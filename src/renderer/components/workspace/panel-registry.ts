@@ -1,5 +1,6 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import type { FunctionComponent } from "react";
+import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { WelcomePanel } from "./welcome-panel.tsx";
 
 /**
@@ -14,5 +15,6 @@ export const panelComponents: Record<
   string,
   FunctionComponent<IDockviewPanelProps>
 > = {
+  terminal: TerminalPanel,
   welcome: WelcomePanel,
 };
