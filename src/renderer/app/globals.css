@@ -2,42 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/*
- * HarmonyOS Sans SC — bay UI 主字体.
- * 本地 TTF 通过 vite public/ 目录 serve, font-display:swap 先 fallback 再换字, 防首屏 FOIT.
- * weight 区段: 300=Light, 400=Regular, 500=Medium, 600-700=Bold.
- */
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Light.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 600 700;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Bold.ttf") format("truetype");
-}
 
 /*
  * Bay dark variant: default 是 dark（:root），加 .light class 切换到 light。
@@ -123,19 +87,12 @@
   --shell-scrollbar-track-hover: transparent;
   --shell-scrollbar-corner: transparent;
 
-  /* === 字体体系 ===
-     UI 主字体 HarmonyOS Sans SC + emoji + system-ui fallback;
-     mono 路径预留 (Bay 当前未引入 JetBrainsMono Nerd Font). */
-  --bay-ui-font-family:
-    "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",
-    "Noto Color Emoji", system-ui, -apple-system, "Helvetica Neue", "PingFang SC",
-    sans-serif;
-  --bay-mono-font-family:
-    "HarmonyOS Sans SC", ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo,
-    monospace;
+  /* === 字体体系 === system-ui + PingFang SC + emoji fallback */
+  --pier-ui-font-family:
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui,
+    -apple-system, "Helvetica Neue", "PingFang SC", sans-serif;
 
   /* === shell layout constants === */
-  --shell-titlebar-height: 44px;
 }
 
 :root.light {
@@ -169,9 +126,8 @@
 
 @theme inline {
   /* font-family 注册到 Tailwind: 在元素上用 `font-sans` / `font-mono` utility 即应用. */
-  --font-sans: var(--bay-ui-font-family);
-  --font-mono: var(--bay-mono-font-family);
-
+  /* font-family 注册到 Tailwind */
+  --font-sans: var(--pier-ui-font-family);
   /* shadcn semantic mapping */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -436,7 +392,7 @@ body {
   height: 100%;
   padding: 0;
   margin: 0;
-  font-family: var(--bay-ui-font-family);
+  font-family: var(--pier-ui-font-family);
   font-feature-settings:
     "rlig" 1,
     "calt" 1;
