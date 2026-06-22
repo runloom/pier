@@ -88,9 +88,19 @@ final class GhosttyBridgeImpl {
             }
         }
 
-        // WKWebView 透明化
-        if let wk = wkWebView {
-            wk.setValue(false, forKey: "drawsBackground")
+        // WKWebView 透明化: 遍历 WebContentsViewCocoa 子视图找到真正的 WKWebView
+        if let container = wkWebView {
+            func findWKWebView(in view: NSView) -> NSView? {
+                let typeName = String(describing: type(of: view))
+                if typeName == "WKWebView" { return view }
+                for child in view.subviews {
+                    if let found = findWKWebView(in: child) { return found }
+                }
+                return nil
+            }
+            if let realWK = findWKWebView(in: container) {
+                realWK.setValue(NSColor.clear, forKey: "underPageBackgroundColor")
+            }
         }
 
         // 创建 EventRouterView (最顶层)

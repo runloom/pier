@@ -51,6 +51,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       return { ok: false, error: "window not found" };
     }
     try {
+      // Electron API: 窗口背景透明 (CSS 控制哪些区域透视, 非终端区域自行画不透明背景)
+      win.setBackgroundColor("#00000000");
       const handle = win.getNativeWindowHandle();
       const ok = addon.setupWindow(handle);
       return ok ? { ok: true } : { ok: false, error: "setupWindow failed" };
