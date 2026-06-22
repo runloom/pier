@@ -1,4 +1,4 @@
-export type { StylePresetId } from "@shared/contracts/preferences.ts";
+import type { StylePresetId } from "@shared/contracts/preferences.ts";
 
 export interface StylePresetOption {
   labelKey: string;

@@ -18,6 +18,8 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
       handler: () => useWorkspaceStore.getState().closeActivePanel(),
       id: "pier.panel.closeActive",
+      surfaces: ["command-palette"],
+      metadata: { sortOrder: 0 },
       title: () => "Close Active Panel",
     })
   );
@@ -28,6 +30,8 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api != null,
       handler: () => useWorkspaceStore.getState().addTab(),
       id: "pier.panel.newTab",
+      surfaces: ["command-palette"],
+      metadata: { sortOrder: 1 },
       title: () => "New Tab",
     })
   );
@@ -41,6 +45,8 @@ export function registerPanelActions(): () => void {
         });
       },
       id: "pier.window.newWindow",
+      surfaces: ["command-palette"],
+      metadata: { sortOrder: 2 },
       title: () => "New Window",
     })
   );
