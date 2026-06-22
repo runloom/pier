@@ -107,6 +107,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       subscriptions.push(
         api.onDidVisibilityChange((e) => {
           if (e.isVisible) {
+            lastFrame = ""; // 强制重发 frame, 终端可能在 offscreen
             sendFrameNow();
             window.pier.terminal.show(panelId);
           } else {
