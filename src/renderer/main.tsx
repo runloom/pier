@@ -5,6 +5,7 @@ import "./app/globals.css";
 import { initI18n } from "./i18n/index.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
 import { registerConfigActions } from "./lib/actions/config-actions.ts";
+import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { initTheme } from "./stores/theme.store.ts";
@@ -23,6 +24,7 @@ async function bootstrap() {
 
   registerConfigActions();
   registerCommandPaletteAction();
+  registerPanelActions();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
 
   const rootEl = document.getElementById("root");
