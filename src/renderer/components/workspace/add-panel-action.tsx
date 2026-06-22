@@ -10,11 +10,11 @@ import { Plus } from "lucide-react";
  */
 export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const handleAdd = () => {
-    const id = `welcome-${Date.now()}`;
+    const id = `terminal-${Date.now()}`;
     props.containerApi.addPanel({
       id,
-      component: "welcome",
-      title: "Welcome",
+      component: "terminal",
+      title: "Terminal",
       position: {
         referenceGroup: props.group,
         direction: "within",
