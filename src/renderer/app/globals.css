@@ -163,7 +163,9 @@
   );
   --shell-scrollbar-thumb-active: color-mix(
     in oklab,
-
+    var(--foreground) 58%,
+    transparent
+  );
   /* === 字体体系 ===
      UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
      Mono: JetBrainsMono Nerd Font (打包 subset) + ui-monospace fallback
