@@ -1,3 +1,4 @@
+import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
 export interface WindowInfo {
@@ -45,12 +46,26 @@ export interface PierWindowAPI {
   listWindows: () => Promise<WindowInfo[]>;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
+  terminal: TerminalAPI;
   theme: PierThemeAPI;
 }
 
 const preferencesApi: PierPreferencesAPI = {
   read: () => ipcRenderer.invoke("pier:preferences:read"),
   update: (patch) => ipcRenderer.invoke("pier:preferences:update", patch),
+};
+
+const terminalApi: TerminalAPI = {
+  close: (panelId) => ipcRenderer.invoke("pier:terminal:close", panelId),
+  create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
+  focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
+  hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  setFrame: (panelId, frame) =>
+    ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
+  setOverlayActive: (active) =>
+    ipcRenderer.send("pier:terminal:set-overlay", active),
+  setup: () => ipcRenderer.invoke("pier:terminal:setup"),
+  show: (panelId) => ipcRenderer.send("pier:terminal:show", panelId),
 };
 
 const themeApi: PierThemeAPI = {
@@ -68,6 +83,7 @@ const api: PierWindowAPI = {
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
   platform: process.platform,
   preferences: preferencesApi,
+  terminal: terminalApi,
   theme: themeApi,
 };
 
