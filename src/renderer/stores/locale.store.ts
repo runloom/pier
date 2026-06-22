@@ -44,7 +44,7 @@ export async function initLocale(): Promise<void> {
   } catch (err) {
     console.error(
       "[locale.store] initLocale IPC failed; keeping store defaults:",
-      err,
+      err
     );
   }
 }

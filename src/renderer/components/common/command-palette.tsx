@@ -27,13 +27,10 @@ import {
 } from "@/components/primitives/command.tsx";
 import { Kbd } from "@/components/primitives/kbd.tsx";
 import { useT } from "@/i18n/use-t.ts";
-import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
-import type {
-  QuickPick,
-  QuickPickItem,
-} from "@/lib/command-palette/types.ts";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 

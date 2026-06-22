@@ -18,8 +18,8 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { LOCALE_OPTIONS } from "@/pages/settings/data/locales.ts";
 import { STYLE_PRESET_OPTIONS } from "@/pages/settings/data/style-presets.ts";
-import { applyThemeVisual, useThemeStore } from "@/stores/theme.store.ts";
 import { type Language, useLocaleStore } from "@/stores/locale.store.ts";
+import { applyThemeVisual, useThemeStore } from "@/stores/theme.store.ts";
 
 const THEME_OPTIONS_DATA = [
   { id: "light", labelKey: "settings.theme.light" },
@@ -71,7 +71,7 @@ export function registerConfigActions(): () => void {
           },
         });
       },
-    }),
+    })
   );
 
   // ── Style preset ──────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ export function registerConfigActions(): () => void {
           },
         });
       },
-    }),
+    })
   );
 
   // ── Locale (no preview) ───────────────────────────────────────────────
@@ -147,7 +147,7 @@ export function registerConfigActions(): () => void {
           },
         });
       },
-    }),
+    })
   );
 
   return () => {

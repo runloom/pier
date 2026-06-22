@@ -22,7 +22,7 @@ function isImePending(e: KeyboardEvent): boolean {
 
 function pickAction(
   chord: KeyChord,
-  target: EventTarget | null,
+  target: EventTarget | null
 ): Action | null {
   const commandId = keybindingRegistry.resolve(chord);
   if (!commandId) {

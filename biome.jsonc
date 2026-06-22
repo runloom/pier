@@ -45,6 +45,33 @@
       "includes": ["src/renderer/app/globals.css"],
       "formatter": { "enabled": false },
       "linter": { "enabled": false }
+    },
+    // shadcn primitives + hooks 由 CLI 生成, 放宽其固有的 lint 规则
+    {
+      "includes": [
+        "src/renderer/components/primitives/**",
+        "src/renderer/hooks/use-mobile.ts"
+      ],
+      "linter": {
+        "rules": {
+          "performance": { "noNamespaceImport": "off" },
+          "a11y": {
+            "useSemanticElements": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off",
+            "useAriaPropsForRole": "off",
+            "noNoninteractiveElementInteractions": "off"
+          },
+          "correctness": { "noNestedComponentDefinitions": "off" },
+          "suspicious": {
+            "noArrayIndexKey": "off",
+            "noDocumentCookie": "off"
+          },
+          "security": { "noDangerouslySetInnerHtml": "off" },
+          "complexity": { "noExcessiveCognitiveComplexity": "off" },
+          "style": { "noNestedTernary": "off" }
+        }
+      }
     }
   ]
 }

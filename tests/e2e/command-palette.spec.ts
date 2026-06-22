@@ -7,7 +7,7 @@ const OUT_MAIN = join(
   "..",
   "out",
   "main",
-  "index.js",
+  "index.js"
 );
 
 test.describe("Command Palette e2e", () => {
@@ -27,7 +27,7 @@ test.describe("Command Palette e2e", () => {
     await expect(dialog).toBeAttached({ timeout: 5000 });
     await expect(win.locator("[cmdk-input]")).toBeVisible();
     await expect(
-      win.locator("[cmdk-group-heading]").filter({ hasText: "设置" }),
+      win.locator("[cmdk-group-heading]").filter({ hasText: "设置" })
     ).toBeVisible();
 
     // 验证主题/风格/语言 action 都在面板中
