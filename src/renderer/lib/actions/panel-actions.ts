@@ -36,6 +36,17 @@ export function registerPanelActions(): () => void {
 
   disposers.push(
     actionRegistry.register({
+      category: "Panel",
+      enabled: () => useWorkspaceStore.getState().api != null,
+      handler: () => useWorkspaceStore.getState().addTerminal(),
+      id: "pier.panel.newTerminal",
+      surfaces: [],
+      title: () => "New Terminal",
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
       category: "Window",
       handler: () => {
         createWindow().catch((err) => {

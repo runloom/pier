@@ -5,6 +5,7 @@ import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 interface WorkspaceState {
   addPanel: (opts: { id: string; title: string; component: string }) => void;
   addTab: () => void;
+  addTerminal: () => void;
   api: DockviewApi | null;
   closeActivePanel: () => void;
   setApi: (api: DockviewApi | null) => void;
@@ -44,6 +45,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       // 无 active group → 新建 group
       api.addPanel({ id, component: "welcome", title: "Welcome" });
     }
+  },
+  addTerminal() {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const id = `terminal-${Date.now()}`;
+    const activeGroup = api.activeGroup;
+    api.addPanel({
+      id,
+      component: "terminal",
+      title: "Terminal",
+      position: activeGroup
+        ? { referenceGroup: activeGroup, direction: "within" }
+        : { direction: "right" },
+    });
   },
   closeActivePanel: () => {
     const api = get().api;
