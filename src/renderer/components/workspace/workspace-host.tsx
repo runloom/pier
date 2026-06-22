@@ -37,7 +37,7 @@ export function WorkspaceHost() {
   return (
     <div className="h-full w-full">
       <DockviewReact
-        className="dockview-theme-abyss"
+        className="dockview-theme-pier"
         components={panelComponents}
         leftHeaderActionsComponent={AddPanelAction}
         onReady={handleReady}

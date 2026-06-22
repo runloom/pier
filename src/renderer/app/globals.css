@@ -468,3 +468,41 @@ body {
 #root {
   height: 100%;
 }
+
+/* === dockview-react custom theme: maps --dv-* → pier semantic tokens ===
+   dockview-theme-abyss 等内置主题用硬编码色值，不跟随主题/风格切换。
+   此自定义主题通过 var() 引用 pier 的 --background / --foreground / --muted 等，
+   使 dockview 面板自动跟随命令面板的主题和风格切换。 */
+.dockview-theme-pier {
+  /* --- panel backgrounds --- */
+  --dv-group-view-background-color: var(--background);
+  --dv-tabs-and-actions-container-background-color: var(--muted);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--card);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--card);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--muted);
+
+  /* --- tab text --- */
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--muted-foreground);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted-foreground);
+
+  /* --- borders & dividers --- */
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-tab-divider-color: var(--border);
+  --dv-floating-border: 1px solid var(--border);
+
+  /* --- interactive --- */
+  --dv-icon-hover-background-color: var(--accent);
+  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 25%, transparent);
+  --dv-active-sash-color: var(--primary);
+  --dv-sash-color: transparent;
+
+  /* --- misc --- */
+  --dv-scrollbar-background-color: var(--border);
+  --dv-context-menu-background-color: var(--popover);
+  --dv-context-menu-color: var(--popover-foreground);
+  --dv-floating-box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
