@@ -57,10 +57,19 @@ export function useKeyboardShortcuts(): void {
       if (isImePending(e)) {
         return;
       }
+      console.log(
+        "[kb] key:",
+        e.code,
+        "meta:",
+        e.metaKey,
+        "shift:",
+        e.shiftKey
+      );
       const action = pickAction(chordFromEvent(e), e.target);
       if (!action) {
         return;
       }
+      console.log("[kb] dispatch:", action.id);
       e.preventDefault();
       e.stopPropagation();
       runAction(action);

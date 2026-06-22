@@ -1,9 +1,10 @@
-/**
- * 全局快捷键 dispatch. 挂 window capture-phase keydown 一次, 渲染 null.
- */
+import { useEffect } from "react";
 import { useKeyboardShortcuts } from "@/lib/keybindings/use-keybindings.ts";
 
 export function ShellKeybindings(): null {
+  useEffect(() => {
+    console.log("[pier] ShellKeybindings mounted — keyboard shortcuts active");
+  }, []);
   useKeyboardShortcuts();
   return null;
 }
