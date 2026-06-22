@@ -37,14 +37,20 @@
     "postinstall": "node ./scripts/ensure-electron.mjs"
   },
   "dependencies": {
+    "@pierre/theme": "^1.0.3",
+    "@shikijs/themes": "^4.2.0",
+    "clsx": "2.1.1",
+    "cmdk": "^1.1.1",
+    "dockview-react": "6.6.1",
+    "i18next": "^26.3.1",
+    "lucide-react": "1.21.0",
+    "proper-lockfile": "^4.1.2",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "dockview-react": "6.6.1",
-    "zustand": "5.0.12",
-    "clsx": "2.1.1",
     "tailwind-merge": "3.6.0",
-    "lucide-react": "1.21.0",
-    "zod": "4.4.3"
+    "write-file-atomic": "^8.0.0",
+    "zod": "4.4.3",
+    "zustand": "5.0.12"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.0",
