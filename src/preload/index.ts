@@ -10,17 +10,23 @@ export interface PierPreferencesAPI {
     theme: string;
     stylePresetId: string;
     language: string;
+    uiFontFamily: string;
+    monoFontFamily: string;
   }>;
   update: (
     patch: Partial<{
       theme: string;
       stylePresetId: string;
       language: string;
+      uiFontFamily: string;
+      monoFontFamily: string;
     }>
   ) => Promise<{
     theme: string;
     stylePresetId: string;
     language: string;
+    uiFontFamily: string;
+    monoFontFamily: string;
   }>;
 }
 

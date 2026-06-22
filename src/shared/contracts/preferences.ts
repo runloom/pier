@@ -28,10 +28,15 @@ export const stylePresetIdSchema = z.enum([
   "vitesse",
 ]);
 
+export const DEFAULT_UI_FONT_FAMILY = "";
+export const DEFAULT_MONO_FONT_FAMILY = "";
+
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
   stylePresetId: stylePresetIdSchema.default("pierre"),
   language: z.enum(["zh-CN", "en"]).default("zh-CN"),
+  uiFontFamily: z.string().default(DEFAULT_UI_FONT_FAMILY),
+  monoFontFamily: z.string().default(DEFAULT_MONO_FONT_FAMILY),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;

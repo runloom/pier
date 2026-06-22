@@ -1,5 +1,28 @@
 export const en = {
   settings: {
+    title: "Settings",
+    description: "Manage application preferences",
+    nav: {
+      appearance: "Appearance",
+    },
+    section: {
+      appearance: "Appearance",
+      font: "Font",
+    },
+    row: {
+      theme: "Theme",
+      themeDesc: "Choose the interface color mode",
+      stylePreset: "Style",
+      stylePresetDesc: "Choose a color scheme",
+      language: "Language",
+      languageDesc: "Choose the display language",
+      uiFontFamily: "UI Font",
+      uiFontFamilyDesc: "Custom UI font family",
+      uiFontFamilyPlaceholder: "HarmonyOS Sans SC",
+      monoFontFamily: "Monospace Font",
+      monoFontFamilyDesc: "Terminal / code editor font family",
+      monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
+    },
     theme: {
       light: "Light",
       dark: "Dark",
@@ -46,6 +69,7 @@ export const en = {
     },
     action: {
       toggleCommandPalette: "Show Command Palette",
+      openSettings: "Open Settings",
       selectTheme: "Select Theme",
       selectStyle: "Select Style",
       selectLanguage: "Select Display Language",

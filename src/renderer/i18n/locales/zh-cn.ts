@@ -1,5 +1,28 @@
 export const zhCN = {
   settings: {
+    title: "设置",
+    description: "管理应用偏好设置",
+    nav: {
+      appearance: "外观",
+    },
+    section: {
+      appearance: "外观",
+      font: "字体",
+    },
+    row: {
+      theme: "主题",
+      themeDesc: "选择界面颜色模式",
+      stylePreset: "风格",
+      stylePresetDesc: "选择配色方案",
+      language: "语言",
+      languageDesc: "选择界面显示语言",
+      uiFontFamily: "界面字体",
+      uiFontFamilyDesc: "自定义界面 UI 字体族",
+      uiFontFamilyPlaceholder: "HarmonyOS Sans SC",
+      monoFontFamily: "等宽字体",
+      monoFontFamilyDesc: "终端 / 代码编辑器字体族",
+      monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
+    },
     theme: {
       light: "浅色",
       dark: "深色",
@@ -46,6 +69,7 @@ export const zhCN = {
     },
     action: {
       toggleCommandPalette: "显示命令面板",
+      openSettings: "打开设置",
       selectTheme: "选择主题",
       selectStyle: "选择风格",
       selectLanguage: "选择显示语言",

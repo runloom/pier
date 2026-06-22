@@ -46,6 +46,8 @@ const DEFAULTS: ProjectPreferences = {
   theme: "system",
   stylePresetId: "pierre",
   language: "zh-CN",
+  uiFontFamily: "",
+  monoFontFamily: "",
 };
 
 export async function readPreferences(): Promise<ProjectPreferences> {

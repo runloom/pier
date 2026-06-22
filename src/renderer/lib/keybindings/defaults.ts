@@ -12,4 +12,5 @@ export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
   { commandId: "pier.panel.closeActive", keys: "Mod+KeyW" },
   { commandId: "pier.window.newWindow", keys: "Mod+KeyN" },
   { commandId: "pier.commandPalette.toggle", keys: "Mod+Shift+KeyP" },
+  { commandId: "pier.settings.open", keys: "Mod+Comma" },
 ];
