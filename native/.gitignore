@@ -1,0 +1,5 @@
+.build/
+build/
+build_swift/
+node_modules/
+Package.resolved
