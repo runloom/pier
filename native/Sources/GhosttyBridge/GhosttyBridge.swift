@@ -60,6 +60,9 @@ private struct Terminal {
 final class GhosttyBridgeImpl {
     static let shared = GhosttyBridgeImpl()
 
+    /// EventRouter 命中矩形向内收缩的像素数, 给 dockview sash (4px) 留出事件通道。
+    private static let hitInset: CGFloat = 5
+
     private var terminals: [String: Terminal] = [:]
     private var eventRouters: [ObjectIdentifier: EventRouterView] = [:]  // per-window
     private var activePanelId: String?
@@ -160,10 +163,10 @@ final class GhosttyBridgeImpl {
             parentWindow: parent
         )
 
-        // 更新 EventRouter targets
+        // 更新 EventRouter targets (inset 留出 sash 事件通道)
         let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-            rect: frame, view: terminalView
+            rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset), view: terminalView
         )
 
         activePanelId = panelId
@@ -179,10 +182,10 @@ final class GhosttyBridgeImpl {
         term.containerView.frame = frame
         CATransaction.commit()
 
-        // 同步 EventRouter targets
+        // 同步 EventRouter targets (inset 留出 sash 事件通道)
         let windowId = ObjectIdentifier(term.parentWindow)
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-            rect: frame, view: term.terminalView
+            rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset), view: term.terminalView
         )
     }
 

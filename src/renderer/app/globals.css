@@ -636,6 +636,11 @@ body {
   background-color: transparent !important;
 }
 
+/* 面板间分隔线 — dockview 默认只有宽/高, 无 background; 透明模式下需显式着色 */
+.dockview-theme-pier .dv-split-view-container > .dv-view-container > .dv-view:not(:first-child)::before {
+  background-color: var(--border);
+}
+
 /* sash 视觉/交互分离:
    - 命中区: 保留 dockview 默认 4px (.dv-sash 本体), 不动
    - 视觉线: ::after 伪元素 1.5px, hover 时着色 var(--ring)
