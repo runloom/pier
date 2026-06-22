@@ -26,9 +26,9 @@ export function WorkspaceHost() {
     (event: DockviewReadyEvent) => {
       setApi(event.api);
       event.api.addPanel({
-        id: "welcome-1",
-        component: "welcome",
-        title: "Welcome",
+        id: "terminal-1",
+        component: "terminal",
+        title: "Terminal",
       });
     },
     [setApi]
