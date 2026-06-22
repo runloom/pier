@@ -8,6 +8,8 @@ import {
   nativeImage,
 } from "electron";
 import { installCsp } from "./csp.ts";
+import { registerPreferencesIpc } from "./ipc/preferences.ts";
+import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { windowManager } from "./windows/window-manager.ts";
 
@@ -162,6 +164,8 @@ app.whenReady().then(() => {
   }
 
   registerWindowIpc(ipcMain);
+  registerPreferencesIpc(ipcMain);
+  registerThemeIpc(ipcMain);
 
   // 首窗口 id 固定 "main".
   windowManager.create({ id: "main" });

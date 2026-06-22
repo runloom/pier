@@ -5,6 +5,29 @@ export interface WindowInfo {
   id: string;
 }
 
+export interface PierPreferencesAPI {
+  read: () => Promise<{
+    theme: string;
+    stylePresetId: string;
+    language: string;
+  }>;
+  update: (
+    patch: Partial<{
+      theme: string;
+      stylePresetId: string;
+      language: string;
+    }>
+  ) => Promise<{
+    theme: string;
+    stylePresetId: string;
+    language: string;
+  }>;
+}
+
+export interface PierThemeAPI {
+  setNativeChrome: (resolved: "light" | "dark") => Promise<void>;
+}
+
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
@@ -12,7 +35,19 @@ export interface PierWindowAPI {
   focusWindow: (windowId: string) => Promise<void>;
   listWindows: () => Promise<WindowInfo[]>;
   platform: NodeJS.Platform;
+  preferences: PierPreferencesAPI;
+  theme: PierThemeAPI;
 }
+
+const preferencesApi: PierPreferencesAPI = {
+  read: () => ipcRenderer.invoke("pier:preferences:read"),
+  update: (patch) => ipcRenderer.invoke("pier:preferences:update", patch),
+};
+
+const themeApi: PierThemeAPI = {
+  setNativeChrome: (resolved) =>
+    ipcRenderer.invoke("pier:theme:set-native-chrome", resolved),
+};
 
 const api: PierWindowAPI = {
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
@@ -23,6 +58,8 @@ const api: PierWindowAPI = {
     ipcRenderer.invoke("pier://window:focus", windowId),
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
   platform: process.platform,
+  preferences: preferencesApi,
+  theme: themeApi,
 };
 
 contextBridge.exposeInMainWorld("pier", api);
