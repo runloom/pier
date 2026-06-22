@@ -4,7 +4,13 @@
  * 命名规范: `pier://<domain>:<action>`
  */
 export const PIER = {
+  // window
+  WINDOW_CLOSE_CURRENT: "pier://window:close-current",
+  WINDOW_CLOSE: "pier://window:close",
+  WINDOW_CREATE: "pier://window:create",
+  WINDOW_FOCUS: "pier://window:focus",
   WINDOW_FULLSCREEN_STATE: "pier://window:fullscreen-state",
+  WINDOW_LIST: "pier://window:list",
 } as const;
 
 export const PIER_BROADCAST = {

@@ -15,6 +15,9 @@ import { panelComponents } from "./panel-registry.ts";
  * - mount DockviewReact, onReady 时把 api 灌入 store
  * - 注册 panel 组件表 + tab 后 add 按钮 (leftHeaderActionsComponent)
  * - 初始创建一个 welcome panel
+ *
+ * 全局快捷键 dispatch 由 ShellKeybindings 组件统一管理;
+ * panel actions 注册由 main.tsx bootstrap 统一调用。
  */
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
@@ -22,7 +25,6 @@ export function WorkspaceHost() {
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
       setApi(event.api);
-      // 初始 welcome panel
       event.api.addPanel({
         id: "welcome-1",
         component: "welcome",
@@ -35,7 +37,7 @@ export function WorkspaceHost() {
   return (
     <div className="h-full w-full">
       <DockviewReact
-        className="dockview-theme-abyss"
+        className="dockview-theme-pier"
         components={panelComponents}
         leftHeaderActionsComponent={AddPanelAction}
         onReady={handleReady}

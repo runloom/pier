@@ -1,9 +1,12 @@
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
+import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 
 interface WorkspaceState {
   addPanel: (opts: { id: string; title: string; component: string }) => void;
+  addTab: () => void;
   api: DockviewApi | null;
+  closeActivePanel: () => void;
   setApi: (api: DockviewApi | null) => void;
 }
 
@@ -21,5 +24,43 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       title: opts.title,
       position: { direction: "right" },
     });
+  },
+  addTab: () => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const id = `welcome-${Date.now()}`;
+    const group = api.activeGroup;
+    if (group) {
+      // 有 active group → 在该 group 内加 tab (direction within)
+      api.addPanel({
+        id,
+        component: "welcome",
+        title: "Welcome",
+        position: { referenceGroup: group, direction: "within" },
+      });
+    } else {
+      // 无 active group → 新建 group
+      api.addPanel({ id, component: "welcome", title: "Welcome" });
+    }
+  },
+  closeActivePanel: () => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const panel = api.activePanel;
+    if (!panel) {
+      return;
+    }
+    // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
+    if (api.totalPanels <= 1) {
+      closeCurrentWindow().catch((err) => {
+        console.error("[workspace] closeCurrentWindow failed:", err);
+      });
+      return;
+    }
+    api.removePanel(panel);
   },
 }));
