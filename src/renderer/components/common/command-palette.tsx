@@ -2,8 +2,10 @@
  * 命令面板 UI:
  *   - state machine 由 controller 管, 这里只渲染 + 路由用户事件回 controller。
  *   - capture-phase keydown 拦 Esc → controller.goBack() (栈非空回退, 栈空关闭),
- *     早于 cmdk Dialog 的 Esc 默认行为。
+ *     早于 Radix DismissibleLayer 的 Esc 默认行为。
  *   - 关闭时若 quick-pick 未 accept, dismiss effect 调 onDismiss 还原 preview。
+ *   - selectedValue 控制高亮项, 切 quick-pick 时初始化为 checked item, 触发
+ *     debounced onChangeSelection (preview 去重)。
  */
 import { Settings } from "lucide-react";
 import {
@@ -25,18 +27,24 @@ import {
 } from "@/components/primitives/command.tsx";
 import { Kbd } from "@/components/primitives/kbd.tsx";
 import { useT } from "@/i18n/use-t.ts";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
-import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
-import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
+import type {
+  QuickPick,
+  QuickPickItem,
+} from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 
 interface CategoryMeta {
+  /** 用作 i18n key: commandPalette.category.${labelKey} */
   labelKey: string;
   order: number;
 }
 
+// 新增分类时这里加一行 + i18n 加 commandPalette.category.<key>。未注册的分类
+// 兜底排在末尾, label 直接用 raw category 字符串。
 const CATEGORY_META: Record<string, CategoryMeta> = {
   View: { order: 0, labelKey: "view" },
   Settings: { order: 1, labelKey: "settings" },
@@ -66,6 +74,8 @@ function groupActions(actions: readonly Action[]): ActionGroup[] {
 }
 
 function useActions(): readonly Action[] {
+  // version 变 → snapshot 变 → useSyncExternalStore 通知 React 重渲,
+  // 重渲时 list() 取到最新数组。React Compiler 自动按 version 依赖 memo。
   useSyncExternalStore(
     (cb) => actionRegistry.subscribe(cb),
     () => actionRegistry.getVersion(),
@@ -74,6 +84,11 @@ function useActions(): readonly Action[] {
   return actionRegistry.list("command-palette");
 }
 
+/**
+ * 反查每个 actionId 当前生效的 keybinding 文案. 订阅两个 registry 的 version
+ * 触发重渲, 重渲时拉两边最新数据 build map. React Compiler 自动按 version
+ * 依赖 memo, 避免每 render churn map 引用。
+ */
 function useKeybindingLabels(): ReadonlyMap<string, string> {
   useSyncExternalStore(
     (cb) => actionRegistry.subscribe(cb),
@@ -102,9 +117,12 @@ export function CommandPalette() {
   const groups = groupActions(actions);
   const keybindingLabels = useKeybindingLabels();
 
+  // 本地 UI 态: 与 controller 保持同步, 但 cmdk 需要 controlled value/query 引用稳定。
   const [query, setQuery] = useState("");
   const [selectedValue, setSelectedValue] = useState("");
   const lastRequestIdRef = useRef(-1);
+  // null = 未 accept; 非 null = 已 accept (值是 item id)。
+  // 关闭瞬间 dismiss effect 用它判断是否需调 onDismiss。
   const acceptedItemIdRef = useRef<string | null>(null);
 
   const mode = controller.mode;
@@ -112,7 +130,7 @@ export function CommandPalette() {
   const isOpen = controller.open;
   const requestId = controller.requestId;
 
-  // 新一轮 session: 重置 query / selectedValue / accepted flag。
+  // 新一轮 session (open 或 openQuickPick): 重置 query / selectedValue / accepted flag。
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -133,7 +151,9 @@ export function CommandPalette() {
     }
   }, [isOpen, requestId, mode, quickPick]);
 
-  // 关闭时, 若 quick-pick 未 accept 调 onDismiss。
+  // 关闭 (Esc 已走 goBack 路径或点击遮罩) 时, 若 quick-pick 未 accept 调 onDismiss。
+  // goBack() 内联调过 onDismiss, 但 close() 路径 (点击遮罩) 没调, 这里补。
+  // mode/quickPick 在 close() 后仍保留, 故能读到。
   useEffect(() => {
     if (isOpen) {
       return;
@@ -145,10 +165,12 @@ export function CommandPalette() {
     ) {
       quickPick.onDismiss();
     }
+    // 关闭后清 lastRequestId, 下次开重新初始化。
     lastRequestIdRef.current = -1;
   }, [isOpen, mode, quickPick]);
 
-  // capture-phase Esc → goBack。
+  // capture-phase Esc → goBack。早于 Radix DismissibleLayer 的 Esc, 阻止其
+  // 把 dialog 直接关掉; 栈非空回退到上层, 栈空才关。
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -167,7 +189,7 @@ export function CommandPalette() {
     };
   }, [isOpen]);
 
-  // Backspace 在空 query + quick-pick 模式时回退一层。
+  // Backspace 在空 query + quick-pick 模式时回退一层 (VS Code 行为)。
   const handleCommandKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Backspace" && !query && controller.mode === "quick-pick") {
       e.preventDefault();
@@ -176,7 +198,7 @@ export function CommandPalette() {
     }
   };
 
-  // 箭头键 / hover 高亮变化 → preview。
+  // 箭头键 / hover 高亮变化 → preview。在 quick-pick 模式且 onChangeSelection 存在时触发。
   const handleValueChange = (next: string) => {
     setSelectedValue(next);
     if (mode !== "quick-pick" || !quickPick?.onChangeSelection) {
@@ -191,6 +213,7 @@ export function CommandPalette() {
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
+      // Esc 已 stopImmediatePropagation, 不会走到这。这里只剩点击遮罩。
       useCommandPaletteController.getState().close();
     }
   };
@@ -203,11 +226,13 @@ export function CommandPalette() {
     acceptedItemIdRef.current = item.id;
     try {
       await quickPick.onAccept(item);
+      // 若 onAccept 没开新一轮 (requestId 未变) 且面板仍开着, 收尾关掉。
       const after = useCommandPaletteController.getState();
       if (after.requestId === before && after.open) {
         useCommandPaletteController.getState().close();
       }
     } catch (err) {
+      // accept 失败: 复位 flag 让 Esc 仍能触发 onDismiss; err 上报便于排查 (不静默).
       acceptedItemIdRef.current = null;
       console.error("[command-palette] onAccept threw:", err);
     }
@@ -221,6 +246,7 @@ export function CommandPalette() {
     try {
       await action.handler();
       const after = useCommandPaletteController.getState();
+      // handler 没开 quick-pick (requestId 没变) 且仍在 commands 模式: 关闭面板。
       if (after.requestId === before && after.mode === "commands") {
         useCommandPaletteController.getState().close();
       }
@@ -240,6 +266,7 @@ export function CommandPalette() {
 
   return (
     <CommandDialog
+      className="top-[14vh] sm:max-w-[520px]"
       description={dialogTitle}
       onOpenChange={handleOpenChange}
       open={isOpen}
@@ -256,7 +283,7 @@ export function CommandPalette() {
           placeholder={dialogPlaceholder}
           value={query}
         />
-        <CommandList>
+        <CommandList className="max-h-[min(60vh,520px)]">
           <CommandEmpty>{t("commandPalette.empty")}</CommandEmpty>
           {mode === "quick-pick" && quickPick ? (
             <QuickPickView
@@ -344,6 +371,9 @@ function QuickPickView({
   quickPick: QuickPick;
   onAccept: (item: QuickPickItem) => Promise<void>;
 }): ReactNode {
+  // 不包 CommandGroup heading: dialog 输入框 placeholder 已说明当前在选什么
+  // (e.g. "选择主题 (↑↓ 预览, ↵ 确认, Esc 还原)"), 再加一行分组标题是冗余。
+  // quick-pick items 平铺在 CommandList 下。
   return (
     <div className="mt-2">
       {quickPick.items.map((item) => (
