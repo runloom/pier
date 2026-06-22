@@ -1,5 +1,6 @@
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
+import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 
 interface WorkspaceState {
   addPanel: (opts: { id: string; title: string; component: string }) => void;
@@ -50,8 +51,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     const panel = api.activePanel;
-    if (panel) {
-      api.removePanel(panel);
+    if (!panel) {
+      return;
     }
+    // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
+    if (api.totalPanels <= 1) {
+      closeCurrentWindow().catch((err) => {
+        console.error("[workspace] closeCurrentWindow failed:", err);
+      });
+      return;
+    }
+    api.removePanel(panel);
   },
 }));

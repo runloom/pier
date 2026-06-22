@@ -2,24 +2,18 @@ import { join } from "node:path";
 import {
   app,
   BrowserWindow,
+  ipcMain,
   Menu,
   type MenuItemConstructorOptions,
   nativeImage,
-  nativeTheme,
-  shell,
 } from "electron";
 import { installCsp } from "./csp.ts";
+import { registerWindowIpc } from "./ipc/window.ts";
+import { windowManager } from "./windows/window-manager.ts";
 
 const isDev = !app.isPackaged;
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
-
-// dev: win/linux BrowserWindow.icon 让任务栏 / 窗口标题栏看到 Pier 图标; mac 窗口本身不显示
-// 图标 (hiddenInset titlebar), 但 dock icon 走 app.dock.setIcon 单独处理.
-// packaged: 图标由 electron-builder 烘到可执行文件元数据, 运行时不需要 BrowserWindow.icon.
-const DEV_WINDOW_ICON = isDev
-  ? join(import.meta.dirname, "../../build/icon.png")
-  : undefined;
 
 // dev mode silence "Insecure CSP (unsafe-eval)" warning: dev CSP 必须含 'unsafe-eval'
 // (vite HMR + react-refresh 依赖 eval).
@@ -58,54 +52,6 @@ configureAppIdentity();
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
-}
-
-async function createMainWindow(): Promise<BrowserWindow> {
-  const resolved: "light" | "dark" = nativeTheme.shouldUseDarkColors
-    ? "dark"
-    : "light";
-  nativeTheme.themeSource = "system";
-
-  const bgPalette: Record<"light" | "dark", string> = {
-    light: "#ffffff",
-    dark: "#1e1e1e",
-  };
-
-  // 原生 titlebar: 保留系统标题栏 (关闭/最大化/最小化按钮), 不自定义.
-  const iconOptions: Partial<Electron.BrowserWindowConstructorOptions> =
-    !isMac && DEV_WINDOW_ICON ? { icon: DEV_WINDOW_ICON } : {};
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: bgPalette[resolved],
-    ...iconOptions,
-    webPreferences: {
-      preload: join(import.meta.dirname, "../preload/index.cjs"),
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
-  win.on("ready-to-show", () => win.show());
-
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url).catch(() => {
-      // ignore: 外部 URL 打开失败由 OS 处理
-    });
-    return { action: "deny" };
-  });
-
-  const rendererUrl = process.env.ELECTRON_RENDERER_URL;
-  if (isDev && rendererUrl) {
-    await win.loadURL(rendererUrl);
-  } else {
-    await win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
-  }
-
-  return win;
 }
 
 // macOS 默认 Electron menu 极简, 没 Edit menu → Cmd+C/V/X/A 在 app 内 (含 DevTools)
@@ -166,10 +112,17 @@ function buildAppMenu(): Menu {
     ],
   };
 
+  const newWindowMenuItem: MenuItemConstructorOptions = {
+    click: () => windowManager.create(),
+    label: "New Window",
+  };
+
   const windowMenu: MenuItemConstructorOptions = {
     label: "Window",
     submenu: isMac
       ? [
+          newWindowMenuItem,
+          { type: "separator" },
           { role: "minimize" },
           { role: "zoom" },
           { type: "separator" },
@@ -177,7 +130,13 @@ function buildAppMenu(): Menu {
           { type: "separator" },
           { role: "window" },
         ]
-      : [{ role: "minimize" }, { role: "zoom" }, { role: "close" }],
+      : [
+          newWindowMenuItem,
+          { type: "separator" },
+          { role: "minimize" },
+          { role: "zoom" },
+          { role: "close" },
+        ],
   };
 
   const template: MenuItemConstructorOptions[] = [
@@ -186,11 +145,10 @@ function buildAppMenu(): Menu {
     viewMenu,
     windowMenu,
   ];
-
   return Menu.buildFromTemplate(template);
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   installCsp();
   Menu.setApplicationMenu(buildAppMenu());
 
@@ -203,11 +161,14 @@ app.whenReady().then(async () => {
     );
   }
 
-  await createMainWindow();
+  registerWindowIpc(ipcMain);
 
-  app.on("activate", async () => {
+  // 首窗口 id 固定 "main".
+  windowManager.create({ id: "main" });
+
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      await createMainWindow();
+      windowManager.create({ id: "main" });
     }
   });
 });
