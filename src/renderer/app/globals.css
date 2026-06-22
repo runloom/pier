@@ -169,6 +169,9 @@
     var(--foreground) 58%,
     transparent
   );
+  --shell-scrollbar-track: transparent;
+  --shell-scrollbar-track-hover: transparent;
+  --shell-scrollbar-corner: transparent;
   /* === 字体体系 ===
      UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
      Mono: JetBrainsMono Nerd Font (打包 subset) + ui-monospace fallback
@@ -558,24 +561,56 @@ body {
   height: 100%;
 }
 
-/* === dockview-react custom theme: maps --dv-* → pier semantic tokens ===
-   参考 loomdesk 的 .dockview-theme-loomdesk 实现:
-   - tab 背景透明, 由外层 group-view 提供底色
-   - icon hover 用 foreground 8% color-mix
-   - sash 色用 --ring */
+/* === dockview-react custom theme ===
+   所有颜色从 Pier 语义令牌派生, light / dark 自动跟随.
+
+   3 种 tab 状态:
+   S1  未选中 (hidden panel, 任意 group)    — 最弱: 透明底 + 暗文字
+   S2  分组选中 (visible panel, 失焦 group) — 中等: 底部 1px muted 指示线
+   S3  当前聚焦 (visible panel, 聚焦 group) — 最强: 底部 2px primary 指示线 */
+
 .dockview-theme-pier {
-  --dv-tabs-and-actions-container-background-color: transparent;
+  /* — 紧凑布局 — */
+  --dv-tabs-and-actions-container-height: 34px;
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-tab-margin: 0;
+  --dv-tab-border-radius: 0;
+  --dv-border-radius: 0;
+
+  /* — 面板 / Tab 栏底色 — */
+  --dv-group-view-background-color: var(--background);
+  --dv-tabs-and-actions-container-background-color: var(--sidebar);
+
+  /* — S3 聚焦: active-group + visible-panel — */
   --dv-activegroup-visiblepanel-tab-background-color: transparent;
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--muted);
-  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--muted);
-  --dv-tab-divider-color: var(--border);
   --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+
+  /* — S1 未选中: active-group + hidden-panel — */
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
   --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--foreground);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted-foreground);
-  --dv-separator-border: transparent;
+
+  /* — S2 分组选中: inactive-group + visible-panel — */
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-color: color-mix(
+    in oklab,
+    var(--foreground) 65%,
+    transparent
+  );
+
+  /* — S1 未选中: inactive-group + hidden-panel — */
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-color: color-mix(
+    in oklab,
+    var(--foreground) 35%,
+    transparent
+  );
+
+  /* — 分隔 / 边框 — */
+  --dv-tab-divider-color: transparent;
+  --dv-separator-border: var(--border);
   --dv-paneview-header-border-color: var(--border);
+
+  /* — 拖拽 / sash / 浮动 — */
   --dv-sash-color: transparent;
   --dv-active-sash-color: var(--ring);
   --dv-active-sash-transition-delay: 0s;
@@ -584,15 +619,81 @@ body {
   --dv-drag-over-background-color: color-mix(in oklab, var(--ring) 14%, transparent);
   --dv-drag-over-border: 1px solid var(--ring);
   --dv-drag-over-border-color: var(--ring);
-  --dv-floating-box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --dv-floating-box-shadow: 0 8px 32px color-mix(in oklab, var(--foreground) 25%, transparent);
   --dv-floating-border: 1px solid var(--border);
   --dv-paneview-active-outline-color: var(--ring);
-  --dv-group-view-background-color: var(--background);
-  --dv-border-radius: 0px;
 }
 
-/* 覆写 dockview 内置 background → 统一走 --background */
+/* Tab 栏底部分隔线 */
+.dockview-theme-pier .dv-tabs-and-actions-container {
+  border-bottom: 1px solid var(--border);
+}
+
+/* 统一内容区底色 */
 .dockview-theme-pier .dv-dockview,
 .dockview-theme-pier .dv-groupview {
   background-color: var(--background) !important;
+}
+
+/* — 压制 dockview 内置 :focus outline (pier 改用底部指示线) — */
+.dockview-theme-pier .dv-tab:focus-within::after,
+.dockview-theme-pier .dv-tab:focus::after {
+  outline: none !important;
+  top: auto;
+  height: auto;
+  width: auto;
+}
+
+/* — hover: 非选中 tab 微亮 — */
+.dockview-theme-pier .dv-tab.dv-inactive-tab:hover {
+  background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+}
+
+/* — S3 指示线: 聚焦 group 选中 tab → 2px primary — */
+.dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab {
+  position: relative;
+}
+.dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab::after {
+  content: "";
+  position: absolute;
+  top: auto;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background-color: var(--primary);
+  outline: none !important;
+  z-index: 1;
+}
+
+/* — S2 指示线: 失焦 group 选中 tab → 1px muted — */
+.dockview-theme-pier
+  .dv-groupview.dv-inactive-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab {
+  position: relative;
+}
+.dockview-theme-pier
+  .dv-groupview.dv-inactive-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab::after {
+  content: "";
+  position: absolute;
+  top: auto;
+  inset-inline: 0;
+  bottom: 0;
+  height: 1px;
+  background-color: var(--muted-foreground);
+  outline: none !important;
+  z-index: 1;
 }
