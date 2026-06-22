@@ -2,6 +2,89 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* === HarmonyOS Sans SC — 本地打包 UI / CJK 字体 ===
+   字体源来自华为官方 HarmonyOS Sans 包内未修改的 SC TTF 文件。
+   许可允许随软件嵌入、打包和再分发未修改字体。 */
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Light.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Bold.ttf") format("truetype");
+}
+
+/* === JetBrainsMono Nerd Font Mono — 内嵌 woff2 subset,作为等宽字体 ===
+   subset 覆盖 ASCII / Latin-1 / Latin Extended-A / 通用符号 / Box Drawing /
+   Geometric / Powerline / dev icons / file types。
+   font-display:block — 终端字体必须在首次渲染前 ready。 */
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("/fonts/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
+  unicode-range:
+    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
+    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("/fonts/JetBrainsMonoNerdFontMono-Bold.woff2") format("woff2");
+  unicode-range:
+    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
+    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url("/fonts/JetBrainsMonoNerdFontMono-Italic.woff2") format("woff2");
+  unicode-range:
+    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
+    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: italic;
+  font-weight: 700;
+  font-display: block;
+  src: url("/fonts/JetBrainsMonoNerdFontMono-BoldItalic.woff2") format("woff2");
+  unicode-range:
+    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
+    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
+}
+
 
 /*
  * Bay dark variant: default 是 dark（:root），加 .light class 切换到 light。
@@ -80,17 +163,18 @@
   );
   --shell-scrollbar-thumb-active: color-mix(
     in oklab,
-    var(--foreground) 58%,
-    transparent
-  );
-  --shell-scrollbar-track: transparent;
-  --shell-scrollbar-track-hover: transparent;
-  --shell-scrollbar-corner: transparent;
 
-  /* === 字体体系 === system-ui + PingFang SC + emoji fallback */
+  /* === 字体体系 ===
+     UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
+     Mono: JetBrainsMono Nerd Font (打包 subset) + ui-monospace fallback
+     通过 CSS 变量暴露，后续设置页面可动态修改。 */
   --pier-ui-font-family:
-    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui,
-    -apple-system, "Helvetica Neue", "PingFang SC", sans-serif;
+    "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",
+    "Noto Color Emoji", system-ui, -apple-system, "Helvetica Neue", "PingFang SC",
+    sans-serif;
+  --pier-mono-font-family:
+    "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, "JetBrains Mono",
+    Menlo, monospace;
 
   /* === shell layout constants === */
 }
@@ -125,9 +209,9 @@
 }
 
 @theme inline {
-  /* font-family 注册到 Tailwind: 在元素上用 `font-sans` / `font-mono` utility 即应用. */
   /* font-family 注册到 Tailwind */
   --font-sans: var(--pier-ui-font-family);
+  --font-mono: var(--pier-mono-font-family);
   /* shadcn semantic mapping */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -470,39 +554,40 @@ body {
 }
 
 /* === dockview-react custom theme: maps --dv-* → pier semantic tokens ===
-   dockview-theme-abyss 等内置主题用硬编码色值，不跟随主题/风格切换。
-   此自定义主题通过 var() 引用 pier 的 --background / --foreground / --muted 等，
-   使 dockview 面板自动跟随命令面板的主题和风格切换。 */
+   参考 loomdesk 的 .dockview-theme-loomdesk 实现:
+   - tab 背景透明, 由外层 group-view 提供底色
+   - icon hover 用 foreground 8% color-mix
+   - sash 色用 --ring */
 .dockview-theme-pier {
-  /* --- panel backgrounds --- */
-  --dv-group-view-background-color: var(--background);
-  --dv-tabs-and-actions-container-background-color: var(--muted);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--background);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--card);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--card);
+  --dv-tabs-and-actions-container-background-color: transparent;
+  --dv-activegroup-visiblepanel-tab-background-color: transparent;
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--muted);
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
   --dv-inactivegroup-hiddenpanel-tab-background-color: var(--muted);
-
-  /* --- tab text --- */
+  --dv-tab-divider-color: var(--border);
   --dv-activegroup-visiblepanel-tab-color: var(--foreground);
   --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--muted-foreground);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--foreground);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--muted-foreground);
-
-  /* --- borders & dividers --- */
-  --dv-separator-border: var(--border);
+  --dv-separator-border: transparent;
   --dv-paneview-header-border-color: var(--border);
-  --dv-tab-divider-color: var(--border);
-  --dv-floating-border: 1px solid var(--border);
-
-  /* --- interactive --- */
-  --dv-icon-hover-background-color: var(--accent);
-  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 25%, transparent);
-  --dv-active-sash-color: var(--primary);
   --dv-sash-color: transparent;
-
-  /* --- misc --- */
-  --dv-scrollbar-background-color: var(--border);
-  --dv-context-menu-background-color: var(--popover);
-  --dv-context-menu-color: var(--popover-foreground);
+  --dv-active-sash-color: var(--ring);
+  --dv-active-sash-transition-delay: 0s;
+  --dv-tabs-container-scrollbar-color: var(--border);
+  --dv-icon-hover-background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --dv-drag-over-background-color: color-mix(in oklab, var(--ring) 14%, transparent);
+  --dv-drag-over-border: 1px solid var(--ring);
+  --dv-drag-over-border-color: var(--ring);
   --dv-floating-box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --dv-floating-border: 1px solid var(--border);
+  --dv-paneview-active-outline-color: var(--ring);
+  --dv-group-view-background-color: var(--background);
+  --dv-border-radius: 0px;
+}
+
+/* 覆写 dockview 内置 background → 统一走 --background */
+.dockview-theme-pier .dv-dockview,
+.dockview-theme-pier .dv-groupview {
+  background-color: var(--background) !important;
 }
