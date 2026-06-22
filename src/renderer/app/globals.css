@@ -1,14 +1,63 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 /*
- * Pier dark variant: default 是 dark（:root），加 .light class 切换到 light。
+ * HarmonyOS Sans SC — bay UI 主字体.
+ * 本地 TTF 通过 vite public/ 目录 serve, font-display:swap 先 fallback 再换字, 防首屏 FOIT.
+ * weight 区段: 300=Light, 400=Regular, 500=Medium, 600-700=Bold.
+ */
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Light.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Bold.ttf") format("truetype");
+}
+
+/*
+ * Bay dark variant: default 是 dark（:root），加 .light class 切换到 light。
  * 重定向 Tailwind v4 的 dark: 前缀从默认的 @media prefers-color-scheme 改为
- * :root:not(.light) 选择器，与 class-based 主题控制保持一致。
+ * :root:not(.light) 选择器，与 ThemeProvider 的 class-based 控制保持一致。
  */
 @variant dark (:root:not(.light) &);
 
+/*
+ * Bay v0 globals.css
+ *
+ * preset b1VlIttI (tweakcn) v0 占位: 用 shadcn neutral dark default 起步,
+ * architect 后续可 paste tweakcn 实际色 (本文件 :root + :root.light 内
+ * --color-* CSS vars). bay-extends 7 业务色 derive 自 preset semantic vars.
+ *
+ * Default = dark (与 mockup Page 3 截图一致); :root.light 触发 light mode.
+ */
+
 :root {
+  /* shadcn neutral DARK (default) */
   --background: oklch(0.13 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.18 0 0);
@@ -32,11 +81,65 @@
   --border: oklch(1 0 0 / 0.1);
   --input: oklch(1 0 0 / 0.15);
   --ring: oklch(0.55 0 0);
+  /* === Sidebar / titlebar chrome elevation 体系 ===
+     - sidebar (外壳: titlebar / 侧栏 / workspace gutter) 用 --muted, 比内容卡略亮/略暗
+     - 内容卡 bg-card = var(--background), 与 sidebar 形成视觉层次 (类似 VSCode)
+     - border / accent 用 color-mix 软化, 避免高饱和主题 (Solarized 等) 边线/hover 过重 */
+  --sidebar: var(--muted);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: color-mix(in oklab, var(--accent) 50%, transparent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: color-mix(in oklab, var(--border) 50%, transparent);
+  --sidebar-ring: var(--ring);
 
   --radius: 0.5rem;
+
+  /* === scrollbar system ===
+     Firefox 走标准 CSS Scrollbars (`scrollbar-width: thin`); Chromium / Electron /
+     Safari 走 ::-webkit-scrollbar 自定义路径以拿到比 thin 更细的视觉. 颜色使用
+     semantic token 从 palette 派生 (var(--foreground) 自动跟随 light/dark mode 翻色),
+     组件只声明 data-scrollbar policy, 不在局部硬编码 scrollbar 视觉. */
+  --shell-scrollbar-width: thin;
+  --shell-scrollbar-width-legacy: 6px;
+  --shell-scrollbar-radius: 999px;
+  --shell-scrollbar-thumb: color-mix(
+    in oklab,
+    var(--foreground) 30%,
+    transparent
+  );
+  --shell-scrollbar-thumb-hover: color-mix(
+    in oklab,
+    var(--foreground) 44%,
+    transparent
+  );
+  --shell-scrollbar-thumb-active: color-mix(
+    in oklab,
+    var(--foreground) 58%,
+    transparent
+  );
+  --shell-scrollbar-track: transparent;
+  --shell-scrollbar-track-hover: transparent;
+  --shell-scrollbar-corner: transparent;
+
+  /* === 字体体系 ===
+     UI 主字体 HarmonyOS Sans SC + emoji + system-ui fallback;
+     mono 路径预留 (Bay 当前未引入 JetBrainsMono Nerd Font). */
+  --bay-ui-font-family:
+    "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",
+    "Noto Color Emoji", system-ui, -apple-system, "Helvetica Neue", "PingFang SC",
+    sans-serif;
+  --bay-mono-font-family:
+    "HarmonyOS Sans SC", ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo,
+    monospace;
+
+  /* === shell layout constants === */
+  --shell-titlebar-height: 44px;
 }
 
 :root.light {
+  /* shadcn neutral LIGHT (opt-in 由 ThemeProvider apply class="light") */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -60,9 +163,16 @@
   --border: oklch(0.92 0 0);
   --input: oklch(0.92 0 0);
   --ring: oklch(0.708 0 0);
+  /* sidebar/titlebar 已在 :root 走 var(--xxx) 引用, .light 模式自动跟 --background/--foreground 翻面,
+     无需在此重复定义. */
 }
 
 @theme inline {
+  /* font-family 注册到 Tailwind: 在元素上用 `font-sans` / `font-mono` utility 即应用. */
+  --font-sans: var(--bay-ui-font-family);
+  --font-mono: var(--bay-mono-font-family);
+
+  /* shadcn semantic mapping */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -80,35 +190,325 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
   --color-info: var(--info);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* bay-extends 7 业务色 (derive 自 preset semantic, 详 tokens.json) */
+  --color-kanban-lane-backlog: var(--muted);
+  --color-kanban-lane-running: var(--info);
+  --color-kanban-lane-escalated: var(--destructive);
+  --color-kanban-lane-completed: var(--success);
+  --color-kanban-lane-ready-to-merge: var(--warning);
+  --color-kanban-lane-merged: var(--muted-foreground);
+  --color-kanban-lane-paused: var(--muted);
+
+  --color-lint-severity-p0: var(--destructive);
+  --color-lint-severity-p1: var(--warning);
+  --color-lint-severity-p2: var(--muted-foreground);
+
+  --color-iter-cap-normal: var(--primary);
+  --color-iter-cap-warn: var(--warning);
+  --color-iter-cap-exceed: var(--destructive);
+
+  --color-mode-think: var(--muted-foreground);
+  --color-mode-emit: var(--primary);
+  --color-mode-lock: var(--success);
+
+  --color-service-status-ok: var(--success);
+  --color-service-status-warn: var(--warning);
+  --color-service-status-error: var(--destructive);
+  --color-service-status-stopped: var(--muted-foreground);
+
+  --color-dispute-status-pending: var(--warning);
+  --color-dispute-status-accepted: var(--success);
+  --color-dispute-status-rejected: var(--destructive);
+  --color-dispute-status-deferred: var(--muted-foreground);
+
+  --color-action-triad-apply: var(--primary);
+  --color-action-triad-run: var(--primary);
+  --color-action-triad-edit: var(--secondary);
+  --color-action-triad-skip: var(--muted-foreground);
+  --color-action-triad-accept: var(--success);
+  --color-action-triad-reject: var(--destructive);
+  --color-action-triad-defer: var(--warning);
+
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
 }
 
+/* Universal border-color default packaged into @layer base so Tailwind utility-layer
+   border-color- classes (e.g. border-kanban-lane-running) can override it. Without the
+   layer, unlayered rule wins per CSS Cascade Level 5 regardless of selector specificity. */
 @layer base {
   * {
     border-color: var(--border);
   }
+}
 
-  html,
-  body,
-  #root {
-    height: 100%;
-    margin: 0;
+/*
+ * 全局 cursor:pointer reset.
+ *
+ * 背景: shadcn CLI 的 --pointer flag 当前是 stub —
+ *   - CLI declared 但 registry server 端未注入 (curl ?pointer=true 与不传 byte-identical)
+ *   - shadcn-ui repo 全仓搜 'cursor-pointer' = 0 matches
+ *   - 不能等 upstream 接通; HTML <button> 默认 cursor=default 不直观, desktop UX 必须 pointer
+ *
+ * 实现:
+ *   - :where() 0-specificity: 组件级 cursor utility (如 tab-bar 的 cursor-default) 自然 override
+ *   - 覆盖原生 interactive 元素 + role-based 元素 (含 [role="tab"], 但 Bay tab-bar 显式 cursor-default 仍生效)
+ *   - 三种 disabled 状态: :disabled / [aria-disabled="true"] (ARIA) / [data-disabled] (Radix/shadcn)
+ */
+@layer base {
+  :where(
+    button,
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="checkbox"],
+    [role="radio"],
+    [role="switch"],
+    a[href],
+    input[type="checkbox"],
+    input[type="radio"],
+    input[type="range"],
+    input[type="file"],
+    select,
+    summary
+  ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * scrollbar policy 系统.
+ *
+ * 组件声明方式:
+ *   <div data-scrollbar="stable">  // scrollbar-gutter: stable (推荐 panel 内容区, 避免抖动)
+ *   <div data-scrollbar="overlay"> // scrollbar-gutter: auto (悬浮覆盖, 空间紧)
+ *   <div data-scrollbar="none">    // 完全隐藏 (modal/dialog 内部容器)
+ * shadcn primitives (dropdown/popover/select content) 通过 [data-slot] 自动应用, 无需声明.
+ */
+:where(
+  [data-scrollbar],
+  [data-flat-scroll],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"],
+  [data-slot="popover-content"],
+  [data-slot="select-content"]
+) {
+  overscroll-behavior: contain;
+  scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track);
+  scrollbar-width: var(--shell-scrollbar-width);
+}
+
+:where([data-scrollbar="stable"], [data-flat-scroll]) {
+  scrollbar-gutter: stable;
+}
+
+:where([data-scrollbar="overlay"]) {
+  scrollbar-gutter: auto;
+}
+
+:where([data-scrollbar="none"]) {
+  scrollbar-width: none;
+}
+
+/* Chromium / Electron / Safari 上 webkit 永远接管, 自定义比标准 `thin` 更细的视觉.
+   Firefox 不支持 ::-webkit-scrollbar, 自动 fallback 到上面的标准 CSS Scrollbars. */
+@supports selector(::-webkit-scrollbar) {
+  :where(
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  )::-webkit-scrollbar {
+    width: var(--shell-scrollbar-width-legacy);
+    height: var(--shell-scrollbar-width-legacy);
   }
 
-  body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family:
-      "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui,
-      -apple-system, "Helvetica Neue", "PingFang SC", sans-serif;
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
+  :where(
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  )::-webkit-scrollbar-thumb {
+    background: var(--shell-scrollbar-thumb);
+    background-clip: content-box;
+    border: 1px solid transparent;
+    border-radius: var(--shell-scrollbar-radius);
   }
+
+  :where(
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  ):hover::-webkit-scrollbar-thumb {
+    background: var(--shell-scrollbar-thumb-hover);
+    background-clip: content-box;
+  }
+
+  :where(
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  )::-webkit-scrollbar-thumb:active {
+    background: var(--shell-scrollbar-thumb-active);
+    background-clip: content-box;
+  }
+
+  :where(
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  )::-webkit-scrollbar-track {
+    background: var(--shell-scrollbar-track);
+  }
+
+  :where(
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  ):hover::-webkit-scrollbar-track {
+    background: var(--shell-scrollbar-track-hover);
+  }
+
+  :where(
+    [data-scrollbar]:not([data-scrollbar="terminal"]),
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  )::-webkit-scrollbar-corner {
+    background: var(--shell-scrollbar-corner);
+  }
+
+  :where([data-scrollbar="none"])::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+@media (forced-colors: active) {
+  :where(
+    [data-flat-scroll],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]
+  ) {
+    forced-color-adjust: auto;
+    scrollbar-color: auto;
+    scrollbar-width: auto;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  font-family: var(--bay-ui-font-family);
+  font-feature-settings:
+    "rlig" 1,
+    "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/*
+ * Electron titleBarStyle:"hiddenInset" 窗口拖动控制.
+ * .app-drag  → 整片区域作为窗口拖动手柄 (替代系统 titlebar)
+ * .app-no-drag → 拖动区内部的 interactive 元素 (button / tab) 必须 opt-out, 否则 click 被吞
+ */
+.app-drag {
+  -webkit-app-region: drag;
+}
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * Active tab background — "凸出 tab"视觉.
+ *
+ * 形状: 顶圆角 14px 矩形, 底部凸出 4px 进入 Card 区域, 两侧 12px radial-gradient
+ *       构成"外凹"切角, 让相邻 inactive tab 区与凸出的 active tab 之间产生
+ *       自然弧线过渡 (像浏览器标签). 颜色用 var(--card), 与 SidebarInset 下方
+ *       的 Card 内容区融合, 形成 "tab 与 content 同一层" 的层级语义.
+ *
+ * 用法: <span data-bay-tab-active-bg aria-hidden /> 放在 tab 容器内部,
+ *       tab 容器需 `position: relative; overflow: visible`.
+ */
+[data-bay-tab-active-bg] {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  height: 36px;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  background: var(--background);
+  pointer-events: none;
+}
+
+[data-bay-tab-active-bg]::before,
+[data-bay-tab-active-bg]::after {
+  position: absolute;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+[data-bay-tab-active-bg]::before {
+  left: -12px;
+  background: radial-gradient(
+    circle at top left,
+    transparent 12px,
+    var(--background) 12px
+  );
+}
+
+[data-bay-tab-active-bg]::after {
+  right: -12px;
+  background: radial-gradient(
+    circle at top right,
+    transparent 12px,
+    var(--background) 12px
+  );
+}
+
+#root {
+  height: 100%;
 }

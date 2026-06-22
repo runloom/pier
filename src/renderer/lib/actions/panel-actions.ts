@@ -1,5 +1,5 @@
 /**
- * Panel + Window 相关 action 注册. 在 WorkspaceHost mount 时调用一次.
+ * Panel + Window 相关 action 注册. 走快捷键触发, 不在命令面板展示 (和 bay 一致).
  *
  * 新增 action 时:
  *   1. 在 actionRegistry.register({ id: "pier.<domain>.<name>", ... })
@@ -18,8 +18,7 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
       handler: () => useWorkspaceStore.getState().closeActivePanel(),
       id: "pier.panel.closeActive",
-      surfaces: ["command-palette"],
-      metadata: { sortOrder: 0 },
+      surfaces: [],
       title: () => "Close Active Panel",
     })
   );
@@ -30,8 +29,7 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api != null,
       handler: () => useWorkspaceStore.getState().addTab(),
       id: "pier.panel.newTab",
-      surfaces: ["command-palette"],
-      metadata: { sortOrder: 1 },
+      surfaces: [],
       title: () => "New Tab",
     })
   );
@@ -45,8 +43,7 @@ export function registerPanelActions(): () => void {
         });
       },
       id: "pier.window.newWindow",
-      surfaces: ["command-palette"],
-      metadata: { sortOrder: 2 },
+      surfaces: [],
       title: () => "New Window",
     })
   );
