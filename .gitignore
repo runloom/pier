@@ -1,0 +1,50 @@
+.DS_Store
+node_modules
+# build/ 默认忽略; 但 electron-builder buildResources (icon.*, entitlements) 必须入库.
+/build/*
+!/build/icon.icns
+!/build/icon.ico
+!/build/icon.png
+!/build/entitlements.mac.plist
+/package
+.env
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+.playwright-mcp/
+.omc/
+# .claude 本地配置不入库，仅放行项目级 skills.
+.claude/*
+!.claude/skills/
+.playwright-cli/
+
+# Electron build artifacts
+/out/
+/dist-builder/
+/dist-electron/
+
+# Coverage
+coverage/
+
+# Playwright E2E artifacts
+test-results/
+playwright-report/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log
+
+# Worktrees
+.worktrees/
+
+# Per-worktree dev profile
+.pier-dev/

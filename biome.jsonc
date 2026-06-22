@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/type-aware",
+    "ultracite/biome/react"
+  ],
+  "files": {
+    "includes": [
+      "!node_modules",
+      "!out",
+      "!dist",
+      "!build",
+      "!coverage",
+      "!pnpm-lock.yaml",
+      "!src/renderer/app/globals.css"
+    ]
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/renderer/**",
+        "tests/**",
+        "src/shared/**",
+        "src/main/**",
+        "src/preload/**",
+        "electron.vite.config.ts",
+        "vitest.config.ts",
+        "tailwind.config.ts",
+        "scripts/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": "off"
+          },
+          "correctness": {
+            "noUndeclaredDependencies": "off",
+            "noUnresolvedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/renderer/app/globals.css"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    }
+  ]
+}

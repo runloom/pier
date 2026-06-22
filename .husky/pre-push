@@ -1,0 +1,1 @@
+pnpm typecheck && pnpm lint && pnpm check:file-size
