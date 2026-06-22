@@ -56,6 +56,7 @@ private struct Terminal {
 
 // MARK: - Bridge implementation
 
+@MainActor
 final class GhosttyBridgeImpl {
     static let shared = GhosttyBridgeImpl()
 
@@ -253,13 +254,17 @@ final class GhosttyBridgeImpl {
 
 @_cdecl("ghostty_bridge_setup_window")
 public func ghosttyBridgeSetupWindow(_ nsWindowPtr: UnsafeMutableRawPointer) -> Bool {
-    let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
-    return GhosttyBridgeImpl.shared.setupWindow(parent: window)
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        return GhosttyBridgeImpl.shared.setupWindow(parent: window)
+    }
 }
 
 @_cdecl("ghostty_bridge_set_overlay_active")
 public func ghosttyBridgeSetOverlayActive(_ active: Bool) {
-    GhosttyBridgeImpl.shared.setOverlayActive(active)
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.setOverlayActive(active)
+    }
 }
 
 @_cdecl("ghostty_bridge_create_terminal")
@@ -268,11 +273,13 @@ public func ghosttyBridgeCreateTerminal(
     _ panelId: UnsafePointer<CChar>,
     _ x: Double, _ y: Double, _ w: Double, _ h: Double
 ) -> Bool {
-    let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
-    let viewport = NSRect(x: x, y: y, width: w, height: h)
-    return GhosttyBridgeImpl.shared.createTerminal(
-        parent: window, panelId: String(cString: panelId), viewport: viewport
-    )
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        let viewport = NSRect(x: x, y: y, width: w, height: h)
+        return GhosttyBridgeImpl.shared.createTerminal(
+            parent: window, panelId: String(cString: panelId), viewport: viewport
+        )
+    }
 }
 
 @_cdecl("ghostty_bridge_set_frame")
@@ -280,28 +287,38 @@ public func ghosttyBridgeSetFrame(
     _ panelId: UnsafePointer<CChar>,
     _ x: Double, _ y: Double, _ w: Double, _ h: Double
 ) {
-    GhosttyBridgeImpl.shared.setFrame(
-        panelId: String(cString: panelId),
-        viewport: NSRect(x: x, y: y, width: w, height: h)
-    )
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.setFrame(
+            panelId: String(cString: panelId),
+            viewport: NSRect(x: x, y: y, width: w, height: h)
+        )
+    }
 }
 
 @_cdecl("ghostty_bridge_show")
 public func ghosttyBridgeShow(_ panelId: UnsafePointer<CChar>) {
-    GhosttyBridgeImpl.shared.show(panelId: String(cString: panelId))
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.show(panelId: String(cString: panelId))
+    }
 }
 
 @_cdecl("ghostty_bridge_hide")
 public func ghosttyBridgeHide(_ panelId: UnsafePointer<CChar>) {
-    GhosttyBridgeImpl.shared.hide(panelId: String(cString: panelId))
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.hide(panelId: String(cString: panelId))
+    }
 }
 
 @_cdecl("ghostty_bridge_close")
 public func ghosttyBridgeClose(_ panelId: UnsafePointer<CChar>) {
-    GhosttyBridgeImpl.shared.close(panelId: String(cString: panelId))
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.close(panelId: String(cString: panelId))
+    }
 }
 
 @_cdecl("ghostty_bridge_focus")
 public func ghosttyBridgeFocus(_ panelId: UnsafePointer<CChar>) {
-    GhosttyBridgeImpl.shared.focus(panelId: String(cString: panelId))
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.focus(panelId: String(cString: panelId))
+    }
 }

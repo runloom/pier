@@ -18,6 +18,7 @@
     "format:check": "ultracite check",
     "depcruise": "depcruise --config dependency-cruiser.config.cjs src",
     "check:file-size": "bash scripts/check-file-size.sh",
+    "build:native": "cd native && bash build.sh",
     "check": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size",
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
