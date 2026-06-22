@@ -612,7 +612,7 @@ body {
 
   /* — 拖拽 / sash / 浮动 — */
   --dv-sash-color: transparent;
-  --dv-active-sash-color: var(--ring);
+  --dv-active-sash-color: transparent;
   --dv-active-sash-transition-delay: 0s;
   --dv-tabs-container-scrollbar-color: var(--border);
   --dv-icon-hover-background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
@@ -633,6 +633,46 @@ body {
 .dockview-theme-pier .dv-dockview,
 .dockview-theme-pier .dv-groupview {
   background-color: var(--background) !important;
+}
+
+/* sash 视觉/交互分离:
+   - 命中区: 保留 dockview 默认 4px (.dv-sash 本体), 不动
+   - 视觉线: ::after 伪元素 1.5px, hover 时着色 var(--ring)
+   - 默认 hover 整片上色已在上方 --dv-active-sash-color:transparent 禁用
+   - 水平 sash: 居中 (left:50% translateX); 垂直 sash: 顶对齐 (top:50%, 无 translateY)
+     原因: splitview.js 硬编码 sashWidth=4 做居中定位, sash top = boundary-2.
+     dockview 静态分隔线 (.dv-view::before) 从 boundary 向下延伸, 如果 ::after
+     也居中在 boundary 上则视觉中心会比静态线偏高 ~0.75px. */
+.dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1.5px;
+  transform: translateX(-50%);
+  background-color: transparent;
+  transition: background-color 0.15s ease-in-out;
+  pointer-events: none;
+}
+.dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after,
+.dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.dv-disabled):active::after {
+  background-color: var(--ring);
+}
+.dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1.5px;
+  background-color: transparent;
+  transition: background-color 0.15s ease-in-out;
+  pointer-events: none;
+}
+.dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after,
+.dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled):active::after {
+  background-color: var(--ring);
 }
 
 /* — 压制 dockview 内置 :focus outline (pier 改用底部指示线) — */

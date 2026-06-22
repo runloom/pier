@@ -73,6 +73,10 @@ class WindowManager {
       show: false,
       autoHideMenuBar: true,
       backgroundColor: bgPalette[resolved],
+      ...(isMac && {
+        titleBarStyle: "hiddenInset" as const,
+        trafficLightPosition: { x: 12, y: 12 },
+      }),
       webPreferences: {
         preload: join(import.meta.dirname, "../preload/index.cjs"),
         sandbox: true,

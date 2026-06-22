@@ -31,7 +31,10 @@ export interface PierPreferencesAPI {
 }
 
 export interface PierThemeAPI {
-  setNativeChrome: (resolved: "light" | "dark") => Promise<void>;
+  setNativeChrome: (
+    resolved: "light" | "dark",
+    chromeColor?: string
+  ) => Promise<void>;
 }
 
 export interface PierWindowAPI {
@@ -51,8 +54,8 @@ const preferencesApi: PierPreferencesAPI = {
 };
 
 const themeApi: PierThemeAPI = {
-  setNativeChrome: (resolved) =>
-    ipcRenderer.invoke("pier:theme:set-native-chrome", resolved),
+  setNativeChrome: (resolved, chromeColor) =>
+    ipcRenderer.invoke("pier:theme:set-native-chrome", resolved, chromeColor),
 };
 
 const api: PierWindowAPI = {
