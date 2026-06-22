@@ -1,6 +1,8 @@
 import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import "dockview-react/dist/styles/dockview.css";
+import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
+import { useKeyboardShortcuts } from "@/lib/keybindings/use-keybindings.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { AddPanelAction } from "./add-panel-action.tsx";
 import { panelComponents } from "./panel-registry.ts";
@@ -14,10 +16,15 @@ import { panelComponents } from "./panel-registry.ts";
  * 当前职责:
  * - mount DockviewReact, onReady 时把 api 灌入 store
  * - 注册 panel 组件表 + tab 后 add 按钮 (leftHeaderActionsComponent)
+ * - 注册 panel actions (close active 等) + 挂全局快捷键 dispatch
  * - 初始创建一个 welcome panel
  */
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
+  useKeyboardShortcuts();
+
+  // panel actions 注册一次; disposer 在 unmount 时释放.
+  useEffect(() => registerPanelActions(), []);
 
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
