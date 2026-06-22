@@ -9,6 +9,7 @@ import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { initTheme } from "./stores/theme.store.ts";
+import { initLocale } from "./stores/locale.store.ts";
 
 async function bootstrap() {
   try {
@@ -17,9 +18,9 @@ async function bootstrap() {
     console.error("[pier] i18n init failed, falling back to keys:", err);
   }
   try {
-    await initTheme();
+    await Promise.all([initTheme(), initLocale()]);
   } catch (err) {
-    console.error("[pier] theme init failed:", err);
+    console.error("[pier] theme/locale init failed:", err);
   }
 
   registerConfigActions();

@@ -26,6 +26,10 @@ export const zhCN = {
       solarized: "Solarized",
       vitesse: "Vitesse",
     },
+    locale: {
+      "zh-CN": "简体中文",
+      en: "English",
+    },
   },
   commandPalette: {
     title: "命令面板",
@@ -34,6 +38,7 @@ export const zhCN = {
       commands: "搜索命令…",
       theme: "选择主题 (↑↓ 预览, ↵ 确认, Esc 还原)",
       style: "选择风格 (↑↓ 预览, ↵ 确认, Esc 还原)",
+      language: "选择界面语言",
     },
     category: {
       view: "视图",
@@ -43,6 +48,7 @@ export const zhCN = {
       toggleCommandPalette: "显示命令面板",
       selectTheme: "选择主题",
       selectStyle: "选择风格",
+      selectLanguage: "选择显示语言",
     },
   },
 } as const;

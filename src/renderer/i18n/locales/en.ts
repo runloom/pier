@@ -26,6 +26,10 @@ export const en = {
       solarized: "Solarized",
       vitesse: "Vitesse",
     },
+    locale: {
+      "zh-CN": "简体中文",
+      en: "English",
+    },
   },
   commandPalette: {
     title: "Command Palette",
@@ -34,6 +38,7 @@ export const en = {
       commands: "Search commands…",
       theme: "Select theme (↑↓ preview, ↵ accept, Esc restore)",
       style: "Select style (↑↓ preview, ↵ accept, Esc restore)",
+      language: "Select language",
     },
     category: {
       view: "View",
@@ -43,6 +48,7 @@ export const en = {
       toggleCommandPalette: "Show Command Palette",
       selectTheme: "Select Theme",
       selectStyle: "Select Style",
+      selectLanguage: "Select Display Language",
     },
   },
 } as const;
