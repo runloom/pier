@@ -33,6 +33,7 @@ import { useCommandPaletteController } from "@/lib/command-palette/controller.ts
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
 
 interface CategoryMeta {
   /** 用作 i18n key: commandPalette.category.${labelKey} */
@@ -126,6 +127,15 @@ export function CommandPalette() {
   const quickPick = controller.quickPick;
   const isOpen = controller.open;
   const requestId = controller.requestId;
+
+  // 通知 native 层 overlay 打开/关闭, 以便暂停终端事件路由。
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    pushOverlay();
+    return () => popOverlay();
+  }, [isOpen]);
 
   // 新一轮 session (open 或 openQuickPick): 重置 query / selectedValue / accepted flag。
   useEffect(() => {

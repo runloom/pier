@@ -25,6 +25,8 @@ async function bootstrap() {
     console.error("[pier] theme/locale init failed:", err);
   }
 
+  window.pier?.terminal?.setup?.()?.catch(() => undefined);
+
   registerConfigActions();
   registerCommandPaletteAction();
   registerPanelActions();

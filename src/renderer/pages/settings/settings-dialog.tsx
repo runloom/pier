@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import { useT } from "@/i18n/use-t.ts";
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
 import { NAV_ITEMS } from "@/pages/settings/data/appearance-nav.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
+import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
 
 const SIDEBAR_STYLE: CSSProperties = {
   "--sidebar-width": "10rem",
@@ -29,6 +31,14 @@ export function SettingsDialog() {
   const t = useT();
   const open = useSettingsDialogStore((s) => s.isOpen);
   const onOpenChange = useSettingsDialogStore((s) => s.setOpen);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    pushOverlay();
+    return () => popOverlay();
+  }, [open]);
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
