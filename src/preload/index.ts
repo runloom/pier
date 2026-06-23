@@ -78,6 +78,18 @@ const terminalApi: TerminalAPI = {
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  onCwdChange: (cb) => {
+    const listener = (
+      _event: unknown,
+      payload: { cwd: string; panelId: string }
+    ) => {
+      cb(payload);
+    };
+    ipcRenderer.on("pier:terminal:cwd-change", listener);
+    return () => {
+      ipcRenderer.off("pier:terminal:cwd-change", listener);
+    };
+  },
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFrame: (panelId, frame) =>
