@@ -83,6 +83,7 @@ const terminalApi: TerminalAPI = {
     ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
   setOverlayActive: (active) =>
     ipcRenderer.send("pier:terminal:set-overlay", active),
+  // ↑ preload 不带 windowId, main 端用 event.sender 自动找 BrowserWindow.
   setup: () => ipcRenderer.invoke("pier:terminal:setup"),
   show: (panelId) => ipcRenderer.send("pier:terminal:show", panelId),
 };

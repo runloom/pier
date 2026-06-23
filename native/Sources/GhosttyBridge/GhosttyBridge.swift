@@ -112,6 +112,15 @@ final class EventRouterView: NSView {
         // Terminal mode: 只拦截 Cmd+key forward 给 web (路径 2 IPC), 其他 pass through 给 Ghostty.
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard mods.contains(.command) else { return event }
+
+        // macOS menu reserved keys (Cmd+Q/Cmd+H/Cmd+M/Cmd+Comma 等 role-bound items)
+        // 必须先让 NSApp.mainMenu 处理. performKeyEquivalent 命中 menu item 后会调
+        // 该 item 的 action 并返回 true; 没命中返回 false. 不让 menu 优先会让 Cmd+Q
+        // 永远 swallow 在 web forward 链 (web 没注册 → 静默 drop, 用户感受"Cmd+Q 失效").
+        if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+            return nil
+        }
+
         guard let chars = event.charactersIgnoringModifiers, !chars.isEmpty else { return event }
         EventRouterView.forwardCmdKeyCallback?(browserWindowId, mods.rawValue, chars)
         return nil
@@ -263,23 +272,20 @@ final class GhosttyBridgeImpl {
 
     // MARK: - Overlay control (PIER: new API)
 
-    func setOverlayActive(_ active: Bool) {
-        for (_, router) in eventRouters {
-            router.overlayActive = active
-            // 物理隐藏: 从视图层级中移除, 确保 NSDragging 目标发现能找到 WKWebView
-            router.isHidden = active
+    /// Per-window overlay state — 修复 v1 全局污染 bug (window-A 打开命令面板会让 window-B
+    /// overlayCount 也 +1). 调用方 (main IPC handler) 必须传明确的 NSWindow.
+    func setOverlayActive(window: NSWindow, _ active: Bool) {
+        let windowId = ObjectIdentifier(window)
+        guard let router = eventRouters[windowId] else { return }
+        router.overlayActive = active
+        // 物理隐藏: 从视图层级中移除, 确保 NSDragging 目标发现能找到 WKWebView
+        router.isHidden = active
 
-            // 更新 per-window overlayCount + 触发 applyFirstResponder.
-            // overlayCount > 0 时 inTerminalMode=false → firstResponder swap to WKWebView,
-            // web overlay (command palette / dialog) 自然接 keyboard.
-            if let window = router.window {
-                mutateState(window) { state in
-                    state.overlayCount += active ? 1 : -1
-                    if state.overlayCount < 0 { state.overlayCount = 0 }  // defensive
-                }
-                applyFirstResponder(for: window)
-            }
+        mutateState(window) { state in
+            state.overlayCount += active ? 1 : -1
+            if state.overlayCount < 0 { state.overlayCount = 0 }  // defensive
         }
+        applyFirstResponder(for: window)
     }
 
     /// 通知 swift 当前 active panel 是 terminal 还是 web. 由 web 端 dockview
@@ -297,6 +303,13 @@ final class GhosttyBridgeImpl {
     /// 不用 savedFirstResponder restore 模型 — active panel 可能在 overlay 期间被
     /// 切换, pop overlay 后恢复"之前"的 firstResponder 不一定对 (旧 panel 可能已 close).
     /// 按当前 state 重算更可靠.
+    ///
+    /// v2: web mode 不在 swift 这里 makeFirstResponder — 改由 main 调
+    /// `BrowserWindow.webContents.focus()` (Electron 标准 API). 原因: Electron 42 用
+    /// Chromium (不是 WebKit), view 树是 WebContentsViewCocoa > RenderWidgetHostViewCocoa,
+    /// 没有真 WKWebView. v1 makeFirstResponder(找到的 WKWebView) 一直找错 type, fallback
+    /// wrapper 也不接 key (acceptsFirstResponder=false). webContents.focus() 内部知道
+    /// 正确的 NSView, 跨平台一致.
     func applyFirstResponder(for window: NSWindow) {
         let state = stateFor(window: window)
 
@@ -305,24 +318,10 @@ final class GhosttyBridgeImpl {
                let term = terminals[panelId] {
                 window.makeFirstResponder(term.terminalView)
             }
-            // 没找到 terminal NSView → 不动 firstResponder (保留 WKWebView default)
-        } else {
-            if let wk = findWKWebViewInContentView(window) {
-                window.makeFirstResponder(wk)
-            }
+            // 没找到 terminal NSView → 不动 firstResponder (保留 web container default)
         }
-    }
-
-    private func findWKWebViewInContentView(_ window: NSWindow) -> NSView? {
-        guard let contentView = window.contentView else { return nil }
-        func search(in view: NSView) -> NSView? {
-            if String(describing: type(of: view)) == "WKWebView" { return view }
-            for child in view.subviews {
-                if let found = search(in: child) { return found }
-            }
-            return nil
-        }
-        return search(in: contentView)
+        // Web mode: no-op. main 端在 setActivePanelKind('web') / setOverlayActive(true)
+        // 时调 webContents.focus() 让 Chromium 自己 dispatch.
     }
 
     /// 注册 keyboard forward callback: swift NSEvent monitor 捕获 Cmd+key 后, 通过
@@ -390,14 +389,15 @@ final class GhosttyBridgeImpl {
 
         activePanelId = panelId
 
-        // 反例 6 修复: dockview onDidActivePanelChange 可能早于 React TerminalPanel
-        // useEffect 调 terminal.create. 早到的 setActivePanelKind 时 terminals[panelId]
-        // 还没创建, applyFirstResponder 跳过 makeFirstResponder. create 完成后补一次,
-        // 确保 firstResponder 真正 swap 到 terminal NSView.
-        let state = stateFor(window: parent)
-        if state.activeTerminalPanelId == panelId {
-            applyFirstResponder(for: parent)
-        }
+        // 反例 6 修复 v2: 无条件 applyFirstResponder. v1 加 `if activeTerminalPanelId
+        // == panelId` guard 失败 — dockview 快速 fire 多个 active panel change 时, state
+        // 已变成其他 panelId, guard 永不命中. applyFirstResponder 内部已有 safety check
+        // (找不到 term 就不动 firstResponder), 无条件调用安全且可靠.
+        //
+        // 触发场景: layout 恢复 fromJSON 同步建多 panel + React mount 后异步 IPC create,
+        // onDidActivePanelChange fire 给 panel A 时 terminals[A]=nil 先 swap fail; B fire
+        // 后 state=B; A 的 createTerminal 完成补这一次, 不依赖 state 当前值.
+        applyFirstResponder(for: parent)
 
         return true
     }
@@ -453,12 +453,25 @@ final class GhosttyBridgeImpl {
 
     func close(panelId: String) {
         guard let term = terminals[panelId] else { return }
+        let parent = term.parentWindow
         term.containerView.removeFromSuperview()
         terminals.removeValue(forKey: panelId)
         if activePanelId == panelId { activePanelId = nil }
 
-        let windowId = ObjectIdentifier(term.parentWindow)
+        let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets.removeValue(forKey: panelId)
+
+        // 清 windowState stale activeTerminalPanelId — 防 use-after-free + 让
+        // applyFirstResponder 不去 access 已 removeFromSuperview 的 terminalView.
+        // close 后 dockview 会自动 fire onDidActivePanelChange to 下一个 panel,
+        // web 端 listener 会再调 setActivePanelKind. 这里立即 swap 是 belt-and-
+        // suspenders (web IPC 延迟时不留 stale state 窗口).
+        mutateState(parent) { state in
+            if state.activeTerminalPanelId == panelId {
+                state.activeTerminalPanelId = nil
+            }
+        }
+        applyFirstResponder(for: parent)
     }
 
     func focus(panelId: String) {
@@ -540,9 +553,13 @@ public func ghosttyBridgeSetupWindow(
 }
 
 @_cdecl("ghostty_bridge_set_overlay_active")
-public func ghosttyBridgeSetOverlayActive(_ active: Bool) {
+public func ghosttyBridgeSetOverlayActive(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ active: Bool
+) {
     MainActor.assumeIsolated {
-        GhosttyBridgeImpl.shared.setOverlayActive(active)
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        GhosttyBridgeImpl.shared.setOverlayActive(window: window, active)
     }
 }
 

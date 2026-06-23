@@ -37,7 +37,7 @@ interface NativeAddon {
         ) => void)
       | null
   ): void;
-  setOverlayActive(active: boolean): void;
+  setOverlayActive(parentHandle: Buffer, active: boolean): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
   showTerminal(panelId: string): void;
 }
@@ -167,8 +167,25 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     addon?.focusTerminal(panelId);
   });
 
-  ipcMain.on("pier:terminal:set-overlay", (_event, active: boolean) => {
-    addon?.setOverlayActive(active);
+  ipcMain.on("pier:terminal:set-overlay", (event, active: boolean) => {
+    if (!addon) {
+      return;
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return;
+    }
+    try {
+      addon.setOverlayActive(win.getNativeWindowHandle(), active);
+    } catch (err) {
+      console.error("[pier-set-overlay] failed:", err);
+    }
+    // v2: overlay active 时主动调 webContents.focus() 让 Chromium 接管 keystroke.
+    // Electron 标准 API, 内部知道正确的 RenderWidgetHostViewCocoa. 替代 v1 swift 端
+    // makeFirstResponder(WKWebView) 的脆弱实现 (Electron 42 没真 WKWebView).
+    if (active) {
+      win.webContents.focus();
+    }
   });
 
   ipcMain.on(
@@ -186,6 +203,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         addon.setActivePanelKind(win.getNativeWindowHandle(), kindRaw, panelId);
       } catch (err) {
         console.error("[pier-set-active-panel-kind] failed:", err);
+      }
+      // v2: 切到 web panel 时主动调 webContents.focus() (跟 setOverlayActive 同理).
+      // swift applyFirstResponder web 分支已 no-op, 由 main 负责 web focus.
+      if (kind === "web") {
+        win.webContents.focus();
       }
     }
   );

@@ -5,7 +5,7 @@
 
 extern "C" {
     bool ghostty_bridge_setup_window(void* nsWindow, long browserWindowId);
-    void ghostty_bridge_set_overlay_active(bool active);
+    void ghostty_bridge_set_overlay_active(void* nsWindow, bool active);
     bool ghostty_bridge_create_terminal(void* nsWindow, const char* panelId,
                                          double x, double y, double w, double h);
     void ghostty_bridge_set_frame(const char* panelId,
@@ -45,8 +45,10 @@ static Napi::Value JsSetupWindow(const Napi::CallbackInfo& info) {
 }
 
 static Napi::Value JsSetOverlayActive(const Napi::CallbackInfo& info) {
-    bool active = info[0].As<Napi::Boolean>().Value();
-    ghostty_bridge_set_overlay_active(active);
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    bool active = info[1].As<Napi::Boolean>().Value();
+    ghostty_bridge_set_overlay_active((__bridge void*)win, active);
     return info.Env().Undefined();
 }
 
