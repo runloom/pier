@@ -13,7 +13,10 @@ interface WorkspaceState {
   closePanel: (panelId: string) => void;
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
-  splitPanel: (panelId: string, direction: "right" | "below") => void;
+  splitPanel: (
+    panelId: string,
+    direction: "right" | "below" | "left" | "above"
+  ) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
