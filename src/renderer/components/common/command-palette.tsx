@@ -72,6 +72,7 @@ export function groupActionsForPalette(
     );
   }
 
+  // 入参可能已被 actionRegistry.list 按 sortOrder 预排; 这里再排一次保证函数自洽, 不依赖上游顺序.
   for (const g of groups) {
     g.actions.sort((a, b) => compareActions(a, b, frecencyMap));
   }
