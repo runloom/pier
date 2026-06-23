@@ -11,28 +11,32 @@ const SURFACE = "test/submenu";
 
 const noop = () => undefined;
 
-function mkAction(
-  id: string,
-  group: string,
-  sortOrder: number,
-  submenu?: string
-): Action {
-  return {
-    id,
-    title: () => id,
-    category: "Test",
-    handler: noop,
-    surfaces: [SURFACE],
-    metadata: {
-      group,
-      sortOrder,
-      ...(submenu !== undefined && { submenu: () => submenu }),
-    },
-  };
-}
-
 describe("buildMenuEntries — submenu 聚合", () => {
   const disposers: (() => void)[] = [];
+
+  function mkAction(
+    id: string,
+    group: string,
+    sortOrder: number,
+    submenu?: string
+  ): Action {
+    return {
+      id,
+      title: () => id,
+      category: "Test",
+      handler: noop,
+      surfaces: [SURFACE],
+      metadata: {
+        group,
+        sortOrder,
+        ...(submenu !== undefined && { submenu: () => submenu }),
+      },
+    };
+  }
+
+  function register(a: Action): void {
+    disposers.push(actionRegistry.register(a));
+  }
 
   beforeEach(() => {
     disposers.length = 0;
@@ -43,10 +47,6 @@ describe("buildMenuEntries — submenu 聚合", () => {
       d();
     }
   });
-
-  function register(a: Action): void {
-    disposers.push(actionRegistry.register(a));
-  }
 
   it("没 submenu 字段的 action 平铺", () => {
     register(mkAction("a", "1_g", 1));
