@@ -22,6 +22,7 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
       handler: () => useWorkspaceStore.getState().closeActivePanel(),
       id: "pier.panel.closeActive",
+      metadata: { group: "9_close" },
       surfaces: [],
       title: () => "Close Active Panel",
     })
@@ -33,6 +34,7 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api != null,
       handler: () => useWorkspaceStore.getState().addTab(),
       id: "pier.panel.newTab",
+      metadata: { group: "1_new" },
       surfaces: [],
       title: () => "New Tab",
     })
@@ -44,6 +46,7 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api != null,
       handler: () => useWorkspaceStore.getState().addTerminal(),
       id: "pier.panel.newTerminal",
+      metadata: { group: "1_new" },
       surfaces: [],
       title: () => "New Terminal",
     })
@@ -58,6 +61,7 @@ export function registerPanelActions(): () => void {
         });
       },
       id: "pier.window.newWindow",
+      metadata: { group: "1_new" },
       surfaces: [],
       title: () => "New Window",
     })
@@ -79,6 +83,7 @@ export function registerPanelActions(): () => void {
       },
       id: "pier.workspace.resetLayout",
       metadata: {
+        group: "z_workspace",
         iconComponent: RotateCcw,
         keywords: ["reset", "layout", "重置", "布局", "panel", "面板"],
         sortOrder: 6,
