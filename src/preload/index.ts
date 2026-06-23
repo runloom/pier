@@ -1,3 +1,8 @@
+import type {
+  MenuPopupOptions,
+  MenuPopupResult,
+  MenuTemplate,
+} from "@shared/contracts/menu.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -54,6 +59,13 @@ export interface PierKeybindingAPI {
   ) => () => void;
 }
 
+export interface PierMenuAPI {
+  popup: (
+    template: MenuTemplate,
+    options?: MenuPopupOptions
+  ) => Promise<MenuPopupResult>;
+}
+
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
@@ -61,6 +73,7 @@ export interface PierWindowAPI {
   focusWindow: (windowId: string) => Promise<void>;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
+  menu: PierMenuAPI;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
   terminal: TerminalAPI;
@@ -101,6 +114,11 @@ const workspaceApi: PierWorkspaceAPI = {
     ipcRenderer.invoke("pier:workspace:save-layout", layout),
 };
 
+const menuApi: PierMenuAPI = {
+  popup: (template, options) =>
+    ipcRenderer.invoke("pier:menu:popup", template, options),
+};
+
 const keybindingApi: PierKeybindingAPI = {
   onForward: (cb) => {
     const listener = (
@@ -125,6 +143,7 @@ const api: PierWindowAPI = {
     ipcRenderer.invoke("pier://window:focus", windowId),
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
+  menu: menuApi,
   platform: process.platform,
   preferences: preferencesApi,
   terminal: terminalApi,
