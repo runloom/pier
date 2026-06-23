@@ -133,12 +133,44 @@ final class EventRouterView: NSView {
     }
 }
 
+// MARK: - PWD delegate adapter
+
+/// 实现 TerminalSurfacePwdDelegate, 每个 terminal 一个实例, 持有 panelId 用于
+/// 区分多 panel. cwd 变化时调全局 forwardPwdCallback 把 (panelId, path) 转给
+/// main process.
+///
+/// weak-set 到 terminalView.delegate, strong-hold 在 Terminal struct 中以保证
+/// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
+@MainActor
+final class TerminalPwdDelegate: TerminalSurfacePwdDelegate {
+    let panelId: String
+
+    /// 全局 callback: 收到 OSC 7 path 时调用, 把 (browserWindowId, panelId, path)
+    /// 转给 main process. browserWindowId 由 GhosttyBridgeImpl 通过 panelId 反查
+    /// (panel 所属 NSWindow → browserWindowId 映射).
+    static var forwardPwdCallback: ((Int, String, String) -> Void)?
+
+    init(panelId: String) {
+        self.panelId = panelId
+    }
+
+    func terminalDidChangeWorkingDirectory(_ path: String) {
+        guard let windowId = GhosttyBridgeImpl.shared.browserWindowId(forPanelId: panelId) else {
+            return
+        }
+        TerminalPwdDelegate.forwardPwdCallback?(windowId, panelId, path)
+    }
+}
+
 // MARK: - Terminal record
 
 private struct Terminal {
     let containerView: NSView
     let terminalView: TerminalView
     let parentWindow: NSWindow
+    /// PwdDelegate adapter (strong-hold — terminalView.delegate 是 weak).
+    /// 随 Terminal 一起释放, terminalView weak ref 自动 nil, 不留 dangling.
+    let pwdDelegate: TerminalPwdDelegate
 }
 
 // MARK: - Bridge implementation
@@ -179,6 +211,18 @@ final class GhosttyBridgeImpl {
 
     // per-window state, 跟 eventRouters 一样用 ObjectIdentifier(window) 作 key
     private var windowStates: [ObjectIdentifier: WindowKeyboardState] = [:]
+
+    /// panelId → browserWindowId 映射. createTerminal 时建立, close/closeAll 时清理.
+    /// PwdDelegate 收到 OSC 7 时需要反查 panel 所属窗口以路由 IPC.
+    private var panelIdToBrowserWindowId: [String: Int] = [:]
+
+    /// NSWindow → browserWindowId 映射. setupWindow 时建立, detachWindow 时清理.
+    /// createTerminal 用它把 panelId 关联到 browserWindowId.
+    private var windowToBrowserWindowId: [ObjectIdentifier: Int] = [:]
+
+    func browserWindowId(forPanelId panelId: String) -> Int? {
+        return panelIdToBrowserWindowId[panelId]
+    }
 
     func stateFor(window: NSWindow) -> WindowKeyboardState {
         return windowStates[ObjectIdentifier(window)] ?? WindowKeyboardState()
@@ -267,6 +311,9 @@ final class GhosttyBridgeImpl {
         // 初始化 per-window keyboard state (PanelKind 默认 .web — 安全, 不抢 firstResponder)
         windowStates[windowId] = WindowKeyboardState()
 
+        // 记录 browserWindowId 映射 — PwdDelegate 反查 panel→window→browserId 路由 IPC.
+        windowToBrowserWindowId[windowId] = browserWindowId
+
         return true
     }
 
@@ -339,6 +386,13 @@ final class GhosttyBridgeImpl {
         EventRouterView.forwardCmdKeyCallback = cb
     }
 
+    /// 注册 PWD forward callback: swift TerminalSurfacePwdDelegate 收到 OSC 7 后,
+    /// 把 (browserWindowId, panelId, cwd) 转给 main process. 与 keyboard forward
+    /// 路径同模式 (PwdDelegate → C 函数指针 → N-API ThreadSafeFunction).
+    func setPwdForwardCallback(_ cb: @escaping (Int, String, String) -> Void) {
+        TerminalPwdDelegate.forwardPwdCallback = cb
+    }
+
     // MARK: - Terminal lifecycle
 
     func createTerminal(parent: NSWindow, panelId: String, viewport: NSRect) -> Bool {
@@ -356,6 +410,11 @@ final class GhosttyBridgeImpl {
         terminalView.autoresizingMask = [.width, .height]
         terminalView.configuration = TerminalSurfaceOptions(backend: .exec)
         terminalView.controller = controller(for: parent)
+
+        // 挂 PwdDelegate — 接 OSC 7, 转发 (panelId, path) 给 main process.
+        // delegate 是 weak ref, Terminal struct strong-hold pwdDelegate 保证生命周期.
+        let pwdDelegate = TerminalPwdDelegate(panelId: panelId)
+        terminalView.delegate = pwdDelegate
 
         // Container 只是 frame holder, 自身不绘制. terminalView 内的 IOSurfaceLayer
         // (opaque=true) 已经渲染 terminal 全部像素, 不需要 container 再画 background —
@@ -378,7 +437,8 @@ final class GhosttyBridgeImpl {
         terminals[panelId] = Terminal(
             containerView: container,
             terminalView: terminalView,
-            parentWindow: parent
+            parentWindow: parent,
+            pwdDelegate: pwdDelegate
         )
 
         // 更新 EventRouter targets (inset 留出 sash 事件通道)
@@ -386,6 +446,11 @@ final class GhosttyBridgeImpl {
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
             rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset), view: terminalView
         )
+
+        // 建立 panelId → browserWindowId 映射 (PwdDelegate 路由依赖)
+        if let bid = windowToBrowserWindowId[windowId] {
+            panelIdToBrowserWindowId[panelId] = bid
+        }
 
         activePanelId = panelId
 
@@ -456,6 +521,7 @@ final class GhosttyBridgeImpl {
         let parent = term.parentWindow
         term.containerView.removeFromSuperview()
         terminals.removeValue(forKey: panelId)
+        panelIdToBrowserWindowId.removeValue(forKey: panelId)
         if activePanelId == panelId { activePanelId = nil }
 
         let windowId = ObjectIdentifier(parent)
@@ -495,6 +561,7 @@ final class GhosttyBridgeImpl {
         for (panelId, term) in toClose {
             term.containerView.removeFromSuperview()
             terminals.removeValue(forKey: panelId)
+            panelIdToBrowserWindowId.removeValue(forKey: panelId)
         }
         if let activeId = activePanelId, terminals[activeId] == nil {
             activePanelId = nil
@@ -520,6 +587,7 @@ final class GhosttyBridgeImpl {
         // 释放该 window 的 TerminalController — 内部 session/PTY 列表跨 window 累积
         // 是潜在内存泄漏, swift ARC 让无引用 controller 自动 dealloc.
         controllers.removeValue(forKey: windowId)
+        windowToBrowserWindowId.removeValue(forKey: windowId)
     }
 
     // MARK: - Coordinate conversion
@@ -648,6 +716,27 @@ public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallbac
             }
         } else {
             GhosttyBridgeImpl.shared.setKeyboardForwardCallback { _, _, _ in }
+        }
+    }
+}
+
+/// C 函数指针类型: 接收 browserWindowId (Int), panelId UTF-8 C string, cwd UTF-8.
+/// addon.mm 包装成 ThreadSafeFunction 让 JS 端能安全接收.
+public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+
+@_cdecl("ghostty_bridge_set_pwd_forward_callback")
+public func ghosttyBridgeSetPwdForwardCallback(_ cb: PwdForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            GhosttyBridgeImpl.shared.setPwdForwardCallback { wid, panelId, cwd in
+                panelId.withCString { pidPtr in
+                    cwd.withCString { cwdPtr in
+                        cb(wid, pidPtr, cwdPtr)
+                    }
+                }
+            }
+        } else {
+            GhosttyBridgeImpl.shared.setPwdForwardCallback { _, _, _ in }
         }
     }
 }

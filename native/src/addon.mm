@@ -21,6 +21,10 @@ extern "C" {
     // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
     typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
     void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
+    // PWD forward: swift TerminalSurfacePwdDelegate 收到 OSC 7 → 此 trampoline → JS.
+    // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
+    typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
+    void ghostty_bridge_set_pwd_forward_callback(PwdForwardFn cb);
     void ghostty_bridge_set_active_panel_kind(void* nsWindow, long kindRaw, const char* panelId);
 }
 
@@ -163,6 +167,55 @@ static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) 
     return env.Undefined();
 }
 
+// ---- PWD forward callback (swift → main JS) ----
+//
+// swift TerminalSurfacePwdDelegate 收到 OSC 7 → forwardPwdCallback → 这里. 通过
+// ThreadSafeFunction 把事件分发到 main JS 线程, 让 JS 端注册的 callback 收到
+// (browserWindowId, panelId, cwd).
+//
+// 与 keyboard forward 同模式 — 不能在 swift 线程直接调 napi function (会 crash),
+// ThreadSafeFunction 是 N-API 标准的跨线程 callback 桥.
+static Napi::ThreadSafeFunction g_pwdTSFN;
+
+struct PwdForwardPayload {
+    long windowId;
+    std::string panelId;  // heap-owned (跨线程持久化)
+    std::string cwd;
+};
+
+static void g_pwdForwardTrampoline(long windowId, const char* panelId, const char* cwd) {
+    if (!g_pwdTSFN) return;
+    auto* payload = new PwdForwardPayload{ windowId, std::string(panelId), std::string(cwd) };
+    auto status = g_pwdTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, PwdForwardPayload* p) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(p->windowId)),
+            Napi::String::New(env, p->panelId),
+            Napi::String::New(env, p->cwd),
+        });
+        delete p;
+    });
+    if (status != napi_ok) {
+        delete payload;
+    }
+}
+
+static Napi::Value JsSetPwdForwardCallback(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
+        if (g_pwdTSFN) {
+            g_pwdTSFN.Release();
+            g_pwdTSFN = Napi::ThreadSafeFunction();
+        }
+        ghostty_bridge_set_pwd_forward_callback(nullptr);
+        return env.Undefined();
+    }
+    Napi::Function jsFn = info[0].As<Napi::Function>();
+    if (g_pwdTSFN) g_pwdTSFN.Release();
+    g_pwdTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierPwdForward", 0, 1);
+    ghostty_bridge_set_pwd_forward_callback(&g_pwdForwardTrampoline);
+    return env.Undefined();
+}
+
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -189,6 +242,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
+    exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
     return exports;
 }
