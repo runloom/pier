@@ -85,7 +85,12 @@ async function popupAndDispatch(
     );
     return;
   }
-  if (action.enabled?.() === false) {
+  try {
+    if (action.enabled?.() === false) {
+      return;
+    }
+  } catch (err) {
+    console.error(`[menu] action ${result.actionId} enabled() threw:`, err);
     return;
   }
 
