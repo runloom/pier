@@ -14,10 +14,15 @@
  * 改前不一致, inspect DOM 取 dockview 实际默认 tab 的 class 对齐.
  */
 import type { IDockviewPanelHeaderProps } from "dockview-react";
+import { X } from "lucide-react";
 import { type MouseEvent, useCallback } from "react";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
+  // 第二参 _args 在 hook 内未被 useCallback deps 引用 (use-context-menu.ts:_args 标记
+  // unused), 内联对象每次 render 新引用不会导致 baseOnContextMenu 重建. 第三参
+  // options 才需要 useMemo 稳定引用 (Phase 1 不传).
   const baseOnContextMenu = useContextMenu("dockview-tab", {
     panelId: props.api.id,
   });
@@ -28,6 +33,9 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     },
     [baseOnContextMenu, props.api]
   );
+  // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
+  // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
+  // 外层是 dockview 自己渲染的 DOM, 不受此 React 树控制.
   return (
     <div
       className="dv-default-tab"
@@ -36,6 +44,19 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       tabIndex={0}
     >
       <span className="dv-default-tab-content">{props.api.title ?? ""}</span>
+      <button
+        aria-label="Close tab"
+        className="dv-default-tab-action"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          useWorkspaceStore.getState().closePanel(props.api.id);
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        type="button"
+      >
+        <X className="size-3" />
+      </button>
     </div>
   );
 }
