@@ -181,7 +181,7 @@ export function registerPanelActions(): () => void {
         keywords: ["reset", "layout", "重置", "布局", "panel", "面板"],
         sortOrder: 6,
       },
-      surfaces: ["command-palette", "terminal/content"],
+      surfaces: ["command-palette"],
       title: () => i18next.t("commandPalette.action.resetLayout"),
     })
   );
