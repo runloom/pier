@@ -235,7 +235,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       direction,
       FOCUS_TOL_PX
     );
-    if (targetIdx == null) {
+    if (targetIdx === null) {
       return;
     }
 
@@ -250,8 +250,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     // 写回 dockview 单源 — onDidActivePanelChange 回调会自动联动
     // DescriptorStore / KeybindingScope / Swift firstResponder.
-    const panel = api.panels.find((p) => p.id === targetPanel.id);
-    panel?.api.setActive();
+    targetPanel.api.setActive();
   },
 
   resetLayout: async () => {
