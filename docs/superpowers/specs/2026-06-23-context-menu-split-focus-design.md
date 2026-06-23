@@ -223,13 +223,35 @@ function emitBucket(bucket: Action[]): MenuItem[] {
 - focus 必须 global — 用户从 terminal panel 按方向键跳到 welcome panel 后,如果 scope 限 `panel:terminal`,跳到 welcome 后这个快捷键就失效。
 - split 对称 global。
 
-### Ctrl+ 字面 DSL 支持的待验证项
+### Ctrl+ 字面 DSL 扩展
 
-现有 keybinding DSL 在 [defaults.ts](../../src/renderer/lib/keybindings/defaults.ts) 只出现过 `Mod+...`(= Cmd on mac / Ctrl on others),没有过 `Ctrl+...` 字面写法。focus 快捷键在 mac 上必须用 `Ctrl+`(若用 `Mod+Shift+ArrowRight` mac 上是系统 mission control),因此可能需要扩 DSL。
+确认现状: [parse.ts:22-25](../../src/renderer/lib/keybindings/parse.ts) DSL 解析器只识别 `Mod+` / `Alt+` / `Shift+` 三个前缀; [types.ts:23-30](../../src/renderer/lib/keybindings/types.ts) `KeyChord` 只有 `cmdOrCtrl` 一个布尔字段(mac 上 = metaKey,非 mac 上 = ctrlKey),表不出"mac 上要 Ctrl 不要 Cmd"。focus 快捷键直接照搬 loomdesk 的 `Ctrl+Shift+方向键`,因此 DSL 必须扩展。
 
-**实施时验证手段**:写 `tests/unit/default-keymap.test.ts` 的扩展用例,断言 `Ctrl+Shift+ArrowUp` 能被解析。test 红即说明 DSL 需要扩。
+**采用方案**:`KeyChord` 加独立 `ctrl: boolean` 字段,`parse.ts` 平台感知:
 
-**降级方案**(若 DSL 改动比预期大):focus 快捷键用 `Mod+Alt+方向键`(mac 上 `Cmd+Alt+→`,linux 上 `Ctrl+Alt+→`)。略难按但不冲突系统。
+- `Mod+` → `{ cmdOrCtrl: true, ctrl: false }`(语义不变)
+- `Ctrl+`:
+  - mac 上 → `{ cmdOrCtrl: false, ctrl: true }`(独立 Ctrl,不是 Cmd)
+  - 非 mac 上 → `{ cmdOrCtrl: true, ctrl: false }`(等价 `Mod+`,因为非 mac 上 Mod = Ctrl 物理键)
+- `chordFromEvent`:
+  - mac 上 → `{ cmdOrCtrl: e.metaKey, ctrl: e.ctrlKey, ... }`
+  - 非 mac 上 → `{ cmdOrCtrl: e.ctrlKey, ctrl: false, ... }`(非 mac 上无"独立 Ctrl"概念,ctrl 永远 false)
+- `chordEquals` 加 ctrl 比较(5 字段)
+- `chordFromNativeForward`(Swift IPC 路径,仅 mac):mac 逻辑同 `chordFromEvent`
+- `toElectronAccelerator`(menu accelerator 显示):ctrl=true 时输出 `Control+...` 而非 `CmdOrCtrl+...`
+
+**改动文件**:
+
+| 文件 | 改动 |
+|---|---|
+| [types.ts](../../src/renderer/lib/keybindings/types.ts) | KeyChord 加 `readonly ctrl: boolean` |
+| [parse.ts](../../src/renderer/lib/keybindings/parse.ts) | 加 `Ctrl+` 前缀解析;`parseChord(keys, isMac: boolean)` 函数签名扩平台参数 |
+| [matcher.ts](../../src/renderer/lib/keybindings/matcher.ts) | `chordFromEvent` 加 ctrl 字段;`chordEquals` 加 ctrl 比较 |
+| [use-keybindings.ts](../../src/renderer/lib/keybindings/use-keybindings.ts) | `chordFromNativeForward` 加 ctrl 字段 |
+| [registry.ts](../../src/renderer/lib/keybindings/registry.ts) | 调 `parseChord` 处传 isMac() |
+| [build-entries.ts](../../src/renderer/lib/context-menu/build-entries.ts) | `toElectronAccelerator` 加 ctrl → `"Control"` |
+
+**实施粒度第 6 步分裂为 6a + 6b**:6a 完成 DSL 扩展(纯 keybinding 层改动 + 单测),6b 加 6 条 default binding。
 
 ## workspace store 改动
 
@@ -426,14 +448,15 @@ const TOL_PX = 5;
 3. **`pickFocusTarget` 纯函数 + 单测** — 几何算法落地,纯算法、零依赖
 4. **`focusGroup` store action** — 接 dockview api + 调 `pickFocusTarget` + wrapper 单测
 5. **8 个 action 注册 + i18n key** — panel-actions.ts 4 个新加 + 2 个改 surfaces/submenu + 4 个 focus;不绑快捷键
-6. **6 条默认快捷键** — defaults.ts 加 + default-keymap 单测扩;**如 DSL 不支持 Ctrl+ArrowUp,此步分裂为 6a(扩 DSL)+ 6b(加 binding)**
+6. **DSL 扩展 + 6 条默认快捷键** — 分两子步:
+   - **6a. 扩 DSL** — KeyChord 加 ctrl 字段 + parse.ts 平台感知 + matcher/use-keybindings/registry/toElectronAccelerator 同步 + 单测
+   - **6b. 6 条 default binding** — defaults.ts 加 + default-keymap 单测扩
 7. **手动 e2e 验证 + 修 bug** — 跑手动验证清单,记 issue
 
 每步独立可 commit。步骤 1-2 可合一 PR;3-7 可一 PR 完整 focus 功能。
 
 ## 已知未解决问题
 
-- **Ctrl+ 字面 DSL 支持**:实施时跑 default-keymap 单测先确认。是唯一可能需要预先扩 DSL 的依赖项。
 - **TOL_PX 与 pierTheme.gap 同步**:首版硬编码 `5` + 显式 comment;后续 theme 抽公共模块时一并搬。
 - **floating panel 处理**:当前 Pier 无 floating UX,实施时验证 `g.floating === true` 字段在 dockview 类型上是否存在。第一版直接跳过 floating group。
 
