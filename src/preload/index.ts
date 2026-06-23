@@ -15,6 +15,7 @@ export interface WindowInfo {
 interface PreferencesSnapshot {
   language: string;
   monoFontFamily: string;
+  monoFontSize: number;
   stylePresetId: string;
   theme: string;
   uiFontFamily: string;
