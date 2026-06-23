@@ -73,6 +73,7 @@ export const en = {
       selectTheme: "Select Theme",
       selectStyle: "Select Style",
       selectLanguage: "Select Display Language",
+      resetLayout: "Reset Layout",
     },
   },
 } as const;

@@ -39,6 +39,7 @@ export interface PierThemeAPI {
 }
 
 export interface PierWorkspaceAPI {
+  clearLayout: () => Promise<void>;
   loadLayout: () => Promise<unknown | null>;
   saveLayout: (layout: unknown) => Promise<void>;
 }
@@ -94,6 +95,7 @@ const themeApi: PierThemeAPI = {
 };
 
 const workspaceApi: PierWorkspaceAPI = {
+  clearLayout: () => ipcRenderer.invoke("pier:workspace:clear-layout"),
   loadLayout: () => ipcRenderer.invoke("pier:workspace:load-layout"),
   saveLayout: (layout) =>
     ipcRenderer.invoke("pier:workspace:save-layout", layout),

@@ -53,3 +53,22 @@ export async function saveLayout(layout: unknown): Promise<void> {
     await release?.();
   }
 }
+
+/**
+ * 删除持久化 layout 文件. 用于命令面板"重置布局"操作 — renderer 删 dockview
+ * 所有 panel + 重建 default panel 后再调本方法, 防止后续 reload 又恢复旧 layout.
+ *
+ * 文件不存在视为成功 (idempotent). 锁文件清理交给 lockfile.unlock 防泄漏.
+ */
+export async function clearLayout(): Promise<void> {
+  const path = resolveFilePath();
+  if (!existsSync(path)) {
+    return;
+  }
+  const { unlink } = await import("node:fs/promises");
+  try {
+    await unlink(path);
+  } catch {
+    // 文件被并发删除等 race — 已达目标状态, ignore
+  }
+}

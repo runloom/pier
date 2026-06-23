@@ -1,5 +1,9 @@
 import type { IpcMain } from "electron";
-import { readLayout, saveLayout } from "../state/workspace-layout.ts";
+import {
+  clearLayout,
+  readLayout,
+  saveLayout,
+} from "../state/workspace-layout.ts";
 
 export function registerWorkspaceIpc(ipcMain: IpcMain): void {
   ipcMain.handle("pier:workspace:load-layout", async () => readLayout());
@@ -9,4 +13,5 @@ export function registerWorkspaceIpc(ipcMain: IpcMain): void {
       await saveLayout(layout);
     }
   );
+  ipcMain.handle("pier:workspace:clear-layout", async () => clearLayout());
 }

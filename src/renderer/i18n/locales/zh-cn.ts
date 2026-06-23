@@ -73,6 +73,7 @@ export const zhCN = {
       selectTheme: "选择主题",
       selectStyle: "选择风格",
       selectLanguage: "选择显示语言",
+      resetLayout: "重置布局",
     },
   },
 } as const;

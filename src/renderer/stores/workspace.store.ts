@@ -8,6 +8,7 @@ interface WorkspaceState {
   addTerminal: () => void;
   api: DockviewApi | null;
   closeActivePanel: () => void;
+  resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
 }
 
@@ -90,5 +91,33 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       window.pier?.terminal?.close?.(panel.id);
     }
     api.removePanel(panel);
+  },
+  resetLayout: async () => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    // 先清 disk layout — 防 removePanel/addPanel 触发的 debounced save 与 user 重启
+    // 的时序竞争. clearLayout 后再 addPanel 触发的 save 写回的是 default layout,
+    // 即使覆盖也无害.
+    try {
+      await window.pier?.workspace?.clearLayout?.();
+    } catch (err) {
+      console.error("[workspace] clearLayout failed:", err);
+    }
+    // 显式 close terminal panel (同 closeActivePanel 注释 — 主动先发 IPC).
+    const panels = [...api.panels];
+    for (const p of panels) {
+      if (p.view.contentComponent === "terminal") {
+        window.pier?.terminal?.close?.(p.id);
+      }
+      api.removePanel(p);
+    }
+    // 重建 default — 与 workspace-host.applyDefaultLayout 一致.
+    api.addPanel({
+      id: "terminal-1",
+      component: "terminal",
+      title: "Terminal",
+    });
   },
 }));
