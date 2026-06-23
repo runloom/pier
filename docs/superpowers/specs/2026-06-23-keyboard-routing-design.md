@@ -517,3 +517,47 @@ User 报告 v1 实施后 3 bug: 命令面板 ↑/↓ 仍走 terminal / web welco
 - **K2**: terminal active + Cmd+H → hide app ✓
 - **K3**: terminal active + Cmd+M → minimize window ✓
 - **K4**: terminal active + Cmd+Comma → 设置 (我们注册的 global action) ✓
+
+### v2 验证结果 (2026-06-23, user 手测)
+
+User 手测 6 个核心场景全过:
+
+| # | 场景 | 结果 |
+|---|---|---|
+| Bug 1 | terminal active + Cmd+Shift+P → ↑/↓/Enter 命令列表导航 + 选中 | ✓ PASS |
+| Bug 3 | 切到 welcome panel + Cmd+T → newTab | ✓ PASS |
+| Bug 4 | terminal active + Cmd+Q/H/M → quit/hide/minimize | ✓ PASS |
+| Bug 6 | layout 恢复多 terminal + 切 inactive terminal tab → 都能输入 | ✓ PASS |
+| 多窗口 | window-A 打开命令面板, window-B terminal 仍正常输入 | ✓ PASS |
+| 关 panel | active terminal → Cmd+W close → 焦点自动到下一 panel | ✓ PASS |
+
+### v2 核心改动 (8 commit)
+
+```
+fix(keyboard): v2 4 个 critical — webContents.focus + per-window overlay + race
+docs(spec): keyboard routing v2 修订 — webContents.focus() + per-window state
+```
+
+加 v1 task 1-7 共 14 commit. 完整链路 (swift state machine + per-window IPC + scope chain + DOM dispatch + webContents.focus 标准 API + per-window overlay 隔离 + race-free createTerminal + clean close) 全部就绪.
+
+### 自动验证
+
+- `pnpm typecheck` ✓ 0 errors
+- `pnpm test:unit` ✓ 14/14 (keybindings + cmd-palette-keybinding + default-keymap)
+- `pnpm depcruise` ✓ no violations
+- `pnpm build:native` ✓
+- `pnpm exec ultracite check` ✓
+
+### 关键架构 lesson learned (给未来 maintainer)
+
+1. **Electron 用 Chromium 不是 WebKit** — 不存在真 WKWebView, 接 key 的是 RenderWidgetHostViewCocoa. 任何需要让 web 接 keystroke 的逻辑应用 `BrowserWindow.webContents.focus()` (Electron 跨平台 API), 不要手动 makeFirstResponder + findView. (ref: chromium content/app_shim_remote_cocoa/render_widget_host_view_cocoa.mm)
+
+2. **macOS NSEvent monitor 拦截 Cmd+key 必须先让 NSApp.mainMenu.performKeyEquivalent 优先** — 否则 Cmd+Q/H/M/Comma 等 menu role 永远 swallow.
+
+3. **per-window state 必走 IPC windowId 路由** — application-level singleton + for-loop 所有 routers 模式会引入多窗口污染.
+
+4. **dockview fromJSON 同步 vs React useEffect + IPC create 异步的时序不可调和** — 不要靠 "state == 某值" guard 补 race, 应在每个 lifecycle 边界 (createTerminal/close) 无条件触发 swap, 由内部 safety check 保证.
+
+5. **libghostty-spm (Lakr fork) 的 mouseDown 抢 firstResponder 不是 bug** — user 点 terminal 时切到 terminal 是预期. 真正问题在 "user 没点 terminal 时 (开 overlay / 切 panel) 的 swap"; 这 case 不 trigger mouseDown, 不受 Ghostty 抢焦影响.
+
+6. **参考项目 cmux (manaflow-ai/cmux)** 同样架构 (Electron + libghostty + in-window overlay), 用 MainWindowFocusController.intent 状态机 + ForeignFirstResponderPolicy + EventRouter hit-test 优先 — Pier v2 方案与其一致.
