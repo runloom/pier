@@ -17,9 +17,7 @@ describe("projectPreferencesSchema — monoFontSize", () => {
   });
 
   it("拒绝越界 (7 / 33)", () => {
-    expect(() =>
-      projectPreferencesSchema.parse({ monoFontSize: 7 })
-    ).toThrow();
+    expect(() => projectPreferencesSchema.parse({ monoFontSize: 7 })).toThrow();
     expect(() =>
       projectPreferencesSchema.parse({ monoFontSize: 33 })
     ).toThrow();

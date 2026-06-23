@@ -34,7 +34,11 @@ describe("font.store — monoFontSize", () => {
       theme: "system",
       language: "zh-CN",
     }));
-    (window as unknown as { pier: { preferences: { update: typeof updateMock } } }).pier = {
+    (
+      window as unknown as {
+        pier: { preferences: { update: typeof updateMock } };
+      }
+    ).pier = {
       preferences: { update: updateMock },
     };
 

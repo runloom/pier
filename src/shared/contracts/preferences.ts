@@ -38,12 +38,7 @@ export const projectPreferencesSchema = z.object({
   language: z.enum(["zh-CN", "en"]).default("zh-CN"),
   uiFontFamily: z.string().default(DEFAULT_UI_FONT_FAMILY),
   monoFontFamily: z.string().default(DEFAULT_MONO_FONT_FAMILY),
-  monoFontSize: z
-    .number()
-    .int()
-    .min(8)
-    .max(32)
-    .default(DEFAULT_MONO_FONT_SIZE),
+  monoFontSize: z.number().int().min(8).max(32).default(DEFAULT_MONO_FONT_SIZE),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;
