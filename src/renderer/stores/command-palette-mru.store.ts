@@ -96,15 +96,8 @@ export async function initCommandPaletteMru(): Promise<void> {
   if (!api) {
     return;
   }
-  try {
-    const state = await api.read();
-    useCommandPaletteMru.setState({
-      entries: state.entries,
-      frecencyMap: recompute(state.entries),
-    });
-  } catch (err) {
-    console.error("[command-palette-mru] init read 失败:", err);
-  }
+
+  // 先订阅 onChange, 否则 await read 期间到来的广播会丢失
   api.onChange((state: MruState) => {
     if (entriesEqual(state.entries, useCommandPaletteMru.getState().entries)) {
       return;
@@ -114,4 +107,14 @@ export async function initCommandPaletteMru(): Promise<void> {
       frecencyMap: recompute(state.entries),
     });
   });
+
+  try {
+    const state = await api.read();
+    useCommandPaletteMru.setState({
+      entries: state.entries,
+      frecencyMap: recompute(state.entries),
+    });
+  } catch (err) {
+    console.error("[command-palette-mru] init read 失败:", err);
+  }
 }
