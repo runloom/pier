@@ -80,4 +80,15 @@ export const zhCN = {
       clearRecent: "清空命令面板使用记录",
     },
   },
+  contextMenu: {
+    action: {
+      closeAll: "关闭所有",
+      closeOthers: "关闭其他",
+      closePanel: "关闭",
+      closeTerminal: "关闭终端",
+      newTerminal: "新建终端",
+      splitDown: "向下拆分",
+      splitRight: "向右拆分",
+    },
+  },
 } as const;

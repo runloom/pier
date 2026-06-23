@@ -1,4 +1,9 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
+import type {
+  MenuPopupOptions,
+  MenuPopupResult,
+  MenuTemplate,
+} from "@shared/contracts/menu.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -7,29 +12,23 @@ export interface WindowInfo {
   id: string;
 }
 
+interface PreferencesSnapshot {
+  language: string;
+  monoFontFamily: string;
+  stylePresetId: string;
+  theme: string;
+  uiFontFamily: string;
+}
+
 export interface PierPreferencesAPI {
-  read: () => Promise<{
-    theme: string;
-    stylePresetId: string;
-    language: string;
-    uiFontFamily: string;
-    monoFontFamily: string;
-  }>;
-  update: (
-    patch: Partial<{
-      theme: string;
-      stylePresetId: string;
-      language: string;
-      uiFontFamily: string;
-      monoFontFamily: string;
-    }>
-  ) => Promise<{
-    theme: string;
-    stylePresetId: string;
-    language: string;
-    uiFontFamily: string;
-    monoFontFamily: string;
-  }>;
+  /**
+   * 订阅其他窗口对 preferences 的修改 — main 端 update 后会广播给除 sender 外
+   * 的所有 BrowserWindow. 调用方在 sender 自己的 setter 里已经 await + 同步
+   * 应用过, 不会收到自己的广播.
+   */
+  onChanged: (cb: (next: PreferencesSnapshot) => void) => () => void;
+  read: () => Promise<PreferencesSnapshot>;
+  update: (patch: Partial<PreferencesSnapshot>) => Promise<PreferencesSnapshot>;
 }
 
 export interface PierThemeAPI {
@@ -63,6 +62,13 @@ export interface PierKeybindingAPI {
   ) => () => void;
 }
 
+export interface PierMenuAPI {
+  popup: (
+    template: MenuTemplate,
+    options?: MenuPopupOptions
+  ) => Promise<MenuPopupResult>;
+}
+
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
@@ -71,6 +77,7 @@ export interface PierWindowAPI {
   focusWindow: (windowId: string) => Promise<void>;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
+  menu: PierMenuAPI;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
   terminal: TerminalAPI;
@@ -78,16 +85,42 @@ export interface PierWindowAPI {
   workspace: PierWorkspaceAPI;
 }
 
+/**
+ * 订阅 main → renderer IPC 事件, 返回 dispose 函数.
+ *
+ * 所有 forward 类 API (keybinding.onForward / terminal.onCwdChange /
+ * onTitleChange / onContextMenuRequest / preferences.onChanged) 共用此模板.
+ * 加新订阅:一行 (channel, cb).
+ */
+function subscribeIpc<P>(
+  channel: string,
+  cb: (payload: P) => void
+): () => void {
+  const listener = (_event: unknown, payload: P): void => {
+    cb(payload);
+  };
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.off(channel, listener);
+  };
+}
+
 const preferencesApi: PierPreferencesAPI = {
+  onChanged: (cb) => subscribeIpc("pier:preferences:changed", cb),
   read: () => ipcRenderer.invoke("pier:preferences:read"),
   update: (patch) => ipcRenderer.invoke("pier:preferences:update", patch),
 };
 
 const terminalApi: TerminalAPI = {
-  close: (panelId) => ipcRenderer.invoke("pier:terminal:close", panelId),
+  applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
+  close: (panelId) => ipcRenderer.send("pier:terminal:close", panelId),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  onContextMenuRequest: (cb) =>
+    subscribeIpc("pier:terminal:request-context-menu", cb),
+  onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
+  onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFrame: (panelId, frame) =>
@@ -127,19 +160,13 @@ const commandPaletteMruApi: PierCommandPaletteMruAPI = {
   },
 };
 
+const menuApi: PierMenuAPI = {
+  popup: (template, options) =>
+    ipcRenderer.invoke("pier:menu:popup", template, options),
+};
+
 const keybindingApi: PierKeybindingAPI = {
-  onForward: (cb) => {
-    const listener = (
-      _event: unknown,
-      chord: { modifierFlags: number; chars: string }
-    ) => {
-      cb(chord);
-    };
-    ipcRenderer.on("pier:keybinding:forward", listener);
-    return () => {
-      ipcRenderer.off("pier:keybinding:forward", listener);
-    };
-  },
+  onForward: (cb) => subscribeIpc("pier:keybinding:forward", cb),
 };
 
 const api: PierWindowAPI = {
@@ -152,6 +179,7 @@ const api: PierWindowAPI = {
     ipcRenderer.invoke("pier://window:focus", windowId),
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
+  menu: menuApi,
   platform: process.platform,
   preferences: preferencesApi,
   terminal: terminalApi,

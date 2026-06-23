@@ -7,9 +7,11 @@ import {
 import { useCallback } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { AddPanelAction } from "./add-panel-action.tsx";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
+import { PanelTabHeader } from "./panel-tab-header.tsx";
 
 /**
  * WorkspaceHost — dockview-react 的唯一业务边界。
@@ -102,6 +104,22 @@ export function WorkspaceHost() {
       // null (无 active panel), 此时 fall back 到 "web" + null panelId 防 terminal
       // 抢 firstResponder. getState() 是 imperative 用法, 不是 React hook.
       event.api.onDidActivePanelChange((panel) => {
+        // dockview 是 active 的唯一来源 — 集中推送给 PanelDescriptorStore,
+        // 各 sink (DocumentTitle / TitleBar) 据此显示当前聚焦 panel 的呈现信息.
+        //
+        // 占位 descriptor:setActive 是同步, 但 panel React 组件的 useEffect
+        // (内含 usePanelDescriptor.upsert) 要 commit 后异步跑. 新建 panel 时
+        // 有一帧 activeId=new 但 descriptors[new]=undefined, sink 退回 "Pier"
+        // 造成闪烁. 先用 panel.title 占位 (panel.title 是 dockview 同步可读的初始值),
+        // panel 自己的 useEffect 跑起来时会用真实计算结果覆盖.
+        const descriptorStore = usePanelDescriptorStore.getState();
+        if (panel && !descriptorStore.descriptors[panel.id]) {
+          descriptorStore.upsert(panel.id, {
+            short: panel.title || "Panel",
+          });
+        }
+        descriptorStore.setActive(panel?.id ?? null);
+
         if (!panel) {
           useKeybindingScope.getState().setActivePanel(null, null, null);
           window.pier?.terminal?.setActivePanelKind?.("web", null);
@@ -151,6 +169,7 @@ export function WorkspaceHost() {
     <div className="h-full w-full">
       <DockviewReact
         components={panelComponents}
+        defaultTabComponent={PanelTabHeader}
         leftHeaderActionsComponent={AddPanelAction}
         onReady={handleReady}
         theme={pierTheme}

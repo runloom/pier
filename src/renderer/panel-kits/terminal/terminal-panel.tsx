@@ -1,6 +1,9 @@
 import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
+import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
+import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 
 function getAnchorFrame(anchor: HTMLDivElement): TerminalFrame | null {
   const r = anchor.getBoundingClientRect();
@@ -24,12 +27,50 @@ function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
   });
 }
 
+/**
+ * 路径 basename — POSIX 形式 (终端始终在 macOS).
+ * 末尾 '/' 容错: "/" → "/"; "/a/b/" → "b"; "/a/b" → "b"; "" → "Terminal".
+ */
+export function basename(path: string): string {
+  if (path === "" || path === "/") {
+    return path === "" ? "Terminal" : "/";
+  }
+  const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
+  const idx = trimmed.lastIndexOf("/");
+  return idx === -1 ? trimmed : trimmed.slice(idx + 1);
+}
+
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
   const anchorRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 订阅 swift OSC 7 → main → 这里. usePanelEventState 自动按 panelId 过滤 +
+  // 空字符串忽略 (vim set notitle / tmux detach 等清空场景不污染上一次有效值).
+  const cwd = usePanelEventState(
+    window.pier.terminal.onCwdChange,
+    panelId,
+    (e) => e.cwd
+  );
+  const sequenceTitle = usePanelEventState(
+    window.pier.terminal.onTitleChange,
+    panelId,
+    (e) => e.title
+  );
+
+  // descriptor 三字段优先级链:
+  // - short: basename(cwd) — tab strip 始终显示目录, 不被 OSC 干扰 (稳定锚点)
+  // - long:  sequenceTitle ?? cwd — sink 优先 OSC 自定义 ("Claude Code"),
+  //          没 OSC 时 fallback cwd 完整路径
+  // - path:  cwd — 真实 cwd, 不被 OSC override (breadcrumb / status bar 用)
+  // hook input 接受 undefined; hook 内部按字段存在性条件 upsert 到 store.
+  usePanelDescriptor(api, {
+    short: cwd ? basename(cwd) : "Terminal",
+    long: sequenceTitle ?? cwd ?? undefined,
+    path: cwd ?? undefined,
+  });
 
   useLayoutEffect(() => {
     const parent = parentRef.current?.parentElement;
@@ -157,6 +198,25 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       window.pier.terminal.close(panelId);
     };
   }, [api, panelId]);
+
+  // 订阅 swift 转发的右键: panel 的 NSView 吞掉 React 层 onContextMenu, 唯一拿到
+  // 右键的方式是 swift NSEvent monitor 拦截 + IPC 转发. 这里按 panelId 过滤 (一个
+  // terminal panel 的菜单只该响应它自己的右键).
+  useEffect(() => {
+    const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
+      if (req.panelId !== panelId) {
+        return;
+      }
+      popupContextMenuAt("terminal/content", { x: req.x, y: req.y }).catch(
+        (err: unknown) => {
+          console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
+        }
+      );
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [panelId]);
 
   if (error) {
     return (

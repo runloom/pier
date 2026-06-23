@@ -1,11 +1,19 @@
 import { createRequire } from "node:module";
 import type {
   CreateTerminalArgs,
+  TerminalColors,
   TerminalFrame,
 } from "@shared/contracts/terminal.ts";
 import { BrowserWindow, type IpcMain } from "electron";
 
 interface NativeAddon {
+  /**
+   * 应用 Pier 主题派生的终端配色到指定 window 下的 Ghostty controller.
+   * Ghostty 库 controller.setTheme(...) 内部 reconfigure 并立即生效, shell 进程
+   * 不重启. 每个 BrowserWindow 一个 controller, 该 window 下所有 terminal panel
+   * 共享, 调一次即可.
+   */
+  applyTerminalTheme(parentHandle: Buffer, colors: TerminalColors): void;
   closeAllTerminals(parentHandle: Buffer): void;
   closeTerminal(panelId: string): void;
   createTerminal(
@@ -37,7 +45,35 @@ interface NativeAddon {
         ) => void)
       | null
   ): void;
+  setMouseForwardCallback(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          x: number,
+          y: number
+        ) => void)
+      | null
+  ): void;
   setOverlayActive(parentHandle: Buffer, active: boolean): void;
+  /**
+   * 注册 PWD forward callback. swift TerminalSurfacePwdDelegate 收到 OSC 7 后调用,
+   * 传 (browserWindowId, panelId, cwd). 用 windowId 路由到对应 BrowserWindow 的
+   * renderer (多窗口下避免广播污染). 传 null 解绑.
+   */
+  setPwdForwardCallback(
+    cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
+  ): void;
+  /**
+   * 注册 Title forward callback. swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后调用,
+   * 传 (browserWindowId, panelId, title). TUI 应用 (claude / vim / aider) 自定义 title
+   * 通道. 与 PWD 路由方式相同, 按 windowId 精准送到对应 BrowserWindow renderer.
+   */
+  setTitleForwardCallback(
+    cb:
+      | ((browserWindowId: number, panelId: string, title: string) => void)
+      | null
+  ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
   showTerminal(panelId: string): void;
 }
@@ -68,37 +104,82 @@ function loadNativeAddon(): {
   }
 }
 
+/**
+ * Forward swift-originated event to a specific BrowserWindow's renderer.
+ *
+ * 所有 swift→main→renderer forward 共用这一条路由 (keyboard / mouse / pwd / title):
+ * 1. 按 browserWindowId 精准定位 BrowserWindow — swift NSEvent monitor / delegate
+ *    跨线程, callback 执行时 focused window 可能已切换, 不能用 getFocusedWindow.
+ * 2. 守 isDestroyed (window/webContents 在 swift 触发 → main JS dispatch 间可能销毁).
+ * 3. send 抛任何错误 (window 关闭瞬间) 都 catch + log + 继续 — 不影响其他 channel.
+ */
+function forwardToWindow<P>(
+  browserWindowId: number,
+  channel: string,
+  payload: P,
+  errorLabel: string
+): void {
+  try {
+    const targetWindow = BrowserWindow.fromId(browserWindowId);
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return;
+    }
+    const wc = targetWindow.webContents;
+    if (wc.isDestroyed()) {
+      return;
+    }
+    wc.send(channel, payload);
+  } catch (err) {
+    console.error(`[${errorLabel}] send failed:`, err);
+  }
+}
+
 export function registerTerminalIpc(ipcMain: IpcMain): void {
   const { addon, error: loadError } = loadNativeAddon();
   cachedAddon = addon;
 
-  // 注册 keyboard forward callback: swift NSEvent monitor 捕获 Cmd+key 后,
-  // 通过 ThreadSafeFunction 调到这里. callback 收到 (browserWindowId, modifierFlags,
-  // chars), 用 windowId 精准路由到对应 BrowserWindow 的 renderer.
+  // 四条 swift → renderer forward channel, 全部走 forwardToWindow helper.
+  // 不能用 BrowserWindow.getFocusedWindow():swift 触发时 (NSEvent monitor / OSC
+  // parser delegate) 跨线程, focused window 不一定是事件源 window — 必须用 setupWindow
+  // 时记录的 BrowserWindow.id 精准路由.
   //
-  // 多窗口: 不能用 BrowserWindow.getFocusedWindow() —  swift NSEvent monitor 与
-  // main 主线程不同, callback 执行时 focused window 可能已切换, 会把 window-A 的
-  // keystroke 错送到 window-B. 用 windowId 是唯一可靠路由.
-  //
-  // 这是 Pier "terminal 透明 + web overlay" 架构里 keyboard 全局快捷键唯一可靠
-  // 路径 — 不能用 wk.keyDown forward (Electron 42 ViewsCompositorSuperview 架构
-  // 下 WKWebView 不是真正渲染 web 的层) 也不能依赖 firstResponder chain (Ghostty
-  // terminalView focus 时消费所有 key).
-  addon?.setKeyboardForwardCallback((browserWindowId, modifierFlags, chars) => {
-    try {
-      const targetWindow = BrowserWindow.fromId(browserWindowId);
-      if (!targetWindow || targetWindow.isDestroyed()) {
-        return;
-      }
-      const wc = targetWindow.webContents;
-      if (wc.isDestroyed()) {
-        return;
-      }
-      wc.send("pier:keybinding:forward", { modifierFlags, chars });
-    } catch (err) {
-      // window 在 send 瞬间销毁等 edge case — 不影响其他功能
-      console.error("[pier-key-forward] send failed:", err);
-    }
+  // - keyboard:Cmd+key 全局快捷键 (terminal 透明 + web overlay 架构下唯一可靠通道,
+  //   不能依赖 wk.keyDown forward 或 firstResponder chain — Electron 42 ViewsCompositor-
+  //   Superview 架构下 WKWebView 不是真正渲染层, Ghostty terminalView focus 时消费所有 key).
+  // - mouse:terminal 区域右键 → renderer 调 popupContextMenuAt 弹 native menu.
+  // - pwd:OSC 7 → 真实 cwd → descriptor.path / descriptor.short basename.
+  // - title:OSC 0/2 → TUI 应用 (claude / vim) 自定义 title → descriptor.long.
+  addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
+    forwardToWindow(
+      id,
+      "pier:keybinding:forward",
+      { modifierFlags, chars },
+      "pier-key-forward"
+    );
+  });
+  addon?.setMouseForwardCallback((id, panelId, x, y) => {
+    forwardToWindow(
+      id,
+      "pier:terminal:request-context-menu",
+      { panelId, x, y },
+      "pier-mouse-forward"
+    );
+  });
+  addon?.setPwdForwardCallback((id, panelId, cwd) => {
+    forwardToWindow(
+      id,
+      "pier:terminal:cwd-change",
+      { panelId, cwd },
+      "pier-cwd-forward"
+    );
+  });
+  addon?.setTitleForwardCallback((id, panelId, title) => {
+    forwardToWindow(
+      id,
+      "pier:terminal:title-change",
+      { panelId, title },
+      "pier-title-forward"
+    );
   });
 
   ipcMain.handle("pier:terminal:setup", (event) => {
@@ -144,28 +225,38 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   });
 
+  // Renderer → addon 单参数透传 (fire-and-forget): renderer.ipcRenderer.send 单向
+  // 触发 addon 同名 method. addon 可能未加载 (非 darwin / native load 失败), 用
+  // optional chain 让 callback 仍注册但 noop — 不让 renderer 端 send 静默丢但接收侧
+  // "No handler".
+  const panelIdRelays = [
+    {
+      channel: "pier:terminal:show",
+      call: (panelId: string) => addon?.showTerminal(panelId),
+    },
+    {
+      channel: "pier:terminal:hide",
+      call: (panelId: string) => addon?.hideTerminal(panelId),
+    },
+    {
+      channel: "pier:terminal:focus",
+      call: (panelId: string) => addon?.focusTerminal(panelId),
+    },
+    {
+      channel: "pier:terminal:close",
+      call: (panelId: string) => addon?.closeTerminal(panelId),
+    },
+  ] as const;
+  for (const { channel, call } of panelIdRelays) {
+    ipcMain.on(channel, (_event, panelId: string) => call(panelId));
+  }
+  // set-frame 多一个 frame 参数, 不进数组单独写.
   ipcMain.on(
     "pier:terminal:set-frame",
     (_event, panelId: string, frame: TerminalFrame) => {
       addon?.setFrame(panelId, frame);
     }
   );
-
-  ipcMain.on("pier:terminal:show", (_event, panelId: string) => {
-    addon?.showTerminal(panelId);
-  });
-
-  ipcMain.on("pier:terminal:hide", (_event, panelId: string) => {
-    addon?.hideTerminal(panelId);
-  });
-
-  ipcMain.handle("pier:terminal:close", (_event, panelId: string) => {
-    addon?.closeTerminal(panelId);
-  });
-
-  ipcMain.on("pier:terminal:focus", (_event, panelId: string) => {
-    addon?.focusTerminal(panelId);
-  });
 
   ipcMain.on("pier:terminal:set-overlay", (event, active: boolean) => {
     if (!addon) {
@@ -185,6 +276,21 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     // makeFirstResponder(WKWebView) 的脆弱实现 (Electron 42 没真 WKWebView).
     if (active) {
       win.webContents.focus();
+    }
+  });
+
+  ipcMain.on("pier:terminal:apply-theme", (event, colors: TerminalColors) => {
+    if (!addon) {
+      return;
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return;
+    }
+    try {
+      addon.applyTerminalTheme(win.getNativeWindowHandle(), colors);
+    } catch (err) {
+      console.error("[pier-terminal-apply-theme] failed:", err);
     }
   });
 

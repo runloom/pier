@@ -17,6 +17,7 @@ export function registerSettingsActions(): () => void {
     title: () => i18next.t("commandPalette.action.openSettings"),
     surfaces: ["command-palette"],
     metadata: {
+      group: "5_appearance",
       iconComponent: SlidersHorizontal,
       sortOrder: 5,
       keywords: ["settings", "preferences", "设置", "偏好"],
