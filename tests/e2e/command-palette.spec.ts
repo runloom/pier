@@ -101,7 +101,7 @@ test.describe("Command Palette e2e", () => {
         .click();
       await win.waitForTimeout(500);
 
-      // 4. 重开命令面板, "打开设置" 不应在第一位 (CATEGORY_META.View=0 排前)
+      // 4. 重开命令面板, "打开设置" 不应在第一位 (Settings.order=4 在最后, View/Workspace/Panel/Window 都比它靠前)
       await win.keyboard.press("Meta+Shift+KeyP");
       await win.waitForTimeout(800);
       await expect(win.locator("[cmdk-item]").first()).not.toContainText(
