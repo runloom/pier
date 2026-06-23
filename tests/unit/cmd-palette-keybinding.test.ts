@@ -22,6 +22,7 @@ describe("command palette keybinding resolution", () => {
     const chord = parseChord("Mod+Shift+KeyP");
     expect(chord).toEqual({
       cmdOrCtrl: true,
+      ctrl: false,
       alt: false,
       shift: true,
       code: "KeyP",

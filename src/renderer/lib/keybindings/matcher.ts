@@ -29,6 +29,9 @@ export function isMac(): boolean {
 export function chordFromEvent(e: KeyboardEvent): KeyChord {
   return {
     cmdOrCtrl: IS_MAC ? e.metaKey : e.ctrlKey,
+    // mac 上 Ctrl 物理键独立; 非 mac 上 Ctrl == Mod, 此字段永远 false (避免与
+    // cmdOrCtrl 重复表达).
+    ctrl: IS_MAC ? e.ctrlKey : false,
     alt: e.altKey,
     shift: e.shiftKey,
     code: e.code,
@@ -38,6 +41,7 @@ export function chordFromEvent(e: KeyboardEvent): KeyChord {
 export function chordEquals(a: KeyChord, b: KeyChord): boolean {
   return (
     a.cmdOrCtrl === b.cmdOrCtrl &&
+    a.ctrl === b.ctrl &&
     a.alt === b.alt &&
     a.shift === b.shift &&
     a.code === b.code

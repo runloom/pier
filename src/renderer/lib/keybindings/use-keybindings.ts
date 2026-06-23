@@ -125,10 +125,14 @@ function chordFromNativeForward(
   modifierFlags: number,
   chars: string
 ): KeyChord {
+  const hasCmd = hasFlag(modifierFlags, NS_FLAG_COMMAND);
+  const hasCtrl = hasFlag(modifierFlags, NS_FLAG_CONTROL);
+  // 路径 2 仅在 mac 上跑 (NS_FLAG_* 是 mac 概念). mac 上 Mod = Cmd, ctrl 字段
+  // 独立表达 Ctrl 物理键. 同时按 Cmd+Ctrl 时 ctrl 仍真; chordEquals 严格匹配
+  // 决定 resolve 结果.
   return {
-    cmdOrCtrl:
-      hasFlag(modifierFlags, NS_FLAG_COMMAND) ||
-      hasFlag(modifierFlags, NS_FLAG_CONTROL),
+    cmdOrCtrl: hasCmd,
+    ctrl: hasCtrl,
     alt: hasFlag(modifierFlags, NS_FLAG_OPTION),
     shift: hasFlag(modifierFlags, NS_FLAG_SHIFT),
     code: charsToCode(chars),

@@ -9,7 +9,7 @@
  *   - getBindingsFor(commandId): 反向查询.
  */
 import { Notifier } from "@/lib/util/notifier.ts";
-import { chordEquals } from "./matcher.ts";
+import { chordEquals, isMac } from "./matcher.ts";
 import { parseChord, parseCommandId } from "./parse.ts";
 import type {
   Keybinding,
@@ -113,7 +113,7 @@ class KeybindingRegistry extends Notifier {
       }
       return;
     }
-    const chord = parseChord(input.keys);
+    const chord = parseChord(input.keys, isMac());
     const scope: KeybindingScope = input.scope ?? "global";
     const table = source === "user" ? this.userOverrides : this.defaults;
     const list = table.get(parsed.commandId) ?? [];

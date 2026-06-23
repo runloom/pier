@@ -50,6 +50,10 @@ export function toElectronAccelerator(chord: KeyChord): string {
   if (chord.cmdOrCtrl) {
     parts.push("CmdOrCtrl");
   }
+  if (chord.ctrl) {
+    // Electron accelerator 用 "Control" 字面表示独立 Ctrl (mac 上区分 Cmd/Ctrl).
+    parts.push("Control");
+  }
   if (chord.alt) {
     parts.push("Alt");
   }
