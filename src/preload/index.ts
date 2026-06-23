@@ -1,3 +1,4 @@
+import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -44,6 +45,14 @@ export interface PierWorkspaceAPI {
   saveLayout: (layout: unknown) => Promise<void>;
 }
 
+export interface PierCommandPaletteMruAPI {
+  clear: () => Promise<MruState>;
+  /** 订阅 changed 广播, 返回解绑函数 */
+  onChange: (handler: (state: MruState) => void) => () => void;
+  read: () => Promise<MruState>;
+  recordUse: (actionId: string) => void;
+}
+
 /**
  * Keyboard chord forward: swift NSEvent monitor 捕获 Cmd+key → main IPC →
  * 这里 dispatch 到 renderer 侧的 listener (shell-keybindings).
@@ -57,6 +66,7 @@ export interface PierKeybindingAPI {
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
+  commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<{ windowId: string }>;
   focusWindow: (windowId: string) => Promise<void>;
   keybinding: PierKeybindingAPI;
@@ -101,6 +111,22 @@ const workspaceApi: PierWorkspaceAPI = {
     ipcRenderer.invoke("pier:workspace:save-layout", layout),
 };
 
+const commandPaletteMruApi: PierCommandPaletteMruAPI = {
+  read: () => ipcRenderer.invoke("pier:command-palette-mru:read"),
+  recordUse: (actionId) =>
+    ipcRenderer.send("pier:command-palette-mru:record", actionId),
+  clear: () => ipcRenderer.invoke("pier:command-palette-mru:clear"),
+  onChange: (handler) => {
+    const listener = (_event: unknown, state: MruState) => {
+      handler(state);
+    };
+    ipcRenderer.on("pier:command-palette-mru:changed", listener);
+    return () => {
+      ipcRenderer.off("pier:command-palette-mru:changed", listener);
+    };
+  },
+};
+
 const keybindingApi: PierKeybindingAPI = {
   onForward: (cb) => {
     const listener = (
@@ -120,6 +146,7 @@ const api: PierWindowAPI = {
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:close", windowId),
+  commandPaletteMru: commandPaletteMruApi,
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:focus", windowId),
