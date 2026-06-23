@@ -8,7 +8,7 @@ interface WorkspaceState {
   addTerminal: () => void;
   api: DockviewApi | null;
   closeActivePanel: () => void;
-  closeAll: () => void;
+  closeAll: () => Promise<void>;
   closeOthers: (panelId: string) => void;
   closePanel: (panelId: string) => void;
   resetLayout: () => Promise<void>;
@@ -136,10 +136,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
-  closeAll: () => {
+  closeAll: async () => {
     const api = get().api;
     if (!api) {
       return;
+    }
+    // 先清磁盘 layout — 防 removePanel 触发的 debounced save 与 closeCurrentWindow 时序
+    // 竞争把空 layout 写入磁盘 (下次启动 fromJSON 拿到空 panel list 应用为空 workspace).
+    try {
+      await window.pier?.workspace?.clearLayout?.();
+    } catch (err) {
+      console.error("[workspace] clearLayout failed:", err);
     }
     const all = [...api.panels];
     for (const p of all) {
