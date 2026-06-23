@@ -21,7 +21,12 @@ export function registerTerminalActions(): () => void {
     actionRegistry.register({
       category: "Panel",
       enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
-      handler: () => useWorkspaceStore.getState().closeActivePanel(),
+      handler: () => {
+        const p = useWorkspaceStore.getState().api?.activePanel;
+        if (p) {
+          useWorkspaceStore.getState().closePanel(p.id);
+        }
+      },
       id: "pier.terminal.close",
       metadata: { group: "9_close", iconComponent: X, sortOrder: 1 },
       surfaces: ["terminal/content"],
