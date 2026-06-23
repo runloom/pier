@@ -26,6 +26,12 @@ export interface KeyChord {
   readonly cmdOrCtrl: boolean;
   /** KeyboardEvent.code 值: "KeyP" / "Digit1" / "ArrowUp" / "Escape" 等. */
   readonly code: string;
+  /**
+   * 独立 Ctrl 物理键. mac 上独立于 Cmd; 非 mac 上无意义 (永远 false, 因为
+   * Mod 和 Ctrl 在非 mac 上是同一物理键). 用于表达 mac 上 "Ctrl+Shift+方向键"
+   * 这种与 Cmd 区分的 binding.
+   */
+  readonly ctrl: boolean;
   readonly shift: boolean;
 }
 

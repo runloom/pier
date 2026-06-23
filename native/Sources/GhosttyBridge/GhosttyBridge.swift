@@ -122,9 +122,13 @@ final class EventRouterView: NSView {
 
     /// 路由 keyDown:
     /// - 非 owner window 的 event: 放行 (其他 window 自己的 router 会处理).
-    /// - 不含 Cmd: 放行给 firstResponder (terminal 正常接 Ctrl/Shift/纯 key).
-    /// - Cmd+key: 通过 callback emit (windowId, chord) 给 main → IPC 转 renderer
-    ///   调 action; 消费事件 (return nil) 让 terminal 不再收到这个 keystroke.
+    /// - 不含 Cmd 也不含 Ctrl+Shift: 放行给 firstResponder (terminal 正常接 Ctrl/Shift/纯 key).
+    /// - Cmd+key 或 Ctrl+Shift+key: 通过 callback emit (windowId, chord) 给 main →
+    ///   IPC 转 renderer 调 action; 消费事件 (return nil) 让 terminal 不再收到这个 keystroke.
+    ///
+    /// Ctrl+Shift 必须同时按才转发, 单 Ctrl (如 Ctrl+C / Ctrl+D / Ctrl+R) 留给 Ghostty
+    /// shell 处理. 这是为了支持 web 层注册的 Ctrl+Shift+方向键 等 chord 跨 terminal 焦点
+    /// 也能触发 (focus 方向导航等), 同时不破坏 shell 信号 / 控制键正常输入.
     ///
     /// 不再 forward 到 WKWebView (旧实现 wk.keyDown 在 Electron 42 不可靠 —
     /// ViewsCompositorSuperview 才是真正渲染 web 的层, WKWebView 只是事件壳).
@@ -138,15 +142,20 @@ final class EventRouterView: NSView {
         let state = GhosttyBridgeImpl.shared.stateFor(window: window)
         guard state.inTerminalMode else { return event }
 
-        // Terminal mode: 只拦截 Cmd+key forward 给 web (路径 2 IPC), 其他 pass through 给 Ghostty.
+        // Terminal mode: 拦截 Cmd+key 或 Ctrl+Shift+key forward 给 web (路径 2 IPC),
+        // 其他 pass through 给 Ghostty. Ctrl+Shift+ 是为 web 层 focus 方向导航等 binding
+        // 留的口子 — 单 Ctrl 留给 Ghostty 不动 (shell Ctrl+C 等).
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard mods.contains(.command) else { return event }
+        let isCmd = mods.contains(.command)
+        let isCtrlShift = mods.contains(.control) && mods.contains(.shift)
+        guard isCmd || isCtrlShift else { return event }
 
         // macOS menu reserved keys (Cmd+Q/Cmd+H/Cmd+M/Cmd+Comma 等 role-bound items)
         // 必须先让 NSApp.mainMenu 处理. performKeyEquivalent 命中 menu item 后会调
         // 该 item 的 action 并返回 true; 没命中返回 false. 不让 menu 优先会让 Cmd+Q
         // 永远 swallow 在 web forward 链 (web 没注册 → 静默 drop, 用户感受"Cmd+Q 失效").
-        if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+        // 仅 Cmd 路径走 menu — menu items 全部都是 Cmd+... 修饰, Ctrl+Shift 不参与.
+        if isCmd, NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
             return nil
         }
 

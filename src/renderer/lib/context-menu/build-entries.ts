@@ -50,6 +50,10 @@ export function toElectronAccelerator(chord: KeyChord): string {
   if (chord.cmdOrCtrl) {
     parts.push("CmdOrCtrl");
   }
+  if (chord.ctrl) {
+    // Electron accelerator 用 "Control" 字面表示独立 Ctrl (mac 上区分 Cmd/Ctrl).
+    parts.push("Control");
+  }
   if (chord.alt) {
     parts.push("Alt");
   }
@@ -74,6 +78,60 @@ function groupOf(a: Action): string {
 
 function sortOrderOf(a: Action): number {
   return a.metadata?.sortOrder ?? 0;
+}
+
+function actionToMenuItem(a: Action): MenuItem {
+  const binding = keybindingRegistry.getBindingsFor(a.id)[0];
+  const accelerator = binding
+    ? toElectronAccelerator(binding.chord)
+    : undefined;
+  const enabled = a.enabled?.() ?? true;
+  return {
+    type: "action",
+    id: a.id,
+    label: a.title(),
+    enabled,
+    ...(accelerator !== undefined && { accelerator }),
+  };
+}
+
+/**
+ * 把单个 group 桶投影成 MenuItem 序列.
+ * 子菜单聚合: 同 submenu() key 合并; 没 submenu 字段平铺.
+ * 子菜单位置 = 该 key 第一个 action 在桶里的相对位置.
+ */
+function buildBucketItems(bucket: readonly Action[]): MenuItem[] {
+  type Placeholder =
+    | { kind: "action"; a: Action }
+    | { kind: "submenu"; key: string };
+  const placeholders: Placeholder[] = [];
+  const submenuMap = new Map<string, Action[]>();
+  for (const a of bucket) {
+    const key = a.metadata?.submenu?.();
+    if (key) {
+      let group = submenuMap.get(key);
+      if (!group) {
+        group = [];
+        submenuMap.set(key, group);
+        placeholders.push({ kind: "submenu", key });
+      }
+      group.push(a);
+    } else {
+      placeholders.push({ kind: "action", a });
+    }
+  }
+  return placeholders.map((p) => {
+    if (p.kind === "action") {
+      return actionToMenuItem(p.a);
+    }
+    // submenuMap.get(p.key) 此时一定非空 (placeholder push 时已确保).
+    const subActions = submenuMap.get(p.key) ?? [];
+    return {
+      type: "submenu",
+      label: p.key,
+      submenu: subActions.map(actionToMenuItem),
+    };
+  });
 }
 
 export function buildMenuEntries(surface: string): MenuTemplate {
@@ -107,20 +165,7 @@ export function buildMenuEntries(surface: string): MenuTemplate {
       }
       return a.title().localeCompare(b.title());
     });
-    for (const a of bucket) {
-      const binding = keybindingRegistry.getBindingsFor(a.id)[0];
-      const accelerator = binding
-        ? toElectronAccelerator(binding.chord)
-        : undefined;
-      const enabled = a.enabled?.() ?? true;
-      items.push({
-        type: "action",
-        id: a.id,
-        label: a.title(),
-        enabled,
-        ...(accelerator !== undefined && { accelerator }),
-      });
-    }
+    items.push(...buildBucketItems(bucket));
   }
 
   return items;

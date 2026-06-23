@@ -8,7 +8,18 @@
  *   3. 在命令面板展示时, surfaces: ["command-palette"] + i18n title key + icon
  */
 import i18next from "i18next";
-import { Plus, RotateCcw } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  PanelTop,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { createWindow } from "@/lib/ipc/window-ipc.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -67,9 +78,15 @@ export function registerPanelActions(): () => void {
     })
   );
 
-  // ─── dockview-tab surface actions ───────────────────────────────────
-  // 右键 tab 时 dockview 先把该 tab 设为 activePanel (onPointerDown), 再 fire
-  // onContextMenu — 所以 handler 用 activePanel 等价于"右键的那个 tab".
+  // ─── 多 surface 触发的 panel actions ─────────────────────────────────
+  // 这些 action 挂在 dockview-tab / terminal/content / command-palette 三个
+  // surface 上, handler 统一用 useWorkspaceStore.getState().api?.activePanel:
+  //   - dockview-tab 右键: dockview pointerdown 阶段已把被右键 tab 设为
+  //     activePanel, handler 用 activePanel 等价于"右键的那个 tab"
+  //   - terminal/content 右键: terminal NSView 占 firstResponder 时本就是
+  //     activePanel
+  //   - command-palette 触发: palette 是 overlay 不改 activePanel, 仍是
+  //     用户打开 palette 之前操作的 panel — 符合"对当前操作的 panel 做事"语义
   disposers.push(
     actionRegistry.register({
       category: "Panel",
@@ -137,8 +154,13 @@ export function registerPanelActions(): () => void {
         }
       },
       id: "pier.panel.splitRight",
-      metadata: { group: "2_split", sortOrder: 1 },
-      surfaces: ["dockview-tab"],
+      metadata: {
+        group: "2_split",
+        iconComponent: PanelRight,
+        sortOrder: 1,
+        submenu: () => i18next.t("contextMenu.submenu.split"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
       title: () => i18next.t("contextMenu.action.splitRight"),
     })
   );
@@ -155,9 +177,144 @@ export function registerPanelActions(): () => void {
         }
       },
       id: "pier.panel.splitDown",
-      metadata: { group: "2_split", sortOrder: 2 },
-      surfaces: ["dockview-tab"],
+      metadata: {
+        group: "2_split",
+        iconComponent: PanelBottom,
+        sortOrder: 2,
+        submenu: () => i18next.t("contextMenu.submenu.split"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
       title: () => i18next.t("contextMenu.action.splitDown"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
+      handler: () => {
+        const api = useWorkspaceStore.getState().api;
+        const p = api?.activePanel;
+        if (p) {
+          useWorkspaceStore.getState().splitPanel(p.id, "left");
+        }
+      },
+      id: "pier.panel.splitLeft",
+      metadata: {
+        group: "2_split",
+        iconComponent: PanelLeft,
+        sortOrder: 3,
+        submenu: () => i18next.t("contextMenu.submenu.split"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      title: () => i18next.t("contextMenu.action.splitLeft"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
+      handler: () => {
+        const api = useWorkspaceStore.getState().api;
+        const p = api?.activePanel;
+        if (p) {
+          useWorkspaceStore.getState().splitPanel(p.id, "above");
+        }
+      },
+      id: "pier.panel.splitUp",
+      metadata: {
+        group: "2_split",
+        iconComponent: PanelTop,
+        sortOrder: 4,
+        submenu: () => i18next.t("contextMenu.submenu.split"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      title: () => i18next.t("contextMenu.action.splitUp"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
+      handler: () => useWorkspaceStore.getState().focusGroup("right"),
+      id: "pier.panel.focusRight",
+      metadata: {
+        excludeFromMru: true,
+        group: "3_focus",
+        iconComponent: ArrowRight,
+        sortOrder: 1,
+        submenu: () => i18next.t("contextMenu.submenu.focus"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      title: () => i18next.t("contextMenu.action.focusRight"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
+      handler: () => useWorkspaceStore.getState().focusGroup("down"),
+      id: "pier.panel.focusDown",
+      metadata: {
+        excludeFromMru: true,
+        group: "3_focus",
+        iconComponent: ArrowDown,
+        sortOrder: 2,
+        submenu: () => i18next.t("contextMenu.submenu.focus"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      title: () => i18next.t("contextMenu.action.focusDown"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
+      handler: () => useWorkspaceStore.getState().focusGroup("left"),
+      id: "pier.panel.focusLeft",
+      metadata: {
+        excludeFromMru: true,
+        group: "3_focus",
+        iconComponent: ArrowLeft,
+        sortOrder: 3,
+        submenu: () => i18next.t("contextMenu.submenu.focus"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      title: () => i18next.t("contextMenu.action.focusLeft"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
+      handler: () => useWorkspaceStore.getState().focusGroup("up"),
+      id: "pier.panel.focusUp",
+      metadata: {
+        excludeFromMru: true,
+        group: "3_focus",
+        iconComponent: ArrowUp,
+        sortOrder: 4,
+        submenu: () => i18next.t("contextMenu.submenu.focus"),
+      },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      title: () => i18next.t("contextMenu.action.focusUp"),
     })
   );
 

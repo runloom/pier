@@ -75,10 +75,14 @@ function runAction(action: Action): void {
 
 /**
  * 把 swift forward 来的 chars 转成 KeyboardEvent.code 格式 (与 default keymap
- * 一致 — keymap 用 "KeyT" / "Backquote" / "Digit1" 等).
+ * 一致 — keymap 用 "KeyT" / "Backquote" / "Digit1" / "ArrowUp" 等).
  *
- * Pier 当前默认 keymap 涉及的字符: t/w/n/p/`/,. 其他不在 keymap 的 chord 即使
- * 命中也 resolve 不到 action, 不需要在这里穷举所有可能符号.
+ * Pier 当前默认 keymap 涉及的字符: t/w/n/p/`/,. + 方向键. 其他不在 keymap 的
+ * chord 即使命中也 resolve 不到 action, 不需要在这里穷举所有可能符号.
+ *
+ * 方向键: macOS charactersIgnoringModifiers 在按方向键时返回 NSUpArrowFunctionKey
+ * (\u{F700}) 等私有 Unicode, 必须映射到 "ArrowUp"/"ArrowDown"/"ArrowLeft"/"ArrowRight"
+ * 才能跟 web 层 KeyboardEvent.code 命名空间对齐.
  */
 function charsToCode(chars: string): string {
   const ch = chars.toLowerCase();
@@ -111,6 +115,14 @@ function charsToCode(chars: string): string {
       return "Minus";
     case "=":
       return "Equal";
+    case "\u{F700}":
+      return "ArrowUp";
+    case "\u{F701}":
+      return "ArrowDown";
+    case "\u{F702}":
+      return "ArrowLeft";
+    case "\u{F703}":
+      return "ArrowRight";
     default:
       return ch; // fallback: 让 keymap resolve 自行不命中
   }
@@ -125,10 +137,14 @@ function chordFromNativeForward(
   modifierFlags: number,
   chars: string
 ): KeyChord {
+  const hasCmd = hasFlag(modifierFlags, NS_FLAG_COMMAND);
+  const hasCtrl = hasFlag(modifierFlags, NS_FLAG_CONTROL);
+  // 路径 2 仅在 mac 上跑 (NS_FLAG_* 是 mac 概念). mac 上 Mod = Cmd, ctrl 字段
+  // 独立表达 Ctrl 物理键. 同时按 Cmd+Ctrl 时 ctrl 仍真; chordEquals 严格匹配
+  // 决定 resolve 结果.
   return {
-    cmdOrCtrl:
-      hasFlag(modifierFlags, NS_FLAG_COMMAND) ||
-      hasFlag(modifierFlags, NS_FLAG_CONTROL),
+    cmdOrCtrl: hasCmd,
+    ctrl: hasCtrl,
     alt: hasFlag(modifierFlags, NS_FLAG_OPTION),
     shift: hasFlag(modifierFlags, NS_FLAG_SHIFT),
     code: charsToCode(chars),

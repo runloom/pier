@@ -19,9 +19,10 @@ describe("command palette keybinding resolution", () => {
   });
 
   it("resolves Mod+Shift+KeyP to commandPalette.toggle", () => {
-    const chord = parseChord("Mod+Shift+KeyP");
+    const chord = parseChord("Mod+Shift+KeyP", false);
     expect(chord).toEqual({
       cmdOrCtrl: true,
+      ctrl: false,
       alt: false,
       shift: true,
       code: "KeyP",
