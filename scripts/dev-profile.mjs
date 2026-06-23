@@ -11,8 +11,10 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -487,13 +489,43 @@ export async function isPortListening(port, host = "127.0.0.1") {
   }
 }
 
+/**
+ * 递归扫 path 下所有文件, 返回 mtime 最新的 {path, mtimeMs}. 不存在返回 null.
+ * 不跟随 symlink (lstat), 避免 node_modules 软链回环.
+ *
+ * @param {string} target
+ * @returns {{ path: string, mtimeMs: number } | null}
+ */
+function findNewestMtime(target) {
+  let stat;
+  try {
+    stat = statSync(target);
+  } catch {
+    return null;
+  }
+  if (!stat.isDirectory()) {
+    return { path: target, mtimeMs: stat.mtimeMs };
+  }
+  let newest = null;
+  for (const entry of readdirSync(target, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
+    const sub = findNewestMtime(path.join(target, entry.name));
+    if (sub && (!newest || sub.mtimeMs > newest.mtimeMs)) {
+      newest = sub;
+    }
+  }
+  return newest;
+}
+
 async function predev() {
   const profile = resolveDevProfile();
 
   // native addon 守卫: 缺了直接报错, 而不是进 Electron 后 require 才炸 (panel 内只一行不易定位).
+  const nativeRoot = path.join(profile.worktreeRoot, "native");
   const nativeAddon = path.join(
-    profile.worktreeRoot,
-    "native",
+    nativeRoot,
     "build",
     "Release",
     "ghostty_native.node"
@@ -503,6 +535,40 @@ async function predev() {
       `[dev-profile] 缺 native addon: ${nativeAddon}\n` +
         "  这是终端 PTY 桥接的 swift+node-gyp 产物, 每个 worktree 必须各自编译.\n" +
         "  请先执行: pnpm setup:worktree (会自动跑 pnpm build:native)"
+    );
+    process.exit(1);
+  }
+
+  // staleness 守卫: 源码 mtime > binary mtime → 拒绝 (旧 binary 缺新加的 napi 导出会在
+  // ipc register 时炸 "addon?.xxx is not a function", 错误地点离根因远, 难定位).
+  const addonMtime = statSync(nativeAddon).mtimeMs;
+  const sourceCandidates = [
+    path.join(nativeRoot, "src"),
+    path.join(nativeRoot, "Sources"),
+    path.join(nativeRoot, "binding.gyp"),
+    path.join(nativeRoot, "Package.swift"),
+    path.join(nativeRoot, "build.sh"),
+  ];
+  let staleSourcePath = null;
+  let staleSourceMtime = 0;
+  for (const candidate of sourceCandidates) {
+    const newest = findNewestMtime(candidate);
+    if (
+      newest &&
+      newest.mtimeMs > addonMtime &&
+      newest.mtimeMs > staleSourceMtime
+    ) {
+      staleSourcePath = newest.path;
+      staleSourceMtime = newest.mtimeMs;
+    }
+  }
+  if (staleSourcePath) {
+    console.error(
+      "[dev-profile] native addon 过时:\n" +
+        `  binary: ${nativeAddon} (mtime ${new Date(addonMtime).toISOString()})\n` +
+        `  新源码: ${staleSourcePath} (mtime ${new Date(staleSourceMtime).toISOString()})\n` +
+        "  旧 binary 缺新加的 napi 导出, Electron 启动后会在 ipc register 时报\n" +
+        "  'addon?.xxx is not a function'. 请先执行: pnpm build:native"
     );
     process.exit(1);
   }

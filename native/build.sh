@@ -31,8 +31,11 @@ install_name_tool -id "@rpath/libGhosttyBridge.dylib" "$DYLIB_OUT" 2>/dev/null |
 install_name_tool -add_rpath "@loader_path" "$DYLIB_OUT" 2>/dev/null || true
 
 echo "=== [3/3] node-gyp rebuild ==="
-npm install --ignore-scripts
-npx --yes node-gyp rebuild --verbose
+# --ignore-workspace: native/ 不在根 pnpm-workspace.yaml 的 packages 列表里, 不加这个
+# flag pnpm 会把 native/ 当成 workspace 外目录, 不生成本地 pnpm-lock.yaml.
+# --ignore-scripts: node-gyp 自带 install script, 这里只装依赖, 真正编译走下面那行.
+pnpm install --ignore-workspace --ignore-scripts
+pnpm exec node-gyp rebuild --verbose
 
 # Copy runtime deps next to .node
 cp build_swift/libGhosttyBridge.dylib build/Release/ 2>/dev/null || true
