@@ -46,6 +46,27 @@ function applyLocal(
   return [...prev, { actionId, useCount: 1, lastUsedAt: now }];
 }
 
+function entriesEqual(a: readonly MruEntry[], b: readonly MruEntry[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (!(x && y)) {
+      return false;
+    }
+    if (
+      x.actionId !== y.actionId ||
+      x.useCount !== y.useCount ||
+      x.lastUsedAt !== y.lastUsedAt
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export const useCommandPaletteMru = create<CommandPaletteMruStore>(
   (set, get) => ({
     entries: EMPTY_MRU_STATE.entries,
@@ -85,6 +106,9 @@ export async function initCommandPaletteMru(): Promise<void> {
     console.error("[command-palette-mru] init read 失败:", err);
   }
   api.onChange((state: MruState) => {
+    if (entriesEqual(state.entries, useCommandPaletteMru.getState().entries)) {
+      return;
+    }
     useCommandPaletteMru.setState({
       entries: state.entries,
       frecencyMap: recompute(state.entries),
