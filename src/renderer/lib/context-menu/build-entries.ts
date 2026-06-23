@@ -78,6 +78,8 @@ function sortOrderOf(a: Action): number {
 
 export function buildMenuEntries(
   surface: string,
+  // _args: Phase 2 per-invocation context (例 target panelId), Phase 1 暂未用 —
+  // Phase 1 actions 都通过 store.getState() 读 active panel 决策, 不需要 args.
   _args?: Record<string, unknown>
 ): MenuTemplate {
   const actions = actionRegistry.list(surface);
