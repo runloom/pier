@@ -8,8 +8,12 @@ interface WorkspaceState {
   addTerminal: () => void;
   api: DockviewApi | null;
   closeActivePanel: () => void;
+  closeAll: () => void;
+  closeOthers: (panelId: string) => void;
+  closePanel: (panelId: string) => void;
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
+  splitPanel: (panelId: string, direction: "right" | "below") => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -92,6 +96,76 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     api.removePanel(panel);
   },
+  closePanel: (panelId) => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const panel = api.panels.find((p) => p.id === panelId);
+    if (!panel) {
+      return;
+    }
+    if (panel.view.contentComponent === "terminal") {
+      window.pier?.terminal?.close?.(panel.id);
+    }
+    api.removePanel(panel);
+  },
+
+  closeOthers: (panelId) => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const keepPanel = api.panels.find((p) => p.id === panelId);
+    if (!keepPanel) {
+      return;
+    }
+    const toClose = api.panels.filter((p) => p.id !== panelId);
+    for (const p of toClose) {
+      if (p.view.contentComponent === "terminal") {
+        window.pier?.terminal?.close?.(p.id);
+      }
+      api.removePanel(p);
+    }
+  },
+
+  closeAll: () => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const all = [...api.panels];
+    for (const p of all) {
+      if (p.view.contentComponent === "terminal") {
+        window.pier?.terminal?.close?.(p.id);
+      }
+      api.removePanel(p);
+    }
+  },
+
+  splitPanel: (panelId, direction) => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const panel = api.panels.find((p) => p.id === panelId);
+    if (!panel) {
+      return;
+    }
+    const component = panel.view.contentComponent;
+    const prefix = component === "terminal" ? "terminal" : component;
+    const newId = `${prefix}-${Date.now()}`;
+    api.addPanel({
+      id: newId,
+      component,
+      ...(panel.title !== undefined && { title: panel.title }),
+      position: {
+        referencePanel: panel.id,
+        direction,
+      },
+    });
+  },
+
   resetLayout: async () => {
     const api = get().api;
     if (!api) {
