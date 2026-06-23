@@ -47,8 +47,8 @@ export function registerPanelActions(): () => void {
       handler: () => useWorkspaceStore.getState().addTerminal(),
       id: "pier.panel.newTerminal",
       metadata: { group: "1_new", sortOrder: 1 },
-      surfaces: ["dockview-tab"],
-      title: () => "New Terminal",
+      surfaces: ["dockview-tab", "terminal/content"],
+      title: () => i18next.t("contextMenu.action.newTerminal"),
     })
   );
 
@@ -181,7 +181,7 @@ export function registerPanelActions(): () => void {
         keywords: ["reset", "layout", "重置", "布局", "panel", "面板"],
         sortOrder: 6,
       },
-      surfaces: ["command-palette"],
+      surfaces: ["command-palette", "terminal/content"],
       title: () => i18next.t("commandPalette.action.resetLayout"),
     })
   );

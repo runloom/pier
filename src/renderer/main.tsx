@@ -9,6 +9,7 @@ import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
+import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
@@ -33,6 +34,7 @@ async function bootstrap() {
   registerCommandPaletteAction();
   registerPanelActions();
   registerSettingsActions();
+  registerTerminalActions();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
 
   const rootEl = document.getElementById("root");
