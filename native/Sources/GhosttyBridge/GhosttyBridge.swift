@@ -270,6 +270,39 @@ final class GhosttyBridgeImpl {
             state.activePanelKind = kind
             state.activeTerminalPanelId = kind == .terminal ? panelId : nil
         }
+        applyFirstResponder(for: window)
+    }
+
+    /// 按 windowStates 当前 state 重算 + apply firstResponder.
+    /// 不用 savedFirstResponder restore 模型 — active panel 可能在 overlay 期间被
+    /// 切换, pop overlay 后恢复"之前"的 firstResponder 不一定对 (旧 panel 可能已 close).
+    /// 按当前 state 重算更可靠.
+    func applyFirstResponder(for window: NSWindow) {
+        let state = stateFor(window: window)
+
+        if state.inTerminalMode {
+            if let panelId = state.activeTerminalPanelId,
+               let term = terminals[panelId] {
+                window.makeFirstResponder(term.terminalView)
+            }
+            // 没找到 terminal NSView → 不动 firstResponder (保留 WKWebView default)
+        } else {
+            if let wk = findWKWebViewInContentView(window) {
+                window.makeFirstResponder(wk)
+            }
+        }
+    }
+
+    private func findWKWebViewInContentView(_ window: NSWindow) -> NSView? {
+        guard let contentView = window.contentView else { return nil }
+        func search(in view: NSView) -> NSView? {
+            if String(describing: type(of: view)) == "WKWebView" { return view }
+            for child in view.subviews {
+                if let found = search(in: child) { return found }
+            }
+            return nil
+        }
+        return search(in: contentView)
     }
 
     /// 注册 keyboard forward callback: swift NSEvent monitor 捕获 Cmd+key 后, 通过
@@ -401,7 +434,12 @@ final class GhosttyBridgeImpl {
     func focus(panelId: String) {
         guard let term = terminals[panelId] else { return }
         activePanelId = panelId
-        term.terminalView.window?.makeFirstResponder(term.terminalView)
+        // 更新 per-window state + 触发 applyFirstResponder (代替原 makeFirstResponder).
+        // 这里只处理 terminal panel focus 场景, web panel focus 由 setActivePanelKind('web') 走.
+        if let window = term.terminalView.window {
+            setActivePanelKind(window: window, kind: .terminal, panelId: panelId)
+            applyFirstResponder(for: window)
+        }
     }
 
     /// 关闭指定 window 下所有 terminal NSView. 用于 renderer reload / crash 时清理,
