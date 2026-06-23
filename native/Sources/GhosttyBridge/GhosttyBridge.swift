@@ -101,6 +101,15 @@ final class EventRouterView: NSView {
     /// ViewsCompositorSuperview 才是真正渲染 web 的层, WKWebView 只是事件壳).
     private func routeKeyDown(_ event: NSEvent) -> NSEvent? {
         guard let window = ownerWindow, event.window === window else { return event }
+
+        // Web mode (overlay active OR active panel is web): 全 pass through.
+        // firstResponder 已 swap 到 WKWebView, web DOM 自然接所有 key (含 ↑/↓/Enter/Cmd+A/Cmd+T 等).
+        // 不在此处拦截 Cmd+key — let web's useKeyboardShortcuts 路径 1 (DOM keydown capture)
+        // 用 scopeStore 按 [overlay阻断] > [panel] > [global] 优先级 resolve.
+        let state = GhosttyBridgeImpl.shared.stateFor(window: window)
+        guard state.inTerminalMode else { return event }
+
+        // Terminal mode: 只拦截 Cmd+key forward 给 web (路径 2 IPC), 其他 pass through 给 Ghostty.
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard mods.contains(.command) else { return event }
         guard let chars = event.charactersIgnoringModifiers, !chars.isEmpty else { return event }
@@ -259,6 +268,17 @@ final class GhosttyBridgeImpl {
             router.overlayActive = active
             // 物理隐藏: 从视图层级中移除, 确保 NSDragging 目标发现能找到 WKWebView
             router.isHidden = active
+
+            // 更新 per-window overlayCount + 触发 applyFirstResponder.
+            // overlayCount > 0 时 inTerminalMode=false → firstResponder swap to WKWebView,
+            // web overlay (command palette / dialog) 自然接 keyboard.
+            if let window = router.window {
+                mutateState(window) { state in
+                    state.overlayCount += active ? 1 : -1
+                    if state.overlayCount < 0 { state.overlayCount = 0 }  // defensive
+                }
+                applyFirstResponder(for: window)
+            }
         }
     }
 
@@ -369,6 +389,16 @@ final class GhosttyBridgeImpl {
         )
 
         activePanelId = panelId
+
+        // 反例 6 修复: dockview onDidActivePanelChange 可能早于 React TerminalPanel
+        // useEffect 调 terminal.create. 早到的 setActivePanelKind 时 terminals[panelId]
+        // 还没创建, applyFirstResponder 跳过 makeFirstResponder. create 完成后补一次,
+        // 确保 firstResponder 真正 swap 到 terminal NSView.
+        let state = stateFor(window: parent)
+        if state.activeTerminalPanelId == panelId {
+            applyFirstResponder(for: parent)
+        }
+
         return true
     }
 
