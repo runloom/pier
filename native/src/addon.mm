@@ -21,6 +21,8 @@ extern "C" {
     // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
     typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
     void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
+    typedef void (*MouseForwardFn)(long browserWindowId, const char* panelId, double x, double y);
+    void ghostty_bridge_set_mouse_forward_callback(MouseForwardFn cb);
     void ghostty_bridge_set_active_panel_kind(void* nsWindow, long kindRaw, const char* panelId);
 }
 
@@ -163,6 +165,53 @@ static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) 
     return env.Undefined();
 }
 
+// ---- Right-mouse forward callback (swift → main JS) ----
+//
+// 同 keyboard forward 模式: swift NSEvent monitor 命中 terminal 区域右键时调
+// trampoline, ThreadSafeFunction 把 (windowId, panelId, x, y) 转到 JS 线程.
+static Napi::ThreadSafeFunction g_mouseTSFN;
+
+struct MouseForwardPayload {
+    long windowId;
+    std::string panelId;
+    double x;
+    double y;
+};
+
+static void g_mouseForwardTrampoline(long windowId, const char* panelId, double x, double y) {
+    if (!g_mouseTSFN) return;
+    auto* payload = new MouseForwardPayload{ windowId, std::string(panelId), x, y };
+    auto status = g_mouseTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, MouseForwardPayload* p) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(p->windowId)),
+            Napi::String::New(env, p->panelId),
+            Napi::Number::New(env, p->x),
+            Napi::Number::New(env, p->y),
+        });
+        delete p;
+    });
+    if (status != napi_ok) {
+        delete payload;
+    }
+}
+
+static Napi::Value JsSetMouseForwardCallback(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
+        if (g_mouseTSFN) {
+            g_mouseTSFN.Release();
+            g_mouseTSFN = Napi::ThreadSafeFunction();
+        }
+        ghostty_bridge_set_mouse_forward_callback(nullptr);
+        return env.Undefined();
+    }
+    Napi::Function jsFn = info[0].As<Napi::Function>();
+    if (g_mouseTSFN) g_mouseTSFN.Release();
+    g_mouseTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierMouseForward", 0, 1);
+    ghostty_bridge_set_mouse_forward_callback(&g_mouseForwardTrampoline);
+    return env.Undefined();
+}
+
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -190,6 +239,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
+    exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
     return exports;
 }
 
