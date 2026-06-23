@@ -105,6 +105,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!panel) {
       return;
     }
+    // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
+    if (api.totalPanels <= 1) {
+      closeCurrentWindow().catch((err) => {
+        console.error("[workspace] closeCurrentWindow failed:", err);
+      });
+      return;
+    }
     if (panel.view.contentComponent === "terminal") {
       window.pier?.terminal?.close?.(panel.id);
     }
