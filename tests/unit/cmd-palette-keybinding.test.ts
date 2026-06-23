@@ -26,7 +26,10 @@ describe("command palette keybinding resolution", () => {
       shift: true,
       code: "KeyP",
     });
-    const commandId = keybindingRegistry.resolve(chord);
+    const commandId = keybindingRegistry.resolve(chord, {
+      activePanelComponent: null,
+      overlayStack: [],
+    });
     expect(commandId).toBe("pier.commandPalette.toggle");
   });
 

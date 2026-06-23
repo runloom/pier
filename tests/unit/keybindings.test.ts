@@ -2,7 +2,16 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { chordEquals } from "@/lib/keybindings/matcher.ts";
 import { parseChord } from "@/lib/keybindings/parse.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
-import type { KeybindingInput } from "@/lib/keybindings/types.ts";
+import type {
+  KeybindingInput,
+  ResolveScopeState,
+} from "@/lib/keybindings/types.ts";
+
+// 默认 scope: 空 panel + 空 overlay → resolve 直接走 global 层.
+const GLOBAL_SCOPE: ResolveScopeState = {
+  activePanelComponent: null,
+  overlayStack: [],
+};
 
 describe("keybinding engine", () => {
   beforeEach(() => {
@@ -30,14 +39,18 @@ describe("keybinding engine", () => {
     ];
     keybindingRegistry.registerDefaults(keymap);
     const chord = parseChord("Mod+KeyW");
-    expect(keybindingRegistry.resolve(chord)).toBe("pier.test.action");
+    expect(keybindingRegistry.resolve(chord, GLOBAL_SCOPE)).toBe(
+      "pier.test.action"
+    );
   });
 
   it("returns null for unregistered chord", () => {
     keybindingRegistry.registerDefaults([
       { commandId: "pier.test.action", keys: "Mod+KeyW" },
     ]);
-    expect(keybindingRegistry.resolve(parseChord("Mod+KeyQ"))).toBeNull();
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyQ"), GLOBAL_SCOPE)
+    ).toBeNull();
   });
 
   it("user unbind (-prefix) suppresses default", () => {
@@ -47,7 +60,9 @@ describe("keybinding engine", () => {
     keybindingRegistry.loadUserKeymap([
       { commandId: "-pier.test.action", keys: "" },
     ]);
-    expect(keybindingRegistry.resolve(parseChord("Mod+KeyW"))).toBeNull();
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyW"), GLOBAL_SCOPE)
+    ).toBeNull();
   });
 
   it("user override adds additional binding; unbind removes default", () => {
@@ -58,21 +73,23 @@ describe("keybinding engine", () => {
     keybindingRegistry.loadUserKeymap([
       { commandId: "pier.test.action", keys: "Mod+KeyQ" },
     ]);
-    expect(keybindingRegistry.resolve(parseChord("Mod+KeyW"))).toBe(
-      "pier.test.action"
-    );
-    expect(keybindingRegistry.resolve(parseChord("Mod+KeyQ"))).toBe(
-      "pier.test.action"
-    );
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyW"), GLOBAL_SCOPE)
+    ).toBe("pier.test.action");
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyQ"), GLOBAL_SCOPE)
+    ).toBe("pier.test.action");
     // 要屏蔽 default 需用 -commandId 解绑
     keybindingRegistry.loadUserKeymap([
       { commandId: "-pier.test.action", keys: "" },
       { commandId: "pier.test.action", keys: "Mod+KeyQ" },
     ]);
-    expect(keybindingRegistry.resolve(parseChord("Mod+KeyW"))).toBeNull();
-    expect(keybindingRegistry.resolve(parseChord("Mod+KeyQ"))).toBe(
-      "pier.test.action"
-    );
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyW"), GLOBAL_SCOPE)
+    ).toBeNull();
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyQ"), GLOBAL_SCOPE)
+    ).toBe("pier.test.action");
   });
 
   it("chordEquals is reflexive", () => {

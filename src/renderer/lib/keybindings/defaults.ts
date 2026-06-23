@@ -8,10 +8,18 @@
 import type { KeybindingInput } from "./types.ts";
 
 export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
-  { commandId: "pier.panel.newTab", keys: "Mod+KeyT" },
-  { commandId: "pier.panel.closeActive", keys: "Mod+KeyW" },
-  { commandId: "pier.window.newWindow", keys: "Mod+KeyN" },
-  { commandId: "pier.panel.newTerminal", keys: "Mod+Backquote" },
-  { commandId: "pier.commandPalette.toggle", keys: "Mod+Shift+KeyP" },
-  { commandId: "pier.settings.open", keys: "Mod+Comma" },
+  { commandId: "pier.panel.newTab", keys: "Mod+KeyT", scope: "global" },
+  { commandId: "pier.panel.closeActive", keys: "Mod+KeyW", scope: "global" },
+  { commandId: "pier.window.newWindow", keys: "Mod+KeyN", scope: "global" },
+  {
+    commandId: "pier.panel.newTerminal",
+    keys: "Mod+Backquote",
+    scope: "global",
+  },
+  {
+    commandId: "pier.commandPalette.toggle",
+    keys: "Mod+Shift+KeyP",
+    scope: "global",
+  },
+  { commandId: "pier.settings.open", keys: "Mod+Comma", scope: "global" },
 ];

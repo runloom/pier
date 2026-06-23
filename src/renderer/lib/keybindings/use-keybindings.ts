@@ -16,6 +16,7 @@
 import { useEffect } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { isTextInputElement } from "./is-text-input.ts";
 import { chordFromEvent } from "./matcher.ts";
 import { keybindingRegistry } from "./registry.ts";
@@ -41,7 +42,11 @@ function pickAction(
   chord: KeyChord,
   target: EventTarget | null
 ): Action | null {
-  const commandId = keybindingRegistry.resolve(chord);
+  const scope = useKeybindingScope.getState();
+  const commandId = keybindingRegistry.resolve(chord, {
+    activePanelComponent: scope.activePanelComponent,
+    overlayStack: scope.overlayStack,
+  });
   if (!commandId) {
     return null;
   }

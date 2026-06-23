@@ -11,6 +11,15 @@
 
 export type KeymapSource = "default" | "user";
 
+/**
+ * Keybinding scope tag — resolve 优先级 [overlay 阻断] > [panel] > [global].
+ * 新 panel kit / overlay 在 panel-registry 或 overlay component 内声明对应 scope id.
+ */
+export type KeybindingScope =
+  | "global"
+  | `panel:${string}`
+  | `overlay:${string}`;
+
 export interface KeyChord {
   readonly alt: boolean;
   /** "Mod" — mac 上等价 metaKey, 其他平台等价 ctrlKey. */
@@ -23,6 +32,7 @@ export interface KeyChord {
 export interface Keybinding {
   readonly chord: KeyChord;
   readonly commandId: string;
+  readonly scope: KeybindingScope;
   readonly source: KeymapSource;
 }
 
@@ -33,4 +43,15 @@ export interface KeybindingInput {
   readonly commandId: string;
   /** DSL: "Mod+Shift+KeyP" / "Mod+KeyW". 解绑条目本字段可为空. */
   readonly keys: string;
+  /** Default 'global' if omitted (兼容老 keymap entries). */
+  readonly scope?: KeybindingScope;
+}
+
+/**
+ * resolve(chord, scopeState) 的输入. 优先级 [overlay 阻断] > [panel] > [global].
+ * activePanelComponent 是 dockview panel component id (例: "terminal" / "web").
+ */
+export interface ResolveScopeState {
+  readonly activePanelComponent: string | null;
+  readonly overlayStack: readonly string[];
 }
