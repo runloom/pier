@@ -9,6 +9,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   EMPTY_MRU_STATE,
+  frecency,
   MRU_MAX_ENTRIES,
   type MruEntry,
   type MruState,
@@ -17,14 +18,6 @@ import {
 import { app } from "electron";
 import lockfile from "proper-lockfile";
 import writeFileAtomic from "write-file-atomic";
-
-const HALF_LIFE_DAYS = 14;
-const MS_PER_DAY = 86_400_000;
-
-function frecency(entry: MruEntry, now: number): number {
-  const ageDays = (now - entry.lastUsedAt) / MS_PER_DAY;
-  return entry.useCount * 0.5 ** (ageDays / HALF_LIFE_DAYS);
-}
 
 export function evictWeakest(
   entries: readonly MruEntry[],

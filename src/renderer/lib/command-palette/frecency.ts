@@ -5,11 +5,12 @@
  *
  * 半衰期 14 天: 两周不用, 权重折半. 参数硬编码, 后续观察体感再调.
  */
-import type { MruEntry } from "@shared/contracts/command-palette-mru.ts";
+import {
+  HALF_LIFE_DAYS,
+  type MruEntry,
+  MS_PER_DAY,
+} from "@shared/contracts/command-palette-mru.ts";
 import type { Action } from "@/lib/actions/types.ts";
-
-const HALF_LIFE_DAYS = 14;
-const MS_PER_DAY = 86_400_000;
 
 export const CATEGORY_META: Record<
   string,
