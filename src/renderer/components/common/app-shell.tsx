@@ -8,7 +8,7 @@ const IS_MAC = window.pier?.platform === "darwin";
 
 export function AppShell() {
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col">
       {IS_MAC && <TitleBar />}
       <ShellKeybindings />
       <CommandPalette />

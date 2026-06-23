@@ -11,6 +11,7 @@ import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
+import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
 
 async function bootstrap() {
@@ -26,6 +27,7 @@ async function bootstrap() {
   }
 
   window.pier?.terminal?.setup?.()?.catch(() => undefined);
+  installDragWatcher();
 
   registerConfigActions();
   registerCommandPaletteAction();

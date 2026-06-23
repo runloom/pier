@@ -617,9 +617,10 @@ body {
   --dv-active-sash-transition-delay: 0s;
   --dv-tabs-container-scrollbar-color: var(--border);
   --dv-icon-hover-background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
-  --dv-drag-over-background-color: color-mix(in oklab, var(--ring) 14%, transparent);
-  --dv-drag-over-border: 1px solid var(--ring);
-  --dv-drag-over-border-color: var(--ring);
+  /* drag-over 高亮 — 半透明 primary, 与下层 terminal NSView 合成出叠加效果 */
+  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 30%, transparent);
+  --dv-drag-over-border: 2px solid var(--primary);
+  --dv-drag-over-border-color: var(--primary);
   --dv-floating-box-shadow: 0 8px 32px color-mix(in oklab, var(--foreground) 25%, transparent);
   --dv-floating-border: 1px solid var(--border);
   --dv-paneview-active-outline-color: var(--ring);
@@ -636,34 +637,25 @@ body {
   background-color: transparent !important;
 }
 
-/* 面板间分隔线 — dockview 默认只有宽/高, 无 background; 透明模式下需显式着色 */
-.dockview-theme-pier .dv-split-view-container > .dv-view-container > .dv-view:not(:first-child)::before {
-  background-color: var(--border);
-}
-
 /* sash 视觉/交互分离:
    - 命中区: 保留 dockview 默认 4px (.dv-sash 本体), 不动
-   - 视觉线: ::after 伪元素 1.5px, hover 时着色 var(--ring)
-   - 默认 hover 整片上色已在上方 --dv-active-sash-color:transparent 禁用
-   - 水平 sash: 居中 (left:50% translateX); 垂直 sash: 顶对齐 (top:50%, 无 translateY)
-     原因: splitview.js 硬编码 sashWidth=4 做居中定位, sash top = boundary-2.
-     dockview 静态分隔线 (.dv-view::before) 从 boundary 向下延伸, 如果 ::after
-     也居中在 boundary 上则视觉中心会比静态线偏高 ~0.75px. */
+   - 视觉线: ::after 伪元素 1px, 半透明 foreground 与下层合成; hover 整段 var(--ring) 高亮 */
 .dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 1.5px;
+  width: 1px;
   transform: translateX(-50%);
-  background-color: transparent;
+  background-color: color-mix(in oklab, var(--foreground) 35%, transparent);
   transition: background-color 0.15s ease-in-out;
   pointer-events: none;
 }
 .dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after,
 .dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.dv-disabled):active::after {
   background-color: var(--ring);
+  width: 1.5px;
 }
 .dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::after {
   content: "";
@@ -671,14 +663,15 @@ body {
   left: 0;
   right: 0;
   top: 50%;
-  height: 1.5px;
-  background-color: transparent;
+  height: 1px;
+  background-color: color-mix(in oklab, var(--foreground) 35%, transparent);
   transition: background-color 0.15s ease-in-out;
   pointer-events: none;
 }
 .dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after,
 .dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled):active::after {
   background-color: var(--ring);
+  height: 1.5px;
 }
 
 /* — 压制 dockview 内置 :focus outline (pier 改用底部指示线) — */

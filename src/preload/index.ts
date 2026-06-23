@@ -38,16 +38,33 @@ export interface PierThemeAPI {
   ) => Promise<void>;
 }
 
+export interface PierWorkspaceAPI {
+  loadLayout: () => Promise<unknown | null>;
+  saveLayout: (layout: unknown) => Promise<void>;
+}
+
+/**
+ * Keyboard chord forward: swift NSEvent monitor 捕获 Cmd+key → main IPC →
+ * 这里 dispatch 到 renderer 侧的 listener (shell-keybindings).
+ */
+export interface PierKeybindingAPI {
+  onForward: (
+    cb: (chord: { modifierFlags: number; chars: string }) => void
+  ) => () => void;
+}
+
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
   createWindow: () => Promise<{ windowId: string }>;
   focusWindow: (windowId: string) => Promise<void>;
+  keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
   terminal: TerminalAPI;
   theme: PierThemeAPI;
+  workspace: PierWorkspaceAPI;
 }
 
 const preferencesApi: PierPreferencesAPI = {
@@ -73,6 +90,27 @@ const themeApi: PierThemeAPI = {
     ipcRenderer.invoke("pier:theme:set-native-chrome", resolved, chromeColor),
 };
 
+const workspaceApi: PierWorkspaceAPI = {
+  loadLayout: () => ipcRenderer.invoke("pier:workspace:load-layout"),
+  saveLayout: (layout) =>
+    ipcRenderer.invoke("pier:workspace:save-layout", layout),
+};
+
+const keybindingApi: PierKeybindingAPI = {
+  onForward: (cb) => {
+    const listener = (
+      _event: unknown,
+      chord: { modifierFlags: number; chars: string }
+    ) => {
+      cb(chord);
+    };
+    ipcRenderer.on("pier:keybinding:forward", listener);
+    return () => {
+      ipcRenderer.off("pier:keybinding:forward", listener);
+    };
+  },
+};
+
 const api: PierWindowAPI = {
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
@@ -80,11 +118,13 @@ const api: PierWindowAPI = {
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:focus", windowId),
+  keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
   platform: process.platform,
   preferences: preferencesApi,
   terminal: terminalApi,
   theme: themeApi,
+  workspace: workspaceApi,
 };
 
 contextBridge.exposeInMainWorld("pier", api);

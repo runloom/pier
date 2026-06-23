@@ -12,6 +12,7 @@ import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
+import { registerWorkspaceIpc } from "./ipc/workspace.ts";
 import { windowManager } from "./windows/window-manager.ts";
 
 const isDev = !app.isPackaged;
@@ -168,6 +169,7 @@ app.whenReady().then(() => {
   registerPreferencesIpc(ipcMain);
   registerTerminalIpc(ipcMain);
   registerThemeIpc(ipcMain);
+  registerWorkspaceIpc(ipcMain);
 
   // 首窗口 id 固定 "main".
   windowManager.create({ id: "main" });

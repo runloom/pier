@@ -1,9 +1,10 @@
 // native/src/addon.mm — N-API bridge: JS ↔ C ABI (GhosttyBridge.swift)
 #import <AppKit/AppKit.h>
 #import <napi.h>
+#include <string>
 
 extern "C" {
-    bool ghostty_bridge_setup_window(void* nsWindow);
+    bool ghostty_bridge_setup_window(void* nsWindow, long browserWindowId);
     void ghostty_bridge_set_overlay_active(bool active);
     bool ghostty_bridge_create_terminal(void* nsWindow, const char* panelId,
                                          double x, double y, double w, double h);
@@ -13,6 +14,13 @@ extern "C" {
     void ghostty_bridge_hide(const char* panelId);
     void ghostty_bridge_close(const char* panelId);
     void ghostty_bridge_focus(const char* panelId);
+    void ghostty_bridge_close_all(void* nsWindow);
+    void ghostty_bridge_detach_window(void* nsWindow);
+    // C 函数指针 typedef 让 swift cb 能传给 N-API ThreadSafeFunction 持有的 trampoline.
+    // 签名: (browserWindowId, modifierFlags, chars UTF-8). browserWindowId 是 Electron
+    // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
+    typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
+    void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
 }
 
 // Electron getNativeWindowHandle() returns Buffer containing NSView**
@@ -30,7 +38,8 @@ static NSWindow* WindowFromHandle(const Napi::Value& v) {
 static Napi::Value JsSetupWindow(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return Napi::Boolean::New(info.Env(), false);
-    bool ok = ghostty_bridge_setup_window((__bridge void*)win);
+    long browserWindowId = static_cast<long>(info[1].As<Napi::Number>().Int64Value());
+    bool ok = ghostty_bridge_setup_window((__bridge void*)win, browserWindowId);
     return Napi::Boolean::New(info.Env(), ok);
 }
 
@@ -88,6 +97,69 @@ static Napi::Value JsFocus(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+static Napi::Value JsCloseAll(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    ghostty_bridge_close_all((__bridge void*)win);
+    return info.Env().Undefined();
+}
+
+static Napi::Value JsDetachWindow(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    ghostty_bridge_detach_window((__bridge void*)win);
+    return info.Env().Undefined();
+}
+
+// ---- Keyboard forward callback (swift → main JS) ----
+//
+// swift NSEvent monitor 捕获 Cmd+key 时, 通过 C 函数指针 (g_keyForwardTrampoline)
+// 调到这里, 我们通过 ThreadSafeFunction 把事件分发到 main 进程的 JS 线程, 让 JS
+// 端注册的 callback 收到 { modifiers, chars }.
+//
+// 不能直接在 swift 线程调 napi function (会 crash) — ThreadSafeFunction 是 N-API
+// 标准的跨线程 callback 桥.
+static Napi::ThreadSafeFunction g_keyboardTSFN;
+
+struct KeyForwardPayload {
+    long windowId;
+    unsigned long modifiers;
+    std::string chars;  // heap-owned (跨线程持久化)
+};
+
+static void g_keyForwardTrampoline(long windowId, unsigned long modifiers, const char* chars) {
+    if (!g_keyboardTSFN) return;
+    auto* payload = new KeyForwardPayload{ windowId, modifiers, std::string(chars) };
+    auto status = g_keyboardTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, KeyForwardPayload* p) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(p->windowId)),
+            Napi::Number::New(env, static_cast<double>(p->modifiers)),
+            Napi::String::New(env, p->chars),
+        });
+        delete p;
+    });
+    if (status != napi_ok) {
+        delete payload;
+    }
+}
+
+static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
+        if (g_keyboardTSFN) {
+            g_keyboardTSFN.Release();
+            g_keyboardTSFN = Napi::ThreadSafeFunction();
+        }
+        ghostty_bridge_set_keyboard_forward_callback(nullptr);
+        return env.Undefined();
+    }
+    Napi::Function jsFn = info[0].As<Napi::Function>();
+    if (g_keyboardTSFN) g_keyboardTSFN.Release();
+    g_keyboardTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierKeyForward", 0, 1);
+    ghostty_bridge_set_keyboard_forward_callback(&g_keyForwardTrampoline);
+    return env.Undefined();
+}
+
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setupWindow",     Napi::Function::New(env, JsSetupWindow));
     exports.Set("setOverlayActive", Napi::Function::New(env, JsSetOverlayActive));
@@ -97,6 +169,9 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("hideTerminal",    Napi::Function::New(env, JsHide));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("focusTerminal",   Napi::Function::New(env, JsFocus));
+    exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
+    exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
+    exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
     return exports;
 }
 
