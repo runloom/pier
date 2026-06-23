@@ -93,7 +93,8 @@ export function registerPanelActions(): () => void {
       category: "Panel",
       enabled: () => {
         const api = useWorkspaceStore.getState().api;
-        return api != null && api.panels.length > 1;
+        const group = api?.activeGroup;
+        return group != null && group.panels.length > 1;
       },
       handler: () => {
         const api = useWorkspaceStore.getState().api;
