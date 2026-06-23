@@ -3,12 +3,10 @@
  * dispatch 选中的 action.
  *
  * usage:
- *   const onContextMenu = useContextMenu("dockview-tab", { panelId });
+ *   const onContextMenu = useContextMenu("dockview-tab");
  *   <div onContextMenu={onContextMenu}>...</div>
  *
- * args 透传给 action.handler 暂未启用 (Action.handler 当前签名是 () => void).
- * 后续要让 action 知道 target panelId 时, 把 args 通过 closure 或 context 传给 handler.
- * Phase 1 的 actions 都用 store.getState() 读 active panel 决策, 不需 args.
+ * Phase 1 的 actions 都用 store.getState() 读 active panel 决策, 不需传 args.
  */
 import { type MouseEvent, useCallback } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -29,7 +27,6 @@ export interface UseContextMenuOptions {
 
 export function useContextMenu(
   surface: string,
-  _args?: Record<string, unknown>,
   options?: UseContextMenuOptions
 ): (event: MouseEvent) => void {
   return useCallback(
