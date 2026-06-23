@@ -46,8 +46,8 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api != null,
       handler: () => useWorkspaceStore.getState().addTerminal(),
       id: "pier.panel.newTerminal",
-      metadata: { group: "1_new" },
-      surfaces: [],
+      metadata: { group: "1_new", sortOrder: 1 },
+      surfaces: ["dockview-tab"],
       title: () => "New Terminal",
     })
   );
@@ -64,6 +64,99 @@ export function registerPanelActions(): () => void {
       metadata: { group: "1_new" },
       surfaces: [],
       title: () => "New Window",
+    })
+  );
+
+  // ─── dockview-tab surface actions ───────────────────────────────────
+  // 右键 tab 时 dockview 先把该 tab 设为 activePanel (onPointerDown), 再 fire
+  // onContextMenu — 所以 handler 用 activePanel 等价于"右键的那个 tab".
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
+      handler: () => {
+        const api = useWorkspaceStore.getState().api;
+        const p = api?.activePanel;
+        if (p) {
+          useWorkspaceStore.getState().closePanel(p.id);
+        }
+      },
+      id: "pier.panel.close",
+      metadata: { group: "9_close", sortOrder: 1 },
+      surfaces: ["dockview-tab"],
+      title: () => i18next.t("contextMenu.action.closePanel"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.panels.length > 1;
+      },
+      handler: () => {
+        const api = useWorkspaceStore.getState().api;
+        const p = api?.activePanel;
+        if (p) {
+          useWorkspaceStore.getState().closeOthers(p.id);
+        }
+      },
+      id: "pier.panel.closeOthers",
+      metadata: { group: "9_close", sortOrder: 2 },
+      surfaces: ["dockview-tab"],
+      title: () => i18next.t("contextMenu.action.closeOthers"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.panels.length > 0;
+      },
+      handler: () => useWorkspaceStore.getState().closeAll(),
+      id: "pier.panel.closeAll",
+      metadata: { group: "9_close", sortOrder: 3 },
+      surfaces: ["dockview-tab"],
+      title: () => i18next.t("contextMenu.action.closeAll"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
+      handler: () => {
+        const api = useWorkspaceStore.getState().api;
+        const p = api?.activePanel;
+        if (p) {
+          useWorkspaceStore.getState().splitPanel(p.id, "right");
+        }
+      },
+      id: "pier.panel.splitRight",
+      metadata: { group: "2_split", sortOrder: 1 },
+      surfaces: ["dockview-tab"],
+      title: () => i18next.t("contextMenu.action.splitRight"),
+    })
+  );
+
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
+      handler: () => {
+        const api = useWorkspaceStore.getState().api;
+        const p = api?.activePanel;
+        if (p) {
+          useWorkspaceStore.getState().splitPanel(p.id, "below");
+        }
+      },
+      id: "pier.panel.splitDown",
+      metadata: { group: "2_split", sortOrder: 2 },
+      surfaces: ["dockview-tab"],
+      title: () => i18next.t("contextMenu.action.splitDown"),
     })
   );
 
