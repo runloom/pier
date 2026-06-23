@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Pier app icon — 停靠面板">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c1a24"/>
+      <stop offset="1" stop-color="#0b0a10"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.62" cy="0.3" r="0.6">
+      <stop offset="0" stop-color="#8a76f0" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#8a76f0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vio" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a594ff"/>
+      <stop offset="1" stop-color="#6850dd"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <!-- workspace frame -->
+  <rect x="96" y="96" width="320" height="320" rx="44" fill="#16141e" stroke="#8a76f0" stroke-opacity="0.22" stroke-width="2"/>
+  <!-- sidebar (agents) -->
+  <rect x="118" y="118" width="64" height="276" rx="14" fill="#221d30"/>
+  <circle cx="150" cy="150" r="7" fill="#c2b3ff"/>
+  <circle cx="150" cy="180" r="7" fill="#4a4458"/>
+  <circle cx="150" cy="210" r="7" fill="#4a4458"/>
+  <!-- main active panel -->
+  <rect x="196" y="118" width="198" height="168" rx="14" fill="url(#vio)"/>
+  <rect x="216" y="142" width="120" height="12" rx="6" fill="#ffffff" fill-opacity="0.85"/>
+  <rect x="216" y="166" width="158" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.45"/>
+  <rect x="216" y="184" width="138" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.45"/>
+  <!-- terminal panel -->
+  <rect x="196" y="300" width="198" height="94" rx="14" fill="#221d30"/>
+  <rect x="216" y="324" width="11" height="15" rx="2" fill="#c2b3ff"/>
+  <rect x="236" y="327" width="120" height="9" rx="4.5" fill="#3a3450"/>
+  <rect x="216" y="354" width="150" height="9" rx="4.5" fill="#3a3450"/>
+</svg>

@@ -5,6 +5,9 @@ node_modules
 !/build/icon.icns
 !/build/icon.ico
 !/build/icon.png
+!/build/app-icon-master.svg
+!/build/app-icon-rounded.svg
+!/build/design-sources/
 !/build/entitlements.mac.plist
 /package
 .env
