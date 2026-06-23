@@ -46,7 +46,10 @@ interface CategoryMeta {
 // 兜底排在末尾, label 直接用 raw category 字符串。
 const CATEGORY_META: Record<string, CategoryMeta> = {
   View: { order: 0, labelKey: "view" },
-  Settings: { order: 1, labelKey: "settings" },
+  Workspace: { order: 1, labelKey: "workspace" },
+  Panel: { order: 2, labelKey: "panel" },
+  Window: { order: 3, labelKey: "window" },
+  Settings: { order: 4, labelKey: "settings" },
 };
 
 const UNKNOWN_ORDER = Object.keys(CATEGORY_META).length;

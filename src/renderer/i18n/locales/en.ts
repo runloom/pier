@@ -66,6 +66,9 @@ export const en = {
     category: {
       view: "View",
       settings: "Settings",
+      workspace: "Workspace",
+      panel: "Panel",
+      window: "Window",
     },
     action: {
       toggleCommandPalette: "Show Command Palette",

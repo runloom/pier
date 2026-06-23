@@ -66,6 +66,9 @@ export const zhCN = {
     category: {
       view: "视图",
       settings: "设置",
+      workspace: "工作区",
+      panel: "面板",
+      window: "窗口",
     },
     action: {
       toggleCommandPalette: "显示命令面板",
