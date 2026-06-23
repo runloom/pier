@@ -9,6 +9,7 @@ import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
+import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
@@ -28,6 +29,7 @@ async function bootstrap() {
 
   window.pier?.terminal?.setup?.()?.catch(() => undefined);
   installDragWatcher();
+  initCommandPaletteMru().catch(() => undefined);
 
   registerConfigActions();
   registerCommandPaletteAction();
