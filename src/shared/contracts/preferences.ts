@@ -30,6 +30,7 @@ export const stylePresetIdSchema = z.enum([
 
 export const DEFAULT_UI_FONT_FAMILY = "";
 export const DEFAULT_MONO_FONT_FAMILY = "";
+export const DEFAULT_MONO_FONT_SIZE = 13;
 
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
@@ -37,6 +38,12 @@ export const projectPreferencesSchema = z.object({
   language: z.enum(["zh-CN", "en"]).default("zh-CN"),
   uiFontFamily: z.string().default(DEFAULT_UI_FONT_FAMILY),
   monoFontFamily: z.string().default(DEFAULT_MONO_FONT_FAMILY),
+  monoFontSize: z
+    .number()
+    .int()
+    .min(8)
+    .max(32)
+    .default(DEFAULT_MONO_FONT_SIZE),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;

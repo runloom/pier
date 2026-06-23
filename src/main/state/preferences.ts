@@ -48,6 +48,7 @@ const DEFAULTS: ProjectPreferences = {
   language: "zh-CN",
   uiFontFamily: "",
   monoFontFamily: "",
+  monoFontSize: 13,
 };
 
 export async function readPreferences(): Promise<ProjectPreferences> {
