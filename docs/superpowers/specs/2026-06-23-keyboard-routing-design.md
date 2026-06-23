@@ -439,3 +439,81 @@ User 测完更新该表 + 总结 "回归 bug: <list 或 none>" + "新发现 bug:
 - ✓ DEFAULT_KEYMAP 全标 scope: 'global' (行为等价)
 - ✓ command-palette mount/unmount 同时 push/pop 双 store (overlay scope + terminal-overlay overlayCount)
 - ✓ dual-path keyboard (路径 1 DOM keydown + 路径 2 IPC chord forward) 都过同 pickAction
+
+---
+
+## v2 修订 (2026-06-23, 基于 evidence 调研)
+
+User 报告 v1 实施后 3 bug: 命令面板 ↑/↓ 仍走 terminal / web welcome Cmd+T 偶现失效 / Cmd+Q 等 macOS reserved keys 失效. Audit 发现 v1 还有 multi-window overlay 全局污染 + createTerminal race + close stale state 共 4 critical.
+
+### v1 → v2 关键认知颠覆
+
+**v1 错认知**:
+- swap firstResponder 用 `makeFirstResponder(找到的 WKWebView)` — 假设 Electron 内嵌 WKWebView, 找精确 type=="WKWebView" 实例
+- mouseDown 抢 firstResponder 是 libghostty-spm fork 加的, 应 fork patch 改
+
+**v2 调研结果 (evidence-based)**:
+
+1. **Electron 用 Chromium 不是 WebKit** (ref: chromium content/app_shim_remote_cocoa/render_widget_host_view_cocoa.mm)
+   - view tree: `NSWindow.contentView > RootViewMac > WebContentsViewCocoa > RenderWidgetHostViewCocoa` (实际接 keystroke)
+   - **没有真 WKWebView 实例** in Electron view tree
+   - `makeFirstResponder(WKWebView)` v1 一直找错 type, 偶尔 fallback 到 wrapper (不接 key)
+   - **正确 API**: `BrowserWindow.webContents.focus()` — Electron 标准跨平台, 内部知道正确的 RenderWidgetHostViewCocoa
+
+2. **Bug 1/3 (命令面板 ↑/↓) 真根因** 不是 Ghostty mouseDown 抢
+   - 触发场景: user 按 Cmd+Shift+P (没点 terminal) → Ghostty mouseDown 不 fire
+   - 失败原因: Pier swap 找错 NSView type
+   - **不需要 fork Ghostty** — Ghostty mouseDown 抢只在 user 点 terminal 时发生 (此时切到 terminal 是预期, 不是 bug)
+
+3. **cmux 项目 (manaflow-ai/cmux) 同样 in-window overlay 架构**, 不 fork Ghostty
+   - 用 `MainWindowFocusController.intent` 状态机 (跟 Pier WindowKeyboardState 思路一致)
+   - 用 `ForeignFirstResponderPolicy` + `FocusStealingResponder` marker protocol 让 focus 协作 (可选防御性增强)
+   - 用 EventRouter hit-test 优先 (跟 Pier 一致, positioned: .above)
+   - command palette 是 in-window SwiftUI overlay (不用 NSPanel)
+
+4. **multi-window 隔离漏洞** (3 audit 一致 flag)
+   - `terminal-overlay.store.ts:8` overlayCount 是 module-level singleton 跨 window 共享
+   - IPC `pier:terminal:set-overlay` 不带 windowId
+   - swift `setOverlayActive` for-loop 所有 routers ±1 → window-A 打开命令面板会污染 window-B state
+
+5. **createTerminal race** (Bug 6 直接根因)
+   - dockview fromJSON 同步创建 panel, TerminalPanel React mount 后异步 IPC create
+   - onDidActivePanelChange fire 给 active panel A → setActivePanelKind('terminal', A) → applyFirstResponder, 但 terminals[A]=nil → swap fail
+   - 末尾补修复 `if state.activeTerminalPanelId == panelId { applyFirstResponder }` 时序已过期不命中
+   - 应改成无条件 applyFirstResponder (内部已有 safety check)
+
+### v2 修订设计
+
+**核心原则改动**:
+- ~~swift `applyFirstResponder` web 分支用 `makeFirstResponder(WKWebView)`~~ → **`win.webContents.focus()` (Electron API)**
+- ~~overlayCount module-level singleton~~ → **per-window Map (renderer) + IPC 带 windowId**
+- ~~createTerminal 末尾 `if activeTerminalPanelId == panelId` guard~~ → **无条件 applyFirstResponder**
+- close(panelId) 加: **清 windowStates[].activeTerminalPanelId + 触发 applyFirstResponder**
+
+**新 IPC contract**:
+- `pier:terminal:set-overlay` 改: 不带显式 windowId, main 用 `BrowserWindow.fromWebContents(event.sender)` 自动路由 (现有 ipcMain.on 模式)
+- 加 IPC `pier:web:focus` 或合并到 setActivePanelKind ('web') 路径: main 调 `win.webContents.focus()` (而非 swift makeFirstResponder)
+
+### v2 实施清单 (4 task)
+
+| # | Task | File |
+|---|---|---|
+| 1 | swap web mode 改用 webContents.focus() | swift applyFirstResponder + main IPC + ipc/terminal.ts 新 web focus handler |
+| 2 | per-window overlayCount + IPC windowId | terminal-overlay.store.ts + main/ipc/terminal.ts + swift setOverlayActive(window:active:) |
+| 3 | createTerminal 无条件 applyFirstResponder | swift GhosttyBridge.swift createTerminal 末尾 |
+| 4 | close(panelId) 清 windowStates + swap | swift GhosttyBridge.swift close 末尾 |
+
+可选 task 5: 加 cmux 风格 `ForeignFirstResponderPolicy` (防御性, 处理 stranded responder)
+
+### 测试 matrix v2 补强
+
+旧 matrix 24 条 + 加:
+- **M3**: 多窗口 overlay 隔离 — window-A 打开命令面板, window-B terminal 应仍能输入
+- **M4**: 多窗口 firstResponder 独立 — window-A 命令面板 ↑/↓ 不影响 window-B firstResponder
+- **L1**: layout 恢复多 terminal — 4 个 panel (3 terminal + 1 welcome), 立即切 tab 应能输入
+- **L2**: layout 恢复后切 inactive terminal tab — 输入应到正确 terminal
+- **L3**: 关闭 active terminal panel → 新 active 应自动接 firstResponder
+- **K1**: terminal active + Cmd+Q → quit ✓ (v1 fix 已加 NSApp.mainMenu.performKeyEquivalent)
+- **K2**: terminal active + Cmd+H → hide app ✓
+- **K3**: terminal active + Cmd+M → minimize window ✓
+- **K4**: terminal active + Cmd+Comma → 设置 (我们注册的 global action) ✓
