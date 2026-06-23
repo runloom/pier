@@ -77,6 +77,7 @@ export const zhCN = {
       selectStyle: "选择风格",
       selectLanguage: "选择显示语言",
       resetLayout: "重置布局",
+      clearRecent: "清空命令面板使用记录",
     },
   },
 } as const;

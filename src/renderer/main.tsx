@@ -4,6 +4,7 @@ import { App } from "./App.tsx";
 import "./app/globals.css";
 import { initI18n } from "./i18n/index.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
+import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
 import { registerConfigActions } from "./lib/actions/config-actions.ts";
 import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
@@ -35,6 +36,7 @@ async function bootstrap() {
   registerCommandPaletteAction();
   registerPanelActions();
   registerSettingsActions();
+  registerCommandPaletteMruAction();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
 
   const rootEl = document.getElementById("root");
