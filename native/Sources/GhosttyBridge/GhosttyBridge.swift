@@ -439,41 +439,17 @@ final class GhosttyBridgeImpl {
         // 时调 webContents.focus() 让 Chromium 自己 dispatch.
     }
 
-    /// 注册 keyboard forward callback: swift NSEvent monitor 捕获 Cmd+key 后, 通过
-    /// 这个 callback 把 (modifier flags, characters) 转给 main process. main 接收
-    /// 后再通过 IPC 通知 renderer 解析 chord 调对应 action.
-    ///
-    /// 整个链路: 用户按 Cmd+T → NSEvent monitor → EventRouterView.routeKeyDown
-    /// → forwardCmdKeyCallback (本回调) → N-API ThreadSafeFunction → main JS →
-    /// win.webContents.send("pier:keybinding:forward") → preload listener → renderer
-    /// 用 chord 找 action 调用 handler.
-    ///
-    /// 这条路径完全绕开 NSView responder chain (Ghostty terminal focus 时它消费
-    /// 所有 key 是 wk.keyDown forward 不可靠的根因).
-    func setKeyboardForwardCallback(_ cb: @escaping (Int, UInt, String) -> Void) {
-        EventRouterView.forwardCmdKeyCallback = cb
-    }
-
-    /// 注册右键事件 forward callback. 与 keyboard 同构: swift EventRouterView 拦到
-    /// terminal 区域 rightMouseDown 后, 通过此 callback 把 (windowId, panelId, x, y)
-    /// 转给 main, main IPC 通知 renderer 弹菜单.
-    func setMouseForwardCallback(_ cb: @escaping (Int, String, Double, Double) -> Void) {
-        EventRouterView.forwardRightMouseCallback = cb
-    }
-
-    /// 注册 PWD forward callback: swift TerminalSurfacePwdDelegate 收到 OSC 7 后,
-    /// 把 (browserWindowId, panelId, cwd) 转给 main process. 与 keyboard forward
-    /// 路径同模式 (EventDelegate → C 函数指针 → N-API ThreadSafeFunction).
-    func setPwdForwardCallback(_ cb: @escaping (Int, String, String) -> Void) {
-        TerminalEventDelegate.forwardPwdCallback = cb
-    }
-
-    /// 注册 Title forward callback: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后,
-    /// 把 (browserWindowId, panelId, title) 转给 main process. TUI 应用 (claude / vim)
-    /// 的自定义 title 通道, 与 PWD 同模式.
-    func setTitleForwardCallback(_ cb: @escaping (Int, String, String) -> Void) {
-        TerminalEventDelegate.forwardTitleCallback = cb
-    }
+    // Forward callback 注册 — 不经 GhosttyBridgeImpl 中间层. 整条 forward 链:
+    //
+    //   swift 输入 (NSEvent monitor / Ghostty delegate)
+    //   → EventRouterView.forwardCmd­Key/RightMouseCallback (输入事件)
+    //   或 TerminalEventDelegate.forwardPwd/TitleCallback (Ghostty 输出事件)
+    //   → C 函数指针 trampoline (C ABI export 持有)
+    //   → N-API ThreadSafeFunction (addon.mm 持有)
+    //   → main JS callback → webContents.send → renderer.
+    //
+    // EventRouterView / TerminalEventDelegate 的 static var 就是 forward 的源头,
+    // C ABI export 直接赋值过去 — 没有"impl method 转一层 static var"的中间步骤.
 
     // MARK: - Terminal lifecycle
 
@@ -815,48 +791,45 @@ public func ghosttyBridgeDetachWindow(_ nsWindowPtr: UnsafeMutableRawPointer) {
     }
 }
 
-/// C 函数指针类型: 接收 browserWindowId (Int), modifier flags (raw UInt), characters
-/// (C string UTF-8). addon.mm 包装成 ThreadSafeFunction 让 JS 端能安全接收.
+// C 函数指针 typealias 集中放在一起 — addon.mm 通过 ThreadSafeFunction 包装让
+// JS 端能安全接收. C string 在 @_cdecl 内 withCString 取临时指针调用 cb, cb 返回
+// 后字符串生命周期结束 (addon.mm 端 trampoline 已 std::string 拷贝, 不会 dangling).
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
+public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
+public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
 public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            GhosttyBridgeImpl.shared.setKeyboardForwardCallback { wid, mods, chars in
+            EventRouterView.forwardCmdKeyCallback = { wid, mods, chars in
                 chars.withCString { ptr in cb(wid, mods, ptr) }
             }
         } else {
-            GhosttyBridgeImpl.shared.setKeyboardForwardCallback { _, _, _ in }
+            EventRouterView.forwardCmdKeyCallback = nil
         }
     }
 }
-
-/// C 函数指针: (browserWindowId, panelId C string, x, y).
-public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
 
 @_cdecl("ghostty_bridge_set_mouse_forward_callback")
 public func ghosttyBridgeSetMouseForwardCallback(_ cb: MouseForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            GhosttyBridgeImpl.shared.setMouseForwardCallback { wid, panelId, x, y in
+            EventRouterView.forwardRightMouseCallback = { wid, panelId, x, y in
                 panelId.withCString { ptr in cb(wid, ptr, x, y) }
             }
         } else {
-            GhosttyBridgeImpl.shared.setMouseForwardCallback { _, _, _, _ in }
+            EventRouterView.forwardRightMouseCallback = nil
         }
     }
 }
-
-/// C 函数指针类型: 接收 browserWindowId (Int), panelId UTF-8 C string, cwd UTF-8.
-/// addon.mm 包装成 ThreadSafeFunction 让 JS 端能安全接收.
-public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 
 @_cdecl("ghostty_bridge_set_pwd_forward_callback")
 public func ghosttyBridgeSetPwdForwardCallback(_ cb: PwdForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            GhosttyBridgeImpl.shared.setPwdForwardCallback { wid, panelId, cwd in
+            TerminalEventDelegate.forwardPwdCallback = { wid, panelId, cwd in
                 panelId.withCString { pidPtr in
                     cwd.withCString { cwdPtr in
                         cb(wid, pidPtr, cwdPtr)
@@ -864,19 +837,16 @@ public func ghosttyBridgeSetPwdForwardCallback(_ cb: PwdForwardCallback?) {
                 }
             }
         } else {
-            GhosttyBridgeImpl.shared.setPwdForwardCallback { _, _, _ in }
+            TerminalEventDelegate.forwardPwdCallback = nil
         }
     }
 }
-
-/// C 函数指针类型: 接收 browserWindowId (Int), panelId UTF-8, title UTF-8.
-public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 
 @_cdecl("ghostty_bridge_set_title_forward_callback")
 public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            GhosttyBridgeImpl.shared.setTitleForwardCallback { wid, panelId, title in
+            TerminalEventDelegate.forwardTitleCallback = { wid, panelId, title in
                 panelId.withCString { pidPtr in
                     title.withCString { titlePtr in
                         cb(wid, pidPtr, titlePtr)
@@ -884,7 +854,7 @@ public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
                 }
             }
         } else {
-            GhosttyBridgeImpl.shared.setTitleForwardCallback { _, _, _ in }
+            TerminalEventDelegate.forwardTitleCallback = nil
         }
     }
 }

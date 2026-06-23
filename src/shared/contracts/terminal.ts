@@ -85,7 +85,11 @@ export interface TerminalColors {
 
 export interface TerminalAPI {
   applyTheme(colors: TerminalColors): void;
-  close(panelId: string): Promise<void>;
+  /**
+   * 关闭 terminal panel 的 native NSView. fire-and-forget — swift 端 close 是同步
+   * 调用, 调用方不需要 await. 调用 idempotent (panelId 不存在时 no-op).
+   */
+  close(panelId: string): void;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   focus(panelId: string): void;
   hide(panelId: string): void;

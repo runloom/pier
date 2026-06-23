@@ -8,9 +8,9 @@ import { create } from "zustand";
  */
 export interface PanelDescriptor {
   /** 完整形式 — document.title / titlebar / 单 tab 模式 */
-  long?: string;
+  long?: string | undefined;
   /** 当前工作目录绝对路径 — terminal 由 OSC 7 提供; 其他 panel 可不填. sink 优先消费. */
-  path?: string;
+  path?: string | undefined;
   /** 紧凑形式 — tab strip 等空间受限处 */
   short: string;
 }

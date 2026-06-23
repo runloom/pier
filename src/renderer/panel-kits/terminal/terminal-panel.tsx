@@ -2,6 +2,7 @@ import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
+import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 
 function getAnchorFrame(anchor: HTMLDivElement): TerminalFrame | null {
@@ -45,57 +46,31 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cwd, setCwd] = useState<string | null>(null);
-  const [sequenceTitle, setSequenceTitle] = useState<string | null>(null);
 
-  // 订阅 swift OSC 7 → main → 这里. cwd 变化 setState 触发 descriptor 重新计算.
-  // 单 listener 接所有 panel 的事件 — 按 panelId 自行过滤.
-  //
-  // 空字符串过滤:OSC 0/2 / OSC 7 协议允许发空载荷 ("clear title"),
-  // 例如 vim `set notitle` / tmux detach / 自定义 precmd 重置. 若把空串放进 store,
-  // `??` 不捕获空串会让 long="" 一路泄漏到 sink, macOS titlebar 渲染空白条.
-  // 在最上游过滤掉空串 — 保留上一次有效值, 避免回退到 fallback 闪烁.
-  useEffect(() => {
-    const disposeCwd = window.pier.terminal.onCwdChange((event) => {
-      if (event.panelId === panelId && event.cwd) {
-        setCwd(event.cwd);
-      }
-    });
-    const disposeTitle = window.pier.terminal.onTitleChange((event) => {
-      if (event.panelId === panelId && event.title) {
-        setSequenceTitle(event.title);
-      }
-    });
-    return () => {
-      disposeCwd();
-      disposeTitle();
-    };
-  }, [panelId]);
+  // 订阅 swift OSC 7 → main → 这里. usePanelEventState 自动按 panelId 过滤 +
+  // 空字符串忽略 (vim set notitle / tmux detach 等清空场景不污染上一次有效值).
+  const cwd = usePanelEventState(
+    window.pier.terminal.onCwdChange,
+    panelId,
+    (e) => e.cwd
+  );
+  const sequenceTitle = usePanelEventState(
+    window.pier.terminal.onTitleChange,
+    panelId,
+    (e) => e.title
+  );
 
   // descriptor 三字段优先级链:
   // - short: basename(cwd) — tab strip 始终显示目录, 不被 OSC 干扰 (稳定锚点)
   // - long:  sequenceTitle ?? cwd — sink 优先 OSC 自定义 ("Claude Code"),
   //          没 OSC 时 fallback cwd 完整路径
   // - path:  cwd — 真实 cwd, 不被 OSC override (breadcrumb / status bar 用)
-  // 没 cwd 没 OSC 时只传 short = "Terminal".
-  const descriptor = ((): {
-    short: string;
-    long?: string;
-    path?: string;
-  } => {
-    const short = cwd ? basename(cwd) : "Terminal";
-    const long = sequenceTitle ?? cwd ?? undefined;
-    const path = cwd ?? undefined;
-    const result: { short: string; long?: string; path?: string } = { short };
-    if (long !== undefined) {
-      result.long = long;
-    }
-    if (path !== undefined) {
-      result.path = path;
-    }
-    return result;
-  })();
-  usePanelDescriptor(api, descriptor);
+  // hook input 接受 undefined; hook 内部按字段存在性条件 upsert 到 store.
+  usePanelDescriptor(api, {
+    short: cwd ? basename(cwd) : "Terminal",
+    long: sequenceTitle ?? cwd ?? undefined,
+    path: cwd ?? undefined,
+  });
 
   useLayoutEffect(() => {
     const parent = parentRef.current?.parentElement;

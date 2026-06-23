@@ -21,10 +21,13 @@ export interface PanelHandle {
  *
  * 职责:
  * - 同步 short 到 dockview tab (api.setTitle)
- * - upsert 整个 descriptor 到 store (供 active sink 消费)
+ * - upsert descriptor 到 store (供 active sink 消费)
  * - 卸载时 remove
  *
  * Active 状态由 workspace-host 统一推送 store.activeId, panel 端不参与判断.
+ *
+ * 字段值允许显式 `undefined` (PanelDescriptor 类型已开放), sink 端 `??` 链对
+ * "字段不存在"和"字段值 undefined"行为一致, 不需要在 hook 内过滤.
  */
 export function usePanelDescriptor(
   panel: PanelHandle,
@@ -36,15 +39,7 @@ export function usePanelDescriptor(
 
   useEffect(() => {
     panel.setTitle(short);
-    // exactOptionalPropertyTypes — 按字段是否定义条件构造, 不显式写 undefined.
-    const next: PanelDescriptor = { short };
-    if (long !== undefined) {
-      next.long = long;
-    }
-    if (path !== undefined) {
-      next.path = path;
-    }
-    upsert(panel.id, next);
+    upsert(panel.id, { short, long, path });
     return () => remove(panel.id);
   }, [panel, short, long, path, upsert, remove]);
 }

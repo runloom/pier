@@ -138,195 +138,161 @@ static Napi::Value JsDetachWindow(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
-// ---- Keyboard forward callback (swift → main JS) ----
+// ---- Forward channel template (swift → main JS) ----
 //
-// swift NSEvent monitor 捕获 Cmd+key 时, 通过 C 函数指针 (g_keyForwardTrampoline)
-// 调到这里, 我们通过 ThreadSafeFunction 把事件分发到 main 进程的 JS 线程, 让 JS
-// 端注册的 callback 收到 { modifiers, chars }.
+// 通用 ThreadSafeFunction 桥. 每条 forward (keyboard / mouse / pwd / title) 都是:
+//   swift 线程触发 C 函数指针 → trampoline 构 Payload → TSFN 跨线程到 JS 线程 →
+//   payload.callJs(env, jsCallback) → delete payload.
 //
-// 不能直接在 swift 线程调 napi function (会 crash) — ThreadSafeFunction 是 N-API
-// 标准的跨线程 callback 桥.
-static Napi::ThreadSafeFunction g_keyboardTSFN;
+// Payload 是 plain struct, 各自字段 + 一个 callJs 方法负责把字段映射到 napi 值.
+// 添加新 forward 只需:声明 Payload、声明 g_xxx ForwardChannel、1 行 trampoline、
+// 1 行 JsSet handler.
+template <typename Payload>
+class ForwardChannel {
+public:
+    explicit ForwardChannel(const char* debugName) : debugName_(debugName) {}
 
-struct KeyForwardPayload {
-    long windowId;
-    unsigned long modifiers;
-    std::string chars;  // heap-owned (跨线程持久化)
+    void bindJs(Napi::Env env, Napi::Function jsFn) {
+        releaseJs();
+        tsfn_ = Napi::ThreadSafeFunction::New(env, jsFn, debugName_, 0, 1);
+    }
+
+    void releaseJs() {
+        if (tsfn_) {
+            tsfn_.Release();
+            tsfn_ = Napi::ThreadSafeFunction();
+        }
+    }
+
+    void emit(Payload payload) {
+        if (!tsfn_) return;
+        auto* heap = new Payload(std::move(payload));
+        auto status = tsfn_.BlockingCall(heap, [](Napi::Env env, Napi::Function jsCallback, Payload* p) {
+            p->callJs(env, jsCallback);
+            delete p;
+        });
+        if (status != napi_ok) {
+            delete heap;
+        }
+    }
+
+private:
+    Napi::ThreadSafeFunction tsfn_;
+    const char* debugName_;
 };
 
-static void g_keyForwardTrampoline(long windowId, unsigned long modifiers, const char* chars) {
-    if (!g_keyboardTSFN) return;
-    auto* payload = new KeyForwardPayload{ windowId, modifiers, std::string(chars) };
-    auto status = g_keyboardTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, KeyForwardPayload* p) {
-        jsCallback.Call({
-            Napi::Number::New(env, static_cast<double>(p->windowId)),
-            Napi::Number::New(env, static_cast<double>(p->modifiers)),
-            Napi::String::New(env, p->chars),
-        });
-        delete p;
-    });
-    if (status != napi_ok) {
-        delete payload;
-    }
-}
-
-static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) {
+// JsSet handler 通用实现: 把 (release-or-bind + swift-setter 调用) 这两步合一.
+// trampoline 总是非 null — 解绑时只断 JS 端, swift 端调用 setter(nullptr).
+template <typename Channel, typename Trampoline>
+static Napi::Value JsSetForwardCallback(
+    const Napi::CallbackInfo& info,
+    Channel& channel,
+    void (*setter)(Trampoline),
+    Trampoline trampoline)
+{
     Napi::Env env = info.Env();
     if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
-        if (g_keyboardTSFN) {
-            g_keyboardTSFN.Release();
-            g_keyboardTSFN = Napi::ThreadSafeFunction();
-        }
-        ghostty_bridge_set_keyboard_forward_callback(nullptr);
+        channel.releaseJs();
+        setter(nullptr);
         return env.Undefined();
     }
-    Napi::Function jsFn = info[0].As<Napi::Function>();
-    if (g_keyboardTSFN) g_keyboardTSFN.Release();
-    g_keyboardTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierKeyForward", 0, 1);
-    ghostty_bridge_set_keyboard_forward_callback(&g_keyForwardTrampoline);
+    channel.bindJs(env, info[0].As<Napi::Function>());
+    setter(trampoline);
     return env.Undefined();
 }
 
-// ---- Right-mouse forward callback (swift → main JS) ----
-//
-// 同 keyboard forward 模式: swift NSEvent monitor 命中 terminal 区域右键时调
-// trampoline, ThreadSafeFunction 把 (windowId, panelId, x, y) 转到 JS 线程.
-static Napi::ThreadSafeFunction g_mouseTSFN;
+// ---- Keyboard forward (Cmd+key 全局快捷键转 renderer) ----
+struct KeyForwardPayload {
+    long windowId;
+    unsigned long modifiers;
+    std::string chars;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::Number::New(env, static_cast<double>(modifiers)),
+            Napi::String::New(env, chars),
+        });
+    }
+};
+static ForwardChannel<KeyForwardPayload> g_keyboardChannel("PierKeyForward");
+static void g_keyForwardTrampoline(long windowId, unsigned long modifiers, const char* chars) {
+    g_keyboardChannel.emit({ windowId, modifiers, std::string(chars) });
+}
+static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_keyboardChannel,
+                                ghostty_bridge_set_keyboard_forward_callback,
+                                &g_keyForwardTrampoline);
+}
 
+// ---- Right-mouse forward (terminal 区域右键转 native menu trigger) ----
 struct MouseForwardPayload {
     long windowId;
     std::string panelId;
     double x;
     double y;
-};
-
-static void g_mouseForwardTrampoline(long windowId, const char* panelId, double x, double y) {
-    if (!g_mouseTSFN) return;
-    auto* payload = new MouseForwardPayload{ windowId, std::string(panelId), x, y };
-    auto status = g_mouseTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, MouseForwardPayload* p) {
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
-            Napi::Number::New(env, static_cast<double>(p->windowId)),
-            Napi::String::New(env, p->panelId),
-            Napi::Number::New(env, p->x),
-            Napi::Number::New(env, p->y),
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::Number::New(env, x),
+            Napi::Number::New(env, y),
         });
-        delete p;
-    });
-    if (status != napi_ok) {
-        delete payload;
     }
+};
+static ForwardChannel<MouseForwardPayload> g_mouseChannel("PierMouseForward");
+static void g_mouseForwardTrampoline(long windowId, const char* panelId, double x, double y) {
+    g_mouseChannel.emit({ windowId, std::string(panelId), x, y });
 }
-
 static Napi::Value JsSetMouseForwardCallback(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
-        if (g_mouseTSFN) {
-            g_mouseTSFN.Release();
-            g_mouseTSFN = Napi::ThreadSafeFunction();
-        }
-        ghostty_bridge_set_mouse_forward_callback(nullptr);
-        return env.Undefined();
-    }
-    Napi::Function jsFn = info[0].As<Napi::Function>();
-    if (g_mouseTSFN) g_mouseTSFN.Release();
-    g_mouseTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierMouseForward", 0, 1);
-    ghostty_bridge_set_mouse_forward_callback(&g_mouseForwardTrampoline);
-    return env.Undefined();
+    return JsSetForwardCallback(info, g_mouseChannel,
+                                ghostty_bridge_set_mouse_forward_callback,
+                                &g_mouseForwardTrampoline);
 }
 
-// ---- PWD forward callback (swift → main JS) ----
-//
-// swift TerminalSurfacePwdDelegate 收到 OSC 7 → forwardPwdCallback → 这里. 通过
-// ThreadSafeFunction 把事件分发到 main JS 线程, 让 JS 端注册的 callback 收到
-// (browserWindowId, panelId, cwd).
-//
-// 与 keyboard forward 同模式 — 不能在 swift 线程直接调 napi function (会 crash),
-// ThreadSafeFunction 是 N-API 标准的跨线程 callback 桥.
-static Napi::ThreadSafeFunction g_pwdTSFN;
-
+// ---- PWD forward (OSC 7 cwd → renderer panel descriptor) ----
 struct PwdForwardPayload {
     long windowId;
-    std::string panelId;  // heap-owned (跨线程持久化)
+    std::string panelId;
     std::string cwd;
-};
-
-static void g_pwdForwardTrampoline(long windowId, const char* panelId, const char* cwd) {
-    if (!g_pwdTSFN) return;
-    auto* payload = new PwdForwardPayload{ windowId, std::string(panelId), std::string(cwd) };
-    auto status = g_pwdTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, PwdForwardPayload* p) {
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
-            Napi::Number::New(env, static_cast<double>(p->windowId)),
-            Napi::String::New(env, p->panelId),
-            Napi::String::New(env, p->cwd),
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::String::New(env, cwd),
         });
-        delete p;
-    });
-    if (status != napi_ok) {
-        delete payload;
     }
+};
+static ForwardChannel<PwdForwardPayload> g_pwdChannel("PierPwdForward");
+static void g_pwdForwardTrampoline(long windowId, const char* panelId, const char* cwd) {
+    g_pwdChannel.emit({ windowId, std::string(panelId), std::string(cwd) });
 }
-
 static Napi::Value JsSetPwdForwardCallback(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
-        if (g_pwdTSFN) {
-            g_pwdTSFN.Release();
-            g_pwdTSFN = Napi::ThreadSafeFunction();
-        }
-        ghostty_bridge_set_pwd_forward_callback(nullptr);
-        return env.Undefined();
-    }
-    Napi::Function jsFn = info[0].As<Napi::Function>();
-    if (g_pwdTSFN) g_pwdTSFN.Release();
-    g_pwdTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierPwdForward", 0, 1);
-    ghostty_bridge_set_pwd_forward_callback(&g_pwdForwardTrampoline);
-    return env.Undefined();
+    return JsSetForwardCallback(info, g_pwdChannel,
+                                ghostty_bridge_set_pwd_forward_callback,
+                                &g_pwdForwardTrampoline);
 }
 
-// ---- Title forward callback (swift OSC 0/2 → main JS) ----
-//
-// 与 PWD forward 同模式. TUI 应用 (claude / vim / aider) 主动通过 OSC 0/2 写
-// 自定义 title, swift TerminalSurfaceTitleDelegate 接, 经 ThreadSafeFunction
-// 跨线程到 JS.
-static Napi::ThreadSafeFunction g_titleTSFN;
-
+// ---- Title forward (OSC 0/2 → renderer panel descriptor) ----
 struct TitleForwardPayload {
     long windowId;
     std::string panelId;
     std::string title;
-};
-
-static void g_titleForwardTrampoline(long windowId, const char* panelId, const char* title) {
-    if (!g_titleTSFN) return;
-    auto* payload = new TitleForwardPayload{ windowId, std::string(panelId), std::string(title) };
-    auto status = g_titleTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, TitleForwardPayload* p) {
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
-            Napi::Number::New(env, static_cast<double>(p->windowId)),
-            Napi::String::New(env, p->panelId),
-            Napi::String::New(env, p->title),
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::String::New(env, title),
         });
-        delete p;
-    });
-    if (status != napi_ok) {
-        delete payload;
     }
+};
+static ForwardChannel<TitleForwardPayload> g_titleChannel("PierTitleForward");
+static void g_titleForwardTrampoline(long windowId, const char* panelId, const char* title) {
+    g_titleChannel.emit({ windowId, std::string(panelId), std::string(title) });
 }
-
 static Napi::Value JsSetTitleForwardCallback(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
-        if (g_titleTSFN) {
-            g_titleTSFN.Release();
-            g_titleTSFN = Napi::ThreadSafeFunction();
-        }
-        ghostty_bridge_set_title_forward_callback(nullptr);
-        return env.Undefined();
-    }
-    Napi::Function jsFn = info[0].As<Napi::Function>();
-    if (g_titleTSFN) g_titleTSFN.Release();
-    g_titleTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierTitleForward", 0, 1);
-    ghostty_bridge_set_title_forward_callback(&g_titleForwardTrampoline);
-    return env.Undefined();
+    return JsSetForwardCallback(info, g_titleChannel,
+                                ghostty_bridge_set_title_forward_callback,
+                                &g_titleForwardTrampoline);
 }
 
 static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
