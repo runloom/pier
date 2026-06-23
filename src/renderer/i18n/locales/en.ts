@@ -79,4 +79,15 @@ export const en = {
       resetLayout: "Reset Layout",
     },
   },
+  contextMenu: {
+    action: {
+      closeAll: "Close All",
+      closeOthers: "Close Others",
+      closePanel: "Close",
+      closeTerminal: "Close Terminal",
+      newTerminal: "New Terminal",
+      splitDown: "Split Down",
+      splitRight: "Split Right",
+    },
+  },
 } as const;

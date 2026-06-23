@@ -13,6 +13,7 @@ export function registerCommandPaletteAction(): () => void {
   return actionRegistry.register({
     id: "pier.commandPalette.toggle",
     category: "View",
+    metadata: { group: "9_other" },
     title: () => i18next.t("commandPalette.action.toggleCommandPalette"),
     surfaces: [],
     handler: () => {

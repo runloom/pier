@@ -52,12 +52,19 @@ final class EventRouterView: NSView {
 
     private weak var ownerWindow: NSWindow?
     private var keyMonitor: Any?
+    private var mouseMonitor: Any?
 
     /// 全局 callback: swift monitor 捕获 Cmd+key 后调用, 把 chord 转给 main process.
     /// 签名 (browserWindowId, modifierFlags, chars) — 多窗口下 main 用 windowId
     /// 路由 (`BrowserWindow.fromId`), 而不是 `getFocusedWindow()` (背景窗口按 key
     /// 时 focused 已切走会路由错).
     static var forwardCmdKeyCallback: ((Int, UInt, String) -> Void)?
+
+    /// Right-mouse 转发: 用户在 terminal 区域右键 → main → renderer → 弹原生菜单.
+    /// 签名 (browserWindowId, panelId, contentX, contentY) — 坐标系是 BrowserWindow
+    /// 的 contentView (top-left origin, flipped), 即 Electron renderer 内坐标, 也是
+    /// Electron Menu.popup({x,y}) 期待的格式.
+    static var forwardRightMouseCallback: ((Int, String, Double, Double) -> Void)?
 
     /// Electron BrowserWindow.id — main 进程调 setupWindow 时传入. forward callback
     /// 用它告诉 main 这个 key event 来自哪个 window.
@@ -80,23 +87,35 @@ final class EventRouterView: NSView {
         return nil
     }
 
-    /// 在 setupWindow 后调用一次, 绑定 window 并安装 keyboard 监听.
+    /// 在 setupWindow 后调用一次, 绑定 window 并安装 keyboard + mouse 监听.
     /// browserWindowId 来自 Electron BrowserWindow.id, forward 时回传给 main 路由.
-    func attachKeyboardRouting(window: NSWindow, browserWindowId: Int) {
+    func attachInputRouting(window: NSWindow, browserWindowId: Int) {
         ownerWindow = window
         self.browserWindowId = browserWindowId
-        if keyMonitor != nil { return }
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
-            [weak self] event in
-            guard let self else { return event }
-            return self.routeKeyDown(event)
+        if keyMonitor == nil {
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+                [weak self] event in
+                guard let self else { return event }
+                return self.routeKeyDown(event)
+            }
+        }
+        if mouseMonitor == nil {
+            mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) {
+                [weak self] event in
+                guard let self else { return event }
+                return self.routeRightMouseDown(event)
+            }
         }
     }
 
-    func detachKeyboardRouting() {
+    func detachInputRouting() {
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
+        }
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseMonitor = nil
         }
         ownerWindow = nil
     }
@@ -136,8 +155,36 @@ final class EventRouterView: NSView {
         return nil
     }
 
+    /// 路由 rightMouseDown:
+    /// - 非 owner window: 放行
+    /// - overlay 打开期间: 放行 (router.isHidden 仅 block hitTest, 不 block NSEvent local
+    ///   monitor; 若不显式 guard, 命令面板期间右键 terminal 会弹菜单在 overlay 下方)
+    /// - 不在任何 terminal target rect 内: 放行 (空白区 / web panel 让 React onContextMenu 处理)
+    /// - 在 terminal rect 内: forward (windowId, panelId, x, y) 给 main, 消费事件
+    private func routeRightMouseDown(_ event: NSEvent) -> NSEvent? {
+        guard let window = ownerWindow, event.window === window else { return event }
+        let state = GhosttyBridgeImpl.shared.stateFor(window: window)
+        guard state.overlayCount == 0 else { return event }
+        // 把 window 坐标转 EventRouterView 局部坐标 (与 hitTest 同套坐标变换);
+        // EventRouterView.isFlipped=true 让 local 坐标系是 top-left origin, 跟 Electron
+        // BrowserWindow contentView 一致, 可直接给 main 做 Menu.popup({x,y}).
+        let local = self.convert(event.locationInWindow, from: nil)
+        for (panelId, target) in targets {
+            if target.rect.contains(local) {
+                EventRouterView.forwardRightMouseCallback?(
+                    browserWindowId, panelId, Double(local.x), Double(local.y)
+                )
+                return nil  // 消费, 不让 terminal NSView 收到右键
+            }
+        }
+        return event
+    }
+
     deinit {
         if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
         }
     }
@@ -271,7 +318,7 @@ final class GhosttyBridgeImpl {
         let router = EventRouterView(frame: contentView.bounds)
         router.autoresizingMask = [.width, .height]
         contentView.addSubview(router, positioned: .above, relativeTo: nil)
-        router.attachKeyboardRouting(window: parent, browserWindowId: browserWindowId)
+        router.attachInputRouting(window: parent, browserWindowId: browserWindowId)
         eventRouters[windowId] = router
 
         // 初始化 per-window keyboard state (PanelKind 默认 .web — 安全, 不抢 firstResponder)
@@ -347,6 +394,13 @@ final class GhosttyBridgeImpl {
     /// 所有 key 是 wk.keyDown forward 不可靠的根因).
     func setKeyboardForwardCallback(_ cb: @escaping (Int, UInt, String) -> Void) {
         EventRouterView.forwardCmdKeyCallback = cb
+    }
+
+    /// 注册右键事件 forward callback. 与 keyboard 同构: swift EventRouterView 拦到
+    /// terminal 区域 rightMouseDown 后, 通过此 callback 把 (windowId, panelId, x, y)
+    /// 转给 main, main IPC 通知 renderer 弹菜单.
+    func setMouseForwardCallback(_ cb: @escaping (Int, String, Double, Double) -> Void) {
+        EventRouterView.forwardRightMouseCallback = cb
     }
 
     // MARK: - Terminal lifecycle
@@ -523,7 +577,7 @@ final class GhosttyBridgeImpl {
         let windowId = ObjectIdentifier(parent)
         closeAll(parent: parent)
         if let router = eventRouters[windowId] {
-            router.detachKeyboardRouting()
+            router.detachInputRouting()
             router.removeFromSuperview()
             eventRouters.removeValue(forKey: windowId)
         }
@@ -689,6 +743,22 @@ public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallbac
             }
         } else {
             GhosttyBridgeImpl.shared.setKeyboardForwardCallback { _, _, _ in }
+        }
+    }
+}
+
+/// C 函数指针: (browserWindowId, panelId C string, x, y).
+public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
+
+@_cdecl("ghostty_bridge_set_mouse_forward_callback")
+public func ghosttyBridgeSetMouseForwardCallback(_ cb: MouseForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            GhosttyBridgeImpl.shared.setMouseForwardCallback { wid, panelId, x, y in
+                panelId.withCString { ptr in cb(wid, ptr, x, y) }
+            }
+        } else {
+            GhosttyBridgeImpl.shared.setMouseForwardCallback { _, _, _, _ in }
         }
     }
 }

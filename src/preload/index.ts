@@ -1,3 +1,8 @@
+import type {
+  MenuPopupOptions,
+  MenuPopupResult,
+  MenuTemplate,
+} from "@shared/contracts/menu.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -48,6 +53,13 @@ export interface PierKeybindingAPI {
   ) => () => void;
 }
 
+export interface PierMenuAPI {
+  popup: (
+    template: MenuTemplate,
+    options?: MenuPopupOptions
+  ) => Promise<MenuPopupResult>;
+}
+
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
@@ -55,6 +67,7 @@ export interface PierWindowAPI {
   focusWindow: (windowId: string) => Promise<void>;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
+  menu: PierMenuAPI;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
   terminal: TerminalAPI;
@@ -82,6 +95,18 @@ const terminalApi: TerminalAPI = {
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  onContextMenuRequest: (cb) => {
+    const listener = (
+      _event: unknown,
+      req: { panelId: string; x: number; y: number }
+    ) => {
+      cb(req);
+    };
+    ipcRenderer.on("pier:terminal:request-context-menu", listener);
+    return () => {
+      ipcRenderer.off("pier:terminal:request-context-menu", listener);
+    };
+  },
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFrame: (panelId, frame) =>
@@ -103,6 +128,11 @@ const workspaceApi: PierWorkspaceAPI = {
   loadLayout: () => ipcRenderer.invoke("pier:workspace:load-layout"),
   saveLayout: (layout) =>
     ipcRenderer.invoke("pier:workspace:save-layout", layout),
+};
+
+const menuApi: PierMenuAPI = {
+  popup: (template, options) =>
+    ipcRenderer.invoke("pier:menu:popup", template, options),
 };
 
 const keybindingApi: PierKeybindingAPI = {
@@ -129,6 +159,7 @@ const api: PierWindowAPI = {
     ipcRenderer.invoke("pier://window:focus", windowId),
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
+  menu: menuApi,
   platform: process.platform,
   preferences: preferencesApi,
   terminal: terminalApi,

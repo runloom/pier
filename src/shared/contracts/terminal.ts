@@ -15,6 +15,13 @@ export interface CreateTerminalResult {
   ok: boolean;
 }
 
+export interface TerminalContextMenuRequest {
+  panelId: string;
+  /** BrowserWindow contentView 坐标 (top-left origin, flipped). */
+  x: number;
+  y: number;
+}
+
 /**
  * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
  * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
@@ -63,6 +70,10 @@ export interface TerminalAPI {
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   focus(panelId: string): void;
   hide(panelId: string): void;
+  /** 订阅 swift 转发的右键事件. 返回 unsubscribe. */
+  onContextMenuRequest: (
+    cb: (req: TerminalContextMenuRequest) => void
+  ) => () => void;
   setActivePanelKind: (
     kind: "terminal" | "web",
     panelId: string | null
