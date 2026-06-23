@@ -91,6 +91,18 @@ const terminalApi: TerminalAPI = {
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  onContextMenuRequest: (cb) => {
+    const listener = (
+      _event: unknown,
+      req: { panelId: string; x: number; y: number }
+    ) => {
+      cb(req);
+    };
+    ipcRenderer.on("pier:terminal:request-context-menu", listener);
+    return () => {
+      ipcRenderer.off("pier:terminal:request-context-menu", listener);
+    };
+  },
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFrame: (panelId, frame) =>
