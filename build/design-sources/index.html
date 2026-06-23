@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pier — App 图标方向</title>
+<style>
+  :root{
+    --bg:oklch(0.13 0.012 285);
+    --surface:oklch(0.165 0.014 285);
+    --surface-2:oklch(0.205 0.015 285);
+    --fg:oklch(0.96 0.005 285);
+    --muted:oklch(0.66 0.014 285);
+    --border:oklch(0.27 0.012 285);
+    --accent:oklch(0.66 0.18 280);
+    --accent-soft:oklch(0.66 0.18 280 / 0.14);
+    --font-display:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+    --font-body:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+    --font-mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  body{
+    background:
+      radial-gradient(120% 80% at 80% -10%, oklch(0.66 0.18 280 / 0.10), transparent 60%),
+      var(--bg);
+    color:var(--fg);
+    font:16px/1.6 var(--font-body);
+    min-height:100vh;
+    padding:64px 40px 96px;
+  }
+  .wrap{max-width:1120px;margin:0 auto}
+
+  /* ── header ─────────────────────────────── */
+  header{margin-bottom:56px;max-width:760px}
+  .eyebrow{
+    font:600 12px/1 var(--font-mono);
+    letter-spacing:0.22em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:20px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .eyebrow::before{content:"";width:28px;height:1px;background:var(--accent);opacity:.6}
+  h1{
+    font:600 clamp(34px,5vw,52px)/1.05 var(--font-display);
+    letter-spacing:-0.025em;margin-bottom:18px;
+    text-wrap:balance;
+  }
+  header p{color:var(--muted);font-size:17px;max-width:62ch;text-wrap:pretty}
+  header p strong{color:var(--fg);font-weight:550}
+
+  /* ── theme toggle ───────────────────────── */
+  .controls{display:flex;align-items:center;gap:14px;margin-top:32px}
+  .seg{
+    display:inline-flex;background:var(--surface);border:1px solid var(--border);
+    border-radius:999px;padding:4px;gap:2px;
+  }
+  .seg button{
+    font:550 13px/1 var(--font-body);letter-spacing:0.01em;
+    color:var(--muted);background:transparent;border:0;cursor:pointer;
+    padding:8px 18px;border-radius:999px;transition:.18s;
+  }
+  .seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--fg)}
+  .controls .hint{font:500 12px/1 var(--font-mono);letter-spacing:0.04em;color:var(--muted)}
+
+  /* ── cards ──────────────────────────────── */
+  .stack{display:flex;flex-direction:column;gap:24px;margin-top:48px}
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:24px;
+    padding:32px;
+    display:grid;
+    grid-template-columns:236px 1fr;
+    gap:36px;
+    position:relative;
+  }
+  .card.lead{
+    border-color:oklch(0.66 0.18 280 / 0.4);
+    box-shadow:0 0 0 1px oklch(0.66 0.18 280 / 0.18), 0 24px 60px -30px oklch(0.66 0.18 280 / 0.5);
+  }
+  .badge{
+    position:absolute;top:-11px;left:32px;
+    font:600 11px/1 var(--font-mono);letter-spacing:0.14em;text-transform:uppercase;
+    color:#fff;background:var(--accent);
+    padding:7px 13px;border-radius:999px;
+  }
+  .hero{
+    display:flex;flex-direction:column;align-items:center;gap:18px;
+  }
+  .hero .tile{
+    width:200px;height:200px;border-radius:46px;overflow:hidden;
+    box-shadow:0 24px 50px -24px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,255,255,.04);
+  }
+  .hero .tile svg{display:block;width:100%;height:100%}
+  .hero .fname{font:500 12px/1 var(--font-mono);letter-spacing:0.03em;color:var(--muted)}
+
+  .meta{display:flex;flex-direction:column;align-items:flex-start;gap:0}
+  .meta .num{font:600 12px/1 var(--font-mono);letter-spacing:0.18em;color:var(--accent);margin-bottom:12px}
+  .meta h3{font:600 25px/1.2 var(--font-display);letter-spacing:-0.015em;margin-bottom:4px}
+  .meta .zh{font-size:13px;color:var(--muted);font-family:var(--font-mono);letter-spacing:0.05em;margin-bottom:16px}
+  .meta .desc{color:var(--muted);font-size:15px;max-width:54ch;text-wrap:pretty;margin-bottom:18px}
+  .meta .desc b{color:var(--fg);font-weight:550}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+  .tag{
+    font:500 12px/1 var(--font-body);letter-spacing:0.01em;color:var(--fg);
+    background:var(--accent-soft);border:1px solid oklch(0.66 0.18 280 / 0.3);
+    padding:6px 11px;border-radius:8px;
+  }
+
+  /* ── size ladder ────────────────────────── */
+  .ladder{
+    display:flex;align-items:flex-end;gap:22px;
+    padding:22px 24px;border-radius:16px;
+    background:var(--ladder-bg, #0d0c12);
+    border:1px solid var(--border);
+    transition:background .25s, border-color .25s;
+  }
+  body.wall-light .ladder{--ladder-bg:#f4f3f7;border-color:#e3e1ea}
+  .px{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .px svg{display:block;border-radius:22%;box-shadow:0 4px 14px -6px rgba(0,0,0,.6)}
+  .px span{font:500 10px/1 var(--font-mono);letter-spacing:0.06em;color:var(--muted)}
+  body.wall-light .px span{color:#6b6976}
+  .s128 svg{width:128px;height:128px}
+  .s64 svg{width:64px;height:64px}
+  .s48 svg{width:48px;height:48px}
+  .s32 svg{width:32px;height:32px}
+  .s16 svg{width:16px;height:16px;border-radius:22%}
+
+  /* ── footer ─────────────────────────────── */
+  footer{
+    margin-top:52px;padding-top:28px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:14px;max-width:74ch;
+  }
+  footer code{
+    font:500 13px var(--font-mono);color:var(--fg);
+    background:var(--surface-2);padding:2px 7px;border-radius:6px;
+  }
+  footer .files{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+  footer .files a{
+    font:500 12px var(--font-mono);color:var(--accent);text-decoration:none;
+    border:1px solid var(--border);border-radius:8px;padding:7px 12px;
+  }
+  footer .files a:hover{border-color:var(--accent)}
+
+  @media (max-width:760px){
+    body{padding:44px 22px 72px}
+    .card{grid-template-columns:1fr;gap:26px}
+    .hero{flex-direction:row;justify-content:flex-start}
+    .hero .tile{width:120px;height:120px;border-radius:28px}
+    .ladder{flex-wrap:wrap;gap:18px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ───────── icon defs (referenced via <use>) ───────── -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Direction A · Pier -->
+    <linearGradient id="a-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1a24"/><stop offset="1" stop-color="#0b0a10"/></linearGradient>
+    <radialGradient id="a-glow" cx="0.5" cy="0.26" r="0.62"><stop offset="0" stop-color="#8a76f0" stop-opacity="0.42"/><stop offset="1" stop-color="#8a76f0" stop-opacity="0"/></radialGradient>
+    <linearGradient id="a-vio" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c6b8ff"/><stop offset="1" stop-color="#6a51e0"/></linearGradient>
+    <linearGradient id="a-refl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a76f0" stop-opacity="0.55"/><stop offset="1" stop-color="#8a76f0" stop-opacity="0"/></linearGradient>
+    <!-- Direction B · Panels -->
+    <radialGradient id="b-glow" cx="0.62" cy="0.3" r="0.6"><stop offset="0" stop-color="#8a76f0" stop-opacity="0.4"/><stop offset="1" stop-color="#8a76f0" stop-opacity="0"/></radialGradient>
+    <linearGradient id="b-vio" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a594ff"/><stop offset="1" stop-color="#6850dd"/></linearGradient>
+    <!-- Direction C · Berth -->
+    <radialGradient id="c-glow" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#8a76f0" stop-opacity="0.4"/><stop offset="1" stop-color="#8a76f0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="c-orb" cx="0.5" cy="0.42" r="0.6"><stop offset="0" stop-color="#efeaff"/><stop offset="0.55" stop-color="#9d8bff"/><stop offset="1" stop-color="#6a51e0"/></radialGradient>
+
+    <symbol id="ico-a" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="112" fill="url(#a-bg)"/>
+      <rect width="512" height="512" rx="112" fill="url(#a-glow)"/>
+      <rect x="116" y="190" width="280" height="28" rx="14" fill="url(#a-vio)"/>
+      <rect x="161" y="214" width="26" height="102" rx="13" fill="url(#a-vio)"/>
+      <rect x="243" y="214" width="26" height="102" rx="13" fill="url(#a-vio)"/>
+      <rect x="325" y="214" width="26" height="102" rx="13" fill="url(#a-vio)"/>
+      <circle cx="256" cy="176" r="30" fill="#8a76f0" fill-opacity="0.28"/>
+      <circle cx="256" cy="176" r="15" fill="#e0d8ff"/>
+      <rect x="92" y="318" width="328" height="3" rx="1.5" fill="#8a76f0" fill-opacity="0.6"/>
+      <rect x="161" y="324" width="26" height="78" rx="13" fill="url(#a-refl)"/>
+      <rect x="243" y="324" width="26" height="78" rx="13" fill="url(#a-refl)"/>
+      <rect x="325" y="324" width="26" height="78" rx="13" fill="url(#a-refl)"/>
+      <rect x="92" y="340" width="328" height="7" fill="#0d0c12" opacity="0.6"/>
+      <rect x="92" y="362" width="328" height="7" fill="#0d0c12" opacity="0.78"/>
+      <rect x="92" y="384" width="328" height="7" fill="#0d0c12" opacity="0.92"/>
+    </symbol>
+
+    <symbol id="ico-b" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="112" fill="url(#a-bg)"/>
+      <rect width="512" height="512" rx="112" fill="url(#b-glow)"/>
+      <rect x="96" y="96" width="320" height="320" rx="44" fill="#16141e" stroke="#8a76f0" stroke-opacity="0.22" stroke-width="2"/>
+      <rect x="118" y="118" width="64" height="276" rx="14" fill="#221d30"/>
+      <circle cx="150" cy="150" r="7" fill="#c2b3ff"/>
+      <circle cx="150" cy="180" r="7" fill="#4a4458"/>
+      <circle cx="150" cy="210" r="7" fill="#4a4458"/>
+      <rect x="196" y="118" width="198" height="168" rx="14" fill="url(#b-vio)"/>
+      <rect x="216" y="142" width="120" height="12" rx="6" fill="#ffffff" fill-opacity="0.85"/>
+      <rect x="216" y="166" width="158" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.45"/>
+      <rect x="216" y="184" width="138" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.45"/>
+      <rect x="196" y="300" width="198" height="94" rx="14" fill="#221d30"/>
+      <rect x="216" y="324" width="11" height="15" rx="2" fill="#c2b3ff"/>
+      <rect x="236" y="327" width="120" height="9" rx="4.5" fill="#3a3450"/>
+      <rect x="216" y="354" width="150" height="9" rx="4.5" fill="#3a3450"/>
+    </symbol>
+
+    <symbol id="ico-c" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="112" fill="url(#a-bg)"/>
+      <rect width="512" height="512" rx="112" fill="url(#c-glow)"/>
+      <path d="M 176 158 L 176 322 L 336 322 L 336 158" fill="none" stroke="url(#a-vio)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="256" cy="232" r="58" fill="#8a76f0" fill-opacity="0.16"/>
+      <circle cx="256" cy="232" r="40" fill="url(#c-orb)"/>
+      <ellipse cx="256" cy="356" rx="92" ry="7" fill="#8a76f0" fill-opacity="0.32"/>
+      <ellipse cx="256" cy="378" rx="60" ry="5" fill="#8a76f0" fill-opacity="0.18"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Pier · App 图标</div>
+    <h1>三个停靠的方向</h1>
+    <p><strong>Pier</strong> 是本地 AI 开发工作台——名字本意「码头 / 栈桥」，正是产品的核心隐喻：多个 agent 在这里<strong>停靠</strong>、被看见、回到项目的连续性。三个方向都建立在品牌的<strong>紫罗兰主色与近黑底</strong>之上，克制到单一强调色，适配 macOS / Windows / Linux 桌面与 favicon。</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="尺寸梯度背景">
+        <button id="dark" aria-pressed="true">深色墙</button>
+        <button id="light" aria-pressed="false">浅色墙</button>
+      </div>
+      <span class="hint">切换以检验小尺寸可读性</span>
+    </div>
+  </header>
+
+  <div class="stack">
+
+    <!-- ── A ── -->
+    <article class="card lead">
+      <span class="badge">推荐</span>
+      <div class="hero">
+        <div class="tile"><svg viewBox="0 0 512 512"><use href="#ico-a"/></svg></div>
+        <span class="fname">icons/pier-pier.svg</span>
+      </div>
+      <div class="meta">
+        <div class="num">A — 栈桥与倒影</div>
+        <h3>The Pier</h3>
+        <div class="zh">deck · pilings · reflection</div>
+        <p class="desc">侧看的栈桥：一道<b>甲板</b>横贯，三根<b>桩柱</b>探入水面，水线下泛起紫光倒影；顶端一盏<b>泊灯</b>是刚靠岸的 agent。直接画出产品的名字，叙事感最强、最难被认错。桩柱阵列在 16px 下仍读作「∏」形剪影。</p>
+        <div class="tags"><span class="tag">品牌叙事</span><span class="tag">辨识度最高</span><span class="tag">单一强调色</span></div>
+        <div class="ladder">
+          <div class="px s128"><svg viewBox="0 0 512 512"><use href="#ico-a"/></svg><span>128</span></div>
+          <div class="px s64"><svg viewBox="0 0 512 512"><use href="#ico-a"/></svg><span>64</span></div>
+          <div class="px s48"><svg viewBox="0 0 512 512"><use href="#ico-a"/></svg><span>48</span></div>
+          <div class="px s32"><svg viewBox="0 0 512 512"><use href="#ico-a"/></svg><span>32</span></div>
+          <div class="px s16"><svg viewBox="0 0 512 512"><use href="#ico-a"/></svg><span>16</span></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ── B ── -->
+    <article class="card">
+      <div class="hero">
+        <div class="tile"><svg viewBox="0 0 512 512"><use href="#ico-b"/></svg></div>
+        <span class="fname">icons/pier-panels.svg</span>
+      </div>
+      <div class="meta">
+        <div class="num">B — 停靠面板</div>
+        <h3>Docked Panels</h3>
+        <div class="zh">dockview · active panel · terminal</div>
+        <p class="desc">把产品本身画进图标：一个工作区里 <b>dockview</b> 面板各就各位——侧栏的 agent 状态点、一块发亮的<b>当前活动面板</b>、底部带光标的<b>终端</b>。最「一眼就是开发工具」的安全选项，缩到 16px 仍读作一扇亮着主面板的窗口。</p>
+        <div class="tags"><span class="tag">产品直给</span><span class="tag">开发工具气质</span><span class="tag">面板布局</span></div>
+        <div class="ladder">
+          <div class="px s128"><svg viewBox="0 0 512 512"><use href="#ico-b"/></svg><span>128</span></div>
+          <div class="px s64"><svg viewBox="0 0 512 512"><use href="#ico-b"/></svg><span>64</span></div>
+          <div class="px s48"><svg viewBox="0 0 512 512"><use href="#ico-b"/></svg><span>48</span></div>
+          <div class="px s32"><svg viewBox="0 0 512 512"><use href="#ico-b"/></svg><span>32</span></div>
+          <div class="px s16"><svg viewBox="0 0 512 512"><use href="#ico-b"/></svg><span>16</span></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ── C ── -->
+    <article class="card">
+      <div class="hero">
+        <div class="tile"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg></div>
+        <span class="fname">icons/pier-berth.svg</span>
+      </div>
+      <div class="meta">
+        <div class="num">C — 泊位</div>
+        <h3>The Berth</h3>
+        <div class="zh">cradle · moored node · calm</div>
+        <p class="desc">最抽象、最安静的一支：一个 <b>U 形泊位</b>用单一笔触托起一颗发光的<b>节点</b>——被妥善停泊的 agent。大量留白、单线条、纯几何，缩放极其稳健，气质冷静克制，适合追求长期耐看的标志。</p>
+        <div class="tags"><span class="tag">极简抽象</span><span class="tag">缩放稳健</span><span class="tag">冷静耐看</span></div>
+        <div class="ladder">
+          <div class="px s128"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg><span>128</span></div>
+          <div class="px s64"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg><span>64</span></div>
+          <div class="px s48"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg><span>48</span></div>
+          <div class="px s32"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg><span>32</span></div>
+          <div class="px s16"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg><span>16</span></div>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <footer>
+    三个方向都已存为可直接使用的矢量源文件。选定后我可以对齐到全套打包尺寸 —— macOS 用 <code>build/icon.icns</code>、Windows 用 <code>build/icon.ico</code>、Linux 用 <code>build/icon.png</code>（见 <code>electron-builder.yml</code>），并替换现有的 <code>build/app-icon.svg</code> 占位图。
+    <div class="files">
+      <a href="icons/pier-pier.svg">pier-pier.svg</a>
+      <a href="icons/pier-panels.svg">pier-panels.svg</a>
+      <a href="icons/pier-berth.svg">pier-berth.svg</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+  (function(){
+    var b=document.body, dk=document.getElementById('dark'), lt=document.getElementById('light');
+    function set(light){
+      b.classList.toggle('wall-light', light);
+      dk.setAttribute('aria-pressed', String(!light));
+      lt.setAttribute('aria-pressed', String(light));
+    }
+    dk.addEventListener('click',function(){set(false)});
+    lt.addEventListener('click',function(){set(true)});
+  })();
+</script>
+</body>
+</html>

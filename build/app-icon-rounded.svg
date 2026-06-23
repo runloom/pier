@@ -1,0 +1,35 @@
+<!-- Pier app icon · 按 Apple macOS HIG / Design Resources 标准模板:
+       canvas 1024 / visible 824×824 / margin 100 each side / corner radius 185 (≈22.4% × 824)
+     这套数值是 Apple 给 macOS 第三方 app 的官方模板; 所有原生 dock app 都按这个尺寸来,
+     所以视觉上才一致. 100px 透明边距让 dock cell 里 app 跟邻居等大, 不出现"大一圈".
+     给 dev 期 app.dock.setIcon / Linux .png / Windows .ico — 这些场景 OS 不套遮罩, 需要预烘. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Pier app icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c1a24"/>
+      <stop offset="1" stop-color="#0b0a10"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#8a76f0" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#8a76f0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vio" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c6b8ff"/>
+      <stop offset="1" stop-color="#6a51e0"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#efeaff"/>
+      <stop offset="0.55" stop-color="#9d8bff"/>
+      <stop offset="1" stop-color="#6a51e0"/>
+    </radialGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#glow)"/>
+  <g transform="translate(100,100) scale(1.609375)">
+    <path d="M 176 158 L 176 322 L 336 322 L 336 158" fill="none" stroke="url(#vio)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="256" cy="232" r="58" fill="#8a76f0" fill-opacity="0.16"/>
+    <circle cx="256" cy="232" r="40" fill="url(#orb)"/>
+    <ellipse cx="256" cy="356" rx="92" ry="7" fill="#8a76f0" fill-opacity="0.32"/>
+    <ellipse cx="256" cy="378" rx="60" ry="5" fill="#8a76f0" fill-opacity="0.18"/>
+  </g>
+</svg>
