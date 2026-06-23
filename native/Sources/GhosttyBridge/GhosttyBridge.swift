@@ -140,6 +140,39 @@ final class GhosttyBridgeImpl {
     private var controllers: [ObjectIdentifier: TerminalController] = [:]
     private var activePanelId: String?
 
+    // MARK: - Keyboard state
+
+    /// 当前 active 的 panel 类型 — terminal 或 web. 决定 firstResponder 该指向谁.
+    enum PanelKind {
+        case terminal, web
+    }
+
+    /// Per-window 键盘 routing 状态. 由 web 端 dockview onDidActivePanelChange +
+    /// overlay 生命周期事件驱动; swift 不主动决策, 只读 state.
+    struct WindowKeyboardState {
+        var activePanelKind: PanelKind = .web   // boot 默认 web (terminal 未必存在)
+        var activeTerminalPanelId: String?
+        var overlayCount: Int = 0
+
+        var inTerminalMode: Bool {
+            activePanelKind == .terminal && overlayCount == 0
+        }
+    }
+
+    // per-window state, 跟 eventRouters 一样用 ObjectIdentifier(window) 作 key
+    private var windowStates: [ObjectIdentifier: WindowKeyboardState] = [:]
+
+    func stateFor(window: NSWindow) -> WindowKeyboardState {
+        return windowStates[ObjectIdentifier(window)] ?? WindowKeyboardState()
+    }
+
+    private func mutateState(_ window: NSWindow, _ mutate: (inout WindowKeyboardState) -> Void) {
+        let windowId = ObjectIdentifier(window)
+        var state = windowStates[windowId] ?? WindowKeyboardState()
+        mutate(&state)
+        windowStates[windowId] = state
+    }
+
     private func controller(for window: NSWindow) -> TerminalController {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }
@@ -213,6 +246,9 @@ final class GhosttyBridgeImpl {
         router.attachKeyboardRouting(window: parent, browserWindowId: browserWindowId)
         eventRouters[windowId] = router
 
+        // 初始化 per-window keyboard state (PanelKind 默认 .web — 安全, 不抢 firstResponder)
+        windowStates[windowId] = WindowKeyboardState()
+
         return true
     }
 
@@ -223,6 +259,16 @@ final class GhosttyBridgeImpl {
             router.overlayActive = active
             // 物理隐藏: 从视图层级中移除, 确保 NSDragging 目标发现能找到 WKWebView
             router.isHidden = active
+        }
+    }
+
+    /// 通知 swift 当前 active panel 是 terminal 还是 web. 由 web 端 dockview
+    /// onDidActivePanelChange 触发. swift 不主动决策, 只更新 state — 后续 task
+    /// 加 applyFirstResponder 调用让它真正 swap firstResponder.
+    func setActivePanelKind(window: NSWindow, kind: PanelKind, panelId: String?) {
+        mutateState(window) { state in
+            state.activePanelKind = kind
+            state.activeTerminalPanelId = kind == .terminal ? panelId : nil
         }
     }
 
@@ -518,5 +564,19 @@ public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallbac
         } else {
             GhosttyBridgeImpl.shared.setKeyboardForwardCallback { _, _, _ in }
         }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_active_panel_kind")
+public func ghosttyBridgeSetActivePanelKind(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ kindRaw: Int,   // 0 = terminal, 1 = web
+    _ panelIdPtr: UnsafePointer<CChar>?
+) {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        let kind: GhosttyBridgeImpl.PanelKind = (kindRaw == 0) ? .terminal : .web
+        let panelId: String? = panelIdPtr.flatMap { String(cString: $0) }
+        GhosttyBridgeImpl.shared.setActivePanelKind(window: window, kind: kind, panelId: panelId)
     }
 }

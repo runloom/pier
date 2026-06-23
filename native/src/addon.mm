@@ -21,6 +21,7 @@ extern "C" {
     // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
     typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
     void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
+    void ghostty_bridge_set_active_panel_kind(void* nsWindow, long kindRaw, const char* panelId);
 }
 
 // Electron getNativeWindowHandle() returns Buffer containing NSView**
@@ -160,6 +161,20 @@ static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) 
     return env.Undefined();
 }
 
+static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    long kindRaw = static_cast<long>(info[1].As<Napi::Number>().Int64Value());
+    const char* panelIdC = nullptr;
+    std::string panelIdHolder;
+    if (info.Length() > 2 && info[2].IsString()) {
+        panelIdHolder = info[2].As<Napi::String>().Utf8Value();
+        panelIdC = panelIdHolder.c_str();
+    }
+    ghostty_bridge_set_active_panel_kind((__bridge void*)win, kindRaw, panelIdC);
+    return info.Env().Undefined();
+}
+
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setupWindow",     Napi::Function::New(env, JsSetupWindow));
     exports.Set("setOverlayActive", Napi::Function::New(env, JsSetOverlayActive));
@@ -172,6 +187,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
+    exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
     return exports;
 }
 

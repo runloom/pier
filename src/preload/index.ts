@@ -77,6 +77,8 @@ const terminalApi: TerminalAPI = {
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  setActivePanelKind: (kind, panelId) =>
+    ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFrame: (panelId, frame) =>
     ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
   setOverlayActive: (active) =>

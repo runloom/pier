@@ -20,6 +20,10 @@ export interface TerminalAPI {
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   focus(panelId: string): void;
   hide(panelId: string): void;
+  setActivePanelKind: (
+    kind: "terminal" | "web",
+    panelId: string | null
+  ) => void;
   setFrame(panelId: string, frame: TerminalFrame): void;
   setOverlayActive(active: boolean): void;
   setup(): Promise<CreateTerminalResult>;

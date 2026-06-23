@@ -17,12 +17,17 @@ interface NativeAddon {
   detachWindow(parentHandle: Buffer): void;
   focusTerminal(panelId: string): void;
   hideTerminal(panelId: string): void;
-  setFrame(panelId: string, frame: TerminalFrame): void;
   /**
    * 注册 keyboard forward callback. swift NSEvent monitor 检测 Cmd+key 后调用,
    * 传 (browserWindowId, modifierFlags, chars). browserWindowId 是 setupWindow
    * 传入的 BrowserWindow.id, 用于多窗口路由. 传 null 解绑.
    */
+  setActivePanelKind(
+    parentHandle: Buffer,
+    kindRaw: number,
+    panelId: string | null
+  ): void;
+  setFrame(panelId: string, frame: TerminalFrame): void;
   setKeyboardForwardCallback(
     cb:
       | ((
@@ -165,4 +170,23 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   ipcMain.on("pier:terminal:set-overlay", (_event, active: boolean) => {
     addon?.setOverlayActive(active);
   });
+
+  ipcMain.on(
+    "pier:terminal:set-active-panel-kind",
+    (event, kind: "terminal" | "web", panelId: string | null) => {
+      if (!addon) {
+        return;
+      }
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      const kindRaw = kind === "terminal" ? 0 : 1;
+      try {
+        addon.setActivePanelKind(win.getNativeWindowHandle(), kindRaw, panelId);
+      } catch (err) {
+        console.error("[pier-set-active-panel-kind] failed:", err);
+      }
+    }
+  );
 }
