@@ -5,6 +5,8 @@
 import type { LucideIcon } from "lucide-react";
 
 export interface ActionMetadata {
+  /** true = 执行后不计入命令面板 MRU。仅给 clearRecent 这类元命令用 */
+  excludeFromMru?: boolean;
   iconComponent?: LucideIcon;
   keywords?: readonly string[];
   sortOrder?: number;
