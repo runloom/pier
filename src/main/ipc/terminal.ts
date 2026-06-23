@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import type {
   CreateTerminalArgs,
   TerminalColors,
+  TerminalFont,
   TerminalFrame,
 } from "@shared/contracts/terminal.ts";
 import { BrowserWindow, type IpcMain } from "electron";
@@ -19,7 +20,9 @@ interface NativeAddon {
   createTerminal(
     parentHandle: Buffer,
     panelId: string,
-    frame: TerminalFrame
+    frame: TerminalFrame,
+    fontFamily: string,
+    fontSize: number
   ): boolean;
   /** Window 真正销毁时调用一次: closeAll + 卸 EventRouter + 卸 NSEvent monitor */
   detachWindow(parentHandle: Buffer): void;
@@ -63,6 +66,12 @@ interface NativeAddon {
    */
   setPwdForwardCallback(
     cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
+  ): void;
+  /** 热更新 window 下所有 terminal 的字体. controller per window, 内部走 Ghostty TerminalController.setTerminalConfiguration. */
+  setTerminalFont(
+    parentHandle: Buffer,
+    fontFamily: string,
+    fontSize: number
   ): void;
   /**
    * 注册 Title forward callback. swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后调用,
@@ -213,7 +222,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
     try {
       const handle = win.getNativeWindowHandle();
-      const ok = addon.createTerminal(handle, args.panelId, args.frame);
+      const ok = addon.createTerminal(
+        handle,
+        args.panelId,
+        args.frame,
+        args.font.family,
+        args.font.size
+      );
       return ok
         ? { ok: true }
         : { ok: false, error: "createTerminal returned false" };
@@ -293,6 +308,31 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       console.error("[pier-terminal-apply-theme] failed:", err);
     }
   });
+
+  ipcMain.on(
+    "pier:terminal:set-font",
+    (event, _panelId: string, font: TerminalFont) => {
+      // panelId 暂时不用 — Ghostty controller 是 per-window, setTerminalConfiguration
+      // 影响该 window 所有 panel. 保留 panelId 在 IPC 签名里, 与 setFrame/show 等保持
+      // 一致, 为以后 per-panel 字体留余地.
+      if (!addon) {
+        return;
+      }
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      try {
+        addon.setTerminalFont(
+          win.getNativeWindowHandle(),
+          font.family,
+          font.size
+        );
+      } catch (err) {
+        console.error("[pier-terminal-set-font] failed:", err);
+      }
+    }
+  );
 
   ipcMain.on(
     "pier:terminal:set-active-panel-kind",

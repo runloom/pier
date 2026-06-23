@@ -5,7 +5,18 @@ export interface TerminalFrame {
   y: number;
 }
 
+/**
+ * Terminal 字体配置. family 已在 renderer 侧调 computeMonoFontFamily 处理过 fallback
+ * 链, native 端拿到的是完整 font-family 字符串 (含逗号分隔的 fallback). size 单位 px,
+ * 范围 8-32 (由 preferences zod 守住).
+ */
+export interface TerminalFont {
+  family: string;
+  size: number;
+}
+
 export interface CreateTerminalArgs {
+  font: TerminalFont;
   frame: TerminalFrame;
   panelId: string;
 }
@@ -112,6 +123,11 @@ export interface TerminalAPI {
     kind: "terminal" | "web",
     panelId: string | null
   ) => void;
+  /**
+   * 热更新已存在 terminal 的字体. 走 Ghostty TerminalController.setTerminalConfiguration
+   * → ghostty_surface_update_config, 不重建 surface, 不杀 shell. fire-and-forget.
+   */
+  setFont(panelId: string, font: TerminalFont): void;
   setFrame(panelId: string, frame: TerminalFrame): void;
   setOverlayActive(active: boolean): void;
   setup(): Promise<CreateTerminalResult>;
