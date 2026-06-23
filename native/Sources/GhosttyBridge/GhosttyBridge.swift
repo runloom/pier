@@ -147,10 +147,14 @@ final class EventRouterView: NSView {
 
     /// 路由 rightMouseDown:
     /// - 非 owner window: 放行
+    /// - overlay 打开期间: 放行 (router.isHidden 仅 block hitTest, 不 block NSEvent local
+    ///   monitor; 若不显式 guard, 命令面板期间右键 terminal 会弹菜单在 overlay 下方)
     /// - 不在任何 terminal target rect 内: 放行 (空白区 / web panel 让 React onContextMenu 处理)
     /// - 在 terminal rect 内: forward (windowId, panelId, x, y) 给 main, 消费事件
     private func routeRightMouseDown(_ event: NSEvent) -> NSEvent? {
         guard let window = ownerWindow, event.window === window else { return event }
+        let state = GhosttyBridgeImpl.shared.stateFor(window: window)
+        guard state.overlayCount == 0 else { return event }
         // 把 window 坐标转 EventRouterView 局部坐标 (与 hitTest 同套坐标变换);
         // EventRouterView.isFlipped=true 让 local 坐标系是 top-left origin, 跟 Electron
         // BrowserWindow contentView 一致, 可直接给 main 做 Menu.popup({x,y}).
