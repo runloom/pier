@@ -7,6 +7,7 @@ import {
 import { useCallback } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { AddPanelAction } from "./add-panel-action.tsx";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
@@ -102,6 +103,10 @@ export function WorkspaceHost() {
       // null (无 active panel), 此时 fall back 到 "web" + null panelId 防 terminal
       // 抢 firstResponder. getState() 是 imperative 用法, 不是 React hook.
       event.api.onDidActivePanelChange((panel) => {
+        // dockview 是 active 的唯一来源 — 集中推送给 PanelDescriptorStore,
+        // 各 sink (DocumentTitle / TitleBar) 据此显示当前聚焦 panel 的呈现信息.
+        usePanelDescriptorStore.getState().setActive(panel?.id ?? null);
+
         if (!panel) {
           useKeybindingScope.getState().setActivePanel(null, null, null);
           window.pier?.terminal?.setActivePanelKind?.("web", null);

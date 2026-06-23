@@ -1,6 +1,7 @@
 import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 
 function getAnchorFrame(anchor: HTMLDivElement): TerminalFrame | null {
   const r = anchor.getBoundingClientRect();
@@ -30,6 +31,10 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 注册呈现信息 — 当前固定 "Terminal", 后续接入 OSC 0/2 / 前台进程名 / cwd 时
+  // 只换这里传入的字符串, hook / store / sink 不变.
+  usePanelDescriptor(api, { short: "Terminal", long: "Terminal" });
 
   useLayoutEffect(() => {
     const parent = parentRef.current?.parentElement;
