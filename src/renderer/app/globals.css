@@ -619,7 +619,7 @@ body {
   --dv-icon-hover-background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
   /* drag-over 高亮 — 半透明 primary, 与下层 terminal NSView 合成出叠加效果 */
   --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 30%, transparent);
-  --dv-drag-over-border: 2px solid var(--primary);
+  --dv-drag-over-border: 1.5px solid var(--primary);
   --dv-drag-over-border-color: var(--primary);
   --dv-floating-box-shadow: 0 8px 32px color-mix(in oklab, var(--foreground) 25%, transparent);
   --dv-floating-border: 1px solid var(--border);
@@ -635,52 +635,6 @@ body {
 .dockview-theme-pier .dv-dockview,
 .dockview-theme-pier .dv-groupview {
   background-color: transparent !important;
-}
-
-/* sash 视觉/交互分离:
-   - 命中区: 保留 dockview 默认 4px (.dv-sash 本体), 不动
-   - 视觉线: ::after 伪元素 1px, 半透明 foreground 与下层合成; hover 整段 var(--ring) 高亮 */
-.dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 1px;
-  transform: translateX(-50%);
-  background-color: color-mix(in oklab, var(--foreground) 35%, transparent);
-  transition: background-color 0.15s ease-in-out;
-  pointer-events: none;
-}
-.dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after,
-.dockview-theme-pier .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.dv-disabled):active::after {
-  background-color: var(--ring);
-  width: 1.5px;
-}
-.dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background-color: color-mix(in oklab, var(--foreground) 35%, transparent);
-  transition: background-color 0.15s ease-in-out;
-  pointer-events: none;
-}
-.dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after,
-.dockview-theme-pier .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled):active::after {
-  background-color: var(--ring);
-  height: 1.5px;
-}
-
-/* — 压制 dockview 内置 :focus outline (pier 改用底部指示线) — */
-.dockview-theme-pier .dv-tab:focus-within::after,
-.dockview-theme-pier .dv-tab:focus::after {
-  outline: none !important;
-  top: auto;
-  height: auto;
-  width: auto;
 }
 
 /* — hover: 非选中 tab 微亮 — */
@@ -735,4 +689,56 @@ body {
   background-color: var(--muted-foreground);
   outline: none !important;
   z-index: 1;
+}
+
+
+/* 拖拽线 */
+.dv-split-view-container > .dv-view-container > .dv-view::before {
+  display: none;
+}
+
+.dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
+  width: 5px;
+}
+
+.dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background-color: var(--border);
+  z-index: 1;
+}
+
+.dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:hover::before { 
+  width: 1.5px;
+  background-color: var(--primary);
+}
+
+
+.dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
+  height: 5px;
+}
+
+.dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 1px;
+  background-color: var(--border);
+  z-index: 1;
+}
+
+.dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:hover::before {
+  height: 1.5px;
+  background-color: var(--primary);
+}
+
+/* 拖拽占位蒙层即刻贴位, 去掉默认 300ms 滞后感 */
+.dockview-theme-pier .dv-drop-target-container {
+  --dv-transition-duration: 100ms;
 }

@@ -30,10 +30,10 @@ import { PanelTabHeader } from "./panel-tab-header.tsx";
 /**
  * Pier dockview theme 对象 — 配合 CSS class dockview-theme-pier 使用。
  *
- * gap: 4 — Pier 透明 WKWebView + 终端 NSView 架构下, panel content 区域被 NSView
- * 视觉覆盖, 任何渲染在 panel 内部的 web 元素都被遮挡 (含 sash 分割线). gap 让
- * 相邻 panel 之间留 4px 空隙, sash 与 dockview 内置 separator (.dv-view::before)
- * 渲染在 gap 内, 不被 NSView 覆盖.
+ * gap: 0 — Pier 透明 WKWebView + 终端 NSView 架构下, panel content 区域被 NSView
+ * 视觉覆盖. 新 sash ::before 内线方案直接渲染在 .dv-sash 容器上 (sash z-index: 99
+ * 在 NSView 之上), 不再依赖 panel 间空隙暴露视觉线; gap 改 0 避免 panel 之间透明缝隙
+ * 跟 sash 内线并列显示成"两条线"伪影.
  *
  * dndOverlayMounting: 'absolute' — 让 root drop overlay 渲染到 shell 根层级,
  * 配合 setOverlayActive 隐藏 terminal NSView 使 group drop overlay 也可见.
@@ -41,7 +41,7 @@ import { PanelTabHeader } from "./panel-tab-header.tsx";
 const pierTheme: DockviewTheme = {
   name: "pier",
   className: "dockview-theme-pier",
-  gap: 4,
+  gap: 0,
   dndOverlayMounting: "absolute",
 };
 
