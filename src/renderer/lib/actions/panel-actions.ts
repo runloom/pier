@@ -8,7 +8,7 @@
  *   3. 在命令面板展示时, surfaces: ["command-palette"] + i18n title key + icon
  */
 import i18next from "i18next";
-import { RotateCcw } from "lucide-react";
+import { Plus, RotateCcw } from "lucide-react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { createWindow } from "@/lib/ipc/window-ipc.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -46,8 +46,8 @@ export function registerPanelActions(): () => void {
       enabled: () => useWorkspaceStore.getState().api != null,
       handler: () => useWorkspaceStore.getState().addTerminal(),
       id: "pier.panel.newTerminal",
-      metadata: { group: "1_new", sortOrder: 1 },
-      surfaces: ["dockview-tab", "terminal/content"],
+      metadata: { group: "1_new", iconComponent: Plus, sortOrder: 1 },
+      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
       title: () => i18next.t("contextMenu.action.newTerminal"),
     })
   );
