@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Pier app icon — 泊位 (满版/iOS)">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f1c28"/>
+      <stop offset="1" stop-color="#0b0a10"/>
+    </linearGradient>
+    <linearGradient id="vio" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c6b8ff"/>
+      <stop offset="1" stop-color="#6a51e0"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#efeaff"/>
+      <stop offset="0.55" stop-color="#9d8bff"/>
+      <stop offset="1" stop-color="#6a51e0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0.06" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ishadow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.9" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.26"/>
+    </linearGradient>
+    <clipPath id="clip"><rect width="512" height="512" rx="112"/></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- material: top edge highlight + bottom inner shadow (single top light source) -->
+  <g clip-path="url(#clip)">
+    <rect width="512" height="512" fill="url(#rim)"/>
+    <rect width="512" height="512" fill="url(#ishadow)"/>
+  </g>
+  <!-- berth cradle (U) -->
+  <path d="M 124 112 L 124 376 L 388 376 L 388 112" fill="none" stroke="url(#vio)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- moored agent — glowing node -->
+  <circle cx="256" cy="240" r="92" fill="#8a76f0" fill-opacity="0.16"/>
+  <circle cx="256" cy="240" r="64" fill="url(#orb)"/>
+  <!-- soft water reflection -->
+  <ellipse cx="256" cy="406" rx="138" ry="9" fill="#8a76f0" fill-opacity="0.32"/>
+  <ellipse cx="256" cy="432" rx="90" ry="7" fill="#8a76f0" fill-opacity="0.18"/>
+</svg>

@@ -12,7 +12,7 @@
 //
 // 幂等: 已正确软链则跳过; prod/packaged 需要的 `out/` 不在此处理 (按需 `pnpm build`).
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   lstatSync,
@@ -99,7 +99,34 @@ function isBrokenSymlink(p) {
   }
 }
 
+// native/build/Release/ 是 `pnpm build:native` (swift + node-gyp) 的产物, git 不入库.
+// 每个 worktree 必须各自编译一次, 否则主进程 require('.../ghostty_native.node') 直接抛
+// "Cannot find module", panel 内只看到一行报错难以定位.
+const nativeAddon = path.join(
+  cwd,
+  "native",
+  "build",
+  "Release",
+  "ghostty_native.node"
+);
+
+function ensureNativeAddon() {
+  if (existsSync(nativeAddon)) {
+    console.log("[setup-worktree] native addon 已编译, 跳过.");
+    return;
+  }
+  console.log("[setup-worktree] 编译 native addon (首次约 30s)...");
+  const r = spawnSync("pnpm", ["build:native"], { cwd, stdio: "inherit" });
+  if (r.status !== 0) {
+    console.error(
+      `[setup-worktree] native 编译失败 (exit ${r.status}). 见上方 build.sh 输出.`
+    );
+    process.exit(1);
+  }
+}
+
 linkNodeModules();
+ensureNativeAddon();
 
 console.log(
   "[setup-worktree] 完成. dev 模式可运行 (pnpm run electron:dev).\n" +

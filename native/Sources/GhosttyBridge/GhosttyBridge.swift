@@ -15,6 +15,16 @@
 
 import AppKit
 import GhosttyTerminal
+import GhosttyTheme
+
+// MARK: - Helpers
+
+/// Pier IPC 边界统一传 `#RRGGBB`. GhosttyThemeDefinition 的 background/foreground/
+/// cursorColor/selectionBackground 直接转给 builder, 不带 #; palette[i] 由库内
+/// 拼接 `"#\(value)"`. 这里统一剥前缀, 既符合两类 API.
+private func stripHash(_ s: String) -> String {
+    s.hasPrefix("#") ? String(s.dropFirst()) : s
+}
 
 // MARK: - EventRouterView
 
@@ -576,6 +586,37 @@ final class GhosttyBridgeImpl {
         controllers.removeValue(forKey: windowId)
     }
 
+    // MARK: - Theme apply
+
+    /// 把 Pier 主题派生的终端配色应用到该 window 下的 Ghostty controller. 走库的
+    /// `controller.setTheme(...)` 路径, 内部 reconfigure 并 push 到 ghostty app, shell
+    /// 进程不重启. 一个 controller 服务 window 下所有 terminal panel.
+    ///
+    /// controller(for:) 是 lazy 创建 — 即使 applyTheme 在 createTerminal 之前调
+    /// (主题 hydrate 顺序在前), 也会 cache 主题; 后续 createTerminal 拿到的是已经
+    /// 应用了主题的 controller, terminalView 创建即正确配色.
+    func applyTheme(
+        window: NSWindow,
+        background: String,
+        foreground: String,
+        cursor: String?,
+        selectionBackground: String?,
+        palette: [Int: String]
+    ) {
+        let controller = controller(for: window)
+        let definition = GhosttyThemeDefinition(
+            name: "pier-runtime",
+            background: background,
+            foreground: foreground,
+            cursorColor: cursor,
+            cursorText: nil,
+            selectionBackground: selectionBackground,
+            selectionForeground: nil,
+            palette: palette
+        )
+        controller.setTheme(definition.toTerminalTheme())
+    }
+
     // MARK: - Coordinate conversion
 
     private func computeFrame(in contentView: NSView, viewport: NSRect) -> NSRect {
@@ -733,5 +774,36 @@ public func ghosttyBridgeSetActivePanelKind(
         let kind: GhosttyBridgeImpl.PanelKind = (kindRaw == 0) ? .terminal : .web
         let panelId: String? = panelIdPtr.flatMap { String(cString: $0) }
         GhosttyBridgeImpl.shared.setActivePanelKind(window: window, kind: kind, panelId: panelId)
+    }
+}
+
+/// palette 必须长度 16, 且每槽非空 (Pier renderer derive 阶段保证). cursor /
+/// selectionBackground 可空. 调用同步处理: addon.mm 的 std::string 在本调用栈
+/// 内保持, swift 这里立即 String(cString:) 拷贝, 拷贝完所有指针即可失效.
+@_cdecl("ghostty_bridge_apply_theme")
+public func ghosttyBridgeApplyTheme(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ backgroundPtr: UnsafePointer<CChar>,
+    _ foregroundPtr: UnsafePointer<CChar>,
+    _ cursorPtr: UnsafePointer<CChar>?,
+    _ selectionBackgroundPtr: UnsafePointer<CChar>?,
+    _ palettePtr: UnsafePointer<UnsafePointer<CChar>?>
+) {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        var palette: [Int: String] = [:]
+        for i in 0..<16 {
+            if let p = palettePtr.advanced(by: i).pointee {
+                palette[i] = stripHash(String(cString: p))
+            }
+        }
+        GhosttyBridgeImpl.shared.applyTheme(
+            window: window,
+            background: stripHash(String(cString: backgroundPtr)),
+            foreground: stripHash(String(cString: foregroundPtr)),
+            cursor: cursorPtr.map { stripHash(String(cString: $0)) },
+            selectionBackground: selectionBackgroundPtr.map { stripHash(String(cString: $0)) },
+            palette: palette
+        )
     }
 }
