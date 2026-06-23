@@ -78,9 +78,15 @@ export function registerPanelActions(): () => void {
     })
   );
 
-  // ─── dockview-tab surface actions ───────────────────────────────────
-  // 右键 tab 时 dockview 先把该 tab 设为 activePanel (onPointerDown), 再 fire
-  // onContextMenu — 所以 handler 用 activePanel 等价于"右键的那个 tab".
+  // ─── 多 surface 触发的 panel actions ─────────────────────────────────
+  // 这些 action 挂在 dockview-tab / terminal/content / command-palette 三个
+  // surface 上, handler 统一用 useWorkspaceStore.getState().api?.activePanel:
+  //   - dockview-tab 右键: dockview pointerdown 阶段已把被右键 tab 设为
+  //     activePanel, handler 用 activePanel 等价于"右键的那个 tab"
+  //   - terminal/content 右键: terminal NSView 占 firstResponder 时本就是
+  //     activePanel
+  //   - command-palette 触发: palette 是 overlay 不改 activePanel, 仍是
+  //     用户打开 palette 之前操作的 panel — 符合"对当前操作的 panel 做事"语义
   disposers.push(
     actionRegistry.register({
       category: "Panel",
@@ -231,8 +237,10 @@ export function registerPanelActions(): () => void {
   disposers.push(
     actionRegistry.register({
       category: "Panel",
-      enabled: () =>
-        (useWorkspaceStore.getState().api?.groups?.length ?? 0) > 1,
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
       handler: () => useWorkspaceStore.getState().focusGroup("right"),
       id: "pier.panel.focusRight",
       metadata: {
@@ -250,8 +258,10 @@ export function registerPanelActions(): () => void {
   disposers.push(
     actionRegistry.register({
       category: "Panel",
-      enabled: () =>
-        (useWorkspaceStore.getState().api?.groups?.length ?? 0) > 1,
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
       handler: () => useWorkspaceStore.getState().focusGroup("down"),
       id: "pier.panel.focusDown",
       metadata: {
@@ -269,8 +279,10 @@ export function registerPanelActions(): () => void {
   disposers.push(
     actionRegistry.register({
       category: "Panel",
-      enabled: () =>
-        (useWorkspaceStore.getState().api?.groups?.length ?? 0) > 1,
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
       handler: () => useWorkspaceStore.getState().focusGroup("left"),
       id: "pier.panel.focusLeft",
       metadata: {
@@ -288,8 +300,10 @@ export function registerPanelActions(): () => void {
   disposers.push(
     actionRegistry.register({
       category: "Panel",
-      enabled: () =>
-        (useWorkspaceStore.getState().api?.groups?.length ?? 0) > 1,
+      enabled: () => {
+        const api = useWorkspaceStore.getState().api;
+        return api != null && api.groups.length > 1;
+      },
       handler: () => useWorkspaceStore.getState().focusGroup("up"),
       id: "pier.panel.focusUp",
       metadata: {
