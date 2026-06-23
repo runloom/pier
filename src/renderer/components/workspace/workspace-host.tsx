@@ -11,6 +11,7 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { AddPanelAction } from "./add-panel-action.tsx";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
+import { PanelTabHeader } from "./panel-tab-header.tsx";
 
 /**
  * WorkspaceHost — dockview-react 的唯一业务边界。
@@ -168,6 +169,7 @@ export function WorkspaceHost() {
     <div className="h-full w-full">
       <DockviewReact
         components={panelComponents}
+        defaultTabComponent={PanelTabHeader}
         leftHeaderActionsComponent={AddPanelAction}
         onReady={handleReady}
         theme={pierTheme}

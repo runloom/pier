@@ -43,6 +43,7 @@ export function registerConfigActions(): () => void {
       title: () => i18next.t("commandPalette.action.selectTheme"),
       surfaces: ["command-palette"],
       metadata: {
+        group: "5_appearance",
         iconComponent: Palette,
         sortOrder: 10,
         keywords: ["theme", "主题", "dark", "light", "深色", "浅色"],
@@ -82,6 +83,7 @@ export function registerConfigActions(): () => void {
       title: () => i18next.t("commandPalette.action.selectStyle"),
       surfaces: ["command-palette"],
       metadata: {
+        group: "5_appearance",
         iconComponent: Paintbrush,
         sortOrder: 11,
         keywords: ["style", "风格", "theme", "preset", "配色"],
@@ -121,6 +123,7 @@ export function registerConfigActions(): () => void {
       title: () => i18next.t("commandPalette.action.selectLanguage"),
       surfaces: ["command-palette"],
       metadata: {
+        group: "5_appearance",
         iconComponent: Languages,
         sortOrder: 20,
         keywords: ["language", "locale", "i18n", "语言"],

@@ -2,6 +2,7 @@ import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
+import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 
 function getAnchorFrame(anchor: HTMLDivElement): TerminalFrame | null {
   const r = anchor.getBoundingClientRect();
@@ -222,6 +223,25 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       window.pier.terminal.close(panelId);
     };
   }, [api, panelId]);
+
+  // 订阅 swift 转发的右键: panel 的 NSView 吞掉 React 层 onContextMenu, 唯一拿到
+  // 右键的方式是 swift NSEvent monitor 拦截 + IPC 转发. 这里按 panelId 过滤 (一个
+  // terminal panel 的菜单只该响应它自己的右键).
+  useEffect(() => {
+    const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
+      if (req.panelId !== panelId) {
+        return;
+      }
+      popupContextMenuAt("terminal/content", { x: req.x, y: req.y }).catch(
+        (err: unknown) => {
+          console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
+        }
+      );
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [panelId]);
 
   if (error) {
     return (

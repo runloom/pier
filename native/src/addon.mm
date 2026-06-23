@@ -21,6 +21,10 @@ extern "C" {
     // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
     typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
     void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
+    // Mouse forward: swift NSEvent monitor 命中 terminal 区域 rightMouseDown → JS.
+    // 签名 (browserWindowId, panelId UTF-8, x, y). 用于触发 native 右键菜单.
+    typedef void (*MouseForwardFn)(long browserWindowId, const char* panelId, double x, double y);
+    void ghostty_bridge_set_mouse_forward_callback(MouseForwardFn cb);
     // PWD forward: swift TerminalSurfacePwdDelegate 收到 OSC 7 → 此 trampoline → JS.
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
     typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
@@ -30,6 +34,18 @@ extern "C" {
     typedef void (*TitleForwardFn)(long browserWindowId, const char* panelId, const char* title);
     void ghostty_bridge_set_title_forward_callback(TitleForwardFn cb);
     void ghostty_bridge_set_active_panel_kind(void* nsWindow, long kindRaw, const char* panelId);
+    // 应用 Pier 主题派生的终端配色. cursor / selection 可空 (NULL = 不设置).
+    // palette 是 16 槽 const char* 数组, 每槽 #RRGGBB hex (含 #). 调用同步, swift 同步
+    // 构造 GhosttyThemeDefinition 后立即 setTheme — addon 端的字符串生命周期只需覆盖
+    // 这次调用即可.
+    void ghostty_bridge_apply_theme(
+        void* nsWindow,
+        const char* background,
+        const char* foreground,
+        const char* cursor,            // nullable
+        const char* selectionBackground, // nullable
+        const char** palette           // length 16, non-null entries
+    );
 }
 
 // Electron getNativeWindowHandle() returns Buffer containing NSView**
@@ -171,6 +187,53 @@ static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) 
     return env.Undefined();
 }
 
+// ---- Right-mouse forward callback (swift → main JS) ----
+//
+// 同 keyboard forward 模式: swift NSEvent monitor 命中 terminal 区域右键时调
+// trampoline, ThreadSafeFunction 把 (windowId, panelId, x, y) 转到 JS 线程.
+static Napi::ThreadSafeFunction g_mouseTSFN;
+
+struct MouseForwardPayload {
+    long windowId;
+    std::string panelId;
+    double x;
+    double y;
+};
+
+static void g_mouseForwardTrampoline(long windowId, const char* panelId, double x, double y) {
+    if (!g_mouseTSFN) return;
+    auto* payload = new MouseForwardPayload{ windowId, std::string(panelId), x, y };
+    auto status = g_mouseTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, MouseForwardPayload* p) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(p->windowId)),
+            Napi::String::New(env, p->panelId),
+            Napi::Number::New(env, p->x),
+            Napi::Number::New(env, p->y),
+        });
+        delete p;
+    });
+    if (status != napi_ok) {
+        delete payload;
+    }
+}
+
+static Napi::Value JsSetMouseForwardCallback(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
+        if (g_mouseTSFN) {
+            g_mouseTSFN.Release();
+            g_mouseTSFN = Napi::ThreadSafeFunction();
+        }
+        ghostty_bridge_set_mouse_forward_callback(nullptr);
+        return env.Undefined();
+    }
+    Napi::Function jsFn = info[0].As<Napi::Function>();
+    if (g_mouseTSFN) g_mouseTSFN.Release();
+    g_mouseTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierMouseForward", 0, 1);
+    ghostty_bridge_set_mouse_forward_callback(&g_mouseForwardTrampoline);
+    return env.Undefined();
+}
+
 // ---- PWD forward callback (swift → main JS) ----
 //
 // swift TerminalSurfacePwdDelegate 收到 OSC 7 → forwardPwdCallback → 这里. 通过
@@ -266,6 +329,55 @@ static Napi::Value JsSetTitleForwardCallback(const Napi::CallbackInfo& info) {
     return env.Undefined();
 }
 
+static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    Napi::Object colors = info[1].As<Napi::Object>();
+
+    // 解析必填: background / foreground.
+    std::string bg = colors.Get("background").As<Napi::String>().Utf8Value();
+    std::string fg = colors.Get("foreground").As<Napi::String>().Utf8Value();
+
+    // 解析可选 cursor / selectionBackground. undefined / "" 视为缺失.
+    std::string cursorStr;
+    const char* cursorPtr = nullptr;
+    Napi::Value cursorVal = colors.Get("cursor");
+    if (cursorVal.IsString()) {
+        cursorStr = cursorVal.As<Napi::String>().Utf8Value();
+        if (!cursorStr.empty()) cursorPtr = cursorStr.c_str();
+    }
+
+    std::string selStr;
+    const char* selPtr = nullptr;
+    Napi::Value selVal = colors.Get("selectionBackground");
+    if (selVal.IsString()) {
+        selStr = selVal.As<Napi::String>().Utf8Value();
+        if (!selStr.empty()) selPtr = selStr.c_str();
+    }
+
+    // palette: 长度 16, 每项 string. 不足则 NoOp (renderer 端 derive 保证 16 槽).
+    Napi::Array paletteArr = colors.Get("palette").As<Napi::Array>();
+    if (paletteArr.Length() != 16) {
+        return info.Env().Undefined();
+    }
+    std::string paletteStrs[16];
+    const char* palettePtrs[16];
+    for (uint32_t i = 0; i < 16; ++i) {
+        paletteStrs[i] = paletteArr.Get(i).As<Napi::String>().Utf8Value();
+        palettePtrs[i] = paletteStrs[i].c_str();
+    }
+
+    ghostty_bridge_apply_theme(
+        (__bridge void*)win,
+        bg.c_str(),
+        fg.c_str(),
+        cursorPtr,
+        selPtr,
+        palettePtrs
+    );
+    return info.Env().Undefined();
+}
+
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -295,6 +407,8 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
+    exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
+    exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));
     return exports;
 }
 

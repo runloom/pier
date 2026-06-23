@@ -1,11 +1,19 @@
 import { createRequire } from "node:module";
 import type {
   CreateTerminalArgs,
+  TerminalColors,
   TerminalFrame,
 } from "@shared/contracts/terminal.ts";
 import { BrowserWindow, type IpcMain } from "electron";
 
 interface NativeAddon {
+  /**
+   * 应用 Pier 主题派生的终端配色到指定 window 下的 Ghostty controller.
+   * Ghostty 库 controller.setTheme(...) 内部 reconfigure 并立即生效, shell 进程
+   * 不重启. 每个 BrowserWindow 一个 controller, 该 window 下所有 terminal panel
+   * 共享, 调一次即可.
+   */
+  applyTerminalTheme(parentHandle: Buffer, colors: TerminalColors): void;
   closeAllTerminals(parentHandle: Buffer): void;
   closeTerminal(panelId: string): void;
   createTerminal(
@@ -34,6 +42,16 @@ interface NativeAddon {
           browserWindowId: number,
           modifierFlags: number,
           chars: string
+        ) => void)
+      | null
+  ): void;
+  setMouseForwardCallback(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          x: number,
+          y: number
         ) => void)
       | null
   ): void;
@@ -116,6 +134,25 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     } catch (err) {
       // window 在 send 瞬间销毁等 edge case — 不影响其他功能
       console.error("[pier-key-forward] send failed:", err);
+    }
+  });
+
+  // Right-mouse forward: swift NSEvent monitor 命中 terminal 区域时调到这里, 通过
+  // windowId 找 BrowserWindow, send IPC 通知 renderer 弹菜单. 与 keyboard forward
+  // 同构 — 不能用 getFocusedWindow (swift monitor 跨线程 + 多窗口下不准).
+  addon?.setMouseForwardCallback((browserWindowId, panelId, x, y) => {
+    try {
+      const targetWindow = BrowserWindow.fromId(browserWindowId);
+      if (!targetWindow || targetWindow.isDestroyed()) {
+        return;
+      }
+      const wc = targetWindow.webContents;
+      if (wc.isDestroyed()) {
+        return;
+      }
+      wc.send("pier:terminal:request-context-menu", { panelId, x, y });
+    } catch (err) {
+      console.error("[pier-mouse-forward] send failed:", err);
     }
   });
 
@@ -244,6 +281,21 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     // makeFirstResponder(WKWebView) 的脆弱实现 (Electron 42 没真 WKWebView).
     if (active) {
       win.webContents.focus();
+    }
+  });
+
+  ipcMain.on("pier:terminal:apply-theme", (event, colors: TerminalColors) => {
+    if (!addon) {
+      return;
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return;
+    }
+    try {
+      addon.applyTerminalTheme(win.getNativeWindowHandle(), colors);
+    } catch (err) {
+      console.error("[pier-terminal-apply-theme] failed:", err);
     }
   });
 

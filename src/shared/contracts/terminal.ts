@@ -15,6 +15,13 @@ export interface CreateTerminalResult {
   ok: boolean;
 }
 
+export interface TerminalContextMenuRequest {
+  panelId: string;
+  /** BrowserWindow contentView 坐标 (top-left origin, flipped). */
+  x: number;
+  y: number;
+}
+
 /**
  * Terminal cwd 变化事件 — swift OSC 7 解析后通过 IPC 推送到 renderer.
  * cwd 是绝对路径 (file:// 前缀已由 swift 端从 URL 提取掉).
@@ -34,11 +41,58 @@ export interface TerminalTitleEvent {
   title: string;
 }
 
+/**
+ * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
+ * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
+ * 8..15  = bright black .. bright white
+ *
+ * 每项是 #RRGGBB (6 字符, 不含 alpha) — Ghostty 库接收 hex 字符串.
+ */
+export type AnsiPalette = readonly [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+];
+
+/**
+ * 终端配色描述. 由 renderer 侧从当前 Shiki 主题派生, 经 IPC → native addon →
+ * Ghostty controller.setTheme 应用. 所有色值都是 #RRGGBB (含 #, 6 字符).
+ *
+ * cursor / selectionBackground 写成 `| undefined` 而非纯 optional, 是因为项目
+ * tsconfig 启用 exactOptionalPropertyTypes — derive 函数会显式赋 undefined 表示
+ * "主题缺这个键", IPC 边界用 isString 守卫区分缺失 vs 实际值.
+ */
+export interface TerminalColors {
+  background: string;
+  cursor?: string | undefined;
+  foreground: string;
+  palette: AnsiPalette;
+  selectionBackground?: string | undefined;
+}
+
 export interface TerminalAPI {
+  applyTheme(colors: TerminalColors): void;
   close(panelId: string): Promise<void>;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   focus(panelId: string): void;
   hide(panelId: string): void;
+  /** 订阅 swift 转发的右键事件. 返回 unsubscribe. */
+  onContextMenuRequest: (
+    cb: (req: TerminalContextMenuRequest) => void
+  ) => () => void;
   /**
    * 订阅 terminal cwd 变化. 回调返回 dispose 函数, 调用即取消订阅.
    * 每次调用建立一个独立 listener — 调用方收到所有 panel 的事件并自行按

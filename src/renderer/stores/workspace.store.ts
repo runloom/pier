@@ -8,8 +8,12 @@ interface WorkspaceState {
   addTerminal: () => void;
   api: DockviewApi | null;
   closeActivePanel: () => void;
+  closeAll: () => Promise<void>;
+  closeOthers: (panelId: string) => void;
+  closePanel: (panelId: string) => void;
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
+  splitPanel: (panelId: string, direction: "right" | "below") => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -92,6 +96,94 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     api.removePanel(panel);
   },
+  closePanel: (panelId) => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const panel = api.panels.find((p) => p.id === panelId);
+    if (!panel) {
+      return;
+    }
+    // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
+    if (api.totalPanels <= 1) {
+      closeCurrentWindow().catch((err) => {
+        console.error("[workspace] closeCurrentWindow failed:", err);
+      });
+      return;
+    }
+    if (panel.view.contentComponent === "terminal") {
+      window.pier?.terminal?.close?.(panel.id);
+    }
+    api.removePanel(panel);
+  },
+
+  closeOthers: (panelId) => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const keepPanel = api.panels.find((p) => p.id === panelId);
+    if (!keepPanel) {
+      return;
+    }
+    const toClose = api.panels.filter((p) => p.id !== panelId);
+    for (const p of toClose) {
+      if (p.view.contentComponent === "terminal") {
+        window.pier?.terminal?.close?.(p.id);
+      }
+      api.removePanel(p);
+    }
+  },
+
+  closeAll: async () => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    // 先清磁盘 layout — 防 removePanel 触发的 debounced save 与 closeCurrentWindow 时序
+    // 竞争把空 layout 写入磁盘 (下次启动 fromJSON 拿到空 panel list 应用为空 workspace).
+    try {
+      await window.pier?.workspace?.clearLayout?.();
+    } catch (err) {
+      console.error("[workspace] clearLayout failed:", err);
+    }
+    const all = [...api.panels];
+    for (const p of all) {
+      if (p.view.contentComponent === "terminal") {
+        window.pier?.terminal?.close?.(p.id);
+      }
+      api.removePanel(p);
+    }
+    // 同 closePanel/closeActivePanel: 全 panel 关闭等价于"想退出当前 workspace",
+    // 留空 dockview 用户无路可走 (Cmd+T 才能恢复). 一律 close window 保持对称.
+    closeCurrentWindow().catch((err) => {
+      console.error("[workspace] closeCurrentWindow failed:", err);
+    });
+  },
+
+  splitPanel: (panelId, direction) => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const panel = api.panels.find((p) => p.id === panelId);
+    if (!panel) {
+      return;
+    }
+    const component = panel.view.contentComponent;
+    const newId = `${component}-${Date.now()}`;
+    api.addPanel({
+      id: newId,
+      component,
+      ...(panel.title !== undefined && { title: panel.title }),
+      position: {
+        referencePanel: panel.id,
+        direction,
+      },
+    });
+  },
+
   resetLayout: async () => {
     const api = get().api;
     if (!api) {
