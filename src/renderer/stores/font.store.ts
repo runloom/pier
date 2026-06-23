@@ -117,9 +117,12 @@ interface FontState {
   _hydrate: (snapshot: {
     uiFontFamily: string;
     monoFontFamily: string;
+    monoFontSize: number;
   }) => void;
   monoFontFamily: string;
+  monoFontSize: number;
   setMonoFontFamily: (next: string) => Promise<void>;
+  setMonoFontSize: (next: number) => Promise<void>;
   setUiFontFamily: (next: string) => Promise<void>;
   uiFontFamily: string;
 }
@@ -127,10 +130,11 @@ interface FontState {
 export const useFontStore = create<FontState>((set) => ({
   uiFontFamily: "",
   monoFontFamily: "",
+  monoFontSize: 13,
 
-  _hydrate({ uiFontFamily, monoFontFamily }) {
+  _hydrate({ uiFontFamily, monoFontFamily, monoFontSize }) {
     syncCssVars(uiFontFamily, monoFontFamily);
-    set({ uiFontFamily, monoFontFamily });
+    set({ uiFontFamily, monoFontFamily, monoFontSize });
   },
 
   async setUiFontFamily(next) {
@@ -158,6 +162,18 @@ export const useFontStore = create<FontState>((set) => ({
       console.error("[font.store] setMonoFontFamily IPC failed:", err);
     }
   },
+
+  async setMonoFontSize(next) {
+    try {
+      const merged = await window.pier.preferences.update({
+        monoFontSize: next,
+      });
+      const value = (merged.monoFontSize as number) ?? 13;
+      set({ monoFontSize: value });
+    } catch (err) {
+      console.error("[font.store] setMonoFontSize IPC failed:", err);
+    }
+  },
 }));
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -168,6 +184,7 @@ export async function initFont(): Promise<void> {
     useFontStore.getState()._hydrate({
       uiFontFamily: (snapshot.uiFontFamily as string) ?? "",
       monoFontFamily: (snapshot.monoFontFamily as string) ?? "",
+      monoFontSize: (snapshot.monoFontSize as number) ?? 13,
     });
   } catch (err) {
     console.error("[font.store] initFont IPC failed; keeping defaults:", err);
