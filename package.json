@@ -1,6 +1,6 @@
 {
   "name": "pier",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Pier — 本地 AI 开发工作台（dockview panel 布局 + 终端 + 代码变更预览 + 多 agent 状态可见性）",
   "type": "module",
   "main": "out/main/index.js",
@@ -32,7 +32,7 @@
     "electron:dev": "node ./scripts/dev-profile.mjs electron-dev",
     "electron:preview": "electron-vite preview",
     "build:electron": "electron-vite build",
-    "build:dist": "pnpm build:electron && electron-builder",
+    "build:dist": "pnpm build:native && pnpm build:electron && electron-builder",
     "build": "pnpm build:electron",
     "setup:worktree": "node ./scripts/setup-worktree.mjs",
     "prepare": "husky",

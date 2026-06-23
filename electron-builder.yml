@@ -3,41 +3,32 @@ productName: Pier
 copyright: Copyright © 2026 Pier
 
 directories:
-  output: release
+  output: dist-builder
   buildResources: build
 
+# Native addon: terminal.ts 用 require("../../native/build/Release/ghostty_native.node")
+# 必须把 .node + 同目录 libGhosttyBridge.dylib 打进包，且 asarUnpack 保留物理路径。
 files:
   - out/**/*
   - '!**/*.map'
+  - native/build/Release/**
 
 asar: true
+asarUnpack:
+  - native/build/Release/**
 
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
   target:
     - target: dmg
-      arch: [x64, arm64]
+      arch: [arm64]
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   gatekeeperAssess: false
+  identity: null
   notarize: false
-
-win:
-  icon: build/icon.ico
-  target:
-    - target: nsis
-      arch: [x64]
-
-linux:
-  icon: build/icon.png
-  target:
-    - target: AppImage
-      arch: [x64]
-    - target: deb
-      arch: [x64]
-  category: Development
 
 dmg:
   contents:
@@ -47,8 +38,3 @@ dmg:
       y: 150
       type: link
       path: /Applications
-
-publish:
-  - provider: github
-    owner: TBD
-    repo: pier
