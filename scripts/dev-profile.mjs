@@ -489,6 +489,24 @@ export async function isPortListening(port, host = "127.0.0.1") {
 
 async function predev() {
   const profile = resolveDevProfile();
+
+  // native addon 守卫: 缺了直接报错, 而不是进 Electron 后 require 才炸 (panel 内只一行不易定位).
+  const nativeAddon = path.join(
+    profile.worktreeRoot,
+    "native",
+    "build",
+    "Release",
+    "ghostty_native.node"
+  );
+  if (!existsSync(nativeAddon)) {
+    console.error(
+      `[dev-profile] 缺 native addon: ${nativeAddon}\n` +
+        "  这是终端 PTY 桥接的 swift+node-gyp 产物, 每个 worktree 必须各自编译.\n" +
+        "  请先执行: pnpm setup:worktree (会自动跑 pnpm build:native)"
+    );
+    process.exit(1);
+  }
+
   const runtime = readRuntime(profile.runtimeFile);
   if (runtime?.pid && !isPidAlive(runtime.pid)) {
     rmSync(profile.runtimeFile, { force: true });
