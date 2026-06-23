@@ -19,4 +19,37 @@ describe("DEFAULT_KEYMAP", () => {
       scope: "global",
     });
   });
+
+  it("contains split / focus shortcuts", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.splitRight",
+      keys: "Mod+KeyD",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.splitDown",
+      keys: "Mod+Shift+KeyD",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusUp",
+      keys: "Ctrl+Shift+ArrowUp",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusDown",
+      keys: "Ctrl+Shift+ArrowDown",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusLeft",
+      keys: "Ctrl+Shift+ArrowLeft",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusRight",
+      keys: "Ctrl+Shift+ArrowRight",
+      scope: "global",
+    });
+  });
 });

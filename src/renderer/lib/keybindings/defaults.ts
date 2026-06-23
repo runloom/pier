@@ -22,4 +22,32 @@ export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
     scope: "global",
   },
   { commandId: "pier.settings.open", keys: "Mod+Comma", scope: "global" },
+  // Split — splitLeft / splitUp 不绑默认 (用户可自定义)
+  { commandId: "pier.panel.splitRight", keys: "Mod+KeyD", scope: "global" },
+  {
+    commandId: "pier.panel.splitDown",
+    keys: "Mod+Shift+KeyD",
+    scope: "global",
+  },
+  // Focus — Ctrl+Shift+方向键 (mac 上 = 独立 Ctrl, 非 mac 上 = Mod 等价)
+  {
+    commandId: "pier.panel.focusUp",
+    keys: "Ctrl+Shift+ArrowUp",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusDown",
+    keys: "Ctrl+Shift+ArrowDown",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusLeft",
+    keys: "Ctrl+Shift+ArrowLeft",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusRight",
+    keys: "Ctrl+Shift+ArrowRight",
+    scope: "global",
+  },
 ];
