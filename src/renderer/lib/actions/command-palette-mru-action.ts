@@ -25,7 +25,9 @@ export function registerCommandPaletteMruAction(): () => void {
       useCommandPaletteMru
         .getState()
         .clear()
-        .catch(() => undefined);
+        .catch((err: unknown) => {
+          console.error("[command-palette-mru] clear 失败:", err);
+        });
     },
   });
 }

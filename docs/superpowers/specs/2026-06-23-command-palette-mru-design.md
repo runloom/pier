@@ -225,7 +225,7 @@ interface ActionMetadata {
 - `zh-CN`: "清空命令面板使用记录"
 - `en`: "Clear command palette history"
 
-handler 调 `window.pier.commandPaletteMru.clear()` 并 toast 提示。surface 设 `["command-palette"]`，让它本身也出现在命令面板里。`metadata.excludeFromMru = true` 让它清空后不会把自己写回 MRU（否则下一次打开命令面板就会看到 clearRecent 排在顶端，违反"清空"语义）。
+handler 调 `window.pier.commandPaletteMru.clear()` 并 console.error 记录失败 (Pier 暂无 toast 系统, 后续接入后可升级到 toast). surface 设 `["command-palette"]`，让它本身也出现在命令面板里。`metadata.excludeFromMru = true` 让它清空后不会把自己写回 MRU（否则下一次打开命令面板就会看到 clearRecent 排在顶端，违反"清空"语义）。
 
 ## 错误处理
 
