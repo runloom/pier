@@ -90,6 +90,18 @@ const terminalApi: TerminalAPI = {
       ipcRenderer.off("pier:terminal:cwd-change", listener);
     };
   },
+  onTitleChange: (cb) => {
+    const listener = (
+      _event: unknown,
+      payload: { panelId: string; title: string }
+    ) => {
+      cb(payload);
+    };
+    ipcRenderer.on("pier:terminal:title-change", listener);
+    return () => {
+      ipcRenderer.off("pier:terminal:title-change", listener);
+    };
+  },
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFrame: (panelId, frame) =>

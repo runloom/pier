@@ -24,6 +24,16 @@ export interface TerminalCwdEvent {
   panelId: string;
 }
 
+/**
+ * Terminal title 变化事件 — swift OSC 0/2 解析后通过 IPC 推送到 renderer.
+ * title 是 TUI 应用 (claude / vim / aider) 主动设置的自定义 window title,
+ * descriptor.long 的最高优先级来源.
+ */
+export interface TerminalTitleEvent {
+  panelId: string;
+  title: string;
+}
+
 export interface TerminalAPI {
   close(panelId: string): Promise<void>;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
@@ -34,6 +44,11 @@ export interface TerminalAPI {
    * 单个 listener 接收所有 panel 的事件 — 调用方按 panelId 自行过滤.
    */
   onCwdChange(cb: (event: TerminalCwdEvent) => void): () => void;
+  /**
+   * 订阅 terminal title (OSC 0/2) 变化. 回调返回 dispose 函数.
+   * 单 listener 接所有 panel 事件 — 调用方按 panelId 过滤.
+   */
+  onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
   setActivePanelKind: (
     kind: "terminal" | "web",
     panelId: string | null

@@ -45,27 +45,55 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [cwd, setCwd] = useState<string | null>(null);
+  const [sequenceTitle, setSequenceTitle] = useState<string | null>(null);
 
   // 订阅 swift OSC 7 → main → 这里. cwd 变化 setState 触发 descriptor 重新计算.
   // 单 listener 接所有 panel 的事件 — 按 panelId 自行过滤.
   useEffect(() => {
-    const dispose = window.pier.terminal.onCwdChange((event) => {
+    const disposeCwd = window.pier.terminal.onCwdChange((event) => {
       if (event.panelId === panelId) {
         setCwd(event.cwd);
       }
     });
-    return dispose;
+    // 订阅 OSC 0/2 title — TUI 应用 (claude / vim / aider) 主动设的自定义 title.
+    // 退出 TUI 后 shell 通常不会"清空" title, sequenceTitle 会保留直到下一个应用
+    // 写新值; 如果想"退出 claude 后 long 回到 cwd", 可以接 process-exit 事件主动
+    // 清空 — v1 暂不做.
+    const disposeTitle = window.pier.terminal.onTitleChange((event) => {
+      if (event.panelId === panelId) {
+        setSequenceTitle(event.title);
+      }
+    });
+    return () => {
+      disposeCwd();
+      disposeTitle();
+    };
   }, [panelId]);
 
-  // 把 cwd 翻译成 descriptor 三字段:
-  // - short: basename(cwd) — tab strip
-  // - long:  cwd            — sink 长形式 (resolveLong 会优先用 path)
-  // - path:  cwd            — sink 优先字段, 也是未来 breadcrumb / status bar 用的数据
-  // 没 cwd 时 fallback "Terminal" (只填 short, 不传 long/path).
-  usePanelDescriptor(
-    api,
-    cwd ? { short: basename(cwd), long: cwd, path: cwd } : { short: "Terminal" }
-  );
+  // descriptor 三字段优先级链:
+  // - short: basename(cwd) — tab strip 始终显示目录, 不被 OSC 干扰 (稳定锚点)
+  // - long:  sequenceTitle ?? cwd — sink 优先 OSC 自定义 ("Claude Code"),
+  //          没 OSC 时 fallback cwd 完整路径
+  // - path:  cwd — 真实 cwd, 不被 OSC override (breadcrumb / status bar 用)
+  // 没 cwd 没 OSC 时只传 short = "Terminal".
+  const descriptor = ((): {
+    short: string;
+    long?: string;
+    path?: string;
+  } => {
+    const short = cwd ? basename(cwd) : "Terminal";
+    const long = sequenceTitle ?? cwd ?? undefined;
+    const path = cwd ?? undefined;
+    const result: { short: string; long?: string; path?: string } = { short };
+    if (long !== undefined) {
+      result.long = long;
+    }
+    if (path !== undefined) {
+      result.path = path;
+    }
+    return result;
+  })();
+  usePanelDescriptor(api, descriptor);
 
   useLayoutEffect(() => {
     const parent = parentRef.current?.parentElement;

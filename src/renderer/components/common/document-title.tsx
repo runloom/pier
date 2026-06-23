@@ -7,12 +7,19 @@ import {
 /**
  * 解析"长形式"字符串 — sink 共享的 fallback 链.
  *
- * 优先级:path (绝对路径, 信息密度最高) > long > short.
- * terminal panel cd 后 sink 自然显示完整 cwd; 没 path 的 panel 走 long; 都没
- * 兜底 short (descriptor 契约保证 short 必填).
+ * 优先级:long > path > short.
+ *
+ * - long 由 panel 主动计算 (terminal 内部已做 sequenceTitle ?? cwd 优先级),
+ *   是 sink "应该显示什么"的权威来源.
+ * - path 是真实绝对路径, 给没填 long 的 panel 类型兜底 (理论上 terminal 也会
+ *   走这里, 但 terminal 一定填 long).
+ * - short 是最终兜底, descriptor 契约保证必填.
+ *
+ * 注意: 不能让 path 排在 long 前面 — 否则 terminal 的 sequenceTitle 永远被
+ * 真实 cwd 覆盖, OSC 0/2 失效.
  */
 export function resolveLong(d: PanelDescriptor): string {
-  return d.path ?? d.long ?? d.short;
+  return d.long ?? d.path ?? d.short;
 }
 
 /**

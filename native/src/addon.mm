@@ -25,6 +25,10 @@ extern "C" {
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
     typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
     void ghostty_bridge_set_pwd_forward_callback(PwdForwardFn cb);
+    // Title forward: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 → 此 trampoline → JS.
+    // 签名 (browserWindowId, panelId UTF-8, title UTF-8). 与 PWD 同模式.
+    typedef void (*TitleForwardFn)(long browserWindowId, const char* panelId, const char* title);
+    void ghostty_bridge_set_title_forward_callback(TitleForwardFn cb);
     void ghostty_bridge_set_active_panel_kind(void* nsWindow, long kindRaw, const char* panelId);
 }
 
@@ -216,6 +220,52 @@ static Napi::Value JsSetPwdForwardCallback(const Napi::CallbackInfo& info) {
     return env.Undefined();
 }
 
+// ---- Title forward callback (swift OSC 0/2 → main JS) ----
+//
+// 与 PWD forward 同模式. TUI 应用 (claude / vim / aider) 主动通过 OSC 0/2 写
+// 自定义 title, swift TerminalSurfaceTitleDelegate 接, 经 ThreadSafeFunction
+// 跨线程到 JS.
+static Napi::ThreadSafeFunction g_titleTSFN;
+
+struct TitleForwardPayload {
+    long windowId;
+    std::string panelId;
+    std::string title;
+};
+
+static void g_titleForwardTrampoline(long windowId, const char* panelId, const char* title) {
+    if (!g_titleTSFN) return;
+    auto* payload = new TitleForwardPayload{ windowId, std::string(panelId), std::string(title) };
+    auto status = g_titleTSFN.BlockingCall(payload, [](Napi::Env env, Napi::Function jsCallback, TitleForwardPayload* p) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(p->windowId)),
+            Napi::String::New(env, p->panelId),
+            Napi::String::New(env, p->title),
+        });
+        delete p;
+    });
+    if (status != napi_ok) {
+        delete payload;
+    }
+}
+
+static Napi::Value JsSetTitleForwardCallback(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined()) {
+        if (g_titleTSFN) {
+            g_titleTSFN.Release();
+            g_titleTSFN = Napi::ThreadSafeFunction();
+        }
+        ghostty_bridge_set_title_forward_callback(nullptr);
+        return env.Undefined();
+    }
+    Napi::Function jsFn = info[0].As<Napi::Function>();
+    if (g_titleTSFN) g_titleTSFN.Release();
+    g_titleTSFN = Napi::ThreadSafeFunction::New(env, jsFn, "PierTitleForward", 0, 1);
+    ghostty_bridge_set_title_forward_callback(&g_titleForwardTrampoline);
+    return env.Undefined();
+}
+
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -243,6 +293,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
+    exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
     return exports;
 }

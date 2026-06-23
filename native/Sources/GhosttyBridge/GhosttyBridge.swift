@@ -133,22 +133,33 @@ final class EventRouterView: NSView {
     }
 }
 
-// MARK: - PWD delegate adapter
+// MARK: - Terminal event delegate adapter
 
-/// 实现 TerminalSurfacePwdDelegate, 每个 terminal 一个实例, 持有 panelId 用于
-/// 区分多 panel. cwd 变化时调全局 forwardPwdCallback 把 (panelId, path) 转给
-/// main process.
+/// 同时实现 PwdDelegate + TitleDelegate, 每个 terminal 一个实例, 持有 panelId 用于
+/// 区分多 panel. 利用 libghostty callbackBridge 的动态转型机制 (`as? any Protocol`),
+/// 单个 delegate 对象可被同时识别为多个 protocol — 因此可挂多个事件类型而 delegate
+/// 槽位只占用一个 (TerminalView.delegate 是单一 weak ref).
+///
+/// 后续 bell / focus / close / progress 等都可挂到这个 class — 只需 conform 对应
+/// protocol 并加 forward callback 通道.
 ///
 /// weak-set 到 terminalView.delegate, strong-hold 在 Terminal struct 中以保证
 /// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
 @MainActor
-final class TerminalPwdDelegate: TerminalSurfacePwdDelegate {
+final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
+    TerminalSurfaceTitleDelegate
+{
     let panelId: String
 
     /// 全局 callback: 收到 OSC 7 path 时调用, 把 (browserWindowId, panelId, path)
     /// 转给 main process. browserWindowId 由 GhosttyBridgeImpl 通过 panelId 反查
     /// (panel 所属 NSWindow → browserWindowId 映射).
     static var forwardPwdCallback: ((Int, String, String) -> Void)?
+
+    /// 全局 callback: 收到 OSC 0/2 title 时调用, 把 (browserWindowId, panelId, title)
+    /// 转给 main process. TUI 应用 (claude / vim / aider) 主动通过 OSC 0/2 写自定义
+    /// title — descriptor.long 的最高优先级来源.
+    static var forwardTitleCallback: ((Int, String, String) -> Void)?
 
     init(panelId: String) {
         self.panelId = panelId
@@ -158,7 +169,14 @@ final class TerminalPwdDelegate: TerminalSurfacePwdDelegate {
         guard let windowId = GhosttyBridgeImpl.shared.browserWindowId(forPanelId: panelId) else {
             return
         }
-        TerminalPwdDelegate.forwardPwdCallback?(windowId, panelId, path)
+        TerminalEventDelegate.forwardPwdCallback?(windowId, panelId, path)
+    }
+
+    func terminalDidChangeTitle(_ title: String) {
+        guard let windowId = GhosttyBridgeImpl.shared.browserWindowId(forPanelId: panelId) else {
+            return
+        }
+        TerminalEventDelegate.forwardTitleCallback?(windowId, panelId, title)
     }
 }
 
@@ -168,9 +186,10 @@ private struct Terminal {
     let containerView: NSView
     let terminalView: TerminalView
     let parentWindow: NSWindow
-    /// PwdDelegate adapter (strong-hold — terminalView.delegate 是 weak).
-    /// 随 Terminal 一起释放, terminalView weak ref 自动 nil, 不留 dangling.
-    let pwdDelegate: TerminalPwdDelegate
+    /// EventDelegate adapter (strong-hold — terminalView.delegate 是 weak).
+    /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
+    /// weak ref 自动 nil, 不留 dangling.
+    let eventDelegate: TerminalEventDelegate
 }
 
 // MARK: - Bridge implementation
@@ -388,9 +407,16 @@ final class GhosttyBridgeImpl {
 
     /// 注册 PWD forward callback: swift TerminalSurfacePwdDelegate 收到 OSC 7 后,
     /// 把 (browserWindowId, panelId, cwd) 转给 main process. 与 keyboard forward
-    /// 路径同模式 (PwdDelegate → C 函数指针 → N-API ThreadSafeFunction).
+    /// 路径同模式 (EventDelegate → C 函数指针 → N-API ThreadSafeFunction).
     func setPwdForwardCallback(_ cb: @escaping (Int, String, String) -> Void) {
-        TerminalPwdDelegate.forwardPwdCallback = cb
+        TerminalEventDelegate.forwardPwdCallback = cb
+    }
+
+    /// 注册 Title forward callback: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后,
+    /// 把 (browserWindowId, panelId, title) 转给 main process. TUI 应用 (claude / vim)
+    /// 的自定义 title 通道, 与 PWD 同模式.
+    func setTitleForwardCallback(_ cb: @escaping (Int, String, String) -> Void) {
+        TerminalEventDelegate.forwardTitleCallback = cb
     }
 
     // MARK: - Terminal lifecycle
@@ -411,10 +437,10 @@ final class GhosttyBridgeImpl {
         terminalView.configuration = TerminalSurfaceOptions(backend: .exec)
         terminalView.controller = controller(for: parent)
 
-        // 挂 PwdDelegate — 接 OSC 7, 转发 (panelId, path) 给 main process.
-        // delegate 是 weak ref, Terminal struct strong-hold pwdDelegate 保证生命周期.
-        let pwdDelegate = TerminalPwdDelegate(panelId: panelId)
-        terminalView.delegate = pwdDelegate
+        // 挂 EventDelegate — 同时接 OSC 7 (PwdDelegate) + OSC 0/2 (TitleDelegate).
+        // delegate 是 weak ref, Terminal struct strong-hold eventDelegate 保证生命周期.
+        let eventDelegate = TerminalEventDelegate(panelId: panelId)
+        terminalView.delegate = eventDelegate
 
         // Container 只是 frame holder, 自身不绘制. terminalView 内的 IOSurfaceLayer
         // (opaque=true) 已经渲染 terminal 全部像素, 不需要 container 再画 background —
@@ -438,7 +464,7 @@ final class GhosttyBridgeImpl {
             containerView: container,
             terminalView: terminalView,
             parentWindow: parent,
-            pwdDelegate: pwdDelegate
+            eventDelegate: eventDelegate
         )
 
         // 更新 EventRouter targets (inset 留出 sash 事件通道)
@@ -737,6 +763,26 @@ public func ghosttyBridgeSetPwdForwardCallback(_ cb: PwdForwardCallback?) {
             }
         } else {
             GhosttyBridgeImpl.shared.setPwdForwardCallback { _, _, _ in }
+        }
+    }
+}
+
+/// C 函数指针类型: 接收 browserWindowId (Int), panelId UTF-8, title UTF-8.
+public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+
+@_cdecl("ghostty_bridge_set_title_forward_callback")
+public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            GhosttyBridgeImpl.shared.setTitleForwardCallback { wid, panelId, title in
+                panelId.withCString { pidPtr in
+                    title.withCString { titlePtr in
+                        cb(wid, pidPtr, titlePtr)
+                    }
+                }
+            }
+        } else {
+            GhosttyBridgeImpl.shared.setTitleForwardCallback { _, _, _ in }
         }
     }
 }

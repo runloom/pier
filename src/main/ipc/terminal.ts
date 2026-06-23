@@ -46,6 +46,16 @@ interface NativeAddon {
   setPwdForwardCallback(
     cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
   ): void;
+  /**
+   * 注册 Title forward callback. swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后调用,
+   * 传 (browserWindowId, panelId, title). TUI 应用 (claude / vim / aider) 自定义 title
+   * 通道. 与 PWD 路由方式相同, 按 windowId 精准送到对应 BrowserWindow renderer.
+   */
+  setTitleForwardCallback(
+    cb:
+      | ((browserWindowId: number, panelId: string, title: string) => void)
+      | null
+  ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
   showTerminal(panelId: string): void;
 }
@@ -128,6 +138,25 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       wc.send("pier:terminal:cwd-change", { panelId, cwd });
     } catch (err) {
       console.error("[pier-cwd-forward] send failed:", err);
+    }
+  });
+
+  // 注册 Title forward callback: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后,
+  // 通过 ThreadSafeFunction 调到这里. TUI 应用 (claude / vim) 主动写的 title, 是
+  // descriptor.long 的最高优先级来源 (sequence > cwd > fallback).
+  addon?.setTitleForwardCallback((browserWindowId, panelId, title) => {
+    try {
+      const targetWindow = BrowserWindow.fromId(browserWindowId);
+      if (!targetWindow || targetWindow.isDestroyed()) {
+        return;
+      }
+      const wc = targetWindow.webContents;
+      if (wc.isDestroyed()) {
+        return;
+      }
+      wc.send("pier:terminal:title-change", { panelId, title });
+    } catch (err) {
+      console.error("[pier-title-forward] send failed:", err);
     }
   });
 
