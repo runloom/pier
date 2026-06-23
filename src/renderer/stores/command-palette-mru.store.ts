@@ -7,6 +7,8 @@
  */
 import {
   EMPTY_MRU_STATE,
+  frecency,
+  MRU_MAX_ENTRIES,
   type MruEntry,
   type MruState,
 } from "@shared/contracts/command-palette-mru.ts";
@@ -43,7 +45,26 @@ function applyLocal(
       return next;
     }
   }
-  return [...prev, { actionId, useCount: 1, lastUsedAt: now }];
+  const incoming: MruEntry = { actionId, useCount: 1, lastUsedAt: now };
+  if (prev.length < MRU_MAX_ENTRIES) {
+    return [...prev, incoming];
+  }
+  // 已满: 按 frecency 淘汰最弱, 与 main evictWeakest 同语义, 保证渲染器瞬时状态也守 schema max(200).
+  let weakestIdx = 0;
+  const head = prev[0];
+  let weakestScore = head ? frecency(head, now) : 0;
+  for (let i = 1; i < prev.length; i++) {
+    const e = prev[i];
+    if (!e) {
+      continue;
+    }
+    const s = frecency(e, now);
+    if (s < weakestScore) {
+      weakestScore = s;
+      weakestIdx = i;
+    }
+  }
+  return [...prev.filter((_, i) => i !== weakestIdx), incoming];
 }
 
 function entriesEqual(a: readonly MruEntry[], b: readonly MruEntry[]): boolean {
@@ -79,12 +100,21 @@ export const useCommandPaletteMru = create<CommandPaletteMruStore>(
     },
 
     clear: async () => {
+      const api = window.pier?.commandPaletteMru;
+      // #3: preload 缺失 → 本地兜底, 不让 await undefined 静默成功.
+      if (!api) {
+        set({ entries: [], frecencyMap: new Map() });
+        return;
+      }
       try {
-        await window.pier?.commandPaletteMru?.clear?.();
-        // 广播回来会通过 onChange 重置, 这里不直接 set 避免双写
+        // #10: 用 IPC 返回值兜底, 不再仅依赖 broadcast 触发 onChange.
+        const next = await api.clear();
+        set({
+          entries: next.entries,
+          frecencyMap: recompute(next.entries),
+        });
       } catch (err) {
         console.error("[command-palette-mru] clear 失败:", err);
-        // 仍然本地清空保持 UI 一致
         set({ entries: [], frecencyMap: new Map() });
       }
     },
@@ -97,8 +127,11 @@ export async function initCommandPaletteMru(): Promise<void> {
     return;
   }
 
+  let onChangeApplied = false;
+
   // 先订阅 onChange, 否则 await read 期间到来的广播会丢失
   api.onChange((state: MruState) => {
+    onChangeApplied = true;
     if (entriesEqual(state.entries, useCommandPaletteMru.getState().entries)) {
       return;
     }
@@ -110,6 +143,10 @@ export async function initCommandPaletteMru(): Promise<void> {
 
   try {
     const state = await api.read();
+    if (onChangeApplied) {
+      // read 等待期间已有更新到达, 它的快照可能比当前状态旧, 跳过覆盖.
+      return;
+    }
     useCommandPaletteMru.setState({
       entries: state.entries,
       frecencyMap: recompute(state.entries),
