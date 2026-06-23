@@ -80,15 +80,22 @@ describe("pickFocusTarget", () => {
     expect(idx).toBe(null);
   });
 
-  it("isActive 候选跳过", () => {
-    // active 在 left, candidates 含 active 自己 — pickFocusTarget 必须跳过 isActive
+  it("isActive 候选跳过 — 即使在方向上 overlap 最大", () => {
+    // 诱饵 R1 (isActive=true) 与 R2 几何完全相同, 若算法漏了 isActive 跳过,
+    // R1 先入循环, overlap 最大, 会把 bestIdx 锁在 1. 算法正确时必须落在 R2 (idx=2).
+    const r1 = rect(105, 0, 100, 100);
+    const r2 = rect(105, 0, 100, 100);
     const idx = pickFocusTarget(
       left,
-      [mkCand("L", left, true), mkCand("R", right)],
+      [
+        mkCand("L", left, true),
+        { id: "R1", isActive: true, rect: r1 }, // 诱饵
+        mkCand("R2", r2),
+      ],
       "right",
       TOL
     );
-    expect(idx).toBe(1);
+    expect(idx).toBe(2);
   });
 
   it("rect == null 的候选跳过", () => {
@@ -135,18 +142,41 @@ describe("pickFocusTarget", () => {
 
   it("容忍 gap 像素 — tol 内的偏差仍算在方向上", () => {
     // 右邻 left = 99 (比 active.right=100 还小 1px), 但 tol=5 容忍, 仍判右
-    const right_overlap = rect(99, 0, 100, 100);
+    const rightOverlap = rect(99, 0, 100, 100);
     const idx = pickFocusTarget(
       left,
-      [mkCand("L", left, true), mkCand("R", right_overlap)],
+      [mkCand("L", left, true), mkCand("R", rightOverlap)],
       "right",
       TOL
     );
     expect(idx).toBe(1);
   });
 
-  it("候选不足 (只有 active) 返回 null", () => {
-    const idx = pickFocusTarget(left, [mkCand("L", left, true)], "right", TOL);
+  it("超出 tol 边界则不算同方向", () => {
+    // 候选 left = 94, active.right = 100, gap = -6 比 tol=5 还多 1px, 判定不在右方向.
+    // 与上一条 "容忍 gap 像素" 对照:99 内, 94 外, 验证 isInDirection 的 <= 比较精度.
+    const tooMuchOverlap = rect(94, 0, 100, 100);
+    const idx = pickFocusTarget(
+      left,
+      [mkCand("L", left, true), mkCand("R", tooMuchOverlap)],
+      "right",
+      TOL
+    );
+    expect(idx).toBe(null);
+  });
+
+  it("有候选但都不在方向上返回 null", () => {
+    // 与 "方向上无邻居返回 null" 区分:那里测 candidates.length<2 边界,
+    // 这里测 isActive 跳过 + inDir 全 false 的"实有候选但无方向匹配".
+    // active = 中心 (50, 50, 100, 100); 候选在它左上, "right" 方向下全部 inDir=false.
+    const center = rect(50, 50, 100, 100);
+    const aboveLeft = rect(0, 0, 40, 40);
+    const idx = pickFocusTarget(
+      center,
+      [mkCand("C", center, true), mkCand("AL", aboveLeft)],
+      "right",
+      TOL
+    );
     expect(idx).toBe(null);
   });
 });
