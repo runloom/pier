@@ -37,6 +37,16 @@ interface NativeAddon {
         ) => void)
       | null
   ): void;
+  setMouseForwardCallback(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          x: number,
+          y: number
+        ) => void)
+      | null
+  ): void;
   setOverlayActive(parentHandle: Buffer, active: boolean): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
   showTerminal(panelId: string): void;
@@ -98,6 +108,25 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     } catch (err) {
       // window 在 send 瞬间销毁等 edge case — 不影响其他功能
       console.error("[pier-key-forward] send failed:", err);
+    }
+  });
+
+  // Right-mouse forward: swift NSEvent monitor 命中 terminal 区域时调到这里, 通过
+  // windowId 找 BrowserWindow, send IPC 通知 renderer 弹菜单. 与 keyboard forward
+  // 同构 — 不能用 getFocusedWindow (swift monitor 跨线程 + 多窗口下不准).
+  addon?.setMouseForwardCallback((browserWindowId, panelId, x, y) => {
+    try {
+      const targetWindow = BrowserWindow.fromId(browserWindowId);
+      if (!targetWindow || targetWindow.isDestroyed()) {
+        return;
+      }
+      const wc = targetWindow.webContents;
+      if (wc.isDestroyed()) {
+        return;
+      }
+      wc.send("pier:terminal:request-context-menu", { panelId, x, y });
+    } catch (err) {
+      console.error("[pier-mouse-forward] send failed:", err);
     }
   });
 
