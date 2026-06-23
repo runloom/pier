@@ -6,9 +6,8 @@
  * 半衰期 14 天: 两周不用, 权重折半. 参数硬编码, 后续观察体感再调.
  */
 import {
-  HALF_LIFE_DAYS,
+  frecency,
   type MruEntry,
-  MS_PER_DAY,
 } from "@shared/contracts/command-palette-mru.ts";
 import type { Action } from "@/lib/actions/types.ts";
 
@@ -31,8 +30,7 @@ export function buildFrecencyMap(
 ): ReadonlyMap<string, number> {
   const map = new Map<string, number>();
   for (const entry of entries) {
-    const ageDays = (now - entry.lastUsedAt) / MS_PER_DAY;
-    map.set(entry.actionId, entry.useCount * 0.5 ** (ageDays / HALF_LIFE_DAYS));
+    map.set(entry.actionId, frecency(entry, now));
   }
   return map;
 }
