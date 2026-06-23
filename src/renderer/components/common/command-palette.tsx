@@ -39,6 +39,7 @@ import {
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
 
@@ -123,10 +124,11 @@ export function CommandPalette() {
   const controller = useCommandPaletteController();
   const actions = useActions();
   const keybindingLabels = useKeybindingLabels();
+  const frecencyMap = useCommandPaletteMru((s) => s.frecencyMap);
 
   // 本地 UI 态: 与 controller 保持同步, 但 cmdk 需要 controlled value/query 引用稳定。
   const [query, setQuery] = useState("");
-  const groups = groupActionsForPalette(actions, new Map(), query);
+  const groups = groupActionsForPalette(actions, frecencyMap, query);
   const [selectedValue, setSelectedValue] = useState("");
   const lastRequestIdRef = useRef(-1);
   // null = 未 accept; 非 null = 已 accept (值是 item id)。
@@ -268,6 +270,9 @@ export function CommandPalette() {
     const before = useCommandPaletteController.getState().requestId;
     try {
       await action.handler();
+      if (!action.metadata?.excludeFromMru) {
+        useCommandPaletteMru.getState().recordUse(action.id);
+      }
       const after = useCommandPaletteController.getState();
       // handler 没开 quick-pick (requestId 没变) 且仍在 commands 模式: 关闭面板。
       if (after.requestId === before && after.mode === "commands") {
