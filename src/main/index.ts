@@ -8,6 +8,7 @@ import {
   nativeImage,
 } from "electron";
 import { installCsp } from "./csp.ts";
+import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
@@ -166,6 +167,7 @@ app.whenReady().then(() => {
   }
 
   registerWindowIpc(ipcMain);
+  registerMenuIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
   registerTerminalIpc(ipcMain);
   registerThemeIpc(ipcMain);
