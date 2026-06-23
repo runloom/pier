@@ -21,7 +21,7 @@ const separatorSchema = z.object({ type: z.literal("separator") });
 
 const roleSchema = z.object({
   type: z.literal("role"),
-  role: z.enum([...ALLOWED_ROLES] as [string, ...string[]]),
+  role: z.enum(ALLOWED_ROLES),
   label: labelSchema.optional(),
   enabled: z.boolean().optional(),
 });

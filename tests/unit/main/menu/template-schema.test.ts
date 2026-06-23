@@ -46,6 +46,15 @@ describe("MenuTemplateSchema", () => {
     expect(() => MenuTemplateSchema.parse([build(6)])).toThrow();
   });
 
+  it("接受深度恰好 5 的 submenu", () => {
+    type AnyMenuItem = unknown;
+    const build = (n: number): AnyMenuItem =>
+      n === 0
+        ? { type: "action", id: "leaf", label: "leaf" }
+        : { type: "submenu", label: `L${n}`, submenu: [build(n - 1)] };
+    expect(() => MenuTemplateSchema.parse([build(5)])).not.toThrow();
+  });
+
   it("拒绝 label 超过 256 字符", () => {
     const longLabel = "x".repeat(257);
     expect(() =>
