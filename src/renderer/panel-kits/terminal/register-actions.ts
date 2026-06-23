@@ -22,10 +22,9 @@ export function registerTerminalActions(): () => void {
       category: "Panel",
       enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
       handler: () => {
-        const p = useWorkspaceStore.getState().api?.activePanel;
-        if (p) {
-          useWorkspaceStore.getState().closePanel(p.id);
-        }
+        // alias: 把 close 行为统一委派给 pier.panel.close handler.
+        // 未来给"关闭"加 dirty-check / confirm 时只需改一处.
+        actionRegistry.get("pier.panel.close")?.handler();
       },
       id: "pier.terminal.close",
       metadata: { group: "9_close", iconComponent: X, sortOrder: 1 },
