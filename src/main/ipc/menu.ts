@@ -94,7 +94,9 @@ export function registerMenuIpc(ipcMain: IpcMain): void {
         const menu = Menu.buildFromTemplate(items);
         // menu-will-close 在用户选中 (click 已经 fire) 或关闭 (Esc / 外部点击) 后触发.
         // setImmediate 让 click handler 先 run 完, pickedId 才反映真实选择.
-        menu.on("menu-will-close", () => {
+        // 用 once: single-fire 语义显式 — 即使某些 Electron 版本对嵌套 submenu 多 fire,
+        // resolve 也只发一次, 不留 setImmediate 余炮.
+        menu.once("menu-will-close", () => {
           setImmediate(() => resolve({ actionId: pickedId }));
         });
         const popupOpts: { window: BrowserWindow; x?: number; y?: number } = {
