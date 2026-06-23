@@ -23,6 +23,25 @@ export interface TerminalContextMenuRequest {
 }
 
 /**
+ * Terminal cwd 变化事件 — swift OSC 7 解析后通过 IPC 推送到 renderer.
+ * cwd 是绝对路径 (file:// 前缀已由 swift 端从 URL 提取掉).
+ */
+export interface TerminalCwdEvent {
+  cwd: string;
+  panelId: string;
+}
+
+/**
+ * Terminal title 变化事件 — swift OSC 0/2 解析后通过 IPC 推送到 renderer.
+ * title 是 TUI 应用 (claude / vim / aider) 主动设置的自定义 window title,
+ * descriptor.long 的最高优先级来源.
+ */
+export interface TerminalTitleEvent {
+  panelId: string;
+  title: string;
+}
+
+/**
  * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
  * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
  * 8..15  = bright black .. bright white
@@ -66,7 +85,11 @@ export interface TerminalColors {
 
 export interface TerminalAPI {
   applyTheme(colors: TerminalColors): void;
-  close(panelId: string): Promise<void>;
+  /**
+   * 关闭 terminal panel 的 native NSView. fire-and-forget — swift 端 close 是同步
+   * 调用, 调用方不需要 await. 调用 idempotent (panelId 不存在时 no-op).
+   */
+  close(panelId: string): void;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   focus(panelId: string): void;
   hide(panelId: string): void;
@@ -74,6 +97,17 @@ export interface TerminalAPI {
   onContextMenuRequest: (
     cb: (req: TerminalContextMenuRequest) => void
   ) => () => void;
+  /**
+   * 订阅 terminal cwd 变化. 回调返回 dispose 函数, 调用即取消订阅.
+   * 每次调用建立一个独立 listener — 调用方收到所有 panel 的事件并自行按
+   * panelId 过滤. 多 panel 场景下会有 N 个 listener, 每个 panel 自行 dispose.
+   */
+  onCwdChange(cb: (event: TerminalCwdEvent) => void): () => void;
+  /**
+   * 订阅 terminal title (OSC 0/2) 变化. 回调返回 dispose 函数.
+   * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
+   */
+  onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
   setActivePanelKind: (
     kind: "terminal" | "web",
     panelId: string | null

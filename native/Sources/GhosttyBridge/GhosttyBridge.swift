@@ -190,12 +190,63 @@ final class EventRouterView: NSView {
     }
 }
 
+// MARK: - Terminal event delegate adapter
+
+/// 同时实现 PwdDelegate + TitleDelegate, 每个 terminal 一个实例, 持有 panelId
+/// + browserWindowId 用于事件路由. 利用 libghostty callbackBridge 的动态转型机制
+/// (`as? any Protocol`), 单个 delegate 对象可被同时识别为多个 protocol — 因此可
+/// 挂多个事件类型而 delegate 槽位只占用一个 (TerminalView.delegate 是单一 weak ref).
+///
+/// 后续 bell / focus / close / progress 等都可挂到这个 class — 只需 conform 对应
+/// protocol 并加 forward callback 通道.
+///
+/// 自持 browserWindowId 而非全局反查:panelId 在 Pier 中不保证跨窗口唯一
+/// (workspace-host default layout 都用 "terminal-1"), 用全局 panelId→windowId map
+/// 会被后建立的同名 panel 覆盖, 事件路由到错窗口. delegate 跟随 Terminal 生命周期,
+/// 创建时确定路由目标, 干净无歧义.
+///
+/// weak-set 到 terminalView.delegate, strong-hold 在 Terminal struct 中以保证
+/// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
+@MainActor
+final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
+    TerminalSurfaceTitleDelegate
+{
+    let panelId: String
+    let browserWindowId: Int
+
+    /// 全局 callback: 收到 OSC 7 path 时调用, 把 (browserWindowId, panelId, path)
+    /// 转给 main process.
+    static var forwardPwdCallback: ((Int, String, String) -> Void)?
+
+    /// 全局 callback: 收到 OSC 0/2 title 时调用, 把 (browserWindowId, panelId, title)
+    /// 转给 main process. TUI 应用 (claude / vim / aider) 主动通过 OSC 0/2 写自定义
+    /// title — descriptor.long 的最高优先级来源.
+    static var forwardTitleCallback: ((Int, String, String) -> Void)?
+
+    init(panelId: String, browserWindowId: Int) {
+        self.panelId = panelId
+        self.browserWindowId = browserWindowId
+    }
+
+    func terminalDidChangeWorkingDirectory(_ path: String) {
+        TerminalEventDelegate.forwardPwdCallback?(browserWindowId, panelId, path)
+    }
+
+    func terminalDidChangeTitle(_ title: String) {
+        TerminalEventDelegate.forwardTitleCallback?(browserWindowId, panelId, title)
+    }
+}
+
 // MARK: - Terminal record
 
 private struct Terminal {
     let containerView: NSView
     let terminalView: TerminalView
     let parentWindow: NSWindow
+    /// EventDelegate adapter (strong-hold — terminalView.delegate 是 weak).
+    /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
+    /// weak ref 自动 nil, 不留 dangling.
+    let eventDelegate: TerminalEventDelegate
 }
 
 // MARK: - Bridge implementation
@@ -236,6 +287,10 @@ final class GhosttyBridgeImpl {
 
     // per-window state, 跟 eventRouters 一样用 ObjectIdentifier(window) 作 key
     private var windowStates: [ObjectIdentifier: WindowKeyboardState] = [:]
+
+    /// NSWindow → browserWindowId 映射. setupWindow 时建立, detachWindow 时清理.
+    /// createTerminal 用它给 TerminalEventDelegate 初始化 browserWindowId.
+    private var windowToBrowserWindowId: [ObjectIdentifier: Int] = [:]
 
     func stateFor(window: NSWindow) -> WindowKeyboardState {
         return windowStates[ObjectIdentifier(window)] ?? WindowKeyboardState()
@@ -324,6 +379,9 @@ final class GhosttyBridgeImpl {
         // 初始化 per-window keyboard state (PanelKind 默认 .web — 安全, 不抢 firstResponder)
         windowStates[windowId] = WindowKeyboardState()
 
+        // 记录 browserWindowId 映射 — PwdDelegate 反查 panel→window→browserId 路由 IPC.
+        windowToBrowserWindowId[windowId] = browserWindowId
+
         return true
     }
 
@@ -381,27 +439,17 @@ final class GhosttyBridgeImpl {
         // 时调 webContents.focus() 让 Chromium 自己 dispatch.
     }
 
-    /// 注册 keyboard forward callback: swift NSEvent monitor 捕获 Cmd+key 后, 通过
-    /// 这个 callback 把 (modifier flags, characters) 转给 main process. main 接收
-    /// 后再通过 IPC 通知 renderer 解析 chord 调对应 action.
-    ///
-    /// 整个链路: 用户按 Cmd+T → NSEvent monitor → EventRouterView.routeKeyDown
-    /// → forwardCmdKeyCallback (本回调) → N-API ThreadSafeFunction → main JS →
-    /// win.webContents.send("pier:keybinding:forward") → preload listener → renderer
-    /// 用 chord 找 action 调用 handler.
-    ///
-    /// 这条路径完全绕开 NSView responder chain (Ghostty terminal focus 时它消费
-    /// 所有 key 是 wk.keyDown forward 不可靠的根因).
-    func setKeyboardForwardCallback(_ cb: @escaping (Int, UInt, String) -> Void) {
-        EventRouterView.forwardCmdKeyCallback = cb
-    }
-
-    /// 注册右键事件 forward callback. 与 keyboard 同构: swift EventRouterView 拦到
-    /// terminal 区域 rightMouseDown 后, 通过此 callback 把 (windowId, panelId, x, y)
-    /// 转给 main, main IPC 通知 renderer 弹菜单.
-    func setMouseForwardCallback(_ cb: @escaping (Int, String, Double, Double) -> Void) {
-        EventRouterView.forwardRightMouseCallback = cb
-    }
+    // Forward callback 注册 — 不经 GhosttyBridgeImpl 中间层. 整条 forward 链:
+    //
+    //   swift 输入 (NSEvent monitor / Ghostty delegate)
+    //   → EventRouterView.forwardCmd­Key/RightMouseCallback (输入事件)
+    //   或 TerminalEventDelegate.forwardPwd/TitleCallback (Ghostty 输出事件)
+    //   → C 函数指针 trampoline (C ABI export 持有)
+    //   → N-API ThreadSafeFunction (addon.mm 持有)
+    //   → main JS callback → webContents.send → renderer.
+    //
+    // EventRouterView / TerminalEventDelegate 的 static var 就是 forward 的源头,
+    // C ABI export 直接赋值过去 — 没有"impl method 转一层 static var"的中间步骤.
 
     // MARK: - Terminal lifecycle
 
@@ -420,6 +468,17 @@ final class GhosttyBridgeImpl {
         terminalView.autoresizingMask = [.width, .height]
         terminalView.configuration = TerminalSurfaceOptions(backend: .exec)
         terminalView.controller = controller(for: parent)
+
+        // 挂 EventDelegate — 同时接 OSC 7 (PwdDelegate) + OSC 0/2 (TitleDelegate).
+        // delegate 是 weak ref, Terminal struct strong-hold eventDelegate 保证生命周期.
+        // browserWindowId 创建时固定 — panelId 跨窗口可能同名, 不能靠 panelId 全局反查.
+        let parentWindowId = ObjectIdentifier(parent)
+        let browserWindowId = windowToBrowserWindowId[parentWindowId] ?? -1
+        let eventDelegate = TerminalEventDelegate(
+            panelId: panelId,
+            browserWindowId: browserWindowId
+        )
+        terminalView.delegate = eventDelegate
 
         // Container 只是 frame holder, 自身不绘制. terminalView 内的 IOSurfaceLayer
         // (opaque=true) 已经渲染 terminal 全部像素, 不需要 container 再画 background —
@@ -442,7 +501,8 @@ final class GhosttyBridgeImpl {
         terminals[panelId] = Terminal(
             containerView: container,
             terminalView: terminalView,
-            parentWindow: parent
+            parentWindow: parent,
+            eventDelegate: eventDelegate
         )
 
         // 更新 EventRouter targets (inset 留出 sash 事件通道)
@@ -584,6 +644,7 @@ final class GhosttyBridgeImpl {
         // 释放该 window 的 TerminalController — 内部 session/PTY 列表跨 window 累积
         // 是潜在内存泄漏, swift ARC 让无引用 controller 自动 dealloc.
         controllers.removeValue(forKey: windowId)
+        windowToBrowserWindowId.removeValue(forKey: windowId)
     }
 
     // MARK: - Theme apply
@@ -730,35 +791,70 @@ public func ghosttyBridgeDetachWindow(_ nsWindowPtr: UnsafeMutableRawPointer) {
     }
 }
 
-/// C 函数指针类型: 接收 browserWindowId (Int), modifier flags (raw UInt), characters
-/// (C string UTF-8). addon.mm 包装成 ThreadSafeFunction 让 JS 端能安全接收.
+// C 函数指针 typealias 集中放在一起 — addon.mm 通过 ThreadSafeFunction 包装让
+// JS 端能安全接收. C string 在 @_cdecl 内 withCString 取临时指针调用 cb, cb 返回
+// 后字符串生命周期结束 (addon.mm 端 trampoline 已 std::string 拷贝, 不会 dangling).
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
+public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
+public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
 public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            GhosttyBridgeImpl.shared.setKeyboardForwardCallback { wid, mods, chars in
+            EventRouterView.forwardCmdKeyCallback = { wid, mods, chars in
                 chars.withCString { ptr in cb(wid, mods, ptr) }
             }
         } else {
-            GhosttyBridgeImpl.shared.setKeyboardForwardCallback { _, _, _ in }
+            EventRouterView.forwardCmdKeyCallback = nil
         }
     }
 }
-
-/// C 函数指针: (browserWindowId, panelId C string, x, y).
-public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
 
 @_cdecl("ghostty_bridge_set_mouse_forward_callback")
 public func ghosttyBridgeSetMouseForwardCallback(_ cb: MouseForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            GhosttyBridgeImpl.shared.setMouseForwardCallback { wid, panelId, x, y in
+            EventRouterView.forwardRightMouseCallback = { wid, panelId, x, y in
                 panelId.withCString { ptr in cb(wid, ptr, x, y) }
             }
         } else {
-            GhosttyBridgeImpl.shared.setMouseForwardCallback { _, _, _, _ in }
+            EventRouterView.forwardRightMouseCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_pwd_forward_callback")
+public func ghosttyBridgeSetPwdForwardCallback(_ cb: PwdForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardPwdCallback = { wid, panelId, cwd in
+                panelId.withCString { pidPtr in
+                    cwd.withCString { cwdPtr in
+                        cb(wid, pidPtr, cwdPtr)
+                    }
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardPwdCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_title_forward_callback")
+public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardTitleCallback = { wid, panelId, title in
+                panelId.withCString { pidPtr in
+                    title.withCString { titlePtr in
+                        cb(wid, pidPtr, titlePtr)
+                    }
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardTitleCallback = nil
         }
     }
 }

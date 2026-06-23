@@ -75,38 +75,42 @@ export interface PierWindowAPI {
   workspace: PierWorkspaceAPI;
 }
 
+/**
+ * 订阅 main → renderer IPC 事件, 返回 dispose 函数.
+ *
+ * 所有 forward 类 API (keybinding.onForward / terminal.onCwdChange /
+ * onTitleChange / onContextMenuRequest / preferences.onChanged) 共用此模板.
+ * 加新订阅:一行 (channel, cb).
+ */
+function subscribeIpc<P>(
+  channel: string,
+  cb: (payload: P) => void
+): () => void {
+  const listener = (_event: unknown, payload: P): void => {
+    cb(payload);
+  };
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.off(channel, listener);
+  };
+}
+
 const preferencesApi: PierPreferencesAPI = {
-  onChanged: (cb) => {
-    const listener = (_event: unknown, next: PreferencesSnapshot): void => {
-      cb(next);
-    };
-    ipcRenderer.on("pier:preferences:changed", listener);
-    return () => {
-      ipcRenderer.off("pier:preferences:changed", listener);
-    };
-  },
+  onChanged: (cb) => subscribeIpc("pier:preferences:changed", cb),
   read: () => ipcRenderer.invoke("pier:preferences:read"),
   update: (patch) => ipcRenderer.invoke("pier:preferences:update", patch),
 };
 
 const terminalApi: TerminalAPI = {
   applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
-  close: (panelId) => ipcRenderer.invoke("pier:terminal:close", panelId),
+  close: (panelId) => ipcRenderer.send("pier:terminal:close", panelId),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
-  onContextMenuRequest: (cb) => {
-    const listener = (
-      _event: unknown,
-      req: { panelId: string; x: number; y: number }
-    ) => {
-      cb(req);
-    };
-    ipcRenderer.on("pier:terminal:request-context-menu", listener);
-    return () => {
-      ipcRenderer.off("pier:terminal:request-context-menu", listener);
-    };
-  },
+  onContextMenuRequest: (cb) =>
+    subscribeIpc("pier:terminal:request-context-menu", cb),
+  onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
+  onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFrame: (panelId, frame) =>
@@ -136,18 +140,7 @@ const menuApi: PierMenuAPI = {
 };
 
 const keybindingApi: PierKeybindingAPI = {
-  onForward: (cb) => {
-    const listener = (
-      _event: unknown,
-      chord: { modifierFlags: number; chars: string }
-    ) => {
-      cb(chord);
-    };
-    ipcRenderer.on("pier:keybinding:forward", listener);
-    return () => {
-      ipcRenderer.off("pier:keybinding:forward", listener);
-    };
-  },
+  onForward: (cb) => subscribeIpc("pier:keybinding:forward", cb),
 };
 
 const api: PierWindowAPI = {
