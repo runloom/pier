@@ -1,6 +1,7 @@
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
+import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
 
 interface WorkspaceState {
   addPanel: (opts: { id: string; title: string; component: string }) => void;
@@ -11,6 +12,7 @@ interface WorkspaceState {
   closeAll: () => Promise<void>;
   closeOthers: (panelId: string) => void;
   closePanel: (panelId: string) => void;
+  focusGroup: (direction: "right" | "down" | "left" | "up") => void;
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
   splitPanel: (
@@ -18,6 +20,22 @@ interface WorkspaceState {
     direction: "right" | "below" | "left" | "above"
   ) => void;
 }
+
+/**
+ * 拿 dockview group 的 HTMLElement. dockview 没把 group.element 列入 public API,
+ * cast + instanceof 守卫: 升级 dockview 若改 group 类型, focus 安全降级为 no-op
+ * 而非 crash.
+ */
+function getGroupElement(g: unknown): HTMLElement | null {
+  const el = (g as { element?: HTMLElement } | null)?.element;
+  return el instanceof HTMLElement ? el : null;
+}
+
+/**
+ * = pierTheme.gap (4) + 1. 改 gap 必须同步此常量.
+ * 容忍像素让相邻 group 的边界比较不被 gap 卡掉.
+ */
+const FOCUS_TOL_PX = 5;
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   api: null,
@@ -185,6 +203,55 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         direction,
       },
     });
+  },
+
+  focusGroup: (direction) => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const active = api.activeGroup;
+    if (!active) {
+      return;
+    }
+    if (api.groups.length < 2) {
+      return;
+    }
+
+    const activeEl = getGroupElement(active);
+    if (!activeEl) {
+      return;
+    }
+    const activeRect = activeEl.getBoundingClientRect();
+
+    const candidates = api.groups.map((g) => ({
+      id: g.id,
+      isActive: g.id === active.id,
+      rect: getGroupElement(g)?.getBoundingClientRect() ?? null,
+    }));
+    const targetIdx = pickFocusTarget(
+      activeRect,
+      candidates,
+      direction,
+      FOCUS_TOL_PX
+    );
+    if (targetIdx == null) {
+      return;
+    }
+
+    const targetGroup = api.groups[targetIdx];
+    if (!targetGroup) {
+      return;
+    }
+    const targetPanel = targetGroup.activePanel ?? targetGroup.panels[0];
+    if (!targetPanel) {
+      return;
+    }
+
+    // 写回 dockview 单源 — onDidActivePanelChange 回调会自动联动
+    // DescriptorStore / KeybindingScope / Swift firstResponder.
+    const panel = api.panels.find((p) => p.id === targetPanel.id);
+    panel?.api.setActive();
   },
 
   resetLayout: async () => {
