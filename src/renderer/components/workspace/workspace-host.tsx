@@ -105,7 +105,19 @@ export function WorkspaceHost() {
       event.api.onDidActivePanelChange((panel) => {
         // dockview 是 active 的唯一来源 — 集中推送给 PanelDescriptorStore,
         // 各 sink (DocumentTitle / TitleBar) 据此显示当前聚焦 panel 的呈现信息.
-        usePanelDescriptorStore.getState().setActive(panel?.id ?? null);
+        //
+        // 占位 descriptor:setActive 是同步, 但 panel React 组件的 useEffect
+        // (内含 usePanelDescriptor.upsert) 要 commit 后异步跑. 新建 panel 时
+        // 有一帧 activeId=new 但 descriptors[new]=undefined, sink 退回 "Pier"
+        // 造成闪烁. 先用 panel.title 占位 (panel.title 是 dockview 同步可读的初始值),
+        // panel 自己的 useEffect 跑起来时会用真实计算结果覆盖.
+        const descriptorStore = usePanelDescriptorStore.getState();
+        if (panel && !descriptorStore.descriptors[panel.id]) {
+          descriptorStore.upsert(panel.id, {
+            short: panel.title || "Panel",
+          });
+        }
+        descriptorStore.setActive(panel?.id ?? null);
 
         if (!panel) {
           useKeybindingScope.getState().setActivePanel(null, null, null);

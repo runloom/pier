@@ -9,10 +9,10 @@ import {
  *
  * 优先级:long > path > short.
  *
- * - long 由 panel 主动计算 (terminal 内部已做 sequenceTitle ?? cwd 优先级),
- *   是 sink "应该显示什么"的权威来源.
- * - path 是真实绝对路径, 给没填 long 的 panel 类型兜底 (理论上 terminal 也会
- *   走这里, 但 terminal 一定填 long).
+ * - long 由 panel 主动计算 (terminal 内部做 sequenceTitle ?? cwd ?? undefined),
+ *   是 sink "应该显示什么"的权威来源. 注意 terminal panel 首次 mount 还没收到
+ *   任何 OSC 时 long 是 undefined, 此时 fall through 到 path (也 undefined) 再到 short.
+ * - path 是真实绝对路径, 给只填 path 不填 long 的 panel 类型兜底.
  * - short 是最终兜底, descriptor 契约保证必填.
  *
  * 注意: 不能让 path 排在 long 前面 — 否则 terminal 的 sequenceTitle 永远被

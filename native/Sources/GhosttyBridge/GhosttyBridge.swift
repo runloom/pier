@@ -135,13 +135,18 @@ final class EventRouterView: NSView {
 
 // MARK: - Terminal event delegate adapter
 
-/// 同时实现 PwdDelegate + TitleDelegate, 每个 terminal 一个实例, 持有 panelId 用于
-/// 区分多 panel. 利用 libghostty callbackBridge 的动态转型机制 (`as? any Protocol`),
-/// 单个 delegate 对象可被同时识别为多个 protocol — 因此可挂多个事件类型而 delegate
-/// 槽位只占用一个 (TerminalView.delegate 是单一 weak ref).
+/// 同时实现 PwdDelegate + TitleDelegate, 每个 terminal 一个实例, 持有 panelId
+/// + browserWindowId 用于事件路由. 利用 libghostty callbackBridge 的动态转型机制
+/// (`as? any Protocol`), 单个 delegate 对象可被同时识别为多个 protocol — 因此可
+/// 挂多个事件类型而 delegate 槽位只占用一个 (TerminalView.delegate 是单一 weak ref).
 ///
 /// 后续 bell / focus / close / progress 等都可挂到这个 class — 只需 conform 对应
 /// protocol 并加 forward callback 通道.
+///
+/// 自持 browserWindowId 而非全局反查:panelId 在 Pier 中不保证跨窗口唯一
+/// (workspace-host default layout 都用 "terminal-1"), 用全局 panelId→windowId map
+/// 会被后建立的同名 panel 覆盖, 事件路由到错窗口. delegate 跟随 Terminal 生命周期,
+/// 创建时确定路由目标, 干净无歧义.
 ///
 /// weak-set 到 terminalView.delegate, strong-hold 在 Terminal struct 中以保证
 /// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
@@ -150,10 +155,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceTitleDelegate
 {
     let panelId: String
+    let browserWindowId: Int
 
     /// 全局 callback: 收到 OSC 7 path 时调用, 把 (browserWindowId, panelId, path)
-    /// 转给 main process. browserWindowId 由 GhosttyBridgeImpl 通过 panelId 反查
-    /// (panel 所属 NSWindow → browserWindowId 映射).
+    /// 转给 main process.
     static var forwardPwdCallback: ((Int, String, String) -> Void)?
 
     /// 全局 callback: 收到 OSC 0/2 title 时调用, 把 (browserWindowId, panelId, title)
@@ -161,22 +166,17 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// title — descriptor.long 的最高优先级来源.
     static var forwardTitleCallback: ((Int, String, String) -> Void)?
 
-    init(panelId: String) {
+    init(panelId: String, browserWindowId: Int) {
         self.panelId = panelId
+        self.browserWindowId = browserWindowId
     }
 
     func terminalDidChangeWorkingDirectory(_ path: String) {
-        guard let windowId = GhosttyBridgeImpl.shared.browserWindowId(forPanelId: panelId) else {
-            return
-        }
-        TerminalEventDelegate.forwardPwdCallback?(windowId, panelId, path)
+        TerminalEventDelegate.forwardPwdCallback?(browserWindowId, panelId, path)
     }
 
     func terminalDidChangeTitle(_ title: String) {
-        guard let windowId = GhosttyBridgeImpl.shared.browserWindowId(forPanelId: panelId) else {
-            return
-        }
-        TerminalEventDelegate.forwardTitleCallback?(windowId, panelId, title)
+        TerminalEventDelegate.forwardTitleCallback?(browserWindowId, panelId, title)
     }
 }
 
@@ -231,17 +231,9 @@ final class GhosttyBridgeImpl {
     // per-window state, 跟 eventRouters 一样用 ObjectIdentifier(window) 作 key
     private var windowStates: [ObjectIdentifier: WindowKeyboardState] = [:]
 
-    /// panelId → browserWindowId 映射. createTerminal 时建立, close/closeAll 时清理.
-    /// PwdDelegate 收到 OSC 7 时需要反查 panel 所属窗口以路由 IPC.
-    private var panelIdToBrowserWindowId: [String: Int] = [:]
-
     /// NSWindow → browserWindowId 映射. setupWindow 时建立, detachWindow 时清理.
-    /// createTerminal 用它把 panelId 关联到 browserWindowId.
+    /// createTerminal 用它给 TerminalEventDelegate 初始化 browserWindowId.
     private var windowToBrowserWindowId: [ObjectIdentifier: Int] = [:]
-
-    func browserWindowId(forPanelId panelId: String) -> Int? {
-        return panelIdToBrowserWindowId[panelId]
-    }
 
     func stateFor(window: NSWindow) -> WindowKeyboardState {
         return windowStates[ObjectIdentifier(window)] ?? WindowKeyboardState()
@@ -439,7 +431,13 @@ final class GhosttyBridgeImpl {
 
         // 挂 EventDelegate — 同时接 OSC 7 (PwdDelegate) + OSC 0/2 (TitleDelegate).
         // delegate 是 weak ref, Terminal struct strong-hold eventDelegate 保证生命周期.
-        let eventDelegate = TerminalEventDelegate(panelId: panelId)
+        // browserWindowId 创建时固定 — panelId 跨窗口可能同名, 不能靠 panelId 全局反查.
+        let parentWindowId = ObjectIdentifier(parent)
+        let browserWindowId = windowToBrowserWindowId[parentWindowId] ?? -1
+        let eventDelegate = TerminalEventDelegate(
+            panelId: panelId,
+            browserWindowId: browserWindowId
+        )
         terminalView.delegate = eventDelegate
 
         // Container 只是 frame holder, 自身不绘制. terminalView 内的 IOSurfaceLayer
@@ -472,11 +470,6 @@ final class GhosttyBridgeImpl {
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
             rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset), view: terminalView
         )
-
-        // 建立 panelId → browserWindowId 映射 (PwdDelegate 路由依赖)
-        if let bid = windowToBrowserWindowId[windowId] {
-            panelIdToBrowserWindowId[panelId] = bid
-        }
 
         activePanelId = panelId
 
@@ -547,7 +540,6 @@ final class GhosttyBridgeImpl {
         let parent = term.parentWindow
         term.containerView.removeFromSuperview()
         terminals.removeValue(forKey: panelId)
-        panelIdToBrowserWindowId.removeValue(forKey: panelId)
         if activePanelId == panelId { activePanelId = nil }
 
         let windowId = ObjectIdentifier(parent)
@@ -587,7 +579,6 @@ final class GhosttyBridgeImpl {
         for (panelId, term) in toClose {
             term.containerView.removeFromSuperview()
             terminals.removeValue(forKey: panelId)
-            panelIdToBrowserWindowId.removeValue(forKey: panelId)
         }
         if let activeId = activePanelId, terminals[activeId] == nil {
             activePanelId = nil

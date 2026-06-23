@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WelcomePanel } from "@/components/workspace/welcome-panel.tsx";
 
-// WelcomePanel 不读 props, 测试只需喂满足类型的最小 mock.
-// dockview 的 api/containerApi 在此组件不被调用, 用空对象满足结构即可.
+// WelcomePanel 现在调 usePanelDescriptor, 需要 mock api.id + api.setTitle.
+// dockview 的 containerApi 在此组件不被调用, 用空对象满足结构即可.
 const mockProps = {
-  api: {},
+  api: { id: "welcome-test", setTitle: vi.fn() },
   containerApi: {},
 } as unknown as IDockviewPanelProps;
 

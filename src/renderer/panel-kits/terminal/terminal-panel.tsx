@@ -49,18 +49,19 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
   // 订阅 swift OSC 7 → main → 这里. cwd 变化 setState 触发 descriptor 重新计算.
   // 单 listener 接所有 panel 的事件 — 按 panelId 自行过滤.
+  //
+  // 空字符串过滤:OSC 0/2 / OSC 7 协议允许发空载荷 ("clear title"),
+  // 例如 vim `set notitle` / tmux detach / 自定义 precmd 重置. 若把空串放进 store,
+  // `??` 不捕获空串会让 long="" 一路泄漏到 sink, macOS titlebar 渲染空白条.
+  // 在最上游过滤掉空串 — 保留上一次有效值, 避免回退到 fallback 闪烁.
   useEffect(() => {
     const disposeCwd = window.pier.terminal.onCwdChange((event) => {
-      if (event.panelId === panelId) {
+      if (event.panelId === panelId && event.cwd) {
         setCwd(event.cwd);
       }
     });
-    // 订阅 OSC 0/2 title — TUI 应用 (claude / vim / aider) 主动设的自定义 title.
-    // 退出 TUI 后 shell 通常不会"清空" title, sequenceTitle 会保留直到下一个应用
-    // 写新值; 如果想"退出 claude 后 long 回到 cwd", 可以接 process-exit 事件主动
-    // 清空 — v1 暂不做.
     const disposeTitle = window.pier.terminal.onTitleChange((event) => {
-      if (event.panelId === panelId) {
+      if (event.panelId === panelId && event.title) {
         setSequenceTitle(event.title);
       }
     });

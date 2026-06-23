@@ -29,11 +29,12 @@ interface PanelDescriptorState {
  * 写入方:
  * - panel 端通过 usePanelDescriptor hook 注册/更新/卸载 (upsert/remove)
  * - workspace-host 通过 dockview onDidActivePanelChange 推送 activeId
+ *   (同时同步 upsert 占位 descriptor, 避免 panel useEffect 异步 commit 间隙闪烁)
  *
- * 读取方:
- * - DocumentTitle:document.title (long ?? short)
- * - TitleBar (macOS):自定义标题栏 (同上)
- * - 未来:全局 panel 列表 / breadcrumb / agent 状态总览
+ * 读取方 (经 resolveLong, 优先级 long > path > short):
+ * - DocumentTitle:document.title
+ * - TitleBar (macOS):自定义标题栏
+ * - 未来:全局 panel 列表 / breadcrumb (消费 path) / agent 状态总览
  *
  * 不在 hook 里监听 isActive — active 唯一来源是 dockview, 集中推 store, 防止
  * N 个 panel 各自判断 active 的竞态.

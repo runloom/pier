@@ -41,12 +41,13 @@ export interface TerminalAPI {
   hide(panelId: string): void;
   /**
    * 订阅 terminal cwd 变化. 回调返回 dispose 函数, 调用即取消订阅.
-   * 单个 listener 接收所有 panel 的事件 — 调用方按 panelId 自行过滤.
+   * 每次调用建立一个独立 listener — 调用方收到所有 panel 的事件并自行按
+   * panelId 过滤. 多 panel 场景下会有 N 个 listener, 每个 panel 自行 dispose.
    */
   onCwdChange(cb: (event: TerminalCwdEvent) => void): () => void;
   /**
    * 订阅 terminal title (OSC 0/2) 变化. 回调返回 dispose 函数.
-   * 单 listener 接所有 panel 事件 — 调用方按 panelId 过滤.
+   * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
   setActivePanelKind: (
