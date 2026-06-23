@@ -23,6 +23,7 @@ const CHANNEL_CLEAR = "pier:command-palette-mru:clear";
 const CHANNEL_CHANGED = "pier:command-palette-mru:changed";
 
 let memo: MruState | null = null;
+let memoPromise: Promise<MruState> | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
 function enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -32,12 +33,22 @@ function enqueue<T>(work: () => Promise<T>): Promise<T> {
   return next;
 }
 
-async function ensureLoaded(): Promise<MruState> {
+function ensureLoaded(): Promise<MruState> {
   if (memo) {
-    return memo;
+    return Promise.resolve(memo);
   }
-  memo = await readMruState();
-  return memo;
+  if (memoPromise) {
+    return memoPromise;
+  }
+  memoPromise = readMruState()
+    .then((s) => {
+      memo = s;
+      return s;
+    })
+    .finally(() => {
+      memoPromise = null;
+    });
+  return memoPromise;
 }
 
 function broadcast(state: MruState): void {
@@ -52,30 +63,40 @@ export function registerCommandPaletteMruIpc(ipcMain: IpcMain): void {
   ipcMain.handle(CHANNEL_READ, async () => ensureLoaded());
 
   ipcMain.on(CHANNEL_RECORD, (_event, actionId: string) => {
-    if (typeof actionId !== "string" || actionId.length === 0) {
+    // #6: 拒绝异常长的 actionId, 避免 disk-fill 攻击面.
+    if (
+      typeof actionId !== "string" ||
+      actionId.length === 0 ||
+      actionId.length > 128
+    ) {
       return;
     }
     enqueue(async () => {
-      const current = await ensureLoaded();
-      const next = recordUse(current, actionId, Date.now());
-      memo = next;
+      const prev = await ensureLoaded();
+      const next = recordUse(prev, actionId, Date.now());
       try {
         await writeMruState(next);
       } catch (err) {
-        console.error("[command-palette-mru] 落盘失败:", err);
+        console.error("[command-palette-mru] record 落盘失败, memo 不变:", err);
+        // #1: 落盘失败不更新 memo, 不 broadcast. 渲染器本地乐观状态在下次 read / broadcast 修复.
+        return;
       }
+      memo = next;
       broadcast(next);
     });
   });
 
   ipcMain.handle(CHANNEL_CLEAR, async () =>
     enqueue(async () => {
-      memo = EMPTY_MRU_STATE;
+      await ensureLoaded(); // 让磁盘读完成, 避免后续 read 与本 clear 抢
       try {
         await writeMruState(EMPTY_MRU_STATE);
       } catch (err) {
         console.error("[command-palette-mru] 清空落盘失败:", err);
+        // #2: 让 invoke 抛错, 渲染器 catch 后能本地兜底.
+        throw err;
       }
+      memo = EMPTY_MRU_STATE;
       broadcast(EMPTY_MRU_STATE);
       return EMPTY_MRU_STATE;
     })

@@ -76,16 +76,6 @@ async function ensureDir(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true });
 }
 
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const { stat } = await import("node:fs/promises");
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function readMruState(): Promise<MruState> {
   const path = resolveFilePath();
   if (!existsSync(path)) {
@@ -103,13 +93,17 @@ export async function readMruState(): Promise<MruState> {
 export async function writeMruState(state: MruState): Promise<void> {
   const path = resolveFilePath();
   await ensureDir(path);
-  let release: (() => Promise<void>) | undefined;
+  // 首次写: 文件还不存在时 lockfile.lock 会拒, 所以先 touch 一个空状态再加锁覆盖.
+  if (!existsSync(path)) {
+    await writeFileAtomic(
+      path,
+      `${JSON.stringify(EMPTY_MRU_STATE, null, 2)}\n`
+    );
+  }
+  const release = await lockfile.lock(path);
   try {
-    if (await fileExists(path)) {
-      release = await lockfile.lock(path);
-    }
     await writeFileAtomic(path, `${JSON.stringify(state, null, 2)}\n`);
   } finally {
-    await release?.();
+    await release();
   }
 }
