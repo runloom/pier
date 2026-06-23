@@ -21,6 +21,13 @@ export interface ActionMetadata {
   iconComponent?: LucideIcon;
   keywords?: readonly string[];
   sortOrder?: number;
+  /**
+   * 设置后, 该 action 进同名子菜单. 同 surface 内 submenu() 返回相同字符串的
+   * action 会聚合成一个 MenuItemSubmenu (label = 返回值, children = 按
+   * group/sortOrder 排序). 子菜单本身在父菜单的位置 = 其内第一个 action 的位置.
+   * 命令面板忽略此字段, 永远平铺展示.
+   */
+  submenu?: () => string;
 }
 
 export interface Action {
