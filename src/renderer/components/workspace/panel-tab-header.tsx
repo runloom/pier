@@ -15,17 +15,25 @@
  */
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
-import { type MouseEvent, useCallback } from "react";
+import { type MouseEvent, useCallback, useEffect, useState } from "react";
+import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
-import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
-  // 第二参 _args 在 hook 内未被 useCallback deps 引用 (use-context-menu.ts:_args 标记
-  // unused), 内联对象每次 render 新引用不会导致 baseOnContextMenu 重建. 第三参
-  // options 才需要 useMemo 稳定引用 (Phase 1 不传).
-  const baseOnContextMenu = useContextMenu("dockview-tab", {
-    panelId: props.api.id,
-  });
+  const [title, setTitle] = useState<string>(props.api.title ?? "");
+  useEffect(() => {
+    // dockview onDidTitleChange fire 时把新 title 写入 state, 触发 tab 重渲.
+    const disposable = props.api.onDidTitleChange((e) => {
+      setTitle(e.title);
+    });
+    // mount 时 sync 一次防 onDidTitleChange 未 fire 但 props.api.title 已变.
+    setTitle(props.api.title ?? "");
+    return () => {
+      disposable.dispose();
+    };
+  }, [props.api]);
+
+  const baseOnContextMenu = useContextMenu("dockview-tab");
   const onContextMenu = useCallback(
     (event: MouseEvent) => {
       props.api.setActive();
@@ -43,16 +51,17 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       role="tab"
       tabIndex={0}
     >
-      <span className="dv-default-tab-content">{props.api.title ?? ""}</span>
+      <span className="dv-default-tab-content">{title}</span>
       <button
         aria-label="Close tab"
         className="dv-default-tab-action"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          useWorkspaceStore.getState().closePanel(props.api.id);
+          props.api.setActive();
+          actionRegistry.get("pier.panel.close")?.handler();
         }}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.preventDefault()}
         type="button"
       >
         <X className="size-3" />
