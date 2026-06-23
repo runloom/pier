@@ -380,3 +380,62 @@ dockview onDidActivePanelChange 早于 React TerminalPanel useEffect 调 `termin
 ## 实现优先级建议
 
 按迁移 step 顺序，每 step 单独 PR / commit，验证后再下一步。
+
+---
+
+## Verification Log (2026-06-23)
+
+按 plan task 1-7 全部 committed (commits `feat(keyboard): ...` 系列 8 个). 自动验证 pass:
+- `pnpm typecheck` ✓ 0 errors
+- `pnpm test:unit` ✓ 14/14 (含 keybindings + cmd-palette-keybinding + default-keymap)
+- `pnpm depcruise` ✓ no violations (198 modules)
+- `pnpm build:native` ✓
+
+24 条手测 test matrix 待 user 在 Pier 实测后填写:
+
+| # | 场景 | 结果 | Note |
+|---|---|---|---|
+| T1 | terminal 普通输入 `ls` → shell 接 | TBD | |
+| T2 | terminal 中文 IME 输入 | TBD | |
+| T3 | terminal `ping localhost` + Ctrl+C → SIGINT | TBD | |
+| T4 | terminal `ls /us<Tab>` → 补全 /usr | TBD | |
+| T5 | terminal ↑/↓ → shell history | TBD | |
+| G1 | terminal active + Cmd+T → newTab | TBD | |
+| G2 | terminal active + Cmd+Shift+P → 命令面板 | TBD | |
+| G3 | terminal active + Cmd+W → 关 panel | TBD | |
+| G4 | terminal active + Cmd+` → newTerminal | TBD | |
+| G5 | Cmd+N → 新窗口 | TBD | |
+| G6 | Cmd+Comma → 设置 | TBD | |
+| O1 | 命令面板打开 + ↑/↓ → cmdk navigate | **CORE BUG FIX** TBD | |
+| O2 | 命令面板 + Enter → select | TBD | |
+| O3 | 命令面板 + Esc → 关闭 | TBD | |
+| O4 | 命令面板 + Cmd+T → inert (overlay 阻断 global, 不触发 newTab) | TBD | spec user Q1 选 B |
+| O5 | 命令面板 input 有文字 + Cmd+A → 全选 | TBD | macOS 原生 IBeam |
+| O6 | 命令面板 + Cmd+C/V → 复制粘贴 | TBD | macOS 原生 |
+| W1 | web panel (welcome) active + 字符 key → web DOM 接 | TBD | |
+| W2 | web panel active + Cmd+T → fall through global → newTab | TBD | |
+| TS1 | 同 group tab1 terminal → tab2 welcome 切换 → firstResponder swap WKWebView | TBD | |
+| TS2 | 同 group tab2 welcome → tab1 terminal 切回 → firstResponder swap terminalView | TBD | |
+| TS3 | terminal panel close 后新 active panel firstResponder 跟切 | TBD | |
+| M1 | 多窗口 keyboard browserWindowId 路由 (window-A terminal, window-B welcome, window-B Cmd+T → newTab 在 window-B) | TBD | |
+| M2 | 多窗口 overlay 隔离 (window-A 命令面板 + window-B terminal, window-B Cmd+T 仍触发) | TBD | |
+| P1 | future panel:file-explorer Cmd+S → search action (panel scope) | N/A | 框架已就绪, file-explorer panel 未实现 |
+| P2 | future panel:file-explorer Cmd+T → fall through global → newTab | N/A | 同上 |
+
+User 测完更新该表 + 总结 "回归 bug: <list 或 none>" + "新发现 bug: <list 或 none>".
+
+### 关键设计验证 (自动覆盖, 无需手测)
+
+- ✓ swift state machine: WindowKeyboardState per window (ObjectIdentifier-keyed)
+- ✓ inTerminalMode = activePanelKind=.terminal && overlayCount==0
+- ✓ applyFirstResponder 按 state 重算 (不用 savedFirstResponder restore)
+- ✓ setOverlayActive ±1 overlayCount + clamp ≥0 defensive
+- ✓ NSEvent monitor routeKeyDown 加 inTerminalMode gate, web mode 全 pass through
+- ✓ createTerminal 末尾 if activeTerminalPanelId == panelId 补 applyFirstResponder (反例 6 race 修复)
+- ✓ web scope store: flat overlayStack (支持 nested) + activePanelKind/Component/Id
+- ✓ panel-registry panelKindOf default 'web' (未知 panel 安全 fallback)
+- ✓ keybinding registry findInScope: user-then-default 迭代顺序保留
+- ✓ resolve 优先级: overlay 阻断 → panel + global fall-through
+- ✓ DEFAULT_KEYMAP 全标 scope: 'global' (行为等价)
+- ✓ command-palette mount/unmount 同时 push/pop 双 store (overlay scope + terminal-overlay overlayCount)
+- ✓ dual-path keyboard (路径 1 DOM keydown + 路径 2 IPC chord forward) 都过同 pickAction
