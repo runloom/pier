@@ -1,16 +1,14 @@
-<!-- App Store 母版: 1024×1024 全幅纸底 (无 alpha 无圆角, 上传规范要求), macOS 套圆角遮罩.
-     mark 几何按"可见区 824×824"中心对齐: translate(100,100) scale(1.609375) → 源 viewBox 512 → 824 可见区.
-     方向 C "The Berth" · 紫罗兰单一强调色 (#8a76f0 系) + 近黑底渐变 (#1c1a24 → #0b0a10). -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Pier app icon master">
+<!-- Pier app icon · Apple HIG / macOS 第三方 app 官方模板:
+       canvas 1024 / visible 824×824 / margin 100 each side
+     dock cell 里 icon 跟原生邻居 (Finder/Safari/Music...) 视觉等大, 不出现"大一圈".
+     几何完全照搬设计师 pier-berth.svg (viewBox 512), 通过 translate(100,100) scale(1.609375)
+     映射到 824 可见区. stroke/rim/ishadow 比例保持不变, 只是整体缩小到 824. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Pier app icon — 泊位">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1c1a24"/>
+      <stop offset="0" stop-color="#1f1c28"/>
       <stop offset="1" stop-color="#0b0a10"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55">
-      <stop offset="0" stop-color="#8a76f0" stop-opacity="0.4"/>
-      <stop offset="1" stop-color="#8a76f0" stop-opacity="0"/>
-    </radialGradient>
     <linearGradient id="vio" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#c6b8ff"/>
       <stop offset="1" stop-color="#6a51e0"/>
@@ -20,14 +18,26 @@
       <stop offset="0.55" stop-color="#9d8bff"/>
       <stop offset="1" stop-color="#6a51e0"/>
     </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0.06" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ishadow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.9" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.26"/>
+    </linearGradient>
+    <clipPath id="clip"><rect width="512" height="512" rx="112"/></clipPath>
   </defs>
-  <rect width="1024" height="1024" fill="url(#bg)"/>
-  <rect width="1024" height="1024" fill="url(#glow)"/>
   <g transform="translate(100,100) scale(1.609375)">
-    <path d="M 176 158 L 176 322 L 336 322 L 336 158" fill="none" stroke="url(#vio)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="256" cy="232" r="58" fill="#8a76f0" fill-opacity="0.16"/>
-    <circle cx="256" cy="232" r="40" fill="url(#orb)"/>
-    <ellipse cx="256" cy="356" rx="92" ry="7" fill="#8a76f0" fill-opacity="0.32"/>
-    <ellipse cx="256" cy="378" rx="60" ry="5" fill="#8a76f0" fill-opacity="0.18"/>
+    <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+    <g clip-path="url(#clip)">
+      <rect width="512" height="512" fill="url(#rim)"/>
+      <rect width="512" height="512" fill="url(#ishadow)"/>
+    </g>
+    <path d="M 124 112 L 124 376 L 388 376 L 388 112" fill="none" stroke="url(#vio)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="256" cy="240" r="92" fill="#8a76f0" fill-opacity="0.16"/>
+    <circle cx="256" cy="240" r="64" fill="url(#orb)"/>
+    <ellipse cx="256" cy="406" rx="138" ry="9" fill="#8a76f0" fill-opacity="0.32"/>
+    <ellipse cx="256" cy="432" rx="90" ry="7" fill="#8a76f0" fill-opacity="0.18"/>
   </g>
 </svg>

@@ -93,6 +93,10 @@
   }
   .hero .tile svg{display:block;width:100%;height:100%}
   .hero .fname{font:500 12px/1 var(--font-mono);letter-spacing:0.03em;color:var(--muted)}
+  .pair{display:flex;flex-direction:column;gap:18px;align-items:center}
+  .tile-bare{width:200px;height:200px;border-radius:28px;display:grid;place-items:center;background:#eceaf2}
+  .tile-bare img{width:200px;height:200px;display:block}
+  .cap{font:500 11px/1.5 var(--font-mono);letter-spacing:0.02em;color:var(--muted);text-align:center;margin-top:8px}
 
   .meta{display:flex;flex-direction:column;align-items:flex-start;gap:0}
   .meta .num{font:600 12px/1 var(--font-mono);letter-spacing:0.18em;color:var(--accent);margin-bottom:12px}
@@ -164,9 +168,6 @@
     <!-- Direction B · Panels -->
     <radialGradient id="b-glow" cx="0.62" cy="0.3" r="0.6"><stop offset="0" stop-color="#8a76f0" stop-opacity="0.4"/><stop offset="1" stop-color="#8a76f0" stop-opacity="0"/></radialGradient>
     <linearGradient id="b-vio" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a594ff"/><stop offset="1" stop-color="#6850dd"/></linearGradient>
-    <!-- Direction C · Berth -->
-    <radialGradient id="c-glow" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#8a76f0" stop-opacity="0.4"/><stop offset="1" stop-color="#8a76f0" stop-opacity="0"/></radialGradient>
-    <radialGradient id="c-orb" cx="0.5" cy="0.42" r="0.6"><stop offset="0" stop-color="#efeaff"/><stop offset="0.55" stop-color="#9d8bff"/><stop offset="1" stop-color="#6a51e0"/></radialGradient>
 
     <symbol id="ico-a" viewBox="0 0 512 512">
       <rect width="512" height="512" rx="112" fill="url(#a-bg)"/>
@@ -204,14 +205,14 @@
       <rect x="216" y="354" width="150" height="9" rx="4.5" fill="#3a3450"/>
     </symbol>
 
+    <radialGradient id="c-orb" cx="0.5" cy="0.42" r="0.6"><stop offset="0" stop-color="#efeaff"/><stop offset="0.55" stop-color="#9d8bff"/><stop offset="1" stop-color="#6a51e0"/></radialGradient>
     <symbol id="ico-c" viewBox="0 0 512 512">
       <rect width="512" height="512" rx="112" fill="url(#a-bg)"/>
-      <rect width="512" height="512" rx="112" fill="url(#c-glow)"/>
-      <path d="M 176 158 L 176 322 L 336 322 L 336 158" fill="none" stroke="url(#a-vio)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="256" cy="232" r="58" fill="#8a76f0" fill-opacity="0.16"/>
-      <circle cx="256" cy="232" r="40" fill="url(#c-orb)"/>
-      <ellipse cx="256" cy="356" rx="92" ry="7" fill="#8a76f0" fill-opacity="0.32"/>
-      <ellipse cx="256" cy="378" rx="60" ry="5" fill="#8a76f0" fill-opacity="0.18"/>
+      <path d="M 124 112 L 124 376 L 388 376 L 388 112" fill="none" stroke="url(#a-vio)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="256" cy="240" r="92" fill="#8a76f0" fill-opacity="0.16"/>
+      <circle cx="256" cy="240" r="64" fill="url(#c-orb)"/>
+      <ellipse cx="256" cy="406" rx="138" ry="9" fill="#8a76f0" fill-opacity="0.32"/>
+      <ellipse cx="256" cy="432" rx="90" ry="7" fill="#8a76f0" fill-opacity="0.18"/>
     </symbol>
   </defs>
 </svg>
@@ -280,15 +281,23 @@
     <!-- ── C ── -->
     <article class="card">
       <div class="hero">
-        <div class="tile"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg></div>
-        <span class="fname">icons/pier-berth.svg</span>
+        <div class="pair">
+          <div>
+            <div class="tile"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg></div>
+            <div class="cap">通用 / iOS · 满版<br>pier-berth.svg</div>
+          </div>
+          <div>
+            <div class="tile-bare"><img src="icons/pier-berth-macos.svg" alt="Pier macOS 桌面图标" width="200" height="200"/></div>
+            <div class="cap">macOS 桌面 · 留白 squircle 投影<br>pier-berth-macos.svg</div>
+          </div>
+        </div>
       </div>
       <div class="meta">
         <div class="num">C — 泊位</div>
         <h3>The Berth</h3>
         <div class="zh">cradle · moored node · calm</div>
-        <p class="desc">最抽象、最安静的一支：一个 <b>U 形泊位</b>用单一笔触托起一颗发光的<b>节点</b>——被妥善停泊的 agent。大量留白、单线条、纯几何，缩放极其稳健，气质冷静克制，适合追求长期耐看的标志。</p>
-        <div class="tags"><span class="tag">极简抽象</span><span class="tag">缩放稳健</span><span class="tag">冷静耐看</span></div>
+        <p class="desc">放大的 U 形泊位托起发光节点，水面落下柔和倒影。按 macOS 规范出两版：<b>满版</b>给 iOS / 通用（系统自动加圆角与投影）；<b>桌面版</b>带约 10% 安全区留白、连续圆角 <b>squircle</b>、顶部边缘高光、底部内阴影与烘焙投影——和 Dock 邻居对齐。</p>
+        <div class="tags"><span class="tag">macOS 材质</span><span class="tag">squircle 留白</span><span class="tag">边缘高光</span></div>
         <div class="ladder">
           <div class="px s128"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg><span>128</span></div>
           <div class="px s64"><svg viewBox="0 0 512 512"><use href="#ico-c"/></svg><span>64</span></div>
@@ -307,6 +316,7 @@
       <a href="icons/pier-pier.svg">pier-pier.svg</a>
       <a href="icons/pier-panels.svg">pier-panels.svg</a>
       <a href="icons/pier-berth.svg">pier-berth.svg</a>
+      <a href="icons/pier-berth-macos.svg">pier-berth-macos.svg</a>
     </div>
   </footer>
 </div>
