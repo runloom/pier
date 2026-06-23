@@ -102,9 +102,12 @@ export function registerMenuIpc(ipcMain: IpcMain): void {
         const popupOpts: { window: BrowserWindow; x?: number; y?: number } = {
           window: win,
         };
-        if (typeof options.x === "number" && typeof options.y === "number") {
-          popupOpts.x = Math.round(options.x);
-          popupOpts.y = Math.round(options.y);
+        // 必须 isFinite 否则 NaN/Infinity 通过 typeof 守卫, Math.round(NaN)=NaN 传给
+        // Menu.popup 行为未定义 (部分平台让 popup 永不弹出, menu-will-close 不 fire,
+        // 这个 IPC promise 永久挂起).
+        if (Number.isFinite(options.x) && Number.isFinite(options.y)) {
+          popupOpts.x = Math.round(options.x as number);
+          popupOpts.y = Math.round(options.y as number);
         }
         menu.popup(popupOpts);
       });
