@@ -25,16 +25,47 @@ function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
   });
 }
 
+/**
+ * 路径 basename — POSIX 形式 (终端始终在 macOS).
+ * 末尾 '/' 容错: "/" → "/"; "/a/b/" → "b"; "/a/b" → "b"; "" → "Terminal".
+ */
+export function basename(path: string): string {
+  if (path === "" || path === "/") {
+    return path === "" ? "Terminal" : "/";
+  }
+  const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
+  const idx = trimmed.lastIndexOf("/");
+  return idx === -1 ? trimmed : trimmed.slice(idx + 1);
+}
+
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
   const anchorRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cwd, setCwd] = useState<string | null>(null);
 
-  // 注册呈现信息 — 当前固定 "Terminal", 后续接入 OSC 0/2 / 前台进程名 / cwd 时
-  // 只换这里传入的字符串, hook / store / sink 不变.
-  usePanelDescriptor(api, { short: "Terminal", long: "Terminal" });
+  // 订阅 swift OSC 7 → main → 这里. cwd 变化 setState 触发 descriptor 重新计算.
+  // 单 listener 接所有 panel 的事件 — 按 panelId 自行过滤.
+  useEffect(() => {
+    const dispose = window.pier.terminal.onCwdChange((event) => {
+      if (event.panelId === panelId) {
+        setCwd(event.cwd);
+      }
+    });
+    return dispose;
+  }, [panelId]);
+
+  // 把 cwd 翻译成 descriptor 三字段:
+  // - short: basename(cwd) — tab strip
+  // - long:  cwd            — sink 长形式 (resolveLong 会优先用 path)
+  // - path:  cwd            — sink 优先字段, 也是未来 breadcrumb / status bar 用的数据
+  // 没 cwd 时 fallback "Terminal" (只填 short, 不传 long/path).
+  usePanelDescriptor(
+    api,
+    cwd ? { short: basename(cwd), long: cwd, path: cwd } : { short: "Terminal" }
+  );
 
   useLayoutEffect(() => {
     const parent = parentRef.current?.parentElement;
