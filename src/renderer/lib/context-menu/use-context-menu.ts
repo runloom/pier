@@ -14,6 +14,11 @@ import { type MouseEvent, useCallback } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { buildMenuEntries } from "./build-entries.ts";
 
+/**
+ * useContextMenu options. IMPORTANT: 调用方若传入 options 对象, 必须用 useMemo
+ * 包裹保证稳定引用 — 否则每次 render 都产生新 onContextMenu 引用, 触发挂载的
+ * panel/tab 组件 re-render. Phase 1 暂无 caller 传 options, 留作未来 contract.
+ */
 export interface UseContextMenuOptions {
   /**
    * 自定义触发坐标 — 默认用 React event.clientX / clientY (BrowserWindow 内坐标).
@@ -62,23 +67,29 @@ async function popupAndDispatch(
   if (template.length === 0) {
     return;
   }
-  try {
-    const result = await window.pier.menu.popup(template, coords);
-    if (!result.actionId) {
-      return;
-    }
-    const action = actionRegistry.get(result.actionId);
-    if (!action) {
-      console.warn(
-        `[menu] action ${result.actionId} not found (registered after menu open?)`
-      );
-      return;
-    }
-    if (action.enabled?.() === false) {
-      return;
-    }
-    await action.handler();
-  } catch (err) {
-    console.error(`[menu] popup ${surface} failed:`, err);
+
+  const result = await window.pier.menu
+    .popup(template, coords)
+    .catch((err: unknown) => {
+      console.error(`[menu] popup ${surface} failed:`, err);
+      return null;
+    });
+  if (!result?.actionId) {
+    return;
   }
+
+  const action = actionRegistry.get(result.actionId);
+  if (!action) {
+    console.warn(
+      `[menu] action ${result.actionId} not found (registered after menu open?)`
+    );
+    return;
+  }
+  if (action.enabled?.() === false) {
+    return;
+  }
+
+  await Promise.resolve(action.handler()).catch((err: unknown) => {
+    console.error(`[menu] action ${result.actionId} threw:`, err);
+  });
 }
