@@ -18,3 +18,20 @@ export const panelComponents: Record<
   terminal: TerminalPanel,
   welcome: WelcomePanel,
 };
+
+/**
+ * Panel kit 类型元数据 — keyboard 路由用。
+ * - 'terminal': panel 内是 Ghostty native NSView, 需要 firstResponder = terminalView
+ * - 'web': panel 内全是 web DOM, firstResponder = WKWebView
+ *
+ * 新加 panel kit 时在这里登记一行。未知 panel default 'web' 安全
+ * (不会让 terminal 抢 firstResponder)。
+ */
+export const panelKinds = {
+  terminal: "terminal",
+  welcome: "web",
+} as const;
+
+export function panelKindOf(component: string): "terminal" | "web" {
+  return (panelKinds as Record<string, "terminal" | "web">)[component] ?? "web";
+}
