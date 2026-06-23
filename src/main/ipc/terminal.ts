@@ -38,6 +38,14 @@ interface NativeAddon {
       | null
   ): void;
   setOverlayActive(parentHandle: Buffer, active: boolean): void;
+  /**
+   * 注册 PWD forward callback. swift TerminalSurfacePwdDelegate 收到 OSC 7 后调用,
+   * 传 (browserWindowId, panelId, cwd). 用 windowId 路由到对应 BrowserWindow 的
+   * renderer (多窗口下避免广播污染). 传 null 解绑.
+   */
+  setPwdForwardCallback(
+    cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
+  ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
   showTerminal(panelId: string): void;
 }
@@ -98,6 +106,28 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     } catch (err) {
       // window 在 send 瞬间销毁等 edge case — 不影响其他功能
       console.error("[pier-key-forward] send failed:", err);
+    }
+  });
+
+  // 注册 PWD forward callback: swift TerminalSurfacePwdDelegate 收到 OSC 7 后,
+  // 通过 ThreadSafeFunction 调到这里. callback 收到 (browserWindowId, panelId, cwd),
+  // 用 windowId 精准路由到对应 BrowserWindow 的 renderer.
+  //
+  // 这是 terminal panel tab title / 系统 title 反映 cwd 的唯一通道. 不依赖
+  // proc_pidinfo polling — Ghostty 已完整解析 OSC 7, 被动接收即可.
+  addon?.setPwdForwardCallback((browserWindowId, panelId, cwd) => {
+    try {
+      const targetWindow = BrowserWindow.fromId(browserWindowId);
+      if (!targetWindow || targetWindow.isDestroyed()) {
+        return;
+      }
+      const wc = targetWindow.webContents;
+      if (wc.isDestroyed()) {
+        return;
+      }
+      wc.send("pier:terminal:cwd-change", { panelId, cwd });
+    } catch (err) {
+      console.error("[pier-cwd-forward] send failed:", err);
     }
   });
 
