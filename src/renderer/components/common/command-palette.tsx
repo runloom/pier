@@ -30,49 +30,56 @@ import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import {
+  CATEGORY_META,
+  compareActions,
+  compareGroups,
+  UNKNOWN_ORDER,
+} from "@/lib/command-palette/frecency.ts";
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
-
-interface CategoryMeta {
-  /** 用作 i18n key: commandPalette.category.${labelKey} */
-  labelKey: string;
-  order: number;
-}
-
-// 新增分类时这里加一行 + i18n 加 commandPalette.category.<key>。未注册的分类
-// 兜底排在末尾, label 直接用 raw category 字符串。
-const CATEGORY_META: Record<string, CategoryMeta> = {
-  View: { order: 0, labelKey: "view" },
-  Workspace: { order: 1, labelKey: "workspace" },
-  Panel: { order: 2, labelKey: "panel" },
-  Window: { order: 3, labelKey: "window" },
-  Settings: { order: 4, labelKey: "settings" },
-};
-
-const UNKNOWN_ORDER = Object.keys(CATEGORY_META).length;
-
-function categoryRank(category: string): number {
-  return CATEGORY_META[category]?.order ?? UNKNOWN_ORDER;
-}
 
 interface ActionGroup {
   actions: Action[];
   category: string;
 }
 
-function groupActions(actions: readonly Action[]): ActionGroup[] {
+export function groupActionsForPalette(
+  actions: readonly Action[],
+  frecencyMap: ReadonlyMap<string, number>,
+  query: string
+): ActionGroup[] {
   const map = new Map<string, Action[]>();
   for (const action of actions) {
     const list = map.get(action.category) ?? [];
     list.push(action);
     map.set(action.category, list);
   }
-  return Array.from(map.entries())
-    .map(([category, list]) => ({ category, actions: list }))
-    .sort((a, b) => categoryRank(a.category) - categoryRank(b.category));
+  const groups = Array.from(map.entries()).map(([category, list]) => ({
+    category,
+    actions: list,
+  }));
+
+  if (query.length > 0) {
+    // 有搜索时不重排组内, 让 cmdk fuzzy score 接管
+    return groups.sort(
+      (a, b) =>
+        (CATEGORY_META[a.category]?.order ?? UNKNOWN_ORDER) -
+        (CATEGORY_META[b.category]?.order ?? UNKNOWN_ORDER)
+    );
+  }
+
+  // 入参可能已被 actionRegistry.list 按 sortOrder 预排; 这里再排一次保证函数自洽, 不依赖上游顺序.
+  for (const g of groups) {
+    g.actions.sort((a, b) => compareActions(a, b, frecencyMap));
+  }
+  return groups.sort((ga, gb) =>
+    compareGroups(ga.actions, gb.actions, frecencyMap)
+  );
 }
 
 function useActions(): readonly Action[] {
@@ -116,11 +123,12 @@ export function CommandPalette() {
   const t = useT();
   const controller = useCommandPaletteController();
   const actions = useActions();
-  const groups = groupActions(actions);
   const keybindingLabels = useKeybindingLabels();
+  const frecencyMap = useCommandPaletteMru((s) => s.frecencyMap);
 
   // 本地 UI 态: 与 controller 保持同步, 但 cmdk 需要 controlled value/query 引用稳定。
   const [query, setQuery] = useState("");
+  const groups = groupActionsForPalette(actions, frecencyMap, query);
   const [selectedValue, setSelectedValue] = useState("");
   const lastRequestIdRef = useRef(-1);
   // null = 未 accept; 非 null = 已 accept (值是 item id)。
@@ -262,6 +270,9 @@ export function CommandPalette() {
     const before = useCommandPaletteController.getState().requestId;
     try {
       await action.handler();
+      if (!action.metadata?.excludeFromMru) {
+        useCommandPaletteMru.getState().recordUse(action.id);
+      }
       const after = useCommandPaletteController.getState();
       // handler 没开 quick-pick (requestId 没变) 且仍在 commands 模式: 关闭面板。
       if (after.requestId === before && after.mode === "commands") {

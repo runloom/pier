@@ -5,6 +5,8 @@
 import type { LucideIcon } from "lucide-react";
 
 export interface ActionMetadata {
+  /** true = 执行后不计入命令面板 MRU。仅给 clearRecent 这类元命令用 */
+  excludeFromMru?: boolean;
   /**
    * 菜单/命令面板内分段 key. 不同 group 之间渲染时自动插 separator;
    * 同 group 内按 sortOrder 升序. 字典序排列, 数字前缀控制大段顺序:

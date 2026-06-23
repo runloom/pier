@@ -4,12 +4,14 @@ import { App } from "./App.tsx";
 import "./app/globals.css";
 import { initI18n } from "./i18n/index.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
+import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
 import { registerConfigActions } from "./lib/actions/config-actions.ts";
 import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
+import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
@@ -29,11 +31,13 @@ async function bootstrap() {
 
   window.pier?.terminal?.setup?.()?.catch(() => undefined);
   installDragWatcher();
+  initCommandPaletteMru().catch(() => undefined);
 
   registerConfigActions();
   registerCommandPaletteAction();
   registerPanelActions();
   registerSettingsActions();
+  registerCommandPaletteMruAction();
   registerTerminalActions();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
 

@@ -8,6 +8,7 @@ import {
   nativeImage,
 } from "electron";
 import { installCsp } from "./csp.ts";
+import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
@@ -172,6 +173,7 @@ app.whenReady().then(() => {
   registerTerminalIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
+  registerCommandPaletteMruIpc(ipcMain);
 
   // 首窗口 id 固定 "main".
   windowManager.create({ id: "main" });

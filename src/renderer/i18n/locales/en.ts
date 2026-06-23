@@ -77,6 +77,7 @@ export const en = {
       selectStyle: "Select Style",
       selectLanguage: "Select Display Language",
       resetLayout: "Reset Layout",
+      clearRecent: "Clear command palette history",
     },
   },
   contextMenu: {
