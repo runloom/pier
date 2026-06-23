@@ -148,6 +148,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
       api.removePanel(p);
     }
+    // 同 closePanel/closeActivePanel: 全 panel 关闭等价于"想退出当前 workspace",
+    // 留空 dockview 用户无路可走 (Cmd+T 才能恢复). 一律 close window 保持对称.
+    closeCurrentWindow().catch((err) => {
+      console.error("[workspace] closeCurrentWindow failed:", err);
+    });
   },
 
   splitPanel: (panelId, direction) => {
@@ -160,8 +165,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     const component = panel.view.contentComponent;
-    const prefix = component === "terminal" ? "terminal" : component;
-    const newId = `${prefix}-${Date.now()}`;
+    const newId = `${component}-${Date.now()}`;
     api.addPanel({
       id: newId,
       component,
