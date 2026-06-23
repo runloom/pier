@@ -33,6 +33,7 @@ import { useCommandPaletteController } from "@/lib/command-palette/controller.ts
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
 
 interface CategoryMeta {
@@ -128,13 +129,19 @@ export function CommandPalette() {
   const isOpen = controller.open;
   const requestId = controller.requestId;
 
-  // 通知 native 层 overlay 打开/关闭, 以便暂停终端事件路由。
+  // 通知 native 层 overlay 打开/关闭, 以便暂停终端事件路由;
+  // 同时 push scope id 进 keybinding scope 栈, 让 overlay 期间 panel/global
+  // scope 被阻断 (spec user Q1 选项 B: overlay 内未注册的快捷键不 fall through)。
   useEffect(() => {
     if (!isOpen) {
       return;
     }
     pushOverlay();
-    return () => popOverlay();
+    useKeybindingScope.getState().pushOverlay("overlay:command-palette");
+    return () => {
+      useKeybindingScope.getState().popOverlay("overlay:command-palette");
+      popOverlay();
+    };
   }, [isOpen]);
 
   // 新一轮 session (open 或 openQuickPick): 重置 query / selectedValue / accepted flag。
