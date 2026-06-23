@@ -6,9 +6,10 @@ import {
 } from "dockview-react";
 import { useCallback } from "react";
 import "dockview-react/dist/styles/dockview.css";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { AddPanelAction } from "./add-panel-action.tsx";
-import { panelComponents } from "./panel-registry.ts";
+import { panelComponents, panelKindOf } from "./panel-registry.ts";
 
 /**
  * WorkspaceHost — dockview-react 的唯一业务边界。
@@ -94,6 +95,22 @@ export function WorkspaceHost() {
             console.error("[workspace] toJSON failed:", err);
           }
         }, SAVE_DEBOUNCE_MS);
+      });
+
+      // Active panel 变化 (含同 group 切 tab, panel 创建/删除导致 active 切换) →
+      // 同步 scopeStore + 通过 IPC 通知 swift firstResponder swap. panel 可能为
+      // null (无 active panel), 此时 fall back 到 "web" + null panelId 防 terminal
+      // 抢 firstResponder. getState() 是 imperative 用法, 不是 React hook.
+      event.api.onDidActivePanelChange((panel) => {
+        if (!panel) {
+          useKeybindingScope.getState().setActivePanel(null, null, null);
+          window.pier?.terminal?.setActivePanelKind?.("web", null);
+          return;
+        }
+        const component = panel.view.contentComponent;
+        const kind = panelKindOf(component);
+        useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
+        window.pier?.terminal?.setActivePanelKind?.(kind, panel.id);
       });
 
       // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时
