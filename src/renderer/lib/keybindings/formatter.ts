@@ -45,6 +45,11 @@ export function formatChord(chord: KeyChord): string {
   if (chord.cmdOrCtrl) {
     parts.push(mac ? "⌘" : "Ctrl");
   }
+  if (chord.ctrl) {
+    // 独立 Ctrl 物理键 — mac 上显示 ⌃ 与 ⌘ 区分; non-mac 上 chord.ctrl
+    // 永远 false (parseChord 归一化), 这里走不到, 保持对称写 Ctrl.
+    parts.push(mac ? "⌃" : "Ctrl");
+  }
   if (chord.alt) {
     parts.push(mac ? "⌥" : "Alt");
   }

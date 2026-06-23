@@ -38,8 +38,8 @@ interface ModState {
 }
 
 /**
- * 单个 modifier handler — 检测重复 + 应用副作用. 返回 true 表示成功消费,
- * 调用方需 slice 掉前缀.
+ * 单个 modifier handler — 检测重复 + 应用副作用更新 state. 重复修饰符抛错;
+ * 不返回值. consumeModifier 负责检测前缀匹配并 slice.
  */
 type ModHandler = (state: ModState, isMac: boolean, keys: string) => void;
 
@@ -104,7 +104,7 @@ function consumeModifier(
   return null;
 }
 
-export function parseChord(keys: string, isMac = false): KeyChord {
+export function parseChord(keys: string, isMac: boolean): KeyChord {
   const state: ModState = {
     cmdOrCtrl: false,
     ctrl: false,
