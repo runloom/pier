@@ -699,6 +699,7 @@ body {
 
 .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
   width: 5px;
+  z-index: 1;
 }
 
 .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::before {
@@ -720,6 +721,7 @@ body {
 
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
   height: 5px;
+  z-index: 1;
 }
 
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::before {

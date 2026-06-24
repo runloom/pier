@@ -218,10 +218,12 @@ final class EventRouterView: NSView {
 /// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
 @MainActor
 final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
-    TerminalSurfaceTitleDelegate
+    TerminalSurfaceTitleDelegate,
+    TerminalSurfaceScrollbarDelegate
 {
     let panelId: String
     let browserWindowId: Int
+    weak var scrollbarSink: TerminalScrollbarStateSink?
 
     /// 全局 callback: 收到 OSC 7 path 时调用, 把 (browserWindowId, panelId, path)
     /// 转给 main process.
@@ -244,6 +246,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     func terminalDidChangeTitle(_ title: String) {
         TerminalEventDelegate.forwardTitleCallback?(browserWindowId, panelId, title)
     }
+
+    func terminalDidUpdateScrollbar(_ state: TerminalScrollbarState) {
+        scrollbarSink?.terminalScrollbarStateDidChange(state)
+    }
 }
 
 // MARK: - Terminal record
@@ -265,10 +271,13 @@ final class GhosttyBridgeImpl {
     static let shared = GhosttyBridgeImpl()
 
     /// EventRouter 命中矩形向内收缩的像素数, 给 dockview sash (4px) 留出事件通道。
+    /// 终端 scrollbar 必须绘制在这个 inset 内侧, 避免与 sash 抢同一条边界。
     private static let hitInset: CGFloat = 5
 
     private var terminals: [String: Terminal] = [:]
     private var eventRouters: [ObjectIdentifier: EventRouterView] = [:]  // per-window
+    private var terminalBackgrounds: [ObjectIdentifier: NSColor] = [:]
+    private var terminalForegrounds: [ObjectIdentifier: NSColor] = [:]
     /// per-window TerminalController. window close 时通过 detachWindow 释放 — 避免
     /// 旧 controller 内 session/PTY 列表跨 window 累积 (singleton 不会随 window
     /// 销毁而清理).
@@ -316,10 +325,36 @@ final class GhosttyBridgeImpl {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }
         let c = TerminalController { builder in
-            builder.withBackgroundOpacity(1.0)
+            Self.configureDefaultTerminalAppearance(&builder)
         }
         controllers[windowId] = c
         return c
+    }
+
+    nonisolated static func configureDefaultTerminalAppearance(
+        _ builder: inout TerminalConfiguration.Builder
+    ) {
+        let terminalPaddingX = 6
+        let terminalPaddingY = 4
+        builder.withBackgroundOpacity(1.0)
+        builder.withWindowPaddingX(terminalPaddingX)
+        builder.withWindowPaddingY(terminalPaddingY)
+        builder.withCustom("scrollbar", "system")
+    }
+
+    nonisolated private static func terminalColor(from value: String) -> NSColor? {
+        let hex = stripHash(value)
+        guard hex.count == 6, let rgb = Int(hex, radix: 16) else { return nil }
+        return NSColor(
+            calibratedRed: CGFloat((rgb >> 16) & 0xff) / 255,
+            green: CGFloat((rgb >> 8) & 0xff) / 255,
+            blue: CGFloat(rgb & 0xff) / 255,
+            alpha: 1
+        )
+    }
+
+    nonisolated private static func terminalBackgroundColor(from value: String) -> NSColor? {
+        terminalColor(from: value)
     }
 
     // MARK: - Window setup (PIER: new API)
@@ -491,8 +526,8 @@ final class GhosttyBridgeImpl {
 
                 let windowId = ObjectIdentifier(parent)
                 eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-                    rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset),
-                    view: existing.terminalView
+                    rect: Self.terminalTargetRect(for: frame),
+                    view: existing.containerView
                 )
 
                 activePanelId = panelId
@@ -504,8 +539,7 @@ final class GhosttyBridgeImpl {
 
         let frame = computeFrame(in: contentView, viewport: viewport)
 
-        let terminalView = TerminalView(frame: NSRect(origin: .zero, size: frame.size))
-        terminalView.autoresizingMask = [.width, .height]
+        let terminalView = TerminalView(frame: .zero)
         terminalView.configuration = TerminalSurfaceOptions(backend: .exec)
         terminalView.controller = controller(for: parent)
 
@@ -528,12 +562,13 @@ final class GhosttyBridgeImpl {
         )
         terminalView.delegate = eventDelegate
 
-        // Container 只是 frame holder, 自身不绘制. terminalView 内的 IOSurfaceLayer
-        // (opaque=true) 已经渲染 terminal 全部像素, 不需要 container 再画 background —
-        // 旧代码 backgroundColor=black 多余, 会让 CoreAnimation 创建额外 backing
-        // texture, 增加 GPU 合成成本且视觉无效 (被 terminalView 完全遮挡).
-        let container = NSView(frame: frame)
-        container.addSubview(terminalView)
+        // Container 负责承载 terminalView 和右侧 overlay scrollbar. 终端内容仍由
+        // Ghostty 的 TerminalView 渲染, scrollbar 只消费 Ghostty 暴露的 scrollback
+        // 状态并把交互转回 TerminalView binding action.
+        let container = TerminalContainerView(frame: frame, terminalView: terminalView)
+        container.backgroundColor = terminalBackgrounds[parentWindowId] ?? .black
+        container.scrollbarColor = terminalForegrounds[parentWindowId] ?? .white
+        eventDelegate.scrollbarSink = container
 
         // PIER: 放在所有 web 渲染相关 NSView 之下.
         // Electron 42 macOS contentView 实际结构 (subviews 从底到顶):
@@ -556,7 +591,7 @@ final class GhosttyBridgeImpl {
         // 更新 EventRouter targets (inset 留出 sash 事件通道)
         let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-            rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset), view: terminalView
+            rect: Self.terminalTargetRect(for: frame), view: container
         )
 
         activePanelId = panelId
@@ -586,7 +621,8 @@ final class GhosttyBridgeImpl {
         // 同步 EventRouter targets (inset 留出 sash 事件通道)
         let windowId = ObjectIdentifier(term.parentWindow)
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-            rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset), view: term.terminalView
+            rect: Self.terminalTargetRect(for: frame),
+            view: term.containerView
         )
     }
 
@@ -707,6 +743,8 @@ final class GhosttyBridgeImpl {
         // 释放该 window 的 TerminalController — 内部 session/PTY 列表跨 window 累积
         // 是潜在内存泄漏, swift ARC 让无引用 controller 自动 dealloc.
         controllers.removeValue(forKey: windowId)
+        terminalBackgrounds.removeValue(forKey: windowId)
+        terminalForegrounds.removeValue(forKey: windowId)
         windowToBrowserWindowId.removeValue(forKey: windowId)
     }
 
@@ -740,6 +778,24 @@ final class GhosttyBridgeImpl {
             palette: palette
         )
         controller.setTheme(definition.toTerminalTheme())
+        if let backgroundColor = Self.terminalBackgroundColor(from: background) {
+            let windowId = ObjectIdentifier(window)
+            terminalBackgrounds[windowId] = backgroundColor
+            for term in terminals.values where term.parentWindow === window {
+                if let container = term.containerView as? TerminalContainerView {
+                    container.backgroundColor = backgroundColor
+                }
+            }
+        }
+        if let foregroundColor = Self.terminalColor(from: foreground) {
+            let windowId = ObjectIdentifier(window)
+            terminalForegrounds[windowId] = foregroundColor
+            for term in terminals.values where term.parentWindow === window {
+                if let container = term.containerView as? TerminalContainerView {
+                    container.scrollbarColor = foregroundColor
+                }
+            }
+        }
     }
 
     /// 把字体配置写入 window 下的 TerminalController. 走 setTerminalConfiguration
@@ -754,28 +810,29 @@ final class GhosttyBridgeImpl {
         applyFontToController(parent: window, family: fontFamily, size: fontSize)
     }
 
-    /// createTerminal 与 applyFontConfig 共用的实现. 拿 controller, 用 startingFrom
-    /// 当前 config 派生新 config (保住 backgroundOpacity / 默认 cursor / 默认 thicken 等
-    /// 既有字段, ghostty 配置 last-wins 语义), 再 setTerminalConfiguration. 空 family /
-    /// Float ≤ 0 视为"保持当前值" —— startingFrom 已带原值, 跳过 with 调用即不变.
+    /// createTerminal 与 applyFontConfig 共用的实现. 每次生成一份干净配置, 避免
+    /// 字体更新时把默认外观配置反复 append 到 controller. 空 family / Float ≤ 0
+    /// 视为"只写默认外观".
     private func applyFontToController(
         parent: NSWindow,
         family: String,
         size: Float
     ) {
         let controller = controller(for: parent)
-        let newConfig = TerminalConfiguration(
-            startingFrom: controller.terminalConfiguration,
-            configure: { builder in
-                if !family.isEmpty {
-                    builder.withFontFamily(family)
-                }
-                if size > 0 {
-                    builder.withFontSize(size)
-                }
+        let newConfig = TerminalConfiguration { builder in
+            Self.configureDefaultTerminalAppearance(&builder)
+            if !family.isEmpty {
+                builder.withFontFamily(family)
             }
-        )
+            if size > 0 {
+                builder.withFontSize(size)
+            }
+        }
         controller.setTerminalConfiguration(newConfig)
+    }
+
+    private static func terminalTargetRect(for frame: NSRect) -> NSRect {
+        frame.insetBy(dx: hitInset, dy: hitInset)
     }
 
     // MARK: - Coordinate conversion

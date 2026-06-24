@@ -13,8 +13,7 @@ let package = Package(
     ],
     dependencies: [
         .package(
-            url: "https://github.com/Lakr233/libghostty-spm.git",
-            branch: "main"
+            path: "Vendor/libghostty-spm"
         ),
     ],
     targets: [
