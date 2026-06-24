@@ -11,7 +11,7 @@ import type {
   AnsiPalette,
   TerminalColors,
 } from "@shared/contracts/terminal.ts";
-import { normalizeHex, opaqueOn } from "./oklch.ts";
+import { normalizeHex, opaqueOn, readableText, visibleColor } from "./oklch.ts";
 import type { ShikiThemeLike } from "./preset-registry.ts";
 
 // 缺 ANSI 键时的兜底 palette. 风格沿 Ghostty 内置 default (TerminalTheme+Defaults.swift).
@@ -136,9 +136,23 @@ export function deriveTerminalColors(
     pickHex(colors, "editorCursor.foreground", background) ??
     pickHex(colors, "terminalCursor.foreground", background);
 
-  const selectionBackground =
+  const selectionBackgroundSource =
     pickHex(colors, "terminal.selectionBackground", background) ??
-    pickHex(colors, "editor.selectionBackground", background);
+    pickHex(colors, "editor.selectionBackground", background) ??
+    (mode === "dark" ? "#264f78" : "#add6ff");
+  const selectionBackground = visibleColor(
+    background,
+    selectionBackgroundSource,
+    1.5
+  );
+  const selectionForegroundSource =
+    pickHex(colors, "terminal.selectionForeground", selectionBackground) ??
+    pickHex(colors, "editor.selectionForeground", selectionBackground) ??
+    foreground;
+  const selectionForeground = readableText(
+    selectionBackground,
+    selectionForegroundSource
+  );
 
   return {
     background,
@@ -146,5 +160,6 @@ export function deriveTerminalColors(
     foreground,
     palette: derivePalette(colors, background, mode),
     selectionBackground,
+    selectionForeground,
   };
 }

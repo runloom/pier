@@ -82,9 +82,10 @@ export type AnsiPalette = readonly [
  * 终端配色描述. 由 renderer 侧从当前 Shiki 主题派生, 经 IPC → native addon →
  * Ghostty controller.setTheme 应用. 所有色值都是 #RRGGBB (含 #, 6 字符).
  *
- * cursor / selectionBackground 写成 `| undefined` 而非纯 optional, 是因为项目
- * tsconfig 启用 exactOptionalPropertyTypes — derive 函数会显式赋 undefined 表示
- * "主题缺这个键", IPC 边界用 isString 守卫区分缺失 vs 实际值.
+ * cursor / selectionBackground / selectionForeground 写成 `| undefined` 而非纯
+ * optional, 是因为项目 tsconfig 启用 exactOptionalPropertyTypes — derive 函数
+ * 会显式赋 undefined 表示"主题缺这个键", IPC 边界用 isString 守卫区分缺失
+ * vs 实际值.
  */
 export interface TerminalColors {
   background: string;
@@ -92,6 +93,7 @@ export interface TerminalColors {
   foreground: string;
   palette: AnsiPalette;
   selectionBackground?: string | undefined;
+  selectionForeground?: string | undefined;
 }
 
 export interface TerminalAPI {

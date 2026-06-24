@@ -52,6 +52,7 @@ extern "C" {
         const char* foreground,
         const char* cursor,            // nullable
         const char* selectionBackground, // nullable
+        const char* selectionForeground, // nullable
         const char** palette           // length 16, non-null entries
     );
 }
@@ -342,7 +343,8 @@ static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
     std::string bg = colors.Get("background").As<Napi::String>().Utf8Value();
     std::string fg = colors.Get("foreground").As<Napi::String>().Utf8Value();
 
-    // 解析可选 cursor / selectionBackground. undefined / "" 视为缺失.
+    // 解析可选 cursor / selectionBackground / selectionForeground.
+    // undefined / "" 视为缺失.
     std::string cursorStr;
     const char* cursorPtr = nullptr;
     Napi::Value cursorVal = colors.Get("cursor");
@@ -357,6 +359,14 @@ static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
     if (selVal.IsString()) {
         selStr = selVal.As<Napi::String>().Utf8Value();
         if (!selStr.empty()) selPtr = selStr.c_str();
+    }
+
+    std::string selFgStr;
+    const char* selFgPtr = nullptr;
+    Napi::Value selFgVal = colors.Get("selectionForeground");
+    if (selFgVal.IsString()) {
+        selFgStr = selFgVal.As<Napi::String>().Utf8Value();
+        if (!selFgStr.empty()) selFgPtr = selFgStr.c_str();
     }
 
     // palette: 长度 16, 每项 string. 不足则 NoOp (renderer 端 derive 保证 16 槽).
@@ -377,6 +387,7 @@ static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
         fg.c_str(),
         cursorPtr,
         selPtr,
+        selFgPtr,
         palettePtrs
     );
     return info.Env().Undefined();

@@ -725,6 +725,7 @@ final class GhosttyBridgeImpl {
         foreground: String,
         cursor: String?,
         selectionBackground: String?,
+        selectionForeground: String?,
         palette: [Int: String]
     ) {
         let controller = controller(for: window)
@@ -735,7 +736,7 @@ final class GhosttyBridgeImpl {
             cursorColor: cursor,
             cursorText: nil,
             selectionBackground: selectionBackground,
-            selectionForeground: nil,
+            selectionForeground: selectionForeground,
             palette: palette
         )
         controller.setTheme(definition.toTerminalTheme())
@@ -1018,8 +1019,9 @@ public func ghosttyBridgeSetActivePanelKind(
 }
 
 /// palette 必须长度 16, 且每槽非空 (Pier renderer derive 阶段保证). cursor /
-/// selectionBackground 可空. 调用同步处理: addon.mm 的 std::string 在本调用栈
-/// 内保持, swift 这里立即 String(cString:) 拷贝, 拷贝完所有指针即可失效.
+/// selectionBackground / selectionForeground 可空. 调用同步处理: addon.mm 的
+/// std::string 在本调用栈内保持, swift 这里立即 String(cString:) 拷贝, 拷贝完
+/// 所有指针即可失效.
 @_cdecl("ghostty_bridge_apply_theme")
 public func ghosttyBridgeApplyTheme(
     _ nsWindowPtr: UnsafeMutableRawPointer,
@@ -1027,6 +1029,7 @@ public func ghosttyBridgeApplyTheme(
     _ foregroundPtr: UnsafePointer<CChar>,
     _ cursorPtr: UnsafePointer<CChar>?,
     _ selectionBackgroundPtr: UnsafePointer<CChar>?,
+    _ selectionForegroundPtr: UnsafePointer<CChar>?,
     _ palettePtr: UnsafePointer<UnsafePointer<CChar>?>
 ) {
     MainActor.assumeIsolated {
@@ -1042,7 +1045,12 @@ public func ghosttyBridgeApplyTheme(
             background: stripHash(String(cString: backgroundPtr)),
             foreground: stripHash(String(cString: foregroundPtr)),
             cursor: cursorPtr.map { stripHash(String(cString: $0)) },
-            selectionBackground: selectionBackgroundPtr.map { stripHash(String(cString: $0)) },
+            selectionBackground: selectionBackgroundPtr.map {
+                stripHash(String(cString: $0))
+            },
+            selectionForeground: selectionForegroundPtr.map {
+                stripHash(String(cString: $0))
+            },
             palette: palette
         )
     }
