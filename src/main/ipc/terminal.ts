@@ -10,95 +10,13 @@ import {
   isToggleDevToolsNativeChord,
   toggleDetachedDevTools,
 } from "../devtools.ts";
-
-interface NativeAddon {
-  /**
-   * 应用 Pier 主题派生的终端配色到指定 window 下的 Ghostty controller.
-   * Ghostty 库 controller.setTheme(...) 内部 reconfigure 并立即生效, shell 进程
-   * 不重启. 每个 BrowserWindow 一个 controller, 该 window 下所有 terminal panel
-   * 共享, 调一次即可.
-   */
-  applyTerminalTheme(parentHandle: Buffer, colors: TerminalColors): void;
-  closeAllTerminals(parentHandle: Buffer): void;
-  closeTerminal(panelId: string): void;
-  createTerminal(
-    parentHandle: Buffer,
-    panelId: string,
-    frame: TerminalFrame,
-    fontFamily: string,
-    fontSize: number
-  ): boolean;
-  /** Window 真正销毁时调用一次: closeAll + 卸 EventRouter + 卸 NSEvent monitor */
-  detachWindow(parentHandle: Buffer): void;
-  focusTerminal(panelId: string): void;
-  hideTerminal(panelId: string): void;
-  /**
-   * 孤儿清理:关掉该 window 下不在 activeIds 集合的 terminal NSView. C 方案
-   * reload 零销毁路径上, renderer 重建后报告"我现在还需要这些 panelId",
-   * swift 把不在集合里的清掉. 空数组 = 全清 (等价 closeAllTerminals).
-   */
-  reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
-  /**
-   * 注册 keyboard forward callback. swift NSEvent monitor 检测 Cmd+key 后调用,
-   * 传 (browserWindowId, modifierFlags, chars). browserWindowId 是 setupWindow
-   * 传入的 BrowserWindow.id, 用于多窗口路由. 传 null 解绑.
-   */
-  setActivePanelKind(
-    parentHandle: Buffer,
-    kindRaw: number,
-    panelId: string | null
-  ): void;
-  setFrame(panelId: string, frame: TerminalFrame): void;
-  setKeyboardForwardCallback(
-    cb:
-      | ((
-          browserWindowId: number,
-          modifierFlags: number,
-          chars: string
-        ) => void)
-      | null
-  ): void;
-  setMouseForwardCallback(
-    cb:
-      | ((
-          browserWindowId: number,
-          panelId: string,
-          x: number,
-          y: number
-        ) => void)
-      | null
-  ): void;
-  setOverlayActive(parentHandle: Buffer, active: boolean): void;
-  /**
-   * 注册 PWD forward callback. swift TerminalSurfacePwdDelegate 收到 OSC 7 后调用,
-   * 传 (browserWindowId, panelId, cwd). 用 windowId 路由到对应 BrowserWindow 的
-   * renderer (多窗口下避免广播污染). 传 null 解绑.
-   */
-  setPwdForwardCallback(
-    cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
-  ): void;
-  setTerminalFocusRequestCallback(
-    cb: ((browserWindowId: number, panelId: string) => void) | null
-  ): void;
-  /** 热更新 window 下所有 terminal 的字体. controller per window, 内部走 Ghostty TerminalController.setTerminalConfiguration. */
-  setTerminalFont(
-    parentHandle: Buffer,
-    fontFamily: string,
-    fontSize: number
-  ): void;
-  /**
-   * 注册 Title forward callback. swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后调用,
-   * 传 (browserWindowId, panelId, title). TUI 应用 (claude / vim / aider) 自定义 title
-   * 通道. 与 PWD 路由方式相同, 按 windowId 精准送到对应 BrowserWindow renderer.
-   */
-  setTitleForwardCallback(
-    cb:
-      | ((browserWindowId: number, panelId: string, title: string) => void)
-      | null
-  ): void;
-  setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
-  showTerminal(panelId: string): void;
-}
+import {
+  readTerminalPanelSession,
+  removeTerminalPanelSession,
+  updateTerminalPanelCwd,
+} from "../state/terminal-session-state.ts";
+import { findBrowserWindowId } from "../windows/window-identity.ts";
+import type { NativeAddon } from "./terminal-native-addon.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
@@ -120,6 +38,10 @@ function rememberActivePanelFocus(
   panelId: string | null
 ): void {
   activePanelFocusByWindowId.set(win.id, { kind, panelId });
+}
+
+function stableWindowIdFor(win: BrowserWindow): string {
+  return findBrowserWindowId(win) ?? `browser-${win.id}`;
 }
 
 export function restoreActivePanelFocus(win: BrowserWindow): void {
@@ -256,6 +178,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     );
   });
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
+    const targetWindow = BrowserWindow.fromId(id);
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      const windowId = stableWindowIdFor(targetWindow);
+      updateTerminalPanelCwd(windowId, panelId, cwd).catch((err) => {
+        console.error("[pier-cwd-persist] failed:", err);
+      });
+    }
     forwardToWindow(
       id,
       "pier:terminal:cwd-change",
@@ -293,33 +222,40 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   });
 
-  ipcMain.handle("pier:terminal:create", (event, args: CreateTerminalArgs) => {
-    if (!addon) {
-      return { ok: false, error: loadError ?? "native addon not loaded" };
+  ipcMain.handle(
+    "pier:terminal:create",
+    async (event, args: CreateTerminalArgs) => {
+      if (!addon) {
+        return { ok: false, error: loadError ?? "native addon not loaded" };
+      }
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) {
+        return { ok: false, error: "window not found" };
+      }
+      try {
+        const handle = win.getNativeWindowHandle();
+        const windowId = stableWindowIdFor(win);
+        const saved = await readTerminalPanelSession(windowId, args.panelId);
+        const cwd = args.cwd ?? saved?.cwd;
+        const ok = addon.createTerminal(
+          handle,
+          args.panelId,
+          args.frame,
+          args.font.family,
+          args.font.size,
+          cwd
+        );
+        return ok
+          ? { ok: true }
+          : { ok: false, error: "createTerminal returned false" };
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
     }
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) {
-      return { ok: false, error: "window not found" };
-    }
-    try {
-      const handle = win.getNativeWindowHandle();
-      const ok = addon.createTerminal(
-        handle,
-        args.panelId,
-        args.frame,
-        args.font.family,
-        args.font.size
-      );
-      return ok
-        ? { ok: true }
-        : { ok: false, error: "createTerminal returned false" };
-    } catch (e) {
-      return {
-        ok: false,
-        error: e instanceof Error ? e.message : String(e),
-      };
-    }
-  });
+  );
 
   // Renderer → addon 单参数透传 (fire-and-forget): renderer.ipcRenderer.send 单向
   // 触发 addon 同名 method. addon 可能未加载 (非 darwin / native load 失败), 用
@@ -334,14 +270,20 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       channel: "pier:terminal:hide",
       call: (panelId: string) => addon?.hideTerminal(panelId),
     },
-    {
-      channel: "pier:terminal:close",
-      call: (panelId: string) => addon?.closeTerminal(panelId),
-    },
   ] as const;
   for (const { channel, call } of panelIdRelays) {
     ipcMain.on(channel, (_event, panelId: string) => call(panelId));
   }
+  ipcMain.on("pier:terminal:close", (event, panelId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      const windowId = stableWindowIdFor(win);
+      removeTerminalPanelSession(windowId, panelId).catch((err) => {
+        console.error("[pier-cwd-remove] failed:", err);
+      });
+    }
+    addon?.closeTerminal(panelId);
+  });
   ipcMain.on("pier:terminal:focus", (event, panelId: string) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {

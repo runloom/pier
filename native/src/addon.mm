@@ -9,7 +9,8 @@ extern "C" {
     void ghostty_bridge_set_overlay_active(void* nsWindow, bool active);
     bool ghostty_bridge_create_terminal(void* nsWindow, const char* panelId,
                                          double x, double y, double w, double h,
-                                         const char* fontFamily, float fontSize);
+                                         const char* fontFamily, float fontSize,
+                                         const char* workingDirectory);
     void ghostty_bridge_set_font_config(void* nsWindow, const char* fontFamily, float fontSize);
     void ghostty_bridge_set_frame(const char* panelId,
                                    double x, double y, double w, double h);
@@ -98,10 +99,17 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     double h = frame.Get("height").As<Napi::Number>().DoubleValue();
     std::string fontFamily = info[3].As<Napi::String>().Utf8Value();
     float fontSize = info[4].As<Napi::Number>().FloatValue();
+    const char* cwdPtr = nullptr;
+    std::string cwdHolder;
+    if (info.Length() > 5 && info[5].IsString()) {
+        cwdHolder = info[5].As<Napi::String>().Utf8Value();
+        if (!cwdHolder.empty()) cwdPtr = cwdHolder.c_str();
+    }
     bool ok = ghostty_bridge_create_terminal(
         (__bridge void*)win, panelId.c_str(),
         x, y, w, h,
-        fontFamily.c_str(), fontSize
+        fontFamily.c_str(), fontSize,
+        cwdPtr
     );
     return Napi::Boolean::New(info.Env(), ok);
 }

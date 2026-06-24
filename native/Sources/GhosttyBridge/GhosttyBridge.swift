@@ -549,7 +549,8 @@ final class GhosttyBridgeImpl {
         panelId: String,
         viewport: NSRect,
         fontFamily: String,
-        fontSize: Float
+        fontSize: Float,
+        workingDirectory: String?
     ) -> Bool {
         guard let contentView = parent.contentView else { return false }
 
@@ -587,7 +588,10 @@ final class GhosttyBridgeImpl {
         let frame = computeFrame(in: contentView, viewport: viewport)
 
         let terminalView = TerminalView(frame: .zero)
-        terminalView.configuration = TerminalSurfaceOptions(backend: .exec)
+        terminalView.configuration = TerminalSurfaceOptions(
+            backend: .exec,
+            workingDirectory: workingDirectory
+        )
         terminalView.controller = controller(for: parent)
 
         // 把创建期字体写进 controller 的 TerminalConfiguration. 走 setTerminalConfiguration
@@ -934,19 +938,22 @@ public func ghosttyBridgeCreateTerminal(
     _ panelIdPtr: UnsafePointer<CChar>,
     _ x: Double, _ y: Double, _ w: Double, _ h: Double,
     _ fontFamilyPtr: UnsafePointer<CChar>,
-    _ fontSize: Float
+    _ fontSize: Float,
+    _ workingDirectoryPtr: UnsafePointer<CChar>?
 ) -> Bool {
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
         let panelId = String(cString: panelIdPtr)
         let fontFamily = String(cString: fontFamilyPtr)
+        let workingDirectory = workingDirectoryPtr.map { String(cString: $0) }
         let viewport = NSRect(x: x, y: y, width: w, height: h)
         return GhosttyBridgeImpl.shared.createTerminal(
             parent: window,
             panelId: panelId,
             viewport: viewport,
             fontFamily: fontFamily,
-            fontSize: fontSize
+            fontSize: fontSize,
+            workingDirectory: workingDirectory
         )
     }
 }
