@@ -123,6 +123,7 @@ const terminalApi: TerminalAPI = {
   onContextMenuRequest: (cb) =>
     subscribeIpc("pier:terminal:request-context-menu", cb),
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
+  onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),

@@ -77,6 +77,9 @@ interface NativeAddon {
   setPwdForwardCallback(
     cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
   ): void;
+  setTerminalFocusRequestCallback(
+    cb: ((browserWindowId: number, panelId: string) => void) | null
+  ): void;
   /** 热更新 window 下所有 terminal 的字体. controller per window, 内部走 Ghostty TerminalController.setTerminalConfiguration. */
   setTerminalFont(
     parentHandle: Buffer,
@@ -140,6 +143,17 @@ export function restoreActivePanelFocus(win: BrowserWindow): void {
 
   if (!win.webContents.isDestroyed()) {
     win.webContents.focus();
+  }
+}
+
+export function blurActivePanelFocus(win: BrowserWindow): void {
+  if (win.isDestroyed()) {
+    return;
+  }
+  try {
+    cachedAddon?.setActivePanelKind(win.getNativeWindowHandle(), 1, null);
+  } catch (err) {
+    console.error("[pier-blur-terminal-focus] failed:", err);
   }
 }
 
@@ -233,6 +247,14 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       "pier-mouse-forward"
     );
   });
+  addon?.setTerminalFocusRequestCallback((id, panelId) => {
+    forwardToWindow(
+      id,
+      "pier:terminal:focus-request",
+      { panelId },
+      "pier-terminal-focus-request"
+    );
+  });
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     forwardToWindow(
       id,
@@ -324,6 +346,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
       rememberActivePanelFocus(win, "terminal", panelId);
+      if (!win.isFocused()) {
+        blurActivePanelFocus(win);
+        return;
+      }
     }
     addon?.focusTerminal(panelId);
   });
@@ -426,6 +452,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!addon) {
         return;
       }
+      if (kind === "terminal" && !win.isFocused()) {
+        blurActivePanelFocus(win);
+        return;
+      }
       const kindRaw = kind === "terminal" ? 0 : 1;
       try {
         addon.setActivePanelKind(win.getNativeWindowHandle(), kindRaw, panelId);
@@ -434,7 +464,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
       // v2: 切到 web panel 时主动调 webContents.focus() (跟 setOverlayActive 同理).
       // swift applyFirstResponder web 分支已 no-op, 由 main 负责 web focus.
-      if (kind === "web") {
+      if (kind === "web" && win.isFocused()) {
         win.webContents.focus();
       }
     }

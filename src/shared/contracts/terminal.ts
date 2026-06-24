@@ -33,6 +33,10 @@ export interface TerminalContextMenuRequest {
   y: number;
 }
 
+export interface TerminalFocusRequest {
+  panelId: string;
+}
+
 /**
  * Terminal cwd 变化事件 — swift OSC 7 解析后通过 IPC 推送到 renderer.
  * cwd 是绝对路径 (file:// 前缀已由 swift 端从 URL 提取掉).
@@ -116,6 +120,8 @@ export interface TerminalAPI {
    * panelId 过滤. 多 panel 场景下会有 N 个 listener, 每个 panel 自行 dispose.
    */
   onCwdChange(cb: (event: TerminalCwdEvent) => void): () => void;
+  /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
+  onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
   /**
    * 订阅 terminal title (OSC 0/2) 变化. 回调返回 dispose 函数.
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.

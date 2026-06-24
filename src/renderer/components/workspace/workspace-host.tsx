@@ -6,6 +6,7 @@ import {
 } from "dockview-react";
 import { useCallback } from "react";
 import "dockview-react/dist/styles/dockview.css";
+import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -129,6 +130,12 @@ export function WorkspaceHost() {
         const kind = panelKindOf(component);
         useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
         window.pier?.terminal?.setActivePanelKind?.(kind, panel.id);
+      });
+
+      window.pier?.terminal?.onFocusRequest?.((req) => {
+        if (activateTerminalPanelFromFocusRequest(event.api, req.panelId)) {
+          window.pier?.terminal?.setActivePanelKind?.("terminal", req.panelId);
+        }
       });
 
       // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时

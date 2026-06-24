@@ -53,7 +53,11 @@ enum TerminalContainerLayout {
 
 @MainActor
 final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
+    static var forwardFocusRequestCallback: ((Int, String) -> Void)?
+
     let terminalView: TerminalView
+    private let browserWindowId: Int
+    private let panelId: String
 
     private let scrollbarView: TerminalScrollbarOverlayView
 
@@ -69,8 +73,10 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         }
     }
 
-    init(frame frameRect: NSRect, terminalView: TerminalView) {
+    init(frame frameRect: NSRect, terminalView: TerminalView, panelId: String, browserWindowId: Int) {
         self.terminalView = terminalView
+        self.panelId = panelId
+        self.browserWindowId = browserWindowId
         scrollbarView = TerminalScrollbarOverlayView(terminalView: terminalView)
         super.init(frame: frameRect)
 
@@ -88,6 +94,10 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     override var isOpaque: Bool { false }
+
+    override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
+        true
+    }
 
     override func layout() {
         super.layout()
@@ -135,6 +145,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
             super.mouseDown(with: event)
             return
         }
+        Self.forwardFocusRequestCallback?(browserWindowId, panelId)
         terminalView.mouseDown(with: event)
     }
 
@@ -257,6 +268,10 @@ private final class TerminalScrollbarOverlayView: NSView {
     }
 
     override var isOpaque: Bool { false }
+
+    override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
+        true
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)

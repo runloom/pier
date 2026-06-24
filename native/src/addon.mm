@@ -33,6 +33,8 @@ extern "C" {
     // 签名 (browserWindowId, panelId UTF-8, x, y). 用于触发 native 右键菜单.
     typedef void (*MouseForwardFn)(long browserWindowId, const char* panelId, double x, double y);
     void ghostty_bridge_set_mouse_forward_callback(MouseForwardFn cb);
+    typedef void (*TerminalFocusRequestFn)(long browserWindowId, const char* panelId);
+    void ghostty_bridge_set_terminal_focus_request_callback(TerminalFocusRequestFn cb);
     // PWD forward: swift TerminalSurfacePwdDelegate 收到 OSC 7 → 此 trampoline → JS.
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
     typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
@@ -288,6 +290,27 @@ static Napi::Value JsSetMouseForwardCallback(const Napi::CallbackInfo& info) {
                                 &g_mouseForwardTrampoline);
 }
 
+// ---- Terminal focus request forward (terminal 左键点击 → renderer 激活 tab) ----
+struct TerminalFocusRequestPayload {
+    long windowId;
+    std::string panelId;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+        });
+    }
+};
+static ForwardChannel<TerminalFocusRequestPayload> g_terminalFocusRequestChannel("PierTerminalFocusRequest");
+static void g_terminalFocusRequestTrampoline(long windowId, const char* panelId) {
+    g_terminalFocusRequestChannel.emit({ windowId, std::string(panelId) });
+}
+static Napi::Value JsSetTerminalFocusRequestCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_terminalFocusRequestChannel,
+                                ghostty_bridge_set_terminal_focus_request_callback,
+                                &g_terminalFocusRequestTrampoline);
+}
+
 // ---- PWD forward (OSC 7 cwd → renderer panel descriptor) ----
 struct PwdForwardPayload {
     long windowId;
@@ -437,6 +460,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
+    exports.Set("setTerminalFocusRequestCallback", Napi::Function::New(env, JsSetTerminalFocusRequestCallback));
     exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));
     exports.Set("setTerminalFont", Napi::Function::New(env, JsSetFontConfig));
     return exports;

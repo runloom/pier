@@ -15,7 +15,11 @@
 import { join } from "node:path";
 import { app, BrowserWindow, nativeTheme, shell } from "electron";
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
-import { getTerminalAddon, restoreActivePanelFocus } from "../ipc/terminal.ts";
+import {
+  blurActivePanelFocus,
+  getTerminalAddon,
+  restoreActivePanelFocus,
+} from "../ipc/terminal.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
 
 const WINDOW_ID_REGEX = /^(main|w-\d+)$/;
@@ -119,6 +123,9 @@ class WindowManager {
     const window = new BrowserWindow(winOpts);
 
     window.on("ready-to-show", () => window.show());
+    window.on("blur", () => {
+      blurActivePanelFocus(window);
+    });
 
     window.webContents.setWindowOpenHandler(({ url }) => {
       shell.openExternal(url).catch(() => {

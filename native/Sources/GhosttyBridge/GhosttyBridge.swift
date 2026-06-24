@@ -612,7 +612,12 @@ final class GhosttyBridgeImpl {
         // Container 负责承载 terminalView 和右侧 overlay scrollbar. 终端内容仍由
         // Ghostty 的 TerminalView 渲染, scrollbar 只消费 Ghostty 暴露的 scrollback
         // 状态并把交互转回 TerminalView binding action.
-        let container = TerminalContainerView(frame: frame, terminalView: terminalView)
+        let container = TerminalContainerView(
+            frame: frame,
+            terminalView: terminalView,
+            panelId: panelId,
+            browserWindowId: browserWindowId
+        )
         container.backgroundColor = terminalBackgrounds[parentWindowId] ?? .black
         container.scrollbarColor = terminalForegrounds[parentWindowId] ?? .white
         eventDelegate.scrollbarSink = container
@@ -1045,6 +1050,7 @@ public func ghosttyBridgeDetachWindow(_ nsWindowPtr: UnsafeMutableRawPointer) {
 // 后字符串生命周期结束 (addon.mm 端 trampoline 已 std::string 拷贝, 不会 dangling).
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
+public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 
@@ -1070,6 +1076,19 @@ public func ghosttyBridgeSetMouseForwardCallback(_ cb: MouseForwardCallback?) {
             }
         } else {
             EventRouterView.forwardRightMouseCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_terminal_focus_request_callback")
+public func ghosttyBridgeSetTerminalFocusRequestCallback(_ cb: TerminalFocusRequestCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalContainerView.forwardFocusRequestCallback = { wid, panelId in
+                panelId.withCString { ptr in cb(wid, ptr) }
+            }
+        } else {
+            TerminalContainerView.forwardFocusRequestCallback = nil
         }
     }
 }
