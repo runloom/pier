@@ -70,6 +70,21 @@ final class EventRouterView: NSView {
     /// 用它告诉 main 这个 key event 来自哪个 window.
     private var browserWindowId: Int = -1
 
+    private static let terminalAppShortcutKeys: Set<String> = [
+        "Ctrl+Shift+ArrowDown",
+        "Ctrl+Shift+ArrowLeft",
+        "Ctrl+Shift+ArrowRight",
+        "Ctrl+Shift+ArrowUp",
+        "Mod+Backquote",
+        "Mod+Comma",
+        "Mod+KeyD",
+        "Mod+KeyN",
+        "Mod+KeyT",
+        "Mod+KeyW",
+        "Mod+Shift+KeyD",
+        "Mod+Shift+KeyP",
+    ]
+
     override var isOpaque: Bool { false }
     override var isFlipped: Bool { true }  // 对齐 Electron contentView 的 top-left 坐标系
     override func draw(_ dirtyRect: NSRect) {}
@@ -120,18 +135,78 @@ final class EventRouterView: NSView {
         ownerWindow = nil
     }
 
-    /// 路由 keyDown:
-    /// - 非 owner window 的 event: 放行 (其他 window 自己的 router 会处理).
-    /// - 不含 Cmd 也不含 Ctrl+Shift: 放行给 firstResponder (terminal 正常接 Ctrl/Shift/纯 key).
-    /// - Cmd+key 或 Ctrl+Shift+key: 通过 callback emit (windowId, chord) 给 main →
-    ///   IPC 转 renderer 调 action; 消费事件 (return nil) 让 terminal 不再收到这个 keystroke.
-    ///
-    /// Ctrl+Shift 必须同时按才转发, 单 Ctrl (如 Ctrl+C / Ctrl+D / Ctrl+R) 留给 Ghostty
-    /// shell 处理. 这是为了支持 web 层注册的 Ctrl+Shift+方向键 等 chord 跨 terminal 焦点
-    /// 也能触发 (focus 方向导航等), 同时不破坏 shell 信号 / 控制键正常输入.
-    ///
-    /// 不再 forward 到 WKWebView (旧实现 wk.keyDown 在 Electron 42 不可靠 —
-    /// ViewsCompositorSuperview 才是真正渲染 web 的层, WKWebView 只是事件壳).
+    private static func keyCode(from chars: String) -> String? {
+        switch chars.lowercased() {
+        case "a"..."z":
+            return "Key\(chars.uppercased())"
+        case "0"..."9":
+            return "Digit\(chars)"
+        case "`":
+            return "Backquote"
+        case ",":
+            return "Comma"
+        case ".":
+            return "Period"
+        case "/":
+            return "Slash"
+        case ";":
+            return "Semicolon"
+        case "'":
+            return "Quote"
+        case "[":
+            return "BracketLeft"
+        case "]":
+            return "BracketRight"
+        case "\\":
+            return "Backslash"
+        case "-":
+            return "Minus"
+        case "=":
+            return "Equal"
+        case "\u{F700}":
+            return "ArrowUp"
+        case "\u{F701}":
+            return "ArrowDown"
+        case "\u{F702}":
+            return "ArrowLeft"
+        case "\u{F703}":
+            return "ArrowRight"
+        default:
+            return nil
+        }
+    }
+
+    private static func terminalAppShortcutKey(modifierFlags mods: NSEvent.ModifierFlags, chars: String) -> String? {
+        guard let code = keyCode(from: chars) else { return nil }
+
+        var parts: [String] = []
+        if mods.contains(.command) {
+            parts.append("Mod")
+        }
+        if mods.contains(.control) {
+            parts.append("Ctrl")
+        }
+        if mods.contains(.option) {
+            parts.append("Alt")
+        }
+        if mods.contains(.shift) {
+            parts.append("Shift")
+        }
+        parts.append(code)
+        return parts.joined(separator: "+")
+    }
+
+    private func passThroughToTerminal(window: NSWindow, event: NSEvent) -> NSEvent? {
+        if GhosttyBridgeImpl.shared.prepareTerminalForOrdinaryKeyDown(
+            window: window, event: event
+        ) {
+            return nil
+        }
+        return event
+    }
+
+    /// 路由 keyDown: terminal mode 下只截获 Pier 明确声明的 app 快捷键, 其他
+    /// Cmd / Ctrl+Shift 组合交给 Ghostty, 避免吞掉终端编辑和 TUI 快捷键.
     private func routeKeyDown(_ event: NSEvent) -> NSEvent? {
         guard let window = ownerWindow, event.window === window else { return event }
 
@@ -149,14 +224,9 @@ final class EventRouterView: NSView {
         let isCmd = mods.contains(.command)
         let isCtrlShift = mods.contains(.control) && mods.contains(.shift)
 
-        if !(isCmd || isCtrlShift),
-           GhosttyBridgeImpl.shared.prepareTerminalForOrdinaryKeyDown(
-               window: window, event: event
-           ) {
-            return nil
+        guard isCmd || isCtrlShift else {
+            return passThroughToTerminal(window: window, event: event)
         }
-
-        guard isCmd || isCtrlShift else { return event }
 
         // macOS menu reserved keys (Cmd+Q/Cmd+H/Cmd+M/Cmd+Comma 等 role-bound items)
         // 必须先让 NSApp.mainMenu 处理. performKeyEquivalent 命中 menu item 后会调
@@ -167,7 +237,14 @@ final class EventRouterView: NSView {
             return nil
         }
 
-        guard let chars = event.charactersIgnoringModifiers, !chars.isEmpty else { return event }
+        guard let chars = event.charactersIgnoringModifiers, !chars.isEmpty else {
+            return passThroughToTerminal(window: window, event: event)
+        }
+        guard let shortcutKey = Self.terminalAppShortcutKey(modifierFlags: mods, chars: chars),
+              Self.terminalAppShortcutKeys.contains(shortcutKey) else {
+            return passThroughToTerminal(window: window, event: event)
+        }
+
         EventRouterView.forwardCmdKeyCallback?(browserWindowId, mods.rawValue, chars)
         return nil
     }
@@ -348,6 +425,7 @@ final class GhosttyBridgeImpl {
         builder.withWindowPaddingX(terminalPaddingX)
         builder.withWindowPaddingY(terminalPaddingY)
         builder.withCustom("scrollbar", "system")
+        builder.withCustom("keybind", "super+backspace=text:\\x15")
     }
 
     nonisolated private static func terminalColor(from value: String) -> NSColor? {

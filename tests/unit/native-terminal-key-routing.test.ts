@@ -1,0 +1,77 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
+
+const TERMINAL_APP_SHORTCUT_KEYS_RE =
+  /terminalAppShortcutKeys:\s*Set<String>\s*=\s*\[([\s\S]*?)\]/;
+
+const GHOSTTY_BRIDGE_PATH = join(
+  process.cwd(),
+  "native/Sources/GhosttyBridge/GhosttyBridge.swift"
+);
+
+function readGhosttyBridgeSource(): string {
+  return readFileSync(GHOSTTY_BRIDGE_PATH, "utf8");
+}
+
+function swiftTerminalAppShortcuts(source: string): string[] {
+  const match = source.match(TERMINAL_APP_SHORTCUT_KEYS_RE);
+  if (!match) {
+    throw new Error("Swift terminalAppShortcutKeys allowlist not found");
+  }
+  const body = match[1];
+  if (!body) {
+    throw new Error("Swift terminalAppShortcutKeys allowlist body is empty");
+  }
+
+  return Array.from(body.matchAll(/"([^"]+)"/g))
+    .flatMap((entry) => (entry[1] ? [entry[1]] : []))
+    .sort();
+}
+
+describe("native terminal key routing", () => {
+  it("keeps the Swift terminal-mode allowlist in sync with DEFAULT_KEYMAP", () => {
+    const markedDefaultShortcuts = DEFAULT_KEYMAP.filter(
+      (binding) => binding.nativeTerminal === "app"
+    )
+      .map((binding) => binding.keys)
+      .sort();
+
+    expect(swiftTerminalAppShortcuts(readGhosttyBridgeSource())).toEqual(
+      markedDefaultShortcuts
+    );
+  });
+
+  it("does not treat common terminal editing shortcuts as Pier app shortcuts", () => {
+    const shortcuts = swiftTerminalAppShortcuts(readGhosttyBridgeSource());
+
+    expect(shortcuts).not.toContain("Mod+Backspace");
+    expect(shortcuts).not.toContain("Mod+Delete");
+    expect(shortcuts).not.toContain("Mod+KeyK");
+    expect(shortcuts).not.toContain("Mod+ArrowLeft");
+    expect(shortcuts).not.toContain("Mod+ArrowRight");
+  });
+
+  it("adds a Ghostty-native Cmd+Backspace binding for delete-to-line-start", () => {
+    expect(readGhosttyBridgeSource()).toContain(
+      'builder.withCustom("keybind", "super+backspace=text:\\\\x15")'
+    );
+  });
+
+  it("forwards only declared terminal-mode Pier shortcuts instead of all Cmd keys", () => {
+    const source = readGhosttyBridgeSource();
+    const allowlistCheckIndex = source.indexOf(
+      "terminalAppShortcutKeys.contains(shortcutKey)"
+    );
+    const forwardIndex = source.indexOf(
+      "EventRouterView.forwardCmdKeyCallback?(browserWindowId, mods.rawValue, chars)"
+    );
+
+    expect(source).toContain(
+      "terminalAppShortcutKey(modifierFlags: mods, chars: chars)"
+    );
+    expect(allowlistCheckIndex).toBeGreaterThan(-1);
+    expect(forwardIndex).toBeGreaterThan(allowlistCheckIndex);
+  });
+});

@@ -8,46 +8,78 @@
 import type { KeybindingInput } from "./types.ts";
 
 export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
-  { commandId: "pier.panel.newTab", keys: "Mod+KeyT", scope: "global" },
-  { commandId: "pier.panel.closeActive", keys: "Mod+KeyW", scope: "global" },
-  { commandId: "pier.window.newWindow", keys: "Mod+KeyN", scope: "global" },
+  {
+    commandId: "pier.panel.newTab",
+    keys: "Mod+KeyT",
+    nativeTerminal: "app",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.closeActive",
+    keys: "Mod+KeyW",
+    nativeTerminal: "app",
+    scope: "global",
+  },
+  {
+    commandId: "pier.window.newWindow",
+    keys: "Mod+KeyN",
+    nativeTerminal: "app",
+    scope: "global",
+  },
   {
     commandId: "pier.panel.newTerminal",
     keys: "Mod+Backquote",
+    nativeTerminal: "app",
     scope: "global",
   },
   {
     commandId: "pier.commandPalette.toggle",
     keys: "Mod+Shift+KeyP",
+    nativeTerminal: "app",
     scope: "global",
   },
-  { commandId: "pier.settings.open", keys: "Mod+Comma", scope: "global" },
+  {
+    commandId: "pier.settings.open",
+    keys: "Mod+Comma",
+    nativeTerminal: "app",
+    scope: "global",
+  },
   // Split — splitLeft / splitUp 不绑默认 (用户可自定义)
-  { commandId: "pier.panel.splitRight", keys: "Mod+KeyD", scope: "global" },
+  {
+    commandId: "pier.panel.splitRight",
+    keys: "Mod+KeyD",
+    nativeTerminal: "app",
+    scope: "global",
+  },
   {
     commandId: "pier.panel.splitDown",
     keys: "Mod+Shift+KeyD",
+    nativeTerminal: "app",
     scope: "global",
   },
   // Focus — Ctrl+Shift+方向键 (mac 上 = 独立 Ctrl, 非 mac 上 = Mod 等价)
   {
     commandId: "pier.panel.focusUp",
     keys: "Ctrl+Shift+ArrowUp",
+    nativeTerminal: "app",
     scope: "global",
   },
   {
     commandId: "pier.panel.focusDown",
     keys: "Ctrl+Shift+ArrowDown",
+    nativeTerminal: "app",
     scope: "global",
   },
   {
     commandId: "pier.panel.focusLeft",
     keys: "Ctrl+Shift+ArrowLeft",
+    nativeTerminal: "app",
     scope: "global",
   },
   {
     commandId: "pier.panel.focusRight",
     keys: "Ctrl+Shift+ArrowRight",
+    nativeTerminal: "app",
     scope: "global",
   },
 ];
