@@ -16,6 +16,7 @@ export interface TerminalFont {
 }
 
 export interface CreateTerminalArgs {
+  cwd?: string | undefined;
   font: TerminalFont;
   frame: TerminalFrame;
   panelId: string;
