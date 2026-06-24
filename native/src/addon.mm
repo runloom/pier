@@ -2,6 +2,7 @@
 #import <AppKit/AppKit.h>
 #import <napi.h>
 #include <string>
+#include <vector>
 
 extern "C" {
     bool ghostty_bridge_setup_window(void* nsWindow, long browserWindowId);
@@ -17,6 +18,11 @@ extern "C" {
     void ghostty_bridge_close(const char* panelId);
     void ghostty_bridge_focus(const char* panelId);
     void ghostty_bridge_close_all(void* nsWindow);
+    // 孤儿清理:关该 window 下不在 activeIds 中的 NSView. C 方案 reload 零销毁
+    // 路径上, renderer 重建后报告"我现在还需要这些 panelId", swift 把不在集合
+    // 里的 panel 清掉. activeIds = NULL / count = 0 表示新 renderer 还没有任何
+    // terminal panel — 等价于 closeAll.
+    void ghostty_bridge_reconcile(void* nsWindow, const char** activeIds, long count);
     void ghostty_bridge_detach_window(void* nsWindow);
     // C 函数指针 typedef 让 swift cb 能传给 N-API ThreadSafeFunction 持有的 trampoline.
     // 签名: (browserWindowId, modifierFlags, chars UTF-8). browserWindowId 是 Electron
@@ -136,6 +142,30 @@ static Napi::Value JsCloseAll(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
     ghostty_bridge_close_all((__bridge void*)win);
+    return info.Env().Undefined();
+}
+
+static Napi::Value JsReconcile(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    Napi::Array arr = info[1].As<Napi::Array>();
+    uint32_t len = arr.Length();
+    // 两段式存储:先把 Utf8Value 持回 std::string 数组 (保证字符串生命周期覆盖到
+    // ghostty_bridge_reconcile 调用结束), 再收集 const char* 到平铺数组传给 swift.
+    // swift 端 String(cString:) 立即拷贝, 调用结束后这边可以全部释放.
+    std::vector<std::string> holders;
+    holders.reserve(len);
+    for (uint32_t i = 0; i < len; ++i) {
+        holders.push_back(arr.Get(i).As<Napi::String>().Utf8Value());
+    }
+    std::vector<const char*> ptrs;
+    ptrs.reserve(len);
+    for (auto& s : holders) ptrs.push_back(s.c_str());
+    ghostty_bridge_reconcile(
+        (__bridge void*)win,
+        ptrs.empty() ? nullptr : ptrs.data(),
+        static_cast<long>(len)
+    );
     return info.Env().Undefined();
 }
 
@@ -389,6 +419,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("focusTerminal",   Napi::Function::New(env, JsFocus));
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
+    exports.Set("reconcileTerminals", Napi::Function::New(env, JsReconcile));
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));

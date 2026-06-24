@@ -1,4 +1,3 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
@@ -43,11 +42,14 @@ async function bootstrap() {
 
   const rootEl = document.getElementById("root");
   if (rootEl) {
-    createRoot(rootEl).render(
-      <StrictMode>
-        <App />
-      </StrictMode>
-    );
+    // 不包 StrictMode:Pier 终端 panel 是 web React tree + Ghostty native NSView
+    // 协同, useEffect cleanup 调 terminal.close IPC 销毁 NSView. StrictMode 在
+    // dev 模式让组件双 mount/unmount, 会产生 close 多于 create 的孤儿调用,
+    // 把 reload 后复用的 NSView 真销毁, 反而引入 dev-only 视觉/PTY 状态丢失.
+    // 生产 build 没 StrictMode, C 方案的 createTerminal 复用 + reconcile 已经
+    // 让 reload 零闪 + PTY 跨 reload 保留;关掉 dev StrictMode 让两个环境行为
+    // 一致, 不影响其它 dev 检查能力 (Pier 没有依赖 StrictMode 暴露的具体反例).
+    createRoot(rootEl).render(<App />);
   }
 }
 

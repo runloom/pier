@@ -471,9 +471,34 @@ final class GhosttyBridgeImpl {
     ) -> Bool {
         guard let contentView = parent.contentView else { return false }
 
-        // Idempotent: 同 panelId 已存在 (如 reload 残留) → 先 close 旧的再创建.
-        // main 进程 reload 监听 best-effort, 这里是 defensive 兜底防止 NSView 泄漏.
-        if terminals[panelId] != nil {
+        // Reload 复用路径:同 panelId 已存在且是同一 parent window 的, 不 close、
+        // 不重建 — 只同步 frame + 重新 apply font + 重新挂 EventRouter target.
+        // terminalView / PTY / session / 屏幕缓冲 全部保留, 用户看不到任何闪烁,
+        // shell 状态 (运行中进程、命令历史、cwd) 完整跨 reload.
+        //
+        // parent 不一致的极少数情况 (panelId 在 Pier 中跨窗口非唯一, 见
+        // TerminalEventDelegate 注释), 退回到原 defensive 行为:先 close 旧的
+        // 再创建, 避免把别 window 的 terminalView frame 拽到当前 window.
+        if let existing = terminals[panelId] {
+            if existing.parentWindow === parent {
+                let frame = computeFrame(in: contentView, viewport: viewport)
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                existing.containerView.frame = frame
+                CATransaction.commit()
+
+                applyFontToController(parent: parent, family: fontFamily, size: fontSize)
+
+                let windowId = ObjectIdentifier(parent)
+                eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
+                    rect: frame.insetBy(dx: Self.hitInset, dy: Self.hitInset),
+                    view: existing.terminalView
+                )
+
+                activePanelId = panelId
+                applyFirstResponder(for: parent)
+                return true
+            }
             close(panelId: panelId)
         }
 
@@ -629,6 +654,21 @@ final class GhosttyBridgeImpl {
         if let window = term.terminalView.window {
             setActivePanelKind(window: window, kind: .terminal, panelId: panelId)
             applyFirstResponder(for: window)
+        }
+    }
+
+    /// 孤儿清理:关掉该 window 下不在 activeIds 集合中的 terminal NSView. 配合
+    /// C 方案 reload 零销毁使用 — renderer 重建后调 reconcile 报告"我现在还需要
+    /// 这些 panelId", main 转给这里, 把 reload 前 layout 里有但新 layout 没有
+    /// 的 panel 清掉, 避免孤儿 NSView 永久挂在 contentView.subviews 中.
+    /// activeIds 为空表示新 renderer 还没有任何 terminal panel, 全部清掉.
+    func reconcile(parent: NSWindow, activeIds: Set<String>) {
+        let windowId = ObjectIdentifier(parent)
+        let toClose = terminals.filter { (panelId, term) in
+            ObjectIdentifier(term.parentWindow) == windowId && !activeIds.contains(panelId)
+        }
+        for (panelId, _) in toClose {
+            close(panelId: panelId)
         }
     }
 
@@ -864,6 +904,26 @@ public func ghosttyBridgeCloseAll(_ nsWindowPtr: UnsafeMutableRawPointer) {
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
         GhosttyBridgeImpl.shared.closeAll(parent: window)
+    }
+}
+
+@_cdecl("ghostty_bridge_reconcile")
+public func ghosttyBridgeReconcile(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ activeIds: UnsafePointer<UnsafePointer<CChar>?>?,
+    _ count: Int
+) {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        var ids: Set<String> = []
+        if let activeIds = activeIds {
+            for i in 0..<count {
+                if let ptr = activeIds[i] {
+                    ids.insert(String(cString: ptr))
+                }
+            }
+        }
+        GhosttyBridgeImpl.shared.reconcile(parent: window, activeIds: ids)
     }
 }
 

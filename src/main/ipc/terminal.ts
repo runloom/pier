@@ -29,6 +29,12 @@ interface NativeAddon {
   focusTerminal(panelId: string): void;
   hideTerminal(panelId: string): void;
   /**
+   * 孤儿清理:关掉该 window 下不在 activeIds 集合的 terminal NSView. C 方案
+   * reload 零销毁路径上, renderer 重建后报告"我现在还需要这些 panelId",
+   * swift 把不在集合里的清掉. 空数组 = 全清 (等价 closeAllTerminals).
+   */
+  reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
+  /**
    * 注册 keyboard forward callback. swift NSEvent monitor 检测 Cmd+key 后调用,
    * 传 (browserWindowId, modifierFlags, chars). browserWindowId 是 setupWindow
    * 传入的 BrowserWindow.id, 用于多窗口路由. 传 null 解绑.
@@ -272,6 +278,25 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       addon?.setFrame(panelId, frame);
     }
   );
+
+  // Reconcile: renderer 重建后 (dockview restore 完成时) 报告当前活跃 panelId
+  // 集合, swift 把不在集合里的 NSView 清掉. C 方案 reload 零销毁路径的孤儿兜底.
+  // fire-and-forget: 调用方不需要 await, 失败也只是孤儿 NSView 多挂一会儿,
+  // 不影响功能.
+  ipcMain.on("pier:terminal:reconcile", (event, activeIds: string[]) => {
+    if (!addon) {
+      return;
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return;
+    }
+    try {
+      addon.reconcileTerminals(win.getNativeWindowHandle(), activeIds);
+    } catch (err) {
+      console.error("[pier-terminal-reconcile] failed:", err);
+    }
+  });
 
   ipcMain.on("pier:terminal:set-overlay", (event, active: boolean) => {
     if (!addon) {

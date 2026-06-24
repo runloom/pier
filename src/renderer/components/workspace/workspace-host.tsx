@@ -156,6 +156,16 @@ export function WorkspaceHost() {
           console.error("[workspace] fromJSON failed, fallback default:", err);
           applyDefaultLayout(event.api);
         }
+
+        // C 方案 reload 零销毁的孤儿兜底:layout 应用后报告当前还活着的 terminal
+        // panelId 集合, swift 把 reload 前 layout 里有、新 layout 里没有的 NSView
+        // 清掉. 首次启动 / layout 未变 时是 noop (swift terminals 字典空 / 集合一致),
+        // 只有 reload 后 layout 收缩时才真正回收孤儿. fire-and-forget.
+        const terminalPanelIds = event.api.panels
+          .filter((p) => p.view.contentComponent === "terminal")
+          .map((p) => p.id);
+        window.pier?.terminal?.reconcile?.(terminalPanelIds);
+
         // 给 dockview 一帧时间 flush layout-change 事件, 再放 save gate
         requestAnimationFrame(() => {
           isApplyingPersistedLayout = false;

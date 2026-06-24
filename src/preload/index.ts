@@ -118,6 +118,8 @@ const terminalApi: TerminalAPI = {
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  reconcile: (activeIds) =>
+    ipcRenderer.send("pier:terminal:reconcile", activeIds),
   onContextMenuRequest: (cb) =>
     subscribeIpc("pier:terminal:request-context-menu", cb),
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),

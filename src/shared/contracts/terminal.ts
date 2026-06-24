@@ -119,6 +119,13 @@ export interface TerminalAPI {
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
+  /**
+   * 报告 renderer 当前活跃的 terminal panelId 集合. swift 把不在集合里的 NSView
+   * 清掉 — C 方案 reload 零销毁路径的孤儿兜底:reload 前 layout 有但新 layout
+   * 没有的 panel 在这里被回收. dockview restore 完成时 (renderer 知道完整 layout)
+   * 调一次即可. fire-and-forget.
+   */
+  reconcile(activeIds: string[]): void;
   setActivePanelKind: (
     kind: "terminal" | "web",
     panelId: string | null
