@@ -22,8 +22,8 @@ export function popOverlay(): void {
 
 /**
  * 全局拖拽监听: 在 dockview tab (HTML5 drag) / sash (pointer drag) 启动时 push overlay,
- * 结束时 pop。确保拖拽期间 EventRouter 不截获事件, 并隐藏 terminal NSView 让 web
- * 层 drop overlay / sash 高亮可见。
+ * 结束时 pop。确保拖拽期间 EventRouter 不截获事件, 让 web 层 drop overlay / sash
+ * 高亮能接收输入并稳定显示在 terminal 上方。
  *
  * 两套独立监听 (HTML5 drag 与 pointer drag 是不同事件流):
  *   - dragstart/dragend: tab 拖拽 (dockview 走 HTML5 drag API)

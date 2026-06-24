@@ -1,6 +1,6 @@
 import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
@@ -47,7 +47,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
-  const parentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   // 订阅 swift OSC 7 → main → 这里. usePanelEventState 自动按 panelId 过滤 +
@@ -74,24 +73,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     long: sequenceTitle ?? cwd ?? undefined,
     path: cwd ?? undefined,
   });
-
-  useLayoutEffect(() => {
-    const parent = parentRef.current?.parentElement;
-    const anchor = anchorRef.current;
-    if (!(parent && anchor)) {
-      return;
-    }
-
-    const sync = () => {
-      anchor.style.width = `${parent.clientWidth}px`;
-      anchor.style.height = `${parent.clientHeight}px`;
-    };
-    sync();
-
-    const ro = new ResizeObserver(sync);
-    ro.observe(parent);
-    return () => ro.disconnect();
-  }, []);
 
   const monoFontFamilyRef = useRef(monoFontFamily);
   const monoFontSizeRef = useRef(monoFontSize);
@@ -122,17 +103,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       }
       lastFrame = key;
       window.pier.terminal.setFrame(panelId, frame);
-    };
-
-    let rafId = 0;
-    const scheduleSync = () => {
-      if (rafId) {
-        return;
-      }
-      rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        sendFrameNow();
-      });
     };
 
     const init = async () => {
@@ -186,12 +156,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         })
       );
 
-      const parent = anchor.parentElement;
-      if (parent) {
-        const ro = new ResizeObserver(scheduleSync);
-        ro.observe(parent);
-        subscriptions.push({ dispose: () => ro.disconnect() });
-      }
+      subscriptions.push(api.onDidDimensionsChange(sendFrameNow));
 
       const onWindowResize = () => sendFrameNow();
       window.addEventListener("resize", onWindowResize);
@@ -204,9 +169,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
     return () => {
       disposed = true;
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
       for (const s of subscriptions) {
         s.dispose();
       }
@@ -248,8 +210,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   }
 
   return (
-    <div className="h-full" ref={parentRef}>
-      <div className="terminal-anchor" ref={anchorRef} />
+    <div className="relative h-full min-h-0 w-full min-w-0 overflow-hidden">
+      <div className="terminal-anchor absolute inset-0" ref={anchorRef} />
     </div>
   );
 }

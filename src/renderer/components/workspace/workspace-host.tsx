@@ -38,7 +38,7 @@ import { PanelTabHeader } from "./panel-tab-header.tsx";
  * 跟 sash 内线并列显示成"两条线"伪影.
  *
  * dndOverlayMounting: 'absolute' — 让 root drop overlay 渲染到 shell 根层级,
- * 配合 setOverlayActive 隐藏 terminal NSView 使 group drop overlay 也可见.
+ * 配合 setOverlayActive 暂停 EventRouter 拦截, 使 group drop overlay 可接收输入.
  */
 const pierTheme: DockviewTheme = {
   name: "pier",
@@ -305,7 +305,7 @@ export function WorkspaceHost() {
   );
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full overflow-hidden">
       <DockviewReact
         components={panelComponents}
         defaultTabComponent={PanelTabHeader}

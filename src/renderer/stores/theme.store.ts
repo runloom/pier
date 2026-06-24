@@ -35,15 +35,6 @@ export function resolveTheme(preference: ThemePreference): ResolvedTheme {
   return prefersDark ? "dark" : "light";
 }
 
-/** 从 applyTokens 写入的 inline style 读取 --muted (sidebar/tab-bar 底色). */
-function readChromeColor(): string | undefined {
-  if (typeof document === "undefined") {
-    return;
-  }
-  const val = document.documentElement.style.getPropertyValue("--muted").trim();
-  return val || undefined;
-}
-
 function applyDocumentTheme(resolved: ResolvedTheme): void {
   if (typeof document === "undefined") {
     return;
@@ -52,9 +43,6 @@ function applyDocumentTheme(resolved: ResolvedTheme): void {
   root.classList.toggle("light", resolved === "light");
   root.classList.toggle("dark", resolved === "dark");
   syncThemeHead({ resolved });
-  window.pier?.theme
-    ?.setNativeChrome?.(resolved, readChromeColor())
-    ?.catch(() => undefined);
 }
 
 /**
@@ -89,6 +77,9 @@ function flushPendingTerminalApply(): void {
     const shiki = getShikiTheme(pending.presetId, pending.resolved);
     const colors = deriveTerminalColors(shiki, pending.resolved);
     window.pier?.terminal?.applyTheme?.(colors);
+    window.pier?.theme
+      ?.setNativeChrome?.(pending.resolved, colors.background)
+      ?.catch(() => undefined);
   } catch (err) {
     console.error("[theme.store] applyTerminalColors failed:", err);
   }
@@ -169,9 +160,6 @@ export const useThemeStore = create<ThemeState>((set) => ({
       const currentResolved = useThemeStore.getState().resolvedTheme;
       applyTokens({ presetId: nextPreset, resolved: currentResolved });
       syncThemeHead({ resolved: currentResolved });
-      window.pier?.theme
-        ?.setNativeChrome?.(currentResolved, readChromeColor())
-        ?.catch(() => undefined);
       applyTerminalColors(nextPreset, currentResolved);
       set({
         stylePresetId: nextPreset,

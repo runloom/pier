@@ -4,24 +4,45 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 
 class TestResizeObserver {
+  static observeCount = 0;
+
   observe() {
-    // Test no-op.
+    TestResizeObserver.observeCount += 1;
   }
   disconnect() {
     // Test no-op.
   }
 }
 
-function createPanelProps(): IDockviewPanelProps {
-  return {
+interface TestPanelProps extends IDockviewPanelProps {
+  emitDimensions(event: { height: number; width: number }): void;
+}
+
+function createPanelProps(): TestPanelProps {
+  let onDidDimensionsChange:
+    | ((event: { height: number; width: number }) => void)
+    | null = null;
+  const props = {
     api: {
+      height: 300,
       id: "terminal-1",
       onDidActiveChange: vi.fn(() => ({ dispose: vi.fn() })),
+      onDidDimensionsChange: vi.fn(
+        (listener: (event: { height: number; width: number }) => void) => {
+          onDidDimensionsChange = listener;
+          return { dispose: vi.fn() };
+        }
+      ),
       onDidVisibilityChange: vi.fn(() => ({ dispose: vi.fn() })),
       setTitle: vi.fn(),
+      width: 400,
     },
     containerApi: {},
-  } as unknown as IDockviewPanelProps;
+    emitDimensions(event: { height: number; width: number }) {
+      onDidDimensionsChange?.(event);
+    },
+  };
+  return props as unknown as TestPanelProps;
 }
 
 describe("TerminalPanel lifecycle", () => {
@@ -29,6 +50,7 @@ describe("TerminalPanel lifecycle", () => {
     HTMLElement.prototype.getBoundingClientRect;
 
   beforeEach(() => {
+    TestResizeObserver.observeCount = 0;
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 0)
@@ -91,5 +113,33 @@ describe("TerminalPanel lifecycle", () => {
     unmount();
 
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
+  });
+
+  it("uses dockview dimension events instead of ResizeObserver for terminal frame updates", async () => {
+    const props = createPanelProps();
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    vi.mocked(window.pier.terminal.setFrame).mockClear();
+
+    props.emitDimensions({ height: 340, width: 460 });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.setFrame).toHaveBeenCalledWith(
+        "terminal-1",
+        expect.objectContaining({
+          height: 300,
+          width: 400,
+          x: 10,
+          y: 20,
+        })
+      );
+    });
+    expect(TestResizeObserver.observeCount).toBe(0);
   });
 });
