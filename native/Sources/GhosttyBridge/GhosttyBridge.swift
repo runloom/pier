@@ -148,6 +148,14 @@ final class EventRouterView: NSView {
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let isCmd = mods.contains(.command)
         let isCtrlShift = mods.contains(.control) && mods.contains(.shift)
+
+        if !(isCmd || isCtrlShift),
+           GhosttyBridgeImpl.shared.prepareTerminalForOrdinaryKeyDown(
+               window: window, event: event
+           ) {
+            return nil
+        }
+
         guard isCmd || isCtrlShift else { return event }
 
         // macOS menu reserved keys (Cmd+Q/Cmd+H/Cmd+M/Cmd+Comma 等 role-bound items)
@@ -475,12 +483,51 @@ final class GhosttyBridgeImpl {
         if state.inTerminalMode {
             if let panelId = state.activeTerminalPanelId,
                let term = terminals[panelId] {
-                window.makeFirstResponder(term.terminalView)
+                if window.firstResponder === term.terminalView {
+                    // Closing a detached DevTools window can leave AppKit's
+                    // firstResponder pointing at the terminal while Ghostty's
+                    // surface focus was cleared by windowDidResignKey.
+                    // Refresh becomeFirstResponder so Ghostty sets focus true
+                    // again even when AppKit thinks the responder is unchanged.
+                    _ = term.terminalView.becomeFirstResponder()
+                } else {
+                    window.makeFirstResponder(term.terminalView)
+                }
             }
             // 没找到 terminal NSView → 不动 firstResponder (保留 web container default)
         }
         // Web mode: no-op. main 端在 setActivePanelKind('web') / setOverlayActive(true)
         // 时调 webContents.focus() 让 Chromium 自己 dispatch.
+    }
+
+    func prepareTerminalForOrdinaryKeyDown(
+        window: NSWindow,
+        event: NSEvent
+    ) -> Bool {
+        let state = stateFor(window: window)
+        guard state.inTerminalMode,
+              let panelId = state.activeTerminalPanelId,
+              let term = terminals[panelId] else {
+            return false
+        }
+
+        if window.firstResponder === term.terminalView {
+            _ = term.terminalView.becomeFirstResponder()
+            return false
+        }
+
+        guard window.makeFirstResponder(term.terminalView) else {
+            return false
+        }
+
+        _ = term.terminalView.becomeFirstResponder()
+
+        // Local event monitors run before AppKit dispatches the key event, but
+        // changing firstResponder here is too late for the current event's
+        // already-selected responder. Forward this one event manually so the
+        // first character typed after closing detached DevTools is not lost.
+        term.terminalView.keyDown(with: event)
+        return true
     }
 
     // Forward callback 注册 — 不经 GhosttyBridgeImpl 中间层. 整条 forward 链:

@@ -14,7 +14,8 @@
  */
 import { join } from "node:path";
 import { app, BrowserWindow, nativeTheme, shell } from "electron";
-import { getTerminalAddon } from "../ipc/terminal.ts";
+import { installDetachedDevToolsHandlers } from "../devtools.ts";
+import { getTerminalAddon, restoreActivePanelFocus } from "../ipc/terminal.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
 
 const WINDOW_ID_REGEX = /^(main|w-\d+)$/;
@@ -125,6 +126,12 @@ class WindowManager {
       });
       return { action: "deny" };
     });
+
+    if (isDev) {
+      installDetachedDevToolsHandlers(window, () => {
+        restoreActivePanelFocus(window);
+      });
+    }
 
     // Crash 兜底: 渲染进程异常退出 (非主动 reload) 时清理 terminal NSView, 防止
     // 旧 view 残留在 contentView.subviews 中. 正常 reload 不在这里清 — NSView 跟

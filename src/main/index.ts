@@ -8,6 +8,7 @@ import {
   nativeImage,
 } from "electron";
 import { installCsp } from "./csp.ts";
+import { createDetachedDevToolsMenuItem } from "./devtools.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
@@ -108,7 +109,13 @@ function buildAppMenu(): Menu {
     submenu: [
       { role: "reload" },
       { role: "forceReload" },
-      { role: "toggleDevTools" },
+      ...(isDev
+        ? [
+            createDetachedDevToolsMenuItem(() =>
+              BrowserWindow.getFocusedWindow()
+            ),
+          ]
+        : []),
       { type: "separator" },
       { role: "resetZoom" },
       { role: "zoomIn" },

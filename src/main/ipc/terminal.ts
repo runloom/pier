@@ -6,6 +6,10 @@ import type {
   TerminalFrame,
 } from "@shared/contracts/terminal.ts";
 import { BrowserWindow, type IpcMain } from "electron";
+import {
+  isToggleDevToolsNativeChord,
+  toggleDetachedDevTools,
+} from "../devtools.ts";
 
 interface NativeAddon {
   /**
@@ -100,6 +104,45 @@ export function getTerminalAddon(): NativeAddon | null {
 
 let cachedAddon: NativeAddon | null = null;
 
+interface ActivePanelFocusState {
+  kind: "terminal" | "web";
+  panelId: string | null;
+}
+
+const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
+
+function rememberActivePanelFocus(
+  win: BrowserWindow,
+  kind: "terminal" | "web",
+  panelId: string | null
+): void {
+  activePanelFocusByWindowId.set(win.id, { kind, panelId });
+}
+
+export function restoreActivePanelFocus(win: BrowserWindow): void {
+  if (win.isDestroyed()) {
+    return;
+  }
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.focus();
+
+  const active = activePanelFocusByWindowId.get(win.id);
+  if (active?.kind === "terminal" && active.panelId) {
+    try {
+      cachedAddon?.focusTerminal(active.panelId);
+    } catch (err) {
+      console.error("[pier-restore-terminal-focus] failed:", err);
+    }
+    return;
+  }
+
+  if (!win.webContents.isDestroyed()) {
+    win.webContents.focus();
+  }
+}
+
 function loadNativeAddon(): {
   addon: NativeAddon | null;
   error: string | null;
@@ -165,6 +208,16 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   // - pwd:OSC 7 → 真实 cwd → descriptor.path / descriptor.short basename.
   // - title:OSC 0/2 → TUI 应用 (claude / vim) 自定义 title → descriptor.long.
   addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
+    const targetWindow = BrowserWindow.fromId(id);
+    if (
+      targetWindow &&
+      !targetWindow.isDestroyed() &&
+      isToggleDevToolsNativeChord(modifierFlags, chars)
+    ) {
+      toggleDetachedDevTools(targetWindow);
+      return;
+    }
+
     forwardToWindow(
       id,
       "pier:keybinding:forward",
@@ -260,10 +313,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       call: (panelId: string) => addon?.hideTerminal(panelId),
     },
     {
-      channel: "pier:terminal:focus",
-      call: (panelId: string) => addon?.focusTerminal(panelId),
-    },
-    {
       channel: "pier:terminal:close",
       call: (panelId: string) => addon?.closeTerminal(panelId),
     },
@@ -271,6 +320,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   for (const { channel, call } of panelIdRelays) {
     ipcMain.on(channel, (_event, panelId: string) => call(panelId));
   }
+  ipcMain.on("pier:terminal:focus", (event, panelId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      rememberActivePanelFocus(win, "terminal", panelId);
+    }
+    addon?.focusTerminal(panelId);
+  });
   // set-frame 多一个 frame 参数, 不进数组单独写.
   ipcMain.on(
     "pier:terminal:set-frame",
@@ -362,11 +418,12 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   ipcMain.on(
     "pier:terminal:set-active-panel-kind",
     (event, kind: "terminal" | "web", panelId: string | null) => {
-      if (!addon) {
-        return;
-      }
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) {
+        return;
+      }
+      rememberActivePanelFocus(win, kind, panelId);
+      if (!addon) {
         return;
       }
       const kindRaw = kind === "terminal" ? 0 : 1;
