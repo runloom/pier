@@ -90,20 +90,20 @@
 }
 
 /*
- * Bay dark variant: default 是 dark（:root），加 .light class 切换到 light。
+ * Pier dark variant: default 是 dark（:root），加 .light class 切换到 light。
  * 重定向 Tailwind v4 的 dark: 前缀从默认的 @media prefers-color-scheme 改为
  * :root:not(.light) 选择器，与 ThemeProvider 的 class-based 控制保持一致。
  */
 @variant dark (:root:not(.light) &);
 
 /*
- * Bay v0 globals.css
+ * Pier UI globals.css
  *
- * preset b1VlIttI (tweakcn) v0 占位: 用 shadcn neutral dark default 起步,
- * architect 后续可 paste tweakcn 实际色 (本文件 :root + :root.light 内
- * --color-* CSS vars). bay-extends 7 业务色 derive 自 preset semantic vars.
+ * shadcn preset b27GcrRo / radix-rhea / neutral。应用 UI chrome 使用中性结构色,
+ * 状态色和图表色从主题派生。终端 ANSI / selection 配色由 derive-terminal-colors
+ * 独立处理, 不从这些 UI token 反推。
  *
- * Default = dark (与 mockup Page 3 截图一致); :root.light 触发 light mode.
+ * Default = dark; :root.light 触发 light mode.
  */
 
 :root {
@@ -114,8 +114,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.65 0.18 280);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.25 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.22 0 0);
@@ -128,9 +128,72 @@
   --warning-foreground: oklch(0.13 0 0);
   --success: oklch(0.65 0.15 145);
   --info: oklch(0.65 0.18 230);
+  --chart-1: var(--info);
+  --chart-2: var(--success);
+  --chart-3: var(--warning);
+  --chart-4: var(--destructive);
+  --chart-5: var(--primary);
   --border: oklch(1 0 0 / 0.1);
   --input: oklch(1 0 0 / 0.15);
   --ring: oklch(0.55 0 0);
+  --surface-canvas: color-mix(in oklab, var(--muted) 35%, var(--background));
+  --surface-subtle: color-mix(in oklab, var(--muted) 72%, var(--background));
+  --surface-raised: color-mix(in oklab, var(--muted) 90%, var(--background));
+  --surface-inset: color-mix(in oklab, var(--background) 72%, var(--muted));
+  --surface-border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --interactive-hover: color-mix(
+    in oklab,
+    var(--foreground) 8%,
+    var(--background)
+  );
+  --interactive-active: color-mix(
+    in oklab,
+    var(--foreground) 12%,
+    var(--background)
+  );
+  --status-neutral-bg: color-mix(in oklab, var(--muted) 64%, transparent);
+  --status-neutral-fg: var(--muted-foreground);
+  --status-neutral-border: color-mix(
+    in oklab,
+    var(--muted-foreground) 20%,
+    transparent
+  );
+  --status-info-bg: color-mix(in oklab, var(--info) 14%, transparent);
+  --status-info-fg: color-mix(in oklab, var(--info) 82%, var(--foreground));
+  --status-info-border: color-mix(in oklab, var(--info) 24%, transparent);
+  --status-success-bg: color-mix(in oklab, var(--success) 14%, transparent);
+  --status-success-fg: color-mix(
+    in oklab,
+    var(--success) 82%,
+    var(--foreground)
+  );
+  --status-success-border: color-mix(
+    in oklab,
+    var(--success) 24%,
+    transparent
+  );
+  --status-warning-bg: color-mix(in oklab, var(--warning) 16%, transparent);
+  --status-warning-fg: color-mix(
+    in oklab,
+    var(--warning) 78%,
+    var(--foreground)
+  );
+  --status-warning-border: color-mix(
+    in oklab,
+    var(--warning) 28%,
+    transparent
+  );
+  --status-danger-bg: color-mix(in oklab, var(--destructive) 14%, transparent);
+  --status-danger-fg: color-mix(
+    in oklab,
+    var(--destructive) 86%,
+    var(--foreground)
+  );
+  --status-danger-border: color-mix(
+    in oklab,
+    var(--destructive) 24%,
+    transparent
+  );
   /* === Sidebar / titlebar chrome elevation 体系 ===
      - sidebar (外壳: titlebar / 侧栏 / workspace gutter) 用 --muted, 比内容卡略亮/略暗
      - 内容卡 bg-card = var(--background), 与 sidebar 形成视觉层次 (类似 VSCode)
@@ -144,7 +207,7 @@
   --sidebar-border: color-mix(in oklab, var(--border) 50%, transparent);
   --sidebar-ring: var(--ring);
 
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
   /* === scrollbar system ===
      Firefox 走标准 CSS Scrollbars (`scrollbar-width: thin`); Chromium / Electron /
@@ -195,7 +258,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.55 0.2 280);
+  --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -209,6 +272,11 @@
   --warning-foreground: oklch(0.985 0 0);
   --success: oklch(0.55 0.15 145);
   --info: oklch(0.55 0.2 230);
+  --chart-1: var(--info);
+  --chart-2: var(--success);
+  --chart-3: var(--warning);
+  --chart-4: var(--destructive);
+  --chart-5: var(--primary);
   --border: oklch(0.92 0 0);
   --input: oklch(0.92 0 0);
   --ring: oklch(0.708 0 0);
@@ -241,6 +309,11 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
   --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -253,44 +326,31 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* bay-extends 7 业务色 (derive 自 preset semantic, 详 tokens.json) */
-  --color-kanban-lane-backlog: var(--muted);
-  --color-kanban-lane-running: var(--info);
-  --color-kanban-lane-escalated: var(--destructive);
-  --color-kanban-lane-completed: var(--success);
-  --color-kanban-lane-ready-to-merge: var(--warning);
-  --color-kanban-lane-merged: var(--muted-foreground);
-  --color-kanban-lane-paused: var(--muted);
+  --color-surface-canvas: var(--surface-canvas);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-inset: var(--surface-inset);
+  --color-surface-border: var(--surface-border);
+  --color-interactive-hover: var(--interactive-hover);
+  --color-interactive-active: var(--interactive-active);
 
-  --color-lint-severity-p0: var(--destructive);
-  --color-lint-severity-p1: var(--warning);
-  --color-lint-severity-p2: var(--muted-foreground);
+  --color-status-neutral-bg: var(--status-neutral-bg);
+  --color-status-neutral-fg: var(--status-neutral-fg);
+  --color-status-neutral-border: var(--status-neutral-border);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-fg: var(--status-info-fg);
+  --color-status-info-border: var(--status-info-border);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-fg: var(--status-success-fg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-fg: var(--status-warning-fg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-fg: var(--status-danger-fg);
+  --color-status-danger-border: var(--status-danger-border);
 
-  --color-iter-cap-normal: var(--primary);
-  --color-iter-cap-warn: var(--warning);
-  --color-iter-cap-exceed: var(--destructive);
-
-  --color-mode-think: var(--muted-foreground);
-  --color-mode-emit: var(--primary);
-  --color-mode-lock: var(--success);
-
-  --color-service-status-ok: var(--success);
-  --color-service-status-warn: var(--warning);
-  --color-service-status-error: var(--destructive);
-  --color-service-status-stopped: var(--muted-foreground);
-
-  --color-dispute-status-pending: var(--warning);
-  --color-dispute-status-accepted: var(--success);
-  --color-dispute-status-rejected: var(--destructive);
-  --color-dispute-status-deferred: var(--muted-foreground);
-
-  --color-action-triad-apply: var(--primary);
-  --color-action-triad-run: var(--primary);
-  --color-action-triad-edit: var(--secondary);
-  --color-action-triad-skip: var(--muted-foreground);
-  --color-action-triad-accept: var(--success);
-  --color-action-triad-reject: var(--destructive);
-  --color-action-triad-defer: var(--warning);
+  /* Pier 业务 token 按实际功能增量添加；不要继承 Bay 的看板/任务台账命名。 */
 
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
@@ -299,7 +359,7 @@
 }
 
 /* Universal border-color default packaged into @layer base so Tailwind utility-layer
-   border-color- classes (e.g. border-kanban-lane-running) can override it. Without the
+   border-color classes can override it. Without the
    layer, unlayered rule wins per CSS Cascade Level 5 regardless of selector specificity. */
 @layer base {
   * {
