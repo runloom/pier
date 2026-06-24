@@ -6,7 +6,7 @@
  */
 
 import { PIER } from "@shared/ipc-channels.ts";
-import { BrowserWindow, type IpcMain } from "electron";
+import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
@@ -24,11 +24,11 @@ export function registerWindowIpc(ipcMain: IpcMain): void {
   });
 
   ipcMain.handle(PIER.WINDOW_CLOSE_CURRENT, (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = windowManager.fromWebContents(event.sender);
     if (!win) {
       return;
     }
-    const internalId = windowManager.findInternalIdByBrowserWindow(win);
+    const internalId = windowManager.findInternalIdByWindow(win);
     if (internalId) {
       windowManager.close(internalId);
     }

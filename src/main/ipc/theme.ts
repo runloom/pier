@@ -1,4 +1,4 @@
-import { BrowserWindow, type IpcMain, nativeTheme } from "electron";
+import { type IpcMain, nativeTheme } from "electron";
 import { windowManager } from "../windows/window-manager.ts";
 
 const NATIVE_CHROME_PALETTE = {
@@ -19,17 +19,14 @@ export function registerThemeIpc(ipcMain: IpcMain): void {
       const color = chromeColor ?? NATIVE_CHROME_PALETTE[resolved];
 
       if (isMac) {
-        // macOS: 平时 BrowserWindow 必须保持 #00000000 透明让 terminal NSView 透出,
-        // 不能直接 setBackgroundColor(chromeColor) — 否则 Chromium 合成时窗口底色
-        // 盖住下层 terminal NSView. 改为只记录给 window-manager 的 reload chrome
-        // 缓存, did-start-loading 临时切到 chromeColor 覆盖 reload 期间非终端区域
-        // 的"透到桌面"闪烁, did-finish-load 立刻切回透明.
-        for (const win of BrowserWindow.getAllWindows()) {
-          windowManager.setReloadChromeColor(win, color);
+        // macOS: opaque BaseWindow 只作为兜底 backing; renderer 透明区域仍通过
+        // transparent WebContentsView 透出 native terminal NSView.
+        for (const win of windowManager.getAll()) {
+          windowManager.setNativeChromeColor(win, color);
         }
         return;
       }
-      for (const win of BrowserWindow.getAllWindows()) {
+      for (const win of windowManager.getAll()) {
         win.setBackgroundColor(color);
       }
     }

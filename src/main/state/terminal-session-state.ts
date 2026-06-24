@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { app } from "electron";
-import lockfile from "proper-lockfile";
+import lockfile, { type LockOptions } from "proper-lockfile";
 import writeFileAtomic from "write-file-atomic";
 import { z } from "zod";
 
@@ -30,10 +30,23 @@ const terminalSessionStateSchema = z.object({
 export type TerminalPanelSession = z.infer<typeof terminalPanelSessionSchema>;
 type TerminalSessionState = z.infer<typeof terminalSessionStateSchema>;
 
-const EMPTY_TERMINAL_SESSION_STATE: TerminalSessionState = {
-  version: 1,
-  windows: {},
+const LOCK_OPTIONS: LockOptions = {
+  retries: {
+    factor: 1,
+    maxTimeout: 100,
+    minTimeout: 20,
+    retries: 5,
+  },
 };
+
+let stateMutationQueue: Promise<void> = Promise.resolve();
+
+function createEmptyState(): TerminalSessionState {
+  return {
+    version: 1,
+    windows: {},
+  };
+}
 
 function resolveFilePath(): string {
   return join(app.getPath("userData"), "terminal-session-state.json");
@@ -53,10 +66,9 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-async function readState(): Promise<TerminalSessionState> {
-  const path = resolveFilePath();
+async function readStateFromPath(path: string): Promise<TerminalSessionState> {
   if (!existsSync(path)) {
-    return EMPTY_TERMINAL_SESSION_STATE;
+    return createEmptyState();
   }
   try {
     const raw = await readFile(path, "utf-8");
@@ -66,25 +78,50 @@ async function readState(): Promise<TerminalSessionState> {
       "[terminal-session-state] parse failed, using empty state:",
       err
     );
-    return EMPTY_TERMINAL_SESSION_STATE;
+    return createEmptyState();
   }
 }
 
-async function writeState(state: TerminalSessionState): Promise<void> {
+function readState(): Promise<TerminalSessionState> {
   const path = resolveFilePath();
+  return readStateFromPath(path);
+}
+
+async function ensureStateFile(path: string): Promise<void> {
   await ensureDir(path);
   if (!(await fileExists(path))) {
     await writeFileAtomic(
       path,
-      `${JSON.stringify(EMPTY_TERMINAL_SESSION_STATE, null, 2)}\n`
+      `${JSON.stringify(createEmptyState(), null, 2)}\n`
     );
   }
-  const release = await lockfile.lock(path);
+}
+
+async function mutateState(
+  mutator: (state: TerminalSessionState) => boolean
+): Promise<void> {
+  const path = resolveFilePath();
+  await ensureStateFile(path);
+  const release = await lockfile.lock(path, LOCK_OPTIONS);
   try {
-    await writeFileAtomic(path, `${JSON.stringify(state, null, 2)}\n`);
+    const state = await readStateFromPath(path);
+    if (mutator(state)) {
+      await writeFileAtomic(path, `${JSON.stringify(state, null, 2)}\n`);
+    }
   } finally {
     await release();
   }
+}
+
+function enqueueStateMutation(
+  mutator: (state: TerminalSessionState) => boolean
+): Promise<void> {
+  const run = stateMutationQueue.then(
+    () => mutateState(mutator),
+    () => mutateState(mutator)
+  );
+  stateMutationQueue = run.catch(() => undefined);
+  return run;
 }
 
 function isNonEmptyId(value: string): boolean {
@@ -117,14 +154,15 @@ export async function updateTerminalPanelCwd(
   if (!isRestorableCwd(cwd)) {
     return;
   }
-  const state = await readState();
-  const windowState = state.windows[windowId] ?? { panels: {} };
-  state.windows[windowId] = windowState;
-  windowState.panels[panelId] = {
-    cwd,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeState(state);
+  await enqueueStateMutation((state) => {
+    const windowState = state.windows[windowId] ?? { panels: {} };
+    state.windows[windowId] = windowState;
+    windowState.panels[panelId] = {
+      cwd,
+      updatedAt: new Date().toISOString(),
+    };
+    return true;
+  });
 }
 
 export async function removeTerminalPanelSession(
@@ -134,14 +172,15 @@ export async function removeTerminalPanelSession(
   if (!(isNonEmptyId(windowId) && isNonEmptyId(panelId))) {
     return;
   }
-  const state = await readState();
-  const windowState = state.windows[windowId];
-  if (!windowState?.panels[panelId]) {
-    return;
-  }
-  delete windowState.panels[panelId];
-  if (Object.keys(windowState.panels).length === 0) {
-    delete state.windows[windowId];
-  }
-  await writeState(state);
+  await enqueueStateMutation((state) => {
+    const windowState = state.windows[windowId];
+    if (!windowState?.panels[panelId]) {
+      return false;
+    }
+    delete windowState.panels[panelId];
+    if (Object.keys(windowState.panels).length === 0) {
+      delete state.windows[windowId];
+    }
+    return true;
+  });
 }

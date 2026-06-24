@@ -29,7 +29,7 @@ describe("terminal focus restoration", () => {
       setPwdForwardCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
-      setupWindow: vi.fn(),
+      setupWindow: vi.fn(() => true),
       showTerminal: vi.fn(),
     };
     const createFakeWindow = (focused = true) => ({
@@ -40,6 +40,7 @@ describe("terminal focus restoration", () => {
       isFocused: () => focused,
       isMinimized: () => false,
       restore: vi.fn(),
+      setBackgroundColor: vi.fn(),
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
@@ -60,10 +61,7 @@ describe("terminal focus restoration", () => {
     };
 
     vi.doMock("electron", () => ({
-      BrowserWindow: {
-        fromId: vi.fn((id: number) => (id === ipcWindow.id ? ipcWindow : null)),
-        fromWebContents: vi.fn(() => ipcWindow),
-      },
+      // terminal.ts only imports Electron types at runtime now.
     }));
     vi.doMock("node:module", () => ({
       createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
@@ -79,7 +77,11 @@ describe("terminal focus restoration", () => {
       updateTerminalPanelCwd: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
-      findBrowserWindowId: vi.fn(() => "main"),
+      findAppWindowByElectronId: vi.fn((id: number) =>
+        id === ipcWindow.id ? ipcWindow : null
+      ),
+      findAppWindowByWebContents: vi.fn(() => ipcWindow),
+      findInternalWindowId: vi.fn(() => "main"),
     }));
 
     const { registerTerminalIpc, restoreActivePanelFocus } = await import(
@@ -196,6 +198,22 @@ describe("terminal focus restoration", () => {
       "Menlo",
       13,
       "/Users/xyz/ABC/pier"
+    );
+  });
+
+  it("does not make the host window transparent during terminal setup", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow } =
+      await setupTerminalFocusHarness();
+
+    const result = invokeHandlers.get("pier:terminal:setup")?.({
+      sender: ipcWindow.webContents,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(ipcWindow.setBackgroundColor).not.toHaveBeenCalled();
+    expect(fakeAddon.setupWindow).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      ipcWindow.id
     );
   });
 

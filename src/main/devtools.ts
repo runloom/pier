@@ -1,8 +1,8 @@
 import {
   app,
-  type BrowserWindow,
   type Input,
   type MenuItemConstructorOptions,
+  type WebContents,
 } from "electron";
 
 export const DETACHED_DEVTOOLS_ACCELERATOR = "CommandOrControl+Alt+I";
@@ -12,18 +12,18 @@ const NS_FLAG_CONTROL = 0x4_00_00;
 const NS_FLAG_OPTION = 0x8_00_00;
 const NS_FLAG_COMMAND = 0x10_00_00;
 
+type DevToolsWebContentsLike = Pick<
+  WebContents,
+  "closeDevTools" | "isDestroyed" | "isDevToolsOpened" | "on" | "openDevTools"
+>;
+
 interface DevToolsWindowLike {
-  isDestroyed?: () => boolean;
-  webContents: {
-    closeDevTools: () => void;
-    isDestroyed: () => boolean;
-    isDevToolsOpened: () => boolean;
-    openDevTools: (options: {
-      activate: boolean;
-      mode: "detach";
-      title: string;
-    }) => void;
-  };
+  focus: () => void;
+  isDestroyed: () => boolean;
+  isMinimized: () => boolean;
+  moveTop: () => void;
+  restore: () => void;
+  webContents: DevToolsWebContentsLike;
 }
 
 function hasFlag(flags: number, flag: number): boolean {
@@ -67,7 +67,7 @@ export function isToggleDevToolsNativeChord(
 }
 
 export function toggleDetachedDevTools(win: DevToolsWindowLike): void {
-  if (win.isDestroyed?.() === true || win.webContents.isDestroyed()) {
+  if (win.isDestroyed() || win.webContents.isDestroyed()) {
     return;
   }
 
@@ -99,7 +99,7 @@ export function createDetachedDevToolsMenuItem(
 }
 
 export function installDetachedDevToolsHandlers(
-  win: BrowserWindow,
+  win: DevToolsWindowLike,
   restoreFocus: () => void
 ): void {
   win.webContents.on("before-input-event", (event, input) => {

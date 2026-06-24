@@ -1,11 +1,12 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
-import { app, BrowserWindow } from "electron";
+import { app } from "electron";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
+import type { AppWindow } from "../windows/app-window.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import {
   createClientRegistry,
@@ -26,14 +27,14 @@ export interface PierAppCore {
 }
 
 function broadcastMruState(state: MruState): void {
-  for (const win of BrowserWindow.getAllWindows()) {
+  for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
       win.webContents.send("pier:command-palette-mru:changed", state);
     }
   }
 }
 
-function focusRendererTarget(win: BrowserWindow): void {
+function focusRendererTarget(win: AppWindow): void {
   if (win.isMinimized()) {
     win.restore();
   }
@@ -61,7 +62,7 @@ function sendRendererCommand(
     return true;
   }
   const focused =
-    BrowserWindow.getFocusedWindow() ??
+    windowManager.getFocused() ??
     windowManager.getAll().find((win) => !win.isDestroyed()) ??
     null;
   if (!focused || focused.isDestroyed()) {
