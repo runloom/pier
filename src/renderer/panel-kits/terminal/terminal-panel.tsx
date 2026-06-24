@@ -210,7 +210,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       for (const s of subscriptions) {
         s.dispose();
       }
-      window.pier.terminal.close(panelId);
     };
   }, [api, panelId]);
 

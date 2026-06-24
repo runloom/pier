@@ -9,12 +9,13 @@ describe("terminal focus restoration", () => {
   async function setupTerminalFocusHarness(
     opts: { ipcWindowFocused?: boolean } = {}
   ) {
+    const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const fakeAddon = {
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
-      createTerminal: vi.fn(),
+      createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
       focusTerminal: vi.fn(),
       hideTerminal: vi.fn(),
@@ -48,7 +49,11 @@ describe("terminal focus restoration", () => {
     const ipcWindow = createFakeWindow(opts.ipcWindowFocused ?? true);
     const restoreWindow = createFakeWindow();
     const fakeIpcMain = {
-      handle: vi.fn(),
+      handle: vi.fn(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          invokeHandlers.set(channel, handler);
+        }
+      ),
       on: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
         handlers.set(channel, handler);
       }),
@@ -66,6 +71,16 @@ describe("terminal focus restoration", () => {
         createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
       },
     }));
+    vi.doMock("@main/state/terminal-session-state.ts", () => ({
+      readTerminalPanelSession: vi.fn(async () => ({
+        cwd: "/Users/xyz/ABC/pier",
+        updatedAt: "2026-06-24T00:00:00.000Z",
+      })),
+      updateTerminalPanelCwd: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/windows/window-identity.ts", () => ({
+      findBrowserWindowId: vi.fn(() => "main"),
+    }));
 
     const { registerTerminalIpc, restoreActivePanelFocus } = await import(
       "@main/ipc/terminal.ts"
@@ -75,6 +90,7 @@ describe("terminal focus restoration", () => {
     return {
       fakeAddon,
       handlers,
+      invokeHandlers,
       ipcWindow,
       restoreActivePanelFocus,
       restoreWindow,
@@ -156,6 +172,30 @@ describe("terminal focus restoration", () => {
     expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
       { panelId: "panel-2" }
+    );
+  });
+
+  it("passes the saved cwd when creating a new native terminal", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow } =
+      await setupTerminalFocusHarness();
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      "terminal-1",
+      { x: 1, y: 2, width: 300, height: 200 },
+      "Menlo",
+      13,
+      "/Users/xyz/ABC/pier"
     );
   });
 

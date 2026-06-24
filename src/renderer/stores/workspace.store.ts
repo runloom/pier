@@ -129,10 +129,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       });
       return;
     }
-    // 主动先发 native terminal close IPC, 再 removePanel — 不依赖 React unmount
-    // 时序. dockview removePanel 会同步 dispose React tree, useEffect cleanup 也会
-    // 调 terminal.close (idempotent, swift close 二次调用 no-op), 这里只是确保
-    // close IPC 一定先于 dockview 内部 panel state 销毁 fire.
+    // 主动先发 native terminal close IPC, 再 removePanel — native session 生命周期
+    // 只绑定显式 workspace close 操作, 不绑定 React unmount. 这样 Electron reload
+    // 卸载 renderer tree 时不会误杀可复用的 Ghostty surface / PTY.
     //
     // 用 panel.view.contentComponent 而非 panel.params?.component:
     // contentComponent 是 dockview 注册组件的 stable readonly string (panel-registry

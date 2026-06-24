@@ -21,6 +21,11 @@ import {
   restoreActivePanelFocus,
 } from "../ipc/terminal.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
+import {
+  findBrowserWindowId,
+  forgetBrowserWindowId,
+  rememberBrowserWindowId,
+} from "./window-identity.ts";
 
 const WINDOW_ID_REGEX = /^(main|w-\d+)$/;
 
@@ -121,6 +126,7 @@ class WindowManager {
     }
 
     const window = new BrowserWindow(winOpts);
+    rememberBrowserWindowId(window, id);
 
     window.on("ready-to-show", () => window.show());
     window.on("blur", () => {
@@ -209,6 +215,7 @@ class WindowManager {
       for (const cb of this.onCloseCallbacks) {
         cb(id);
       }
+      forgetBrowserWindowId(window);
       this.windows.delete(id);
       this.allocator.release(id);
     });
@@ -262,12 +269,7 @@ class WindowManager {
 
   /** 通过 BrowserWindow 实例反查内部 string id. */
   findInternalIdByBrowserWindow(bw: BrowserWindow): string | null {
-    for (const [id, w] of this.windows) {
-      if (w === bw) {
-        return id;
-      }
-    }
-    return null;
+    return findBrowserWindowId(bw);
   }
 }
 
