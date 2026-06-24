@@ -627,8 +627,8 @@ body {
 
    3 种 tab 状态:
    S1  未选中 (hidden panel, 任意 group)    — 最弱: 透明底 + 暗文字
-   S2  分组选中 (visible panel, 失焦 group) — 中等: 底部 1px muted 指示线
-   S3  当前聚焦 (visible panel, 聚焦 group) — 最强: 底部 2px primary 指示线 */
+   S2  分组选中 (visible panel, 失焦 group) — 中等: 内容底色 + 顶部 1px muted 指示线
+   S3  当前聚焦 (visible panel, 聚焦 group) — 最强: 内容底色 + 顶部 2px primary 指示线 */
 
 .dockview-theme-pier {
   /* — 紧凑布局 — */
@@ -643,7 +643,7 @@ body {
   --dv-tabs-and-actions-container-background-color: var(--sidebar);
 
   /* — S3 聚焦: active-group + visible-panel — */
-  --dv-activegroup-visiblepanel-tab-background-color: transparent;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--background);
   --dv-activegroup-visiblepanel-tab-color: var(--foreground);
 
   /* — S1 未选中: active-group + hidden-panel — */
@@ -651,7 +651,7 @@ body {
   --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
 
   /* — S2 分组选中: inactive-group + visible-panel — */
-  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--background);
   --dv-inactivegroup-visiblepanel-tab-color: color-mix(
     in oklab,
     var(--foreground) 65%,
@@ -703,38 +703,46 @@ body {
   color: var(--foreground);
 }
 
-/* — S3 指示线: 聚焦 group 选中 tab → 2px primary — */
+/* — 选中 tab 与内容区连成同一层, 避免 tab 栏底线切断层级 — */
 .dockview-theme-pier
-  .dv-groupview.dv-active-group
+  .dv-groupview
   > .dv-tabs-and-actions-container
   .dv-tabs-container
   > .dv-tab.dv-active-tab {
+  overflow: visible;
   position: relative;
 }
 .dockview-theme-pier
-  .dv-groupview.dv-active-group
+  .dv-groupview
   > .dv-tabs-and-actions-container
   .dv-tabs-container
-  > .dv-tab.dv-active-tab::after {
+  > .dv-tab.dv-active-tab::before {
   content: "";
   position: absolute;
-  top: auto;
   inset-inline: 0;
-  bottom: 0;
-  height: 2px;
-  background-color: var(--primary);
-  outline: none !important;
+  bottom: -1px;
+  height: 1px;
+  background-color: var(--background);
   z-index: 1;
 }
 
-/* — S2 指示线: 失焦 group 选中 tab → 1px muted — */
+/* — S3 指示线: 聚焦 group 选中 tab → 顶部 2px primary — */
 .dockview-theme-pier
-  .dv-groupview.dv-inactive-group
+  .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
   .dv-tabs-container
-  > .dv-tab.dv-active-tab {
-  position: relative;
+  > .dv-tab.dv-active-tab::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  height: 2px;
+  background-color: var(--primary);
+  outline: none !important;
+  z-index: 2;
 }
+
+/* — S2 指示线: 失焦 group 选中 tab → 顶部 1px muted — */
 .dockview-theme-pier
   .dv-groupview.dv-inactive-group
   > .dv-tabs-and-actions-container
@@ -742,13 +750,12 @@ body {
   > .dv-tab.dv-active-tab::after {
   content: "";
   position: absolute;
-  top: auto;
+  top: 0;
   inset-inline: 0;
-  bottom: 0;
   height: 1px;
   background-color: var(--muted-foreground);
   outline: none !important;
-  z-index: 1;
+  z-index: 2;
 }
 
 
