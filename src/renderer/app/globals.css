@@ -820,3 +820,8 @@ body {
 .dockview-theme-pier .dv-drop-target-container {
   --dv-transition-duration: 100ms;
 }
+
+
+.dockview-theme-pier .dv-tabs-and-actions-container {
+  border-bottom: none;
+}
