@@ -7,11 +7,16 @@ import {
   type MenuItemConstructorOptions,
   nativeImage,
 } from "electron";
+import {
+  type RegisteredLocalControl,
+  registerCliLocalControl,
+} from "./adapters/cli/register-local-control.ts";
 import { installCsp } from "./csp.ts";
 import { createDetachedDevToolsMenuItem } from "./devtools.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
+import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
@@ -21,6 +26,7 @@ import { windowManager } from "./windows/window-manager.ts";
 const isDev = !app.isPackaged;
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
+let localControl: RegisteredLocalControl | null = null;
 
 // dev mode silence "Insecure CSP (unsafe-eval)" warning: dev CSP 必须含 'unsafe-eval'
 // (vite HMR + react-refresh 依赖 eval).
@@ -48,7 +54,9 @@ function setUserDataPath(userDataDir: string): void {
 function configureAppIdentity(): void {
   if (isDev) {
     const cwd = process.cwd();
-    setUserDataPath(devUserDataDirForCwd(cwd));
+    setUserDataPath(
+      process.env.ELECTRON_USER_DATA_DIR ?? devUserDataDirForCwd(cwd)
+    );
   }
   app.setName("Pier");
 }
@@ -177,10 +185,21 @@ app.whenReady().then(() => {
   registerWindowIpc(ipcMain);
   registerMenuIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
+  registerRendererCommandIpc(ipcMain);
   registerTerminalIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);
+  registerCliLocalControl()
+    .then((control) => {
+      localControl = control;
+    })
+    .catch((error: unknown) => {
+      console.error(
+        "[cli] failed to start local control server:",
+        error instanceof Error ? error.message : String(error)
+      );
+    });
 
   // 首窗口 id 固定 "main".
   windowManager.create({ id: "main" });
@@ -196,4 +215,10 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  localControl?.close().catch(() => {
+    // ignore: app 正在退出
+  });
 });

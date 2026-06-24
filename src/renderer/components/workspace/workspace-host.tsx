@@ -1,3 +1,4 @@
+import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import {
   DockviewReact,
   type DockviewReadyEvent,
@@ -56,6 +57,125 @@ function applyDefaultLayout(api: DockviewReadyEvent["api"]): void {
 }
 
 const SAVE_DEBOUNCE_MS = 500;
+
+function panelSnapshots() {
+  const api = useWorkspaceStore.getState().api;
+  if (!api) {
+    throw new Error("workspace api not ready");
+  }
+  return api.panels.map((panel) => {
+    const component = panel.view.contentComponent;
+    return {
+      active: panel.id === api.activePanel?.id,
+      id: panel.id,
+      kind: panelKindOf(component),
+      title: panel.title,
+    };
+  });
+}
+
+function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
+  const api = useWorkspaceStore.getState().api;
+  if (!api) {
+    throw new Error("workspace api not ready");
+  }
+  const panel = api.panels.find((candidate) => candidate.id === panelId);
+  if (!panel) {
+    throw new Error(`panel not found: ${panelId}`);
+  }
+  const kind = panelKindOf(panel.view.contentComponent);
+  if (expectedKind && kind !== expectedKind) {
+    throw new Error(`panel is not ${expectedKind}: ${panelId}`);
+  }
+  panel.api.setActive();
+}
+
+function runRendererCommand(envelope: RendererCommandEnvelope): void {
+  try {
+    const state = useWorkspaceStore.getState();
+    switch (envelope.command.type) {
+      case "panel.list": {
+        window.pier.rendererCommand.resolve({
+          data: panelSnapshots(),
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "panel.focus": {
+        focusPanel(envelope.command.panelId);
+        window.pier.rendererCommand.resolve({
+          data: null,
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "terminal.list": {
+        window.pier.rendererCommand.resolve({
+          data: panelSnapshots().filter((panel) => panel.kind === "terminal"),
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "terminal.open": {
+        const panelId = state.addTerminal({
+          ...(envelope.command.placement && {
+            placement: envelope.command.placement,
+          }),
+        });
+        if (!panelId) {
+          throw new Error("workspace api not ready");
+        }
+        window.pier.rendererCommand.resolve({
+          data: { panelId },
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "terminal.focus": {
+        focusPanel(envelope.command.panelId, "terminal");
+        window.pier.rendererCommand.resolve({
+          data: null,
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "workspace.open": {
+        const panelId = state.addTerminal({
+          path: envelope.command.path,
+          ...(envelope.command.placement && {
+            placement: envelope.command.placement,
+          }),
+        });
+        if (!panelId) {
+          throw new Error("workspace api not ready");
+        }
+        window.pier.rendererCommand.resolve({
+          data: { panelId, path: envelope.command.path },
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      default: {
+        const _exhaustive: never = envelope.command;
+        throw new Error(`unsupported renderer command: ${String(_exhaustive)}`);
+      }
+    }
+  } catch (error) {
+    window.pier.rendererCommand.resolve({
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+      },
+      ok: false,
+      requestId: envelope.requestId,
+    });
+  }
+}
 
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
@@ -137,6 +257,8 @@ export function WorkspaceHost() {
           window.pier?.terminal?.setActivePanelKind?.("terminal", req.panelId);
         }
       });
+
+      window.pier.rendererCommand.onCommand(runRendererCommand);
 
       // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时
       // 用 default. 注意: applyDefaultLayout / fromJSON 都包在 isApplyingPersistedLayout

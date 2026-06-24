@@ -7,22 +7,20 @@
 
 import { PIER } from "@shared/ipc-channels.ts";
 import { BrowserWindow, type IpcMain } from "electron";
+import { appCore } from "../app-core/app-core.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
 export function registerWindowIpc(ipcMain: IpcMain): void {
-  ipcMain.handle(PIER.WINDOW_CREATE, () => {
-    const id = windowManager.create();
-    return { windowId: id };
-  });
+  ipcMain.handle(PIER.WINDOW_CREATE, () => appCore.services.window.create());
 
-  ipcMain.handle(PIER.WINDOW_LIST, () => windowManager.list());
+  ipcMain.handle(PIER.WINDOW_LIST, () => appCore.services.window.list());
 
   ipcMain.handle(PIER.WINDOW_FOCUS, (_event, windowId: string) => {
-    windowManager.focus(windowId);
+    appCore.services.window.focus(windowId);
   });
 
   ipcMain.handle(PIER.WINDOW_CLOSE, (_event, windowId: string) => {
-    windowManager.close(windowId);
+    appCore.services.window.close(windowId);
   });
 
   ipcMain.handle(PIER.WINDOW_CLOSE_CURRENT, (event) => {

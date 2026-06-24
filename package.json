@@ -5,6 +5,9 @@
   "type": "module",
   "main": "out/main/index.js",
   "private": true,
+  "bin": {
+    "pier": "./bin/pier.mjs"
+  },
   "license": "TBD",
   "engines": {
     "node": ">=22.0.0",
@@ -29,6 +32,7 @@
     "predev": "node ./scripts/dev-profile.mjs predev",
     "dev": "node ./scripts/dev-profile.mjs electron-dev",
     "dev:info": "node ./scripts/dev-profile.mjs info",
+    "cli:dev": "node ./bin/pier.mjs",
     "electron:dev": "node ./scripts/dev-profile.mjs electron-dev",
     "electron:preview": "electron-vite preview",
     "build:electron": "electron-vite build",

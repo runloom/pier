@@ -55,7 +55,9 @@ export function registerPanelActions(): () => void {
     actionRegistry.register({
       category: "Panel",
       enabled: () => useWorkspaceStore.getState().api != null,
-      handler: () => useWorkspaceStore.getState().addTerminal(),
+      handler: () => {
+        useWorkspaceStore.getState().addTerminal();
+      },
       id: "pier.panel.newTerminal",
       metadata: { group: "1_new", iconComponent: Plus, sortOrder: 1 },
       surfaces: ["dockview-tab", "terminal/content", "command-palette"],

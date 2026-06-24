@@ -13,6 +13,10 @@ files:
   - '!**/*.map'
   - native/build/Release/**
 
+extraResources:
+  - from: bin/pier.mjs
+    to: bin/pier
+
 asar: true
 asarUnpack:
   - native/build/Release/**

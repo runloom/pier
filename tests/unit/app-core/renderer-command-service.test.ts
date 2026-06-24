@@ -1,0 +1,153 @@
+import { createRendererCommandService } from "@main/services/renderer-command-service.ts";
+import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
+import { describe, expect, it, vi } from "vitest";
+
+describe("createRendererCommandService", () => {
+  it("发送 renderer command 并等待结果", async () => {
+    let sent: RendererCommandEnvelope | null = null;
+    let focus: boolean | undefined;
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-1",
+      host: {
+        send(envelope, _windowId, options) {
+          sent = envelope;
+          focus = options?.focus;
+          return true;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({ type: "terminal.open" });
+    expect(sent).toEqual({
+      command: { type: "terminal.open" },
+      requestId: "renderer-req-1",
+    });
+    expect(focus).toBe(true);
+    service.resolve({
+      data: { panelId: "terminal-1" },
+      ok: true,
+      requestId: "renderer-req-1",
+    });
+
+    await expect(promise).resolves.toEqual({
+      data: { panelId: "terminal-1" },
+      ok: true,
+      requestId: "renderer-req-1",
+    });
+  });
+
+  it("查询类 renderer command 不主动聚焦窗口", async () => {
+    let focus: boolean | undefined;
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-list",
+      host: {
+        send(_envelope, _windowId, options) {
+          focus = options?.focus;
+          return true;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({ type: "panel.list" });
+    expect(focus).toBe(false);
+    service.resolve({
+      data: [],
+      ok: true,
+      requestId: "renderer-req-list",
+    });
+
+    await expect(promise).resolves.toEqual({
+      data: [],
+      ok: true,
+      requestId: "renderer-req-list",
+    });
+  });
+
+  it("显式 focus=false 时不主动聚焦窗口", async () => {
+    let focus: boolean | undefined;
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-background",
+      host: {
+        send(_envelope, _windowId, options) {
+          focus = options?.focus;
+          return true;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({
+      focus: false,
+      path: ".",
+      type: "workspace.open",
+    });
+    expect(focus).toBe(false);
+    service.resolve({
+      data: { panelId: "terminal-1" },
+      ok: true,
+      requestId: "renderer-req-background",
+    });
+
+    await expect(promise).resolves.toEqual({
+      data: { panelId: "terminal-1" },
+      ok: true,
+      requestId: "renderer-req-background",
+    });
+  });
+
+  it("无可用 renderer 窗口时返回失败", async () => {
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-2",
+      host: { send: () => false },
+      timeoutMs: 1000,
+    });
+
+    await expect(service.execute({ type: "terminal.open" })).resolves.toEqual({
+      error: { message: "no renderer window available" },
+      ok: false,
+      requestId: "renderer-req-2",
+    });
+  });
+
+  it("renderer 超时时返回失败", async () => {
+    vi.useFakeTimers();
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-3",
+      host: { send: () => true },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({ type: "workspace.open", path: "." });
+    vi.advanceTimersByTime(1000);
+
+    await expect(promise).resolves.toEqual({
+      error: { message: "renderer command timed out" },
+      ok: false,
+      requestId: "renderer-req-3",
+    });
+    vi.useRealTimers();
+  });
+
+  it("透传 renderer 失败结果", async () => {
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-4",
+      host: { send: () => true },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({ type: "workspace.open", path: "." });
+    service.resolve({
+      error: { message: "workspace api not ready" },
+      ok: false,
+      requestId: "renderer-req-4",
+    });
+
+    await expect(promise).resolves.toEqual({
+      error: { message: "workspace api not ready" },
+      ok: false,
+      requestId: "renderer-req-4",
+    });
+  });
+});

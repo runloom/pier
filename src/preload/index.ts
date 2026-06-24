@@ -4,6 +4,14 @@ import type {
   MenuPopupResult,
   MenuTemplate,
 } from "@shared/contracts/menu.ts";
+import type {
+  RendererCommandEnvelope,
+  RendererCommandResult,
+} from "@shared/contracts/renderer-command.ts";
+import {
+  RENDERER_COMMAND_CHANNEL,
+  RENDERER_COMMAND_RESULT_CHANNEL,
+} from "@shared/contracts/renderer-command-channels.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -45,6 +53,11 @@ export interface PierWorkspaceAPI {
   saveLayout: (layout: unknown) => Promise<void>;
 }
 
+export interface PierRendererCommandAPI {
+  onCommand: (cb: (envelope: RendererCommandEnvelope) => void) => () => void;
+  resolve: (result: RendererCommandResult) => void;
+}
+
 export interface PierCommandPaletteMruAPI {
   clear: () => Promise<MruState>;
   /** 订阅 changed 广播, 返回解绑函数 */
@@ -81,6 +94,7 @@ export interface PierWindowAPI {
   menu: PierMenuAPI;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
+  rendererCommand: PierRendererCommandAPI;
   terminal: TerminalAPI;
   theme: PierThemeAPI;
   workspace: PierWorkspaceAPI;
@@ -150,6 +164,12 @@ const workspaceApi: PierWorkspaceAPI = {
     ipcRenderer.invoke("pier:workspace:save-layout", layout),
 };
 
+const rendererCommandApi: PierRendererCommandAPI = {
+  onCommand: (cb) => subscribeIpc(RENDERER_COMMAND_CHANNEL, cb),
+  resolve: (result) =>
+    ipcRenderer.send(RENDERER_COMMAND_RESULT_CHANNEL, result),
+};
+
 const commandPaletteMruApi: PierCommandPaletteMruAPI = {
   read: () => ipcRenderer.invoke("pier:command-palette-mru:read"),
   recordUse: (actionId) =>
@@ -188,6 +208,7 @@ const api: PierWindowAPI = {
   menu: menuApi,
   platform: process.platform,
   preferences: preferencesApi,
+  rendererCommand: rendererCommandApi,
   terminal: terminalApi,
   theme: themeApi,
   workspace: workspaceApi,

@@ -1,3 +1,4 @@
+import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
@@ -6,7 +7,10 @@ import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
 interface WorkspaceState {
   addPanel: (opts: { id: string; title: string; component: string }) => void;
   addTab: () => void;
-  addTerminal: () => void;
+  addTerminal: (opts?: {
+    path?: string;
+    placement?: PierCommandPlacement;
+  }) => string | null;
   api: DockviewApi | null;
   closeActivePanel: () => void;
   closeAll: () => Promise<void>;
@@ -72,21 +76,42 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       api.addPanel({ id, component: "welcome", title: "Welcome" });
     }
   },
-  addTerminal() {
+  addTerminal(opts) {
     const api = get().api;
     if (!api) {
-      return;
+      return null;
     }
     const id = `terminal-${Date.now()}`;
     const activeGroup = api.activeGroup;
+    const activePanel = api.activePanel;
+    const splitDirection = (() => {
+      switch (opts?.placement) {
+        case "split-right":
+          return "right";
+        case "split-below":
+          return "below";
+        case "split-left":
+          return "left";
+        case "split-above":
+          return "above";
+        default:
+          return null;
+      }
+    })();
+    const position =
+      splitDirection && activePanel
+        ? { referencePanel: activePanel.id, direction: splitDirection }
+        : undefined;
+    const fallbackPosition = activeGroup
+      ? { referenceGroup: activeGroup, direction: "within" as const }
+      : { direction: "right" as const };
     api.addPanel({
       id,
       component: "terminal",
-      title: "Terminal",
-      position: activeGroup
-        ? { referenceGroup: activeGroup, direction: "within" }
-        : { direction: "right" },
+      title: opts?.path ? `Terminal: ${opts.path}` : "Terminal",
+      position: position ?? fallbackPosition,
     });
+    return id;
   },
   closeActivePanel: () => {
     const api = get().api;
