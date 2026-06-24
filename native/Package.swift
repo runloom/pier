@@ -27,5 +27,9 @@ let package = Package(
                 .unsafeFlags(["-Xfrontend", "-enable-objc-interop"]),
             ]
         ),
+        .testTarget(
+            name: "GhosttyBridgeTests",
+            dependencies: ["GhosttyBridge"]
+        ),
     ]
 )
