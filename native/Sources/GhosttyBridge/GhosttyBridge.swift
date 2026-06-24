@@ -462,7 +462,13 @@ final class GhosttyBridgeImpl {
 
     // MARK: - Terminal lifecycle
 
-    func createTerminal(parent: NSWindow, panelId: String, viewport: NSRect) -> Bool {
+    func createTerminal(
+        parent: NSWindow,
+        panelId: String,
+        viewport: NSRect,
+        fontFamily: String,
+        fontSize: Float
+    ) -> Bool {
         guard let contentView = parent.contentView else { return false }
 
         // Idempotent: 同 panelId 已存在 (如 reload 残留) → 先 close 旧的再创建.
@@ -477,6 +483,14 @@ final class GhosttyBridgeImpl {
         terminalView.autoresizingMask = [.width, .height]
         terminalView.configuration = TerminalSurfaceOptions(backend: .exec)
         terminalView.controller = controller(for: parent)
+
+        // 把创建期字体写进 controller 的 TerminalConfiguration. 走 setTerminalConfiguration
+        // → ghostty_app_update_config + ghostty_surface_update_config (hot-reload). 注意
+        // 这是 window 级 config — 同 window 已存在的其他 panel 也会同步切到新字体
+        // (ghostty_app_update_config 会推到 controller 下所有 surface). 实际使用中字体
+        // 来自 store 单值 (monoFontFamily + monoFontSize), 每个 panel 都用同一份, 不会
+        // 看到字体抖动; 但概念上要清楚: 不是 panel-local 配置.
+        applyFontToController(parent: parent, family: fontFamily, size: fontSize)
 
         // 挂 EventDelegate — 同时接 OSC 7 (PwdDelegate) + OSC 0/2 (TitleDelegate).
         // delegate 是 weak ref, Terminal struct strong-hold eventDelegate 保证生命周期.
@@ -687,6 +701,42 @@ final class GhosttyBridgeImpl {
         controller.setTheme(definition.toTerminalTheme())
     }
 
+    /// 把字体配置写入 window 下的 TerminalController. 走 setTerminalConfiguration
+    /// → ghostty_app_update_config + ghostty_surface_update_config (hot-reload),
+    /// 不重建 surface 不杀 shell. controller 是 lazy 创建 — 即使 setFont 在 createTerminal
+    /// 之前调 (字体 hydrate 顺序在前), 后续 createTerminal 拿到的 controller 已带字体配置.
+    func applyFontConfig(
+        window: NSWindow,
+        fontFamily: String,
+        fontSize: Float
+    ) {
+        applyFontToController(parent: window, family: fontFamily, size: fontSize)
+    }
+
+    /// createTerminal 与 applyFontConfig 共用的实现. 拿 controller, 用 startingFrom
+    /// 当前 config 派生新 config (保住 backgroundOpacity / 默认 cursor / 默认 thicken 等
+    /// 既有字段, ghostty 配置 last-wins 语义), 再 setTerminalConfiguration. 空 family /
+    /// Float ≤ 0 视为"保持当前值" —— startingFrom 已带原值, 跳过 with 调用即不变.
+    private func applyFontToController(
+        parent: NSWindow,
+        family: String,
+        size: Float
+    ) {
+        let controller = controller(for: parent)
+        let newConfig = TerminalConfiguration(
+            startingFrom: controller.terminalConfiguration,
+            configure: { builder in
+                if !family.isEmpty {
+                    builder.withFontFamily(family)
+                }
+                if size > 0 {
+                    builder.withFontSize(size)
+                }
+            }
+        )
+        controller.setTerminalConfiguration(newConfig)
+    }
+
     // MARK: - Coordinate conversion
 
     private func computeFrame(in contentView: NSView, viewport: NSRect) -> NSRect {
@@ -731,14 +781,39 @@ public func ghosttyBridgeSetOverlayActive(
 @_cdecl("ghostty_bridge_create_terminal")
 public func ghosttyBridgeCreateTerminal(
     _ nsWindowPtr: UnsafeMutableRawPointer,
-    _ panelId: UnsafePointer<CChar>,
-    _ x: Double, _ y: Double, _ w: Double, _ h: Double
+    _ panelIdPtr: UnsafePointer<CChar>,
+    _ x: Double, _ y: Double, _ w: Double, _ h: Double,
+    _ fontFamilyPtr: UnsafePointer<CChar>,
+    _ fontSize: Float
 ) -> Bool {
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        let panelId = String(cString: panelIdPtr)
+        let fontFamily = String(cString: fontFamilyPtr)
         let viewport = NSRect(x: x, y: y, width: w, height: h)
         return GhosttyBridgeImpl.shared.createTerminal(
-            parent: window, panelId: String(cString: panelId), viewport: viewport
+            parent: window,
+            panelId: panelId,
+            viewport: viewport,
+            fontFamily: fontFamily,
+            fontSize: fontSize
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_set_font_config")
+public func ghosttyBridgeSetFontConfig(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ fontFamilyPtr: UnsafePointer<CChar>,
+    _ fontSize: Float
+) {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        let fontFamily = String(cString: fontFamilyPtr)
+        GhosttyBridgeImpl.shared.applyFontConfig(
+            window: window,
+            fontFamily: fontFamily,
+            fontSize: fontSize
         )
     }
 }

@@ -7,7 +7,9 @@ extern "C" {
     bool ghostty_bridge_setup_window(void* nsWindow, long browserWindowId);
     void ghostty_bridge_set_overlay_active(void* nsWindow, bool active);
     bool ghostty_bridge_create_terminal(void* nsWindow, const char* panelId,
-                                         double x, double y, double w, double h);
+                                         double x, double y, double w, double h,
+                                         const char* fontFamily, float fontSize);
+    void ghostty_bridge_set_font_config(void* nsWindow, const char* fontFamily, float fontSize);
     void ghostty_bridge_set_frame(const char* panelId,
                                    double x, double y, double w, double h);
     void ghostty_bridge_show(const char* panelId);
@@ -85,7 +87,13 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     double y = frame.Get("y").As<Napi::Number>().DoubleValue();
     double w = frame.Get("width").As<Napi::Number>().DoubleValue();
     double h = frame.Get("height").As<Napi::Number>().DoubleValue();
-    bool ok = ghostty_bridge_create_terminal((__bridge void*)win, panelId.c_str(), x, y, w, h);
+    std::string fontFamily = info[3].As<Napi::String>().Utf8Value();
+    float fontSize = info[4].As<Napi::Number>().FloatValue();
+    bool ok = ghostty_bridge_create_terminal(
+        (__bridge void*)win, panelId.c_str(),
+        x, y, w, h,
+        fontFamily.c_str(), fontSize
+    );
     return Napi::Boolean::New(info.Env(), ok);
 }
 
@@ -344,6 +352,19 @@ static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+static Napi::Value JsSetFontConfig(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    std::string fontFamily = info[1].As<Napi::String>().Utf8Value();
+    float fontSize = info[2].As<Napi::Number>().FloatValue();
+    ghostty_bridge_set_font_config(
+        (__bridge void*)win,
+        fontFamily.c_str(),
+        fontSize
+    );
+    return info.Env().Undefined();
+}
+
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -375,6 +396,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
     exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));
+    exports.Set("setTerminalFont", Napi::Function::New(env, JsSetFontConfig));
     return exports;
 }
 

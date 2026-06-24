@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
 
 function getAnchorFrame(anchor: HTMLDivElement): TerminalFrame | null {
   const r = anchor.getBoundingClientRect();
@@ -43,6 +44,8 @@ export function basename(path: string): string {
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
+  const monoFontFamily = useFontStore((s) => s.monoFontFamily);
+  const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +92,11 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     ro.observe(parent);
     return () => ro.disconnect();
   }, []);
+
+  const monoFontFamilyRef = useRef(monoFontFamily);
+  const monoFontSizeRef = useRef(monoFontSize);
+  monoFontFamilyRef.current = monoFontFamily;
+  monoFontSizeRef.current = monoFontSize;
 
   useEffect(() => {
     const anchor = anchorRef.current;
@@ -139,7 +147,14 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         return;
       }
 
-      const result = await window.pier.terminal.create({ panelId, frame });
+      const result = await window.pier.terminal.create({
+        panelId,
+        frame,
+        font: {
+          family: computeMonoFontFamily(monoFontFamilyRef.current),
+          size: monoFontSizeRef.current,
+        },
+      });
       if (!result.ok) {
         setError(result.error ?? "终端创建失败");
         return;
@@ -198,6 +213,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       window.pier.terminal.close(panelId);
     };
   }, [api, panelId]);
+
+  useEffect(() => {
+    window.pier.terminal.setFont(panelId, {
+      family: computeMonoFontFamily(monoFontFamily),
+      size: monoFontSize,
+    });
+  }, [panelId, monoFontFamily, monoFontSize]);
 
   // 订阅 swift 转发的右键: panel 的 NSView 吞掉 React 层 onContextMenu, 唯一拿到
   // 右键的方式是 swift NSEvent monitor 拦截 + IPC 转发. 这里按 panelId 过滤 (一个

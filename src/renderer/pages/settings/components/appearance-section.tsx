@@ -3,6 +3,7 @@ import { FieldSeparator, FieldSet } from "@/components/primitives/field.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { LanguageRow } from "@/pages/settings/components/rows/language-row.tsx";
 import { MonoFontRow } from "@/pages/settings/components/rows/mono-font-row.tsx";
+import { MonoFontSizeRow } from "@/pages/settings/components/rows/mono-font-size-row.tsx";
 import { StyleRow } from "@/pages/settings/components/rows/style-row.tsx";
 import { ThemeRow } from "@/pages/settings/components/rows/theme-row.tsx";
 import { UiFontRow } from "@/pages/settings/components/rows/ui-font-row.tsx";
@@ -22,6 +23,8 @@ export function AppearanceSection() {
             <UiFontRow />
             <FieldSeparator />
             <MonoFontRow />
+            <FieldSeparator />
+            <MonoFontSizeRow />
             <FieldSeparator />
             <LanguageRow />
           </FieldSet>

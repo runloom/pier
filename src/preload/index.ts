@@ -15,6 +15,7 @@ export interface WindowInfo {
 interface PreferencesSnapshot {
   language: string;
   monoFontFamily: string;
+  monoFontSize: number;
   stylePresetId: string;
   theme: string;
   uiFontFamily: string;
@@ -123,6 +124,8 @@ const terminalApi: TerminalAPI = {
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
+  setFont: (panelId, font) =>
+    ipcRenderer.send("pier:terminal:set-font", panelId, font),
   setFrame: (panelId, frame) =>
     ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
   setOverlayActive: (active) =>

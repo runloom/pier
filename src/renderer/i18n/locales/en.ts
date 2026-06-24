@@ -22,6 +22,9 @@ export const en = {
       monoFontFamily: "Monospace Font",
       monoFontFamilyDesc: "Terminal / code editor font family",
       monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
+      monoFontSize: "Monospace Size",
+      monoFontSizeDesc: "Terminal font size (px), 8-32",
+      monoFontSizePlaceholder: "13",
     },
     theme: {
       light: "Light",

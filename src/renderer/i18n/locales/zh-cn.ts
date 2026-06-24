@@ -22,6 +22,9 @@ export const zhCN = {
       monoFontFamily: "等宽字体",
       monoFontFamilyDesc: "终端 / 代码编辑器字体族",
       monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
+      monoFontSize: "等宽字号",
+      monoFontSizeDesc: "终端字号 (px)，范围 8–32",
+      monoFontSizePlaceholder: "13",
     },
     theme: {
       light: "浅色",
