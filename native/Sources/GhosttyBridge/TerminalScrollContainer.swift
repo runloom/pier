@@ -16,6 +16,12 @@ enum TerminalContainerHitTarget: Equatable {
     case scrollbar
 }
 
+private enum TerminalMouseButton {
+    case left
+    case right
+    case other
+}
+
 enum TerminalContainerLayout {
     static let scrollbarHitWidth: CGFloat = 14
     static let scrollbarVisualWidth: CGFloat = 8
@@ -60,6 +66,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     private let panelId: String
 
     private let scrollbarView: TerminalScrollbarOverlayView
+    private var capturedTerminalMouseButton: TerminalMouseButton?
 
     var backgroundColor: NSColor = .black {
         didSet {
@@ -145,11 +152,17 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
             super.mouseDown(with: event)
             return
         }
+        capturedTerminalMouseButton = .left
         Self.forwardFocusRequestCallback?(browserWindowId, panelId)
         terminalView.mouseDown(with: event)
     }
 
     override func mouseUp(with event: NSEvent) {
+        if capturedTerminalMouseButton == .left {
+            defer { capturedTerminalMouseButton = nil }
+            terminalView.mouseUp(with: event)
+            return
+        }
         guard hitTarget(for: event) == .terminal else {
             super.mouseUp(with: event)
             return
@@ -158,6 +171,10 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if capturedTerminalMouseButton == .left {
+            terminalView.mouseDragged(with: event)
+            return
+        }
         guard hitTarget(for: event) == .terminal else {
             super.mouseDragged(with: event)
             return
@@ -170,10 +187,16 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
             super.rightMouseDown(with: event)
             return
         }
+        capturedTerminalMouseButton = .right
         terminalView.rightMouseDown(with: event)
     }
 
     override func rightMouseUp(with event: NSEvent) {
+        if capturedTerminalMouseButton == .right {
+            defer { capturedTerminalMouseButton = nil }
+            terminalView.rightMouseUp(with: event)
+            return
+        }
         guard hitTarget(for: event) == .terminal else {
             super.rightMouseUp(with: event)
             return
@@ -181,15 +204,33 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         terminalView.rightMouseUp(with: event)
     }
 
+    override func rightMouseDragged(with event: NSEvent) {
+        if capturedTerminalMouseButton == .right {
+            terminalView.rightMouseDragged(with: event)
+            return
+        }
+        guard hitTarget(for: event) == .terminal else {
+            super.rightMouseDragged(with: event)
+            return
+        }
+        terminalView.rightMouseDragged(with: event)
+    }
+
     override func otherMouseDown(with event: NSEvent) {
         guard hitTarget(for: event) == .terminal else {
             super.otherMouseDown(with: event)
             return
         }
+        capturedTerminalMouseButton = .other
         terminalView.otherMouseDown(with: event)
     }
 
     override func otherMouseUp(with event: NSEvent) {
+        if capturedTerminalMouseButton == .other {
+            defer { capturedTerminalMouseButton = nil }
+            terminalView.otherMouseUp(with: event)
+            return
+        }
         guard hitTarget(for: event) == .terminal else {
             super.otherMouseUp(with: event)
             return
@@ -198,6 +239,10 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     override func otherMouseDragged(with event: NSEvent) {
+        if capturedTerminalMouseButton == .other {
+            terminalView.otherMouseDragged(with: event)
+            return
+        }
         guard hitTarget(for: event) == .terminal else {
             super.otherMouseDragged(with: event)
             return
