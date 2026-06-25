@@ -60,7 +60,7 @@ describe("createPierCliCommandClient", () => {
         request(envelope) {
           seen.push(envelope);
           return Promise.resolve({
-            data: [{ id: "main", focused: true }],
+            data: [{ id: "main", focused: true, recordId: "record-main" }],
             ok: true,
             requestId: "req-9",
           });
@@ -69,7 +69,7 @@ describe("createPierCliCommandClient", () => {
     });
 
     await expect(client.run(["windows", "list", "--json"])).resolves.toEqual({
-      data: [{ id: "main", focused: true }],
+      data: [{ id: "main", focused: true, recordId: "record-main" }],
       ok: true,
       requestId: "req-9",
     });

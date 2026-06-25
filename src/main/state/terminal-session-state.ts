@@ -168,3 +168,8 @@ export async function removeTerminalPanelSession(
     return state;
   });
 }
+
+export async function flushTerminalSessionState(): Promise<void> {
+  const s = await ensureStore();
+  await s.flush();
+}

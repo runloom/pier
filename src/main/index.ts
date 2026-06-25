@@ -10,6 +10,7 @@ import {
   type RegisteredLocalControl,
   registerCliLocalControl,
 } from "./adapters/cli/register-local-control.ts";
+import { appCore } from "./app-core/app-core.ts";
 import { installCsp } from "./csp.ts";
 import { createDetachedDevToolsMenuItem } from "./devtools.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
@@ -26,6 +27,7 @@ const isDev = !app.isPackaged;
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
 let localControl: RegisteredLocalControl | null = null;
+let didFlushBeforeQuit = false;
 
 // dev mode silence "Insecure CSP (unsafe-eval)" warning: dev CSP 必须含 'unsafe-eval'
 // (vite HMR + react-refresh 依赖 eval).
@@ -129,7 +131,14 @@ function buildAppMenu(): Menu {
   };
 
   const newWindowMenuItem: MenuItemConstructorOptions = {
-    click: () => windowManager.create(),
+    click: () => {
+      appCore.services.window.create({ mode: "fresh" }).catch((error) => {
+        console.error(
+          "[window] failed to create new window:",
+          error instanceof Error ? error.message : String(error)
+        );
+      });
+    },
     label: "New Window",
   };
 
@@ -164,7 +173,7 @@ function buildAppMenu(): Menu {
   return Menu.buildFromTemplate(template);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   installCsp();
   Menu.setApplicationMenu(buildAppMenu());
 
@@ -196,12 +205,26 @@ app.whenReady().then(() => {
       );
     });
 
-  // 首窗口 id 固定 "main".
-  windowManager.create({ id: "main" });
+  const restored = await appCore.services.window.restoreOpenWindows();
+  if (restored.length === 0) {
+    await appCore.services.window.create({ mode: "fresh" });
+  }
 
   app.on("activate", () => {
     if (windowManager.getAll().length === 0) {
-      windowManager.create({ id: "main" });
+      appCore.services.window
+        .restoreMostRecentClosed()
+        .then(async (restoredWindow) => {
+          if (!restoredWindow) {
+            await appCore.services.window.create({ mode: "fresh" });
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "[window] failed to restore window on activate:",
+            error instanceof Error ? error.message : String(error)
+          );
+        });
     }
   });
 });
@@ -212,7 +235,23 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (!didFlushBeforeQuit) {
+    event.preventDefault();
+    didFlushBeforeQuit = true;
+    appCore.services.window
+      .flushOpenWindows()
+      .catch((error) => {
+        console.error(
+          "[window] failed to flush windows before quit:",
+          error instanceof Error ? error.message : String(error)
+        );
+      })
+      .finally(() => {
+        app.quit();
+      });
+    return;
+  }
   windowManager.destroyAllForQuit();
   localControl?.close().catch(() => {
     // ignore: app 正在退出

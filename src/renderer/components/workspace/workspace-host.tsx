@@ -162,6 +162,9 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
         });
         return;
       }
+      case "workspace.flushLayout": {
+        throw new Error("workspace.flushLayout requires workspace api context");
+      }
       default: {
         const _exhaustive: never = envelope.command;
         throw new Error(`unsupported renderer command: ${String(_exhaustive)}`);
@@ -197,6 +200,42 @@ export function WorkspaceHost() {
       // / 拖 panel 等), userTouched=true. loadLayout 完成时如果 user 已操作, fromJSON
       // 跳过 (不覆盖 user 操作) — user 显式新建的 panel 优先于磁盘旧 layout.
       let userTouched = false;
+      const windowContextPromise = window.pier.getWindowContext();
+
+      const saveCurrentLayout = async (): Promise<void> => {
+        const json = event.api.toJSON();
+        const windowContext = await windowContextPromise;
+        await window.pier.workspace.saveLayout(json, windowContext.recordId);
+      };
+
+      const flushCurrentLayout = async (
+        envelope: RendererCommandEnvelope
+      ): Promise<void> => {
+        try {
+          const windowContext = await windowContextPromise;
+          if (event.api.totalPanels === 0) {
+            await window.pier.workspace.clearLayout(windowContext.recordId);
+          } else {
+            await window.pier.workspace.saveLayout(
+              event.api.toJSON(),
+              windowContext.recordId
+            );
+          }
+          window.pier.rendererCommand.resolve({
+            data: null,
+            ok: true,
+            requestId: envelope.requestId,
+          });
+        } catch (error) {
+          window.pier.rendererCommand.resolve({
+            error: {
+              message: error instanceof Error ? error.message : String(error),
+            },
+            ok: false,
+            requestId: envelope.requestId,
+          });
+        }
+      };
 
       // onDidLayoutChange 双责任: 标记 userTouched (防 fromJSON 覆盖) + debounced save
       let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -211,14 +250,9 @@ export function WorkspaceHost() {
         }
         saveTimer = setTimeout(() => {
           saveTimer = null;
-          try {
-            const json = event.api.toJSON();
-            window.pier.workspace.saveLayout(json).catch((err) => {
-              console.error("[workspace] saveLayout failed:", err);
-            });
-          } catch (err) {
-            console.error("[workspace] toJSON failed:", err);
-          }
+          saveCurrentLayout().catch((err) => {
+            console.error("[workspace] saveLayout failed:", err);
+          });
         }, SAVE_DEBOUNCE_MS);
       });
 
@@ -264,7 +298,15 @@ export function WorkspaceHost() {
         }
       });
 
-      window.pier.rendererCommand.onCommand(runRendererCommand);
+      window.pier.rendererCommand.onCommand((envelope) => {
+        if (envelope.command.type === "workspace.flushLayout") {
+          flushCurrentLayout(envelope).catch((error) => {
+            console.error("[workspace] flushLayout failed:", error);
+          });
+          return;
+        }
+        runRendererCommand(envelope);
+      });
 
       // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时
       // 用 default. 注意: applyDefaultLayout / fromJSON 都包在 isApplyingPersistedLayout
@@ -272,7 +314,10 @@ export function WorkspaceHost() {
       (async () => {
         let saved: unknown = null;
         try {
-          saved = await window.pier.workspace.loadLayout();
+          const windowContext = await windowContextPromise;
+          saved = await window.pier.workspace.loadLayout(
+            windowContext.recordId
+          );
         } catch (err) {
           console.error("[workspace] loadLayout failed:", err);
         }

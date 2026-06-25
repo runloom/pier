@@ -25,27 +25,38 @@ class TestResizeObserver {
 }
 
 interface TestPanelProps extends IDockviewPanelProps {
+  emitActive(event: { isActive: boolean }): void;
   emitDimensions(event: { height: number; width: number }): void;
   emitVisibility(event: { isVisible: boolean }): void;
 }
 
 function createPanelProps(
-  options: { isVisible?: boolean } = {}
+  options: { isActive?: boolean; isVisible?: boolean } = {}
 ): TestPanelProps {
+  let onDidActiveChange: ((event: { isActive: boolean }) => void) | null = null;
   let onDidDimensionsChange:
     | ((event: { height: number; width: number }) => void)
     | null = null;
   let onDidVisibilityChange: ((event: { isVisible: boolean }) => void) | null =
     null;
+  let isActive = options.isActive ?? true;
   let isVisible = options.isVisible ?? true;
   const props = {
     api: {
       height: 300,
       id: "terminal-1",
+      get isActive() {
+        return isActive;
+      },
       get isVisible() {
         return isVisible;
       },
-      onDidActiveChange: vi.fn(() => ({ dispose: vi.fn() })),
+      onDidActiveChange: vi.fn(
+        (listener: (event: { isActive: boolean }) => void) => {
+          onDidActiveChange = listener;
+          return { dispose: vi.fn() };
+        }
+      ),
       onDidDimensionsChange: vi.fn(
         (listener: (event: { height: number; width: number }) => void) => {
           onDidDimensionsChange = listener;
@@ -62,6 +73,10 @@ function createPanelProps(
       width: 400,
     },
     containerApi: {},
+    emitActive(event: { isActive: boolean }) {
+      isActive = event.isActive;
+      onDidActiveChange?.(event);
+    },
     emitDimensions(event: { height: number; width: number }) {
       onDidDimensionsChange?.(event);
     },
@@ -173,7 +188,7 @@ describe("TerminalPanel lifecycle", () => {
       title: "Claude Code",
       updatedAt: "2026-06-25T00:00:00.000Z",
     });
-    const props = createPanelProps({ isVisible: false });
+    const props = createPanelProps({ isActive: false, isVisible: false });
 
     render(<TerminalPanel {...props} />);
 
@@ -184,6 +199,18 @@ describe("TerminalPanel lifecycle", () => {
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
 
     props.emitVisibility({ isVisible: true });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+  });
+
+  it("creates a native terminal for a newly active terminal panel before visibility settles", async () => {
+    const props = createPanelProps({ isActive: true, isVisible: false });
+
+    render(<TerminalPanel {...props} />);
 
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(

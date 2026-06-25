@@ -5,7 +5,7 @@
  * close-guard 两段式 / route pending / reload detach 等 pier 暂不需要的能力.
  *
  *   - create(): 分配 id (首窗口 "main", 后续 w-{N}), 创建 app window, 注册到 Map.
- *   - list(): 返回所有存活窗口的 { id, focused }.
+ *   - list(): 返回所有存活窗口的 { id, recordId, focused }.
  *   - focus(): 聚焦/恢复指定窗口.
  *   - close(): 关闭指定窗口.
  *   - onClose(): 关闭回调 (供 main 侧清理).
@@ -13,6 +13,7 @@
  * 窗口关闭后自动从 Map 移除并释放 ID; window-all-closed 由 main 侧处理.
  */
 import { join } from "node:path";
+import type { WindowOpenMode } from "@shared/contracts/window.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import {
   app,
@@ -33,6 +34,7 @@ import { WindowIdAllocator } from "./window-id-allocator.ts";
 import {
   findAppWindowByWebContents,
   findInternalWindowId,
+  findWindowContext,
   forgetAppWindow,
   rememberAppWindow,
 } from "./window-identity.ts";
@@ -49,11 +51,14 @@ export interface WindowBounds {
 export interface CreateWindowOptions {
   bounds?: WindowBounds;
   id?: string;
+  mode?: WindowOpenMode;
+  recordId?: string;
 }
 
 export interface WindowInfo {
   focused: boolean;
   id: string;
+  recordId: string;
 }
 
 const isDev = !app.isPackaged;
@@ -66,7 +71,15 @@ function resolveDevIcon(): string | undefined {
 class WindowManager {
   private readonly windows = new Map<string, AppWindow>();
   private readonly allocator = new WindowIdAllocator();
-  private readonly onCloseCallbacks: Array<(windowId: string) => void> = [];
+  private readonly onBeforeCloseCallbacks: Array<
+    (payload: { recordId: string; windowId: string }) => Promise<void> | void
+  > = [];
+  private readonly onCloseCallbacks: Array<
+    (payload: { recordId: string; windowId: string }) => void
+  > = [];
+  private isDestroyingAllForQuit = false;
+  private readonly closeFlushDone = new WeakSet<AppWindow>();
+  private readonly closeFlushPending = new WeakSet<AppWindow>();
 
   setNativeChromeColor(window: AppWindow, color: string): void {
     if (isMac) {
@@ -74,12 +87,24 @@ class WindowManager {
     }
   }
 
-  onClose(callback: (windowId: string) => void): void {
+  onClose(
+    callback: (payload: { recordId: string; windowId: string }) => void
+  ): void {
     this.onCloseCallbacks.push(callback);
+  }
+
+  onBeforeClose(
+    callback: (payload: {
+      recordId: string;
+      windowId: string;
+    }) => Promise<void> | void
+  ): void {
+    this.onBeforeCloseCallbacks.push(callback);
   }
 
   create(opts: CreateWindowOptions = {}): string {
     const id = opts.id ?? this.allocator.next();
+    const mode = opts.mode ?? "restore";
     if (!WINDOW_ID_REGEX.test(id)) {
       throw new Error(`invalid windowId: ${JSON.stringify(id)}`);
     }
@@ -123,7 +148,12 @@ class WindowManager {
     const window = isMac
       ? this.createMacWindow(baseOpts, webPreferences)
       : this.createBrowserWindow(baseOpts, webPreferences, devIcon);
-    rememberAppWindow(window, id);
+    rememberAppWindow(window, {
+      mode,
+      recordId: opts.recordId ?? id,
+      sessionId: opts.recordId ?? id,
+      windowId: id,
+    });
 
     const showOnce = () => {
       if (!window.isDestroyed()) {
@@ -185,7 +215,29 @@ class WindowManager {
     // 不 detach 的话:
     // - NSEvent application-level monitor 永远活在 process 里 (内存泄漏)
     // - GhosttyBridgeImpl.eventRouters dict 累积已死 window 的 router 引用
-    window.host.on("close", () => {
+    window.host.on("close", (event: Electron.Event) => {
+      const context = findWindowContext(window);
+      if (
+        !this.isDestroyingAllForQuit &&
+        context &&
+        !this.closeFlushDone.has(window)
+      ) {
+        event.preventDefault();
+        if (!this.closeFlushPending.has(window)) {
+          this.closeFlushPending.add(window);
+          this.flushBeforeClose(window, {
+            recordId: context.recordId,
+            windowId: id,
+          }).finally(() => {
+            this.closeFlushPending.delete(window);
+            this.closeFlushDone.add(window);
+            if (!window.isDestroyed()) {
+              window.close();
+            }
+          });
+        }
+        return;
+      }
       try {
         getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());
       } catch {
@@ -197,11 +249,14 @@ class WindowManager {
       if (window.appView && !window.webContents.isDestroyed()) {
         window.webContents.close();
       }
+      const context = findWindowContext(window);
       forgetAppWindow(window);
       this.windows.delete(id);
       this.allocator.release(id);
-      for (const cb of this.onCloseCallbacks) {
-        cb(id);
+      if (!this.isDestroyingAllForQuit && context) {
+        for (const cb of this.onCloseCallbacks) {
+          cb({ recordId: context.recordId, windowId: id });
+        }
       }
     });
 
@@ -220,6 +275,22 @@ class WindowManager {
 
     this.windows.set(id, window);
     return id;
+  }
+
+  private async flushBeforeClose(
+    window: AppWindow,
+    payload: { recordId: string; windowId: string }
+  ): Promise<void> {
+    try {
+      await Promise.all(this.onBeforeCloseCallbacks.map((cb) => cb(payload)));
+    } catch (err) {
+      console.error(
+        "[window-before-close] failed:",
+        err instanceof Error ? err.message : String(err)
+      );
+    } finally {
+      this.closeFlushPending.delete(window);
+    }
   }
 
   private createMacWindow(
@@ -272,6 +343,7 @@ class WindowManager {
     return [...this.windows.entries()].map(([id, w]) => ({
       id,
       focused: w.isFocused(),
+      recordId: findWindowContext(w)?.recordId ?? id,
     }));
   }
 
@@ -291,6 +363,7 @@ class WindowManager {
   }
 
   destroyAllForQuit(): void {
+    this.isDestroyingAllForQuit = true;
     for (const window of this.windows.values()) {
       if (!window.isDestroyed()) {
         try {

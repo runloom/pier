@@ -95,6 +95,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => `w${winId}`),
+      findWindowSessionId: vi.fn(() => `session-${winId}`),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -175,6 +176,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       // 按 webContents 反查:每个 sender 是不同 webContents 对象, 路由对应 window.
       findAppWindowByWebContents: vi.fn((wc: unknown) => wcMap.get(wc) ?? null),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowSessionId: vi.fn((win: { id: number }) => `session-${win.id}`),
     }));
 
     const fakeIpcMain = {

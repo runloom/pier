@@ -78,15 +78,26 @@ function sendRendererCommand(
 function createPierAppCore(): PierAppCore {
   const eventBus = createPierEventBus();
   const clients = createClientRegistry();
+  const rendererCommand = createRendererCommandService({
+    host: { send: sendRendererCommand },
+  });
   const services: PierCoreServices = {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
     preferences: createPreferencesService({ eventBus }),
-    rendererCommand: createRendererCommandService({
-      host: { send: sendRendererCommand },
+    rendererCommand,
+    window: createWindowService({
+      flushRendererLayout: async (windowId) => {
+        const result = await rendererCommand.execute({
+          type: "workspace.flushLayout",
+          windowId,
+        });
+        if (!result.ok) {
+          throw new Error(result.error.message);
+        }
+      },
     }),
-    window: createWindowService(),
     workspace: createWorkspaceService(),
   };
   return {

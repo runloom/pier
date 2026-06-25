@@ -61,9 +61,9 @@ function services(rendererCommands: unknown[] = []): PierCoreServices {
       }),
     },
     workspace: {
-      clearLayout: async () => undefined,
-      readLayout: async () => null,
-      saveLayout: async () => undefined,
+      clearLayout: async (_recordId) => undefined,
+      readLayout: async (_recordId) => null,
+      saveLayout: async (_layout, _recordId) => undefined,
     },
     rendererCommand: {
       execute: (command) => {
@@ -78,9 +78,18 @@ function services(rendererCommands: unknown[] = []): PierCoreServices {
     },
     window: {
       close: () => undefined,
-      create: () => ({ windowId: "w-1" }),
+      create: async () => ({ recordId: "record-1", windowId: "w-1" }),
       focus: () => undefined,
-      list: () => [{ focused: true, id: "main" }],
+      flushOpenWindows: async () => undefined,
+      flushWindow: async () => undefined,
+      list: () => [{ focused: true, id: "main", recordId: "record-main" }],
+      restoreMostRecentClosed: async () => ({
+        recordId: "record-closed",
+        windowId: "main",
+      }),
+      restoreOpenWindows: async () => [
+        { recordId: "record-open", windowId: "main" },
+      ],
     },
   };
 }
@@ -100,7 +109,7 @@ describe("createCommandRouter", () => {
         requestId: "req-1",
       })
     ).resolves.toEqual({
-      data: [{ focused: true, id: "main" }],
+      data: [{ focused: true, id: "main", recordId: "record-main" }],
       ok: true,
       requestId: "req-1",
     });
@@ -284,5 +293,86 @@ describe("createCommandRouter", () => {
       { type: "terminal.list", windowId: "main" },
       { panelId: "terminal-1", type: "terminal.focus", windowId: "main" },
     ]);
+  });
+
+  it("workspace layout commands require and pass through a durable window record id", async () => {
+    const calls: unknown[] = [];
+    const fakeServices = services();
+    fakeServices.workspace = {
+      clearLayout: (recordId) => {
+        calls.push(["clear", recordId]);
+        return Promise.resolve();
+      },
+      readLayout: (recordId) => {
+        calls.push(["read", recordId]);
+        return Promise.resolve({ layout: "from-record" });
+      },
+      saveLayout: (layout, recordId) => {
+        calls.push(["save", recordId, layout]);
+        return Promise.resolve();
+      },
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { recordId: "record-1", type: "workspace.layout.read" },
+        protocolVersion: 1,
+        requestId: "req-layout-read",
+      })
+    ).resolves.toEqual({
+      data: { layout: "from-record" },
+      ok: true,
+      requestId: "req-layout-read",
+    });
+    await router.execute({
+      clientId: "desktop-1",
+      command: {
+        layout: { grid: "updated" },
+        recordId: "record-1",
+        type: "workspace.layout.save",
+      },
+      protocolVersion: 1,
+      requestId: "req-layout-save",
+    });
+    await router.execute({
+      clientId: "desktop-1",
+      command: { recordId: "record-1", type: "workspace.layout.clear" },
+      protocolVersion: 1,
+      requestId: "req-layout-clear",
+    });
+
+    expect(calls).toEqual([
+      ["read", "record-1"],
+      ["save", "record-1", { grid: "updated" }],
+      ["clear", "record-1"],
+    ]);
+  });
+
+  it("rejects legacy workspace layout commands without a record id", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { type: "workspace.layout.read" },
+        protocolVersion: 1,
+        requestId: "req-layout-legacy",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "invalid_command",
+        message: "invalid command",
+      },
+      ok: false,
+      requestId: "req-layout-legacy",
+    });
   });
 });

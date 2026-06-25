@@ -9,7 +9,7 @@ import type { KeybindingInput } from "./types.ts";
 
 export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
   {
-    commandId: "pier.panel.newTab",
+    commandId: "pier.panel.newTerminal",
     keys: "Mod+KeyT",
     nativeTerminal: "app",
     scope: "global",

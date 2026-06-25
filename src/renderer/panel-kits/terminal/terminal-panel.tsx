@@ -211,7 +211,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
     subscriptions.push(api.onDidDimensionsChange(sendFrameNow));
 
-    if (api.isVisible) {
+    if (api.isVisible || api.isActive) {
       ensureNativeTerminal().catch(logCreateError);
     }
 

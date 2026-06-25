@@ -83,6 +83,7 @@ describe("terminal focus restoration", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => ipcWindow),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowSessionId: vi.fn(() => "session-main"),
     }));
 
     const { registerTerminalIpc, restoreActivePanelFocus } = await import(

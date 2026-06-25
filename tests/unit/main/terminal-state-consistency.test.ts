@@ -92,6 +92,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowSessionId: vi.fn(() => "session-main"),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -178,7 +179,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
 
     expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenCalledWith(
-      "main",
+      "session-main",
       "panel-1"
     );
   });
@@ -195,7 +196,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(sessionState.updateTerminalPanelTitle).toHaveBeenCalledWith(
-      "main",
+      "session-main",
       "terminal-1",
       "Claude Code"
     );
