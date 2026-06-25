@@ -108,6 +108,19 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
 
     override func layout() {
         super.layout()
+        synchronizeChildFrames()
+    }
+
+    func applyHostFrame(_ hostFrame: NSRect) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        frame = hostFrame
+        synchronizeChildFrames()
+        terminalView.flushHostResizeFrame()
+        CATransaction.commit()
+    }
+
+    private func synchronizeChildFrames() {
         let frames = TerminalContainerLayout.frames(in: bounds)
         terminalView.frame = frames.terminal
         scrollbarView.frame = frames.scrollbar

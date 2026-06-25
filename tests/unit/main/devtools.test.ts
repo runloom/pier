@@ -21,10 +21,16 @@ import {
 describe("detached DevTools", () => {
   function fakeWindow(isOpen = false) {
     return {
+      focus: vi.fn(),
+      isDestroyed: () => false,
+      isMinimized: () => false,
+      moveTop: vi.fn(),
+      restore: vi.fn(),
       webContents: {
         closeDevTools: vi.fn(),
         isDestroyed: () => false,
         isDevToolsOpened: () => isOpen,
+        on: vi.fn(),
         openDevTools: vi.fn(),
       },
     };

@@ -5,7 +5,7 @@ import type {
   TerminalFont,
   TerminalFrame,
 } from "@shared/contracts/terminal.ts";
-import { BrowserWindow, type IpcMain } from "electron";
+import type { IpcMain, WebContents } from "electron";
 import {
   isToggleDevToolsNativeChord,
   toggleDetachedDevTools,
@@ -15,7 +15,12 @@ import {
   removeTerminalPanelSession,
   updateTerminalPanelCwd,
 } from "../state/terminal-session-state.ts";
-import { findBrowserWindowId } from "../windows/window-identity.ts";
+import type { AppWindow } from "../windows/app-window.ts";
+import {
+  findAppWindowByElectronId,
+  findAppWindowByWebContents,
+  findInternalWindowId,
+} from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
@@ -33,18 +38,18 @@ interface ActivePanelFocusState {
 const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
 
 function rememberActivePanelFocus(
-  win: BrowserWindow,
+  win: AppWindow,
   kind: "terminal" | "web",
   panelId: string | null
 ): void {
   activePanelFocusByWindowId.set(win.id, { kind, panelId });
 }
 
-function stableWindowIdFor(win: BrowserWindow): string {
-  return findBrowserWindowId(win) ?? `browser-${win.id}`;
+function stableWindowIdFor(win: AppWindow): string {
+  return findInternalWindowId(win) ?? `window-${win.id}`;
 }
 
-export function restoreActivePanelFocus(win: BrowserWindow): void {
+export function restoreActivePanelFocus(win: AppWindow): void {
   if (win.isDestroyed()) {
     return;
   }
@@ -68,7 +73,7 @@ export function restoreActivePanelFocus(win: BrowserWindow): void {
   }
 }
 
-export function blurActivePanelFocus(win: BrowserWindow): void {
+export function blurActivePanelFocus(win: AppWindow): void {
   if (win.isDestroyed()) {
     return;
   }
@@ -99,10 +104,10 @@ function loadNativeAddon(): {
 }
 
 /**
- * Forward swift-originated event to a specific BrowserWindow's renderer.
+ * Forward swift-originated event to a specific app window renderer.
  *
  * 所有 swift→main→renderer forward 共用这一条路由 (keyboard / mouse / pwd / title):
- * 1. 按 browserWindowId 精准定位 BrowserWindow — swift NSEvent monitor / delegate
+ * 1. 按 Electron window id 精准定位 app window — swift NSEvent monitor / delegate
  *    跨线程, callback 执行时 focused window 可能已切换, 不能用 getFocusedWindow.
  * 2. 守 isDestroyed (window/webContents 在 swift 触发 → main JS dispatch 间可能销毁).
  * 3. send 抛任何错误 (window 关闭瞬间) 都 catch + log + 继续 — 不影响其他 channel.
@@ -114,7 +119,7 @@ function forwardToWindow<P>(
   errorLabel: string
 ): void {
   try {
-    const targetWindow = BrowserWindow.fromId(browserWindowId);
+    const targetWindow = findAppWindowByElectronId(browserWindowId);
     if (!targetWindow || targetWindow.isDestroyed()) {
       return;
     }
@@ -128,14 +133,18 @@ function forwardToWindow<P>(
   }
 }
 
+function windowFromWebContents(webContents: WebContents): AppWindow | null {
+  return findAppWindowByWebContents(webContents);
+}
+
 export function registerTerminalIpc(ipcMain: IpcMain): void {
   const { addon, error: loadError } = loadNativeAddon();
   cachedAddon = addon;
 
   // 四条 swift → renderer forward channel, 全部走 forwardToWindow helper.
-  // 不能用 BrowserWindow.getFocusedWindow():swift 触发时 (NSEvent monitor / OSC
+  // 不能用 focused window:swift 触发时 (NSEvent monitor / OSC
   // parser delegate) 跨线程, focused window 不一定是事件源 window — 必须用 setupWindow
-  // 时记录的 BrowserWindow.id 精准路由.
+  // 时记录的 Electron window id 精准路由.
   //
   // - keyboard:Cmd+key 全局快捷键 (terminal 透明 + web overlay 架构下唯一可靠通道,
   //   不能依赖 wk.keyDown forward 或 firstResponder chain — Electron 42 ViewsCompositor-
@@ -144,7 +153,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   // - pwd:OSC 7 → 真实 cwd → descriptor.path / descriptor.short basename.
   // - title:OSC 0/2 → TUI 应用 (claude / vim) 自定义 title → descriptor.long.
   addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
-    const targetWindow = BrowserWindow.fromId(id);
+    const targetWindow = findAppWindowByElectronId(id);
     if (
       targetWindow &&
       !targetWindow.isDestroyed() &&
@@ -178,7 +187,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     );
   });
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
-    const targetWindow = BrowserWindow.fromId(id);
+    const targetWindow = findAppWindowByElectronId(id);
     if (targetWindow && !targetWindow.isDestroyed()) {
       const windowId = stableWindowIdFor(targetWindow);
       updateTerminalPanelCwd(windowId, panelId, cwd).catch((err) => {
@@ -205,15 +214,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (!addon) {
       return { ok: false, error: loadError ?? "native addon not loaded" };
     }
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = windowFromWebContents(event.sender);
     if (!win) {
       return { ok: false, error: "window not found" };
     }
     try {
-      // Electron API: 窗口背景透明 (CSS 控制哪些区域透视, 非终端区域自行画不透明背景)
-      win.setBackgroundColor("#00000000");
       const handle = win.getNativeWindowHandle();
-      // 把 BrowserWindow.id 传给 swift, 让 forward callback 能按 window 路由 (多窗口
+      // 把 Electron window id 传给 swift, 让 forward callback 能按 window 路由 (多窗口
       // 下避免 getFocusedWindow 误把 background window 的 keystroke 路由到 focused)
       const ok = addon.setupWindow(handle, win.id);
       return ok ? { ok: true } : { ok: false, error: "setupWindow failed" };
@@ -228,7 +235,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!addon) {
         return { ok: false, error: loadError ?? "native addon not loaded" };
       }
-      const win = BrowserWindow.fromWebContents(event.sender);
+      const win = windowFromWebContents(event.sender);
       if (!win) {
         return { ok: false, error: "window not found" };
       }
@@ -275,7 +282,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     ipcMain.on(channel, (_event, panelId: string) => call(panelId));
   }
   ipcMain.on("pier:terminal:close", (event, panelId: string) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = windowFromWebContents(event.sender);
     if (win) {
       const windowId = stableWindowIdFor(win);
       removeTerminalPanelSession(windowId, panelId).catch((err) => {
@@ -285,7 +292,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     addon?.closeTerminal(panelId);
   });
   ipcMain.on("pier:terminal:focus", (event, panelId: string) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = windowFromWebContents(event.sender);
     if (win) {
       rememberActivePanelFocus(win, "terminal", panelId);
       if (!win.isFocused()) {
@@ -311,7 +318,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (!addon) {
       return;
     }
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = windowFromWebContents(event.sender);
     if (!win) {
       return;
     }
@@ -326,7 +333,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (!addon) {
       return;
     }
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = windowFromWebContents(event.sender);
     if (!win) {
       return;
     }
@@ -347,7 +354,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (!addon) {
       return;
     }
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = windowFromWebContents(event.sender);
     if (!win) {
       return;
     }
@@ -367,7 +374,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!addon) {
         return;
       }
-      const win = BrowserWindow.fromWebContents(event.sender);
+      const win = windowFromWebContents(event.sender);
       if (!win) {
         return;
       }
@@ -386,7 +393,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   ipcMain.on(
     "pier:terminal:set-active-panel-kind",
     (event, kind: "terminal" | "web", panelId: string | null) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
+      const win = windowFromWebContents(event.sender);
       if (!win) {
         return;
       }

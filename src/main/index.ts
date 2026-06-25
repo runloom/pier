@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import {
   app,
-  BrowserWindow,
   ipcMain,
   Menu,
   type MenuItemConstructorOptions,
@@ -118,11 +117,7 @@ function buildAppMenu(): Menu {
       { role: "reload" },
       { role: "forceReload" },
       ...(isDev
-        ? [
-            createDetachedDevToolsMenuItem(() =>
-              BrowserWindow.getFocusedWindow()
-            ),
-          ]
+        ? [createDetachedDevToolsMenuItem(() => windowManager.getFocused())]
         : []),
       { type: "separator" },
       { role: "resetZoom" },
@@ -205,7 +200,7 @@ app.whenReady().then(() => {
   windowManager.create({ id: "main" });
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (windowManager.getAll().length === 0) {
       windowManager.create({ id: "main" });
     }
   });
@@ -218,7 +213,9 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  windowManager.destroyAllForQuit();
   localControl?.close().catch(() => {
     // ignore: app 正在退出
   });
+  localControl = null;
 });

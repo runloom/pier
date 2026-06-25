@@ -542,6 +542,7 @@
 html,
 body {
   height: 100%;
+  overflow: hidden;
   padding: 0;
   margin: 0;
   font-family: var(--pier-ui-font-family);
@@ -619,6 +620,7 @@ body {
 
 #root {
   height: 100%;
+  overflow: hidden;
   background: transparent;
 }
 
@@ -695,6 +697,13 @@ body {
 .dockview-theme-pier .dv-dockview,
 .dockview-theme-pier .dv-groupview {
   background-color: transparent !important;
+}
+
+/* dockview 自带 web scrollbar 在 resize 时会短暂显现；Pier terminal 区域由
+   native view 承载，resize 期间隐藏这层 web scrollbar，保留正常 tab overflow。 */
+.dockview-theme-pier .dv-scrollable.dv-scrollable-resizing .dv-scrollbar {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* — hover: 非选中 tab 微亮 — */
@@ -810,4 +819,9 @@ body {
 /* 拖拽占位蒙层即刻贴位, 去掉默认 300ms 滞后感 */
 .dockview-theme-pier .dv-drop-target-container {
   --dv-transition-duration: 100ms;
+}
+
+
+.dockview-theme-pier .dv-tabs-and-actions-container {
+  border-bottom: none;
 }

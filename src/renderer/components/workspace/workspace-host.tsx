@@ -8,6 +8,7 @@ import {
 import { useCallback } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
+import { flushTerminalLayoutFramesTrailing } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -38,7 +39,7 @@ import { PanelTabHeader } from "./panel-tab-header.tsx";
  * 跟 sash 内线并列显示成"两条线"伪影.
  *
  * dndOverlayMounting: 'absolute' — 让 root drop overlay 渲染到 shell 根层级,
- * 配合 setOverlayActive 隐藏 terminal NSView 使 group drop overlay 也可见.
+ * 配合 setOverlayActive 暂停 EventRouter 拦截, 使 group drop overlay 可接收输入.
  */
 const pierTheme: DockviewTheme = {
   name: "pier",
@@ -204,6 +205,7 @@ export function WorkspaceHost() {
           return; // program-driven, 不算 user touched
         }
         userTouched = true;
+        flushTerminalLayoutFramesTrailing("dockview-layout");
         if (saveTimer) {
           clearTimeout(saveTimer);
         }
@@ -218,6 +220,10 @@ export function WorkspaceHost() {
             console.error("[workspace] toJSON failed:", err);
           }
         }, SAVE_DEBOUNCE_MS);
+      });
+
+      event.api.onDidMaximizedGroupChange(() => {
+        flushTerminalLayoutFramesTrailing("dockview-maximize");
       });
 
       // Active panel 变化 (含同 group 切 tab, panel 创建/删除导致 active 切换) →
@@ -305,7 +311,7 @@ export function WorkspaceHost() {
   );
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full overflow-hidden">
       <DockviewReact
         components={panelComponents}
         defaultTabComponent={PanelTabHeader}

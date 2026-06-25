@@ -9,14 +9,14 @@ const IS_MAC = window.pier?.platform === "darwin";
 
 export function AppShell() {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col overflow-hidden">
       <DocumentTitle />
       {IS_MAC && <TitleBar />}
-      <ShellKeybindings />
-      <CommandPalette />
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <WorkspaceHost />
       </div>
+      <ShellKeybindings />
+      <CommandPalette />
       <SettingsDialog />
     </div>
   );

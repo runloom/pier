@@ -1,6 +1,7 @@
-import { BrowserWindow, type IpcMain } from "electron";
+import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
 import type { ProjectPreferences } from "../state/preferences.ts";
+import { windowManager } from "../windows/window-manager.ts";
 
 export function registerPreferencesIpc(ipcMain: IpcMain): void {
   ipcMain.handle("pier:preferences:read", async () =>
@@ -16,7 +17,7 @@ export function registerPreferencesIpc(ipcMain: IpcMain): void {
       // locale.store 暂未接 listener — 跨窗口字体/语言切换需要重启目标窗口才
       // 生效. sender 自己已在 setTheme/setStylePreset await 后立即应用, 不走
       // listener 路径避免重复 set.
-      for (const win of BrowserWindow.getAllWindows()) {
+      for (const win of windowManager.getAll()) {
         if (win.webContents.id === event.sender.id) {
           continue;
         }

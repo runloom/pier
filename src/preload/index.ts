@@ -13,6 +13,7 @@ import {
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
 export interface WindowInfo {
@@ -83,6 +84,10 @@ export interface PierMenuAPI {
   ) => Promise<MenuPopupResult>;
 }
 
+export interface WindowLayoutPulse {
+  reason: "resize" | "zoom";
+}
+
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
@@ -92,6 +97,7 @@ export interface PierWindowAPI {
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
+  onWindowLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
   rendererCommand: PierRendererCommandAPI;
@@ -206,6 +212,8 @@ const api: PierWindowAPI = {
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
   menu: menuApi,
+  onWindowLayoutPulse: (cb) =>
+    subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
   platform: process.platform,
   preferences: preferencesApi,
   rendererCommand: rendererCommandApi,

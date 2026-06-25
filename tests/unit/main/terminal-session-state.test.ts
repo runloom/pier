@@ -56,4 +56,30 @@ describe("terminal session state", () => {
       readTerminalPanelSession("main", "terminal-1")
     ).resolves.toBeNull();
   });
+
+  it("serializes concurrent cwd updates without dropping panel sessions", async () => {
+    const { readTerminalPanelSession, updateTerminalPanelCwd } = await import(
+      "@main/state/terminal-session-state.ts"
+    );
+
+    await expect(
+      Promise.all(
+        Array.from({ length: 20 }, (_, index) =>
+          updateTerminalPanelCwd(
+            "main",
+            `terminal-${index}`,
+            `/tmp/pier-terminal-${index}`
+          )
+        )
+      )
+    ).resolves.toHaveLength(20);
+
+    for (let index = 0; index < 20; index += 1) {
+      await expect(
+        readTerminalPanelSession("main", `terminal-${index}`)
+      ).resolves.toMatchObject({
+        cwd: `/tmp/pier-terminal-${index}`,
+      });
+    }
+  });
 });

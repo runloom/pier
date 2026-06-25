@@ -1,6 +1,6 @@
 /**
  * pier:menu:popup IPC — renderer 通过 contextBridge 提交 MenuTemplate, main 在
- * BrowserWindow 上弹原生菜单. resolve 返回用户选中的 actionId (action 项) 或 null
+ * app window 上弹原生菜单. resolve 返回用户选中的 actionId (action 项) 或 null
  * (Esc / 点击外部 / role 项).
  *
  * 安全: 任何 schema 不合法的 template 立即 reject, 不调 Menu.popup; role 仅允许
@@ -17,13 +17,14 @@ import type {
   MenuItem as PierMenuItem,
 } from "@shared/contracts/menu.ts";
 import {
-  BrowserWindow,
+  type BaseWindow,
   type IpcMain,
   Menu,
   type MenuItem,
   type MenuItemConstructorOptions,
 } from "electron";
 import { MenuTemplateSchema } from "../menu/template-schema.ts";
+import { windowManager } from "../windows/window-manager.ts";
 
 function toMenuItem(
   item: PierMenuItem,
@@ -73,7 +74,7 @@ export function registerMenuIpc(ipcMain: IpcMain): void {
         return Promise.resolve({ actionId: null });
       }
 
-      const win = BrowserWindow.fromWebContents(event.sender);
+      const win = windowManager.fromWebContents(event.sender);
       if (!win) {
         return Promise.resolve({ actionId: null });
       }
@@ -99,8 +100,8 @@ export function registerMenuIpc(ipcMain: IpcMain): void {
         menu.once("menu-will-close", () => {
           setImmediate(() => resolve({ actionId: pickedId }));
         });
-        const popupOpts: { window: BrowserWindow; x?: number; y?: number } = {
-          window: win,
+        const popupOpts: { window: BaseWindow; x?: number; y?: number } = {
+          window: win.host,
         };
         // 必须 isFinite 否则 NaN/Infinity 通过 typeof 守卫, Math.round(NaN)=NaN 传给
         // Menu.popup 行为未定义 (部分平台让 popup 永不弹出, menu-will-close 不 fire,

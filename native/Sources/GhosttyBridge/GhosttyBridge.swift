@@ -340,13 +340,70 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 // MARK: - Terminal record
 
 private struct Terminal {
-    let containerView: NSView
+    let containerView: TerminalContainerView
     let terminalView: TerminalView
     let parentWindow: NSWindow
     /// EventDelegate adapter (strong-hold — terminalView.delegate 是 weak).
     /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
     /// weak ref 自动 nil, 不留 dangling.
     let eventDelegate: TerminalEventDelegate
+}
+
+struct TerminalLiveResizePredictor {
+    private static let edgeTolerance: CGFloat = 1
+    private static let edgeBleed: CGFloat = 2
+
+    static func predict(
+        lastFrame: NSRect,
+        oldContentSize: NSSize,
+        newContentSize: NSSize
+    ) -> NSRect {
+        let deltaWidth = newContentSize.width - oldContentSize.width
+        let deltaHeight = newContentSize.height - oldContentSize.height
+        let touchesRight = abs(lastFrame.maxX - oldContentSize.width) <= edgeTolerance
+        let touchesBottom = lastFrame.minY <= edgeTolerance
+        let touchesTop = abs(lastFrame.maxY - oldContentSize.height) <= edgeTolerance
+
+        var next = lastFrame
+        if touchesRight {
+            next.size.width = max(lastFrame.width + deltaWidth + edgeBleed, 0)
+        }
+        if touchesBottom {
+            next.origin.y = -edgeBleed
+            next.size.height = max(lastFrame.height + deltaHeight + edgeBleed, 0)
+        } else if touchesTop {
+            next.origin.y = lastFrame.minY + deltaHeight
+        }
+        return next
+    }
+}
+
+struct TerminalLayoutState {
+    private(set) var authoritativeContentSize: NSSize
+    private(set) var authoritativeFrame: NSRect
+    private(set) var presentedFrame: NSRect
+
+    init(authoritativeContentSize: NSSize, authoritativeFrame: NSRect) {
+        self.authoritativeContentSize = authoritativeContentSize
+        self.authoritativeFrame = authoritativeFrame
+        self.presentedFrame = authoritativeFrame
+    }
+
+    mutating func predictProvisionalFrame(newContentSize: NSSize) -> NSRect {
+        let frame = TerminalLiveResizePredictor.predict(
+            lastFrame: authoritativeFrame,
+            oldContentSize: authoritativeContentSize,
+            newContentSize: newContentSize
+        )
+        presentedFrame = frame
+        return frame
+    }
+
+    mutating func rememberAuthoritativeLayout(contentSize: NSSize, frame: NSRect) {
+        authoritativeContentSize = contentSize
+        authoritativeFrame = frame
+        presentedFrame = frame
+    }
 }
 
 // MARK: - Bridge implementation
@@ -363,6 +420,9 @@ final class GhosttyBridgeImpl {
     private var eventRouters: [ObjectIdentifier: EventRouterView] = [:]  // per-window
     private var terminalBackgrounds: [ObjectIdentifier: NSColor] = [:]
     private var terminalForegrounds: [ObjectIdentifier: NSColor] = [:]
+    private var terminalLayouts: [String: TerminalLayoutState] = [:]
+    private var liveResizeContentSizes: [ObjectIdentifier: NSSize] = [:]
+    private var liveResizeObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
     /// per-window TerminalController. window close 时通过 detachWindow 释放 — 避免
     /// 旧 controller 内 session/PTY 列表跨 window 累积 (singleton 不会随 window
     /// 销毁而清理).
@@ -414,6 +474,64 @@ final class GhosttyBridgeImpl {
         }
         controllers[windowId] = c
         return c
+    }
+
+    private func rememberLayout(
+        panelId: String,
+        contentView: NSView,
+        nativeFrame: NSRect
+    ) {
+        if var existing = terminalLayouts[panelId] {
+            existing.rememberAuthoritativeLayout(
+                contentSize: contentView.bounds.size,
+                frame: nativeFrame
+            )
+            terminalLayouts[panelId] = existing
+            return
+        }
+        terminalLayouts[panelId] = TerminalLayoutState(
+            authoritativeContentSize: contentView.bounds.size,
+            authoritativeFrame: nativeFrame
+        )
+    }
+
+    private func installLiveResizeObserver(parent: NSWindow, contentView: NSView) {
+        let windowId = ObjectIdentifier(parent)
+        guard liveResizeObservers[windowId] == nil else { return }
+        contentView.postsBoundsChangedNotifications = true
+        liveResizeContentSizes[windowId] = contentView.bounds.size
+        let token = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: contentView,
+            queue: .main
+        ) { [weak parent] _ in
+            guard let parent else { return }
+            Task { @MainActor in
+                GhosttyBridgeImpl.shared.handleContentViewLiveResize(parent: parent)
+            }
+        }
+        liveResizeObservers[windowId] = token
+    }
+
+    private func handleContentViewLiveResize(parent: NSWindow) {
+        guard let contentView = parent.contentView else { return }
+        let windowId = ObjectIdentifier(parent)
+        let oldSize = liveResizeContentSizes[windowId] ?? contentView.bounds.size
+        let newSize = contentView.bounds.size
+        guard oldSize != newSize else { return }
+        liveResizeContentSizes[windowId] = newSize
+
+        for (panelId, term) in terminals where term.parentWindow === parent {
+            guard var state = terminalLayouts[panelId] else { continue }
+            let frame = state.predictProvisionalFrame(newContentSize: newSize)
+            terminalLayouts[panelId] = state
+            term.containerView.applyHostFrame(frame)
+
+            eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
+                rect: Self.terminalTargetRect(for: frame),
+                view: term.containerView
+            )
+        }
     }
 
     nonisolated static func configureDefaultTerminalAppearance(
@@ -505,6 +623,7 @@ final class GhosttyBridgeImpl {
         contentView.addSubview(router, positioned: .above, relativeTo: nil)
         router.attachInputRouting(window: parent, browserWindowId: browserWindowId)
         eventRouters[windowId] = router
+        installLiveResizeObserver(parent: parent, contentView: contentView)
 
         // 初始化 per-window keyboard state (PanelKind 默认 .web — 安全, 不抢 firstResponder)
         windowStates[windowId] = WindowKeyboardState()
@@ -643,10 +762,12 @@ final class GhosttyBridgeImpl {
         if let existing = terminals[panelId] {
             if existing.parentWindow === parent {
                 let frame = computeFrame(in: contentView, viewport: viewport)
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                existing.containerView.frame = frame
-                CATransaction.commit()
+                existing.containerView.applyHostFrame(frame)
+                rememberLayout(
+                    panelId: panelId,
+                    contentView: contentView,
+                    nativeFrame: frame
+                )
 
                 applyFontToController(parent: parent, family: fontFamily, size: fontSize)
 
@@ -714,12 +835,18 @@ final class GhosttyBridgeImpl {
         // 正确: .below relativeTo nil → 插入 subviews[0], 在 ViewsCompositorSuperview
         //   之下 (visually 最底), web 层可叠加在 terminal 之上.
         contentView.addSubview(container, positioned: .below, relativeTo: nil)
+        container.applyHostFrame(frame)
 
         terminals[panelId] = Terminal(
             containerView: container,
             terminalView: terminalView,
             parentWindow: parent,
             eventDelegate: eventDelegate
+        )
+        rememberLayout(
+            panelId: panelId,
+            contentView: contentView,
+            nativeFrame: frame
         )
 
         // 更新 EventRouter targets (inset 留出 sash 事件通道)
@@ -747,10 +874,12 @@ final class GhosttyBridgeImpl {
         guard let term = terminals[panelId],
               let contentView = term.parentWindow.contentView else { return }
         let frame = computeFrame(in: contentView, viewport: viewport)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        term.containerView.frame = frame
-        CATransaction.commit()
+        term.containerView.applyHostFrame(frame)
+        rememberLayout(
+            panelId: panelId,
+            contentView: contentView,
+            nativeFrame: frame
+        )
 
         // 同步 EventRouter targets (inset 留出 sash 事件通道)
         let windowId = ObjectIdentifier(term.parentWindow)
@@ -764,12 +893,16 @@ final class GhosttyBridgeImpl {
         guard let term = terminals[panelId] else { return }
         activePanelId = panelId
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
         if let contentView = term.parentWindow.contentView {
             // 确保终端在所有 web 渲染层之下 (见 createTerminal 注释)
             contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
         }
+
+        let frame = terminalLayouts[panelId]?.presentedFrame ?? term.containerView.frame
+        term.containerView.applyHostFrame(frame)
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         term.containerView.alphaValue = 1
         term.containerView.isHidden = false
         CATransaction.commit()
@@ -852,6 +985,7 @@ final class GhosttyBridgeImpl {
         for (panelId, term) in toClose {
             term.containerView.removeFromSuperview()
             terminals.removeValue(forKey: panelId)
+            terminalLayouts.removeValue(forKey: panelId)
         }
         if let activeId = activePanelId, terminals[activeId] == nil {
             activePanelId = nil
@@ -874,6 +1008,10 @@ final class GhosttyBridgeImpl {
             router.removeFromSuperview()
             eventRouters.removeValue(forKey: windowId)
         }
+        if let token = liveResizeObservers.removeValue(forKey: windowId) {
+            NotificationCenter.default.removeObserver(token)
+        }
+        liveResizeContentSizes.removeValue(forKey: windowId)
         // 释放该 window 的 TerminalController — 内部 session/PTY 列表跨 window 累积
         // 是潜在内存泄漏, swift ARC 让无引用 controller 自动 dealloc.
         controllers.removeValue(forKey: windowId)
@@ -916,18 +1054,14 @@ final class GhosttyBridgeImpl {
             let windowId = ObjectIdentifier(window)
             terminalBackgrounds[windowId] = backgroundColor
             for term in terminals.values where term.parentWindow === window {
-                if let container = term.containerView as? TerminalContainerView {
-                    container.backgroundColor = backgroundColor
-                }
+                term.containerView.backgroundColor = backgroundColor
             }
         }
         if let foregroundColor = Self.terminalColor(from: foreground) {
             let windowId = ObjectIdentifier(window)
             terminalForegrounds[windowId] = foregroundColor
             for term in terminals.values where term.parentWindow === window {
-                if let container = term.containerView as? TerminalContainerView {
-                    container.scrollbarColor = foregroundColor
-                }
+                term.containerView.scrollbarColor = foregroundColor
             }
         }
     }
