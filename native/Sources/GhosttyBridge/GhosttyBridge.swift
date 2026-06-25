@@ -527,8 +527,17 @@ final class GhosttyBridgeImpl {
             terminalLayouts[panelId] = state
             term.containerView.applyHostFrame(frame)
 
+            // EventRouter.targets[i].rect 必须用 viewport (top-left), 跟 EventRouterView
+            // isFlipped=true 一致 — 见 terminalTargetRect 注释. live resize 路径上拿到
+            // 的 frame 是 NSView frame (contentView bottom-left), 这里 Y-flip 回 viewport.
+            let viewport = NSRect(
+                x: frame.minX,
+                y: contentView.bounds.height - frame.minY - frame.height,
+                width: frame.width,
+                height: frame.height
+            )
             eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-                rect: Self.terminalTargetRect(for: frame),
+                rect: Self.terminalTargetRect(viewport: viewport),
                 view: term.containerView
             )
         }
@@ -676,20 +685,36 @@ final class GhosttyBridgeImpl {
     /// 正确的 NSView, 跨平台一致.
     func applyFirstResponder(for window: NSWindow) {
         let state = stateFor(window: window)
+        let activeTerminalId: String? =
+            state.inTerminalMode ? state.activeTerminalPanelId : nil
+
+        // 主动给所有非 active terminal 调 resignFirstResponder, 让 ghostty surface
+        // setFocus(false). 修复 drag/panel-swap 期间 AppKit 自动的 resignFirstResponder
+        // 没传播到非当前 firstResponder 的 terminal NSView 的盲点 (firstResponder
+        // 可能漂到 dockview 内部 web view, swap 回 terminal 时只触发新 view 的 become,
+        // 没人触发旧 view 的 resign), 旧 terminal 卡在 focus=true → 多个 cursor 同时
+        // 闪烁的"幽灵焦点". resignFirstResponder super 实现是 no-op, 安全可手动调.
+        let windowId = ObjectIdentifier(window)
+        for (panelId, term) in terminals
+            where ObjectIdentifier(term.parentWindow) == windowId
+                && panelId != activeTerminalId {
+            _ = term.terminalView.resignFirstResponder()
+        }
 
         if state.inTerminalMode {
             if let panelId = state.activeTerminalPanelId,
                let term = terminals[panelId] {
-                if window.firstResponder === term.terminalView {
-                    // Closing a detached DevTools window can leave AppKit's
-                    // firstResponder pointing at the terminal while Ghostty's
-                    // surface focus was cleared by windowDidResignKey.
-                    // Refresh becomeFirstResponder so Ghostty sets focus true
-                    // again even when AppKit thinks the responder is unchanged.
-                    _ = term.terminalView.becomeFirstResponder()
-                } else {
+                if window.firstResponder !== term.terminalView {
                     window.makeFirstResponder(term.terminalView)
                 }
+                // 无条件 becomeFirstResponder. 双保险:
+                // (1) firstResponder 已是 terminal 时强制刷新 ghostty surface focus —
+                //     修原 detached DevTools 关闭 case;
+                // (2) makeFirstResponder 失败 (oldResponder 拒绝 resign / dockview drag
+                //     内部 view 抢占等) 时仍触发 ghostty surface setFocus(true), 让 user
+                //     按键 dispatch 到 firstResponder (即使不是 terminal) 时, ghostty 至少
+                //     不会 silently drop input.
+                _ = term.terminalView.becomeFirstResponder()
             }
             // 没找到 terminal NSView → 不动 firstResponder (保留 web container default)
         }
@@ -773,7 +798,7 @@ final class GhosttyBridgeImpl {
 
                 let windowId = ObjectIdentifier(parent)
                 eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-                    rect: Self.terminalTargetRect(for: frame),
+                    rect: Self.terminalTargetRect(viewport: viewport),
                     view: existing.containerView
                 )
 
@@ -852,7 +877,7 @@ final class GhosttyBridgeImpl {
         // 更新 EventRouter targets (inset 留出 sash 事件通道)
         let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-            rect: Self.terminalTargetRect(for: frame), view: container
+            rect: Self.terminalTargetRect(viewport: viewport), view: container
         )
 
         activePanelId = panelId
@@ -881,12 +906,24 @@ final class GhosttyBridgeImpl {
             nativeFrame: frame
         )
 
-        // 同步 EventRouter targets (inset 留出 sash 事件通道)
+        // 同步 EventRouter targets (inset 留出 sash 事件通道). target.rect 用
+        // viewport (top-left) 不用 frame (bottom-left), 见 terminalTargetRect 注释.
         let windowId = ObjectIdentifier(term.parentWindow)
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-            rect: Self.terminalTargetRect(for: frame),
+            rect: Self.terminalTargetRect(viewport: viewport),
             view: term.containerView
         )
+
+        // Drag panel 完成时 dockview 大量 set-frame 给所有受影响 panel, 但不再 fire
+        // focus IPC (active panel 没换). 期间 swift firstResponder 可能漂到 dockview
+        // 内部 web view (drag overlay 等), drop 后没人重 apply firstResponder → user
+        // 视觉看到 panel visible 但无法输入. 这里兜底:每次 active terminal 的 setFrame
+        // 都重 apply firstResponder. 幂等, 多次调用无副作用 (applyFirstResponder 内部
+        // 已 idempotent).
+        let state = stateFor(window: term.parentWindow)
+        if state.inTerminalMode, state.activeTerminalPanelId == panelId {
+            applyFirstResponder(for: term.parentWindow)
+        }
     }
 
     func show(panelId: String) {
@@ -910,7 +947,12 @@ final class GhosttyBridgeImpl {
 
     func hide(panelId: String) {
         guard let term = terminals[panelId] else { return }
-        guard panelId != activePanelId else { return }
+        // 不 guard `panelId != activePanelId`. 该 guard 设计目的是防 drag drop 后没 show
+        // 让 NSView 永远 offscreen, 但对同 group 切 tab 是错的:
+        //   tab A→B: hide(A) 先到 main, 此时 swift.activePanelId 还是 A (focus(B) 还没到),
+        //   guard 跳过 → A 不 hide → B 后续 addSubview .below nil 落 subviews[0], A 被
+        //   push 到 [1] 仍 visible 且 z-order 在 B 之上 → user 看到 A 的内容, 切 tab 无效.
+        // drag 场景实际靠 setFrame 紧跟 hide 把 NSView 移回新 visible 位置, 不依赖 guard.
         let f = term.containerView.frame
         if f.minX > -50000 {
             CATransaction.begin()
@@ -1099,8 +1141,17 @@ final class GhosttyBridgeImpl {
         controller.setTerminalConfiguration(newConfig)
     }
 
-    private static func terminalTargetRect(for frame: NSRect) -> NSRect {
-        frame.insetBy(dx: hitInset, dy: hitInset)
+    /// EventRouterView.targets[panelId].rect 用的坐标系是 EventRouterView 自己 — 它
+    /// override isFlipped=true 走 top-left, 等价于 web viewport 坐标. **必须传 viewport
+    /// (top-left), 不是 NSView frame** — frame 是 contentView 坐标 (bottom-left, 经
+    /// computeFrame Y-flip 后的), 两者不一致.
+    ///
+    /// 历史 bug:之前传 frame, hitTest 在 panel 偏离垂直中心时 miss — 因 contentView
+    /// (bottom-left) 跟 EventRouterView (top-left) 的 Y range 数字只在 panel 上下对称
+    /// 于 H/2 时巧合相等, drag panel 到非中央位置后 hitTest 就 silent miss, 点击落到
+    /// web 层但无 listener → click 无效, 用户感受"无法 click 终端 / 无法输入".
+    private static func terminalTargetRect(viewport: NSRect) -> NSRect {
+        viewport.insetBy(dx: hitInset, dy: hitInset)
     }
 
     // MARK: - Coordinate conversion

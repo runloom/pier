@@ -49,6 +49,31 @@ function stableWindowIdFor(win: AppWindow): string {
   return findInternalWindowId(win) ?? `window-${win.id}`;
 }
 
+/**
+ * 给 panelId 加 AppWindow scope 前缀, 让 swift 端 `terminals: [String: Terminal]`
+ * 单一 dict 能区分跨窗口同名 panel. Pier 默认 layout 多窗口都用 "terminal-1",
+ * 不加 scope 时第二个窗口的 createTerminal 会撞已存在 entry → close 第一个窗口 panel
+ * 再重建第二个的, 视觉上第二个窗口空白.
+ *
+ * scope = AppWindow.id (Electron process-local 唯一, 不需要持久化), 用 "::"
+ * 分隔避免跟 panelId 内部可能的 "-" 冲突.
+ *
+ * - main → swift: 始终 scope (createTerminal / show / hide / close / focus /
+ *   setFrame / setActivePanelKind / reconcile)
+ * - swift → main → renderer: 始终 unscope, 让 renderer 用 raw panelId 跟 dockview
+ *   state 对齐
+ */
+const PANEL_ID_SEPARATOR = "::";
+function scopePanelId(win: AppWindow, panelId: string): string {
+  return `${win.id}${PANEL_ID_SEPARATOR}${panelId}`;
+}
+function unscopePanelId(scopedId: string): string {
+  const idx = scopedId.indexOf(PANEL_ID_SEPARATOR);
+  return idx === -1
+    ? scopedId
+    : scopedId.slice(idx + PANEL_ID_SEPARATOR.length);
+}
+
 export function restoreActivePanelFocus(win: AppWindow): void {
   if (win.isDestroyed()) {
     return;
@@ -61,7 +86,7 @@ export function restoreActivePanelFocus(win: AppWindow): void {
   const active = activePanelFocusByWindowId.get(win.id);
   if (active?.kind === "terminal" && active.panelId) {
     try {
-      cachedAddon?.focusTerminal(active.panelId);
+      cachedAddon?.focusTerminal(scopePanelId(win, active.panelId));
     } catch (err) {
       console.error("[pier-restore-terminal-focus] failed:", err);
     }
@@ -170,11 +195,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       "pier-key-forward"
     );
   });
+  // Swift forward callback 收到的 panelId 是 scoped (createTerminal 时 main 传的),
+  // unscope 后给 renderer — React/dockview 的 panel id 是 raw.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
     forwardToWindow(
       id,
       "pier:terminal:request-context-menu",
-      { panelId, x, y },
+      { panelId: unscopePanelId(panelId), x, y },
       "pier-mouse-forward"
     );
   });
@@ -182,22 +209,23 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     forwardToWindow(
       id,
       "pier:terminal:focus-request",
-      { panelId },
+      { panelId: unscopePanelId(panelId) },
       "pier-terminal-focus-request"
     );
   });
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
+    const rawPanelId = unscopePanelId(panelId);
     const targetWindow = findAppWindowByElectronId(id);
     if (targetWindow && !targetWindow.isDestroyed()) {
       const windowId = stableWindowIdFor(targetWindow);
-      updateTerminalPanelCwd(windowId, panelId, cwd).catch((err) => {
+      updateTerminalPanelCwd(windowId, rawPanelId, cwd).catch((err) => {
         console.error("[pier-cwd-persist] failed:", err);
       });
     }
     forwardToWindow(
       id,
       "pier:terminal:cwd-change",
-      { panelId, cwd },
+      { panelId: rawPanelId, cwd },
       "pier-cwd-forward"
     );
   });
@@ -205,7 +233,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     forwardToWindow(
       id,
       "pier:terminal:title-change",
-      { panelId, title },
+      { panelId: unscopePanelId(panelId), title },
       "pier-title-forward"
     );
   });
@@ -246,7 +274,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         const cwd = args.cwd ?? saved?.cwd;
         const ok = addon.createTerminal(
           handle,
-          args.panelId,
+          scopePanelId(win, args.panelId),
           args.frame,
           args.font.family,
           args.font.size,
@@ -271,15 +299,23 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   const panelIdRelays = [
     {
       channel: "pier:terminal:show",
-      call: (panelId: string) => addon?.showTerminal(panelId),
+      call: (win: AppWindow, panelId: string) =>
+        addon?.showTerminal(scopePanelId(win, panelId)),
     },
     {
       channel: "pier:terminal:hide",
-      call: (panelId: string) => addon?.hideTerminal(panelId),
+      call: (win: AppWindow, panelId: string) =>
+        addon?.hideTerminal(scopePanelId(win, panelId)),
     },
   ] as const;
   for (const { channel, call } of panelIdRelays) {
-    ipcMain.on(channel, (_event, panelId: string) => call(panelId));
+    ipcMain.on(channel, (event, panelId: string) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      call(win, panelId);
+    });
   }
   ipcMain.on("pier:terminal:close", (event, panelId: string) => {
     const win = windowFromWebContents(event.sender);
@@ -288,8 +324,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       removeTerminalPanelSession(windowId, panelId).catch((err) => {
         console.error("[pier-cwd-remove] failed:", err);
       });
+      addon?.closeTerminal(scopePanelId(win, panelId));
     }
-    addon?.closeTerminal(panelId);
   });
   ipcMain.on("pier:terminal:focus", (event, panelId: string) => {
     const win = windowFromWebContents(event.sender);
@@ -299,14 +335,18 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         blurActivePanelFocus(win);
         return;
       }
+      addon?.focusTerminal(scopePanelId(win, panelId));
     }
-    addon?.focusTerminal(panelId);
   });
   // set-frame 多一个 frame 参数, 不进数组单独写.
   ipcMain.on(
     "pier:terminal:set-frame",
-    (_event, panelId: string, frame: TerminalFrame) => {
-      addon?.setFrame(panelId, frame);
+    (event, panelId: string, frame: TerminalFrame) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      addon?.setFrame(scopePanelId(win, panelId), frame);
     }
   );
 
@@ -323,7 +363,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       return;
     }
     try {
-      addon.reconcileTerminals(win.getNativeWindowHandle(), activeIds);
+      addon.reconcileTerminals(
+        win.getNativeWindowHandle(),
+        activeIds.map((id) => scopePanelId(win, id))
+      );
     } catch (err) {
       console.error("[pier-terminal-reconcile] failed:", err);
     }
@@ -407,7 +450,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
       const kindRaw = kind === "terminal" ? 0 : 1;
       try {
-        addon.setActivePanelKind(win.getNativeWindowHandle(), kindRaw, panelId);
+        addon.setActivePanelKind(
+          win.getNativeWindowHandle(),
+          kindRaw,
+          panelId ? scopePanelId(win, panelId) : null
+        );
       } catch (err) {
         console.error("[pier-set-active-panel-kind] failed:", err);
       }

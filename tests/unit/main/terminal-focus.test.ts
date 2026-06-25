@@ -117,7 +117,7 @@ describe("terminal focus restoration", () => {
     restoreActivePanelFocus(restoreWindow as never);
 
     expect(restoreWindow.focus).toHaveBeenCalledOnce();
-    expect(fakeAddon.focusTerminal).toHaveBeenCalledWith("panel-1");
+    expect(fakeAddon.focusTerminal).toHaveBeenCalledWith("7::panel-1");
     expect(restoreWindow.webContents.focus).not.toHaveBeenCalled();
   });
 
@@ -139,7 +139,7 @@ describe("terminal focus restoration", () => {
     restoreActivePanelFocus(restoreWindow as never);
 
     expect(restoreWindow.focus).toHaveBeenCalledOnce();
-    expect(fakeAddon.focusTerminal).toHaveBeenCalledWith("panel-1");
+    expect(fakeAddon.focusTerminal).toHaveBeenCalledWith("7::panel-1");
     expect(restoreWindow.webContents.focus).not.toHaveBeenCalled();
   });
 
@@ -161,15 +161,18 @@ describe("terminal focus restoration", () => {
 
     restoreActivePanelFocus(ipcWindow as never);
 
-    expect(fakeAddon.focusTerminal).toHaveBeenCalledWith("panel-1");
+    expect(fakeAddon.focusTerminal).toHaveBeenCalledWith("7::panel-1");
   });
 
-  it("forwards native terminal focus requests to the source window renderer", async () => {
+  it("forwards native terminal focus requests to source window renderer (unscoped panelId)", async () => {
+    // swift 端 forward callback 传的是 scoped panelId (因为 createTerminal 时
+    // main 用 scoped key 写进了 swift terminals dict), main 必须 unscope 后给 renderer
+    // — React/dockview 的 panel id 是 raw.
     const { fakeAddon, ipcWindow } = await setupTerminalFocusHarness();
     const focusForward =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
 
-    focusForward?.(ipcWindow.id, "panel-2");
+    focusForward?.(ipcWindow.id, "7::panel-2");
 
     expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
@@ -193,7 +196,7 @@ describe("terminal focus restoration", () => {
     expect(result).toEqual({ ok: true });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("window"),
-      "terminal-1",
+      "7::terminal-1",
       { x: 1, y: 2, width: 300, height: 200 },
       "Menlo",
       13,
@@ -236,5 +239,68 @@ describe("terminal focus restoration", () => {
       1,
       null
     );
+  });
+
+  it("restoreActivePanelFocus on minimized window calls win.restore() first (#15)", async () => {
+    // window 从 dock 点回恢复:BrowserWindow focus 事件 fire 时 isMinimized 可能仍是
+    // true (取决于 OS timing), restoreActivePanelFocus 必须先 win.restore() 让窗口
+    // 真正出来, 再做后续 terminal focus 恢复, 否则 makeFirstResponder 在最小化窗口上
+    // 是 silent no-op.
+    const { handlers, ipcWindow, restoreActivePanelFocus } =
+      await setupTerminalFocusHarness();
+    const minimizedWindow = {
+      focus: vi.fn(),
+      getNativeWindowHandle: () => Buffer.from("window"),
+      id: 7,
+      isDestroyed: () => false,
+      isFocused: () => true,
+      isMinimized: () => true,
+      restore: vi.fn(),
+      webContents: {
+        focus: vi.fn(),
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    };
+
+    handlers.get("pier:terminal:set-active-panel-kind")?.(
+      { sender: ipcWindow.webContents },
+      "terminal",
+      "panel-1"
+    );
+    restoreActivePanelFocus(minimizedWindow as never);
+
+    expect(minimizedWindow.restore).toHaveBeenCalledOnce();
+    expect(minimizedWindow.focus).toHaveBeenCalledOnce();
+    // restore 必须在 focus 之前, 否则 focus 调用没有可见效果
+    const restoreOrder = minimizedWindow.restore.mock.invocationCallOrder[0];
+    const focusOrder = minimizedWindow.focus.mock.invocationCallOrder[0];
+    expect(focusOrder).toBeGreaterThan(restoreOrder ?? 0);
+  });
+
+  it("blurActivePanelFocus tolerates destroyed window (no throw)", async () => {
+    // window close 跟 blur 事件可能 race:window.on("blur") fire 后 micro-task 内
+    // window 已被销毁. blurActivePanelFocus 必须 guard isDestroyed, 否则
+    // win.getNativeWindowHandle() 抛 native error 跨 process 难调试.
+    const destroyedWindow = {
+      focus: vi.fn(),
+      getNativeWindowHandle: () => {
+        throw new Error("window destroyed");
+      },
+      id: 99,
+      isDestroyed: () => true,
+      isFocused: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      webContents: {
+        focus: vi.fn(),
+        isDestroyed: () => true,
+        send: vi.fn(),
+      },
+    };
+    await setupTerminalFocusHarness();
+    const { blurActivePanelFocus } = await import("@main/ipc/terminal.ts");
+
+    expect(() => blurActivePanelFocus(destroyedWindow as never)).not.toThrow();
   });
 });

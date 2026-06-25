@@ -125,13 +125,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             layoutRegistration?.flushTrailing("visibility");
             window.pier.terminal.show(panelId);
           } else {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                if (!disposed) {
-                  window.pier.terminal.hide(panelId);
-                }
-              });
-            });
+            // 直接发 hide IPC. swift hide 总是执行 (移 offscreen + remove targets),
+            // 由后续 setFrame 把 NSView 移回新位置自动恢复 visible (drag 场景), 或者
+            // 让出 z-order 给新 active panel (tab 切换场景). 早期版本用过双 rAF 等
+            // dockview settle, 但 visibility=false → true 紧接 fire 时 (drag drop)
+            // 双 rAF 跟即时 show 形成 race:show 完成后 rAF 内的 hide 才跑, 最终状态
+            // 变成 hidden. 直接 hide + 不延迟最干净.
+            window.pier.terminal.hide(panelId);
           }
         })
       );

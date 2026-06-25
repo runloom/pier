@@ -135,6 +135,16 @@ class WindowManager {
     window.host.on("blur", () => {
       blurActivePanelFocus(window);
     });
+    // BrowserWindow resignKey 时 Ghostty 库的 windowDidResignKey 会把每个 surface
+    // 的 core.setFocus(false), cursor 变空心、shell 不接 stdin. becomeKey 只在
+    // firstResponder === self 时才 setFocus(true), 而我们在 blur 时已把 swift state
+    // 改成 web/null + main 端的 active terminal panel 记忆停留在 map 中, AppKit
+    // firstResponder 在跨 app switch 后也未必仍指向之前的 terminalView. 这里在 focus
+    // 事件主动 replay user 最后期望的 active panel — swift 端 focusTerminal 会重新
+    // makeFirstResponder + 强制 becomeFirstResponder, 让 Ghostty surface focus 回到 true.
+    window.host.on("focus", () => {
+      restoreActivePanelFocus(window);
+    });
 
     window.webContents.setWindowOpenHandler(({ url }) => {
       shell.openExternal(url).catch(() => {
