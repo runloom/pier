@@ -70,14 +70,13 @@ describe("renderer/lib/theme/derive-tokens", () => {
     expect(lightTokens.foreground).not.toBe(darkTokens.foreground);
   });
 
-  it("uses neutral structural chrome while preserving saturated status colors", () => {
+  it("uses saturated primary while keeping structural chrome neutral", () => {
     const tokens = deriveAppStyleTokens(
       getShikiTheme("pierre", "light"),
       "light"
     );
 
     for (const key of [
-      "primary",
       "secondary",
       "muted",
       "accent",
@@ -88,8 +87,12 @@ describe("renderer/lib/theme/derive-tokens", () => {
     }
 
     expect(contrast(tokens.background, tokens.primary)).toBeGreaterThanOrEqual(
-      4.5
+      3
     );
+    expect(chromaOf(tokens.primary)).toBeGreaterThanOrEqual(0.1);
+    expect(
+      contrast(tokens.primary, tokens["primary-foreground"])
+    ).toBeGreaterThanOrEqual(4.5);
     expect(contrast(tokens.background, tokens.muted)).toBeGreaterThanOrEqual(
       1.05
     );

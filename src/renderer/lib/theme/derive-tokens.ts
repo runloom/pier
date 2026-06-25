@@ -118,6 +118,63 @@ function pickSaturated(
   return fallback;
 }
 
+function pickSaturatedOpaque(
+  get: ColorGetter,
+  keys: readonly string[],
+  fallback: string,
+  bg: string
+): string {
+  for (const key of keys) {
+    const v = get(key);
+    if (!v) {
+      continue;
+    }
+    const opaque = opaqueOn(v, bg);
+    if (chromaOf(opaque) >= 0.1) {
+      return opaque;
+    }
+  }
+  return opaqueOn(fallback, bg);
+}
+
+function readableFilledPrimary(surface: string): string {
+  const foreground = readableOnFilled(surface);
+  if (contrast(surface, foreground) >= 4.5) {
+    return surface;
+  }
+  return visibleColor(foreground, surface, 4.5);
+}
+
+function derivePrimaryColor(
+  get: ColorGetter,
+  bg: string,
+  mode: "light" | "dark"
+): string {
+  const source = pickSaturatedOpaque(
+    get,
+    [
+      "button.background",
+      "activityBar.activeBorder",
+      "focusBorder",
+      "charts.blue",
+      "terminal.ansiBlue",
+      "terminal.ansiBrightBlue",
+    ],
+    mode === "dark" ? FALLBACKS.blueDark : FALLBACKS.blueLight,
+    bg
+  );
+  let primary = visibleColor(bg, source, 3);
+  if (chromaOf(primary) < 0.1) {
+    primary = visibleColor(
+      bg,
+      opaqueOn(mode === "dark" ? FALLBACKS.blueDark : FALLBACKS.blueLight, bg),
+      3
+    );
+  }
+  primary = readableFilledPrimary(primary);
+  return contrast(bg, primary) >= 3 ? primary : visibleColor(bg, primary, 3);
+}
+
 function deriveIndicatorColors(
   get: ColorGetter,
   bg: string,
@@ -294,14 +351,12 @@ function deriveNeutralChrome(
   border: string;
   input: string;
   muted: string;
-  primary: string;
   ring: string;
   secondary: string;
 } {
   const surfaceAmount = mode === "dark" ? 0.08 : 0.04;
   const controlAmount = mode === "dark" ? 0.12 : 0.04;
   const borderAmount = mode === "dark" ? 0.14 : 0.12;
-  const primary = visibleColor(bg, mix(fg, bg, 0.08), 4.5);
   const border = neutralSurface(bg, fg, borderAmount, 1.25);
 
   return {
@@ -309,7 +364,6 @@ function deriveNeutralChrome(
     border,
     input: border,
     muted: neutralSurface(bg, fg, surfaceAmount, 1.05),
-    primary,
     ring: neutralSurface(bg, fg, 0.44, 1.5),
     secondary: neutralSurface(bg, fg, controlAmount, 1.05),
   };
@@ -326,6 +380,7 @@ export function deriveAppStyleTokens(
   const get = makeGetter(colors, fallback);
   const { bg, fg } = deriveBaseColors(get, mode);
   const chrome = deriveNeutralChrome(bg, fg, mode);
+  const primary = derivePrimaryColor(get, bg, mode);
 
   // popover / card = background — shadow/ring 表达 elevation，不从 chrome 色键派生偏离色（ADR-010）。
   const card = bg;
@@ -359,7 +414,7 @@ export function deriveAppStyleTokens(
     // 色块上的字 / 图标 / switch thumb / checkbox 勾。按 OKLCH L pivot 把 primary 投到 {#000, #fff}
     // 二选一（感知一致），NOT shiki 主题的 `button.foreground`——主题作者写 button hint 是为 VSCode
     // dropdown（亮底深字）设计的，与本仓 shadcn 风格"饱和色块 + opposite-pole 文字"语义错位。
-    "primary-foreground": readableOnFilled(chrome.primary),
+    "primary-foreground": readableOnFilled(primary),
     "secondary-foreground": readableText(
       chrome.secondary,
       opaqueOn(get("button.secondaryForeground") ?? fg, chrome.secondary)
@@ -375,7 +430,7 @@ export function deriveAppStyleTokens(
     input: chrome.input,
     muted: chrome.muted,
     popover,
-    primary: chrome.primary,
+    primary,
     radius: "0.625rem",
     ring: chrome.ring,
     secondary: chrome.secondary,
