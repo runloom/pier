@@ -2,73 +2,55 @@
  * Workspace 布局持久化 — 存 dockview 的 toJSON() 序列化结果到 userData.
  * reload / 重启窗口后从这里恢复 panel 布局.
  */
-import { existsSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { app } from "electron";
-import lockfile from "proper-lockfile";
-import writeFileAtomic from "write-file-atomic";
+import {
+  type DebouncedJsonStore,
+  debouncedJsonStore,
+} from "./debounced-store.ts";
 
 function resolveFilePath(): string {
   return join(app.getPath("userData"), "workspace-layout.json");
 }
 
-async function ensureDir(filePath: string): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
+let store: DebouncedJsonStore<unknown> | undefined;
+
+function getStore(): DebouncedJsonStore<unknown> {
+  if (!store) {
+    store = debouncedJsonStore<unknown>({
+      filePath: resolveFilePath(),
+      defaults: null,
+      debounceMs: 500,
+    });
+  }
+  return store;
 }
 
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const { stat: statFn } = await import("node:fs/promises");
-    await statFn(path);
-    return true;
-  } catch {
-    return false;
-  }
+async function ensureStore(): Promise<DebouncedJsonStore<unknown>> {
+  const s = getStore();
+  await s.init();
+  return s;
 }
 
 export async function readLayout(): Promise<unknown | null> {
-  const path = resolveFilePath();
-  if (!existsSync(path)) {
-    return null;
-  }
-  try {
-    const raw = await readFile(path, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  const s = await ensureStore();
+  const state = s.get();
+  // null means no layout was ever persisted or it was cleared
+  return state;
 }
 
 export async function saveLayout(layout: unknown): Promise<void> {
-  const path = resolveFilePath();
-  await ensureDir(path);
-  let release: (() => Promise<void>) | undefined;
-  try {
-    if (await fileExists(path)) {
-      release = await lockfile.lock(path);
-    }
-    await writeFileAtomic(path, `${JSON.stringify(layout, null, 2)}\n`);
-  } finally {
-    await release?.();
-  }
+  const s = await ensureStore();
+  s.replace(layout);
 }
 
 /**
  * 删除持久化 layout 文件. 用于命令面板"重置布局"操作 — renderer 删 dockview
  * 所有 panel + 重建 default panel 后再调本方法, 防止后续 reload 又恢复旧 layout.
  *
- * 文件不存在视为成功 (idempotent). 锁文件清理交给 lockfile.unlock 防泄漏.
+ * 文件不存在视为成功 (idempotent).
  */
 export async function clearLayout(): Promise<void> {
-  const path = resolveFilePath();
-  if (!existsSync(path)) {
-    return;
-  }
-  const { unlink } = await import("node:fs/promises");
-  try {
-    await unlink(path);
-  } catch {
-    // 文件被并发删除等 race — 已达目标状态, ignore
-  }
+  const s = await ensureStore();
+  await s.clear();
 }
