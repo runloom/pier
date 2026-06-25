@@ -15,12 +15,22 @@
  */
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
-import { type MouseEvent, useCallback, useEffect, useState } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { panelIconOf } from "./panel-registry.ts";
+import { revealDockviewTabElement } from "./tab-visibility.ts";
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const [title, setTitle] = useState<string>(props.api.title ?? "");
+  const tabRef = useRef<HTMLDivElement>(null);
+  const Icon = panelIconOf(props.api.component);
   useEffect(() => {
     // dockview onDidTitleChange fire 时把新 title 写入 state, 触发 tab 重渲.
     const disposable = props.api.onDidTitleChange((e) => {
@@ -29,6 +39,40 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     // mount 时 sync 一次防 onDidTitleChange 未 fire 但 props.api.title 已变.
     setTitle(props.api.title ?? "");
     return () => {
+      disposable.dispose();
+    };
+  }, [props.api]);
+
+  useEffect(() => {
+    let revealFrame: number | null = null;
+    const cancelReveal = () => {
+      if (revealFrame !== null) {
+        cancelAnimationFrame(revealFrame);
+        revealFrame = null;
+      }
+    };
+    const reveal = () => {
+      cancelReveal();
+      revealFrame = requestAnimationFrame(() => {
+        revealFrame = null;
+        if (tabRef.current) {
+          revealDockviewTabElement(tabRef.current);
+        }
+      });
+    };
+
+    if (props.api.isActive) {
+      reveal();
+    }
+    const disposable = props.api.onDidActiveChange((event) => {
+      if (event.isActive) {
+        reveal();
+      } else {
+        cancelReveal();
+      }
+    });
+    return () => {
+      cancelReveal();
       disposable.dispose();
     };
   }, [props.api]);
@@ -47,10 +91,20 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   return (
     <div
       className="dv-default-tab"
+      data-panel-tab-id={props.api.id}
       onContextMenu={onContextMenu}
+      ref={tabRef}
       role="tab"
       tabIndex={0}
     >
+      {Icon ? (
+        <Icon
+          aria-hidden="true"
+          className="pier-panel-tab-icon shrink-0"
+          data-panel-tab-icon={props.api.component}
+          strokeWidth={2.35}
+        />
+      ) : null}
       <span className="dv-default-tab-content">{title}</span>
       <button
         aria-label="Close tab"
