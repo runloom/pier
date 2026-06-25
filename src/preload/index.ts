@@ -145,6 +145,8 @@ const terminalApi: TerminalAPI = {
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
+  readSession: (panelId) =>
+    ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFont: (panelId, font) =>

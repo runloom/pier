@@ -87,6 +87,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelTitle: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) =>
@@ -167,6 +168,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelTitle: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) => idMap.get(id) ?? null),

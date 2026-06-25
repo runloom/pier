@@ -26,16 +26,25 @@ class TestResizeObserver {
 
 interface TestPanelProps extends IDockviewPanelProps {
   emitDimensions(event: { height: number; width: number }): void;
+  emitVisibility(event: { isVisible: boolean }): void;
 }
 
-function createPanelProps(): TestPanelProps {
+function createPanelProps(
+  options: { isVisible?: boolean } = {}
+): TestPanelProps {
   let onDidDimensionsChange:
     | ((event: { height: number; width: number }) => void)
     | null = null;
+  let onDidVisibilityChange: ((event: { isVisible: boolean }) => void) | null =
+    null;
+  let isVisible = options.isVisible ?? true;
   const props = {
     api: {
       height: 300,
       id: "terminal-1",
+      get isVisible() {
+        return isVisible;
+      },
       onDidActiveChange: vi.fn(() => ({ dispose: vi.fn() })),
       onDidDimensionsChange: vi.fn(
         (listener: (event: { height: number; width: number }) => void) => {
@@ -43,13 +52,22 @@ function createPanelProps(): TestPanelProps {
           return { dispose: vi.fn() };
         }
       ),
-      onDidVisibilityChange: vi.fn(() => ({ dispose: vi.fn() })),
+      onDidVisibilityChange: vi.fn(
+        (listener: (event: { isVisible: boolean }) => void) => {
+          onDidVisibilityChange = listener;
+          return { dispose: vi.fn() };
+        }
+      ),
       setTitle: vi.fn(),
       width: 400,
     },
     containerApi: {},
     emitDimensions(event: { height: number; width: number }) {
       onDidDimensionsChange?.(event);
+    },
+    emitVisibility(event: { isVisible: boolean }) {
+      isVisible = event.isVisible;
+      onDidVisibilityChange?.(event);
     },
   };
   return props as unknown as TestPanelProps;
@@ -120,6 +138,7 @@ describe("TerminalPanel lifecycle", () => {
           onContextMenuRequest: vi.fn(() => vi.fn()),
           onCwdChange: vi.fn(() => vi.fn()),
           onTitleChange: vi.fn(() => vi.fn()),
+          readSession: vi.fn(async () => null),
           setFont: vi.fn(),
           setFrame: vi.fn(),
           show: vi.fn(),
@@ -148,6 +167,31 @@ describe("TerminalPanel lifecycle", () => {
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
   });
 
+  it("restores the saved tab descriptor before creating a hidden native terminal", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      cwd: "/Users/xyz/ABC/pier",
+      title: "Claude Code",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+    const props = createPanelProps({ isVisible: false });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(props.api.setTitle).toHaveBeenCalledWith("pier");
+    });
+    expect(props.api.setTitle).not.toHaveBeenCalledWith("Terminal");
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
+
+    props.emitVisibility({ isVisible: true });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+  });
+
   it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {
     const props = createPanelProps();
 
@@ -157,6 +201,9 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({ panelId: "terminal-1" })
       );
+    });
+    await waitFor(() => {
+      expect(TestResizeObserver.observeCount).toBe(1);
     });
     vi.mocked(window.pier.terminal.setFrame).mockClear();
 
@@ -173,8 +220,6 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
-    expect(TestResizeObserver.observeCount).toBe(1);
-
     vi.mocked(window.pier.terminal.setFrame).mockClear();
     anchorFrame = {
       height: 340,

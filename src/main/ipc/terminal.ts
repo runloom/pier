@@ -14,6 +14,7 @@ import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
   updateTerminalPanelCwd,
+  updateTerminalPanelTitle,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import {
@@ -230,10 +231,18 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     );
   });
   addon?.setTitleForwardCallback((id, panelId, title) => {
+    const rawPanelId = unscopePanelId(panelId);
+    const targetWindow = findAppWindowByElectronId(id);
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      const windowId = stableWindowIdFor(targetWindow);
+      updateTerminalPanelTitle(windowId, rawPanelId, title).catch((err) => {
+        console.error("[pier-title-persist] failed:", err);
+      });
+    }
     forwardToWindow(
       id,
       "pier:terminal:title-change",
-      { panelId: unscopePanelId(panelId), title },
+      { panelId: rawPanelId, title },
       "pier-title-forward"
     );
   });
@@ -289,6 +298,17 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           error: e instanceof Error ? e.message : String(e),
         };
       }
+    }
+  );
+
+  ipcMain.handle(
+    "pier:terminal:read-session",
+    async (event, panelId: string) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return null;
+      }
+      return await readTerminalPanelSession(stableWindowIdFor(win), panelId);
     }
   );
 

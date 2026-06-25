@@ -1,8 +1,9 @@
 /**
  * Terminal session state persistence.
  *
- * Remembers the last cwd per window id + terminal panel id, so a
- * relaunched app can create a fresh shell in the same directory.
+ * Remembers the last cwd/title per window id + terminal panel id, so a
+ * relaunched app can restore tab chrome before creating a fresh shell in the
+ * same directory.
  *
  * Uses debouncedJsonStore: in-memory state + 500ms debounced atomic write.
  * No file lock — single-process, no cross-process contention.
@@ -16,7 +17,8 @@ import {
 } from "./debounced-store.ts";
 
 const terminalPanelSessionSchema = z.object({
-  cwd: z.string(),
+  cwd: z.string().optional(),
+  title: z.string().optional(),
   updatedAt: z.string(),
 });
 
@@ -92,6 +94,10 @@ function isRestorableCwd(cwd: string): boolean {
   return cwd.trim() === cwd && cwd.length > 0 && isAbsolute(cwd);
 }
 
+function isRestorableTitle(title: string): boolean {
+  return title.trim().length > 0;
+}
+
 export async function updateTerminalPanelCwd(
   windowId: string,
   panelId: string,
@@ -107,8 +113,35 @@ export async function updateTerminalPanelCwd(
   s.mutate((state) => {
     const windowState = state.windows[windowId] ?? { panels: {} };
     state.windows[windowId] = windowState;
+    const current = windowState.panels[panelId] ?? {};
     windowState.panels[panelId] = {
+      ...current,
       cwd,
+      updatedAt: new Date().toISOString(),
+    };
+    return state;
+  });
+}
+
+export async function updateTerminalPanelTitle(
+  windowId: string,
+  panelId: string,
+  title: string
+): Promise<void> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return;
+  }
+  if (!isRestorableTitle(title)) {
+    return;
+  }
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId] ?? { panels: {} };
+    state.windows[windowId] = windowState;
+    const current = windowState.panels[panelId] ?? {};
+    windowState.panels[panelId] = {
+      ...current,
+      title,
       updatedAt: new Date().toISOString(),
     };
     return state;
