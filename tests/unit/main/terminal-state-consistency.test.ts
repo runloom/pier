@@ -40,6 +40,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       setMouseForwardCallback: vi.fn(),
       setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),
+      setTerminalConfig: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
@@ -320,6 +321,26 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       Buffer.from("window"),
       "Menlo",
       14
+    );
+  });
+
+  it("routes terminal runtime config through the sender window", async () => {
+    const { fakeAddon, handlers, win } = await setupHarness();
+    const config = {
+      cursorStyle: "bar",
+      cursorBlink: false,
+      scrollbackLimitBytes: 128_000_000,
+      pasteProtection: false,
+    };
+
+    handlers.get("pier:terminal:set-config")?.(
+      { sender: win.webContents },
+      config
+    );
+
+    expect(fakeAddon.setTerminalConfig).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      config
     );
   });
 });

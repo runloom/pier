@@ -30,7 +30,11 @@ export function MonoFontSizeRow() {
     <InputRow
       description={t("settings.row.monoFontSizeDesc")}
       id="settings-mono-font-size"
+      inputClassName="w-24"
+      inputMode="numeric"
       label={t("settings.row.monoFontSize")}
+      max={MAX}
+      min={MIN}
       onBlur={(raw) => {
         const next = clampToValid(raw, persisted);
         setDraft(String(next));
@@ -40,6 +44,8 @@ export function MonoFontSizeRow() {
       }}
       onChange={setDraft}
       placeholder={t("settings.row.monoFontSizePlaceholder")}
+      step={1}
+      type="number"
       value={draft}
     />
   );

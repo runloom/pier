@@ -3,9 +3,16 @@ import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
 interface WorkspaceState {
-  addPanel: (opts: { id: string; title: string; component: string }) => void;
+  addPanel: (opts: {
+    component: string;
+    id: string;
+    params?: TerminalPanelParams;
+    title: string;
+  }) => void;
   addTab: () => void;
   addTerminal: (opts?: {
     path?: string;
@@ -23,6 +30,40 @@ interface WorkspaceState {
     panelId: string,
     direction: "right" | "below" | "left" | "above"
   ) => void;
+}
+
+interface TerminalPanelParams {
+  cwd: string;
+}
+
+function isRestorableCwd(value: string | undefined): value is string {
+  return typeof value === "string" && value.trim() === value && value !== "";
+}
+
+function cwdParams(cwd: string | undefined): TerminalPanelParams | undefined {
+  return isRestorableCwd(cwd) ? { cwd } : undefined;
+}
+
+function terminalPanelCwd(panelId: string | undefined): string | undefined {
+  if (!panelId) {
+    return;
+  }
+  const descriptor = usePanelDescriptorStore.getState().descriptors[panelId];
+  return isRestorableCwd(descriptor?.path) ? descriptor.path : undefined;
+}
+
+function inheritedActiveTerminalCwd(api: DockviewApi): string | undefined {
+  if (
+    useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
+    "activeTerminal"
+  ) {
+    return;
+  }
+  const activePanel = api.activePanel;
+  if (activePanel?.view.contentComponent !== "terminal") {
+    return;
+  }
+  return terminalPanelCwd(activePanel.id);
 }
 
 /**
@@ -58,6 +99,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       id: opts.id,
       component: opts.component,
       title: opts.title,
+      ...(opts.params && { params: opts.params }),
       position: { direction: "right" },
     });
   },
@@ -110,10 +152,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const fallbackPosition = activeGroup
       ? { referenceGroup: activeGroup, direction: "within" as const }
       : { direction: "right" as const };
+    const cwd = opts?.path ?? inheritedActiveTerminalCwd(api);
+    const params = cwdParams(cwd);
     api.addPanel({
       id,
       component: "terminal",
       title: opts?.path ? `Terminal: ${opts.path}` : "Terminal",
+      ...(params && { params }),
       position: position ?? fallbackPosition,
     });
     return id;
@@ -223,10 +268,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     const component = panel.view.contentComponent;
     const newId = `${component}-${Date.now()}`;
+    const params =
+      component === "terminal" &&
+      useTerminalPreferencesStore.getState().terminalNewCwdPolicy ===
+        "activeTerminal"
+        ? cwdParams(terminalPanelCwd(panel.id))
+        : undefined;
     api.addPanel({
       id: newId,
       component,
       ...(panel.title !== undefined && { title: panel.title }),
+      ...(params && { params }),
       position: {
         referencePanel: panel.id,
         direction,

@@ -1,5 +1,10 @@
 import { join } from "node:path";
 import {
+  DEFAULT_TERMINAL_CURSOR_BLINK,
+  DEFAULT_TERMINAL_CURSOR_STYLE,
+  DEFAULT_TERMINAL_NEW_CWD_POLICY,
+  DEFAULT_TERMINAL_PASTE_PROTECTION,
+  DEFAULT_TERMINAL_SCROLLBACK_MB,
   type ProjectPreferences,
   projectPreferencesSchema,
 } from "@shared/contracts/preferences.ts";
@@ -22,6 +27,11 @@ const DEFAULTS: ProjectPreferences = {
   uiFontFamily: "",
   monoFontFamily: "",
   monoFontSize: 13,
+  terminalCursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
+  terminalCursorBlink: DEFAULT_TERMINAL_CURSOR_BLINK,
+  terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
+  terminalPasteProtection: DEFAULT_TERMINAL_PASTE_PROTECTION,
+  terminalNewCwdPolicy: DEFAULT_TERMINAL_NEW_CWD_POLICY,
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;
