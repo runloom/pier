@@ -12,9 +12,9 @@ import { flushTerminalLayoutFramesTrailing } from "@/panel-kits/terminal/termina
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { AddPanelAction } from "./add-panel-action.tsx";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
+import { WorkspaceHeaderActions } from "./workspace-header-actions.tsx";
 
 /**
  * WorkspaceHost — dockview-react 的唯一业务边界。
@@ -24,7 +24,7 @@ import { PanelTabHeader } from "./panel-tab-header.tsx";
  *
  * 当前职责:
  * - mount DockviewReact, onReady 时把 api 灌入 store
- * - 注册 panel 组件表 + tab 后 add 按钮 (leftHeaderActionsComponent)
+ * - 注册 panel 组件表 + tab 后 header actions
  * - 初始创建一个 welcome panel
  *
  * 全局快捷键 dispatch 由 ShellKeybindings 组件统一管理;
@@ -360,7 +360,8 @@ export function WorkspaceHost() {
       <DockviewReact
         components={panelComponents}
         defaultTabComponent={PanelTabHeader}
-        leftHeaderActionsComponent={AddPanelAction}
+        disableTabsOverflowList={true}
+        leftHeaderActionsComponent={WorkspaceHeaderActions}
         onReady={handleReady}
         theme={pierTheme}
       />

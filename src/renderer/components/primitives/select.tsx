@@ -29,6 +29,7 @@ function SelectValue({
 }
 
 function SelectTrigger({
+  asChild,
   className,
   size = "default",
   children,
@@ -36,6 +37,19 @@ function SelectTrigger({
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: "sm" | "default";
 }) {
+  if (asChild) {
+    return (
+      <SelectPrimitive.Trigger
+        asChild
+        className={className}
+        data-slot="select-trigger"
+        {...props}
+      >
+        {children}
+      </SelectPrimitive.Trigger>
+    );
+  }
+
   return (
     <SelectPrimitive.Trigger
       className={cn(

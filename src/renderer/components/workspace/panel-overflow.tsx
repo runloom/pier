@@ -1,0 +1,287 @@
+import type { IDockviewHeaderActionsProps } from "dockview-react";
+import { ChevronDown } from "lucide-react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
+import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
+import { Button } from "../primitives/button.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+} from "../primitives/select.tsx";
+import { panelIconOf } from "./panel-registry.ts";
+import { revealDockviewTabElement } from "./tab-visibility.ts";
+
+const CLIP_EPSILON_PX = 1;
+
+interface OverflowPanelLike {
+  id: string;
+}
+
+type HeaderPanel = IDockviewHeaderActionsProps["panels"][number];
+
+function sameIds(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function closestTabsContainer(element: HTMLElement | null): HTMLElement | null {
+  return (
+    element
+      ?.closest<HTMLElement>(".dv-tabs-and-actions-container")
+      ?.querySelector<HTMLElement>(".dv-tabs-container") ?? null
+  );
+}
+
+function findTabContentElement(
+  tabsContainer: HTMLElement,
+  panelId: string
+): HTMLElement | null {
+  for (const contentElement of tabsContainer.querySelectorAll<HTMLElement>(
+    "[data-panel-tab-id]"
+  )) {
+    if (contentElement.dataset.panelTabId === panelId) {
+      return contentElement;
+    }
+  }
+  return null;
+}
+
+function revealPanelTab(
+  rootElement: HTMLElement | null,
+  panelId: string
+): void {
+  const tabsContainer = closestTabsContainer(rootElement);
+  const tabContentElement = tabsContainer
+    ? findTabContentElement(tabsContainer, panelId)
+    : null;
+  if (tabContentElement) {
+    revealDockviewTabElement(tabContentElement);
+  }
+}
+
+function isOutsideVisibleTabStrip(tabRect: DOMRect, containerRect: DOMRect) {
+  return (
+    tabRect.right <= containerRect.left + CLIP_EPSILON_PX ||
+    tabRect.left >= containerRect.right - CLIP_EPSILON_PX
+  );
+}
+
+export function getOverflowPanelIds(
+  tabsContainer: HTMLElement,
+  panels: readonly OverflowPanelLike[]
+): string[] {
+  const containerRect = tabsContainer.getBoundingClientRect();
+  if (containerRect.width <= 0) {
+    return [];
+  }
+
+  const knownPanelIds = new Set(panels.map((panel) => panel.id));
+  const orderedTabEntries: Array<{
+    element: HTMLElement;
+    panelId: string;
+  }> = [];
+
+  for (const contentElement of tabsContainer.querySelectorAll<HTMLElement>(
+    "[data-panel-tab-id]"
+  )) {
+    const panelId = contentElement.dataset.panelTabId;
+    if (!(panelId && knownPanelIds.has(panelId))) {
+      continue;
+    }
+    orderedTabEntries.push({
+      element: contentElement.closest<HTMLElement>(".dv-tab") ?? contentElement,
+      panelId,
+    });
+  }
+
+  return orderedTabEntries
+    .filter(({ element: tabElement }) => {
+      const tabRect = tabElement.getBoundingClientRect();
+      return isOutsideVisibleTabStrip(tabRect, containerRect);
+    })
+    .map(({ panelId }) => panelId);
+}
+
+function useOverflowPanelIds(
+  rootRef: RefObject<HTMLDivElement | null>,
+  panels: readonly HeaderPanel[]
+): string[] {
+  const [overflowPanelIds, setOverflowPanelIds] = useState<string[]>([]);
+
+  const updateOverflowPanels = useCallback(() => {
+    const tabsContainer = closestTabsContainer(rootRef.current);
+    const nextIds = tabsContainer
+      ? getOverflowPanelIds(tabsContainer, panels)
+      : [];
+    setOverflowPanelIds((currentIds) =>
+      sameIds(currentIds, nextIds) ? currentIds : nextIds
+    );
+  }, [panels, rootRef]);
+
+  useLayoutEffect(() => {
+    let frame: number | null = null;
+    const scheduleUpdate = () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        updateOverflowPanels();
+      });
+    };
+
+    scheduleUpdate();
+    const tabsContainer = closestTabsContainer(rootRef.current);
+    if (!tabsContainer) {
+      return () => {
+        if (frame !== null) {
+          cancelAnimationFrame(frame);
+        }
+      };
+    }
+
+    tabsContainer.addEventListener("scroll", scheduleUpdate, { passive: true });
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleUpdate);
+    resizeObserver?.observe(tabsContainer);
+    const headerElement = tabsContainer.closest<HTMLElement>(
+      ".dv-tabs-and-actions-container"
+    );
+    if (headerElement) {
+      resizeObserver?.observe(headerElement);
+    }
+
+    const mutationObserver =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(scheduleUpdate);
+    mutationObserver?.observe(tabsContainer, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      tabsContainer.removeEventListener("scroll", scheduleUpdate);
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+    };
+  }, [rootRef, updateOverflowPanels]);
+
+  useEffect(() => {
+    const disposables = panels.map((panel) =>
+      panel.api.onDidTitleChange(updateOverflowPanels)
+    );
+    return () => {
+      for (const disposable of disposables) {
+        disposable.dispose();
+      }
+    };
+  }, [panels, updateOverflowPanels]);
+
+  return overflowPanelIds;
+}
+
+function PanelMenuItem({ panel }: { panel: HeaderPanel }) {
+  const Icon = panelIconOf(panel.view.contentComponent);
+
+  return (
+    <SelectItem textValue={panel.title ?? "Panel"} value={panel.id}>
+      {Icon ? <Icon data-icon="inline-start" strokeWidth={2.35} /> : null}
+      <span className="truncate">{panel.title ?? "Panel"}</span>
+    </SelectItem>
+  );
+}
+
+export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
+  const [open, setOpen] = useState(false);
+  const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
+  const rootRef = useMemo(
+    () => ({ current: rootElement }) satisfies RefObject<HTMLDivElement | null>,
+    [rootElement]
+  );
+  const overflowPanelIds = useOverflowPanelIds(rootRef, props.panels);
+  const overflowPanels = useMemo(
+    () =>
+      overflowPanelIds
+        .map((id) => props.panels.find((panel) => panel.id === id))
+        .filter((panel): panel is HeaderPanel => Boolean(panel)),
+    [overflowPanelIds, props.panels]
+  );
+  const activePanelById = useMemo(
+    () => new Map(props.panels.map((panel) => [panel.id, panel])),
+    [props.panels]
+  );
+  const activatePanel = useCallback(
+    (panelId: string) => {
+      activePanelById.get(panelId)?.api.setActive();
+      revealPanelTab(rootRef.current, panelId);
+    },
+    [activePanelById, rootRef]
+  );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    pushOverlay();
+    return () => popOverlay();
+  }, [open]);
+
+  if (overflowPanels.length === 0) {
+    return <div className="h-full px-1" ref={setRootElement} />;
+  }
+
+  return (
+    <div
+      className="flex h-full items-center justify-center px-1"
+      ref={setRootElement}
+    >
+      <Select
+        onOpenChange={setOpen}
+        onValueChange={activatePanel}
+        open={open}
+        value=""
+      >
+        <SelectTrigger aria-label="Hidden tabs" asChild>
+          <Button
+            aria-label="Hidden tabs"
+            size="sm"
+            title="Hidden tabs"
+            type="button"
+            variant="secondary"
+          >
+            <ChevronDown data-icon="inline-start" />
+            <span>{overflowPanels.length}</span>
+          </Button>
+        </SelectTrigger>
+        <SelectContent
+          align="end"
+          className="w-48"
+          position="popper"
+          sideOffset={6}
+        >
+          <SelectGroup>
+            {overflowPanels.map((panel) => (
+              <PanelMenuItem key={panel.id} panel={panel} />
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
