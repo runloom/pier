@@ -39,9 +39,20 @@ export function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
+function initialCwdFromParams(params: unknown): string | undefined {
+  if (!params || typeof params !== "object" || !("cwd" in params)) {
+    return;
+  }
+  const cwd = (params as { cwd?: unknown }).cwd;
+  return typeof cwd === "string" && cwd.trim() === cwd && cwd !== ""
+    ? cwd
+    : undefined;
+}
+
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
+  const initialCwd = initialCwdFromParams(props.params);
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -159,6 +170,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             family: computeMonoFontFamily(monoFontFamilyRef.current),
             size: monoFontSizeRef.current,
           },
+          ...(initialCwd && { cwd: initialCwd }),
         });
         if (!result.ok) {
           setError(result.error ?? "终端创建失败");
@@ -243,7 +255,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       }
       layoutRegistration?.dispose();
     };
-  }, [api, panelId]);
+  }, [api, panelId, initialCwd]);
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {

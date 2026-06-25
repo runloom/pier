@@ -141,6 +141,7 @@
   --surface-raised: color-mix(in oklab, var(--muted) 90%, var(--background));
   --surface-inset: color-mix(in oklab, var(--background) 72%, var(--muted));
   --surface-border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --overlay-scrim: color-mix(in oklab, var(--foreground) 16%, transparent);
   --interactive-hover: color-mix(
     in oklab,
     var(--foreground) 8%,
@@ -197,12 +198,12 @@
   /* === Sidebar / titlebar chrome elevation 体系 ===
      - sidebar (外壳: titlebar / 侧栏 / workspace gutter) 用 --muted, 比内容卡略亮/略暗
      - 内容卡 bg-card = var(--background), 与 sidebar 形成视觉层次 (类似 VSCode)
-     - border / accent 用 color-mix 软化, 避免高饱和主题 (Solarized 等) 边线/hover 过重 */
+     - active / hover 复用 --accent, 与 Select / 菜单选中态保持一致 */
   --sidebar: var(--muted);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: color-mix(in oklab, var(--accent) 50%, transparent);
+  --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: color-mix(in oklab, var(--border) 50%, transparent);
   --sidebar-ring: var(--ring);
@@ -280,6 +281,7 @@
   --border: oklch(0.92 0 0);
   --input: oklch(0.92 0 0);
   --ring: oklch(0.708 0 0);
+  --overlay-scrim: color-mix(in oklab, var(--foreground) 22%, transparent);
   /* sidebar/titlebar 已在 :root 走 var(--xxx) 引用, .light 模式自动跟 --background/--foreground 翻面,
      无需在此重复定义. */
 }
@@ -331,6 +333,7 @@
   --color-surface-raised: var(--surface-raised);
   --color-surface-inset: var(--surface-inset);
   --color-surface-border: var(--surface-border);
+  --color-overlay-scrim: var(--overlay-scrim);
   --color-interactive-hover: var(--interactive-hover);
   --color-interactive-active: var(--interactive-active);
 
@@ -895,7 +898,6 @@ body {
 .dockview-theme-pier .dv-tabs-and-actions-container {
   border-bottom: none;
 }
-
 
 .dv-tab .dv-default-tab .dv-default-tab-action:hover {
   border-radius: 12px;

@@ -29,3 +29,55 @@ describe("projectPreferencesSchema — monoFontSize", () => {
     ).toThrow();
   });
 });
+
+describe("projectPreferencesSchema — terminal preferences", () => {
+  it("提供终端设置默认值", () => {
+    const parsed = projectPreferencesSchema.parse({});
+    expect(parsed.terminalCursorStyle).toBe("block");
+    expect(parsed.terminalCursorBlink).toBe(true);
+    expect(parsed.terminalScrollbackMb).toBe(64);
+    expect(parsed.terminalPasteProtection).toBe(true);
+    expect(parsed.terminalNewCwdPolicy).toBe("activeTerminal");
+  });
+
+  it("接受终端设置边界值和枚举值", () => {
+    expect(
+      projectPreferencesSchema.parse({
+        terminalCursorStyle: "bar",
+        terminalCursorBlink: false,
+        terminalScrollbackMb: 10,
+        terminalPasteProtection: false,
+        terminalNewCwdPolicy: "shellDefault",
+      })
+    ).toMatchObject({
+      terminalCursorStyle: "bar",
+      terminalCursorBlink: false,
+      terminalScrollbackMb: 10,
+      terminalPasteProtection: false,
+      terminalNewCwdPolicy: "shellDefault",
+    });
+
+    expect(
+      projectPreferencesSchema.parse({ terminalScrollbackMb: 512 })
+        .terminalScrollbackMb
+    ).toBe(512);
+  });
+
+  it("拒绝非法终端设置", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ terminalCursorStyle: "beam" })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ terminalScrollbackMb: 9 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ terminalScrollbackMb: 513 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ terminalScrollbackMb: 64.5 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ terminalNewCwdPolicy: "workspaceRoot" })
+    ).toThrow();
+  });
+});

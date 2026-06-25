@@ -35,7 +35,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-black/30 duration-100 data-closed:animate-out data-open:animate-in supports-backdrop-filter:backdrop-blur-sm",
+        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
         className
       )}
       data-slot="dialog-overlay"
@@ -95,12 +95,16 @@ function wasInnerPortalOpenRecently(): boolean {
 function DialogContent({
   className,
   children,
+  initialFocus = "content",
   overlayClassName,
   showCloseButton = true,
+  onOpenAutoFocus,
   onPointerDownOutside,
   onInteractOutside,
+  tabIndex = -1,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  initialFocus?: "content" | "firstFocusable";
   overlayClassName?: string;
   showCloseButton?: boolean;
 }) {
@@ -109,7 +113,7 @@ function DialogContent({
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         className={cn(
-          "app-no-drag data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground text-sm shadow-xl outline-none ring-1 ring-foreground/5 duration-100 data-closed:animate-out data-open:animate-in sm:max-w-md dark:ring-foreground/10",
+          "app-no-drag data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground text-sm shadow-xl outline-none duration-100 data-closed:animate-out data-open:animate-in sm:max-w-md",
           className
         )}
         data-slot="dialog-content"
@@ -128,6 +132,20 @@ function DialogContent({
           }
           onInteractOutside?.(e);
         }}
+        onOpenAutoFocus={(event) => {
+          if (onOpenAutoFocus) {
+            onOpenAutoFocus(event);
+            return;
+          }
+          if (initialFocus === "firstFocusable") {
+            return;
+          }
+          event.preventDefault();
+          const target = event.currentTarget;
+          if (target instanceof HTMLElement) {
+            target.focus({ preventScroll: true });
+          }
+        }}
         onPointerDownOutside={(e) => {
           // 点击发生时 Select / Popover 等 inner-portal 在 DOM 中 = 用户想关
           // 那个弹层而非 Dialog → prevent
@@ -141,6 +159,7 @@ function DialogContent({
           }
           onPointerDownOutside?.(e);
         }}
+        tabIndex={tabIndex}
         {...props}
       >
         {children}

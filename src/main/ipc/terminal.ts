@@ -4,6 +4,7 @@ import type {
   TerminalColors,
   TerminalFont,
   TerminalFrame,
+  TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 import type { IpcMain, WebContents } from "electron";
 import {
@@ -55,20 +56,8 @@ function terminalSessionScopeFor(win: AppWindow): string {
   return findWindowSessionId(win) ?? stableWindowIdFor(win);
 }
 
-/**
- * 给 panelId 加 AppWindow scope 前缀, 让 swift 端 `terminals: [String: Terminal]`
- * 单一 dict 能区分跨窗口同名 panel. Pier 默认 layout 多窗口都用 "terminal-1",
- * 不加 scope 时第二个窗口的 createTerminal 会撞已存在 entry → close 第一个窗口 panel
- * 再重建第二个的, 视觉上第二个窗口空白.
- *
- * scope = AppWindow.id (Electron process-local 唯一, 不需要持久化), 用 "::"
- * 分隔避免跟 panelId 内部可能的 "-" 冲突.
- *
- * - main → swift: 始终 scope (createTerminal / show / hide / close / focus /
- *   setFrame / setActivePanelKind / reconcile)
- * - swift → main → renderer: 始终 unscope, 让 renderer 用 raw panelId 跟 dockview
- *   state 对齐
- */
+// Swift 端 terminal dict 是全局的; main→swift 的 panelId 必须加 window scope,
+// 避免多窗口同名 panel 互相覆盖. swift→renderer 再 unscope 回 dockview raw id.
 const PANEL_ID_SEPARATOR = "::";
 function scopePanelId(win: AppWindow, panelId: string): string {
   return `${win.id}${PANEL_ID_SEPARATOR}${panelId}`;
@@ -172,17 +161,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   const { addon, error: loadError } = loadNativeAddon();
   cachedAddon = addon;
 
-  // 四条 swift → renderer forward channel, 全部走 forwardToWindow helper.
-  // 不能用 focused window:swift 触发时 (NSEvent monitor / OSC
-  // parser delegate) 跨线程, focused window 不一定是事件源 window — 必须用 setupWindow
-  // 时记录的 Electron window id 精准路由.
-  //
-  // - keyboard:Cmd+key 全局快捷键 (terminal 透明 + web overlay 架构下唯一可靠通道,
-  //   不能依赖 wk.keyDown forward 或 firstResponder chain — Electron 42 ViewsCompositor-
-  //   Superview 架构下 WKWebView 不是真正渲染层, Ghostty terminalView focus 时消费所有 key).
-  // - mouse:terminal 区域右键 → renderer 调 popupContextMenuAt 弹 native menu.
-  // - pwd:OSC 7 → 真实 cwd → descriptor.path / descriptor.short basename.
-  // - title:OSC 0/2 → TUI 应用 (claude / vim) 自定义 title → descriptor.long.
+  // swift → renderer forward 必须按 setupWindow 记录的 Electron window id 路由:
+  // keyboard / mouse / pwd / title 都不能依赖当前 focused window.
   addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
     const targetWindow = findAppWindowByElectronId(id);
     if (
@@ -323,10 +303,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   );
 
-  // Renderer → addon 单参数透传 (fire-and-forget): renderer.ipcRenderer.send 单向
-  // 触发 addon 同名 method. addon 可能未加载 (非 darwin / native load 失败), 用
-  // optional chain 让 callback 仍注册但 noop — 不让 renderer 端 send 静默丢但接收侧
-  // "No handler".
+  // Renderer → addon 单参数透传. addon 可能未加载, handler 仍注册但 noop.
   const panelIdRelays = [
     {
       channel: "pier:terminal:show",
@@ -381,10 +358,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   );
 
-  // Reconcile: renderer 重建后 (dockview restore 完成时) 报告当前活跃 panelId
-  // 集合, swift 把不在集合里的 NSView 清掉. C 方案 reload 零销毁路径的孤儿兜底.
-  // fire-and-forget: 调用方不需要 await, 失败也只是孤儿 NSView 多挂一会儿,
-  // 不影响功能.
+  // Reconcile: renderer restore 完成后报告活跃 terminal, swift 清掉孤儿 NSView.
   ipcMain.on("pier:terminal:reconcile", (event, activeIds: string[]) => {
     if (!addon) {
       return;
@@ -416,9 +390,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     } catch (err) {
       console.error("[pier-set-overlay] failed:", err);
     }
-    // v2: overlay active 时主动调 webContents.focus() 让 Chromium 接管 keystroke.
-    // Electron 标准 API, 内部知道正确的 RenderWidgetHostViewCocoa. 替代 v1 swift 端
-    // makeFirstResponder(WKWebView) 的脆弱实现 (Electron 42 没真 WKWebView).
+    // overlay active 时让 Chromium 接管 keystroke.
     if (active) {
       win.webContents.focus();
     }
@@ -440,11 +412,26 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   });
 
   ipcMain.on(
+    "pier:terminal:set-config",
+    (event, config: TerminalRuntimeConfig) => {
+      if (!addon) {
+        return;
+      }
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      try {
+        addon.setTerminalConfig(win.getNativeWindowHandle(), config);
+      } catch (err) {
+        console.error("[pier-terminal-set-config] failed:", err);
+      }
+    }
+  );
+
+  ipcMain.on(
     "pier:terminal:set-font",
     (event, _panelId: string, font: TerminalFont) => {
-      // panelId 暂时不用 — Ghostty controller 是 per-window, setTerminalConfiguration
-      // 影响该 window 所有 panel. 保留 panelId 在 IPC 签名里, 与 setFrame/show 等保持
-      // 一致, 为以后 per-panel 字体留余地.
       if (!addon) {
         return;
       }
@@ -489,8 +476,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       } catch (err) {
         console.error("[pier-set-active-panel-kind] failed:", err);
       }
-      // v2: 切到 web panel 时主动调 webContents.focus() (跟 setOverlayActive 同理).
-      // swift applyFirstResponder web 分支已 no-op, 由 main 负责 web focus.
+      // 切到 web panel 时由 main 负责 web focus.
       if (kind === "web" && win.isFocused()) {
         win.webContents.focus();
       }

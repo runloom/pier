@@ -15,6 +15,15 @@ export interface TerminalFont {
   size: number;
 }
 
+export type TerminalCursorStyle = "block" | "bar" | "underline";
+
+export interface TerminalRuntimeConfig {
+  cursorBlink: boolean;
+  cursorStyle: TerminalCursorStyle;
+  pasteProtection: boolean;
+  scrollbackLimitBytes: number;
+}
+
 export interface CreateTerminalArgs {
   cwd?: string | undefined;
   font: TerminalFont;
@@ -150,6 +159,7 @@ export interface TerminalAPI {
     kind: "terminal" | "web",
     panelId: string | null
   ) => void;
+  setConfig(config: TerminalRuntimeConfig): void;
   /**
    * 热更新已存在 terminal 的字体. 走 Ghostty TerminalController.setTerminalConfiguration
    * → ghostty_surface_update_config, 不重建 surface, 不杀 shell. fire-and-forget.
