@@ -180,6 +180,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
               if (!disposed && didCreateNativeTerminal) {
                 layoutRegistration?.flushTrailing("visibility");
                 window.pier.terminal.show(panelId);
+                if (api.isActive && api.isVisible) {
+                  window.pier.terminal.focus(panelId);
+                }
               }
             })
             .catch(logCreateError);
@@ -206,6 +209,23 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             })
             .catch(logCreateError);
         }
+      })
+    );
+
+    subscriptions.push(
+      api.onDidGroupChange(() => {
+        if (!(api.isActive && api.isVisible)) {
+          return;
+        }
+        ensureNativeTerminal()
+          .then(() => {
+            if (!disposed && didCreateNativeTerminal) {
+              layoutRegistration?.flushTrailing("dockview-layout");
+              window.pier.terminal.show(panelId);
+              window.pier.terminal.focus(panelId);
+            }
+          })
+          .catch(logCreateError);
       })
     );
 

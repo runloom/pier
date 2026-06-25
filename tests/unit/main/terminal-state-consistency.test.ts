@@ -242,4 +242,84 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       ["7::panel-a", "7::panel-b"]
     );
   });
+
+  it("activates web focus only when terminal overlay is enabled", async () => {
+    const { fakeAddon, handlers, win } = await setupHarness();
+
+    handlers.get("pier:terminal:set-overlay")?.(
+      { sender: win.webContents },
+      true
+    );
+
+    expect(fakeAddon.setOverlayActive).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      true
+    );
+    expect(win.webContents.focus).toHaveBeenCalledOnce();
+
+    vi.mocked(win.webContents.focus).mockClear();
+
+    handlers.get("pier:terminal:set-overlay")?.(
+      { sender: win.webContents },
+      false
+    );
+
+    expect(fakeAddon.setOverlayActive).toHaveBeenLastCalledWith(
+      Buffer.from("window"),
+      false
+    );
+    expect(win.webContents.focus).not.toHaveBeenCalled();
+  });
+
+  it("routes terminal theme application through the sender window", async () => {
+    const { fakeAddon, handlers, win } = await setupHarness();
+    const colors = {
+      background: "#000000",
+      black: "#000000",
+      blue: "#0000ff",
+      brightBlack: "#111111",
+      brightBlue: "#2222ff",
+      brightCyan: "#22ffff",
+      brightGreen: "#22ff22",
+      brightMagenta: "#ff22ff",
+      brightRed: "#ff2222",
+      brightWhite: "#ffffff",
+      brightYellow: "#ffff22",
+      cursor: "#ffffff",
+      cyan: "#00ffff",
+      foreground: "#ffffff",
+      green: "#00ff00",
+      magenta: "#ff00ff",
+      red: "#ff0000",
+      selection: "#333333",
+      white: "#eeeeee",
+      yellow: "#ffff00",
+    };
+
+    handlers.get("pier:terminal:apply-theme")?.(
+      { sender: win.webContents },
+      colors
+    );
+
+    expect(fakeAddon.applyTerminalTheme).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      colors
+    );
+  });
+
+  it("routes terminal font application through the sender window", async () => {
+    const { fakeAddon, handlers, win } = await setupHarness();
+
+    handlers.get("pier:terminal:set-font")?.(
+      { sender: win.webContents },
+      "panel-1",
+      { family: "Menlo", size: 14 }
+    );
+
+    expect(fakeAddon.setTerminalFont).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      "Menlo",
+      14
+    );
+  });
 });

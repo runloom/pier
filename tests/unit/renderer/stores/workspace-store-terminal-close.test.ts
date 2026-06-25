@@ -1,17 +1,53 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock("@/lib/ipc/window-ipc.ts", () => ({
+  closeCurrentWindow: closeCurrentWindowMock,
+}));
+
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 function terminalPanel(id: string) {
   return {
+    api: { setActive: vi.fn() },
     id,
     title: "Terminal",
     view: { contentComponent: "terminal" },
   };
 }
 
+function webPanel(id: string) {
+  return {
+    api: { setActive: vi.fn() },
+    id,
+    title: "Welcome",
+    view: { contentComponent: "welcome" },
+  };
+}
+
+function createApi(panels: ReturnType<typeof terminalPanel>[]) {
+  return {
+    activePanel: panels[0] ?? null,
+    addPanel: vi.fn(),
+    panels,
+    removePanel: vi.fn(),
+    totalPanels: panels.length,
+  };
+}
+
+function firstInvocationOrder(fn: { mock: { invocationCallOrder: number[] } }) {
+  const order = fn.mock.invocationCallOrder[0];
+  if (order === undefined) {
+    throw new Error("expected mock to be called");
+  }
+  return order;
+}
+
 describe("workspace terminal close lifecycle", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    closeCurrentWindowMock.mockClear();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -31,12 +67,7 @@ describe("workspace terminal close lifecycle", () => {
 
   it("closes the native terminal when a terminal panel is explicitly closed", () => {
     const panel = terminalPanel("terminal-1");
-    const api = {
-      activePanel: panel,
-      panels: [panel, { ...terminalPanel("terminal-2"), id: "welcome-1" }],
-      removePanel: vi.fn(),
-      totalPanels: 2,
-    };
+    const api = createApi([panel, webPanel("welcome-1")]);
 
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -48,12 +79,7 @@ describe("workspace terminal close lifecycle", () => {
 
   it("Cmd+W closes the active terminal panel when more than one panel exists", () => {
     const panel = terminalPanel("terminal-1");
-    const api = {
-      activePanel: panel,
-      panels: [panel, { ...terminalPanel("terminal-2"), id: "terminal-2" }],
-      removePanel: vi.fn(),
-      totalPanels: 2,
-    };
+    const api = createApi([panel, webPanel("welcome-1")]);
 
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -61,7 +87,32 @@ describe("workspace terminal close lifecycle", () => {
 
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
     expect(api.removePanel).toHaveBeenCalledWith(panel);
-    expect(window.pier.closeCurrentWindow).not.toHaveBeenCalled();
+    expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("does not close a native terminal when a web panel is explicitly closed", () => {
+    const terminal = terminalPanel("terminal-1");
+    const web = webPanel("welcome-1");
+    const api = createApi([terminal, web]);
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().closePanel("welcome-1");
+
+    expect(window.pier.terminal.close).not.toHaveBeenCalled();
+    expect(api.removePanel).toHaveBeenCalledWith(web);
+  });
+
+  it("closes the native terminal when the active terminal panel is closed", () => {
+    const terminal = terminalPanel("terminal-1");
+    const api = createApi([terminal, webPanel("welcome-1")]);
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().closeActivePanel();
+
+    expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
+    expect(api.removePanel).toHaveBeenCalledWith(terminal);
   });
 
   it("Cmd+W closes the current window instead of removing the last panel", () => {
@@ -77,19 +128,32 @@ describe("workspace terminal close lifecycle", () => {
 
     useWorkspaceStore.getState().closeActivePanel();
 
-    expect(window.pier.closeCurrentWindow).toHaveBeenCalled();
+    expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
     expect(api.removePanel).not.toHaveBeenCalled();
   });
 
-  it("clears closeAll layout from the current window record", async () => {
-    const panel = terminalPanel("terminal-1");
-    const api = {
-      activePanel: panel,
-      panels: [panel],
-      removePanel: vi.fn(),
-      totalPanels: 1,
-    };
+  it("closes only terminal panels removed by closeOthers", () => {
+    const keep = terminalPanel("terminal-keep");
+    const terminal = terminalPanel("terminal-close");
+    const web = webPanel("welcome-close");
+    const api = createApi([keep, terminal, web]);
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().closeOthers("terminal-keep");
+
+    expect(window.pier.terminal.close).toHaveBeenCalledOnce();
+    expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-close");
+    expect(api.removePanel).toHaveBeenCalledWith(terminal);
+    expect(api.removePanel).toHaveBeenCalledWith(web);
+    expect(api.removePanel).not.toHaveBeenCalledWith(keep);
+  });
+
+  it("clears layout before closing terminal panels during closeAll", async () => {
+    const terminal = terminalPanel("terminal-1");
+    const web = webPanel("welcome-1");
+    const api = createApi([terminal, web]);
 
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -99,17 +163,19 @@ describe("workspace terminal close lifecycle", () => {
     expect(window.pier.workspace.clearLayout).toHaveBeenCalledWith(
       "record-current"
     );
+    expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
+    expect(api.removePanel).toHaveBeenCalledWith(terminal);
+    expect(api.removePanel).toHaveBeenCalledWith(web);
+    expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
+    expect(
+      firstInvocationOrder(vi.mocked(window.pier.workspace.clearLayout))
+    ).toBeLessThan(firstInvocationOrder(vi.mocked(window.pier.terminal.close)));
   });
 
-  it("clears resetLayout from the current window record", async () => {
-    const panel = terminalPanel("terminal-1");
-    const api = {
-      activePanel: panel,
-      addPanel: vi.fn(),
-      panels: [panel],
-      removePanel: vi.fn(),
-      totalPanels: 1,
-    };
+  it("clears layout, closes old terminals, and rebuilds default terminal during resetLayout", async () => {
+    const oldTerminal = terminalPanel("terminal-old");
+    const web = webPanel("welcome-old");
+    const api = createApi([oldTerminal, web]);
 
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -119,5 +185,16 @@ describe("workspace terminal close lifecycle", () => {
     expect(window.pier.workspace.clearLayout).toHaveBeenCalledWith(
       "record-current"
     );
+    expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-old");
+    expect(api.removePanel).toHaveBeenCalledWith(oldTerminal);
+    expect(api.removePanel).toHaveBeenCalledWith(web);
+    expect(api.addPanel).toHaveBeenCalledWith({
+      component: "terminal",
+      id: "terminal-1",
+      title: "Terminal",
+    });
+    expect(
+      firstInvocationOrder(vi.mocked(window.pier.workspace.clearLayout))
+    ).toBeLessThan(firstInvocationOrder(vi.mocked(window.pier.terminal.close)));
   });
 });

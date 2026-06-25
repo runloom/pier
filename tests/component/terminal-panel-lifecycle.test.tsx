@@ -27,20 +27,22 @@ class TestResizeObserver {
 interface TestPanelProps extends IDockviewPanelProps {
   emitActive(event: { isActive: boolean }): void;
   emitDimensions(event: { height: number; width: number }): void;
+  emitGroupChange(): void;
   emitVisibility(event: { isVisible: boolean }): void;
 }
 
 function createPanelProps(
   options: { isActive?: boolean; isVisible?: boolean } = {}
 ): TestPanelProps {
+  let isActive = options.isActive ?? true;
+  let isVisible = options.isVisible ?? true;
   let onDidActiveChange: ((event: { isActive: boolean }) => void) | null = null;
   let onDidDimensionsChange:
     | ((event: { height: number; width: number }) => void)
     | null = null;
+  let onDidGroupChange: (() => void) | null = null;
   let onDidVisibilityChange: ((event: { isVisible: boolean }) => void) | null =
     null;
-  let isActive = options.isActive ?? true;
-  let isVisible = options.isVisible ?? true;
   const props = {
     api: {
       height: 300,
@@ -63,6 +65,10 @@ function createPanelProps(
           return { dispose: vi.fn() };
         }
       ),
+      onDidGroupChange: vi.fn((listener: () => void) => {
+        onDidGroupChange = listener;
+        return { dispose: vi.fn() };
+      }),
       onDidVisibilityChange: vi.fn(
         (listener: (event: { isVisible: boolean }) => void) => {
           onDidVisibilityChange = listener;
@@ -73,6 +79,9 @@ function createPanelProps(
       width: 400,
     },
     containerApi: {},
+    emitGroupChange() {
+      onDidGroupChange?.();
+    },
     emitActive(event: { isActive: boolean }) {
       isActive = event.isActive;
       onDidActiveChange?.(event);
@@ -298,5 +307,79 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
+  });
+
+  it("refocuses an active native terminal when dockview shows it after tab drag", async () => {
+    const props = createPanelProps({ isActive: true });
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    vi.mocked(window.pier.terminal.focus).mockClear();
+
+    props.emitVisibility({ isVisible: false });
+    props.emitVisibility({ isVisible: true });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.show).toHaveBeenCalledWith("terminal-1");
+      expect(window.pier.terminal.focus).toHaveBeenCalledWith("terminal-1");
+    });
+  });
+
+  it("refocuses an active native terminal when dockview moves it to another group", async () => {
+    const props = createPanelProps({ isActive: true });
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    vi.mocked(window.pier.terminal.focus).mockClear();
+
+    props.emitGroupChange();
+
+    await waitFor(() => {
+      expect(window.pier.terminal.focus).toHaveBeenCalledWith("terminal-1");
+    });
+  });
+
+  it("does not focus a terminal that becomes visible while inactive", async () => {
+    const props = createPanelProps({ isActive: false });
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    vi.mocked(window.pier.terminal.focus).mockClear();
+
+    props.emitVisibility({ isVisible: false });
+    props.emitVisibility({ isVisible: true });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.show).toHaveBeenCalledWith("terminal-1");
+    });
+    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
+  });
+
+  it("does not focus a terminal moved between groups while hidden", async () => {
+    const props = createPanelProps({ isActive: true, isVisible: false });
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    vi.mocked(window.pier.terminal.focus).mockClear();
+
+    props.emitGroupChange();
+
+    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 });

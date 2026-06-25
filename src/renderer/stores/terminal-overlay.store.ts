@@ -6,6 +6,12 @@
  *   - dockview drag (tab 拖拽 / sash 调整): installDragWatcher 自动管理
  */
 let overlayCount = 0;
+const TAB_DRAG_FALLBACK_MS = 5000;
+const DRAG_WATCHER_CLEANUP_KEY = "__pierTerminalDragWatcherCleanup__";
+
+interface DragWatcherDocument extends Document {
+  [DRAG_WATCHER_CLEANUP_KEY]?: () => void;
+}
 
 export function pushOverlay(): void {
   if (++overlayCount === 1) {
@@ -35,55 +41,128 @@ export function installDragWatcher(): void {
   if (dragWatcherInstalled) {
     return;
   }
+  const watcherDocument = document as DragWatcherDocument;
+  watcherDocument[DRAG_WATCHER_CLEANUP_KEY]?.();
   dragWatcherInstalled = true;
 
   // HTML5 drag (tab): dragstart 是 panel/tab 拖拽的唯一可靠信号, pointerdown 在
   // Electron + macOS 上不一定能可靠触达 web (mouse events 被 EventRouter / NSView 抢)
   let dragActive = false;
-  document.addEventListener(
-    "dragstart",
-    (e) => {
-      const t = e.target as HTMLElement | null;
-      if (!t?.closest?.(".dv-tab")) {
-        return;
-      }
-      if (dragActive) {
-        return;
-      }
-      dragActive = true;
-      pushOverlay();
-    },
-    true
-  );
-  document.addEventListener(
-    "dragend",
-    () => {
-      if (!dragActive) {
-        return;
-      }
-      dragActive = false;
-      popOverlay();
-    },
-    true
-  );
+  let dragFallbackTimer: number | null = null;
+
+  const clearDragFallback = () => {
+    if (dragFallbackTimer === null) {
+      return;
+    }
+    window.clearTimeout(dragFallbackTimer);
+    dragFallbackTimer = null;
+  };
+
+  const endTabDrag = () => {
+    if (!dragActive) {
+      return;
+    }
+    dragActive = false;
+    clearDragFallback();
+    popOverlay();
+  };
+
+  const armDragFallback = () => {
+    clearDragFallback();
+    dragFallbackTimer = window.setTimeout(endTabDrag, TAB_DRAG_FALLBACK_MS);
+  };
+
+  const beginTabDrag = () => {
+    if (dragActive) {
+      return;
+    }
+    dragActive = true;
+    pushOverlay();
+    armDragFallback();
+  };
+
+  const onDragStart = (e: DragEvent) => {
+    const t = e.target as HTMLElement | null;
+    if (!t?.closest?.(".dv-tab")) {
+      return;
+    }
+    beginTabDrag();
+  };
+
+  const onDrop = () => {
+    if (!dragActive) {
+      return;
+    }
+    window.setTimeout(endTabDrag, 0);
+  };
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      endTabDrag();
+    }
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      endTabDrag();
+    }
+  };
+
+  document.addEventListener("dragstart", onDragStart, true);
+  document.addEventListener("dragend", endTabDrag, true);
+  document.addEventListener("drop", onDrop, true);
+  document.addEventListener("visibilitychange", onVisibilityChange, true);
+  window.addEventListener("blur", endTabDrag);
+  window.addEventListener("keydown", onKeyDown, true);
 
   // Sash / resize handle 走 pointer events, 没有 HTML5 drag
-  document.addEventListener(
-    "pointerdown",
-    (e) => {
-      const t = e.target as HTMLElement;
-      if (!(t.closest(".dv-sash") || t.closest(".dv-resize-container"))) {
+  let sashDragActive = false;
+  let endSashDrag: (() => void) | null = null;
+  const beginSashDrag = () => {
+    if (sashDragActive) {
+      return;
+    }
+    sashDragActive = true;
+    pushOverlay();
+    const cleanup = () => {
+      if (!sashDragActive) {
         return;
       }
-      pushOverlay();
-      const cleanup = () => {
-        popOverlay();
-        window.removeEventListener("pointerup", cleanup);
-        window.removeEventListener("pointercancel", cleanup);
-      };
-      window.addEventListener("pointerup", cleanup);
-      window.addEventListener("pointercancel", cleanup);
-    },
-    true
-  );
+      sashDragActive = false;
+      popOverlay();
+      window.removeEventListener("pointerup", cleanup);
+      window.removeEventListener("pointercancel", cleanup);
+      window.removeEventListener("blur", cleanup);
+      endSashDrag = null;
+    };
+    endSashDrag = cleanup;
+    window.addEventListener("pointerup", cleanup);
+    window.addEventListener("pointercancel", cleanup);
+    window.addEventListener("blur", cleanup);
+  };
+
+  const onPointerDown = (e: PointerEvent) => {
+    const t = e.target as HTMLElement;
+    if (!(t.closest(".dv-sash") || t.closest(".dv-resize-container"))) {
+      return;
+    }
+    beginSashDrag();
+  };
+
+  document.addEventListener("pointerdown", onPointerDown, true);
+
+  watcherDocument[DRAG_WATCHER_CLEANUP_KEY] = () => {
+    endTabDrag();
+    endSashDrag?.();
+    clearDragFallback();
+    document.removeEventListener("dragstart", onDragStart, true);
+    document.removeEventListener("dragend", endTabDrag, true);
+    document.removeEventListener("drop", onDrop, true);
+    document.removeEventListener("visibilitychange", onVisibilityChange, true);
+    document.removeEventListener("pointerdown", onPointerDown, true);
+    window.removeEventListener("blur", endTabDrag);
+    window.removeEventListener("keydown", onKeyDown, true);
+    dragWatcherInstalled = false;
+    delete watcherDocument[DRAG_WATCHER_CLEANUP_KEY];
+  };
 }
