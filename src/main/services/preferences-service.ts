@@ -37,6 +37,21 @@ function stripUndefinedPatch(
     ...(patch.stylePresetId !== undefined && {
       stylePresetId: patch.stylePresetId,
     }),
+    ...(patch.terminalCursorBlink !== undefined && {
+      terminalCursorBlink: patch.terminalCursorBlink,
+    }),
+    ...(patch.terminalCursorStyle !== undefined && {
+      terminalCursorStyle: patch.terminalCursorStyle,
+    }),
+    ...(patch.terminalNewCwdPolicy !== undefined && {
+      terminalNewCwdPolicy: patch.terminalNewCwdPolicy,
+    }),
+    ...(patch.terminalPasteProtection !== undefined && {
+      terminalPasteProtection: patch.terminalPasteProtection,
+    }),
+    ...(patch.terminalScrollbackMb !== undefined && {
+      terminalScrollbackMb: patch.terminalScrollbackMb,
+    }),
     ...(patch.theme !== undefined && { theme: patch.theme }),
     ...(patch.uiFontFamily !== undefined && {
       uiFontFamily: patch.uiFontFamily,

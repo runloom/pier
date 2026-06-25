@@ -31,6 +31,11 @@ interface PreferencesSnapshot {
   monoFontFamily: string;
   monoFontSize: number;
   stylePresetId: string;
+  terminalCursorBlink: boolean;
+  terminalCursorStyle: "block" | "bar" | "underline";
+  terminalNewCwdPolicy: "activeTerminal" | "shellDefault";
+  terminalPasteProtection: boolean;
+  terminalScrollbackMb: number;
   theme: string;
   uiFontFamily: string;
 }
@@ -155,6 +160,7 @@ const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
+  setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),
   setFont: (panelId, font) =>
     ipcRenderer.send("pier:terminal:set-font", panelId, font),
   setFrame: (panelId, frame) =>

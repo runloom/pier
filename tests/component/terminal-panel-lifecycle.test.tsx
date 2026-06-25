@@ -32,7 +32,11 @@ interface TestPanelProps extends IDockviewPanelProps {
 }
 
 function createPanelProps(
-  options: { isActive?: boolean; isVisible?: boolean } = {}
+  options: {
+    isActive?: boolean;
+    isVisible?: boolean;
+    params?: { cwd?: string };
+  } = {}
 ): TestPanelProps {
   let isActive = options.isActive ?? true;
   let isVisible = options.isVisible ?? true;
@@ -79,6 +83,7 @@ function createPanelProps(
       width: 400,
     },
     containerApi: {},
+    params: options.params ?? {},
     emitGroupChange() {
       onDidGroupChange?.();
     },
@@ -224,6 +229,23 @@ describe("TerminalPanel lifecycle", () => {
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+  });
+
+  it("passes panel cwd params into native terminal creation", async () => {
+    render(
+      <TerminalPanel
+        {...createPanelProps({ params: { cwd: "/Users/xyz/ABC/pier" } })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: "/Users/xyz/ABC/pier",
+          panelId: "terminal-1",
+        })
       );
     });
   });

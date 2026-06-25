@@ -54,7 +54,8 @@ function CommandDialog({
           "top-1/3 translate-y-0 overflow-hidden rounded-3xl! p-0",
           className
         )}
-        overlayClassName="bg-transparent duration-0 data-open:animate-none data-closed:animate-none supports-backdrop-filter:backdrop-blur-none"
+        initialFocus="firstFocusable"
+        overlayClassName="bg-transparent duration-0 data-open:animate-none data-closed:animate-none"
         showCloseButton={showCloseButton}
       >
         {children}
@@ -156,7 +157,7 @@ function CommandItem({
   return (
     <CommandPrimitive.Item
       className={cn(
-        "group/command-item relative flex min-h-7 select-none items-center gap-2 in-data-[slot=dialog-content]:rounded-2xl rounded-xl px-2 py-1.5 text-sm outline-hidden data-[disabled=true]:pointer-events-none data-selected:bg-muted data-selected:text-foreground data-[disabled=true]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-selected:*:[svg]:text-foreground",
+        "group/command-item relative flex min-h-7 select-none items-center gap-2 in-data-[slot=dialog-content]:rounded-2xl rounded-xl px-2 py-1.5 text-sm outline-hidden data-[disabled=true]:pointer-events-none data-selected:bg-accent data-selected:text-accent-foreground data-[disabled=true]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-selected:*:[svg]:text-accent-foreground",
         className
       )}
       data-slot="command-item"
@@ -175,7 +176,7 @@ function CommandShortcut({
   return (
     <span
       className={cn(
-        "ml-auto text-muted-foreground text-xs tracking-widest group-data-selected/command-item:text-foreground",
+        "ml-auto text-muted-foreground text-xs tracking-widest group-data-selected/command-item:text-accent-foreground",
         className
       )}
       data-slot="command-shortcut"

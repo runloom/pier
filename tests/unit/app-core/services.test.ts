@@ -10,6 +10,11 @@ const basePreferences: ProjectPreferences = {
   monoFontFamily: "",
   monoFontSize: 13,
   stylePresetId: "pierre",
+  terminalCursorBlink: true,
+  terminalCursorStyle: "block",
+  terminalNewCwdPolicy: "activeTerminal",
+  terminalPasteProtection: true,
+  terminalScrollbackMb: 64,
   theme: "system",
   uiFontFamily: "",
 };
@@ -34,6 +39,42 @@ describe("createPreferencesService", () => {
       theme: "dark",
     });
     expect(seen).toEqual([{ ...basePreferences, theme: "dark" }]);
+  });
+
+  it("更新终端偏好时不会被服务层过滤", async () => {
+    const patches: Partial<ProjectPreferences>[] = [];
+    const service = createPreferencesService({
+      readPreferences: async () => basePreferences,
+      updatePreferences: (patch) => {
+        patches.push(patch);
+        return Promise.resolve({ ...basePreferences, ...patch });
+      },
+    });
+
+    await expect(
+      service.update({
+        terminalCursorBlink: false,
+        terminalCursorStyle: "bar",
+        terminalNewCwdPolicy: "shellDefault",
+        terminalPasteProtection: false,
+        terminalScrollbackMb: 128,
+      })
+    ).resolves.toMatchObject({
+      terminalCursorBlink: false,
+      terminalCursorStyle: "bar",
+      terminalNewCwdPolicy: "shellDefault",
+      terminalPasteProtection: false,
+      terminalScrollbackMb: 128,
+    });
+    expect(patches).toEqual([
+      {
+        terminalCursorBlink: false,
+        terminalCursorStyle: "bar",
+        terminalNewCwdPolicy: "shellDefault",
+        terminalPasteProtection: false,
+        terminalScrollbackMb: 128,
+      },
+    ]);
   });
 });
 

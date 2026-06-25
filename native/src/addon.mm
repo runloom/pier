@@ -12,6 +12,9 @@ extern "C" {
                                          const char* fontFamily, float fontSize,
                                          const char* workingDirectory);
     void ghostty_bridge_set_font_config(void* nsWindow, const char* fontFamily, float fontSize);
+    void ghostty_bridge_set_terminal_config(void* nsWindow, const char* cursorStyle,
+                                            bool cursorBlink, double scrollbackLimitBytes,
+                                            bool pasteProtection);
     void ghostty_bridge_set_frame(const char* panelId,
                                    double x, double y, double w, double h);
     void ghostty_bridge_show(const char* panelId);
@@ -437,6 +440,24 @@ static Napi::Value JsSetFontConfig(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+static Napi::Value JsSetTerminalConfig(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return info.Env().Undefined();
+    Napi::Object config = info[1].As<Napi::Object>();
+    std::string cursorStyle = config.Get("cursorStyle").As<Napi::String>().Utf8Value();
+    bool cursorBlink = config.Get("cursorBlink").As<Napi::Boolean>().Value();
+    double scrollbackLimitBytes = config.Get("scrollbackLimitBytes").As<Napi::Number>().DoubleValue();
+    bool pasteProtection = config.Get("pasteProtection").As<Napi::Boolean>().Value();
+    ghostty_bridge_set_terminal_config(
+        (__bridge void*)win,
+        cursorStyle.c_str(),
+        cursorBlink,
+        scrollbackLimitBytes,
+        pasteProtection
+    );
+    return info.Env().Undefined();
+}
+
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -471,6 +492,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setTerminalFocusRequestCallback", Napi::Function::New(env, JsSetTerminalFocusRequestCallback));
     exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));
     exports.Set("setTerminalFont", Napi::Function::New(env, JsSetFontConfig));
+    exports.Set("setTerminalConfig", Napi::Function::New(env, JsSetTerminalConfig));
     return exports;
 }
 
