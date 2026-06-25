@@ -1098,51 +1098,52 @@
 </tr>
 <tr>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">P3</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">P1</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">模型 / 账号 / 端点运维</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">账号 / Profile / 项目级 Agent 配置</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">建设理由：后置集成。</p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">改进点：Pier 可显示端点健康和配置状态，但不做完整模型下载、serving 和账号平台。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">建设理由：闭环补齐 / 高痛点配置能力。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">改进点：把合法的多账号、多工作区、API key、model provider、Claude/Codex profile 和项目级配置变成可见、可切换、可绑定的工作台能力；完整模型下载、serving 和账号平台仍然不做。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>2</strong></p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：模型端点状态与 Pier 弱相关，完整 serving 不适合。</p>
-</td>
-<td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>3</strong></p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：本地模型、API key、额度和端点配置容易出错，但不是 Pier 主线。</p>
-</td>
-<td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>3</strong></p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：端点健康和日志能减少试错。</p>
-</td>
-<td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>3</strong></p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：改善模型选择和可用性，但不直接提高代码质量。</p>
-</td>
-<td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>2</strong></p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：模型不能替代 GPU、serve、下载和端点编排。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>4</strong></p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：Pier 是本地 AI 开发工作台，按项目绑定 Codex、Claude、API key、provider 和 profile 与核心工作流强相关。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
 <p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>5</strong></p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：Claude/Codex 已有模型选择、账号、用量、配置和官方托管能力。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：单一官方账号或单一额度经常不够用，手动切换账号、key、workspace 和项目配置会直接打断 agent 工作流。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">16</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>4</strong></p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：预设 profile、项目级默认配置、快速切换和状态提示能减少重复登录、改环境变量和手动编辑配置文件。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">判断需降级：P3。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>4</strong></p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：把账号来源、provider、项目配置和敏感凭据边界显式化，能减少误用账号、误发代码上下文和错误计费路径。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">能力说明：模型端点发现、健康、用量、限额、日志、模型服务状态。</p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">Pier 范围：最多做状态提示和配置入口，不承担模型平台。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>1</strong></p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：模型无法替代本机凭据管理、配置层级、环境变量注入、provider 路由和 safeStorage。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">Odysseus setup docs: <a href="https://github.com/pewdiepie-archdaemon/odysseus/blob/dev/docs/setup.md">https://github.com/pewdiepie-archdaemon/odysseus/blob/dev/docs/setup.md</a>；Odysseus README: <a href="https://github.com/pewdiepie-archdaemon/odysseus">https://github.com/pewdiepie-archdaemon/odysseus</a>；Orca usage docs: <a href="https://www.onorca.dev/docs">https://www.onorca.dev/docs</a>；Codex config reference: <a href="https://developers.openai.com/codex/config-reference">https://developers.openai.com/codex/config-reference</a>；Claude costs/usage: <a href="https://docs.anthropic.com/en/docs/claude-code/costs">https://docs.anthropic.com/en/docs/claude-code/costs</a></p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;"><strong>3</strong></p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">依据：Codex 和 Claude 都已有用户级/项目级配置、API key、provider 和用量能力，但缺少 Pier 视角下的跨工具、跨项目统一 profile 面板。</p>
+</td>
+<td style="vertical-align: top; white-space: normal; word-break: break-word;">
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">25</p>
+</td>
+<td style="vertical-align: top; white-space: normal; word-break: break-word;">
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">判断修正：提高到 P1；做 profile 和项目级配置，不做完整模型平台。</p>
+</td>
+<td style="vertical-align: top; white-space: normal; word-break: break-word;">
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">能力说明：为每个项目或 worktree 绑定 Codex / Claude 的配置来源、登录方式、API key、model provider、默认模型、权限档位、环境变量和用量状态。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">Pier 范围：提供可见 profile、项目默认值、快速切换、状态提示和安全存储；支持合规的多工作区、多 provider、多 API key 使用。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">不做范围：不做完整模型下载、GPU serving、账号售卖、绕过服务限制或统一托管模型平台。</p>
+</td>
+<td style="vertical-align: top; white-space: normal; word-break: break-word;">
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">OpenAI Codex auth: <a href="https://developers.openai.com/codex/auth">https://developers.openai.com/codex/auth</a>；Codex config basics: <a href="https://developers.openai.com/codex/config-basic">https://developers.openai.com/codex/config-basic</a>；Codex advanced config / providers: <a href="https://developers.openai.com/codex/config-advanced">https://developers.openai.com/codex/config-advanced</a>；Codex MCP project config: <a href="https://developers.openai.com/codex/mcp">https://developers.openai.com/codex/mcp</a>；Claude Code settings: <a href="https://docs.anthropic.com/en/docs/claude-code/settings">https://docs.anthropic.com/en/docs/claude-code/settings</a>；Claude Code status line rate limits: <a href="https://docs.anthropic.com/en/docs/claude-code/statusline">https://docs.anthropic.com/en/docs/claude-code/statusline</a>；Claude Code LLM gateways: <a href="https://docs.anthropic.com/en/docs/claude-code/llm-gateway">https://docs.anthropic.com/en/docs/claude-code/llm-gateway</a></p>
 </td>
 </tr>
 <tr>
