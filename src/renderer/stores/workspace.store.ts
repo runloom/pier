@@ -114,6 +114,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       id,
       component: "terminal",
       title: opts?.path ? `Terminal: ${opts.path}` : "Terminal",
+      ...(opts?.path ? { params: { cwd: opts.path } } : {}),
       position: position ?? fallbackPosition,
     });
     return id;
@@ -129,6 +130,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
     if (api.totalPanels <= 1) {
+      if (panel.view.contentComponent === "terminal") {
+        window.pier?.terminal?.close?.(panel.id);
+      }
       closeCurrentWindow().catch((err) => {
         console.error("[workspace] closeCurrentWindow failed:", err);
       });
@@ -157,6 +161,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
     if (api.totalPanels <= 1) {
+      if (panel.view.contentComponent === "terminal") {
+        window.pier?.terminal?.close?.(panel.id);
+      }
       closeCurrentWindow().catch((err) => {
         console.error("[workspace] closeCurrentWindow failed:", err);
       });

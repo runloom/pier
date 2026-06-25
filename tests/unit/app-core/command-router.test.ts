@@ -76,6 +76,9 @@ function services(rendererCommands: unknown[] = []): PierCoreServices {
       },
       resolve: () => undefined,
     },
+    terminalSessions: {
+      listRecentClosed: async () => [],
+    },
     window: {
       close: () => undefined,
       create: async () => ({ recordId: "record-1", windowId: "w-1" }),
@@ -292,6 +295,87 @@ describe("createCommandRouter", () => {
       { panelId: "terminal-1", type: "panel.focus", windowId: "main" },
       { type: "terminal.list", windowId: "main" },
       { panelId: "terminal-1", type: "terminal.focus", windowId: "main" },
+    ]);
+  });
+
+  it("terminal.list without a window id aggregates all live windows", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services();
+    fakeServices.window.list = () => [
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "secondary", recordId: "record-secondary" },
+    ];
+    fakeServices.rendererCommand.execute = (command) => {
+      rendererCommands.push(command);
+      if (command.type !== "terminal.list") {
+        throw new Error(`unexpected command: ${command.type}`);
+      }
+      return Promise.resolve({
+        data:
+          command.windowId === "main"
+            ? [
+                {
+                  active: true,
+                  cwd: "/Users/xyz/ABC/pier",
+                  groupIndex: 0,
+                  panelId: "terminal-main",
+                  tabCount: 1,
+                  tabIndex: 0,
+                  title: "pier",
+                },
+              ]
+            : [
+                {
+                  active: false,
+                  cwd: "/Users/xyz/ABC/bay",
+                  groupIndex: 1,
+                  panelId: "terminal-bay",
+                  tabCount: 2,
+                  tabIndex: 1,
+                  title: "bay",
+                },
+              ],
+        ok: true,
+        requestId: "renderer-req",
+      });
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { type: "terminal.list" },
+        protocolVersion: 1,
+        requestId: "req-terminal-list-all",
+      })
+    ).resolves.toEqual({
+      data: {
+        errors: [],
+        open: [
+          expect.objectContaining({
+            panelId: "terminal-main",
+            recordId: "record-main",
+            windowFocused: true,
+            windowId: "main",
+          }),
+          expect.objectContaining({
+            panelId: "terminal-bay",
+            recordId: "record-secondary",
+            windowFocused: false,
+            windowId: "secondary",
+          }),
+        ],
+        recentClosed: [],
+      },
+      ok: true,
+      requestId: "req-terminal-list-all",
+    });
+    expect(rendererCommands).toEqual([
+      { type: "terminal.list", windowId: "main" },
+      { type: "terminal.list", windowId: "secondary" },
     ]);
   });
 

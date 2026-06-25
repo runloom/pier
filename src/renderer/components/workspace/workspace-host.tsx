@@ -15,6 +15,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { AddPanelAction } from "./add-panel-action.tsx";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
+import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
 
 /**
  * WorkspaceHost — dockview-react 的唯一业务边界。
@@ -64,15 +65,10 @@ function panelSnapshots() {
   if (!api) {
     throw new Error("workspace api not ready");
   }
-  return api.panels.map((panel) => {
-    const component = panel.view.contentComponent;
-    return {
-      active: panel.id === api.activePanel?.id,
-      id: panel.id,
-      kind: panelKindOf(component),
-      title: panel.title,
-    };
-  });
+  return buildWorkspacePanelSnapshots(
+    api,
+    usePanelDescriptorStore.getState().descriptors
+  );
 }
 
 function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
@@ -122,6 +118,7 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
       }
       case "terminal.open": {
         const panelId = state.addTerminal({
+          ...(envelope.command.cwd && { path: envelope.command.cwd }),
           ...(envelope.command.placement && {
             placement: envelope.command.placement,
           }),
@@ -200,7 +197,20 @@ export function WorkspaceHost() {
       // / 拖 panel 等), userTouched=true. loadLayout 完成时如果 user 已操作, fromJSON
       // 跳过 (不覆盖 user 操作) — user 显式新建的 panel 优先于磁盘旧 layout.
       let userTouched = false;
+      let didNotifyReadyToShow = false;
       const windowContextPromise = window.pier.getWindowContext();
+
+      const notifyReadyToShow = (): void => {
+        if (didNotifyReadyToShow) {
+          return;
+        }
+        didNotifyReadyToShow = true;
+        // 此时 BrowserWindow 仍是 show:false, 隐藏页面的 requestAnimationFrame 可能
+        // 不推进; 用 macrotask 接在同步 layout restore 后通知 main 显示窗口.
+        setTimeout(() => {
+          window.pier.readyToShow();
+        }, 0);
+      };
 
       const saveCurrentLayout = async (): Promise<void> => {
         const json = event.api.toJSON();
@@ -323,6 +333,7 @@ export function WorkspaceHost() {
         }
         if (userTouched) {
           // user 已经在 layout 里加了 panel, 不覆盖
+          notifyReadyToShow();
           return;
         }
         isApplyingPersistedLayout = true;
@@ -345,6 +356,7 @@ export function WorkspaceHost() {
           .filter((p) => p.view.contentComponent === "terminal")
           .map((p) => p.id);
         window.pier?.terminal?.reconcile?.(terminalPanelIds);
+        notifyReadyToShow();
 
         // 给 dockview 一帧时间 flush layout-change 事件, 再放 save gate
         requestAnimationFrame(() => {

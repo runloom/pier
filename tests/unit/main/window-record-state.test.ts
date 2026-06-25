@@ -64,4 +64,49 @@ describe("window record state", () => {
     await expect(readOpenWindowRecordIds()).resolves.toEqual([]);
     await expect(readMostRecentClosedWindowRecordId()).resolves.toBe(second.id);
   });
+
+  it("orders open records by the last focused open window without mutating the open set", async () => {
+    const {
+      createWindowRecord,
+      markWindowRecordClosed,
+      markWindowRecordFocused,
+      markWindowRecordOpen,
+      readOpenWindowRecordIds,
+      readPreferredOpenWindowRecordIds,
+    } = await import("@main/state/window-record-state.ts");
+
+    const first = await createWindowRecord();
+    const second = await createWindowRecord();
+    const third = await createWindowRecord();
+    await markWindowRecordOpen(first.id);
+    await markWindowRecordOpen(second.id);
+    await markWindowRecordOpen(third.id);
+
+    await markWindowRecordFocused(second.id);
+
+    await expect(readPreferredOpenWindowRecordIds()).resolves.toEqual([
+      second.id,
+      first.id,
+      third.id,
+    ]);
+    await expect(readOpenWindowRecordIds()).resolves.toEqual([
+      first.id,
+      second.id,
+      third.id,
+    ]);
+
+    await markWindowRecordClosed(second.id);
+
+    await expect(readPreferredOpenWindowRecordIds()).resolves.toEqual([
+      first.id,
+      third.id,
+    ]);
+
+    await markWindowRecordFocused("missing-record");
+
+    await expect(readPreferredOpenWindowRecordIds()).resolves.toEqual([
+      first.id,
+      third.id,
+    ]);
+  });
 });

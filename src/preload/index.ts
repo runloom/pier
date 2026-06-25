@@ -17,7 +17,7 @@ import type {
   WindowContext,
   WindowCreateResult,
 } from "@shared/contracts/window.ts";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
 export interface WindowInfo {
@@ -106,6 +106,7 @@ export interface PierWindowAPI {
   onWindowLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
+  readyToShow: () => void;
   rendererCommand: PierRendererCommandAPI;
   terminal: TerminalAPI;
   theme: PierThemeAPI;
@@ -143,7 +144,11 @@ const terminalApi: TerminalAPI = {
   close: (panelId) => ipcRenderer.send("pier:terminal:close", panelId),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
+  focusSession: (args) =>
+    ipcRenderer.invoke("pier:terminal:focus-session", args),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  listSessions: (args) =>
+    ipcRenderer.invoke("pier:terminal:list-sessions", args),
   reconcile: (activeIds) =>
     ipcRenderer.send("pier:terminal:reconcile", activeIds),
   onContextMenuRequest: (cb) =>
@@ -151,6 +156,9 @@ const terminalApi: TerminalAPI = {
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
+  listRecentSessions: () =>
+    ipcRenderer.invoke("pier:terminal:list-recent-sessions"),
+  openSession: (args) => ipcRenderer.invoke("pier:terminal:open-session", args),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
@@ -227,6 +235,7 @@ const api: PierWindowAPI = {
     subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
   platform: process.platform,
   preferences: preferencesApi,
+  readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
   rendererCommand: rendererCommandApi,
   terminal: terminalApi,
   theme: themeApi,

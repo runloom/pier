@@ -1,3 +1,5 @@
+import type { PierCommandPlacement } from "./commands.ts";
+
 export interface TerminalFrame {
   height: number;
   width: number;
@@ -63,6 +65,66 @@ export interface TerminalPanelSessionSnapshot {
   updatedAt: string;
 }
 
+export interface TerminalRecentSessionSnapshot {
+  closedAt: string;
+  cwd: string;
+  id: string;
+  panelId: string;
+  recordId: string;
+  title?: string | undefined;
+  windowAlive: boolean;
+  windowId?: string | undefined;
+}
+
+export interface TerminalOpenSessionSnapshot {
+  active?: boolean | undefined;
+  cwd?: string | undefined;
+  groupIndex: number;
+  panelId: string;
+  recordId: string;
+  tabCount: number;
+  tabIndex: number;
+  title?: string | undefined;
+  windowFocused?: boolean | undefined;
+  windowId: string;
+}
+
+export interface TerminalListError {
+  message: string;
+  recordId?: string | undefined;
+  windowId?: string | undefined;
+}
+
+export interface TerminalListSnapshot {
+  errors: TerminalListError[];
+  open: TerminalOpenSessionSnapshot[];
+  recentClosed: TerminalRecentSessionSnapshot[];
+}
+
+export interface TerminalListSessionsArgs {
+  windowId?: string | undefined;
+}
+
+export interface TerminalOpenSessionArgs {
+  cwd?: string | undefined;
+  focus?: boolean | undefined;
+  placement?: PierCommandPlacement | undefined;
+  windowId?: string | undefined;
+}
+
+export interface TerminalSessionCommandResult {
+  error?: string | undefined;
+  ok: boolean;
+  panelId?: string | undefined;
+  windowId?: string | undefined;
+}
+
+export interface TerminalFocusSessionArgs {
+  focus?: boolean | undefined;
+  panelId: string;
+  windowId?: string | undefined;
+}
+
 /**
  * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
  * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
@@ -116,7 +178,12 @@ export interface TerminalAPI {
   close(panelId: string): void;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   focus(panelId: string): void;
+  focusSession(
+    args: TerminalFocusSessionArgs
+  ): Promise<TerminalSessionCommandResult>;
   hide(panelId: string): void;
+  listRecentSessions(): Promise<TerminalRecentSessionSnapshot[]>;
+  listSessions(args?: TerminalListSessionsArgs): Promise<TerminalListSnapshot>;
   /** 订阅 swift 转发的右键事件. 返回 unsubscribe. */
   onContextMenuRequest: (
     cb: (req: TerminalContextMenuRequest) => void
@@ -134,6 +201,9 @@ export interface TerminalAPI {
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
+  openSession(
+    args?: TerminalOpenSessionArgs
+  ): Promise<TerminalSessionCommandResult>;
   /**
    * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
    * 标题/cwd, 真正的 native terminal 可以等 panel 可见时再创建.

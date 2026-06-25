@@ -11,6 +11,8 @@ import {
   toggleDetachedDevTools,
 } from "../devtools.ts";
 import {
+  archiveTerminalPanelSession,
+  listRecentTerminalPanelSessions,
   readTerminalPanelSession,
   removeTerminalPanelSession,
   updateTerminalPanelCwd,
@@ -24,6 +26,7 @@ import {
   findWindowSessionId,
 } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
+import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
@@ -47,37 +50,12 @@ function rememberActivePanelFocus(
   activePanelFocusByWindowId.set(win.id, { kind, panelId });
 }
 
-function stableWindowIdFor(win: AppWindow): string {
+export function stableWindowIdFor(win: AppWindow): string {
   return findInternalWindowId(win) ?? `window-${win.id}`;
 }
 
-function terminalSessionScopeFor(win: AppWindow): string {
+export function terminalSessionScopeFor(win: AppWindow): string {
   return findWindowSessionId(win) ?? stableWindowIdFor(win);
-}
-
-/**
- * 给 panelId 加 AppWindow scope 前缀, 让 swift 端 `terminals: [String: Terminal]`
- * 单一 dict 能区分跨窗口同名 panel. Pier 默认 layout 多窗口都用 "terminal-1",
- * 不加 scope 时第二个窗口的 createTerminal 会撞已存在 entry → close 第一个窗口 panel
- * 再重建第二个的, 视觉上第二个窗口空白.
- *
- * scope = AppWindow.id (Electron process-local 唯一, 不需要持久化), 用 "::"
- * 分隔避免跟 panelId 内部可能的 "-" 冲突.
- *
- * - main → swift: 始终 scope (createTerminal / show / hide / close / focus /
- *   setFrame / setActivePanelKind / reconcile)
- * - swift → main → renderer: 始终 unscope, 让 renderer 用 raw panelId 跟 dockview
- *   state 对齐
- */
-const PANEL_ID_SEPARATOR = "::";
-function scopePanelId(win: AppWindow, panelId: string): string {
-  return `${win.id}${PANEL_ID_SEPARATOR}${panelId}`;
-}
-function unscopePanelId(scopedId: string): string {
-  const idx = scopedId.indexOf(PANEL_ID_SEPARATOR);
-  return idx === -1
-    ? scopedId
-    : scopedId.slice(idx + PANEL_ID_SEPARATOR.length);
 }
 
 export function restoreActivePanelFocus(win: AppWindow): void {
@@ -164,7 +142,9 @@ function forwardToWindow<P>(
   }
 }
 
-function windowFromWebContents(webContents: WebContents): AppWindow | null {
+export function windowFromWebContents(
+  webContents: WebContents
+): AppWindow | null {
   return findAppWindowByWebContents(webContents);
 }
 
@@ -288,7 +268,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const cwd = args.cwd ?? saved?.cwd;
+        const cwd = saved?.cwd ?? args.cwd;
         const ok = addon.createTerminal(
           handle,
           scopePanelId(win, args.panelId),
@@ -323,6 +303,21 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   );
 
+  ipcMain.handle("pier:terminal:list-recent-sessions", async (event) => {
+    const win = windowFromWebContents(event.sender);
+    if (!win) {
+      return [];
+    }
+    const recordId = terminalSessionScopeFor(win);
+    const sessions = await listRecentTerminalPanelSessions(recordId);
+    return sessions.map((session) => ({
+      ...session,
+      recordId,
+      windowAlive: true,
+      windowId: stableWindowIdFor(win),
+    }));
+  });
+
   // Renderer → addon 单参数透传 (fire-and-forget): renderer.ipcRenderer.send 单向
   // 触发 addon 同名 method. addon 可能未加载 (非 darwin / native load 失败), 用
   // optional chain 让 callback 仍注册但 noop — 不让 renderer 端 send 静默丢但接收侧
@@ -352,9 +347,15 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const win = windowFromWebContents(event.sender);
     if (win) {
       const sessionScope = terminalSessionScopeFor(win);
-      removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
-        console.error("[pier-cwd-remove] failed:", err);
-      });
+      archiveTerminalPanelSession(sessionScope, panelId)
+        .catch((err) => {
+          console.error("[pier-cwd-archive] failed:", err);
+        })
+        .finally(() => {
+          removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
+            console.error("[pier-cwd-remove] failed:", err);
+          });
+        });
       addon?.closeTerminal(scopePanelId(win, panelId));
     }
   });

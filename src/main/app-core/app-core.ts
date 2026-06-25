@@ -4,6 +4,7 @@ import { app } from "electron";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
+import { createTerminalSessionService } from "../services/terminal-session-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -87,6 +88,7 @@ function createPierAppCore(): PierAppCore {
     }),
     preferences: createPreferencesService({ eventBus }),
     rendererCommand,
+    terminalSessions: createTerminalSessionService(),
     window: createWindowService({
       flushRendererLayout: async (windowId) => {
         const result = await rendererCommand.execute({

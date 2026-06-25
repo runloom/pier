@@ -12,6 +12,7 @@ export const PIER = {
   WINDOW_FOCUS: "pier://window:focus",
   WINDOW_FULLSCREEN_STATE: "pier://window:fullscreen-state",
   WINDOW_LIST: "pier://window:list",
+  WINDOW_RENDERER_READY: "pier://window:renderer-ready",
 } as const;
 
 export const PIER_BROADCAST = {

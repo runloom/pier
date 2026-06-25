@@ -47,6 +47,14 @@ const AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE =
   /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
 const FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE =
   /if \(event\.api\.totalPanels === 0\)[\s\S]{0,160}?\.clearLayout\(windowContext\.recordId\)/;
+const READY_TO_SHOW_AFTER_LAYOUT_RE =
+  /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\);\s*notifyReadyToShow\(\);/;
+const READY_TO_SHOW_WHEN_USER_TOUCHED_RE =
+  /if \(userTouched\) \{[\s\S]{0,120}?notifyReadyToShow\(\);[\s\S]{0,80}?return;/;
+const READY_TO_SHOW_USES_HIDDEN_WINDOW_SAFE_TIMER_RE =
+  /setTimeout\(\(\) => \{[\s\S]{0,80}?window\.pier\.readyToShow\(\);[\s\S]{0,40}?\}, 0\)/;
+const READY_TO_SHOW_DOES_NOT_WAIT_FOR_RAF_RE =
+  /requestAnimationFrame\([\s\S]{0,160}?window\.pier\.readyToShow\(\)/;
 
 describe("workspace-host invariants (#17 #19)", () => {
   it("declares userTouched flag and uses it to gate fromJSON (防 user 操作被 saved layout 覆盖)", () => {
@@ -117,5 +125,14 @@ describe("workspace-host invariants (#17 #19)", () => {
     // closeAll 会先清 record layout 再关闭窗口; close-before-flush 看到 0 panels
     // 时必须保持 cleared state, 不能把空 dockview JSON 写回 record.
     expect(SOURCE).toMatch(FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE);
+  });
+
+  it("notifies main after workspace layout has reached a stable first paint point", () => {
+    // main 侧等 readyToShow 再展示窗口, 避免 did-finish-load 后把 theme/layout/terminal
+    // 恢复中的中间态暴露给用户.
+    expect(SOURCE).toMatch(READY_TO_SHOW_AFTER_LAYOUT_RE);
+    expect(SOURCE).toMatch(READY_TO_SHOW_WHEN_USER_TOUCHED_RE);
+    expect(SOURCE).toMatch(READY_TO_SHOW_USES_HIDDEN_WINDOW_SAFE_TIMER_RE);
+    expect(SOURCE).not.toMatch(READY_TO_SHOW_DOES_NOT_WAIT_FOR_RAF_RE);
   });
 });

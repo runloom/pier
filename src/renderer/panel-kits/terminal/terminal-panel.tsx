@@ -38,13 +38,23 @@ export function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
+function readInitialCwd(params: unknown): string | null {
+  if (typeof params !== "object" || params === null) {
+    return null;
+  }
+  const cwd = (params as { cwd?: unknown }).cwd;
+  return typeof cwd === "string" && cwd.trim().length > 0 ? cwd : null;
+}
+
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
+  const initialCwd = readInitialCwd(props.params);
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
   >(undefined);
@@ -63,7 +73,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
 
   const sessionLoaded = savedSession !== undefined;
-  const effectiveCwd = cwd ?? savedSession?.cwd ?? null;
+  const restoredCwd = savedSession?.cwd ?? initialCwd;
+  const effectiveCwd = cwd ?? restoredCwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
 
   // descriptor 三字段优先级链:
@@ -120,6 +131,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     let layoutRegistration: TerminalLayoutRegistration | null = null;
     let didCreateNativeTerminal = false;
     let createPromise: Promise<void> | null = null;
+    setNativeTerminalReady(false);
 
     const sendFrameNow = () => {
       if (disposed || !didCreateNativeTerminal) {
@@ -153,6 +165,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
         const result = await window.pier.terminal.create({
           panelId,
+          ...(initialCwd ? { cwd: initialCwd } : {}),
           frame,
           font: {
             family: computeMonoFontFamily(monoFontFamilyRef.current),
@@ -165,6 +178,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         }
 
         didCreateNativeTerminal = true;
+        setNativeTerminalReady(true);
         layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
       })().finally(() => {
         createPromise = null;
@@ -242,7 +256,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       }
       layoutRegistration?.dispose();
     };
-  }, [api, panelId]);
+  }, [api, panelId, initialCwd]);
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {
@@ -270,17 +284,31 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     };
   }, [panelId]);
 
-  if (error) {
-    return (
-      <div className="flex h-full items-center justify-center bg-background">
-        <p className="text-muted-foreground text-sm">{error}</p>
-      </div>
-    );
-  }
-
+  const terminalSurfaceStyle = {
+    backgroundColor: "var(--terminal-background, var(--background))",
+  };
   return (
-    <div className="relative h-full min-h-0 w-full min-w-0 overflow-hidden">
+    <div
+      className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
+      data-testid="terminal-panel-root"
+    >
       <div className="terminal-anchor absolute inset-0" ref={anchorRef} />
+      {nativeTerminalReady || error ? null : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          data-testid="terminal-placeholder"
+          style={terminalSurfaceStyle}
+        />
+      )}
+      {error ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={terminalSurfaceStyle}
+        >
+          <p className="text-muted-foreground text-sm">{error}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -14,11 +14,12 @@
  */
 import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import {
   app,
   BaseWindow,
   BrowserWindow,
+  ipcMain,
   nativeTheme,
   shell,
   WebContentsView,
@@ -53,6 +54,7 @@ export interface CreateWindowOptions {
   id?: string;
   mode?: WindowOpenMode;
   recordId?: string;
+  showInactive?: boolean;
 }
 
 export interface WindowInfo {
@@ -63,6 +65,7 @@ export interface WindowInfo {
 
 const isDev = !app.isPackaged;
 const isMac = process.platform === "darwin";
+const RENDERER_READY_SHOW_TIMEOUT_MS = 3000;
 
 function resolveDevIcon(): string | undefined {
   return isDev ? join(import.meta.dirname, "../../build/icon.png") : undefined;
@@ -75,6 +78,9 @@ class WindowManager {
     (payload: { recordId: string; windowId: string }) => Promise<void> | void
   > = [];
   private readonly onCloseCallbacks: Array<
+    (payload: { recordId: string; windowId: string }) => void
+  > = [];
+  private readonly onFocusCallbacks: Array<
     (payload: { recordId: string; windowId: string }) => void
   > = [];
   private isDestroyingAllForQuit = false;
@@ -91,6 +97,12 @@ class WindowManager {
     callback: (payload: { recordId: string; windowId: string }) => void
   ): void {
     this.onCloseCallbacks.push(callback);
+  }
+
+  onFocus(
+    callback: (payload: { recordId: string; windowId: string }) => void
+  ): void {
+    this.onFocusCallbacks.push(callback);
   }
 
   onBeforeClose(
@@ -155,12 +167,69 @@ class WindowManager {
       windowId: id,
     });
 
+    let didShow = false;
+    let showFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const traceStartup = (
+      event: "did-finish-load" | "fallback" | "readyToShow" | "show",
+      extra: Record<string, unknown> = {}
+    ) => {
+      if (process.env.PIER_STARTUP_TRACE !== "1") {
+        return;
+      }
+      console.info("[window-startup]", {
+        event,
+        recordId: opts.recordId ?? id,
+        windowId: id,
+        ...extra,
+      });
+    };
+    const cleanupShowWait = () => {
+      if (showFallbackTimer) {
+        clearTimeout(showFallbackTimer);
+        showFallbackTimer = null;
+      }
+      ipcMain.off(PIER.WINDOW_RENDERER_READY, handleRendererReady);
+    };
     const showOnce = () => {
+      if (didShow) {
+        return;
+      }
+      didShow = true;
+      cleanupShowWait();
       if (!window.isDestroyed()) {
-        window.host.show();
+        const showMode = opts.showInactive ? "inactive" : "active";
+        traceStartup("show", { showMode });
+        if (opts.showInactive) {
+          window.host.showInactive();
+        } else {
+          window.host.show();
+        }
       }
     };
-    window.webContents.once("did-finish-load", showOnce);
+    const handleRendererReady = (event: Electron.IpcMainEvent) => {
+      if (event.sender !== window.webContents) {
+        return;
+      }
+      traceStartup("readyToShow");
+      showOnce();
+    };
+    const scheduleReadyFallback = () => {
+      traceStartup("did-finish-load");
+      if (!showFallbackTimer) {
+        showFallbackTimer = setTimeout(() => {
+          const payload = {
+            recordId: opts.recordId ?? id,
+            showMode: opts.showInactive ? "inactive" : "active",
+            windowId: id,
+          };
+          console.warn("[window-startup] readyToShow fallback", payload);
+          traceStartup("fallback", payload);
+          showOnce();
+        }, RENDERER_READY_SHOW_TIMEOUT_MS);
+      }
+    };
+    ipcMain.on(PIER.WINDOW_RENDERER_READY, handleRendererReady);
+    window.webContents.once("did-finish-load", scheduleReadyFallback);
     window.webContents.once("did-fail-load", showOnce);
     window.host.on("blur", () => {
       blurActivePanelFocus(window);
@@ -174,6 +243,12 @@ class WindowManager {
     // makeFirstResponder + 强制 becomeFirstResponder, 让 Ghostty surface focus 回到 true.
     window.host.on("focus", () => {
       restoreActivePanelFocus(window);
+      const context = findWindowContext(window);
+      if (context) {
+        for (const cb of this.onFocusCallbacks) {
+          cb({ recordId: context.recordId, windowId: id });
+        }
+      }
     });
 
     window.webContents.setWindowOpenHandler(({ url }) => {
@@ -246,6 +321,7 @@ class WindowManager {
     });
 
     window.host.on("closed", () => {
+      cleanupShowWait();
       if (window.appView && !window.webContents.isDestroyed()) {
         window.webContents.close();
       }

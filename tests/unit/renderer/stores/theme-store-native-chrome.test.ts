@@ -44,4 +44,18 @@ describe("theme store native chrome backing", () => {
       expected
     );
   });
+
+  it("syncs the terminal background CSS variable from terminal colors", async () => {
+    const { applyThemeVisual } = await import("@/stores/theme.store.ts");
+    const expected = deriveTerminalColors(
+      getShikiTheme("pierre", "dark"),
+      "dark"
+    ).background;
+
+    applyThemeVisual("dark", "pierre");
+
+    expect(
+      document.documentElement.style.getPropertyValue("--terminal-background")
+    ).toBe(expected);
+  });
 });

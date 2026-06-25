@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
+const TERMINAL_PANEL_ID_PREFIX = /^terminal-/;
 
 vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: closeCurrentWindowMock,
@@ -77,6 +78,48 @@ describe("workspace terminal close lifecycle", () => {
     expect(api.removePanel).toHaveBeenCalledWith(panel);
   });
 
+  it("stores the requested cwd in terminal panel params when opening a terminal path", () => {
+    const panel = terminalPanel("terminal-1");
+    const api = createApi([panel, webPanel("welcome-1")]);
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    const panelId = useWorkspaceStore.getState().addTerminal({
+      path: "/Users/xyz/ABC/pier",
+    });
+
+    expect(panelId).toMatch(TERMINAL_PANEL_ID_PREFIX);
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: "terminal",
+        params: { cwd: "/Users/xyz/ABC/pier" },
+        title: "Terminal: /Users/xyz/ABC/pier",
+      })
+    );
+  });
+
+  it("keeps placement behavior when opening a terminal path", () => {
+    const panel = terminalPanel("terminal-1");
+    const api = createApi([panel, webPanel("welcome-1")]);
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().addTerminal({
+      path: "/Users/xyz/ABC/pier",
+      placement: "split-right",
+    });
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: { cwd: "/Users/xyz/ABC/pier" },
+        position: {
+          direction: "right",
+          referencePanel: "terminal-1",
+        },
+      })
+    );
+  });
+
   it("Cmd+W closes the active terminal panel when more than one panel exists", () => {
     const panel = terminalPanel("terminal-1");
     const api = createApi([panel, webPanel("welcome-1")]);
@@ -129,8 +172,29 @@ describe("workspace terminal close lifecycle", () => {
     useWorkspaceStore.getState().closeActivePanel();
 
     expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
-    expect(window.pier.terminal.close).not.toHaveBeenCalled();
+    expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
     expect(api.removePanel).not.toHaveBeenCalled();
+  });
+
+  it("archives a last terminal panel before closing the window from closePanel", () => {
+    const panel = terminalPanel("terminal-1");
+    const api = {
+      activePanel: panel,
+      panels: [panel],
+      removePanel: vi.fn(),
+      totalPanels: 1,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().closePanel("terminal-1");
+
+    expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
+    expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
+    expect(api.removePanel).not.toHaveBeenCalled();
+    expect(
+      firstInvocationOrder(vi.mocked(window.pier.terminal.close))
+    ).toBeLessThan(firstInvocationOrder(closeCurrentWindowMock));
   });
 
   it("closes only terminal panels removed by closeOthers", () => {

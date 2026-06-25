@@ -32,7 +32,7 @@ interface TestPanelProps extends IDockviewPanelProps {
 }
 
 function createPanelProps(
-  options: { isActive?: boolean; isVisible?: boolean } = {}
+  options: { initialCwd?: string; isActive?: boolean; isVisible?: boolean } = {}
 ): TestPanelProps {
   let isActive = options.isActive ?? true;
   let isVisible = options.isVisible ?? true;
@@ -79,6 +79,7 @@ function createPanelProps(
       width: 400,
     },
     containerApi: {},
+    params: options.initialCwd ? { cwd: options.initialCwd } : undefined,
     emitGroupChange() {
       onDidGroupChange?.();
     },
@@ -226,6 +227,104 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
+  });
+
+  it("passes the initial cwd from panel params when creating the native terminal", async () => {
+    const props = createPanelProps({
+      initialCwd: "/Users/xyz/ABC/pier",
+      isActive: true,
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: "/Users/xyz/ABC/pier",
+          panelId: "terminal-1",
+        })
+      );
+    });
+  });
+
+  it("passes panel params cwd immediately and leaves saved cwd precedence to main", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      cwd: "/Users/xyz/ABC/current-work",
+      title: "Claude Code",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+    const props = createPanelProps({
+      initialCwd: "/Users/xyz/ABC/original-open",
+      isActive: true,
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: "/Users/xyz/ABC/original-open",
+          panelId: "terminal-1",
+        })
+      );
+    });
+  });
+
+  it("shows a terminal-colored placeholder until the native terminal is ready", async () => {
+    let resolveCreate!: (value: { ok: true }) => void;
+    vi.mocked(window.pier.terminal.create).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        })
+    );
+    const props = createPanelProps();
+
+    const { container } = render(<TerminalPanel {...props} />);
+
+    const root = container.querySelector('[data-testid="terminal-panel-root"]');
+    const placeholder = container.querySelector(
+      '[data-testid="terminal-placeholder"]'
+    );
+    expect(root?.getAttribute("style") ?? "").not.toContain(
+      "--terminal-background"
+    );
+    expect(placeholder).not.toBeNull();
+    expect(placeholder?.getAttribute("style")).toContain(
+      "--terminal-background"
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    resolveCreate({ ok: true });
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="terminal-placeholder"]')
+      ).toBeNull();
+    });
+  });
+
+  it("keeps terminal create failures on the terminal-colored surface", async () => {
+    vi.mocked(window.pier.terminal.create).mockResolvedValueOnce({
+      error: "终端创建失败",
+      ok: false,
+    });
+    const props = createPanelProps();
+
+    const { container, findByText } = render(<TerminalPanel {...props} />);
+
+    const errorText = await findByText("终端创建失败");
+    const root = container.querySelector('[data-testid="terminal-panel-root"]');
+    expect(root?.getAttribute("style") ?? "").not.toContain(
+      "--terminal-background"
+    );
+    expect(errorText.parentElement?.getAttribute("style")).toContain(
+      "--terminal-background"
+    );
   });
 
   it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {

@@ -38,10 +38,11 @@ function stripOptions(args: readonly string[]): string[] {
       arg === "--json" ||
       arg === "--print-envelope" ||
       arg === "--window" ||
+      arg === "--cwd" ||
       arg === "--split" ||
       arg === "--no-focus"
     ) {
-      if (arg === "--window" || arg === "--split") {
+      if (arg === "--window" || arg === "--cwd" || arg === "--split") {
         index++;
       }
       continue;
@@ -136,7 +137,8 @@ function parsePanels(
 function parseTerminals(
   action: string | undefined,
   value: string | undefined,
-  route: ReturnType<typeof routeOptions>
+  route: ReturnType<typeof routeOptions>,
+  args: readonly string[]
 ): PierCommand {
   if (action === "list") {
     return {
@@ -145,7 +147,8 @@ function parseTerminals(
     };
   }
   if (action === "open") {
-    return { type: "terminal.open", ...route };
+    const cwd = optionValue(args, "--cwd");
+    return { type: "terminal.open", ...route, ...(cwd && { cwd }) };
   }
   if (action === "focus") {
     return {
@@ -174,7 +177,7 @@ function parseCommand(args: readonly string[]): PierCommand {
     return parsePanels(action, value, route);
   }
   if (domain === "terminals") {
-    return parseTerminals(action, value, route);
+    return parseTerminals(action, value, route, args);
   }
   if (domain === "preferences" && action === "read") {
     return { type: "preferences.read" };

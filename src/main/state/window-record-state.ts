@@ -14,6 +14,7 @@ const windowRecordSchema = z.object({
 });
 
 const windowRecordStateSchema = z.object({
+  lastFocusedWindowRecordId: z.string().min(1).nullable().optional(),
   openWindowRecordIds: z.array(z.string().min(1)),
   recentlyClosedWindowRecordIds: z.array(z.string().min(1)),
   records: z.record(z.string(), windowRecordSchema),
@@ -24,6 +25,7 @@ export type WindowRecord = z.infer<typeof windowRecordSchema>;
 type WindowRecordState = z.infer<typeof windowRecordStateSchema>;
 
 const DEFAULTS: WindowRecordState = {
+  lastFocusedWindowRecordId: null,
   openWindowRecordIds: [],
   recentlyClosedWindowRecordIds: [],
   records: {},
@@ -138,9 +140,36 @@ export async function markWindowRecordClosed(recordId: string): Promise<void> {
   });
 }
 
+export async function markWindowRecordFocused(recordId: string): Promise<void> {
+  if (recordId.trim().length === 0) {
+    return;
+  }
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const record = state.records[recordId];
+    if (!record) {
+      return state;
+    }
+    record.updatedAt = now();
+    state.lastFocusedWindowRecordId = recordId;
+    return state;
+  });
+}
+
 export async function readOpenWindowRecordIds(): Promise<string[]> {
   const s = await ensureStore();
   return [...s.get().openWindowRecordIds];
+}
+
+export async function readPreferredOpenWindowRecordIds(): Promise<string[]> {
+  const s = await ensureStore();
+  const state = s.get();
+  const openIds = [...state.openWindowRecordIds];
+  const preferredId = state.lastFocusedWindowRecordId;
+  if (!(preferredId && openIds.includes(preferredId))) {
+    return openIds;
+  }
+  return [preferredId, ...openIds.filter((id) => id !== preferredId)];
 }
 
 export async function readMostRecentClosedWindowRecordId(): Promise<

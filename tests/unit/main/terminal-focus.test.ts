@@ -206,6 +206,31 @@ describe("terminal focus restoration", () => {
     );
   });
 
+  it("prefers a saved cwd over a stale renderer-provided initial cwd", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow } =
+      await setupTerminalFocusHarness();
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        cwd: "/Users/xyz/ABC/original-open",
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      "7::terminal-1",
+      { x: 1, y: 2, width: 300, height: 200 },
+      "Menlo",
+      13,
+      "/Users/xyz/ABC/pier"
+    );
+  });
+
   it("does not make the host window transparent during terminal setup", async () => {
     const { fakeAddon, invokeHandlers, ipcWindow } =
       await setupTerminalFocusHarness();

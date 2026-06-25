@@ -31,14 +31,62 @@ test.describe("Command Palette e2e", () => {
     await expect(
       win.locator("[cmdk-group-heading]").filter({ hasText: "设置" })
     ).toBeVisible();
+    await expect(
+      win.locator("[cmdk-group-heading]").filter({ hasText: "运行" })
+    ).toBeVisible();
 
     // 验证主题/风格/语言 action 都在面板中
     const items = win.locator("[cmdk-item]");
+    await expect(items.filter({ hasText: "运行任务..." })).toBeVisible();
+    await expect(items.filter({ hasText: "新建终端" })).toBeVisible();
+    await expect(items.filter({ hasText: "终端列表..." })).toBeVisible();
     await expect(items.filter({ hasText: "选择主题" })).toBeVisible();
     await expect(items.filter({ hasText: "选择风格" })).toBeVisible();
     await expect(items.filter({ hasText: "选择显示语言" })).toBeVisible();
 
     await app.close();
+  });
+
+  test("Terminal List opens a grouped terminal quick-pick list", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-switch-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+
+      await win.keyboard.press("Meta+Shift+KeyP");
+      await win.waitForTimeout(800);
+      await win
+        .locator("[cmdk-item]")
+        .filter({ hasText: "终端列表..." })
+        .click();
+
+      await expect(win.locator("[cmdk-input]")).toHaveAttribute(
+        "placeholder",
+        "搜索终端、窗口或目录…"
+      );
+      await expect(
+        win.locator("[cmdk-item]").filter({ hasText: "当前终端" })
+      ).toHaveCount(0);
+      await expect(
+        win.locator("[cmdk-group-heading]").filter({
+          hasText: "窗口 1 · 当前窗口 · 第 1 组",
+        })
+      ).toBeVisible();
+      await expect(win.getByText("当前", { exact: true })).toHaveCount(0);
+      await expect(
+        win.locator('[cmdk-item][data-checked="true"]').filter({
+          hasText: "标签 1/1",
+        })
+      ).toBeVisible();
+
+      await expect(win.getByText("切换", { exact: true })).toHaveCount(0);
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
   });
 
   test("MRU 顶置最近执行的 action", async () => {

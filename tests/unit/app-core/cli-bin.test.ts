@@ -135,4 +135,66 @@ describe("bin/pier.mjs", () => {
     expect(stdout).toBe("");
     await server.close();
   });
+
+  it("terminals list 没有 --json 时输出窗口和组分段", async () => {
+    const userDataDir = await makeTempDir();
+    const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
+    const server = createPierLocalControlServer({
+      handleRequest: (envelope) => {
+        const parsed = pierCommandEnvelopeSchema.parse(envelope);
+        return Promise.resolve({
+          data: {
+            errors: [],
+            open: [
+              {
+                active: true,
+                cwd: "/Users/xyz/ABC/pier",
+                groupIndex: 0,
+                panelId: "terminal-1",
+                recordId: "record-main",
+                tabCount: 2,
+                tabIndex: 0,
+                title: "pier",
+                windowFocused: true,
+                windowId: "main",
+              },
+              {
+                active: true,
+                cwd: "/Users/xyz/ABC/bay",
+                groupIndex: 0,
+                panelId: "terminal-2",
+                recordId: "record-secondary",
+                tabCount: 1,
+                tabIndex: 0,
+                title: "bay",
+                windowFocused: false,
+                windowId: "secondary",
+              },
+            ],
+            recentClosed: [],
+          },
+          ok: true,
+          requestId: parsed.requestId,
+        });
+      },
+      socketPath,
+    });
+    await server.start();
+
+    const { stdout } = await execFileAsync(
+      "node",
+      ["bin/pier.mjs", "terminals", "list"],
+      {
+        env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
+      }
+    );
+
+    expect(stdout).toContain("窗口 1 · 当前窗口 · 第 1 组");
+    expect(stdout).toContain("✓ pier");
+    expect(stdout).toContain("窗口 2 · 第 1 组");
+    expect(stdout).toContain("bay");
+    expect(stdout).not.toContain("✓ bay");
+    expect(stdout).toContain("/Users/xyz/ABC/pier");
+    await server.close();
+  });
 });

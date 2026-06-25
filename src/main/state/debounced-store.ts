@@ -40,6 +40,7 @@ export function debouncedJsonStore<T>(opts: {
   let state: T | undefined;
   let dirty = false;
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let writeQueue: Promise<void> = Promise.resolve();
   const debounceMs = opts.debounceMs ?? 500;
 
   function scheduleFlush(): void {
@@ -47,22 +48,37 @@ export function debouncedJsonStore<T>(opts: {
     if (!flushTimer) {
       flushTimer = setTimeout(() => {
         flushTimer = null;
-        doFlush();
+        doFlush().catch((err) => {
+          console.error("[debounced-store] flush failed:", err);
+        });
       }, debounceMs);
     }
   }
 
   async function doFlush(): Promise<void> {
     if (!dirty) {
+      await writeQueue;
       return;
     }
+    const content = `${JSON.stringify(state, null, 2)}\n`;
     dirty = false;
-    await doWrite();
+    try {
+      await enqueueWrite(content);
+    } catch (err) {
+      dirty = true;
+      throw err;
+    }
   }
 
-  async function doWrite(): Promise<void> {
-    await mkdir(dirname(opts.filePath), { recursive: true });
-    await writeFileAtomic(opts.filePath, `${JSON.stringify(state, null, 2)}\n`);
+  function enqueueWrite(content: string): Promise<void> {
+    const write = writeQueue
+      .catch(() => undefined)
+      .then(async () => {
+        await mkdir(dirname(opts.filePath), { recursive: true });
+        await writeFileAtomic(opts.filePath, content);
+      });
+    writeQueue = write;
+    return write;
   }
 
   async function init(): Promise<T> {
@@ -107,7 +123,10 @@ export function debouncedJsonStore<T>(opts: {
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    await doFlush();
+    while (dirty) {
+      await doFlush();
+    }
+    await writeQueue;
   }
 
   async function clear(): Promise<void> {

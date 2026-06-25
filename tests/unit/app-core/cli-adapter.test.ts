@@ -190,6 +190,21 @@ describe("parsePierCliArgs", () => {
     ).toEqual({ type: "terminal.open", windowId: "main" });
   });
 
+  it("解析 terminals open --cwd", () => {
+    expect(
+      parsePierCliArgs(
+        ["terminals", "open", "--cwd", "/Users/xyz/ABC/pier", "--json"],
+        {
+          clientId: "cli-1",
+          requestId: "req-terminal-open-cwd",
+        }
+      ).envelope.command
+    ).toEqual({
+      cwd: "/Users/xyz/ABC/pier",
+      type: "terminal.open",
+    });
+  });
+
   it("解析 terminals open --no-focus", () => {
     expect(
       parsePierCliArgs(

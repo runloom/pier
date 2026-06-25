@@ -16,6 +16,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { Badge } from "@/components/primitives/badge.tsx";
 import {
   Command,
   CommandDialog,
@@ -93,6 +94,13 @@ function useActions(): readonly Action[] {
   return actionRegistry.list("command-palette");
 }
 
+function quickPickItems(quickPick: QuickPick): readonly QuickPickItem[] {
+  if (quickPick.sections && quickPick.sections.length > 0) {
+    return quickPick.sections.flatMap((section) => section.items);
+  }
+  return quickPick.items;
+}
+
 /**
  * 反查每个 actionId 当前生效的 keybinding 文案. 订阅两个 registry 的 version
  * 触发重渲, 重渲时拉两边最新数据 build map. React Compiler 自动按 version
@@ -167,9 +175,10 @@ export function CommandPalette() {
     setQuery("");
     acceptedItemIdRef.current = null;
     if (mode === "quick-pick" && quickPick) {
+      const items = quickPickItems(quickPick);
       const checked =
-        quickPick.items.find((i) => i.checked && !i.disabled) ??
-        quickPick.items.find((i) => !i.disabled);
+        items.find((i) => i.checked && !i.disabled) ??
+        items.find((i) => !i.disabled);
       setSelectedValue(checked?.id ?? "");
     } else {
       setSelectedValue("");
@@ -229,7 +238,7 @@ export function CommandPalette() {
     if (mode !== "quick-pick" || !quickPick?.onChangeSelection) {
       return;
     }
-    const item = quickPick.items.find((i) => i.id === next);
+    const item = quickPickItems(quickPick).find((i) => i.id === next);
     if (!item || item.disabled) {
       return;
     }
@@ -399,35 +408,58 @@ function QuickPickView({
   quickPick: QuickPick;
   onAccept: (item: QuickPickItem) => Promise<void>;
 }): ReactNode {
-  // 不包 CommandGroup heading: dialog 输入框 placeholder 已说明当前在选什么
-  // (e.g. "选择主题 (↑↓ 预览, ↵ 确认, Esc 还原)"), 再加一行分组标题是冗余。
-  // quick-pick items 平铺在 CommandList 下。
+  const renderItem = (item: QuickPickItem) => (
+    <CommandItem
+      data-checked={item.checked === true}
+      data-disabled={item.disabled === true}
+      key={item.id}
+      keywords={[item.label, item.id, ...(item.keywords ?? [])]}
+      onSelect={() => {
+        onAccept(item).catch((err) => {
+          console.error(
+            `[command-palette] quick-pick onAccept ${item.id} rejected:`,
+            err
+          );
+        });
+      }}
+      value={item.id}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{item.label}</span>
+          {item.badges?.map((badge) => (
+            <Badge
+              className="h-4.5 px-1.5 text-[10px]"
+              key={`${item.id}:${badge.label}`}
+              variant={badge.variant ?? "secondary"}
+            >
+              {badge.label}
+            </Badge>
+          ))}
+        </span>
+        {item.detail ? (
+          <span className="block truncate text-muted-foreground text-xs">
+            {item.detail}
+          </span>
+        ) : null}
+      </span>
+      {item.description ? (
+        <span className="shrink-0 text-muted-foreground text-xs">
+          {item.description}
+        </span>
+      ) : null}
+    </CommandItem>
+  );
+
   return (
     <div className="mt-2">
-      {quickPick.items.map((item) => (
-        <CommandItem
-          data-checked={item.checked === true}
-          data-disabled={item.disabled === true}
-          key={item.id}
-          keywords={[item.label, item.id, ...(item.keywords ?? [])]}
-          onSelect={() => {
-            onAccept(item).catch((err) => {
-              console.error(
-                `[command-palette] quick-pick onAccept ${item.id} rejected:`,
-                err
-              );
-            });
-          }}
-          value={item.id}
-        >
-          <span className="min-w-0 flex-1 truncate">{item.label}</span>
-          {item.description ? (
-            <span className="shrink-0 text-muted-foreground text-xs">
-              {item.description}
-            </span>
-          ) : null}
-        </CommandItem>
-      ))}
+      {quickPick.sections && quickPick.sections.length > 0
+        ? quickPick.sections.map((section) => (
+            <CommandGroup heading={section.heading} key={section.id}>
+              {section.items.map(renderItem)}
+            </CommandGroup>
+          ))
+        : quickPick.items.map(renderItem)}
     </div>
   );
 }

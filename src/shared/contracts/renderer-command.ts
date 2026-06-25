@@ -18,6 +18,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("terminal.open"),
+    cwd: z.string().min(1).optional(),
     focus: z.boolean().optional(),
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),

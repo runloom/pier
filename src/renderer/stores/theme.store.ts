@@ -66,6 +66,16 @@ let pendingTerminalApply: {
 } | null = null;
 let scheduledTerminalFrame: number | null = null;
 
+function syncTerminalBackground(background: string): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.documentElement.style.setProperty(
+    "--terminal-background",
+    background
+  );
+}
+
 function flushPendingTerminalApply(): void {
   scheduledTerminalFrame = null;
   const pending = pendingTerminalApply;
@@ -76,6 +86,7 @@ function flushPendingTerminalApply(): void {
   try {
     const shiki = getShikiTheme(pending.presetId, pending.resolved);
     const colors = deriveTerminalColors(shiki, pending.resolved);
+    syncTerminalBackground(colors.background);
     window.pier?.terminal?.applyTheme?.(colors);
     window.pier?.theme
       ?.setNativeChrome?.(pending.resolved, colors.background)

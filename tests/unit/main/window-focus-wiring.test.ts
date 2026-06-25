@@ -26,7 +26,7 @@ const SOURCE = readFileSync(
 const BLUR_WIRING_RE =
   /window\.host\.on\("blur",\s*\(\)\s*=>\s*\{\s*blurActivePanelFocus\(window\);\s*\}\);/;
 const FOCUS_WIRING_RE =
-  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*restoreActivePanelFocus\(window\);\s*\}\);/;
+  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*restoreActivePanelFocus\(window\);[\s\S]{0,350}?this\.onFocusCallbacks/;
 
 describe("window-manager focus / blur wiring", () => {
   it("attaches blur handler routing to blurActivePanelFocus", () => {
