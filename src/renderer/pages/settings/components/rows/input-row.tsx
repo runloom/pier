@@ -10,18 +10,30 @@ import { Input } from "@/components/primitives/input.tsx";
 export interface InputRowProps {
   description?: ReactNode;
   id: string;
+  inputClassName?: string;
+  inputMode?: "numeric";
   label: string;
+  max?: number;
+  min?: number;
   onBlur?: (value: string) => void;
   onChange?: (value: string) => void;
   placeholder?: string;
+  step?: number;
+  type?: "text" | "number";
   value: string;
 }
 
 export function InputRow({
   id,
+  inputClassName = "w-[240px]",
+  inputMode,
   label,
   description,
+  max,
+  min,
   placeholder,
+  step,
+  type = "text",
   value,
   onChange,
   onBlur,
@@ -33,11 +45,16 @@ export function InputRow({
         {description && <FieldDescription>{description}</FieldDescription>}
       </FieldContent>
       <Input
-        className="w-[240px]"
+        className={inputClassName}
         id={id}
+        inputMode={inputMode}
+        max={max}
+        min={min}
         onBlur={(e) => onBlur?.(e.currentTarget.value)}
         onChange={(e) => onChange?.(e.currentTarget.value)}
         placeholder={placeholder}
+        step={step}
+        type={type}
         value={value}
       />
     </Field>

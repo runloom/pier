@@ -141,6 +141,7 @@
   --surface-raised: color-mix(in oklab, var(--muted) 90%, var(--background));
   --surface-inset: color-mix(in oklab, var(--background) 72%, var(--muted));
   --surface-border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --overlay-scrim: color-mix(in oklab, var(--foreground) 16%, transparent);
   --interactive-hover: color-mix(
     in oklab,
     var(--foreground) 8%,
@@ -197,12 +198,12 @@
   /* === Sidebar / titlebar chrome elevation 体系 ===
      - sidebar (外壳: titlebar / 侧栏 / workspace gutter) 用 --muted, 比内容卡略亮/略暗
      - 内容卡 bg-card = var(--background), 与 sidebar 形成视觉层次 (类似 VSCode)
-     - border / accent 用 color-mix 软化, 避免高饱和主题 (Solarized 等) 边线/hover 过重 */
+     - active / hover 复用 --accent, 与 Select / 菜单选中态保持一致 */
   --sidebar: var(--muted);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: color-mix(in oklab, var(--accent) 50%, transparent);
+  --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: color-mix(in oklab, var(--border) 50%, transparent);
   --sidebar-ring: var(--ring);
@@ -280,6 +281,7 @@
   --border: oklch(0.92 0 0);
   --input: oklch(0.92 0 0);
   --ring: oklch(0.708 0 0);
+  --overlay-scrim: color-mix(in oklab, var(--foreground) 22%, transparent);
   /* sidebar/titlebar 已在 :root 走 var(--xxx) 引用, .light 模式自动跟 --background/--foreground 翻面,
      无需在此重复定义. */
 }
@@ -331,6 +333,7 @@
   --color-surface-raised: var(--surface-raised);
   --color-surface-inset: var(--surface-inset);
   --color-surface-border: var(--surface-border);
+  --color-overlay-scrim: var(--overlay-scrim);
   --color-interactive-hover: var(--interactive-hover);
   --color-interactive-active: var(--interactive-active);
 
@@ -679,11 +682,11 @@ body {
   --dv-active-sash-transition-delay: 0s;
   --dv-tabs-container-scrollbar-color: var(--border);
   --dv-icon-hover-background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
-  /* drag-over 高亮 — 半透明 primary, 与下层 terminal NSView 合成出叠加效果 */
-  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 30%, transparent);
-  --dv-drag-over-border: 1.5px solid var(--primary);
-  --dv-drag-over-border-color: var(--primary);
-  --dv-floating-box-shadow: 0 8px 32px color-mix(in oklab, var(--foreground) 25%, transparent);
+  /* drag-over 高亮需轻，避免和下层 terminal NSView 合成出大块色斑。 */
+  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+  --dv-drag-over-border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
+  --dv-drag-over-border-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  --dv-floating-box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent);
   --dv-floating-border: 1px solid var(--border);
   --dv-paneview-active-outline-color: var(--ring);
 }
@@ -712,6 +715,89 @@ body {
   color: var(--foreground);
 }
 
+.dockview-theme-pier .dv-tab .dv-default-tab,
+.dv-tab.dv-tab-dragging .dv-default-tab,
+.dv-tab-ghost-drag .dv-default-tab {
+  box-sizing: border-box;
+  gap: 6px;
+  padding-inline: 8px 4px;
+}
+
+.dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content,
+.dv-tab.dv-tab-dragging .dv-default-tab .dv-default-tab-content,
+.dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
+  font-weight: 600;
+  margin-right: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
+  font-weight: 600 !important;
+}
+
+.dockview-theme-pier .pier-panel-tab-icon,
+.dv-tab.dv-tab-dragging .pier-panel-tab-icon,
+.dv-tab-ghost-drag .pier-panel-tab-icon {
+  color: currentColor;
+  height: 14px;
+  opacity: 0.92;
+  width: 14px;
+}
+
+.dv-tab-ghost-drag .pier-panel-tab-icon {
+  height: 14px !important;
+  width: 14px !important;
+}
+
+.dockview-theme-pier .dv-tab.dv-tab-dragging,
+.dv-tab.dv-tab-dragging {
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.dv-tab-ghost-drag {
+  background-color: transparent !important;
+  border-radius: 999px !important;
+  box-sizing: border-box !important;
+  color: var(--foreground) !important;
+  display: inline-flex !important;
+  height: 32px !important;
+  max-width: 220px !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  width: fit-content !important;
+}
+
+.dockview-theme-pier .dv-tab.dv-tab-dragging .dv-default-tab,
+.dv-tab.dv-tab-dragging .dv-default-tab,
+.dv-tab-ghost-drag .dv-default-tab {
+  background-color: var(--background) !important;
+  border: 1px solid color-mix(in oklab, var(--border) 72%, transparent) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent) !important;
+  height: 32px !important;
+  max-width: 220px !important;
+  overflow: hidden !important;
+  padding-inline: 10px 12px !important;
+  width: fit-content !important;
+}
+
+.dockview-theme-pier .dv-tab-ghost-drag::after,
+.dv-tab-ghost-drag::after {
+  outline: none !important;
+}
+
+.dockview-theme-pier .dv-drop-target-container .dv-drop-target-anchor,
+.dockview-theme-pier
+  .dv-drop-target
+  > .dv-drop-target-dropzone
+  > .dv-drop-target-selection {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent);
+}
+
 /* — 选中 tab 与内容区连成同一层, 避免 tab 栏底线切断层级 — */
 .dockview-theme-pier
   .dv-groupview
@@ -720,19 +806,6 @@ body {
   > .dv-tab.dv-active-tab {
   overflow: visible;
   position: relative;
-}
-.dockview-theme-pier
-  .dv-groupview
-  > .dv-tabs-and-actions-container
-  .dv-tabs-container
-  > .dv-tab.dv-active-tab::before {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: -1px;
-  height: 1px;
-  background-color: var(--background);
-  z-index: 1;
 }
 
 /* — S3 指示线: 聚焦 group 选中 tab → 顶部 2px primary — */
@@ -743,7 +816,7 @@ body {
   > .dv-tab.dv-active-tab::after {
   content: "";
   position: absolute;
-  top: 0;
+  top: 1px;
   inset-inline: 0;
   height: 2px;
   background-color: var(--primary);
@@ -759,9 +832,9 @@ body {
   > .dv-tab.dv-active-tab::after {
   content: "";
   position: absolute;
-  top: 0;
+  top: 1px;
   inset-inline: 0;
-  height: 1px;
+  height: 2px;
   background-color: var(--muted-foreground);
   outline: none !important;
   z-index: 2;
@@ -781,7 +854,7 @@ body {
 .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::before {
   content: "";
   position: absolute;
-  top: 0;
+  top: 1px;
   bottom: 0;
   left: 2px;
   width: 1px;
@@ -805,7 +878,7 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 2px;
+  top: 2px;
   height: 1px;
   background-color: var(--border);
   z-index: 1;
@@ -824,4 +897,8 @@ body {
 
 .dockview-theme-pier .dv-tabs-and-actions-container {
   border-bottom: none;
+}
+
+.dv-tab .dv-default-tab .dv-default-tab-action:hover {
+  border-radius: 12px;
 }

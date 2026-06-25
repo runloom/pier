@@ -3,4 +3,7 @@ version = 1
 name = "pier"
 
 [setup]
-script = "pnpm i"
+script = '''
+pnpm i
+pnpm build:native
+'''

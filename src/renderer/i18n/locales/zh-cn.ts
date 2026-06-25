@@ -4,10 +4,12 @@ export const zhCN = {
     description: "管理应用偏好设置",
     nav: {
       appearance: "外观",
+      terminal: "终端",
     },
     section: {
       appearance: "外观",
       font: "字体",
+      terminal: "终端",
     },
     row: {
       theme: "主题",
@@ -25,6 +27,28 @@ export const zhCN = {
       monoFontSize: "等宽字号",
       monoFontSizeDesc: "终端字号 (px)，范围 8–32",
       monoFontSizePlaceholder: "13",
+      terminalCursorStyle: "光标样式",
+      terminalCursorStyleDesc: "选择终端输入光标的形状",
+      terminalCursorBlink: "光标闪烁",
+      terminalCursorBlinkDesc: "开启后终端光标会周期性闪烁",
+      terminalScrollbackMb: "滚动历史上限",
+      terminalScrollbackMbDesc: "终端历史缓冲区大小 (MB)，范围 10–512",
+      terminalScrollbackRuntimeNote: "修改后对新建终端生效，已有终端不会重启。",
+      terminalPasteProtection: "粘贴保护",
+      terminalPasteProtectionDesc: "粘贴可能直接执行的内容前先确认",
+      terminalNewCwdPolicy: "新终端目录",
+      terminalNewCwdPolicyDesc: "控制新建或拆分终端时使用哪个工作目录",
+    },
+    terminal: {
+      cursorStyle: {
+        block: "块状",
+        bar: "竖线",
+        underline: "下划线",
+      },
+      newCwdPolicy: {
+        activeTerminal: "继承当前终端",
+        shellDefault: "使用 shell 默认目录",
+      },
     },
     theme: {
       light: "浅色",

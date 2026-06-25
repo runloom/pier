@@ -1,4 +1,5 @@
 import type { IDockviewPanelProps } from "dockview-react";
+import { House } from "lucide-react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 
 export function WelcomePanel(props: IDockviewPanelProps) {
@@ -12,3 +13,9 @@ export function WelcomePanel(props: IDockviewPanelProps) {
     </div>
   );
 }
+
+export const welcomePanelKit = {
+  component: WelcomePanel,
+  icon: House,
+  kind: "web",
+} as const;

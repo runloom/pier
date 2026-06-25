@@ -1,5 +1,6 @@
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
+import { SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
@@ -38,18 +39,20 @@ export function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
-function readInitialCwd(params: unknown): string | null {
-  if (typeof params !== "object" || params === null) {
-    return null;
+function initialCwdFromParams(params: unknown): string | undefined {
+  if (!params || typeof params !== "object" || !("cwd" in params)) {
+    return;
   }
   const cwd = (params as { cwd?: unknown }).cwd;
-  return typeof cwd === "string" && cwd.trim().length > 0 ? cwd : null;
+  return typeof cwd === "string" && cwd.trim() === cwd && cwd !== ""
+    ? cwd
+    : undefined;
 }
 
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
-  const initialCwd = readInitialCwd(props.params);
+  const initialCwd = initialCwdFromParams(props.params);
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -165,12 +168,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
         const result = await window.pier.terminal.create({
           panelId,
-          ...(initialCwd ? { cwd: initialCwd } : {}),
           frame,
           font: {
             family: computeMonoFontFamily(monoFontFamilyRef.current),
             size: monoFontSizeRef.current,
           },
+          ...(initialCwd && { cwd: initialCwd }),
         });
         if (!result.ok) {
           setError(result.error ?? "终端创建失败");
@@ -312,3 +315,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     </div>
   );
 }
+
+export const terminalPanelKit = {
+  component: TerminalPanel,
+  icon: SquareTerminal,
+  kind: "terminal",
+} as const;

@@ -1,6 +1,7 @@
 import type {
   TerminalColors,
   TerminalFrame,
+  TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 
 export interface NativeAddon {
@@ -70,6 +71,7 @@ export interface NativeAddon {
   setPwdForwardCallback(
     cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
   ): void;
+  setTerminalConfig(parentHandle: Buffer, config: TerminalRuntimeConfig): void;
   setTerminalFocusRequestCallback(
     cb: ((browserWindowId: number, panelId: string) => void) | null
   ): void;

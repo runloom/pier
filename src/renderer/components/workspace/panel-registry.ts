@@ -1,22 +1,39 @@
 import type { IDockviewPanelProps } from "dockview-react";
+import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
-import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
-import { WelcomePanel } from "./welcome-panel.tsx";
+import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { welcomePanelKit } from "./welcome-panel.tsx";
+
+type PanelKind = "terminal" | "web";
+
+interface PanelKitMetadata {
+  component: FunctionComponent<IDockviewPanelProps>;
+  icon: LucideIcon;
+  kind: PanelKind;
+}
 
 /**
- * Panel 组件注册表 — dockview addPanel 的 component 名映射到 React 组件。
+ * Panel kit 元数据聚合表 — dockview addPanel 的 component 名映射到 kit 能力。
  *
  * 新增 panel 类型时:
- * 1. 在 panel-kits/<name>/ 下实现组件 (接收 IDockviewPanelProps)
- * 2. 在此注册: { <name>: <Component> }
+ * 1. 在 panel-kits/<name>/ 下实现并导出 kit 元数据
+ * 2. 在此登记一行 component 名到 kit 元数据的映射
  * 3. 业务侧调 useWorkspaceStore().addPanel({ component: <name>, ... })
  */
+export const panelKits = {
+  terminal: terminalPanelKit,
+  welcome: welcomePanelKit,
+} satisfies Record<string, PanelKitMetadata>;
+
+const panelKitByComponent: Readonly<Record<string, PanelKitMetadata>> =
+  panelKits;
+
 export const panelComponents: Record<
   string,
   FunctionComponent<IDockviewPanelProps>
 > = {
-  terminal: TerminalPanel,
-  welcome: WelcomePanel,
+  terminal: panelKits.terminal.component,
+  welcome: panelKits.welcome.component,
 };
 
 /**
@@ -28,10 +45,14 @@ export const panelComponents: Record<
  * (不会让 terminal 抢 firstResponder)。
  */
 export const panelKinds = {
-  terminal: "terminal",
-  welcome: "web",
+  terminal: panelKits.terminal.kind,
+  welcome: panelKits.welcome.kind,
 } as const;
 
 export function panelKindOf(component: string): "terminal" | "web" {
-  return (panelKinds as Record<string, "terminal" | "web">)[component] ?? "web";
+  return panelKitByComponent[component]?.kind ?? "web";
+}
+
+export function panelIconOf(component: string): LucideIcon | null {
+  return panelKitByComponent[component]?.icon ?? null;
 }

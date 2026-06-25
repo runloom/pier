@@ -32,7 +32,11 @@ interface TestPanelProps extends IDockviewPanelProps {
 }
 
 function createPanelProps(
-  options: { initialCwd?: string; isActive?: boolean; isVisible?: boolean } = {}
+  options: {
+    isActive?: boolean;
+    isVisible?: boolean;
+    params?: { cwd?: string };
+  } = {}
 ): TestPanelProps {
   let isActive = options.isActive ?? true;
   let isVisible = options.isVisible ?? true;
@@ -79,7 +83,7 @@ function createPanelProps(
       width: 400,
     },
     containerApi: {},
-    params: options.initialCwd ? { cwd: options.initialCwd } : undefined,
+    params: options.params ?? {},
     emitGroupChange() {
       onDidGroupChange?.();
     },
@@ -229,13 +233,12 @@ describe("TerminalPanel lifecycle", () => {
     });
   });
 
-  it("passes the initial cwd from panel params when creating the native terminal", async () => {
-    const props = createPanelProps({
-      initialCwd: "/Users/xyz/ABC/pier",
-      isActive: true,
-    });
-
-    render(<TerminalPanel {...props} />);
+  it("passes panel cwd params into native terminal creation", async () => {
+    render(
+      <TerminalPanel
+        {...createPanelProps({ params: { cwd: "/Users/xyz/ABC/pier" } })}
+      />
+    );
 
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
@@ -254,8 +257,8 @@ describe("TerminalPanel lifecycle", () => {
       updatedAt: "2026-06-25T00:00:00.000Z",
     });
     const props = createPanelProps({
-      initialCwd: "/Users/xyz/ABC/original-open",
       isActive: true,
+      params: { cwd: "/Users/xyz/ABC/original-open" },
     });
 
     render(<TerminalPanel {...props} />);

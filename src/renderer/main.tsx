@@ -15,6 +15,7 @@ import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
+import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
 
 async function bootstrap() {
@@ -24,7 +25,12 @@ async function bootstrap() {
     console.error("[pier] i18n init failed, falling back to keys:", err);
   }
   try {
-    await Promise.all([initTheme(), initLocale(), initFont()]);
+    await Promise.all([
+      initTheme(),
+      initLocale(),
+      initFont(),
+      initTerminalPreferences(),
+    ]);
   } catch (err) {
     console.error("[pier] theme/locale init failed:", err);
   }
