@@ -114,8 +114,12 @@ describe.runIf(process.platform === "darwin")(
     it("creates an opaque BaseWindow with a transparent full-window WebContentsView", async () => {
       const electron = await import("electron");
       const { windowManager } = await import("@main/windows/window-manager.ts");
+      const { findWindowContext } = await import(
+        "@main/windows/window-identity.ts"
+      );
 
       windowManager.create({ id: "main" });
+      const win = windowManager.get("main");
 
       expect(electron.BaseWindow).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -148,6 +152,51 @@ describe.runIf(process.platform === "darwin")(
         x: 0,
         y: 0,
       });
+      expect(win ? findWindowContext(win) : null).toMatchObject({
+        mode: "restore",
+        recordId: "main",
+        sessionId: "main",
+        windowId: "main",
+      });
+    });
+
+    it("scopes terminal sessions by durable window record, not reusable runtime id", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      const { findWindowContext } = await import(
+        "@main/windows/window-identity.ts"
+      );
+
+      windowManager.create({
+        id: "w-1",
+        mode: "fresh",
+        recordId: "record-a",
+      });
+      const firstWin = windowManager.get("w-1");
+      const firstContext = firstWin ? findWindowContext(firstWin) : null;
+
+      electronMock.hostListeners.get("closed")?.();
+
+      windowManager.create({
+        id: "w-1",
+        mode: "fresh",
+        recordId: "record-b",
+      });
+      const secondWin = windowManager.get("w-1");
+      const secondContext = secondWin ? findWindowContext(secondWin) : null;
+
+      expect(firstContext).toMatchObject({
+        mode: "fresh",
+        recordId: "record-a",
+        sessionId: "record-a",
+        windowId: "w-1",
+      });
+      expect(secondContext).toMatchObject({
+        mode: "fresh",
+        recordId: "record-b",
+        sessionId: "record-b",
+        windowId: "w-1",
+      });
+      expect(secondContext?.sessionId).not.toBe(firstContext?.sessionId);
     });
 
     it("maps renderer webContents back to the owning app window", async () => {

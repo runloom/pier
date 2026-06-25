@@ -35,6 +35,10 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),
   }),
+  z.object({
+    type: z.literal("workspace.flushLayout"),
+    windowId: z.string().min(1).optional(),
+  }),
 ]);
 
 export type RendererCommand = z.infer<typeof rendererCommandSchema>;

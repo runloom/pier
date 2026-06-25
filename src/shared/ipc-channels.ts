@@ -7,6 +7,7 @@ export const PIER = {
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CLOSE: "pier://window:close",
+  WINDOW_CONTEXT: "pier://window:context",
   WINDOW_CREATE: "pier://window:create",
   WINDOW_FOCUS: "pier://window:focus",
   WINDOW_FULLSCREEN_STATE: "pier://window:fullscreen-state",

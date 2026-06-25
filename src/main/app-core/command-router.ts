@@ -6,6 +6,7 @@ import {
 } from "@shared/contracts/commands.ts";
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import { authorizeCommand } from "./permissions.ts";
@@ -23,14 +24,26 @@ export interface PierCoreServices {
   rendererCommand: RendererCommandService;
   window: {
     close(windowId: string): void;
-    create(): { windowId: string };
+    create(options?: WindowCreateOptions): Promise<{
+      recordId: string;
+      windowId: string;
+    }>;
     focus(windowId: string): void;
+    flushOpenWindows(): Promise<void>;
+    flushWindow(windowId: string): Promise<void>;
     list(): WindowInfo[];
+    restoreMostRecentClosed(): Promise<{
+      recordId: string;
+      windowId: string;
+    } | null>;
+    restoreOpenWindows(): Promise<
+      Array<{ recordId: string; windowId: string }>
+    >;
   };
   workspace: {
-    clearLayout(): Promise<void>;
-    readLayout(): Promise<unknown | null>;
-    saveLayout(layout: unknown): Promise<void>;
+    clearLayout(recordId: string): Promise<void>;
+    readLayout(recordId: string): Promise<unknown | null>;
+    saveLayout(layout: unknown, recordId: string): Promise<void>;
   };
 }
 
@@ -124,19 +137,25 @@ export function createCommandRouter({
             services.window.close(command.windowId);
             return success(requestId, null);
           case "window.create":
-            return success(requestId, services.window.create());
+            return success(requestId, await services.window.create());
           case "window.focus":
             services.window.focus(command.windowId);
             return success(requestId, null);
           case "window.list":
             return success(requestId, services.window.list());
           case "workspace.layout.clear":
-            await services.workspace.clearLayout();
+            await services.workspace.clearLayout(command.recordId);
             return success(requestId, null);
           case "workspace.layout.read":
-            return success(requestId, await services.workspace.readLayout());
+            return success(
+              requestId,
+              await services.workspace.readLayout(command.recordId)
+            );
           case "workspace.layout.save":
-            await services.workspace.saveLayout(command.layout);
+            await services.workspace.saveLayout(
+              command.layout,
+              command.recordId
+            );
             return success(requestId, null);
           case "panel.focus":
           case "panel.list":

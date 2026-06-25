@@ -57,6 +57,12 @@ export interface TerminalTitleEvent {
   title: string;
 }
 
+export interface TerminalPanelSessionSnapshot {
+  cwd?: string | undefined;
+  title?: string | undefined;
+  updatedAt: string;
+}
+
 /**
  * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
  * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
@@ -128,6 +134,11 @@ export interface TerminalAPI {
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
+  /**
+   * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
+   * 标题/cwd, 真正的 native terminal 可以等 panel 可见时再创建.
+   */
+  readSession(panelId: string): Promise<TerminalPanelSessionSnapshot | null>;
   /**
    * 报告 renderer 当前活跃的 terminal panelId 集合. swift 把不在集合里的 NSView
    * 清掉 — C 方案 reload 零销毁路径的孤儿兜底:reload 前 layout 有但新 layout

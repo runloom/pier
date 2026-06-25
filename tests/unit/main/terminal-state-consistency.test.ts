@@ -84,6 +84,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelTitle: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) =>
@@ -91,6 +92,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowSessionId: vi.fn(() => "session-main"),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -177,8 +179,33 @@ describe("Swift terminal state consistency via main IPC paths", () => {
 
     expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenCalledWith(
-      "main",
+      "session-main",
       "panel-1"
+    );
+  });
+
+  it("persists forwarded terminal titles using the raw renderer panel id", async () => {
+    const { fakeAddon, win } = await setupHarness();
+    const sessionState = await import("@main/state/terminal-session-state.ts");
+    const callback = fakeAddon.setTitleForwardCallback.mock.calls[0]?.[0] as
+      | ((windowId: number, panelId: string, title: string) => void)
+      | undefined;
+
+    callback?.(win.id, "7::terminal-1", "Claude Code");
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(sessionState.updateTerminalPanelTitle).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      "Claude Code"
+    );
+    expect(win.webContents.send).toHaveBeenCalledWith(
+      "pier:terminal:title-change",
+      {
+        panelId: "terminal-1",
+        title: "Claude Code",
+      }
     );
   });
 

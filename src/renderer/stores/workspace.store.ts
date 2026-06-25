@@ -41,6 +41,11 @@ function getGroupElement(g: unknown): HTMLElement | null {
  */
 const FOCUS_TOL_PX = 5;
 
+async function clearCurrentWindowLayout(): Promise<void> {
+  const context = await window.pier.getWindowContext();
+  await window.pier.workspace.clearLayout(context.recordId);
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   api: null,
   setApi: (api) => set({ api }),
@@ -189,7 +194,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // 先清磁盘 layout — 防 removePanel 触发的 debounced save 与 closeCurrentWindow 时序
     // 竞争把空 layout 写入磁盘 (下次启动 fromJSON 拿到空 panel list 应用为空 workspace).
     try {
-      await window.pier?.workspace?.clearLayout?.();
+      await clearCurrentWindowLayout();
     } catch (err) {
       console.error("[workspace] clearLayout failed:", err);
     }
@@ -286,7 +291,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // 的时序竞争. clearLayout 后再 addPanel 触发的 save 写回的是 default layout,
     // 即使覆盖也无害.
     try {
-      await window.pier?.workspace?.clearLayout?.();
+      await clearCurrentWindowLayout();
     } catch (err) {
       console.error("[workspace] clearLayout failed:", err);
     }

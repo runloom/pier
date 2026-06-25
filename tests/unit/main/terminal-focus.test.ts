@@ -75,6 +75,7 @@ describe("terminal focus restoration", () => {
         updatedAt: "2026-06-24T00:00:00.000Z",
       })),
       updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelTitle: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) =>
@@ -82,6 +83,7 @@ describe("terminal focus restoration", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => ipcWindow),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowSessionId: vi.fn(() => "session-main"),
     }));
 
     const { registerTerminalIpc, restoreActivePanelFocus } = await import(

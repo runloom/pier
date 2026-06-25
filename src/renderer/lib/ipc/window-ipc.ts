@@ -6,10 +6,18 @@
 
 export type { PierWindowAPI, WindowInfo } from "../../../preload/index.ts";
 
+import type {
+  WindowContext,
+  WindowCreateResult,
+} from "@shared/contracts/window.ts";
 import type { WindowInfo } from "../../../preload/index.ts";
 
-export function createWindow(): Promise<{ windowId: string }> {
+export function createWindow(): Promise<WindowCreateResult> {
   return window.pier.createWindow();
+}
+
+export function getWindowContext(): Promise<WindowContext> {
+  return window.pier.getWindowContext();
 }
 
 export function listWindows(): Promise<WindowInfo[]> {

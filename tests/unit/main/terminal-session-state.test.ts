@@ -44,6 +44,24 @@ describe("terminal session state", () => {
     ).resolves.toBeNull();
   });
 
+  it("persists and reads the last terminal title by window and panel", async () => {
+    const {
+      readTerminalPanelSession,
+      updateTerminalPanelCwd,
+      updateTerminalPanelTitle,
+    } = await import("@main/state/terminal-session-state.ts");
+
+    await updateTerminalPanelCwd("main", "terminal-1", "/Users/xyz/ABC/pier");
+    await updateTerminalPanelTitle("main", "terminal-1", "Claude Code");
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      cwd: "/Users/xyz/ABC/pier",
+      title: "Claude Code",
+    });
+  });
+
   it("ignores blank and relative cwd updates", async () => {
     const { readTerminalPanelSession, updateTerminalPanelCwd } = await import(
       "@main/state/terminal-session-state.ts"

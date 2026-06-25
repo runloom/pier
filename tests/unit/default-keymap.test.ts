@@ -19,7 +19,7 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
 describe("DEFAULT_KEYMAP", () => {
   it("keeps tab/window panel shortcuts wired", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.panel.newTab",
+      commandId: "pier.panel.newTerminal",
       keys: "Mod+KeyT",
       nativeTerminal: "app",
       scope: "global",

@@ -13,12 +13,17 @@ import {
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
+import type {
+  WindowContext,
+  WindowCreateResult,
+} from "@shared/contracts/window.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
 export interface WindowInfo {
   focused: boolean;
   id: string;
+  recordId: string;
 }
 
 interface PreferencesSnapshot {
@@ -49,9 +54,9 @@ export interface PierThemeAPI {
 }
 
 export interface PierWorkspaceAPI {
-  clearLayout: () => Promise<void>;
-  loadLayout: () => Promise<unknown | null>;
-  saveLayout: (layout: unknown) => Promise<void>;
+  clearLayout: (recordId: string) => Promise<void>;
+  loadLayout: (recordId: string) => Promise<unknown | null>;
+  saveLayout: (layout: unknown, recordId: string) => Promise<void>;
 }
 
 export interface PierRendererCommandAPI {
@@ -92,8 +97,9 @@ export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
   commandPaletteMru: PierCommandPaletteMruAPI;
-  createWindow: () => Promise<{ windowId: string }>;
+  createWindow: () => Promise<WindowCreateResult>;
   focusWindow: (windowId: string) => Promise<void>;
+  getWindowContext: () => Promise<WindowContext>;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
@@ -145,6 +151,8 @@ const terminalApi: TerminalAPI = {
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
+  readSession: (panelId) =>
+    ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setFont: (panelId, font) =>
@@ -164,10 +172,12 @@ const themeApi: PierThemeAPI = {
 };
 
 const workspaceApi: PierWorkspaceAPI = {
-  clearLayout: () => ipcRenderer.invoke("pier:workspace:clear-layout"),
-  loadLayout: () => ipcRenderer.invoke("pier:workspace:load-layout"),
-  saveLayout: (layout) =>
-    ipcRenderer.invoke("pier:workspace:save-layout", layout),
+  clearLayout: (recordId) =>
+    ipcRenderer.invoke("pier:workspace:clear-layout", recordId),
+  loadLayout: (recordId) =>
+    ipcRenderer.invoke("pier:workspace:load-layout", recordId),
+  saveLayout: (layout, recordId) =>
+    ipcRenderer.invoke("pier:workspace:save-layout", layout, recordId),
 };
 
 const rendererCommandApi: PierRendererCommandAPI = {
@@ -209,6 +219,7 @@ const api: PierWindowAPI = {
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:focus", windowId),
+  getWindowContext: () => ipcRenderer.invoke("pier://window:context"),
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
   menu: menuApi,

@@ -31,6 +31,22 @@ const SET_ACTIVE_PANEL_KIND_FOR_WEB_NULL_RE =
 
 const RECONCILE_CALL_RE =
   /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\)/;
+const READS_WINDOW_CONTEXT_RE = /window\.pier\.getWindowContext\(\)/;
+const SAVES_LAYOUT_BY_WINDOW_RECORD_RE =
+  /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
+const LOADS_LAYOUT_BY_WINDOW_RECORD_RE =
+  /window\.pier\.workspace\.loadLayout\(\s*windowContext\.recordId\s*\)/;
+const FRESH_MODE_SKIP_RE = /windowContext\.mode !== "fresh"/;
+const FLUSH_LAYOUT_COMMAND_RE = /case "workspace\.flushLayout"/;
+const FLUSH_SAVES_CURRENT_LAYOUT_RE =
+  /window\.pier\.workspace[\s\S]{0,80}?\.saveLayout\(\s*event\.api\.toJSON\(\),\s*windowContext\.recordId\s*\)/;
+const WRITABLE_MAIN_FALLBACK_RE = /recordId: "main"/;
+const WINDOW_CONTEXT_PROMISE_RE =
+  /const windowContextPromise = window\.pier\.getWindowContext\(\)/;
+const AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE =
+  /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
+const FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE =
+  /if \(event\.api\.totalPanels === 0\)[\s\S]{0,160}?\.clearLayout\(windowContext\.recordId\)/;
 
 describe("workspace-host invariants (#17 #19)", () => {
   it("declares userTouched flag and uses it to gate fromJSON (防 user 操作被 saved layout 覆盖)", () => {
@@ -65,5 +81,41 @@ describe("workspace-host invariants (#17 #19)", () => {
     // C 方案 reload 零销毁:layout 应用后报告"我现在还需要这些 panelId", swift 把
     // 不在集合的孤儿清掉. 缺这条 reload 后旧 NSView 永久挂在 contentView.subviews.
     expect(SOURCE).toMatch(RECONCILE_CALL_RE);
+  });
+
+  it("loads persisted layout from the current durable window record", () => {
+    // Cmd+N 是新建新 record, 所以首次自然为空; 同一 record 后续 reload / restore
+    // 仍必须能读回自己的 layout, 不能用 fresh mode 永久跳过恢复.
+    expect(SOURCE).toMatch(READS_WINDOW_CONTEXT_RE);
+    expect(SOURCE).toMatch(LOADS_LAYOUT_BY_WINDOW_RECORD_RE);
+    expect(SOURCE).not.toMatch(FRESH_MODE_SKIP_RE);
+  });
+
+  it("persists and restores layouts by durable window record", () => {
+    // 新窗口不继承旧窗口, 但它自己的 layout 仍要能在 Cmd+Q 或重新激活后恢复.
+    // 因此读写都必须带 window record scope, 不能再写全局 workspace-layout.json.
+    expect(SOURCE).toMatch(SAVES_LAYOUT_BY_WINDOW_RECORD_RE);
+    expect(SOURCE).toMatch(LOADS_LAYOUT_BY_WINDOW_RECORD_RE);
+  });
+
+  it("does not use main as a writable fallback before window context resolves", () => {
+    // 二号窗口刚 ready 但 getWindowContext 尚未返回时, close/Cmd+Q flush
+    // 不能把该窗口布局写进 main record.
+    expect(SOURCE).toMatch(WINDOW_CONTEXT_PROMISE_RE);
+    expect(SOURCE).toMatch(AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE);
+    expect(SOURCE).not.toMatch(WRITABLE_MAIN_FALLBACK_RE);
+  });
+
+  it("handles renderer flushLayout command by saving the current dockview layout", () => {
+    // window close / Cmd+Q 不能等 debounced save, main 会请求 renderer 立刻把
+    // 当前 dockview 布局写入当前 window record.
+    expect(SOURCE).toMatch(FLUSH_LAYOUT_COMMAND_RE);
+    expect(SOURCE).toMatch(FLUSH_SAVES_CURRENT_LAYOUT_RE);
+  });
+
+  it("keeps closeAll from re-saving an empty dockview layout", () => {
+    // closeAll 会先清 record layout 再关闭窗口; close-before-flush 看到 0 panels
+    // 时必须保持 cleared state, 不能把空 dockview JSON 写回 record.
+    expect(SOURCE).toMatch(FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE);
   });
 });

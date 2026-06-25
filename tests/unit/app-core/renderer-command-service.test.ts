@@ -65,6 +65,37 @@ describe("createRendererCommandService", () => {
     });
   });
 
+  it("flush layout command 不主动聚焦窗口", async () => {
+    let focus: boolean | undefined;
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-flush",
+      host: {
+        send(_envelope, _windowId, options) {
+          focus = options?.focus;
+          return true;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({
+      type: "workspace.flushLayout",
+      windowId: "main",
+    });
+    expect(focus).toBe(false);
+    service.resolve({
+      data: null,
+      ok: true,
+      requestId: "renderer-req-flush",
+    });
+
+    await expect(promise).resolves.toEqual({
+      data: null,
+      ok: true,
+      requestId: "renderer-req-flush",
+    });
+  });
+
   it("显式 focus=false 时不主动聚焦窗口", async () => {
     let focus: boolean | undefined;
     const service = createRendererCommandService({

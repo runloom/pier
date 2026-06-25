@@ -4,6 +4,7 @@ import type { ProjectPreferences } from "./preferences.ts";
 export interface WindowInfo {
   focused: boolean;
   id: string;
+  recordId: string;
 }
 
 export interface PanelSnapshot {

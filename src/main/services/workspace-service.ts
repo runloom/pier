@@ -5,15 +5,15 @@ import {
 } from "../state/workspace-layout.ts";
 
 export interface WorkspaceService {
-  clearLayout(): Promise<void>;
-  readLayout(): Promise<unknown | null>;
-  saveLayout(layout: unknown): Promise<void>;
+  clearLayout(recordId: string): Promise<void>;
+  readLayout(recordId: string): Promise<unknown | null>;
+  saveLayout(layout: unknown, recordId: string): Promise<void>;
 }
 
 export function createWorkspaceService(): WorkspaceService {
   return {
-    clearLayout: () => clearLayoutState(),
-    readLayout: () => readLayoutState(),
-    saveLayout: (layout) => saveLayoutState(layout),
+    clearLayout: (recordId) => clearLayoutState(recordId),
+    readLayout: (recordId) => readLayoutState(recordId),
+    saveLayout: (layout, recordId) => saveLayoutState(layout, recordId),
   };
 }

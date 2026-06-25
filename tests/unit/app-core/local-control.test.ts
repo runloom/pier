@@ -69,7 +69,7 @@ describe("local control socket", () => {
         const parsed = pierCommandEnvelopeSchema.parse(envelope);
         seen.push(parsed);
         return Promise.resolve({
-          data: [{ focused: true, id: "main" }],
+          data: [{ focused: true, id: "main", recordId: "record-main" }],
           ok: true,
           requestId: parsed.requestId,
         });
@@ -88,7 +88,7 @@ describe("local control socket", () => {
         requestId: "req-1",
       })
     ).resolves.toEqual({
-      data: [{ focused: true, id: "main" }],
+      data: [{ focused: true, id: "main", recordId: "record-main" }],
       ok: true,
       requestId: "req-1",
     });

@@ -25,12 +25,19 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("preferences.update"),
     patch: projectPreferencesPatchSchema,
   }),
-  z.object({ type: z.literal("workspace.layout.read") }),
   z.object({
-    type: z.literal("workspace.layout.save"),
-    layout: z.unknown(),
+    recordId: z.string().min(1),
+    type: z.literal("workspace.layout.read"),
   }),
-  z.object({ type: z.literal("workspace.layout.clear") }),
+  z.object({
+    layout: z.unknown(),
+    recordId: z.string().min(1),
+    type: z.literal("workspace.layout.save"),
+  }),
+  z.object({
+    recordId: z.string().min(1),
+    type: z.literal("workspace.layout.clear"),
+  }),
   z.object({
     type: z.literal("workspace.open"),
     focus: z.boolean().optional(),

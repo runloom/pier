@@ -46,6 +46,7 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
       return command.focus ?? true;
     case "panel.list":
     case "terminal.list":
+    case "workspace.flushLayout":
       return false;
     default: {
       const _exhaustive: never = command;

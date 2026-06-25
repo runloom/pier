@@ -25,6 +25,7 @@ class TestResizeObserver {
 }
 
 interface TestPanelProps extends IDockviewPanelProps {
+  emitActive(event: { isActive: boolean }): void;
   emitDimensions(event: { height: number; width: number }): void;
   emitGroupChange(): void;
   emitVisibility(event: { isVisible: boolean }): void;
@@ -33,7 +34,7 @@ interface TestPanelProps extends IDockviewPanelProps {
 function createPanelProps(
   options: { isActive?: boolean; isVisible?: boolean } = {}
 ): TestPanelProps {
-  let isActive = options.isActive ?? false;
+  let isActive = options.isActive ?? true;
   let isVisible = options.isVisible ?? true;
   let onDidActiveChange: ((event: { isActive: boolean }) => void) | null = null;
   let onDidDimensionsChange:
@@ -161,6 +162,7 @@ describe("TerminalPanel lifecycle", () => {
           onContextMenuRequest: vi.fn(() => vi.fn()),
           onCwdChange: vi.fn(() => vi.fn()),
           onTitleChange: vi.fn(() => vi.fn()),
+          readSession: vi.fn(async () => null),
           setFont: vi.fn(),
           setFrame: vi.fn(),
           show: vi.fn(),
@@ -189,6 +191,43 @@ describe("TerminalPanel lifecycle", () => {
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
   });
 
+  it("restores the saved tab descriptor before creating a hidden native terminal", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      cwd: "/Users/xyz/ABC/pier",
+      title: "Claude Code",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+    const props = createPanelProps({ isActive: false, isVisible: false });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(props.api.setTitle).toHaveBeenCalledWith("pier");
+    });
+    expect(props.api.setTitle).not.toHaveBeenCalledWith("Terminal");
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
+
+    props.emitVisibility({ isVisible: true });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+  });
+
+  it("creates a native terminal for a newly active terminal panel before visibility settles", async () => {
+    const props = createPanelProps({ isActive: true, isVisible: false });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+  });
+
   it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {
     const props = createPanelProps();
 
@@ -198,6 +237,9 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({ panelId: "terminal-1" })
       );
+    });
+    await waitFor(() => {
+      expect(TestResizeObserver.observeCount).toBe(1);
     });
     vi.mocked(window.pier.terminal.setFrame).mockClear();
 
@@ -214,8 +256,6 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
-    expect(TestResizeObserver.observeCount).toBe(1);
-
     vi.mocked(window.pier.terminal.setFrame).mockClear();
     anchorFrame = {
       height: 340,
@@ -283,8 +323,10 @@ describe("TerminalPanel lifecycle", () => {
     props.emitVisibility({ isVisible: false });
     props.emitVisibility({ isVisible: true });
 
-    expect(window.pier.terminal.show).toHaveBeenCalledWith("terminal-1");
-    expect(window.pier.terminal.focus).toHaveBeenCalledWith("terminal-1");
+    await waitFor(() => {
+      expect(window.pier.terminal.show).toHaveBeenCalledWith("terminal-1");
+      expect(window.pier.terminal.focus).toHaveBeenCalledWith("terminal-1");
+    });
   });
 
   it("refocuses an active native terminal when dockview moves it to another group", async () => {
@@ -300,7 +342,9 @@ describe("TerminalPanel lifecycle", () => {
 
     props.emitGroupChange();
 
-    expect(window.pier.terminal.focus).toHaveBeenCalledWith("terminal-1");
+    await waitFor(() => {
+      expect(window.pier.terminal.focus).toHaveBeenCalledWith("terminal-1");
+    });
   });
 
   it("does not focus a terminal that becomes visible while inactive", async () => {
@@ -317,7 +361,9 @@ describe("TerminalPanel lifecycle", () => {
     props.emitVisibility({ isVisible: false });
     props.emitVisibility({ isVisible: true });
 
-    expect(window.pier.terminal.show).toHaveBeenCalledWith("terminal-1");
+    await waitFor(() => {
+      expect(window.pier.terminal.show).toHaveBeenCalledWith("terminal-1");
+    });
     expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 

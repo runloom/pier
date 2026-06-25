@@ -14,12 +14,14 @@ import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
   updateTerminalPanelCwd,
+  updateTerminalPanelTitle,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
   findAppWindowByWebContents,
   findInternalWindowId,
+  findWindowSessionId,
 } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 
@@ -47,6 +49,10 @@ function rememberActivePanelFocus(
 
 function stableWindowIdFor(win: AppWindow): string {
   return findInternalWindowId(win) ?? `window-${win.id}`;
+}
+
+function terminalSessionScopeFor(win: AppWindow): string {
+  return findWindowSessionId(win) ?? stableWindowIdFor(win);
 }
 
 /**
@@ -217,8 +223,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const rawPanelId = unscopePanelId(panelId);
     const targetWindow = findAppWindowByElectronId(id);
     if (targetWindow && !targetWindow.isDestroyed()) {
-      const windowId = stableWindowIdFor(targetWindow);
-      updateTerminalPanelCwd(windowId, rawPanelId, cwd).catch((err) => {
+      const sessionScope = terminalSessionScopeFor(targetWindow);
+      updateTerminalPanelCwd(sessionScope, rawPanelId, cwd).catch((err) => {
         console.error("[pier-cwd-persist] failed:", err);
       });
     }
@@ -230,10 +236,18 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     );
   });
   addon?.setTitleForwardCallback((id, panelId, title) => {
+    const rawPanelId = unscopePanelId(panelId);
+    const targetWindow = findAppWindowByElectronId(id);
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      const sessionScope = terminalSessionScopeFor(targetWindow);
+      updateTerminalPanelTitle(sessionScope, rawPanelId, title).catch((err) => {
+        console.error("[pier-title-persist] failed:", err);
+      });
+    }
     forwardToWindow(
       id,
       "pier:terminal:title-change",
-      { panelId: unscopePanelId(panelId), title },
+      { panelId: rawPanelId, title },
       "pier-title-forward"
     );
   });
@@ -269,8 +283,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
       try {
         const handle = win.getNativeWindowHandle();
-        const windowId = stableWindowIdFor(win);
-        const saved = await readTerminalPanelSession(windowId, args.panelId);
+        const sessionScope = terminalSessionScopeFor(win);
+        const saved = await readTerminalPanelSession(
+          sessionScope,
+          args.panelId
+        );
         const cwd = args.cwd ?? saved?.cwd;
         const ok = addon.createTerminal(
           handle,
@@ -289,6 +306,20 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           error: e instanceof Error ? e.message : String(e),
         };
       }
+    }
+  );
+
+  ipcMain.handle(
+    "pier:terminal:read-session",
+    async (event, panelId: string) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return null;
+      }
+      return await readTerminalPanelSession(
+        terminalSessionScopeFor(win),
+        panelId
+      );
     }
   );
 
@@ -320,8 +351,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   ipcMain.on("pier:terminal:close", (event, panelId: string) => {
     const win = windowFromWebContents(event.sender);
     if (win) {
-      const windowId = stableWindowIdFor(win);
-      removeTerminalPanelSession(windowId, panelId).catch((err) => {
+      const sessionScope = terminalSessionScopeFor(win);
+      removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
         console.error("[pier-cwd-remove] failed:", err);
       });
       addon?.closeTerminal(scopePanelId(win, panelId));

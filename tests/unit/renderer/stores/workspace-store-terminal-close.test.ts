@@ -51,8 +51,15 @@ describe("workspace terminal close lifecycle", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        terminal: { close: vi.fn() },
+        closeCurrentWindow: vi.fn(async () => undefined),
+        getWindowContext: vi.fn(async () => ({
+          mode: "restore",
+          recordId: "record-current",
+          sessionId: "record-current",
+          windowId: "main",
+        })),
         workspace: { clearLayout: vi.fn(async () => undefined) },
+        terminal: { close: vi.fn() },
       },
     });
     useWorkspaceStore.getState().setApi(null);
@@ -68,6 +75,19 @@ describe("workspace terminal close lifecycle", () => {
 
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
     expect(api.removePanel).toHaveBeenCalledWith(panel);
+  });
+
+  it("Cmd+W closes the active terminal panel when more than one panel exists", () => {
+    const panel = terminalPanel("terminal-1");
+    const api = createApi([panel, webPanel("welcome-1")]);
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().closeActivePanel();
+
+    expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
+    expect(api.removePanel).toHaveBeenCalledWith(panel);
+    expect(closeCurrentWindowMock).not.toHaveBeenCalled();
   });
 
   it("does not close a native terminal when a web panel is explicitly closed", () => {
@@ -93,6 +113,24 @@ describe("workspace terminal close lifecycle", () => {
 
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
     expect(api.removePanel).toHaveBeenCalledWith(terminal);
+  });
+
+  it("Cmd+W closes the current window instead of removing the last panel", () => {
+    const panel = terminalPanel("terminal-1");
+    const api = {
+      activePanel: panel,
+      panels: [panel],
+      removePanel: vi.fn(),
+      totalPanels: 1,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().closeActivePanel();
+
+    expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
+    expect(window.pier.terminal.close).not.toHaveBeenCalled();
+    expect(api.removePanel).not.toHaveBeenCalled();
   });
 
   it("closes only terminal panels removed by closeOthers", () => {
@@ -121,7 +159,10 @@ describe("workspace terminal close lifecycle", () => {
 
     await useWorkspaceStore.getState().closeAll();
 
-    expect(window.pier.workspace.clearLayout).toHaveBeenCalledOnce();
+    expect(window.pier.getWindowContext).toHaveBeenCalled();
+    expect(window.pier.workspace.clearLayout).toHaveBeenCalledWith(
+      "record-current"
+    );
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
     expect(api.removePanel).toHaveBeenCalledWith(terminal);
     expect(api.removePanel).toHaveBeenCalledWith(web);
@@ -140,7 +181,10 @@ describe("workspace terminal close lifecycle", () => {
 
     await useWorkspaceStore.getState().resetLayout();
 
-    expect(window.pier.workspace.clearLayout).toHaveBeenCalledOnce();
+    expect(window.pier.getWindowContext).toHaveBeenCalled();
+    expect(window.pier.workspace.clearLayout).toHaveBeenCalledWith(
+      "record-current"
+    );
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-old");
     expect(api.removePanel).toHaveBeenCalledWith(oldTerminal);
     expect(api.removePanel).toHaveBeenCalledWith(web);

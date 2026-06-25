@@ -8,10 +8,23 @@
 import { PIER } from "@shared/ipc-channels.ts";
 import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
+import { findWindowContext } from "../windows/window-identity.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
 export function registerWindowIpc(ipcMain: IpcMain): void {
   ipcMain.handle(PIER.WINDOW_CREATE, () => appCore.services.window.create());
+
+  ipcMain.handle(PIER.WINDOW_CONTEXT, (event) => {
+    const win = windowManager.fromWebContents(event.sender);
+    if (!win) {
+      throw new Error("window not found");
+    }
+    const context = findWindowContext(win);
+    if (!context) {
+      throw new Error("window context not found");
+    }
+    return context;
+  });
 
   ipcMain.handle(PIER.WINDOW_LIST, () => appCore.services.window.list());
 
