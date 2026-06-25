@@ -1,5 +1,6 @@
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
+import { SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
@@ -296,3 +297,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     </div>
   );
 }
+
+export const terminalPanelKit = {
+  component: TerminalPanel,
+  icon: SquareTerminal,
+  kind: "terminal",
+} as const;
