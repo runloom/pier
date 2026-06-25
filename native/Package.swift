@@ -29,7 +29,10 @@ let package = Package(
         ),
         .testTarget(
             name: "GhosttyBridgeTests",
-            dependencies: ["GhosttyBridge"]
+            dependencies: [
+                "GhosttyBridge",
+                .product(name: "GhosttyTerminal", package: "libghostty-spm"),
+            ]
         ),
     ]
 )

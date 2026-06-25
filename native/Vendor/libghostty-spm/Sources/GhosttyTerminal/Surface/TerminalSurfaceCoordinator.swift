@@ -227,6 +227,11 @@ final class TerminalSurfaceCoordinator {
         }
     }
 
+    func resizeAndRenderSynchronously() {
+        synchronizeMetrics()
+        renderImmediately()
+    }
+
     func setDisplayVisible(_ visible: Bool) {
         guard isDisplayVisible != visible else {
             surface?.setOcclusion(effectiveSurfaceVisible)

@@ -8,6 +8,7 @@ import {
 import { useCallback } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
+import { flushTerminalLayoutFramesTrailing } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -204,6 +205,7 @@ export function WorkspaceHost() {
           return; // program-driven, 不算 user touched
         }
         userTouched = true;
+        flushTerminalLayoutFramesTrailing("dockview-layout");
         if (saveTimer) {
           clearTimeout(saveTimer);
         }
@@ -218,6 +220,10 @@ export function WorkspaceHost() {
             console.error("[workspace] toJSON failed:", err);
           }
         }, SAVE_DEBOUNCE_MS);
+      });
+
+      event.api.onDidMaximizedGroupChange(() => {
+        flushTerminalLayoutFramesTrailing("dockview-maximize");
       });
 
       // Active panel 变化 (含同 group 切 tab, panel 创建/删除导致 active 切换) →

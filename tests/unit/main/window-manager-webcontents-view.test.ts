@@ -184,5 +184,26 @@ describe.runIf(process.platform === "darwin")(
       }).not.toThrow();
       expect(findAppWindowByElectronId(42)).toBeNull();
     });
+
+    it("notifies the renderer after native window geometry changes", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main" });
+      electronMock.webContents.send.mockClear();
+
+      electronMock.hostListeners.get("resize")?.();
+      electronMock.hostListeners.get("maximize")?.();
+      electronMock.hostListeners.get("unmaximize")?.();
+
+      expect(electronMock.webContents.send).toHaveBeenCalledWith(
+        "pier:window:layout-pulse",
+        { reason: "resize" }
+      );
+      expect(electronMock.webContents.send).toHaveBeenCalledWith(
+        "pier:window:layout-pulse",
+        { reason: "zoom" }
+      );
+      expect(electronMock.webContents.send).toHaveBeenCalledTimes(3);
+    });
   }
 );

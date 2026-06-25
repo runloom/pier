@@ -168,6 +168,11 @@
             core.fitToSize()
         }
 
+        public func flushHostResizeFrame() {
+            updateMetalLayerMetrics()
+            core.resizeAndRenderSynchronously()
+        }
+
         func updateMetalLayerMetrics() {
             guard bounds.width > 0, bounds.height > 0 else { return }
             let scale = core.scaleFactor()

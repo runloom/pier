@@ -5,12 +5,22 @@ import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 
 class TestResizeObserver {
   static observeCount = 0;
+  static instances: TestResizeObserver[] = [];
+  private readonly cb: ResizeObserverCallback;
+
+  constructor(cb: ResizeObserverCallback) {
+    this.cb = cb;
+    TestResizeObserver.instances.push(this);
+  }
 
   observe() {
     TestResizeObserver.observeCount += 1;
   }
   disconnect() {
     // Test no-op.
+  }
+  emit() {
+    this.cb([], this as unknown as ResizeObserver);
   }
 }
 
@@ -48,9 +58,26 @@ function createPanelProps(): TestPanelProps {
 describe("TerminalPanel lifecycle", () => {
   const originalGetBoundingClientRect =
     HTMLElement.prototype.getBoundingClientRect;
+  let anchorFrame = {
+    height: 300,
+    width: 400,
+    x: 10,
+    y: 20,
+  };
+  let emitWindowLayoutPulse:
+    | ((pulse: { reason: "resize" | "zoom" }) => void)
+    | null = null;
 
   beforeEach(() => {
+    anchorFrame = {
+      height: 300,
+      width: 400,
+      x: 10,
+      y: 20,
+    };
+    emitWindowLayoutPulse = null;
     TestResizeObserver.observeCount = 0;
+    TestResizeObserver.instances = [];
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 0)
@@ -62,14 +89,14 @@ describe("TerminalPanel lifecycle", () => {
     HTMLElement.prototype.getBoundingClientRect = function () {
       if (this.classList.contains("terminal-anchor")) {
         return {
-          bottom: 320,
-          height: 300,
-          left: 10,
-          right: 410,
-          top: 20,
-          width: 400,
-          x: 10,
-          y: 20,
+          bottom: anchorFrame.y + anchorFrame.height,
+          height: anchorFrame.height,
+          left: anchorFrame.x,
+          right: anchorFrame.x + anchorFrame.width,
+          top: anchorFrame.y,
+          width: anchorFrame.width,
+          x: anchorFrame.x,
+          y: anchorFrame.y,
           toJSON: () => null,
         } as DOMRect;
       }
@@ -79,6 +106,12 @@ describe("TerminalPanel lifecycle", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
+        onWindowLayoutPulse: vi.fn(
+          (cb: (pulse: { reason: "resize" | "zoom" }) => void) => {
+            emitWindowLayoutPulse = cb;
+            return vi.fn();
+          }
+        ),
         terminal: {
           close: vi.fn(),
           create: vi.fn(async () => ({ ok: true })),
@@ -115,7 +148,7 @@ describe("TerminalPanel lifecycle", () => {
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
   });
 
-  it("uses dockview dimension events instead of ResizeObserver for terminal frame updates", async () => {
+  it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {
     const props = createPanelProps();
 
     render(<TerminalPanel {...props} />);
@@ -140,6 +173,58 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
-    expect(TestResizeObserver.observeCount).toBe(0);
+    expect(TestResizeObserver.observeCount).toBe(1);
+
+    vi.mocked(window.pier.terminal.setFrame).mockClear();
+    anchorFrame = {
+      height: 340,
+      width: 460,
+      x: 10,
+      y: 20,
+    };
+    TestResizeObserver.instances[0]?.emit();
+
+    await waitFor(() => {
+      expect(window.pier.terminal.setFrame).toHaveBeenCalledWith(
+        "terminal-1",
+        expect.objectContaining({
+          height: 340,
+          width: 460,
+          x: 10,
+          y: 20,
+        })
+      );
+    });
+  });
+
+  it("sends a trailing native frame after window layout pulses settle", async () => {
+    render(<TerminalPanel {...createPanelProps()} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    vi.mocked(window.pier.terminal.setFrame).mockClear();
+
+    emitWindowLayoutPulse?.({ reason: "zoom" });
+    anchorFrame = {
+      height: 620,
+      width: 900,
+      x: 10,
+      y: 20,
+    };
+
+    await waitFor(() => {
+      expect(window.pier.terminal.setFrame).toHaveBeenCalledWith(
+        "terminal-1",
+        expect.objectContaining({
+          height: 620,
+          width: 900,
+          x: 10,
+          y: 20,
+        })
+      );
+    });
   });
 });

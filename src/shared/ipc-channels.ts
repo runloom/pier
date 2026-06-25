@@ -14,6 +14,8 @@ export const PIER = {
 } as const;
 
 export const PIER_BROADCAST = {
+  // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
+  WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // macOS 原生全屏进出 (main → renderer, payload { isFullscreen }).
   WINDOW_FULLSCREEN_CHANGED: "pier://window:fullscreen-changed",
 } as const;

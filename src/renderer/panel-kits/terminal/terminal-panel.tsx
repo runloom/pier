@@ -1,24 +1,20 @@
-import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
-
-function getAnchorFrame(anchor: HTMLDivElement): TerminalFrame | null {
-  const r = anchor.getBoundingClientRect();
-  if (r.width < 10 || r.height < 10) {
-    return null;
-  }
-  return { x: r.x, y: r.y, width: r.width, height: r.height };
-}
+import {
+  readTerminalAnchorFrame,
+  registerTerminalLayoutAnchor,
+  type TerminalLayoutRegistration,
+} from "./terminal-layout-coordinator.ts";
 
 function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
   return new Promise((resolve) => {
     const check = () => {
-      const r = anchor.getBoundingClientRect();
-      if (r.width > 100 && r.height > 100) {
+      const frame = readTerminalAnchorFrame(anchor);
+      if (frame && frame.width > 100 && frame.height > 100) {
         resolve();
         return;
       }
@@ -87,22 +83,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
     let disposed = false;
     const subscriptions: Array<{ dispose(): void }> = [];
-    let lastFrame = "";
+    let layoutRegistration: TerminalLayoutRegistration | null = null;
 
     const sendFrameNow = () => {
       if (disposed) {
         return;
       }
-      const frame = getAnchorFrame(anchor);
-      if (!frame) {
-        return;
-      }
-      const key = `${frame.x},${frame.y},${frame.width},${frame.height}`;
-      if (key === lastFrame) {
-        return;
-      }
-      lastFrame = key;
-      window.pier.terminal.setFrame(panelId, frame);
+      layoutRegistration?.flushNow("dockview-dimensions");
     };
 
     const init = async () => {
@@ -111,7 +98,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         return;
       }
 
-      const frame = getAnchorFrame(anchor);
+      const frame = readTerminalAnchorFrame(anchor);
       if (!frame) {
         setError("无法获取面板坐标");
         return;
@@ -130,11 +117,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         return;
       }
 
+      layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
+
       subscriptions.push(
         api.onDidVisibilityChange((e) => {
           if (e.isVisible) {
-            lastFrame = ""; // 强制重发 frame, 终端可能在 offscreen
-            sendFrameNow();
+            layoutRegistration?.flushTrailing("visibility");
             window.pier.terminal.show(panelId);
           } else {
             requestAnimationFrame(() => {
@@ -157,12 +145,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       );
 
       subscriptions.push(api.onDidDimensionsChange(sendFrameNow));
-
-      const onWindowResize = () => sendFrameNow();
-      window.addEventListener("resize", onWindowResize);
-      subscriptions.push({
-        dispose: () => window.removeEventListener("resize", onWindowResize),
-      });
     };
 
     init();
@@ -172,6 +154,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       for (const s of subscriptions) {
         s.dispose();
       }
+      layoutRegistration?.dispose();
     };
   }, [api, panelId]);
 
