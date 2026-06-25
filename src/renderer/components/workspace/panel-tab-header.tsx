@@ -18,9 +18,11 @@ import { X } from "lucide-react";
 import { type MouseEvent, useCallback, useEffect, useState } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { panelIconOf } from "./panel-registry.ts";
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const [title, setTitle] = useState<string>(props.api.title ?? "");
+  const Icon = panelIconOf(props.api.component);
   useEffect(() => {
     // dockview onDidTitleChange fire 时把新 title 写入 state, 触发 tab 重渲.
     const disposable = props.api.onDidTitleChange((e) => {
@@ -51,6 +53,14 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       role="tab"
       tabIndex={0}
     >
+      {Icon ? (
+        <Icon
+          aria-hidden="true"
+          className="pier-panel-tab-icon shrink-0"
+          data-panel-tab-icon={props.api.component}
+          strokeWidth={2.35}
+        />
+      ) : null}
       <span className="dv-default-tab-content">{title}</span>
       <button
         aria-label="Close tab"
