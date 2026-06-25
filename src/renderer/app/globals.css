@@ -679,11 +679,11 @@ body {
   --dv-active-sash-transition-delay: 0s;
   --dv-tabs-container-scrollbar-color: var(--border);
   --dv-icon-hover-background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
-  /* drag-over 高亮 — 半透明 primary, 与下层 terminal NSView 合成出叠加效果 */
-  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 30%, transparent);
-  --dv-drag-over-border: 1.5px solid var(--primary);
-  --dv-drag-over-border-color: var(--primary);
-  --dv-floating-box-shadow: 0 8px 32px color-mix(in oklab, var(--foreground) 25%, transparent);
+  /* drag-over 高亮需轻，避免和下层 terminal NSView 合成出大块色斑。 */
+  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+  --dv-drag-over-border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
+  --dv-drag-over-border-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  --dv-floating-box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent);
   --dv-floating-border: 1px solid var(--border);
   --dv-paneview-active-outline-color: var(--ring);
 }
@@ -712,13 +712,17 @@ body {
   color: var(--foreground);
 }
 
-.dockview-theme-pier .dv-tab .dv-default-tab {
+.dockview-theme-pier .dv-tab .dv-default-tab,
+.dv-tab.dv-tab-dragging .dv-default-tab,
+.dv-tab-ghost-drag .dv-default-tab {
   box-sizing: border-box;
   gap: 6px;
   padding-inline: 8px 4px;
 }
 
-.dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content {
+.dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content,
+.dv-tab.dv-tab-dragging .dv-default-tab .dv-default-tab-content,
+.dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
   font-weight: 600;
   margin-right: 0;
   min-width: 0;
@@ -726,11 +730,69 @@ body {
   text-overflow: ellipsis;
 }
 
-.dockview-theme-pier .pier-panel-tab-icon {
+.dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
+  font-weight: 600 !important;
+}
+
+.dockview-theme-pier .pier-panel-tab-icon,
+.dv-tab.dv-tab-dragging .pier-panel-tab-icon,
+.dv-tab-ghost-drag .pier-panel-tab-icon {
   color: currentColor;
   height: 14px;
   opacity: 0.92;
   width: 14px;
+}
+
+.dv-tab-ghost-drag .pier-panel-tab-icon {
+  height: 14px !important;
+  width: 14px !important;
+}
+
+.dockview-theme-pier .dv-tab.dv-tab-dragging,
+.dv-tab.dv-tab-dragging {
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.dv-tab-ghost-drag {
+  background-color: transparent !important;
+  border-radius: 999px !important;
+  box-sizing: border-box !important;
+  color: var(--foreground) !important;
+  display: inline-flex !important;
+  height: 32px !important;
+  max-width: 220px !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  width: fit-content !important;
+}
+
+.dockview-theme-pier .dv-tab.dv-tab-dragging .dv-default-tab,
+.dv-tab.dv-tab-dragging .dv-default-tab,
+.dv-tab-ghost-drag .dv-default-tab {
+  background-color: var(--background) !important;
+  border: 1px solid color-mix(in oklab, var(--border) 72%, transparent) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent) !important;
+  height: 32px !important;
+  max-width: 220px !important;
+  overflow: hidden !important;
+  padding-inline: 10px 12px !important;
+  width: fit-content !important;
+}
+
+.dockview-theme-pier .dv-tab-ghost-drag::after,
+.dv-tab-ghost-drag::after {
+  outline: none !important;
+}
+
+.dockview-theme-pier .dv-drop-target-container .dv-drop-target-anchor,
+.dockview-theme-pier
+  .dv-drop-target
+  > .dv-drop-target-dropzone
+  > .dv-drop-target-selection {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent);
 }
 
 /* — 选中 tab 与内容区连成同一层, 避免 tab 栏底线切断层级 — */
