@@ -119,11 +119,18 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
       layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
 
+      const focusIfActive = () => {
+        if (api.isActive && api.isVisible) {
+          window.pier.terminal.focus(panelId);
+        }
+      };
+
       subscriptions.push(
         api.onDidVisibilityChange((e) => {
           if (e.isVisible) {
             layoutRegistration?.flushTrailing("visibility");
             window.pier.terminal.show(panelId);
+            focusIfActive();
           } else {
             // 直接发 hide IPC. swift hide 总是执行 (移 offscreen + remove targets),
             // 由后续 setFrame 把 NSView 移回新位置自动恢复 visible (drag 场景), 或者
@@ -133,6 +140,17 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             // 变成 hidden. 直接 hide + 不延迟最干净.
             window.pier.terminal.hide(panelId);
           }
+        })
+      );
+
+      subscriptions.push(
+        api.onDidGroupChange(() => {
+          if (!(api.isActive && api.isVisible)) {
+            return;
+          }
+          layoutRegistration?.flushTrailing("dockview-layout");
+          window.pier.terminal.show(panelId);
+          window.pier.terminal.focus(panelId);
         })
       );
 
