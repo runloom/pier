@@ -258,7 +258,7 @@ final class EventRouterView: NSView {
     private func routeRightMouseDown(_ event: NSEvent) -> NSEvent? {
         guard let window = ownerWindow, event.window === window else { return event }
         let state = GhosttyBridgeImpl.shared.stateFor(window: window)
-        guard state.overlayCount == 0 else { return event }
+        guard !state.overlayActive else { return event }
         // 把 window 坐标转 EventRouterView 局部坐标 (与 hitTest 同套坐标变换);
         // EventRouterView.isFlipped=true 让 local 坐标系是 top-left origin, 跟 Electron
         // BrowserWindow contentView 一致, 可直接给 main 做 Menu.popup({x,y}).
@@ -349,6 +349,15 @@ private struct Terminal {
     let eventDelegate: TerminalEventDelegate
 }
 
+private struct TerminalRuntimePreferences {
+    var fontFamily: String = ""
+    var fontSize: Float = 0
+    var cursorStyle: TerminalCursorStyle = .block
+    var cursorBlink: Bool = true
+    var scrollbackLimitBytes: UInt64 = 64_000_000
+    var pasteProtection: Bool = true
+}
+
 struct TerminalLiveResizePredictor {
     private static let edgeTolerance: CGFloat = 1
     private static let edgeBleed: CGFloat = 2
@@ -427,6 +436,7 @@ final class GhosttyBridgeImpl {
     /// 旧 controller 内 session/PTY 列表跨 window 累积 (singleton 不会随 window
     /// 销毁而清理).
     private var controllers: [ObjectIdentifier: TerminalController] = [:]
+    private var terminalRuntimePreferences: [ObjectIdentifier: TerminalRuntimePreferences] = [:]
     private var activePanelId: String?
 
     // MARK: - Keyboard state
@@ -441,10 +451,10 @@ final class GhosttyBridgeImpl {
     struct WindowKeyboardState {
         var activePanelKind: PanelKind = .web   // boot 默认 web (terminal 未必存在)
         var activeTerminalPanelId: String?
-        var overlayCount: Int = 0
+        var overlayActive = false
 
         var inTerminalMode: Bool {
-            activePanelKind == .terminal && overlayCount == 0
+            activePanelKind == .terminal && !overlayActive
         }
     }
 
@@ -469,11 +479,47 @@ final class GhosttyBridgeImpl {
     private func controller(for window: NSWindow) -> TerminalController {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }
-        let c = TerminalController { builder in
-            Self.configureDefaultTerminalAppearance(&builder)
-        }
+        let c = TerminalController(
+            configuration: Self.terminalConfiguration(
+                from: terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
+            )
+        )
         controllers[windowId] = c
         return c
+    }
+
+    private static func terminalConfiguration(
+        from preferences: TerminalRuntimePreferences
+    ) -> TerminalConfiguration {
+        TerminalConfiguration { builder in
+            configureDefaultTerminalAppearance(&builder)
+            if !preferences.fontFamily.isEmpty {
+                builder.withFontFamily(preferences.fontFamily)
+            }
+            if preferences.fontSize > 0 {
+                builder.withFontSize(preferences.fontSize)
+            }
+            builder.withCursorStyle(preferences.cursorStyle)
+            builder.withCursorStyleBlink(preferences.cursorBlink)
+            builder.withCustom("scrollback-limit", "\(preferences.scrollbackLimitBytes)")
+            builder.withCustom(
+                "clipboard-paste-protection",
+                preferences.pasteProtection ? "true" : "false"
+            )
+        }
+    }
+
+    private func mutateTerminalRuntimePreferences(
+        window: NSWindow,
+        _ mutate: (inout TerminalRuntimePreferences) -> Void
+    ) {
+        let windowId = ObjectIdentifier(window)
+        var preferences = terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
+        mutate(&preferences)
+        terminalRuntimePreferences[windowId] = preferences
+        controller(for: window).setTerminalConfiguration(
+            Self.terminalConfiguration(from: preferences)
+        )
     }
 
     private func rememberLayout(
@@ -646,7 +692,7 @@ final class GhosttyBridgeImpl {
     // MARK: - Overlay control (PIER: new API)
 
     /// Per-window overlay state — 修复 v1 全局污染 bug (window-A 打开命令面板会让 window-B
-    /// overlayCount 也 +1). 调用方 (main IPC handler) 必须传明确的 NSWindow.
+    /// overlay 状态被污染). 调用方 (main IPC handler) 必须传明确的 NSWindow.
     func setOverlayActive(window: NSWindow, _ active: Bool) {
         let windowId = ObjectIdentifier(window)
         guard let router = eventRouters[windowId] else { return }
@@ -655,8 +701,7 @@ final class GhosttyBridgeImpl {
         router.isHidden = active
 
         mutateState(window) { state in
-            state.overlayCount += active ? 1 : -1
-            if state.overlayCount < 0 { state.overlayCount = 0 }  // defensive
+            state.overlayActive = active
         }
         applyFirstResponder(for: window)
     }
@@ -794,7 +839,11 @@ final class GhosttyBridgeImpl {
                     nativeFrame: frame
                 )
 
-                applyFontToController(parent: parent, family: fontFamily, size: fontSize)
+                applyFontConfig(
+                    window: parent,
+                    fontFamily: fontFamily,
+                    fontSize: fontSize
+                )
 
                 let windowId = ObjectIdentifier(parent)
                 eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
@@ -824,7 +873,11 @@ final class GhosttyBridgeImpl {
         // (ghostty_app_update_config 会推到 controller 下所有 surface). 实际使用中字体
         // 来自 store 单值 (monoFontFamily + monoFontSize), 每个 panel 都用同一份, 不会
         // 看到字体抖动; 但概念上要清楚: 不是 panel-local 配置.
-        applyFontToController(parent: parent, family: fontFamily, size: fontSize)
+        applyFontConfig(
+            window: parent,
+            fontFamily: fontFamily,
+            fontSize: fontSize
+        )
 
         // 挂 EventDelegate — 同时接 OSC 7 (PwdDelegate) + OSC 0/2 (TitleDelegate).
         // delegate 是 weak ref, Terminal struct strong-hold eventDelegate 保证生命周期.
@@ -1059,6 +1112,7 @@ final class GhosttyBridgeImpl {
         controllers.removeValue(forKey: windowId)
         terminalBackgrounds.removeValue(forKey: windowId)
         terminalForegrounds.removeValue(forKey: windowId)
+        terminalRuntimePreferences.removeValue(forKey: windowId)
         windowToBrowserWindowId.removeValue(forKey: windowId)
     }
 
@@ -1117,28 +1171,36 @@ final class GhosttyBridgeImpl {
         fontFamily: String,
         fontSize: Float
     ) {
-        applyFontToController(parent: window, family: fontFamily, size: fontSize)
+        mutateTerminalRuntimePreferences(window: window) { preferences in
+            preferences.fontFamily = fontFamily
+            preferences.fontSize = fontSize
+        }
     }
 
-    /// createTerminal 与 applyFontConfig 共用的实现. 每次生成一份干净配置, 避免
-    /// 字体更新时把默认外观配置反复 append 到 controller. 空 family / Float ≤ 0
-    /// 视为"只写默认外观".
-    private func applyFontToController(
-        parent: NSWindow,
-        family: String,
-        size: Float
+    func applyTerminalConfig(
+        window: NSWindow,
+        cursorStyleRaw: String,
+        cursorBlink: Bool,
+        scrollbackLimitBytes: UInt64,
+        pasteProtection: Bool
     ) {
-        let controller = controller(for: parent)
-        let newConfig = TerminalConfiguration { builder in
-            Self.configureDefaultTerminalAppearance(&builder)
-            if !family.isEmpty {
-                builder.withFontFamily(family)
-            }
-            if size > 0 {
-                builder.withFontSize(size)
-            }
+        mutateTerminalRuntimePreferences(window: window) { preferences in
+            preferences.cursorStyle = Self.cursorStyle(from: cursorStyleRaw)
+            preferences.cursorBlink = cursorBlink
+            preferences.scrollbackLimitBytes = scrollbackLimitBytes
+            preferences.pasteProtection = pasteProtection
         }
-        controller.setTerminalConfiguration(newConfig)
+    }
+
+    private static func cursorStyle(from raw: String) -> TerminalCursorStyle {
+        switch raw {
+        case "bar":
+            return .bar
+        case "underline":
+            return .underline
+        default:
+            return .block
+        }
     }
 
     /// EventRouterView.targets[panelId].rect 用的坐标系是 EventRouterView 自己 — 它
@@ -1234,6 +1296,27 @@ public func ghosttyBridgeSetFontConfig(
             window: window,
             fontFamily: fontFamily,
             fontSize: fontSize
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_set_terminal_config")
+public func ghosttyBridgeSetTerminalConfig(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ cursorStylePtr: UnsafePointer<CChar>,
+    _ cursorBlink: Bool,
+    _ scrollbackLimitBytes: Double,
+    _ pasteProtection: Bool
+) {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        let cursorStyle = String(cString: cursorStylePtr)
+        GhosttyBridgeImpl.shared.applyTerminalConfig(
+            window: window,
+            cursorStyleRaw: cursorStyle,
+            cursorBlink: cursorBlink,
+            scrollbackLimitBytes: UInt64(max(0, scrollbackLimitBytes)),
+            pasteProtection: pasteProtection
         )
     }
 }

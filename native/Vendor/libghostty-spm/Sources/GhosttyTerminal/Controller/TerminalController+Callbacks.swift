@@ -13,6 +13,38 @@ import GhosttyKit
 #endif
 
 private enum TerminalCallbacks {
+    #if canImport(AppKit)
+        static func confirmUnsafePaste(text: String) -> Bool {
+            if Thread.isMainThread {
+                return MainActor.assumeIsolated {
+                    runUnsafePasteAlert(text: text)
+                }
+            }
+            return DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    runUnsafePasteAlert(text: text)
+                }
+            }
+        }
+
+        @MainActor
+        private static func runUnsafePasteAlert(text: String) -> Bool {
+            let lineCount = TerminalInputText.lineCount(in: text)
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "确认粘贴到终端？"
+            alert.informativeText =
+                "这段内容包含 \(lineCount) 行，可能会直接执行命令。"
+            alert.addButton(withTitle: "粘贴")
+            alert.addButton(withTitle: "取消")
+            return alert.runModal() == .alertFirstButtonReturn
+        }
+    #else
+        static func confirmUnsafePaste(text _: String) -> Bool {
+            true
+        }
+    #endif
+
     static func wakeup(userdata: UnsafeMutableRawPointer?) {
         guard let userdata else { return }
         let controller = Unmanaged<TerminalController>.fromOpaque(userdata)
@@ -128,10 +160,20 @@ private enum TerminalCallbacks {
             .input,
             "clipboard paste confirm request=\(request.rawValue) bytes=\(text.utf8.count) lines=\(TerminalInputText.lineCount(in: text))"
         )
+
+        let confirmed = confirmUnsafePaste(text: text)
         text.withCString { cString in
-            ghostty_surface_complete_clipboard_request(surface, cString, opaquePtr, true)
+            ghostty_surface_complete_clipboard_request(
+                surface,
+                cString,
+                opaquePtr,
+                confirmed
+            )
         }
-        TerminalDebugLog.log(.input, "clipboard paste confirmed")
+        TerminalDebugLog.log(
+            .input,
+            confirmed ? "clipboard paste confirmed" : "clipboard paste canceled"
+        )
     }
 }
 

@@ -4,10 +4,12 @@ export const en = {
     description: "Manage application preferences",
     nav: {
       appearance: "Appearance",
+      terminal: "Terminal",
     },
     section: {
       appearance: "Appearance",
       font: "Font",
+      terminal: "Terminal",
     },
     row: {
       theme: "Theme",
@@ -25,6 +27,31 @@ export const en = {
       monoFontSize: "Monospace Size",
       monoFontSizeDesc: "Terminal font size (px), 8-32",
       monoFontSizePlaceholder: "13",
+      terminalCursorStyle: "Cursor Style",
+      terminalCursorStyleDesc: "Choose the terminal input cursor shape",
+      terminalCursorBlink: "Cursor Blink",
+      terminalCursorBlinkDesc: "Blink the terminal cursor periodically",
+      terminalScrollbackMb: "Scrollback Limit",
+      terminalScrollbackMbDesc: "Terminal history buffer size (MB), 10-512",
+      terminalScrollbackRuntimeNote:
+        "Applies to new terminals. Existing terminals are not restarted.",
+      terminalPasteProtection: "Paste Protection",
+      terminalPasteProtectionDesc:
+        "Confirm before pasting content that may execute immediately",
+      terminalNewCwdPolicy: "New Terminal Directory",
+      terminalNewCwdPolicyDesc:
+        "Choose which directory new or split terminals use",
+    },
+    terminal: {
+      cursorStyle: {
+        block: "Block",
+        bar: "Bar",
+        underline: "Underline",
+      },
+      newCwdPolicy: {
+        activeTerminal: "Inherit active terminal",
+        shellDefault: "Use shell default",
+      },
     },
     theme: {
       light: "Light",

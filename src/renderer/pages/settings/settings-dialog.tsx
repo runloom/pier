@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,11 @@ import {
 } from "@/components/primitives/sidebar.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
-import { NAV_ITEMS } from "@/pages/settings/data/appearance-nav.ts";
+import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
+import {
+  NAV_ITEMS,
+  type SettingsSectionId,
+} from "@/pages/settings/data/appearance-nav.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
 
@@ -31,6 +35,8 @@ export function SettingsDialog() {
   const t = useT();
   const open = useSettingsDialogStore((s) => s.isOpen);
   const onOpenChange = useSettingsDialogStore((s) => s.setOpen);
+  const [activeSection, setActiveSection] =
+    useState<SettingsSectionId>("appearance");
 
   useEffect(() => {
     if (!open) {
@@ -52,18 +58,23 @@ export function SettingsDialog() {
           style={SIDEBAR_STYLE}
         >
           <Sidebar className="hidden md:flex" collapsible="none">
-            <SidebarContent>
+            <SidebarContent className="overflow-visible">
               <SidebarGroupContent>
                 <SidebarMenu>
                   {NAV_ITEMS.map((item) => {
                     const Icon = item.icon;
                     return (
                       <SidebarMenuItem key={item.id}>
-                        <SidebarMenuButton asChild isActive>
-                          <a href={`#${item.id}`}>
-                            <Icon />
-                            <span>{t(`settings.nav.${item.id}`)}</span>
-                          </a>
+                        <SidebarMenuButton
+                          aria-current={
+                            activeSection === item.id ? "page" : undefined
+                          }
+                          isActive={activeSection === item.id}
+                          onClick={() => setActiveSection(item.id)}
+                          type="button"
+                        >
+                          <Icon />
+                          <span>{t(`settings.nav.${item.id}`)}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
@@ -77,7 +88,11 @@ export function SettingsDialog() {
             className="relative -mr-6 flex h-full min-h-0 flex-1 flex-col overflow-y-auto"
             data-scrollbar="stable"
           >
-            <AppearanceSection />
+            {activeSection === "appearance" ? (
+              <AppearanceSection />
+            ) : (
+              <TerminalSection />
+            )}
           </main>
         </SidebarProvider>
       </DialogContent>

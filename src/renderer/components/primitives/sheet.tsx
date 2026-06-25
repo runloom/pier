@@ -35,7 +35,7 @@ function SheetOverlay({
   return (
     <SheetPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed inset-0 z-50 bg-black/30 duration-100 data-closed:animate-out data-open:animate-in supports-backdrop-filter:backdrop-blur-sm",
+        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed inset-0 z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
         className
       )}
       data-slot="sheet-overlay"
