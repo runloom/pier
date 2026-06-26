@@ -10,7 +10,11 @@ extern "C" {
     bool ghostty_bridge_create_terminal(void* nsWindow, const char* panelId,
                                          double x, double y, double w, double h,
                                          const char* fontFamily, float fontSize,
-                                         const char* workingDirectory);
+                                         const char* workingDirectory,
+                                         const char* command,
+                                         const char** envKeys,
+                                         const char** envValues,
+                                         long envCount);
     void ghostty_bridge_set_font_config(void* nsWindow, const char* fontFamily, float fontSize);
     void ghostty_bridge_set_terminal_config(void* nsWindow, const char* cursorStyle,
                                             bool cursorBlink, double scrollbackLimitBytes,
@@ -78,6 +82,18 @@ static NSWindow* WindowFromHandle(const Napi::Value& v) {
     return view.window;
 }
 
+static void ReadOptionalString(
+    Napi::Object object,
+    const char* key,
+    std::string& holder,
+    const char*& ptr
+) {
+    Napi::Value value = object.Get(key);
+    if (!value.IsString()) return;
+    holder = value.As<Napi::String>().Utf8Value();
+    if (!holder.empty()) ptr = holder.c_str();
+}
+
 // --- JS exports ---
 
 static Napi::Value JsSetupWindow(const Napi::CallbackInfo& info) {
@@ -108,16 +124,52 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     std::string fontFamily = info[3].As<Napi::String>().Utf8Value();
     float fontSize = info[4].As<Napi::Number>().FloatValue();
     const char* cwdPtr = nullptr;
+    const char* commandPtr = nullptr;
     std::string cwdHolder;
+    std::string commandHolder;
+    std::vector<std::string> envKeyHolders;
+    std::vector<std::string> envValueHolders;
+    std::vector<const char*> envKeys;
+    std::vector<const char*> envValues;
     if (info.Length() > 5 && info[5].IsString()) {
         cwdHolder = info[5].As<Napi::String>().Utf8Value();
         if (!cwdHolder.empty()) cwdPtr = cwdHolder.c_str();
+    } else if (info.Length() > 5 && info[5].IsObject()) {
+        Napi::Object launch = info[5].As<Napi::Object>();
+        ReadOptionalString(launch, "cwd", cwdHolder, cwdPtr);
+        ReadOptionalString(launch, "command", commandHolder, commandPtr);
+        Napi::Value envValue = launch.Get("env");
+        if (envValue.IsObject()) {
+            Napi::Object envObject = envValue.As<Napi::Object>();
+            Napi::Array names = envObject.GetPropertyNames();
+            for (uint32_t index = 0; index < names.Length(); index++) {
+                Napi::Value keyValue = names.Get(index);
+                if (!keyValue.IsString()) continue;
+                std::string key = keyValue.As<Napi::String>().Utf8Value();
+                Napi::Value value = envObject.Get(key);
+                if (!value.IsString()) continue;
+                envKeyHolders.push_back(key);
+                envValueHolders.push_back(value.As<Napi::String>().Utf8Value());
+            }
+            envKeys.reserve(envKeyHolders.size());
+            envValues.reserve(envValueHolders.size());
+            for (const auto& key : envKeyHolders) {
+                envKeys.push_back(key.c_str());
+            }
+            for (const auto& value : envValueHolders) {
+                envValues.push_back(value.c_str());
+            }
+        }
     }
     bool ok = ghostty_bridge_create_terminal(
         (__bridge void*)win, panelId.c_str(),
         x, y, w, h,
         fontFamily.c_str(), fontSize,
-        cwdPtr
+        cwdPtr,
+        commandPtr,
+        envKeys.empty() ? nullptr : envKeys.data(),
+        envValues.empty() ? nullptr : envValues.data(),
+        static_cast<long>(envKeys.size())
     );
     return Napi::Boolean::New(info.Env(), ok);
 }
@@ -485,13 +537,27 @@ static Napi::Value JsSetFontConfig(const Napi::CallbackInfo& info) {
 }
 
 static Napi::Value JsSetTerminalConfig(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
     NSWindow* win = WindowFromHandle(info[0]);
-    if (!win) return info.Env().Undefined();
+    if (!win) return env.Undefined();
+    if (info.Length() < 2 || !info[1].IsObject()) {
+        return env.Undefined();
+    }
     Napi::Object config = info[1].As<Napi::Object>();
-    std::string cursorStyle = config.Get("cursorStyle").As<Napi::String>().Utf8Value();
-    bool cursorBlink = config.Get("cursorBlink").As<Napi::Boolean>().Value();
-    double scrollbackLimitBytes = config.Get("scrollbackLimitBytes").As<Napi::Number>().DoubleValue();
-    bool pasteProtection = config.Get("pasteProtection").As<Napi::Boolean>().Value();
+    Napi::Value cursorStyleVal = config.Get("cursorStyle");
+    Napi::Value cursorBlinkVal = config.Get("cursorBlink");
+    Napi::Value scrollbackLimitBytesVal = config.Get("scrollbackLimitBytes");
+    Napi::Value pasteProtectionVal = config.Get("pasteProtection");
+    if (!cursorStyleVal.IsString() ||
+        !cursorBlinkVal.IsBoolean() ||
+        !scrollbackLimitBytesVal.IsNumber() ||
+        !pasteProtectionVal.IsBoolean()) {
+        return env.Undefined();
+    }
+    std::string cursorStyle = cursorStyleVal.As<Napi::String>().Utf8Value();
+    bool cursorBlink = cursorBlinkVal.As<Napi::Boolean>().Value();
+    double scrollbackLimitBytes = scrollbackLimitBytesVal.As<Napi::Number>().DoubleValue();
+    bool pasteProtection = pasteProtectionVal.As<Napi::Boolean>().Value();
     ghostty_bridge_set_terminal_config(
         (__bridge void*)win,
         cursorStyle.c_str(),
@@ -499,7 +565,7 @@ static Napi::Value JsSetTerminalConfig(const Napi::CallbackInfo& info) {
         scrollbackLimitBytes,
         pasteProtection
     );
-    return info.Env().Undefined();
+    return env.Undefined();
 }
 
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {

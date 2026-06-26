@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WorkspaceHeaderActions } from "@/components/workspace/workspace-header-actions.tsx";
+import {
+  WorkspaceHeaderActions,
+  WorkspaceHeaderRightActions,
+} from "@/components/workspace/workspace-header-actions.tsx";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
@@ -40,6 +43,9 @@ function setRect(
 function createPanel(id: string, title: string) {
   return {
     api: {
+      exitMaximized: vi.fn(),
+      isMaximized: vi.fn(() => false),
+      maximize: vi.fn(),
       onDidTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
       setActive: vi.fn(),
     },
@@ -54,13 +60,18 @@ function createPanel(id: string, title: string) {
 function createProps(
   panels: ReturnType<typeof createPanel>[]
 ): IDockviewHeaderActionsProps {
+  const group = {};
+  const containerApi = {
+    activeGroup: group,
+    activePanel: panels[0] ?? null,
+    addPanel: vi.fn(),
+    panels,
+  };
   return {
     activePanel: panels[0],
     api: {},
-    containerApi: {
-      addPanel: vi.fn(),
-    },
-    group: {},
+    containerApi,
+    group,
     headerPosition: "top",
     isGroupActive: true,
     panels,
@@ -135,6 +146,39 @@ afterEach(() => {
 });
 
 describe("WorkspaceHeaderActions", () => {
+  it("renders the panel size control in the right header action area", () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+
+    render(<WorkspaceHeaderRightActions {...props} />);
+
+    expect(
+      screen.getByRole("button", { name: "Maximize panel" })
+    ).toBeInTheDocument();
+  });
+
+  it("toggles the group active panel from the right header action area", () => {
+    const panel = createPanel("terminal-1", "Terminal 1");
+    const props = createProps([panel]);
+
+    render(<WorkspaceHeaderRightActions {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Maximize panel" }));
+
+    expect(panel.api.setActive).toHaveBeenCalledOnce();
+    expect(panel.api.maximize).toHaveBeenCalledOnce();
+  });
+
+  it("renders minimize in the right header action area for a maximized panel", () => {
+    const panel = createPanel("terminal-1", "Terminal 1");
+    vi.mocked(panel.api.isMaximized).mockReturnValue(true);
+    const props = createProps([panel]);
+
+    render(<WorkspaceHeaderRightActions {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Minimize panel" }));
+
+    expect(panel.api.setActive).toHaveBeenCalledOnce();
+    expect(panel.api.exitMaximized).toHaveBeenCalledOnce();
+  });
+
   it("renders a select trigger for clipped tabs", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");

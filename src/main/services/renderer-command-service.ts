@@ -46,6 +46,7 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
   switch (command.type) {
     case "panel.focus":
     case "panel.open":
+    case "terminal.open":
       return command.focus ?? true;
     case "panel.list":
     case "workspace.flushLayout":

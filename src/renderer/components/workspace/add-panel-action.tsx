@@ -18,16 +18,16 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   };
 
   return (
-    <div className="flex h-full items-center justify-center px-1">
+    <div className="flex h-full items-center justify-center px-0.5">
       <Button
         aria-label="New Tab"
         onClick={handleAdd}
-        size="icon-sm"
+        size="icon-xs"
         title="New Tab"
         type="button"
         variant="secondary"
       >
-        <Plus className="size-4" />
+        <Plus />
       </Button>
     </div>
   );

@@ -52,7 +52,10 @@ async function ensureStore(): Promise<DebouncedJsonStore<ProjectPreferences>> {
   const s = getStore();
   try {
     const raw = await s.init();
-    projectPreferencesSchema.parse(raw);
+    const parsed = projectPreferencesSchema.parse(raw);
+    if (JSON.stringify(parsed) !== JSON.stringify(raw)) {
+      s.replace(parsed);
+    }
   } catch (err) {
     console.warn("[preferences] parse failed, resetting to defaults:", err);
     await s.clear();

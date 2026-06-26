@@ -4,7 +4,6 @@ import type {
   TerminalFont,
   TerminalFrame,
   TerminalPresentationSnapshot,
-  TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 import type { IpcMain, WebContents } from "electron";
 import {
@@ -22,6 +21,10 @@ import {
   findAppWindowByElectronId,
   findAppWindowByWebContents,
 } from "../windows/window-identity.ts";
+import {
+  consumeCreateLaunch,
+  resolveCreateTerminalLaunch,
+} from "./terminal-create-launch.ts";
 import { handleTerminalCwdChange } from "./terminal-cwd-forwarding.ts";
 import {
   recordNativeTerminalRoute,
@@ -44,10 +47,10 @@ import {
   applyRendererTerminalPresentation,
   setTerminalOverlayActive,
 } from "./terminal-presentation.ts";
+import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
 
-/** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
   return cachedAddon;
 }
@@ -208,8 +211,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const context = saved?.context ?? args.context;
-        const cwd = context?.cwd;
+        const { context, nativeLaunch } = resolveCreateTerminalLaunch(
+          args,
+          saved
+        );
         recordRendererTerminalRoute(win, "create", args.panelId, {
           height: args.frame.height,
           width: args.frame.width,
@@ -222,9 +227,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           args.frame,
           args.font.family,
           args.font.size,
-          cwd
+          nativeLaunch
         );
         if (ok) {
+          consumeCreateLaunch(args);
           await persistInitialTerminalContext(
             sessionScope,
             args.panelId,
@@ -404,27 +410,28 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   });
 
-  ipcMain.on(
-    "pier:terminal:set-config",
-    (event, config: TerminalRuntimeConfig) => {
-      if (!addon) {
-        return;
-      }
-      const win = windowFromWebContents(event.sender);
-      if (!win) {
-        return;
-      }
-      recordRendererTerminalRoute(win, "set-config", null, {
-        cursorBlink: config.cursorBlink,
-        pasteProtection: config.pasteProtection,
-      });
-      try {
-        addon.setTerminalConfig(win.getNativeWindowHandle(), config);
-      } catch (err) {
-        console.error("[pier-terminal-set-config] failed:", err);
-      }
+  ipcMain.on("pier:terminal:set-config", (event, config: unknown) => {
+    if (!addon) {
+      return;
     }
-  );
+    const win = windowFromWebContents(event.sender);
+    if (!win) {
+      return;
+    }
+    if (!isTerminalRuntimeConfig(config)) {
+      console.error("[pier-terminal-set-config] invalid config:", config);
+      return;
+    }
+    recordRendererTerminalRoute(win, "set-config", null, {
+      cursorBlink: config.cursorBlink,
+      pasteProtection: config.pasteProtection,
+    });
+    try {
+      addon.setTerminalConfig(win.getNativeWindowHandle(), config);
+    } catch (err) {
+      console.error("[pier-terminal-set-config] failed:", err);
+    }
+  });
 
   registerTerminalShortcutIpc(ipcMain, addon);
 

@@ -22,7 +22,17 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     vi.clearAllMocks();
   });
 
-  async function setupHarness(winId: number) {
+  async function setupHarness(
+    winId: number,
+    opts: {
+      launch?: {
+        command?: string;
+        cwd?: string;
+        env?: Record<string, string>;
+        profileId?: string;
+      };
+    } = {}
+  ) {
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const invokeHandlers = new Map<
       string,
@@ -93,6 +103,14 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     vi.doMock("@main/state/panel-context-state.ts", () => ({
       recordRecentPanelContext: vi.fn(async () => undefined),
     }));
+    const consumeLaunch = vi.fn(() => opts.launch ?? null);
+    vi.doMock("@main/state/terminal-launch-state.ts", () => ({
+      terminalLaunchRegistry: {
+        consume: consumeLaunch,
+        read: vi.fn(() => opts.launch ?? null),
+        register: vi.fn(),
+      },
+    }));
     vi.doMock("@main/services/panel-context-resolver.ts", () => ({
       resolvePanelContextForPath: vi.fn(async (path: string) => ({
         contextId: `ctx:${path}`,
@@ -116,7 +134,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
     registerTerminalIpc(fakeIpcMain as never);
 
-    return { fakeAddon, handlers, invokeHandlers, win };
+    return { consumeLaunch, fakeAddon, handlers, invokeHandlers, win };
   }
 
   it("two windows with same raw panel id produce distinct scoped ids on addon calls", async () => {
@@ -322,6 +340,46 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       13,
       undefined
     );
+  });
+
+  it("passes registered launch options into native terminal creation", async () => {
+    const launch = {
+      command: "pnpm test",
+      cwd: "/tmp/pier",
+      env: {
+        PIER_MODE: "dev",
+      },
+      profileId: "codex",
+    };
+    const { consumeLaunch, fakeAddon, invokeHandlers, win } =
+      await setupHarness(7, { launch });
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: win.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 0, y: 0, width: 1, height: 1 },
+        launchId: "launch-1",
+        panelId: "panel-a",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      Buffer.from("win-7"),
+      "7::panel-a",
+      expect.any(Object),
+      "Menlo",
+      13,
+      {
+        command: "pnpm test",
+        cwd: "/tmp/pier",
+        env: {
+          PIER_MODE: "dev",
+        },
+      }
+    );
+    expect(consumeLaunch).toHaveBeenCalledWith("launch-1");
   });
 
   it("reconcile scopes every panelId in the active list (no cross-window orphan close)", async () => {
