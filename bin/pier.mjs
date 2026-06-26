@@ -18,6 +18,8 @@ function usage() {
     "  pier worktrees list --path <path> --json",
     "  pier worktrees create --path <repo> --name <dir> --branch <branch> --base <ref> --json",
     "  pier worktrees open <path> --json",
+    "  pier plugins list --json",
+    "  pier plugins inspect <id> --json",
     "  pier preferences read --json",
   ].join("\n");
 }
@@ -186,6 +188,25 @@ function parseWorktrees(action, value, unexpected, args, cwd, route) {
   throw new Error("unknown pier CLI command");
 }
 
+function parsePlugins(action, value, unexpected) {
+  if (action === "list") {
+    if (value || unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
+    }
+    return { type: "plugin.list" };
+  }
+  if (action === "inspect") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return {
+      id: requireValue(value),
+      type: "plugin.inspect",
+    };
+  }
+  throw new Error("unknown pier CLI command");
+}
+
 function parseCommand(args, cwd) {
   const [domain, action, value, unexpected] = stripOptions(args);
   const route = routeOptions(args);
@@ -203,6 +224,9 @@ function parseCommand(args, cwd) {
   }
   if (domain === "worktrees") {
     return parseWorktrees(action, value, unexpected, args, cwd, route);
+  }
+  if (domain === "plugins") {
+    return parsePlugins(action, value, unexpected);
   }
   if (domain === "preferences" && action === "read") {
     return { type: "preferences.read" };

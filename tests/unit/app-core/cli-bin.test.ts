@@ -164,6 +164,43 @@ describe("bin/pier.mjs", () => {
     });
   });
 
+  it("解析 plugins 命令并输出命令信封", async () => {
+    const list = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "plugins",
+      "list",
+      "--json",
+      "--print-envelope",
+    ]);
+    expect(JSON.parse(list.stdout)).toMatchObject({
+      envelope: { command: { type: "plugin.list" } },
+      json: true,
+    });
+
+    const inspect = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "plugins",
+      "inspect",
+      "sample.local",
+      "--json",
+      "--print-envelope",
+    ]);
+    expect(JSON.parse(inspect.stdout)).toMatchObject({
+      envelope: {
+        command: { id: "sample.local", type: "plugin.inspect" },
+      },
+      json: true,
+    });
+  });
+
+  it("usage 包含 plugins 命令", async () => {
+    await expect(
+      execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("pier plugins inspect <id> --json"),
+    });
+  });
+
   it("拒绝 terminals open --cwd 旧入口", async () => {
     await expect(
       execFileAsync("node", [

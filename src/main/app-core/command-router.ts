@@ -1,5 +1,6 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import {
+  type PierCommand,
   type PierCommandResult,
   type ProjectPreferencesPatch,
   pierCommandEnvelopeSchema,
@@ -11,6 +12,10 @@ import {
 } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import {
+  type PluginService,
+  PluginServiceError,
+} from "../services/plugin-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { WorktreeService } from "../services/worktree-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
@@ -37,6 +42,7 @@ export interface PierCoreServices {
     recordRecent(context: PanelContext): Promise<void>;
     resolveForPath(path: string): Promise<PanelContext>;
   };
+  plugins: PluginService;
   preferences: {
     read(): Promise<ProjectPreferences>;
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
@@ -115,6 +121,188 @@ async function deriveActivePanelContext(
   return null;
 }
 
+async function executePluginCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  switch (command.type) {
+    case "plugin.list":
+      return success(requestId, await services.plugins.list());
+    case "plugin.inspect": {
+      const plugin = await services.plugins.inspect(command.id);
+      if (!plugin) {
+        return failure(
+          requestId,
+          "not_found",
+          `plugin not found: ${command.id}`
+        );
+      }
+      return success(requestId, plugin);
+    }
+    default:
+      return null;
+  }
+}
+
+async function executeWorktreeCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  switch (command.type) {
+    case "worktree.list":
+      return success(requestId, await services.worktrees.list(command));
+    case "worktree.create":
+      return success(requestId, await services.worktrees.create(command));
+    case "worktree.open":
+      return await executePanelOpenCommand(
+        requestId,
+        {
+          focus: command.focus,
+          path: command.path,
+          placement: command.placement,
+          type: "panel.open",
+          windowId: command.windowId,
+        },
+        services
+      );
+    case "worktree.remove":
+      return failure(
+        requestId,
+        "unsupported",
+        "worktree.remove is not supported yet"
+      );
+    default:
+      return null;
+  }
+}
+
+async function executeAppStateCommand(
+  requestId: string,
+  command: PierCommand,
+  clients: PierClientRegistry,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  switch (command.type) {
+    case "app.status":
+      return success(requestId, {
+        clients: clients.list().length,
+        panelContext: {
+          active: await deriveActivePanelContext(services),
+          recent: await services.panelContexts.listRecent(),
+        },
+        protocolVersion: 1,
+      });
+    case "commandPaletteMru.clear":
+      return success(requestId, await services.commandPaletteMru.clear());
+    case "commandPaletteMru.read":
+      return success(requestId, await services.commandPaletteMru.read());
+    case "commandPaletteMru.record":
+      await services.commandPaletteMru.recordUse(command.actionId);
+      return success(requestId, null);
+    case "preferences.read":
+      return success(requestId, await services.preferences.read());
+    case "preferences.update":
+      return success(
+        requestId,
+        await services.preferences.update(command.patch)
+      );
+    default:
+      return null;
+  }
+}
+
+async function executeWindowWorkspaceCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  switch (command.type) {
+    case "window.close":
+      services.window.close(command.windowId);
+      return success(requestId, null);
+    case "window.create":
+      return success(requestId, await services.window.create());
+    case "window.focus":
+      services.window.focus(command.windowId);
+      return success(requestId, null);
+    case "window.list":
+      return success(requestId, services.window.list());
+    case "workspace.layout.clear":
+      await services.workspace.clearLayout(command.recordId);
+      return success(requestId, null);
+    case "workspace.layout.read":
+      return success(
+        requestId,
+        await services.workspace.readLayout(command.recordId)
+      );
+    case "workspace.layout.save":
+      await services.workspace.saveLayout(command.layout, command.recordId);
+      return success(requestId, null);
+    default:
+      return null;
+  }
+}
+
+async function executePanelCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  switch (command.type) {
+    case "panel.focus":
+      return await executePanelFocusCommand(requestId, command, services);
+    case "panel.list":
+      return await executePanelListCommand(requestId, command, services);
+    case "panel.open":
+      return await executePanelOpenCommand(requestId, command, services);
+    default:
+      return null;
+  }
+}
+
+async function executeKnownCommand(
+  requestId: string,
+  command: PierCommand,
+  clients: PierClientRegistry,
+  services: PierCoreServices
+): Promise<PierCommandResult> {
+  try {
+    const executors = [
+      (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
+      (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
+      (cmd: PierCommand) =>
+        executeAppStateCommand(requestId, cmd, clients, services),
+      (cmd: PierCommand) =>
+        executeWindowWorkspaceCommand(requestId, cmd, services),
+      (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
+    ];
+    for (const executor of executors) {
+      const result = await executor(command);
+      if (result) {
+        return result;
+      }
+    }
+    return failure(
+      requestId,
+      "invalid_command",
+      `unsupported command: ${command.type}`
+    );
+  } catch (err) {
+    if (err instanceof PluginServiceError) {
+      const code =
+        err.code === "invalid_manifest" ? "invalid_command" : err.code;
+      return failure(requestId, code, err.message);
+    }
+    return failure(
+      requestId,
+      "internal_error",
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+}
+
 export function createCommandRouter({
   clients,
   services,
@@ -138,99 +326,7 @@ export function createCommandRouter({
         return failure(requestId, "permission_denied", auth.reason);
       }
 
-      try {
-        switch (command.type) {
-          case "app.status":
-            return success(requestId, {
-              clients: clients.list().length,
-              panelContext: {
-                active: await deriveActivePanelContext(services),
-                recent: await services.panelContexts.listRecent(),
-              },
-              protocolVersion: 1,
-            });
-          case "commandPaletteMru.clear":
-            return success(requestId, await services.commandPaletteMru.clear());
-          case "commandPaletteMru.read":
-            return success(requestId, await services.commandPaletteMru.read());
-          case "commandPaletteMru.record":
-            await services.commandPaletteMru.recordUse(command.actionId);
-            return success(requestId, null);
-          case "preferences.read":
-            return success(requestId, await services.preferences.read());
-          case "preferences.update":
-            return success(
-              requestId,
-              await services.preferences.update(command.patch)
-            );
-          case "window.close":
-            services.window.close(command.windowId);
-            return success(requestId, null);
-          case "window.create":
-            return success(requestId, await services.window.create());
-          case "window.focus":
-            services.window.focus(command.windowId);
-            return success(requestId, null);
-          case "window.list":
-            return success(requestId, services.window.list());
-          case "workspace.layout.clear":
-            await services.workspace.clearLayout(command.recordId);
-            return success(requestId, null);
-          case "workspace.layout.read":
-            return success(
-              requestId,
-              await services.workspace.readLayout(command.recordId)
-            );
-          case "workspace.layout.save":
-            await services.workspace.saveLayout(
-              command.layout,
-              command.recordId
-            );
-            return success(requestId, null);
-          case "panel.focus":
-            return await executePanelFocusCommand(requestId, command, services);
-          case "panel.list":
-            return await executePanelListCommand(requestId, command, services);
-          case "panel.open":
-            return await executePanelOpenCommand(requestId, command, services);
-          case "worktree.list":
-            return success(requestId, await services.worktrees.list(command));
-          case "worktree.create":
-            return success(requestId, await services.worktrees.create(command));
-          case "worktree.open":
-            return await executePanelOpenCommand(
-              requestId,
-              {
-                focus: command.focus,
-                path: command.path,
-                placement: command.placement,
-                type: "panel.open",
-                windowId: command.windowId,
-              },
-              services
-            );
-          case "worktree.remove":
-            return failure(
-              requestId,
-              "unsupported",
-              "worktree.remove is not supported yet"
-            );
-          default: {
-            const _exhaustive: never = command;
-            return failure(
-              requestId,
-              "invalid_command",
-              `unsupported command: ${String(_exhaustive)}`
-            );
-          }
-        }
-      } catch (err) {
-        return failure(
-          requestId,
-          "internal_error",
-          err instanceof Error ? err.message : String(err)
-        );
-      }
+      return await executeKnownCommand(requestId, command, clients, services);
     },
   };
 }

@@ -25,6 +25,17 @@ export const pierCapabilitySchema = z.enum([
   "panel:control",
   "terminal:read",
   "terminal:control",
+  "plugin:read",
+  "plugin:write",
+  "command:register",
+  "panel:register",
+  "git:read",
+  "file:read",
+  "transcript:read",
+  "profile:read",
+  "secret:read",
+  "evidence:write",
+  "network",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;
@@ -62,6 +73,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "panel:control",
     "terminal:read",
     "terminal:control",
+    "plugin:read",
+    "plugin:write",
   ],
   "cli-local": [
     "app:read",
@@ -76,6 +89,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "panel:control",
     "terminal:read",
     "terminal:control",
+    "plugin:read",
   ],
   "mcp-local": [
     "app:read",

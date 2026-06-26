@@ -215,6 +215,25 @@ describe("parsePierCliArgs", () => {
     });
   });
 
+  it("解析 plugins list/inspect", () => {
+    expect(
+      parsePierCliArgs(["plugins", "list", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-list",
+      }).envelope.command
+    ).toEqual({ type: "plugin.list" });
+
+    expect(
+      parsePierCliArgs(["plugins", "inspect", "sample.local", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-inspect",
+      }).envelope.command
+    ).toEqual({
+      id: "sample.local",
+      type: "plugin.inspect",
+    });
+  });
+
   it("拒绝 terminals open --cwd 旧入口", () => {
     expect(() =>
       parsePierCliArgs(["terminals", "open", "--cwd", "."], {

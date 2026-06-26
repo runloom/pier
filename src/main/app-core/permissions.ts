@@ -17,6 +17,8 @@ const REQUIRED_CAPABILITY_BY_COMMAND: Record<
   "panel.focus": "panel:control",
   "panel.list": "panel:read",
   "panel.open": "workspace:open",
+  "plugin.inspect": "plugin:read",
+  "plugin.list": "plugin:read",
   "preferences.read": "preferences:read",
   "preferences.update": "preferences:write",
   "window.close": "window:close",
@@ -37,6 +39,12 @@ export function authorizeCommand(
   client: PierClient
 ): AuthorizationResult {
   const required = REQUIRED_CAPABILITY_BY_COMMAND[command.type];
+  if (!required) {
+    return {
+      ok: false,
+      reason: `missing command capability mapping: ${command.type}`,
+    };
+  }
   const requiredCapabilities = Array.isArray(required) ? required : [required];
   const missing = requiredCapabilities.find(
     (capability) => !client.capabilities.includes(capability)

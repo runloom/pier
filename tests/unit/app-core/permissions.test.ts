@@ -2,6 +2,7 @@ import { authorizeCommand } from "@main/app-core/permissions.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
   type PierClient,
+  pierCapabilitySchema,
   pierClientKindSchema,
 } from "@shared/contracts/permissions.ts";
 import { describe, expect, it } from "vitest";
@@ -111,6 +112,52 @@ describe("authorizeCommand", () => {
     ).toEqual({
       ok: false,
       reason: "missing capability: worktree:write",
+    });
+  });
+
+  it("预留插件能力但默认不授予 CLI/MCP 高危权限", () => {
+    expect(pierCapabilitySchema.parse("plugin:read")).toBe("plugin:read");
+    expect(pierCapabilitySchema.parse("plugin:write")).toBe("plugin:write");
+    expect(pierCapabilitySchema.parse("command:register")).toBe(
+      "command:register"
+    );
+    expect(pierCapabilitySchema.parse("panel:register")).toBe("panel:register");
+    expect(pierCapabilitySchema.parse("secret:read")).toBe("secret:read");
+    expect(pierCapabilitySchema.parse("network")).toBe("network");
+
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND["cli-local"]).toContain(
+      "plugin:read"
+    );
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND["cli-local"]).not.toEqual(
+      expect.arrayContaining([
+        "plugin:write",
+        "command:register",
+        "panel:register",
+        "secret:read",
+        "network",
+      ])
+    );
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND["mcp-local"]).not.toEqual(
+      expect.arrayContaining([
+        "plugin:read",
+        "plugin:write",
+        "command:register",
+        "panel:register",
+        "secret:read",
+        "network",
+      ])
+    );
+  });
+
+  it("允许 CLI 读取插件信息但拒绝 MCP 默认客户端读取插件信息", () => {
+    expect(
+      authorizeCommand({ type: "plugin.list" }, client("cli-local"))
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand({ type: "plugin.list" }, client("mcp-local"))
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: plugin:read",
     });
   });
 

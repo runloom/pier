@@ -96,6 +96,113 @@ function services(
         userKeymap: patch.userKeymap ?? [],
       }),
     },
+    plugins: {
+      inspect: async (id) =>
+        id === "sample.local"
+          ? {
+              commands: [
+                {
+                  id: "sample.command",
+                  permissions: [],
+                  title: "Sample Command",
+                },
+              ],
+              enabled: true,
+              id: "sample.local",
+              manifest: {
+                apiVersion: 1,
+                commands: [
+                  {
+                    id: "sample.command",
+                    permissions: [],
+                    title: "Sample Command",
+                  },
+                ],
+                engines: { pier: ">=0.1.0" },
+                id: "sample.local",
+                name: "Sample Local",
+                panels: [
+                  {
+                    id: "sample.panel",
+                    permissions: [],
+                    title: "Sample Panel",
+                  },
+                ],
+                permissions: ["plugin:read"],
+                source: { kind: "local" },
+                version: "1.0.0",
+              },
+              panels: [
+                {
+                  id: "sample.panel",
+                  permissions: [],
+                  title: "Sample Panel",
+                },
+              ],
+              permissions: ["plugin:read"],
+              source: { kind: "local" },
+              version: "1.0.0",
+            }
+          : null,
+      list: async () => [
+        {
+          commands: [
+            { id: "sample.command", permissions: [], title: "Sample Command" },
+          ],
+          enabled: true,
+          id: "sample.local",
+          manifest: {
+            apiVersion: 1,
+            commands: [
+              {
+                id: "sample.command",
+                permissions: [],
+                title: "Sample Command",
+              },
+            ],
+            engines: { pier: ">=0.1.0" },
+            id: "sample.local",
+            name: "Sample Local",
+            panels: [
+              {
+                id: "sample.panel",
+                permissions: [],
+                title: "Sample Panel",
+              },
+            ],
+            permissions: ["plugin:read"],
+            source: { kind: "local" },
+            version: "1.0.0",
+          },
+          panels: [
+            { id: "sample.panel", permissions: [], title: "Sample Panel" },
+          ],
+          permissions: ["plugin:read"],
+          source: { kind: "local" },
+          version: "1.0.0",
+        },
+      ],
+      setEnabled: async (id, enabled) => ({
+        commands: [],
+        enabled,
+        id,
+        manifest: {
+          apiVersion: 1,
+          commands: [],
+          engines: { pier: ">=0.1.0" },
+          id,
+          name: id,
+          panels: [],
+          permissions: [],
+          source: { kind: "builtin" },
+          version: "1.0.0",
+        },
+        panels: [],
+        permissions: [],
+        source: { kind: "builtin" },
+        version: "1.0.0",
+      }),
+    },
     panelContexts: {
       listRecent: async () => recentContexts,
       recordRecent: (context) => {
@@ -544,6 +651,74 @@ describe("createCommandRouter", () => {
       },
       ok: false,
       requestId: "req-worktree-remove",
+    });
+  });
+
+  it("分发 plugin.list 和 plugin.inspect", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { type: "plugin.list" },
+        protocolVersion: 1,
+        requestId: "req-plugin-list",
+      })
+    ).resolves.toMatchObject({
+      data: [
+        {
+          commands: [{ id: "sample.command" }],
+          enabled: true,
+          id: "sample.local",
+          panels: [{ id: "sample.panel" }],
+        },
+      ],
+      ok: true,
+      requestId: "req-plugin-list",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.local", type: "plugin.inspect" },
+        protocolVersion: 1,
+        requestId: "req-plugin-inspect",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        commands: [{ id: "sample.command" }],
+        enabled: true,
+        id: "sample.local",
+        panels: [{ id: "sample.panel" }],
+      },
+      ok: true,
+      requestId: "req-plugin-inspect",
+    });
+  });
+
+  it("plugin.inspect 未命中时返回 not_found", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "missing.plugin", type: "plugin.inspect" },
+        protocolVersion: 1,
+        requestId: "req-plugin-missing",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "not_found",
+        message: "plugin not found: missing.plugin",
+      },
+      ok: false,
+      requestId: "req-plugin-missing",
     });
   });
 });

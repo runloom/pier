@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pluginInspectRequestSchema } from "./plugin.ts";
 import { projectPreferencesSchema } from "./preferences.ts";
 import {
   worktreeCreateRequestSchema,
@@ -91,6 +92,10 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   worktreeRemoveRequestSchema.extend({
     type: z.literal("worktree.remove"),
+  }),
+  z.object({ type: z.literal("plugin.list") }),
+  pluginInspectRequestSchema.extend({
+    type: z.literal("plugin.inspect"),
   }),
 ]);
 

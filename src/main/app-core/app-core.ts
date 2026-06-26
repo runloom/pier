@@ -3,6 +3,7 @@ import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-cha
 import { app } from "electron";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
+import { createPluginService } from "../services/plugin-service.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createWindowService } from "../services/window-service.ts";
@@ -88,6 +89,7 @@ function createPierAppCore(): PierAppCore {
       broadcast: broadcastMruState,
     }),
     preferences: createPreferencesService({ eventBus }),
+    plugins: createPluginService(),
     panelContexts: createPanelContextService(),
     rendererCommand,
     window: createWindowService({
