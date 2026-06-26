@@ -1,15 +1,17 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import {
-  type PierCommand,
   type PierCommandResult,
   type ProjectPreferencesPatch,
   pierCommandEnvelopeSchema,
 } from "@shared/contracts/commands.ts";
 import type { WindowInfo } from "@shared/contracts/events.ts";
+import {
+  type PanelContext,
+  panelSnapshotSchema,
+} from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
-import type { TerminalSessionService } from "../services/terminal-session-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
   commandFailure as failure,
@@ -18,13 +20,10 @@ import {
 import {
   executePanelFocusCommand,
   executePanelListCommand,
+  executePanelOpenCommand,
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
-import {
-  executeTerminalFocusCommand,
-  executeTerminalListCommand,
-  executeTerminalOpenCommand,
-} from "./terminal-panel-commands.ts";
+import { orderedWindows } from "./window-routing.ts";
 
 export interface PierCoreServices {
   commandPaletteMru: {
@@ -32,12 +31,16 @@ export interface PierCoreServices {
     read(): Promise<MruState>;
     recordUse(actionId: string): Promise<void>;
   };
+  panelContexts: {
+    listRecent(): Promise<PanelContext[]>;
+    recordRecent(context: PanelContext): Promise<void>;
+    resolveForPath(path: string): Promise<PanelContext>;
+  };
   preferences: {
     read(): Promise<ProjectPreferences>;
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
   rendererCommand: RendererCommandService;
-  terminalSessions: TerminalSessionService;
   window: {
     close(windowId: string): void;
     create(options?: WindowCreateOptions): Promise<{
@@ -85,25 +88,29 @@ function requestIdOf(rawEnvelope: unknown): string {
   return "unknown";
 }
 
-async function rendererCommandResult(
-  requestId: string,
-  command: Extract<
-    PierCommand,
-    | { type: "panel.focus" }
-    | { type: "panel.list" }
-    | { type: "workspace.open" }
-  >,
+async function deriveActivePanelContext(
   services: PierCoreServices
-): Promise<PierCommandResult> {
-  const result = await services.rendererCommand.execute(command);
-  if (result.ok) {
-    return success(requestId, result.data);
-  }
-  return failure(
-    requestId,
-    result.error.code ?? "platform_unavailable",
-    result.error.message
+): Promise<PanelContext | null> {
+  const focusedWindow = orderedWindows(services.window.list()).find(
+    (windowInfo) => windowInfo.focused
   );
+  if (!focusedWindow) {
+    return null;
+  }
+  const result = await services.rendererCommand.execute({
+    type: "panel.list",
+    windowId: focusedWindow.id,
+  });
+  if (!(result.ok && Array.isArray(result.data))) {
+    return null;
+  }
+  for (const rawPanel of result.data) {
+    const parsed = panelSnapshotSchema.safeParse(rawPanel);
+    if (parsed.success && parsed.data.active) {
+      return parsed.data.context ?? null;
+    }
+  }
+  return null;
 }
 
 export function createCommandRouter({
@@ -134,6 +141,10 @@ export function createCommandRouter({
           case "app.status":
             return success(requestId, {
               clients: clients.list().length,
+              panelContext: {
+                active: await deriveActivePanelContext(services),
+                recent: await services.panelContexts.listRecent(),
+              },
               protocolVersion: 1,
             });
           case "commandPaletteMru.clear":
@@ -178,26 +189,8 @@ export function createCommandRouter({
             return await executePanelFocusCommand(requestId, command, services);
           case "panel.list":
             return await executePanelListCommand(requestId, command, services);
-          case "workspace.open":
-            return await rendererCommandResult(requestId, command, services);
-          case "terminal.open":
-            return await executeTerminalOpenCommand(
-              requestId,
-              command,
-              services
-            );
-          case "terminal.list":
-            return await executeTerminalListCommand(
-              requestId,
-              command,
-              services
-            );
-          case "terminal.focus":
-            return await executeTerminalFocusCommand(
-              requestId,
-              command,
-              services
-            );
+          case "panel.open":
+            return await executePanelOpenCommand(requestId, command, services);
           default: {
             const _exhaustive: never = command;
             return failure(

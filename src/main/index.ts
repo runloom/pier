@@ -18,7 +18,6 @@ import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
-import { registerTerminalSessionIpc } from "./ipc/terminal-session-commands.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
@@ -198,7 +197,6 @@ app.whenReady().then(async () => {
   registerPreferencesIpc(ipcMain);
   registerRendererCommandIpc(ipcMain);
   registerTerminalIpc(ipcMain);
-  registerTerminalSessionIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);

@@ -11,11 +11,12 @@ import {
   isToggleDevToolsNativeChord,
   toggleDetachedDevTools,
 } from "../devtools.ts";
+import { resolvePanelContextForPath } from "../services/panel-context-resolver.ts";
+import { recordRecentPanelContext } from "../state/panel-context-state.ts";
 import {
-  archiveTerminalPanelSession,
   readTerminalPanelSession,
   removeTerminalPanelSession,
-  updateTerminalPanelCwd,
+  updateTerminalPanelContext,
   updateTerminalPanelTitle,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -148,12 +149,33 @@ export function windowFromWebContents(
   return findAppWindowByWebContents(webContents);
 }
 
+async function handleTerminalCwdChange(
+  id: number,
+  rawPanelId: string,
+  cwd: string,
+  targetWindow: AppWindow | null
+): Promise<void> {
+  const context = await resolvePanelContextForPath(cwd, {
+    source: "panel",
+  });
+  await recordRecentPanelContext(context);
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    const sessionScope = terminalSessionScopeFor(targetWindow);
+    await updateTerminalPanelContext(sessionScope, rawPanelId, context);
+  }
+  forwardToWindow(
+    id,
+    "pier:terminal:cwd-change",
+    { panelId: rawPanelId, context },
+    "pier-cwd-forward"
+  );
+}
+
 export function registerTerminalIpc(ipcMain: IpcMain): void {
   const { addon, error: loadError } = loadNativeAddon();
   cachedAddon = addon;
 
-  // swift → renderer forward 必须按 setupWindow 记录的 Electron window id 路由:
-  // keyboard / mouse / pwd / title 都不能依赖当前 focused window.
+  // Swift forward callback 必须按 setupWindow 记录的 Electron window id 路由.
   addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
     const targetWindow = findAppWindowByElectronId(id);
     if (
@@ -172,8 +194,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       "pier-key-forward"
     );
   });
-  // Swift forward callback 收到的 panelId 是 scoped (createTerminal 时 main 传的),
-  // unscope 后给 renderer — React/dockview 的 panel id 是 raw.
+  // Swift 收到 scoped panelId, renderer 使用 raw panel id.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
     forwardToWindow(
       id,
@@ -193,18 +214,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     const rawPanelId = unscopePanelId(panelId);
     const targetWindow = findAppWindowByElectronId(id);
-    if (targetWindow && !targetWindow.isDestroyed()) {
-      const sessionScope = terminalSessionScopeFor(targetWindow);
-      updateTerminalPanelCwd(sessionScope, rawPanelId, cwd).catch((err) => {
-        console.error("[pier-cwd-persist] failed:", err);
-      });
-    }
-    forwardToWindow(
-      id,
-      "pier:terminal:cwd-change",
-      { panelId: rawPanelId, cwd },
-      "pier-cwd-forward"
-    );
+    handleTerminalCwdChange(id, rawPanelId, cwd, targetWindow).catch((err) => {
+      console.error("[pier-cwd-context] failed:", err);
+    });
   });
   addon?.setTitleForwardCallback((id, panelId, title) => {
     const rawPanelId = unscopePanelId(panelId);
@@ -259,7 +271,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const cwd = saved?.cwd ?? args.cwd;
+        const context = saved?.context ?? args.context;
+        const cwd = context?.cwd;
         const ok = addon.createTerminal(
           handle,
           scopePanelId(win, args.panelId),
@@ -268,11 +281,15 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           args.font.size,
           cwd
         );
-        if (ok && cwd) {
+        if (ok && context) {
           try {
-            await updateTerminalPanelCwd(sessionScope, args.panelId, cwd);
+            await updateTerminalPanelContext(
+              sessionScope,
+              args.panelId,
+              context
+            );
           } catch (err) {
-            console.error("[pier-cwd-initial-persist] failed:", err);
+            console.error("[pier-context-initial-persist] failed:", err);
           }
         }
         return ok
@@ -327,15 +344,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const win = windowFromWebContents(event.sender);
     if (win) {
       const sessionScope = terminalSessionScopeFor(win);
-      archiveTerminalPanelSession(sessionScope, panelId)
-        .catch((err) => {
-          console.error("[pier-cwd-archive] failed:", err);
-        })
-        .finally(() => {
-          removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
-            console.error("[pier-cwd-remove] failed:", err);
-          });
-        });
+      removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
+        console.error("[pier-cwd-remove] failed:", err);
+      });
       addon?.closeTerminal(scopePanelId(win, panelId));
     }
   });

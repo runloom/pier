@@ -1,3 +1,4 @@
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
@@ -30,7 +31,17 @@ function createApi() {
   };
 }
 
-describe("workspace.store — terminal cwd policy", () => {
+const context: PanelContext = {
+  contextId: "ctx-pier",
+  cwd: "/Users/xyz/ABC/pier",
+  openedPath: "/Users/xyz/ABC/pier",
+  projectRoot: "/Users/xyz/ABC/pier",
+  source: "command",
+  updatedAt: 1_772_000_000_000,
+  worktreeKey: "/Users/xyz/ABC/pier",
+};
+
+describe("workspace.store — terminal context policy", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -44,40 +55,40 @@ describe("workspace.store — terminal cwd policy", () => {
     });
   });
 
-  it("显式 path 创建终端时作为 cwd 传入 panel params", () => {
+  it("explicit context is persisted as the only terminal panel params", () => {
     const api = createApi();
     useWorkspaceStore.getState().setApi(api as never);
 
-    useWorkspaceStore.getState().addTerminal({ path: "/Users/xyz/ABC/pier" });
+    useWorkspaceStore.getState().addTerminal({ context });
 
     expect(api.addPanel).toHaveBeenCalledWith(
       expect.objectContaining({
         component: "terminal",
-        params: { cwd: "/Users/xyz/ABC/pier" },
+        params: { context },
         title: "Terminal: /Users/xyz/ABC/pier",
       })
     );
   });
 
-  it("默认从当前 active terminal 继承 cwd", () => {
+  it("inherits context from the current active terminal", () => {
     const api = createApi();
     useWorkspaceStore.getState().setApi(api as never);
     usePanelDescriptorStore.getState().setActive("terminal-1");
     usePanelDescriptorStore.getState().upsert("terminal-1", {
-      short: "pier",
-      path: "/Users/xyz/ABC/pier",
+      context,
+      display: { short: "pier" },
     });
 
     useWorkspaceStore.getState().addTerminal();
 
     expect(api.addPanel).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: { cwd: "/Users/xyz/ABC/pier" },
+        params: { context },
       })
     );
   });
 
-  it("shellDefault 策略下普通新建终端不传 cwd", () => {
+  it("shellDefault policy creates a terminal without context params", () => {
     useTerminalPreferencesStore.setState({
       terminalNewCwdPolicy: "shellDefault",
     });
@@ -85,8 +96,8 @@ describe("workspace.store — terminal cwd policy", () => {
     useWorkspaceStore.getState().setApi(api as never);
     usePanelDescriptorStore.getState().setActive("terminal-1");
     usePanelDescriptorStore.getState().upsert("terminal-1", {
-      short: "pier",
-      path: "/Users/xyz/ABC/pier",
+      context,
+      display: { short: "pier" },
     });
 
     useWorkspaceStore.getState().addTerminal();
@@ -98,12 +109,12 @@ describe("workspace.store — terminal cwd policy", () => {
     );
   });
 
-  it("拆分终端时继承来源终端 cwd", () => {
+  it("split terminal inherits the source terminal context", () => {
     const api = createApi();
     useWorkspaceStore.getState().setApi(api as never);
     usePanelDescriptorStore.getState().upsert("terminal-1", {
-      short: "pier",
-      path: "/Users/xyz/ABC/pier",
+      context,
+      display: { short: "pier" },
     });
 
     useWorkspaceStore.getState().splitPanel("terminal-1", "right");
@@ -111,7 +122,7 @@ describe("workspace.store — terminal cwd policy", () => {
     expect(api.addPanel).toHaveBeenCalledWith(
       expect.objectContaining({
         component: "terminal",
-        params: { cwd: "/Users/xyz/ABC/pier" },
+        params: { context },
         position: {
           direction: "right",
           referencePanel: "terminal-1",

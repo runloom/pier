@@ -39,7 +39,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("workspace.layout.clear"),
   }),
   z.object({
-    type: z.literal("workspace.open"),
+    type: z.literal("panel.open"),
     focus: z.boolean().optional(),
     path: z.string().min(1),
     placement: pierCommandPlacementSchema.optional(),
@@ -61,23 +61,6 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("panel.focus"),
-    focus: z.boolean().optional(),
-    panelId: z.string().min(1),
-    windowId: z.string().min(1).optional(),
-  }),
-  z.object({
-    type: z.literal("terminal.list"),
-    windowId: z.string().min(1).optional(),
-  }),
-  z.object({
-    type: z.literal("terminal.open"),
-    cwd: z.string().min(1).optional(),
-    focus: z.boolean().optional(),
-    placement: pierCommandPlacementSchema.optional(),
-    windowId: z.string().min(1).optional(),
-  }),
-  z.object({
-    type: z.literal("terminal.focus"),
     focus: z.boolean().optional(),
     panelId: z.string().min(1),
     windowId: z.string().min(1).optional(),

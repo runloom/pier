@@ -35,9 +35,6 @@ pier windows list --json
 pier windows focus <windowId> --json
 pier panels list [--window <windowId>] --json
 pier panels focus <panelId> [--window <windowId>] --json
-pier terminals list [--window <windowId>] --json
-pier terminals open --json
-pier terminals focus <panelId> [--window <windowId>] --json
 pier preferences read --json
 ```
 
@@ -48,16 +45,14 @@ pier preferences read --json
 ```bash
 pier open . --window main
 pier open . --split right
-pier terminals open --window main --split below
 ```
 
 `--window <windowId>` 会把 renderer 命令发到指定窗口；未指定时优先使用当前聚焦窗口。`--split` 支持 `right`、`below` / `down`、`left`、`above` / `up`；未指定时在当前 active group 内作为 tab 打开。
 
-默认情况下，`open`、`terminals open`、`panels focus` 和 `terminals focus` 会主动聚焦目标 Pier 窗口，适合人工命令行调用。MCP server 或后台 agent 不希望打断当前用户时，加 `--no-focus`:
+默认情况下，`open` 和 `panels focus` 会主动聚焦目标 Pier 窗口，适合人工命令行调用。MCP server 或后台 agent 不希望打断当前用户时，加 `--no-focus`:
 
 ```bash
 pier open . --no-focus --json
-pier terminals open --window main --no-focus --json
 ```
 
 开发态验证真实 CLI 通道时，先启动 Pier:
@@ -74,12 +69,9 @@ pnpm --silent cli:dev -- windows list --json
 pnpm --silent cli:dev -- windows focus main --json
 pnpm --silent cli:dev -- panels list --window main --json
 pnpm --silent cli:dev -- panels focus terminal-1 --window main --json
-pnpm --silent cli:dev -- terminals list --window main --json
-pnpm --silent cli:dev -- terminals open --json
-pnpm --silent cli:dev -- terminals focus terminal-1 --window main --json
 pnpm --silent cli:dev -- open . --json
 pnpm --silent cli:dev -- open .
-pnpm --silent cli:dev -- terminals open --window main --split right --json
+pnpm --silent cli:dev -- open . --window main --split right --json
 pnpm --silent cli:dev -- open . --no-focus --json
 pnpm --silent cli:dev -- preferences read --json
 pnpm vitest run tests/unit/app-core/cli-bin.test.ts
@@ -95,9 +87,7 @@ pnpm --silent cli:dev -- status --json --print-envelope
 
 CLI 默认以 `cli-local` 客户端身份调用控制平面: 可以读取状态、打开路径、聚焦窗口和 panel；默认不能关闭窗口、写配置或发送终端输入。
 
-说明: `pier terminals open --json` 会通过本机控制通道到达 main，再经 renderer command bridge 请求 dockview 创建 terminal panel。terminal panel 挂载后仍按现有 `TerminalPanel` 生命周期创建 Ghostty native view。
-
-说明: `pier open <path> --json` 是类似 `code .` 的高层命令，语义是“打开路径/工作区”。当前阶段会通过 renderer command bridge 打开一个带路径语义的 terminal panel；真正的文件 panel、项目模型和终端初始 cwd 注入留给后续项目模型与 terminal create 参数扩展。
+说明: `pier open <path> --json` 是类似 `code .` 的高层命令，语义是“打开路径/工作区”。当前阶段会在 main 进程解析路径、Git 根目录和 worktree 信息，形成公共 `PanelContext`，再通过 renderer command bridge 打开一个带上下文的 terminal panel，并把解析后的目录作为终端初始 cwd。真正的文件 panel 和插件业务留给后续扩展。
 
 MCP 外部进程定位 `pier` CLI 的顺序:
 

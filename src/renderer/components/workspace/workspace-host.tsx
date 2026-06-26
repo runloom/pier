@@ -129,17 +129,9 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
         });
         return;
       }
-      case "terminal.list": {
-        window.pier.rendererCommand.resolve({
-          data: panelSnapshots().filter((panel) => panel.kind === "terminal"),
-          ok: true,
-          requestId: envelope.requestId,
-        });
-        return;
-      }
-      case "terminal.open": {
+      case "panel.open": {
         const panelId = state.addTerminal({
-          ...(envelope.command.cwd && { path: envelope.command.cwd }),
+          context: envelope.command.context,
           ...(envelope.command.placement && {
             placement: envelope.command.placement,
           }),
@@ -148,33 +140,10 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
           throw new Error("workspace api not ready");
         }
         window.pier.rendererCommand.resolve({
-          data: { panelId },
-          ok: true,
-          requestId: envelope.requestId,
-        });
-        return;
-      }
-      case "terminal.focus": {
-        focusPanel(envelope.command.panelId, "terminal");
-        window.pier.rendererCommand.resolve({
-          data: null,
-          ok: true,
-          requestId: envelope.requestId,
-        });
-        return;
-      }
-      case "workspace.open": {
-        const panelId = state.addTerminal({
-          path: envelope.command.path,
-          ...(envelope.command.placement && {
-            placement: envelope.command.placement,
-          }),
-        });
-        if (!panelId) {
-          throw new Error("workspace api not ready");
-        }
-        window.pier.rendererCommand.resolve({
-          data: { panelId, path: envelope.command.path },
+          data: {
+            context: envelope.command.context,
+            panelId,
+          },
           ok: true,
           requestId: envelope.requestId,
         });
@@ -318,7 +287,7 @@ export function WorkspaceHost() {
         const descriptorStore = usePanelDescriptorStore.getState();
         if (panel && !descriptorStore.descriptors[panel.id]) {
           descriptorStore.upsert(panel.id, {
-            short: panel.title || "Panel",
+            display: { short: panel.title || "Panel" },
           });
         }
         descriptorStore.setActive(panel?.id ?? null);

@@ -4,6 +4,12 @@ import type {
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
 import type { PanelSnapshot, WindowInfo } from "@shared/contracts/events.ts";
+import {
+  type PanelContext,
+  panelContextSchema,
+  panelDisplaySchema,
+  panelKindSchema,
+} from "@shared/contracts/panel.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import { commandFailure, commandSuccess } from "./command-results.ts";
 import {
@@ -12,9 +18,13 @@ import {
   numberValue,
   stringValue,
 } from "./command-value.ts";
-import { orderedWindows } from "./window-routing.ts";
+import { orderedWindows, resolveCommandWindow } from "./window-routing.ts";
 
 export interface PanelCommandServices {
+  panelContexts: {
+    recordRecent(context: PanelContext): Promise<void>;
+    resolveForPath(path: string): Promise<PanelContext>;
+  };
   rendererCommand: RendererCommandService;
   window: {
     list(): WindowInfo[];
@@ -52,11 +62,11 @@ function normalizePanelSnapshot(
     return null;
   }
   const rawKind = stringValue(record, "kind");
-  const kind = rawKind === "terminal" ? "terminal" : "web";
+  const parsedKind = panelKindSchema.safeParse(rawKind);
+  const kind = parsedKind.success ? parsedKind.data : "web";
   const active = booleanValue(record, "active");
-  const cwd = stringValue(record, "cwd");
-  const title = stringValue(record, "title");
-  const terminalTitle = stringValue(record, "terminalTitle");
+  const context = panelContextSchema.safeParse(record.context);
+  const display = panelDisplaySchema.safeParse(record.display);
   return {
     groupIndex: numberValue(record, "groupIndex", 0),
     id,
@@ -68,9 +78,8 @@ function normalizePanelSnapshot(
     windowId: windowInfo.id,
     windowIndex,
     ...(active === undefined ? {} : { active }),
-    ...(cwd ? { cwd } : {}),
-    ...(terminalTitle ? { terminalTitle } : {}),
-    ...(title ? { title } : {}),
+    ...(context.success ? { context: context.data } : {}),
+    ...(display.success ? { display: display.data } : {}),
   };
 }
 
@@ -149,6 +158,41 @@ export async function executePanelListCommand(
     );
   }
   return commandSuccess(requestId, await listPanels(command, services));
+}
+
+export async function executePanelOpenCommand(
+  requestId: string,
+  command: Extract<PierCommand, { type: "panel.open" }>,
+  services: PanelCommandServices
+): Promise<PierCommandResult> {
+  const target = resolveCommandWindow(command.windowId, services, {
+    requireStableDefault: !command.windowId,
+  });
+  if (!target.window) {
+    return commandFailure(
+      requestId,
+      target.code ?? (command.windowId ? "not_found" : "platform_unavailable"),
+      target.error ?? "no renderer window available"
+    );
+  }
+
+  const context = await services.panelContexts.resolveForPath(command.path);
+  const result = await services.rendererCommand.execute({
+    focus: command.focus,
+    placement: command.placement,
+    type: "panel.open",
+    context,
+    windowId: target.window.id,
+  });
+  if (!result.ok) {
+    return commandFailure(
+      requestId,
+      result.error.code ?? "platform_unavailable",
+      result.error.message
+    );
+  }
+  await services.panelContexts.recordRecent(context);
+  return commandSuccess(requestId, result.data);
 }
 
 export async function executePanelFocusCommand(
