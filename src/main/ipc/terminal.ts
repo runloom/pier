@@ -27,6 +27,7 @@ import {
 } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
+import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
@@ -432,6 +433,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
     }
   );
+
+  registerTerminalShortcutIpc(ipcMain, addon);
 
   ipcMain.on(
     "pier:terminal:set-font",

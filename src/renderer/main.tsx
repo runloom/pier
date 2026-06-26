@@ -13,6 +13,7 @@ import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
+import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
@@ -47,6 +48,7 @@ async function bootstrap() {
   registerCommandPaletteMruAction();
   registerTerminalActions();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+  await initKeybindingPreferences();
 
   const rootEl = document.getElementById("root");
   if (rootEl) {

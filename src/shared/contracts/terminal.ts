@@ -232,6 +232,7 @@ export interface TerminalAPI {
     kind: "terminal" | "web",
     panelId: string | null
   ) => void;
+  setAppShortcutKeys(keys: string[]): void;
   setConfig(config: TerminalRuntimeConfig): void;
   /**
    * 热更新已存在 terminal 的字体. 走 Ghostty TerminalController.setTerminalConfiguration

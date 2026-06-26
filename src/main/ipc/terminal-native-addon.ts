@@ -42,6 +42,7 @@ export interface NativeAddon {
     kindRaw: number,
     panelId: string | null
   ): void;
+  setAppShortcutKeys(keys: string[]): void;
   setFrame(panelId: string, frame: TerminalFrame): void;
   setKeyboardForwardCallback(
     cb:

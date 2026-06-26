@@ -35,7 +35,7 @@ export function registerPanelActions(): () => void {
       id: "pier.panel.closeActive",
       metadata: { group: "9_close" },
       surfaces: [],
-      title: () => "Close Active Panel",
+      title: () => i18next.t("commandPalette.action.closeActivePanel"),
     })
   );
 
@@ -47,7 +47,7 @@ export function registerPanelActions(): () => void {
       id: "pier.panel.newTab",
       metadata: { group: "1_new" },
       surfaces: [],
-      title: () => "New Tab",
+      title: () => i18next.t("commandPalette.action.newTab"),
     })
   );
 
@@ -76,7 +76,7 @@ export function registerPanelActions(): () => void {
       id: "pier.window.newWindow",
       metadata: { group: "1_new" },
       surfaces: [],
-      title: () => "New Window",
+      title: () => i18next.t("commandPalette.action.newWindow"),
     })
   );
 

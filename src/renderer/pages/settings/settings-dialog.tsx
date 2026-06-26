@@ -18,6 +18,7 @@ import {
 } from "@/components/primitives/sidebar.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
+import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
 import {
   NAV_ITEMS,
@@ -96,11 +97,9 @@ export function SettingsDialog() {
             className="relative -mr-6 flex h-full min-h-0 flex-1 flex-col overflow-y-auto"
             data-scrollbar="stable"
           >
-            {activeSection === "appearance" ? (
-              <AppearanceSection />
-            ) : (
-              <TerminalSection />
-            )}
+            {activeSection === "appearance" ? <AppearanceSection /> : null}
+            {activeSection === "terminal" ? <TerminalSection /> : null}
+            {activeSection === "keybindings" ? <KeybindingsSection /> : null}
           </main>
         </SidebarProvider>
       </DialogContent>

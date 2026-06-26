@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { stringifyChord } from "@/lib/keybindings/formatter.ts";
 import { chordEquals } from "@/lib/keybindings/matcher.ts";
 import { parseChord } from "@/lib/keybindings/parse.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
@@ -172,5 +173,43 @@ describe("keybinding engine", () => {
     expect(keybindingRegistry.getBindingsFor("pier.test.action")).toHaveLength(
       1
     );
+  });
+
+  it("stringifies chords back to the persisted keymap DSL", () => {
+    expect(stringifyChord(parseChord("Mod+Alt+Shift+KeyX", true))).toBe(
+      "Mod+Alt+Shift+KeyX"
+    );
+    expect(stringifyChord(parseChord("Ctrl+Shift+ArrowLeft", true))).toBe(
+      "Ctrl+Shift+ArrowLeft"
+    );
+  });
+
+  it("detects conflicts in the same scope and ignores the same command", () => {
+    keybindingRegistry.registerDefaults([
+      {
+        commandId: "pier.test.first",
+        keys: "Mod+KeyK",
+        scope: "global",
+      },
+      {
+        commandId: "pier.test.panel",
+        keys: "Mod+KeyK",
+        scope: "panel:terminal",
+      },
+    ]);
+    const chord = parseChord("Mod+KeyK", false);
+
+    expect(
+      keybindingRegistry.findConflict(chord, "global", "pier.test.second")
+    ).toMatchObject({
+      commandId: "pier.test.first",
+      scope: "global",
+    });
+    expect(
+      keybindingRegistry.findConflict(chord, "global", "pier.test.first")
+    ).toBeNull();
+    expect(
+      keybindingRegistry.findConflict(chord, "overlay:command-palette")
+    ).toBeNull();
   });
 });
