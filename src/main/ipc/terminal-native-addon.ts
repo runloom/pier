@@ -1,10 +1,16 @@
+import { createRequire } from "node:module";
 import type {
   TerminalColors,
   TerminalFrame,
+  TerminalNativePresentationSnapshot,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 
 export interface NativeAddon {
+  applyTerminalPresentation(
+    parentHandle: Buffer,
+    snapshot: TerminalNativePresentationSnapshot
+  ): void;
   /**
    * 应用 Pier 主题派生的终端配色到指定 window 下的 Ghostty controller.
    * Ghostty 库 controller.setTheme(...) 内部 reconfigure 并立即生效, shell 进程
@@ -22,6 +28,7 @@ export interface NativeAddon {
     fontSize: number,
     cwd: string | undefined
   ): boolean;
+  debugSnapshot(parentHandle: Buffer): string;
   /** Window 真正销毁时调用一次: closeAll + 卸 EventRouter + 卸 NSEvent monitor */
   detachWindow(parentHandle: Buffer): void;
   focusTerminal(panelId: string): void;
@@ -95,4 +102,23 @@ export interface NativeAddon {
   ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
   showTerminal(panelId: string): void;
+}
+
+export function loadNativeAddon(): {
+  addon: NativeAddon | null;
+  error: string | null;
+} {
+  if (process.platform !== "darwin") {
+    return { addon: null, error: "ghostty requires macOS" };
+  }
+  try {
+    const require = createRequire(import.meta.url);
+    const addon: NativeAddon = require("../../native/build/Release/ghostty_native.node");
+    return { addon, error: null };
+  } catch (e) {
+    return {
+      addon: null,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
 }

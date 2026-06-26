@@ -91,6 +91,7 @@ export const zhCN = {
         },
         terminal: {
           close: "关闭当前终端面板。",
+          openDebugWindow: "打开终端调试窗口。",
         },
         window: {
           newWindow: "打开一个新的 Pier 窗口。",
@@ -162,6 +163,7 @@ export const zhCN = {
     },
     action: {
       toggleCommandPalette: "显示命令面板",
+      openTerminalDebugWindow: "打开终端调试窗口",
       openSettings: "打开设置",
       closeActivePanel: "关闭当前面板",
       newTab: "新建标签",

@@ -22,6 +22,10 @@ function detectMac(): boolean {
 
 const IS_MAC = detectMac();
 
+function normalizeEventCode(code: string): string {
+  return code === "NumpadEnter" ? "Enter" : code;
+}
+
 export function isMac(): boolean {
   return IS_MAC;
 }
@@ -34,7 +38,7 @@ export function chordFromEvent(e: KeyboardEvent): KeyChord {
     ctrl: IS_MAC ? e.ctrlKey : false,
     alt: e.altKey,
     shift: e.shiftKey,
-    code: e.code,
+    code: normalizeEventCode(e.code),
   };
 }
 

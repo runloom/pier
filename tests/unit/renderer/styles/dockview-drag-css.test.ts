@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+const SUBTLE_DROP_TARGET_BACKGROUND_RE =
+  /--dv-drag-over-background-color:\s*color-mix\(\s*in oklab,\s*var\(--primary\) 10%,\s*transparent\s*\)/;
+const SUBTLE_DROP_TARGET_BORDER_RE =
+  /--dv-drag-over-border:\s*1px solid\s*color-mix\(in oklab, var\(--primary\) 55%, transparent\)/;
+
 describe("Pier dockview drag CSS", () => {
   it("keeps drop targets subtle over native terminal content", () => {
     const css = readFileSync(
@@ -9,12 +14,8 @@ describe("Pier dockview drag CSS", () => {
       "utf8"
     );
 
-    expect(css).toContain(
-      "--dv-drag-over-background-color: color-mix(in oklab, var(--primary) 10%, transparent)"
-    );
-    expect(css).toContain(
-      "--dv-drag-over-border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent)"
-    );
+    expect(css).toMatch(SUBTLE_DROP_TARGET_BACKGROUND_RE);
+    expect(css).toMatch(SUBTLE_DROP_TARGET_BORDER_RE);
     expect(css).toContain(
       ".dockview-theme-pier .dv-drop-target-container .dv-drop-target-anchor"
     );

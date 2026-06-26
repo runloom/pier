@@ -156,6 +156,50 @@ describe("workspace.store panel reveal policy", () => {
     root.remove();
   });
 
+  it("generates unique split panel ids when shortcuts fire within the same millisecond", () => {
+    const activePanel = terminalPanel("terminal-1");
+    const panels = [activePanel];
+    const api = {
+      addPanel: vi.fn((panel: ReturnType<typeof terminalPanel>) => {
+        panels.push(terminalPanel(panel.id));
+      }),
+      panels,
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().splitPanel("terminal-1", "right");
+    useWorkspaceStore.getState().splitPanel("terminal-1", "below");
+
+    expect(api.addPanel).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: "terminal-123" })
+    );
+    expect(api.addPanel).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: "terminal-123-1" })
+    );
+  });
+
+  it("generates unique terminal ids when new terminals open within the same millisecond", () => {
+    const activePanel = terminalPanel("terminal-1");
+    const panels = [activePanel];
+    const api = {
+      activeGroup: { id: "group-1" },
+      activePanel,
+      addPanel: vi.fn((panel: ReturnType<typeof terminalPanel>) => {
+        panels.push(terminalPanel(panel.id));
+      }),
+      panels,
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    const firstPanelId = useWorkspaceStore.getState().addTerminal();
+    const secondPanelId = useWorkspaceStore.getState().addTerminal();
+
+    expect(firstPanelId).toBe("terminal-123");
+    expect(secondPanelId).toBe("terminal-123-1");
+  });
+
   it("reveals the target panel when focusing another group", () => {
     const activePanel = terminalPanel("terminal-1");
     const targetPanel = terminalPanel("terminal-2");

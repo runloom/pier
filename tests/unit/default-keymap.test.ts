@@ -6,12 +6,14 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Ctrl+Shift+ArrowLeft",
   "Ctrl+Shift+ArrowRight",
   "Ctrl+Shift+ArrowUp",
+  "Ctrl+Shift+KeyD",
   "Mod+Backquote",
   "Mod+Comma",
   "Mod+KeyD",
   "Mod+KeyN",
   "Mod+KeyT",
   "Mod+KeyW",
+  "Mod+Shift+Enter",
   "Mod+Shift+KeyD",
   "Mod+Shift+KeyP",
 ];
@@ -72,6 +74,38 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.focusRight",
       keys: "Ctrl+Shift+ArrowRight",
+      nativeTerminal: "app",
+      scope: "global",
+    });
+  });
+
+  it("contains the panel maximize shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.toggleMaximized",
+      keys: "Mod+Shift+Enter",
+      nativeTerminal: "app",
+      scope: "global",
+    });
+  });
+
+  it("contains the native terminal debug window shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.terminal.openDebugWindow",
+      keys: "Ctrl+Shift+KeyD",
+      nativeTerminal: "app",
+      scope: "global",
+    });
+    expect(
+      DEFAULT_KEYMAP.some(
+        (binding) => binding.commandId === "pier.terminal.toggleDebugOverlay"
+      )
+    ).toBe(false);
+  });
+
+  it("does not use the macOS Dock Command+Option+D shortcut family for debug window", () => {
+    expect(DEFAULT_KEYMAP).not.toContainEqual({
+      commandId: "pier.terminal.openDebugWindow",
+      keys: "Mod+Alt+Shift+KeyD",
       nativeTerminal: "app",
       scope: "global",
     });

@@ -30,23 +30,56 @@ interface KeybindingPreferencesState {
   userKeymap: UserKeymapEntry[];
 }
 
+const LEGACY_COMMAND_IDS: Record<string, string> = {
+  "pier.terminal.toggleDebugOverlay": "pier.terminal.openDebugWindow",
+};
+
+function normalizeCommandId(commandId: string): string {
+  const isUnbind = commandId.startsWith("-");
+  const rawCommandId = isUnbind ? commandId.slice(1) : commandId;
+  const normalizedCommandId = LEGACY_COMMAND_IDS[rawCommandId] ?? rawCommandId;
+  return isUnbind ? `-${normalizedCommandId}` : normalizedCommandId;
+}
+
+function normalizeTargetCommandId(commandId: string): string {
+  const normalizedCommandId = normalizeCommandId(commandId);
+  return normalizedCommandId.startsWith("-")
+    ? normalizedCommandId.slice(1)
+    : normalizedCommandId;
+}
+
+function normalizeUserKeymapEntries(
+  entries: readonly UserKeymapEntry[]
+): UserKeymapEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    commandId: normalizeCommandId(entry.commandId),
+  }));
+}
+
 function hasDefaultBinding(commandId: string): boolean {
-  return DEFAULT_KEYMAP.some((binding) => binding.commandId === commandId);
+  const normalizedCommandId = normalizeTargetCommandId(commandId);
+  return DEFAULT_KEYMAP.some(
+    (binding) => binding.commandId === normalizedCommandId
+  );
 }
 
 function entriesWithoutCommand(
   entries: readonly UserKeymapEntry[],
   commandId: string
 ): UserKeymapEntry[] {
-  const unbindId = `-${commandId}`;
-  return entries.filter(
-    (entry) => entry.commandId !== commandId && entry.commandId !== unbindId
+  const normalizedCommandId = normalizeTargetCommandId(commandId);
+  const unbindId = `-${normalizedCommandId}`;
+  return normalizeUserKeymapEntries(entries).filter(
+    (entry) =>
+      entry.commandId !== normalizedCommandId && entry.commandId !== unbindId
   );
 }
 
 function applyUserKeymap(entries: readonly UserKeymapEntry[]): void {
+  const normalizedEntries = normalizeUserKeymapEntries(entries);
   keybindingRegistry.loadUserKeymap(
-    entries.map((entry) => ({
+    normalizedEntries.map((entry) => ({
       ...entry,
       scope: entry.scope as KeybindingScope,
     }))
@@ -64,13 +97,14 @@ function applyUserKeymap(entries: readonly UserKeymapEntry[]): void {
 async function persistUserKeymap(
   entries: UserKeymapEntry[]
 ): Promise<KeybindingUpdateResult> {
+  const normalizedEntries = normalizeUserKeymapEntries(entries);
   try {
-    await window.pier.preferences.update({ userKeymap: entries });
-    applyUserKeymap(entries);
+    await window.pier.preferences.update({ userKeymap: normalizedEntries });
+    applyUserKeymap(normalizedEntries);
     useKeybindingPreferencesStore.setState({
       error: null,
       recordingCommandId: null,
-      userKeymap: entries,
+      userKeymap: normalizedEntries,
     });
     return { ok: true };
   } catch (err) {
@@ -91,17 +125,21 @@ export const useKeybindingPreferencesStore = create<KeybindingPreferencesState>(
     },
 
     clearBinding(commandId) {
+      const normalizedCommandId = normalizeTargetCommandId(commandId);
       const next: UserKeymapEntry[] = [
-        ...entriesWithoutCommand(get().userKeymap, commandId),
-        { commandId: `-${commandId}`, keys: "", scope: "global" },
+        ...entriesWithoutCommand(get().userKeymap, normalizedCommandId),
+        { commandId: `-${normalizedCommandId}`, keys: "", scope: "global" },
       ];
       return persistUserKeymap(next);
     },
 
     hasUserEntry(commandId) {
-      const unbindId = `-${commandId}`;
+      const normalizedCommandId = normalizeTargetCommandId(commandId);
+      const unbindId = `-${normalizedCommandId}`;
       return get().userKeymap.some(
-        (entry) => entry.commandId === commandId || entry.commandId === unbindId
+        (entry) =>
+          entry.commandId === normalizedCommandId ||
+          entry.commandId === unbindId
       );
     },
 
@@ -116,6 +154,7 @@ export const useKeybindingPreferencesStore = create<KeybindingPreferencesState>(
     },
 
     setBinding(commandId, keys, scope = "global") {
+      const normalizedCommandId = normalizeTargetCommandId(commandId);
       let chord: KeyChord;
       try {
         chord = parseChord(keys, isMac());
@@ -125,24 +164,39 @@ export const useKeybindingPreferencesStore = create<KeybindingPreferencesState>(
         return Promise.resolve({ ok: false, error: message });
       }
       const normalizedKeys = stringifyChord(chord);
-      const conflict = keybindingRegistry.findConflict(chord, scope, commandId);
+      const conflict = keybindingRegistry.findConflict(
+        chord,
+        scope,
+        normalizedCommandId
+      );
       if (conflict) {
         const message = `Shortcut already used by ${conflict.commandId}`;
         set({ error: message });
         return Promise.resolve({ ok: false, error: message });
       }
       const next: UserKeymapEntry[] = [
-        ...entriesWithoutCommand(get().userKeymap, commandId),
+        ...entriesWithoutCommand(get().userKeymap, normalizedCommandId),
       ];
-      if (hasDefaultBinding(commandId)) {
-        next.push({ commandId: `-${commandId}`, keys: "", scope: "global" });
+      if (hasDefaultBinding(normalizedCommandId)) {
+        next.push({
+          commandId: `-${normalizedCommandId}`,
+          keys: "",
+          scope: "global",
+        });
       }
-      next.push({ commandId, keys: normalizedKeys, scope });
+      next.push({
+        commandId: normalizedCommandId,
+        keys: normalizedKeys,
+        scope,
+      });
       return persistUserKeymap(next);
     },
 
     startRecording(commandId) {
-      set({ error: null, recordingCommandId: commandId });
+      set({
+        error: null,
+        recordingCommandId: normalizeTargetCommandId(commandId),
+      });
     },
   })
 );
@@ -151,7 +205,7 @@ let preferencesListenerAttached = false;
 let detachPreferencesListener: (() => void) | null = null;
 
 function hydrate(entries: readonly UserKeymapEntry[]): void {
-  const next = [...entries];
+  const next = normalizeUserKeymapEntries(entries);
   applyUserKeymap(next);
   useKeybindingPreferencesStore.setState({
     error: null,

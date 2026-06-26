@@ -6,12 +6,21 @@ import {
   type DockviewTheme,
   type SerializedDockview,
 } from "dockview-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
-import { flushTerminalLayoutFramesTrailing } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
+import {
+  flushTerminalLayoutFramesTrailing,
+  setTerminalLayoutPresentationScheduler,
+  type TerminalLayoutFlushReason,
+} from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
+import {
+  requestTerminalPresentation,
+  type TerminalPresentationWorkspaceState,
+  updateTerminalPresentationWorkspace,
+} from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -108,6 +117,48 @@ function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
   }
 }
 
+type WorkspacePanel = DockviewReadyEvent["api"]["panels"][number];
+
+function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
+  if (!panel) {
+    useKeybindingScope.getState().setActivePanel(null, null, null);
+    return;
+  }
+  const component = panel.view.contentComponent;
+  const kind = panelKindOf(component);
+  useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
+}
+
+function buildTerminalWorkspacePresentationState(
+  api: DockviewReadyEvent["api"]
+): TerminalPresentationWorkspaceState {
+  const activePanel = api.activePanel;
+  return {
+    activePanelId: activePanel?.id ?? null,
+    activePanelKind: activePanel
+      ? panelKindOf(activePanel.view.contentComponent)
+      : "web",
+    hasMaximizedGroup: api.hasMaximizedGroup(),
+    panels: api.panels.map((panel) => ({
+      component: panel.view.contentComponent,
+      dockviewActive: panel.api.isActive,
+      dockviewVisible: panel.api.isVisible,
+      id: panel.id,
+    })),
+  };
+}
+
+function syncTerminalPresentation(
+  api: DockviewReadyEvent["api"],
+  flushReason: TerminalLayoutFlushReason
+): void {
+  updateTerminalPresentationWorkspace(
+    buildTerminalWorkspacePresentationState(api),
+    flushReason
+  );
+  flushTerminalLayoutFramesTrailing(flushReason);
+}
+
 function runRendererCommand(envelope: RendererCommandEnvelope): void {
   try {
     const state = useWorkspaceStore.getState();
@@ -173,6 +224,7 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
 
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
+  const [hasMaximizedGroup, setHasMaximizedGroup] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -181,6 +233,11 @@ export function WorkspaceHost() {
       setDockviewTabRevealRoot(null);
     };
   }, []);
+
+  useEffect(
+    () => setTerminalLayoutPresentationScheduler(requestTerminalPresentation),
+    []
+  );
 
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
@@ -248,6 +305,15 @@ export function WorkspaceHost() {
         }
       };
 
+      const syncDockviewMaximizedState = (): void => {
+        const nextHasMaximizedGroup = event.api.hasMaximizedGroup();
+        rootRef.current?.setAttribute(
+          "data-dockview-maximized",
+          nextHasMaximizedGroup ? "true" : "false"
+        );
+        setHasMaximizedGroup(nextHasMaximizedGroup);
+      };
+
       // onDidLayoutChange 双责任: 标记 userTouched (防 fromJSON 覆盖) + debounced save
       let saveTimer: ReturnType<typeof setTimeout> | null = null;
       event.api.onDidLayoutChange(() => {
@@ -255,7 +321,7 @@ export function WorkspaceHost() {
           return; // program-driven, 不算 user touched
         }
         userTouched = true;
-        flushTerminalLayoutFramesTrailing("dockview-layout");
+        syncTerminalPresentation(event.api, "dockview-layout");
         if (saveTimer) {
           clearTimeout(saveTimer);
         }
@@ -268,7 +334,9 @@ export function WorkspaceHost() {
       });
 
       event.api.onDidMaximizedGroupChange(() => {
-        flushTerminalLayoutFramesTrailing("dockview-maximize");
+        syncDockviewMaximizedState();
+        syncActivePanelScope(event.api.activePanel);
+        syncTerminalPresentation(event.api, "dockview-maximize");
       });
 
       // Active panel 变化 (含同 group 切 tab, panel 创建/删除导致 active 切换) →
@@ -292,15 +360,8 @@ export function WorkspaceHost() {
         }
         descriptorStore.setActive(panel?.id ?? null);
 
-        if (!panel) {
-          useKeybindingScope.getState().setActivePanel(null, null, null);
-          window.pier?.terminal?.setActivePanelKind?.("web", null);
-          return;
-        }
-        const component = panel.view.contentComponent;
-        const kind = panelKindOf(component);
-        useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
-        window.pier?.terminal?.setActivePanelKind?.(kind, panel.id);
+        syncActivePanelScope(panel);
+        syncTerminalPresentation(event.api, "dockview-active-panel");
       });
 
       window.pier?.terminal?.onFocusRequest?.((req) => {
@@ -312,7 +373,7 @@ export function WorkspaceHost() {
           }
         );
         if (result.ok) {
-          window.pier?.terminal?.setActivePanelKind?.("terminal", req.panelId);
+          syncTerminalPresentation(event.api, "dockview-active-panel");
         }
       });
 
@@ -355,9 +416,15 @@ export function WorkspaceHost() {
           } else {
             applyDefaultLayout(event.api);
           }
+          syncDockviewMaximizedState();
+          syncActivePanelScope(event.api.activePanel);
+          syncTerminalPresentation(event.api, "restore");
         } catch (err) {
           console.error("[workspace] fromJSON failed, fallback default:", err);
           applyDefaultLayout(event.api);
+          syncDockviewMaximizedState();
+          syncActivePanelScope(event.api.activePanel);
+          syncTerminalPresentation(event.api, "restore");
         }
 
         // C 方案 reload 零销毁的孤儿兜底:layout 应用后报告当前还活着的 terminal
@@ -380,7 +447,12 @@ export function WorkspaceHost() {
   );
 
   return (
-    <div className="h-full w-full overflow-hidden" ref={rootRef}>
+    <div
+      className="h-full w-full overflow-hidden"
+      data-dockview-maximized={hasMaximizedGroup ? "true" : "false"}
+      data-testid="workspace-host-root"
+      ref={rootRef}
+    >
       <DockviewReact
         components={panelComponents}
         defaultTabComponent={PanelTabHeader}

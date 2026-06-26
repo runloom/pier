@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { stringifyChord } from "@/lib/keybindings/formatter.ts";
-import { chordEquals } from "@/lib/keybindings/matcher.ts";
+import { chordEquals, chordFromEvent } from "@/lib/keybindings/matcher.ts";
 import { parseChord } from "@/lib/keybindings/parse.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import type {
@@ -79,6 +79,48 @@ describe("keybinding engine", () => {
       alt: false,
       shift: false,
       code: "KeyP",
+    });
+  });
+
+  it("parses Mod+Shift+Enter into KeyChord", () => {
+    expect(parseChord("Mod+Shift+Enter", true)).toEqual({
+      cmdOrCtrl: true,
+      ctrl: false,
+      alt: false,
+      shift: true,
+      code: "Enter",
+    });
+  });
+
+  it("normalizes keyboard numpad Enter to the Enter keybinding code", () => {
+    const event = new KeyboardEvent("keydown", {
+      code: "NumpadEnter",
+      metaKey: true,
+      shiftKey: true,
+    });
+
+    expect(chordFromEvent(event)).toMatchObject({
+      code: "Enter",
+    });
+  });
+
+  it("parses Ctrl+Shift+KeyD into a mac terminal debug chord", () => {
+    expect(parseChord("Ctrl+Shift+KeyD", true)).toEqual({
+      cmdOrCtrl: false,
+      ctrl: true,
+      alt: false,
+      shift: true,
+      code: "KeyD",
+    });
+  });
+
+  it("parses Ctrl+Shift+KeyD into a non-mac terminal debug chord", () => {
+    expect(parseChord("Ctrl+Shift+KeyD", false)).toEqual({
+      cmdOrCtrl: true,
+      ctrl: false,
+      alt: false,
+      shift: true,
+      code: "KeyD",
     });
   });
 

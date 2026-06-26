@@ -94,6 +94,7 @@ export const en = {
         },
         terminal: {
           close: "Close the current terminal panel.",
+          openDebugWindow: "Open the terminal debug window.",
         },
         window: {
           newWindow: "Open a new Pier window.",
@@ -165,6 +166,7 @@ export const en = {
     },
     action: {
       toggleCommandPalette: "Show Command Palette",
+      openTerminalDebugWindow: "Open Terminal Debug Window",
       openSettings: "Open Settings",
       closeActivePanel: "Close Active Panel",
       newTab: "New Tab",

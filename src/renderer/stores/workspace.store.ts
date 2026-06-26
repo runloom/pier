@@ -34,6 +34,7 @@ interface WorkspaceState {
     panelId: string,
     direction: "right" | "below" | "left" | "above"
   ) => void;
+  toggleActivePanelMaximized: () => void;
 }
 
 interface TerminalPanelParams {
@@ -65,6 +66,19 @@ function inheritedActiveTerminalContext(
     return;
   }
   return terminalPanelContext(activePanel.id);
+}
+
+function uniquePanelId(api: DockviewApi, prefix: string): string {
+  const base = `${prefix}-${Date.now()}`;
+  const existing = new Set(api.panels.map((panel) => panel.id));
+  if (!existing.has(base)) {
+    return base;
+  }
+  let suffix = 1;
+  while (existing.has(`${base}-${suffix}`)) {
+    suffix += 1;
+  }
+  return `${base}-${suffix}`;
 }
 
 /**
@@ -110,7 +124,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!api) {
       return;
     }
-    const id = `welcome-${Date.now()}`;
+    const id = uniquePanelId(api, "welcome");
     const group = api.activeGroup;
     if (group) {
       // 有 active group → 在该 group 内加 tab (direction within)
@@ -131,7 +145,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!api) {
       return null;
     }
-    const id = `terminal-${Date.now()}`;
+    const id = uniquePanelId(api, "terminal");
     const activeGroup = opts?.referenceGroup ?? api.activeGroup;
     const activePanel = api.activePanel;
     const splitDirection = (() => {
@@ -281,7 +295,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     const component = panel.view.contentComponent;
-    const newId = `${component}-${Date.now()}`;
+    const newId = uniquePanelId(api, component);
     const params =
       component === "terminal" &&
       useTerminalPreferencesStore.getState().terminalNewCwdPolicy ===
@@ -352,6 +366,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     activateWorkspacePanel(api, targetPanel.id, {
       reveal: "always",
     });
+  },
+
+  toggleActivePanelMaximized: () => {
+    const panel = get().api?.activePanel;
+    if (!panel) {
+      return;
+    }
+    if (panel.api.isMaximized()) {
+      panel.api.exitMaximized();
+      return;
+    }
+    panel.api.maximize();
   },
 
   resetLayout: async () => {

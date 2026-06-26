@@ -39,6 +39,18 @@ export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
     scope: "global",
   },
   {
+    commandId: "pier.panel.toggleMaximized",
+    keys: "Mod+Shift+Enter",
+    nativeTerminal: "app",
+    scope: "global",
+  },
+  {
+    commandId: "pier.terminal.openDebugWindow",
+    keys: "Ctrl+Shift+KeyD",
+    nativeTerminal: "app",
+    scope: "global",
+  },
+  {
     commandId: "pier.settings.open",
     keys: "Mod+Comma",
     nativeTerminal: "app",

@@ -22,12 +22,14 @@ const IS_APPLYING_PERSISTED_DECL_RE = /let isApplyingPersistedLayout = false/;
 const IS_APPLYING_GUARDS_SAVE_RE = /if \(isApplyingPersistedLayout\) \{/;
 
 const ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE =
-  /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,800}?if \(!panel\) \{/;
+  /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,200}?if \(!panel\) \{/;
+const ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE =
+  /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
+const ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE =
+  /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
 
-const SET_ACTIVE_PANEL_KIND_FOR_TERMINAL_RE =
-  /window\.pier\?\.terminal\?\.setActivePanelKind\?\.\(kind, panel\.id\)/;
-const SET_ACTIVE_PANEL_KIND_FOR_WEB_NULL_RE =
-  /window\.pier\?\.terminal\?\.setActivePanelKind\?\.\("web", null\)/;
+const SET_ACTIVE_PANEL_KIND_PRIMITIVE_RE =
+  /window\.pier\?\.terminal\?\.setActivePanelKind/;
 
 const RECONCILE_CALL_RE =
   /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\)/;
@@ -72,17 +74,17 @@ describe("workspace-host invariants (#17 #19)", () => {
     expect(SOURCE).toMatch(IS_APPLYING_GUARDS_SAVE_RE);
   });
 
-  it("onDidActivePanelChange handles null panel by setting web kind (no terminal steals)", () => {
-    // #17 fromJSON 失败 / no panels:active panel 可能为 null, 必须 fallback 到
-    // setActivePanelKind("web", null), 防止 swift 拿着旧 stale panelId 继续 makeFirstResponder.
+  it("onDidActivePanelChange handles null panel via scope + presentation sync", () => {
+    // active panel 可能为 null. renderer 只同步 keybinding scope + desired
+    // presentation, 不再直接写 native primitive.
     expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE);
-    expect(SOURCE).toMatch(SET_ACTIVE_PANEL_KIND_FOR_WEB_NULL_RE);
+    expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE);
+    expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE);
   });
 
-  it("forwards active panel + kind to swift on every onDidActivePanelChange", () => {
-    // 这是切 tab / drag / 任何 dockview activePanel 变化的核心 IPC 边界. 缺这条
-    // swift 端永远停在旧 active panel, 切 tab 视觉跟输入都漂.
-    expect(SOURCE).toMatch(SET_ACTIVE_PANEL_KIND_FOR_TERMINAL_RE);
+  it("does not call native active-panel primitive from renderer workspace host", () => {
+    // presentation reconciler 是 renderer presentation 唯一写入口.
+    expect(SOURCE).not.toMatch(SET_ACTIVE_PANEL_KIND_PRIMITIVE_RE);
   });
 
   it("calls reconcile after layout restore to clean up orphan native NSViews", () => {

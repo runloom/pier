@@ -1,9 +1,9 @@
-import { createRequire } from "node:module";
 import type {
   CreateTerminalArgs,
   TerminalColors,
   TerminalFont,
   TerminalFrame,
+  TerminalPresentationSnapshot,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 import type { IpcMain, WebContents } from "electron";
@@ -11,8 +11,6 @@ import {
   isToggleDevToolsNativeChord,
   toggleDetachedDevTools,
 } from "../devtools.ts";
-import { resolvePanelContextForPath } from "../services/panel-context-resolver.ts";
-import { recordRecentPanelContext } from "../state/panel-context-state.ts";
 import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
@@ -23,13 +21,31 @@ import type { AppWindow } from "../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
   findAppWindowByWebContents,
-  findInternalWindowId,
-  findWindowSessionId,
 } from "../windows/window-identity.ts";
-import type { NativeAddon } from "./terminal-native-addon.ts";
+import { handleTerminalCwdChange } from "./terminal-cwd-forwarding.ts";
+import {
+  recordNativeTerminalRoute,
+  recordRendererTerminalRoute,
+  recordWebContentsRoute,
+} from "./terminal-debug.ts";
+import { registerTerminalDebugSnapshotIpc } from "./terminal-debug-snapshot.ts";
+import {
+  blurActivePanelFocus,
+  focusWebContentsForEffectivePresentation,
+  rememberActivePanelFocus,
+  setTerminalFocusAddonProvider,
+} from "./terminal-focus-state.ts";
+import { forwardToWindow } from "./terminal-forwarding.ts";
+import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
 import { performTerminalOperation } from "./terminal-operations.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
+import {
+  applyLatestTerminalPresentation,
+  applyRendererTerminalPresentation,
+  setTerminalOverlayActive,
+} from "./terminal-presentation.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
+import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
@@ -37,135 +53,51 @@ export function getTerminalAddon(): NativeAddon | null {
 }
 let cachedAddon: NativeAddon | null = null;
 
-interface ActivePanelFocusState {
-  kind: "terminal" | "web";
-  panelId: string | null;
-}
-const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
-function rememberActivePanelFocus(
-  win: AppWindow,
-  kind: "terminal" | "web",
-  panelId: string | null
-): void {
-  activePanelFocusByWindowId.set(win.id, { kind, panelId });
-}
-
-export function stableWindowIdFor(win: AppWindow): string {
-  return findInternalWindowId(win) ?? `window-${win.id}`;
-}
-export function terminalSessionScopeFor(win: AppWindow): string {
-  return findWindowSessionId(win) ?? stableWindowIdFor(win);
-}
-export function restoreActivePanelFocus(win: AppWindow): void {
-  if (win.isDestroyed()) {
-    return;
-  }
-  if (win.isMinimized()) {
-    win.restore();
-  }
-  win.focus();
-
-  const active = activePanelFocusByWindowId.get(win.id);
-  if (active?.kind === "terminal" && active.panelId) {
-    try {
-      cachedAddon?.focusTerminal(scopePanelId(win, active.panelId));
-    } catch (err) {
-      console.error("[pier-restore-terminal-focus] failed:", err);
-    }
-    return;
-  }
-
-  if (!win.webContents.isDestroyed()) {
-    win.webContents.focus();
-  }
-}
-
-export function blurActivePanelFocus(win: AppWindow): void {
-  if (win.isDestroyed()) {
-    return;
-  }
-  try {
-    cachedAddon?.setActivePanelKind(win.getNativeWindowHandle(), 1, null);
-  } catch (err) {
-    console.error("[pier-blur-terminal-focus] failed:", err);
-  }
-}
-
-function loadNativeAddon(): {
-  addon: NativeAddon | null;
-  error: string | null;
-} {
-  if (process.platform !== "darwin") {
-    return { addon: null, error: "ghostty requires macOS" };
-  }
-  try {
-    const require = createRequire(import.meta.url);
-    const addon: NativeAddon = require("../../native/build/Release/ghostty_native.node");
-    return { addon, error: null };
-  } catch (e) {
-    return {
-      addon: null,
-      error: e instanceof Error ? e.message : String(e),
-    };
-  }
-}
-
-/** Swift-originated events 按 Electron window id 精准转发, 避免焦点窗口误路由. */
-function forwardToWindow<P>(
-  browserWindowId: number,
-  channel: string,
-  payload: P,
-  errorLabel: string
-): void {
-  try {
-    const targetWindow = findAppWindowByElectronId(browserWindowId);
-    if (!targetWindow || targetWindow.isDestroyed()) {
-      return;
-    }
-    const wc = targetWindow.webContents;
-    if (wc.isDestroyed()) {
-      return;
-    }
-    wc.send(channel, payload);
-  } catch (err) {
-    console.error(`[${errorLabel}] send failed:`, err);
-  }
-}
-
 export function windowFromWebContents(
   webContents: WebContents
 ): AppWindow | null {
   return findAppWindowByWebContents(webContents);
 }
 
-async function handleTerminalCwdChange(
-  id: number,
-  rawPanelId: string,
-  cwd: string,
-  targetWindow: AppWindow | null
+async function persistInitialTerminalContext(
+  sessionScope: string,
+  panelId: string,
+  context: CreateTerminalArgs["context"]
 ): Promise<void> {
-  const context = await resolvePanelContextForPath(cwd, {
-    source: "panel",
-  });
-  await recordRecentPanelContext(context);
-  if (targetWindow && !targetWindow.isDestroyed()) {
-    const sessionScope = terminalSessionScopeFor(targetWindow);
-    await updateTerminalPanelContext(sessionScope, rawPanelId, context);
+  if (!context) {
+    return;
   }
-  forwardToWindow(
-    id,
-    "pier:terminal:cwd-change",
-    { panelId: rawPanelId, context },
-    "pier-cwd-forward"
+  try {
+    await updateTerminalPanelContext(sessionScope, panelId, context);
+  } catch (err) {
+    console.error("[pier-context-initial-persist] failed:", err);
+  }
+}
+
+function conformTerminalPresentationAfterCreate(
+  win: AppWindow,
+  addon: NativeAddon | null
+): void {
+  const effective = applyLatestTerminalPresentation(win, addon, "restore");
+  focusWebContentsForEffectivePresentation(
+    win,
+    effective,
+    "terminal-create-conform"
   );
 }
 
 export function registerTerminalIpc(ipcMain: IpcMain): void {
   const { addon, error: loadError } = loadNativeAddon();
   cachedAddon = addon;
+  setTerminalFocusAddonProvider(() => cachedAddon);
+  registerTerminalDebugSnapshotIpc(ipcMain, addon);
 
   // Swift forward callback 必须按 setupWindow 记录的 Electron window id 路由.
   addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
+    recordNativeTerminalRoute(id, "key-forward", null, {
+      chars,
+      modifierFlags,
+    });
     const targetWindow = findAppWindowByElectronId(id);
     if (
       targetWindow &&
@@ -185,6 +117,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   });
   // Swift 收到 scoped panelId, renderer 使用 raw panel id.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
+    recordNativeTerminalRoute(id, "right-mouse", panelId, { x, y });
     forwardToWindow(
       id,
       "pier:terminal:request-context-menu",
@@ -193,6 +126,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     );
   });
   addon?.setTerminalFocusRequestCallback((id, panelId) => {
+    recordNativeTerminalRoute(id, "focus-request", panelId);
     forwardToWindow(
       id,
       "pier:terminal:focus-request",
@@ -201,6 +135,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     );
   });
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
+    recordNativeTerminalRoute(id, "cwd", panelId, { cwd });
     const rawPanelId = unscopePanelId(panelId);
     const targetWindow = findAppWindowByElectronId(id);
     handleTerminalCwdChange(id, rawPanelId, cwd, targetWindow).catch((err) => {
@@ -208,6 +143,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     });
   });
   addon?.setTitleForwardCallback((id, panelId, title) => {
+    recordNativeTerminalRoute(id, "title", panelId, { title });
     const rawPanelId = unscopePanelId(panelId);
     const targetWindow = findAppWindowByElectronId(id);
     if (targetWindow && !targetWindow.isDestroyed()) {
@@ -236,6 +172,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       const handle = win.getNativeWindowHandle();
       // 传 Electron window id 给 swift, 防多窗口 callback 误投到 focused window.
       const ok = addon.setupWindow(handle, win.id);
+      recordRendererTerminalRoute(win, "setup", null, { ok });
       return ok ? { ok: true } : { ok: false, error: "setupWindow failed" };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -273,6 +210,12 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         );
         const context = saved?.context ?? args.context;
         const cwd = context?.cwd;
+        recordRendererTerminalRoute(win, "create", args.panelId, {
+          height: args.frame.height,
+          width: args.frame.width,
+          x: args.frame.x,
+          y: args.frame.y,
+        });
         const ok = addon.createTerminal(
           handle,
           scopePanelId(win, args.panelId),
@@ -281,16 +224,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           args.font.size,
           cwd
         );
-        if (ok && context) {
-          try {
-            await updateTerminalPanelContext(
-              sessionScope,
-              args.panelId,
-              context
-            );
-          } catch (err) {
-            console.error("[pier-context-initial-persist] failed:", err);
-          }
+        if (ok) {
+          await persistInitialTerminalContext(
+            sessionScope,
+            args.panelId,
+            context
+          );
+          conformTerminalPresentationAfterCreate(win, addon);
         }
         return ok
           ? { ok: true }
@@ -301,6 +241,29 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           error: e instanceof Error ? e.message : String(e),
         };
       }
+    }
+  );
+
+  ipcMain.on(
+    "pier:terminal:apply-presentation",
+    (event, snapshot: TerminalPresentationSnapshot) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      recordRendererTerminalRoute(win, "apply-presentation", null, {
+        hasMaximizedGroup: snapshot.hasMaximizedGroup,
+        overlayActive: snapshot.overlayActive,
+        reason: snapshot.reason,
+        rendererSequence: snapshot.rendererSequence,
+        terminalCount: snapshot.terminals.length,
+      });
+      const effective = applyRendererTerminalPresentation(win, addon, snapshot);
+      focusWebContentsForEffectivePresentation(
+        win,
+        effective,
+        "terminal-presentation"
+      );
     }
   );
 
@@ -336,6 +299,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!win) {
         return;
       }
+      recordRendererTerminalRoute(
+        win,
+        channel === "pier:terminal:show" ? "show" : "hide",
+        panelId
+      );
       call(win, panelId);
     });
   }
@@ -343,6 +311,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const win = windowFromWebContents(event.sender);
     if (win) {
       const sessionScope = terminalSessionScopeFor(win);
+      recordRendererTerminalRoute(win, "close", panelId);
       removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
         console.error("[pier-cwd-remove] failed:", err);
       });
@@ -353,6 +322,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const win = windowFromWebContents(event.sender);
     if (win) {
       rememberActivePanelFocus(win, "terminal", panelId);
+      recordRendererTerminalRoute(win, "focus", panelId, {
+        windowFocused: win.isFocused(),
+      });
       if (!win.isFocused()) {
         blurActivePanelFocus(win);
         return;
@@ -367,11 +339,16 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!win) {
         return;
       }
+      recordRendererTerminalRoute(win, "set-frame", panelId, {
+        height: frame.height,
+        width: frame.width,
+        x: frame.x,
+        y: frame.y,
+      });
       addon?.setFrame(scopePanelId(win, panelId), frame);
     }
   );
 
-  // Reconcile: renderer restore 完成后报告活跃 terminal, swift 清掉孤儿 NSView.
   ipcMain.on("pier:terminal:reconcile", (event, activeIds: string[]) => {
     if (!addon) {
       return;
@@ -380,6 +357,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (!win) {
       return;
     }
+    recordRendererTerminalRoute(win, "reconcile", null, {
+      count: activeIds.length,
+    });
     try {
       addon.reconcileTerminals(
         win.getNativeWindowHandle(),
@@ -391,20 +371,20 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   });
 
   ipcMain.on("pier:terminal:set-overlay", (event, active: boolean) => {
-    if (!addon) {
-      return;
-    }
     const win = windowFromWebContents(event.sender);
     if (!win) {
       return;
     }
+    recordRendererTerminalRoute(win, "set-overlay", null, { active });
     try {
-      addon.setOverlayActive(win.getNativeWindowHandle(), active);
+      const effective = setTerminalOverlayActive(win, addon, active);
+      focusWebContentsForEffectivePresentation(
+        win,
+        effective,
+        "terminal-overlay"
+      );
     } catch (err) {
       console.error("[pier-set-overlay] failed:", err);
-    }
-    if (active) {
-      win.webContents.focus();
     }
   });
 
@@ -416,6 +396,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (!win) {
       return;
     }
+    recordRendererTerminalRoute(win, "apply-theme", null);
     try {
       addon.applyTerminalTheme(win.getNativeWindowHandle(), colors);
     } catch (err) {
@@ -433,6 +414,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!win) {
         return;
       }
+      recordRendererTerminalRoute(win, "set-config", null, {
+        cursorBlink: config.cursorBlink,
+        pasteProtection: config.pasteProtection,
+      });
       try {
         addon.setTerminalConfig(win.getNativeWindowHandle(), config);
       } catch (err) {
@@ -453,6 +438,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!win) {
         return;
       }
+      recordRendererTerminalRoute(win, "set-font", _panelId, {
+        fontSize: font.size,
+      });
       try {
         addon.setTerminalFont(
           win.getNativeWindowHandle(),
@@ -473,6 +461,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         return;
       }
       rememberActivePanelFocus(win, kind, panelId);
+      recordRendererTerminalRoute(win, "set-active-panel-kind", panelId, {
+        kind,
+      });
       if (!addon) {
         return;
       }
@@ -491,6 +482,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         console.error("[pier-set-active-panel-kind] failed:", err);
       }
       if (kind === "web" && win.isFocused()) {
+        recordWebContentsRoute(win, "focus-webcontents", {
+          reason: "active-web-panel",
+        });
         win.webContents.focus();
       }
     }
