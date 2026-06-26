@@ -77,6 +77,10 @@ export interface PierCommandPaletteMruAPI {
   recordUse: (actionId: string) => void;
 }
 
+export interface PierCommandPaletteAPI {
+  onToggleRequest: (cb: () => void) => () => void;
+}
+
 /**
  * Keyboard chord forward: swift NSEvent monitor 捕获 Cmd+key → main IPC →
  * 这里 dispatch 到 renderer 侧的 listener (shell-keybindings).
@@ -105,6 +109,7 @@ export interface WindowLayoutPulse {
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
+  commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<WindowCreateResult>;
   focusWindow: (windowId: string) => Promise<void>;
@@ -167,6 +172,8 @@ const terminalApi: TerminalAPI = {
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   openSession: (args) => ipcRenderer.invoke("pier:terminal:open-session", args),
+  performOperation: (panelId, operation) =>
+    ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
@@ -219,6 +226,11 @@ const commandPaletteMruApi: PierCommandPaletteMruAPI = {
   },
 };
 
+const commandPaletteApi: PierCommandPaletteAPI = {
+  onToggleRequest: (cb) =>
+    subscribeIpc(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST, cb),
+};
+
 const menuApi: PierMenuAPI = {
   popup: (template, options) =>
     ipcRenderer.invoke("pier:menu:popup", template, options),
@@ -236,6 +248,7 @@ const api: PierWindowAPI = {
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:close", windowId),
+  commandPalette: commandPaletteApi,
   commandPaletteMru: commandPaletteMruApi,
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>

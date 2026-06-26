@@ -26,20 +26,18 @@ import {
   findWindowSessionId,
 } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
+import { performTerminalOperation } from "./terminal-operations.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
   return cachedAddon;
 }
-
 let cachedAddon: NativeAddon | null = null;
-
 interface ActivePanelFocusState {
   kind: "terminal" | "web";
   panelId: string | null;
 }
-
 const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
 
 function rememberActivePanelFocus(
@@ -241,6 +239,18 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
+
+  ipcMain.handle(
+    "pier:terminal:perform-operation",
+    (event, panelId: unknown, operation: unknown) =>
+      performTerminalOperation({
+        addon,
+        loadError,
+        operation,
+        panelId,
+        win: windowFromWebContents(event.sender),
+      })
+  );
 
   ipcMain.handle(
     "pier:terminal:create",

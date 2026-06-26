@@ -132,6 +132,13 @@ export interface TerminalSessionCommandResult {
   windowId?: string | undefined;
 }
 
+export type TerminalOperation = "copy" | "paste" | "selectAll" | "clearScreen";
+
+export interface TerminalOperationResult {
+  error?: string | undefined;
+  ok: boolean;
+}
+
 export interface TerminalFocusSessionArgs {
   focus?: boolean | undefined;
   panelId: string;
@@ -216,6 +223,10 @@ export interface TerminalAPI {
   openSession(
     args?: TerminalOpenSessionArgs
   ): Promise<TerminalSessionCommandResult>;
+  performOperation(
+    panelId: string,
+    operation: TerminalOperation
+  ): Promise<TerminalOperationResult>;
   /**
    * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
    * 标题/cwd, 真正的 native terminal 可以等 panel 可见时再创建.

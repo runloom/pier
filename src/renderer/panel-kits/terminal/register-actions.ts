@@ -5,17 +5,84 @@
  * 内 register, 主程序 bootstrap 调一次 registerTerminalActions(). 未来第三方 kit
  * 同样模式 (panel-kits/<name>/register-actions.ts), 不需改 main.tsx.
  *
- * Phase 1 只放 1 个 kit 独有 action (close terminal); newTerminal / resetLayout 在
- * panel-actions.ts 内通过 surfaces 数组扩到 "terminal/content" 直接复用, 不在此文件
- * 重复注册. copy / paste / clear 等需要 Ghostty SDK 配合的操作留 Phase 2.
+ * terminal 内容操作由 kit 自己注册; newTerminal 在 panel-actions.ts 内通过 surfaces
+ * 扩到 "terminal/content" 直接复用, 不在此文件重复注册.
  */
+import type { TerminalOperation } from "@shared/contracts/terminal.ts";
 import i18next from "i18next";
 import { X } from "lucide-react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
+function activeTerminalPanelId(): string | null {
+  const panel = useWorkspaceStore.getState().api?.activePanel;
+  return panel?.view.contentComponent === "terminal" ? panel.id : null;
+}
+
+function registerTerminalOperationAction(opts: {
+  id: string;
+  i18nKey: string;
+  operation: TerminalOperation;
+  sortOrder: number;
+}): () => void {
+  return actionRegistry.register({
+    category: "Terminal",
+    enabled: () => activeTerminalPanelId() != null,
+    handler: async () => {
+      const panelId = activeTerminalPanelId();
+      if (!panelId) {
+        return;
+      }
+      const result = await window.pier.terminal.performOperation(
+        panelId,
+        opts.operation
+      );
+      if (!result.ok) {
+        console.error("[terminal-actions] operation failed:", result.error);
+      }
+    },
+    id: opts.id,
+    metadata: { group: "0_edit", sortOrder: opts.sortOrder },
+    surfaces: ["terminal/content"],
+    title: () => i18next.t(opts.i18nKey),
+  });
+}
+
 export function registerTerminalActions(): () => void {
   const disposers: Array<() => void> = [];
+
+  disposers.push(
+    registerTerminalOperationAction({
+      id: "pier.terminal.copy",
+      i18nKey: "contextMenu.action.copy",
+      operation: "copy",
+      sortOrder: 1,
+    })
+  );
+  disposers.push(
+    registerTerminalOperationAction({
+      id: "pier.terminal.paste",
+      i18nKey: "contextMenu.action.paste",
+      operation: "paste",
+      sortOrder: 2,
+    })
+  );
+  disposers.push(
+    registerTerminalOperationAction({
+      id: "pier.terminal.selectAll",
+      i18nKey: "contextMenu.action.selectAll",
+      operation: "selectAll",
+      sortOrder: 3,
+    })
+  );
+  disposers.push(
+    registerTerminalOperationAction({
+      id: "pier.terminal.clearScreen",
+      i18nKey: "contextMenu.action.clearScreen",
+      operation: "clearScreen",
+      sortOrder: 4,
+    })
+  );
 
   disposers.push(
     actionRegistry.register({

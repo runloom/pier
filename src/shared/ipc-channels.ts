@@ -16,6 +16,8 @@ export const PIER = {
 } as const;
 
 export const PIER_BROADCAST = {
+  // main 端应用菜单请求 renderer 打开/关闭命令面板.
+  COMMAND_PALETTE_TOGGLE_REQUEST: "pier://command-palette:toggle-request",
   // main 端应用菜单 / 原生快捷键请求 renderer 打开设置.
   SETTINGS_OPEN_REQUEST: "pier://settings:open-request",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
