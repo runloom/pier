@@ -81,6 +81,33 @@ export const pluginRegistryEntrySchema = z.object({
 });
 export type PluginRegistryEntry = z.infer<typeof pluginRegistryEntrySchema>;
 
+export const pluginRegistryDiagnosticSourceSchema = z.object({
+  integrity: z.string().min(1).optional(),
+  kind: pluginSourceKindSchema,
+  path: z.string().min(1).optional(),
+  url: z.string().min(1).optional(),
+});
+export type PluginRegistryDiagnosticSource = z.infer<
+  typeof pluginRegistryDiagnosticSourceSchema
+>;
+
+export const pluginRegistryDiagnosticSchema = z.object({
+  code: z.enum(["invalid_manifest", "unsupported"]),
+  message: z.string().min(1),
+  source: pluginRegistryDiagnosticSourceSchema,
+});
+export type PluginRegistryDiagnostic = z.infer<
+  typeof pluginRegistryDiagnosticSchema
+>;
+
+export const pluginRegistryListResultSchema = z.object({
+  diagnostics: z.array(pluginRegistryDiagnosticSchema),
+  entries: z.array(pluginRegistryEntrySchema),
+});
+export type PluginRegistryListResult = z.infer<
+  typeof pluginRegistryListResultSchema
+>;
+
 export const pluginInspectRequestSchema = z.object({
   id: z.string().min(1),
 });

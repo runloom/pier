@@ -87,7 +87,7 @@ function cliClientServices(): PierCoreServices {
     },
     plugins: {
       inspect: async () => null,
-      list: async () => [],
+      list: async () => ({ diagnostics: [], entries: [] }),
       setEnabled: async (id, enabled) => ({
         commands: [],
         enabled,

@@ -279,8 +279,6 @@ export function createWorktreeService({
       serviceError("invalid_name", `invalid worktree name: ${request.name}`);
     }
 
-    const resolvedPath = await safeRealpath(request.path, realpath);
-    await validateBranchName(request.branch, resolvedPath, execGit);
     const before = await list({ path: request.path });
     if (before.status === "unavailable") {
       serviceError(
@@ -288,6 +286,7 @@ export function createWorktreeService({
         `cannot create worktree from ${request.path}`
       );
     }
+    await validateBranchName(request.branch, before.mainPath, execGit);
 
     // Pier-owned worktrees live under the main checkout so Git remains the source of truth.
     const targetPath = join(before.mainPath, ".worktrees", request.name);

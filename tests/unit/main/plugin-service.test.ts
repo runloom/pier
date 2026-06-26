@@ -49,6 +49,15 @@ const builtinManifest = {
   version: "1.0.0",
 };
 
+const emptyState = {
+  read: () => Promise.resolve({ plugins: {}, version: 1 as const }),
+  setEnabled: (id: string, enabled: boolean) =>
+    Promise.resolve({
+      plugins: { [id]: { enabled, updatedAt: 1 } },
+      version: 1 as const,
+    }),
+};
+
 describe("pluginManifestSchema", () => {
   it("校验 manifest source、权限、commands 和 panels", () => {
     expect(pluginManifestSchema.parse(builtinManifest)).toMatchObject({
@@ -103,18 +112,21 @@ describe("createPluginService", () => {
       },
     });
 
-    await expect(service.list()).resolves.toMatchObject([
-      {
-        enabled: false,
-        id: "sample.builtin",
-        manifest: { source: { kind: "builtin" } },
-      },
-      {
-        enabled: true,
-        id: "sample.local",
-        manifest: { source: { kind: "local", url: localPath } },
-      },
-    ]);
+    await expect(service.list()).resolves.toMatchObject({
+      diagnostics: [],
+      entries: [
+        {
+          enabled: false,
+          id: "sample.builtin",
+          manifest: { source: { kind: "builtin" } },
+        },
+        {
+          enabled: true,
+          id: "sample.local",
+          manifest: { source: { kind: "local", url: localPath } },
+        },
+      ],
+    });
 
     await expect(service.inspect("sample.local")).resolves.toMatchObject({
       commands: [{ id: "sample.sayHello" }],
@@ -154,14 +166,48 @@ describe("createPluginService", () => {
     });
   });
 
-  it("git 和 registry source 返回明确 unsupported 错误", async () => {
+  it("坏 manifest 不阻断其它插件发现，并返回诊断信息", async () => {
+    const dir = await makeTempDir();
+    const badPath = join(dir, "bad-plugin.json");
+    await writeFile(badPath, JSON.stringify({ ...builtinManifest, id: "" }));
     const service = createPluginService({
-      sources: [{ kind: "git", url: "https://example.com/plugin.git" }],
+      sources: [
+        { kind: "builtin", manifest: builtinManifest },
+        { kind: "local", path: badPath },
+      ],
+      state: emptyState,
     });
 
-    await expect(service.list()).rejects.toMatchObject({
-      code: "unsupported",
-      message: "plugin source kind is not supported yet: git",
-    } satisfies Partial<PluginServiceError>);
+    await expect(service.list()).resolves.toMatchObject({
+      diagnostics: [
+        {
+          code: "invalid_manifest",
+          message: "invalid plugin manifest",
+          source: { kind: "local", path: badPath },
+        },
+      ],
+      entries: [{ id: "sample.builtin" }],
+    });
+  });
+
+  it("git 和 registry source 返回明确 unsupported 诊断", async () => {
+    const service = createPluginService({
+      sources: [{ kind: "git", url: "https://example.com/plugin.git" }],
+      state: emptyState,
+    });
+
+    await expect(service.list()).resolves.toMatchObject({
+      diagnostics: [
+        {
+          code: "unsupported",
+          message: "plugin source kind is not supported yet: git",
+          source: { kind: "git", url: "https://example.com/plugin.git" },
+        },
+      ],
+      entries: [],
+    } satisfies {
+      diagnostics: Array<Partial<PluginServiceError> & { source: unknown }>;
+      entries: unknown[];
+    });
   });
 });

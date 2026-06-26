@@ -238,6 +238,19 @@ describe("createWorktreeService", () => {
     const service = createWorktreeService({
       execGit: (args, cwd) => {
         calls.push({ args, cwd });
+        if (args[0] === "rev-parse" && args.includes("--show-toplevel")) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "worktree" && args[1] === "list") {
+          return Promise.resolve(
+            [
+              "worktree /repo",
+              "HEAD abc123",
+              "branch refs/heads/main",
+              "",
+            ].join("\0")
+          );
+        }
         if (args[0] === "check-ref-format") {
           return Promise.reject(new Error("invalid branch"));
         }
@@ -261,6 +274,32 @@ describe("createWorktreeService", () => {
         (call) => call.args[0] === "worktree" && call.args[1] === "add"
       )
     ).toBe(false);
+  });
+
+  it("create 在校验 branch 前先确认 path 是可用 Git 仓库", async () => {
+    const calls: Array<{ args: readonly string[]; cwd: string }> = [];
+    const service = createWorktreeService({
+      execGit: (args, cwd) => {
+        calls.push({ args, cwd });
+        if (args[0] === "rev-parse") {
+          return Promise.reject(new Error("not a git repository"));
+        }
+        return Promise.resolve("");
+      },
+      realpath: (path) => Promise.resolve(path),
+    });
+
+    await expect(
+      service.create({
+        branch: "feature/a",
+        name: "feature-a",
+        path: "/missing-repo",
+      })
+    ).rejects.toMatchObject({
+      reason: "not_git_repo",
+    });
+
+    expect(calls.map((call) => call.args[0])).toEqual(["rev-parse"]);
   });
 
   it("remove 使用 git worktree remove 安全移除 Pier 管理的 linked worktree", async () => {

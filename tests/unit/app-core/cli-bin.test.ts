@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -26,6 +26,14 @@ afterEach(async () => {
 });
 
 describe("bin/pier.mjs", () => {
+  it("复用 shared CLI parser，避免 bin 和 main adapter 双写解析逻辑", async () => {
+    const source = await readFile("bin/pier.mjs", "utf8");
+
+    expect(source).toContain("./pier-cli-parser.js");
+    expect(source).not.toContain("function parseWorktrees");
+    expect(source).not.toContain("function parseTerminalOpen");
+  });
+
   it("解析 status 并输出命令信封", async () => {
     const { stdout } = await execFileAsync("node", [
       "bin/pier.mjs",

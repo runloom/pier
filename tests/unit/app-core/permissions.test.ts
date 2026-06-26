@@ -77,6 +77,27 @@ describe("authorizeCommand", () => {
     });
   });
 
+  it("terminal.open 携带启动参数时要求 terminal:control", () => {
+    expect(
+      authorizeCommand(
+        {
+          launch: { command: "pnpm test", cwd: "/repo" },
+          type: "terminal.open",
+        },
+        client("cli-local", ["workspace:open"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: terminal:control",
+    });
+    expect(
+      authorizeCommand(
+        { type: "terminal.open" },
+        client("cli-local", ["workspace:open"])
+      )
+    ).toEqual({ ok: true });
+  });
+
   it("允许 CLI 默认客户端读取和创建 worktree", () => {
     expect(
       authorizeCommand(

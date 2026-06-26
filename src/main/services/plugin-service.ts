@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
 import type {
   PluginManifest,
+  PluginRegistryDiagnostic,
+  PluginRegistryDiagnosticSource,
   PluginRegistryEntry,
+  PluginRegistryListResult,
   PluginRegistryState,
   PluginSource,
 } from "@shared/contracts/plugin.ts";
@@ -38,7 +41,7 @@ export interface PluginStateStore {
 
 export interface PluginService {
   inspect(id: string): Promise<PluginRegistryEntry | null>;
-  list(): Promise<PluginRegistryEntry[]>;
+  list(): Promise<PluginRegistryListResult>;
   setEnabled(id: string, enabled: boolean): Promise<PluginRegistryEntry>;
 }
 
@@ -70,6 +73,46 @@ function entryFromManifest(
     permissions: manifest.permissions,
     source: sourceFromManifest(manifest),
     version: manifest.version,
+  };
+}
+
+function diagnosticSource(
+  source: PluginDiscoverySource
+): PluginRegistryDiagnosticSource {
+  switch (source.kind) {
+    case "builtin":
+      return { kind: "builtin" };
+    case "local":
+      return { kind: "local", path: source.path };
+    case "git":
+    case "registry":
+      return {
+        ...(source.integrity && { integrity: source.integrity }),
+        kind: source.kind,
+        ...(source.url && { url: source.url }),
+      };
+    default: {
+      const _exhaustive: never = source;
+      return _exhaustive;
+    }
+  }
+}
+
+function diagnosticFromError(
+  source: PluginDiscoverySource,
+  err: unknown
+): PluginRegistryDiagnostic {
+  if (err instanceof PluginServiceError) {
+    return {
+      code: err.code === "unsupported" ? "unsupported" : "invalid_manifest",
+      message: err.message,
+      source: diagnosticSource(source),
+    };
+  }
+  return {
+    code: "invalid_manifest",
+    message: err instanceof Error ? err.message : "invalid plugin manifest",
+    source: diagnosticSource(source),
   };
 }
 
@@ -122,20 +165,28 @@ export function createPluginService({
   sources = [],
   state = DEFAULT_STATE,
 }: CreatePluginServiceOptions = {}): PluginService {
-  async function list(): Promise<PluginRegistryEntry[]> {
+  async function list(): Promise<PluginRegistryListResult> {
     const manifests: PluginManifest[] = [];
+    const diagnostics: PluginRegistryDiagnostic[] = [];
     for (const source of sources) {
-      manifests.push(await readSourceManifest(source, readTextFile));
+      try {
+        manifests.push(await readSourceManifest(source, readTextFile));
+      } catch (err) {
+        diagnostics.push(diagnosticFromError(source, err));
+      }
     }
     const registryState = await state.read();
-    return manifests.map((manifest) =>
-      entryFromManifest(manifest, registryState)
-    );
+    return {
+      diagnostics,
+      entries: manifests.map((manifest) =>
+        entryFromManifest(manifest, registryState)
+      ),
+    };
   }
 
   async function inspect(id: string): Promise<PluginRegistryEntry | null> {
-    const entries = await list();
-    return entries.find((entry) => entry.id === id) ?? null;
+    const result = await list();
+    return result.entries.find((entry) => entry.id === id) ?? null;
   }
 
   async function setEnabled(

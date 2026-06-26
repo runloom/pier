@@ -148,15 +148,10 @@ function services(
               version: "1.0.0",
             }
           : null,
-      list: async () => [
-        {
-          commands: [
-            { id: "sample.command", permissions: [], title: "Sample Command" },
-          ],
-          enabled: true,
-          id: "sample.local",
-          manifest: {
-            apiVersion: 1,
+      list: async () => ({
+        diagnostics: [],
+        entries: [
+          {
             commands: [
               {
                 id: "sample.command",
@@ -164,28 +159,40 @@ function services(
                 title: "Sample Command",
               },
             ],
-            engines: { pier: ">=0.1.0" },
+            enabled: true,
             id: "sample.local",
-            name: "Sample Local",
+            manifest: {
+              apiVersion: 1,
+              commands: [
+                {
+                  id: "sample.command",
+                  permissions: [],
+                  title: "Sample Command",
+                },
+              ],
+              engines: { pier: ">=0.1.0" },
+              id: "sample.local",
+              name: "Sample Local",
+              panels: [
+                {
+                  id: "sample.panel",
+                  permissions: [],
+                  title: "Sample Panel",
+                },
+              ],
+              permissions: ["plugin:read"],
+              source: { kind: "local" },
+              version: "1.0.0",
+            },
             panels: [
-              {
-                id: "sample.panel",
-                permissions: [],
-                title: "Sample Panel",
-              },
+              { id: "sample.panel", permissions: [], title: "Sample Panel" },
             ],
             permissions: ["plugin:read"],
             source: { kind: "local" },
             version: "1.0.0",
           },
-          panels: [
-            { id: "sample.panel", permissions: [], title: "Sample Panel" },
-          ],
-          permissions: ["plugin:read"],
-          source: { kind: "local" },
-          version: "1.0.0",
-        },
-      ],
+        ],
+      }),
       setEnabled: async (id, enabled) => ({
         commands: [],
         enabled,
@@ -1040,14 +1047,17 @@ describe("createCommandRouter", () => {
         requestId: "req-plugin-list",
       })
     ).resolves.toMatchObject({
-      data: [
-        {
-          commands: [{ id: "sample.command" }],
-          enabled: true,
-          id: "sample.local",
-          panels: [{ id: "sample.panel" }],
-        },
-      ],
+      data: {
+        diagnostics: [],
+        entries: [
+          {
+            commands: [{ id: "sample.command" }],
+            enabled: true,
+            id: "sample.local",
+            panels: [{ id: "sample.panel" }],
+          },
+        ],
+      },
       ok: true,
       requestId: "req-plugin-list",
     });
