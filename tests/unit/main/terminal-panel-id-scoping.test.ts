@@ -84,6 +84,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       },
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
+      archiveTerminalPanelSession: vi.fn(async () => undefined),
+      listRecentTerminalPanelSessions: vi.fn(async () => []),
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelCwd: vi.fn(async () => undefined),

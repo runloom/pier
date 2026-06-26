@@ -82,6 +82,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       },
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
+      archiveTerminalPanelSession: vi.fn(async () => undefined),
+      listRecentTerminalPanelSessions: vi.fn(async () => []),
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelCwd: vi.fn(async () => undefined),
@@ -179,9 +181,34 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-1");
+    expect(sessionState.archiveTerminalPanelSession).toHaveBeenCalledWith(
+      "session-main",
+      "panel-1"
+    );
     expect(sessionState.removeTerminalPanelSession).toHaveBeenCalledWith(
       "session-main",
       "panel-1"
+    );
+  });
+
+  it("persists the initial cwd after native terminal creation succeeds", async () => {
+    const { invokeHandlers, win } = await setupHarness();
+    const sessionState = await import("@main/state/terminal-session-state.ts");
+
+    await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: win.webContents },
+      {
+        cwd: "/Users/xyz/ABC/pier",
+        font: { family: "Menlo", size: 13 },
+        frame: { height: 400, width: 600, x: 0, y: 0 },
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(sessionState.updateTerminalPanelCwd).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      "/Users/xyz/ABC/pier"
     );
   });
 

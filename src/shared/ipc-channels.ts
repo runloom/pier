@@ -12,9 +12,12 @@ export const PIER = {
   WINDOW_FOCUS: "pier://window:focus",
   WINDOW_FULLSCREEN_STATE: "pier://window:fullscreen-state",
   WINDOW_LIST: "pier://window:list",
+  WINDOW_RENDERER_READY: "pier://window:renderer-ready",
 } as const;
 
 export const PIER_BROADCAST = {
+  // main 端应用菜单 / 原生快捷键请求 renderer 打开设置.
+  SETTINGS_OPEN_REQUEST: "pier://settings:open-request",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // macOS 原生全屏进出 (main → renderer, payload { isFullscreen }).

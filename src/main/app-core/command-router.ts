@@ -1,5 +1,6 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import {
+  type PierCommand,
   type PierCommandResult,
   type ProjectPreferencesPatch,
   pierCommandEnvelopeSchema,
@@ -8,8 +9,22 @@ import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
+import type { TerminalSessionService } from "../services/terminal-session-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
+import {
+  commandFailure as failure,
+  commandSuccess as success,
+} from "./command-results.ts";
+import {
+  executePanelFocusCommand,
+  executePanelListCommand,
+} from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
+import {
+  executeTerminalFocusCommand,
+  executeTerminalListCommand,
+  executeTerminalOpenCommand,
+} from "./terminal-panel-commands.ts";
 
 export interface PierCoreServices {
   commandPaletteMru: {
@@ -22,6 +37,7 @@ export interface PierCoreServices {
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
   rendererCommand: RendererCommandService;
+  terminalSessions: TerminalSessionService;
   window: {
     close(windowId: string): void;
     create(options?: WindowCreateOptions): Promise<{
@@ -56,26 +72,6 @@ export interface CreateCommandRouterArgs {
   services: PierCoreServices;
 }
 
-function success(requestId: string, data: unknown): PierCommandResult {
-  return { data, ok: true, requestId };
-}
-
-function failure(
-  requestId: string,
-  code: PierCommandResult extends infer R
-    ? R extends { ok: false; error: { code: infer C } }
-      ? C
-      : never
-    : never,
-  message: string
-): PierCommandResult {
-  return {
-    error: { code, message },
-    ok: false,
-    requestId,
-  };
-}
-
 function requestIdOf(rawEnvelope: unknown): string {
   if (
     rawEnvelope &&
@@ -87,6 +83,27 @@ function requestIdOf(rawEnvelope: unknown): string {
     return rawEnvelope.requestId;
   }
   return "unknown";
+}
+
+async function rendererCommandResult(
+  requestId: string,
+  command: Extract<
+    PierCommand,
+    | { type: "panel.focus" }
+    | { type: "panel.list" }
+    | { type: "workspace.open" }
+  >,
+  services: PierCoreServices
+): Promise<PierCommandResult> {
+  const result = await services.rendererCommand.execute(command);
+  if (result.ok) {
+    return success(requestId, result.data);
+  }
+  return failure(
+    requestId,
+    result.error.code ?? "platform_unavailable",
+    result.error.message
+  );
 }
 
 export function createCommandRouter({
@@ -158,21 +175,29 @@ export function createCommandRouter({
             );
             return success(requestId, null);
           case "panel.focus":
+            return await executePanelFocusCommand(requestId, command, services);
           case "panel.list":
-          case "terminal.focus":
-          case "terminal.list":
+            return await executePanelListCommand(requestId, command, services);
+          case "workspace.open":
+            return await rendererCommandResult(requestId, command, services);
           case "terminal.open":
-          case "workspace.open": {
-            const result = await services.rendererCommand.execute(command);
-            if (result.ok) {
-              return success(requestId, result.data);
-            }
-            return failure(
+            return await executeTerminalOpenCommand(
               requestId,
-              "platform_unavailable",
-              result.error.message
+              command,
+              services
             );
-          }
+          case "terminal.list":
+            return await executeTerminalListCommand(
+              requestId,
+              command,
+              services
+            );
+          case "terminal.focus":
+            return await executeTerminalFocusCommand(
+              requestId,
+              command,
+              services
+            );
           default: {
             const _exhaustive: never = command;
             return failure(

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type {
   RendererCommand,
   RendererCommandEnvelope,
@@ -29,9 +30,13 @@ interface PendingRequest {
   resolve(result: RendererCommandResult): void;
 }
 
-function failure(requestId: string, message: string): RendererCommandResult {
+function failure(
+  requestId: string,
+  message: string,
+  code: PierCommandErrorCode = "platform_unavailable"
+): RendererCommandResult {
   return {
-    error: { message },
+    error: { code, message },
     ok: false,
     requestId,
   };
@@ -72,13 +77,23 @@ export function createRendererCommandService({
         })
       ) {
         return Promise.resolve(
-          failure(requestId, "no renderer window available")
+          failure(
+            requestId,
+            "no renderer window available",
+            command.windowId ? "not_found" : "platform_unavailable"
+          )
         );
       }
       return new Promise((resolve) => {
         const rejectTimer = setTimeout(() => {
           pending.delete(requestId);
-          resolve(failure(requestId, "renderer command timed out"));
+          resolve(
+            failure(
+              requestId,
+              "renderer command timed out",
+              "platform_unavailable"
+            )
+          );
         }, timeoutMs);
         pending.set(requestId, { rejectTimer, resolve });
       });

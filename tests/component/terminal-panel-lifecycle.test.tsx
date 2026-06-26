@@ -3,6 +3,12 @@ import type { IDockviewPanelProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 
+const popupContextMenuAtMock = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock("@/lib/context-menu/use-context-menu.ts", () => ({
+  popupContextMenuAt: popupContextMenuAtMock,
+}));
+
 class TestResizeObserver {
   static observeCount = 0;
   static instances: TestResizeObserver[] = [];
@@ -79,6 +85,7 @@ function createPanelProps(
           return { dispose: vi.fn() };
         }
       ),
+      setActive: vi.fn(),
       setTitle: vi.fn(),
       width: 400,
     },
@@ -125,6 +132,7 @@ describe("TerminalPanel lifecycle", () => {
     emitWindowLayoutPulse = null;
     TestResizeObserver.observeCount = 0;
     TestResizeObserver.instances = [];
+    popupContextMenuAtMock.mockClear();
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 0)
@@ -168,6 +176,7 @@ describe("TerminalPanel lifecycle", () => {
           onCwdChange: vi.fn(() => vi.fn()),
           onTitleChange: vi.fn(() => vi.fn()),
           readSession: vi.fn(async () => null),
+          setActivePanelKind: vi.fn(),
           setFont: vi.fn(),
           setFrame: vi.fn(),
           show: vi.fn(),
@@ -248,6 +257,86 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
+  });
+
+  it("passes panel params cwd immediately and leaves saved cwd precedence to main", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      cwd: "/Users/xyz/ABC/current-work",
+      title: "Claude Code",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+    const props = createPanelProps({
+      isActive: true,
+      params: { cwd: "/Users/xyz/ABC/original-open" },
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: "/Users/xyz/ABC/original-open",
+          panelId: "terminal-1",
+        })
+      );
+    });
+  });
+
+  it("shows a terminal-colored placeholder until the native terminal is ready", async () => {
+    let resolveCreate!: (value: { ok: true }) => void;
+    vi.mocked(window.pier.terminal.create).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        })
+    );
+    const props = createPanelProps();
+
+    const { container } = render(<TerminalPanel {...props} />);
+
+    const root = container.querySelector('[data-testid="terminal-panel-root"]');
+    const placeholder = container.querySelector(
+      '[data-testid="terminal-placeholder"]'
+    );
+    expect(root?.getAttribute("style") ?? "").not.toContain(
+      "--terminal-background"
+    );
+    expect(placeholder).not.toBeNull();
+    expect(placeholder?.getAttribute("style")).toContain(
+      "--terminal-background"
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    resolveCreate({ ok: true });
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="terminal-placeholder"]')
+      ).toBeNull();
+    });
+  });
+
+  it("keeps terminal create failures on the terminal-colored surface", async () => {
+    vi.mocked(window.pier.terminal.create).mockResolvedValueOnce({
+      error: "终端创建失败",
+      ok: false,
+    });
+    const props = createPanelProps();
+
+    const { container, findByText } = render(<TerminalPanel {...props} />);
+
+    const errorText = await findByText("终端创建失败");
+    const root = container.querySelector('[data-testid="terminal-panel-root"]');
+    expect(root?.getAttribute("style") ?? "").not.toContain(
+      "--terminal-background"
+    );
+    expect(errorText.parentElement?.getAttribute("style")).toContain(
+      "--terminal-background"
+    );
   });
 
   it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {
@@ -403,5 +492,38 @@ describe("TerminalPanel lifecycle", () => {
     props.emitGroupChange();
 
     expect(window.pier.terminal.focus).not.toHaveBeenCalled();
+  });
+
+  it("activates the terminal panel before opening a native context menu", async () => {
+    let emitContextMenuRequest: (req: {
+      panelId: string;
+      x: number;
+      y: number;
+    }) => void = () => {
+      throw new Error("context menu listener was not registered");
+    };
+    vi.mocked(window.pier.terminal.onContextMenuRequest).mockImplementation(
+      (cb) => {
+        emitContextMenuRequest = cb;
+        return vi.fn();
+      }
+    );
+    const props = createPanelProps();
+
+    render(<TerminalPanel {...props} />);
+
+    emitContextMenuRequest({ panelId: "terminal-1", x: 12, y: 24 });
+
+    await waitFor(() => {
+      expect(popupContextMenuAtMock).toHaveBeenCalledWith("terminal/content", {
+        x: 12,
+        y: 24,
+      });
+    });
+    expect(props.api.setActive).toHaveBeenCalledOnce();
+    expect(window.pier.terminal.setActivePanelKind).toHaveBeenCalledWith(
+      "terminal",
+      "terminal-1"
+    );
   });
 });

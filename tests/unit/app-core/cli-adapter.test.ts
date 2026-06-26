@@ -181,6 +181,19 @@ describe("parsePierCliArgs", () => {
     });
   });
 
+  it("解析 panels focus --no-focus", () => {
+    expect(
+      parsePierCliArgs(["panels", "focus", "panel-1", "--no-focus"], {
+        clientId: "cli-1",
+        requestId: "req-panel-focus-background",
+      }).envelope.command
+    ).toEqual({
+      focus: false,
+      panelId: "panel-1",
+      type: "panel.focus",
+    });
+  });
+
   it("解析 terminals open", () => {
     expect(
       parsePierCliArgs(["terminals", "open", "--window", "main", "--json"], {
@@ -188,6 +201,21 @@ describe("parsePierCliArgs", () => {
         requestId: "req-terminal-open",
       }).envelope.command
     ).toEqual({ type: "terminal.open", windowId: "main" });
+  });
+
+  it("解析 terminals open --cwd", () => {
+    expect(
+      parsePierCliArgs(
+        ["terminals", "open", "--cwd", "/Users/xyz/ABC/pier", "--json"],
+        {
+          clientId: "cli-1",
+          requestId: "req-terminal-open-cwd",
+        }
+      ).envelope.command
+    ).toEqual({
+      cwd: "/Users/xyz/ABC/pier",
+      type: "terminal.open",
+    });
   });
 
   it("解析 terminals open --no-focus", () => {
@@ -231,6 +259,19 @@ describe("parsePierCliArgs", () => {
     });
   });
 
+  it("解析 terminals focus --no-focus", () => {
+    expect(
+      parsePierCliArgs(["terminals", "focus", "terminal-1", "--no-focus"], {
+        clientId: "cli-1",
+        requestId: "req-terminal-focus-background",
+      }).envelope.command
+    ).toEqual({
+      focus: false,
+      panelId: "terminal-1",
+      type: "terminal.focus",
+    });
+  });
+
   it("解析 preferences read", () => {
     expect(
       parsePierCliArgs(["preferences", "read", "--json"], {
@@ -247,5 +288,21 @@ describe("parsePierCliArgs", () => {
         requestId: "req-5",
       })
     ).toThrow("unknown pier CLI command");
+  });
+
+  it("拒绝缺少值的 CLI 选项", () => {
+    expect(() =>
+      parsePierCliArgs(["terminals", "list", "--window", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-missing-window",
+      })
+    ).toThrow("missing required value for --window");
+
+    expect(() =>
+      parsePierCliArgs(["terminals", "open", "--cwd"], {
+        clientId: "cli-1",
+        requestId: "req-missing-cwd",
+      })
+    ).toThrow("missing required value for --cwd");
   });
 });

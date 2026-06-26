@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const electronMock = vi.hoisted(() => {
-  const hostListeners = new Map<string, (...args: never[]) => void>();
-  const webListeners = new Map<string, (...args: never[]) => void>();
-  const webOnceListeners = new Map<string, (...args: never[]) => void>();
+  const hostListeners = new Map<string, (...args: unknown[]) => void>();
+  const ipcMainListeners = new Map<string, (...args: unknown[]) => void>();
+  const webListeners = new Map<string, (...args: unknown[]) => void>();
+  const webOnceListeners = new Map<string, (...args: unknown[]) => void>();
   const state = {
     throwWhenReadingWindowId: false,
   };
@@ -14,11 +15,15 @@ const electronMock = vi.hoisted(() => {
     isDestroyed: vi.fn(() => false),
     loadFile: vi.fn(async () => undefined),
     loadURL: vi.fn(async () => undefined),
-    on: vi.fn((event: string, listener: (...args: never[]) => void) => {
+    off: vi.fn((event: string) => {
+      webListeners.delete(event);
+      return webContents;
+    }),
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
       webListeners.set(event, listener);
       return webContents;
     }),
-    once: vi.fn((event: string, listener: (...args: never[]) => void) => {
+    once: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
       webOnceListeners.set(event, listener);
       return webContents;
     }),
@@ -50,13 +55,14 @@ const electronMock = vi.hoisted(() => {
     isFocused: vi.fn(() => true),
     isMinimized: vi.fn(() => false),
     moveTop: vi.fn(),
-    on: vi.fn((event: string, listener: (...args: never[]) => void) => {
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
       hostListeners.set(event, listener);
       return baseWindow;
     }),
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
     show: vi.fn(),
+    showInactive: vi.fn(),
   };
 
   const browserWindowCtor = vi.fn(function BrowserWindow() {
@@ -68,6 +74,7 @@ const electronMock = vi.hoisted(() => {
     baseWindow,
     browserWindowCtor,
     hostListeners,
+    ipcMainListeners,
     state,
     webContents,
     webListeners,
@@ -87,6 +94,14 @@ vi.mock("electron", () => ({
     getAllWindows: vi.fn(() => []),
     getFocusedWindow: vi.fn(() => null),
   }),
+  ipcMain: {
+    off: vi.fn((event: string) => {
+      electronMock.ipcMainListeners.delete(event);
+    }),
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      electronMock.ipcMainListeners.set(event, listener);
+    }),
+  },
   nativeTheme: {
     shouldUseDarkColors: true,
   },
@@ -105,10 +120,15 @@ describe.runIf(process.platform === "darwin")(
       vi.resetModules();
       vi.clearAllMocks();
       electronMock.hostListeners.clear();
+      electronMock.ipcMainListeners.clear();
       electronMock.state.throwWhenReadingWindowId = false;
       electronMock.webListeners.clear();
       electronMock.webOnceListeners.clear();
       vi.stubEnv("ELECTRON_RENDERER_URL", "http://127.0.0.1:5173");
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
     });
 
     it("creates an opaque BaseWindow with a transparent full-window WebContentsView", async () => {
@@ -253,6 +273,59 @@ describe.runIf(process.platform === "darwin")(
         { reason: "zoom" }
       );
       expect(electronMock.webContents.send).toHaveBeenCalledTimes(3);
+    });
+
+    it("waits for renderer ready before showing the foreground window", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main" });
+
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.({
+        sender: electronMock.webContents,
+      });
+
+      expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
+      expect(electronMock.baseWindow.showInactive).not.toHaveBeenCalled();
+    });
+
+    it("shows restored background windows without stealing focus", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main", showInactive: true });
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.({
+        sender: electronMock.webContents,
+      });
+
+      expect(electronMock.baseWindow.showInactive).toHaveBeenCalledOnce();
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+    });
+
+    it("falls back to showing and warns when renderer ready never arrives", async () => {
+      vi.useFakeTimers();
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {
+        // test spy
+      });
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main", recordId: "record-main" });
+      electronMock.webOnceListeners.get("did-finish-load")?.();
+
+      vi.advanceTimersByTime(2999);
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+
+      expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith(
+        "[window-startup] readyToShow fallback",
+        expect.objectContaining({
+          recordId: "record-main",
+          showMode: "active",
+          windowId: "main",
+        })
+      );
     });
   }
 );

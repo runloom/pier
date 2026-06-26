@@ -97,9 +97,9 @@ describe("groupRank", () => {
     const actions = [baseAction("a", "Settings")];
     const r = groupRank(actions, new Map());
     expect(r.tier).toBe("fallback");
-    // Settings.order = 4 (见 command-palette.tsx CATEGORY_META)
+    // Settings.order = 5 (见 command-palette.tsx CATEGORY_META)
     if (r.tier === "fallback") {
-      expect(r.order).toBe(4);
+      expect(r.order).toBe(5);
     }
   });
 });
@@ -147,7 +147,7 @@ describe("compareGroups", () => {
     expect(compareGroups(ga, gb, map)).toBeLessThan(0);
   });
 
-  it("两个 fallback 组: 按 CATEGORY_META.order 排 (View=0 在前, Settings=4 在后)", () => {
+  it("两个 fallback 组: 按 CATEGORY_META.order 排 (View=0 在前, Settings=5 在后)", () => {
     const view = [mkA("v", "View")];
     const settings = [mkA("s", "Settings")];
     expect(compareGroups(view, settings, new Map())).toBeLessThan(0);

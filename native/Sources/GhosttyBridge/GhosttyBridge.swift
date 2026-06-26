@@ -265,6 +265,7 @@ final class EventRouterView: NSView {
         let local = self.convert(event.locationInWindow, from: nil)
         for (panelId, target) in targets {
             if target.rect.contains(local) {
+                GhosttyBridgeImpl.shared.focus(panelId: panelId)
                 EventRouterView.forwardRightMouseCallback?(
                     browserWindowId, panelId, Double(local.x), Double(local.y)
                 )
@@ -437,7 +438,6 @@ final class GhosttyBridgeImpl {
     /// 销毁而清理).
     private var controllers: [ObjectIdentifier: TerminalController] = [:]
     private var terminalRuntimePreferences: [ObjectIdentifier: TerminalRuntimePreferences] = [:]
-    private var activePanelId: String?
 
     // MARK: - Keyboard state
 
@@ -851,7 +851,6 @@ final class GhosttyBridgeImpl {
                     view: existing.containerView
                 )
 
-                activePanelId = panelId
                 applyFirstResponder(for: parent)
                 return true
             }
@@ -933,8 +932,6 @@ final class GhosttyBridgeImpl {
             rect: Self.terminalTargetRect(viewport: viewport), view: container
         )
 
-        activePanelId = panelId
-
         // 反例 6 修复 v2: 无条件 applyFirstResponder. v1 加 `if activeTerminalPanelId
         // == panelId` guard 失败 — dockview 快速 fire 多个 active panel change 时, state
         // 已变成其他 panelId, guard 永不命中. applyFirstResponder 内部已有 safety check
@@ -981,8 +978,6 @@ final class GhosttyBridgeImpl {
 
     func show(panelId: String) {
         guard let term = terminals[panelId] else { return }
-        activePanelId = panelId
-
         if let contentView = term.parentWindow.contentView {
             // 确保终端在所有 web 渲染层之下 (见 createTerminal 注释)
             contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
@@ -1000,9 +995,9 @@ final class GhosttyBridgeImpl {
 
     func hide(panelId: String) {
         guard let term = terminals[panelId] else { return }
-        // 不 guard `panelId != activePanelId`. 该 guard 设计目的是防 drag drop 后没 show
-        // 让 NSView 永远 offscreen, 但对同 group 切 tab 是错的:
-        //   tab A→B: hide(A) 先到 main, 此时 swift.activePanelId 还是 A (focus(B) 还没到),
+        // 不 guard `panelId != state.activeTerminalPanelId`. 该 guard 设计目的是防
+        // drag drop 后没 show 让 NSView 永远 offscreen, 但对同 group 切 tab 是错的:
+        //   tab A→B: hide(A) 先到 main, 此时 swift state 还是 A (focus(B) 还没到),
         //   guard 跳过 → A 不 hide → B 后续 addSubview .below nil 落 subviews[0], A 被
         //   push 到 [1] 仍 visible 且 z-order 在 B 之上 → user 看到 A 的内容, 切 tab 无效.
         // drag 场景实际靠 setFrame 紧跟 hide 把 NSView 移回新 visible 位置, 不依赖 guard.
@@ -1026,7 +1021,6 @@ final class GhosttyBridgeImpl {
         let parent = term.parentWindow
         term.containerView.removeFromSuperview()
         terminals.removeValue(forKey: panelId)
-        if activePanelId == panelId { activePanelId = nil }
 
         let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets.removeValue(forKey: panelId)
@@ -1046,7 +1040,6 @@ final class GhosttyBridgeImpl {
 
     func focus(panelId: String) {
         guard let term = terminals[panelId] else { return }
-        activePanelId = panelId
         // 更新 per-window state + 触发 applyFirstResponder (代替原 makeFirstResponder).
         // 这里只处理 terminal panel focus 场景, web panel focus 由 setActivePanelKind('web') 走.
         if let window = term.terminalView.window {
@@ -1081,9 +1074,6 @@ final class GhosttyBridgeImpl {
             term.containerView.removeFromSuperview()
             terminals.removeValue(forKey: panelId)
             terminalLayouts.removeValue(forKey: panelId)
-        }
-        if let activeId = activePanelId, terminals[activeId] == nil {
-            activePanelId = nil
         }
         eventRouters[windowId]?.targets.removeAll()
     }

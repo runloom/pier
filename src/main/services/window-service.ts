@@ -8,9 +8,10 @@ import {
   createWindowRecord,
   flushWindowRecordState,
   markWindowRecordClosed,
+  markWindowRecordFocused,
   markWindowRecordOpen,
   readMostRecentClosedWindowRecordId,
-  readOpenWindowRecordIds,
+  readPreferredOpenWindowRecordIds,
 } from "../state/window-record-state.ts";
 import { findWindowContext } from "../windows/window-identity.ts";
 import { windowManager } from "../windows/window-manager.ts";
@@ -59,6 +60,11 @@ function ensureCloseHandler(): void {
       console.error("[window-record-close] failed:", err);
     });
   });
+  windowManager.onFocus(({ recordId }) => {
+    markWindowRecordFocused(recordId).catch((err) => {
+      console.error("[window-record-focus] failed:", err);
+    });
+  });
 }
 
 function nextRuntimeWindowId(): string | undefined {
@@ -89,8 +95,9 @@ export function createWindowService(
   async function createFromRecord(options: {
     mode: "fresh" | "restore";
     recordId: string;
+    showInactive?: boolean;
   }): Promise<WindowCreateResult> {
-    const { mode, recordId } = options;
+    const { mode, recordId, showInactive } = options;
     if (isWindowRecordOpenInLiveWindow(recordId)) {
       throw new Error(`window record already open: ${recordId}`);
     }
@@ -99,6 +106,7 @@ export function createWindowService(
       ...(runtimeWindowId ? { id: runtimeWindowId } : {}),
       mode,
       recordId,
+      ...(showInactive ? { showInactive: true } : {}),
     });
     await markWindowRecordOpen(recordId);
     return { recordId, windowId };
@@ -135,10 +143,16 @@ export function createWindowService(
       return await createFromRecord({ mode: "restore", recordId });
     },
     restoreOpenWindows: async () => {
-      const recordIds = await readOpenWindowRecordIds();
+      const recordIds = await readPreferredOpenWindowRecordIds();
       const results: WindowCreateResult[] = [];
-      for (const recordId of recordIds) {
-        results.push(await createFromRecord({ mode: "restore", recordId }));
+      for (const [index, recordId] of recordIds.entries()) {
+        results.push(
+          await createFromRecord({
+            mode: "restore",
+            recordId,
+            showInactive: index > 0,
+          })
+        );
       }
       return results;
     },

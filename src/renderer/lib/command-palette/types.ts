@@ -5,7 +5,18 @@
 
 export type CommandPaletteSurface = "command-palette" | (string & {});
 
+export interface QuickPickItemBadge {
+  readonly label: string;
+  readonly variant?:
+    | "default"
+    | "destructive"
+    | "ghost"
+    | "outline"
+    | "secondary";
+}
+
 export interface QuickPickItem {
+  readonly badges?: readonly QuickPickItemBadge[];
   readonly checked?: boolean;
   readonly description?: string;
   readonly detail?: string;
@@ -15,13 +26,20 @@ export interface QuickPickItem {
   readonly label: string;
 }
 
-export interface QuickPick {
+export interface QuickPickSection {
+  readonly heading: string;
+  readonly id: string;
   readonly items: readonly QuickPickItem[];
+}
+
+export interface QuickPick {
+  readonly items?: readonly QuickPickItem[];
   onAccept(item: QuickPickItem): void | Promise<void>;
   /** 箭头键导航 / 鼠标 hover 时实时 preview。不传 → 无 preview。 */
   onChangeSelection?(item: QuickPickItem): void;
   /** Esc / 点击遮罩关闭时还原到打开前的值。不传 → 关闭即确认。 */
   onDismiss?(): void;
   readonly placeholder?: string;
+  readonly sections?: readonly QuickPickSection[];
   readonly title: string;
 }

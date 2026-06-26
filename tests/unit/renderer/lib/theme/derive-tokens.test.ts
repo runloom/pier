@@ -96,6 +96,8 @@ describe("renderer/lib/theme/derive-tokens", () => {
     expect(contrast(tokens.background, tokens.muted)).toBeGreaterThanOrEqual(
       1.05
     );
+    expect(tokens.popover).toBe(tokens.background);
+    expect(contrast(tokens.muted, tokens.secondary)).toBeGreaterThan(1);
     expect(chromaOf(tokens.info)).toBeGreaterThanOrEqual(0.1);
     expect(chromaOf(tokens.success)).toBeGreaterThanOrEqual(0.1);
     expect(chromaOf(tokens.warning)).toBeGreaterThanOrEqual(0.1);

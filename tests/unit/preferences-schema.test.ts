@@ -1,6 +1,21 @@
 import { projectPreferencesSchema } from "@shared/contracts/preferences.ts";
 import { describe, expect, it } from "vitest";
 
+describe("projectPreferencesSchema — language", () => {
+  it("默认跟随系统并接受显式语言", () => {
+    expect(projectPreferencesSchema.parse({}).language).toBe("system");
+    expect(
+      projectPreferencesSchema.parse({ language: "system" }).language
+    ).toBe("system");
+    expect(projectPreferencesSchema.parse({ language: "zh-CN" }).language).toBe(
+      "zh-CN"
+    );
+    expect(projectPreferencesSchema.parse({ language: "en" }).language).toBe(
+      "en"
+    );
+  });
+});
+
 describe("projectPreferencesSchema — monoFontSize", () => {
   it("默认值是 13", () => {
     const parsed = projectPreferencesSchema.parse({});

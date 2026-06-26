@@ -46,6 +46,14 @@ export function SettingsDialog() {
     return () => popOverlay();
   }, [open]);
 
+  useEffect(
+    () =>
+      window.pier?.settings?.onOpenRequest?.(() => {
+        useSettingsDialogStore.getState().open();
+      }),
+    []
+  );
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col sm:max-w-[1200px]">

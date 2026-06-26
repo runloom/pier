@@ -4,13 +4,16 @@ const mocks = vi.hoisted(() => {
   let closeCallback:
     | ((payload: { recordId: string; windowId: string }) => void)
     | null = null;
+  let focusCallback:
+    | ((payload: { recordId: string; windowId: string }) => void)
+    | null = null;
   let beforeCloseCallback:
     | ((payload: { recordId: string; windowId: string }) => void)
     | null = null;
   const liveWindowContexts: Array<{ recordId: string }> = [];
   return {
     close: vi.fn(),
-    create: vi.fn((options?: { recordId?: string }) => {
+    create: vi.fn((options?: { recordId?: string; showInactive?: boolean }) => {
       liveWindowContexts.push({ recordId: options?.recordId ?? "unknown" });
       return "w-1";
     }),
@@ -19,6 +22,7 @@ const mocks = vi.hoisted(() => {
     flushWindowRecordState: vi.fn(async () => undefined),
     focus: vi.fn(),
     getCloseCallback: () => closeCallback,
+    getFocusCallback: () => focusCallback,
     getBeforeCloseCallback: () => beforeCloseCallback,
     getAll: vi.fn(() =>
       liveWindowContexts.map((context) => ({
@@ -30,6 +34,7 @@ const mocks = vi.hoisted(() => {
       (): Array<{ focused: boolean; id: string; recordId: string }> => []
     ),
     markWindowRecordClosed: vi.fn(async () => undefined),
+    markWindowRecordFocused: vi.fn(async () => undefined),
     markWindowRecordOpen: vi.fn(async () => undefined),
     onBeforeClose: vi.fn(
       (callback: (payload: { recordId: string; windowId: string }) => void) => {
@@ -41,8 +46,14 @@ const mocks = vi.hoisted(() => {
         closeCallback = callback;
       }
     ),
+    onFocus: vi.fn(
+      (callback: (payload: { recordId: string; windowId: string }) => void) => {
+        focusCallback = callback;
+      }
+    ),
     readMostRecentClosedWindowRecordId: vi.fn(async () => "record-closed"),
     readOpenWindowRecordIds: vi.fn(async () => ["record-open-1"]),
+    readPreferredOpenWindowRecordIds: vi.fn(async () => ["record-open-1"]),
     resetLiveWindowCount: () => {
       liveWindowContexts.length = 0;
     },
@@ -57,9 +68,11 @@ vi.mock("@main/state/window-record-state.ts", () => ({
   createWindowRecord: mocks.createWindowRecord,
   flushWindowRecordState: mocks.flushWindowRecordState,
   markWindowRecordClosed: mocks.markWindowRecordClosed,
+  markWindowRecordFocused: mocks.markWindowRecordFocused,
   markWindowRecordOpen: mocks.markWindowRecordOpen,
   readMostRecentClosedWindowRecordId: mocks.readMostRecentClosedWindowRecordId,
   readOpenWindowRecordIds: mocks.readOpenWindowRecordIds,
+  readPreferredOpenWindowRecordIds: mocks.readPreferredOpenWindowRecordIds,
 }));
 
 vi.mock("@main/state/terminal-session-state.ts", () => ({
@@ -75,6 +88,7 @@ vi.mock("@main/windows/window-manager.ts", () => ({
     list: mocks.list,
     onBeforeClose: mocks.onBeforeClose,
     onClose: mocks.onClose,
+    onFocus: mocks.onFocus,
   },
 }));
 
@@ -218,7 +232,7 @@ describe("WindowService", () => {
   });
 
   it("restores all open window records for Cmd+Q relaunch", async () => {
-    mocks.readOpenWindowRecordIds.mockResolvedValueOnce([
+    mocks.readPreferredOpenWindowRecordIds.mockResolvedValueOnce([
       "record-open-1",
       "record-open-2",
     ]);
@@ -241,6 +255,59 @@ describe("WindowService", () => {
     expect(mocks.create).toHaveBeenCalledWith({
       mode: "restore",
       recordId: "record-open-2",
+      showInactive: true,
     });
+  });
+
+  it("restores the last focused open window in the foreground on relaunch", async () => {
+    mocks.readOpenWindowRecordIds.mockResolvedValueOnce([
+      "record-open-1",
+      "record-focused",
+    ]);
+    mocks.readPreferredOpenWindowRecordIds.mockResolvedValueOnce([
+      "record-focused",
+      "record-open-1",
+    ]);
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+
+    const service = createWindowService();
+    const result = await service.restoreOpenWindows();
+
+    expect(result).toEqual([
+      { recordId: "record-focused", windowId: "w-1" },
+      { recordId: "record-open-1", windowId: "w-1" },
+    ]);
+    expect(mocks.create).toHaveBeenNthCalledWith(1, {
+      id: "main",
+      mode: "restore",
+      recordId: "record-focused",
+    });
+    expect(mocks.create).toHaveBeenNthCalledWith(2, {
+      mode: "restore",
+      recordId: "record-open-1",
+      showInactive: true,
+    });
+  });
+
+  it("records durable window focus without changing the window lifecycle state", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+
+    createWindowService();
+    mocks.getFocusCallback()?.({ recordId: "record-focused", windowId: "w-2" });
+    await Promise.resolve();
+
+    expect(mocks.markWindowRecordFocused).toHaveBeenCalledWith(
+      "record-focused"
+    );
+    expect(mocks.markWindowRecordOpen).not.toHaveBeenCalledWith(
+      "record-focused"
+    );
+    expect(mocks.markWindowRecordClosed).not.toHaveBeenCalledWith(
+      "record-focused"
+    );
   });
 });

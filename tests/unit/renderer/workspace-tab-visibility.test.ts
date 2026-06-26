@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { revealElementWithinScrollContainer } from "@/components/workspace/tab-visibility.ts";
+import { revealElementWithinScrollContainer } from "@/lib/workspace/tab-visibility.ts";
 
 function setRect(
   element: HTMLElement,

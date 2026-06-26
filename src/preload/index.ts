@@ -17,7 +17,7 @@ import type {
   WindowContext,
   WindowCreateResult,
 } from "@shared/contracts/window.ts";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
 export interface WindowInfo {
@@ -94,6 +94,10 @@ export interface PierMenuAPI {
   ) => Promise<MenuPopupResult>;
 }
 
+export interface PierSettingsAPI {
+  onOpenRequest: (cb: () => void) => () => void;
+}
+
 export interface WindowLayoutPulse {
   reason: "resize" | "zoom";
 }
@@ -111,7 +115,9 @@ export interface PierWindowAPI {
   onWindowLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
   platform: NodeJS.Platform;
   preferences: PierPreferencesAPI;
+  readyToShow: () => void;
   rendererCommand: PierRendererCommandAPI;
+  settings: PierSettingsAPI;
   terminal: TerminalAPI;
   theme: PierThemeAPI;
   workspace: PierWorkspaceAPI;
@@ -148,7 +154,11 @@ const terminalApi: TerminalAPI = {
   close: (panelId) => ipcRenderer.send("pier:terminal:close", panelId),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
+  focusSession: (args) =>
+    ipcRenderer.invoke("pier:terminal:focus-session", args),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  listSessions: (args) =>
+    ipcRenderer.invoke("pier:terminal:list-sessions", args),
   reconcile: (activeIds) =>
     ipcRenderer.send("pier:terminal:reconcile", activeIds),
   onContextMenuRequest: (cb) =>
@@ -156,6 +166,7 @@ const terminalApi: TerminalAPI = {
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
+  openSession: (args) => ipcRenderer.invoke("pier:terminal:open-session", args),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
@@ -213,6 +224,10 @@ const menuApi: PierMenuAPI = {
     ipcRenderer.invoke("pier:menu:popup", template, options),
 };
 
+const settingsApi: PierSettingsAPI = {
+  onOpenRequest: (cb) => subscribeIpc(PIER_BROADCAST.SETTINGS_OPEN_REQUEST, cb),
+};
+
 const keybindingApi: PierKeybindingAPI = {
   onForward: (cb) => subscribeIpc("pier:keybinding:forward", cb),
 };
@@ -233,7 +248,9 @@ const api: PierWindowAPI = {
     subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
   platform: process.platform,
   preferences: preferencesApi,
+  readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
   rendererCommand: rendererCommandApi,
+  settings: settingsApi,
   terminal: terminalApi,
   theme: themeApi,
   workspace: workspaceApi,

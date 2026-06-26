@@ -53,7 +53,7 @@ export function registerPanelActions(): () => void {
 
   disposers.push(
     actionRegistry.register({
-      category: "Panel",
+      category: "Run",
       enabled: () => useWorkspaceStore.getState().api != null,
       handler: () => {
         useWorkspaceStore.getState().addTerminal();

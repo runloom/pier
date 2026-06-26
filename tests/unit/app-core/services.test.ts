@@ -6,7 +6,7 @@ import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { describe, expect, it } from "vitest";
 
 const basePreferences: ProjectPreferences = {
-  language: "zh-CN",
+  language: "system",
   monoFontFamily: "",
   monoFontSize: 13,
   stylePresetId: "pierre",

@@ -1,6 +1,6 @@
 import i18next, { type TFunction } from "i18next";
 import { useSyncExternalStore } from "react";
-import { DEFAULT_LOCALE } from "./index.ts";
+import { FALLBACK_LOCALE } from "./language.ts";
 
 function subscribe(cb: () => void): () => void {
   i18next.on("languageChanged", cb);
@@ -12,7 +12,7 @@ function getSnapshot(): string {
 }
 
 function getServerSnapshot(): string {
-  return DEFAULT_LOCALE;
+  return FALLBACK_LOCALE;
 }
 
 export function useT(): TFunction {

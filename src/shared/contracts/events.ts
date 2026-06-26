@@ -4,13 +4,19 @@ import type { ProjectPreferences } from "./preferences.ts";
 export interface WindowInfo {
   focused: boolean;
   id: string;
+  lastFocusedAt?: number | undefined;
   recordId: string;
 }
 
 export interface PanelSnapshot {
   active?: boolean;
+  cwd?: string;
+  groupIndex?: number;
   id: string;
   kind: "terminal" | "web";
+  tabCount?: number;
+  tabIndex?: number;
+  terminalTitle?: string;
   title?: string;
   windowId?: string;
 }

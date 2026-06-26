@@ -45,7 +45,7 @@ export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
   stylePresetId: stylePresetIdSchema.default("pierre"),
-  language: z.enum(["zh-CN", "en"]).default("zh-CN"),
+  language: z.enum(["system", "zh-CN", "en"]).default("system"),
   uiFontFamily: z.string().default(DEFAULT_UI_FONT_FAMILY),
   monoFontFamily: z.string().default(DEFAULT_MONO_FONT_FAMILY),
   monoFontSize: z.number().int().min(8).max(32).default(DEFAULT_MONO_FONT_SIZE),

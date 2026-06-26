@@ -12,6 +12,7 @@ import {
   toggleDetachedDevTools,
 } from "../devtools.ts";
 import {
+  archiveTerminalPanelSession,
   readTerminalPanelSession,
   removeTerminalPanelSession,
   updateTerminalPanelCwd,
@@ -25,6 +26,7 @@ import {
   findWindowSessionId,
 } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
+import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
@@ -48,25 +50,12 @@ function rememberActivePanelFocus(
   activePanelFocusByWindowId.set(win.id, { kind, panelId });
 }
 
-function stableWindowIdFor(win: AppWindow): string {
+export function stableWindowIdFor(win: AppWindow): string {
   return findInternalWindowId(win) ?? `window-${win.id}`;
 }
 
-function terminalSessionScopeFor(win: AppWindow): string {
+export function terminalSessionScopeFor(win: AppWindow): string {
   return findWindowSessionId(win) ?? stableWindowIdFor(win);
-}
-
-// Swift 端 terminal dict 是全局的; main→swift 的 panelId 必须加 window scope,
-// 避免多窗口同名 panel 互相覆盖. swift→renderer 再 unscope 回 dockview raw id.
-const PANEL_ID_SEPARATOR = "::";
-function scopePanelId(win: AppWindow, panelId: string): string {
-  return `${win.id}${PANEL_ID_SEPARATOR}${panelId}`;
-}
-function unscopePanelId(scopedId: string): string {
-  const idx = scopedId.indexOf(PANEL_ID_SEPARATOR);
-  return idx === -1
-    ? scopedId
-    : scopedId.slice(idx + PANEL_ID_SEPARATOR.length);
 }
 
 export function restoreActivePanelFocus(win: AppWindow): void {
@@ -153,7 +142,9 @@ function forwardToWindow<P>(
   }
 }
 
-function windowFromWebContents(webContents: WebContents): AppWindow | null {
+export function windowFromWebContents(
+  webContents: WebContents
+): AppWindow | null {
   return findAppWindowByWebContents(webContents);
 }
 
@@ -268,7 +259,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const cwd = args.cwd ?? saved?.cwd;
+        const cwd = saved?.cwd ?? args.cwd;
         const ok = addon.createTerminal(
           handle,
           scopePanelId(win, args.panelId),
@@ -277,6 +268,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           args.font.size,
           cwd
         );
+        if (ok && cwd) {
+          try {
+            await updateTerminalPanelCwd(sessionScope, args.panelId, cwd);
+          } catch (err) {
+            console.error("[pier-cwd-initial-persist] failed:", err);
+          }
+        }
         return ok
           ? { ok: true }
           : { ok: false, error: "createTerminal returned false" };
@@ -329,9 +327,15 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const win = windowFromWebContents(event.sender);
     if (win) {
       const sessionScope = terminalSessionScopeFor(win);
-      removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
-        console.error("[pier-cwd-remove] failed:", err);
-      });
+      archiveTerminalPanelSession(sessionScope, panelId)
+        .catch((err) => {
+          console.error("[pier-cwd-archive] failed:", err);
+        })
+        .finally(() => {
+          removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
+            console.error("[pier-cwd-remove] failed:", err);
+          });
+        });
       addon?.closeTerminal(scopePanelId(win, panelId));
     }
   });

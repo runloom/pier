@@ -14,11 +14,12 @@
  */
 import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import {
   app,
   BaseWindow,
   BrowserWindow,
+  ipcMain,
   nativeTheme,
   shell,
   WebContentsView,
@@ -53,16 +54,19 @@ export interface CreateWindowOptions {
   id?: string;
   mode?: WindowOpenMode;
   recordId?: string;
+  showInactive?: boolean;
 }
 
 export interface WindowInfo {
   focused: boolean;
   id: string;
+  lastFocusedAt?: number;
   recordId: string;
 }
 
 const isDev = !app.isPackaged;
 const isMac = process.platform === "darwin";
+const RENDERER_READY_SHOW_TIMEOUT_MS = 3000;
 
 function resolveDevIcon(): string | undefined {
   return isDev ? join(import.meta.dirname, "../../build/icon.png") : undefined;
@@ -77,6 +81,11 @@ class WindowManager {
   private readonly onCloseCallbacks: Array<
     (payload: { recordId: string; windowId: string }) => void
   > = [];
+  private readonly onFocusCallbacks: Array<
+    (payload: { recordId: string; windowId: string }) => void
+  > = [];
+  private focusSequence = 0;
+  private readonly lastFocusedAtByWindowId = new Map<string, number>();
   private isDestroyingAllForQuit = false;
   private readonly closeFlushDone = new WeakSet<AppWindow>();
   private readonly closeFlushPending = new WeakSet<AppWindow>();
@@ -93,6 +102,12 @@ class WindowManager {
     this.onCloseCallbacks.push(callback);
   }
 
+  onFocus(
+    callback: (payload: { recordId: string; windowId: string }) => void
+  ): void {
+    this.onFocusCallbacks.push(callback);
+  }
+
   onBeforeClose(
     callback: (payload: {
       recordId: string;
@@ -100,6 +115,12 @@ class WindowManager {
     }) => Promise<void> | void
   ): void {
     this.onBeforeCloseCallbacks.push(callback);
+  }
+
+  private rememberFocusedWindow(windowId: string): number {
+    this.focusSequence += 1;
+    this.lastFocusedAtByWindowId.set(windowId, this.focusSequence);
+    return this.focusSequence;
   }
 
   create(opts: CreateWindowOptions = {}): string {
@@ -155,12 +176,69 @@ class WindowManager {
       windowId: id,
     });
 
+    let didShow = false;
+    let showFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const traceStartup = (
+      event: "did-finish-load" | "fallback" | "readyToShow" | "show",
+      extra: Record<string, unknown> = {}
+    ) => {
+      if (process.env.PIER_STARTUP_TRACE !== "1") {
+        return;
+      }
+      console.info("[window-startup]", {
+        event,
+        recordId: opts.recordId ?? id,
+        windowId: id,
+        ...extra,
+      });
+    };
+    const cleanupShowWait = () => {
+      if (showFallbackTimer) {
+        clearTimeout(showFallbackTimer);
+        showFallbackTimer = null;
+      }
+      ipcMain.off(PIER.WINDOW_RENDERER_READY, handleRendererReady);
+    };
     const showOnce = () => {
+      if (didShow) {
+        return;
+      }
+      didShow = true;
+      cleanupShowWait();
       if (!window.isDestroyed()) {
-        window.host.show();
+        const showMode = opts.showInactive ? "inactive" : "active";
+        traceStartup("show", { showMode });
+        if (opts.showInactive) {
+          window.host.showInactive();
+        } else {
+          window.host.show();
+        }
       }
     };
-    window.webContents.once("did-finish-load", showOnce);
+    const handleRendererReady = (event: Electron.IpcMainEvent) => {
+      if (event.sender !== window.webContents) {
+        return;
+      }
+      traceStartup("readyToShow");
+      showOnce();
+    };
+    const scheduleReadyFallback = () => {
+      traceStartup("did-finish-load");
+      if (!showFallbackTimer) {
+        showFallbackTimer = setTimeout(() => {
+          const payload = {
+            recordId: opts.recordId ?? id,
+            showMode: opts.showInactive ? "inactive" : "active",
+            windowId: id,
+          };
+          console.warn("[window-startup] readyToShow fallback", payload);
+          traceStartup("fallback", payload);
+          showOnce();
+        }, RENDERER_READY_SHOW_TIMEOUT_MS);
+      }
+    };
+    ipcMain.on(PIER.WINDOW_RENDERER_READY, handleRendererReady);
+    window.webContents.once("did-finish-load", scheduleReadyFallback);
     window.webContents.once("did-fail-load", showOnce);
     window.host.on("blur", () => {
       blurActivePanelFocus(window);
@@ -173,7 +251,14 @@ class WindowManager {
     // 事件主动 replay user 最后期望的 active panel — swift 端 focusTerminal 会重新
     // makeFirstResponder + 强制 becomeFirstResponder, 让 Ghostty surface focus 回到 true.
     window.host.on("focus", () => {
+      this.rememberFocusedWindow(id);
       restoreActivePanelFocus(window);
+      const context = findWindowContext(window);
+      if (context) {
+        for (const cb of this.onFocusCallbacks) {
+          cb({ recordId: context.recordId, windowId: id });
+        }
+      }
     });
 
     window.webContents.setWindowOpenHandler(({ url }) => {
@@ -246,12 +331,14 @@ class WindowManager {
     });
 
     window.host.on("closed", () => {
+      cleanupShowWait();
       if (window.appView && !window.webContents.isDestroyed()) {
         window.webContents.close();
       }
       const context = findWindowContext(window);
       forgetAppWindow(window);
       this.windows.delete(id);
+      this.lastFocusedAtByWindowId.delete(id);
       this.allocator.release(id);
       if (!this.isDestroyingAllForQuit && context) {
         for (const cb of this.onCloseCallbacks) {
@@ -340,11 +427,15 @@ class WindowManager {
   }
 
   list(): WindowInfo[] {
-    return [...this.windows.entries()].map(([id, w]) => ({
-      id,
-      focused: w.isFocused(),
-      recordId: findWindowContext(w)?.recordId ?? id,
-    }));
+    return [...this.windows.entries()].map(([id, w]) => {
+      const lastFocusedAt = this.lastFocusedAtByWindowId.get(id);
+      return {
+        id,
+        focused: w.isFocused(),
+        ...(lastFocusedAt === undefined ? {} : { lastFocusedAt }),
+        recordId: findWindowContext(w)?.recordId ?? id,
+      };
+    });
   }
 
   focus(id: string): void {
@@ -355,6 +446,7 @@ class WindowManager {
     if (w.isMinimized()) {
       w.restore();
     }
+    this.rememberFocusedWindow(id);
     w.focus();
   }
 

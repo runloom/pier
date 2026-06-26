@@ -6,6 +6,7 @@ import { registerCommandPaletteAction } from "./lib/actions/command-palette-acti
 import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
 import { registerConfigActions } from "./lib/actions/config-actions.ts";
 import { registerPanelActions } from "./lib/actions/panel-actions.ts";
+import { registerRunActions } from "./lib/actions/run-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
@@ -40,6 +41,7 @@ async function bootstrap() {
 
   registerConfigActions();
   registerCommandPaletteAction();
+  registerRunActions();
   registerPanelActions();
   registerSettingsActions();
   registerCommandPaletteMruAction();

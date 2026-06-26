@@ -355,17 +355,18 @@ function deriveNeutralChrome(
   secondary: string;
 } {
   const surfaceAmount = mode === "dark" ? 0.08 : 0.04;
-  const controlAmount = mode === "dark" ? 0.12 : 0.04;
+  const accentAmount = mode === "dark" ? 0.12 : 0.04;
+  const secondaryAmount = mode === "dark" ? 0.14 : 0.08;
   const borderAmount = mode === "dark" ? 0.14 : 0.12;
   const border = neutralSurface(bg, fg, borderAmount, 1.25);
 
   return {
-    accent: neutralSurface(bg, fg, controlAmount, 1.05),
+    accent: neutralSurface(bg, fg, accentAmount, 1.05),
     border,
     input: border,
     muted: neutralSurface(bg, fg, surfaceAmount, 1.05),
     ring: neutralSurface(bg, fg, 0.44, 1.5),
-    secondary: neutralSurface(bg, fg, controlAmount, 1.05),
+    secondary: neutralSurface(bg, fg, secondaryAmount, 1.05),
   };
 }
 
@@ -382,7 +383,7 @@ export function deriveAppStyleTokens(
   const chrome = deriveNeutralChrome(bg, fg, mode);
   const primary = derivePrimaryColor(get, bg, mode);
 
-  // popover / card = background — shadow/ring 表达 elevation，不从 chrome 色键派生偏离色（ADR-010）。
+  // popover / card = background；浮层层级由 shadow/ring 表达，避免改弹窗内容底色。
   const card = bg;
   const popover = bg;
 

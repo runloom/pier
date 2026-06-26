@@ -57,6 +57,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
   >(undefined);
@@ -75,7 +76,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
 
   const sessionLoaded = savedSession !== undefined;
-  const effectiveCwd = cwd ?? savedSession?.cwd ?? null;
+  const restoredCwd = savedSession?.cwd ?? initialCwd;
+  const effectiveCwd = cwd ?? restoredCwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
 
   // descriptor 三字段优先级链:
@@ -132,6 +134,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     let layoutRegistration: TerminalLayoutRegistration | null = null;
     let didCreateNativeTerminal = false;
     let createPromise: Promise<void> | null = null;
+    setNativeTerminalReady(false);
 
     const sendFrameNow = () => {
       if (disposed || !didCreateNativeTerminal) {
@@ -178,6 +181,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         }
 
         didCreateNativeTerminal = true;
+        setNativeTerminalReady(true);
         layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
       })().finally(() => {
         createPromise = null;
@@ -272,6 +276,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       if (req.panelId !== panelId) {
         return;
       }
+      api.setActive();
+      window.pier?.terminal?.setActivePanelKind?.("terminal", panelId);
       popupContextMenuAt("terminal/content", { x: req.x, y: req.y }).catch(
         (err: unknown) => {
           console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
@@ -281,19 +287,33 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     return () => {
       unsubscribe?.();
     };
-  }, [panelId]);
+  }, [panelId, api.setActive]);
 
-  if (error) {
-    return (
-      <div className="flex h-full items-center justify-center bg-background">
-        <p className="text-muted-foreground text-sm">{error}</p>
-      </div>
-    );
-  }
-
+  const terminalSurfaceStyle = {
+    backgroundColor: "var(--terminal-background, var(--background))",
+  };
   return (
-    <div className="relative h-full min-h-0 w-full min-w-0 overflow-hidden">
+    <div
+      className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
+      data-testid="terminal-panel-root"
+    >
       <div className="terminal-anchor absolute inset-0" ref={anchorRef} />
+      {nativeTerminalReady || error ? null : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          data-testid="terminal-placeholder"
+          style={terminalSurfaceStyle}
+        />
+      )}
+      {error ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={terminalSurfaceStyle}
+        >
+          <p className="text-muted-foreground text-sm">{error}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { pierCommandPlacementSchema } from "./commands.ts";
+import {
+  type PierCommandErrorCode,
+  pierCommandPlacementSchema,
+} from "./commands.ts";
 
 export const rendererCommandSchema = z.discriminatedUnion("type", [
   z.object({
@@ -18,6 +21,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("terminal.open"),
+    cwd: z.string().min(1).optional(),
     focus: z.boolean().optional(),
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),
@@ -60,6 +64,7 @@ export type RendererCommandResult =
     }
   | {
       error: {
+        code?: PierCommandErrorCode | undefined;
         message: string;
       };
       ok: false;

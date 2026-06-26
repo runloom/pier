@@ -1,5 +1,6 @@
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { Plus } from "lucide-react";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { Button } from "../primitives/button.tsx";
 
 /**
@@ -11,15 +12,8 @@ import { Button } from "../primitives/button.tsx";
  */
 export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const handleAdd = () => {
-    const id = `terminal-${Date.now()}`;
-    props.containerApi.addPanel({
-      id,
-      component: "terminal",
-      title: "Terminal",
-      position: {
-        referenceGroup: props.group,
-        direction: "within",
-      },
+    useWorkspaceStore.getState().addTerminal({
+      referenceGroup: props.group,
     });
   };
 

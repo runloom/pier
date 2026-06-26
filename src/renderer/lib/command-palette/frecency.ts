@@ -17,9 +17,10 @@ export const CATEGORY_META: Record<
 > = {
   View: { order: 0, labelKey: "view" },
   Workspace: { order: 1, labelKey: "workspace" },
-  Panel: { order: 2, labelKey: "panel" },
-  Window: { order: 3, labelKey: "window" },
-  Settings: { order: 4, labelKey: "settings" },
+  Run: { order: 2, labelKey: "run" },
+  Panel: { order: 3, labelKey: "panel" },
+  Window: { order: 4, labelKey: "window" },
+  Settings: { order: 5, labelKey: "settings" },
 };
 
 export const UNKNOWN_ORDER = Object.keys(CATEGORY_META).length;

@@ -10,10 +10,11 @@ import { describe, expect, it } from "vitest";
  *
  * - blur → blurActivePanelFocus 让 swift state 切 web/null, Ghostty 库自身的
  *   windowDidResignKey 同时把每个 surface core.setFocus(false)
- * - focus → restoreActivePanelFocus 让 main 重发 user 期望的 active terminal
- *   panelId 给 swift, swift 重新 makeFirstResponder + 强制 becomeFirstResponder,
- *   Ghostty surface core.setFocus(true) 被 windowDidBecomeKey 的 firstResponder
- *   === self 分支命中, cursor 恢复实心、shell 重新接 stdin.
+ * - focus → 先记录最后聚焦窗口, 再 restoreActivePanelFocus 让 main 重发 user
+ *   期望的 active terminal panelId 给 swift, swift 重新 makeFirstResponder +
+ *   强制 becomeFirstResponder, Ghostty surface core.setFocus(true) 被
+ *   windowDidBecomeKey 的 firstResponder === self 分支命中, cursor 恢复实心、
+ *   shell 重新接 stdin.
  *
  * 缺 focus handler 的实际表现:用户切到其他 app 再切回 Pier, 所有终端 cursor
  * 空心、无法输入.
@@ -26,7 +27,7 @@ const SOURCE = readFileSync(
 const BLUR_WIRING_RE =
   /window\.host\.on\("blur",\s*\(\)\s*=>\s*\{\s*blurActivePanelFocus\(window\);\s*\}\);/;
 const FOCUS_WIRING_RE =
-  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*restoreActivePanelFocus\(window\);\s*\}\);/;
+  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*this\.rememberFocusedWindow\(id\);\s*restoreActivePanelFocus\(window\);[\s\S]{0,350}?this\.onFocusCallbacks/;
 
 describe("window-manager focus / blur wiring", () => {
   it("attaches blur handler routing to blurActivePanelFocus", () => {

@@ -9,15 +9,15 @@ import { dirname, join } from "node:path";
 function usage() {
   return [
     "Usage:",
-    "  pier open <path> --json",
+    "  pier open <path> [--window <windowId>] [--split <direction>] [--no-focus] --json",
     "  pier status --json",
     "  pier windows list --json",
     "  pier windows focus <windowId> --json",
     "  pier panels list [--window <windowId>] --json",
-    "  pier panels focus <panelId> [--window <windowId>] --json",
+    "  pier panels focus <panelId> [--window <windowId>] [--no-focus] --json",
     "  pier terminals list [--window <windowId>] --json",
-    "  pier terminals open --json",
-    "  pier terminals focus <panelId> [--window <windowId>] --json",
+    "  pier terminals open [--window <windowId>] [--cwd <path>] [--split <direction>] [--no-focus] --json",
+    "  pier terminals focus <panelId> [--window <windowId>] [--no-focus] --json",
     "  pier preferences read --json",
   ].join("\n");
 }
@@ -31,7 +31,14 @@ function requireValue(value) {
 
 function optionValue(args, name) {
   const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
+  if (index < 0) {
+    return;
+  }
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`missing required value for ${name}`);
+  }
+  return value;
 }
 
 function stripOptions(args) {
@@ -42,10 +49,11 @@ function stripOptions(args) {
       arg === "--json" ||
       arg === "--print-envelope" ||
       arg === "--window" ||
+      arg === "--cwd" ||
       arg === "--split" ||
       arg === "--no-focus"
     ) {
-      if (arg === "--window" || arg === "--split") {
+      if (arg === "--window" || arg === "--cwd" || arg === "--split") {
         index++;
       }
       continue;
@@ -121,7 +129,7 @@ function parsePanels(action, value, route) {
   throw new Error("unknown pier CLI command");
 }
 
-function parseTerminals(action, value, route) {
+function parseTerminals(action, value, route, args) {
   if (action === "list") {
     return {
       type: "terminal.list",
@@ -129,7 +137,8 @@ function parseTerminals(action, value, route) {
     };
   }
   if (action === "open") {
-    return { type: "terminal.open", ...route };
+    const cwd = optionValue(args, "--cwd");
+    return { type: "terminal.open", ...route, ...(cwd && { cwd }) };
   }
   if (action === "focus") {
     return {
@@ -158,7 +167,7 @@ function parseCommand(args) {
     return parsePanels(action, value, route);
   }
   if (domain === "terminals") {
-    return parseTerminals(action, value, route);
+    return parseTerminals(action, value, route, args);
   }
   if (domain === "preferences" && action === "read") {
     return { type: "preferences.read" };
@@ -276,6 +285,118 @@ function request(socketPath, envelope, timeoutMs = 5000) {
   });
 }
 
+function asObject(value) {
+  return value && typeof value === "object" ? value : null;
+}
+
+function terminalWindowOrdinals(open) {
+  const windowOrdinalById = new Map();
+  for (const session of open) {
+    if (!session?.windowId || windowOrdinalById.has(session.windowId)) {
+      continue;
+    }
+    windowOrdinalById.set(session.windowId, windowOrdinalById.size + 1);
+  }
+  return windowOrdinalById;
+}
+
+function terminalGroupHeading(session, groupIndex, windowOrdinalById) {
+  const headingParts = [`窗口 ${windowOrdinalById.get(session.windowId) ?? 1}`];
+  if (session.windowFocused) {
+    headingParts.push("当前窗口");
+  }
+  headingParts.push(`第 ${groupIndex + 1} 组`);
+  return headingParts.join(" · ");
+}
+
+function formatOpenTerminalLines(open) {
+  const lines = [];
+  const windowOrdinalById = terminalWindowOrdinals(open);
+  let currentGroupKey = "";
+  for (const session of open) {
+    if (!session?.windowId) {
+      continue;
+    }
+    const groupIndex = Number.isFinite(session.groupIndex)
+      ? session.groupIndex
+      : 0;
+    const groupKey = `${session.windowId}:${groupIndex}`;
+    if (groupKey !== currentGroupKey) {
+      currentGroupKey = groupKey;
+      if (lines.length > 0) {
+        lines.push("");
+      }
+      lines.push(terminalGroupHeading(session, groupIndex, windowOrdinalById));
+    }
+    const tabIndex = Number.isFinite(session.tabIndex) ? session.tabIndex : 0;
+    const tabCount = Number.isFinite(session.tabCount) ? session.tabCount : 1;
+    const marker = session.windowFocused && session.active ? "✓" : " ";
+    const title = session.title || session.panelId || "Terminal";
+    lines.push(
+      `  ${marker} ${title}  标签 ${tabIndex + 1}/${tabCount}  panel ${session.panelId}  window ${session.windowId}`
+    );
+    if (session.cwd) {
+      lines.push(`    ${session.cwd}`);
+    }
+  }
+  return lines;
+}
+
+function formatRecentTerminalLines(recentClosed) {
+  const lines = [];
+  if (recentClosed.length > 0) {
+    lines.push("最近关闭");
+    for (const session of recentClosed) {
+      const title = session.title || session.panelId || "Terminal";
+      lines.push(`  ${title}  已关闭  重新打开`);
+      if (session.cwd) {
+        lines.push(`    ${session.cwd}`);
+      }
+    }
+  }
+  return lines;
+}
+
+function formatTerminalErrorLines(errors) {
+  const lines = [];
+  if (errors.length > 0) {
+    lines.push("错误");
+    for (const error of errors) {
+      const message = error?.message || String(error);
+      const windowId = error?.windowId ? `${error.windowId}: ` : "";
+      lines.push(`  ${windowId}${message}`);
+    }
+  }
+  return lines;
+}
+
+function appendSection(lines, section) {
+  if (section.length === 0) {
+    return;
+  }
+  if (lines.length > 0) {
+    lines.push("");
+  }
+  lines.push(...section);
+}
+
+function formatTerminalList(data) {
+  const snapshot = asObject(data);
+  if (!snapshot) {
+    return "";
+  }
+  const open = Array.isArray(snapshot.open) ? snapshot.open : [];
+  const recentClosed = Array.isArray(snapshot.recentClosed)
+    ? snapshot.recentClosed
+    : [];
+  const errors = Array.isArray(snapshot.errors) ? snapshot.errors : [];
+  const lines = [];
+  appendSection(lines, formatOpenTerminalLines(open));
+  appendSection(lines, formatRecentTerminalLines(recentClosed));
+  appendSection(lines, formatTerminalErrorLines(errors));
+  return lines.length > 0 ? `${lines.join("\n")}\n` : "";
+}
+
 try {
   const rawArgv = process.argv.slice(2);
   const parsed = parseArgs(rawArgv[0] === "--" ? rawArgv.slice(1) : rawArgv);
@@ -288,6 +409,15 @@ try {
   const result = await request(resolveSocketPath(), parsed.envelope);
   if (parsed.json) {
     console.log(JSON.stringify(result, null, 2));
+  } else if (parsed.envelope.command.type === "terminal.list" && result.ok) {
+    const output = formatTerminalList(result.data);
+    if (output) {
+      process.stdout.write(output);
+    }
+  } else if (!result.ok) {
+    const code = result.error?.code ?? "error";
+    const message = result.error?.message ?? "command failed";
+    console.error(`${code}: ${message}`);
   }
   process.exit(result.ok ? 0 : 1);
 } catch (error) {

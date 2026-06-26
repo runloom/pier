@@ -10,7 +10,7 @@ describe("terminal-preferences.store", () => {
     const read = vi.fn(async () => ({
       theme: "system",
       stylePresetId: "pierre",
-      language: "zh-CN",
+      language: "system",
       uiFontFamily: "",
       monoFontFamily: "",
       monoFontSize: 13,

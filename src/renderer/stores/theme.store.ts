@@ -3,6 +3,7 @@ import type {
   StylePresetId,
   ThemePreference,
 } from "@shared/contracts/preferences.ts";
+import type { TerminalColors } from "@shared/contracts/terminal.ts";
 
 import { create } from "zustand";
 import { applyTokens } from "@/lib/theme/apply-tokens.ts";
@@ -61,10 +62,21 @@ function applyDocumentTheme(resolved: ResolvedTheme): void {
  * 影响 DOM 主题应用; 不能让 IPC 错误拖垮整个主题切换.
  */
 let pendingTerminalApply: {
+  colors: TerminalColors;
   presetId: StylePresetId;
   resolved: ResolvedTheme;
 } | null = null;
 let scheduledTerminalFrame: number | null = null;
+
+function syncTerminalBackground(background: string): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.documentElement.style.setProperty(
+    "--terminal-background",
+    background
+  );
+}
 
 function flushPendingTerminalApply(): void {
   scheduledTerminalFrame = null;
@@ -74,11 +86,9 @@ function flushPendingTerminalApply(): void {
     return;
   }
   try {
-    const shiki = getShikiTheme(pending.presetId, pending.resolved);
-    const colors = deriveTerminalColors(shiki, pending.resolved);
-    window.pier?.terminal?.applyTheme?.(colors);
+    window.pier?.terminal?.applyTheme?.(pending.colors);
     window.pier?.theme
-      ?.setNativeChrome?.(pending.resolved, colors.background)
+      ?.setNativeChrome?.(pending.resolved, pending.colors.background)
       ?.catch(() => undefined);
   } catch (err) {
     console.error("[theme.store] applyTerminalColors failed:", err);
@@ -89,7 +99,15 @@ function applyTerminalColors(
   presetId: StylePresetId,
   resolved: ResolvedTheme
 ): void {
-  pendingTerminalApply = { presetId, resolved };
+  try {
+    const shiki = getShikiTheme(presetId, resolved);
+    const colors = deriveTerminalColors(shiki, resolved);
+    syncTerminalBackground(colors.background);
+    pendingTerminalApply = { colors, presetId, resolved };
+  } catch (err) {
+    console.error("[theme.store] deriveTerminalColors failed:", err);
+    return;
+  }
   if (scheduledTerminalFrame !== null) {
     return;
   }

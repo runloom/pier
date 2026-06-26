@@ -1,4 +1,9 @@
 const REVEAL_PADDING_PX = 8;
+let dockviewTabRevealRoot: ParentNode | null = null;
+
+export function setDockviewTabRevealRoot(root: ParentNode | null): void {
+  dockviewTabRevealRoot = root;
+}
 
 export function revealElementWithinScrollContainer(
   container: HTMLElement,
@@ -42,4 +47,37 @@ export function revealDockviewTabElement(tabContentElement: HTMLElement): void {
   }
 
   revealElementWithinScrollContainer(tabsContainer, tabElement);
+}
+
+export function revealDockviewTabByPanelId(
+  panelId: string,
+  root: ParentNode
+): boolean {
+  for (const contentElement of root.querySelectorAll<HTMLElement>(
+    "[data-panel-tab-id]"
+  )) {
+    if (contentElement.dataset.panelTabId === panelId) {
+      revealDockviewTabElement(contentElement);
+      return true;
+    }
+  }
+  return false;
+}
+
+export function scheduleRevealDockviewTabByPanelId(
+  panelId: string,
+  root?: ParentNode
+): void {
+  const targetRoot = root ?? dockviewTabRevealRoot;
+  if (!targetRoot) {
+    return;
+  }
+  const reveal = () => {
+    revealDockviewTabByPanelId(panelId, targetRoot);
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(reveal);
+    return;
+  }
+  reveal();
 }

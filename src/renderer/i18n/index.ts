@@ -1,10 +1,7 @@
 import i18next from "i18next";
+import { FALLBACK_LOCALE, resolveLanguagePreference } from "./language.ts";
 import { en } from "./locales/en.ts";
 import { zhCN } from "./locales/zh-cn.ts";
-
-export const DEFAULT_LOCALE = "zh-CN";
-export const SUPPORTED_LOCALES = ["zh-CN", "en"] as const;
-export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 let initialized = false;
 
@@ -12,9 +9,11 @@ export async function initI18n(): Promise<void> {
   if (initialized) {
     return;
   }
+  const initialLocale = resolveLanguagePreference("system");
+  document.documentElement.lang = initialLocale;
   await i18next.init({
-    lng: DEFAULT_LOCALE,
-    fallbackLng: "en",
+    lng: initialLocale,
+    fallbackLng: FALLBACK_LOCALE,
     interpolation: { escapeValue: false },
     resources: {
       "zh-CN": { translation: zhCN },

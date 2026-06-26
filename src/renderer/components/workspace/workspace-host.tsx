@@ -1,3 +1,4 @@
+import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import {
   DockviewReact,
@@ -5,8 +6,10 @@ import {
   type DockviewTheme,
   type SerializedDockview,
 } from "dockview-react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import "dockview-react/dist/styles/dockview.css";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import { flushTerminalLayoutFramesTrailing } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
@@ -15,6 +18,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
 import { WorkspaceHeaderActions } from "./workspace-header-actions.tsx";
+import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
 
 /**
  * WorkspaceHost — dockview-react 的唯一业务边界。
@@ -59,20 +63,31 @@ function applyDefaultLayout(api: DockviewReadyEvent["api"]): void {
 
 const SAVE_DEBOUNCE_MS = 500;
 
+class RendererCommandExecutionError extends Error {
+  readonly code: PierCommandErrorCode;
+
+  constructor(code: PierCommandErrorCode, message: string) {
+    super(message);
+    this.name = "RendererCommandExecutionError";
+    this.code = code;
+  }
+}
+
+function rendererCommandErrorCode(
+  code: "kind_mismatch" | "not_found"
+): PierCommandErrorCode {
+  return code === "kind_mismatch" ? "invalid_command" : code;
+}
+
 function panelSnapshots() {
   const api = useWorkspaceStore.getState().api;
   if (!api) {
     throw new Error("workspace api not ready");
   }
-  return api.panels.map((panel) => {
-    const component = panel.view.contentComponent;
-    return {
-      active: panel.id === api.activePanel?.id,
-      id: panel.id,
-      kind: panelKindOf(component),
-      title: panel.title,
-    };
-  });
+  return buildWorkspacePanelSnapshots(
+    api,
+    usePanelDescriptorStore.getState().descriptors
+  );
 }
 
 function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
@@ -80,15 +95,17 @@ function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
   if (!api) {
     throw new Error("workspace api not ready");
   }
-  const panel = api.panels.find((candidate) => candidate.id === panelId);
-  if (!panel) {
-    throw new Error(`panel not found: ${panelId}`);
+  const result = activateWorkspacePanel(api, panelId, {
+    ...(expectedKind && { expectedKind }),
+    kindOfComponent: panelKindOf,
+    reveal: "always",
+  });
+  if (!result.ok) {
+    throw new RendererCommandExecutionError(
+      rendererCommandErrorCode(result.code),
+      result.message
+    );
   }
-  const kind = panelKindOf(panel.view.contentComponent);
-  if (expectedKind && kind !== expectedKind) {
-    throw new Error(`panel is not ${expectedKind}: ${panelId}`);
-  }
-  panel.api.setActive();
 }
 
 function runRendererCommand(envelope: RendererCommandEnvelope): void {
@@ -122,6 +139,7 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
       }
       case "terminal.open": {
         const panelId = state.addTerminal({
+          ...(envelope.command.cwd && { path: envelope.command.cwd }),
           ...(envelope.command.placement && {
             placement: envelope.command.placement,
           }),
@@ -173,6 +191,9 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
   } catch (error) {
     window.pier.rendererCommand.resolve({
       error: {
+        ...(error instanceof RendererCommandExecutionError
+          ? { code: error.code }
+          : {}),
         message: error instanceof Error ? error.message : String(error),
       },
       ok: false,
@@ -183,6 +204,14 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
 
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setDockviewTabRevealRoot(rootRef.current);
+    return () => {
+      setDockviewTabRevealRoot(null);
+    };
+  }, []);
 
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
@@ -200,7 +229,20 @@ export function WorkspaceHost() {
       // / 拖 panel 等), userTouched=true. loadLayout 完成时如果 user 已操作, fromJSON
       // 跳过 (不覆盖 user 操作) — user 显式新建的 panel 优先于磁盘旧 layout.
       let userTouched = false;
+      let didNotifyReadyToShow = false;
       const windowContextPromise = window.pier.getWindowContext();
+
+      const notifyReadyToShow = (): void => {
+        if (didNotifyReadyToShow) {
+          return;
+        }
+        didNotifyReadyToShow = true;
+        // 此时 BrowserWindow 仍是 show:false, 隐藏页面的 requestAnimationFrame 可能
+        // 不推进; 用 macrotask 接在同步 layout restore 后通知 main 显示窗口.
+        setTimeout(() => {
+          window.pier.readyToShow();
+        }, 0);
+      };
 
       const saveCurrentLayout = async (): Promise<void> => {
         const json = event.api.toJSON();
@@ -293,7 +335,14 @@ export function WorkspaceHost() {
       });
 
       window.pier?.terminal?.onFocusRequest?.((req) => {
-        if (activateTerminalPanelFromFocusRequest(event.api, req.panelId)) {
+        const result = activateTerminalPanelFromFocusRequest(
+          event.api,
+          req.panelId,
+          {
+            kindOfComponent: panelKindOf,
+          }
+        );
+        if (result.ok) {
           window.pier?.terminal?.setActivePanelKind?.("terminal", req.panelId);
         }
       });
@@ -323,6 +372,7 @@ export function WorkspaceHost() {
         }
         if (userTouched) {
           // user 已经在 layout 里加了 panel, 不覆盖
+          notifyReadyToShow();
           return;
         }
         isApplyingPersistedLayout = true;
@@ -345,6 +395,7 @@ export function WorkspaceHost() {
           .filter((p) => p.view.contentComponent === "terminal")
           .map((p) => p.id);
         window.pier?.terminal?.reconcile?.(terminalPanelIds);
+        notifyReadyToShow();
 
         // 给 dockview 一帧时间 flush layout-change 事件, 再放 save gate
         requestAnimationFrame(() => {
@@ -356,7 +407,7 @@ export function WorkspaceHost() {
   );
 
   return (
-    <div className="h-full w-full overflow-hidden">
+    <div className="h-full w-full overflow-hidden" ref={rootRef}>
       <DockviewReact
         components={panelComponents}
         defaultTabComponent={PanelTabHeader}

@@ -1,5 +1,8 @@
+import { useEffect } from "react";
 import { resolveLong } from "@/components/common/document-title.tsx";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
+
+const TITLEBAR_HEIGHT = "38px";
 
 /**
  * TitleBar — macOS hiddenInset 自定义标题栏.
@@ -12,6 +15,19 @@ import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
  */
 export function TitleBar() {
   const active = useActiveDescriptor();
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--app-titlebar-height",
+      TITLEBAR_HEIGHT
+    );
+    return () => {
+      document.documentElement.style.setProperty(
+        "--app-titlebar-height",
+        "0px"
+      );
+    };
+  }, []);
+
   // resolveLong 可能返回空字符串 (descriptor 字段空值降级时), `||` 而非 `??`,
   // 让空串也回退到 "Pier" — 与 document-title.tsx 的兜底行为对齐.
   const text = (active && resolveLong(active)) || "Pier";
