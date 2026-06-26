@@ -940,6 +940,26 @@ body {
   background-color: var(--primary);
 }
 
+[data-dockview-maximized="true"]
+  .dockview-theme-pier
+  .dv-split-view-container.dv-separator-border
+  .dv-view:not(:first-child)::before,
+[data-dockview-maximized="true"]
+  .dockview-theme-pier
+  .dv-split-view-container
+  > .dv-sash-container
+  > .dv-sash::before {
+  display: none !important;
+}
+
+[data-dockview-maximized="true"]
+  .dockview-theme-pier
+  .dv-split-view-container
+  > .dv-sash-container
+  > .dv-sash {
+  pointer-events: none;
+}
+
 /* 拖拽占位蒙层即刻贴位, 去掉默认 300ms 滞后感 */
 .dockview-theme-pier .dv-drop-target-container {
   --dv-transition-duration: 100ms;

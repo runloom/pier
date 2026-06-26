@@ -5,6 +5,8 @@
  *   - web overlay (command palette / dialog): pushOverlay / popOverlay
  *   - dockview drag (tab 拖拽 / sash 调整): installDragWatcher 自动管理
  */
+import { setTerminalPresentationOverlayActive } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
+
 let overlayCount = 0;
 const TAB_DRAG_FALLBACK_MS = 5000;
 const DRAG_WATCHER_CLEANUP_KEY = "__pierTerminalDragWatcherCleanup__";
@@ -15,6 +17,7 @@ interface DragWatcherDocument extends Document {
 
 export function pushOverlay(): void {
   if (++overlayCount === 1) {
+    setTerminalPresentationOverlayActive(true);
     window.pier?.terminal?.setOverlayActive?.(true);
   }
 }
@@ -22,6 +25,7 @@ export function pushOverlay(): void {
 export function popOverlay(): void {
   overlayCount = Math.max(0, overlayCount - 1);
   if (overlayCount === 0) {
+    setTerminalPresentationOverlayActive(false);
     window.pier?.terminal?.setOverlayActive?.(false);
   }
 }

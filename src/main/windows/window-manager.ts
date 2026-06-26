@@ -25,11 +25,11 @@ import {
   WebContentsView,
 } from "electron";
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
+import { getTerminalAddon } from "../ipc/terminal.ts";
 import {
   blurActivePanelFocus,
-  getTerminalAddon,
   restoreActivePanelFocus,
-} from "../ipc/terminal.ts";
+} from "../ipc/terminal-focus-state.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
 import {

@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
+import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { initI18n } from "./i18n/index.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
 import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
@@ -8,6 +9,7 @@ import { registerConfigActions } from "./lib/actions/config-actions.ts";
 import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerRunActions } from "./lib/actions/run-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
+import { registerTerminalDebugActions } from "./lib/actions/terminal-debug-actions.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
@@ -19,6 +21,19 @@ import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts"
 import { initTheme } from "./stores/theme.store.ts";
 
 async function bootstrap() {
+  const params = new URLSearchParams(window.location.search);
+  const debugMode = params.get("pierDebug");
+  const targetBrowserWindowId = Number(params.get("targetBrowserWindowId"));
+  if (debugMode === "terminal" && Number.isFinite(targetBrowserWindowId)) {
+    const rootEl = document.getElementById("root");
+    if (rootEl) {
+      createRoot(rootEl).render(
+        <TerminalDebugWindow targetBrowserWindowId={targetBrowserWindowId} />
+      );
+    }
+    return;
+  }
+
   try {
     await initI18n();
   } catch (err) {
@@ -45,6 +60,7 @@ async function bootstrap() {
   registerPanelActions();
   registerSettingsActions();
   registerCommandPaletteMruAction();
+  registerTerminalDebugActions();
   registerTerminalActions();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
 

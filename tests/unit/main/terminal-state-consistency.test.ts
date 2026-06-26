@@ -26,6 +26,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const fakeAddon = {
+      applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
@@ -104,6 +105,25 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     return { fakeAddon, handlers, invokeHandlers, win };
   }
 
+  function terminalPresentation(panelId = "panel-1", rendererSequence = 1) {
+    return {
+      activePanelId: panelId,
+      activePanelKind: "terminal" as const,
+      hasMaximizedGroup: false,
+      overlayActive: false,
+      reason: "dockview-active-panel" as const,
+      rendererSequence,
+      terminals: [
+        {
+          focused: true,
+          frame: { height: 400, width: 300, x: 0, y: 0 },
+          panelId,
+          visible: true,
+        },
+      ],
+    };
+  }
+
   it("forwards hide IPC unconditionally (no main-side filtering)", async () => {
     // 关键防回归:hide 由 swift 端单一执行, main 端透传不过滤. 历史上 swift 端
     // 加过 `guard panelId != activePanelId` 防御性 guard, 结果在 tab switch 场景
@@ -150,17 +170,25 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       winFocused: false,
     });
 
-    handlers.get("pier:terminal:set-active-panel-kind")?.(
+    handlers.get("pier:terminal:apply-presentation")?.(
       { sender: win.webContents },
-      "terminal",
-      "panel-1"
+      terminalPresentation("panel-1")
     );
 
-    // 不是直接 setActivePanelKind(.terminal), 而是 setActivePanelKind(.web, null) 来 blur
-    expect(fakeAddon.setActivePanelKind).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
       Buffer.from("window"),
-      1, // 1 = web
-      null
+      expect.objectContaining({
+        activePanelId: null,
+        activePanelKind: "web",
+        terminals: [
+          expect.objectContaining({
+            focused: false,
+            panelId: "7::panel-1",
+            visible: true,
+          }),
+        ],
+        windowFocused: false,
+      })
     );
     expect(fakeAddon.focusTerminal).not.toHaveBeenCalled();
   });
@@ -274,27 +302,49 @@ describe("Swift terminal state consistency via main IPC paths", () => {
   it("activates web focus only when terminal overlay is enabled", async () => {
     const { fakeAddon, handlers, win } = await setupHarness();
 
+    handlers.get("pier:terminal:apply-presentation")?.(
+      { sender: win.webContents },
+      terminalPresentation("panel-1")
+    );
+    vi.mocked(win.webContents.focus).mockClear();
+    fakeAddon.applyTerminalPresentation.mockClear();
+
     handlers.get("pier:terminal:set-overlay")?.(
       { sender: win.webContents },
       true
     );
 
-    expect(fakeAddon.setOverlayActive).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
       Buffer.from("window"),
-      true
+      expect.objectContaining({
+        activePanelKind: "web",
+        overlayActive: true,
+        terminals: [
+          expect.objectContaining({
+            focused: false,
+            panelId: "7::panel-1",
+            visible: true,
+          }),
+        ],
+      })
     );
     expect(win.webContents.focus).toHaveBeenCalledOnce();
 
     vi.mocked(win.webContents.focus).mockClear();
+    fakeAddon.applyTerminalPresentation.mockClear();
 
     handlers.get("pier:terminal:set-overlay")?.(
       { sender: win.webContents },
       false
     );
 
-    expect(fakeAddon.setOverlayActive).toHaveBeenLastCalledWith(
+    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
       Buffer.from("window"),
-      false
+      expect.objectContaining({
+        activePanelId: "7::panel-1",
+        activePanelKind: "terminal",
+        overlayActive: false,
+      })
     );
     expect(win.webContents.focus).not.toHaveBeenCalled();
   });

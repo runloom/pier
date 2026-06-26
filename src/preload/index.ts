@@ -12,7 +12,11 @@ import {
   RENDERER_COMMAND_CHANNEL,
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
-import type { TerminalAPI } from "@shared/contracts/terminal.ts";
+import type {
+  TerminalAPI,
+  TerminalDebugRendererSnapshotRequest,
+  TerminalDebugRendererSnapshotResult,
+} from "@shared/contracts/terminal.ts";
 import type {
   WindowContext,
   WindowCreateResult,
@@ -150,9 +154,13 @@ const preferencesApi: PierPreferencesAPI = {
 };
 
 const terminalApi: TerminalAPI = {
+  applyPresentation: (snapshot) =>
+    ipcRenderer.send("pier:terminal:apply-presentation", snapshot),
   applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
   close: (panelId) => ipcRenderer.send("pier:terminal:close", panelId),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
+  debugSnapshot: (args) =>
+    ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   focusSession: (args) =>
     ipcRenderer.invoke("pier:terminal:focus-session", args),
@@ -164,8 +172,34 @@ const terminalApi: TerminalAPI = {
   onContextMenuRequest: (cb) =>
     subscribeIpc("pier:terminal:request-context-menu", cb),
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
+  onDebugRendererSnapshotRequest: (cb) => {
+    const listener = async (
+      _event: unknown,
+      req: TerminalDebugRendererSnapshotRequest
+    ) => {
+      const result: TerminalDebugRendererSnapshotResult = {
+        ok: false,
+        requestId: req.requestId,
+      };
+      try {
+        result.renderer = await cb(req);
+        result.ok = true;
+      } catch (err) {
+        result.error = err instanceof Error ? err.message : String(err);
+      }
+      ipcRenderer.send("pier:terminal-debug:renderer-snapshot-result", result);
+    };
+    ipcRenderer.on("pier:terminal-debug:collect-renderer-snapshot", listener);
+    return () => {
+      ipcRenderer.off(
+        "pier:terminal-debug:collect-renderer-snapshot",
+        listener
+      );
+    };
+  },
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
+  openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
   openSession: (args) => ipcRenderer.invoke("pier:terminal:open-session", args),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),

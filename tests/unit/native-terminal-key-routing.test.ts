@@ -59,6 +59,14 @@ describe("native terminal key routing", () => {
     );
   });
 
+  it("maps native return characters to the Enter keybinding code", () => {
+    const source = readGhosttyBridgeSource();
+
+    expect(source).toContain('case "\\r"');
+    expect(source).toContain('case "\\u{3}"');
+    expect(source).toContain('return "Enter"');
+  });
+
   it("forwards only declared terminal-mode Pier shortcuts instead of all Cmd keys", () => {
     const source = readGhosttyBridgeSource();
     const allowlistCheckIndex = source.indexOf(

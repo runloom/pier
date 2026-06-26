@@ -80,6 +80,18 @@ export function registerPanelActions(): () => void {
     })
   );
 
+  disposers.push(
+    actionRegistry.register({
+      category: "Panel",
+      enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
+      handler: () => useWorkspaceStore.getState().toggleActivePanelMaximized(),
+      id: "pier.panel.toggleMaximized",
+      metadata: { group: "4_layout" },
+      surfaces: [],
+      title: () => "Toggle Panel Maximize",
+    })
+  );
+
   // ─── 多 surface 触发的 panel actions ─────────────────────────────────
   // 这些 action 挂在 dockview-tab / terminal/content / command-palette 三个
   // surface 上, handler 统一用 useWorkspaceStore.getState().api?.activePanel:

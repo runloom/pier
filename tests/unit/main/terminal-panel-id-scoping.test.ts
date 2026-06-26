@@ -29,6 +29,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       (...args: unknown[]) => unknown | Promise<unknown>
     >();
     const fakeAddon = {
+      applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
@@ -115,6 +116,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       (...args: unknown[]) => unknown | Promise<unknown>
     >();
     const fakeAddon = {
+      applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),

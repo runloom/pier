@@ -4,9 +4,11 @@ type WindowLayoutPulseReason = "resize" | "zoom";
 
 export type TerminalLayoutFlushReason =
   | "anchor-resize"
+  | "dockview-active-panel"
   | "dockview-dimensions"
   | "dockview-layout"
   | "dockview-maximize"
+  | "restore"
   | "visibility"
   | "window-resize"
   | `window-${WindowLayoutPulseReason}`;
@@ -28,6 +30,9 @@ export interface TerminalLayoutRegistration {
 const anchors = new Map<string, TerminalAnchorState>();
 let windowResizeInstalled = false;
 let windowLayoutPulseDispose: (() => void) | null = null;
+let presentationScheduler:
+  | ((reason: TerminalLayoutFlushReason) => void)
+  | null = null;
 
 export function readTerminalAnchorFrame(
   anchor: HTMLDivElement
@@ -37,6 +42,22 @@ export function readTerminalAnchorFrame(
     return null;
   }
   return { x: r.x, y: r.y, width: r.width, height: r.height };
+}
+
+export function isRegisteredTerminalAnchorVisible(panelId: string): boolean {
+  const state = anchors.get(panelId);
+  return state ? readTerminalAnchorFrame(state.anchor) !== null : false;
+}
+
+export function hasRegisteredTerminalAnchor(panelId: string): boolean {
+  return anchors.has(panelId);
+}
+
+export function readRegisteredTerminalAnchorFrame(
+  panelId: string
+): TerminalFrame | null {
+  const state = anchors.get(panelId);
+  return state ? readTerminalAnchorFrame(state.anchor) : null;
 }
 
 function frameKey(frame: TerminalFrame): string {
@@ -67,12 +88,31 @@ function debugFrame(
   });
 }
 
-function sendFrameNow(
+export function setTerminalLayoutPresentationScheduler(
+  scheduler: ((reason: TerminalLayoutFlushReason) => void) | null
+): () => void {
+  presentationScheduler = scheduler;
+  return () => {
+    if (presentationScheduler === scheduler) {
+      presentationScheduler = null;
+    }
+  };
+}
+
+function notifyPresentationChange(reason: TerminalLayoutFlushReason): void {
+  presentationScheduler?.(reason);
+}
+
+function observeFrameNow(
   state: TerminalAnchorState,
   reason: TerminalLayoutFlushReason
 ): void {
   const frame = readTerminalAnchorFrame(state.anchor);
   if (!frame) {
+    if (state.lastFrameKey !== "") {
+      state.lastFrameKey = "";
+      notifyPresentationChange(reason);
+    }
     return;
   }
   const key = frameKey(frame);
@@ -81,21 +121,21 @@ function sendFrameNow(
   }
   state.lastFrameKey = key;
   debugFrame(reason, state.panelId, frame);
-  window.pier.terminal.setFrame(state.panelId, frame);
+  notifyPresentationChange(reason);
 }
 
 function flushTrailing(
   state: TerminalAnchorState,
   reason: TerminalLayoutFlushReason
 ): void {
-  sendFrameNow(state, reason);
+  observeFrameNow(state, reason);
   if (state.frameRequest !== null) {
     cancelAnimationFrame(state.frameRequest);
   }
 
   let remainingFrames = 2;
   const tick = () => {
-    sendFrameNow(state, reason);
+    observeFrameNow(state, reason);
     remainingFrames -= 1;
     if (remainingFrames > 0) {
       state.frameRequest = requestAnimationFrame(tick);
@@ -110,7 +150,7 @@ export function flushTerminalLayoutFrames(
   reason: TerminalLayoutFlushReason
 ): void {
   for (const state of anchors.values()) {
-    sendFrameNow(state, reason);
+    observeFrameNow(state, reason);
   }
 }
 
@@ -167,11 +207,12 @@ export function registerTerminalLayoutAnchor(
     resizeObserver: null,
   };
   state.resizeObserver = new ResizeObserver(() => {
-    sendFrameNow(state, "anchor-resize");
+    observeFrameNow(state, "anchor-resize");
   });
   state.resizeObserver.observe(anchor);
   anchors.set(panelId, state);
   ensureGlobalListeners();
+  notifyPresentationChange("visibility");
 
   return {
     dispose() {
@@ -182,10 +223,11 @@ export function registerTerminalLayoutAnchor(
       if (anchors.get(panelId) === state) {
         anchors.delete(panelId);
       }
+      notifyPresentationChange("visibility");
       maybeDisposeGlobalListeners();
     },
     flushNow(reason) {
-      sendFrameNow(state, reason);
+      observeFrameNow(state, reason);
     },
     flushTrailing(reason) {
       flushTrailing(state, reason);

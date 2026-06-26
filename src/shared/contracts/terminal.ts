@@ -7,6 +7,190 @@ export interface TerminalFrame {
   y: number;
 }
 
+export type TerminalPresentationReason =
+  | "anchor-resize"
+  | "dockview-active-panel"
+  | "dockview-dimensions"
+  | "dockview-layout"
+  | "dockview-maximize"
+  | "overlay"
+  | "restore"
+  | "visibility"
+  | "window-blur"
+  | "window-focus"
+  | "window-resize"
+  | `window-${"resize" | "zoom"}`;
+
+export interface TerminalPresentationEntry {
+  focused: boolean;
+  frame: TerminalFrame | null;
+  panelId: string;
+  visible: boolean;
+}
+
+export interface TerminalPresentationSnapshot {
+  activePanelId: string | null;
+  activePanelKind: "terminal" | "web";
+  hasMaximizedGroup: boolean;
+  overlayActive: boolean;
+  reason: TerminalPresentationReason;
+  rendererSequence: number;
+  terminals: TerminalPresentationEntry[];
+}
+
+export interface TerminalNativePresentationSnapshot
+  extends TerminalPresentationSnapshot {
+  nativeApplySequence: number;
+  windowFocused: boolean;
+}
+
+export interface TerminalDebugPresentationSnapshot {
+  desired?: TerminalPresentationSnapshot | undefined;
+  effective?: TerminalNativePresentationSnapshot | undefined;
+}
+
+export type TerminalDebugRoute =
+  | "renderer->main->native"
+  | "renderer->main->webContents"
+  | "native->main->renderer";
+
+export interface TerminalDebugEvent {
+  action: string;
+  at: string;
+  browserWindowId: number;
+  detail?: Record<string, boolean | number | string | null> | undefined;
+  id: number;
+  nativePanelId?: string | undefined;
+  panelId?: string | undefined;
+  route: TerminalDebugRoute;
+  windowId?: string | undefined;
+}
+
+export interface TerminalDebugNativeWindowSnapshot {
+  activePanelKind: "terminal" | "web";
+  activeTerminalPanelId: string | null;
+  inTerminalMode: boolean;
+  lastAppliedNativeApplySequence?: number | undefined;
+  lastAppliedRendererSequence?: number | undefined;
+  lastPresentationReason?: string | undefined;
+  nativeActiveTerminalPanelId: string | null;
+  overlayActive: boolean;
+  staleDiscardCount?: number | undefined;
+}
+
+export interface TerminalDebugNativeSurfaceSnapshot {
+  alpha: number;
+  browserWindowId: number;
+  frame: TerminalFrame;
+  hasRouterTarget: boolean;
+  isFirstResponder: boolean;
+  isHidden: boolean;
+  isOffscreen: boolean;
+  nativePanelId: string;
+  panelId: string;
+  targetRect?: TerminalFrame | null | undefined;
+  viewportFrame?: TerminalFrame | null | undefined;
+}
+
+export interface TerminalDebugNativeSnapshot {
+  error?: string | undefined;
+  surfaces: TerminalDebugNativeSurfaceSnapshot[];
+  window: TerminalDebugNativeWindowSnapshot;
+}
+
+export type TerminalDebugIssueSeverity = "error" | "warning";
+
+export interface TerminalDebugIssue {
+  code:
+    | "duplicate_renderer_panel"
+    | "desired_focus_native_first_responder_mismatch"
+    | "desired_frame_native_mismatch"
+    | "desired_hidden_native_visible"
+    | "desired_visible_native_hidden"
+    | "frame_mismatch"
+    | "native_hidden_while_anchor_visible"
+    | "native_missing"
+    | "orphan_native_surface"
+    | "presentation_stale"
+    | "renderer_terminal_create_pending"
+    | "renderer_terminal_lifecycle_missing"
+    | "renderer_terminal_placeholder_visible";
+  message: string;
+  panelId?: string | undefined;
+  severity: TerminalDebugIssueSeverity;
+}
+
+export type TerminalDebugRendererTerminalPhase =
+  | "creating"
+  | "disposed"
+  | "error"
+  | "mounted"
+  | "ready"
+  | "waiting_for_anchor";
+
+export interface TerminalDebugRendererTerminalLifecycleSnapshot {
+  createAttemptCount: number;
+  createPending: boolean;
+  didCreateNativeTerminal: boolean;
+  error: string | null;
+  hasRenderableAnchor: boolean;
+  nativeTerminalReady: boolean;
+  phase: TerminalDebugRendererTerminalPhase;
+  placeholderVisible: boolean;
+  updatedAt: number;
+}
+
+export interface TerminalDebugRendererPanelSnapshot {
+  anchorFrame: TerminalFrame | null;
+  component: string;
+  dockviewActive: boolean;
+  dockviewVisible: boolean;
+  hasAnchor: boolean;
+  isActivePanel: boolean;
+  panelId: string;
+  terminalLifecycle?:
+    | TerminalDebugRendererTerminalLifecycleSnapshot
+    | undefined;
+}
+
+export interface TerminalDebugRendererSnapshot {
+  activePanelId: string | null;
+  desiredPresentation?: TerminalPresentationSnapshot | undefined;
+  hasMaximizedGroup: boolean;
+  panelCount: number;
+  panels: TerminalDebugRendererPanelSnapshot[];
+  viewportFrame?: TerminalFrame | undefined;
+}
+
+export interface TerminalDebugRendererSnapshotRequest {
+  requestId: string;
+}
+
+export interface TerminalDebugRendererSnapshotResult {
+  error?: string | undefined;
+  ok: boolean;
+  renderer?: TerminalDebugRendererSnapshot | undefined;
+  requestId: string;
+}
+
+export interface TerminalDebugSnapshotArgs {
+  targetBrowserWindowId?: number | undefined;
+}
+
+export interface TerminalDebugSnapshot {
+  events: TerminalDebugEvent[];
+  issues?: TerminalDebugIssue[] | undefined;
+  native: TerminalDebugNativeSnapshot;
+  presentation?: TerminalDebugPresentationSnapshot | undefined;
+  renderer?: TerminalDebugRendererSnapshot | undefined;
+}
+
+export interface TerminalDebugWindowOpenResult {
+  error?: string | undefined;
+  ok: boolean;
+  targetBrowserWindowId?: number | undefined;
+}
+
 /**
  * Terminal 字体配置. family 已在 renderer 侧调 computeMonoFontFamily 处理过 fallback
  * 链, native 端拿到的是完整 font-family 字符串 (含逗号分隔的 fallback). size 单位 px,
@@ -183,6 +367,7 @@ export interface TerminalColors {
 }
 
 export interface TerminalAPI {
+  applyPresentation(snapshot: TerminalPresentationSnapshot): void;
   applyTheme(colors: TerminalColors): void;
   /**
    * 关闭 terminal panel 的 native NSView. fire-and-forget — swift 端 close 是同步
@@ -190,6 +375,9 @@ export interface TerminalAPI {
    */
   close(panelId: string): void;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
+  debugSnapshot(
+    args?: TerminalDebugSnapshotArgs
+  ): Promise<TerminalDebugSnapshot>;
   focus(panelId: string): void;
   focusSession(
     args: TerminalFocusSessionArgs
@@ -206,6 +394,11 @@ export interface TerminalAPI {
    * panelId 过滤. 多 panel 场景下会有 N 个 listener, 每个 panel 自行 dispose.
    */
   onCwdChange(cb: (event: TerminalCwdEvent) => void): () => void;
+  onDebugRendererSnapshotRequest: (
+    cb: (
+      req: TerminalDebugRendererSnapshotRequest
+    ) => Promise<TerminalDebugRendererSnapshot> | TerminalDebugRendererSnapshot
+  ) => () => void;
   /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
   onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
   /**
@@ -213,6 +406,7 @@ export interface TerminalAPI {
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
+  openDebugWindow(): Promise<TerminalDebugWindowOpenResult>;
   openSession(
     args?: TerminalOpenSessionArgs
   ): Promise<TerminalSessionCommandResult>;

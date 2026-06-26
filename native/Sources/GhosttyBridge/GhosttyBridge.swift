@@ -14,6 +14,7 @@
 //   - WKWebView 设为透明
 
 import AppKit
+import Darwin
 import GhosttyTerminal
 import GhosttyTheme
 
@@ -75,12 +76,14 @@ final class EventRouterView: NSView {
         "Ctrl+Shift+ArrowLeft",
         "Ctrl+Shift+ArrowRight",
         "Ctrl+Shift+ArrowUp",
+        "Ctrl+Shift+KeyD",
         "Mod+Backquote",
         "Mod+Comma",
         "Mod+KeyD",
         "Mod+KeyN",
         "Mod+KeyT",
         "Mod+KeyW",
+        "Mod+Shift+Enter",
         "Mod+Shift+KeyD",
         "Mod+Shift+KeyP",
     ]
@@ -163,6 +166,10 @@ final class EventRouterView: NSView {
             return "Minus"
         case "=":
             return "Equal"
+        case "\r":
+            return "Enter"
+        case "\u{3}":
+            return "Enter"
         case "\u{F700}":
             return "ArrowUp"
         case "\u{F701}":
@@ -416,6 +423,43 @@ struct TerminalLayoutState {
     }
 }
 
+private struct TerminalPresentationFrame: Codable {
+    let height: Double
+    let width: Double
+    let x: Double
+    let y: Double
+
+    var nsRect: NSRect {
+        NSRect(x: x, y: y, width: width, height: height)
+    }
+}
+
+private struct TerminalPresentationEntry: Codable {
+    let focused: Bool
+    let frame: TerminalPresentationFrame?
+    let panelId: String
+    let visible: Bool
+}
+
+private struct TerminalPresentationEnvelope: Codable {
+    let activePanelId: String?
+    let activePanelKind: String
+    let hasMaximizedGroup: Bool
+    let nativeApplySequence: Int
+    let overlayActive: Bool
+    let reason: String
+    let rendererSequence: Int
+    let terminals: [TerminalPresentationEntry]
+    let windowFocused: Bool
+}
+
+private struct TerminalPresentationApplyState {
+    var lastAppliedNativeApplySequence: Int = 0
+    var lastAppliedRendererSequence: Int = 0
+    var lastPresentationReason: String = ""
+    var staleDiscardCount: Int = 0
+}
+
 // MARK: - Bridge implementation
 
 @MainActor
@@ -438,6 +482,8 @@ final class GhosttyBridgeImpl {
     /// 销毁而清理).
     private var controllers: [ObjectIdentifier: TerminalController] = [:]
     private var terminalRuntimePreferences: [ObjectIdentifier: TerminalRuntimePreferences] = [:]
+    private var latestPresentations: [ObjectIdentifier: TerminalPresentationEnvelope] = [:]
+    private var presentationApplyStates: [ObjectIdentifier: TerminalPresentationApplyState] = [:]
 
     // MARK: - Keyboard state
 
@@ -717,6 +763,103 @@ final class GhosttyBridgeImpl {
         applyFirstResponder(for: window)
     }
 
+    func applyPresentation(parent: NSWindow, json: String) {
+        guard let data = json.data(using: .utf8),
+              let presentation = try? JSONDecoder().decode(
+                TerminalPresentationEnvelope.self,
+                from: data
+              ) else {
+            return
+        }
+        applyPresentation(parent: parent, presentation: presentation)
+    }
+
+    private func applyLatestPresentationIfAvailable(parent: NSWindow) {
+        let windowId = ObjectIdentifier(parent)
+        guard let presentation = latestPresentations[windowId] else { return }
+        applyPresentation(parent: parent, presentation: presentation, allowSameSequence: true)
+    }
+
+    private func applyPresentation(
+        parent: NSWindow,
+        presentation: TerminalPresentationEnvelope,
+        allowSameSequence: Bool = false
+    ) {
+        guard let contentView = parent.contentView else { return }
+        let windowId = ObjectIdentifier(parent)
+        var applyState = presentationApplyStates[windowId] ?? TerminalPresentationApplyState()
+        let stale = allowSameSequence
+            ? presentation.nativeApplySequence < applyState.lastAppliedNativeApplySequence
+            : presentation.nativeApplySequence <= applyState.lastAppliedNativeApplySequence
+        if stale {
+            applyState.staleDiscardCount += 1
+            presentationApplyStates[windowId] = applyState
+            return
+        }
+
+        latestPresentations[windowId] = presentation
+        applyState.lastAppliedNativeApplySequence = presentation.nativeApplySequence
+        applyState.lastAppliedRendererSequence = presentation.rendererSequence
+        applyState.lastPresentationReason = presentation.reason
+        presentationApplyStates[windowId] = applyState
+
+        if let router = eventRouters[windowId] {
+            router.overlayActive = presentation.overlayActive
+            router.isHidden = presentation.overlayActive
+        }
+
+        let kind: PanelKind = presentation.activePanelKind == "terminal" ? .terminal : .web
+        mutateState(parent) { state in
+            state.activePanelKind = kind
+            state.activeTerminalPanelId = kind == .terminal ? presentation.activePanelId : nil
+            state.overlayActive = presentation.overlayActive
+        }
+
+        var nextTargets: [String: EventRouterView.Target] = [:]
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for entry in presentation.terminals {
+            guard let term = terminals[entry.panelId],
+                  term.parentWindow === parent else { continue }
+            var viewport: NSRect?
+            if let frame = entry.frame {
+                let nextViewport = frame.nsRect
+                viewport = nextViewport
+                let nativeFrame = computeFrame(in: contentView, viewport: nextViewport)
+                term.containerView.applyHostFrame(nativeFrame)
+                rememberLayout(
+                    panelId: entry.panelId,
+                    contentView: contentView,
+                    nativeFrame: nativeFrame
+                )
+            }
+
+            if entry.visible, let viewport {
+                contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
+                term.containerView.alphaValue = 1
+                term.containerView.isHidden = false
+                nextTargets[entry.panelId] = EventRouterView.Target(
+                    rect: Self.terminalTargetRect(viewport: viewport),
+                    view: term.containerView
+                )
+            } else {
+                let rememberedFrame =
+                    terminalLayouts[entry.panelId]?.presentedFrame ?? term.containerView.frame
+                term.containerView.alphaValue = 0
+                term.containerView.isHidden = true
+                term.containerView.frame = NSRect(
+                    x: -99999,
+                    y: -99999,
+                    width: rememberedFrame.width,
+                    height: rememberedFrame.height
+                )
+            }
+        }
+        eventRouters[windowId]?.targets = nextTargets
+        CATransaction.commit()
+        applyFirstResponder(for: parent)
+    }
+
     /// 按 windowStates 当前 state 重算 + apply firstResponder.
     /// 不用 savedFirstResponder restore 模型 — active panel 可能在 overlay 期间被
     /// 切换, pop overlay 后恢复"之前"的 firstResponder 不一定对 (旧 panel 可能已 close).
@@ -845,13 +988,7 @@ final class GhosttyBridgeImpl {
                     fontSize: fontSize
                 )
 
-                let windowId = ObjectIdentifier(parent)
-                eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-                    rect: Self.terminalTargetRect(viewport: viewport),
-                    view: existing.containerView
-                )
-
-                applyFirstResponder(for: parent)
+                applyLatestPresentationIfAvailable(parent: parent)
                 return true
             }
             close(panelId: panelId)
@@ -911,8 +1048,12 @@ final class GhosttyBridgeImpl {
         //   subviews[1], 视觉上 cover 了 ViewsCompositorSuperview, terminal 遮挡 web.
         // 正确: .below relativeTo nil → 插入 subviews[0], 在 ViewsCompositorSuperview
         //   之下 (visually 最底), web 层可叠加在 terminal 之上.
+        container.alphaValue = 0
+        container.isHidden = true
+        container.frame = NSRect(
+            x: -99999, y: -99999, width: frame.width, height: frame.height
+        )
         contentView.addSubview(container, positioned: .below, relativeTo: nil)
-        container.applyHostFrame(frame)
 
         terminals[panelId] = Terminal(
             containerView: container,
@@ -926,21 +1067,7 @@ final class GhosttyBridgeImpl {
             nativeFrame: frame
         )
 
-        // 更新 EventRouter targets (inset 留出 sash 事件通道)
-        let windowId = ObjectIdentifier(parent)
-        eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
-            rect: Self.terminalTargetRect(viewport: viewport), view: container
-        )
-
-        // 反例 6 修复 v2: 无条件 applyFirstResponder. v1 加 `if activeTerminalPanelId
-        // == panelId` guard 失败 — dockview 快速 fire 多个 active panel change 时, state
-        // 已变成其他 panelId, guard 永不命中. applyFirstResponder 内部已有 safety check
-        // (找不到 term 就不动 firstResponder), 无条件调用安全且可靠.
-        //
-        // 触发场景: layout 恢复 fromJSON 同步建多 panel + React mount 后异步 IPC create,
-        // onDidActivePanelChange fire 给 panel A 时 terminals[A]=nil 先 swap fail; B fire
-        // 后 state=B; A 的 createTerminal 完成补这一次, 不依赖 state 当前值.
-        applyFirstResponder(for: parent)
+        applyLatestPresentationIfAvailable(parent: parent)
 
         return true
     }
@@ -1103,6 +1230,8 @@ final class GhosttyBridgeImpl {
         terminalBackgrounds.removeValue(forKey: windowId)
         terminalForegrounds.removeValue(forKey: windowId)
         terminalRuntimePreferences.removeValue(forKey: windowId)
+        latestPresentations.removeValue(forKey: windowId)
+        presentationApplyStates.removeValue(forKey: windowId)
         windowToBrowserWindowId.removeValue(forKey: windowId)
     }
 
@@ -1204,6 +1333,87 @@ final class GhosttyBridgeImpl {
     /// web 层但无 listener → click 无效, 用户感受"无法 click 终端 / 无法输入".
     private static func terminalTargetRect(viewport: NSRect) -> NSRect {
         viewport.insetBy(dx: hitInset, dy: hitInset)
+    }
+
+    private static func rectDebugPayload(_ rect: NSRect) -> [String: Double] {
+        [
+            "height": Double(rect.height),
+            "width": Double(rect.width),
+            "x": Double(rect.minX),
+            "y": Double(rect.minY),
+        ]
+    }
+
+    private static func viewportDebugRect(contentView: NSView, frame: NSRect) -> NSRect {
+        if contentView.isFlipped {
+            return frame
+        }
+        return NSRect(
+            x: frame.minX,
+            y: contentView.bounds.height - frame.minY - frame.height,
+            width: frame.width,
+            height: frame.height
+        )
+    }
+
+    private static func jsonString(_ value: Any) -> String {
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return json
+    }
+
+    func debugSnapshot(parent: NSWindow) -> String {
+        let windowId = ObjectIdentifier(parent)
+        let state = stateFor(window: parent)
+        let router = eventRouters[windowId]
+        let activePanelKind = state.activePanelKind == .terminal ? "terminal" : "web"
+        let activeTerminalPanelId: Any =
+            state.activeTerminalPanelId.map { $0 as Any } ?? NSNull()
+        let applyState = presentationApplyStates[windowId]
+        let browserWindowId = windowToBrowserWindowId[windowId] ?? -1
+        let contentView = parent.contentView
+        let surfaces: [[String: Any]] = terminals
+            .filter { ObjectIdentifier($0.value.parentWindow) == windowId }
+            .sorted { $0.key < $1.key }
+            .map { panelId, term in
+                let frame = term.containerView.frame
+                var payload: [String: Any] = [
+                    "alpha": Double(term.containerView.alphaValue),
+                    "browserWindowId": browserWindowId,
+                    "frame": Self.rectDebugPayload(frame),
+                    "hasRouterTarget": router?.targets[panelId] != nil,
+                    "isFirstResponder": parent.firstResponder === term.terminalView,
+                    "isHidden": term.containerView.isHidden,
+                    "isOffscreen": frame.minX < -50000 || frame.minY < -50000,
+                    "panelId": panelId,
+                ]
+                if let contentView {
+                    payload["viewportFrame"] = Self.rectDebugPayload(
+                        Self.viewportDebugRect(contentView: contentView, frame: frame)
+                    )
+                }
+                if let target = router?.targets[panelId] {
+                    payload["targetRect"] = Self.rectDebugPayload(target.rect)
+                }
+                return payload
+            }
+
+        return Self.jsonString([
+            "surfaces": surfaces,
+            "window": [
+                "activePanelKind": activePanelKind,
+                "activeTerminalPanelId": activeTerminalPanelId,
+                "inTerminalMode": state.inTerminalMode,
+                "lastAppliedNativeApplySequence": applyState?.lastAppliedNativeApplySequence ?? 0,
+                "lastAppliedRendererSequence": applyState?.lastAppliedRendererSequence ?? 0,
+                "lastPresentationReason": applyState?.lastPresentationReason ?? "",
+                "overlayActive": state.overlayActive,
+                "staleDiscardCount": applyState?.staleDiscardCount ?? 0,
+            ],
+        ])
     }
 
     // MARK: - Coordinate conversion
@@ -1388,6 +1598,24 @@ public func ghosttyBridgeDetachWindow(_ nsWindowPtr: UnsafeMutableRawPointer) {
     }
 }
 
+@_cdecl("ghostty_bridge_debug_snapshot")
+public func ghosttyBridgeDebugSnapshot(
+    _ nsWindowPtr: UnsafeMutableRawPointer
+) -> UnsafeMutablePointer<CChar>? {
+    let json = MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        return GhosttyBridgeImpl.shared.debugSnapshot(parent: window)
+    }
+    return json.withCString { strdup($0) }
+}
+
+@_cdecl("ghostty_bridge_free_string")
+public func ghosttyBridgeFreeString(_ ptr: UnsafeMutablePointer<CChar>?) {
+    if let ptr {
+        free(ptr)
+    }
+}
+
 // C 函数指针 typealias 集中放在一起 — addon.mm 通过 ThreadSafeFunction 包装让
 // JS 端能安全接收. C string 在 @_cdecl 内 withCString 取临时指针调用 cb, cb 返回
 // 后字符串生命周期结束 (addon.mm 端 trampoline 已 std::string 拷贝, 不会 dangling).
@@ -1481,6 +1709,20 @@ public func ghosttyBridgeSetActivePanelKind(
         let kind: GhosttyBridgeImpl.PanelKind = (kindRaw == 0) ? .terminal : .web
         let panelId: String? = panelIdPtr.flatMap { String(cString: $0) }
         GhosttyBridgeImpl.shared.setActivePanelKind(window: window, kind: kind, panelId: panelId)
+    }
+}
+
+@_cdecl("ghostty_bridge_apply_presentation")
+public func ghosttyBridgeApplyPresentation(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ jsonPtr: UnsafePointer<CChar>
+) {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        GhosttyBridgeImpl.shared.applyPresentation(
+            parent: window,
+            json: String(cString: jsonPtr)
+        )
     }
 }
 

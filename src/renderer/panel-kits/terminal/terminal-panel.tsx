@@ -11,12 +11,18 @@ import {
   registerTerminalLayoutAnchor,
   type TerminalLayoutRegistration,
 } from "./terminal-layout-coordinator.ts";
+import {
+  disposeTerminalPanelLifecycleDebug,
+  type TerminalLifecycleDebugPatch,
+  updateTerminalPanelLifecycleDebug,
+} from "./terminal-lifecycle-debug.ts";
+import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 
 function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
   return new Promise((resolve) => {
     const check = () => {
       const frame = readTerminalAnchorFrame(anchor);
-      if (frame && frame.width > 100 && frame.height > 100) {
+      if (frame) {
         resolve();
         return;
       }
@@ -132,9 +138,39 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     let disposed = false;
     const subscriptions: Array<{ dispose(): void }> = [];
     let layoutRegistration: TerminalLayoutRegistration | null = null;
+    let renderableAnchorObserver: ResizeObserver | null = null;
     let didCreateNativeTerminal = false;
     let createPromise: Promise<void> | null = null;
+    let createAttemptCount = 0;
+    let lifecycleError: string | null = null;
+    let lifecycleNativeTerminalReady = false;
     setNativeTerminalReady(false);
+
+    const markLifecycle = (patch: TerminalLifecycleDebugPatch): void => {
+      if (patch.error !== undefined) {
+        lifecycleError = patch.error;
+      }
+      if (patch.nativeTerminalReady !== undefined) {
+        lifecycleNativeTerminalReady = patch.nativeTerminalReady;
+      }
+      updateTerminalPanelLifecycleDebug(panelId, {
+        createAttemptCount,
+        didCreateNativeTerminal,
+        error: lifecycleError,
+        hasRenderableAnchor: readTerminalAnchorFrame(anchor) !== null,
+        nativeTerminalReady: lifecycleNativeTerminalReady,
+        placeholderVisible: !(lifecycleNativeTerminalReady || lifecycleError),
+        ...patch,
+      });
+    };
+
+    markLifecycle({
+      createPending: false,
+      didCreateNativeTerminal: false,
+      error: null,
+      nativeTerminalReady: false,
+      phase: "mounted",
+    });
 
     const sendFrameNow = () => {
       if (disposed || !didCreateNativeTerminal) {
@@ -145,7 +181,17 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
     const logCreateError = (err: unknown) => {
       console.error(`[terminal-panel] create ${panelId} failed:`, err);
+      markLifecycle({
+        createPending: false,
+        error: err instanceof Error ? err.message : String(err),
+        phase: "error",
+      });
     };
+
+    const hasRenderableAnchor = () => readTerminalAnchorFrame(anchor) !== null;
+
+    const shouldCreateNativeTerminal = () =>
+      api.isVisible || api.isActive || hasRenderableAnchor();
 
     const ensureNativeTerminal = (): Promise<void> => {
       if (didCreateNativeTerminal) {
@@ -154,6 +200,10 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       if (createPromise) {
         return createPromise;
       }
+      markLifecycle({
+        createPending: true,
+        phase: hasRenderableAnchor() ? "creating" : "waiting_for_anchor",
+      });
       createPromise = (async () => {
         await waitForRealSize(anchor);
         if (disposed || didCreateNativeTerminal) {
@@ -162,10 +212,22 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
         const frame = readTerminalAnchorFrame(anchor);
         if (!frame) {
-          setError("无法获取面板坐标");
+          const message = "无法获取面板坐标";
+          setError(message);
+          markLifecycle({
+            createPending: false,
+            error: message,
+            phase: "error",
+          });
           return;
         }
 
+        createAttemptCount += 1;
+        markLifecycle({
+          createAttemptCount,
+          createPending: true,
+          phase: "creating",
+        });
         const result = await window.pier.terminal.create({
           panelId,
           frame,
@@ -176,18 +238,52 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           ...(initialCwd && { cwd: initialCwd }),
         });
         if (!result.ok) {
-          setError(result.error ?? "终端创建失败");
+          const message = result.error ?? "终端创建失败";
+          setError(message);
+          markLifecycle({
+            createPending: false,
+            error: message,
+            phase: "error",
+          });
           return;
         }
 
         didCreateNativeTerminal = true;
         setNativeTerminalReady(true);
+        markLifecycle({
+          createPending: false,
+          didCreateNativeTerminal: true,
+          error: null,
+          nativeTerminalReady: true,
+          phase: "ready",
+        });
         layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
+        renderableAnchorObserver?.disconnect();
+        renderableAnchorObserver = null;
+        layoutRegistration.flushTrailing("visibility");
+        requestTerminalPresentation("visibility");
       })().finally(() => {
         createPromise = null;
       });
       return createPromise;
     };
+
+    const ensureNativeTerminalIfRenderable = () => {
+      markLifecycle({
+        hasRenderableAnchor: hasRenderableAnchor(),
+      });
+      if (!shouldCreateNativeTerminal()) {
+        return;
+      }
+      ensureNativeTerminal().catch(logCreateError);
+    };
+
+    if (!(api.isVisible || api.isActive)) {
+      renderableAnchorObserver = new ResizeObserver(() => {
+        ensureNativeTerminalIfRenderable();
+      });
+      renderableAnchorObserver.observe(anchor);
+    }
 
     subscriptions.push(
       api.onDidVisibilityChange((e) => {
@@ -196,21 +292,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             .then(() => {
               if (!disposed && didCreateNativeTerminal) {
                 layoutRegistration?.flushTrailing("visibility");
-                window.pier.terminal.show(panelId);
-                if (api.isActive && api.isVisible) {
-                  window.pier.terminal.focus(panelId);
-                }
+                requestTerminalPresentation("visibility");
               }
             })
             .catch(logCreateError);
         } else if (didCreateNativeTerminal) {
-          // 直接发 hide IPC. swift hide 总是执行 (移 offscreen + remove targets),
-          // 由后续 setFrame 把 NSView 移回新位置自动恢复 visible (drag 场景), 或者
-          // 让出 z-order 给新 active panel (tab 切换场景). 早期版本用过双 rAF 等
-          // dockview settle, 但 visibility=false → true 紧接 fire 时 (drag drop)
-          // 双 rAF 跟即时 show 形成 race:show 完成后 rAF 内的 hide 才跑, 最终状态
-          // 变成 hidden. 直接 hide + 不延迟最干净.
-          window.pier.terminal.hide(panelId);
+          layoutRegistration?.flushTrailing("visibility");
+          requestTerminalPresentation("visibility");
         }
       })
     );
@@ -221,7 +309,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           ensureNativeTerminal()
             .then(() => {
               if (!disposed && didCreateNativeTerminal) {
-                window.pier.terminal.focus(panelId);
+                requestTerminalPresentation("dockview-active-panel");
               }
             })
             .catch(logCreateError);
@@ -238,25 +326,34 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           .then(() => {
             if (!disposed && didCreateNativeTerminal) {
               layoutRegistration?.flushTrailing("dockview-layout");
-              window.pier.terminal.show(panelId);
-              window.pier.terminal.focus(panelId);
+              requestTerminalPresentation("dockview-layout");
             }
           })
           .catch(logCreateError);
       })
     );
 
-    subscriptions.push(api.onDidDimensionsChange(sendFrameNow));
+    subscriptions.push(
+      api.onDidDimensionsChange(() => {
+        ensureNativeTerminalIfRenderable();
+        sendFrameNow();
+      })
+    );
 
-    if (api.isVisible || api.isActive) {
-      ensureNativeTerminal().catch(logCreateError);
-    }
+    ensureNativeTerminalIfRenderable();
+    requestAnimationFrame(() => {
+      if (!disposed) {
+        ensureNativeTerminalIfRenderable();
+      }
+    });
 
     return () => {
       disposed = true;
+      disposeTerminalPanelLifecycleDebug(panelId);
       for (const s of subscriptions) {
         s.dispose();
       }
+      renderableAnchorObserver?.disconnect();
       layoutRegistration?.dispose();
     };
   }, [api, panelId, initialCwd]);
@@ -277,7 +374,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         return;
       }
       api.setActive();
-      window.pier?.terminal?.setActivePanelKind?.("terminal", panelId);
+      requestTerminalPresentation("dockview-active-panel");
       popupContextMenuAt("terminal/content", { x: req.x, y: req.y }).catch(
         (err: unknown) => {
           console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
