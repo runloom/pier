@@ -7,7 +7,15 @@ describe("terminal focus restoration", () => {
   });
 
   async function setupTerminalFocusHarness(
-    opts: { ipcWindowFocused?: boolean } = {}
+    opts: {
+      ipcWindowFocused?: boolean;
+      launch?: {
+        command?: string;
+        cwd?: string;
+        env?: Record<string, string>;
+        profileId?: string;
+      };
+    } = {}
   ) {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -89,6 +97,15 @@ describe("terminal focus restoration", () => {
     vi.doMock("@main/state/panel-context-state.ts", () => ({
       recordRecentPanelContext: vi.fn(async () => undefined),
     }));
+    const consumeLaunch = vi.fn(() => opts.launch ?? null);
+    const readLaunch = vi.fn(() => opts.launch ?? null);
+    vi.doMock("@main/state/terminal-launch-state.ts", () => ({
+      terminalLaunchRegistry: {
+        consume: consumeLaunch,
+        read: readLaunch,
+        register: vi.fn(),
+      },
+    }));
     vi.doMock("@main/services/panel-context-resolver.ts", () => ({
       resolvePanelContextForPath: vi.fn(async (path: string) => ({
         contextId: `ctx:${path}`,
@@ -116,10 +133,12 @@ describe("terminal focus restoration", () => {
 
     registerTerminalIpc(fakeIpcMain as never);
     return {
+      consumeLaunch,
       fakeAddon,
       handlers,
       invokeHandlers,
       ipcWindow,
+      readLaunch,
       restoreActivePanelFocus,
       restoreWindow,
     };
@@ -273,7 +292,7 @@ describe("terminal focus restoration", () => {
       { x: 1, y: 2, width: 300, height: 200 },
       "Menlo",
       13,
-      "/Users/xyz/ABC/pier"
+      { cwd: "/Users/xyz/ABC/pier" }
     );
   });
 
@@ -307,8 +326,41 @@ describe("terminal focus restoration", () => {
       { x: 1, y: 2, width: 300, height: 200 },
       "Menlo",
       13,
-      "/Users/xyz/ABC/pier"
+      { cwd: "/Users/xyz/ABC/pier" }
     );
+  });
+
+  it("does not replay one-shot launch command/env when a saved terminal session exists", async () => {
+    const { consumeLaunch, fakeAddon, invokeHandlers, ipcWindow } =
+      await setupTerminalFocusHarness({
+        launch: {
+          command: "pnpm test",
+          cwd: "/Users/xyz/ABC/stale-launch",
+          env: { SECRET: "token" },
+          profileId: "codex",
+        },
+      });
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        launchId: "launch-restore",
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      "7::terminal-1",
+      { x: 1, y: 2, width: 300, height: 200 },
+      "Menlo",
+      13,
+      { cwd: "/Users/xyz/ABC/pier" }
+    );
+    expect(consumeLaunch).toHaveBeenCalledWith("launch-restore");
   });
 
   it("does not make the host window transparent during terminal setup", async () => {

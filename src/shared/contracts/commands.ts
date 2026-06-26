@@ -2,6 +2,10 @@ import { z } from "zod";
 import { pluginInspectRequestSchema } from "./plugin.ts";
 import { projectPreferencesSchema } from "./preferences.ts";
 import {
+  resolvedTerminalLaunchOptionsSchema,
+  terminalLaunchOptionsSchema,
+} from "./terminal-launch.ts";
+import {
   type WorktreeOperationErrorReason,
   worktreeCreateRequestSchema,
   worktreeListRequestSchema,
@@ -52,6 +56,27 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     path: z.string().min(1),
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    type: z.literal("terminal.open"),
+    focus: z.boolean().optional(),
+    launch: terminalLaunchOptionsSchema.optional(),
+    placement: pierCommandPlacementSchema.optional(),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({ type: z.literal("terminal.profile.list") }),
+  z.object({
+    type: z.literal("terminal.profile.read"),
+    profileId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("terminal.profile.upsert"),
+    profile: resolvedTerminalLaunchOptionsSchema,
+    profileId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("terminal.profile.delete"),
+    profileId: z.string().min(1),
   }),
   z.object({ type: z.literal("window.list") }),
   z.object({ type: z.literal("window.create") }),

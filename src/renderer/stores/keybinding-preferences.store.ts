@@ -57,6 +57,24 @@ function normalizeUserKeymapEntries(
   }));
 }
 
+function equalUserKeymapEntries(
+  left: readonly UserKeymapEntry[],
+  right: readonly UserKeymapEntry[]
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((entry, index) => {
+    const other = right[index];
+    return (
+      other !== undefined &&
+      entry.commandId === other.commandId &&
+      entry.keys === other.keys &&
+      entry.scope === other.scope
+    );
+  });
+}
+
 function hasDefaultBinding(commandId: string): boolean {
   const normalizedCommandId = normalizeTargetCommandId(commandId);
   return DEFAULT_KEYMAP.some(
@@ -203,9 +221,20 @@ export const useKeybindingPreferencesStore = create<KeybindingPreferencesState>(
 
 let preferencesListenerAttached = false;
 let detachPreferencesListener: (() => void) | null = null;
+let didHydrateKeybindings = false;
 
 function hydrate(entries: readonly UserKeymapEntry[]): void {
   const next = normalizeUserKeymapEntries(entries);
+  if (
+    didHydrateKeybindings &&
+    equalUserKeymapEntries(
+      useKeybindingPreferencesStore.getState().userKeymap,
+      next
+    )
+  ) {
+    return;
+  }
+  didHydrateKeybindings = true;
   applyUserKeymap(next);
   useKeybindingPreferencesStore.setState({
     error: null,
@@ -232,6 +261,7 @@ export function detachKeybindingPreferencesListener(): void {
   detachPreferencesListener?.();
   detachPreferencesListener = null;
   preferencesListenerAttached = false;
+  didHydrateKeybindings = false;
 }
 
 export async function initKeybindingPreferences(): Promise<void> {

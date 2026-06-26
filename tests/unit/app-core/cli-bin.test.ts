@@ -217,12 +217,114 @@ describe("bin/pier.mjs", () => {
     });
   });
 
-  it("usage 不再包含 terminal open/list/focus", async () => {
+  it("解析 terminal open 启动参数并输出命令信封", async () => {
+    const { stdout } = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "terminal",
+      "open",
+      "--cwd",
+      ".",
+      "--profile",
+      "codex",
+      "--env",
+      "PIER_MODE=dev",
+      "--no-focus",
+      "--json",
+      "--print-envelope",
+      "--",
+      "pnpm",
+      "test",
+    ]);
+
+    expect(JSON.parse(stdout)).toMatchObject({
+      envelope: {
+        command: {
+          focus: false,
+          launch: {
+            command: "pnpm test",
+            cwd: resolve("."),
+            env: {
+              PIER_MODE: "dev",
+            },
+            profileId: "codex",
+          },
+          type: "terminal.open",
+        },
+      },
+      json: true,
+    });
+  });
+
+  it("-- 后的 command 参数不会触发 bin 自己的全局选项", async () => {
+    const { stdout } = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "--print-envelope",
+      "terminal",
+      "open",
+      "--",
+      "my-tool",
+      "--no-focus",
+      "--json",
+      "--print-envelope",
+    ]);
+
+    expect(JSON.parse(stdout)).toMatchObject({
+      envelope: {
+        command: {
+          launch: {
+            command: "my-tool --no-focus --json --print-envelope",
+            cwd: resolve("."),
+          },
+          type: "terminal.open",
+        },
+      },
+      json: false,
+    });
+  });
+
+  it("解析 terminal profiles set 并输出命令信封", async () => {
+    const { stdout } = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "terminal",
+      "profiles",
+      "set",
+      "codex",
+      "--cwd",
+      ".",
+      "--env",
+      "PIER_MODE=dev",
+      "--json",
+      "--print-envelope",
+      "--",
+      "codex",
+      "--sandbox",
+      "workspace-write",
+    ]);
+
+    expect(JSON.parse(stdout)).toMatchObject({
+      envelope: {
+        command: {
+          profile: {
+            command: "codex --sandbox workspace-write",
+            cwd: resolve("."),
+            env: {
+              PIER_MODE: "dev",
+            },
+          },
+          profileId: "codex",
+          type: "terminal.profile.upsert",
+        },
+      },
+      json: true,
+    });
+  });
+
+  it("usage 包含 terminal open 且不恢复 terminals 旧入口", async () => {
     await expect(
       execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
     ).rejects.toMatchObject({
       stderr: expect.stringContaining(
-        "pier panels focus <panelId> [--window <windowId>] [--no-focus] --json"
+        "pier terminal open [--cwd <path>] [--profile <profileId>]"
       ),
     });
     await expect(
@@ -336,6 +438,45 @@ describe("bin/pier.mjs", () => {
     expect(stdout).toContain("window secondary");
     expect(stdout).not.toContain("✓ bay");
     expect(stdout).toContain("/Users/xyz/ABC/pier");
+    await server.close();
+  });
+
+  it("terminal profiles list 没有 --json 时输出 profile 摘要", async () => {
+    const userDataDir = await makeTempDir();
+    const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
+    const server = createPierLocalControlServer({
+      handleRequest: (envelope) => {
+        const parsed = pierCommandEnvelopeSchema.parse(envelope);
+        return Promise.resolve({
+          data: {
+            codex: {
+              command: "codex",
+              cwd: "/Users/xyz/ABC/pier",
+              env: { PIER_MODE: "dev" },
+            },
+            default: {},
+          },
+          ok: true,
+          requestId: parsed.requestId,
+        });
+      },
+      socketPath,
+    });
+    await server.start();
+
+    const { stdout } = await execFileAsync(
+      "node",
+      ["bin/pier.mjs", "terminal", "profiles", "list"],
+      {
+        env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
+      }
+    );
+
+    expect(stdout).toContain("codex");
+    expect(stdout).toContain("command: codex");
+    expect(stdout).toContain("cwd: /Users/xyz/ABC/pier");
+    expect(stdout).toContain("env: PIER_MODE");
+    expect(stdout).toContain("default");
     await server.close();
   });
 

@@ -11,6 +11,7 @@ import {
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import {
   type PluginService,
@@ -30,6 +31,7 @@ import {
   executePanelFocusCommand,
   executePanelListCommand,
   executePanelOpenCommand,
+  executeTerminalOpenCommand,
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { orderedWindows } from "./window-routing.ts";
@@ -51,6 +53,38 @@ export interface PierCoreServices {
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
   rendererCommand: RendererCommandService;
+  terminalLaunches: {
+    consume(
+      launchId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    discard(launchId: string): Promise<void> | void;
+    read(
+      launchId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    register(launch: ResolvedTerminalLaunchOptions): Promise<string> | string;
+    sweepExpired?(): Promise<number> | number;
+  };
+  terminalProfiles: {
+    delete(profileId: string): Promise<boolean>;
+    list(): Promise<Record<string, ResolvedTerminalLaunchOptions>>;
+    read(profileId: string): Promise<ResolvedTerminalLaunchOptions | null>;
+    resolve(
+      profileId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    upsert(
+      profileId: string,
+      profile: ResolvedTerminalLaunchOptions
+    ): Promise<ResolvedTerminalLaunchOptions>;
+  };
   window: {
     close(windowId: string): void;
     create(options?: WindowCreateOptions): Promise<{
@@ -261,6 +295,39 @@ async function executePanelCommand(
   }
 }
 
+async function executeTerminalCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  switch (command.type) {
+    case "terminal.open":
+      return await executeTerminalOpenCommand(requestId, command, services);
+    case "terminal.profile.delete":
+      return success(
+        requestId,
+        await services.terminalProfiles.delete(command.profileId)
+      );
+    case "terminal.profile.list":
+      return success(requestId, await services.terminalProfiles.list());
+    case "terminal.profile.read":
+      return success(
+        requestId,
+        await services.terminalProfiles.read(command.profileId)
+      );
+    case "terminal.profile.upsert":
+      return success(
+        requestId,
+        await services.terminalProfiles.upsert(
+          command.profileId,
+          command.profile
+        )
+      );
+    default:
+      return null;
+  }
+}
+
 async function executeKnownCommand(
   requestId: string,
   command: PierCommand,
@@ -271,6 +338,7 @@ async function executeKnownCommand(
     const executors = [
       (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
       (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
+      (cmd: PierCommand) => executeTerminalCommand(requestId, cmd, services),
       (cmd: PierCommand) =>
         executeAppStateCommand(requestId, cmd, clients, services),
       (cmd: PierCommand) =>

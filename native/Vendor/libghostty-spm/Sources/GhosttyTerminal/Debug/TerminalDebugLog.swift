@@ -277,7 +277,11 @@ extension TerminalSessionBackend {
 extension TerminalSurfaceOptions {
     var debugSummary: String {
         let fontSizeDescription = fontSize.map { String($0) } ?? "nil"
-        return "backend=\(backend.debugSummary) fontSize=\(fontSizeDescription) workingDirectory=\(workingDirectory ?? "nil") context=\(context.debugSummary)"
+        let envDescription = environment.isEmpty ? "0" : "\(environment.count)"
+        let commandDescription = command.map { value in
+            value.count > 80 ? "\(value.prefix(80))..." : value
+        } ?? "nil"
+        return "backend=\(backend.debugSummary) fontSize=\(fontSizeDescription) workingDirectory=\(workingDirectory ?? "nil") command=\(commandDescription) env=\(envDescription) context=\(context.debugSummary)"
     }
 }
 

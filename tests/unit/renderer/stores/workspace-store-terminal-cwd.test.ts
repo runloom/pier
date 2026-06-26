@@ -70,6 +70,26 @@ describe("workspace.store — terminal context policy", () => {
     );
   });
 
+  it("launchId is persisted without raw launch options", () => {
+    const api = createApi();
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().addTerminal({
+      context,
+      launchId: "launch-1",
+    });
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: "terminal",
+        params: {
+          context,
+          launchId: "launch-1",
+        },
+      })
+    );
+  });
+
   it("inherits context from the current active terminal", () => {
     const api = createApi();
     useWorkspaceStore.getState().setApi(api as never);

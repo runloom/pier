@@ -10,6 +10,8 @@
  */
 import { type MouseEvent, useCallback } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
+import { useZoomStore } from "@/stores/zoom.store.ts";
 import { buildMenuEntries } from "./build-entries.ts";
 
 /**
@@ -19,8 +21,8 @@ import { buildMenuEntries } from "./build-entries.ts";
  */
 export interface UseContextMenuOptions {
   /**
-   * 自定义触发坐标 — 默认用 React event.clientX / clientY (BrowserWindow 内坐标).
-   * 来自 swift 转发的右键事件需要由调用方提前转好坐标传入.
+   * 自定义触发坐标 — 返回值必须是 BrowserWindow contentView 坐标.
+   * 默认路径会把 React event.clientX / clientY 从 CSS px 转成 contentView 坐标.
    */
   getCoords?: (event: MouseEvent) => { x: number; y: number };
 }
@@ -33,10 +35,15 @@ export function useContextMenu(
     (event: MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      const coords = options?.getCoords?.(event) ?? {
-        x: event.clientX,
-        y: event.clientY,
-      };
+      const coords =
+        options?.getCoords?.(event) ??
+        cssPointToContentViewPoint(
+          {
+            x: event.clientX,
+            y: event.clientY,
+          },
+          useZoomStore.getState().windowZoomLevel
+        );
       popupAndDispatch(surface, coords).catch((err: unknown) => {
         console.error(`[menu] unhandled popup ${surface}:`, err);
       });
@@ -46,8 +53,8 @@ export function useContextMenu(
 }
 
 /**
- * 不在 React tree 内时 (例 swift 转发的右键) 直接调用: 不需要 hook 上下文,
- * 同样的逻辑给坐标 + surface 即可弹菜单.
+ * 不在 React tree 内时 (例 swift 转发的右键) 直接调用: 不需要 hook 上下文.
+ * coords 必须已经是 BrowserWindow contentView 坐标.
  */
 export async function popupContextMenuAt(
   surface: string,

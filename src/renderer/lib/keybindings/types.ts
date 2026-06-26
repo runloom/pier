@@ -49,8 +49,6 @@ export interface KeybindingInput {
   readonly commandId: string;
   /** DSL: "Mod+Shift+KeyP" / "Mod+KeyW". 解绑条目本字段可为空. */
   readonly keys: string;
-  /** Native terminal 聚焦时仍应由 Pier 应用层处理的默认快捷键. */
-  readonly nativeTerminal?: "app";
   /** Default 'global' if omitted (兼容老 keymap entries). */
   readonly scope?: KeybindingScope;
 }

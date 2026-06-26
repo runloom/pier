@@ -33,7 +33,6 @@ extension TerminalController {
             bridge: bridge,
             configuration: configuration,
             config: &surfaceConfig,
-            workingDirectory: configuration.workingDirectory,
             platformSetup: platformSetup
         )
     }
@@ -70,29 +69,66 @@ extension TerminalController {
         bridge: TerminalCallbackBridge,
         configuration: TerminalSurfaceOptions,
         config: inout ghostty_surface_config_s,
-        workingDirectory: String?,
         platformSetup: (inout ghostty_surface_config_s) -> Void
     ) -> ghostty_surface_t? {
-        guard let workingDirectory else {
-            return buildSurface(
-                app: app,
-                bridge: bridge,
-                configuration: configuration,
-                config: &config,
-                platformSetup: platformSetup
-            )
+        withOptionalCString(configuration.workingDirectory) { workingDirectoryPtr in
+            withOptionalCString(configuration.command) { commandPtr in
+                config.working_directory = workingDirectoryPtr
+                config.command = commandPtr
+                return withEnvironment(configuration.environment) { envVars, envCount in
+                    config.env_vars = envVars
+                    config.env_var_count = envCount
+                    return buildSurface(
+                        app: app,
+                        bridge: bridge,
+                        configuration: configuration,
+                        config: &config,
+                        platformSetup: platformSetup
+                    )
+                }
+            }
+        }
+    }
+
+    private func withOptionalCString<Result>(
+        _ value: String?,
+        body: (UnsafePointer<CChar>?) -> Result
+    ) -> Result {
+        guard let value else {
+            return body(nil)
+        }
+        return value.withCString { ptr in
+            body(ptr)
+        }
+    }
+
+    private func withEnvironment<Result>(
+        _ environment: [String: String],
+        body: (UnsafeMutablePointer<ghostty_env_var_s>?, Int) -> Result
+    ) -> Result {
+        let pairs = environment.sorted { $0.key < $1.key }
+        guard !pairs.isEmpty else {
+            return body(nil, 0)
         }
 
-        return workingDirectory.withCString { ptr in
-            config.working_directory = ptr
-            return buildSurface(
-                app: app,
-                bridge: bridge,
-                configuration: configuration,
-                config: &config,
-                platformSetup: platformSetup
-            )
+        let keyPointers = pairs.map { strdup($0.key)! }
+        let valuePointers = pairs.map { strdup($0.value)! }
+        defer {
+            keyPointers.forEach { free($0) }
+            valuePointers.forEach { free($0) }
         }
+
+        let envVars = UnsafeMutablePointer<ghostty_env_var_s>.allocate(
+            capacity: pairs.count
+        )
+        defer {
+            envVars.deallocate()
+        }
+        for index in pairs.indices {
+            envVars[index].key = UnsafePointer(keyPointers[index])
+            envVars[index].value = UnsafePointer(valuePointers[index])
+        }
+        return body(envVars, pairs.count)
     }
 
     private func buildSurface(

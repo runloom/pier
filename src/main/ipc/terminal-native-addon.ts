@@ -5,6 +5,7 @@ import type {
   TerminalNativePresentationSnapshot,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
+import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 
 export interface NativeAddon {
   applyTerminalPresentation(
@@ -26,7 +27,7 @@ export interface NativeAddon {
     frame: TerminalFrame,
     fontFamily: string,
     fontSize: number,
-    cwd: string | undefined
+    launch: ResolvedTerminalLaunchOptions | undefined
   ): boolean;
   debugSnapshot(parentHandle: Buffer): string;
   /** Window 真正销毁时调用一次: closeAll + 卸 EventRouter + 卸 NSEvent monitor */

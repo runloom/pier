@@ -66,6 +66,9 @@ describe("app menu", () => {
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
+      onResetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
     });
 
     expect(labels(template)).toEqual(["Pier", "文件", "编辑", "视图", "窗口"]);
@@ -86,6 +89,9 @@ describe("app menu", () => {
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
+      onResetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
     });
 
     expect(labels(template)).toEqual([
@@ -108,6 +114,9 @@ describe("app menu", () => {
     };
     const onNewWindow = vi.fn();
     const onNewTerminal = vi.fn();
+    const onResetZoom = vi.fn();
+    const onZoomIn = vi.fn();
+    const onZoomOut = vi.fn();
     const template = buildAppMenuTemplate({
       appName: "Pier",
       getTargetWindow: () => win as never,
@@ -118,6 +127,9 @@ describe("app menu", () => {
       onOpenCommandPalette: (target) => {
         target?.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST);
       },
+      onResetZoom,
+      onZoomIn,
+      onZoomOut,
     });
 
     const fileMenu = submenu(itemAt(template, 1));
@@ -136,6 +148,52 @@ describe("app menu", () => {
     expect(send).toHaveBeenCalledWith(
       PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST
     );
+  });
+
+  it("routes zoom menu items through Pier handlers with keymap accelerators", () => {
+    const onResetZoom = vi.fn();
+    const onZoomIn = vi.fn();
+    const onZoomOut = vi.fn();
+    const template = buildAppMenuTemplate({
+      appName: "Pier",
+      getTargetWindow: () => null,
+      isDev: false,
+      language: "en",
+      onNewTerminal: vi.fn(),
+      onNewWindow: vi.fn(),
+      onOpenCommandPalette: vi.fn(),
+      onResetZoom,
+      onZoomIn,
+      onZoomOut,
+    });
+
+    const viewMenu = submenu(itemAt(template, 3));
+    const resetZoom = viewMenu.find((item) => item.label === "Reset Zoom");
+    const zoomIn = viewMenu.find((item) => item.label === "Zoom In");
+    const zoomOut = viewMenu.find((item) => item.label === "Zoom Out");
+
+    expect(resetZoom).toMatchObject({ accelerator: "CmdOrCtrl+0" });
+    expect(zoomIn).toMatchObject({ accelerator: "CmdOrCtrl+=" });
+    expect(zoomOut).toMatchObject({ accelerator: "CmdOrCtrl+-" });
+    expect(resetZoom).not.toHaveProperty("role");
+    expect(zoomIn).not.toHaveProperty("role");
+    expect(zoomOut).not.toHaveProperty("role");
+
+    resetZoom?.click?.(
+      undefined as never,
+      undefined as never,
+      undefined as never
+    );
+    zoomIn?.click?.(undefined as never, undefined as never, undefined as never);
+    zoomOut?.click?.(
+      undefined as never,
+      undefined as never,
+      undefined as never
+    );
+
+    expect(onResetZoom).toHaveBeenCalledOnce();
+    expect(onZoomIn).toHaveBeenCalledOnce();
+    expect(onZoomOut).toHaveBeenCalledOnce();
   });
 
   it("rebuilds the application menu when language preferences change", async () => {
@@ -157,11 +215,15 @@ describe("app menu", () => {
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
+      onResetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
       readPreferences,
     });
 
     const listener = subscribe.mock.calls[0]?.[0] as (event: unknown) => void;
     listener({
+      changedKeys: ["language"],
       snapshot: { language: "zh-CN" },
       type: "preferences.changed",
     });

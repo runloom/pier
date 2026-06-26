@@ -93,6 +93,11 @@ export const zhCN = {
           close: "关闭当前终端面板。",
           openDebugWindow: "打开终端调试窗口。",
         },
+        view: {
+          resetZoom: "恢复默认界面缩放。",
+          zoomIn: "放大 Pier 界面。",
+          zoomOut: "缩小 Pier 界面。",
+        },
         window: {
           newWindow: "打开一个新的 Pier 窗口。",
         },
@@ -175,6 +180,9 @@ export const zhCN = {
       selectLanguage: "选择显示语言",
       resetLayout: "重置布局",
       clearRecent: "清空命令面板使用记录",
+      zoomIn: "放大界面",
+      zoomOut: "缩小界面",
+      resetZoom: "重置界面缩放",
     },
     run: {
       action: {

@@ -22,6 +22,7 @@ import type {
   WindowContext,
   WindowCreateResult,
 } from "@shared/contracts/window.ts";
+import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -35,9 +36,8 @@ export type PreferencesSnapshot = ProjectPreferences;
 
 export interface PierPreferencesAPI {
   /**
-   * 订阅其他窗口对 preferences 的修改 — main 端 update 后会广播给除 sender 外
-   * 的所有 BrowserWindow. 调用方在 sender 自己的 setter 里已经 await + 同步
-   * 应用过, 不会收到自己的广播.
+   * 订阅 preferences 修改 — main 端 update 后会广播给所有 BrowserWindow,
+   * 包括发起 update 的窗口. renderer store 负责对相同快照去重.
    */
   onChanged: (cb: (next: PreferencesSnapshot) => void) => () => void;
   read: () => Promise<PreferencesSnapshot>;
@@ -96,10 +96,6 @@ export interface PierSettingsAPI {
   onOpenRequest: (cb: () => void) => () => void;
 }
 
-export interface WindowLayoutPulse {
-  reason: "resize" | "zoom";
-}
-
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
@@ -143,7 +139,7 @@ function subscribeIpc<P>(
 }
 
 const preferencesApi: PierPreferencesAPI = {
-  onChanged: (cb) => subscribeIpc("pier:preferences:changed", cb),
+  onChanged: (cb) => subscribeIpc(PIER_BROADCAST.PREFERENCES_CHANGED, cb),
   read: () => ipcRenderer.invoke("pier:preferences:read"),
   update: (patch) => ipcRenderer.invoke("pier:preferences:update", patch),
 };

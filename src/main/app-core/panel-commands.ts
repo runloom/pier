@@ -10,6 +10,10 @@ import {
   panelDisplaySchema,
   panelKindSchema,
 } from "@shared/contracts/panel.ts";
+import type {
+  ResolvedTerminalLaunchOptions,
+  TerminalLaunchOptions,
+} from "@shared/contracts/terminal-launch.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import { commandFailure, commandSuccess } from "./command-results.ts";
 import {
@@ -26,6 +30,30 @@ export interface PanelCommandServices {
     resolveForPath(path: string): Promise<PanelContext>;
   };
   rendererCommand: RendererCommandService;
+  terminalLaunches: {
+    consume(
+      launchId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    discard(launchId: string): Promise<void> | void;
+    read(
+      launchId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    register(launch: ResolvedTerminalLaunchOptions): Promise<string> | string;
+  };
+  terminalProfiles: {
+    resolve(
+      profileId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+  };
   window: {
     list(): WindowInfo[];
   };
@@ -80,6 +108,23 @@ function normalizePanelSnapshot(
     ...(active === undefined ? {} : { active }),
     ...(context.success ? { context: context.data } : {}),
     ...(display.success ? { display: display.data } : {}),
+  };
+}
+
+function mergeTerminalLaunchProfile(
+  launch: TerminalLaunchOptions,
+  profile: ResolvedTerminalLaunchOptions | null
+): ResolvedTerminalLaunchOptions {
+  const env =
+    profile?.env || launch.env
+      ? { ...(profile?.env ?? {}), ...(launch.env ?? {}) }
+      : undefined;
+  return {
+    ...(profile?.command && { command: profile.command }),
+    ...(profile?.cwd && { cwd: profile.cwd }),
+    ...(env && { env }),
+    ...(launch.command && { command: launch.command }),
+    ...(launch.cwd && { cwd: launch.cwd }),
   };
 }
 
@@ -192,6 +237,66 @@ export async function executePanelOpenCommand(
     );
   }
   await services.panelContexts.recordRecent(context);
+  return commandSuccess(requestId, result.data);
+}
+
+export async function executeTerminalOpenCommand(
+  requestId: string,
+  command: Extract<PierCommand, { type: "terminal.open" }>,
+  services: PanelCommandServices
+): Promise<PierCommandResult> {
+  const target = resolveCommandWindow(command.windowId, services, {
+    requireStableDefault: !command.windowId,
+  });
+  if (!target.window) {
+    return commandFailure(
+      requestId,
+      target.code ?? (command.windowId ? "not_found" : "platform_unavailable"),
+      target.error ?? "no renderer window available"
+    );
+  }
+
+  const rawLaunch = command.launch ?? {};
+  const profile = rawLaunch.profileId
+    ? await services.terminalProfiles.resolve(rawLaunch.profileId)
+    : null;
+  if (rawLaunch.profileId && !profile) {
+    return commandFailure(
+      requestId,
+      "invalid_command",
+      `unknown terminal profile: ${rawLaunch.profileId}`
+    );
+  }
+  const launch = mergeTerminalLaunchProfile(rawLaunch, profile);
+  const context = launch.cwd
+    ? await services.panelContexts.resolveForPath(launch.cwd)
+    : undefined;
+  const launchId = await services.terminalLaunches.register(launch);
+  let result: Awaited<ReturnType<typeof services.rendererCommand.execute>>;
+  try {
+    result = await services.rendererCommand.execute({
+      ...(context && { context }),
+      focus: command.focus,
+      launchId,
+      placement: command.placement,
+      type: "terminal.open",
+      windowId: target.window.id,
+    });
+  } catch (err) {
+    await services.terminalLaunches.discard(launchId);
+    throw err;
+  }
+  if (!result.ok) {
+    await services.terminalLaunches.discard(launchId);
+    return commandFailure(
+      requestId,
+      result.error.code ?? "platform_unavailable",
+      result.error.message
+    );
+  }
+  if (context) {
+    await services.panelContexts.recordRecent(context);
+  }
   return commandSuccess(requestId, result.data);
 }
 

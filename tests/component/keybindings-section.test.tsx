@@ -18,6 +18,7 @@ import {
 import { initI18n } from "@/i18n/index.ts";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import { registerViewActions } from "@/lib/actions/view-actions.ts";
 import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
@@ -106,7 +107,11 @@ describe("KeybindingsSection", () => {
   });
 
   it("uses descriptive localized action labels in the settings list", () => {
-    const disposers = [registerPanelActions(), registerTerminalActions()];
+    const disposers = [
+      registerPanelActions(),
+      registerTerminalActions(),
+      registerViewActions(),
+    ];
 
     const { unmount } = render(<KeybindingsSection />);
 
@@ -121,6 +126,9 @@ describe("KeybindingsSection", () => {
     expect(
       within(terminalRow).getByText("关闭当前终端面板。")
     ).toBeInTheDocument();
+    expect(screen.getByText("放大界面")).toBeInTheDocument();
+    expect(screen.getByText("缩小界面")).toBeInTheDocument();
+    expect(screen.getByText("重置界面缩放")).toBeInTheDocument();
     unmount();
     for (const dispose of disposers) {
       dispose();

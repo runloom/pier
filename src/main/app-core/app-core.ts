@@ -6,9 +6,11 @@ import { createPanelContextService } from "../services/panel-context-service.ts"
 import { createPluginService } from "../services/plugin-service.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
+import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
+import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import {
@@ -92,6 +94,8 @@ function createPierAppCore(): PierAppCore {
     plugins: createPluginService(),
     panelContexts: createPanelContextService(),
     rendererCommand,
+    terminalProfiles: createTerminalProfileService(),
+    terminalLaunches: terminalLaunchRegistry,
     window: createWindowService({
       flushRendererLayout: async (windowId) => {
         const result = await rendererCommand.execute({

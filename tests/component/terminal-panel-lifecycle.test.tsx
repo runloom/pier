@@ -1,9 +1,11 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useZoomStore } from "@/stores/zoom.store.ts";
 
 const popupContextMenuAtMock = vi.hoisted(() => vi.fn(async () => undefined));
 const requestTerminalPresentationMock = vi.hoisted(() => vi.fn());
@@ -48,7 +50,7 @@ function createPanelProps(
   options: {
     isActive?: boolean;
     isVisible?: boolean;
-    params?: { context?: PanelContext };
+    params?: { context?: PanelContext; launchId?: string };
   } = {}
 ): TestPanelProps {
   let isActive = options.isActive ?? true;
@@ -136,7 +138,7 @@ describe("TerminalPanel lifecycle", () => {
     y: 20,
   };
   let emitWindowLayoutPulse:
-    | ((pulse: { reason: "resize" | "zoom" }) => void)
+    | ((pulse: { reason: "resize" | "view-zoom" | "zoom" }) => void)
     | null = null;
 
   beforeEach(() => {
@@ -151,7 +153,13 @@ describe("TerminalPanel lifecycle", () => {
     TestResizeObserver.instances = [];
     popupContextMenuAtMock.mockClear();
     requestTerminalPresentationMock.mockClear();
+    useFontStore.setState({
+      monoFontFamily: "",
+      monoFontSize: 13,
+      uiFontFamily: "",
+    });
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+    useZoomStore.setState({ windowZoomLevel: 0 });
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 0)
@@ -181,7 +189,9 @@ describe("TerminalPanel lifecycle", () => {
       configurable: true,
       value: {
         onWindowLayoutPulse: vi.fn(
-          (cb: (pulse: { reason: "resize" | "zoom" }) => void) => {
+          (
+            cb: (pulse: { reason: "resize" | "view-zoom" | "zoom" }) => void
+          ) => {
             emitWindowLayoutPulse = cb;
             return vi.fn();
           }
@@ -316,6 +326,26 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({
           context,
+          panelId: "terminal-1",
+        })
+      );
+    });
+  });
+
+  it("passes launchId into native terminal creation", async () => {
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: { context, launchId: "launch-1" },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          launchId: "launch-1",
           panelId: "terminal-1",
         })
       );
@@ -488,7 +518,7 @@ describe("TerminalPanel lifecycle", () => {
     });
     vi.mocked(window.pier.terminal.setFrame).mockClear();
 
-    emitWindowLayoutPulse?.({ reason: "zoom" });
+    emitWindowLayoutPulse?.({ reason: "view-zoom" });
     anchorFrame = {
       height: 620,
       width: 900,
@@ -497,6 +527,34 @@ describe("TerminalPanel lifecycle", () => {
     };
 
     expect(window.pier.terminal.setFrame).not.toHaveBeenCalled();
+  });
+
+  it("applies effective terminal font size from window zoom without changing the base preference", async () => {
+    useFontStore.setState({ monoFontSize: 13 });
+    useZoomStore.setState({ windowZoomLevel: 2 });
+    render(<TerminalPanel {...createPanelProps()} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          font: expect.objectContaining({ size: 18.7 }),
+        })
+      );
+    });
+    expect(useFontStore.getState().monoFontSize).toBe(13);
+
+    vi.mocked(window.pier.terminal.setFont).mockClear();
+    act(() => {
+      useZoomStore.setState({ windowZoomLevel: 1 });
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.setFont).toHaveBeenCalledWith(
+        "terminal-1",
+        expect.objectContaining({ size: 15.6 })
+      );
+    });
+    expect(useFontStore.getState().monoFontSize).toBe(13);
   });
 
   it("refocuses an active native terminal when dockview shows it after tab drag", async () => {

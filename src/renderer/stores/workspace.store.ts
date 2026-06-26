@@ -19,6 +19,7 @@ interface WorkspaceState {
   addTab: () => void;
   addTerminal: (opts?: {
     context?: PanelContext;
+    launchId?: string;
     placement?: PierCommandPlacement;
     referenceGroup?: WorkspaceGroupRef;
   }) => string | null;
@@ -40,7 +41,8 @@ interface WorkspaceState {
 }
 
 interface TerminalPanelParams {
-  context: PanelContext;
+  context?: PanelContext;
+  launchId?: string;
 }
 
 type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
@@ -177,7 +179,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ? undefined
       : inheritedActiveTerminalContext(api);
     const context = opts?.context ?? inheritedContext;
-    const params = context ? { context } : undefined;
+    const params =
+      context || opts?.launchId
+        ? {
+            ...(context && { context }),
+            ...(opts?.launchId && { launchId: opts.launchId }),
+          }
+        : undefined;
     const titlePath = context?.cwd;
     api.addPanel({
       id,

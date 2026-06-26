@@ -96,6 +96,11 @@ export const en = {
           close: "Close the current terminal panel.",
           openDebugWindow: "Open the terminal debug window.",
         },
+        view: {
+          resetZoom: "Restore the default interface zoom.",
+          zoomIn: "Zoom the Pier interface in.",
+          zoomOut: "Zoom the Pier interface out.",
+        },
         window: {
           newWindow: "Open a new Pier window.",
         },
@@ -178,6 +183,9 @@ export const en = {
       selectLanguage: "Select Display Language",
       resetLayout: "Reset Layout",
       clearRecent: "Clear command palette history",
+      zoomIn: "Zoom In",
+      zoomOut: "Zoom Out",
+      resetZoom: "Reset Zoom",
     },
     run: {
       action: {

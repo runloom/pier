@@ -45,6 +45,30 @@ describe("projectPreferencesSchema — monoFontSize", () => {
   });
 });
 
+describe("projectPreferencesSchema — windowZoomLevel", () => {
+  it("defaults to 0 and accepts the supported range", () => {
+    expect(projectPreferencesSchema.parse({}).windowZoomLevel).toBe(0);
+    expect(
+      projectPreferencesSchema.parse({ windowZoomLevel: -3 }).windowZoomLevel
+    ).toBe(-3);
+    expect(
+      projectPreferencesSchema.parse({ windowZoomLevel: 5 }).windowZoomLevel
+    ).toBe(5);
+  });
+
+  it("rejects values outside the supported range", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ windowZoomLevel: -4 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ windowZoomLevel: 6 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ windowZoomLevel: 1.5 })
+    ).toThrow();
+  });
+});
+
 describe("projectPreferencesSchema — terminal preferences", () => {
   it("提供终端设置默认值", () => {
     const parsed = projectPreferencesSchema.parse({});

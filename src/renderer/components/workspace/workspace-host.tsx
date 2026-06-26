@@ -203,6 +203,31 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
         });
         return;
       }
+      case "terminal.open": {
+        const panelId = state.addTerminal({
+          ...(envelope.command.context && {
+            context: envelope.command.context,
+          }),
+          launchId: envelope.command.launchId,
+          ...(envelope.command.placement && {
+            placement: envelope.command.placement,
+          }),
+        });
+        if (!panelId) {
+          throw new Error("workspace api not ready");
+        }
+        window.pier.rendererCommand.resolve({
+          data: {
+            ...(envelope.command.context && {
+              context: envelope.command.context,
+            }),
+            panelId,
+          },
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
       case "workspace.flushLayout": {
         throw new Error("workspace.flushLayout requires workspace api context");
       }

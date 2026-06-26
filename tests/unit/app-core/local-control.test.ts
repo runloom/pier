@@ -123,6 +123,7 @@ function cliClientServices(): PierCoreServices {
         theme: "system",
         uiFontFamily: "",
         userKeymap: [],
+        windowZoomLevel: 0,
       }),
       update: async (patch) => ({
         language: "system",
@@ -137,6 +138,7 @@ function cliClientServices(): PierCoreServices {
         theme: patch.theme ?? "system",
         uiFontFamily: "",
         userKeymap: patch.userKeymap ?? [],
+        windowZoomLevel: patch.windowZoomLevel ?? 0,
       }),
     },
     rendererCommand: {
@@ -149,6 +151,19 @@ function cliClientServices(): PierCoreServices {
         requestId: "renderer-unavailable",
       }),
       resolve: () => undefined,
+    },
+    terminalLaunches: {
+      consume: async () => null,
+      discard: async () => undefined,
+      read: async () => null,
+      register: async () => "launch-1",
+    },
+    terminalProfiles: {
+      delete: async () => false,
+      list: async () => ({}),
+      read: async () => null,
+      resolve: async () => null,
+      upsert: async (_profileId, profile) => profile,
     },
     window: {
       close: () => undefined,

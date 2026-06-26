@@ -1,6 +1,7 @@
 import type { PanelContext } from "./panel.ts";
 
 export interface TerminalFrame {
+  /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
   height: number;
   width: number;
   x: number;
@@ -19,7 +20,7 @@ export type TerminalPresentationReason =
   | "window-blur"
   | "window-focus"
   | "window-resize"
-  | `window-${"resize" | "zoom"}`;
+  | `window-${"resize" | "view-zoom" | "zoom"}`;
 
 export interface TerminalPresentationEntry {
   focused: boolean;
@@ -194,7 +195,7 @@ export interface TerminalDebugWindowOpenResult {
 /**
  * Terminal 字体配置. family 已在 renderer 侧调 computeMonoFontFamily 处理过 fallback
  * 链, native 端拿到的是完整 font-family 字符串 (含逗号分隔的 fallback). size 单位 px,
- * 范围 8-32 (由 preferences zod 守住).
+ * 是基础 monoFontSize 叠加整体界面缩放后的有效字号, 范围 8-48.
  */
 export interface TerminalFont {
   family: string;
@@ -214,6 +215,7 @@ export interface CreateTerminalArgs {
   context?: PanelContext | undefined;
   font: TerminalFont;
   frame: TerminalFrame;
+  launchId?: string | undefined;
   panelId: string;
 }
 

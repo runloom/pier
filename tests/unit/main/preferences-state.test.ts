@@ -41,6 +41,7 @@ describe("preferences state", () => {
       terminalScrollbackMb: 64,
       terminalPasteProtection: true,
       terminalNewCwdPolicy: "activeTerminal",
+      windowZoomLevel: 0,
     });
   });
 });

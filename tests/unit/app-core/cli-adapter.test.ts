@@ -239,9 +239,154 @@ describe("parsePierCliArgs", () => {
       parsePierCliArgs(["terminals", "open", "--cwd", "."], {
         clientId: "cli-1",
         cwd: "/Users/xyz/ABC/pier",
-        requestId: "req-terminal-open-cwd",
+        requestId: "req-terminals-open-cwd",
       })
     ).toThrow("unknown pier CLI command");
+  });
+
+  it("解析 terminal open 启动参数", () => {
+    expect(
+      parsePierCliArgs(
+        [
+          "terminal",
+          "open",
+          "--cwd",
+          ".",
+          "--profile",
+          "codex",
+          "--env",
+          "PIER_MODE=dev",
+          "--env",
+          "EMPTY=",
+          "--window",
+          "main",
+          "--split",
+          "below",
+          "--no-focus",
+          "--",
+          "pnpm",
+          "test",
+          "--",
+          "watch",
+        ],
+        {
+          clientId: "cli-1",
+          cwd: "/Users/xyz/ABC/pier",
+          requestId: "req-terminal-open",
+        }
+      ).envelope.command
+    ).toEqual({
+      focus: false,
+      launch: {
+        command: "pnpm test -- watch",
+        cwd: "/Users/xyz/ABC/pier",
+        env: {
+          EMPTY: "",
+          PIER_MODE: "dev",
+        },
+        profileId: "codex",
+      },
+      placement: "split-below",
+      type: "terminal.open",
+      windowId: "main",
+    });
+  });
+
+  it("拒绝非法 terminal env 参数", () => {
+    expect(() =>
+      parsePierCliArgs(["terminal", "open", "--env", "1BAD=value"], {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-terminal-open-env",
+      })
+    ).toThrow("invalid --env value");
+  });
+
+  it("-- 后的 command 参数不被解析成 Pier 选项或输出选项", () => {
+    const parsed = parsePierCliArgs(
+      [
+        "terminal",
+        "open",
+        "--cwd",
+        ".",
+        "--",
+        "env",
+        "--profile",
+        "inner",
+        "--env",
+        "INNER=value",
+        "--no-focus",
+        "--json",
+        "--print-envelope",
+      ],
+      {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-terminal-open-command-flags",
+      }
+    );
+
+    expect(parsed.json).toBe(false);
+    expect(parsed.envelope.command).toEqual({
+      launch: {
+        command:
+          "env --profile inner --env INNER=value --no-focus --json --print-envelope",
+        cwd: "/Users/xyz/ABC/pier",
+      },
+      type: "terminal.open",
+    });
+  });
+
+  it("解析 terminal profiles 管理命令", () => {
+    expect(
+      parsePierCliArgs(["terminal", "profiles", "list"], {
+        clientId: "cli-1",
+        requestId: "req-terminal-profiles-list",
+      }).envelope.command
+    ).toEqual({ type: "terminal.profile.list" });
+    expect(
+      parsePierCliArgs(["terminal", "profiles", "get", "codex"], {
+        clientId: "cli-1",
+        requestId: "req-terminal-profiles-get",
+      }).envelope.command
+    ).toEqual({ profileId: "codex", type: "terminal.profile.read" });
+    expect(
+      parsePierCliArgs(
+        [
+          "terminal",
+          "profiles",
+          "set",
+          "codex",
+          "--cwd",
+          ".",
+          "--env",
+          "PIER_MODE=dev",
+          "--",
+          "codex",
+          "--sandbox",
+          "workspace-write",
+        ],
+        {
+          clientId: "cli-1",
+          cwd: "/Users/xyz/ABC/pier",
+          requestId: "req-terminal-profiles-set",
+        }
+      ).envelope.command
+    ).toEqual({
+      profile: {
+        command: "codex --sandbox workspace-write",
+        cwd: "/Users/xyz/ABC/pier",
+        env: { PIER_MODE: "dev" },
+      },
+      profileId: "codex",
+      type: "terminal.profile.upsert",
+    });
+    expect(
+      parsePierCliArgs(["terminal", "profiles", "delete", "codex"], {
+        clientId: "cli-1",
+        requestId: "req-terminal-profiles-delete",
+      }).envelope.command
+    ).toEqual({ profileId: "codex", type: "terminal.profile.delete" });
   });
 
   it("拒绝未知命令和缺少值的 CLI 选项", () => {
