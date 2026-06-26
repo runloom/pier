@@ -60,6 +60,7 @@ export interface CreateWindowOptions {
 export interface WindowInfo {
   focused: boolean;
   id: string;
+  lastFocusedAt?: number;
   recordId: string;
 }
 
@@ -83,6 +84,8 @@ class WindowManager {
   private readonly onFocusCallbacks: Array<
     (payload: { recordId: string; windowId: string }) => void
   > = [];
+  private focusSequence = 0;
+  private readonly lastFocusedAtByWindowId = new Map<string, number>();
   private isDestroyingAllForQuit = false;
   private readonly closeFlushDone = new WeakSet<AppWindow>();
   private readonly closeFlushPending = new WeakSet<AppWindow>();
@@ -112,6 +115,12 @@ class WindowManager {
     }) => Promise<void> | void
   ): void {
     this.onBeforeCloseCallbacks.push(callback);
+  }
+
+  private rememberFocusedWindow(windowId: string): number {
+    this.focusSequence += 1;
+    this.lastFocusedAtByWindowId.set(windowId, this.focusSequence);
+    return this.focusSequence;
   }
 
   create(opts: CreateWindowOptions = {}): string {
@@ -242,6 +251,7 @@ class WindowManager {
     // 事件主动 replay user 最后期望的 active panel — swift 端 focusTerminal 会重新
     // makeFirstResponder + 强制 becomeFirstResponder, 让 Ghostty surface focus 回到 true.
     window.host.on("focus", () => {
+      this.rememberFocusedWindow(id);
       restoreActivePanelFocus(window);
       const context = findWindowContext(window);
       if (context) {
@@ -328,6 +338,7 @@ class WindowManager {
       const context = findWindowContext(window);
       forgetAppWindow(window);
       this.windows.delete(id);
+      this.lastFocusedAtByWindowId.delete(id);
       this.allocator.release(id);
       if (!this.isDestroyingAllForQuit && context) {
         for (const cb of this.onCloseCallbacks) {
@@ -416,11 +427,15 @@ class WindowManager {
   }
 
   list(): WindowInfo[] {
-    return [...this.windows.entries()].map(([id, w]) => ({
-      id,
-      focused: w.isFocused(),
-      recordId: findWindowContext(w)?.recordId ?? id,
-    }));
+    return [...this.windows.entries()].map(([id, w]) => {
+      const lastFocusedAt = this.lastFocusedAtByWindowId.get(id);
+      return {
+        id,
+        focused: w.isFocused(),
+        ...(lastFocusedAt === undefined ? {} : { lastFocusedAt }),
+        recordId: findWindowContext(w)?.recordId ?? id,
+      };
+    });
   }
 
   focus(id: string): void {
@@ -431,6 +446,7 @@ class WindowManager {
     if (w.isMinimized()) {
       w.restore();
     }
+    this.rememberFocusedWindow(id);
     w.focus();
   }
 

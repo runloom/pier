@@ -19,10 +19,43 @@ const OUT_MAIN = join(
   "main",
   "index.js"
 );
+const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
+const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
 
 test.skip(process.platform !== "darwin", "native terminal is macOS-only");
 
 const execFileAsync = promisify(execFile);
+
+interface CliResult<T> {
+  data?: T;
+  error?: {
+    message?: string;
+  };
+  ok: boolean;
+}
+
+interface CliTerminalList {
+  errors: unknown[];
+  open: CliTerminalSession[];
+  recentClosed: unknown[];
+}
+
+interface CliTerminalSession {
+  active?: boolean;
+  panelId: string;
+  windowFocused?: boolean;
+  windowId: string;
+}
+
+interface TabVisibility {
+  containerLeft: number;
+  containerRight: number;
+  panelId: string;
+  scrollLeft: number;
+  tabLeft: number;
+  tabRight: number;
+  visible: boolean;
+}
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -54,6 +87,10 @@ async function pasteTextIntoFocusedApp(text: string) {
     "-e",
     `set the clipboard to ${appleScriptString(text)}`,
     "-e",
+    'tell application "System Events" to keystroke "u" using control down',
+    "-e",
+    "delay 0.05",
+    "-e",
     'tell application "System Events" to keystroke "v" using command down',
     "-e",
     "delay 0.1",
@@ -81,6 +118,194 @@ async function waitForTerminalCount(win: Page, count: number) {
   await win.waitForTimeout(800);
 }
 
+async function runPierCliJson<T>(
+  userDataDir: string,
+  args: string[]
+): Promise<T> {
+  const { stdout } = await execFileAsync(
+    "node",
+    [PIER_CLI, ...args, "--json"],
+    {
+      cwd: PROJECT_ROOT,
+      env: {
+        ...process.env,
+        PIER_USER_DATA_DIR: userDataDir,
+      },
+    }
+  );
+  const parsed = JSON.parse(stdout) as CliResult<T>;
+  if (!parsed.ok) {
+    throw new Error(parsed.error?.message ?? stdout);
+  }
+  if (parsed.data === undefined) {
+    throw new Error(`pier CLI returned no data for ${args.join(" ")}`);
+  }
+  return parsed.data;
+}
+
+async function waitForPierCli(userDataDir: string) {
+  await expect
+    .poll(
+      async () => {
+        try {
+          await runPierCliJson(userDataDir, ["status"]);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 10_000 }
+    )
+    .toBe(true);
+}
+
+function terminalList(userDataDir: string): Promise<CliTerminalList> {
+  return runPierCliJson<CliTerminalList>(userDataDir, ["terminals", "list"]);
+}
+
+async function waitForTerminalListCount(
+  userDataDir: string,
+  count: number
+): Promise<CliTerminalList> {
+  let snapshot: CliTerminalList = {
+    errors: [],
+    open: [],
+    recentClosed: [],
+  };
+  await expect
+    .poll(
+      async () => {
+        snapshot = await terminalList(userDataDir);
+        return snapshot.open.length;
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(count);
+  return snapshot;
+}
+
+async function createTerminalTabs(
+  userDataDir: string,
+  win: Page,
+  count: number
+): Promise<CliTerminalList> {
+  let snapshot = await terminalList(userDataDir);
+  await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+    snapshot.open.length
+  );
+  for (
+    let nextCount = snapshot.open.length + 1;
+    nextCount <= count;
+    nextCount++
+  ) {
+    await win.keyboard.press("Meta+KeyT");
+    snapshot = await waitForTerminalListCount(userDataDir, nextCount);
+    await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+      nextCount
+    );
+  }
+  return snapshot;
+}
+
+function tabVisibilities(win: Page): Promise<TabVisibility[]> {
+  return win.evaluate(() => {
+    const result: TabVisibility[] = [];
+    for (const contentElement of document.querySelectorAll<HTMLElement>(
+      "[data-panel-tab-id]"
+    )) {
+      const panelId = contentElement.dataset.panelTabId;
+      const tabElement = contentElement.closest<HTMLElement>(".dv-tab");
+      const tabsContainer =
+        tabElement?.closest<HTMLElement>(".dv-tabs-container") ?? null;
+      if (!(panelId && tabElement && tabsContainer)) {
+        continue;
+      }
+      const tabRect = tabElement.getBoundingClientRect();
+      const containerRect = tabsContainer.getBoundingClientRect();
+      result.push({
+        containerLeft: containerRect.left,
+        containerRight: containerRect.right,
+        panelId,
+        scrollLeft: tabsContainer.scrollLeft,
+        tabLeft: tabRect.left,
+        tabRight: tabRect.right,
+        visible:
+          tabRect.left >= containerRect.left - 1 &&
+          tabRect.right <= containerRect.right + 1,
+      });
+    }
+    return result;
+  });
+}
+
+async function tabVisibility(
+  win: Page,
+  panelId: string
+): Promise<TabVisibility | null> {
+  const tabs = await tabVisibilities(win);
+  return tabs.find((tab) => tab.panelId === panelId) ?? null;
+}
+
+function setTabStripScrollLeftForPanel(
+  win: Page,
+  panelId: string,
+  scrollLeft: number
+): Promise<number> {
+  return win.evaluate(
+    ({ panelId: targetPanelId, scrollLeft: nextScrollLeft }) => {
+      const contentElement = [
+        ...document.querySelectorAll<HTMLElement>("[data-panel-tab-id]"),
+      ].find((element) => element.dataset.panelTabId === targetPanelId);
+      const tabsContainer =
+        contentElement
+          ?.closest<HTMLElement>(".dv-tab")
+          ?.closest<HTMLElement>(".dv-tabs-container") ?? null;
+      if (!tabsContainer) {
+        throw new Error(`tab strip not found for ${targetPanelId}`);
+      }
+      tabsContainer.scrollLeft = nextScrollLeft;
+      return tabsContainer.scrollLeft;
+    },
+    { panelId, scrollLeft }
+  );
+}
+
+async function clickTerminalByHorizontalOrder(
+  win: Page,
+  order: "left" | "right",
+  options: { button?: "left" | "middle" | "right"; waitAfterMs?: number } = {}
+) {
+  const anchors = await win
+    .locator(".terminal-anchor")
+    .evaluateAll((elements) =>
+      elements
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            height: rect.height,
+            width: rect.width,
+            x: rect.x,
+            y: rect.y,
+          };
+        })
+        .filter((anchor) => anchor.width > 100 && anchor.height > 100)
+        .sort((a, b) => a.x - b.x || a.y - b.y)
+    );
+  const target = order === "left" ? anchors[0] : anchors.at(-1);
+  if (!target) {
+    throw new Error(`terminal anchor not found: ${order}`);
+  }
+  await win.mouse.click(
+    target.x + target.width / 2,
+    target.y + target.height / 2,
+    { button: options.button ?? "left" }
+  );
+  const waitAfterMs = options.waitAfterMs ?? 300;
+  if (waitAfterMs > 0) {
+    await win.waitForTimeout(waitAfterMs);
+  }
+}
+
 async function focusTerminalAt(win: Page, index: number) {
   const anchor = win.locator(".terminal-anchor").nth(index);
   await expect(anchor).toBeAttached({ timeout: 10_000 });
@@ -96,11 +321,15 @@ async function writeMarkerFromTerminal(
   app: ElectronApplication,
   win: Page,
   filePath: string,
-  marker: string
+  marker: string,
+  options: { focusDelayMs?: number } = {}
 ) {
   const command = `printf ${shellQuote(marker)} > ${shellQuote(filePath)}`;
   await focusElectronApp(app);
-  await win.waitForTimeout(300);
+  const focusDelayMs = options.focusDelayMs ?? 300;
+  if (focusDelayMs > 0) {
+    await win.waitForTimeout(focusDelayMs);
+  }
   await pasteTextIntoFocusedApp(command);
   await expect
     .poll(() => (existsSync(filePath) ? readFileSync(filePath, "utf8") : ""), {
@@ -270,6 +499,199 @@ test.describe("Native terminal focus e2e", () => {
         win,
         join(markerDir, "overlay.txt"),
         "overlay-ok"
+      );
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  test("CLI focus reveals a hidden terminal tab and restores native input", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.setSize(640, 520);
+      });
+      await waitForPierCli(userDataDir);
+
+      const snapshot = await createTerminalTabs(userDataDir, win, 12);
+      const visibleTabs = await tabVisibilities(win);
+      const hiddenTarget = visibleTabs.find((tab) => !tab.visible);
+      if (!hiddenTarget) {
+        throw new Error(
+          `expected a hidden terminal tab, got ${JSON.stringify(visibleTabs)}`
+        );
+      }
+      const targetSession = snapshot.open.find(
+        (session) => session.panelId === hiddenTarget.panelId
+      );
+      if (!targetSession) {
+        throw new Error(`terminal snapshot missing ${hiddenTarget.panelId}`);
+      }
+
+      await runPierCliJson(userDataDir, [
+        "terminals",
+        "focus",
+        targetSession.panelId,
+        "--window",
+        targetSession.windowId,
+      ]);
+
+      await expect
+        .poll(
+          async () => (await tabVisibility(win, targetSession.panelId))?.visible
+        )
+        .toBe(true);
+      await expect
+        .poll(async () => {
+          const focused = (await terminalList(userDataDir)).open.find(
+            (session) => session.panelId === targetSession.panelId
+          );
+          return focused?.active === true && focused.windowFocused === true;
+        })
+        .toBe(true);
+
+      await writeMarkerFromTerminal(
+        app,
+        win,
+        join(markerDir, "cli-focus.txt"),
+        "cli-focus-ok"
+      );
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  test("native terminal content focus does not reveal its hidden tab", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      });
+      await waitForPierCli(userDataDir);
+      await waitForTerminalListCount(userDataDir, 1);
+      await focusTerminalAt(win, 0);
+
+      await win.keyboard.press("Meta+KeyD");
+      await waitForTerminalListCount(userDataDir, 2);
+      await clickTerminalByHorizontalOrder(win, "right");
+      const snapshot = await createTerminalTabs(userDataDir, win, 10);
+      const targetSession = snapshot.open.find((session) => session.active);
+      if (!targetSession) {
+        throw new Error("active terminal session not found");
+      }
+
+      await setTabStripScrollLeftForPanel(win, targetSession.panelId, 0);
+      await expect
+        .poll(
+          async () => (await tabVisibility(win, targetSession.panelId))?.visible
+        )
+        .toBe(false);
+
+      await clickTerminalByHorizontalOrder(win, "left");
+      await expect
+        .poll(async () => {
+          const active = (await terminalList(userDataDir)).open.find(
+            (session) => session.active
+          );
+          return active?.panelId !== targetSession.panelId;
+        })
+        .toBe(true);
+
+      const before = await tabVisibility(win, targetSession.panelId);
+      await clickTerminalByHorizontalOrder(win, "right", { waitAfterMs: 0 });
+      const after = await tabVisibility(win, targetSession.panelId);
+
+      expect(before?.visible).toBe(false);
+      expect(after?.scrollLeft).toBe(before?.scrollLeft);
+      expect(after?.visible).toBe(false);
+      await writeMarkerFromTerminal(
+        app,
+        win,
+        join(markerDir, "native-no-reveal.txt"),
+        "native-no-reveal-ok",
+        { focusDelayMs: 0 }
+      );
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  test("auxiliary terminal content click restores native input without revealing its hidden tab", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      });
+      await waitForPierCli(userDataDir);
+      await waitForTerminalListCount(userDataDir, 1);
+      await focusTerminalAt(win, 0);
+
+      await win.keyboard.press("Meta+KeyD");
+      await waitForTerminalListCount(userDataDir, 2);
+      await clickTerminalByHorizontalOrder(win, "right");
+      const snapshot = await createTerminalTabs(userDataDir, win, 10);
+      const targetSession = snapshot.open.find((session) => session.active);
+      if (!targetSession) {
+        throw new Error("active terminal session not found");
+      }
+
+      await setTabStripScrollLeftForPanel(win, targetSession.panelId, 0);
+      await expect
+        .poll(
+          async () => (await tabVisibility(win, targetSession.panelId))?.visible
+        )
+        .toBe(false);
+
+      await clickTerminalByHorizontalOrder(win, "left");
+      await expect
+        .poll(async () => {
+          const active = (await terminalList(userDataDir)).open.find(
+            (session) => session.active
+          );
+          return active?.panelId !== targetSession.panelId;
+        })
+        .toBe(true);
+
+      const before = await tabVisibility(win, targetSession.panelId);
+      await clickTerminalByHorizontalOrder(win, "right", {
+        button: "middle",
+        waitAfterMs: 0,
+      });
+      const after = await tabVisibility(win, targetSession.panelId);
+
+      expect(before?.visible).toBe(false);
+      expect(after?.scrollLeft).toBe(before?.scrollLeft);
+      expect(after?.visible).toBe(false);
+      await writeMarkerFromTerminal(
+        app,
+        win,
+        join(markerDir, "native-auxiliary-no-reveal.txt"),
+        "native-auxiliary-no-reveal-ok",
+        { focusDelayMs: 0 }
       );
     } finally {
       await app.close();

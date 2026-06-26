@@ -3,6 +3,8 @@ import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
@@ -17,6 +19,7 @@ interface WorkspaceState {
   addTerminal: (opts?: {
     path?: string;
     placement?: PierCommandPlacement;
+    referenceGroup?: WorkspaceGroupRef;
   }) => string | null;
   api: DockviewApi | null;
   closeActivePanel: () => void;
@@ -35,6 +38,8 @@ interface WorkspaceState {
 interface TerminalPanelParams {
   cwd: string;
 }
+
+type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
 
 function isRestorableCwd(value: string | undefined): value is string {
   return typeof value === "string" && value.trim() === value && value !== "";
@@ -102,6 +107,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ...(opts.params && { params: opts.params }),
       position: { direction: "right" },
     });
+    scheduleRevealDockviewTabByPanelId(opts.id);
   },
   addTab: () => {
     const api = get().api;
@@ -122,6 +128,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       // 无 active group → 新建 group
       api.addPanel({ id, component: "welcome", title: "Welcome" });
     }
+    scheduleRevealDockviewTabByPanelId(id);
   },
   addTerminal(opts) {
     const api = get().api;
@@ -129,7 +136,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return null;
     }
     const id = `terminal-${Date.now()}`;
-    const activeGroup = api.activeGroup;
+    const activeGroup = opts?.referenceGroup ?? api.activeGroup;
     const activePanel = api.activePanel;
     const splitDirection = (() => {
       switch (opts?.placement) {
@@ -161,6 +168,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ...(params && { params }),
       position: position ?? fallbackPosition,
     });
+    scheduleRevealDockviewTabByPanelId(id);
     return id;
   },
   closeActivePanel: () => {
@@ -290,6 +298,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         direction,
       },
     });
+    scheduleRevealDockviewTabByPanelId(newId);
   },
 
   focusGroup: (direction) => {
@@ -337,7 +346,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     // 写回 dockview 单源 — onDidActivePanelChange 回调会自动联动
     // DescriptorStore / KeybindingScope / Swift firstResponder.
-    targetPanel.api.setActive();
+    activateWorkspacePanel(api, targetPanel.id, {
+      reveal: "always",
+    });
   },
 
   resetLayout: async () => {
@@ -367,5 +378,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       component: "terminal",
       title: "Terminal",
     });
+    scheduleRevealDockviewTabByPanelId("terminal-1");
   },
 }));

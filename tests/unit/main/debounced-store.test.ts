@@ -116,4 +116,35 @@ describe("debouncedJsonStore", () => {
     await flushPromise;
     expect(didFlush).toBe(true);
   });
+
+  it("waits for an in-flight debounced write before clearing the file", async () => {
+    const { debouncedJsonStore } = await import(
+      "@main/state/debounced-store.ts"
+    );
+    const store = debouncedJsonStore({
+      debounceMs: 10,
+      defaults: { value: 0 },
+      filePath: join(tempDir, "state.json"),
+    });
+
+    await store.init();
+    store.mutate((state) => ({ ...state, value: 1 }));
+    await vi.advanceTimersByTimeAsync(10);
+    await vi.waitFor(() => {
+      expect(writes).toHaveLength(1);
+    });
+
+    let didClear = false;
+    const clearPromise = store.clear().then(() => {
+      didClear = true;
+    });
+    await Promise.resolve();
+
+    expect(didClear).toBe(false);
+
+    writes[0]?.resolve();
+    await clearPromise;
+    expect(didClear).toBe(true);
+    expect(store.get()).toEqual({ value: 0 });
+  });
 });

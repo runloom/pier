@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { TerminalRecentSessionSnapshot } from "@shared/contracts/terminal.ts";
 import {
@@ -23,6 +24,7 @@ function toSnapshot(
   },
   windowInfo: WindowInfo | undefined
 ): TerminalRecentSessionSnapshot {
+  const title = session.title ?? basename(session.cwd);
   return {
     closedAt: session.closedAt,
     cwd: session.cwd,
@@ -30,7 +32,8 @@ function toSnapshot(
     panelId: session.panelId,
     recordId: session.recordId,
     windowAlive: Boolean(windowInfo),
-    ...(session.title ? { title: session.title } : {}),
+    ...(session.title ? { terminalTitle: session.title } : {}),
+    ...(title ? { title } : {}),
     ...(windowInfo ? { windowId: windowInfo.id } : {}),
   };
 }

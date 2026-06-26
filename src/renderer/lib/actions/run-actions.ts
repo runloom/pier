@@ -92,6 +92,26 @@ function sectionHeading(
   return parts.join(" · ");
 }
 
+function compareOpenSessions(
+  a: TerminalOpenSessionSnapshot,
+  b: TerminalOpenSessionSnapshot
+): number {
+  return (
+    a.windowIndex - b.windowIndex ||
+    a.groupIndex - b.groupIndex ||
+    a.tabIndex - b.tabIndex ||
+    a.windowId.localeCompare(b.windowId) ||
+    a.panelId.localeCompare(b.panelId)
+  );
+}
+
+function terminalCommandErrorMessage(result: {
+  error?: string | undefined;
+  ok: boolean;
+}): string {
+  return result.error ?? "terminal command failed";
+}
+
 function buildTerminalListSections(snapshot: TerminalListSnapshot): {
   recentByItemId: Map<string, TerminalRecentSessionSnapshot>;
   sections: QuickPickSection[];
@@ -100,7 +120,9 @@ function buildTerminalListSections(snapshot: TerminalListSnapshot): {
   const terminalByItemId = new Map<string, TerminalOpenSessionSnapshot>();
   const recentByItemId = new Map<string, TerminalRecentSessionSnapshot>();
   const windowOrdinalById = new Map<string, number>();
-  for (const session of snapshot.open) {
+  const openSessions = [...snapshot.open].sort(compareOpenSessions);
+
+  for (const session of openSessions) {
     if (!windowOrdinalById.has(session.windowId)) {
       windowOrdinalById.set(session.windowId, windowOrdinalById.size + 1);
     }
@@ -115,7 +137,7 @@ function buildTerminalListSections(snapshot: TerminalListSnapshot): {
     string,
     { heading: string; id: string; items: QuickPickItem[] }
   >();
-  for (const session of snapshot.open) {
+  for (const session of openSessions) {
     const itemId = `terminal:${session.windowId}:${session.panelId}`;
     terminalByItemId.set(itemId, session);
     const sectionId = `window:${session.windowId}:group:${session.groupIndex}`;
@@ -152,7 +174,7 @@ function buildTerminalListSections(snapshot: TerminalListSnapshot): {
 
   if (snapshot.recentClosed.length > 0) {
     const recentItems = snapshot.recentClosed.map((session) => {
-      const itemId = `recent:${session.id}`;
+      const itemId = `recent:${session.recordId}:${session.id}`;
       recentByItemId.set(itemId, session);
       return {
         badges: [
@@ -179,6 +201,30 @@ function buildTerminalListSections(snapshot: TerminalListSnapshot): {
       heading: i18next.t("commandPalette.run.section.recentClosed"),
       id: "recent-closed",
       items: recentItems,
+    });
+  }
+
+  if (snapshot.errors.length > 0) {
+    sections.push({
+      heading: i18next.t("commandPalette.run.section.errors"),
+      id: "terminal-errors",
+      items: snapshot.errors.map((error, index) => ({
+        badges: [
+          {
+            label: i18next.t("commandPalette.run.badge.error"),
+            variant: "destructive" as const,
+          },
+        ],
+        detail: [error.windowId, error.recordId]
+          .filter((value): value is string => typeof value === "string")
+          .join(" · "),
+        disabled: true,
+        id: `terminal-error:${index}`,
+        keywords: [error.windowId, error.recordId].filter(
+          (value): value is string => typeof value === "string"
+        ),
+        label: error.message,
+      })),
     });
   }
 
@@ -234,14 +280,13 @@ export function registerRunActions(): () => void {
         const snapshot = await window.pier.terminal.listSessions();
         const { recentByItemId, sections, terminalByItemId } =
           buildTerminalListSections(snapshot);
-        const quickPickItems = sections.flatMap((section) => section.items);
         useCommandPaletteController.getState().openQuickPick({
           title: i18next.t("commandPalette.action.terminalList"),
           placeholder: i18next.t("commandPalette.placeholder.terminalList"),
-          items:
-            quickPickItems.length > 0
-              ? quickPickItems
-              : [
+          ...(sections.length > 0
+            ? { sections }
+            : {
+                items: [
                   {
                     description: i18next.t("commandPalette.run.action.later"),
                     detail: i18next.t("commandPalette.run.noTerminalsDetail"),
@@ -250,24 +295,30 @@ export function registerRunActions(): () => void {
                     label: i18next.t("commandPalette.run.noTerminals"),
                   },
                 ],
-          ...(sections.length > 0 ? { sections } : {}),
-          onAccept: (item) => {
+              }),
+          onAccept: async (item) => {
             const terminalSession = terminalByItemId.get(item.id);
             if (terminalSession) {
-              window.pier.terminal.focusSession({
+              const result = await window.pier.terminal.focusSession({
                 panelId: terminalSession.panelId,
                 windowId: terminalSession.windowId,
               });
+              if (!result.ok) {
+                throw new Error(terminalCommandErrorMessage(result));
+              }
               return;
             }
             const recentSession = recentByItemId.get(item.id);
             if (recentSession) {
-              window.pier.terminal.openSession({
+              const result = await window.pier.terminal.openSession({
                 cwd: recentSession.cwd,
                 ...(recentSession.windowAlive && recentSession.windowId
                   ? { windowId: recentSession.windowId }
                   : {}),
               });
+              if (!result.ok) {
+                throw new Error(terminalCommandErrorMessage(result));
+              }
             }
           },
         });

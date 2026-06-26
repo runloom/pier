@@ -38,6 +38,7 @@ describe("run actions", () => {
                 title: "pier",
                 windowFocused: true,
                 windowId: "main",
+                windowIndex: 0,
               },
               {
                 active: false,
@@ -50,6 +51,7 @@ describe("run actions", () => {
                 title: "loomdesk",
                 windowFocused: true,
                 windowId: "main",
+                windowIndex: 0,
               },
               {
                 active: true,
@@ -62,6 +64,7 @@ describe("run actions", () => {
                 title: "bay",
                 windowFocused: false,
                 windowId: "secondary",
+                windowIndex: 1,
               },
             ],
             recentClosed: [
@@ -125,6 +128,85 @@ describe("run actions", () => {
     expect(quickPick?.sections?.[2]?.items[0]?.badges).toEqual([
       { label: "已关闭", variant: "secondary" },
     ]);
+    expect(quickPick?.items).toBeUndefined();
+  });
+
+  it("sorts terminal rows by window, group, and tab position before rendering", async () => {
+    useWorkspaceStore.getState().setApi({} as never);
+    vi.mocked(window.pier.terminal.listSessions).mockResolvedValueOnce({
+      errors: [],
+      open: [
+        {
+          active: false,
+          cwd: "/tmp/b",
+          groupIndex: 1,
+          panelId: "terminal-b",
+          recordId: "record-main",
+          tabCount: 2,
+          tabIndex: 1,
+          title: "b",
+          windowFocused: true,
+          windowId: "main",
+          windowIndex: 0,
+        },
+        {
+          active: true,
+          cwd: "/tmp/a",
+          groupIndex: 0,
+          panelId: "terminal-a",
+          recordId: "record-main",
+          tabCount: 2,
+          tabIndex: 0,
+          title: "a",
+          windowFocused: true,
+          windowId: "main",
+          windowIndex: 0,
+        },
+      ],
+      recentClosed: [],
+    });
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.terminalList")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    expect(quickPick?.sections?.map((section) => section.heading)).toEqual([
+      "窗口 1 · 当前窗口 · 第 1 组",
+      "窗口 1 · 当前窗口 · 第 2 组",
+    ]);
+    expect(
+      quickPick?.sections?.flatMap((section) =>
+        section.items.map((item) => item.label)
+      )
+    ).toEqual(["a", "b"]);
+  });
+
+  it("renders terminal list errors as a disabled section", async () => {
+    useWorkspaceStore.getState().setApi({} as never);
+    vi.mocked(window.pier.terminal.listSessions).mockResolvedValueOnce({
+      errors: [
+        {
+          message: "renderer command timed out",
+          recordId: "record-secondary",
+          windowId: "secondary",
+        },
+      ],
+      open: [],
+      recentClosed: [],
+    });
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.terminalList")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    expect(quickPick?.sections?.map((section) => section.heading)).toEqual([
+      "错误",
+    ]);
+    expect(quickPick?.sections?.[0]?.items[0]).toMatchObject({
+      disabled: true,
+      id: "terminal-error:0",
+      label: "renderer command timed out",
+    });
   });
 
   it("focuses an existing terminal from the terminal list", async () => {
@@ -147,6 +229,29 @@ describe("run actions", () => {
       panelId: "terminal-bay",
       windowId: "secondary",
     });
+  });
+
+  it("propagates terminal focus failures from the terminal list", async () => {
+    useWorkspaceStore.getState().setApi({} as never);
+    vi.mocked(window.pier.terminal.focusSession).mockResolvedValueOnce({
+      error: "window not found",
+      ok: false,
+    });
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.terminalList")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const target = quickPick?.sections
+      ?.flatMap((section) => section.items)
+      .find((item) => item.id === "terminal:secondary:terminal-bay");
+    if (!(quickPick && target)) {
+      throw new Error("expected secondary terminal item");
+    }
+
+    await expect(quickPick.onAccept(target)).rejects.toThrow(
+      "window not found"
+    );
   });
 
   it("reopens a recent closed terminal through the owning window when possible", async () => {

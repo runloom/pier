@@ -276,6 +276,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       if (req.panelId !== panelId) {
         return;
       }
+      api.setActive();
+      window.pier?.terminal?.setActivePanelKind?.("terminal", panelId);
       popupContextMenuAt("terminal/content", { x: req.x, y: req.y }).catch(
         (err: unknown) => {
           console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
@@ -285,7 +287,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     return () => {
       unsubscribe?.();
     };
-  }, [panelId]);
+  }, [panelId, api.setActive]);
 
   const terminalSurfaceStyle = {
     backgroundColor: "var(--terminal-background, var(--background))",

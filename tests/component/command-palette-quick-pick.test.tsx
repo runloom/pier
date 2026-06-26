@@ -103,7 +103,6 @@ describe("CommandPalette quick pick rows", () => {
       useCommandPaletteController.getState().openQuickPick({
         title: "Terminal List",
         placeholder: "Search terminals",
-        items: [],
         sections: [
           {
             heading: "窗口 1 · 第 1 组",
@@ -111,6 +110,7 @@ describe("CommandPalette quick pick rows", () => {
             items: [
               {
                 badges: [{ label: "标签 1/2", variant: "outline" }],
+                checked: true,
                 detail: "/Users/xyz/ABC/pier",
                 id: "terminal-1",
                 label: "pier",
@@ -143,5 +143,9 @@ describe("CommandPalette quick pick rows", () => {
     expect(screen.getByText("最近关闭")).toBeVisible();
     expect(screen.getByText("已关闭")).toBeVisible();
     expect(screen.getByText("重新打开")).toBeVisible();
+    expect(screen.getByText("pier").closest("[cmdk-item]")).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
   });
 });

@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 /**
  * Swift 端跨 setupWindow / focus / show / close / blur 多条路径上的状态不变量,
  * 源文件层 invariant lock 防回归. 这里测试**代码结构**而不是行为, 因为:
- * - swift 端状态 (terminals dict / state.activeTerminalPanelId / activePanelId
- *   单值 / windowToBrowserWindowId) 是 process-local, TS 测试拿不到
+ * - swift 端状态 (terminals dict / state.activeTerminalPanelId /
+ *   windowToBrowserWindowId) 是 process-local, TS 测试拿不到
  * - 行为已经被 IPC 边界的 tests/unit/main/terminal-state-consistency.test.ts 间接覆盖
  *
  * 这条文件保护几条关键不变量:
@@ -42,6 +42,12 @@ const HIT_ITERATES_TARGETS_RE =
   /for \(_, target\) in targets \{[\s\S]*?target\.rect\.contains/;
 const FORBIDDEN_HIDE_GUARD_RE =
   /guard panelId != activePanelId else \{ return \}/;
+const FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE =
+  /private var activePanelId: String\?/;
+const LOCAL_FOCUS_BEFORE_FORWARD_RE =
+  /GhosttyBridgeImpl\.shared\.focus\(panelId: panelId\)[\s\S]*?Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)/;
+const OTHER_MOUSE_DOWN_FOCUSES_BEFORE_FORWARD_RE =
+  /override func otherMouseDown\(with event: NSEvent\) \{[\s\S]*?capturedTerminalMouseButton = \.other[\s\S]*?activateFocusIntent\(\)[\s\S]*?terminalView\.otherMouseDown\(with: event\)/;
 
 describe("Swift state invariants (source-level lock)", () => {
   it("windowToBrowserWindowId is set up in setupWindow + torn down in detachWindow", () => {
@@ -77,5 +83,33 @@ describe("Swift state invariants (source-level lock)", () => {
     // switch 场景下错误地保护了旧 active panel 不被 hide, 新 panel addSubview
     // 落底层被旧的遮住. 已删除, 不能加回去.
     expect(SOURCE).not.toMatch(FORBIDDEN_HIDE_GUARD_RE);
+  });
+
+  it("does not keep a separate global activePanelId alongside per-window state", () => {
+    expect(SOURCE).not.toMatch(FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE);
+  });
+
+  it("locally focuses a clicked terminal before forwarding renderer focus intent", () => {
+    const scrollContainerSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        "../../native/Sources/GhosttyBridge/TerminalScrollContainer.swift"
+      ),
+      "utf8"
+    );
+    expect(scrollContainerSource).toMatch(LOCAL_FOCUS_BEFORE_FORWARD_RE);
+  });
+
+  it("locally focuses a terminal before forwarding auxiliary mouse input", () => {
+    const scrollContainerSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        "../../native/Sources/GhosttyBridge/TerminalScrollContainer.swift"
+      ),
+      "utf8"
+    );
+    expect(scrollContainerSource).toMatch(
+      OTHER_MOUSE_DOWN_FOCUSES_BEFORE_FORWARD_RE
+    );
   });
 });

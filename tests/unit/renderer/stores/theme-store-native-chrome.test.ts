@@ -58,4 +58,22 @@ describe("theme store native chrome backing", () => {
       document.documentElement.style.getPropertyValue("--terminal-background")
     ).toBe(expected);
   });
+
+  it("syncs the terminal background CSS variable before the coalesced native frame", async () => {
+    const requestAnimationFrame = vi.fn(() => 1);
+    vi.stubGlobal("requestAnimationFrame", requestAnimationFrame);
+    const { applyThemeVisual } = await import("@/stores/theme.store.ts");
+    const expected = deriveTerminalColors(
+      getShikiTheme("pierre", "dark"),
+      "dark"
+    ).background;
+
+    applyThemeVisual("dark", "pierre");
+
+    expect(requestAnimationFrame).toHaveBeenCalledOnce();
+    expect(window.pier.terminal.applyTheme).not.toHaveBeenCalled();
+    expect(
+      document.documentElement.style.getPropertyValue("--terminal-background")
+    ).toBe(expected);
+  });
 });

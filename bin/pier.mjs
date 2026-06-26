@@ -9,15 +9,15 @@ import { dirname, join } from "node:path";
 function usage() {
   return [
     "Usage:",
-    "  pier open <path> --json",
+    "  pier open <path> [--window <windowId>] [--split <direction>] [--no-focus] --json",
     "  pier status --json",
     "  pier windows list --json",
     "  pier windows focus <windowId> --json",
     "  pier panels list [--window <windowId>] --json",
-    "  pier panels focus <panelId> [--window <windowId>] --json",
+    "  pier panels focus <panelId> [--window <windowId>] [--no-focus] --json",
     "  pier terminals list [--window <windowId>] --json",
-    "  pier terminals open [--cwd <path>] --json",
-    "  pier terminals focus <panelId> [--window <windowId>] --json",
+    "  pier terminals open [--window <windowId>] [--cwd <path>] [--split <direction>] [--no-focus] --json",
+    "  pier terminals focus <panelId> [--window <windowId>] [--no-focus] --json",
     "  pier preferences read --json",
   ].join("\n");
 }
@@ -31,7 +31,14 @@ function requireValue(value) {
 
 function optionValue(args, name) {
   const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
+  if (index < 0) {
+    return;
+  }
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`missing required value for ${name}`);
+  }
+  return value;
 }
 
 function stripOptions(args) {
@@ -325,7 +332,9 @@ function formatOpenTerminalLines(open) {
     const tabCount = Number.isFinite(session.tabCount) ? session.tabCount : 1;
     const marker = session.windowFocused && session.active ? "✓" : " ";
     const title = session.title || session.panelId || "Terminal";
-    lines.push(`  ${marker} ${title}  标签 ${tabIndex + 1}/${tabCount}`);
+    lines.push(
+      `  ${marker} ${title}  标签 ${tabIndex + 1}/${tabCount}  panel ${session.panelId}  window ${session.windowId}`
+    );
     if (session.cwd) {
       lines.push(`    ${session.cwd}`);
     }
@@ -405,6 +414,10 @@ try {
     if (output) {
       process.stdout.write(output);
     }
+  } else if (!result.ok) {
+    const code = result.error?.code ?? "error";
+    const message = result.error?.message ?? "command failed";
+    console.error(`${code}: ${message}`);
   }
   process.exit(result.ok ? 0 : 1);
 } catch (error) {

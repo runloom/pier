@@ -1,4 +1,4 @@
-import type { PierCommandPlacement } from "./commands.ts";
+import type { PierCommandErrorCode, PierCommandPlacement } from "./commands.ts";
 
 export interface TerminalFrame {
   height: number;
@@ -80,6 +80,7 @@ export interface TerminalRecentSessionSnapshot {
   id: string;
   panelId: string;
   recordId: string;
+  terminalTitle?: string | undefined;
   title?: string | undefined;
   windowAlive: boolean;
   windowId?: string | undefined;
@@ -93,12 +94,15 @@ export interface TerminalOpenSessionSnapshot {
   recordId: string;
   tabCount: number;
   tabIndex: number;
+  terminalTitle?: string | undefined;
   title?: string | undefined;
   windowFocused?: boolean | undefined;
   windowId: string;
+  windowIndex: number;
 }
 
 export interface TerminalListError {
+  code?: PierCommandErrorCode | undefined;
   message: string;
   recordId?: string | undefined;
   windowId?: string | undefined;
@@ -191,7 +195,6 @@ export interface TerminalAPI {
     args: TerminalFocusSessionArgs
   ): Promise<TerminalSessionCommandResult>;
   hide(panelId: string): void;
-  listRecentSessions(): Promise<TerminalRecentSessionSnapshot[]>;
   listSessions(args?: TerminalListSessionsArgs): Promise<TerminalListSnapshot>;
   /** 订阅 swift 转发的右键事件. 返回 unsubscribe. */
   onContextMenuRequest: (

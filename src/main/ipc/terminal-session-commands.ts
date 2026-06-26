@@ -5,7 +5,11 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
-import { listTerminalSessions } from "../app-core/command-router.ts";
+import {
+  executeTerminalFocusCommand,
+  executeTerminalOpenCommand,
+  listTerminalSessions,
+} from "../app-core/terminal-panel-commands.ts";
 
 function commandResult(
   ok: boolean,
@@ -56,12 +60,16 @@ export function registerTerminalSessionIpc(ipcMain: IpcMain): void {
       _event,
       args: TerminalFocusSessionArgs
     ): Promise<TerminalSessionCommandResult> => {
-      const result = await appCore.services.rendererCommand.execute({
-        type: "terminal.focus",
-        panelId: args.panelId,
-        ...(args.focus === undefined ? {} : { focus: args.focus }),
-        ...(args.windowId ? { windowId: args.windowId } : {}),
-      });
+      const result = await executeTerminalFocusCommand(
+        "ipc-terminal-focus",
+        {
+          type: "terminal.focus",
+          panelId: args.panelId,
+          ...(args.focus === undefined ? {} : { focus: args.focus }),
+          ...(args.windowId ? { windowId: args.windowId } : {}),
+        },
+        appCore.services
+      );
       return result.ok
         ? commandResult(true, result.data, args.windowId)
         : commandResult(false, result.error);
@@ -74,13 +82,17 @@ export function registerTerminalSessionIpc(ipcMain: IpcMain): void {
       _event,
       args?: TerminalOpenSessionArgs
     ): Promise<TerminalSessionCommandResult> => {
-      const result = await appCore.services.rendererCommand.execute({
-        type: "terminal.open",
-        ...(args?.cwd ? { cwd: args.cwd } : {}),
-        ...(args?.focus === undefined ? {} : { focus: args.focus }),
-        ...(args?.placement ? { placement: args.placement } : {}),
-        ...(args?.windowId ? { windowId: args.windowId } : {}),
-      });
+      const result = await executeTerminalOpenCommand(
+        "ipc-terminal-open",
+        {
+          type: "terminal.open",
+          ...(args?.cwd ? { cwd: args.cwd } : {}),
+          ...(args?.focus === undefined ? {} : { focus: args.focus }),
+          ...(args?.placement ? { placement: args.placement } : {}),
+          ...(args?.windowId ? { windowId: args.windowId } : {}),
+        },
+        appCore.services
+      );
       return result.ok
         ? commandResult(true, result.data, args?.windowId)
         : commandResult(false, result.error);

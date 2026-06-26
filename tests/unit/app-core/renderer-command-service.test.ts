@@ -136,7 +136,10 @@ describe("createRendererCommandService", () => {
     });
 
     await expect(service.execute({ type: "terminal.open" })).resolves.toEqual({
-      error: { message: "no renderer window available" },
+      error: {
+        code: "platform_unavailable",
+        message: "no renderer window available",
+      },
       ok: false,
       requestId: "renderer-req-2",
     });
@@ -154,7 +157,10 @@ describe("createRendererCommandService", () => {
     vi.advanceTimersByTime(1000);
 
     await expect(promise).resolves.toEqual({
-      error: { message: "renderer command timed out" },
+      error: {
+        code: "platform_unavailable",
+        message: "renderer command timed out",
+      },
       ok: false,
       requestId: "renderer-req-3",
     });

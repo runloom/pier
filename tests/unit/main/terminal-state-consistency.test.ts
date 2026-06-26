@@ -191,16 +191,24 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     );
   });
 
-  it("lists recent closed terminal sessions for the current window session", async () => {
+  it("persists the initial cwd after native terminal creation succeeds", async () => {
     const { invokeHandlers, win } = await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
 
-    await invokeHandlers.get("pier:terminal:list-recent-sessions")?.({
-      sender: win.webContents,
-    });
+    await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: win.webContents },
+      {
+        cwd: "/Users/xyz/ABC/pier",
+        font: { family: "Menlo", size: 13 },
+        frame: { height: 400, width: 600, x: 0, y: 0 },
+        panelId: "terminal-1",
+      }
+    );
 
-    expect(sessionState.listRecentTerminalPanelSessions).toHaveBeenCalledWith(
-      "session-main"
+    expect(sessionState.updateTerminalPanelCwd).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      "/Users/xyz/ABC/pier"
     );
   });
 

@@ -3,6 +3,12 @@ import type { IDockviewPanelProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 
+const popupContextMenuAtMock = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock("@/lib/context-menu/use-context-menu.ts", () => ({
+  popupContextMenuAt: popupContextMenuAtMock,
+}));
+
 class TestResizeObserver {
   static observeCount = 0;
   static instances: TestResizeObserver[] = [];
@@ -79,6 +85,7 @@ function createPanelProps(
           return { dispose: vi.fn() };
         }
       ),
+      setActive: vi.fn(),
       setTitle: vi.fn(),
       width: 400,
     },
@@ -125,6 +132,7 @@ describe("TerminalPanel lifecycle", () => {
     emitWindowLayoutPulse = null;
     TestResizeObserver.observeCount = 0;
     TestResizeObserver.instances = [];
+    popupContextMenuAtMock.mockClear();
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 0)
@@ -168,6 +176,7 @@ describe("TerminalPanel lifecycle", () => {
           onCwdChange: vi.fn(() => vi.fn()),
           onTitleChange: vi.fn(() => vi.fn()),
           readSession: vi.fn(async () => null),
+          setActivePanelKind: vi.fn(),
           setFont: vi.fn(),
           setFrame: vi.fn(),
           show: vi.fn(),
@@ -483,5 +492,38 @@ describe("TerminalPanel lifecycle", () => {
     props.emitGroupChange();
 
     expect(window.pier.terminal.focus).not.toHaveBeenCalled();
+  });
+
+  it("activates the terminal panel before opening a native context menu", async () => {
+    let emitContextMenuRequest: (req: {
+      panelId: string;
+      x: number;
+      y: number;
+    }) => void = () => {
+      throw new Error("context menu listener was not registered");
+    };
+    vi.mocked(window.pier.terminal.onContextMenuRequest).mockImplementation(
+      (cb) => {
+        emitContextMenuRequest = cb;
+        return vi.fn();
+      }
+    );
+    const props = createPanelProps();
+
+    render(<TerminalPanel {...props} />);
+
+    emitContextMenuRequest({ panelId: "terminal-1", x: 12, y: 24 });
+
+    await waitFor(() => {
+      expect(popupContextMenuAtMock).toHaveBeenCalledWith("terminal/content", {
+        x: 12,
+        y: 24,
+      });
+    });
+    expect(props.api.setActive).toHaveBeenCalledOnce();
+    expect(window.pier.terminal.setActivePanelKind).toHaveBeenCalledWith(
+      "terminal",
+      "terminal-1"
+    );
   });
 });

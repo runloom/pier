@@ -40,6 +40,7 @@ export function debouncedJsonStore<T>(opts: {
   let state: T | undefined;
   let dirty = false;
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let initPromise: Promise<T> | null = null;
   let writeQueue: Promise<void> = Promise.resolve();
   const debounceMs = opts.debounceMs ?? 500;
 
@@ -85,17 +86,27 @@ export function debouncedJsonStore<T>(opts: {
     if (state !== undefined) {
       return state;
     }
-    if (existsSync(opts.filePath)) {
-      try {
-        const raw = await readFile(opts.filePath, "utf-8");
-        state = JSON.parse(raw) as T;
-        return state;
-      } catch {
-        // Corrupt file — fall through to defaults
-      }
+    if (initPromise) {
+      return initPromise;
     }
-    state = structuredClone(opts.defaults);
-    return state;
+    initPromise = (async () => {
+      if (existsSync(opts.filePath)) {
+        try {
+          const raw = await readFile(opts.filePath, "utf-8");
+          state = JSON.parse(raw) as T;
+          return state;
+        } catch {
+          // Corrupt file — fall through to defaults
+        }
+      }
+      state = structuredClone(opts.defaults);
+      return state;
+    })();
+    try {
+      return await initPromise;
+    } finally {
+      initPromise = null;
+    }
   }
 
   function get(): T {
@@ -135,6 +146,7 @@ export function debouncedJsonStore<T>(opts: {
       flushTimer = null;
     }
     dirty = false;
+    await writeQueue.catch(() => undefined);
     state = structuredClone(opts.defaults);
     try {
       await unlink(opts.filePath);

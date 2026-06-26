@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHeaderActions } from "@/components/workspace/workspace-header-actions.tsx";
+import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 let setOverlayActive: ReturnType<typeof vi.fn>;
 let originalHasPointerCapture:
@@ -71,6 +73,11 @@ beforeEach(() => {
   originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
   originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
   originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  setDockviewTabRevealRoot(document);
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    cb(performance.now());
+    return 1;
+  });
   Object.defineProperties(HTMLElement.prototype, {
     hasPointerCapture: {
       configurable: true,
@@ -101,6 +108,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  setDockviewTabRevealRoot(null);
+  useWorkspaceStore.getState().setApi(null);
   if (originalHasPointerCapture) {
     HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
   } else {
@@ -286,7 +296,9 @@ describe("WorkspaceHeaderActions", () => {
     );
 
     expect(overflowPanel.api.setActive).toHaveBeenCalledTimes(1);
-    expect(tabsContainer.scrollLeft).toBe(88);
+    await waitFor(() => {
+      expect(tabsContainer.scrollLeft).toBe(88);
+    });
 
     header.remove();
   });
@@ -347,6 +359,56 @@ describe("WorkspaceHeaderActions", () => {
     expect(
       document.querySelector("[data-overflow-tabs-viewport]")
     ).not.toBeInTheDocument();
+
+    header.remove();
+  });
+
+  it("reveals a terminal tab added from the header new-tab action", () => {
+    vi.spyOn(Date, "now").mockReturnValue(123);
+    const header = document.createElement("div");
+    const tabsContainer = document.createElement("div");
+    const existingTab = document.createElement("div");
+    const existingContent = document.createElement("div");
+    const newTab = document.createElement("div");
+    const newContent = document.createElement("div");
+    const actionsContainer = document.createElement("div");
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+
+    header.className = "dv-tabs-and-actions-container";
+    tabsContainer.className = "dv-tabs-container";
+    existingTab.className = "dv-tab";
+    newTab.className = "dv-tab";
+    existingContent.dataset.panelTabId = "terminal-1";
+    newContent.dataset.panelTabId = "terminal-123";
+    existingTab.append(existingContent);
+    newTab.append(newContent);
+    tabsContainer.append(existingTab, newTab);
+    header.append(tabsContainer, actionsContainer);
+    document.body.append(header);
+
+    tabsContainer.scrollLeft = 0;
+    setRect(tabsContainer, { bottom: 34, left: 0, right: 120, top: 0 });
+    setRect(existingTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(newTab, { bottom: 34, left: 120, right: 200, top: 0 });
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />, {
+      container: actionsContainer,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "New Tab" }));
+
+    expect(props.containerApi.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: "terminal",
+        id: "terminal-123",
+        position: {
+          direction: "within",
+          referenceGroup: props.group,
+        },
+      })
+    );
+    expect(tabsContainer.scrollLeft).toBe(88);
 
     header.remove();
   });

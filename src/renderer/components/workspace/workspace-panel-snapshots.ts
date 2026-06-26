@@ -59,12 +59,19 @@ export function buildWorkspacePanelSnapshots(
     const descriptor = descriptors[panel.id];
     const position = positionForPanel(api, panel.id);
     const title = descriptor?.short ?? panel.title;
+    const terminalTitle =
+      descriptor?.long &&
+      descriptor.long !== descriptor.path &&
+      descriptor.long !== title
+        ? descriptor.long
+        : undefined;
     return {
       active: panel.id === api.activePanel?.id,
       id: panel.id,
       kind: panelKindOf(component),
       ...position,
       ...(title ? { title } : {}),
+      ...(terminalTitle ? { terminalTitle } : {}),
       ...(descriptor?.path ? { cwd: descriptor.path } : {}),
     };
   });

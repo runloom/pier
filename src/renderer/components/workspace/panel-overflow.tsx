@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
 import { Button } from "../primitives/button.tsx";
 import {
@@ -17,8 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "../primitives/select.tsx";
-import { panelIconOf } from "./panel-registry.ts";
-import { revealDockviewTabElement } from "./tab-visibility.ts";
+import { panelIconOf, panelKindOf } from "./panel-registry.ts";
 
 const CLIP_EPSILON_PX = 1;
 
@@ -38,33 +38,6 @@ function closestTabsContainer(element: HTMLElement | null): HTMLElement | null {
       ?.closest<HTMLElement>(".dv-tabs-and-actions-container")
       ?.querySelector<HTMLElement>(".dv-tabs-container") ?? null
   );
-}
-
-function findTabContentElement(
-  tabsContainer: HTMLElement,
-  panelId: string
-): HTMLElement | null {
-  for (const contentElement of tabsContainer.querySelectorAll<HTMLElement>(
-    "[data-panel-tab-id]"
-  )) {
-    if (contentElement.dataset.panelTabId === panelId) {
-      return contentElement;
-    }
-  }
-  return null;
-}
-
-function revealPanelTab(
-  rootElement: HTMLElement | null,
-  panelId: string
-): void {
-  const tabsContainer = closestTabsContainer(rootElement);
-  const tabContentElement = tabsContainer
-    ? findTabContentElement(tabsContainer, panelId)
-    : null;
-  if (tabContentElement) {
-    revealDockviewTabElement(tabContentElement);
-  }
 }
 
 function isOutsideVisibleTabStrip(tabRect: DOMRect, containerRect: DOMRect) {
@@ -222,16 +195,19 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
         .filter((panel): panel is HeaderPanel => Boolean(panel)),
     [overflowPanelIds, props.panels]
   );
-  const activePanelById = useMemo(
-    () => new Map(props.panels.map((panel) => [panel.id, panel])),
-    [props.panels]
-  );
   const activatePanel = useCallback(
     (panelId: string) => {
-      activePanelById.get(panelId)?.api.setActive();
-      revealPanelTab(rootRef.current, panelId);
+      const revealRoot =
+        rootRef.current?.closest<HTMLElement>(
+          ".dv-tabs-and-actions-container"
+        ) ?? undefined;
+      activateWorkspacePanel({ panels: props.panels }, panelId, {
+        kindOfComponent: panelKindOf,
+        reveal: "always",
+        ...(revealRoot && { root: revealRoot }),
+      });
     },
-    [activePanelById, rootRef]
+    [props.panels, rootRef]
   );
 
   useEffect(() => {

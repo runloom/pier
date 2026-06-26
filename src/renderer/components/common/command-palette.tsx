@@ -98,7 +98,7 @@ function quickPickItems(quickPick: QuickPick): readonly QuickPickItem[] {
   if (quickPick.sections && quickPick.sections.length > 0) {
     return quickPick.sections.flatMap((section) => section.items);
   }
-  return quickPick.items;
+  return quickPick.items ?? [];
 }
 
 /**
@@ -410,6 +410,7 @@ function QuickPickView({
 }): ReactNode {
   const renderItem = (item: QuickPickItem) => (
     <CommandItem
+      aria-current={item.checked === true ? "true" : undefined}
       data-checked={item.checked === true}
       data-disabled={item.disabled === true}
       key={item.id}
@@ -459,7 +460,7 @@ function QuickPickView({
               {section.items.map(renderItem)}
             </CommandGroup>
           ))
-        : quickPick.items.map(renderItem)}
+        : (quickPick.items ?? []).map(renderItem)}
     </div>
   );
 }

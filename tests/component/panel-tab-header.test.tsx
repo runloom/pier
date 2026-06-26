@@ -59,7 +59,7 @@ describe("PanelTabHeader", () => {
     ).not.toBeNull();
   });
 
-  it("reveals its own dockview tab when it becomes active", async () => {
+  it("does not reveal its own dockview tab when it becomes active", async () => {
     let activeChange: ActiveChangeHandler | null = null;
     const tabsContainer = document.createElement("div");
     tabsContainer.className = "dv-tabs-container";
@@ -84,7 +84,7 @@ describe("PanelTabHeader", () => {
       await new Promise(requestAnimationFrame);
     });
 
-    expect(tabsContainer.scrollLeft).toBe(68);
+    expect(tabsContainer.scrollLeft).toBe(0);
     tabsContainer.remove();
   });
 

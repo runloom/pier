@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { pierCommandPlacementSchema } from "./commands.ts";
+import {
+  type PierCommandErrorCode,
+  pierCommandPlacementSchema,
+} from "./commands.ts";
 
 export const rendererCommandSchema = z.discriminatedUnion("type", [
   z.object({
@@ -61,6 +64,7 @@ export type RendererCommandResult =
     }
   | {
       error: {
+        code?: PierCommandErrorCode | undefined;
         message: string;
       };
       ok: false;

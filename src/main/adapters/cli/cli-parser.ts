@@ -27,7 +27,14 @@ function optionValue(
   name: string
 ): string | undefined {
   const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
+  if (index < 0) {
+    return;
+  }
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`missing required value for ${name}`);
+  }
+  return value;
 }
 
 function stripOptions(args: readonly string[]): string[] {

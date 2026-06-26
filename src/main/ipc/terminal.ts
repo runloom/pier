@@ -13,7 +13,6 @@ import {
 } from "../devtools.ts";
 import {
   archiveTerminalPanelSession,
-  listRecentTerminalPanelSessions,
   readTerminalPanelSession,
   removeTerminalPanelSession,
   updateTerminalPanelCwd,
@@ -269,6 +268,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           args.font.size,
           cwd
         );
+        if (ok && cwd) {
+          try {
+            await updateTerminalPanelCwd(sessionScope, args.panelId, cwd);
+          } catch (err) {
+            console.error("[pier-cwd-initial-persist] failed:", err);
+          }
+        }
         return ok
           ? { ok: true }
           : { ok: false, error: "createTerminal returned false" };
@@ -294,21 +300,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       );
     }
   );
-
-  ipcMain.handle("pier:terminal:list-recent-sessions", async (event) => {
-    const win = windowFromWebContents(event.sender);
-    if (!win) {
-      return [];
-    }
-    const recordId = terminalSessionScopeFor(win);
-    const sessions = await listRecentTerminalPanelSessions(recordId);
-    return sessions.map((session) => ({
-      ...session,
-      recordId,
-      windowAlive: true,
-      windowId: stableWindowIdFor(win),
-    }));
-  });
 
   // Renderer → addon 单参数透传. addon 可能未加载, handler 仍注册但 noop.
   const panelIdRelays = [

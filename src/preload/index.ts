@@ -161,8 +161,6 @@ const terminalApi: TerminalAPI = {
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
-  listRecentSessions: () =>
-    ipcRenderer.invoke("pier:terminal:list-recent-sessions"),
   openSession: (args) => ipcRenderer.invoke("pier:terminal:open-session", args),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),

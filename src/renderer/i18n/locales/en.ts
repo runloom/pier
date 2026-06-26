@@ -123,6 +123,7 @@ export const en = {
       },
       badge: {
         closed: "Closed",
+        error: "Error",
         group: "Group {{group}}",
         panel: "Panel {{index}}",
         tab: "Tab {{tab}}/{{total}}",
@@ -138,6 +139,7 @@ export const en = {
       taskPlaceholderDetail: "This version only adds the entry point",
       section: {
         currentWindow: "Current Window",
+        errors: "Errors",
         group: "Group {{group}}",
         recentClosed: "Recently Closed",
         window: "Window {{window}}",

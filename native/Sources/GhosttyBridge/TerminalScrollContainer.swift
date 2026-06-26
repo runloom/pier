@@ -84,7 +84,11 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         self.terminalView = terminalView
         self.panelId = panelId
         self.browserWindowId = browserWindowId
-        scrollbarView = TerminalScrollbarOverlayView(terminalView: terminalView)
+        scrollbarView = TerminalScrollbarOverlayView(
+            terminalView: terminalView,
+            panelId: panelId,
+            browserWindowId: browserWindowId
+        )
         super.init(frame: frameRect)
 
         wantsLayer = true
@@ -152,6 +156,11 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         scrollbarView.update(state)
     }
 
+    private func activateFocusIntent() {
+        GhosttyBridgeImpl.shared.focus(panelId: panelId)
+        Self.forwardFocusRequestCallback?(browserWindowId, panelId)
+    }
+
     override func scrollWheel(with event: NSEvent) {
         if hitTarget(for: event) == .terminal {
             terminalView.scrollWheel(with: event)
@@ -166,7 +175,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
             return
         }
         capturedTerminalMouseButton = .left
-        Self.forwardFocusRequestCallback?(browserWindowId, panelId)
+        activateFocusIntent()
         terminalView.mouseDown(with: event)
     }
 
@@ -235,6 +244,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
             return
         }
         capturedTerminalMouseButton = .other
+        activateFocusIntent()
         terminalView.otherMouseDown(with: event)
     }
 
@@ -284,6 +294,8 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
 @MainActor
 private final class TerminalScrollbarOverlayView: NSView {
     weak var terminalView: TerminalView?
+    private let panelId: String
+    private let browserWindowId: Int
 
     var thumbColor: NSColor = .white {
         didSet {
@@ -312,8 +324,10 @@ private final class TerminalScrollbarOverlayView: NSView {
         return state.total > state.length && state.length > 0
     }
 
-    init(terminalView: TerminalView) {
+    init(terminalView: TerminalView, panelId: String, browserWindowId: Int) {
         self.terminalView = terminalView
+        self.panelId = panelId
+        self.browserWindowId = browserWindowId
         super.init(frame: .zero)
         isHidden = true
         wantsLayer = true
@@ -382,7 +396,8 @@ private final class TerminalScrollbarOverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        terminalView?.window?.makeFirstResponder(terminalView)
+        GhosttyBridgeImpl.shared.focus(panelId: panelId)
+        TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId)
         guard isScrollable, let thumbRect else { return }
 
         let local = convert(event.locationInWindow, from: nil)

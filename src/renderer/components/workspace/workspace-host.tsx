@@ -1,3 +1,4 @@
+import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import {
   DockviewReact,
@@ -5,8 +6,10 @@ import {
   type DockviewTheme,
   type SerializedDockview,
 } from "dockview-react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import "dockview-react/dist/styles/dockview.css";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import { flushTerminalLayoutFramesTrailing } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
@@ -60,6 +63,22 @@ function applyDefaultLayout(api: DockviewReadyEvent["api"]): void {
 
 const SAVE_DEBOUNCE_MS = 500;
 
+class RendererCommandExecutionError extends Error {
+  readonly code: PierCommandErrorCode;
+
+  constructor(code: PierCommandErrorCode, message: string) {
+    super(message);
+    this.name = "RendererCommandExecutionError";
+    this.code = code;
+  }
+}
+
+function rendererCommandErrorCode(
+  code: "kind_mismatch" | "not_found"
+): PierCommandErrorCode {
+  return code === "kind_mismatch" ? "invalid_command" : code;
+}
+
 function panelSnapshots() {
   const api = useWorkspaceStore.getState().api;
   if (!api) {
@@ -76,15 +95,17 @@ function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
   if (!api) {
     throw new Error("workspace api not ready");
   }
-  const panel = api.panels.find((candidate) => candidate.id === panelId);
-  if (!panel) {
-    throw new Error(`panel not found: ${panelId}`);
+  const result = activateWorkspacePanel(api, panelId, {
+    ...(expectedKind && { expectedKind }),
+    kindOfComponent: panelKindOf,
+    reveal: "always",
+  });
+  if (!result.ok) {
+    throw new RendererCommandExecutionError(
+      rendererCommandErrorCode(result.code),
+      result.message
+    );
   }
-  const kind = panelKindOf(panel.view.contentComponent);
-  if (expectedKind && kind !== expectedKind) {
-    throw new Error(`panel is not ${expectedKind}: ${panelId}`);
-  }
-  panel.api.setActive();
 }
 
 function runRendererCommand(envelope: RendererCommandEnvelope): void {
@@ -170,6 +191,9 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
   } catch (error) {
     window.pier.rendererCommand.resolve({
       error: {
+        ...(error instanceof RendererCommandExecutionError
+          ? { code: error.code }
+          : {}),
         message: error instanceof Error ? error.message : String(error),
       },
       ok: false,
@@ -180,6 +204,14 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
 
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setDockviewTabRevealRoot(rootRef.current);
+    return () => {
+      setDockviewTabRevealRoot(null);
+    };
+  }, []);
 
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
@@ -303,7 +335,14 @@ export function WorkspaceHost() {
       });
 
       window.pier?.terminal?.onFocusRequest?.((req) => {
-        if (activateTerminalPanelFromFocusRequest(event.api, req.panelId)) {
+        const result = activateTerminalPanelFromFocusRequest(
+          event.api,
+          req.panelId,
+          {
+            kindOfComponent: panelKindOf,
+          }
+        );
+        if (result.ok) {
           window.pier?.terminal?.setActivePanelKind?.("terminal", req.panelId);
         }
       });
@@ -368,7 +407,7 @@ export function WorkspaceHost() {
   );
 
   return (
-    <div className="h-full w-full overflow-hidden">
+    <div className="h-full w-full overflow-hidden" ref={rootRef}>
       <DockviewReact
         components={panelComponents}
         defaultTabComponent={PanelTabHeader}

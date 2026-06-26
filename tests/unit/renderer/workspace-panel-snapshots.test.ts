@@ -60,6 +60,7 @@ describe("buildWorkspacePanelSnapshots", () => {
         kind: "terminal",
         tabCount: 1,
         tabIndex: 0,
+        terminalTitle: "Claude Code",
         title: "bay",
       },
     ]);

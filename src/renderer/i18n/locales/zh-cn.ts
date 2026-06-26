@@ -120,6 +120,7 @@ export const zhCN = {
       },
       badge: {
         closed: "已关闭",
+        error: "错误",
         group: "第 {{group}} 组",
         panel: "第 {{index}} 个面板",
         tab: "标签 {{tab}}/{{total}}",
@@ -135,6 +136,7 @@ export const zhCN = {
       taskPlaceholderDetail: "这版只放入口，暂不接入真实 task 数据",
       section: {
         currentWindow: "当前窗口",
+        errors: "错误",
         group: "第 {{group}} 组",
         recentClosed: "最近关闭",
         window: "窗口 {{window}}",
