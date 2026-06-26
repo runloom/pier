@@ -7,6 +7,7 @@ import {
   readRegisteredTerminalAnchorFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { resetTerminalPresentationReconcilerForTests } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("dockview-react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("dockview-react")>();
@@ -155,6 +156,7 @@ describe("WorkspaceHost", () => {
     resetTerminalPresentationReconcilerForTests();
     installPierWindowApi();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue(null);
+    useWorkspaceStore.setState({ api: null });
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       cb(performance.now());
       return 1;
@@ -166,6 +168,7 @@ describe("WorkspaceHost", () => {
     Reflect.deleteProperty(window, "pier");
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    useWorkspaceStore.setState({ api: null });
   });
 
   it("disables dockview overflow and uses the workspace shadcn header actions", () => {
@@ -498,5 +501,66 @@ describe("WorkspaceHost", () => {
     );
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
+  });
+
+  it("creates a terminal panel when main sends the native menu request", () => {
+    const bridge: { listener?: () => void } = {};
+    const addPanel = vi.fn();
+    const onNewTerminalRequest = vi.fn((cb: () => void) => {
+      bridge.listener = cb;
+      return vi.fn();
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        getWindowContext: vi.fn(() => new Promise(() => undefined)),
+        readyToShow: vi.fn(),
+        rendererCommand: {
+          onCommand: vi.fn(),
+          resolve: vi.fn(),
+        },
+        terminal: {
+          onFocusRequest: vi.fn(),
+          reconcile: vi.fn(),
+          setActivePanelKind: vi.fn(),
+        },
+        workspace: {
+          clearLayout: vi.fn(),
+          loadLayout: vi.fn(),
+          onNewTerminalRequest,
+          saveLayout: vi.fn(),
+        },
+      } as never,
+    });
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.calls.at(-1)?.[0];
+    if (!props) {
+      throw new Error("DockviewReact props missing");
+    }
+    const api = {
+      activeGroup: null,
+      activePanel: null,
+      addPanel,
+      onDidActivePanelChange: vi.fn(),
+      onDidLayoutChange: vi.fn(),
+      onDidMaximizedGroupChange: vi.fn(),
+      panels: [],
+      toJSON: vi.fn(() => ({ grid: { root: undefined } })),
+      totalPanels: 0,
+    } as unknown as DockviewReadyEvent["api"];
+
+    act(() => {
+      props.onReady?.({ api } as DockviewReadyEvent);
+      bridge.listener?.();
+    });
+
+    expect(onNewTerminalRequest).toHaveBeenCalledOnce();
+    expect(addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: "terminal",
+        title: "Terminal",
+      })
+    );
   });
 });

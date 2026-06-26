@@ -1,4 +1,5 @@
 import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
@@ -17,7 +18,7 @@ interface WorkspaceState {
   }) => void;
   addTab: () => void;
   addTerminal: (opts?: {
-    path?: string;
+    context?: PanelContext;
     placement?: PierCommandPlacement;
     referenceGroup?: WorkspaceGroupRef;
   }) => string | null;
@@ -37,28 +38,23 @@ interface WorkspaceState {
 }
 
 interface TerminalPanelParams {
-  cwd: string;
+  context: PanelContext;
 }
 
 type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
 
-function isRestorableCwd(value: string | undefined): value is string {
-  return typeof value === "string" && value.trim() === value && value !== "";
-}
-
-function cwdParams(cwd: string | undefined): TerminalPanelParams | undefined {
-  return isRestorableCwd(cwd) ? { cwd } : undefined;
-}
-
-function terminalPanelCwd(panelId: string | undefined): string | undefined {
+function terminalPanelContext(
+  panelId: string | undefined
+): PanelContext | undefined {
   if (!panelId) {
     return;
   }
-  const descriptor = usePanelDescriptorStore.getState().descriptors[panelId];
-  return isRestorableCwd(descriptor?.path) ? descriptor.path : undefined;
+  return usePanelDescriptorStore.getState().descriptors[panelId]?.context;
 }
 
-function inheritedActiveTerminalCwd(api: DockviewApi): string | undefined {
+function inheritedActiveTerminalContext(
+  api: DockviewApi
+): PanelContext | undefined {
   if (
     useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
     "activeTerminal"
@@ -69,7 +65,7 @@ function inheritedActiveTerminalCwd(api: DockviewApi): string | undefined {
   if (activePanel?.view.contentComponent !== "terminal") {
     return;
   }
-  return terminalPanelCwd(activePanel.id);
+  return terminalPanelContext(activePanel.id);
 }
 
 function uniquePanelId(api: DockviewApi, prefix: string): string {
@@ -173,12 +169,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const fallbackPosition = activeGroup
       ? { referenceGroup: activeGroup, direction: "within" as const }
       : { direction: "right" as const };
-    const cwd = opts?.path ?? inheritedActiveTerminalCwd(api);
-    const params = cwdParams(cwd);
+    const inheritedContext = opts?.context
+      ? undefined
+      : inheritedActiveTerminalContext(api);
+    const context = opts?.context ?? inheritedContext;
+    const params = context ? { context } : undefined;
+    const titlePath = context?.cwd;
     api.addPanel({
       id,
       component: "terminal",
-      title: opts?.path ? `Terminal: ${opts.path}` : "Terminal",
+      title: titlePath ? `Terminal: ${titlePath}` : "Terminal",
       ...(params && { params }),
       position: position ?? fallbackPosition,
     });
@@ -300,7 +300,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       component === "terminal" &&
       useTerminalPreferencesStore.getState().terminalNewCwdPolicy ===
         "activeTerminal"
-        ? cwdParams(terminalPanelCwd(panel.id))
+        ? (() => {
+            const context = terminalPanelContext(panel.id);
+            return context ? { context } : undefined;
+          })()
         : undefined;
     api.addPanel({
       id: newId,

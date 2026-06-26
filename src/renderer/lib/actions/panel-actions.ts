@@ -35,7 +35,7 @@ export function registerPanelActions(): () => void {
       id: "pier.panel.closeActive",
       metadata: { group: "9_close" },
       surfaces: [],
-      title: () => "Close Active Panel",
+      title: () => i18next.t("commandPalette.action.closeActivePanel"),
     })
   );
 
@@ -47,7 +47,7 @@ export function registerPanelActions(): () => void {
       id: "pier.panel.newTab",
       metadata: { group: "1_new" },
       surfaces: [],
-      title: () => "New Tab",
+      title: () => i18next.t("commandPalette.action.newTab"),
     })
   );
 
@@ -76,7 +76,7 @@ export function registerPanelActions(): () => void {
       id: "pier.window.newWindow",
       metadata: { group: "1_new" },
       surfaces: [],
-      title: () => "New Window",
+      title: () => i18next.t("commandPalette.action.newWindow"),
     })
   );
 
@@ -174,7 +174,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 1,
         submenu: () => i18next.t("contextMenu.submenu.split"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.splitRight"),
     })
   );
@@ -197,7 +197,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 2,
         submenu: () => i18next.t("contextMenu.submenu.split"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.splitDown"),
     })
   );
@@ -220,7 +220,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 3,
         submenu: () => i18next.t("contextMenu.submenu.split"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.splitLeft"),
     })
   );
@@ -243,7 +243,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 4,
         submenu: () => i18next.t("contextMenu.submenu.split"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.splitUp"),
     })
   );
@@ -264,7 +264,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 1,
         submenu: () => i18next.t("contextMenu.submenu.focus"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.focusRight"),
     })
   );
@@ -285,7 +285,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 2,
         submenu: () => i18next.t("contextMenu.submenu.focus"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.focusDown"),
     })
   );
@@ -306,7 +306,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 3,
         submenu: () => i18next.t("contextMenu.submenu.focus"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.focusLeft"),
     })
   );
@@ -327,7 +327,7 @@ export function registerPanelActions(): () => void {
         sortOrder: 4,
         submenu: () => i18next.t("contextMenu.submenu.focus"),
       },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+      surfaces: ["terminal/content"],
       title: () => i18next.t("contextMenu.action.focusUp"),
     })
   );

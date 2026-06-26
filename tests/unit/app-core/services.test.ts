@@ -17,6 +17,7 @@ const basePreferences: ProjectPreferences = {
   terminalScrollbackMb: 64,
   theme: "system",
   uiFontFamily: "",
+  userKeymap: [],
 };
 
 describe("createPreferencesService", () => {
@@ -75,6 +76,34 @@ describe("createPreferencesService", () => {
         terminalScrollbackMb: 128,
       },
     ]);
+  });
+
+  it("更新用户快捷键时不会被服务层过滤", async () => {
+    const patches: Partial<ProjectPreferences>[] = [];
+    const userKeymap = [
+      {
+        commandId: "-pier.panel.newTerminal",
+        keys: "",
+        scope: "global" as const,
+      },
+      {
+        commandId: "pier.panel.newTerminal",
+        keys: "Mod+Shift+KeyX",
+        scope: "global" as const,
+      },
+    ];
+    const service = createPreferencesService({
+      readPreferences: async () => basePreferences,
+      updatePreferences: (patch) => {
+        patches.push(patch);
+        return Promise.resolve({ ...basePreferences, ...patch });
+      },
+    });
+
+    await expect(service.update({ userKeymap })).resolves.toMatchObject({
+      userKeymap,
+    });
+    expect(patches).toEqual([{ userKeymap }]);
   });
 });
 

@@ -3,6 +3,7 @@ import {
   type PierCommandErrorCode,
   pierCommandPlacementSchema,
 } from "./commands.ts";
+import { panelContextSchema } from "./panel.ts";
 
 export const rendererCommandSchema = z.discriminatedUnion("type", [
   z.object({
@@ -16,26 +17,9 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   z.object({
-    type: z.literal("terminal.list"),
-    windowId: z.string().min(1).optional(),
-  }),
-  z.object({
-    type: z.literal("terminal.open"),
-    cwd: z.string().min(1).optional(),
+    type: z.literal("panel.open"),
+    context: panelContextSchema,
     focus: z.boolean().optional(),
-    placement: pierCommandPlacementSchema.optional(),
-    windowId: z.string().min(1).optional(),
-  }),
-  z.object({
-    type: z.literal("terminal.focus"),
-    focus: z.boolean().optional(),
-    panelId: z.string().min(1),
-    windowId: z.string().min(1).optional(),
-  }),
-  z.object({
-    type: z.literal("workspace.open"),
-    focus: z.boolean().optional(),
-    path: z.string().min(1),
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),
   }),

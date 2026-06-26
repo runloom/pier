@@ -85,12 +85,24 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       },
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
-      archiveTerminalPanelSession: vi.fn(async () => undefined),
-      listRecentTerminalPanelSessions: vi.fn(async () => []),
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
-      updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/state/panel-context-state.ts", () => ({
+      recordRecentPanelContext: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/services/panel-context-resolver.ts", () => ({
+      resolvePanelContextForPath: vi.fn(async (path: string) => ({
+        contextId: `ctx:${path}`,
+        cwd: path,
+        openedPath: path,
+        projectRoot: path,
+        source: "panel",
+        updatedAt: 1,
+        worktreeKey: path,
+      })),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) =>
@@ -172,8 +184,22 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
-      updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/state/panel-context-state.ts", () => ({
+      recordRecentPanelContext: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/services/panel-context-resolver.ts", () => ({
+      resolvePanelContextForPath: vi.fn(async (path: string) => ({
+        contextId: `ctx:${path}`,
+        cwd: path,
+        openedPath: path,
+        projectRoot: path,
+        source: "panel",
+        updatedAt: 1,
+        worktreeKey: path,
+      })),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) => idMap.get(id) ?? null),
@@ -333,6 +359,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     pwdFwd?.(win.id, "5::terminal-4", "/some/path");
     titleFwd?.(win.id, "5::terminal-5", "My Terminal");
 
+    await new Promise((resolve) => setImmediate(resolve));
+
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:request-context-menu",
       { panelId: "terminal-2", x: 100, y: 200 }
@@ -343,7 +371,10 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     );
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:cwd-change",
-      { panelId: "terminal-4", cwd: "/some/path" }
+      {
+        context: expect.objectContaining({ cwd: "/some/path" }),
+        panelId: "terminal-4",
+      }
     );
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:title-change",

@@ -4,6 +4,7 @@ import type {
   MenuPopupResult,
   MenuTemplate,
 } from "@shared/contracts/menu.ts";
+import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type {
   RendererCommandEnvelope,
   RendererCommandResult,
@@ -30,19 +31,7 @@ export interface WindowInfo {
   recordId: string;
 }
 
-interface PreferencesSnapshot {
-  language: string;
-  monoFontFamily: string;
-  monoFontSize: number;
-  stylePresetId: string;
-  terminalCursorBlink: boolean;
-  terminalCursorStyle: "block" | "bar" | "underline";
-  terminalNewCwdPolicy: "activeTerminal" | "shellDefault";
-  terminalPasteProtection: boolean;
-  terminalScrollbackMb: number;
-  theme: string;
-  uiFontFamily: string;
-}
+export type PreferencesSnapshot = ProjectPreferences;
 
 export interface PierPreferencesAPI {
   /**
@@ -65,6 +54,7 @@ export interface PierThemeAPI {
 export interface PierWorkspaceAPI {
   clearLayout: (recordId: string) => Promise<void>;
   loadLayout: (recordId: string) => Promise<unknown | null>;
+  onNewTerminalRequest: (cb: () => void) => () => void;
   saveLayout: (layout: unknown, recordId: string) => Promise<void>;
 }
 
@@ -79,6 +69,10 @@ export interface PierCommandPaletteMruAPI {
   onChange: (handler: (state: MruState) => void) => () => void;
   read: () => Promise<MruState>;
   recordUse: (actionId: string) => void;
+}
+
+export interface PierCommandPaletteAPI {
+  onToggleRequest: (cb: () => void) => () => void;
 }
 
 /**
@@ -109,6 +103,7 @@ export interface WindowLayoutPulse {
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
+  commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<WindowCreateResult>;
   focusWindow: (windowId: string) => Promise<void>;
@@ -162,11 +157,7 @@ const terminalApi: TerminalAPI = {
   debugSnapshot: (args) =>
     ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
-  focusSession: (args) =>
-    ipcRenderer.invoke("pier:terminal:focus-session", args),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
-  listSessions: (args) =>
-    ipcRenderer.invoke("pier:terminal:list-sessions", args),
   reconcile: (activeIds) =>
     ipcRenderer.send("pier:terminal:reconcile", activeIds),
   onContextMenuRequest: (cb) =>
@@ -200,11 +191,14 @@ const terminalApi: TerminalAPI = {
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
-  openSession: (args) => ipcRenderer.invoke("pier:terminal:open-session", args),
+  performOperation: (panelId, operation) =>
+    ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
+  setAppShortcutKeys: (keys) =>
+    ipcRenderer.send("pier:terminal:set-app-shortcut-keys", keys),
   setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),
   setFont: (panelId, font) =>
     ipcRenderer.send("pier:terminal:set-font", panelId, font),
@@ -227,6 +221,8 @@ const workspaceApi: PierWorkspaceAPI = {
     ipcRenderer.invoke("pier:workspace:clear-layout", recordId),
   loadLayout: (recordId) =>
     ipcRenderer.invoke("pier:workspace:load-layout", recordId),
+  onNewTerminalRequest: (cb) =>
+    subscribeIpc(PIER_BROADCAST.NEW_TERMINAL_REQUEST, cb),
   saveLayout: (layout, recordId) =>
     ipcRenderer.invoke("pier:workspace:save-layout", layout, recordId),
 };
@@ -253,6 +249,11 @@ const commandPaletteMruApi: PierCommandPaletteMruAPI = {
   },
 };
 
+const commandPaletteApi: PierCommandPaletteAPI = {
+  onToggleRequest: (cb) =>
+    subscribeIpc(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST, cb),
+};
+
 const menuApi: PierMenuAPI = {
   popup: (template, options) =>
     ipcRenderer.invoke("pier:menu:popup", template, options),
@@ -270,6 +271,7 @@ const api: PierWindowAPI = {
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:close", windowId),
+  commandPalette: commandPaletteApi,
   commandPaletteMru: commandPaletteMruApi,
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>

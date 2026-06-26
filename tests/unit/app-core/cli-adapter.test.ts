@@ -85,19 +85,20 @@ describe("createPierCliCommandClient", () => {
 });
 
 describe("parsePierCliArgs", () => {
-  it("解析 open path", () => {
+  it("解析 open path 为 panel.open", () => {
     expect(
       parsePierCliArgs(
         ["open", ".", "--window", "main", "--split", "right", "--json"],
         {
           clientId: "cli-1",
+          cwd: "/Users/xyz/ABC/pier",
           requestId: "req-open",
         }
       ).envelope.command
     ).toEqual({
-      path: ".",
+      path: "/Users/xyz/ABC/pier",
       placement: "split-right",
-      type: "workspace.open",
+      type: "panel.open",
       windowId: "main",
     });
   });
@@ -106,6 +107,7 @@ describe("parsePierCliArgs", () => {
     expect(
       parsePierCliArgs(["open", "."], {
         clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
         requestId: "req-open",
       }).json
     ).toBe(false);
@@ -115,73 +117,29 @@ describe("parsePierCliArgs", () => {
     expect(
       parsePierCliArgs(["open", ".", "--no-focus"], {
         clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
         requestId: "req-open-background",
       }).envelope.command
     ).toEqual({
       focus: false,
-      path: ".",
-      type: "workspace.open",
+      path: "/Users/xyz/ABC/pier",
+      type: "panel.open",
     });
   });
 
-  it("解析 status", () => {
-    expect(
-      parsePierCliArgs(["status", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-0",
-      }).envelope.command
-    ).toEqual({ type: "app.status" });
-  });
-
-  it("解析 windows list", () => {
+  it("解析 windows 和 panels 命令", () => {
     expect(
       parsePierCliArgs(["windows", "list", "--json"], {
         clientId: "cli-1",
         requestId: "req-1",
-      })
-    ).toEqual({
-      envelope: {
-        clientId: "cli-1",
-        command: { type: "window.list" },
-        protocolVersion: 1,
-        requestId: "req-1",
-      },
-      json: true,
-    });
-  });
-
-  it("解析 windows focus", () => {
-    expect(
-      parsePierCliArgs(["windows", "focus", "main", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-2",
       }).envelope.command
-    ).toEqual({ type: "window.focus", windowId: "main" });
-  });
-
-  it("解析 panels list", () => {
+    ).toEqual({ type: "window.list" });
     expect(
       parsePierCliArgs(["panels", "list", "--window", "main", "--json"], {
         clientId: "cli-1",
         requestId: "req-3",
       }).envelope.command
     ).toEqual({ type: "panel.list", windowId: "main" });
-  });
-
-  it("解析 panels focus", () => {
-    expect(
-      parsePierCliArgs(["panels", "focus", "panel-1", "--window", "main"], {
-        clientId: "cli-1",
-        requestId: "req-panel-focus",
-      }).envelope.command
-    ).toEqual({
-      panelId: "panel-1",
-      type: "panel.focus",
-      windowId: "main",
-    });
-  });
-
-  it("解析 panels focus --no-focus", () => {
     expect(
       parsePierCliArgs(["panels", "focus", "panel-1", "--no-focus"], {
         clientId: "cli-1",
@@ -194,84 +152,6 @@ describe("parsePierCliArgs", () => {
     });
   });
 
-  it("解析 terminals open", () => {
-    expect(
-      parsePierCliArgs(["terminals", "open", "--window", "main", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-terminal-open",
-      }).envelope.command
-    ).toEqual({ type: "terminal.open", windowId: "main" });
-  });
-
-  it("解析 terminals open --cwd", () => {
-    expect(
-      parsePierCliArgs(
-        ["terminals", "open", "--cwd", "/Users/xyz/ABC/pier", "--json"],
-        {
-          clientId: "cli-1",
-          requestId: "req-terminal-open-cwd",
-        }
-      ).envelope.command
-    ).toEqual({
-      cwd: "/Users/xyz/ABC/pier",
-      type: "terminal.open",
-    });
-  });
-
-  it("解析 terminals open --no-focus", () => {
-    expect(
-      parsePierCliArgs(
-        ["terminals", "open", "--window", "main", "--no-focus"],
-        {
-          clientId: "cli-1",
-          requestId: "req-terminal-background",
-        }
-      ).envelope.command
-    ).toEqual({
-      focus: false,
-      type: "terminal.open",
-      windowId: "main",
-    });
-  });
-
-  it("解析 terminals list", () => {
-    expect(
-      parsePierCliArgs(["terminals", "list", "--window", "main", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-terminal-list",
-      }).envelope.command
-    ).toEqual({ type: "terminal.list", windowId: "main" });
-  });
-
-  it("解析 terminals focus", () => {
-    expect(
-      parsePierCliArgs(
-        ["terminals", "focus", "terminal-1", "--window", "main"],
-        {
-          clientId: "cli-1",
-          requestId: "req-terminal-focus",
-        }
-      ).envelope.command
-    ).toEqual({
-      panelId: "terminal-1",
-      type: "terminal.focus",
-      windowId: "main",
-    });
-  });
-
-  it("解析 terminals focus --no-focus", () => {
-    expect(
-      parsePierCliArgs(["terminals", "focus", "terminal-1", "--no-focus"], {
-        clientId: "cli-1",
-        requestId: "req-terminal-focus-background",
-      }).envelope.command
-    ).toEqual({
-      focus: false,
-      panelId: "terminal-1",
-      type: "terminal.focus",
-    });
-  });
-
   it("解析 preferences read", () => {
     expect(
       parsePierCliArgs(["preferences", "read", "--json"], {
@@ -281,28 +161,29 @@ describe("parsePierCliArgs", () => {
     ).toEqual({ type: "preferences.read" });
   });
 
-  it("拒绝未知命令", () => {
+  it("拒绝 terminals open --cwd 旧入口", () => {
+    expect(() =>
+      parsePierCliArgs(["terminals", "open", "--cwd", "."], {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-terminal-open-cwd",
+      })
+    ).toThrow("unknown pier CLI command");
+  });
+
+  it("拒绝未知命令和缺少值的 CLI 选项", () => {
     expect(() =>
       parsePierCliArgs(["windows", "delete", "main"], {
         clientId: "cli-1",
         requestId: "req-5",
       })
     ).toThrow("unknown pier CLI command");
-  });
 
-  it("拒绝缺少值的 CLI 选项", () => {
     expect(() =>
-      parsePierCliArgs(["terminals", "list", "--window", "--json"], {
+      parsePierCliArgs(["panels", "list", "--window", "--json"], {
         clientId: "cli-1",
         requestId: "req-missing-window",
       })
     ).toThrow("missing required value for --window");
-
-    expect(() =>
-      parsePierCliArgs(["terminals", "open", "--cwd"], {
-        clientId: "cli-1",
-        requestId: "req-missing-cwd",
-      })
-    ).toThrow("missing required value for --cwd");
   });
 });

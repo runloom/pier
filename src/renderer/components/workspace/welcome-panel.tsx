@@ -3,7 +3,9 @@ import { House } from "lucide-react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 
 export function WelcomePanel(props: IDockviewPanelProps) {
-  usePanelDescriptor(props.api, { short: "Welcome", long: "Welcome" });
+  usePanelDescriptor(props.api, {
+    display: { long: "Welcome", short: "Welcome" },
+  });
   return (
     <div className="flex h-full items-center justify-center bg-background p-6">
       <div className="text-center">

@@ -71,7 +71,7 @@ final class EventRouterView: NSView {
     /// 用它告诉 main 这个 key event 来自哪个 window.
     private var browserWindowId: Int = -1
 
-    private static let terminalAppShortcutKeys: Set<String> = [
+    private static var terminalAppShortcutKeys: Set<String> = [
         "Ctrl+Shift+ArrowDown",
         "Ctrl+Shift+ArrowLeft",
         "Ctrl+Shift+ArrowRight",
@@ -87,6 +87,10 @@ final class EventRouterView: NSView {
         "Mod+Shift+KeyD",
         "Mod+Shift+KeyP",
     ]
+
+    static func setTerminalAppShortcutKeys(_ keys: Set<String>) {
+        terminalAppShortcutKeys = keys
+    }
 
     override var isOpaque: Bool { false }
     override var isFlipped: Bool { true }  // 对齐 Electron contentView 的 top-left 坐标系
@@ -224,16 +228,10 @@ final class EventRouterView: NSView {
         let state = GhosttyBridgeImpl.shared.stateFor(window: window)
         guard state.inTerminalMode else { return event }
 
-        // Terminal mode: 拦截 Cmd+key 或 Ctrl+Shift+key forward 给 web (路径 2 IPC),
-        // 其他 pass through 给 Ghostty. Ctrl+Shift+ 是为 web 层 focus 方向导航等 binding
-        // 留的口子 — 单 Ctrl 留给 Ghostty 不动 (shell Ctrl+C 等).
+        // Terminal mode: 只把运行时 allowlist 内的 Pier app 快捷键 forward 给 web
+        // (路径 2 IPC), 其他组合全部 pass through 给 Ghostty.
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let isCmd = mods.contains(.command)
-        let isCtrlShift = mods.contains(.control) && mods.contains(.shift)
-
-        guard isCmd || isCtrlShift else {
-            return passThroughToTerminal(window: window, event: event)
-        }
 
         // macOS menu reserved keys (Cmd+Q/Cmd+H/Cmd+M/Cmd+Comma 等 role-bound items)
         // 必须先让 NSApp.mainMenu 处理. performKeyEquivalent 命中 menu item 后会调
@@ -1175,6 +1173,11 @@ final class GhosttyBridgeImpl {
         }
     }
 
+    func performBindingAction(panelId: String, action: String) -> Bool {
+        guard let term = terminals[panelId] else { return false }
+        return term.terminalView.performBindingAction(action)
+    }
+
     /// 孤儿清理:关掉该 window 下不在 activeIds 集合中的 terminal NSView. 配合
     /// C 方案 reload 零销毁使用 — renderer 重建后调 reconcile 报告"我现在还需要
     /// 这些 panelId", main 转给这里, 把 reload 前 layout 里有但新 layout 没有
@@ -1562,6 +1565,19 @@ public func ghosttyBridgeFocus(_ panelId: UnsafePointer<CChar>) {
     }
 }
 
+@_cdecl("ghostty_bridge_perform_binding_action")
+public func ghosttyBridgePerformBindingAction(
+    _ panelId: UnsafePointer<CChar>,
+    _ action: UnsafePointer<CChar>
+) -> Bool {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.performBindingAction(
+            panelId: String(cString: panelId),
+            action: String(cString: action)
+        )
+    }
+}
+
 @_cdecl("ghostty_bridge_close_all")
 public func ghosttyBridgeCloseAll(_ nsWindowPtr: UnsafeMutableRawPointer) {
     MainActor.assumeIsolated {
@@ -1635,6 +1651,24 @@ public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallbac
         } else {
             EventRouterView.forwardCmdKeyCallback = nil
         }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_app_shortcut_keys")
+public func ghosttyBridgeSetAppShortcutKeys(
+    _ keysPtr: UnsafePointer<UnsafePointer<CChar>?>?,
+    _ count: Int
+) {
+    MainActor.assumeIsolated {
+        var keys: Set<String> = []
+        if let keysPtr {
+            for i in 0..<count {
+                if let ptr = keysPtr[i] {
+                    keys.insert(String(cString: ptr))
+                }
+            }
+        }
+        EventRouterView.setTerminalAppShortcutKeys(keys)
     }
 }
 

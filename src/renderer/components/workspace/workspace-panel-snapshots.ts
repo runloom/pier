@@ -1,4 +1,4 @@
-import type { PanelSnapshot } from "@shared/contracts/events.ts";
+import type { PanelSnapshot } from "@shared/contracts/panel.ts";
 import type { PanelDescriptor } from "@/stores/panel-descriptor.store.ts";
 import { panelKindOf } from "./panel-registry.ts";
 
@@ -58,21 +58,16 @@ export function buildWorkspacePanelSnapshots(
     const component = panel.view.contentComponent;
     const descriptor = descriptors[panel.id];
     const position = positionForPanel(api, panel.id);
-    const title = descriptor?.short ?? panel.title;
-    const terminalTitle =
-      descriptor?.long &&
-      descriptor.long !== descriptor.path &&
-      descriptor.long !== title
-        ? descriptor.long
-        : undefined;
+    const display = descriptor?.display ?? {
+      short: panel.title ?? panel.id,
+    };
     return {
       active: panel.id === api.activePanel?.id,
       id: panel.id,
       kind: panelKindOf(component),
       ...position,
-      ...(title ? { title } : {}),
-      ...(terminalTitle ? { terminalTitle } : {}),
-      ...(descriptor?.path ? { cwd: descriptor.path } : {}),
+      ...(descriptor?.context ? { context: descriptor.context } : {}),
+      display,
     };
   });
 }

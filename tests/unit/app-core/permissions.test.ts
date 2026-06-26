@@ -56,20 +56,9 @@ describe("authorizeCommand", () => {
     ).toEqual({ ok: true });
   });
 
-  it("允许 CLI 默认客户端打开终端", () => {
-    expect(
-      authorizeCommand({ type: "terminal.open" }, client("cli-local"))
-    ).toEqual({
-      ok: true,
-    });
-  });
-
   it("允许 CLI 默认客户端打开路径", () => {
     expect(
-      authorizeCommand(
-        { path: ".", type: "workspace.open" },
-        client("cli-local")
-      )
+      authorizeCommand({ path: ".", type: "panel.open" }, client("cli-local"))
     ).toEqual({
       ok: true,
     });

@@ -72,11 +72,33 @@ describe("terminal focus restoration", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => ({
-        cwd: "/Users/xyz/ABC/pier",
+        context: {
+          contextId: "ctx-pier",
+          cwd: "/Users/xyz/ABC/pier",
+          openedPath: "/Users/xyz/ABC/pier",
+          projectRoot: "/Users/xyz/ABC/pier",
+          source: "panel",
+          updatedAt: 1,
+          worktreeKey: "/Users/xyz/ABC/pier",
+        },
         updatedAt: "2026-06-24T00:00:00.000Z",
       })),
-      updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/state/panel-context-state.ts", () => ({
+      recordRecentPanelContext: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/services/panel-context-resolver.ts", () => ({
+      resolvePanelContextForPath: vi.fn(async (path: string) => ({
+        contextId: `ctx:${path}`,
+        cwd: path,
+        openedPath: path,
+        projectRoot: path,
+        source: "panel",
+        updatedAt: 1,
+        worktreeKey: path,
+      })),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) =>
@@ -255,14 +277,23 @@ describe("terminal focus restoration", () => {
     );
   });
 
-  it("prefers a saved cwd over a stale renderer-provided initial cwd", async () => {
+  it("prefers a saved context over a stale renderer-provided initial context", async () => {
     const { fakeAddon, invokeHandlers, ipcWindow } =
       await setupTerminalFocusHarness();
+    const staleContext = {
+      contextId: "ctx-original-open",
+      cwd: "/Users/xyz/ABC/original-open",
+      openedPath: "/Users/xyz/ABC/original-open",
+      projectRoot: "/Users/xyz/ABC/original-open",
+      source: "command" as const,
+      updatedAt: 1,
+      worktreeKey: "/Users/xyz/ABC/original-open",
+    };
 
     const result = await invokeHandlers.get("pier:terminal:create")?.(
       { sender: ipcWindow.webContents },
       {
-        cwd: "/Users/xyz/ABC/original-open",
+        context: staleContext,
         font: { family: "Menlo", size: 13 },
         frame: { x: 1, y: 2, width: 300, height: 200 },
         panelId: "terminal-1",

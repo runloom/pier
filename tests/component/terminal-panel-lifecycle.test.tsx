@@ -1,7 +1,9 @@
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import { render, waitFor } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 
 const popupContextMenuAtMock = vi.hoisted(() => vi.fn(async () => undefined));
 const requestTerminalPresentationMock = vi.hoisted(() => vi.fn());
@@ -46,7 +48,7 @@ function createPanelProps(
   options: {
     isActive?: boolean;
     isVisible?: boolean;
-    params?: { cwd?: string };
+    params?: { context?: PanelContext };
   } = {}
 ): TestPanelProps {
   let isActive = options.isActive ?? true;
@@ -114,6 +116,16 @@ function createPanelProps(
   return props as unknown as TestPanelProps;
 }
 
+const context: PanelContext = {
+  contextId: "ctx-pier",
+  cwd: "/Users/xyz/ABC/pier",
+  openedPath: "/Users/xyz/ABC/pier",
+  projectRoot: "/Users/xyz/ABC/pier",
+  source: "command",
+  updatedAt: 1_772_000_000_000,
+  worktreeKey: "/Users/xyz/ABC/pier",
+};
+
 describe("TerminalPanel lifecycle", () => {
   const originalGetBoundingClientRect =
     HTMLElement.prototype.getBoundingClientRect;
@@ -139,6 +151,7 @@ describe("TerminalPanel lifecycle", () => {
     TestResizeObserver.instances = [];
     popupContextMenuAtMock.mockClear();
     requestTerminalPresentationMock.mockClear();
+    usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 0)
@@ -214,7 +227,7 @@ describe("TerminalPanel lifecycle", () => {
 
   it("restores the saved tab descriptor before creating a hidden native terminal", async () => {
     vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
-      cwd: "/Users/xyz/ABC/pier",
+      context,
       title: "Claude Code",
       updatedAt: "2026-06-25T00:00:00.000Z",
     });
@@ -290,32 +303,79 @@ describe("TerminalPanel lifecycle", () => {
     });
   });
 
-  it("passes panel cwd params into native terminal creation", async () => {
+  it("passes panel context into native terminal creation", async () => {
     render(
       <TerminalPanel
-        {...createPanelProps({ params: { cwd: "/Users/xyz/ABC/pier" } })}
+        {...createPanelProps({
+          params: { context },
+        })}
       />
     );
 
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: "/Users/xyz/ABC/pier",
+          context,
           panelId: "terminal-1",
         })
       );
     });
   });
 
-  it("passes panel params cwd immediately and leaves saved cwd precedence to main", async () => {
+  it("does not restart native terminal creation when context params trigger rerenders", async () => {
+    const props = createPanelProps({
+      params: { context },
+    });
+    const { container } = render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="terminal-placeholder"]')
+      ).toBeNull();
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(window.pier.terminal.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports panel context through the descriptor", async () => {
+    const props = createPanelProps({ params: { context } });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(props.api.setTitle).toHaveBeenCalledWith("pier");
+    });
+    expect(
+      usePanelDescriptorStore.getState().descriptors["terminal-1"]
+    ).toEqual(
+      expect.objectContaining({
+        context,
+        display: expect.objectContaining({ short: "pier" }),
+      })
+    );
+  });
+
+  it("passes panel context immediately and leaves saved context precedence to main", async () => {
     vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
-      cwd: "/Users/xyz/ABC/current-work",
+      context: {
+        ...context,
+        contextId: "ctx-current-work",
+        cwd: "/Users/xyz/ABC/current-work",
+        openedPath: "/Users/xyz/ABC/current-work",
+        projectRoot: "/Users/xyz/ABC/current-work",
+        worktreeKey: "/Users/xyz/ABC/current-work",
+      },
       title: "Claude Code",
       updatedAt: "2026-06-25T00:00:00.000Z",
     });
     const props = createPanelProps({
       isActive: true,
-      params: { cwd: "/Users/xyz/ABC/original-open" },
+      params: { context },
     });
 
     render(<TerminalPanel {...props} />);
@@ -323,7 +383,7 @@ describe("TerminalPanel lifecycle", () => {
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: "/Users/xyz/ABC/original-open",
+          context,
           panelId: "terminal-1",
         })
       );

@@ -1,3 +1,7 @@
+import {
+  type PanelContext,
+  panelContextSchema,
+} from "@shared/contracts/panel.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { SquareTerminal } from "lucide-react";
@@ -45,20 +49,20 @@ export function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
-function initialCwdFromParams(params: unknown): string | undefined {
-  if (!params || typeof params !== "object" || !("cwd" in params)) {
+function panelContextFromParams(params: unknown): PanelContext | undefined {
+  if (!params || typeof params !== "object" || !("context" in params)) {
     return;
   }
-  const cwd = (params as { cwd?: unknown }).cwd;
-  return typeof cwd === "string" && cwd.trim() === cwd && cwd !== ""
-    ? cwd
-    : undefined;
+  const parsed = panelContextSchema.safeParse(
+    (params as { context?: unknown }).context
+  );
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
-  const initialCwd = initialCwdFromParams(props.params);
+  const [initialContext] = useState(() => panelContextFromParams(props.params));
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -68,12 +72,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     TerminalPanelSessionSnapshot | null | undefined
   >(undefined);
 
-  // 订阅 swift OSC 7 → main → 这里. usePanelEventState 自动按 panelId 过滤 +
-  // 空字符串忽略 (vim set notitle / tmux detach 等清空场景不污染上一次有效值).
-  const cwd = usePanelEventState(
+  // 订阅 swift OSC 7 → main 解析完整 PanelContext → 这里. renderer 不拼接/覆盖
+  // context 字段，避免 cwd 已变但 worktreeKey/gitRoot 仍是旧项目。
+  const runtimeContext = usePanelEventState(
     window.pier.terminal.onCwdChange,
     panelId,
-    (e) => e.cwd
+    (e) => e.context
   );
   const sequenceTitle = usePanelEventState(
     window.pier.terminal.onTitleChange,
@@ -82,23 +86,27 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
 
   const sessionLoaded = savedSession !== undefined;
-  const restoredCwd = savedSession?.cwd ?? initialCwd;
-  const effectiveCwd = cwd ?? restoredCwd ?? null;
+  const effectiveContext =
+    runtimeContext ?? savedSession?.context ?? initialContext;
+  const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
 
-  // descriptor 三字段优先级链:
-  // - short: basename(cwd) — tab strip 始终显示目录, 不被 OSC 干扰 (稳定锚点)
-  // - long:  sequenceTitle ?? cwd — sink 优先 OSC 自定义 ("Claude Code"),
-  //          没 OSC 时 fallback cwd 完整路径
-  // - path:  cwd — 真实 cwd, 不被 OSC override (breadcrumb / status bar 用)
-  // hook input 接受 undefined; hook 内部按字段存在性条件 upsert 到 store.
+  // descriptor 由 display + context 组成:
+  // - display.short: basename(cwd) — tab strip 稳定显示目录名
+  // - display.long: sequenceTitle ?? cwd — 优先展示 OSC 标题, 否则展示完整 cwd
+  // - context: main 解析出的完整 PanelContext, 不在 renderer 局部拼 cwd
   usePanelDescriptor(
     api,
     sessionLoaded
       ? {
-          short: effectiveCwd ? basename(effectiveCwd) : "Terminal",
-          long: effectiveTitle ?? effectiveCwd ?? undefined,
-          path: effectiveCwd ?? undefined,
+          ...(effectiveContext ? { context: effectiveContext } : {}),
+          display: {
+            short: effectiveCwd ? basename(effectiveCwd) : "Terminal",
+            ...(effectiveTitle || effectiveCwd
+              ? { long: effectiveTitle ?? effectiveCwd ?? undefined }
+              : {}),
+            ...(effectiveTitle ? { terminalTitle: effectiveTitle } : {}),
+          },
         }
       : null
   );
@@ -235,7 +243,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             family: computeMonoFontFamily(monoFontFamilyRef.current),
             size: monoFontSizeRef.current,
           },
-          ...(initialCwd && { cwd: initialCwd }),
+          ...(initialContext && { context: initialContext }),
         });
         if (!result.ok) {
           const message = result.error ?? "终端创建失败";
@@ -356,7 +364,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       renderableAnchorObserver?.disconnect();
       layoutRegistration?.dispose();
     };
-  }, [api, panelId, initialCwd]);
+  }, [api, panelId, initialContext]);
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {

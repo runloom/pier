@@ -21,31 +21,28 @@ describe("basename", () => {
 });
 
 describe("resolveLong", () => {
-  it("prefers long over path (long 是 panel 主动计算的权威值)", () => {
+  it("prefers display.long over display.short", () => {
     expect(
       resolveLong({
-        short: "pier",
-        long: "Claude Code",
-        path: "/Users/x/pier",
+        display: {
+          long: "Claude Code",
+          short: "pier",
+        },
       })
     ).toBe("Claude Code");
   });
 
-  it("falls back to path when no long", () => {
-    expect(resolveLong({ short: "x", path: "/tmp/abc" })).toBe("/tmp/abc");
+  it("falls back to display.short when no long", () => {
+    expect(resolveLong({ display: { short: "x" } })).toBe("x");
   });
 
-  it("falls back to short when neither long nor path", () => {
-    expect(resolveLong({ short: "x" })).toBe("x");
-  });
-
-  it("OSC sequenceTitle 在 long 里时优先于真实 cwd path", () => {
-    // 模拟 terminal-panel 真实输入:long=sequenceTitle, path=cwd
+  it("OSC sequenceTitle 在 display.long 里时优先显示", () => {
     expect(
       resolveLong({
-        short: "pier",
-        long: "Claude Code",
-        path: "/Users/x/ABC/pier",
+        display: {
+          long: "Claude Code",
+          short: "pier",
+        },
       })
     ).toBe("Claude Code");
   });

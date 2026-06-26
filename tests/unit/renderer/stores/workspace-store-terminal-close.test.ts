@@ -1,3 +1,4 @@
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -36,6 +37,16 @@ function createApi(panels: ReturnType<typeof terminalPanel>[]) {
     totalPanels: panels.length,
   };
 }
+
+const context: PanelContext = {
+  contextId: "ctx-pier",
+  cwd: "/Users/xyz/ABC/pier",
+  openedPath: "/Users/xyz/ABC/pier",
+  projectRoot: "/Users/xyz/ABC/pier",
+  source: "command",
+  updatedAt: 1_772_000_000_000,
+  worktreeKey: "/Users/xyz/ABC/pier",
+};
 
 function firstInvocationOrder(fn: { mock: { invocationCallOrder: number[] } }) {
   const order = fn.mock.invocationCallOrder[0];
@@ -78,40 +89,40 @@ describe("workspace terminal close lifecycle", () => {
     expect(api.removePanel).toHaveBeenCalledWith(panel);
   });
 
-  it("stores the requested cwd in terminal panel params when opening a terminal path", () => {
+  it("stores the requested context in terminal panel params when opening a terminal panel", () => {
     const panel = terminalPanel("terminal-1");
     const api = createApi([panel, webPanel("welcome-1")]);
 
     useWorkspaceStore.getState().setApi(api as never);
 
     const panelId = useWorkspaceStore.getState().addTerminal({
-      path: "/Users/xyz/ABC/pier",
+      context,
     });
 
     expect(panelId).toMatch(TERMINAL_PANEL_ID_PREFIX);
     expect(api.addPanel).toHaveBeenCalledWith(
       expect.objectContaining({
         component: "terminal",
-        params: { cwd: "/Users/xyz/ABC/pier" },
+        params: { context },
         title: "Terminal: /Users/xyz/ABC/pier",
       })
     );
   });
 
-  it("keeps placement behavior when opening a terminal path", () => {
+  it("keeps placement behavior when opening a terminal panel", () => {
     const panel = terminalPanel("terminal-1");
     const api = createApi([panel, webPanel("welcome-1")]);
 
     useWorkspaceStore.getState().setApi(api as never);
 
     useWorkspaceStore.getState().addTerminal({
-      path: "/Users/xyz/ABC/pier",
+      context,
       placement: "split-right",
     });
 
     expect(api.addPanel).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: { cwd: "/Users/xyz/ABC/pier" },
+        params: { context },
         position: {
           direction: "right",
           referencePanel: "terminal-1",
