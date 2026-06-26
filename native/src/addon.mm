@@ -485,13 +485,27 @@ static Napi::Value JsSetFontConfig(const Napi::CallbackInfo& info) {
 }
 
 static Napi::Value JsSetTerminalConfig(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
     NSWindow* win = WindowFromHandle(info[0]);
-    if (!win) return info.Env().Undefined();
+    if (!win) return env.Undefined();
+    if (info.Length() < 2 || !info[1].IsObject()) {
+        return env.Undefined();
+    }
     Napi::Object config = info[1].As<Napi::Object>();
-    std::string cursorStyle = config.Get("cursorStyle").As<Napi::String>().Utf8Value();
-    bool cursorBlink = config.Get("cursorBlink").As<Napi::Boolean>().Value();
-    double scrollbackLimitBytes = config.Get("scrollbackLimitBytes").As<Napi::Number>().DoubleValue();
-    bool pasteProtection = config.Get("pasteProtection").As<Napi::Boolean>().Value();
+    Napi::Value cursorStyleVal = config.Get("cursorStyle");
+    Napi::Value cursorBlinkVal = config.Get("cursorBlink");
+    Napi::Value scrollbackLimitBytesVal = config.Get("scrollbackLimitBytes");
+    Napi::Value pasteProtectionVal = config.Get("pasteProtection");
+    if (!cursorStyleVal.IsString() ||
+        !cursorBlinkVal.IsBoolean() ||
+        !scrollbackLimitBytesVal.IsNumber() ||
+        !pasteProtectionVal.IsBoolean()) {
+        return env.Undefined();
+    }
+    std::string cursorStyle = cursorStyleVal.As<Napi::String>().Utf8Value();
+    bool cursorBlink = cursorBlinkVal.As<Napi::Boolean>().Value();
+    double scrollbackLimitBytes = scrollbackLimitBytesVal.As<Napi::Number>().DoubleValue();
+    bool pasteProtection = pasteProtectionVal.As<Napi::Boolean>().Value();
     ghostty_bridge_set_terminal_config(
         (__bridge void*)win,
         cursorStyle.c_str(),
@@ -499,7 +513,7 @@ static Napi::Value JsSetTerminalConfig(const Napi::CallbackInfo& info) {
         scrollbackLimitBytes,
         pasteProtection
     );
-    return info.Env().Undefined();
+    return env.Undefined();
 }
 
 static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {

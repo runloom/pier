@@ -4,7 +4,6 @@ import type {
   TerminalFont,
   TerminalFrame,
   TerminalPresentationSnapshot,
-  TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 import type { IpcMain, WebContents } from "electron";
 import {
@@ -44,6 +43,7 @@ import {
   applyRendererTerminalPresentation,
   setTerminalOverlayActive,
 } from "./terminal-presentation.ts";
+import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
 
@@ -404,27 +404,28 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   });
 
-  ipcMain.on(
-    "pier:terminal:set-config",
-    (event, config: TerminalRuntimeConfig) => {
-      if (!addon) {
-        return;
-      }
-      const win = windowFromWebContents(event.sender);
-      if (!win) {
-        return;
-      }
-      recordRendererTerminalRoute(win, "set-config", null, {
-        cursorBlink: config.cursorBlink,
-        pasteProtection: config.pasteProtection,
-      });
-      try {
-        addon.setTerminalConfig(win.getNativeWindowHandle(), config);
-      } catch (err) {
-        console.error("[pier-terminal-set-config] failed:", err);
-      }
+  ipcMain.on("pier:terminal:set-config", (event, config: unknown) => {
+    if (!addon) {
+      return;
     }
-  );
+    const win = windowFromWebContents(event.sender);
+    if (!win) {
+      return;
+    }
+    if (!isTerminalRuntimeConfig(config)) {
+      console.error("[pier-terminal-set-config] invalid config:", config);
+      return;
+    }
+    recordRendererTerminalRoute(win, "set-config", null, {
+      cursorBlink: config.cursorBlink,
+      pasteProtection: config.pasteProtection,
+    });
+    try {
+      addon.setTerminalConfig(win.getNativeWindowHandle(), config);
+    } catch (err) {
+      console.error("[pier-terminal-set-config] failed:", err);
+    }
+  });
 
   registerTerminalShortcutIpc(ipcMain, addon);
 

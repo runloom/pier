@@ -26,7 +26,10 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
-import { WorkspaceHeaderActions } from "./workspace-header-actions.tsx";
+import {
+  WorkspaceHeaderActions,
+  WorkspaceHeaderRightActions,
+} from "./workspace-header-actions.tsx";
 import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
 
 /**
@@ -224,6 +227,9 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
 
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
+  const setWorkspaceHasMaximizedGroup = useWorkspaceStore(
+    (s) => s.setHasMaximizedGroup
+  );
   const [hasMaximizedGroup, setHasMaximizedGroup] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -312,6 +318,7 @@ export function WorkspaceHost() {
           nextHasMaximizedGroup ? "true" : "false"
         );
         setHasMaximizedGroup(nextHasMaximizedGroup);
+        setWorkspaceHasMaximizedGroup(nextHasMaximizedGroup);
       };
 
       // onDidLayoutChange 双责任: 标记 userTouched (防 fromJSON 覆盖) + debounced save
@@ -443,7 +450,7 @@ export function WorkspaceHost() {
         });
       })();
     },
-    [setApi]
+    [setApi, setWorkspaceHasMaximizedGroup]
   );
 
   return (
@@ -459,6 +466,7 @@ export function WorkspaceHost() {
         disableTabsOverflowList={true}
         leftHeaderActionsComponent={WorkspaceHeaderActions}
         onReady={handleReady}
+        rightHeaderActionsComponent={WorkspaceHeaderRightActions}
         theme={pierTheme}
       />
     </div>

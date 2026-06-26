@@ -28,8 +28,10 @@ interface WorkspaceState {
   closeOthers: (panelId: string) => void;
   closePanel: (panelId: string) => void;
   focusGroup: (direction: "right" | "down" | "left" | "up") => void;
+  hasMaximizedGroup: boolean;
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
+  setHasMaximizedGroup: (hasMaximizedGroup: boolean) => void;
   splitPanel: (
     panelId: string,
     direction: "right" | "below" | "left" | "above"
@@ -104,7 +106,9 @@ async function clearCurrentWindowLayout(): Promise<void> {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   api: null,
-  setApi: (api) => set({ api }),
+  hasMaximizedGroup: false,
+  setApi: (api) => set({ api, hasMaximizedGroup: false }),
+  setHasMaximizedGroup: (hasMaximizedGroup) => set({ hasMaximizedGroup }),
   addPanel: (opts) => {
     const api = get().api;
     if (!api) {

@@ -19,6 +19,9 @@ vi.mock("dockview-react", async (importOriginal) => {
         data-left-header-actions={
           props.leftHeaderActionsComponent?.name ?? "none"
         }
+        data-right-header-actions={
+          props.rightHeaderActionsComponent?.name ?? "none"
+        }
         data-testid="dockview"
       />
     )),
@@ -156,7 +159,7 @@ describe("WorkspaceHost", () => {
     resetTerminalPresentationReconcilerForTests();
     installPierWindowApi();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue(null);
-    useWorkspaceStore.setState({ api: null });
+    useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       cb(performance.now());
       return 1;
@@ -168,7 +171,7 @@ describe("WorkspaceHost", () => {
     Reflect.deleteProperty(window, "pier");
     vi.unstubAllGlobals();
     vi.clearAllMocks();
-    useWorkspaceStore.setState({ api: null });
+    useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
   });
 
   it("disables dockview overflow and uses the workspace shadcn header actions", () => {
@@ -185,6 +188,10 @@ describe("WorkspaceHost", () => {
     expect(screen.getByTestId("dockview")).toHaveAttribute(
       "data-left-header-actions",
       "WorkspaceHeaderActions"
+    );
+    expect(screen.getByTestId("dockview")).toHaveAttribute(
+      "data-right-header-actions",
+      "WorkspaceHeaderRightActions"
     );
     expect(DockviewReact).toHaveBeenCalled();
   });
@@ -215,6 +222,7 @@ describe("WorkspaceHost", () => {
       "data-dockview-maximized",
       "true"
     );
+    expect(useWorkspaceStore.getState().hasMaximizedGroup).toBe(true);
   });
 
   it("hides inactive terminals when a web panel is maximized", () => {

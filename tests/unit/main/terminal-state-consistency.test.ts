@@ -466,4 +466,20 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       config
     );
   });
+
+  it("drops invalid terminal runtime config before calling the native addon", async () => {
+    const { fakeAddon, handlers, win } = await setupHarness();
+
+    handlers.get("pier:terminal:set-config")?.(
+      { sender: win.webContents },
+      {
+        cursorStyle: undefined,
+        cursorBlink: true,
+        scrollbackLimitBytes: 64_000_000,
+        pasteProtection: true,
+      }
+    );
+
+    expect(fakeAddon.setTerminalConfig).not.toHaveBeenCalled();
+  });
 });
