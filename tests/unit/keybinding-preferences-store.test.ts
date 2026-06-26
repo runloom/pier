@@ -31,6 +31,7 @@ describe("keybinding-preferences.store", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
+        platform: "darwin",
         preferences: { onChanged, read, update },
         terminal: { setAppShortcutKeys },
       },
@@ -123,6 +124,130 @@ describe("keybinding-preferences.store", () => {
     expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
       expect.arrayContaining(["Mod+Alt+ArrowLeft"])
     );
+  });
+
+  it("keeps the default debug shortcut in the native terminal allowlist", async () => {
+    const pier = installPierApi();
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences } = await import(
+      "@/stores/keybinding-preferences.store.ts"
+    );
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+
+    expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
+      expect.arrayContaining(["Ctrl+Shift+KeyD"])
+    );
+  });
+
+  it("migrates legacy terminal debug command ids when hydrating preferences", async () => {
+    const pier = installPierApi({
+      userKeymap: [
+        {
+          commandId: "pier.terminal.toggleDebugOverlay",
+          keys: "Mod+Alt+Shift+KeyD",
+          scope: "global",
+        },
+      ],
+    });
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { parseChord } = await import("@/lib/keybindings/parse.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+
+    expect(useKeybindingPreferencesStore.getState().userKeymap).toEqual([
+      {
+        commandId: "pier.terminal.openDebugWindow",
+        keys: "Mod+Alt+Shift+KeyD",
+        scope: "global",
+      },
+    ]);
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Alt+Shift+KeyD", false), {
+        activePanelComponent: null,
+        overlayStack: [],
+      })
+    ).toBe("pier.terminal.openDebugWindow");
+    expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
+      expect.arrayContaining(["Mod+Alt+Shift+KeyD"])
+    );
+  });
+
+  it("migrates legacy terminal debug unbind entries when hydrating preferences", async () => {
+    installPierApi({
+      userKeymap: [
+        {
+          commandId: "-pier.terminal.toggleDebugOverlay",
+          keys: "",
+          scope: "global",
+        },
+      ],
+    });
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+
+    expect(useKeybindingPreferencesStore.getState().userKeymap).toEqual([
+      {
+        commandId: "-pier.terminal.openDebugWindow",
+        keys: "",
+        scope: "global",
+      },
+    ]);
+    expect(
+      keybindingRegistry.getBindingsFor("pier.terminal.openDebugWindow")
+    ).toEqual([]);
+  });
+
+  it("writes legacy terminal debug command updates with the current command id", async () => {
+    const pier = installPierApi();
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+    await useKeybindingPreferencesStore
+      .getState()
+      .setBinding(
+        "pier.terminal.toggleDebugOverlay",
+        "Mod+Alt+Shift+KeyD",
+        "global"
+      );
+
+    expect(pier.update).toHaveBeenLastCalledWith({
+      userKeymap: [
+        {
+          commandId: "-pier.terminal.openDebugWindow",
+          keys: "",
+          scope: "global",
+        },
+        {
+          commandId: "pier.terminal.openDebugWindow",
+          keys: "Mod+Alt+Shift+KeyD",
+          scope: "global",
+        },
+      ],
+    });
   });
 
   it("resets all user keybindings", async () => {

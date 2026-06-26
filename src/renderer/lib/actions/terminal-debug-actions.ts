@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import { Bug } from "lucide-react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 
@@ -9,13 +10,13 @@ export function registerTerminalDebugActions(): () => void {
         console.error("[terminal-debug] open window failed:", err);
       });
     },
-    id: "pier.terminal.toggleDebugOverlay",
+    id: "pier.terminal.openDebugWindow",
     metadata: {
       group: "8_debug",
       iconComponent: Bug,
       keywords: ["terminal", "debug", "native", "route"],
     },
     surfaces: [],
-    title: () => "Toggle Terminal Debug Overlay",
+    title: () => i18next.t("commandPalette.action.openTerminalDebugWindow"),
   });
 }

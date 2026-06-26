@@ -45,7 +45,7 @@ export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
     scope: "global",
   },
   {
-    commandId: "pier.terminal.toggleDebugOverlay",
+    commandId: "pier.terminal.openDebugWindow",
     keys: "Ctrl+Shift+KeyD",
     nativeTerminal: "app",
     scope: "global",

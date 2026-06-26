@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { buildRendererDebugSnapshot } from "@/stores/terminal-debug.store.ts";
+import { buildRendererDebugSnapshot } from "@/lib/terminal-debug/renderer-snapshot.ts";
 
 export function TerminalDebugSnapshotBridge() {
   useEffect(

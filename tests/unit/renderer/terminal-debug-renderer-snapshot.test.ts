@@ -21,40 +21,22 @@ function terminalPanel(id: string) {
   };
 }
 
-describe("terminal debug store", () => {
+describe("terminal debug renderer snapshot", () => {
   beforeEach(() => {
     vi.resetModules();
-    Object.defineProperty(window, "pier", {
-      configurable: true,
-      value: {
-        terminal: {
-          debugSnapshot: vi.fn(async () => ({
-            events: [],
-            native: {
-              surfaces: [],
-              window: {
-                activePanelKind: "terminal",
-                activeTerminalPanelId: "terminal-1",
-                inTerminalMode: true,
-                nativeActiveTerminalPanelId: "1::terminal-1",
-                overlayActive: false,
-              },
-            },
-          })),
-        },
-      },
-    });
   });
 
   afterEach(() => {
-    Reflect.deleteProperty(window, "pier");
     vi.clearAllMocks();
   });
 
   it("adds renderer panels and native-missing diagnostics to debug snapshots", async () => {
     const { useWorkspaceStore } = await import("@/stores/workspace.store.ts");
-    const { useTerminalDebugStore } = await import(
-      "@/stores/terminal-debug.store.ts"
+    const { buildRendererDebugSnapshot } = await import(
+      "@/lib/terminal-debug/renderer-snapshot.ts"
+    );
+    const { buildTerminalDebugIssues } = await import(
+      "@shared/terminal-debug-diagnostics.ts"
     );
     const { updateTerminalPanelLifecycleDebug } = await import(
       "@/panel-kits/terminal/terminal-lifecycle-debug.ts"
@@ -76,27 +58,19 @@ describe("terminal debug store", () => {
       panels: [panel],
     } as never);
 
-    await useTerminalDebugStore.getState().refresh();
+    const renderer = buildRendererDebugSnapshot();
+    const issues = buildTerminalDebugIssues(renderer, {
+      surfaces: [],
+      window: {
+        activePanelKind: "terminal",
+        activeTerminalPanelId: "terminal-1",
+        inTerminalMode: true,
+        nativeActiveTerminalPanelId: "1::terminal-1",
+        overlayActive: false,
+      },
+    });
 
-    const snapshot = useTerminalDebugStore.getState().snapshot as {
-      issues?: Array<{ code: string; panelId?: string }>;
-      renderer?: {
-        viewportFrame?: { height: number; width: number; x: number; y: number };
-        panels: Array<{
-          anchorFrame: {
-            height: number;
-            width: number;
-            x: number;
-            y: number;
-          } | null;
-          dockviewVisible: boolean;
-          hasAnchor: boolean;
-          panelId: string;
-          terminalLifecycle?: { nativeTerminalReady: boolean; phase: string };
-        }>;
-      };
-    } | null;
-    expect(snapshot?.renderer?.viewportFrame).toEqual(
+    expect(renderer.viewportFrame).toEqual(
       expect.objectContaining({
         height: window.innerHeight,
         width: window.innerWidth,
@@ -104,7 +78,7 @@ describe("terminal debug store", () => {
         y: 0,
       })
     );
-    expect(snapshot?.renderer?.panels).toContainEqual(
+    expect(renderer.panels).toContainEqual(
       expect.objectContaining({
         anchorFrame: { height: 240, width: 320, x: 10, y: 20 },
         dockviewVisible: true,
@@ -116,7 +90,7 @@ describe("terminal debug store", () => {
         }),
       })
     );
-    expect(snapshot?.issues).toContainEqual(
+    expect(issues).toContainEqual(
       expect.objectContaining({
         code: "native_missing",
         panelId: "terminal-1",

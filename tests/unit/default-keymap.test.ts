@@ -88,18 +88,23 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
-  it("contains the native terminal debug overlay shortcut", () => {
+  it("contains the native terminal debug window shortcut", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.terminal.toggleDebugOverlay",
+      commandId: "pier.terminal.openDebugWindow",
       keys: "Ctrl+Shift+KeyD",
       nativeTerminal: "app",
       scope: "global",
     });
+    expect(
+      DEFAULT_KEYMAP.some(
+        (binding) => binding.commandId === "pier.terminal.toggleDebugOverlay"
+      )
+    ).toBe(false);
   });
 
-  it("does not use the macOS Dock Command+Option+D shortcut family for debug overlay", () => {
+  it("does not use the macOS Dock Command+Option+D shortcut family for debug window", () => {
     expect(DEFAULT_KEYMAP).not.toContainEqual({
-      commandId: "pier.terminal.toggleDebugOverlay",
+      commandId: "pier.terminal.openDebugWindow",
       keys: "Mod+Alt+Shift+KeyD",
       nativeTerminal: "app",
       scope: "global",

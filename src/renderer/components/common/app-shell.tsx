@@ -1,7 +1,6 @@
 import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { DocumentTitle } from "@/components/common/document-title.tsx";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
-import { TerminalDebugOverlay } from "@/components/common/terminal-debug-overlay.tsx";
 import { TerminalDebugSnapshotBridge } from "@/components/common/terminal-debug-snapshot-bridge.tsx";
 import { TitleBar } from "@/components/common/title-bar.tsx";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
@@ -20,7 +19,6 @@ export function AppShell() {
       <ShellKeybindings />
       <CommandPalette />
       <SettingsDialog />
-      <TerminalDebugOverlay />
       <TerminalDebugSnapshotBridge />
     </div>
   );
