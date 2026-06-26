@@ -26,6 +26,7 @@ import {
   findWindowSessionId,
 } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
+import { performTerminalOperation } from "./terminal-operations.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 
@@ -33,16 +34,13 @@ import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 export function getTerminalAddon(): NativeAddon | null {
   return cachedAddon;
 }
-
 let cachedAddon: NativeAddon | null = null;
 
 interface ActivePanelFocusState {
   kind: "terminal" | "web";
   panelId: string | null;
 }
-
 const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
-
 function rememberActivePanelFocus(
   win: AppWindow,
   kind: "terminal" | "web",
@@ -54,11 +52,9 @@ function rememberActivePanelFocus(
 export function stableWindowIdFor(win: AppWindow): string {
   return findInternalWindowId(win) ?? `window-${win.id}`;
 }
-
 export function terminalSessionScopeFor(win: AppWindow): string {
   return findWindowSessionId(win) ?? stableWindowIdFor(win);
 }
-
 export function restoreActivePanelFocus(win: AppWindow): void {
   if (win.isDestroyed()) {
     return;
@@ -242,6 +238,18 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
+
+  ipcMain.handle(
+    "pier:terminal:perform-operation",
+    (event, panelId: unknown, operation: unknown) =>
+      performTerminalOperation({
+        addon,
+        loadError,
+        operation,
+        panelId,
+        win: windowFromWebContents(event.sender),
+      })
+  );
 
   ipcMain.handle(
     "pier:terminal:create",

@@ -70,6 +70,13 @@ describe("detached DevTools", () => {
     );
   });
 
+  it("allows the visible menu label to be localized", () => {
+    const item = createDetachedDevToolsMenuItem(() => null, "开发者工具");
+
+    expect(item.label).toBe("开发者工具");
+    expect(item.accelerator).toBe("CommandOrControl+Alt+I");
+  });
+
   it("recognizes the webContents devtools accelerator", () => {
     expect(
       isToggleDevToolsInput({

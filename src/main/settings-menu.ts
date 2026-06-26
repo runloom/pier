@@ -37,13 +37,14 @@ export function requestOpenSettings(win: OpenSettingsWindowLike | null): void {
 }
 
 export function createOpenSettingsMenuItem(
-  getTargetWindow: () => OpenSettingsWindowLike | null
+  getTargetWindow: () => OpenSettingsWindowLike | null,
+  label = "Settings..."
 ): MenuItemConstructorOptions {
   return {
     accelerator: OPEN_SETTINGS_ACCELERATOR,
     click: () => {
       requestOpenSettings(getTargetWindow());
     },
-    label: "Settings...",
+    label,
   };
 }

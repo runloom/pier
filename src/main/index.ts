@@ -1,18 +1,13 @@
 import { join } from "node:path";
-import {
-  app,
-  ipcMain,
-  Menu,
-  type MenuItemConstructorOptions,
-  nativeImage,
-} from "electron";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { app, ipcMain, nativeImage } from "electron";
 import {
   type RegisteredLocalControl,
   registerCliLocalControl,
 } from "./adapters/cli/register-local-control.ts";
 import { appCore } from "./app-core/app-core.ts";
+import { installAppMenu } from "./app-menu.ts";
 import { installCsp } from "./csp.ts";
-import { createDetachedDevToolsMenuItem } from "./devtools.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
@@ -22,7 +17,7 @@ import { registerTerminalSessionIpc } from "./ipc/terminal-session-commands.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
-import { createOpenSettingsMenuItem } from "./settings-menu.ts";
+import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
 
 const isDev = !app.isPackaged;
@@ -72,117 +67,72 @@ if (!gotTheLock) {
   app.quit();
 }
 
-// macOS 默认 Electron menu 极简, 没 Edit menu → Cmd+C/V/X/A 在 app 内 (含 DevTools)
-// 全部失效。手动注册标准 menu: App / Edit / View / Window。
-// autoHideMenuBar=true 让 win/linux 仍隐藏 menu bar; mac 的 menu 在屏幕顶部不受影响。
-function buildAppMenu(): Menu {
-  const appName = app.name;
-  const getMenuTargetWindow = () =>
+function getMenuTargetWindow(): AppWindow | null {
+  return (
     windowManager.getFocused() ??
     windowManager.getAll().find((win) => !win.isDestroyed()) ??
-    null;
-  const macAppMenu: MenuItemConstructorOptions = {
-    label: appName,
-    submenu: [
-      { role: "about" },
-      createOpenSettingsMenuItem(getMenuTargetWindow),
-      { type: "separator" },
-      { role: "services" },
-      { type: "separator" },
-      { role: "hide" },
-      { role: "hideOthers" },
-      { role: "unhide" },
-      { type: "separator" },
-      { role: "quit" },
-    ],
-  };
+    null
+  );
+}
 
-  const editMenu: MenuItemConstructorOptions = {
-    label: "Edit",
-    submenu: [
-      { role: "undo" },
-      { role: "redo" },
-      { type: "separator" },
-      { role: "cut" },
-      { role: "copy" },
-      { role: "paste" },
-      ...(isMac
-        ? ([
-            { role: "pasteAndMatchStyle" },
-            { role: "delete" },
-            { role: "selectAll" },
-          ] as MenuItemConstructorOptions[])
-        : ([
-            { role: "delete" },
-            { type: "separator" },
-            { role: "selectAll" },
-          ] as MenuItemConstructorOptions[])),
-    ],
-  };
+function createFreshWindowFromMenu(): void {
+  appCore.services.window.create({ mode: "fresh" }).catch((error) => {
+    console.error(
+      "[window] failed to create new window:",
+      error instanceof Error ? error.message : String(error)
+    );
+  });
+}
 
-  const viewMenu: MenuItemConstructorOptions = {
-    label: "View",
-    submenu: [
-      { role: "reload" },
-      { role: "forceReload" },
-      ...(isDev
-        ? [createDetachedDevToolsMenuItem(() => windowManager.getFocused())]
-        : []),
-      { type: "separator" },
-      { role: "resetZoom" },
-      { role: "zoomIn" },
-      { role: "zoomOut" },
-      { type: "separator" },
-      { role: "togglefullscreen" },
-    ],
-  };
+function openTerminalFromMenu(target: AppWindow | null): void {
+  const windowId = target ? windowManager.findInternalIdByWindow(target) : null;
+  if (!windowId) {
+    return;
+  }
+  appCore.services.rendererCommand
+    .execute({ type: "terminal.open", windowId })
+    .then((result) => {
+      if (!result.ok) {
+        console.error("[menu] failed to open terminal:", result.error.message);
+      }
+    })
+    .catch((error: unknown) => {
+      console.error(
+        "[menu] failed to open terminal:",
+        error instanceof Error ? error.message : String(error)
+      );
+    });
+}
 
-  const newWindowMenuItem: MenuItemConstructorOptions = {
-    click: () => {
-      appCore.services.window.create({ mode: "fresh" }).catch((error) => {
-        console.error(
-          "[window] failed to create new window:",
-          error instanceof Error ? error.message : String(error)
-        );
-      });
-    },
-    label: "New Window",
-  };
-
-  const windowMenu: MenuItemConstructorOptions = {
-    label: "Window",
-    submenu: isMac
-      ? [
-          newWindowMenuItem,
-          { type: "separator" },
-          { role: "minimize" },
-          { role: "zoom" },
-          { type: "separator" },
-          { role: "front" },
-          { type: "separator" },
-          { role: "window" },
-        ]
-      : [
-          newWindowMenuItem,
-          { type: "separator" },
-          { role: "minimize" },
-          { role: "zoom" },
-          { role: "close" },
-        ],
-  };
-
-  const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [macAppMenu] : []),
-    editMenu,
-    viewMenu,
-    windowMenu,
-  ];
-  return Menu.buildFromTemplate(template);
+function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
+  if (!target || target.isDestroyed() || target.webContents.isDestroyed()) {
+    return;
+  }
+  if (target.isMinimized()) {
+    target.restore();
+  }
+  if (isMac) {
+    app.focus({ steal: true });
+  }
+  target.focus();
+  target.webContents.focus();
+  target.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST);
 }
 
 app.whenReady().then(async () => {
   installCsp();
-  Menu.setApplicationMenu(buildAppMenu());
+  await installAppMenu({
+    appName: app.name,
+    eventBus: appCore.eventBus,
+    getSystemLocale: () => app.getLocale(),
+    getTargetWindow: getMenuTargetWindow,
+    isDev,
+    isMac,
+    onNewTerminal: openTerminalFromMenu,
+    onNewWindow: createFreshWindowFromMenu,
+    onOpenCommandPalette: toggleCommandPaletteFromMenu,
+    readPreferences: () => appCore.services.preferences.read(),
+  });
 
   // mac dev: dock icon 默认是 Electron 紫色; 显式设成 Pier 图标.
   if (isMac && isDev && app.dock) {

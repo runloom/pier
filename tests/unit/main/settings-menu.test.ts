@@ -24,6 +24,13 @@ describe("settings menu", () => {
     expect(item.accelerator).toBe(OPEN_SETTINGS_ACCELERATOR);
   });
 
+  it("allows the visible label to be localized", () => {
+    const item = createOpenSettingsMenuItem(() => null, "设置...");
+
+    expect(item.label).toBe("设置...");
+    expect(item.accelerator).toBe(OPEN_SETTINGS_ACCELERATOR);
+  });
+
   it("sends the open settings request to the target renderer", () => {
     const win = {
       focus: vi.fn(),
