@@ -4,11 +4,13 @@ export const en = {
     description: "Manage application preferences",
     nav: {
       appearance: "Appearance",
+      keybindings: "Keyboard",
       terminal: "Terminal",
     },
     section: {
       appearance: "Appearance",
       font: "Font",
+      keybindings: "Keyboard Shortcuts",
       terminal: "Terminal",
     },
     row: {
@@ -52,6 +54,62 @@ export const en = {
         activeTerminal: "Inherit active terminal",
         shellDefault: "Use shell default",
       },
+    },
+    keybindings: {
+      change: "Change Shortcut",
+      clear: "Clear",
+      descriptionDefault: "{{category}} command.",
+      description: {
+        commandPalette: {
+          clearRecent: "Clear command palette history.",
+          toggle: "Open or close the command palette.",
+        },
+        config: {
+          locale: "Choose the display language.",
+          stylePreset: "Choose the interface color style.",
+          theme: "Choose the interface color mode.",
+        },
+        panel: {
+          close: "Close the current panel.",
+          closeActive: "Close the active panel.",
+          closeAll: "Close all panels.",
+          closeOthers: "Close every panel except the current one.",
+          focusDown: "Focus the panel group below.",
+          focusLeft: "Focus the panel group on the left.",
+          focusRight: "Focus the panel group on the right.",
+          focusUp: "Focus the panel group above.",
+          newTab: "Create a new panel tab.",
+          newTerminal: "Create a new terminal panel.",
+          splitDown: "Split the current panel downward.",
+          splitLeft: "Split the current panel to the left.",
+          splitRight: "Split the current panel to the right.",
+          splitUp: "Split the current panel upward.",
+        },
+        run: {
+          task: "Open the task runner entry.",
+          terminalList: "Open the terminal list.",
+        },
+        settings: {
+          open: "Open settings.",
+        },
+        terminal: {
+          close: "Close the current terminal panel.",
+        },
+        window: {
+          newWindow: "Open a new Pier window.",
+        },
+        workspace: {
+          resetLayout: "Clear and restore the default workspace layout.",
+        },
+      },
+      errorConflict: 'Already used by "{{command}}".',
+      errorNeedsModifier: "Shortcut must include at least one modifier.",
+      errorUnknown: "Unable to save shortcut.",
+      record: "Record",
+      recording: "Press keys...",
+      reset: "Reset",
+      resetAll: "Reset All",
+      unassigned: "Unassigned",
     },
     theme: {
       light: "Light",
@@ -103,11 +161,15 @@ export const en = {
       workspace: "Workspace",
       run: "Run",
       panel: "Panel",
+      terminal: "Terminal",
       window: "Window",
     },
     action: {
       toggleCommandPalette: "Show Command Palette",
       openSettings: "Open Settings",
+      closeActivePanel: "Close Active Panel",
+      newTab: "New Tab",
+      newWindow: "New Window",
       runTask: "Run Task...",
       terminalList: "Terminal List...",
       switchTerminal: "Switch Terminal...",
@@ -155,9 +217,9 @@ export const en = {
   },
   contextMenu: {
     action: {
-      closeAll: "Close All",
-      closeOthers: "Close Others",
-      closePanel: "Close",
+      closeAll: "Close All Panels",
+      closeOthers: "Close Other Panels",
+      closePanel: "Close Panel",
       closeTerminal: "Close Terminal",
       focusDown: "Focus Down",
       focusLeft: "Focus Left",

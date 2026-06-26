@@ -4,11 +4,13 @@ export const zhCN = {
     description: "管理应用偏好设置",
     nav: {
       appearance: "外观",
+      keybindings: "快捷键",
       terminal: "终端",
     },
     section: {
       appearance: "外观",
       font: "字体",
+      keybindings: "快捷键",
       terminal: "终端",
     },
     row: {
@@ -49,6 +51,62 @@ export const zhCN = {
         activeTerminal: "继承当前终端",
         shellDefault: "使用 shell 默认目录",
       },
+    },
+    keybindings: {
+      change: "更改快捷键",
+      clear: "清除",
+      descriptionDefault: "{{category}}命令。",
+      description: {
+        commandPalette: {
+          clearRecent: "清空命令面板的使用记录。",
+          toggle: "打开或关闭命令面板。",
+        },
+        config: {
+          locale: "选择界面显示语言。",
+          stylePreset: "选择界面配色风格。",
+          theme: "选择界面颜色模式。",
+        },
+        panel: {
+          close: "关闭当前面板。",
+          closeActive: "关闭当前活动面板。",
+          closeAll: "关闭所有面板。",
+          closeOthers: "关闭除当前面板外的其他面板。",
+          focusDown: "聚焦下方的面板组。",
+          focusLeft: "聚焦左侧的面板组。",
+          focusRight: "聚焦右侧的面板组。",
+          focusUp: "聚焦上方的面板组。",
+          newTab: "新建一个面板标签。",
+          newTerminal: "新建一个终端面板。",
+          splitDown: "向下拆分当前面板。",
+          splitLeft: "向左拆分当前面板。",
+          splitRight: "向右拆分当前面板。",
+          splitUp: "向上拆分当前面板。",
+        },
+        run: {
+          task: "打开任务运行入口。",
+          terminalList: "打开终端列表。",
+        },
+        settings: {
+          open: "打开设置。",
+        },
+        terminal: {
+          close: "关闭当前终端面板。",
+        },
+        window: {
+          newWindow: "打开一个新的 Pier 窗口。",
+        },
+        workspace: {
+          resetLayout: "清空并恢复默认工作区布局。",
+        },
+      },
+      errorConflict: "已被“{{command}}”使用。",
+      errorNeedsModifier: "快捷键至少需要包含一个修饰键。",
+      errorUnknown: "无法保存快捷键。",
+      record: "录制",
+      recording: "按下按键...",
+      reset: "恢复默认",
+      resetAll: "全部重置",
+      unassigned: "未设置",
     },
     theme: {
       light: "浅色",
@@ -100,11 +158,15 @@ export const zhCN = {
       workspace: "工作区",
       run: "运行",
       panel: "面板",
+      terminal: "终端",
       window: "窗口",
     },
     action: {
       toggleCommandPalette: "显示命令面板",
       openSettings: "打开设置",
+      closeActivePanel: "关闭当前面板",
+      newTab: "新建标签",
+      newWindow: "新建窗口",
       runTask: "运行任务...",
       terminalList: "终端列表...",
       switchTerminal: "切换终端...",
@@ -152,9 +214,9 @@ export const zhCN = {
   },
   contextMenu: {
     action: {
-      closeAll: "关闭所有",
-      closeOthers: "关闭其他",
-      closePanel: "关闭",
+      closeAll: "关闭所有面板",
+      closeOthers: "关闭其他面板",
+      closePanel: "关闭面板",
       closeTerminal: "关闭终端",
       focusDown: "向下聚焦",
       focusLeft: "向左聚焦",

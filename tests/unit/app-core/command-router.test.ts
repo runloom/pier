@@ -55,6 +55,7 @@ function services(rendererCommands: unknown[] = []): PierCoreServices {
         terminalScrollbackMb: 64,
         theme: "system",
         uiFontFamily: "",
+        userKeymap: [],
       }),
       update: async (patch) => ({
         language: "system",
@@ -68,6 +69,7 @@ function services(rendererCommands: unknown[] = []): PierCoreServices {
         terminalScrollbackMb: 64,
         theme: patch.theme ?? "system",
         uiFontFamily: "",
+        userKeymap: patch.userKeymap ?? [],
       }),
     },
     workspace: {

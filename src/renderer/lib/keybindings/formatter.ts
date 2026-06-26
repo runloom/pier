@@ -40,6 +40,11 @@ function codeLabel(code: string): string {
 }
 
 export function formatChord(chord: KeyChord): string {
+  const parts = formatChordParts(chord);
+  return isMac() ? parts.join("") : parts.join("+");
+}
+
+export function formatChordParts(chord: KeyChord): string[] {
   const mac = isMac();
   const parts: string[] = [];
   if (chord.cmdOrCtrl) {
@@ -57,5 +62,23 @@ export function formatChord(chord: KeyChord): string {
     parts.push(mac ? "⇧" : "Shift");
   }
   parts.push(codeLabel(chord.code));
-  return mac ? parts.join("") : parts.join("+");
+  return parts;
+}
+
+export function stringifyChord(chord: KeyChord): string {
+  const parts: string[] = [];
+  if (chord.cmdOrCtrl) {
+    parts.push("Mod");
+  }
+  if (chord.ctrl) {
+    parts.push("Ctrl");
+  }
+  if (chord.alt) {
+    parts.push("Alt");
+  }
+  if (chord.shift) {
+    parts.push("Shift");
+  }
+  parts.push(chord.code);
+  return parts.join("+");
 }

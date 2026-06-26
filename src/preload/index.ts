@@ -4,6 +4,7 @@ import type {
   MenuPopupResult,
   MenuTemplate,
 } from "@shared/contracts/menu.ts";
+import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type {
   RendererCommandEnvelope,
   RendererCommandResult,
@@ -26,19 +27,7 @@ export interface WindowInfo {
   recordId: string;
 }
 
-interface PreferencesSnapshot {
-  language: string;
-  monoFontFamily: string;
-  monoFontSize: number;
-  stylePresetId: string;
-  terminalCursorBlink: boolean;
-  terminalCursorStyle: "block" | "bar" | "underline";
-  terminalNewCwdPolicy: "activeTerminal" | "shellDefault";
-  terminalPasteProtection: boolean;
-  terminalScrollbackMb: number;
-  theme: string;
-  uiFontFamily: string;
-}
+export type PreferencesSnapshot = ProjectPreferences;
 
 export interface PierPreferencesAPI {
   /**
@@ -171,6 +160,8 @@ const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
+  setAppShortcutKeys: (keys) =>
+    ipcRenderer.send("pier:terminal:set-app-shortcut-keys", keys),
   setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),
   setFont: (panelId, font) =>
     ipcRenderer.send("pier:terminal:set-font", panelId, font),

@@ -20,6 +20,12 @@ import type {
   ResolveScopeState,
 } from "./types.ts";
 
+export interface KeybindingConflict {
+  readonly binding: Keybinding;
+  readonly commandId: string;
+  readonly scope: KeybindingScope;
+}
+
 class KeybindingRegistry extends Notifier {
   private readonly defaults = new Map<string, Keybinding[]>();
   private readonly userOverrides = new Map<string, Keybinding[]>();
@@ -66,6 +72,38 @@ class KeybindingRegistry extends Notifier {
       return [];
     }
     return this.defaults.get(commandId) ?? [];
+  }
+
+  getUserBindings(): readonly Keybinding[] {
+    return Array.from(this.userOverrides.values()).flat();
+  }
+
+  findConflict(
+    chord: KeyChord,
+    scope: KeybindingScope,
+    ignoredCommandId?: string
+  ): KeybindingConflict | null {
+    for (const [commandId, list] of this.userOverrides) {
+      if (commandId === ignoredCommandId) {
+        continue;
+      }
+      for (const binding of list) {
+        if (binding.scope === scope && chordEquals(binding.chord, chord)) {
+          return { binding, commandId, scope };
+        }
+      }
+    }
+    for (const [commandId, list] of this.defaults) {
+      if (commandId === ignoredCommandId || this.userUnbinds.has(commandId)) {
+        continue;
+      }
+      for (const binding of list) {
+        if (binding.scope === scope && chordEquals(binding.chord, chord)) {
+          return { binding, commandId, scope };
+        }
+      }
+    }
+    return null;
   }
 
   /**

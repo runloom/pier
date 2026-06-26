@@ -19,7 +19,7 @@ export function registerTerminalActions(): () => void {
 
   disposers.push(
     actionRegistry.register({
-      category: "Panel",
+      category: "Terminal",
       enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
       handler: () => {
         // alias: 把 close 行为统一委派给 pier.panel.close handler.
