@@ -59,10 +59,21 @@ function panelContextFromParams(params: unknown): PanelContext | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
+function launchIdFromParams(params: unknown): string | undefined {
+  if (!params || typeof params !== "object" || !("launchId" in params)) {
+    return;
+  }
+  const launchId = (params as { launchId?: unknown }).launchId;
+  return typeof launchId === "string" && launchId.length > 0
+    ? launchId
+    : undefined;
+}
+
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
   const [initialContext] = useState(() => panelContextFromParams(props.params));
+  const [initialLaunchId] = useState(() => launchIdFromParams(props.params));
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -244,6 +255,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             size: monoFontSizeRef.current,
           },
           ...(initialContext && { context: initialContext }),
+          ...(initialLaunchId && { launchId: initialLaunchId }),
         });
         if (!result.ok) {
           const message = result.error ?? "终端创建失败";
@@ -364,7 +376,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       renderableAnchorObserver?.disconnect();
       layoutRegistration?.dispose();
     };
-  }, [api, panelId, initialContext]);
+  }, [api, panelId, initialContext, initialLaunchId]);
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {

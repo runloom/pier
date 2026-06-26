@@ -21,6 +21,10 @@ import {
   findAppWindowByElectronId,
   findAppWindowByWebContents,
 } from "../windows/window-identity.ts";
+import {
+  consumeCreateLaunch,
+  resolveCreateTerminalLaunch,
+} from "./terminal-create-launch.ts";
 import { handleTerminalCwdChange } from "./terminal-cwd-forwarding.ts";
 import {
   recordNativeTerminalRoute,
@@ -47,7 +51,6 @@ import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
 
-/** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
   return cachedAddon;
 }
@@ -208,8 +211,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const context = saved?.context ?? args.context;
-        const cwd = context?.cwd;
+        const { context, nativeLaunch } = resolveCreateTerminalLaunch(
+          args,
+          saved
+        );
         recordRendererTerminalRoute(win, "create", args.panelId, {
           height: args.frame.height,
           width: args.frame.width,
@@ -222,9 +227,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           args.frame,
           args.font.family,
           args.font.size,
-          cwd
+          nativeLaunch
         );
         if (ok) {
+          consumeCreateLaunch(args);
           await persistInitialTerminalContext(
             sessionScope,
             args.panelId,

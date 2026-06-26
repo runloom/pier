@@ -10,6 +10,7 @@ import {
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
@@ -21,6 +22,7 @@ import {
   executePanelFocusCommand,
   executePanelListCommand,
   executePanelOpenCommand,
+  executeTerminalOpenCommand,
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { orderedWindows } from "./window-routing.ts";
@@ -41,6 +43,38 @@ export interface PierCoreServices {
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
   rendererCommand: RendererCommandService;
+  terminalLaunches: {
+    consume(
+      launchId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    discard(launchId: string): Promise<void> | void;
+    read(
+      launchId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    register(launch: ResolvedTerminalLaunchOptions): Promise<string> | string;
+    sweepExpired?(): Promise<number> | number;
+  };
+  terminalProfiles: {
+    delete(profileId: string): Promise<boolean>;
+    list(): Promise<Record<string, ResolvedTerminalLaunchOptions>>;
+    read(profileId: string): Promise<ResolvedTerminalLaunchOptions | null>;
+    resolve(
+      profileId: string
+    ):
+      | Promise<ResolvedTerminalLaunchOptions | null>
+      | ResolvedTerminalLaunchOptions
+      | null;
+    upsert(
+      profileId: string,
+      profile: ResolvedTerminalLaunchOptions
+    ): Promise<ResolvedTerminalLaunchOptions>;
+  };
   window: {
     close(windowId: string): void;
     create(options?: WindowCreateOptions): Promise<{
@@ -191,6 +225,32 @@ export function createCommandRouter({
             return await executePanelListCommand(requestId, command, services);
           case "panel.open":
             return await executePanelOpenCommand(requestId, command, services);
+          case "terminal.open":
+            return await executeTerminalOpenCommand(
+              requestId,
+              command,
+              services
+            );
+          case "terminal.profile.delete":
+            return success(
+              requestId,
+              await services.terminalProfiles.delete(command.profileId)
+            );
+          case "terminal.profile.list":
+            return success(requestId, await services.terminalProfiles.list());
+          case "terminal.profile.read":
+            return success(
+              requestId,
+              await services.terminalProfiles.read(command.profileId)
+            );
+          case "terminal.profile.upsert":
+            return success(
+              requestId,
+              await services.terminalProfiles.upsert(
+                command.profileId,
+                command.profile
+              )
+            );
           default: {
             const _exhaustive: never = command;
             return failure(

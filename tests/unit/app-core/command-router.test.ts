@@ -6,7 +6,7 @@ import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
   type PierClient,
 } from "@shared/contracts/permissions.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const now = 1_772_000_000_000;
 
@@ -56,7 +56,8 @@ function services(
     main: [
       panelSnapshot("terminal-1", panelContext("/Users/xyz/ABC/pier"), true),
     ],
-  }
+  },
+  terminalLaunches: unknown[] = []
 ): PierCoreServices {
   let recentContexts: PanelContext[] = [];
 
@@ -112,7 +113,7 @@ function services(
     rendererCommand: {
       execute: (command) => {
         rendererCommands.push(command);
-        if (command.type === "panel.open") {
+        if (command.type === "panel.open" || command.type === "terminal.open") {
           return Promise.resolve({
             data: {
               context: command.context,
@@ -136,6 +137,22 @@ function services(
         });
       },
       resolve: () => undefined,
+    },
+    terminalLaunches: {
+      consume: async () => null,
+      discard: async () => undefined,
+      read: async () => null,
+      register: (launch) => {
+        terminalLaunches.push(launch);
+        return "launch-1";
+      },
+    },
+    terminalProfiles: {
+      delete: async () => false,
+      list: async () => ({ default: {} }),
+      read: async () => null,
+      resolve: async () => null,
+      upsert: async (_profileId, profile) => profile,
     },
     window: {
       close: () => undefined,
@@ -280,6 +297,318 @@ describe("createCommandRouter", () => {
       focus: false,
       type: "panel.open",
       windowId: "main",
+    });
+  });
+
+  it("terminal.open 注册 launch 后发 renderer terminal.open", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      {
+        main: [
+          panelSnapshot(
+            "terminal-1",
+            panelContext("/Users/xyz/ABC/pier"),
+            true
+          ),
+        ],
+      },
+      terminalLaunches
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: false,
+          launch: {
+            command: "pnpm test",
+            cwd: "/tmp/pier",
+            env: {
+              PIER_MODE: "dev",
+            },
+          },
+          placement: "split-below",
+          type: "terminal.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open",
+      })
+    ).resolves.toEqual({
+      data: {
+        context: panelContext("/tmp/pier"),
+        panelId: "terminal-from-renderer",
+      },
+      ok: true,
+      requestId: "req-terminal-open",
+    });
+
+    expect(terminalLaunches).toEqual([
+      {
+        command: "pnpm test",
+        cwd: "/tmp/pier",
+        env: {
+          PIER_MODE: "dev",
+        },
+      },
+    ]);
+    expect(rendererCommands).toEqual([
+      {
+        context: panelContext("/tmp/pier"),
+        focus: false,
+        launchId: "launch-1",
+        placement: "split-below",
+        type: "terminal.open",
+        windowId: "main",
+      },
+    ]);
+    await expect(fakeServices.panelContexts.listRecent()).resolves.toEqual([
+      panelContext("/tmp/pier"),
+    ]);
+  });
+
+  it("terminal.open 在 renderer command 失败时清理已注册 launch", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    const discardLaunch = vi.fn();
+    Object.assign(fakeServices.terminalLaunches, { discard: discardLaunch });
+    fakeServices.rendererCommand.execute = vi.fn((command) => {
+      rendererCommands.push(command);
+      return Promise.resolve({
+        error: {
+          code: "platform_unavailable" as const,
+          message: "renderer unavailable",
+        },
+        ok: false as const,
+        requestId: "renderer-req",
+      });
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          launch: {
+            command: "printenv SECRET",
+            cwd: "/tmp/pier",
+            env: { SECRET: "token" },
+          },
+          type: "terminal.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open-fail",
+      })
+    ).resolves.toMatchObject({
+      error: { message: "renderer unavailable" },
+      ok: false,
+      requestId: "req-terminal-open-fail",
+    });
+
+    expect(terminalLaunches).toEqual([
+      {
+        command: "printenv SECRET",
+        cwd: "/tmp/pier",
+        env: { SECRET: "token" },
+      },
+    ]);
+    expect(discardLaunch).toHaveBeenCalledWith("launch-1");
+  });
+
+  it("terminal.open 在注册 launch 前解析 profileId 为实际启动参数", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    Object.assign(fakeServices, {
+      terminalProfiles: {
+        resolve: vi.fn(async (profileId: string) =>
+          profileId === "codex"
+            ? {
+                command: "codex",
+                cwd: "/Users/xyz/ABC/profile-cwd",
+                env: { PIER_PROFILE: "codex" },
+              }
+            : null
+        ),
+      },
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          launch: {
+            cwd: "/tmp/pier",
+            env: { PIER_MODE: "dev" },
+            profileId: "codex",
+          },
+          type: "terminal.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open-profile",
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      requestId: "req-terminal-open-profile",
+    });
+
+    expect(terminalLaunches).toEqual([
+      {
+        command: "codex",
+        cwd: "/tmp/pier",
+        env: {
+          PIER_MODE: "dev",
+          PIER_PROFILE: "codex",
+        },
+      },
+    ]);
+  });
+
+  it("terminal.open 遇到未知 profileId 时失败且不注册 launch", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    Object.assign(fakeServices, {
+      terminalProfiles: {
+        resolve: vi.fn(async () => null),
+      },
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          launch: {
+            profileId: "missing",
+          },
+          type: "terminal.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open-missing-profile",
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: "invalid_command",
+        message: "unknown terminal profile: missing",
+      },
+      ok: false,
+      requestId: "req-terminal-open-missing-profile",
+    });
+
+    expect(terminalLaunches).toEqual([]);
+    expect(rendererCommands).toEqual([]);
+  });
+
+  it("terminal profile commands dispatch to the terminal profile service", async () => {
+    const fakeServices = services();
+    const savedProfiles = new Map<string, unknown>([
+      ["codex", { command: "codex", env: { PIER_MODE: "dev" } }],
+    ]);
+    Object.assign(fakeServices.terminalProfiles, {
+      delete: vi.fn((profileId: string) => {
+        const existed = savedProfiles.delete(profileId);
+        return Promise.resolve(existed);
+      }),
+      list: vi.fn(() => Promise.resolve(Object.fromEntries(savedProfiles))),
+      read: vi.fn((profileId: string) =>
+        Promise.resolve(savedProfiles.get(profileId) ?? null)
+      ),
+      upsert: vi.fn((profileId: string, profile: unknown) => {
+        savedProfiles.set(profileId, profile);
+        return Promise.resolve(profile);
+      }),
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { type: "terminal.profile.list" },
+        protocolVersion: 1,
+        requestId: "req-profile-list",
+      })
+    ).resolves.toMatchObject({
+      data: { codex: { command: "codex", env: { PIER_MODE: "dev" } } },
+      ok: true,
+      requestId: "req-profile-list",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          profile: { command: "aider", cwd: "/tmp/pier" },
+          profileId: "aider",
+          type: "terminal.profile.upsert",
+        },
+        protocolVersion: 1,
+        requestId: "req-profile-upsert",
+      })
+    ).resolves.toMatchObject({
+      data: { command: "aider", cwd: "/tmp/pier" },
+      ok: true,
+      requestId: "req-profile-upsert",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          profileId: "aider",
+          type: "terminal.profile.read",
+        },
+        protocolVersion: 1,
+        requestId: "req-profile-read",
+      })
+    ).resolves.toMatchObject({
+      data: { command: "aider", cwd: "/tmp/pier" },
+      ok: true,
+      requestId: "req-profile-read",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          profileId: "aider",
+          type: "terminal.profile.delete",
+        },
+        protocolVersion: 1,
+        requestId: "req-profile-delete",
+      })
+    ).resolves.toMatchObject({
+      data: true,
+      ok: true,
+      requestId: "req-profile-delete",
     });
   });
 

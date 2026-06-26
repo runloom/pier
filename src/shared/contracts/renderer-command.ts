@@ -24,6 +24,14 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   z.object({
+    type: z.literal("terminal.open"),
+    context: panelContextSchema.optional(),
+    focus: z.boolean().optional(),
+    launchId: z.string().min(1),
+    placement: pierCommandPlacementSchema.optional(),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
     type: z.literal("workspace.flushLayout"),
     windowId: z.string().min(1).optional(),
   }),

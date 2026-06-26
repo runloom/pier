@@ -48,7 +48,7 @@ function createPanelProps(
   options: {
     isActive?: boolean;
     isVisible?: boolean;
-    params?: { context?: PanelContext };
+    params?: { context?: PanelContext; launchId?: string };
   } = {}
 ): TestPanelProps {
   let isActive = options.isActive ?? true;
@@ -316,6 +316,26 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({
           context,
+          panelId: "terminal-1",
+        })
+      );
+    });
+  });
+
+  it("passes launchId into native terminal creation", async () => {
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: { context, launchId: "launch-1" },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          launchId: "launch-1",
           panelId: "terminal-1",
         })
       );

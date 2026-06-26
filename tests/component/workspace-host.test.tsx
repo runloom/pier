@@ -61,6 +61,16 @@ function createPanel(opts: {
   };
 }
 
+const context = {
+  contextId: "ctx-pier",
+  cwd: "/Users/xyz/ABC/pier",
+  openedPath: "/Users/xyz/ABC/pier",
+  projectRoot: "/Users/xyz/ABC/pier",
+  source: "command" as const,
+  updatedAt: 1_772_000_000_000,
+  worktreeKey: "/Users/xyz/ABC/pier",
+};
+
 function installPierWindowApi() {
   Object.defineProperty(window, "pier", {
     configurable: true,
@@ -509,6 +519,88 @@ describe("WorkspaceHost", () => {
     );
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
+  });
+
+  it("creates a terminal panel with launchId when main sends terminal.open", () => {
+    const bridge: {
+      listener?: Parameters<typeof window.pier.rendererCommand.onCommand>[0];
+    } = {};
+    const addPanel = vi.fn();
+    const resolve = vi.fn();
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        getWindowContext: vi.fn(() => new Promise(() => undefined)),
+        readyToShow: vi.fn(),
+        rendererCommand: {
+          onCommand: vi.fn((cb) => {
+            bridge.listener = cb;
+            return vi.fn();
+          }),
+          resolve,
+        },
+        terminal: {
+          applyPresentation: vi.fn(),
+          onFocusRequest: vi.fn(),
+          reconcile: vi.fn(),
+          setActivePanelKind: vi.fn(),
+        },
+        workspace: {
+          clearLayout: vi.fn(),
+          loadLayout: vi.fn(),
+          onNewTerminalRequest: vi.fn(),
+          saveLayout: vi.fn(),
+        },
+      } as never,
+    });
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.calls.at(-1)?.[0];
+    if (!props) {
+      throw new Error("DockviewReact props missing");
+    }
+    const api = {
+      activeGroup: null,
+      activePanel: null,
+      addPanel,
+      onDidActivePanelChange: vi.fn(),
+      onDidLayoutChange: vi.fn(),
+      onDidMaximizedGroupChange: vi.fn(),
+      panels: [],
+      toJSON: vi.fn(() => ({ grid: { root: undefined } })),
+      totalPanels: 0,
+    } as unknown as DockviewReadyEvent["api"];
+
+    act(() => {
+      props.onReady?.({ api } as DockviewReadyEvent);
+      bridge.listener?.({
+        command: {
+          context,
+          launchId: "launch-1",
+          type: "terminal.open",
+        },
+        requestId: "req-terminal-open",
+      });
+    });
+
+    expect(addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: "terminal",
+        params: {
+          context,
+          launchId: "launch-1",
+        },
+      })
+    );
+    const panelId = addPanel.mock.calls[0]?.[0]?.id;
+    expect(resolve).toHaveBeenCalledWith({
+      data: {
+        context,
+        panelId,
+      },
+      ok: true,
+      requestId: "req-terminal-open",
+    });
   });
 
   it("creates a terminal panel when main sends the native menu request", () => {

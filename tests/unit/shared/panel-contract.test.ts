@@ -1,3 +1,4 @@
+import { pierCommandSchema } from "@shared/contracts/commands.ts";
 import {
   panelContextSchema,
   panelDescriptorSchema,
@@ -78,6 +79,95 @@ describe("shared panel contract", () => {
     ).toMatchObject({
       context: { contextId: "ctx-1" },
       type: "panel.open",
+    });
+  });
+
+  it("allows public terminal.open commands to carry launch options", () => {
+    expect(
+      pierCommandSchema.parse({
+        focus: false,
+        launch: {
+          command: "pnpm test",
+          cwd: "/Users/xyz/ABC/pier",
+          env: {
+            PIER_MODE: "dev",
+          },
+          profileId: "codex",
+        },
+        placement: "split-right",
+        type: "terminal.open",
+        windowId: "main",
+      })
+    ).toMatchObject({
+      focus: false,
+      launch: {
+        command: "pnpm test",
+        cwd: "/Users/xyz/ABC/pier",
+        env: {
+          PIER_MODE: "dev",
+        },
+        profileId: "codex",
+      },
+      placement: "split-right",
+      type: "terminal.open",
+      windowId: "main",
+    });
+  });
+
+  it("allows renderer terminal.open commands to carry launchId without raw env", () => {
+    expect(
+      rendererCommandSchema.parse({
+        context,
+        launchId: "launch-1",
+        type: "terminal.open",
+      })
+    ).toMatchObject({
+      context: { contextId: "ctx-1" },
+      launchId: "launch-1",
+      type: "terminal.open",
+    });
+  });
+
+  it("allows public terminal profile management commands", () => {
+    expect(
+      pierCommandSchema.parse({ type: "terminal.profile.list" })
+    ).toMatchObject({ type: "terminal.profile.list" });
+    expect(
+      pierCommandSchema.parse({
+        profileId: "codex",
+        type: "terminal.profile.read",
+      })
+    ).toMatchObject({
+      profileId: "codex",
+      type: "terminal.profile.read",
+    });
+    expect(
+      pierCommandSchema.parse({
+        profile: {
+          command: "codex",
+          cwd: "/Users/xyz/ABC/pier",
+          env: { PIER_MODE: "dev" },
+        },
+        profileId: "codex",
+        type: "terminal.profile.upsert",
+      })
+    ).toMatchObject({
+      profile: {
+        command: "codex",
+        cwd: "/Users/xyz/ABC/pier",
+        env: { PIER_MODE: "dev" },
+      },
+      profileId: "codex",
+      type: "terminal.profile.upsert",
+    });
+    expect(
+      pierCommandSchema.parse({
+        profileId: "codex",
+        type: "terminal.profile.delete",
+      })
+    ).toMatchObject({
+      profileId: "codex",
+      type: "terminal.profile.delete",
     });
   });
 });

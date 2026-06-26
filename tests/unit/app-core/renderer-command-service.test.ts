@@ -145,6 +145,55 @@ describe("createRendererCommandService", () => {
     });
   });
 
+  it("terminal.open 默认聚焦但保留 focus=false", async () => {
+    const focusValues: Array<boolean | undefined> = [];
+    const service = createRendererCommandService({
+      createRequestId: () => `renderer-req-terminal-${focusValues.length + 1}`,
+      host: {
+        send(_envelope, _windowId, options) {
+          focusValues.push(options?.focus);
+          return true;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const foreground = service.execute({
+      context,
+      launchId: "launch-foreground",
+      type: "terminal.open",
+    });
+    service.resolve({
+      data: { panelId: "terminal-foreground" },
+      ok: true,
+      requestId: "renderer-req-terminal-1",
+    });
+    await expect(foreground).resolves.toEqual({
+      data: { panelId: "terminal-foreground" },
+      ok: true,
+      requestId: "renderer-req-terminal-1",
+    });
+
+    const background = service.execute({
+      context,
+      focus: false,
+      launchId: "launch-background",
+      type: "terminal.open",
+    });
+    service.resolve({
+      data: { panelId: "terminal-background" },
+      ok: true,
+      requestId: "renderer-req-terminal-2",
+    });
+    await expect(background).resolves.toEqual({
+      data: { panelId: "terminal-background" },
+      ok: true,
+      requestId: "renderer-req-terminal-2",
+    });
+
+    expect(focusValues).toEqual([true, false]);
+  });
+
   it("无可用 renderer 窗口时返回失败", async () => {
     const service = createRendererCommandService({
       createRequestId: () => "renderer-req-2",

@@ -214,6 +214,7 @@ export interface CreateTerminalArgs {
   context?: PanelContext | undefined;
   font: TerminalFont;
   frame: TerminalFrame;
+  launchId?: string | undefined;
   panelId: string;
 }
 

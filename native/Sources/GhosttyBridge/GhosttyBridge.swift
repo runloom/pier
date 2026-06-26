@@ -958,7 +958,9 @@ final class GhosttyBridgeImpl {
         viewport: NSRect,
         fontFamily: String,
         fontSize: Float,
-        workingDirectory: String?
+        workingDirectory: String?,
+        command: String?,
+        environment: [String: String]
     ) -> Bool {
         guard let contentView = parent.contentView else { return false }
 
@@ -997,6 +999,8 @@ final class GhosttyBridgeImpl {
         let terminalView = TerminalView(frame: .zero)
         terminalView.configuration = TerminalSurfaceOptions(
             backend: .exec,
+            command: command,
+            environment: environment,
             workingDirectory: workingDirectory
         )
         terminalView.controller = controller(for: parent)
@@ -1467,13 +1471,27 @@ public func ghosttyBridgeCreateTerminal(
     _ x: Double, _ y: Double, _ w: Double, _ h: Double,
     _ fontFamilyPtr: UnsafePointer<CChar>,
     _ fontSize: Float,
-    _ workingDirectoryPtr: UnsafePointer<CChar>?
+    _ workingDirectoryPtr: UnsafePointer<CChar>?,
+    _ commandPtr: UnsafePointer<CChar>?,
+    _ envKeysPtr: UnsafePointer<UnsafePointer<CChar>?>?,
+    _ envValuesPtr: UnsafePointer<UnsafePointer<CChar>?>?,
+    _ envCount: Int
 ) -> Bool {
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
         let panelId = String(cString: panelIdPtr)
         let fontFamily = String(cString: fontFamilyPtr)
         let workingDirectory = workingDirectoryPtr.map { String(cString: $0) }
+        let command = commandPtr.map { String(cString: $0) }
+        var environment: [String: String] = [:]
+        if let envKeysPtr, let envValuesPtr, envCount > 0 {
+            for index in 0 ..< envCount {
+                guard let keyPtr = envKeysPtr[index],
+                      let valuePtr = envValuesPtr[index]
+                else { continue }
+                environment[String(cString: keyPtr)] = String(cString: valuePtr)
+            }
+        }
         let viewport = NSRect(x: x, y: y, width: w, height: h)
         return GhosttyBridgeImpl.shared.createTerminal(
             parent: window,
@@ -1481,7 +1499,9 @@ public func ghosttyBridgeCreateTerminal(
             viewport: viewport,
             fontFamily: fontFamily,
             fontSize: fontSize,
-            workingDirectory: workingDirectory
+            workingDirectory: workingDirectory,
+            command: command,
+            environment: environment
         )
     }
 }
