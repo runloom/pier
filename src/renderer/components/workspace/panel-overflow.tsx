@@ -21,6 +21,8 @@ import {
 import { panelIconOf, panelKindOf } from "./panel-registry.ts";
 
 const CLIP_EPSILON_PX = 1;
+const OVERFLOW_SLOT_CLASS =
+  "flex h-full w-16 shrink-0 items-center justify-center px-1";
 
 interface OverflowPanelLike {
   id: string;
@@ -33,17 +35,23 @@ function sameIds(a: string[], b: string[]): boolean {
 }
 
 function closestTabsContainer(element: HTMLElement | null): HTMLElement | null {
+  const headerElement = element?.closest<HTMLElement>(
+    ".dv-tabs-and-actions-container"
+  );
+  const directTabsContainer = Array.from(headerElement?.children ?? []).find(
+    (child) => child.classList.contains("dv-tabs-container")
+  ) as HTMLElement | undefined;
   return (
-    element
-      ?.closest<HTMLElement>(".dv-tabs-and-actions-container")
-      ?.querySelector<HTMLElement>(".dv-tabs-container") ?? null
+    directTabsContainer ??
+    headerElement?.querySelector<HTMLElement>(".dv-tabs-container") ??
+    null
   );
 }
 
-function isOutsideVisibleTabStrip(tabRect: DOMRect, containerRect: DOMRect) {
+function isClippedByVisibleTabStrip(tabRect: DOMRect, containerRect: DOMRect) {
   return (
-    tabRect.right <= containerRect.left + CLIP_EPSILON_PX ||
-    tabRect.left >= containerRect.right - CLIP_EPSILON_PX
+    tabRect.left < containerRect.left - CLIP_EPSILON_PX ||
+    tabRect.right > containerRect.right + CLIP_EPSILON_PX
   );
 }
 
@@ -52,10 +60,6 @@ export function getOverflowPanelIds(
   panels: readonly OverflowPanelLike[]
 ): string[] {
   const containerRect = tabsContainer.getBoundingClientRect();
-  if (containerRect.width <= 0) {
-    return [];
-  }
-
   const knownPanelIds = new Set(panels.map((panel) => panel.id));
   const orderedTabEntries: Array<{
     element: HTMLElement;
@@ -75,10 +79,16 @@ export function getOverflowPanelIds(
     });
   }
 
+  if (containerRect.width <= 0) {
+    return orderedTabEntries.length > 0
+      ? orderedTabEntries.map(({ panelId }) => panelId)
+      : panels.map((panel) => panel.id);
+  }
+
   return orderedTabEntries
     .filter(({ element: tabElement }) => {
       const tabRect = tabElement.getBoundingClientRect();
-      return isOutsideVisibleTabStrip(tabRect, containerRect);
+      return isClippedByVisibleTabStrip(tabRect, containerRect);
     })
     .map(({ panelId }) => panelId);
 }
@@ -218,46 +228,47 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
     return () => popOverlay();
   }, [open]);
 
-  if (overflowPanels.length === 0) {
-    return <div className="h-full px-1" ref={setRootElement} />;
-  }
+  const hasOverflowPanels = overflowPanels.length > 0;
 
   return (
     <div
-      className="flex h-full items-center justify-center px-1"
+      className={OVERFLOW_SLOT_CLASS}
+      data-slot="panel-overflow"
       ref={setRootElement}
     >
-      <Select
-        onOpenChange={setOpen}
-        onValueChange={activatePanel}
-        open={open}
-        value=""
-      >
-        <SelectTrigger aria-label="Hidden tabs" asChild>
-          <Button
-            aria-label="Hidden tabs"
-            size="sm"
-            title="Hidden tabs"
-            type="button"
-            variant="secondary"
-          >
-            <ChevronDown data-icon="inline-start" />
-            <span>{overflowPanels.length}</span>
-          </Button>
-        </SelectTrigger>
-        <SelectContent
-          align="end"
-          className="w-48"
-          position="popper"
-          sideOffset={6}
+      {hasOverflowPanels ? (
+        <Select
+          onOpenChange={setOpen}
+          onValueChange={activatePanel}
+          open={open}
+          value=""
         >
-          <SelectGroup>
-            {overflowPanels.map((panel) => (
-              <PanelMenuItem key={panel.id} panel={panel} />
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+          <SelectTrigger aria-label="Hidden tabs" asChild>
+            <Button
+              aria-label="Hidden tabs"
+              size="sm"
+              title="Hidden tabs"
+              type="button"
+              variant="secondary"
+            >
+              <ChevronDown data-icon="inline-start" />
+              <span>{overflowPanels.length}</span>
+            </Button>
+          </SelectTrigger>
+          <SelectContent
+            align="end"
+            className="w-48"
+            position="popper"
+            sideOffset={6}
+          >
+            <SelectGroup>
+              {overflowPanels.map((panel) => (
+                <PanelMenuItem key={panel.id} panel={panel} />
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      ) : null}
     </div>
   );
 }

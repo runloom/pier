@@ -2,6 +2,7 @@ import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
+import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
@@ -28,6 +29,7 @@ interface WorkspaceState {
   closeAll: () => Promise<void>;
   closeOthers: (panelId: string) => void;
   closePanel: (panelId: string) => void;
+  equalizeSplits: () => void;
   focusGroup: (direction: "right" | "down" | "left" | "up") => void;
   hasMaximizedGroup: boolean;
   resetLayout: () => Promise<void>;
@@ -328,6 +330,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       },
     });
     scheduleRevealDockviewTabByPanelId(newId);
+  },
+
+  equalizeSplits: () => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    try {
+      equalizeDockviewSplits(api);
+    } catch (err) {
+      console.error("[workspace] equalizeSplits failed:", err);
+    }
   },
 
   focusGroup: (direction) => {

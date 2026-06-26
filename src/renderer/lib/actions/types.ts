@@ -5,6 +5,8 @@
 import type { LucideIcon } from "lucide-react";
 
 export interface ActionMetadata {
+  aliases?: () => readonly string[];
+  categoryKey?: ActionCategoryKey;
   /** true = 执行后不计入命令面板 MRU。仅给 clearRecent 这类元命令用 */
   excludeFromMru?: boolean;
   /**
@@ -28,7 +30,17 @@ export interface ActionMetadata {
    * 命令面板忽略此字段, 永远平铺展示.
    */
   submenu?: () => string;
+  titleKey?: string;
 }
+
+export type ActionCategoryKey =
+  | "panel"
+  | "run"
+  | "settings"
+  | "terminal"
+  | "view"
+  | "window"
+  | "workspace";
 
 export interface Action {
   category: string;

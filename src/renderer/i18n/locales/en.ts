@@ -84,6 +84,7 @@ export const en = {
           splitLeft: "Split the current panel to the left.",
           splitRight: "Split the current panel to the right.",
           splitUp: "Split the current panel upward.",
+          toggleMaximized: "Toggle the active panel maximized state.",
         },
         run: {
           task: "Open the task runner entry.",
@@ -152,6 +153,7 @@ export const en = {
   commandPalette: {
     title: "Command Palette",
     empty: "No matching command",
+    searchResults: "Results",
     placeholder: {
       commands: "Search commands…",
       runTask: "Search tasks or commands…",
@@ -181,11 +183,29 @@ export const en = {
       selectTheme: "Select Theme",
       selectStyle: "Select Style",
       selectLanguage: "Select Display Language",
+      togglePanelMaximize: "Toggle Panel Maximize",
+      equalizePanels: "Equalize Panels",
       resetLayout: "Reset Layout",
       clearRecent: "Clear command palette history",
       zoomIn: "Zoom In",
       zoomOut: "Zoom Out",
       resetZoom: "Reset Zoom",
+    },
+    aliases: {
+      equalizePanels: [
+        "balance panels",
+        "distribute panels",
+        "even panels",
+        "layout panels",
+        "pingfen mianban",
+        "junfen mianban",
+        "junfen",
+        "jfmb",
+        "pingfen",
+        "pfmb",
+        "平分面板",
+        "均分面板",
+      ],
     },
     run: {
       action: {
@@ -217,6 +237,7 @@ export const en = {
       focusLeft: "Focus Left",
       focusRight: "Focus Right",
       focusUp: "Focus Up",
+      equalizePanels: "Equalize Panels",
       newTerminal: "New Terminal",
       paste: "Paste",
       selectAll: "Select All",

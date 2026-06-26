@@ -81,6 +81,7 @@ export const zhCN = {
           splitLeft: "向左拆分当前面板。",
           splitRight: "向右拆分当前面板。",
           splitUp: "向上拆分当前面板。",
+          toggleMaximized: "切换当前面板的最大化状态。",
         },
         run: {
           task: "打开任务运行入口。",
@@ -149,6 +150,7 @@ export const zhCN = {
   commandPalette: {
     title: "命令面板",
     empty: "无匹配命令",
+    searchResults: "搜索结果",
     placeholder: {
       commands: "搜索命令…",
       runTask: "搜索任务或命令…",
@@ -178,11 +180,30 @@ export const zhCN = {
       selectTheme: "选择主题",
       selectStyle: "选择风格",
       selectLanguage: "选择显示语言",
+      togglePanelMaximize: "切换面板最大化",
+      equalizePanels: "均分面板",
       resetLayout: "重置布局",
       clearRecent: "清空命令面板使用记录",
       zoomIn: "放大界面",
       zoomOut: "缩小界面",
       resetZoom: "重置界面缩放",
+    },
+    aliases: {
+      equalizePanels: [
+        "平分面板",
+        "均分面板",
+        "平分布局",
+        "均分布局",
+        "balance panels",
+        "distribute panels",
+        "equalize panels",
+        "pingfen mianban",
+        "junfen mianban",
+        "junfen",
+        "jfmb",
+        "pingfen",
+        "pfmb",
+      ],
     },
     run: {
       action: {
@@ -214,6 +235,7 @@ export const zhCN = {
       focusLeft: "向左聚焦",
       focusRight: "向右聚焦",
       focusUp: "向上聚焦",
+      equalizePanels: "均分面板",
       newTerminal: "新建终端",
       paste: "粘贴",
       selectAll: "全选",

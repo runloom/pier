@@ -43,6 +43,7 @@
     "postinstall": "node ./scripts/ensure-electron.mjs"
   },
   "dependencies": {
+    "@leeoniya/ufuzzy": "1.0.19",
     "@pierre/theme": "^1.0.3",
     "@shikijs/themes": "^4.2.0",
     "class-variance-authority": "^0.7.1",
