@@ -48,9 +48,20 @@ function stripOptions(args: readonly string[]): string[] {
       arg === "--print-envelope" ||
       arg === "--window" ||
       arg === "--split" ||
-      arg === "--no-focus"
+      arg === "--no-focus" ||
+      arg === "--path" ||
+      arg === "--name" ||
+      arg === "--branch" ||
+      arg === "--base"
     ) {
-      if (arg === "--window" || arg === "--split") {
+      if (
+        arg === "--window" ||
+        arg === "--split" ||
+        arg === "--path" ||
+        arg === "--name" ||
+        arg === "--branch" ||
+        arg === "--base"
+      ) {
         index++;
       }
       continue;
@@ -155,8 +166,51 @@ function parsePanels(
   throw new Error("unknown pier CLI command");
 }
 
+function parseWorktrees(
+  action: string | undefined,
+  value: string | undefined,
+  unexpected: string | undefined,
+  args: readonly string[],
+  cwd: string,
+  route: ReturnType<typeof routeOptions>
+): PierCommand {
+  if (action === "list") {
+    if (value || unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
+    }
+    return {
+      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      type: "worktree.list",
+    };
+  }
+  if (action === "create") {
+    if (value || unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
+    }
+    const base = optionValue(args, "--base");
+    return {
+      ...(base && { base }),
+      branch: requireValue(optionValue(args, "--branch")),
+      name: requireValue(optionValue(args, "--name")),
+      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      type: "worktree.create",
+    };
+  }
+  if (action === "open") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return {
+      path: absolutePath(requireValue(value), cwd),
+      type: "worktree.open",
+      ...route,
+    };
+  }
+  throw new Error("unknown pier CLI command");
+}
+
 function parseCommand(args: readonly string[], cwd: string): PierCommand {
-  const [domain, action, value] = stripOptions(args);
+  const [domain, action, value, unexpected] = stripOptions(args);
   const route = routeOptions(args);
   if (domain === "open") {
     return parseOpen(action, value, cwd, route);
@@ -169,6 +223,9 @@ function parseCommand(args: readonly string[], cwd: string): PierCommand {
   }
   if (domain === "panels") {
     return parsePanels(action, value, route);
+  }
+  if (domain === "worktrees") {
+    return parseWorktrees(action, value, unexpected, args, cwd, route);
   }
   if (domain === "preferences" && action === "read") {
     return { type: "preferences.read" };

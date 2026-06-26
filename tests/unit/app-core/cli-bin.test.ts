@@ -92,6 +92,78 @@ describe("bin/pier.mjs", () => {
     });
   });
 
+  it("解析 worktrees 命令并输出命令信封", async () => {
+    const list = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "worktrees",
+      "list",
+      "--path",
+      ".",
+      "--json",
+      "--print-envelope",
+    ]);
+    expect(JSON.parse(list.stdout)).toMatchObject({
+      envelope: {
+        command: { path: resolve("."), type: "worktree.list" },
+      },
+      json: true,
+    });
+
+    const create = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "worktrees",
+      "create",
+      "--path",
+      ".",
+      "--name",
+      "feature-a",
+      "--branch",
+      "feature/a",
+      "--base",
+      "origin/main",
+      "--json",
+      "--print-envelope",
+    ]);
+    expect(JSON.parse(create.stdout)).toMatchObject({
+      envelope: {
+        command: {
+          base: "origin/main",
+          branch: "feature/a",
+          name: "feature-a",
+          path: resolve("."),
+          type: "worktree.create",
+        },
+      },
+      json: true,
+    });
+
+    const open = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "worktrees",
+      "open",
+      ".",
+      "--no-focus",
+      "--json",
+      "--print-envelope",
+    ]);
+    expect(JSON.parse(open.stdout)).toMatchObject({
+      envelope: {
+        command: { focus: false, path: resolve("."), type: "worktree.open" },
+      },
+      json: true,
+    });
+  });
+
+  it("usage 包含 worktrees 命令", async () => {
+    await expect(
+      execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "pier worktrees create --path <repo> --name <dir> --branch <branch> --base <ref> --json"
+      ),
+    });
+  });
+
   it("拒绝 terminals open --cwd 旧入口", async () => {
     await expect(
       execFileAsync("node", [

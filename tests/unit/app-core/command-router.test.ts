@@ -157,6 +157,46 @@ function services(
       readLayout: async () => null,
       saveLayout: async () => undefined,
     },
+    worktrees: {
+      create: async (args) => ({
+        created: {
+          bare: false,
+          branch: args.branch,
+          detached: false,
+          head: "def456",
+          isCurrent: false,
+          isMain: false,
+          locked: false,
+          lockedReason: null,
+          path: `/repo/.worktrees/${args.name}`,
+          prunable: false,
+          prunableReason: null,
+        },
+        targetPath: `/repo/.worktrees/${args.name}`,
+        worktrees: [],
+      }),
+      list: async (args) => ({
+        currentPath: args.path,
+        mainPath: "/repo",
+        path: args.path,
+        status: "available",
+        worktrees: [
+          {
+            bare: false,
+            branch: "main",
+            detached: false,
+            head: "abc123",
+            isCurrent: args.path === "/repo",
+            isMain: true,
+            locked: false,
+            lockedReason: null,
+            path: "/repo",
+            prunable: false,
+            prunableReason: null,
+          },
+        ],
+      }),
+    },
   };
 }
 
@@ -393,6 +433,117 @@ describe("createCommandRouter", () => {
       panelId: "terminal-1",
       type: "panel.focus",
       windowId: "main",
+    });
+  });
+
+  it("分发 worktree.list 和 worktree.create", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { path: "/repo", type: "worktree.list" },
+        protocolVersion: 1,
+        requestId: "req-worktree-list",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        mainPath: "/repo",
+        status: "available",
+        worktrees: [{ branch: "main", path: "/repo" }],
+      },
+      ok: true,
+      requestId: "req-worktree-list",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          base: "origin/main",
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-create",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        created: {
+          branch: "feature/a",
+          path: "/repo/.worktrees/feature-a",
+        },
+        targetPath: "/repo/.worktrees/feature-a",
+      },
+      ok: true,
+      requestId: "req-worktree-create",
+    });
+  });
+
+  it("worktree.open 复用 panel.open 的 context 解析和 renderer 命令", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: false,
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-open",
+      })
+    ).resolves.toEqual({
+      data: {
+        context: panelContext("/repo/.worktrees/feature-a"),
+        panelId: "terminal-from-renderer",
+      },
+      ok: true,
+      requestId: "req-worktree-open",
+    });
+
+    expect(rendererCommands.at(-1)).toEqual({
+      context: panelContext("/repo/.worktrees/feature-a"),
+      focus: false,
+      type: "panel.open",
+      windowId: "main",
+    });
+  });
+
+  it("worktree.remove 暂不支持危险删除", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.remove",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-remove",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "unsupported",
+        message: "worktree.remove is not supported yet",
+      },
+      ok: false,
+      requestId: "req-worktree-remove",
     });
   });
 });

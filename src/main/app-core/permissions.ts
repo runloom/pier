@@ -8,7 +8,7 @@ export type AuthorizationResult = { ok: true } | { ok: false; reason: string };
 
 const REQUIRED_CAPABILITY_BY_COMMAND: Record<
   PierCommand["type"],
-  PierCapability
+  PierCapability | readonly PierCapability[]
 > = {
   "app.status": "app:read",
   "commandPaletteMru.clear": "app:read",
@@ -23,6 +23,10 @@ const REQUIRED_CAPABILITY_BY_COMMAND: Record<
   "window.create": "window:create",
   "window.focus": "window:focus",
   "window.list": "window:read",
+  "worktree.create": "worktree:write",
+  "worktree.list": "worktree:read",
+  "worktree.open": ["worktree:read", "workspace:open"],
+  "worktree.remove": "worktree:write",
   "workspace.layout.clear": "workspace:write",
   "workspace.layout.read": "workspace:read",
   "workspace.layout.save": "workspace:write",
@@ -33,11 +37,15 @@ export function authorizeCommand(
   client: PierClient
 ): AuthorizationResult {
   const required = REQUIRED_CAPABILITY_BY_COMMAND[command.type];
-  if (client.capabilities.includes(required)) {
+  const requiredCapabilities = Array.isArray(required) ? required : [required];
+  const missing = requiredCapabilities.find(
+    (capability) => !client.capabilities.includes(capability)
+  );
+  if (!missing) {
     return { ok: true };
   }
   return {
     ok: false,
-    reason: `missing capability: ${required}`,
+    reason: `missing capability: ${missing}`,
   };
 }

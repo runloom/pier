@@ -15,6 +15,9 @@ function usage() {
     "  pier windows focus <windowId> --json",
     "  pier panels list [--window <windowId>] --json",
     "  pier panels focus <panelId> [--window <windowId>] [--no-focus] --json",
+    "  pier worktrees list --path <path> --json",
+    "  pier worktrees create --path <repo> --name <dir> --branch <branch> --base <ref> --json",
+    "  pier worktrees open <path> --json",
     "  pier preferences read --json",
   ].join("\n");
 }
@@ -47,9 +50,20 @@ function stripOptions(args) {
       arg === "--print-envelope" ||
       arg === "--window" ||
       arg === "--split" ||
-      arg === "--no-focus"
+      arg === "--no-focus" ||
+      arg === "--path" ||
+      arg === "--name" ||
+      arg === "--branch" ||
+      arg === "--base"
     ) {
-      if (arg === "--window" || arg === "--split") {
+      if (
+        arg === "--window" ||
+        arg === "--split" ||
+        arg === "--path" ||
+        arg === "--name" ||
+        arg === "--branch" ||
+        arg === "--base"
+      ) {
         index++;
       }
       continue;
@@ -136,8 +150,44 @@ function parsePanels(action, value, route) {
   throw new Error("unknown pier CLI command");
 }
 
+function parseWorktrees(action, value, unexpected, args, cwd, route) {
+  if (action === "list") {
+    if (value || unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
+    }
+    return {
+      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      type: "worktree.list",
+    };
+  }
+  if (action === "create") {
+    if (value || unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
+    }
+    const base = optionValue(args, "--base");
+    return {
+      ...(base && { base }),
+      branch: requireValue(optionValue(args, "--branch")),
+      name: requireValue(optionValue(args, "--name")),
+      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      type: "worktree.create",
+    };
+  }
+  if (action === "open") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return {
+      path: absolutePath(requireValue(value), cwd),
+      type: "worktree.open",
+      ...route,
+    };
+  }
+  throw new Error("unknown pier CLI command");
+}
+
 function parseCommand(args, cwd) {
-  const [domain, action, value] = stripOptions(args);
+  const [domain, action, value, unexpected] = stripOptions(args);
   const route = routeOptions(args);
   if (domain === "open") {
     return parseOpen(action, value, cwd, route);
@@ -150,6 +200,9 @@ function parseCommand(args, cwd) {
   }
   if (domain === "panels") {
     return parsePanels(action, value, route);
+  }
+  if (domain === "worktrees") {
+    return parseWorktrees(action, value, unexpected, args, cwd, route);
   }
   if (domain === "preferences" && action === "read") {
     return { type: "preferences.read" };

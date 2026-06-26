@@ -12,6 +12,7 @@ import {
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
+import type { WorktreeService } from "../services/worktree-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
   commandFailure as failure,
@@ -64,6 +65,7 @@ export interface PierCoreServices {
     readLayout(recordId: string): Promise<unknown | null>;
     saveLayout(layout: unknown, recordId: string): Promise<void>;
   };
+  worktrees: WorktreeService;
 }
 
 export interface CommandRouter {
@@ -191,6 +193,28 @@ export function createCommandRouter({
             return await executePanelListCommand(requestId, command, services);
           case "panel.open":
             return await executePanelOpenCommand(requestId, command, services);
+          case "worktree.list":
+            return success(requestId, await services.worktrees.list(command));
+          case "worktree.create":
+            return success(requestId, await services.worktrees.create(command));
+          case "worktree.open":
+            return await executePanelOpenCommand(
+              requestId,
+              {
+                focus: command.focus,
+                path: command.path,
+                placement: command.placement,
+                type: "panel.open",
+                windowId: command.windowId,
+              },
+              services
+            );
+          case "worktree.remove":
+            return failure(
+              requestId,
+              "unsupported",
+              "worktree.remove is not supported yet"
+            );
           default: {
             const _exhaustive: never = command;
             return failure(

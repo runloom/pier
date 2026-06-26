@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { projectPreferencesSchema } from "./preferences.ts";
+import {
+  worktreeCreateRequestSchema,
+  worktreeListRequestSchema,
+  worktreeOpenRequestSchema,
+  worktreeRemoveRequestSchema,
+} from "./worktree.ts";
 
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
@@ -71,6 +77,21 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     actionId: z.string().min(1).max(128),
   }),
   z.object({ type: z.literal("commandPaletteMru.clear") }),
+  worktreeListRequestSchema.extend({
+    type: z.literal("worktree.list"),
+  }),
+  worktreeCreateRequestSchema.extend({
+    type: z.literal("worktree.create"),
+  }),
+  worktreeOpenRequestSchema.extend({
+    focus: z.boolean().optional(),
+    placement: pierCommandPlacementSchema.optional(),
+    type: z.literal("worktree.open"),
+    windowId: z.string().min(1).optional(),
+  }),
+  worktreeRemoveRequestSchema.extend({
+    type: z.literal("worktree.remove"),
+  }),
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;
@@ -89,6 +110,7 @@ export type PierCommandErrorCode =
   | "permission_denied"
   | "not_found"
   | "platform_unavailable"
+  | "unsupported"
   | "internal_error";
 
 export type PierCommandResult =

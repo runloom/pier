@@ -7,6 +7,7 @@ import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
+import { createWorktreeService } from "../services/worktree-service.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import {
@@ -101,6 +102,7 @@ function createPierAppCore(): PierAppCore {
       },
     }),
     workspace: createWorkspaceService(),
+    worktrees: createWorktreeService(),
   };
   return {
     clients,

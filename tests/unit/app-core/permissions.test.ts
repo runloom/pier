@@ -76,6 +76,44 @@ describe("authorizeCommand", () => {
     });
   });
 
+  it("允许 CLI 默认客户端读取和创建 worktree", () => {
+    expect(
+      authorizeCommand(
+        { path: "/repo", type: "worktree.list" },
+        client("cli-local")
+      )
+    ).toEqual({ ok: true });
+
+    expect(
+      authorizeCommand(
+        {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        client("cli-local")
+      )
+    ).toEqual({ ok: true });
+  });
+
+  it("拒绝 MCP 默认客户端创建 worktree", () => {
+    expect(
+      authorizeCommand(
+        {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        client("mcp-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: worktree:write",
+    });
+  });
+
   it("允许 MCP 默认客户端读取工作区状态", () => {
     expect(
       authorizeCommand({ type: "panel.list" }, client("mcp-local"))
