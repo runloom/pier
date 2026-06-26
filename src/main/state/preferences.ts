@@ -23,7 +23,7 @@ function resolveFilePath(): string {
 const DEFAULTS: ProjectPreferences = {
   theme: "system",
   stylePresetId: "pierre",
-  language: "zh-CN",
+  language: "system",
   uiFontFamily: "",
   monoFontFamily: "",
   monoFontSize: 13,

@@ -28,6 +28,7 @@ const THEME_OPTIONS_DATA = [
 ] as const;
 
 const LOCALE_KEYWORDS: Record<Language, readonly string[]> = {
+  system: ["system", "auto", "follow", "系统", "自动"],
   "zh-CN": ["zh", "chinese", "中文", "简体"],
   en: ["en", "english", "英文"],
 };

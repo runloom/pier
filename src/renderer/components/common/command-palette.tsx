@@ -303,7 +303,7 @@ export function CommandPalette() {
 
   return (
     <CommandDialog
-      className="top-[14vh] sm:max-w-[520px]"
+      className="top-[14vh] sm:max-w-130"
       description={dialogTitle}
       onOpenChange={handleOpenChange}
       open={isOpen}

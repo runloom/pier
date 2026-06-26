@@ -35,7 +35,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
+        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed top-[var(--app-titlebar-height)] right-0 bottom-0 left-0 isolate z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
         className
       )}
       data-slot="dialog-overlay"
@@ -95,6 +95,7 @@ function wasInnerPortalOpenRecently(): boolean {
 function DialogContent({
   className,
   children,
+  closeOnOverlayClick = false,
   initialFocus = "content",
   overlayClassName,
   showCloseButton = true,
@@ -104,16 +105,23 @@ function DialogContent({
   tabIndex = -1,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  closeOnOverlayClick?: boolean;
   initialFocus?: "content" | "firstFocusable";
   overlayClassName?: string;
   showCloseButton?: boolean;
 }) {
+  const overlay = <DialogOverlay className={overlayClassName} />;
+
   return (
     <DialogPortal>
-      <DialogOverlay className={overlayClassName} />
+      {closeOnOverlayClick ? (
+        <DialogPrimitive.Close asChild>{overlay}</DialogPrimitive.Close>
+      ) : (
+        overlay
+      )}
       <DialogPrimitive.Content
         className={cn(
-          "app-no-drag data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground text-sm shadow-xl outline-none duration-100 data-closed:animate-out data-open:animate-in sm:max-w-md",
+          "app-no-drag data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-[calc(var(--app-titlebar-height)+(100vh-var(--app-titlebar-height))/2)] left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground text-sm shadow-xl outline-none duration-100 data-closed:animate-out data-open:animate-in sm:max-w-md",
           className
         )}
         data-slot="dialog-content"

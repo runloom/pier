@@ -54,8 +54,8 @@ function CommandDialog({
           "top-1/3 translate-y-0 overflow-hidden rounded-3xl! p-0",
           className
         )}
+        closeOnOverlayClick
         initialFocus="firstFocusable"
-        overlayClassName="bg-transparent duration-0 data-open:animate-none data-closed:animate-none"
         showCloseButton={showCloseButton}
       >
         {children}

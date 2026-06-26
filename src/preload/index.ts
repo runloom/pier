@@ -94,6 +94,10 @@ export interface PierMenuAPI {
   ) => Promise<MenuPopupResult>;
 }
 
+export interface PierSettingsAPI {
+  onOpenRequest: (cb: () => void) => () => void;
+}
+
 export interface WindowLayoutPulse {
   reason: "resize" | "zoom";
 }
@@ -113,6 +117,7 @@ export interface PierWindowAPI {
   preferences: PierPreferencesAPI;
   readyToShow: () => void;
   rendererCommand: PierRendererCommandAPI;
+  settings: PierSettingsAPI;
   terminal: TerminalAPI;
   theme: PierThemeAPI;
   workspace: PierWorkspaceAPI;
@@ -219,6 +224,10 @@ const menuApi: PierMenuAPI = {
     ipcRenderer.invoke("pier:menu:popup", template, options),
 };
 
+const settingsApi: PierSettingsAPI = {
+  onOpenRequest: (cb) => subscribeIpc(PIER_BROADCAST.SETTINGS_OPEN_REQUEST, cb),
+};
+
 const keybindingApi: PierKeybindingAPI = {
   onForward: (cb) => subscribeIpc("pier:keybinding:forward", cb),
 };
@@ -241,6 +250,7 @@ const api: PierWindowAPI = {
   preferences: preferencesApi,
   readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
   rendererCommand: rendererCommandApi,
+  settings: settingsApi,
   terminal: terminalApi,
   theme: themeApi,
   workspace: workspaceApi,

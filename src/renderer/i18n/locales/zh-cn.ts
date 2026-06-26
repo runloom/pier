@@ -77,6 +77,7 @@ export const zhCN = {
       vitesse: "Vitesse",
     },
     locale: {
+      system: "跟随系统",
       "zh-CN": "简体中文",
       en: "English",
     },

@@ -107,11 +107,11 @@ describe("run actions", () => {
     await actionRegistry.get("pier.run.terminalList")?.handler();
 
     const quickPick = useCommandPaletteController.getState().quickPick;
-    expect(quickPick?.title).toBe("终端列表...");
+    expect(quickPick?.title).toBe("Terminal List...");
     expect(quickPick?.sections?.map((section) => section.heading)).toEqual([
-      "窗口 1 · 当前窗口 · 第 1 组",
-      "窗口 2 · 第 2 组",
-      "最近关闭",
+      "Window 1 · Current Window · Group 1",
+      "Window 2 · Group 2",
+      "Recently Closed",
     ]);
     expect(quickPick?.sections?.[0]?.items.map((item) => item.label)).toEqual([
       "pier",
@@ -120,13 +120,13 @@ describe("run actions", () => {
     expect(quickPick?.sections?.[0]?.items[0]?.checked).toBe(true);
     expect(quickPick?.sections?.[1]?.items[0]?.checked).not.toBe(true);
     expect(quickPick?.sections?.[0]?.items[0]?.badges).toEqual([
-      { label: "标签 1/2", variant: "outline" },
+      { label: "Tab 1/2", variant: "outline" },
     ]);
     expect(quickPick?.sections?.[0]?.items[1]?.badges).toEqual([
-      { label: "标签 2/2", variant: "outline" },
+      { label: "Tab 2/2", variant: "outline" },
     ]);
     expect(quickPick?.sections?.[2]?.items[0]?.badges).toEqual([
-      { label: "已关闭", variant: "secondary" },
+      { label: "Closed", variant: "secondary" },
     ]);
     expect(quickPick?.items).toBeUndefined();
   });
@@ -171,8 +171,8 @@ describe("run actions", () => {
 
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick?.sections?.map((section) => section.heading)).toEqual([
-      "窗口 1 · 当前窗口 · 第 1 组",
-      "窗口 1 · 当前窗口 · 第 2 组",
+      "Window 1 · Current Window · Group 1",
+      "Window 1 · Current Window · Group 2",
     ]);
     expect(
       quickPick?.sections?.flatMap((section) =>
@@ -200,7 +200,7 @@ describe("run actions", () => {
 
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick?.sections?.map((section) => section.heading)).toEqual([
-      "错误",
+      "Errors",
     ]);
     expect(quickPick?.sections?.[0]?.items[0]).toMatchObject({
       disabled: true,

@@ -32,7 +32,7 @@ describe("font.store — monoFontSize", () => {
       uiFontFamily: "",
       stylePresetId: "pierre",
       theme: "system",
-      language: "zh-CN",
+      language: "system",
     }));
     (
       window as unknown as {

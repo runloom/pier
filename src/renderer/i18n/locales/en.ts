@@ -80,6 +80,7 @@ export const en = {
       vitesse: "Vitesse",
     },
     locale: {
+      system: "Follow System",
       "zh-CN": "简体中文",
       en: "English",
     },

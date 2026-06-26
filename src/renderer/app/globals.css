@@ -2,91 +2,98 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-
 @layer base {
-/* === HarmonyOS Sans SC — 本地打包 UI / CJK 字体 ===
+  /* === HarmonyOS Sans SC — 本地打包 UI / CJK 字体 ===
    字体源来自华为官方 HarmonyOS Sans 包内未修改的 SC TTF 文件。
    许可允许随软件嵌入、打包和再分发未修改字体。 */
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Light.ttf") format("truetype");
-}
+  @font-face {
+    font-family: "HarmonyOS Sans SC";
+    font-style: normal;
+    font-weight: 300;
+    font-display: swap;
+    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Light.ttf")
+      format("truetype");
+  }
 
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
-}
+  @font-face {
+    font-family: "HarmonyOS Sans SC";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Regular.ttf")
+      format("truetype");
+  }
 
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
-}
+  @font-face {
+    font-family: "HarmonyOS Sans SC";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Medium.ttf")
+      format("truetype");
+  }
 
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 600 700;
-  font-display: swap;
-  src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Bold.ttf") format("truetype");
-}
+  @font-face {
+    font-family: "HarmonyOS Sans SC";
+    font-style: normal;
+    font-weight: 600 700;
+    font-display: swap;
+    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Bold.ttf")
+      format("truetype");
+  }
 
-/* === JetBrainsMono Nerd Font Mono — 内嵌 woff2 subset,作为等宽字体 ===
+  /* === JetBrainsMono Nerd Font Mono — 内嵌 woff2 subset,作为等宽字体 ===
    subset 覆盖 ASCII / Latin-1 / Latin Extended-A / 通用符号 / Box Drawing /
    Geometric / Powerline / dev icons / file types。
    font-display:block — 终端字体必须在首次渲染前 ready。 */
-@font-face {
-  font-family: "JetBrainsMono Nerd Font Mono";
-  font-style: normal;
-  font-weight: 400;
-  font-display: block;
-  src: url("/fonts/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
-  unicode-range:
-    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
-    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
-}
+  @font-face {
+    font-family: "JetBrainsMono Nerd Font Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url("/fonts/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
+    unicode-range:
+      U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
+      U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
+      U+F0000-F0FFF;
+  }
 
-@font-face {
-  font-family: "JetBrainsMono Nerd Font Mono";
-  font-style: normal;
-  font-weight: 700;
-  font-display: block;
-  src: url("/fonts/JetBrainsMonoNerdFontMono-Bold.woff2") format("woff2");
-  unicode-range:
-    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
-    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
-}
+  @font-face {
+    font-family: "JetBrainsMono Nerd Font Mono";
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+    src: url("/fonts/JetBrainsMonoNerdFontMono-Bold.woff2") format("woff2");
+    unicode-range:
+      U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
+      U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
+      U+F0000-F0FFF;
+  }
 
-@font-face {
-  font-family: "JetBrainsMono Nerd Font Mono";
-  font-style: italic;
-  font-weight: 400;
-  font-display: block;
-  src: url("/fonts/JetBrainsMonoNerdFontMono-Italic.woff2") format("woff2");
-  unicode-range:
-    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
-    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
-}
+  @font-face {
+    font-family: "JetBrainsMono Nerd Font Mono";
+    font-style: italic;
+    font-weight: 400;
+    font-display: block;
+    src: url("/fonts/JetBrainsMonoNerdFontMono-Italic.woff2") format("woff2");
+    unicode-range:
+      U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
+      U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
+      U+F0000-F0FFF;
+  }
 
-@font-face {
-  font-family: "JetBrainsMono Nerd Font Mono";
-  font-style: italic;
-  font-weight: 700;
-  font-display: block;
-  src: url("/fonts/JetBrainsMonoNerdFontMono-BoldItalic.woff2") format("woff2");
-  unicode-range:
-    U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF, U+2500-259F, U+25A0-25FF,
-    U+2600-26FF, U+2700-27BF, U+E000-F8FF, U+F0000-F0FFF;
-}
-
+  @font-face {
+    font-family: "JetBrainsMono Nerd Font Mono";
+    font-style: italic;
+    font-weight: 700;
+    font-display: block;
+    src: url("/fonts/JetBrainsMonoNerdFontMono-BoldItalic.woff2")
+      format("woff2");
+    unicode-range:
+      U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
+      U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
+      U+F0000-F0FFF;
+  }
 }
 
 /*
@@ -141,7 +148,8 @@
   --surface-raised: color-mix(in oklab, var(--muted) 90%, var(--background));
   --surface-inset: color-mix(in oklab, var(--background) 72%, var(--muted));
   --surface-border: color-mix(in oklab, var(--foreground) 10%, transparent);
-  --overlay-scrim: color-mix(in oklab, var(--foreground) 16%, transparent);
+  --overlay-scrim: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --app-titlebar-height: 0px;
   --interactive-hover: color-mix(
     in oklab,
     var(--foreground) 8%,
@@ -168,22 +176,14 @@
     var(--success) 82%,
     var(--foreground)
   );
-  --status-success-border: color-mix(
-    in oklab,
-    var(--success) 24%,
-    transparent
-  );
+  --status-success-border: color-mix(in oklab, var(--success) 24%, transparent);
   --status-warning-bg: color-mix(in oklab, var(--warning) 16%, transparent);
   --status-warning-fg: color-mix(
     in oklab,
     var(--warning) 78%,
     var(--foreground)
   );
-  --status-warning-border: color-mix(
-    in oklab,
-    var(--warning) 28%,
-    transparent
-  );
+  --status-warning-border: color-mix(in oklab, var(--warning) 28%, transparent);
   --status-danger-bg: color-mix(in oklab, var(--destructive) 14%, transparent);
   --status-danger-fg: color-mix(
     in oklab,
@@ -242,11 +242,11 @@
      通过 CSS 变量暴露，后续设置页面可动态修改。 */
   --pier-ui-font-family:
     "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",
-    "Noto Color Emoji", system-ui, -apple-system, "Helvetica Neue", "PingFang SC",
-    sans-serif;
+    "Noto Color Emoji", system-ui, -apple-system, "Helvetica Neue",
+    "PingFang SC", sans-serif;
   --pier-mono-font-family:
-    "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, "JetBrains Mono",
-    Menlo, monospace;
+    "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular,
+    "JetBrains Mono", Menlo, monospace;
 
   /* === shell layout constants === */
 }
@@ -284,6 +284,40 @@
   --overlay-scrim: color-mix(in oklab, var(--foreground) 22%, transparent);
   /* sidebar/titlebar 已在 :root 走 var(--xxx) 引用, .light 模式自动跟 --background/--foreground 翻面,
      无需在此重复定义. */
+}
+
+:root:not(.light) {
+  --elevation-border: color-mix(in oklab, var(--foreground) 16%, transparent);
+  --elevation-shadow-color: color-mix(in oklab, var(--background) 66%, black);
+  --elevation-shadow-ambient: color-mix(
+    in oklab,
+    var(--elevation-shadow-color) 42%,
+    transparent
+  );
+  --elevation-shadow-key: color-mix(
+    in oklab,
+    var(--elevation-shadow-color) 64%,
+    transparent
+  );
+  --shadow-2xs: 0 1px 1px 0 var(--elevation-shadow-ambient);
+  --shadow-xs: 0 1px 2px 0 var(--elevation-shadow-ambient);
+  --shadow-sm:
+    0 1px 2px 0 var(--elevation-shadow-ambient),
+    0 1px 1px -1px var(--elevation-shadow-key);
+  --shadow-md:
+    0 0 0 1px color-mix(in oklab, var(--elevation-border) 70%, transparent),
+    0 4px 10px -5px var(--elevation-shadow-key);
+  --shadow-lg:
+    0 0 0 1px var(--elevation-border),
+    0 14px 34px -18px var(--elevation-shadow-ambient),
+    0 22px 56px -30px var(--elevation-shadow-key);
+  --shadow-xl:
+    0 0 0 1px var(--elevation-border),
+    0 22px 56px -26px var(--elevation-shadow-ambient),
+    0 36px 104px -44px var(--elevation-shadow-key);
+  --shadow-2xl:
+    0 0 0 1px var(--elevation-border),
+    0 44px 132px -52px var(--elevation-shadow-key);
 }
 
 @theme inline {
@@ -469,23 +503,23 @@
   }
 
   :where(
-    [data-flat-scroll],
-    [data-slot="dropdown-menu-content"],
-    [data-slot="dropdown-menu-sub-content"],
-    [data-slot="popover-content"],
-    [data-slot="select-content"]
-  ):hover::-webkit-scrollbar-thumb {
+      [data-flat-scroll],
+      [data-slot="dropdown-menu-content"],
+      [data-slot="dropdown-menu-sub-content"],
+      [data-slot="popover-content"],
+      [data-slot="select-content"]
+    ):hover::-webkit-scrollbar-thumb {
     background: var(--shell-scrollbar-thumb-hover);
     background-clip: content-box;
   }
 
   :where(
-    [data-flat-scroll],
-    [data-slot="dropdown-menu-content"],
-    [data-slot="dropdown-menu-sub-content"],
-    [data-slot="popover-content"],
-    [data-slot="select-content"]
-  )::-webkit-scrollbar-thumb:active {
+      [data-flat-scroll],
+      [data-slot="dropdown-menu-content"],
+      [data-slot="dropdown-menu-sub-content"],
+      [data-slot="popover-content"],
+      [data-slot="select-content"]
+    )::-webkit-scrollbar-thumb:active {
     background: var(--shell-scrollbar-thumb-active);
     background-clip: content-box;
   }
@@ -501,12 +535,12 @@
   }
 
   :where(
-    [data-flat-scroll],
-    [data-slot="dropdown-menu-content"],
-    [data-slot="dropdown-menu-sub-content"],
-    [data-slot="popover-content"],
-    [data-slot="select-content"]
-  ):hover::-webkit-scrollbar-track {
+      [data-flat-scroll],
+      [data-slot="dropdown-menu-content"],
+      [data-slot="dropdown-menu-sub-content"],
+      [data-slot="popover-content"],
+      [data-slot="select-content"]
+    ):hover::-webkit-scrollbar-track {
     background: var(--shell-scrollbar-track-hover);
   }
 
@@ -681,12 +715,26 @@ body {
   --dv-active-sash-color: transparent;
   --dv-active-sash-transition-delay: 0s;
   --dv-tabs-container-scrollbar-color: var(--border);
-  --dv-icon-hover-background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --dv-icon-hover-background-color: color-mix(
+    in oklab,
+    var(--foreground) 8%,
+    transparent
+  );
   /* drag-over 高亮需轻，避免和下层 terminal NSView 合成出大块色斑。 */
-  --dv-drag-over-background-color: color-mix(in oklab, var(--primary) 10%, transparent);
-  --dv-drag-over-border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
-  --dv-drag-over-border-color: color-mix(in oklab, var(--primary) 55%, transparent);
-  --dv-floating-box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent);
+  --dv-drag-over-background-color: color-mix(
+    in oklab,
+    var(--primary) 10%,
+    transparent
+  );
+  --dv-drag-over-border: 1px solid
+    color-mix(in oklab, var(--primary) 55%, transparent);
+  --dv-drag-over-border-color: color-mix(
+    in oklab,
+    var(--primary) 55%,
+    transparent
+  );
+  --dv-floating-box-shadow: 0 8px 24px
+    color-mix(in oklab, var(--foreground) 18%, transparent);
   --dv-floating-border: 1px solid var(--border);
   --dv-paneview-active-outline-color: var(--ring);
 }
@@ -795,7 +843,8 @@ body {
   .dv-drop-target
   > .dv-drop-target-dropzone
   > .dv-drop-target-selection {
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--primary) 35%, transparent);
 }
 
 /* — 选中 tab 与内容区连成同一层, 避免 tab 栏底线切断层级 — */
@@ -840,7 +889,6 @@ body {
   z-index: 2;
 }
 
-
 /* 拖拽线 */
 .dv-split-view-container > .dv-view-container > .dv-view::before {
   display: none;
@@ -862,11 +910,12 @@ body {
   z-index: 1;
 }
 
-.dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:hover::before { 
+.dv-split-view-container.dv-horizontal
+  > .dv-sash-container
+  > .dv-sash:hover::before {
   width: 1.5px;
   background-color: var(--primary);
 }
-
 
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
   height: 5px;
@@ -884,7 +933,9 @@ body {
   z-index: 1;
 }
 
-.dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:hover::before {
+.dv-split-view-container.dv-vertical
+  > .dv-sash-container
+  > .dv-sash:hover::before {
   height: 1.5px;
   background-color: var(--primary);
 }
@@ -893,7 +944,6 @@ body {
 .dockview-theme-pier .dv-drop-target-container {
   --dv-transition-duration: 100ms;
 }
-
 
 .dockview-theme-pier .dv-tabs-and-actions-container {
   border-bottom: none;

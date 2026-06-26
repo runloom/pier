@@ -44,7 +44,7 @@ function services(rendererCommands: unknown[] = []): PierCoreServices {
     },
     preferences: {
       read: async () => ({
-        language: "zh-CN",
+        language: "system",
         monoFontFamily: "",
         monoFontSize: 13,
         stylePresetId: "pierre",
@@ -57,7 +57,7 @@ function services(rendererCommands: unknown[] = []): PierCoreServices {
         uiFontFamily: "",
       }),
       update: async (patch) => ({
-        language: "zh-CN",
+        language: "system",
         monoFontFamily: "",
         monoFontSize: 13,
         stylePresetId: "pierre",
