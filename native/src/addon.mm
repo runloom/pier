@@ -21,6 +21,7 @@ extern "C" {
     void ghostty_bridge_hide(const char* panelId);
     void ghostty_bridge_close(const char* panelId);
     void ghostty_bridge_focus(const char* panelId);
+    bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     void ghostty_bridge_close_all(void* nsWindow);
     // 孤儿清理:关该 window 下不在 activeIds 中的 NSView. C 方案 reload 零销毁
     // 路径上, renderer 重建后报告"我现在还需要这些 panelId", swift 把不在集合
@@ -33,6 +34,7 @@ extern "C" {
     // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
     typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
     void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
+    void ghostty_bridge_set_app_shortcut_keys(const char** keys, long count);
     // Mouse forward: swift NSEvent monitor 命中 terminal 区域 rightMouseDown → JS.
     // 签名 (browserWindowId, panelId UTF-8, x, y). 用于触发 native 右键菜单.
     typedef void (*MouseForwardFn)(long browserWindowId, const char* panelId, double x, double y);
@@ -150,6 +152,13 @@ static Napi::Value JsFocus(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     ghostty_bridge_focus(panelId.c_str());
     return info.Env().Undefined();
+}
+
+static Napi::Value JsPerformBindingAction(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    std::string action = info[1].As<Napi::String>().Utf8Value();
+    bool ok = ghostty_bridge_perform_binding_action(panelId.c_str(), action.c_str());
+    return Napi::Boolean::New(info.Env(), ok);
 }
 
 static Napi::Value JsCloseAll(const Napi::CallbackInfo& info) {
@@ -274,6 +283,28 @@ static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) 
     return JsSetForwardCallback(info, g_keyboardChannel,
                                 ghostty_bridge_set_keyboard_forward_callback,
                                 &g_keyForwardTrampoline);
+}
+
+static Napi::Value JsSetAppShortcutKeys(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || !info[0].IsArray()) {
+        ghostty_bridge_set_app_shortcut_keys(nullptr, 0);
+        return env.Undefined();
+    }
+    Napi::Array arr = info[0].As<Napi::Array>();
+    std::vector<std::string> holders;
+    std::vector<const char*> ptrs;
+    holders.reserve(arr.Length());
+    ptrs.reserve(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); i++) {
+        Napi::Value value = arr.Get(i);
+        if (!value.IsString()) continue;
+        holders.push_back(value.As<Napi::String>().Utf8Value());
+        ptrs.push_back(holders.back().c_str());
+    }
+    ghostty_bridge_set_app_shortcut_keys(ptrs.empty() ? nullptr : ptrs.data(),
+                                         static_cast<long>(ptrs.size()));
+    return env.Undefined();
 }
 
 // ---- Right-mouse forward (terminal 区域右键转 native menu trigger) ----
@@ -481,10 +512,12 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("hideTerminal",    Napi::Function::New(env, JsHide));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("focusTerminal",   Napi::Function::New(env, JsFocus));
+    exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
     exports.Set("reconcileTerminals", Napi::Function::New(env, JsReconcile));
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
+    exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));

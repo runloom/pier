@@ -316,6 +316,10 @@ export function WorkspaceHost() {
         }
       });
 
+      window.pier?.workspace?.onNewTerminalRequest?.(() => {
+        useWorkspaceStore.getState().addTerminal();
+      });
+
       window.pier.rendererCommand.onCommand((envelope) => {
         if (envelope.command.type === "workspace.flushLayout") {
           flushCurrentLayout(envelope).catch((error) => {

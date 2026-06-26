@@ -33,6 +33,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       detachWindow: vi.fn(),
       focusTerminal: vi.fn(),
       hideTerminal: vi.fn(),
+      performTerminalBindingAction: vi.fn(() => true),
       reconcileTerminals: vi.fn(),
       setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
@@ -227,6 +228,34 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       "terminal-1",
       context
     );
+  });
+
+  it("maps terminal operation IPC to allowlisted Ghostty binding actions", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    const result = await invokeHandlers.get(
+      "pier:terminal:perform-operation"
+    )?.({ sender: win.webContents }, "terminal-1", "clearScreen");
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::terminal-1",
+      "clear_screen"
+    );
+  });
+
+  it("rejects unknown terminal operations before reaching native", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    const result = await invokeHandlers.get(
+      "pier:terminal:perform-operation"
+    )?.({ sender: win.webContents }, "terminal-1", "openDevTools");
+
+    expect(result).toEqual({
+      ok: false,
+      error: "invalid terminal operation",
+    });
+    expect(fakeAddon.performTerminalBindingAction).not.toHaveBeenCalled();
   });
 
   it("persists forwarded terminal titles using the raw renderer panel id", async () => {

@@ -84,7 +84,8 @@ export function toggleDetachedDevTools(win: DevToolsWindowLike): void {
 }
 
 export function createDetachedDevToolsMenuItem(
-  getFocusedWindow: () => DevToolsWindowLike | null
+  getFocusedWindow: () => DevToolsWindowLike | null,
+  label = "Toggle Developer Tools"
 ): MenuItemConstructorOptions {
   return {
     accelerator: DETACHED_DEVTOOLS_ACCELERATOR,
@@ -94,7 +95,7 @@ export function createDetachedDevToolsMenuItem(
         toggleDetachedDevTools(win);
       }
     },
-    label: "Toggle Developer Tools",
+    label,
   };
 }
 

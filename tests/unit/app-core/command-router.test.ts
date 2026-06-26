@@ -79,6 +79,7 @@ function services(
         terminalScrollbackMb: 64,
         theme: "system",
         uiFontFamily: "",
+        userKeymap: [],
       }),
       update: async (patch) => ({
         language: "system",
@@ -92,6 +93,7 @@ function services(
         terminalScrollbackMb: 64,
         theme: patch.theme ?? "system",
         uiFontFamily: "",
+        userKeymap: patch.userKeymap ?? [],
       }),
     },
     panelContexts: {

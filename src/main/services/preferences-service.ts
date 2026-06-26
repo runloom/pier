@@ -56,6 +56,9 @@ function stripUndefinedPatch(
     ...(patch.uiFontFamily !== undefined && {
       uiFontFamily: patch.uiFontFamily,
     }),
+    ...(patch.userKeymap !== undefined && {
+      userKeymap: patch.userKeymap,
+    }),
   };
 }
 

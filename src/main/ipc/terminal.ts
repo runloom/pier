@@ -27,22 +27,21 @@ import {
   findWindowSessionId,
 } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
+import { performTerminalOperation } from "./terminal-operations.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
+import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
   return cachedAddon;
 }
-
 let cachedAddon: NativeAddon | null = null;
 
 interface ActivePanelFocusState {
   kind: "terminal" | "web";
   panelId: string | null;
 }
-
 const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
-
 function rememberActivePanelFocus(
   win: AppWindow,
   kind: "terminal" | "web",
@@ -54,11 +53,9 @@ function rememberActivePanelFocus(
 export function stableWindowIdFor(win: AppWindow): string {
   return findInternalWindowId(win) ?? `window-${win.id}`;
 }
-
 export function terminalSessionScopeFor(win: AppWindow): string {
   return findWindowSessionId(win) ?? stableWindowIdFor(win);
 }
-
 export function restoreActivePanelFocus(win: AppWindow): void {
   if (win.isDestroyed()) {
     return;
@@ -113,15 +110,7 @@ function loadNativeAddon(): {
   }
 }
 
-/**
- * Forward swift-originated event to a specific app window renderer.
- *
- * 所有 swift→main→renderer forward 共用这一条路由 (keyboard / mouse / pwd / title):
- * 1. 按 Electron window id 精准定位 app window — swift NSEvent monitor / delegate
- *    跨线程, callback 执行时 focused window 可能已切换, 不能用 getFocusedWindow.
- * 2. 守 isDestroyed (window/webContents 在 swift 触发 → main JS dispatch 间可能销毁).
- * 3. send 抛任何错误 (window 关闭瞬间) 都 catch + log + 继续 — 不影响其他 channel.
- */
+/** Swift-originated events 按 Electron window id 精准转发, 避免焦点窗口误路由. */
 function forwardToWindow<P>(
   browserWindowId: number,
   channel: string,
@@ -245,14 +234,25 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
     try {
       const handle = win.getNativeWindowHandle();
-      // 把 Electron window id 传给 swift, 让 forward callback 能按 window 路由 (多窗口
-      // 下避免 getFocusedWindow 误把 background window 的 keystroke 路由到 focused)
+      // 传 Electron window id 给 swift, 防多窗口 callback 误投到 focused window.
       const ok = addon.setupWindow(handle, win.id);
       return ok ? { ok: true } : { ok: false, error: "setupWindow failed" };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
+
+  ipcMain.handle(
+    "pier:terminal:perform-operation",
+    (event, panelId: unknown, operation: unknown) =>
+      performTerminalOperation({
+        addon,
+        loadError,
+        operation,
+        panelId,
+        win: windowFromWebContents(event.sender),
+      })
+  );
 
   ipcMain.handle(
     "pier:terminal:create",
@@ -318,7 +318,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   );
 
-  // Renderer → addon 单参数透传. addon 可能未加载, handler 仍注册但 noop.
   const panelIdRelays = [
     {
       channel: "pier:terminal:show",
@@ -361,7 +360,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       addon?.focusTerminal(scopePanelId(win, panelId));
     }
   });
-  // set-frame 多一个 frame 参数, 不进数组单独写.
   ipcMain.on(
     "pier:terminal:set-frame",
     (event, panelId: string, frame: TerminalFrame) => {
@@ -405,7 +403,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     } catch (err) {
       console.error("[pier-set-overlay] failed:", err);
     }
-    // overlay active 时让 Chromium 接管 keystroke.
     if (active) {
       win.webContents.focus();
     }
@@ -443,6 +440,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
     }
   );
+
+  registerTerminalShortcutIpc(ipcMain, addon);
 
   ipcMain.on(
     "pier:terminal:set-font",
@@ -491,7 +490,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       } catch (err) {
         console.error("[pier-set-active-panel-kind] failed:", err);
       }
-      // 切到 web panel 时由 main 负责 web focus.
       if (kind === "web" && win.isFocused()) {
         win.webContents.focus();
       }

@@ -8,11 +8,13 @@ import { registerConfigActions } from "./lib/actions/config-actions.ts";
 import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerRunActions } from "./lib/actions/run-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
+import { installCommandPaletteMenuRequest } from "./lib/command-palette/menu-request.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
+import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
@@ -37,6 +39,7 @@ async function bootstrap() {
 
   window.pier?.terminal?.setup?.()?.catch(() => undefined);
   installDragWatcher();
+  installCommandPaletteMenuRequest();
   initCommandPaletteMru().catch(() => undefined);
 
   registerConfigActions();
@@ -47,6 +50,7 @@ async function bootstrap() {
   registerCommandPaletteMruAction();
   registerTerminalActions();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+  await initKeybindingPreferences();
 
   const rootEl = document.getElementById("root");
   if (rootEl) {

@@ -74,6 +74,12 @@ export interface TerminalPanelSessionSnapshot {
   updatedAt: string;
 }
 
+export type TerminalOperation = "copy" | "paste" | "selectAll" | "clearScreen";
+
+export interface TerminalOperationResult {
+  error?: string | undefined;
+  ok: boolean;
+}
 /**
  * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
  * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
@@ -145,6 +151,10 @@ export interface TerminalAPI {
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
+  performOperation(
+    panelId: string,
+    operation: TerminalOperation
+  ): Promise<TerminalOperationResult>;
   /**
    * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
    * 标题/cwd, 真正的 native terminal 可以等 panel 可见时再创建.
@@ -161,6 +171,7 @@ export interface TerminalAPI {
     kind: "terminal" | "web",
     panelId: string | null
   ) => void;
+  setAppShortcutKeys(keys: string[]): void;
   setConfig(config: TerminalRuntimeConfig): void;
   /**
    * 热更新已存在 terminal 的字体. 走 Ghostty TerminalController.setTerminalConfiguration
