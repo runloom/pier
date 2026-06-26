@@ -81,6 +81,7 @@ function services(
         theme: "system",
         uiFontFamily: "",
         userKeymap: [],
+        windowZoomLevel: 0,
       }),
       update: async (patch) => ({
         language: "system",
@@ -95,6 +96,7 @@ function services(
         theme: patch.theme ?? "system",
         uiFontFamily: "",
         userKeymap: patch.userKeymap ?? [],
+        windowZoomLevel: patch.windowZoomLevel ?? 0,
       }),
     },
     panelContexts: {

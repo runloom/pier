@@ -10,11 +10,13 @@ const ALL_CALL_SITES_RE = /Self\.terminalTargetRect\(([^)]+)\)/g;
 const COMPUTE_FRAME_FLIP_RE = /contentView\.bounds\.height - viewport\.minY/;
 
 /**
- * 锁住 EventRouterView.targets[i].rect 用的坐标系是 viewport (top-left),
+ * 锁住 EventRouterView.targets[i].rect 用的坐标系是缩放后的 viewport (top-left),
  * 不是 NSView frame (bottom-left). 这是上一次 hitTest 静默 miss bug 的根因.
  *
  * EventRouterView.isFlipped=true → top-left, 它的 hitTest 内 local 也是 top-left;
  * contentView (Electron 默认) isFlipped=false → bottom-left, NSView.frame 在它内部.
+ * renderer 已把 DOM CSS px 乘以 Electron page zoom, 所以 viewport 是 contentView
+ * 坐标，不是未缩放 DOM 坐标。
  * computeFrame 把 viewport (top-left) 翻成 frame (bottom-left) 喂给 containerView.frame,
  * 这是对的;但 EventRouterView.Target.rect 必须留 top-left, 否则跟 local 不同坐标系比对.
  *

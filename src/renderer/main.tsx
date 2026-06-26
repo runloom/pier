@@ -10,6 +10,7 @@ import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerRunActions } from "./lib/actions/run-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
 import { registerTerminalDebugActions } from "./lib/actions/terminal-debug-actions.ts";
+import { registerViewActions } from "./lib/actions/view-actions.ts";
 import { installCommandPaletteMenuRequest } from "./lib/command-palette/menu-request.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
@@ -21,6 +22,7 @@ import { initLocale } from "./stores/locale.store.ts";
 import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
+import { initZoom } from "./stores/zoom.store.ts";
 
 async function bootstrap() {
   const params = new URLSearchParams(window.location.search);
@@ -46,6 +48,7 @@ async function bootstrap() {
       initTheme(),
       initLocale(),
       initFont(),
+      initZoom(),
       initTerminalPreferences(),
     ]);
   } catch (err) {
@@ -62,6 +65,7 @@ async function bootstrap() {
   registerRunActions();
   registerPanelActions();
   registerSettingsActions();
+  registerViewActions();
   registerCommandPaletteMruAction();
   registerTerminalDebugActions();
   registerTerminalActions();

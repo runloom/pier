@@ -1,3 +1,4 @@
+import { APP_HANDLED_NATIVE_TERMINAL_COMMANDS } from "@shared/commands.ts";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
 
@@ -9,11 +10,16 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Ctrl+Shift+KeyD",
   "Mod+Backquote",
   "Mod+Comma",
+  "Mod+Digit0",
+  "Mod+Equal",
   "Mod+KeyD",
   "Mod+KeyN",
   "Mod+KeyT",
   "Mod+KeyW",
+  "Mod+Minus",
+  "Mod+Numpad0",
   "Mod+Shift+Enter",
+  "Mod+Shift+Equal",
   "Mod+Shift+KeyD",
   "Mod+Shift+KeyP",
 ];
@@ -23,19 +29,16 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.newTerminal",
       keys: "Mod+KeyT",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.closeActive",
       keys: "Mod+KeyW",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.window.newWindow",
       keys: "Mod+KeyN",
-      nativeTerminal: "app",
       scope: "global",
     });
   });
@@ -44,37 +47,31 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.splitRight",
       keys: "Mod+KeyD",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.splitDown",
       keys: "Mod+Shift+KeyD",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.focusUp",
       keys: "Ctrl+Shift+ArrowUp",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.focusDown",
       keys: "Ctrl+Shift+ArrowDown",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.focusLeft",
       keys: "Ctrl+Shift+ArrowLeft",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.focusRight",
       keys: "Ctrl+Shift+ArrowRight",
-      nativeTerminal: "app",
       scope: "global",
     });
   });
@@ -83,7 +80,34 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.toggleMaximized",
       keys: "Mod+Shift+Enter",
-      nativeTerminal: "app",
+      scope: "global",
+    });
+  });
+
+  it("contains view zoom shortcuts", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.view.zoomIn",
+      keys: "Mod+Equal",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.view.zoomIn",
+      keys: "Mod+Shift+Equal",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.view.zoomOut",
+      keys: "Mod+Minus",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.view.resetZoom",
+      keys: "Mod+Digit0",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.view.resetZoom",
+      keys: "Mod+Numpad0",
       scope: "global",
     });
   });
@@ -92,7 +116,6 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.terminal.openDebugWindow",
       keys: "Ctrl+Shift+KeyD",
-      nativeTerminal: "app",
       scope: "global",
     });
     expect(
@@ -106,18 +129,23 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).not.toContainEqual({
       commandId: "pier.terminal.openDebugWindow",
       keys: "Mod+Alt+Shift+KeyD",
-      nativeTerminal: "app",
       scope: "global",
     });
   });
 
-  it("marks every shortcut that native terminal focus should forward to Pier", () => {
-    const nativeTerminalAppShortcuts = DEFAULT_KEYMAP.filter(
-      (binding) => binding.nativeTerminal === "app"
+  it("keeps native terminal routing as command policy instead of binding data", () => {
+    const nativeTerminalCommandIds = new Set<string>(
+      APP_HANDLED_NATIVE_TERMINAL_COMMANDS
+    );
+    const nativeTerminalAppShortcuts = DEFAULT_KEYMAP.filter((binding) =>
+      nativeTerminalCommandIds.has(binding.commandId)
     )
       .map((binding) => binding.keys)
       .sort();
 
     expect(nativeTerminalAppShortcuts).toEqual(TERMINAL_MODE_APP_SHORTCUTS);
+    expect(DEFAULT_KEYMAP.some((binding) => "nativeTerminal" in binding)).toBe(
+      false
+    );
   });
 });

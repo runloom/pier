@@ -7,6 +7,8 @@ describe("keybinding-preferences.store", () => {
   });
 
   function installPierApi(snapshot = {}) {
+    let changedListener: ((snapshot: Record<string, unknown>) => void) | null =
+      null;
     const read = vi.fn(async () => ({
       theme: "system",
       stylePresetId: "pierre",
@@ -26,7 +28,12 @@ describe("keybinding-preferences.store", () => {
       ...(await read()),
       ...patch,
     }));
-    const onChanged = vi.fn();
+    const onChanged = vi.fn(
+      (cb: (snapshot: Record<string, unknown>) => void) => {
+        changedListener = cb;
+        return vi.fn();
+      }
+    );
     const setAppShortcutKeys = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -36,7 +43,29 @@ describe("keybinding-preferences.store", () => {
         terminal: { setAppShortcutKeys },
       },
     });
-    return { onChanged, read, setAppShortcutKeys, update };
+    return {
+      emitPreferencesChanged: (next: Record<string, unknown>) => {
+        changedListener?.({
+          theme: "system",
+          stylePresetId: "pierre",
+          language: "system",
+          uiFontFamily: "",
+          monoFontFamily: "",
+          monoFontSize: 13,
+          terminalCursorStyle: "block",
+          terminalCursorBlink: true,
+          terminalScrollbackMb: 64,
+          terminalPasteProtection: true,
+          terminalNewCwdPolicy: "activeTerminal",
+          userKeymap: [],
+          ...next,
+        });
+      },
+      onChanged,
+      read,
+      setAppShortcutKeys,
+      update,
+    };
   }
 
   it("loads persisted user keymap into the registry and syncs native shortcuts", async () => {
@@ -106,7 +135,60 @@ describe("keybinding-preferences.store", () => {
     });
   });
 
-  it("syncs explicitly configured shortcuts without defaults to native terminal routing", async () => {
+  it("syncs replacement bindings for terminal-mode app commands to native terminal routing", async () => {
+    const pier = installPierApi();
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+    await useKeybindingPreferencesStore
+      .getState()
+      .setBinding("pier.view.zoomIn", "Mod+Alt+Equal", "global");
+
+    expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
+      expect.arrayContaining(["Mod+Alt+Equal"])
+    );
+    expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
+      expect.not.arrayContaining(["Mod+Equal", "Mod+Shift+Equal"])
+    );
+  });
+
+  it("ignores sender broadcasts that repeat the current user keymap", async () => {
+    const pier = installPierApi();
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+    await useKeybindingPreferencesStore
+      .getState()
+      .setBinding("pier.view.zoomIn", "Mod+Alt+Equal", "global");
+
+    const callsAfterLocalApply = pier.setAppShortcutKeys.mock.calls.length;
+    pier.emitPreferencesChanged({
+      userKeymap: [
+        { commandId: "-pier.view.zoomIn", keys: "", scope: "global" },
+        {
+          commandId: "pier.view.zoomIn",
+          keys: "Mod+Alt+Equal",
+          scope: "global",
+        },
+      ],
+    });
+
+    expect(pier.setAppShortcutKeys).toHaveBeenCalledTimes(callsAfterLocalApply);
+  });
+
+  it("does not route user-only commands that are not marked for terminal focus", async () => {
     const pier = installPierApi();
     const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
     const { keybindingRegistry } = await import(
@@ -122,7 +204,7 @@ describe("keybinding-preferences.store", () => {
       .setBinding("pier.panel.splitLeft", "Mod+Alt+ArrowLeft", "global");
 
     expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
-      expect.arrayContaining(["Mod+Alt+ArrowLeft"])
+      expect.not.arrayContaining(["Mod+Alt+ArrowLeft"])
     );
   });
 

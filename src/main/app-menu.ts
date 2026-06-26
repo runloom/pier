@@ -1,5 +1,6 @@
 import type { PierEvent } from "@shared/contracts/events.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import { firstAcceleratorForCommand } from "@shared/keybindings.ts";
 import { Menu, type MenuItemConstructorOptions } from "electron";
 import { createDetachedDevToolsMenuItem } from "./devtools.ts";
 import { createOpenSettingsMenuItem } from "./settings-menu.ts";
@@ -137,10 +138,28 @@ export interface BuildAppMenuTemplateArgs {
   onNewTerminal: (target: AppWindow | null) => void;
   onNewWindow: () => void;
   onOpenCommandPalette: (target: AppWindow | null) => void;
+  onResetZoom: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  userKeymap?: ProjectPreferences["userKeymap"];
 }
 
 function separator(): MenuItemConstructorOptions {
   return { type: "separator" };
+}
+
+function appCommandMenuItem(
+  commandId: string,
+  label: string,
+  click: () => void,
+  userKeymap: ProjectPreferences["userKeymap"]
+): MenuItemConstructorOptions {
+  const accelerator = firstAcceleratorForCommand(commandId, userKeymap);
+  return {
+    ...(accelerator ? { accelerator } : {}),
+    click,
+    label,
+  };
 }
 
 export function buildAppMenuTemplate({
@@ -152,6 +171,10 @@ export function buildAppMenuTemplate({
   onNewTerminal,
   onNewWindow,
   onOpenCommandPalette,
+  onResetZoom,
+  onZoomIn,
+  onZoomOut,
+  userKeymap = [],
 }: BuildAppMenuTemplateArgs): MenuItemConstructorOptions[] {
   const t = MENU_TEXT[language];
   const newWindowMenuItem: MenuItemConstructorOptions = {
@@ -209,9 +232,14 @@ export function buildAppMenuTemplate({
           ] satisfies MenuItemConstructorOptions[])
         : []),
       separator(),
-      { label: t.resetZoom, role: "resetZoom" },
-      { label: t.zoomIn, role: "zoomIn" },
-      { label: t.zoomOut, role: "zoomOut" },
+      appCommandMenuItem(
+        "pier.view.resetZoom",
+        t.resetZoom,
+        onResetZoom,
+        userKeymap
+      ),
+      appCommandMenuItem("pier.view.zoomIn", t.zoomIn, onZoomIn, userKeymap),
+      appCommandMenuItem("pier.view.zoomOut", t.zoomOut, onZoomOut, userKeymap),
       separator(),
       { label: t.toggleFullscreen, role: "togglefullscreen" },
     ],
@@ -270,7 +298,9 @@ export interface InstallAppMenuArgs
     subscribe(listener: (event: PierEvent) => void): () => void;
   };
   getSystemLocale: () => string;
-  readPreferences: () => Promise<Pick<ProjectPreferences, "language">>;
+  readPreferences: () => Promise<
+    Pick<ProjectPreferences, "language" | "userKeymap">
+  >;
 }
 
 export async function installAppMenu({
@@ -279,22 +309,30 @@ export async function installAppMenu({
   readPreferences,
   ...menuArgs
 }: InstallAppMenuArgs): Promise<() => void> {
-  const applyMenu = (languagePreference: ProjectPreferences["language"]) => {
+  const applyMenu = (
+    preferences: Pick<ProjectPreferences, "language" | "userKeymap">
+  ) => {
     const language = resolveAppMenuLanguage(
-      languagePreference,
+      preferences.language,
       getSystemLocale
     );
     Menu.setApplicationMenu(
-      Menu.buildFromTemplate(buildAppMenuTemplate({ ...menuArgs, language }))
+      Menu.buildFromTemplate(
+        buildAppMenuTemplate({
+          ...menuArgs,
+          language,
+          userKeymap: preferences.userKeymap,
+        })
+      )
     );
   };
 
   const preferences = await readPreferences();
-  applyMenu(preferences.language);
+  applyMenu(preferences);
 
   return eventBus.subscribe((event) => {
     if (event.type === "preferences.changed") {
-      applyMenu(event.snapshot.language);
+      applyMenu(event.snapshot);
     }
   });
 }

@@ -17,14 +17,27 @@ import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
+import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
+import { createWindowZoomController } from "./windows/window-zoom.ts";
 
 const isDev = !app.isPackaged;
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
 let localControl: RegisteredLocalControl | null = null;
 let didFlushBeforeQuit = false;
+const windowZoom = createWindowZoomController({
+  listWindows: () => windowManager.getAll(),
+  readPreferences: () => appCore.services.preferences.read(),
+  updatePreferences: (patch) => appCore.services.preferences.update(patch),
+});
+
+windowManager.onCreate(({ window }) => {
+  windowZoom.applyPersistedZoomToWindow(window).catch((error) => {
+    console.error("[window-zoom] apply to new window failed:", error);
+  });
+});
 
 // dev mode silence "Insecure CSP (unsafe-eval)" warning: dev CSP 必须含 'unsafe-eval'
 // (vite HMR + react-refresh 依赖 eval).
@@ -126,7 +139,32 @@ app.whenReady().then(async () => {
     onNewTerminal: openTerminalFromMenu,
     onNewWindow: createFreshWindowFromMenu,
     onOpenCommandPalette: toggleCommandPaletteFromMenu,
+    onResetZoom: () => {
+      windowZoom.resetZoom().catch((error) => {
+        console.error("[window-zoom] reset failed:", error);
+      });
+    },
+    onZoomIn: () => {
+      windowZoom.zoomIn().catch((error) => {
+        console.error("[window-zoom] zoom in failed:", error);
+      });
+    },
+    onZoomOut: () => {
+      windowZoom.zoomOut().catch((error) => {
+        console.error("[window-zoom] zoom out failed:", error);
+      });
+    },
     readPreferences: () => appCore.services.preferences.read(),
+  });
+  appCore.eventBus.subscribe((event) => {
+    if (event.type === "preferences.changed") {
+      handlePreferencesChangedForWindows({
+        applyZoomLevel: (level) => windowZoom.applyZoomLevel(level),
+        changedKeys: event.changedKeys,
+        listWindows: () => windowManager.getAll(),
+        snapshot: event.snapshot,
+      });
+    }
   });
 
   // mac dev: dock icon 默认是 Electron 紫色; 显式设成 Pier 图标.

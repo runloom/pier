@@ -7,6 +7,12 @@ vi.mock("@/panel-kits/terminal/terminal-layout-coordinator.ts", () => ({
   readRegisteredTerminalAnchorFrame: vi.fn((panelId: string) =>
     panelId === "terminal-1" ? { height: 240, width: 320, x: 10, y: 20 } : null
   ),
+  readTerminalViewportFrame: vi.fn(() => ({
+    height: window.innerHeight,
+    width: window.innerWidth,
+    x: 0,
+    y: 0,
+  })),
 }));
 
 function terminalPanel(id: string) {

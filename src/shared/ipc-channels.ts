@@ -22,6 +22,8 @@ export const PIER_BROADCAST = {
   NEW_TERMINAL_REQUEST: "pier://panel:new-terminal-request",
   // main 端应用菜单 / 原生快捷键请求 renderer 打开设置.
   SETTINGS_OPEN_REQUEST: "pier://settings:open-request",
+  // 偏好更新后广播完整快照给每个 renderer.
+  PREFERENCES_CHANGED: "pier:preferences:changed",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // macOS 原生全屏进出 (main → renderer, payload { isFullscreen }).

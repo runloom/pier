@@ -2,6 +2,7 @@ import type { TerminalDebugRendererSnapshot } from "@shared/contracts/terminal.t
 import {
   hasRegisteredTerminalAnchor,
   readRegisteredTerminalAnchorFrame,
+  readTerminalViewportFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/terminal-lifecycle-debug.ts";
 import { getLastTerminalPresentationSnapshot } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
@@ -33,11 +34,6 @@ export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
       panelId: panel.id,
       terminalLifecycle: readTerminalPanelLifecycleDebug(panel.id),
     })),
-    viewportFrame: {
-      height: window.innerHeight,
-      width: window.innerWidth,
-      x: 0,
-      y: 0,
-    },
+    viewportFrame: readTerminalViewportFrame(),
   };
 }

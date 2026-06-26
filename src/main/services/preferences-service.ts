@@ -1,5 +1,8 @@
 import type { ProjectPreferencesPatch } from "@shared/contracts/commands.ts";
-import type { PierEvent } from "@shared/contracts/events.ts";
+import type {
+  PierEvent,
+  PreferenceChangedKey,
+} from "@shared/contracts/events.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import {
   readPreferences as readPreferencesState,
@@ -59,6 +62,9 @@ function stripUndefinedPatch(
     ...(patch.userKeymap !== undefined && {
       userKeymap: patch.userKeymap,
     }),
+    ...(patch.windowZoomLevel !== undefined && {
+      windowZoomLevel: patch.windowZoomLevel,
+    }),
   };
 }
 
@@ -70,8 +76,16 @@ export function createPreferencesService({
   return {
     read: () => readPreferences(),
     async update(patch) {
-      const next = await updatePreferences(stripUndefinedPatch(patch));
-      eventBus?.publish({ snapshot: next, type: "preferences.changed" });
+      const normalizedPatch = stripUndefinedPatch(patch);
+      const changedKeys = Object.keys(
+        normalizedPatch
+      ) as PreferenceChangedKey[];
+      const next = await updatePreferences(normalizedPatch);
+      eventBus?.publish({
+        changedKeys,
+        snapshot: next,
+        type: "preferences.changed",
+      });
       return next;
     },
   };

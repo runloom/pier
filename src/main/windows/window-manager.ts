@@ -14,7 +14,7 @@
  */
 import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
-import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER } from "@shared/ipc-channels.ts";
 import {
   app,
   BaseWindow,
@@ -31,6 +31,7 @@ import {
   restoreActivePanelFocus,
 } from "../ipc/terminal-focus-state.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
+import { installMacAppViewGeometry } from "./mac-app-view-geometry.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
 import {
   findAppWindowByWebContents,
@@ -89,6 +90,9 @@ class WindowManager {
   private isDestroyingAllForQuit = false;
   private readonly closeFlushDone = new WeakSet<AppWindow>();
   private readonly closeFlushPending = new WeakSet<AppWindow>();
+  private readonly onCreateCallbacks: Array<
+    (payload: { recordId: string; window: AppWindow; windowId: string }) => void
+  > = [];
 
   setNativeChromeColor(window: AppWindow, color: string): void {
     if (isMac) {
@@ -100,6 +104,16 @@ class WindowManager {
     callback: (payload: { recordId: string; windowId: string }) => void
   ): void {
     this.onCloseCallbacks.push(callback);
+  }
+
+  onCreate(
+    callback: (payload: {
+      recordId: string;
+      window: AppWindow;
+      windowId: string;
+    }) => void
+  ): void {
+    this.onCreateCallbacks.push(callback);
   }
 
   onFocus(
@@ -361,6 +375,13 @@ class WindowManager {
     }
 
     this.windows.set(id, window);
+    for (const cb of this.onCreateCallbacks) {
+      cb({
+        recordId: opts.recordId ?? id,
+        window,
+        windowId: id,
+      });
+    }
     return id;
   }
 
@@ -388,27 +409,7 @@ class WindowManager {
     const appView = new WebContentsView({ webPreferences });
     appView.setBackgroundColor("#00000000");
     host.contentView.addChildView(appView);
-    const resizeAppView = () => {
-      const [width = 0, height = 0] = host.getContentSize();
-      appView.setBounds({ x: 0, y: 0, width, height });
-    };
-    const sendLayoutPulse = (reason: "resize" | "zoom") => {
-      if (!appView.webContents.isDestroyed()) {
-        appView.webContents.send(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, {
-          reason,
-        });
-      }
-    };
-    resizeAppView();
-    host.on("resize", () => {
-      resizeAppView();
-      sendLayoutPulse("resize");
-    });
-    host.on("resized", () => sendLayoutPulse("resize"));
-    host.on("maximize", () => sendLayoutPulse("zoom"));
-    host.on("unmaximize", () => sendLayoutPulse("zoom"));
-    host.on("enter-full-screen", () => sendLayoutPulse("zoom"));
-    host.on("leave-full-screen", () => sendLayoutPulse("zoom"));
+    installMacAppViewGeometry(host, appView);
     return createAppWindow(host, appView.webContents, appView);
   }
 

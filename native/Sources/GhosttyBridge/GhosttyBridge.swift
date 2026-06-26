@@ -71,6 +71,8 @@ final class EventRouterView: NSView {
     /// 用它告诉 main 这个 key event 来自哪个 window.
     private var browserWindowId: Int = -1
 
+    // Startup fallback before the renderer hydrates user keybindings and calls
+    // setTerminalAppShortcutKeys. Keep this list in sync with DEFAULT_KEYMAP.
     private static var terminalAppShortcutKeys: Set<String> = [
         "Ctrl+Shift+ArrowDown",
         "Ctrl+Shift+ArrowLeft",
@@ -79,11 +81,16 @@ final class EventRouterView: NSView {
         "Ctrl+Shift+KeyD",
         "Mod+Backquote",
         "Mod+Comma",
+        "Mod+Digit0",
+        "Mod+Equal",
         "Mod+KeyD",
         "Mod+KeyN",
         "Mod+KeyT",
         "Mod+KeyW",
+        "Mod+Minus",
+        "Mod+Numpad0",
         "Mod+Shift+Enter",
+        "Mod+Shift+Equal",
         "Mod+Shift+KeyD",
         "Mod+Shift+KeyP",
     ]
@@ -617,9 +624,10 @@ final class GhosttyBridgeImpl {
             terminalLayouts[panelId] = state
             term.containerView.applyHostFrame(frame)
 
-            // EventRouter.targets[i].rect 必须用 viewport (top-left), 跟 EventRouterView
-            // isFlipped=true 一致 — 见 terminalTargetRect 注释. live resize 路径上拿到
-            // 的 frame 是 NSView frame (contentView bottom-left), 这里 Y-flip 回 viewport.
+            // EventRouter.targets[i].rect 必须用缩放后的 viewport (top-left), 跟
+            // EventRouterView isFlipped=true 一致 — 见 terminalTargetRect 注释.
+            // live resize 路径上拿到的 frame 是 NSView frame (contentView bottom-left),
+            // 这里 Y-flip 回 viewport.
             let viewport = NSRect(
                 x: frame.minX,
                 y: contentView.bounds.height - frame.minY - frame.height,
@@ -1085,7 +1093,7 @@ final class GhosttyBridgeImpl {
             nativeFrame: frame
         )
 
-        // 同步 EventRouter targets (inset 留出 sash 事件通道). target.rect 用
+        // 同步 EventRouter targets (inset 留出 sash 事件通道). target.rect 用缩放后的
         // viewport (top-left) 不用 frame (bottom-left), 见 terminalTargetRect 注释.
         let windowId = ObjectIdentifier(term.parentWindow)
         eventRouters[windowId]?.targets[panelId] = EventRouterView.Target(
@@ -1330,7 +1338,8 @@ final class GhosttyBridgeImpl {
     }
 
     /// EventRouterView.targets[panelId].rect 用的坐标系是 EventRouterView 自己 — 它
-    /// override isFlipped=true 走 top-left, 等价于 web viewport 坐标. **必须传 viewport
+    /// override isFlipped=true 走 top-left, 等价于 BrowserWindow contentView 坐标.
+    /// 这里的 viewport 已经在 renderer 侧乘过 Electron page zoom. **必须传 viewport
     /// (top-left), 不是 NSView frame** — frame 是 contentView 坐标 (bottom-left, 经
     /// computeFrame Y-flip 后的), 两者不一致.
     ///
