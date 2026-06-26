@@ -5,6 +5,7 @@ import {
   DEFAULT_TERMINAL_NEW_CWD_POLICY,
   DEFAULT_TERMINAL_PASTE_PROTECTION,
   DEFAULT_TERMINAL_SCROLLBACK_MB,
+  DEFAULT_WINDOW_ZOOM_LEVEL,
   type ProjectPreferences,
   projectPreferencesSchema,
 } from "@shared/contracts/preferences.ts";
@@ -32,6 +33,7 @@ const DEFAULTS: ProjectPreferences = {
   terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
   terminalPasteProtection: DEFAULT_TERMINAL_PASTE_PROTECTION,
   terminalNewCwdPolicy: DEFAULT_TERMINAL_NEW_CWD_POLICY,
+  windowZoomLevel: DEFAULT_WINDOW_ZOOM_LEVEL,
   userKeymap: [],
 };
 

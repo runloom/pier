@@ -230,6 +230,25 @@ describe.runIf(process.platform === "darwin")(
       ).toBe(win);
     });
 
+    it("notifies lifecycle subscribers when a window is created", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      const onCreate = vi.fn();
+      windowManager.onCreate(onCreate);
+
+      windowManager.create({
+        id: "main",
+        mode: "fresh",
+        recordId: "record-main",
+      });
+      const win = windowManager.get("main");
+
+      expect(onCreate).toHaveBeenCalledWith({
+        recordId: "record-main",
+        window: win,
+        windowId: "main",
+      });
+    });
+
     it("closes the hosted webContents when the BaseWindow closes", async () => {
       const { windowManager } = await import("@main/windows/window-manager.ts");
 

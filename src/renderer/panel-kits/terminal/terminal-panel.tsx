@@ -3,6 +3,7 @@ import {
   panelContextSchema,
 } from "@shared/contracts/panel.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
+import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -10,6 +11,7 @@ import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
+import { useZoomStore } from "@/stores/zoom.store.ts";
 import {
   readTerminalAnchorFrame,
   registerTerminalLayoutAnchor,
@@ -65,6 +67,11 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [initialContext] = useState(() => panelContextFromParams(props.params));
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
+  const windowZoomLevel = useZoomStore((s) => s.windowZoomLevel);
+  const effectiveMonoFontSize = effectiveTerminalFontSize(
+    monoFontSize,
+    windowZoomLevel
+  );
   const anchorRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
@@ -112,9 +119,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
 
   const monoFontFamilyRef = useRef(monoFontFamily);
-  const monoFontSizeRef = useRef(monoFontSize);
+  const effectiveMonoFontSizeRef = useRef(effectiveMonoFontSize);
   monoFontFamilyRef.current = monoFontFamily;
-  monoFontSizeRef.current = monoFontSize;
+  effectiveMonoFontSizeRef.current = effectiveMonoFontSize;
 
   useEffect(() => {
     let disposed = false;
@@ -241,7 +248,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           frame,
           font: {
             family: computeMonoFontFamily(monoFontFamilyRef.current),
-            size: monoFontSizeRef.current,
+            size: effectiveMonoFontSizeRef.current,
           },
           ...(initialContext && { context: initialContext }),
         });
@@ -369,9 +376,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {
       family: computeMonoFontFamily(monoFontFamily),
-      size: monoFontSize,
+      size: effectiveMonoFontSize,
     });
-  }, [panelId, monoFontFamily, monoFontSize]);
+  }, [panelId, monoFontFamily, effectiveMonoFontSize]);
 
   // 订阅 swift 转发的右键: panel 的 NSView 吞掉 React 层 onContextMenu, 唯一拿到
   // 右键的方式是 swift NSEvent monitor 拦截 + IPC 转发. 这里按 panelId 过滤 (一个

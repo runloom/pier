@@ -1,6 +1,9 @@
 import type { TerminalFrame } from "@shared/contracts/terminal.ts";
+import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
+import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
+import { useZoomStore } from "@/stores/zoom.store.ts";
 
-type WindowLayoutPulseReason = "resize" | "zoom";
+type WindowLayoutPulseReason = WindowLayoutPulse["reason"];
 
 export type TerminalLayoutFlushReason =
   | "anchor-resize"
@@ -41,7 +44,27 @@ export function readTerminalAnchorFrame(
   if (r.width < 10 || r.height < 10) {
     return null;
   }
-  return { x: r.x, y: r.y, width: r.width, height: r.height };
+  return cssRectToContentViewRect(
+    {
+      height: r.height,
+      width: r.width,
+      x: r.x,
+      y: r.y,
+    },
+    useZoomStore.getState().windowZoomLevel
+  );
+}
+
+export function readTerminalViewportFrame(): TerminalFrame {
+  return cssRectToContentViewRect(
+    {
+      height: window.innerHeight,
+      width: window.innerWidth,
+      x: 0,
+      y: 0,
+    },
+    useZoomStore.getState().windowZoomLevel
+  );
 }
 
 export function isRegisteredTerminalAnchorVisible(panelId: string): boolean {
@@ -174,6 +197,12 @@ function ensureGlobalListeners(): void {
   if (!windowLayoutPulseDispose) {
     windowLayoutPulseDispose =
       window.pier?.onWindowLayoutPulse?.((pulse) => {
+        if (
+          pulse.reason === "view-zoom" &&
+          typeof pulse.windowZoomLevel === "number"
+        ) {
+          useZoomStore.setState({ windowZoomLevel: pulse.windowZoomLevel });
+        }
         flushTerminalLayoutFramesTrailing(`window-${pulse.reason}`);
       }) ?? null;
   }

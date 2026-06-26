@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { APP_HANDLED_NATIVE_TERMINAL_COMMANDS } from "@shared/commands.ts";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
 
@@ -37,8 +38,11 @@ function swiftTerminalAppShortcuts(source: string): string[] {
 
 describe("native terminal key routing", () => {
   it("keeps the Swift terminal-mode allowlist in sync with DEFAULT_KEYMAP", () => {
-    const markedDefaultShortcuts = DEFAULT_KEYMAP.filter(
-      (binding) => binding.nativeTerminal === "app"
+    const nativeTerminalCommandIds = new Set<string>(
+      APP_HANDLED_NATIVE_TERMINAL_COMMANDS
+    );
+    const markedDefaultShortcuts = DEFAULT_KEYMAP.filter((binding) =>
+      nativeTerminalCommandIds.has(binding.commandId)
     )
       .map((binding) => binding.keys)
       .sort();

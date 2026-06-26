@@ -56,6 +56,9 @@ export const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 export const DEFAULT_TERMINAL_SCROLLBACK_MB = 64;
 export const DEFAULT_TERMINAL_PASTE_PROTECTION = true;
 export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
+export const DEFAULT_WINDOW_ZOOM_LEVEL = 0;
+export const MIN_WINDOW_ZOOM_LEVEL = -3;
+export const MAX_WINDOW_ZOOM_LEVEL = 5;
 
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
@@ -80,6 +83,12 @@ export const projectPreferencesSchema = z.object({
   terminalNewCwdPolicy: terminalNewCwdPolicySchema.default(
     DEFAULT_TERMINAL_NEW_CWD_POLICY
   ),
+  windowZoomLevel: z
+    .number()
+    .int()
+    .min(MIN_WINDOW_ZOOM_LEVEL)
+    .max(MAX_WINDOW_ZOOM_LEVEL)
+    .default(DEFAULT_WINDOW_ZOOM_LEVEL),
   userKeymap: z.array(userKeymapEntrySchema).max(256).default([]),
 });
 

@@ -11,8 +11,14 @@ export interface WindowInfo {
   recordId: string;
 }
 
+export type PreferenceChangedKey = keyof ProjectPreferences;
+
 export type PierEvent =
-  | { snapshot: ProjectPreferences; type: "preferences.changed" }
+  | {
+      changedKeys: readonly PreferenceChangedKey[];
+      snapshot: ProjectPreferences;
+      type: "preferences.changed";
+    }
   | { type: "window.changed"; windows: WindowInfo[] }
   | { panels: PanelSnapshot[]; type: "panel.changed" }
   | { context: PanelContext; panelId: string; type: "terminal.cwd.changed" }

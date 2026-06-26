@@ -18,15 +18,22 @@ const basePreferences: ProjectPreferences = {
   theme: "system",
   uiFontFamily: "",
   userKeymap: [],
+  windowZoomLevel: 0,
 };
 
 describe("createPreferencesService", () => {
-  it("更新偏好后发布 preferences.changed 事件", async () => {
+  it("更新偏好后发布 preferences.changed 事件并标注变更字段", async () => {
     const bus = createPierEventBus();
-    const seen: ProjectPreferences[] = [];
+    const seen: Array<{
+      changedKeys: readonly string[];
+      snapshot: ProjectPreferences;
+    }> = [];
     bus.subscribe((event) => {
       if (event.type === "preferences.changed") {
-        seen.push(event.snapshot);
+        seen.push({
+          changedKeys: event.changedKeys,
+          snapshot: event.snapshot,
+        });
       }
     });
 
@@ -39,7 +46,12 @@ describe("createPreferencesService", () => {
     await expect(service.update({ theme: "dark" })).resolves.toMatchObject({
       theme: "dark",
     });
-    expect(seen).toEqual([{ ...basePreferences, theme: "dark" }]);
+    expect(seen).toEqual([
+      {
+        changedKeys: ["theme"],
+        snapshot: { ...basePreferences, theme: "dark" },
+      },
+    ]);
   });
 
   it("更新终端偏好时不会被服务层过滤", async () => {
