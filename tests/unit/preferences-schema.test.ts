@@ -96,3 +96,59 @@ describe("projectPreferencesSchema — terminal preferences", () => {
     ).toThrow();
   });
 });
+
+describe("projectPreferencesSchema — user keymap", () => {
+  it("默认没有用户快捷键覆盖", () => {
+    const parsed = projectPreferencesSchema.parse({});
+    expect(parsed.userKeymap).toEqual([]);
+  });
+
+  it("接受普通绑定和解绑条目", () => {
+    expect(
+      projectPreferencesSchema.parse({
+        userKeymap: [
+          {
+            commandId: "-pier.panel.newTerminal",
+            keys: "",
+            scope: "global",
+          },
+          {
+            commandId: "pier.panel.newTerminal",
+            keys: "Mod+Shift+KeyX",
+            scope: "global",
+          },
+        ],
+      }).userKeymap
+    ).toEqual([
+      {
+        commandId: "-pier.panel.newTerminal",
+        keys: "",
+        scope: "global",
+      },
+      {
+        commandId: "pier.panel.newTerminal",
+        keys: "Mod+Shift+KeyX",
+        scope: "global",
+      },
+    ]);
+  });
+
+  it("拒绝缺少 keys 的普通绑定和非法 scope", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({
+        userKeymap: [{ commandId: "pier.panel.newTerminal", keys: "" }],
+      })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({
+        userKeymap: [
+          {
+            commandId: "pier.panel.newTerminal",
+            keys: "Mod+KeyT",
+            scope: "bad scope",
+          },
+        ],
+      })
+    ).toThrow();
+  });
+});

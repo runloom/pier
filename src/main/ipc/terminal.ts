@@ -28,18 +28,19 @@ import {
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { performTerminalOperation } from "./terminal-operations.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
+import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 
 /** 暴露给 window-manager 在 renderer reload/crash 时调用清理. */
 export function getTerminalAddon(): NativeAddon | null {
   return cachedAddon;
 }
 let cachedAddon: NativeAddon | null = null;
+
 interface ActivePanelFocusState {
   kind: "terminal" | "web";
   panelId: string | null;
 }
 const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
-
 function rememberActivePanelFocus(
   win: AppWindow,
   kind: "terminal" | "web",
@@ -51,11 +52,9 @@ function rememberActivePanelFocus(
 export function stableWindowIdFor(win: AppWindow): string {
   return findInternalWindowId(win) ?? `window-${win.id}`;
 }
-
 export function terminalSessionScopeFor(win: AppWindow): string {
   return findWindowSessionId(win) ?? stableWindowIdFor(win);
 }
-
 export function restoreActivePanelFocus(win: AppWindow): void {
   if (win.isDestroyed()) {
     return;
@@ -442,6 +441,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
     }
   );
+
+  registerTerminalShortcutIpc(ipcMain, addon);
 
   ipcMain.on(
     "pier:terminal:set-font",

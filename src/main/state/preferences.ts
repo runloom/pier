@@ -32,6 +32,7 @@ const DEFAULTS: ProjectPreferences = {
   terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
   terminalPasteProtection: DEFAULT_TERMINAL_PASTE_PROTECTION,
   terminalNewCwdPolicy: DEFAULT_TERMINAL_NEW_CWD_POLICY,
+  userKeymap: [],
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;

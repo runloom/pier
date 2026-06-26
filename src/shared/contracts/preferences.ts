@@ -10,6 +10,21 @@ export const terminalNewCwdPolicySchema = z.enum([
   "activeTerminal",
   "shellDefault",
 ]);
+export const keybindingScopeSchema = z.union([
+  z.literal("global"),
+  z.string().regex(/^(panel|overlay):[A-Za-z0-9._:-]+$/),
+]);
+
+export const userKeymapEntrySchema = z
+  .object({
+    commandId: z.string().min(1).max(128),
+    keys: z.string().max(128),
+    scope: keybindingScopeSchema.default("global"),
+  })
+  .refine((entry) => entry.commandId.startsWith("-") || entry.keys !== "", {
+    message: "keys is required for keybinding entries",
+    path: ["keys"],
+  });
 
 export const stylePresetIdSchema = z.enum([
   "pierre",
@@ -65,6 +80,7 @@ export const projectPreferencesSchema = z.object({
   terminalNewCwdPolicy: terminalNewCwdPolicySchema.default(
     DEFAULT_TERMINAL_NEW_CWD_POLICY
   ),
+  userKeymap: z.array(userKeymapEntrySchema).max(256).default([]),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;
@@ -72,4 +88,6 @@ export type ResolvedTheme = z.infer<typeof resolvedThemeSchema>;
 export type StylePresetId = z.infer<typeof stylePresetIdSchema>;
 export type TerminalCursorStyle = z.infer<typeof terminalCursorStyleSchema>;
 export type TerminalNewCwdPolicy = z.infer<typeof terminalNewCwdPolicySchema>;
+export type KeybindingScopePreference = z.infer<typeof keybindingScopeSchema>;
+export type UserKeymapEntry = z.infer<typeof userKeymapEntrySchema>;
 export type ProjectPreferences = z.infer<typeof projectPreferencesSchema>;

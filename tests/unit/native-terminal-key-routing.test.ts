@@ -10,9 +10,14 @@ const GHOSTTY_BRIDGE_PATH = join(
   process.cwd(),
   "native/Sources/GhosttyBridge/GhosttyBridge.swift"
 );
+const NATIVE_ADDON_PATH = join(process.cwd(), "native/src/addon.mm");
 
 function readGhosttyBridgeSource(): string {
   return readFileSync(GHOSTTY_BRIDGE_PATH, "utf8");
+}
+
+function readNativeAddonSource(): string {
+  return readFileSync(NATIVE_ADDON_PATH, "utf8");
 }
 
 function swiftTerminalAppShortcuts(source: string): string[] {
@@ -73,5 +78,15 @@ describe("native terminal key routing", () => {
     );
     expect(allowlistCheckIndex).toBeGreaterThan(-1);
     expect(forwardIndex).toBeGreaterThan(allowlistCheckIndex);
+  });
+
+  it("exposes a runtime setter for customized terminal-mode Pier shortcuts", () => {
+    expect(readGhosttyBridgeSource()).toContain(
+      '@_cdecl("ghostty_bridge_set_app_shortcut_keys")'
+    );
+    expect(readNativeAddonSource()).toContain("JsSetAppShortcutKeys");
+    expect(readNativeAddonSource()).toContain(
+      'exports.Set("setAppShortcutKeys"'
+    );
   });
 });
