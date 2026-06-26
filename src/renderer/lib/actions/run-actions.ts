@@ -1,10 +1,8 @@
-import type {
-  TerminalListSnapshot,
-  TerminalOpenSessionSnapshot,
-  TerminalRecentSessionSnapshot,
-} from "@shared/contracts/terminal.ts";
 import i18next from "i18next";
 import { List, Play } from "lucide-react";
+import { panelKindOf } from "@/components/workspace/panel-registry.ts";
+import type { WorkspacePanelSnapshot } from "@/components/workspace/workspace-panel-snapshots.ts";
+import { buildWorkspacePanelSnapshots } from "@/components/workspace/workspace-panel-snapshots.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type {
@@ -12,36 +10,11 @@ import type {
   QuickPickItemBadge,
   QuickPickSection,
 } from "@/lib/command-palette/types.ts";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
-
-function formatClosedAt(closedAt: string): string {
-  const timestamp = Date.parse(closedAt);
-  if (!Number.isFinite(timestamp)) {
-    return closedAt;
-  }
-  const diffMs = Math.max(0, Date.now() - timestamp);
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (diffMs < minute) {
-    return i18next.t("commandPalette.run.time.justNow");
-  }
-  if (diffMs < hour) {
-    return i18next.t("commandPalette.run.time.minutesAgo", {
-      count: Math.floor(diffMs / minute),
-    });
-  }
-  if (diffMs < day) {
-    return i18next.t("commandPalette.run.time.hoursAgo", {
-      count: Math.floor(diffMs / hour),
-    });
-  }
-  return i18next.t("commandPalette.run.time.daysAgo", {
-    count: Math.floor(diffMs / day),
-  });
-}
 
 function basenameOf(path: string | undefined): string | undefined {
   if (!path) {
@@ -50,84 +23,48 @@ function basenameOf(path: string | undefined): string | undefined {
   return path.split(PATH_SEPARATOR_RE).filter(Boolean).at(-1);
 }
 
-function terminalLabel(session: {
-  cwd?: string | undefined;
-  panelId: string;
-  title?: string | undefined;
-}): string {
-  return session.title ?? basenameOf(session.cwd) ?? session.panelId;
+function terminalLabel(panel: WorkspacePanelSnapshot): string {
+  return panel.display?.short ?? basenameOf(panel.context?.cwd) ?? panel.id;
 }
 
-function terminalTabBadge(
-  session: TerminalOpenSessionSnapshot
-): QuickPickItemBadge[] {
+function terminalTabBadge(panel: WorkspacePanelSnapshot): QuickPickItemBadge[] {
   return [
     {
       label: i18next.t("commandPalette.run.badge.tab", {
-        tab: session.tabIndex + 1,
-        total: session.tabCount,
+        tab: panel.tabIndex + 1,
+        total: panel.tabCount,
       }),
       variant: "outline",
     },
   ];
 }
 
-function sectionHeading(
-  session: TerminalOpenSessionSnapshot,
-  windowOrdinal: number
-): string {
-  const parts = [
-    i18next.t("commandPalette.run.section.window", {
-      window: windowOrdinal,
-    }),
-  ];
-  if (session.windowFocused) {
-    parts.push(i18next.t("commandPalette.run.section.currentWindow"));
-  }
-  parts.push(
+function sectionHeading(panel: WorkspacePanelSnapshot): string {
+  return [
+    i18next.t("commandPalette.run.section.window", { window: 1 }),
+    i18next.t("commandPalette.run.section.currentWindow"),
     i18next.t("commandPalette.run.section.group", {
-      group: session.groupIndex + 1,
-    })
-  );
-  return parts.join(" · ");
+      group: panel.groupIndex + 1,
+    }),
+  ].join(" · ");
 }
 
-function compareOpenSessions(
-  a: TerminalOpenSessionSnapshot,
-  b: TerminalOpenSessionSnapshot
+function comparePanels(
+  a: WorkspacePanelSnapshot,
+  b: WorkspacePanelSnapshot
 ): number {
   return (
-    a.windowIndex - b.windowIndex ||
     a.groupIndex - b.groupIndex ||
     a.tabIndex - b.tabIndex ||
-    a.windowId.localeCompare(b.windowId) ||
-    a.panelId.localeCompare(b.panelId)
+    a.id.localeCompare(b.id)
   );
 }
 
-function terminalCommandErrorMessage(result: {
-  error?: string | undefined;
-  ok: boolean;
-}): string {
-  return result.error ?? "terminal command failed";
-}
-
-function buildTerminalListSections(snapshot: TerminalListSnapshot): {
-  recentByItemId: Map<string, TerminalRecentSessionSnapshot>;
+function buildTerminalPanelSections(openPanels: WorkspacePanelSnapshot[]): {
+  panelsByItemId: Map<string, WorkspacePanelSnapshot>;
   sections: QuickPickSection[];
-  terminalByItemId: Map<string, TerminalOpenSessionSnapshot>;
 } {
-  const terminalByItemId = new Map<string, TerminalOpenSessionSnapshot>();
-  const recentByItemId = new Map<string, TerminalRecentSessionSnapshot>();
-  const windowOrdinalById = new Map<string, number>();
-  const openSessions = [...snapshot.open].sort(compareOpenSessions);
-
-  for (const session of openSessions) {
-    if (!windowOrdinalById.has(session.windowId)) {
-      windowOrdinalById.set(session.windowId, windowOrdinalById.size + 1);
-    }
-  }
-
+  const panelsByItemId = new Map<string, WorkspacePanelSnapshot>();
   const sections: Array<{
     heading: string;
     id: string;
@@ -137,17 +74,15 @@ function buildTerminalListSections(snapshot: TerminalListSnapshot): {
     string,
     { heading: string; id: string; items: QuickPickItem[] }
   >();
-  for (const session of openSessions) {
-    const itemId = `terminal:${session.windowId}:${session.panelId}`;
-    terminalByItemId.set(itemId, session);
-    const sectionId = `window:${session.windowId}:group:${session.groupIndex}`;
+
+  for (const panel of [...openPanels].sort(comparePanels)) {
+    const itemId = `panel:${panel.id}`;
+    panelsByItemId.set(itemId, panel);
+    const sectionId = `group:${panel.groupIndex}`;
     let section = sectionById.get(sectionId);
     if (!section) {
       section = {
-        heading: sectionHeading(
-          session,
-          windowOrdinalById.get(session.windowId) ?? 1
-        ),
+        heading: sectionHeading(panel),
         id: sectionId,
         items: [],
       };
@@ -155,84 +90,38 @@ function buildTerminalListSections(snapshot: TerminalListSnapshot): {
       sections.push(section);
     }
     const item: QuickPickItem = {
-      badges: terminalTabBadge(session),
-      checked: session.windowFocused === true && session.active === true,
+      badges: terminalTabBadge(panel),
+      checked: panel.active === true,
       id: itemId,
       keywords: [
-        session.panelId,
-        session.windowId,
-        session.recordId,
-        session.title,
-        session.cwd,
+        panel.id,
+        panel.context?.cwd,
+        panel.context?.projectRoot,
+        panel.context?.gitRoot,
+        panel.context?.branch,
         section.heading,
       ].filter((value): value is string => typeof value === "string"),
-      label: terminalLabel(session),
-      ...(session.cwd ? { detail: session.cwd } : {}),
+      label: terminalLabel(panel),
+      ...(panel.context?.cwd ? { detail: panel.context.cwd } : {}),
     };
     section.items = [...section.items, item];
   }
 
-  if (snapshot.recentClosed.length > 0) {
-    const recentItems = snapshot.recentClosed.map((session) => {
-      const itemId = `recent:${session.recordId}:${session.id}`;
-      recentByItemId.set(itemId, session);
-      return {
-        badges: [
-          {
-            label: i18next.t("commandPalette.run.badge.closed"),
-            variant: "secondary" as const,
-          },
-        ],
-        description: i18next.t("commandPalette.run.action.reopen"),
-        detail: [session.cwd, formatClosedAt(session.closedAt)].join(" · "),
-        id: itemId,
-        keywords: [
-          session.panelId,
-          session.windowId,
-          session.recordId,
-          session.title,
-          session.cwd,
-          formatClosedAt(session.closedAt),
-        ].filter((value): value is string => typeof value === "string"),
-        label: terminalLabel(session),
-      };
-    });
-    sections.push({
-      heading: i18next.t("commandPalette.run.section.recentClosed"),
-      id: "recent-closed",
-      items: recentItems,
-    });
-  }
-
-  if (snapshot.errors.length > 0) {
-    sections.push({
-      heading: i18next.t("commandPalette.run.section.errors"),
-      id: "terminal-errors",
-      items: snapshot.errors.map((error, index) => ({
-        badges: [
-          {
-            label: i18next.t("commandPalette.run.badge.error"),
-            variant: "destructive" as const,
-          },
-        ],
-        detail: [error.windowId, error.recordId]
-          .filter((value): value is string => typeof value === "string")
-          .join(" · "),
-        disabled: true,
-        id: `terminal-error:${index}`,
-        keywords: [error.windowId, error.recordId].filter(
-          (value): value is string => typeof value === "string"
-        ),
-        label: error.message,
-      })),
-    });
-  }
-
   return {
-    recentByItemId,
+    panelsByItemId,
     sections: sections satisfies QuickPickSection[],
-    terminalByItemId,
   };
+}
+
+function currentTerminalPanels(): WorkspacePanelSnapshot[] {
+  const api = useWorkspaceStore.getState().api;
+  if (!api) {
+    return [];
+  }
+  return buildWorkspacePanelSnapshots(
+    api,
+    usePanelDescriptorStore.getState().descriptors
+  ).filter((panel) => panel.kind === "terminal");
 }
 
 export function registerRunActions(): () => void {
@@ -273,13 +162,14 @@ export function registerRunActions(): () => void {
     actionRegistry.register({
       category: "Run",
       enabled: () => useWorkspaceStore.getState().api != null,
-      handler: async () => {
-        if (!useWorkspaceStore.getState().api) {
+      handler: () => {
+        const api = useWorkspaceStore.getState().api;
+        if (!api) {
           return;
         }
-        const snapshot = await window.pier.terminal.listSessions();
-        const { recentByItemId, sections, terminalByItemId } =
-          buildTerminalListSections(snapshot);
+        const { panelsByItemId, sections } = buildTerminalPanelSections(
+          currentTerminalPanels()
+        );
         useCommandPaletteController.getState().openQuickPick({
           title: i18next.t("commandPalette.action.terminalList"),
           placeholder: i18next.t("commandPalette.placeholder.terminalList"),
@@ -296,29 +186,18 @@ export function registerRunActions(): () => void {
                   },
                 ],
               }),
-          onAccept: async (item) => {
-            const terminalSession = terminalByItemId.get(item.id);
-            if (terminalSession) {
-              const result = await window.pier.terminal.focusSession({
-                panelId: terminalSession.panelId,
-                windowId: terminalSession.windowId,
-              });
-              if (!result.ok) {
-                throw new Error(terminalCommandErrorMessage(result));
-              }
+          onAccept: (item) => {
+            const panel = panelsByItemId.get(item.id);
+            if (!panel) {
               return;
             }
-            const recentSession = recentByItemId.get(item.id);
-            if (recentSession) {
-              const result = await window.pier.terminal.openSession({
-                cwd: recentSession.cwd,
-                ...(recentSession.windowAlive && recentSession.windowId
-                  ? { windowId: recentSession.windowId }
-                  : {}),
-              });
-              if (!result.ok) {
-                throw new Error(terminalCommandErrorMessage(result));
-              }
+            const result = activateWorkspacePanel(api, panel.id, {
+              expectedKind: "terminal",
+              kindOfComponent: panelKindOf,
+              reveal: "always",
+            });
+            if (!result.ok) {
+              throw new Error(result.message);
             }
           },
         });

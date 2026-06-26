@@ -1,6 +1,17 @@
 import { createRendererCommandService } from "@main/services/renderer-command-service.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import { describe, expect, it, vi } from "vitest";
+
+const context: PanelContext = {
+  contextId: "ctx-pier",
+  cwd: "/Users/xyz/ABC/pier",
+  openedPath: "/Users/xyz/ABC/pier",
+  projectRoot: "/Users/xyz/ABC/pier",
+  source: "command",
+  updatedAt: 1_772_000_000_000,
+  worktreeKey: "/Users/xyz/ABC/pier",
+};
 
 describe("createRendererCommandService", () => {
   it("发送 renderer command 并等待结果", async () => {
@@ -18,9 +29,15 @@ describe("createRendererCommandService", () => {
       timeoutMs: 1000,
     });
 
-    const promise = service.execute({ type: "terminal.open" });
+    const promise = service.execute({
+      context,
+      type: "panel.open",
+    });
     expect(sent).toEqual({
-      command: { type: "terminal.open" },
+      command: {
+        context,
+        type: "panel.open",
+      },
       requestId: "renderer-req-1",
     });
     expect(focus).toBe(true);
@@ -111,8 +128,8 @@ describe("createRendererCommandService", () => {
 
     const promise = service.execute({
       focus: false,
-      path: ".",
-      type: "workspace.open",
+      context,
+      type: "panel.open",
     });
     expect(focus).toBe(false);
     service.resolve({
@@ -135,7 +152,9 @@ describe("createRendererCommandService", () => {
       timeoutMs: 1000,
     });
 
-    await expect(service.execute({ type: "terminal.open" })).resolves.toEqual({
+    await expect(
+      service.execute({ context, type: "panel.open" })
+    ).resolves.toEqual({
       error: {
         code: "platform_unavailable",
         message: "no renderer window available",
@@ -153,7 +172,7 @@ describe("createRendererCommandService", () => {
       timeoutMs: 1000,
     });
 
-    const promise = service.execute({ type: "workspace.open", path: "." });
+    const promise = service.execute({ context, type: "panel.open" });
     vi.advanceTimersByTime(1000);
 
     await expect(promise).resolves.toEqual({
@@ -174,7 +193,7 @@ describe("createRendererCommandService", () => {
       timeoutMs: 1000,
     });
 
-    const promise = service.execute({ type: "workspace.open", path: "." });
+    const promise = service.execute({ context, type: "panel.open" });
     service.resolve({
       error: { message: "workspace api not ready" },
       ok: false,

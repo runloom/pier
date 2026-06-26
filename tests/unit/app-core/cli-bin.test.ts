@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import {
   createPierLocalControlServer,
@@ -58,13 +58,13 @@ describe("bin/pier.mjs", () => {
 
     expect(JSON.parse(stdout)).toMatchObject({
       envelope: {
-        command: { path: ".", type: "workspace.open" },
+        command: { path: resolve("."), type: "panel.open" },
       },
       json: true,
     });
   });
 
-  it("解析窗口和分屏参数", async () => {
+  it("解析窗口、分屏和 focus 参数", async () => {
     const { stdout } = await execFileAsync("node", [
       "bin/pier.mjs",
       "open",
@@ -73,43 +73,6 @@ describe("bin/pier.mjs", () => {
       "main",
       "--split",
       "below",
-      "--json",
-      "--print-envelope",
-    ]);
-
-    expect(JSON.parse(stdout)).toMatchObject({
-      envelope: {
-        command: {
-          path: ".",
-          placement: "split-below",
-          type: "workspace.open",
-          windowId: "main",
-        },
-      },
-      json: true,
-    });
-  });
-
-  it("拒绝缺少值的窗口参数", async () => {
-    await expect(
-      execFileAsync("node", [
-        "bin/pier.mjs",
-        "terminals",
-        "list",
-        "--window",
-        "--json",
-        "--print-envelope",
-      ])
-    ).rejects.toMatchObject({
-      stderr: expect.stringContaining("missing required value for --window"),
-    });
-  });
-
-  it("解析 --no-focus", async () => {
-    const { stdout } = await execFileAsync("node", [
-      "bin/pier.mjs",
-      "open",
-      ".",
       "--no-focus",
       "--json",
       "--print-envelope",
@@ -119,15 +82,33 @@ describe("bin/pier.mjs", () => {
       envelope: {
         command: {
           focus: false,
-          path: ".",
-          type: "workspace.open",
+          path: resolve("."),
+          placement: "split-below",
+          type: "panel.open",
+          windowId: "main",
         },
       },
       json: true,
     });
   });
 
-  it("usage lists focus commands with --no-focus", async () => {
+  it("拒绝 terminals open --cwd 旧入口", async () => {
+    await expect(
+      execFileAsync("node", [
+        "bin/pier.mjs",
+        "terminals",
+        "open",
+        "--cwd",
+        ".",
+        "--json",
+        "--print-envelope",
+      ])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("unknown pier CLI command"),
+    });
+  });
+
+  it("usage 不再包含 terminal open/list/focus", async () => {
     await expect(
       execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
     ).rejects.toMatchObject({
@@ -138,9 +119,7 @@ describe("bin/pier.mjs", () => {
     await expect(
       execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
     ).rejects.toMatchObject({
-      stderr: expect.stringContaining(
-        "pier terminals focus <panelId> [--window <windowId>] [--no-focus] --json"
-      ),
+      stderr: expect.not.stringContaining("pier terminals open"),
     });
   });
 
@@ -168,7 +147,7 @@ describe("bin/pier.mjs", () => {
     await server.close();
   });
 
-  it("terminals list 没有 --json 时输出窗口和组分段", async () => {
+  it("panels list 没有 --json 时输出窗口和组分段", async () => {
     const userDataDir = await makeTempDir();
     const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
     const server = createPierLocalControlServer({
@@ -177,33 +156,50 @@ describe("bin/pier.mjs", () => {
         return Promise.resolve({
           data: {
             errors: [],
-            open: [
+            panels: [
               {
                 active: true,
-                cwd: "/Users/xyz/ABC/pier",
+                context: {
+                  contextId: "ctx-pier",
+                  cwd: "/Users/xyz/ABC/pier",
+                  openedPath: "/Users/xyz/ABC/pier",
+                  projectRoot: "/Users/xyz/ABC/pier",
+                  source: "panel",
+                  updatedAt: 1,
+                  worktreeKey: "/Users/xyz/ABC/pier",
+                },
+                display: { short: "pier" },
                 groupIndex: 0,
-                panelId: "terminal-1",
+                id: "terminal-1",
+                kind: "terminal",
                 recordId: "record-main",
                 tabCount: 2,
                 tabIndex: 0,
-                title: "pier",
                 windowFocused: true,
                 windowId: "main",
               },
               {
                 active: true,
-                cwd: "/Users/xyz/ABC/bay",
+                context: {
+                  contextId: "ctx-bay",
+                  cwd: "/Users/xyz/ABC/bay",
+                  openedPath: "/Users/xyz/ABC/bay",
+                  projectRoot: "/Users/xyz/ABC/bay",
+                  source: "panel",
+                  updatedAt: 1,
+                  worktreeKey: "/Users/xyz/ABC/bay",
+                },
+                display: { short: "bay" },
                 groupIndex: 0,
-                panelId: "terminal-2",
+                id: "terminal-2",
+                kind: "terminal",
                 recordId: "record-secondary",
                 tabCount: 1,
                 tabIndex: 0,
-                title: "bay",
                 windowFocused: false,
                 windowId: "secondary",
               },
             ],
-            recentClosed: [],
           },
           ok: true,
           requestId: parsed.requestId,
@@ -215,7 +211,7 @@ describe("bin/pier.mjs", () => {
 
     const { stdout } = await execFileAsync(
       "node",
-      ["bin/pier.mjs", "terminals", "list"],
+      ["bin/pier.mjs", "panels", "list"],
       {
         env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
       }
@@ -243,7 +239,7 @@ describe("bin/pier.mjs", () => {
         return Promise.resolve({
           error: {
             code: "not_found",
-            message: "terminal not found: missing",
+            message: "panel not found: missing",
           },
           ok: false,
           requestId: parsed.requestId,
@@ -254,13 +250,12 @@ describe("bin/pier.mjs", () => {
     await server.start();
 
     await expect(
-      execFileAsync("node", ["bin/pier.mjs", "terminals", "focus", "missing"], {
+      execFileAsync("node", ["bin/pier.mjs", "panels", "focus", "missing"], {
         env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
       })
     ).rejects.toMatchObject({
-      stderr: expect.stringContaining("not_found: terminal not found: missing"),
+      stderr: "not_found: panel not found: missing\n",
     });
-
     await server.close();
   });
 });

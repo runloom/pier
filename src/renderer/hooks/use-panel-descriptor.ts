@@ -33,18 +33,15 @@ export function usePanelDescriptor(
   panel: PanelHandle,
   descriptor: PanelDescriptor | null
 ): void {
-  const short = descriptor?.short;
-  const long = descriptor?.long;
-  const path = descriptor?.path;
   const upsert = usePanelDescriptorStore((s) => s.upsert);
   const remove = usePanelDescriptorStore((s) => s.remove);
 
   useEffect(() => {
-    if (short === undefined) {
+    if (!descriptor) {
       return;
     }
-    panel.setTitle(short);
-    upsert(panel.id, { short, long, path });
+    panel.setTitle(descriptor.display.short);
+    upsert(panel.id, descriptor);
     return () => remove(panel.id);
-  }, [panel, short, long, path, upsert, remove]);
+  }, [panel, descriptor, upsert, remove]);
 }

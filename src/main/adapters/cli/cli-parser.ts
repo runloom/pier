@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isAbsolute, resolve } from "node:path";
 import type {
   PierCommand,
   PierCommandEnvelope,
@@ -7,6 +8,7 @@ import type {
 
 export interface ParsePierCliArgsOptions {
   clientId?: string;
+  cwd?: string;
   requestId?: string;
 }
 
@@ -45,11 +47,10 @@ function stripOptions(args: readonly string[]): string[] {
       arg === "--json" ||
       arg === "--print-envelope" ||
       arg === "--window" ||
-      arg === "--cwd" ||
       arg === "--split" ||
       arg === "--no-focus"
     ) {
-      if (arg === "--window" || arg === "--cwd" || arg === "--split") {
+      if (arg === "--window" || arg === "--split") {
         index++;
       }
       continue;
@@ -99,11 +100,24 @@ function routeOptions(args: readonly string[]): {
   };
 }
 
+function absolutePath(path: string, cwd: string): string {
+  return isAbsolute(path) ? path : resolve(cwd, path);
+}
+
 function parseOpen(
   action: string | undefined,
+  unexpected: string | undefined,
+  cwd: string,
   route: ReturnType<typeof routeOptions>
 ): PierCommand {
-  return { path: requireValue(action), type: "workspace.open", ...route };
+  if (unexpected) {
+    throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+  }
+  return {
+    path: absolutePath(requireValue(action), cwd),
+    type: "panel.open",
+    ...route,
+  };
 }
 
 function parseWindows(
@@ -141,38 +155,11 @@ function parsePanels(
   throw new Error("unknown pier CLI command");
 }
 
-function parseTerminals(
-  action: string | undefined,
-  value: string | undefined,
-  route: ReturnType<typeof routeOptions>,
-  args: readonly string[]
-): PierCommand {
-  if (action === "list") {
-    return {
-      type: "terminal.list",
-      ...(route.windowId && { windowId: route.windowId }),
-    };
-  }
-  if (action === "open") {
-    const cwd = optionValue(args, "--cwd");
-    return { type: "terminal.open", ...route, ...(cwd && { cwd }) };
-  }
-  if (action === "focus") {
-    return {
-      ...(route.focus !== undefined && { focus: route.focus }),
-      panelId: requireValue(value),
-      type: "terminal.focus",
-      ...(route.windowId && { windowId: route.windowId }),
-    };
-  }
-  throw new Error("unknown pier CLI command");
-}
-
-function parseCommand(args: readonly string[]): PierCommand {
+function parseCommand(args: readonly string[], cwd: string): PierCommand {
   const [domain, action, value] = stripOptions(args);
   const route = routeOptions(args);
   if (domain === "open") {
-    return parseOpen(action, route);
+    return parseOpen(action, value, cwd, route);
   }
   if (domain === "status") {
     return { type: "app.status" };
@@ -182,9 +169,6 @@ function parseCommand(args: readonly string[]): PierCommand {
   }
   if (domain === "panels") {
     return parsePanels(action, value, route);
-  }
-  if (domain === "terminals") {
-    return parseTerminals(action, value, route, args);
   }
   if (domain === "preferences" && action === "read") {
     return { type: "preferences.read" };
@@ -196,13 +180,14 @@ export function parsePierCliArgs(
   argv: readonly string[],
   {
     clientId = "cli-local",
+    cwd = process.cwd(),
     requestId = randomUUID(),
   }: ParsePierCliArgsOptions = {}
 ): ParsedPierCliCommand {
   return {
     envelope: {
       clientId,
-      command: parseCommand(argv),
+      command: parseCommand(argv, cwd),
       protocolVersion: 1,
       requestId,
     },

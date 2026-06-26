@@ -11,11 +11,12 @@ import {
   isToggleDevToolsNativeChord,
   toggleDetachedDevTools,
 } from "../devtools.ts";
+import { resolvePanelContextForPath } from "../services/panel-context-resolver.ts";
+import { recordRecentPanelContext } from "../state/panel-context-state.ts";
 import {
-  archiveTerminalPanelSession,
   readTerminalPanelSession,
   removeTerminalPanelSession,
-  updateTerminalPanelCwd,
+  updateTerminalPanelContext,
   updateTerminalPanelTitle,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -109,15 +110,7 @@ function loadNativeAddon(): {
   }
 }
 
-/**
- * Forward swift-originated event to a specific app window renderer.
- *
- * 所有 swift→main→renderer forward 共用这一条路由 (keyboard / mouse / pwd / title):
- * 1. 按 Electron window id 精准定位 app window — swift NSEvent monitor / delegate
- *    跨线程, callback 执行时 focused window 可能已切换, 不能用 getFocusedWindow.
- * 2. 守 isDestroyed (window/webContents 在 swift 触发 → main JS dispatch 间可能销毁).
- * 3. send 抛任何错误 (window 关闭瞬间) 都 catch + log + 继续 — 不影响其他 channel.
- */
+/** Swift-originated events 按 Electron window id 精准转发, 避免焦点窗口误路由. */
 function forwardToWindow<P>(
   browserWindowId: number,
   channel: string,
@@ -145,12 +138,33 @@ export function windowFromWebContents(
   return findAppWindowByWebContents(webContents);
 }
 
+async function handleTerminalCwdChange(
+  id: number,
+  rawPanelId: string,
+  cwd: string,
+  targetWindow: AppWindow | null
+): Promise<void> {
+  const context = await resolvePanelContextForPath(cwd, {
+    source: "panel",
+  });
+  await recordRecentPanelContext(context);
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    const sessionScope = terminalSessionScopeFor(targetWindow);
+    await updateTerminalPanelContext(sessionScope, rawPanelId, context);
+  }
+  forwardToWindow(
+    id,
+    "pier:terminal:cwd-change",
+    { panelId: rawPanelId, context },
+    "pier-cwd-forward"
+  );
+}
+
 export function registerTerminalIpc(ipcMain: IpcMain): void {
   const { addon, error: loadError } = loadNativeAddon();
   cachedAddon = addon;
 
-  // swift → renderer forward 必须按 setupWindow 记录的 Electron window id 路由:
-  // keyboard / mouse / pwd / title 都不能依赖当前 focused window.
+  // Swift forward callback 必须按 setupWindow 记录的 Electron window id 路由.
   addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
     const targetWindow = findAppWindowByElectronId(id);
     if (
@@ -169,8 +183,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       "pier-key-forward"
     );
   });
-  // Swift forward callback 收到的 panelId 是 scoped (createTerminal 时 main 传的),
-  // unscope 后给 renderer — React/dockview 的 panel id 是 raw.
+  // Swift 收到 scoped panelId, renderer 使用 raw panel id.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
     forwardToWindow(
       id,
@@ -190,18 +203,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     const rawPanelId = unscopePanelId(panelId);
     const targetWindow = findAppWindowByElectronId(id);
-    if (targetWindow && !targetWindow.isDestroyed()) {
-      const sessionScope = terminalSessionScopeFor(targetWindow);
-      updateTerminalPanelCwd(sessionScope, rawPanelId, cwd).catch((err) => {
-        console.error("[pier-cwd-persist] failed:", err);
-      });
-    }
-    forwardToWindow(
-      id,
-      "pier:terminal:cwd-change",
-      { panelId: rawPanelId, cwd },
-      "pier-cwd-forward"
-    );
+    handleTerminalCwdChange(id, rawPanelId, cwd, targetWindow).catch((err) => {
+      console.error("[pier-cwd-context] failed:", err);
+    });
   });
   addon?.setTitleForwardCallback((id, panelId, title) => {
     const rawPanelId = unscopePanelId(panelId);
@@ -230,8 +234,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
     try {
       const handle = win.getNativeWindowHandle();
-      // 把 Electron window id 传给 swift, 让 forward callback 能按 window 路由 (多窗口
-      // 下避免 getFocusedWindow 误把 background window 的 keystroke 路由到 focused)
+      // 传 Electron window id 给 swift, 防多窗口 callback 误投到 focused window.
       const ok = addon.setupWindow(handle, win.id);
       return ok ? { ok: true } : { ok: false, error: "setupWindow failed" };
     } catch (e) {
@@ -268,7 +271,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const cwd = saved?.cwd ?? args.cwd;
+        const context = saved?.context ?? args.context;
+        const cwd = context?.cwd;
         const ok = addon.createTerminal(
           handle,
           scopePanelId(win, args.panelId),
@@ -277,11 +281,15 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           args.font.size,
           cwd
         );
-        if (ok && cwd) {
+        if (ok && context) {
           try {
-            await updateTerminalPanelCwd(sessionScope, args.panelId, cwd);
+            await updateTerminalPanelContext(
+              sessionScope,
+              args.panelId,
+              context
+            );
           } catch (err) {
-            console.error("[pier-cwd-initial-persist] failed:", err);
+            console.error("[pier-context-initial-persist] failed:", err);
           }
         }
         return ok
@@ -310,7 +318,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
   );
 
-  // Renderer → addon 单参数透传. addon 可能未加载, handler 仍注册但 noop.
   const panelIdRelays = [
     {
       channel: "pier:terminal:show",
@@ -336,15 +343,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     const win = windowFromWebContents(event.sender);
     if (win) {
       const sessionScope = terminalSessionScopeFor(win);
-      archiveTerminalPanelSession(sessionScope, panelId)
-        .catch((err) => {
-          console.error("[pier-cwd-archive] failed:", err);
-        })
-        .finally(() => {
-          removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
-            console.error("[pier-cwd-remove] failed:", err);
-          });
-        });
+      removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
+        console.error("[pier-cwd-remove] failed:", err);
+      });
       addon?.closeTerminal(scopePanelId(win, panelId));
     }
   });
@@ -359,7 +360,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       addon?.focusTerminal(scopePanelId(win, panelId));
     }
   });
-  // set-frame 多一个 frame 参数, 不进数组单独写.
   ipcMain.on(
     "pier:terminal:set-frame",
     (event, panelId: string, frame: TerminalFrame) => {
@@ -403,7 +403,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     } catch (err) {
       console.error("[pier-set-overlay] failed:", err);
     }
-    // overlay active 时让 Chromium 接管 keystroke.
     if (active) {
       win.webContents.focus();
     }
@@ -491,7 +490,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       } catch (err) {
         console.error("[pier-set-active-panel-kind] failed:", err);
       }
-      // 切到 web panel 时由 main 负责 web focus.
       if (kind === "web" && win.isFocused()) {
         win.webContents.focus();
       }

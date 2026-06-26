@@ -34,15 +34,14 @@ interface CliResult<T> {
   ok: boolean;
 }
 
-interface CliTerminalList {
+interface CliPanelList {
   errors: unknown[];
-  open: CliTerminalSession[];
-  recentClosed: unknown[];
+  panels: CliPanelSession[];
 }
 
-interface CliTerminalSession {
+interface CliPanelSession {
   active?: boolean;
-  panelId: string;
+  id: string;
   windowFocused?: boolean;
   windowId: string;
 }
@@ -159,24 +158,27 @@ async function waitForPierCli(userDataDir: string) {
     .toBe(true);
 }
 
-function terminalList(userDataDir: string): Promise<CliTerminalList> {
-  return runPierCliJson<CliTerminalList>(userDataDir, ["terminals", "list"]);
+function terminalPanels(snapshot: CliPanelList): CliPanelSession[] {
+  return snapshot.panels.filter((panel) => panel.id.startsWith("terminal-"));
 }
 
-async function waitForTerminalListCount(
+function panelList(userDataDir: string): Promise<CliPanelList> {
+  return runPierCliJson<CliPanelList>(userDataDir, ["panels", "list"]);
+}
+
+async function waitForTerminalPanelCount(
   userDataDir: string,
   count: number
-): Promise<CliTerminalList> {
-  let snapshot: CliTerminalList = {
+): Promise<CliPanelList> {
+  let snapshot: CliPanelList = {
     errors: [],
-    open: [],
-    recentClosed: [],
+    panels: [],
   };
   await expect
     .poll(
       async () => {
-        snapshot = await terminalList(userDataDir);
-        return snapshot.open.length;
+        snapshot = await panelList(userDataDir);
+        return terminalPanels(snapshot).length;
       },
       { timeout: 15_000 }
     )
@@ -188,18 +190,18 @@ async function createTerminalTabs(
   userDataDir: string,
   win: Page,
   count: number
-): Promise<CliTerminalList> {
-  let snapshot = await terminalList(userDataDir);
+): Promise<CliPanelList> {
+  let snapshot = await panelList(userDataDir);
   await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
-    snapshot.open.length
+    terminalPanels(snapshot).length
   );
   for (
-    let nextCount = snapshot.open.length + 1;
+    let nextCount = terminalPanels(snapshot).length + 1;
     nextCount <= count;
     nextCount++
   ) {
     await win.keyboard.press("Meta+KeyT");
-    snapshot = await waitForTerminalListCount(userDataDir, nextCount);
+    snapshot = await waitForTerminalPanelCount(userDataDir, nextCount);
     await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
       nextCount
     );
@@ -529,30 +531,28 @@ test.describe("Native terminal focus e2e", () => {
           `expected a hidden terminal tab, got ${JSON.stringify(visibleTabs)}`
         );
       }
-      const targetSession = snapshot.open.find(
-        (session) => session.panelId === hiddenTarget.panelId
+      const targetSession = terminalPanels(snapshot).find(
+        (session) => session.id === hiddenTarget.panelId
       );
       if (!targetSession) {
         throw new Error(`terminal snapshot missing ${hiddenTarget.panelId}`);
       }
 
       await runPierCliJson(userDataDir, [
-        "terminals",
+        "panels",
         "focus",
-        targetSession.panelId,
+        targetSession.id,
         "--window",
         targetSession.windowId,
       ]);
 
       await expect
-        .poll(
-          async () => (await tabVisibility(win, targetSession.panelId))?.visible
-        )
+        .poll(async () => (await tabVisibility(win, targetSession.id))?.visible)
         .toBe(true);
       await expect
         .poll(async () => {
-          const focused = (await terminalList(userDataDir)).open.find(
-            (session) => session.panelId === targetSession.panelId
+          const focused = terminalPanels(await panelList(userDataDir)).find(
+            (session) => session.id === targetSession.id
           );
           return focused?.active === true && focused.windowFocused === true;
         })
@@ -584,38 +584,38 @@ test.describe("Native terminal focus e2e", () => {
         BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
       });
       await waitForPierCli(userDataDir);
-      await waitForTerminalListCount(userDataDir, 1);
+      await waitForTerminalPanelCount(userDataDir, 1);
       await focusTerminalAt(win, 0);
 
       await win.keyboard.press("Meta+KeyD");
-      await waitForTerminalListCount(userDataDir, 2);
+      await waitForTerminalPanelCount(userDataDir, 2);
       await clickTerminalByHorizontalOrder(win, "right");
       const snapshot = await createTerminalTabs(userDataDir, win, 10);
-      const targetSession = snapshot.open.find((session) => session.active);
+      const targetSession = terminalPanels(snapshot).find(
+        (session) => session.active
+      );
       if (!targetSession) {
         throw new Error("active terminal session not found");
       }
 
-      await setTabStripScrollLeftForPanel(win, targetSession.panelId, 0);
+      await setTabStripScrollLeftForPanel(win, targetSession.id, 0);
       await expect
-        .poll(
-          async () => (await tabVisibility(win, targetSession.panelId))?.visible
-        )
+        .poll(async () => (await tabVisibility(win, targetSession.id))?.visible)
         .toBe(false);
 
       await clickTerminalByHorizontalOrder(win, "left");
       await expect
         .poll(async () => {
-          const active = (await terminalList(userDataDir)).open.find(
+          const active = terminalPanels(await panelList(userDataDir)).find(
             (session) => session.active
           );
-          return active?.panelId !== targetSession.panelId;
+          return active?.id !== targetSession.id;
         })
         .toBe(true);
 
-      const before = await tabVisibility(win, targetSession.panelId);
+      const before = await tabVisibility(win, targetSession.id);
       await clickTerminalByHorizontalOrder(win, "right", { waitAfterMs: 0 });
-      const after = await tabVisibility(win, targetSession.panelId);
+      const after = await tabVisibility(win, targetSession.id);
 
       expect(before?.visible).toBe(false);
       expect(after?.scrollLeft).toBe(before?.scrollLeft);
@@ -647,41 +647,41 @@ test.describe("Native terminal focus e2e", () => {
         BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
       });
       await waitForPierCli(userDataDir);
-      await waitForTerminalListCount(userDataDir, 1);
+      await waitForTerminalPanelCount(userDataDir, 1);
       await focusTerminalAt(win, 0);
 
       await win.keyboard.press("Meta+KeyD");
-      await waitForTerminalListCount(userDataDir, 2);
+      await waitForTerminalPanelCount(userDataDir, 2);
       await clickTerminalByHorizontalOrder(win, "right");
       const snapshot = await createTerminalTabs(userDataDir, win, 10);
-      const targetSession = snapshot.open.find((session) => session.active);
+      const targetSession = terminalPanels(snapshot).find(
+        (session) => session.active
+      );
       if (!targetSession) {
         throw new Error("active terminal session not found");
       }
 
-      await setTabStripScrollLeftForPanel(win, targetSession.panelId, 0);
+      await setTabStripScrollLeftForPanel(win, targetSession.id, 0);
       await expect
-        .poll(
-          async () => (await tabVisibility(win, targetSession.panelId))?.visible
-        )
+        .poll(async () => (await tabVisibility(win, targetSession.id))?.visible)
         .toBe(false);
 
       await clickTerminalByHorizontalOrder(win, "left");
       await expect
         .poll(async () => {
-          const active = (await terminalList(userDataDir)).open.find(
+          const active = terminalPanels(await panelList(userDataDir)).find(
             (session) => session.active
           );
-          return active?.panelId !== targetSession.panelId;
+          return active?.id !== targetSession.id;
         })
         .toBe(true);
 
-      const before = await tabVisibility(win, targetSession.panelId);
+      const before = await tabVisibility(win, targetSession.id);
       await clickTerminalByHorizontalOrder(win, "right", {
         button: "middle",
         waitAfterMs: 0,
       });
-      const after = await tabVisibility(win, targetSession.panelId);
+      const after = await tabVisibility(win, targetSession.id);
 
       expect(before?.visible).toBe(false);
       expect(after?.scrollLeft).toBe(before?.scrollLeft);

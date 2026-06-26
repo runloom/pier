@@ -1,19 +1,7 @@
+import type { PanelDescriptor } from "@shared/contracts/panel.ts";
 import { create } from "zustand";
 
-/**
- * PanelDescriptor — panel 向系统汇报的"如何展示"信息.
- *
- * 字段保持开放, 后续按需扩展 (tooltip / status / icon / breadcrumb 等).
- * Sink 侧约定:取不到字段时 fallback 到 short.
- */
-export interface PanelDescriptor {
-  /** 完整形式 — document.title / titlebar / 单 tab 模式 */
-  long?: string | undefined;
-  /** 当前工作目录绝对路径 — terminal 由 OSC 7 提供; 其他 panel 可不填. sink 优先消费. */
-  path?: string | undefined;
-  /** 紧凑形式 — tab strip 等空间受限处 */
-  short: string;
-}
+export type { PanelDescriptor } from "@shared/contracts/panel.ts";
 
 interface PanelDescriptorState {
   activeId: string | null;
@@ -31,7 +19,7 @@ interface PanelDescriptorState {
  * - workspace-host 通过 dockview onDidActivePanelChange 推送 activeId
  *   (同时同步 upsert 占位 descriptor, 避免 panel useEffect 异步 commit 间隙闪烁)
  *
- * 读取方 (经 resolveLong, 优先级 long > path > short):
+ * 读取方 (经 resolveLong, 优先级 display.long > display.short):
  * - DocumentTitle:document.title
  * - TitleBar (macOS):自定义标题栏
  * - 未来:全局 panel 列表 / breadcrumb (消费 path) / agent 状态总览

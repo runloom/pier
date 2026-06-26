@@ -2,9 +2,9 @@ import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import { app } from "electron";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
-import { createTerminalSessionService } from "../services/terminal-session-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -87,8 +87,8 @@ function createPierAppCore(): PierAppCore {
       broadcast: broadcastMruState,
     }),
     preferences: createPreferencesService({ eventBus }),
+    panelContexts: createPanelContextService(),
     rendererCommand,
-    terminalSessions: createTerminalSessionService(),
     window: createWindowService({
       flushRendererLayout: async (windowId) => {
         const result = await rendererCommand.execute({

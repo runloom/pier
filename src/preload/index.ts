@@ -50,6 +50,7 @@ export interface PierThemeAPI {
 export interface PierWorkspaceAPI {
   clearLayout: (recordId: string) => Promise<void>;
   loadLayout: (recordId: string) => Promise<unknown | null>;
+  onNewTerminalRequest: (cb: () => void) => () => void;
   saveLayout: (layout: unknown, recordId: string) => Promise<void>;
 }
 
@@ -148,11 +149,7 @@ const terminalApi: TerminalAPI = {
   close: (panelId) => ipcRenderer.send("pier:terminal:close", panelId),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
-  focusSession: (args) =>
-    ipcRenderer.invoke("pier:terminal:focus-session", args),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
-  listSessions: (args) =>
-    ipcRenderer.invoke("pier:terminal:list-sessions", args),
   reconcile: (activeIds) =>
     ipcRenderer.send("pier:terminal:reconcile", activeIds),
   onContextMenuRequest: (cb) =>
@@ -160,7 +157,6 @@ const terminalApi: TerminalAPI = {
   onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
-  openSession: (args) => ipcRenderer.invoke("pier:terminal:open-session", args),
   performOperation: (panelId, operation) =>
     ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
   readSession: (panelId) =>
@@ -191,6 +187,8 @@ const workspaceApi: PierWorkspaceAPI = {
     ipcRenderer.invoke("pier:workspace:clear-layout", recordId),
   loadLayout: (recordId) =>
     ipcRenderer.invoke("pier:workspace:load-layout", recordId),
+  onNewTerminalRequest: (cb) =>
+    subscribeIpc(PIER_BROADCAST.NEW_TERMINAL_REQUEST, cb),
   saveLayout: (layout, recordId) =>
     ipcRenderer.invoke("pier:workspace:save-layout", layout, recordId),
 };

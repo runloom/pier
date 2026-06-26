@@ -13,7 +13,6 @@ import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
-import { registerTerminalSessionIpc } from "./ipc/terminal-session-commands.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
@@ -85,23 +84,18 @@ function createFreshWindowFromMenu(): void {
 }
 
 function openTerminalFromMenu(target: AppWindow | null): void {
-  const windowId = target ? windowManager.findInternalIdByWindow(target) : null;
-  if (!windowId) {
+  if (!target || target.isDestroyed() || target.webContents.isDestroyed()) {
     return;
   }
-  appCore.services.rendererCommand
-    .execute({ type: "terminal.open", windowId })
-    .then((result) => {
-      if (!result.ok) {
-        console.error("[menu] failed to open terminal:", result.error.message);
-      }
-    })
-    .catch((error: unknown) => {
-      console.error(
-        "[menu] failed to open terminal:",
-        error instanceof Error ? error.message : String(error)
-      );
-    });
+  if (target.isMinimized()) {
+    target.restore();
+  }
+  if (isMac) {
+    app.focus({ steal: true });
+  }
+  target.focus();
+  target.webContents.focus();
+  target.webContents.send(PIER_BROADCAST.NEW_TERMINAL_REQUEST);
 }
 
 function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
@@ -148,7 +142,6 @@ app.whenReady().then(async () => {
   registerPreferencesIpc(ipcMain);
   registerRendererCommandIpc(ipcMain);
   registerTerminalIpc(ipcMain);
-  registerTerminalSessionIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);

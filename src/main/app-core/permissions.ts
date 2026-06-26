@@ -16,11 +16,9 @@ const REQUIRED_CAPABILITY_BY_COMMAND: Record<
   "commandPaletteMru.record": "app:read",
   "panel.focus": "panel:control",
   "panel.list": "panel:read",
+  "panel.open": "workspace:open",
   "preferences.read": "preferences:read",
   "preferences.update": "preferences:write",
-  "terminal.focus": "terminal:control",
-  "terminal.list": "terminal:read",
-  "terminal.open": "terminal:control",
   "window.close": "window:close",
   "window.create": "window:create",
   "window.focus": "window:focus",
@@ -28,7 +26,6 @@ const REQUIRED_CAPABILITY_BY_COMMAND: Record<
   "workspace.layout.clear": "workspace:write",
   "workspace.layout.read": "workspace:read",
   "workspace.layout.save": "workspace:write",
-  "workspace.open": "workspace:open",
 };
 
 export function authorizeCommand(

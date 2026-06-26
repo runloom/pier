@@ -1,4 +1,4 @@
-import type { PierCommandErrorCode, PierCommandPlacement } from "./commands.ts";
+import type { PanelContext } from "./panel.ts";
 
 export interface TerminalFrame {
   height: number;
@@ -27,7 +27,7 @@ export interface TerminalRuntimeConfig {
 }
 
 export interface CreateTerminalArgs {
-  cwd?: string | undefined;
+  context?: PanelContext | undefined;
   font: TerminalFont;
   frame: TerminalFrame;
   panelId: string;
@@ -54,7 +54,7 @@ export interface TerminalFocusRequest {
  * cwd 是绝对路径 (file:// 前缀已由 swift 端从 URL 提取掉).
  */
 export interface TerminalCwdEvent {
-  cwd: string;
+  context: PanelContext;
   panelId: string;
 }
 
@@ -69,67 +69,9 @@ export interface TerminalTitleEvent {
 }
 
 export interface TerminalPanelSessionSnapshot {
-  cwd?: string | undefined;
+  context?: PanelContext | undefined;
   title?: string | undefined;
   updatedAt: string;
-}
-
-export interface TerminalRecentSessionSnapshot {
-  closedAt: string;
-  cwd: string;
-  id: string;
-  panelId: string;
-  recordId: string;
-  terminalTitle?: string | undefined;
-  title?: string | undefined;
-  windowAlive: boolean;
-  windowId?: string | undefined;
-}
-
-export interface TerminalOpenSessionSnapshot {
-  active?: boolean | undefined;
-  cwd?: string | undefined;
-  groupIndex: number;
-  panelId: string;
-  recordId: string;
-  tabCount: number;
-  tabIndex: number;
-  terminalTitle?: string | undefined;
-  title?: string | undefined;
-  windowFocused?: boolean | undefined;
-  windowId: string;
-  windowIndex: number;
-}
-
-export interface TerminalListError {
-  code?: PierCommandErrorCode | undefined;
-  message: string;
-  recordId?: string | undefined;
-  windowId?: string | undefined;
-}
-
-export interface TerminalListSnapshot {
-  errors: TerminalListError[];
-  open: TerminalOpenSessionSnapshot[];
-  recentClosed: TerminalRecentSessionSnapshot[];
-}
-
-export interface TerminalListSessionsArgs {
-  windowId?: string | undefined;
-}
-
-export interface TerminalOpenSessionArgs {
-  cwd?: string | undefined;
-  focus?: boolean | undefined;
-  placement?: PierCommandPlacement | undefined;
-  windowId?: string | undefined;
-}
-
-export interface TerminalSessionCommandResult {
-  error?: string | undefined;
-  ok: boolean;
-  panelId?: string | undefined;
-  windowId?: string | undefined;
 }
 
 export type TerminalOperation = "copy" | "paste" | "selectAll" | "clearScreen";
@@ -138,13 +80,6 @@ export interface TerminalOperationResult {
   error?: string | undefined;
   ok: boolean;
 }
-
-export interface TerminalFocusSessionArgs {
-  focus?: boolean | undefined;
-  panelId: string;
-  windowId?: string | undefined;
-}
-
 /**
  * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
  * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
@@ -198,11 +133,7 @@ export interface TerminalAPI {
   close(panelId: string): void;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   focus(panelId: string): void;
-  focusSession(
-    args: TerminalFocusSessionArgs
-  ): Promise<TerminalSessionCommandResult>;
   hide(panelId: string): void;
-  listSessions(args?: TerminalListSessionsArgs): Promise<TerminalListSnapshot>;
   /** 订阅 swift 转发的右键事件. 返回 unsubscribe. */
   onContextMenuRequest: (
     cb: (req: TerminalContextMenuRequest) => void
@@ -220,9 +151,6 @@ export interface TerminalAPI {
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
-  openSession(
-    args?: TerminalOpenSessionArgs
-  ): Promise<TerminalSessionCommandResult>;
   performOperation(
     panelId: string,
     operation: TerminalOperation

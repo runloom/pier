@@ -83,12 +83,24 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       },
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
-      archiveTerminalPanelSession: vi.fn(async () => undefined),
-      listRecentTerminalPanelSessions: vi.fn(async () => []),
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
-      updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/state/panel-context-state.ts", () => ({
+      recordRecentPanelContext: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@main/services/panel-context-resolver.ts", () => ({
+      resolvePanelContextForPath: vi.fn(async (path: string) => ({
+        contextId: `ctx:${path}`,
+        cwd: path,
+        openedPath: path,
+        projectRoot: path,
+        source: "panel",
+        updatedAt: 1,
+        worktreeKey: path,
+      })),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({
       findAppWindowByElectronId: vi.fn((id: number) =>
@@ -182,34 +194,39 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-1");
-    expect(sessionState.archiveTerminalPanelSession).toHaveBeenCalledWith(
-      "session-main",
-      "panel-1"
-    );
     expect(sessionState.removeTerminalPanelSession).toHaveBeenCalledWith(
       "session-main",
       "panel-1"
     );
   });
 
-  it("persists the initial cwd after native terminal creation succeeds", async () => {
+  it("persists the initial context after native terminal creation succeeds", async () => {
     const { invokeHandlers, win } = await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
+    const context = {
+      contextId: "ctx-pier",
+      cwd: "/Users/xyz/ABC/pier",
+      openedPath: "/Users/xyz/ABC/pier",
+      projectRoot: "/Users/xyz/ABC/pier",
+      source: "command" as const,
+      updatedAt: 1,
+      worktreeKey: "/Users/xyz/ABC/pier",
+    };
 
     await invokeHandlers.get("pier:terminal:create")?.(
       { sender: win.webContents },
       {
-        cwd: "/Users/xyz/ABC/pier",
+        context,
         font: { family: "Menlo", size: 13 },
         frame: { height: 400, width: 600, x: 0, y: 0 },
         panelId: "terminal-1",
       }
     );
 
-    expect(sessionState.updateTerminalPanelCwd).toHaveBeenCalledWith(
+    expect(sessionState.updateTerminalPanelContext).toHaveBeenCalledWith(
       "session-main",
       "terminal-1",
-      "/Users/xyz/ABC/pier"
+      context
     );
   });
 
