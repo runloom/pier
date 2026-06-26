@@ -10,6 +10,21 @@ export type WorktreeUnavailableReason = z.infer<
   typeof worktreeUnavailableReasonSchema
 >;
 
+export const worktreeOperationErrorReasonSchema = z.enum([
+  "not_git_repo",
+  "git_unavailable",
+  "invalid_path",
+  "invalid_name",
+  "invalid_branch",
+  "not_found",
+  "main_worktree",
+  "current_worktree",
+  "unsafe_path",
+]);
+export type WorktreeOperationErrorReason = z.infer<
+  typeof worktreeOperationErrorReasonSchema
+>;
+
 export const worktreeItemSchema = z.object({
   bare: z.boolean(),
   branch: z.string().min(1).nullable(),
@@ -44,6 +59,7 @@ export const worktreeOpenRequestSchema = z.object({
 export type WorktreeOpenRequest = z.infer<typeof worktreeOpenRequestSchema>;
 
 export const worktreeRemoveRequestSchema = z.object({
+  currentPath: z.string().min(1).optional(),
   path: z.string().min(1),
 });
 export type WorktreeRemoveRequest = z.infer<typeof worktreeRemoveRequestSchema>;
@@ -71,3 +87,9 @@ export const worktreeCreateResultSchema = z.object({
   worktrees: z.array(worktreeItemSchema),
 });
 export type WorktreeCreateResult = z.infer<typeof worktreeCreateResultSchema>;
+
+export const worktreeRemoveResultSchema = z.object({
+  removedPath: z.string().min(1),
+  worktrees: z.array(worktreeItemSchema),
+});
+export type WorktreeRemoveResult = z.infer<typeof worktreeRemoveResultSchema>;

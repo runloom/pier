@@ -1,6 +1,7 @@
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
+import { WorktreeServiceError } from "@main/services/worktree-service.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
@@ -302,6 +303,10 @@ function services(
             prunableReason: null,
           },
         ],
+      }),
+      remove: async (args) => ({
+        removedPath: args.path,
+        worktrees: [],
       }),
     },
   };
@@ -628,7 +633,7 @@ describe("createCommandRouter", () => {
     });
   });
 
-  it("worktree.remove 暂不支持危险删除", async () => {
+  it("分发 worktree.remove 到 worktree service", async () => {
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
       services: services(),
@@ -645,12 +650,48 @@ describe("createCommandRouter", () => {
         requestId: "req-worktree-remove",
       })
     ).resolves.toEqual({
+      data: {
+        removedPath: "/repo/.worktrees/feature-a",
+        worktrees: [],
+      },
+      ok: true,
+      requestId: "req-worktree-remove",
+    });
+  });
+
+  it("把 worktree service 错误映射为稳定命令错误", async () => {
+    const fakeServices = services();
+    fakeServices.worktrees.create = () =>
+      Promise.reject(
+        new WorktreeServiceError(
+          "invalid_branch",
+          "invalid worktree branch: bad branch"
+        )
+      );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          branch: "bad branch",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-invalid-branch",
+      })
+    ).resolves.toEqual({
       error: {
-        code: "unsupported",
-        message: "worktree.remove is not supported yet",
+        code: "invalid_branch",
+        message: "invalid worktree branch: bad branch",
       },
       ok: false,
-      requestId: "req-worktree-remove",
+      requestId: "req-worktree-invalid-branch",
     });
   });
 

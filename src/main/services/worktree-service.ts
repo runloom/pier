@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir as fsMkdir, realpath as fsRealpath } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import type {
   WorktreeCreateRequest,
@@ -8,7 +8,9 @@ import type {
   WorktreeItem,
   WorktreeListRequest,
   WorktreeListResult,
-  WorktreeUnavailableReason,
+  WorktreeOperationErrorReason,
+  WorktreeRemoveRequest,
+  WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
 
 const execFileAsync = promisify(execFile);
@@ -17,6 +19,7 @@ const SAFE_WORKTREE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 export interface WorktreeService {
   create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
   list(request: WorktreeListRequest): Promise<WorktreeListResult>;
+  remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
 }
 
 export interface CreateWorktreeServiceOptions {
@@ -25,10 +28,10 @@ export interface CreateWorktreeServiceOptions {
   realpath?: (path: string) => Promise<string>;
 }
 
-class WorktreeServiceError extends Error {
-  readonly reason: WorktreeUnavailableReason;
+export class WorktreeServiceError extends Error {
+  readonly reason: WorktreeOperationErrorReason;
 
-  constructor(reason: WorktreeUnavailableReason, message: string) {
+  constructor(reason: WorktreeOperationErrorReason, message: string) {
     super(message);
     this.name = "WorktreeServiceError";
     this.reason = reason;
@@ -135,6 +138,7 @@ export function parseGitWorktreeListPorcelainZ(
   const items: WorktreeItem[] = [];
   let current: WorktreeItem | null = null;
 
+  // Git's -z format keeps records NUL-delimited while attributes remain line-based.
   const lines = output
     .split("\0")
     .flatMap((chunk) => chunk.split("\n"))
@@ -174,10 +178,37 @@ function safeDirectoryName(name: string): boolean {
 }
 
 function serviceError(
-  reason: WorktreeUnavailableReason,
+  reason: WorktreeOperationErrorReason,
   message: string
 ): never {
   throw new WorktreeServiceError(reason, message);
+}
+
+function samePath(a: string, b: string): boolean {
+  return resolve(a) === resolve(b);
+}
+
+function isInsideDirectory(child: string, parent: string): boolean {
+  const childPath = resolve(child);
+  const parentPath = resolve(parent);
+  const relativePath = relative(parentPath, childPath);
+  return (
+    relativePath.length > 0 &&
+    !relativePath.startsWith("..") &&
+    !isAbsolute(relativePath)
+  );
+}
+
+async function validateBranchName(
+  branch: string,
+  cwd: string,
+  execGit: (args: readonly string[], cwd: string) => Promise<string>
+): Promise<void> {
+  try {
+    await execGit(["check-ref-format", "--branch", branch], cwd);
+  } catch {
+    serviceError("invalid_branch", `invalid worktree branch: ${branch}`);
+  }
 }
 
 export function createWorktreeService({
@@ -248,6 +279,8 @@ export function createWorktreeService({
       serviceError("invalid_name", `invalid worktree name: ${request.name}`);
     }
 
+    const resolvedPath = await safeRealpath(request.path, realpath);
+    await validateBranchName(request.branch, resolvedPath, execGit);
     const before = await list({ path: request.path });
     if (before.status === "unavailable") {
       serviceError(
@@ -256,6 +289,7 @@ export function createWorktreeService({
       );
     }
 
+    // Pier-owned worktrees live under the main checkout so Git remains the source of truth.
     const targetPath = join(before.mainPath, ".worktrees", request.name);
     await mkdir(join(before.mainPath, ".worktrees"));
     await execGit(
@@ -291,5 +325,62 @@ export function createWorktreeService({
     };
   }
 
-  return { create, list };
+  async function remove(
+    request: WorktreeRemoveRequest
+  ): Promise<WorktreeRemoveResult> {
+    const targetPath = await safeRealpath(request.path, realpath);
+    const before = await list({ path: targetPath });
+    if (before.status === "unavailable") {
+      serviceError(before.reason, `cannot remove worktree at ${request.path}`);
+    }
+
+    const target = before.worktrees.find((item) =>
+      samePath(item.path, targetPath)
+    );
+    if (!target) {
+      serviceError("not_found", `worktree not found: ${request.path}`);
+    }
+    if (target.isMain) {
+      serviceError("main_worktree", "cannot remove the main worktree");
+    }
+
+    if (request.currentPath) {
+      const currentPath = await safeRealpath(request.currentPath, realpath);
+      if (samePath(target.path, currentPath)) {
+        serviceError("current_worktree", "cannot remove the current worktree");
+      }
+    }
+
+    // Safe remove only covers Pier-managed linked worktrees and delegates deletion to Git.
+    const managedRoot = await safeRealpath(
+      join(before.mainPath, ".worktrees"),
+      realpath
+    );
+    if (!isInsideDirectory(target.path, managedRoot)) {
+      serviceError(
+        "unsafe_path",
+        `worktree is outside Pier-managed directory: ${target.path}`
+      );
+    }
+
+    try {
+      await execGit(["worktree", "remove", target.path], before.mainPath);
+    } catch (err) {
+      serviceError(
+        "git_unavailable",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+
+    const after = await list({ path: before.mainPath });
+    if (after.status === "unavailable") {
+      serviceError(after.reason, "removed worktree but list failed");
+    }
+    return {
+      removedPath: target.path,
+      worktrees: after.worktrees,
+    };
+  }
+
+  return { create, list, remove };
 }

@@ -17,7 +17,10 @@ import {
   PluginServiceError,
 } from "../services/plugin-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
-import type { WorktreeService } from "../services/worktree-service.ts";
+import {
+  type WorktreeService,
+  WorktreeServiceError,
+} from "../services/worktree-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
   commandFailure as failure,
@@ -168,11 +171,7 @@ async function executeWorktreeCommand(
         services
       );
     case "worktree.remove":
-      return failure(
-        requestId,
-        "unsupported",
-        "worktree.remove is not supported yet"
-      );
+      return success(requestId, await services.worktrees.remove(command));
     default:
       return null;
   }
@@ -290,6 +289,9 @@ async function executeKnownCommand(
       `unsupported command: ${command.type}`
     );
   } catch (err) {
+    if (err instanceof WorktreeServiceError) {
+      return failure(requestId, err.reason, err.message);
+    }
     if (err instanceof PluginServiceError) {
       const code =
         err.code === "invalid_manifest" ? "invalid_command" : err.code;

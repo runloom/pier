@@ -232,4 +232,100 @@ describe("createWorktreeService", () => {
       cwd: "/repo",
     });
   });
+
+  it("create 在执行 git worktree add 前校验 branch 名称", async () => {
+    const calls: Array<{ args: readonly string[]; cwd: string }> = [];
+    const service = createWorktreeService({
+      execGit: (args, cwd) => {
+        calls.push({ args, cwd });
+        if (args[0] === "check-ref-format") {
+          return Promise.reject(new Error("invalid branch"));
+        }
+        return Promise.resolve("");
+      },
+      realpath: (path) => Promise.resolve(path),
+    });
+
+    await expect(
+      service.create({
+        branch: "bad branch",
+        name: "feature-a",
+        path: "/repo",
+      })
+    ).rejects.toMatchObject({
+      reason: "invalid_branch",
+    });
+
+    expect(
+      calls.some(
+        (call) => call.args[0] === "worktree" && call.args[1] === "add"
+      )
+    ).toBe(false);
+  });
+
+  it("remove 使用 git worktree remove 安全移除 Pier 管理的 linked worktree", async () => {
+    const repo = await initRepo();
+    const linked = join(repo, ".worktrees", "feature-a");
+    await git(repo, ["worktree", "add", "-b", "feature-a", linked]);
+    const realRepo = await realpath(repo);
+    const realLinked = await realpath(linked);
+    const service = createWorktreeService();
+
+    const result = await service.remove({
+      currentPath: repo,
+      path: linked,
+    });
+
+    expect(result).toMatchObject({
+      removedPath: realLinked,
+      worktrees: [
+        {
+          isMain: true,
+          path: realRepo,
+        },
+      ],
+    });
+  });
+
+  it("remove 拒绝移除 main worktree", async () => {
+    const repo = await initRepo();
+    const service = createWorktreeService();
+
+    await expect(service.remove({ path: repo })).rejects.toMatchObject({
+      reason: "main_worktree",
+    });
+  });
+
+  it("remove 在提供 currentPath 时拒绝移除当前 worktree", async () => {
+    const repo = await initRepo();
+    const linked = join(repo, ".worktrees", "feature-a");
+    await git(repo, ["worktree", "add", "-b", "feature-a", linked]);
+    const service = createWorktreeService();
+
+    await expect(
+      service.remove({
+        currentPath: linked,
+        path: linked,
+      })
+    ).rejects.toMatchObject({
+      reason: "current_worktree",
+    });
+  });
+
+  it("remove 拒绝移除 main .worktrees 目录外的 linked worktree", async () => {
+    const repo = await initRepo();
+    const root = await makeTempDir("pier-worktree-unmanaged-");
+    const linked = join(root, "feature-a");
+    await git(repo, ["worktree", "add", "-b", "feature-a", linked]);
+    const service = createWorktreeService();
+
+    await expect(
+      service.remove({
+        currentPath: repo,
+        path: linked,
+      })
+    ).rejects.toMatchObject({
+      reason: "unsafe_path",
+    });
+  });
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { pluginInspectRequestSchema } from "./plugin.ts";
 import { projectPreferencesSchema } from "./preferences.ts";
 import {
+  type WorktreeOperationErrorReason,
   worktreeCreateRequestSchema,
   worktreeListRequestSchema,
   worktreeOpenRequestSchema,
@@ -116,7 +117,8 @@ export type PierCommandErrorCode =
   | "not_found"
   | "platform_unavailable"
   | "unsupported"
-  | "internal_error";
+  | "internal_error"
+  | WorktreeOperationErrorReason;
 
 export type PierCommandResult =
   | { data: unknown; ok: true; requestId: string }
