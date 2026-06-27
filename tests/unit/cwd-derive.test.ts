@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveLong } from "@/components/common/document-title.tsx";
-import { basename } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { basename } from "@/panel-kits/terminal/terminal-tab-chrome.ts";
 
 describe("basename", () => {
   it('handles "/" root', () => {

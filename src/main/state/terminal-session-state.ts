@@ -11,7 +11,9 @@
 import { join } from "node:path";
 import {
   type PanelContext,
+  type PanelTabChrome,
   panelContextSchema,
+  panelTabChromeSchema,
 } from "@shared/contracts/panel.ts";
 import { app } from "electron";
 import { z } from "zod";
@@ -22,6 +24,7 @@ import {
 
 const terminalPanelSessionSchema = z.object({
   context: panelContextSchema.optional(),
+  tab: panelTabChromeSchema.optional(),
   title: z.string().optional(),
   updatedAt: z.string(),
 });
@@ -104,6 +107,30 @@ function isRestorableTitle(title: string): boolean {
   return title.trim().length > 0;
 }
 
+function mergePanelTabChrome(
+  current: PanelTabChrome | undefined,
+  patch: Partial<PanelTabChrome>
+): PanelTabChrome | undefined {
+  const next = {
+    ...(current ?? {}),
+    ...patch,
+    ...(patch.badge
+      ? { badge: { ...(current?.badge ?? {}), ...patch.badge } }
+      : {}),
+    ...(patch.icon
+      ? { icon: { ...(current?.icon ?? {}), ...patch.icon } }
+      : {}),
+    ...(patch.state
+      ? { state: { ...(current?.state ?? {}), ...patch.state } }
+      : {}),
+    ...(patch.tooltip
+      ? { tooltip: { ...(current?.tooltip ?? {}), ...patch.tooltip } }
+      : {}),
+  };
+  const parsed = panelTabChromeSchema.safeParse(next);
+  return parsed.success ? parsed.data : current;
+}
+
 export async function updateTerminalPanelContext(
   windowId: string,
   panelId: string,
@@ -120,6 +147,60 @@ export async function updateTerminalPanelContext(
     windowState.panels[panelId] = {
       ...current,
       context,
+      updatedAt: new Date().toISOString(),
+    };
+    return state;
+  });
+}
+
+export async function updateTerminalPanelTab(
+  windowId: string,
+  panelId: string,
+  tab: PanelTabChrome
+): Promise<void> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return;
+  }
+  const parsed = panelTabChromeSchema.safeParse(tab);
+  if (!parsed.success) {
+    return;
+  }
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId] ?? emptyWindowSession();
+    state.windows[windowId] = windowState;
+    const current = windowState.panels[panelId] ?? {};
+    windowState.panels[panelId] = {
+      ...current,
+      tab: parsed.data,
+      updatedAt: new Date().toISOString(),
+    };
+    return state;
+  });
+}
+
+export async function patchTerminalPanelTab(
+  windowId: string,
+  panelId: string,
+  tabPatch: Partial<PanelTabChrome>
+): Promise<void> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return;
+  }
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId];
+    const current = windowState?.panels[panelId];
+    if (!(windowState && current)) {
+      return state;
+    }
+    const tab = mergePanelTabChrome(current.tab, tabPatch);
+    if (!tab) {
+      return state;
+    }
+    windowState.panels[panelId] = {
+      ...current,
+      tab,
       updatedAt: new Date().toISOString(),
     };
     return state;

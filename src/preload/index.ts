@@ -1,5 +1,9 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type {
+  PierCommand,
+  PierCommandResult,
+} from "@shared/contracts/commands.ts";
+import type {
   MenuPopupOptions,
   MenuPopupResult,
   MenuTemplate,
@@ -13,6 +17,10 @@ import {
   RENDERER_COMMAND_CHANNEL,
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
+import type {
+  TaskListResult,
+  TaskSpawnResult,
+} from "@shared/contracts/tasks.ts";
 import type {
   TerminalAPI,
   TerminalDebugRendererSnapshotRequest,
@@ -99,6 +107,22 @@ export interface PierSettingsAPI {
   onOpenRequest: (cb: () => void) => () => void;
 }
 
+export interface PierTasksAPI {
+  list: (args: { projectRoot: string }) => Promise<TaskListResult>;
+  spawn: (args: {
+    focus?: boolean;
+    inputs?: Record<string, string>;
+    placement?:
+      | "active-tab"
+      | "split-right"
+      | "split-below"
+      | "split-left"
+      | "split-above";
+    projectRoot: string;
+    taskId: string;
+  }) => Promise<TaskSpawnResult>;
+}
+
 export interface PierWindowAPI {
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
@@ -116,6 +140,7 @@ export interface PierWindowAPI {
   readyToShow: () => void;
   rendererCommand: PierRendererCommandAPI;
   settings: PierSettingsAPI;
+  tasks: PierTasksAPI;
   terminal: TerminalAPI;
   theme: PierThemeAPI;
   workspace: PierWorkspaceAPI;
@@ -188,6 +213,7 @@ const terminalApi: TerminalAPI = {
     };
   },
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
+  onTabChromePatch: (cb) => subscribeIpc("pier:terminal:tab-chrome-patch", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
   performOperation: (panelId, operation) =>
@@ -267,6 +293,38 @@ const keybindingApi: PierKeybindingAPI = {
   onModifierState: (cb) => subscribeIpc("pier:keybinding:modifier-state", cb),
 };
 
+function assertCommandResult<T>(result: PierCommandResult): T {
+  if (result.ok) {
+    return result.data as T;
+  }
+  throw new Error(result.error.message);
+}
+
+async function executePierCommand<T>(command: PierCommand): Promise<T> {
+  const result: PierCommandResult = await ipcRenderer.invoke(
+    "pier:command-router:execute",
+    command
+  );
+  return assertCommandResult<T>(result);
+}
+
+const tasksApi: PierTasksAPI = {
+  list: (args) =>
+    executePierCommand<TaskListResult>({
+      projectRoot: args.projectRoot,
+      type: "run.list",
+    }),
+  spawn: (args) =>
+    executePierCommand<TaskSpawnResult>({
+      ...(args.focus === undefined ? {} : { focus: args.focus }),
+      ...(args.inputs ? { inputs: args.inputs } : {}),
+      ...(args.placement ? { placement: args.placement } : {}),
+      projectRoot: args.projectRoot,
+      taskId: args.taskId,
+      type: "run.spawn",
+    }),
+};
+
 const api: PierWindowAPI = {
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
@@ -287,6 +345,7 @@ const api: PierWindowAPI = {
   readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
   rendererCommand: rendererCommandApi,
   settings: settingsApi,
+  tasks: tasksApi,
   terminal: terminalApi,
   theme: themeApi,
   workspace: workspaceApi,

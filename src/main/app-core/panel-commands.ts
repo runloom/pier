@@ -6,6 +6,7 @@ import type {
 import type { PanelSnapshot, WindowInfo } from "@shared/contracts/events.ts";
 import {
   type PanelContext,
+  type PanelTabChrome,
   panelContextSchema,
   panelDisplaySchema,
   panelKindSchema,
@@ -243,7 +244,8 @@ export async function executePanelOpenCommand(
 export async function executeTerminalOpenCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "terminal.open" }>,
-  services: PanelCommandServices
+  services: PanelCommandServices,
+  options: { tab?: PanelTabChrome } = {}
 ): Promise<PierCommandResult> {
   const target = resolveCommandWindow(command.windowId, services, {
     requireStableDefault: !command.windowId,
@@ -279,6 +281,7 @@ export async function executeTerminalOpenCommand(
       focus: command.focus,
       launchId,
       placement: command.placement,
+      ...(options.tab && { tab: options.tab }),
       type: "terminal.open",
       windowId: target.window.id,
     });

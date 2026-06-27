@@ -45,6 +45,11 @@ describe("buildWorkspacePanelSnapshots", () => {
         "terminal-1": {
           context: pierContext,
           display: { short: "pier" },
+          tab: {
+            badge: { label: "package.json" },
+            icon: { id: "pier.task" },
+            title: "test",
+          },
         },
         "terminal-2": {
           context: bayContext,
@@ -63,6 +68,11 @@ describe("buildWorkspacePanelSnapshots", () => {
         groupIndex: 0,
         id: "terminal-1",
         kind: "terminal",
+        tab: {
+          badge: { label: "package.json" },
+          icon: { id: "pier.task" },
+          title: "test",
+        },
         tabCount: 2,
         tabIndex: 0,
       },

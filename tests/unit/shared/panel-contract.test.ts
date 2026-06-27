@@ -3,6 +3,7 @@ import {
   panelContextSchema,
   panelDescriptorSchema,
   panelSnapshotSchema,
+  panelTabChromeSchema,
 } from "@shared/contracts/panel.ts";
 import { rendererCommandSchema } from "@shared/contracts/renderer-command.ts";
 import { describe, expect, it } from "vitest";
@@ -48,6 +49,62 @@ describe("shared panel contract", () => {
       context: { contextId: "ctx-1" },
       display: { short: "pier" },
     });
+  });
+
+  it("parses generic tab chrome without business or icon enums", () => {
+    const tab = panelTabChromeSchema.parse({
+      ariaLabel: "Run task test",
+      badge: { colorToken: "surface.muted", label: "package.json" },
+      description: "pnpm run test",
+      icon: {
+        colorToken: "accent.info",
+        id: "custom.anything.from.host.registry",
+        label: "Task",
+      },
+      state: {
+        busy: true,
+        colorToken: "state.running",
+        label: "Running",
+      },
+      title: "test",
+      tooltip: {
+        lines: [
+          { label: "Command", value: "pnpm run test" },
+          { label: "CWD", value: "/Users/xyz/ABC/pier" },
+        ],
+        title: "test",
+      },
+    });
+
+    expect(tab).toMatchObject({
+      badge: { label: "package.json" },
+      icon: { id: "custom.anything.from.host.registry" },
+      state: { busy: true, label: "Running" },
+      title: "test",
+    });
+  });
+
+  it("allows descriptors and snapshots to carry tab chrome", () => {
+    const tab = {
+      icon: { id: "pier.task" },
+      title: "test",
+    };
+
+    expect(
+      panelDescriptorSchema.parse({
+        context,
+        display: { short: "pier" },
+        tab,
+      })
+    ).toMatchObject({ tab });
+    expect(
+      panelSnapshotSchema.parse({
+        display: { short: "pier" },
+        id: "terminal-1",
+        kind: "terminal",
+        tab,
+      })
+    ).toMatchObject({ tab });
   });
 
   it("PanelSnapshot exposes context and display without legacy cwd/title fields", () => {
@@ -119,11 +176,19 @@ describe("shared panel contract", () => {
       rendererCommandSchema.parse({
         context,
         launchId: "launch-1",
+        tab: {
+          icon: { id: "pier.task" },
+          title: "test",
+        },
         type: "terminal.open",
       })
     ).toMatchObject({
       context: { contextId: "ctx-1" },
       launchId: "launch-1",
+      tab: {
+        icon: { id: "pier.task" },
+        title: "test",
+      },
       type: "terminal.open",
     });
   });
