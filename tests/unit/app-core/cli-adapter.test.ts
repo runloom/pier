@@ -82,6 +82,39 @@ describe("createPierCliCommandClient", () => {
       },
     ]);
   });
+
+  it("把解析选项中的 clientEnv 放入命令信封", async () => {
+    const seen: unknown[] = [];
+    const client = createPierCliCommandClient({
+      parseOptions: {
+        clientEnv: { PATH: "/cli/bin", PIER_MODE: "dev" },
+        clientId: "cli-1",
+        requestId: "req-env",
+      },
+      transport: {
+        request(envelope) {
+          seen.push(envelope);
+          return Promise.resolve({
+            data: null,
+            ok: true,
+            requestId: "req-env",
+          });
+        },
+      },
+    });
+
+    await client.run(["status", "--json"]);
+
+    expect(seen).toEqual([
+      {
+        clientEnv: { PATH: "/cli/bin", PIER_MODE: "dev" },
+        clientId: "cli-1",
+        command: { type: "app.status" },
+        protocolVersion: 1,
+        requestId: "req-env",
+      },
+    ]);
+  });
 });
 
 describe("parsePierCliArgs", () => {
@@ -100,6 +133,22 @@ describe("parsePierCliArgs", () => {
       placement: "split-right",
       type: "panel.open",
       windowId: "main",
+    });
+  });
+
+  it("解析时保留 CLI 进程环境作为信封元数据", () => {
+    expect(
+      parsePierCliArgs(["status"], {
+        clientEnv: { PATH: "/cli/bin", PIER_MODE: "dev" },
+        clientId: "cli-1",
+        requestId: "req-client-env",
+      }).envelope
+    ).toEqual({
+      clientEnv: { PATH: "/cli/bin", PIER_MODE: "dev" },
+      clientId: "cli-1",
+      command: { type: "app.status" },
+      protocolVersion: 1,
+      requestId: "req-client-env",
     });
   });
 

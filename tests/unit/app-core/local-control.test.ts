@@ -148,6 +148,21 @@ function cliClientServices(): PierCoreServices {
         windowZoomLevel: patch.windowZoomLevel ?? 0,
       }),
     },
+    processEnvironment: {
+      resolve: async (request) => ({
+        diagnostics: {
+          cacheHit: false,
+          pathChanged: false,
+          shellEnvStatus: "skipped",
+          source: request.source,
+        },
+        env: {
+          ...(request.clientEnv ?? {}),
+          ...(request.profileEnv ?? {}),
+          ...(request.explicitEnv ?? {}),
+        },
+      }),
+    },
     rendererCommand: {
       execute: async () => ({
         error: {

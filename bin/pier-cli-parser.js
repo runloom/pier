@@ -418,10 +418,16 @@ function parseCommand(args, cwd) {
 
 export function parsePierCliArgs(
   argv,
-  { clientId = "cli-local", cwd = process.cwd(), requestId = randomUUID() } = {}
+  {
+    clientEnv,
+    clientId = "cli-local",
+    cwd = process.cwd(),
+    requestId = randomUUID(),
+  } = {}
 ) {
   return {
     envelope: {
+      ...(clientEnv && Object.keys(clientEnv).length > 0 ? { clientEnv } : {}),
       clientId,
       command: parseCommand(argv, cwd),
       protocolVersion: 1,

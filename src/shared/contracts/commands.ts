@@ -3,6 +3,7 @@ import { pluginInspectRequestSchema } from "./plugin.ts";
 import { projectPreferencesSchema } from "./preferences.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
+  terminalLaunchEnvKeySchema,
   terminalLaunchOptionsSchema,
 } from "./terminal-launch.ts";
 import {
@@ -149,10 +150,16 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;
 
+export const pierCommandClientEnvSchema = z.record(
+  terminalLaunchEnvKeySchema,
+  z.string()
+);
+
 export const pierCommandEnvelopeSchema = z.object({
   protocolVersion: pierProtocolVersionSchema,
   requestId: z.string().min(1),
   clientId: z.string().min(1),
+  clientEnv: pierCommandClientEnvSchema.optional(),
   command: pierCommandSchema,
 });
 

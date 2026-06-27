@@ -2,6 +2,10 @@ import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
 import { PluginServiceError } from "@main/services/plugin-service.ts";
+import type {
+  ProcessEnvironmentResolveRequest,
+  ProcessEnvironmentResolveResult,
+} from "@main/services/process-environment-service.ts";
 import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { WorktreeServiceError } from "@main/services/worktree-service.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
@@ -107,7 +111,26 @@ function services(
       panelSnapshot("terminal-1", panelContext("/Users/xyz/ABC/pier"), true),
     ],
   },
-  terminalLaunches: unknown[] = []
+  terminalLaunches: unknown[] = [],
+  resolveEnvironment: (
+    request: ProcessEnvironmentResolveRequest
+  ) => Promise<ProcessEnvironmentResolveResult> = async (request) => ({
+    diagnostics: {
+      cacheHit: false,
+      pathChanged: Boolean(
+        request.clientEnv?.PATH ||
+          request.profileEnv?.PATH ||
+          request.explicitEnv?.PATH
+      ),
+      shellEnvStatus: "skipped",
+      source: request.source,
+    },
+    env: {
+      ...(request.clientEnv ?? {}),
+      ...(request.profileEnv ?? {}),
+      ...(request.explicitEnv ?? {}),
+    },
+  })
 ): PierCoreServices {
   let recentContexts: PanelContext[] = [];
 
@@ -148,6 +171,9 @@ function services(
         userKeymap: patch.userKeymap ?? [],
         windowZoomLevel: patch.windowZoomLevel ?? 0,
       }),
+    },
+    processEnvironment: {
+      resolve: resolveEnvironment,
     },
     plugins: {
       inspect: async (id) =>
@@ -489,6 +515,94 @@ describe("createCommandRouter", () => {
     ]);
   });
 
+  it("terminal.open 在注册 launch 前合并 shell、CLI、profile 和显式环境", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const resolveEnvironment = vi.fn(
+      async (
+        request: ProcessEnvironmentResolveRequest
+      ): Promise<ProcessEnvironmentResolveResult> => ({
+        diagnostics: {
+          cacheHit: false,
+          pathChanged: true,
+          shellEnvStatus: "resolved",
+          source: request.source,
+        },
+        env: {
+          FROM_CLI: request.clientEnv?.FROM_CLI ?? "",
+          FROM_EXPLICIT: request.explicitEnv?.FROM_EXPLICIT ?? "",
+          FROM_PROFILE: request.profileEnv?.FROM_PROFILE ?? "",
+          FROM_SHELL: "shell",
+          PATH: request.explicitEnv?.PATH ?? "",
+        },
+      })
+    );
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches,
+      resolveEnvironment
+    );
+    Object.assign(fakeServices, {
+      terminalProfiles: {
+        resolve: vi.fn(async (profileId: string) =>
+          profileId === "codex"
+            ? {
+                command: "codex",
+                cwd: "/Users/xyz/ABC/profile-cwd",
+                env: { FROM_PROFILE: "profile", PATH: "/profile/bin" },
+              }
+            : null
+        ),
+      },
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientEnv: { FROM_CLI: "cli", PATH: "/cli/bin" },
+        clientId: "desktop-1",
+        command: {
+          launch: {
+            cwd: "/tmp/pier",
+            env: { FROM_EXPLICIT: "explicit", PATH: "/explicit/bin" },
+            profileId: "codex",
+          },
+          type: "terminal.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open-env",
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      requestId: "req-terminal-open-env",
+    });
+
+    expect(resolveEnvironment).toHaveBeenCalledWith({
+      clientEnv: { FROM_CLI: "cli", PATH: "/cli/bin" },
+      cwd: "/tmp/pier",
+      explicitEnv: { FROM_EXPLICIT: "explicit", PATH: "/explicit/bin" },
+      profileEnv: { FROM_PROFILE: "profile", PATH: "/profile/bin" },
+      source: "terminal",
+    });
+    expect(terminalLaunches).toEqual([
+      {
+        command: "codex",
+        cwd: "/tmp/pier",
+        env: {
+          FROM_CLI: "cli",
+          FROM_EXPLICIT: "explicit",
+          FROM_PROFILE: "profile",
+          FROM_SHELL: "shell",
+          PATH: "/explicit/bin",
+        },
+      },
+    ]);
+  });
+
   it("terminal.open 在 renderer command 失败时清理已注册 launch", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];
@@ -605,10 +719,28 @@ describe("createCommandRouter", () => {
   it("run.spawn 重新解析任务并复用 terminal.open", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];
+    const resolveEnvironment = vi.fn(
+      async (
+        request: ProcessEnvironmentResolveRequest
+      ): Promise<ProcessEnvironmentResolveResult> => ({
+        diagnostics: {
+          cacheHit: false,
+          pathChanged: true,
+          shellEnvStatus: "resolved",
+          source: request.source,
+        },
+        env: {
+          FROM_CLI: request.clientEnv?.FROM_CLI ?? "",
+          FROM_SHELL: "shell",
+          ...(request.explicitEnv ?? {}),
+        },
+      })
+    );
     const fakeServices = services(
       rendererCommands,
       undefined,
-      terminalLaunches
+      terminalLaunches,
+      resolveEnvironment
     );
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
@@ -628,6 +760,7 @@ describe("createCommandRouter", () => {
     expect(listResult).toMatchObject({ ok: true });
     await expect(
       router.execute({
+        clientEnv: { FROM_CLI: "cli" },
         clientId: "desktop-1",
         command: {
           focus: true,
@@ -652,8 +785,19 @@ describe("createCommandRouter", () => {
       expect.objectContaining({
         command: expect.stringContaining("pnpm run test"),
         cwd: process.cwd(),
+        env: expect.objectContaining({
+          FROM_CLI: "cli",
+          FROM_SHELL: "shell",
+        }),
       }),
     ]);
+    expect(resolveEnvironment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientEnv: { FROM_CLI: "cli" },
+        cwd: process.cwd(),
+        source: "task",
+      })
+    );
     expect(rendererCommands.at(-1)).toMatchObject({
       launchId: "launch-1",
       placement: "active-tab",

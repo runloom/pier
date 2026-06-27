@@ -11,6 +11,8 @@ import {
   usage,
 } from "./pier-cli-parser.js";
 
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 function shortHash(input) {
   return createHash("sha256").update(input).digest("hex").slice(0, 16);
 }
@@ -105,6 +107,14 @@ function request(socketPath, envelope, timeoutMs = 5000) {
 
 function asObject(value) {
   return value && typeof value === "object" ? value : null;
+}
+
+function safeClientEnv(env) {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([key, value]) => ENV_KEY_PATTERN.test(key) && typeof value === "string"
+    )
+  );
 }
 
 function panelWindowOrdinals(panels) {
@@ -234,16 +244,20 @@ function formatTerminalProfile(profileId, data) {
   return `${profileId}\n${profileDetailLines(data).join("\n")}\n`;
 }
 
-function parseArgs(argv) {
+function parseArgs(argv, { includeClientEnv = true } = {}) {
   return {
-    ...parsePierCliArgs(argv),
+    ...parsePierCliArgs(argv, {
+      ...(includeClientEnv ? { clientEnv: safeClientEnv(process.env) } : {}),
+    }),
     printEnvelope: hasPierCliOption(argv, "--print-envelope"),
   };
 }
 
 try {
   const rawArgv = process.argv.slice(2);
-  const parsed = parseArgs(rawArgv[0] === "--" ? rawArgv.slice(1) : rawArgv);
+  const argv = rawArgv[0] === "--" ? rawArgv.slice(1) : rawArgv;
+  const printEnvelope = hasPierCliOption(argv, "--print-envelope");
+  const parsed = parseArgs(argv, { includeClientEnv: !printEnvelope });
   if (parsed.printEnvelope) {
     console.log(
       JSON.stringify({ envelope: parsed.envelope, json: parsed.json }, null, 2)
