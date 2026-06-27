@@ -42,13 +42,9 @@ function terminalTabBadge(panel: WorkspacePanelSnapshot): QuickPickItemBadge[] {
 }
 
 function sectionHeading(panel: WorkspacePanelSnapshot): string {
-  return [
-    i18next.t("commandPalette.run.section.window", { window: 1 }),
-    i18next.t("commandPalette.run.section.currentWindow"),
-    i18next.t("commandPalette.run.section.group", {
-      group: panel.groupIndex + 1,
-    }),
-  ].join(" · ");
+  return i18next.t("commandPalette.run.section.group", {
+    group: panel.groupIndex + 1,
+  });
 }
 
 function comparePanels(

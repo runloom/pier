@@ -374,9 +374,7 @@ export const zhCN = {
       taskPlaceholder: "任务列表后续支持",
       taskPlaceholderDetail: "这版只放入口，暂不接入真实 task 数据",
       section: {
-        currentWindow: "当前窗口",
         group: "第 {{group}} 组",
-        window: "窗口 {{window}}",
       },
     },
   },

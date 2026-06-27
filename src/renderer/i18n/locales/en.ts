@@ -362,9 +362,7 @@ export const en = {
       taskPlaceholder: "Task list support is coming later",
       taskPlaceholderDetail: "This version only adds the entry point",
       section: {
-        currentWindow: "Current Window",
         group: "Group {{group}}",
-        window: "Window {{window}}",
       },
     },
   },

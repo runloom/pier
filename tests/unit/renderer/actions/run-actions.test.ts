@@ -105,7 +105,7 @@ describe("run actions", () => {
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick?.title).toBe("Terminal List...");
     expect(quickPick?.sections?.map((section) => section.heading)).toEqual([
-      "Window 1 · Current Window · Group 1",
+      "Group 1",
     ]);
     expect(quickPick?.sections?.[0]?.items.map((item) => item.label)).toEqual([
       "pier",
