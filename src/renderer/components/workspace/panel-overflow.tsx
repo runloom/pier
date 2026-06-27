@@ -21,8 +21,9 @@ import {
 import { panelIconOf, panelKindOf } from "./panel-registry.ts";
 
 const CLIP_EPSILON_PX = 1;
-const OVERFLOW_SLOT_CLASS =
-  "flex h-full w-16 shrink-0 items-center justify-center px-1";
+const OVERFLOW_ANCHOR_CLASS = "h-full w-0 shrink-0 overflow-hidden";
+const OVERFLOW_MENU_CLASS =
+  "flex h-full shrink-0 items-center justify-center px-1";
 
 interface OverflowPanelLike {
   id: string;
@@ -230,45 +231,54 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
 
   const hasOverflowPanels = overflowPanels.length > 0;
 
+  if (!hasOverflowPanels) {
+    return (
+      <div
+        aria-hidden={true}
+        className={OVERFLOW_ANCHOR_CLASS}
+        data-slot="panel-overflow"
+        ref={setRootElement}
+      />
+    );
+  }
+
   return (
     <div
-      className={OVERFLOW_SLOT_CLASS}
+      className={OVERFLOW_MENU_CLASS}
       data-slot="panel-overflow"
       ref={setRootElement}
     >
-      {hasOverflowPanels ? (
-        <Select
-          onOpenChange={setOpen}
-          onValueChange={activatePanel}
-          open={open}
-          value=""
-        >
-          <SelectTrigger aria-label="Hidden tabs" asChild>
-            <Button
-              aria-label="Hidden tabs"
-              size="sm"
-              title="Hidden tabs"
-              type="button"
-              variant="secondary"
-            >
-              <ChevronDown data-icon="inline-start" />
-              <span>{overflowPanels.length}</span>
-            </Button>
-          </SelectTrigger>
-          <SelectContent
-            align="end"
-            className="w-48"
-            position="popper"
-            sideOffset={6}
+      <Select
+        onOpenChange={setOpen}
+        onValueChange={activatePanel}
+        open={open}
+        value=""
+      >
+        <SelectTrigger aria-label="Hidden tabs" asChild>
+          <Button
+            aria-label="Hidden tabs"
+            size="sm"
+            title="Hidden tabs"
+            type="button"
+            variant="secondary"
           >
-            <SelectGroup>
-              {overflowPanels.map((panel) => (
-                <PanelMenuItem key={panel.id} panel={panel} />
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      ) : null}
+            <ChevronDown data-icon="inline-start" />
+            <span>{overflowPanels.length}</span>
+          </Button>
+        </SelectTrigger>
+        <SelectContent
+          align="end"
+          className="w-48"
+          position="popper"
+          sideOffset={6}
+        >
+          <SelectGroup>
+            {overflowPanels.map((panel) => (
+              <PanelMenuItem key={panel.id} panel={panel} />
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

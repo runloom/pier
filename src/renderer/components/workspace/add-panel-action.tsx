@@ -18,7 +18,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   };
 
   return (
-    <div className="flex h-full items-center justify-center px-0.5">
+    <div className="flex h-full items-center justify-center px-1">
       <Button
         aria-label="New Tab"
         onClick={handleAdd}

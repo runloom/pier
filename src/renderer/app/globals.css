@@ -969,6 +969,11 @@ body {
   border-bottom: none;
 }
 
+.dv-tab {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .dv-tab .dv-default-tab .dv-default-tab-action:hover {
   border-radius: 12px;
 }

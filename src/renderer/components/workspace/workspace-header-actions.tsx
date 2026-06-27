@@ -54,6 +54,7 @@ export function WorkspaceHeaderRightActions(
 
   const isMaximized = panel.api.isMaximized();
   const Icon = isMaximized ? Minimize2 : Maximize2;
+  const variant = isMaximized ? "default" : "secondary";
   const toggleLabel = toggleAction?.title() ?? "";
 
   return (
@@ -67,7 +68,7 @@ export function WorkspaceHeaderRightActions(
           size="icon-xs"
           title={toggleLabel}
           type="button"
-          variant="secondary"
+          variant={variant}
         >
           <Icon />
         </Button>

@@ -349,7 +349,7 @@ describe("WorkspaceHeaderActions", () => {
     header.remove();
   });
 
-  it("keeps a fixed overflow slot mounted when no tabs are clipped", async () => {
+  it("keeps a zero-width overflow anchor mounted when no tabs are clipped", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");
     const firstTab = document.createElement("div");
@@ -389,9 +389,11 @@ describe("WorkspaceHeaderActions", () => {
         screen.queryByRole("combobox", { name: "Hidden tabs" })
       ).not.toBeInTheDocument();
     });
-    expect(
-      actionsContainer.querySelector('[data-slot="panel-overflow"]')
-    ).toHaveClass("w-16");
+    const overflowAnchor = actionsContainer.querySelector(
+      '[data-slot="panel-overflow"]'
+    );
+    expect(overflowAnchor).toHaveClass("w-0", "overflow-hidden");
+    expect(overflowAnchor).not.toHaveClass("w-16");
 
     header.remove();
   });
