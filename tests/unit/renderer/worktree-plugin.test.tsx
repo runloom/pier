@@ -40,7 +40,7 @@ const context: PanelContext = {
 };
 
 function pluginEntry(enabled: boolean): PluginRegistryEntry {
-  const commands: PluginRegistryEntry["commands"] = [
+  const commands: PluginRegistryEntry["manifest"]["commands"] = [
     {
       id: "pier.worktree.list",
       permissions: ["worktree:read", "workspace:open"],
@@ -48,19 +48,22 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     },
     {
       id: "pier.worktree.create",
-      permissions: ["worktree:write"],
+      permissions: [],
       title: "Worktree: Create",
     },
     {
       id: "pier.worktree.delete",
-      permissions: ["worktree:write"],
+      permissions: [],
       title: "Worktree: Delete...",
     },
   ];
   return {
-    commands,
+    effectivePermissions: [
+      "workspace:open",
+      "worktree:read",
+      "command:register",
+    ],
     enabled,
-    id: WORKTREE_PLUGIN_ID,
     manifest: {
       apiVersion: 1,
       commands,
@@ -118,12 +121,20 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       panels: [],
       permissions: ["worktree:read", "workspace:open", "command:register"],
       source: { kind: "builtin" },
+      terminalStatusItems: [
+        {
+          id: "pier.worktree.status",
+          permissions: ["worktree:read", "workspace:open"],
+          title: "Worktree Status",
+        },
+      ],
       version: "1.0.0",
     },
-    panels: [],
-    permissions: ["worktree:read", "workspace:open", "command:register"],
-    source: { kind: "builtin" },
-    version: "1.0.0",
+    runtime: {
+      canToggle: true,
+      enabled,
+      kind: "builtin",
+    },
   };
 }
 
@@ -522,13 +533,16 @@ describe("worktree builtin plugin", () => {
     const localEntry: PluginRegistryEntry = {
       ...pluginEntry(true),
       enabled: true,
-      id: "local.worktree",
       manifest: {
         ...pluginEntry(true).manifest,
         id: "local.worktree",
         source: { kind: "local" },
       },
-      source: { kind: "local" },
+      runtime: {
+        canToggle: false,
+        enabled: false,
+        kind: "manifest-only",
+      },
     };
     vi.mocked(window.pier.plugins.list).mockResolvedValue({
       diagnostics: [],

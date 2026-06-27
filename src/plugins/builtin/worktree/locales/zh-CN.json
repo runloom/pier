@@ -27,5 +27,11 @@
     "ui.title": "工作树",
     "ui.unsupported": "当前目录不支持 Git worktree"
   },
+  "terminalStatusItems": {
+    "pier.worktree.status": {
+      "description": "在终端面板中显示当前 Git 工作树。",
+      "title": "工作树状态"
+    }
+  },
   "name": "工作树"
 }

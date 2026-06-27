@@ -20,6 +20,7 @@ import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
+import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
 import { createWindowZoomController } from "./windows/window-zoom.ts";
@@ -79,6 +80,19 @@ configureAppIdentity();
 // 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
+  if (isDev) {
+    console.error(
+      formatDevSingleInstanceLockFailure({
+        userDataDir: app.getPath("userData"),
+        ...(process.env.PIER_DEV_PROFILE
+          ? { profile: process.env.PIER_DEV_PROFILE }
+          : {}),
+        ...(process.env.ELECTRON_RENDERER_URL
+          ? { rendererUrl: process.env.ELECTRON_RENDERER_URL }
+          : {}),
+      })
+    );
+  }
   app.quit();
 }
 

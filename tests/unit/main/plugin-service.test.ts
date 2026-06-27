@@ -2,9 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  collectEffectivePermissions,
   createPluginService,
   type PluginServiceError,
 } from "@main/services/plugin-service.ts";
+import { WORKTREE_PLUGIN_MANIFEST } from "@plugins/builtin/worktree/manifest.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -27,6 +29,7 @@ const builtinManifest = {
   commands: [
     {
       id: "sample.sayHello",
+      permissions: ["workspace:open"],
       title: "Say Hello",
     },
   ],
@@ -39,6 +42,7 @@ const builtinManifest = {
     {
       component: "sample.panel",
       id: "sample.panel",
+      permissions: ["panel:register"],
       title: "Sample Panel",
     },
   ],
@@ -46,6 +50,13 @@ const builtinManifest = {
   publisher: "Pier",
   repository: "https://example.com/repo.git",
   source: { kind: "builtin" },
+  terminalStatusItems: [
+    {
+      id: "sample.status",
+      permissions: ["terminal:read"],
+      title: "Sample Status",
+    },
+  ],
   version: "1.0.0",
 };
 
@@ -59,12 +70,13 @@ const emptyState = {
 };
 
 describe("pluginManifestSchema", () => {
-  it("校验 manifest source、权限、commands 和 panels", () => {
+  it("校验 manifest source、权限、commands、panels 和 terminal status items", () => {
     expect(pluginManifestSchema.parse(builtinManifest)).toMatchObject({
       commands: [{ id: "sample.sayHello" }],
       panels: [{ id: "sample.panel" }],
       permissions: ["plugin:read", "panel:register", "command:register"],
       source: { kind: "builtin" },
+      terminalStatusItems: [{ id: "sample.status" }],
     });
   });
 
@@ -96,6 +108,12 @@ describe("pluginManifestSchema", () => {
                 title: "示例面板",
               },
             },
+            terminalStatusItems: {
+              "sample.status": {
+                description: "展示示例状态。",
+                title: "示例状态",
+              },
+            },
           },
         },
       })
@@ -118,9 +136,32 @@ describe("pluginManifestSchema", () => {
           panels: {
             "sample.panel": { title: "示例面板" },
           },
+          terminalStatusItems: {
+            "sample.status": { title: "示例状态" },
+          },
         },
       },
     });
+  });
+
+  it("合并 manifest、命令、面板和终端状态项权限为有效权限", () => {
+    expect(
+      collectEffectivePermissions(pluginManifestSchema.parse(builtinManifest))
+    ).toEqual([
+      "workspace:open",
+      "terminal:read",
+      "plugin:read",
+      "command:register",
+      "panel:register",
+    ]);
+  });
+
+  it("工作树插件当前不会因为未开放入口声明写权限", () => {
+    expect(collectEffectivePermissions(WORKTREE_PLUGIN_MANIFEST)).toEqual([
+      "workspace:open",
+      "worktree:read",
+      "command:register",
+    ]);
   });
 
   it("拒绝无效 manifest", () => {
@@ -185,22 +226,38 @@ describe("createPluginService", () => {
       entries: [
         {
           enabled: false,
-          id: "sample.builtin",
           manifest: { source: { kind: "builtin" } },
+          runtime: {
+            canToggle: true,
+            enabled: false,
+            kind: "builtin",
+          },
         },
         {
           enabled: true,
-          id: "sample.local",
           manifest: { source: { kind: "local", url: localPath } },
+          runtime: {
+            canToggle: false,
+            enabled: false,
+            kind: "manifest-only",
+          },
         },
       ],
     });
 
     await expect(service.inspect("sample.local")).resolves.toMatchObject({
-      commands: [{ id: "sample.sayHello" }],
       enabled: true,
-      id: "sample.local",
-      panels: [{ id: "sample.panel" }],
+      effectivePermissions: expect.arrayContaining(["plugin:read"]),
+      manifest: {
+        commands: [{ id: "sample.sayHello" }],
+        id: "sample.local",
+        panels: [{ id: "sample.panel" }],
+      },
+      runtime: {
+        canToggle: false,
+        enabled: false,
+        kind: "manifest-only",
+      },
     });
   });
 
@@ -239,8 +296,8 @@ describe("createPluginService", () => {
     });
 
     await expect(service.inspect("sample.local")).resolves.toMatchObject({
-      id: "sample.local",
       manifest: {
+        id: "sample.local",
         locales: {
           "zh-CN": {
             commands: {
@@ -289,8 +346,8 @@ describe("createPluginService", () => {
       ],
       entries: [
         {
-          id: "sample.local",
-          manifest: { name: "Sample Local" },
+          manifest: { id: "sample.local", name: "Sample Local" },
+          runtime: { kind: "manifest-only" },
         },
       ],
     });
@@ -326,7 +383,7 @@ describe("createPluginService", () => {
     });
   });
 
-  it("local manifest 可记录启停状态但不会执行插件代码", async () => {
+  it("local manifest 仅作为清单预览，不允许记录启停状态", async () => {
     const dir = await makeTempDir();
     const localPath = join(dir, "pier-plugin.json");
     await writeFile(
@@ -349,17 +406,23 @@ describe("createPluginService", () => {
 
     await expect(service.inspect("sample.local")).resolves.toMatchObject({
       enabled: false,
-      id: "sample.local",
-      source: { kind: "local" },
+      manifest: {
+        id: "sample.local",
+        source: { kind: "local" },
+      },
+      runtime: {
+        canToggle: false,
+        enabled: false,
+        kind: "manifest-only",
+      },
     });
     await expect(
       service.setEnabled("sample.local", true)
-    ).resolves.toMatchObject({
-      enabled: true,
-      id: "sample.local",
-      source: { kind: "local" },
+    ).rejects.toMatchObject({
+      code: "unsupported",
+      message: "plugin source kind cannot be enabled yet: local",
     });
-    expect(setEnabled).toHaveBeenCalledWith("sample.local", true);
+    expect(setEnabled).not.toHaveBeenCalled();
   });
 
   it("内置插件可声明默认启用，且 userData 禁用状态优先", async () => {
@@ -390,11 +453,19 @@ describe("createPluginService", () => {
 
     await expect(service.inspect("sample.builtin")).resolves.toMatchObject({
       enabled: false,
+      runtime: {
+        enabled: false,
+        kind: "builtin",
+      },
     });
     await expect(
       service.setEnabled("sample.builtin", true)
     ).resolves.toMatchObject({
       enabled: true,
+      runtime: {
+        enabled: true,
+        kind: "builtin",
+      },
     });
   });
 
@@ -408,7 +479,8 @@ describe("createPluginService", () => {
 
     await expect(service.inspect("sample.builtin")).resolves.toMatchObject({
       enabled: true,
-      id: "sample.builtin",
+      manifest: { id: "sample.builtin" },
+      runtime: { enabled: true, kind: "builtin" },
     });
   });
 
@@ -432,7 +504,7 @@ describe("createPluginService", () => {
           source: { kind: "local", path: badPath },
         },
       ],
-      entries: [{ id: "sample.builtin" }],
+      entries: [{ manifest: { id: "sample.builtin" } }],
     });
   });
 

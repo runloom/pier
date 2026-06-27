@@ -9,6 +9,10 @@ import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
   type PierClient,
 } from "@shared/contracts/permissions.ts";
+import type {
+  PluginRegistryEntry,
+  PluginSourceKind,
+} from "@shared/contracts/plugin.ts";
 import { describe, expect, it, vi } from "vitest";
 
 const now = 1_772_000_000_000;
@@ -50,6 +54,49 @@ function panelSnapshot(
     display: { short: id },
     id,
     kind: "terminal",
+  };
+}
+
+function pluginEntry(
+  id: string,
+  enabled: boolean,
+  sourceKind: PluginSourceKind = "builtin"
+): PluginRegistryEntry {
+  const commands = [
+    {
+      id: "sample.command",
+      permissions: [],
+      title: "Sample Command",
+    },
+  ];
+  const panels = [
+    {
+      id: "sample.panel",
+      permissions: [],
+      title: "Sample Panel",
+    },
+  ];
+  const canToggle = sourceKind === "builtin";
+  return {
+    effectivePermissions: ["plugin:read"],
+    enabled,
+    manifest: {
+      apiVersion: 1,
+      commands,
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: id,
+      panels,
+      permissions: ["plugin:read"],
+      source: { kind: sourceKind },
+      terminalStatusItems: [],
+      version: "1.0.0",
+    },
+    runtime: {
+      canToggle,
+      enabled: canToggle && enabled,
+      kind: canToggle ? "builtin" : "manifest-only",
+    },
   };
 }
 
@@ -105,116 +152,13 @@ function services(
     plugins: {
       inspect: async (id) =>
         id === "sample.local"
-          ? {
-              commands: [
-                {
-                  id: "sample.command",
-                  permissions: [],
-                  title: "Sample Command",
-                },
-              ],
-              enabled: true,
-              id: "sample.local",
-              manifest: {
-                apiVersion: 1,
-                commands: [
-                  {
-                    id: "sample.command",
-                    permissions: [],
-                    title: "Sample Command",
-                  },
-                ],
-                engines: { pier: ">=0.1.0" },
-                id: "sample.local",
-                name: "Sample Local",
-                panels: [
-                  {
-                    id: "sample.panel",
-                    permissions: [],
-                    title: "Sample Panel",
-                  },
-                ],
-                permissions: ["plugin:read"],
-                source: { kind: "local" },
-                version: "1.0.0",
-              },
-              panels: [
-                {
-                  id: "sample.panel",
-                  permissions: [],
-                  title: "Sample Panel",
-                },
-              ],
-              permissions: ["plugin:read"],
-              source: { kind: "local" },
-              version: "1.0.0",
-            }
+          ? pluginEntry("sample.local", true, "local")
           : null,
       list: async () => ({
         diagnostics: [],
-        entries: [
-          {
-            commands: [
-              {
-                id: "sample.command",
-                permissions: [],
-                title: "Sample Command",
-              },
-            ],
-            enabled: true,
-            id: "sample.local",
-            manifest: {
-              apiVersion: 1,
-              commands: [
-                {
-                  id: "sample.command",
-                  permissions: [],
-                  title: "Sample Command",
-                },
-              ],
-              engines: { pier: ">=0.1.0" },
-              id: "sample.local",
-              name: "Sample Local",
-              panels: [
-                {
-                  id: "sample.panel",
-                  permissions: [],
-                  title: "Sample Panel",
-                },
-              ],
-              permissions: ["plugin:read"],
-              source: { kind: "local" },
-              version: "1.0.0",
-            },
-            panels: [
-              { id: "sample.panel", permissions: [], title: "Sample Panel" },
-            ],
-            permissions: ["plugin:read"],
-            source: { kind: "local" },
-            version: "1.0.0",
-          },
-        ],
+        entries: [pluginEntry("sample.local", true, "local")],
       }),
-      setEnabled: async (id, enabled) => ({
-        commands: [],
-        enabled,
-        id,
-        manifest: {
-          apiVersion: 1,
-          commands: [],
-          engines: { pier: ">=0.1.0" },
-          id,
-          name: id,
-          panels: [],
-          permissions: [],
-          source: { kind: "builtin" },
-          version: "1.0.0",
-        },
-        panels: [],
-        permissions: [],
-        source: { kind: "builtin" },
-        version: "1.0.0",
-      }),
+      setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
     panelContexts: {
       listRecent: async () => recentContexts,
@@ -1153,10 +1097,17 @@ describe("createCommandRouter", () => {
         diagnostics: [],
         entries: [
           {
-            commands: [{ id: "sample.command" }],
+            effectivePermissions: ["plugin:read"],
             enabled: true,
-            id: "sample.local",
-            panels: [{ id: "sample.panel" }],
+            manifest: {
+              commands: [{ id: "sample.command" }],
+              id: "sample.local",
+              panels: [{ id: "sample.panel" }],
+            },
+            runtime: {
+              enabled: false,
+              kind: "manifest-only",
+            },
           },
         ],
       },
@@ -1173,10 +1124,17 @@ describe("createCommandRouter", () => {
       })
     ).resolves.toMatchObject({
       data: {
-        commands: [{ id: "sample.command" }],
+        effectivePermissions: ["plugin:read"],
         enabled: true,
-        id: "sample.local",
-        panels: [{ id: "sample.panel" }],
+        manifest: {
+          commands: [{ id: "sample.command" }],
+          id: "sample.local",
+          panels: [{ id: "sample.panel" }],
+        },
+        runtime: {
+          enabled: false,
+          kind: "manifest-only",
+        },
       },
       ok: true,
       requestId: "req-plugin-inspect",
@@ -1199,7 +1157,8 @@ describe("createCommandRouter", () => {
     ).resolves.toMatchObject({
       data: {
         enabled: false,
-        id: "sample.builtin",
+        manifest: { id: "sample.builtin" },
+        runtime: { enabled: false, kind: "builtin" },
       },
       ok: true,
       requestId: "req-plugin-disable",
@@ -1215,7 +1174,8 @@ describe("createCommandRouter", () => {
     ).resolves.toMatchObject({
       data: {
         enabled: true,
-        id: "sample.builtin",
+        manifest: { id: "sample.builtin" },
+        runtime: { enabled: true, kind: "builtin" },
       },
       ok: true,
       requestId: "req-plugin-enable",

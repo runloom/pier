@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { PierCapability } from "@shared/contracts/permissions.ts";
+import { pierCapabilitySchema } from "@shared/contracts/permissions.ts";
 import type {
   PluginLocaleMessages,
   PluginManifest,
@@ -8,7 +10,6 @@ import type {
   PluginRegistryEntry,
   PluginRegistryListResult,
   PluginRegistryState,
-  PluginSource,
 } from "@shared/contracts/plugin.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import {
@@ -71,25 +72,69 @@ const DEFAULT_STATE: PluginStateStore = {
   setEnabled: setPluginEnabledState,
 };
 
-function sourceFromManifest(manifest: PluginManifest): PluginSource {
-  return manifest.source;
+const CAPABILITY_ORDER = new Map(
+  pierCapabilitySchema.options.map((capability, index) => [capability, index])
+);
+
+export function collectEffectivePermissions(
+  manifest: PluginManifest
+): PierCapability[] {
+  const permissions = new Set<PierCapability>();
+  for (const permission of manifest.permissions) {
+    permissions.add(permission);
+  }
+  for (const command of manifest.commands) {
+    for (const permission of command.permissions) {
+      permissions.add(permission);
+    }
+  }
+  for (const panel of manifest.panels) {
+    for (const permission of panel.permissions) {
+      permissions.add(permission);
+    }
+  }
+  for (const item of manifest.terminalStatusItems) {
+    for (const permission of item.permissions) {
+      permissions.add(permission);
+    }
+  }
+  return Array.from(permissions).sort(
+    (a, b) => (CAPABILITY_ORDER.get(a) ?? 0) - (CAPABILITY_ORDER.get(b) ?? 0)
+  );
+}
+
+function isExecutableSource(source: PluginDiscoverySource): boolean {
+  return source.kind === "builtin";
+}
+
+function runtimeDisabledReason(
+  source: PluginDiscoverySource
+): string | undefined {
+  return source.kind === "builtin"
+    ? undefined
+    : `plugin source kind is manifest-only in this version: ${source.kind}`;
 }
 
 function entryFromManifest(
   manifest: PluginManifest,
   state: PluginRegistryState,
-  options: { defaultEnabled?: boolean } = {}
+  options: { defaultEnabled?: boolean; source: PluginDiscoverySource }
 ): PluginRegistryEntry {
+  const executable = isExecutableSource(options.source);
+  const enabled =
+    state.plugins[manifest.id]?.enabled ?? options.defaultEnabled === true;
+  const runtimeEnabled = executable && enabled;
+  const disabledReason = runtimeDisabledReason(options.source);
   return {
-    commands: manifest.commands,
-    enabled:
-      state.plugins[manifest.id]?.enabled ?? options.defaultEnabled === true,
-    id: manifest.id,
+    effectivePermissions: collectEffectivePermissions(manifest),
+    enabled,
     manifest,
-    panels: manifest.panels,
-    permissions: manifest.permissions,
-    source: sourceFromManifest(manifest),
-    version: manifest.version,
+    runtime: {
+      canToggle: executable,
+      ...(disabledReason && { disabledReason }),
+      enabled: runtimeEnabled,
+      kind: executable ? "builtin" : "manifest-only",
+    },
   };
 }
 
@@ -232,6 +277,7 @@ export function createPluginService({
         entryFromManifest(manifest, registryState, {
           defaultEnabled:
             source.kind === "builtin" && source.defaultEnabled === true,
+          source,
         })
       ),
     };
@@ -239,7 +285,7 @@ export function createPluginService({
 
   async function inspect(id: string): Promise<PluginRegistryEntry | null> {
     const result = await list();
-    return result.entries.find((entry) => entry.id === id) ?? null;
+    return result.entries.find((entry) => entry.manifest.id === id) ?? null;
   }
 
   async function setEnabled(
@@ -250,16 +296,19 @@ export function createPluginService({
     if (!existing) {
       throw new PluginServiceError("not_found", `plugin not found: ${id}`);
     }
-    if (
-      !(existing.source.kind === "builtin" || existing.source.kind === "local")
-    ) {
+    if (!existing.runtime.canToggle) {
       throw new PluginServiceError(
         "unsupported",
-        `plugin source kind cannot be enabled yet: ${existing.source.kind}`
+        `plugin source kind cannot be enabled yet: ${existing.manifest.source.kind}`
       );
     }
     const nextState = await state.setEnabled(id, enabled);
-    return entryFromManifest(existing.manifest, nextState);
+    return entryFromManifest(existing.manifest, nextState, {
+      source: {
+        kind: "builtin",
+        manifest: existing.manifest,
+      },
+    });
   }
 
   return { inspect, list, setEnabled };

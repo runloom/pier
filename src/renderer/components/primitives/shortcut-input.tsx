@@ -1,4 +1,5 @@
-import { Keyboard, RotateCcw, X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/primitives/button.tsx";
 import {
   InputGroup,
@@ -21,6 +22,7 @@ interface ShortcutInputProps {
   clearLabel: string;
   isRecording?: boolean;
   keyParts?: readonly string[];
+  onCancelRecord: () => void;
   onClear: () => void;
   onRecord: () => void;
   onReset: () => void;
@@ -39,6 +41,7 @@ export function ShortcutInput({
   isRecording = false,
   keyParts = [],
   onClear,
+  onCancelRecord,
   onRecord,
   onReset,
   placeholder,
@@ -47,6 +50,14 @@ export function ShortcutInput({
   resetLabel,
   tooltipLabel,
 }: ShortcutInputProps) {
+  const recordingButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isRecording) {
+      recordingButtonRef.current?.focus();
+    }
+  }, [isRecording]);
+
   if (isRecording) {
     return (
       <Button
@@ -59,7 +70,9 @@ export function ShortcutInput({
         data-recording="true"
         data-slot="shortcut-input"
         data-testid="shortcut-input"
+        onBlur={onCancelRecord}
         onClick={onRecord}
+        ref={recordingButtonRef}
         type="button"
         variant="outline"
       >
@@ -85,6 +98,7 @@ export function ShortcutInput({
               className="h-full min-w-0 flex-1 shrink justify-between rounded-xl px-2 text-left font-normal shadow-none hover:bg-muted/70 active:translate-y-0"
               data-slot="shortcut-input-trigger"
               onClick={onRecord}
+              onFocus={onRecord}
               type="button"
               variant="ghost"
             >
@@ -105,7 +119,6 @@ export function ShortcutInput({
                   {placeholder}
                 </span>
               )}
-              <Keyboard data-icon="inline-end" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">{tooltipLabel}</TooltipContent>

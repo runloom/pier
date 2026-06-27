@@ -4,6 +4,7 @@ import type {
   PluginManifest,
   PluginPanelContribution,
   PluginRegistryEntry,
+  PluginTerminalStatusItemContribution,
 } from "@shared/contracts/plugin.ts";
 
 export interface PluginDisplayText {
@@ -145,6 +146,28 @@ export function resolvePluginPanelDisplay(
         locale,
         (messages) => messages.panels?.[panel.id]?.title
       ) ?? panel.title,
+    ...(description ? { description } : {}),
+  };
+}
+
+export function resolvePluginTerminalStatusItemDisplay(
+  manifest: PluginManifest,
+  item: PluginTerminalStatusItemContribution,
+  locale: string
+): PluginContributionDisplayText {
+  const description =
+    resolveFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.terminalStatusItems?.[item.id]?.description
+    ) ?? item.description;
+  return {
+    title:
+      resolveFromLocales(
+        manifest,
+        locale,
+        (messages) => messages.terminalStatusItems?.[item.id]?.title
+      ) ?? item.title,
     ...(description ? { description } : {}),
   };
 }

@@ -22,24 +22,28 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 function pluginEntry(overrides: {
   description?: string;
   enabled: boolean;
+  effectivePermissions?: string[];
   id: string;
   locales?: Record<string, unknown>;
   name: string;
   sourceKind: "builtin" | "local";
 }) {
+  const commands = [
+    {
+      id: `${overrides.id}.list`,
+      permissions: ["worktree:read"],
+      title: "Worktree: List",
+    },
+  ];
   return {
-    commands: [
-      {
-        id: `${overrides.id}.list`,
-        permissions: ["worktree:read"],
-        title: "Worktree: List",
-      },
+    effectivePermissions: overrides.effectivePermissions ?? [
+      "plugin:read",
+      "worktree:read",
     ],
     enabled: overrides.enabled,
-    id: overrides.id,
     manifest: {
       apiVersion: 1,
-      commands: [],
+      commands,
       ...(overrides.description ? { description: overrides.description } : {}),
       engines: { pier: ">=0.1.0" },
       id: overrides.id,
@@ -48,12 +52,28 @@ function pluginEntry(overrides: {
       panels: [],
       permissions: ["plugin:read"],
       source: { kind: overrides.sourceKind },
+      terminalStatusItems: [
+        {
+          id: `${overrides.id}.status`,
+          permissions: ["worktree:read"],
+          title: "Worktree Status",
+        },
+      ],
       version: "1.0.0",
     },
-    panels: [],
-    permissions: ["plugin:read"],
-    source: { kind: overrides.sourceKind },
-    version: "1.0.0",
+    runtime:
+      overrides.sourceKind === "builtin"
+        ? {
+            canToggle: true,
+            enabled: overrides.enabled,
+            kind: "builtin" as const,
+          }
+        : {
+            canToggle: false,
+            disabledReason: "Local plugins are manifest-only in this version.",
+            enabled: false,
+            kind: "manifest-only" as const,
+          },
   };
 }
 
@@ -79,7 +99,7 @@ describe("Settings plugins section", () => {
     useSettingsDialogStore.setState({ isOpen: false });
   });
 
-  it("展示插件 manifest 信息并支持禁用 builtin 插件", async () => {
+  it("默认列表只展示插件摘要，详情展开后展示诊断信息", async () => {
     const enabledWorktree = pluginEntry({
       enabled: true,
       id: "pier.worktree",
@@ -98,12 +118,6 @@ describe("Settings plugins section", () => {
       name: "Local Example",
       sourceKind: "local",
     });
-    const enabledLocalPlugin = pluginEntry({
-      enabled: true,
-      id: "local.example",
-      name: "Local Example",
-      sourceKind: "local",
-    });
     const list = vi
       .fn()
       .mockResolvedValueOnce({
@@ -113,13 +127,9 @@ describe("Settings plugins section", () => {
       .mockResolvedValueOnce({
         diagnostics: [],
         entries: [disabledWorktree, localPlugin],
-      })
-      .mockResolvedValueOnce({
-        diagnostics: [],
-        entries: [disabledWorktree, enabledLocalPlugin],
       });
     const disable = vi.fn(async () => disabledWorktree);
-    const enable = vi.fn(async () => enabledLocalPlugin);
+    const enable = vi.fn();
 
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -140,12 +150,27 @@ describe("Settings plugins section", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Plugins" }));
 
     expect(await screen.findByText("Worktree")).toBeVisible();
-    expect(screen.getByText("pier.worktree")).toBeVisible();
     expect(screen.getByText("Built-in")).toBeVisible();
-    expect(screen.getByText("local.example")).toBeVisible();
-    expect(screen.getAllByText("Commands")[0]).toBeVisible();
+    expect(screen.getByText("Local Example")).toBeVisible();
+    expect(screen.getByText("Manifest preview")).toBeVisible();
+    expect(screen.queryByText("pier.worktree")).not.toBeInTheDocument();
+    expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
+    expect(screen.queryByText("plugin:read")).not.toBeInTheDocument();
+    expect(screen.queryByText("Panels")).not.toBeInTheDocument();
+    expect(screen.queryByText("None")).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show Worktree details" })
+    );
+
+    expect(screen.getByText("Plugin ID")).toBeVisible();
+    expect(screen.getByText("pier.worktree")).toBeVisible();
+    expect(screen.getByText("Commands")).toBeVisible();
     expect(screen.getByText("pier.worktree.list")).toBeVisible();
-    expect(screen.getAllByText("plugin:read")[0]).toBeVisible();
+    expect(screen.getByText("Terminal status items")).toBeVisible();
+    expect(screen.getByText("pier.worktree.status")).toBeVisible();
+    expect(screen.getByText("Read plugin manifests")).toBeVisible();
+    expect(screen.getByText("Read Git worktree information")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Disable Worktree" }));
 
@@ -155,17 +180,10 @@ describe("Settings plugins section", () => {
     expect(
       await screen.findByRole("button", { name: "Enable Worktree" })
     ).toBeVisible();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Enable Local Example" })
-    );
-
-    await waitFor(() => {
-      expect(enable).toHaveBeenCalledWith("local.example");
-    });
     expect(
-      await screen.findByRole("button", { name: "Disable Local Example" })
-    ).toBeVisible();
+      screen.queryByRole("button", { name: "Enable Local Example" })
+    ).not.toBeInTheDocument();
+    expect(enable).not.toHaveBeenCalled();
   });
 
   it("加载插件时使用 shadcn skeleton 加载态", async () => {
@@ -222,6 +240,9 @@ describe("Settings plugins section", () => {
           },
           description: "提供工作树命令面板入口和终端状态栏支持。",
           name: "工作树",
+          terminalStatusItems: {
+            "pier.worktree.status": { title: "工作树状态" },
+          },
         },
       },
       name: "Worktree",
@@ -269,8 +290,14 @@ describe("Settings plugins section", () => {
     ).toBeVisible();
     expect(screen.getByText("本地示例")).toBeVisible();
     expect(screen.getByText("本地示例插件")).toBeVisible();
-    expect(screen.getByText("工作树列表")).toBeVisible();
-    expect(screen.getByText("pier.worktree.list")).toBeVisible();
+    expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "停用工作树" })).toBeVisible();
+    expect(screen.getByText("仅清单预览")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "显示工作树详情" }));
+
+    expect(screen.getByText("工作树列表")).toBeVisible();
+    expect(screen.getByText("工作树状态")).toBeVisible();
+    expect(screen.getByText("读取 Git 工作树信息")).toBeVisible();
   });
 });
