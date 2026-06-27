@@ -13,6 +13,7 @@ import {
   createCommandRouter,
   type PierCoreServices,
 } from "@main/app-core/command-router.ts";
+import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { createWorktreeService } from "@main/services/worktree-service.ts";
 import {
   type PierCommandEnvelope,
@@ -152,6 +153,10 @@ function cliClientServices(): PierCoreServices {
       }),
       resolve: () => undefined,
     },
+    tasks: createTaskService({
+      readRecentState: () => Promise.resolve({ entries: [], version: 1 }),
+      writeRecentState: () => Promise.resolve(),
+    }),
     terminalLaunches: {
       consume: async () => null,
       discard: async () => undefined,

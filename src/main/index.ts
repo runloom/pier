@@ -15,6 +15,7 @@ import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
+import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
@@ -188,6 +189,9 @@ app.whenReady().then(async () => {
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);
+  setTerminalPanelClosedHandler((panelId) => {
+    appCore.services.tasks.markPanelClosed(panelId);
+  });
   registerCliLocalControl()
     .then((control) => {
       localControl = control;

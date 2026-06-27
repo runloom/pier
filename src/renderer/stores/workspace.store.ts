@@ -1,5 +1,5 @@
 import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
-import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
@@ -25,6 +25,7 @@ interface WorkspaceState {
     launchId?: string;
     placement?: PierCommandPlacement;
     referenceGroup?: WorkspaceGroupRef;
+    tab?: PanelTabChrome;
   }) => string | null;
   api: DockviewApi | null;
   closeActivePanel: () => void;
@@ -48,6 +49,7 @@ interface WorkspaceState {
 interface TerminalPanelParams {
   context?: PanelContext;
   launchId?: string;
+  tab?: PanelTabChrome;
 }
 
 type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
@@ -59,6 +61,21 @@ function terminalPanelContext(
     return;
   }
   return usePanelDescriptorStore.getState().descriptors[panelId]?.context;
+}
+
+function terminalPanelParams(args: {
+  context: PanelContext | undefined;
+  launchId: string | undefined;
+  tab: PanelTabChrome | undefined;
+}): TerminalPanelParams | undefined {
+  if (!(args.context || args.launchId || args.tab)) {
+    return;
+  }
+  return {
+    ...(args.context && { context: args.context }),
+    ...(args.launchId && { launchId: args.launchId }),
+    ...(args.tab && { tab: args.tab }),
+  };
 }
 
 function inheritedActiveTerminalContext(
@@ -202,13 +219,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ? undefined
       : inheritedActiveTerminalContext(api);
     const context = opts?.context ?? inheritedContext;
-    const params =
-      context || opts?.launchId
-        ? {
-            ...(context && { context }),
-            ...(opts?.launchId && { launchId: opts.launchId }),
-          }
-        : undefined;
+    const params = terminalPanelParams({
+      context,
+      launchId: opts?.launchId,
+      tab: opts?.tab,
+    });
     const titlePath = context?.cwd;
     api.addPanel({
       id,

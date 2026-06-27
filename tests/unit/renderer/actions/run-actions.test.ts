@@ -1,4 +1,8 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type {
+  TaskListResult,
+  TaskSpawnResult,
+} from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -58,6 +62,33 @@ function installWorkspaceApi() {
   return { api, terminalCurrent, terminalOther };
 }
 
+function taskList(projectRoot = "/Users/xyz/ABC/pier"): TaskListResult {
+  return {
+    errors: [],
+    projectRoot,
+    tasks: [
+      {
+        commandSpec: { command: "pnpm run test", kind: "shell" },
+        concurrencyPolicy: "dedupe",
+        cwd: projectRoot,
+        description: "vitest",
+        id: "package-script:test",
+        label: "test",
+        source: "package-script",
+      },
+      {
+        commandSpec: { command: "custom", kind: "shell" },
+        concurrencyPolicy: "dedupe",
+        cwd: projectRoot,
+        id: "vscode:custom",
+        label: "custom",
+        source: "vscode",
+        unsupportedReason: "不支持 VS Code 扩展任务类型: custom",
+      },
+    ],
+  };
+}
+
 describe("run actions", () => {
   let disposeRunActions: (() => void) | null = null;
 
@@ -76,6 +107,16 @@ describe("run actions", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
+        tasks: {
+          list: vi.fn(async () => taskList()),
+          spawn: vi.fn(
+            async (): Promise<TaskSpawnResult> => ({
+              panelIds: ["terminal-task"],
+              primaryPanelId: "terminal-task",
+              status: "started",
+            })
+          ),
+        },
         terminal: {},
       },
     });
@@ -119,6 +160,97 @@ describe("run actions", () => {
       { label: "Tab 2/2", variant: "outline" },
     ]);
     expect(quickPick?.items).toBeUndefined();
+  });
+
+  it("opens real task candidates from the active project", async () => {
+    installWorkspaceApi();
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.task")?.handler();
+
+    expect(window.pier.tasks.list).toHaveBeenCalledWith({
+      projectRoot: "/Users/xyz/ABC/pier",
+    });
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    expect(quickPick?.sections?.[0]?.heading).toBe("package.json");
+    expect(quickPick?.sections?.[0]?.items[0]).toMatchObject({
+      description: "vitest",
+      detail: "pnpm run test",
+      id: "package-script:test",
+      label: "test",
+    });
+    expect(quickPick?.sections?.[1]?.items[0]).toMatchObject({
+      disabled: true,
+      detail: "不支持 VS Code 扩展任务类型: custom",
+      label: "custom",
+    });
+  });
+
+  it("spawns the selected task through the task bridge", async () => {
+    installWorkspaceApi();
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.task")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const target = quickPick?.sections
+      ?.flatMap((section) => section.items)
+      .find((item) => item.id === "package-script:test");
+    if (!(quickPick && target)) {
+      throw new Error("expected task item");
+    }
+
+    await quickPick.onAccept(target);
+
+    expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
+      focus: true,
+      placement: "active-tab",
+      projectRoot: "/Users/xyz/ABC/pier",
+      taskId: "package-script:test",
+    });
+  });
+
+  it("prompts for missing task inputs and retries spawn", async () => {
+    installWorkspaceApi();
+    vi.mocked(window.pier.tasks.spawn)
+      .mockResolvedValueOnce({
+        inputs: [
+          {
+            default: "web",
+            description: "Target package",
+            id: "pkg",
+            type: "promptString",
+          },
+        ],
+        status: "requires-input",
+      })
+      .mockResolvedValueOnce({
+        panelIds: ["terminal-task"],
+        primaryPanelId: "terminal-task",
+        status: "started",
+      });
+    const promptSpy = vi
+      .spyOn(window, "prompt")
+      .mockReturnValueOnce("renderer");
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.task")?.handler();
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const target = quickPick?.sections?.[0]?.items[0];
+    if (!(quickPick && target)) {
+      throw new Error("expected task item");
+    }
+
+    await quickPick.onAccept(target);
+
+    expect(promptSpy).toHaveBeenCalledWith("Target package", "web");
+    expect(window.pier.tasks.spawn).toHaveBeenLastCalledWith({
+      focus: true,
+      inputs: { pkg: "renderer" },
+      placement: "active-tab",
+      projectRoot: "/Users/xyz/ABC/pier",
+      taskId: "package-script:test",
+    });
   });
 
   it("focuses an existing terminal from the terminal list", async () => {

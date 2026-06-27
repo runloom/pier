@@ -44,6 +44,7 @@ describe("terminal native debug IPC", () => {
       setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
+      setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
       setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),

@@ -1,4 +1,4 @@
-import type { PanelContext } from "./panel.ts";
+import type { PanelContext, PanelTabChrome } from "./panel.ts";
 
 export interface TerminalFrame {
   /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
@@ -217,6 +217,7 @@ export interface CreateTerminalArgs {
   frame: TerminalFrame;
   launchId?: string | undefined;
   panelId: string;
+  tab?: PanelTabChrome | undefined;
 }
 
 export interface CreateTerminalResult {
@@ -254,8 +255,14 @@ export interface TerminalTitleEvent {
   title: string;
 }
 
+export interface TerminalTabChromePatchEvent {
+  panelId: string;
+  tab: Partial<PanelTabChrome>;
+}
+
 export interface TerminalPanelSessionSnapshot {
   context?: PanelContext | undefined;
+  tab?: PanelTabChrome | undefined;
   title?: string | undefined;
   updatedAt: string;
 }
@@ -341,6 +348,9 @@ export interface TerminalAPI {
   ) => () => void;
   /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
   onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
+  onTabChromePatch(
+    cb: (event: TerminalTabChromePatchEvent) => void
+  ): () => void;
   /**
    * 订阅 terminal title (OSC 0/2) 变化. 回调返回 dispose 函数.
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.

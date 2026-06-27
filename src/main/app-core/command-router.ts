@@ -11,6 +11,11 @@ import {
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type {
+  TaskLaunchPlan,
+  TaskListResult,
+  TaskSpawnPreparation,
+} from "@shared/contracts/tasks.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import {
@@ -34,6 +39,10 @@ import {
   executeTerminalOpenCommand,
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
+import {
+  executeRunListCommand,
+  executeRunSpawnCommand,
+} from "./run-commands.ts";
 import { orderedWindows } from "./window-routing.ts";
 
 export interface PierCoreServices {
@@ -53,6 +62,21 @@ export interface PierCoreServices {
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
   rendererCommand: RendererCommandService;
+  tasks: {
+    list(args: { projectRoot: string }): Promise<TaskListResult>;
+    markPanelClosed(panelId: string): void;
+    prepareSpawn(args: {
+      inputs?: Record<string, string> | undefined;
+      projectRoot: string;
+      taskId: string;
+    }): Promise<TaskSpawnPreparation>;
+    recordRecent(launch: TaskLaunchPlan): Promise<void> | void;
+    recordStarted(record: {
+      panelId: string;
+      projectRoot: string;
+      taskId: string;
+    }): void;
+  };
   terminalLaunches: {
     consume(
       launchId: string
@@ -307,6 +331,21 @@ async function executePanelCommand(
   }
 }
 
+async function executeRunCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  switch (command.type) {
+    case "run.list":
+      return await executeRunListCommand(requestId, command, services);
+    case "run.spawn":
+      return await executeRunSpawnCommand(requestId, command, services);
+    default:
+      return null;
+  }
+}
+
 async function executeTerminalCommand(
   requestId: string,
   command: PierCommand,
@@ -350,6 +389,7 @@ async function executeKnownCommand(
     const executors = [
       (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
       (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
+      (cmd: PierCommand) => executeRunCommand(requestId, cmd, services),
       (cmd: PierCommand) => executeTerminalCommand(requestId, cmd, services),
       (cmd: PierCommand) =>
         executeAppStateCommand(requestId, cmd, clients, services),

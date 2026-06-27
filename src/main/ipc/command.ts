@@ -12,6 +12,8 @@ const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
   "plugin.enable",
   "plugin.inspect",
   "plugin.list",
+  "run.list",
+  "run.spawn",
   "worktree.check",
   "worktree.list",
   "worktree.open",

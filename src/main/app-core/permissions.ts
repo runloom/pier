@@ -23,6 +23,8 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "plugin.list": ["plugin:read"],
   "preferences.read": ["preferences:read"],
   "preferences.update": ["preferences:write"],
+  "run.list": ["workspace:read"],
+  "run.spawn": ["workspace:open"],
   "terminal.open": ["workspace:open"],
   "terminal.profile.delete": ["terminal:control"],
   "terminal.profile.list": ["terminal:read"],

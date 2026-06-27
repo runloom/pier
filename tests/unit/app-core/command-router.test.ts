@@ -2,6 +2,7 @@ import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
 import { PluginServiceError } from "@main/services/plugin-service.ts";
+import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { WorktreeServiceError } from "@main/services/worktree-service.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
 import {
@@ -256,6 +257,10 @@ function services(
       },
       resolve: () => undefined,
     },
+    tasks: createTaskService({
+      readRecentState: () => Promise.resolve({ entries: [], version: 1 }),
+      writeRecentState: () => Promise.resolve(),
+    }),
     terminalLaunches: {
       consume: async () => null,
       discard: async () => undefined,
@@ -651,6 +656,71 @@ describe("createCommandRouter", () => {
         },
       },
     ]);
+  });
+
+  it("run.spawn 重新解析任务并复用 terminal.open", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const listResult = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        projectRoot: process.cwd(),
+        type: "run.list",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-list",
+    });
+
+    expect(listResult).toMatchObject({ ok: true });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: true,
+          projectRoot: process.cwd(),
+          taskId: "package-script:test",
+          type: "run.spawn",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-spawn",
+      })
+    ).resolves.toEqual({
+      data: {
+        panelIds: ["terminal-from-renderer"],
+        primaryPanelId: "terminal-from-renderer",
+        status: "started",
+      },
+      ok: true,
+      requestId: "req-run-spawn",
+    });
+
+    expect(terminalLaunches).toEqual([
+      expect.objectContaining({
+        command: expect.stringContaining("pnpm run test"),
+        cwd: process.cwd(),
+      }),
+    ]);
+    expect(rendererCommands.at(-1)).toMatchObject({
+      launchId: "launch-1",
+      placement: "active-tab",
+      tab: {
+        badge: { label: "package.json" },
+        icon: { id: "pier.task", label: "Task" },
+        state: { busy: true, label: "Running" },
+        title: "test",
+      },
+      type: "terminal.open",
+    });
   });
 
   it("terminal.open 遇到未知 profileId 时失败且不注册 launch", async () => {

@@ -42,9 +42,67 @@ export const panelDisplaySchema = z.object({
 });
 export type PanelDisplay = z.infer<typeof panelDisplaySchema>;
 
+export const panelTabIconSchema = z
+  .object({
+    colorToken: z.string().min(1).optional(),
+    id: z.string().min(1).optional(),
+    label: z.string().min(1).optional(),
+    uri: z.string().min(1).optional(),
+  })
+  .strict();
+export type PanelTabIcon = z.infer<typeof panelTabIconSchema>;
+
+export const panelTabBadgeSchema = z
+  .object({
+    colorToken: z.string().min(1).optional(),
+    label: z.string().min(1),
+  })
+  .strict();
+export type PanelTabBadge = z.infer<typeof panelTabBadgeSchema>;
+
+export const panelTabStateSchema = z
+  .object({
+    busy: z.boolean().optional(),
+    colorToken: z.string().min(1).optional(),
+    icon: panelTabIconSchema.optional(),
+    label: z.string().min(1).optional(),
+  })
+  .strict();
+export type PanelTabState = z.infer<typeof panelTabStateSchema>;
+
+export const panelTabTooltipLineSchema = z
+  .object({
+    label: z.string().min(1),
+    value: z.string().min(1),
+  })
+  .strict();
+export type PanelTabTooltipLine = z.infer<typeof panelTabTooltipLineSchema>;
+
+export const panelTabTooltipSchema = z
+  .object({
+    lines: z.array(panelTabTooltipLineSchema).optional(),
+    title: z.string().min(1).optional(),
+  })
+  .strict();
+export type PanelTabTooltip = z.infer<typeof panelTabTooltipSchema>;
+
+export const panelTabChromeSchema = z
+  .object({
+    ariaLabel: z.string().min(1).optional(),
+    badge: panelTabBadgeSchema.optional(),
+    description: z.string().min(1).optional(),
+    icon: panelTabIconSchema.optional(),
+    state: panelTabStateSchema.optional(),
+    title: z.string().min(1).optional(),
+    tooltip: panelTabTooltipSchema.optional(),
+  })
+  .strict();
+export type PanelTabChrome = z.infer<typeof panelTabChromeSchema>;
+
 export const panelDescriptorSchema = z.object({
   context: panelContextSchema.optional(),
   display: panelDisplaySchema,
+  tab: panelTabChromeSchema.optional(),
 });
 export type PanelDescriptor = z.infer<typeof panelDescriptorSchema>;
 
@@ -56,6 +114,7 @@ export const panelSnapshotSchema = z.object({
   id: z.string().min(1),
   kind: panelKindSchema,
   recordId: z.string().min(1).optional(),
+  tab: panelTabChromeSchema.optional(),
   tabCount: z.number().int().nonnegative().optional(),
   tabIndex: z.number().int().nonnegative().optional(),
   windowId: z.string().min(1).optional(),

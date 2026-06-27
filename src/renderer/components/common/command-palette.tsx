@@ -430,7 +430,7 @@ function QuickPickView({
         ) : null}
       </span>
       {item.description ? (
-        <span className="max-w-40 shrink-0 truncate pt-0.5 text-muted-foreground text-xs">
+        <span className="ml-auto min-w-0 max-w-[45%] shrink truncate pt-0.5 text-right text-muted-foreground text-xs">
           {item.description}
         </span>
       ) : null}

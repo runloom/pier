@@ -11,6 +11,7 @@ import { createPluginService } from "../services/plugin-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
+import { createTaskService } from "../services/tasks/task-service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
@@ -103,6 +104,7 @@ function createPierAppCore(): PierAppCore {
     plugins: pluginHost.plugins,
     panelContexts: createPanelContextService(),
     rendererCommand,
+    tasks: createTaskService(),
     terminalProfiles: createTerminalProfileService(),
     terminalLaunches: terminalLaunchRegistry,
     window: createWindowService({

@@ -1,4 +1,4 @@
-import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import { act, render, waitFor } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,11 +47,26 @@ interface TestPanelProps extends IDockviewPanelProps {
   emitVisibility(event: { isVisible: boolean }): void;
 }
 
+const taskTab: PanelTabChrome = {
+  badge: { label: "package.json" },
+  icon: { id: "pier.task", label: "Task" },
+  state: { busy: true, label: "Running" },
+  title: "test",
+  tooltip: {
+    lines: [{ label: "Command", value: "pnpm run test" }],
+    title: "test",
+  },
+};
+
 function createPanelProps(
   options: {
     isActive?: boolean;
     isVisible?: boolean;
-    params?: { context?: PanelContext; launchId?: string };
+    params?: {
+      context?: PanelContext;
+      launchId?: string;
+      tab?: PanelTabChrome;
+    };
   } = {}
 ): TestPanelProps {
   let isActive = options.isActive ?? true;
@@ -142,6 +157,9 @@ describe("TerminalPanel lifecycle", () => {
   let emitWindowLayoutPulse:
     | ((pulse: { reason: "resize" | "view-zoom" | "zoom" }) => void)
     | null = null;
+  let tabChromePatchListeners: Array<{
+    cb: (event: { panelId: string; tab: Partial<PanelTabChrome> }) => void;
+  }> = [];
 
   beforeEach(() => {
     anchorFrame = {
@@ -151,6 +169,7 @@ describe("TerminalPanel lifecycle", () => {
       y: 20,
     };
     emitWindowLayoutPulse = null;
+    tabChromePatchListeners = [];
     TestResizeObserver.observeCount = 0;
     TestResizeObserver.instances = [];
     popupContextMenuAtMock.mockClear();
@@ -206,6 +225,15 @@ describe("TerminalPanel lifecycle", () => {
           hide: vi.fn(),
           onContextMenuRequest: vi.fn(() => vi.fn()),
           onCwdChange: vi.fn(() => vi.fn()),
+          onTabChromePatch: vi.fn((cb) => {
+            const listener = { cb };
+            tabChromePatchListeners.push(listener);
+            return () => {
+              tabChromePatchListeners = tabChromePatchListeners.filter(
+                (entry) => entry !== listener
+              );
+            };
+          }),
           onTitleChange: vi.fn(() => vi.fn()),
           readSession: vi.fn(async () => null),
           setActivePanelKind: vi.fn(),
@@ -409,6 +437,94 @@ describe("TerminalPanel lifecycle", () => {
           panelId: "terminal-1",
         })
       );
+    });
+  });
+
+  it("uses tab chrome params for descriptor title and native creation metadata", async () => {
+    const props = createPanelProps({
+      params: { context, launchId: "launch-1", tab: taskTab },
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(props.api.setTitle).toHaveBeenCalledWith("test");
+    });
+    expect(
+      usePanelDescriptorStore.getState().descriptors["terminal-1"]
+    ).toMatchObject({
+      tab: taskTab,
+    });
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "terminal-1",
+          tab: taskTab,
+        })
+      );
+    });
+  });
+
+  it("restores tab chrome from a saved terminal session", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      context,
+      tab: taskTab,
+      title: "vite",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+    const props = createPanelProps();
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(props.api.setTitle).toHaveBeenCalledWith("test");
+    });
+    expect(
+      usePanelDescriptorStore.getState().descriptors["terminal-1"]
+    ).toMatchObject({
+      display: { terminalTitle: "vite" },
+      tab: taskTab,
+    });
+  });
+
+  it("merges terminal tab chrome patches without replacing the tab title", async () => {
+    const props = createPanelProps({
+      params: { context, tab: taskTab },
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(props.api.setTitle).toHaveBeenCalledWith("test");
+    });
+    act(() => {
+      for (const listener of tabChromePatchListeners) {
+        listener.cb({
+          panelId: "terminal-1",
+          tab: {
+            state: {
+              busy: false,
+              colorToken: "destructive",
+              label: "Failed 1",
+            },
+          },
+        });
+      }
+    });
+
+    await waitFor(() => {
+      expect(
+        usePanelDescriptorStore.getState().descriptors["terminal-1"]
+      ).toMatchObject({
+        tab: {
+          title: "test",
+          state: {
+            busy: false,
+            colorToken: "destructive",
+            label: "Failed 1",
+          },
+        },
+      });
     });
   });
 
