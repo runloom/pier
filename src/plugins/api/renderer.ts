@@ -11,11 +11,22 @@ import type { ReactNode } from "react";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
+export type RendererPluginActionCategoryKey =
+  | "panel"
+  | "run"
+  | "settings"
+  | "terminal"
+  | "view"
+  | "window"
+  | "workspace"
+  | "worktree";
+
 export interface RendererPluginActionMetadata {
+  aliases?: () => readonly string[];
+  categoryKey?: RendererPluginActionCategoryKey;
   excludeFromMru?: boolean;
   group?: string;
   iconComponent?: LucideIcon;
-  keywords?: readonly string[];
   sortOrder?: number;
   submenu?: () => string;
 }
@@ -42,14 +53,15 @@ export interface RendererPluginQuickPickItemBadge {
 }
 
 export interface RendererPluginQuickPickItem {
+  readonly aliases?: readonly string[];
   readonly badges?: readonly RendererPluginQuickPickItemBadge[];
   readonly checked?: boolean;
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
   readonly id: string;
-  readonly keywords?: readonly string[];
   readonly label: string;
+  readonly searchTerms?: readonly string[];
 }
 
 export interface RendererPluginQuickPickSection {
@@ -77,6 +89,7 @@ export interface RendererTerminalStatusItemContext {
 
 export interface RendererTerminalStatusItem {
   id: string;
+  isVisible?: (context: RendererTerminalStatusItemContext) => boolean;
   order?: number;
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
 }

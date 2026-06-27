@@ -258,6 +258,20 @@ describe("worktree builtin plugin", () => {
     ).toBe(true);
   });
 
+  it("worktree 命令接入命令面板 aliases 搜索模型", () => {
+    dispose = activateWorktreePlugin();
+
+    expect(
+      actionRegistry.get("pier.worktree.list")?.metadata?.aliases?.()
+    ).toEqual(expect.arrayContaining(["git worktree list", "工作树列表"]));
+    expect(
+      actionRegistry.get("pier.worktree.create")?.metadata?.aliases?.()
+    ).toEqual(expect.arrayContaining(["git worktree add", "创建工作树"]));
+    expect(
+      actionRegistry.get("pier.worktree.delete")?.metadata?.aliases?.()
+    ).toEqual(expect.arrayContaining(["git worktree remove", "删除工作树"]));
+  });
+
   it("禁用时不注册任何 renderer 贡献", async () => {
     vi.mocked(window.pier.plugins.list).mockResolvedValueOnce({
       diagnostics: [],
@@ -330,6 +344,27 @@ describe("worktree builtin plugin", () => {
     );
   });
 
+  it("主进程标记 git worktree unsupported 时同步禁用 worktree 命令", () => {
+    usePanelDescriptorStore.setState({
+      activeId: "terminal-1",
+      descriptors: {
+        "terminal-1": {
+          context: {
+            ...context,
+            worktreeSupported: false,
+          },
+          display: { short: "pier" },
+        },
+      },
+    });
+    dispose = activateWorktreePlugin();
+
+    expect(actionRegistry.get("pier.worktree.list")?.enabled?.()).toBe(false);
+    expect(actionRegistry.get("pier.worktree.list")?.disabledReason?.()).toBe(
+      "Current directory does not support Git worktrees"
+    );
+  });
+
   it("命令面板动作按 LoomDesk 列表形态列出 worktree 并打开目标 worktree", async () => {
     dispose = activateWorktreePlugin();
 
@@ -363,6 +398,12 @@ describe("worktree builtin plugin", () => {
     expect(linked).toMatchObject({
       detail: "/Users/xyz/ABC/pier-feature",
       label: "feature/worktree",
+      searchTerms: expect.arrayContaining([
+        "/Users/xyz/ABC/pier-feature",
+        "pier-feature",
+        "feature/worktree",
+        "def456",
+      ]),
     });
     expect(locked).toMatchObject({
       description: "used by another process",
@@ -464,6 +505,29 @@ describe("worktree builtin plugin", () => {
     } as never);
     await refreshBuiltinPlugins();
     expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
+  });
+
+  it("不会激活 enabled local 插件的 renderer 代码", async () => {
+    const localEntry: PluginRegistryEntry = {
+      ...pluginEntry(true),
+      enabled: true,
+      id: "local.worktree",
+      manifest: {
+        ...pluginEntry(true).manifest,
+        id: "local.worktree",
+        source: { kind: "local" },
+      },
+      source: { kind: "local" },
+    };
+    vi.mocked(window.pier.plugins.list).mockResolvedValue({
+      diagnostics: [],
+      entries: [localEntry],
+    } as never);
+
+    await refreshBuiltinPlugins();
+
+    expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
+    expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
   it("renderer builtin catalog owns the worktree plugin module", () => {

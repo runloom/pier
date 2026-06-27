@@ -338,6 +338,8 @@ describe("TerminalPanel lifecycle", () => {
   it("renders plugin terminal status items below the native terminal anchor", async () => {
     terminalStatusItemRegistry.register({
       id: "test.worktree-status",
+      isVisible: ({ context: panelContext }) =>
+        Boolean(panelContext?.worktreeRoot),
       order: 10,
       render: ({ context: panelContext }) => (
         <span>{panelContext?.worktreeRoot ?? "missing"}</span>
@@ -357,6 +359,37 @@ describe("TerminalPanel lifecycle", () => {
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
     ).toContain("bottom-6");
+  });
+
+  it("does not reserve status bar space when no item is visible for the panel", () => {
+    terminalStatusItemRegistry.register({
+      id: "test.worktree-status",
+      isVisible: ({ context: panelContext }) =>
+        Boolean(panelContext?.worktreeRoot),
+      order: 10,
+      render: () => <span>worktree</span>,
+    });
+
+    const { container, queryByTestId } = render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context: {
+              contextId: "ctx-home",
+              cwd: "/Users/xyz",
+              openedPath: "/Users/xyz",
+              source: "panel",
+              updatedAt: 1_772_000_000_000,
+            },
+          },
+        })}
+      />
+    );
+
+    expect(queryByTestId("terminal-status-bar")).toBeNull();
+    expect(
+      container.querySelector(".terminal-anchor")?.className ?? ""
+    ).not.toContain("bottom-6");
   });
 
   it("passes launchId into native terminal creation", async () => {

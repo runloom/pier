@@ -98,6 +98,12 @@ describe("Settings plugins section", () => {
       name: "Local Example",
       sourceKind: "local",
     });
+    const enabledLocalPlugin = pluginEntry({
+      enabled: true,
+      id: "local.example",
+      name: "Local Example",
+      sourceKind: "local",
+    });
     const list = vi
       .fn()
       .mockResolvedValueOnce({
@@ -107,15 +113,20 @@ describe("Settings plugins section", () => {
       .mockResolvedValueOnce({
         diagnostics: [],
         entries: [disabledWorktree, localPlugin],
+      })
+      .mockResolvedValueOnce({
+        diagnostics: [],
+        entries: [disabledWorktree, enabledLocalPlugin],
       });
     const disable = vi.fn(async () => disabledWorktree);
+    const enable = vi.fn(async () => enabledLocalPlugin);
 
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
         plugins: {
           disable,
-          enable: vi.fn(),
+          enable,
           inspect: vi.fn(),
           list,
         },
@@ -143,6 +154,17 @@ describe("Settings plugins section", () => {
     });
     expect(
       await screen.findByRole("button", { name: "Enable Worktree" })
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enable Local Example" })
+    );
+
+    await waitFor(() => {
+      expect(enable).toHaveBeenCalledWith("local.example");
+    });
+    expect(
+      await screen.findByRole("button", { name: "Disable Local Example" })
     ).toBeVisible();
   });
 

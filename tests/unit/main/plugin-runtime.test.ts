@@ -63,4 +63,22 @@ describe("createMainPluginHostApi", () => {
     expect(runtime.refresh).toHaveBeenCalledTimes(2);
     expect(runtime.refresh).toHaveBeenCalledWith([plugin]);
   });
+
+  it("disposes the main plugin runtime through the host api", () => {
+    const runtime = {
+      dispose: vi.fn(),
+      refresh: vi.fn(),
+    };
+    const plugins = {
+      inspect: vi.fn(),
+      list: vi.fn(),
+      setEnabled: vi.fn(),
+    };
+
+    const host = createMainPluginHostApi({ plugins, runtime });
+
+    host.dispose();
+
+    expect(runtime.dispose).toHaveBeenCalledTimes(1);
+  });
 });

@@ -326,7 +326,7 @@ describe("createPluginService", () => {
     });
   });
 
-  it("local manifest 只允许发现和 inspect，暂不允许启停", async () => {
+  it("local manifest 可记录启停状态但不会执行插件代码", async () => {
     const dir = await makeTempDir();
     const localPath = join(dir, "pier-plugin.json");
     await writeFile(
@@ -348,16 +348,18 @@ describe("createPluginService", () => {
     });
 
     await expect(service.inspect("sample.local")).resolves.toMatchObject({
+      enabled: false,
       id: "sample.local",
       source: { kind: "local" },
     });
     await expect(
       service.setEnabled("sample.local", true)
-    ).rejects.toMatchObject({
-      code: "unsupported",
-      message: "plugin source kind cannot be enabled yet: local",
+    ).resolves.toMatchObject({
+      enabled: true,
+      id: "sample.local",
+      source: { kind: "local" },
     });
-    expect(setEnabled).not.toHaveBeenCalled();
+    expect(setEnabled).toHaveBeenCalledWith("sample.local", true);
   });
 
   it("内置插件可声明默认启用，且 userData 禁用状态优先", async () => {

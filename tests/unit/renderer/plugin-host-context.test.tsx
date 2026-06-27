@@ -110,11 +110,21 @@ describe("createRendererPluginContext", () => {
       category: "Test",
       handler: () => undefined,
       id: "test.action",
+      metadata: {
+        aliases: () => ["sample alias"],
+        categoryKey: "worktree",
+      },
       surfaces: ["command-palette"],
       title: () => "Test Action",
     });
 
     expect(actionRegistry.get("test.action")?.title()).toBe("Test Action");
+    expect(actionRegistry.get("test.action")?.metadata).toMatchObject({
+      categoryKey: "worktree",
+    });
+    expect(actionRegistry.get("test.action")?.metadata?.aliases?.()).toEqual([
+      "sample alias",
+    ]);
 
     dispose();
     expect(actionRegistry.get("test.action")).toBeUndefined();
@@ -124,12 +134,27 @@ describe("createRendererPluginContext", () => {
     const context = createRendererPluginContext();
 
     context.commandPalette.openQuickPick({
-      items: [{ id: "one", label: "One" }],
+      items: [
+        {
+          aliases: ["uno"],
+          id: "one",
+          label: "One",
+          searchTerms: ["first item"],
+        },
+      ],
       onAccept: () => undefined,
       title: "Pick",
     });
 
     expect(useCommandPaletteController.getState().quickPick).toMatchObject({
+      items: [
+        {
+          aliases: ["uno"],
+          id: "one",
+          label: "One",
+          searchTerms: ["first item"],
+        },
+      ],
       title: "Pick",
     });
   });

@@ -8,6 +8,7 @@ const HOST_REGISTRY_RE =
   /actionRegistry|terminalStatusItemRegistry|useCommandPaletteController|usePanelDescriptorStore/;
 const DEEP_HOST_CONTRACT_RE =
   /\.\.\/\.\.\/\.\.\/api|\.\.\/\.\.\/\.\.\/\.\.\/shared/;
+const LEGACY_KEYWORDS_RE = /\bkeywords\s*:/;
 
 async function collectSourceFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -67,5 +68,24 @@ describe("builtin worktree plugin package boundary", () => {
 
     expect(source).not.toMatch(HOST_REGISTRY_RE);
     expect(source).toContain("@plugins/api/");
+  });
+
+  it("uses command palette aliases and search terms instead of legacy keywords", async () => {
+    const files = [
+      ...(await collectSourceFiles(WORKTREE_PLUGIN_DIR)),
+      join(process.cwd(), "src/plugins/api/renderer.ts"),
+    ];
+    const offenders = (
+      await Promise.all(
+        files.map(async (file) => ({
+          file: relative(process.cwd(), file),
+          source: await readFile(file, "utf8"),
+        }))
+      )
+    )
+      .filter(({ source }) => LEGACY_KEYWORDS_RE.test(source))
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
   });
 });

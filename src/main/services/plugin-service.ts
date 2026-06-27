@@ -78,13 +78,12 @@ function sourceFromManifest(manifest: PluginManifest): PluginSource {
 function entryFromManifest(
   manifest: PluginManifest,
   state: PluginRegistryState,
-  source: PluginDiscoverySource
+  options: { defaultEnabled?: boolean } = {}
 ): PluginRegistryEntry {
   return {
     commands: manifest.commands,
     enabled:
-      state.plugins[manifest.id]?.enabled ??
-      (source.kind === "builtin" && source.defaultEnabled === true),
+      state.plugins[manifest.id]?.enabled ?? options.defaultEnabled === true,
     id: manifest.id,
     manifest,
     panels: manifest.panels,
@@ -230,7 +229,10 @@ export function createPluginService({
     return {
       diagnostics,
       entries: manifests.map(({ manifest, source }) =>
-        entryFromManifest(manifest, registryState, source)
+        entryFromManifest(manifest, registryState, {
+          defaultEnabled:
+            source.kind === "builtin" && source.defaultEnabled === true,
+        })
       ),
     };
   }
@@ -248,17 +250,16 @@ export function createPluginService({
     if (!existing) {
       throw new PluginServiceError("not_found", `plugin not found: ${id}`);
     }
-    if (existing.source.kind !== "builtin") {
+    if (
+      !(existing.source.kind === "builtin" || existing.source.kind === "local")
+    ) {
       throw new PluginServiceError(
         "unsupported",
         `plugin source kind cannot be enabled yet: ${existing.source.kind}`
       );
     }
     const nextState = await state.setEnabled(id, enabled);
-    return entryFromManifest(existing.manifest, nextState, {
-      kind: "builtin",
-      manifest: existing.manifest,
-    });
+    return entryFromManifest(existing.manifest, nextState);
   }
 
   return { inspect, list, setEnabled };

@@ -72,6 +72,13 @@ function activeWorktreeTarget(
       reason: unsupportedReason(context),
     };
   }
+  if (panelContext.worktreeSupported === false) {
+    return {
+      enabled: false,
+      path,
+      reason: unsupportedReason(context),
+    };
+  }
   return { enabled: true, path };
 }
 
@@ -87,6 +94,15 @@ function itemLabel(
       : pluginText(context, "main", "main");
   }
   return worktree.branch ?? basename(worktree.path);
+}
+
+function worktreeSearchTerms(worktree: WorktreeItem): readonly string[] {
+  return [
+    worktree.path,
+    basename(worktree.path),
+    worktree.branch ?? "",
+    worktree.head ?? "",
+  ].filter(Boolean);
 }
 
 function buildWorktreeSections(
@@ -106,8 +122,8 @@ function buildWorktreeSections(
       detail: worktree.path,
       disabled: false,
       id: `worktree:${worktree.path}`,
-      keywords: [worktree.path, worktree.branch ?? ""].filter(Boolean),
       label: itemLabel(context, worktree),
+      searchTerms: worktreeSearchTerms(worktree),
     }));
   return [
     {
@@ -201,9 +217,21 @@ function registerWorktreeListAction(
     },
     id: "pier.worktree.list",
     metadata: {
+      aliases: () => [
+        "worktree",
+        "worktree list",
+        "git worktree",
+        "git worktree list",
+        "workspace worktree",
+        "工作树",
+        "工作树列表",
+        "gongzuoshu",
+        "gong zuo shu",
+        context.i18n.commandTitle("pier.worktree.list", "Worktree: List"),
+      ],
+      categoryKey: "worktree",
       group: "1_worktree",
       iconComponent: GitFork,
-      keywords: ["worktree", "git", "list", "workspace", "工作树", "列表"],
       sortOrder: 1,
     },
     surfaces: ["command-palette"],
@@ -222,9 +250,22 @@ function registerDisabledWorktreeCreateAction(
     handler: () => undefined,
     id: "pier.worktree.create",
     metadata: {
+      aliases: () => [
+        "worktree",
+        "worktree create",
+        "worktree add",
+        "git worktree add",
+        "new worktree",
+        "create worktree",
+        "工作树",
+        "创建工作树",
+        "gongzuoshu",
+        "chuangjian gongzuoshu",
+        context.i18n.commandTitle("pier.worktree.create", "Worktree: Create"),
+      ],
+      categoryKey: "worktree",
       group: "1_worktree",
       iconComponent: GitBranch,
-      keywords: ["worktree", "git", "create", "new", "工作树", "创建"],
       sortOrder: 2,
     },
     surfaces: ["command-palette"],
@@ -243,9 +284,26 @@ function registerDisabledWorktreeDeleteAction(
     handler: () => undefined,
     id: "pier.worktree.delete",
     metadata: {
+      aliases: () => [
+        "worktree",
+        "worktree delete",
+        "worktree remove",
+        "git worktree remove",
+        "remove worktree",
+        "delete worktree",
+        "工作树",
+        "删除工作树",
+        "移除工作树",
+        "gongzuoshu",
+        "shanchu gongzuoshu",
+        context.i18n.commandTitle(
+          "pier.worktree.delete",
+          "Worktree: Delete..."
+        ),
+      ],
+      categoryKey: "worktree",
       group: "1_worktree",
       iconComponent: Trash2,
-      keywords: ["worktree", "git", "delete", "remove", "工作树", "删除"],
       sortOrder: 3,
     },
     surfaces: ["command-palette"],

@@ -140,7 +140,8 @@ function PluginRow({
   pending: boolean;
 }) {
   const t = useT();
-  const canToggle = entry.source.kind === "builtin";
+  const canToggle =
+    entry.source.kind === "builtin" || entry.source.kind === "local";
   const commandContributions = commandContributionBadges(
     entry,
     i18next.language

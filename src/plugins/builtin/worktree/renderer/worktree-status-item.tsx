@@ -72,6 +72,8 @@ export function registerWorktreeStatusItem(
 ): () => void {
   return context.terminalStatusItems.register({
     id: "pier.worktree.status",
+    isVisible: ({ context: panelContext }) =>
+      Boolean(panelContext?.worktreeRoot ?? panelContext?.gitRoot),
     order: 10,
     render: (statusContext) => (
       <WorktreeStatusItem {...statusContext} pluginContext={context} />

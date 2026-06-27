@@ -39,7 +39,8 @@ export type ActionCategoryKey =
   | "terminal"
   | "view"
   | "window"
-  | "workspace";
+  | "workspace"
+  | "worktree";
 
 export interface Action {
   category: string;

@@ -247,6 +247,7 @@ app.on("before-quit", (event) => {
     return;
   }
   windowManager.destroyAllForQuit();
+  appCore.pluginHost.dispose();
   localControl?.close().catch(() => {
     // ignore: app 正在退出
   });

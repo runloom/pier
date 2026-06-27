@@ -47,6 +47,20 @@ export function useTerminalStatusItems(): readonly TerminalStatusItem[] {
   return terminalStatusItemRegistry.list();
 }
 
+export function visibleTerminalStatusItems(
+  items: readonly TerminalStatusItem[],
+  context: TerminalStatusItemContext
+): readonly TerminalStatusItem[] {
+  return items.filter((item) => item.isVisible?.(context) ?? true);
+}
+
+export function hasVisibleTerminalStatusItems(
+  items: readonly TerminalStatusItem[],
+  context: TerminalStatusItemContext
+): boolean {
+  return visibleTerminalStatusItems(items, context).length > 0;
+}
+
 export function TerminalStatusBar({
   context,
   cwd,
@@ -54,7 +68,9 @@ export function TerminalStatusBar({
   title,
 }: TerminalStatusItemContext) {
   const items = useTerminalStatusItems();
-  if (items.length === 0) {
+  const statusContext = { context, cwd, panelId, title };
+  const visibleItems = visibleTerminalStatusItems(items, statusContext);
+  if (visibleItems.length === 0) {
     return null;
   }
   return (
@@ -62,9 +78,9 @@ export function TerminalStatusBar({
       className="absolute inset-x-0 bottom-0 flex h-6 min-w-0 items-center gap-2 border-border/60 border-t bg-background/95 px-2 text-muted-foreground text-xs"
       data-testid="terminal-status-bar"
     >
-      {items.map((item) => (
+      {visibleItems.map((item) => (
         <div className="min-w-0 shrink-0" key={item.id}>
-          {item.render({ context, cwd, panelId, title })}
+          {item.render(statusContext)}
         </div>
       ))}
     </div>

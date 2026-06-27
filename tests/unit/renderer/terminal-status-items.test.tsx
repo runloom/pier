@@ -69,4 +69,25 @@ describe("terminalStatusItemRegistry", () => {
 
     expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
   });
+
+  it("按 panel context 过滤不可见状态项", () => {
+    terminalStatusItemRegistry.register({
+      id: "test.hidden",
+      isVisible: ({ context: panelContext }) =>
+        Boolean(panelContext?.worktreeRoot),
+      order: 10,
+      render: () => <span>Hidden</span>,
+    });
+
+    render(
+      <TerminalStatusBar
+        context={undefined}
+        cwd="/Users/xyz"
+        panelId="terminal-plain"
+        title={null}
+      />
+    );
+
+    expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
+  });
 });

@@ -24,6 +24,7 @@ import {
 } from "./terminal-lifecycle-debug.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import {
+  hasVisibleTerminalStatusItems,
   TerminalStatusBar,
   useTerminalStatusItems,
 } from "./terminal-status-bar.tsx";
@@ -88,7 +89,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     windowZoomLevel
   );
   const anchorRef = useRef<HTMLDivElement>(null);
-  const hasStatusBar = useTerminalStatusItems().length > 0;
+  const statusItems = useTerminalStatusItems();
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [savedSession, setSavedSession] = useState<
@@ -113,6 +114,16 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     runtimeContext ?? savedSession?.context ?? initialContext;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
+  const statusContext = {
+    context: effectiveContext,
+    cwd: effectiveCwd,
+    panelId,
+    title: effectiveTitle,
+  };
+  const hasStatusBar = hasVisibleTerminalStatusItems(
+    statusItems,
+    statusContext
+  );
 
   // descriptor 由 display + context 组成:
   // - display.short: basename(cwd) — tab strip 稳定显示目录名
