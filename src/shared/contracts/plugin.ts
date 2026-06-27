@@ -38,6 +38,9 @@ export const pluginLocaleMessagesSchema = z.object({
   panels: z
     .record(z.string().min(1), pluginLocalizedContributionSchema)
     .optional(),
+  terminalStatusItems: z
+    .record(z.string().min(1), pluginLocalizedContributionSchema)
+    .optional(),
 });
 export type PluginLocaleMessages = z.infer<typeof pluginLocaleMessagesSchema>;
 
@@ -70,6 +73,16 @@ export type PluginPanelContribution = z.infer<
   typeof pluginPanelContributionSchema
 >;
 
+export const pluginTerminalStatusItemContributionSchema = z.object({
+  description: z.string().min(1).optional(),
+  id: z.string().min(1),
+  permissions: z.array(pierCapabilitySchema).default([]),
+  title: z.string().min(1),
+});
+export type PluginTerminalStatusItemContribution = z.infer<
+  typeof pluginTerminalStatusItemContributionSchema
+>;
+
 export const pluginManifestSchema = z.object({
   apiVersion: z.literal(1),
   commands: z.array(pluginCommandContributionSchema).default([]),
@@ -89,6 +102,9 @@ export const pluginManifestSchema = z.object({
   publisher: z.string().min(1).optional(),
   repository: z.string().min(1).optional(),
   source: pluginSourceSchema,
+  terminalStatusItems: z
+    .array(pluginTerminalStatusItemContributionSchema)
+    .default([]),
   version: z.string().min(1),
 });
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
@@ -106,14 +122,15 @@ export const pluginRegistryStateSchema = z.object({
 export type PluginRegistryState = z.infer<typeof pluginRegistryStateSchema>;
 
 export const pluginRegistryEntrySchema = z.object({
-  commands: z.array(pluginCommandContributionSchema),
   enabled: z.boolean(),
-  id: z.string().min(1),
+  effectivePermissions: z.array(pierCapabilitySchema),
   manifest: pluginManifestSchema,
-  panels: z.array(pluginPanelContributionSchema),
-  permissions: z.array(pierCapabilitySchema),
-  source: pluginSourceSchema,
-  version: z.string().min(1),
+  runtime: z.object({
+    canToggle: z.boolean(),
+    disabledReason: z.string().min(1).optional(),
+    enabled: z.boolean(),
+    kind: z.enum(["builtin", "manifest-only"]),
+  }),
 });
 export type PluginRegistryEntry = z.infer<typeof pluginRegistryEntrySchema>;
 

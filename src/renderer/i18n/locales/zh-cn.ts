@@ -1,3 +1,5 @@
+import { PLUGIN_PERMISSION_LABELS_ZH_CN } from "./plugin-permission-labels.ts";
+
 export const zhCN = {
   settings: {
     title: "设置",
@@ -124,6 +126,7 @@ export const zhCN = {
       status: {
         enabled: "已启用",
         disabled: "已停用",
+        manifestOnly: "仅清单预览",
       },
       action: {
         enable: "启用",
@@ -131,10 +134,30 @@ export const zhCN = {
         enablePlugin: "启用{{name}}",
         disablePlugin: "停用{{name}}",
       },
+      details: {
+        hide: "收起详情",
+        hidePlugin: "收起{{name}}详情",
+        show: "详情",
+        showPlugin: "显示{{name}}详情",
+      },
       permissions: "权限",
       commands: "命令",
       panels: "面板",
+      terminalStatusItems: "终端状态项",
+      pluginId: "插件 ID",
+      version: "版本",
+      publisher: "发布者",
+      contributionSummary: {
+        command: "{{count}} 个命令",
+        commands: "{{count}} 个命令",
+        none: "没有贡献项",
+        panel: "{{count}} 个面板",
+        panels: "{{count}} 个面板",
+        terminalStatusItem: "{{count}} 个终端状态项",
+        terminalStatusItems: "{{count}} 个终端状态项",
+      },
       none: "无",
+      permissionLabels: PLUGIN_PERMISSION_LABELS_ZH_CN,
       loadingTitle: "正在加载插件",
       loadingDescription: "正在读取插件清单...",
       emptyTitle: "没有可用插件",

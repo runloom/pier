@@ -22,13 +22,21 @@ const panelContext: PanelContext = {
   worktreeRoot: "/Users/xyz/ABC/pier",
 };
 
+const sampleCommands = [
+  { id: "sample.list", permissions: [], title: "Sample: List" },
+];
+
+const sampleTerminalStatusItems = [
+  { id: "sample.status", permissions: [], title: "Sample Status" },
+];
+const undeclaredContributionErrorPattern = /not declared/;
+
 const pluginEntry = {
-  commands: [{ id: "sample.list", permissions: [], title: "Sample: List" }],
+  effectivePermissions: [],
   enabled: true,
-  id: "sample.plugin",
   manifest: {
     apiVersion: 1,
-    commands: [{ id: "sample.list", permissions: [], title: "Sample: List" }],
+    commands: sampleCommands,
     engines: { pier: ">=0.1.0" },
     id: "sample.plugin",
     localization: {
@@ -60,12 +68,14 @@ const pluginEntry = {
     panels: [],
     permissions: [],
     source: { kind: "builtin" },
+    terminalStatusItems: sampleTerminalStatusItems,
     version: "1.0.0",
   },
-  panels: [],
-  permissions: [],
-  source: { kind: "builtin" },
-  version: "1.0.0",
+  runtime: {
+    canToggle: true,
+    enabled: true,
+    kind: "builtin",
+  },
 } satisfies PluginRegistryEntry;
 
 beforeAll(async () => {
@@ -128,6 +138,32 @@ describe("createRendererPluginContext", () => {
 
     dispose();
     expect(actionRegistry.get("test.action")).toBeUndefined();
+  });
+
+  it("rejects action registration not declared by the plugin manifest", () => {
+    const context = createRendererPluginContext(pluginEntry);
+
+    expect(() =>
+      context.actions.register({
+        category: "Test",
+        handler: () => undefined,
+        id: "sample.missing",
+        title: () => "Missing",
+      })
+    ).toThrow(undeclaredContributionErrorPattern);
+    expect(actionRegistry.get("sample.missing")).toBeUndefined();
+  });
+
+  it("rejects terminal status registration not declared by the plugin manifest", () => {
+    const context = createRendererPluginContext(pluginEntry);
+
+    expect(() =>
+      context.terminalStatusItems.register({
+        id: "sample.missingStatus",
+        render: () => "status",
+      })
+    ).toThrow(undeclaredContributionErrorPattern);
+    expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
   it("opens quick-pick through the command palette controller", () => {

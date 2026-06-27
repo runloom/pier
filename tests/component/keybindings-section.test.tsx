@@ -6,6 +6,7 @@ import {
   within,
 } from "@testing-library/react";
 import i18next from "i18next";
+import { toast } from "sonner";
 import {
   afterEach,
   beforeAll,
@@ -25,6 +26,12 @@ import { KeybindingsSection } from "@/pages/settings/components/keybindings-sect
 import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
 
 const RAW_PANEL_METADATA_PATTERN = /Panel ·/;
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+  },
+}));
 
 describe("KeybindingsSection", () => {
   beforeAll(async () => {
@@ -153,6 +160,9 @@ describe("KeybindingsSection", () => {
     expect(within(input).getByText("Ctrl")).toBeInTheDocument();
     expect(within(input).getByText("T")).toBeInTheDocument();
     expect(
+      input.querySelector('[data-icon="inline-end"]')
+    ).not.toBeInTheDocument();
+    expect(
       within(row).getByRole("button", { name: "录制 新建终端" })
     ).toHaveAttribute("data-slot", "shortcut-input-trigger");
     unmount();
@@ -175,6 +185,33 @@ describe("KeybindingsSection", () => {
     const input = within(row).getByTestId("shortcut-input");
     expect(input).toHaveAttribute("data-recording", "true");
     expect(within(input).getByText("按下按键...")).toBeInTheDocument();
+    unmount();
+    dispose();
+  });
+
+  it("starts recording when the shortcut trigger receives focus and cancels on blur", () => {
+    const dispose = actionRegistry.register({
+      category: "Panel",
+      handler: vi.fn(),
+      id: "pier.panel.closeOthers",
+      surfaces: ["command-palette"],
+      title: () => "关闭其他面板",
+    });
+
+    const { unmount } = render(<KeybindingsSection />);
+    const trigger = screen.getByRole("button", { name: "录制 关闭其他面板" });
+
+    fireEvent.focus(trigger);
+
+    const row = screen.getByTestId("keybinding-row-pier.panel.closeOthers");
+    const input = within(row).getByTestId("shortcut-input");
+    expect(input).toHaveAttribute("data-recording", "true");
+
+    fireEvent.blur(input);
+
+    expect(within(row).getByTestId("shortcut-input")).not.toHaveAttribute(
+      "data-recording"
+    );
     unmount();
     dispose();
   });
@@ -219,7 +256,7 @@ describe("KeybindingsSection", () => {
     dispose();
   });
 
-  it("shows modifier validation errors inside the active row", () => {
+  it("shows modifier validation errors as a toast", () => {
     const dispose = actionRegistry.register({
       category: "Panel",
       handler: vi.fn(),
@@ -232,15 +269,13 @@ describe("KeybindingsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "录制 新建终端" }));
     fireEvent.keyDown(window, { code: "KeyX", key: "X" });
 
-    const row = screen.getByTestId("keybinding-row-pier.panel.newTerminal");
-    expect(within(row).getByRole("alert")).toHaveTextContent(
-      "快捷键至少需要包含一个修饰键。"
-    );
+    expect(toast.error).toHaveBeenCalledWith("快捷键至少需要包含一个修饰键。");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     unmount();
     dispose();
   });
 
-  it("shows localized conflict errors inside the active row", async () => {
+  it("shows localized conflict errors as a toast", async () => {
     const disposers = [
       actionRegistry.register({
         category: "Panel",
@@ -266,12 +301,10 @@ describe("KeybindingsSection", () => {
       key: "T",
     });
 
-    const row = screen.getByTestId("keybinding-row-pier.panel.splitRight");
     await waitFor(() => {
-      expect(within(row).getByRole("alert")).toHaveTextContent(
-        "已被“新建终端”使用。"
-      );
+      expect(toast.error).toHaveBeenCalledWith("已被“新建终端”使用。");
     });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(window.pier.preferences.update).not.toHaveBeenCalled();
     unmount();
     for (const dispose of disposers) {
@@ -306,8 +339,9 @@ describe("KeybindingsSection", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("新建终端");
+      expect(toast.error).toHaveBeenCalledWith("已被“新建终端”使用。");
     });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(window.pier.preferences.update).not.toHaveBeenCalled();
     unmount();
     for (const dispose of disposers) {

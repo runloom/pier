@@ -15,13 +15,13 @@ export const WORKTREE_PLUGIN_MANIFEST: PluginManifest = {
     {
       category: "Worktree",
       id: "pier.worktree.create",
-      permissions: ["worktree:write"],
+      permissions: [],
       title: "Worktree: Create",
     },
     {
       category: "Worktree",
       id: "pier.worktree.delete",
-      permissions: ["worktree:write"],
+      permissions: [],
       title: "Worktree: Delete...",
     },
   ],
@@ -41,5 +41,12 @@ export const WORKTREE_PLUGIN_MANIFEST: PluginManifest = {
   permissions: ["command:register", "worktree:read", "workspace:open"],
   publisher: "Pier",
   source: { kind: "builtin" },
+  terminalStatusItems: [
+    {
+      id: "pier.worktree.status",
+      permissions: ["worktree:read", "workspace:open"],
+      title: "Worktree Status",
+    },
+  ],
   version: "1.0.0",
 };

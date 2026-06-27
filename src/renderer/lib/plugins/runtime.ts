@@ -29,16 +29,16 @@ export class RendererPluginRuntime {
   refresh(entries: readonly PluginRegistryEntry[]): void {
     this.dispose();
     for (const entry of entries) {
-      if (!(entry.enabled && entry.source.kind === "builtin")) {
+      if (!(entry.runtime.enabled && entry.runtime.kind === "builtin")) {
         continue;
       }
-      const module = this.modules.get(entry.id);
+      const module = this.modules.get(entry.manifest.id);
       if (!module) {
         continue;
       }
       const context = createRendererPluginContext(entry);
       const dispose = module.activate(context);
-      this.disposers.set(entry.id, dispose);
+      this.disposers.set(entry.manifest.id, dispose);
     }
   }
 }

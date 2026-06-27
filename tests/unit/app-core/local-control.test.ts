@@ -20,6 +20,7 @@ import {
   pierCommandEnvelopeSchema,
 } from "@shared/contracts/commands.ts";
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
@@ -66,6 +67,30 @@ async function initRepo(): Promise<string> {
   return await realpath(repo);
 }
 
+function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
+  return {
+    effectivePermissions: [],
+    enabled,
+    manifest: {
+      apiVersion: 1,
+      commands: [],
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: id,
+      panels: [],
+      permissions: [],
+      source: { kind: "builtin" },
+      terminalStatusItems: [],
+      version: "1.0.0",
+    },
+    runtime: {
+      canToggle: true,
+      enabled,
+      kind: "builtin",
+    },
+  };
+}
+
 function cliClientServices(): PierCoreServices {
   return {
     commandPaletteMru: {
@@ -89,26 +114,7 @@ function cliClientServices(): PierCoreServices {
     plugins: {
       inspect: async () => null,
       list: async () => ({ diagnostics: [], entries: [] }),
-      setEnabled: async (id, enabled) => ({
-        commands: [],
-        enabled,
-        id,
-        manifest: {
-          apiVersion: 1,
-          commands: [],
-          engines: { pier: ">=0.1.0" },
-          id,
-          name: id,
-          panels: [],
-          permissions: [],
-          source: { kind: "builtin" },
-          version: "1.0.0",
-        },
-        panels: [],
-        permissions: [],
-        source: { kind: "builtin" },
-        version: "1.0.0",
-      }),
+      setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
     preferences: {
       read: async () => ({

@@ -1,3 +1,5 @@
+import { PLUGIN_PERMISSION_LABELS_EN } from "./plugin-permission-labels.ts";
+
 export const en = {
   settings: {
     title: "Settings",
@@ -127,6 +129,7 @@ export const en = {
       status: {
         enabled: "Enabled",
         disabled: "Disabled",
+        manifestOnly: "Manifest preview",
       },
       action: {
         enable: "Enable",
@@ -134,10 +137,30 @@ export const en = {
         enablePlugin: "Enable {{name}}",
         disablePlugin: "Disable {{name}}",
       },
+      details: {
+        hide: "Hide details",
+        hidePlugin: "Hide {{name}} details",
+        show: "Details",
+        showPlugin: "Show {{name}} details",
+      },
       permissions: "Permissions",
       commands: "Commands",
       panels: "Panels",
+      terminalStatusItems: "Terminal status items",
+      pluginId: "Plugin ID",
+      version: "Version",
+      publisher: "Publisher",
+      contributionSummary: {
+        command: "{{count}} command",
+        commands: "{{count}} commands",
+        none: "No contributions",
+        panel: "{{count}} panel",
+        panels: "{{count}} panels",
+        terminalStatusItem: "{{count}} terminal status item",
+        terminalStatusItems: "{{count}} terminal status items",
+      },
       none: "None",
+      permissionLabels: PLUGIN_PERMISSION_LABELS_EN,
       loadingTitle: "Loading plugins",
       loadingDescription: "Reading plugin manifests...",
       emptyTitle: "No plugins found",
