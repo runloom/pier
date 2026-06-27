@@ -31,17 +31,17 @@ function taskExitTabPatch(
   if (exitCode === 0) {
     return {
       state: {
-        busy: false,
         colorToken: "success",
         label: "Succeeded",
+        status: "succeeded",
       },
     };
   }
   return {
     state: {
-      busy: false,
       colorToken: "destructive",
       label: `Failed ${exitCode}`,
+      status: "failed",
     },
   };
 }

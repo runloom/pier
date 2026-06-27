@@ -13,7 +13,10 @@
  * 样式: 用 dockview 默认 `.dv-default-tab` class 维持 hover/active 状态. 若样式与
  * 改前不一致, inspect DOM 取 dockview 实际默认 tab 的 class 对齐.
  */
-import type { PanelTabTooltip } from "@shared/contracts/panel.ts";
+import type {
+  PanelTabStatus,
+  PanelTabTooltip,
+} from "@shared/contracts/panel.ts";
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
 import {
@@ -26,7 +29,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/primitives/tooltip.tsx";
 import { useT } from "@/i18n/use-t.ts";
@@ -35,6 +37,8 @@ import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
+
+const TAB_TOOLTIP_DELAY_MS = 1000;
 
 function localizedTooltipLabel(
   label: string,
@@ -99,16 +103,51 @@ function localizedTooltipLine(
 function tabTooltipText(
   tooltip: PanelTabTooltip | undefined,
   fallback: string | undefined,
+  stateLabel: string | undefined,
   t: ReturnType<typeof useT>
 ): string | null {
   if (!tooltip) {
-    return fallback ?? null;
+    const lines = [fallback, stateLabel].filter((line): line is string =>
+      Boolean(line)
+    );
+    return lines.length > 0 ? lines.join("\n") : null;
   }
   const lines = [
     tooltip.title,
+    stateLabel,
     ...(tooltip.lines ?? []).map((line) => localizedTooltipLine(line, t)),
   ].filter((line): line is string => Boolean(line));
   return lines.length > 0 ? lines.join("\n") : (fallback ?? null);
+}
+
+function tabAriaLabel(
+  explicit: string | undefined,
+  title: string,
+  stateLabel: string | undefined
+): string | undefined {
+  if (explicit) {
+    return explicit;
+  }
+  if (!stateLabel) {
+    return;
+  }
+  return [title, stateLabel].filter(Boolean).join(", ");
+}
+
+function tabStatusTone(status: PanelTabStatus): string {
+  switch (status) {
+    case "running":
+      return "running";
+    case "waiting":
+    case "blocked":
+      return "warning";
+    case "failed":
+      return "destructive";
+    case "succeeded":
+      return "success";
+    default:
+      return "neutral";
+  }
 }
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
@@ -123,8 +162,20 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const tooltipText = tabTooltipText(
     tab?.tooltip,
     descriptor?.display.long ?? descriptor?.display.terminalTitle,
+    tab?.state?.label,
     t
   );
+  const status = tab?.state?.status;
+  const statusIndicator =
+    status && status !== "idle" ? (
+      <span
+        aria-hidden="true"
+        className="pier-panel-tab-state-indicator shrink-0"
+        data-panel-tab-state-indicator={status}
+        data-tab-state-tone={tabStatusTone(status)}
+        data-tab-status={status}
+      />
+    ) : null;
   const shortcutIndex = useTabShortcutHintsStore((state) =>
     state.commandKeyDown ? state.activeGroupTabHints[props.api.id] : undefined
   );
@@ -173,19 +224,18 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   // 外层是 dockview 自己渲染的 DOM, 不受此 React 树控制.
   const tabContent = (
     <div
-      aria-label={tab?.ariaLabel}
+      aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
       className="dv-default-tab"
       data-panel-tab-id={props.api.id}
-      data-tab-busy={
-        tab?.state?.busy === undefined ? undefined : String(tab.state.busy)
-      }
       data-tab-state-label={tab?.state?.label}
+      data-tab-status={status}
       onContextMenu={onContextMenu}
       role="tab"
       tabIndex={0}
     >
       {leadingVisual}
       <span className="dv-default-tab-content">{displayTitle}</span>
+      {statusIndicator}
       <button
         aria-label="Close tab"
         className="dv-default-tab-action"
@@ -208,13 +258,11 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   }
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{tabContent}</TooltipTrigger>
-        <TooltipContent align="start" side="bottom" sideOffset={8}>
-          <span className="whitespace-pre-line">{tooltipText}</span>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip delayDuration={TAB_TOOLTIP_DELAY_MS}>
+      <TooltipTrigger asChild>{tabContent}</TooltipTrigger>
+      <TooltipContent align="start" side="bottom" sideOffset={8}>
+        <span className="whitespace-pre-line">{tooltipText}</span>
+      </TooltipContent>
+    </Tooltip>
   );
 }

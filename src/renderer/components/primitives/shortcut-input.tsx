@@ -10,7 +10,6 @@ import { Kbd, KbdGroup } from "@/components/primitives/kbd.tsx";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/primitives/tooltip.tsx";
 import { cn } from "@/utils/index.ts";
@@ -89,41 +88,39 @@ export function ShortcutInput({
       )}
       data-testid="shortcut-input"
     >
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              aria-label={recordLabel}
-              aria-pressed="false"
-              className="h-full min-w-0 flex-1 shrink justify-between rounded-xl px-2 text-left font-normal shadow-none hover:bg-muted/70 active:translate-y-0"
-              data-slot="shortcut-input-trigger"
-              onClick={onRecord}
-              onFocus={onRecord}
-              type="button"
-              variant="ghost"
-            >
-              {keyParts.length > 0 ? (
-                <KbdGroup className="min-w-0">
-                  {keyParts.map((part, index) => (
-                    <Kbd
-                      className="h-5 min-w-5 rounded-md border border-border bg-muted/70 px-2 text-xs shadow-xs"
-                      data-testid="shortcut-input-key"
-                      key={`${part}-${index}`}
-                    >
-                      {part}
-                    </Kbd>
-                  ))}
-                </KbdGroup>
-              ) : (
-                <span className="min-w-0 truncate text-muted-foreground">
-                  {placeholder}
-                </span>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{tooltipLabel}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            aria-label={recordLabel}
+            aria-pressed="false"
+            className="h-full min-w-0 flex-1 shrink justify-between rounded-xl px-2 text-left font-normal shadow-none hover:bg-muted/70 active:translate-y-0"
+            data-slot="shortcut-input-trigger"
+            onClick={onRecord}
+            onFocus={onRecord}
+            type="button"
+            variant="ghost"
+          >
+            {keyParts.length > 0 ? (
+              <KbdGroup className="min-w-0">
+                {keyParts.map((part, index) => (
+                  <Kbd
+                    className="h-5 min-w-5 rounded-md border border-border bg-muted/70 px-2 text-xs shadow-xs"
+                    data-testid="shortcut-input-key"
+                    key={`${part}-${index}`}
+                  >
+                    {part}
+                  </Kbd>
+                ))}
+              </KbdGroup>
+            ) : (
+              <span className="min-w-0 truncate text-muted-foreground">
+                {placeholder}
+              </span>
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{tooltipLabel}</TooltipContent>
+      </Tooltip>
       <InputGroupAddon
         align="inline-end"
         className="gap-0 p-0 pr-0 has-[>button]:mr-0"

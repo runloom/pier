@@ -60,12 +60,22 @@ export const panelTabBadgeSchema = z
   .strict();
 export type PanelTabBadge = z.infer<typeof panelTabBadgeSchema>;
 
+export const panelTabStatusSchema = z.enum([
+  "idle",
+  "running",
+  "waiting",
+  "blocked",
+  "succeeded",
+  "failed",
+]);
+export type PanelTabStatus = z.infer<typeof panelTabStatusSchema>;
+
 export const panelTabStateSchema = z
   .object({
-    busy: z.boolean().optional(),
     colorToken: z.string().min(1).optional(),
     icon: panelTabIconSchema.optional(),
     label: z.string().min(1).optional(),
+    status: panelTabStatusSchema.optional(),
   })
   .strict();
 export type PanelTabState = z.infer<typeof panelTabStateSchema>;
@@ -98,6 +108,67 @@ export const panelTabChromeSchema = z
   })
   .strict();
 export type PanelTabChrome = z.infer<typeof panelTabChromeSchema>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function legacyStatusFromState(
+  state: Record<string, unknown>
+): PanelTabStatus | undefined {
+  const canonical = panelTabStatusSchema.safeParse(state.status);
+  if (canonical.success) {
+    return canonical.data;
+  }
+
+  if (state.busy === true) {
+    return "running";
+  }
+  if (state.busy !== false) {
+    return;
+  }
+
+  if (state.colorToken === "success") {
+    return "succeeded";
+  }
+  if (
+    state.colorToken === "destructive" ||
+    (typeof state.label === "string" && state.label.startsWith("Failed"))
+  ) {
+    return "failed";
+  }
+  return "idle";
+}
+
+function normalizePanelTabStateInput(state: unknown): unknown {
+  if (!isRecord(state)) {
+    return state;
+  }
+  const { busy: _legacyBusy, ...stateWithoutBusy } = state;
+  const status = legacyStatusFromState(state);
+  return status
+    ? {
+        ...stateWithoutBusy,
+        status,
+      }
+    : stateWithoutBusy;
+}
+
+export function normalizePanelTabChromeInput(
+  input: unknown
+): PanelTabChrome | undefined {
+  if (!isRecord(input)) {
+    return;
+  }
+  const normalized = {
+    ...input,
+    ...("state" in input
+      ? { state: normalizePanelTabStateInput(input.state) }
+      : {}),
+  };
+  const parsed = panelTabChromeSchema.safeParse(normalized);
+  return parsed.success ? parsed.data : undefined;
+}
 
 export const panelDescriptorSchema = z.object({
   context: panelContextSchema.optional(),

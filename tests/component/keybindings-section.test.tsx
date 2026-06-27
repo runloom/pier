@@ -1,11 +1,13 @@
 import {
   fireEvent,
-  render,
+  type RenderOptions,
+  render as renderBase,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import i18next from "i18next";
+import type { ReactElement } from "react";
 import { toast } from "sonner";
 import {
   afterEach,
@@ -16,6 +18,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -26,6 +29,10 @@ import { KeybindingsSection } from "@/pages/settings/components/keybindings-sect
 import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
 
 const RAW_PANEL_METADATA_PATTERN = /Panel ·/;
+
+function render(ui: ReactElement, options?: RenderOptions) {
+  return renderBase(<TooltipProvider>{ui}</TooltipProvider>, options);
+}
 
 vi.mock("sonner", () => ({
   toast: {

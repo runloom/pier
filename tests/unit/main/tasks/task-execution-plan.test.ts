@@ -133,7 +133,7 @@ describe("task execution planning", () => {
     expect(plan.launches[1]?.tab).toMatchObject({
       badge: { label: "VS Code" },
       icon: { id: "pier.task", label: "Task" },
-      state: { busy: true, label: "Running" },
+      state: { label: "Running", status: "running" },
       title: "verify",
       tooltip: {
         lines: expect.arrayContaining([

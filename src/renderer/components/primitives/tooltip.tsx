@@ -5,12 +5,14 @@ import { cn } from "@/utils/index.ts";
 
 function TooltipProvider({
   delayDuration = 0,
+  disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
+      disableHoverableContent={disableHoverableContent}
       {...props}
     />
   );
@@ -29,18 +31,29 @@ function TooltipTrigger({
 }
 
 function TooltipContent({
-  className,
-  sideOffset = 0,
-  side = "top",
+  align = "center",
   children,
+  className,
+  side = "top",
+  sideOffset = 0,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
   const showArrow = side === "top" || side === "bottom";
+  const arrowXClass =
+    align === "start"
+      ? "before:left-[calc(var(--radix-tooltip-trigger-width)/2)] before:-translate-x-1/2"
+      : align === "end"
+        ? "before:right-[calc(var(--radix-tooltip-trigger-width)/2)] before:translate-x-1/2"
+        : "before:left-1/2 before:-translate-x-1/2";
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
+        align={align}
         className={cn(
-          "app-no-drag data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 z-50 inline-flex w-fit max-w-xs origin-(--radix-tooltip-content-transform-origin) items-center gap-1.5 rounded-xl bg-foreground px-3 py-1.5 text-background text-xs has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
+          "app-no-drag data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 relative z-50 inline-flex w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) items-center gap-1 rounded-xl bg-foreground px-2 py-1 text-[11px] text-background leading-snug has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
+          showArrow &&
+            "before:pointer-events-none before:absolute before:size-2.5 before:rotate-45 before:rounded-[2px] before:bg-foreground before:content-[''] data-[side=bottom]:before:top-0 data-[side=top]:before:bottom-0 data-[side=bottom]:before:translate-y-[-50%] data-[side=top]:before:translate-y-[50%]",
+          showArrow && arrowXClass,
           className
         )}
         data-slot="tooltip-content"
@@ -49,9 +62,6 @@ function TooltipContent({
         {...props}
       >
         {children}
-        {showArrow && (
-          <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
-        )}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );
