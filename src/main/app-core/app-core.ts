@@ -1,9 +1,14 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import { app } from "electron";
+import {
+  createMainPluginHostApi,
+  type MainPluginHostApi,
+} from "../plugins/host-api.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
+import { createDefaultPluginSources } from "../services/plugin-sources.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
@@ -28,6 +33,7 @@ export interface PierAppCore {
   clients: PierClientRegistry;
   commandRouter: CommandRouter;
   eventBus: PierEventBus;
+  pluginHost: MainPluginHostApi;
   services: PierCoreServices;
 }
 
@@ -86,12 +92,15 @@ function createPierAppCore(): PierAppCore {
   const rendererCommand = createRendererCommandService({
     host: { send: sendRendererCommand },
   });
+  const pluginHost = createMainPluginHostApi({
+    plugins: createPluginService({ sources: createDefaultPluginSources }),
+  });
   const services: PierCoreServices = {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
     preferences: createPreferencesService({ eventBus }),
-    plugins: createPluginService(),
+    plugins: pluginHost.plugins,
     panelContexts: createPanelContextService(),
     rendererCommand,
     terminalProfiles: createTerminalProfileService(),
@@ -114,6 +123,7 @@ function createPierAppCore(): PierAppCore {
     clients,
     commandRouter: createCommandRouter({ clients, services }),
     eventBus,
+    pluginHost,
     services,
   };
 }

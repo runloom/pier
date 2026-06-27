@@ -1,0 +1,29 @@
+{
+  "commands": {
+    "pier.worktree.create": {
+      "description": "创建工作树入口当前仅展示，暂未开放。",
+      "title": "创建工作树"
+    },
+    "pier.worktree.delete": {
+      "description": "删除工作树入口当前仅展示，暂未开放。",
+      "title": "删除工作树..."
+    },
+    "pier.worktree.list": {
+      "description": "列出当前仓库的 Git worktree 并打开目标工作树。",
+      "title": "工作树列表"
+    }
+  },
+  "description": "提供工作树命令面板入口和终端状态栏支持。",
+  "messages": {
+    "ui.createUnavailable": "创建工作树暂未开放",
+    "ui.deleteUnavailable": "删除工作树暂未开放",
+    "ui.locked": "已锁定",
+    "ui.main": "主工作树",
+    "ui.mainWithBranch": "主工作树（{{branch}}）",
+    "ui.selectPlaceholder": "选择工作树…",
+    "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
+    "ui.title": "工作树",
+    "ui.unsupported": "当前目录不支持 Git worktree"
+  },
+  "name": "工作树"
+}

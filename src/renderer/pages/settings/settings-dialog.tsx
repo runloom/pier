@@ -19,6 +19,7 @@ import {
 import { useT } from "@/i18n/use-t.ts";
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
 import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
+import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
 import {
   NAV_ITEMS,
@@ -100,6 +101,7 @@ export function SettingsDialog() {
             {activeSection === "appearance" ? <AppearanceSection /> : null}
             {activeSection === "terminal" ? <TerminalSection /> : null}
             {activeSection === "keybindings" ? <KeybindingsSection /> : null}
+            {activeSection === "plugins" ? <PluginsSection /> : null}
           </main>
         </SidebarProvider>
       </DialogContent>

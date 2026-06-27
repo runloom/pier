@@ -199,13 +199,28 @@ describe("bin/pier.mjs", () => {
       },
       json: true,
     });
+
+    const disable = await execFileAsync("node", [
+      "bin/pier.mjs",
+      "plugins",
+      "disable",
+      "pier.worktree",
+      "--json",
+      "--print-envelope",
+    ]);
+    expect(JSON.parse(disable.stdout)).toMatchObject({
+      envelope: {
+        command: { id: "pier.worktree", type: "plugin.disable" },
+      },
+      json: true,
+    });
   });
 
   it("usage 包含 plugins 命令", async () => {
     await expect(
       execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
     ).rejects.toMatchObject({
-      stderr: expect.stringContaining("pier plugins inspect <id> --json"),
+      stderr: expect.stringContaining("pier plugins disable <id> --json"),
     });
   });
 

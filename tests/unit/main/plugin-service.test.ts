@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -6,7 +6,7 @@ import {
   type PluginServiceError,
 } from "@main/services/plugin-service.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const tempDirs: string[] = [];
 
@@ -68,12 +68,80 @@ describe("pluginManifestSchema", () => {
     });
   });
 
+  it("支持插件自带 localization 配置和内联 locales", () => {
+    expect(
+      pluginManifestSchema.parse({
+        ...builtinManifest,
+        localization: {
+          defaultLocale: "en",
+          files: { "zh-CN": "locales/zh-CN.json" },
+          locales: ["en", "zh-CN"],
+        },
+        locales: {
+          "zh-CN": {
+            commands: {
+              "sample.sayHello": {
+                description: "输出问候语。",
+                title: "打招呼",
+              },
+            },
+            description: "示例内置插件",
+            messages: {
+              "ui.title": "示例",
+            },
+            name: "示例内置",
+            panels: {
+              "sample.panel": {
+                description: "展示示例内容。",
+                title: "示例面板",
+              },
+            },
+          },
+        },
+      })
+    ).toMatchObject({
+      localization: {
+        defaultLocale: "en",
+        files: { "zh-CN": "locales/zh-CN.json" },
+        locales: ["en", "zh-CN"],
+      },
+      locales: {
+        "zh-CN": {
+          commands: {
+            "sample.sayHello": { title: "打招呼" },
+          },
+          description: "示例内置插件",
+          messages: {
+            "ui.title": "示例",
+          },
+          name: "示例内置",
+          panels: {
+            "sample.panel": { title: "示例面板" },
+          },
+        },
+      },
+    });
+  });
+
   it("拒绝无效 manifest", () => {
     expect(() =>
       pluginManifestSchema.parse({
         ...builtinManifest,
         id: "",
         source: { kind: "remote" },
+      })
+    ).toThrow();
+  });
+
+  it("拒绝空的插件国际化文案", () => {
+    expect(() =>
+      pluginManifestSchema.parse({
+        ...builtinManifest,
+        locales: {
+          "zh-CN": {
+            name: "",
+          },
+        },
       })
     ).toThrow();
   });
@@ -136,6 +204,98 @@ describe("createPluginService", () => {
     });
   });
 
+  it("读取 local 插件目录内的 locale JSON 并合并到 registry entry", async () => {
+    const dir = await makeTempDir();
+    const localPath = join(dir, "pier-plugin.json");
+    const localePath = join(dir, "locales", "zh-CN.json");
+    await mkdir(join(dir, "locales"), { recursive: true });
+    await writeFile(
+      localPath,
+      JSON.stringify({
+        ...builtinManifest,
+        id: "sample.local",
+        localization: {
+          defaultLocale: "en",
+          files: { "zh-CN": "locales/zh-CN.json" },
+          locales: ["en", "zh-CN"],
+        },
+        name: "Sample Local",
+        source: { kind: "local", url: localPath },
+      })
+    );
+    await writeFile(
+      localePath,
+      JSON.stringify({
+        commands: {
+          "sample.sayHello": { title: "打招呼" },
+        },
+        description: "本地示例插件",
+        name: "本地示例",
+      })
+    );
+    const service = createPluginService({
+      sources: [{ kind: "local", path: localPath }],
+      state: emptyState,
+    });
+
+    await expect(service.inspect("sample.local")).resolves.toMatchObject({
+      id: "sample.local",
+      manifest: {
+        locales: {
+          "zh-CN": {
+            commands: {
+              "sample.sayHello": { title: "打招呼" },
+            },
+            description: "本地示例插件",
+            name: "本地示例",
+          },
+        },
+      },
+    });
+  });
+
+  it("local 插件 locale JSON 错误不阻断 manifest 发现并返回诊断", async () => {
+    const dir = await makeTempDir();
+    const localPath = join(dir, "pier-plugin.json");
+    const localePath = join(dir, "locales", "zh-CN.json");
+    await mkdir(join(dir, "locales"), { recursive: true });
+    await writeFile(
+      localPath,
+      JSON.stringify({
+        ...builtinManifest,
+        id: "sample.local",
+        localization: {
+          defaultLocale: "en",
+          files: { "zh-CN": "locales/zh-CN.json" },
+          locales: ["en", "zh-CN"],
+        },
+        name: "Sample Local",
+        source: { kind: "local", url: localPath },
+      })
+    );
+    await writeFile(localePath, JSON.stringify({ name: "" }));
+    const service = createPluginService({
+      sources: [{ kind: "local", path: localPath }],
+      state: emptyState,
+    });
+
+    await expect(service.list()).resolves.toMatchObject({
+      diagnostics: [
+        {
+          code: "invalid_manifest",
+          message: "invalid plugin locale",
+          source: { kind: "local", path: localePath },
+        },
+      ],
+      entries: [
+        {
+          id: "sample.local",
+          manifest: { name: "Sample Local" },
+        },
+      ],
+    });
+  });
+
   it("enabled/disabled 状态由 userData state 决定", async () => {
     let enabled = false;
     const service = createPluginService({
@@ -163,6 +323,90 @@ describe("createPluginService", () => {
       service.setEnabled("sample.builtin", true)
     ).resolves.toMatchObject({
       enabled: true,
+    });
+  });
+
+  it("local manifest 只允许发现和 inspect，暂不允许启停", async () => {
+    const dir = await makeTempDir();
+    const localPath = join(dir, "pier-plugin.json");
+    await writeFile(
+      localPath,
+      JSON.stringify({
+        ...builtinManifest,
+        id: "sample.local",
+        name: "Sample Local",
+        source: { kind: "local", url: localPath },
+      })
+    );
+    const setEnabled = vi.fn(emptyState.setEnabled);
+    const service = createPluginService({
+      sources: [{ kind: "local", path: localPath }],
+      state: {
+        read: emptyState.read,
+        setEnabled,
+      },
+    });
+
+    await expect(service.inspect("sample.local")).resolves.toMatchObject({
+      id: "sample.local",
+      source: { kind: "local" },
+    });
+    await expect(
+      service.setEnabled("sample.local", true)
+    ).rejects.toMatchObject({
+      code: "unsupported",
+      message: "plugin source kind cannot be enabled yet: local",
+    });
+    expect(setEnabled).not.toHaveBeenCalled();
+  });
+
+  it("内置插件可声明默认启用，且 userData 禁用状态优先", async () => {
+    let enabled = false;
+    const service = createPluginService({
+      sources: [
+        { defaultEnabled: true, kind: "builtin", manifest: builtinManifest },
+      ],
+      state: {
+        read: () =>
+          Promise.resolve({
+            plugins: enabled
+              ? {}
+              : { "sample.builtin": { enabled: false, updatedAt: 1 } },
+            version: 1,
+          }),
+        setEnabled: (_id, nextEnabled) => {
+          enabled = nextEnabled;
+          return Promise.resolve({
+            plugins: {
+              "sample.builtin": { enabled: nextEnabled, updatedAt: 2 },
+            },
+            version: 1,
+          });
+        },
+      },
+    });
+
+    await expect(service.inspect("sample.builtin")).resolves.toMatchObject({
+      enabled: false,
+    });
+    await expect(
+      service.setEnabled("sample.builtin", true)
+    ).resolves.toMatchObject({
+      enabled: true,
+    });
+  });
+
+  it("内置插件未写 userData 状态时使用默认启用值", async () => {
+    const service = createPluginService({
+      sources: [
+        { defaultEnabled: true, kind: "builtin", manifest: builtinManifest },
+      ],
+      state: emptyState,
+    });
+
+    await expect(service.inspect("sample.builtin")).resolves.toMatchObject({
+      enabled: true,
+      id: "sample.builtin",
     });
   });
 

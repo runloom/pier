@@ -8,6 +8,7 @@ import {
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { installCsp } from "./csp.ts";
+import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
@@ -129,6 +130,7 @@ function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
 
 app.whenReady().then(async () => {
   installCsp();
+  await appCore.pluginHost.refresh();
   await installAppMenu({
     appName: app.name,
     eventBus: appCore.eventBus,
@@ -177,6 +179,7 @@ app.whenReady().then(async () => {
   }
 
   registerWindowIpc(ipcMain);
+  registerCommandIpc(ipcMain);
   registerMenuIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
   registerRendererCommandIpc(ipcMain);

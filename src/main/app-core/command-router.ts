@@ -166,6 +166,16 @@ async function executePluginCommand(
   switch (command.type) {
     case "plugin.list":
       return success(requestId, await services.plugins.list());
+    case "plugin.disable":
+      return success(
+        requestId,
+        await services.plugins.setEnabled(command.id, false)
+      );
+    case "plugin.enable":
+      return success(
+        requestId,
+        await services.plugins.setEnabled(command.id, true)
+      );
     case "plugin.inspect": {
       const plugin = await services.plugins.inspect(command.id);
       if (!plugin) {
@@ -188,6 +198,8 @@ async function executeWorktreeCommand(
   services: PierCoreServices
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
+    case "worktree.check":
+      return success(requestId, await services.worktrees.check(command));
     case "worktree.list":
       return success(requestId, await services.worktrees.list(command));
     case "worktree.create":

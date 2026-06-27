@@ -26,6 +26,14 @@ module.exports = {
       },
     },
     {
+      name: "plugins-not-import-host-implementations",
+      severity: "error",
+      comment:
+        "插件包不能 import main/renderer 宿主实现, 必须通过 src/plugins/api 或 shared 契约接入",
+      from: { path: "^src/plugins" },
+      to: { path: "^src/(main|renderer)" },
+    },
+    {
       name: "renderer-no-direct-dockview-core",
       severity: "error",
       comment:

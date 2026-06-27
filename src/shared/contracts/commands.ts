@@ -7,6 +7,7 @@ import {
 } from "./terminal-launch.ts";
 import {
   type WorktreeOperationErrorReason,
+  worktreeCheckRequestSchema,
   worktreeCreateRequestSchema,
   worktreeListRequestSchema,
   worktreeOpenRequestSchema,
@@ -107,6 +108,9 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   worktreeListRequestSchema.extend({
     type: z.literal("worktree.list"),
   }),
+  worktreeCheckRequestSchema.extend({
+    type: z.literal("worktree.check"),
+  }),
   worktreeCreateRequestSchema.extend({
     type: z.literal("worktree.create"),
   }),
@@ -122,6 +126,12 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("plugin.list") }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.inspect"),
+  }),
+  pluginInspectRequestSchema.extend({
+    type: z.literal("plugin.enable"),
+  }),
+  pluginInspectRequestSchema.extend({
+    type: z.literal("plugin.disable"),
   }),
 ]);
 

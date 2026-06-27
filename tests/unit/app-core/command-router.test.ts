@@ -1,6 +1,7 @@
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
+import { PluginServiceError } from "@main/services/plugin-service.ts";
 import { WorktreeServiceError } from "@main/services/worktree-service.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
 import {
@@ -292,6 +293,12 @@ function services(
       saveLayout: async () => undefined,
     },
     worktrees: {
+      check: async (args) => ({
+        currentPath: args.path,
+        mainPath: "/repo",
+        path: args.path,
+        status: "supported",
+      }),
       create: async (args) => ({
         created: {
           bare: false,
@@ -997,6 +1004,31 @@ describe("createCommandRouter", () => {
     });
   });
 
+  it("分发 worktree.check 到 worktree service", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { path: "/repo", type: "worktree.check" },
+        protocolVersion: 1,
+        requestId: "req-worktree-check",
+      })
+    ).resolves.toEqual({
+      data: {
+        currentPath: "/repo",
+        mainPath: "/repo",
+        path: "/repo",
+        status: "supported",
+      },
+      ok: true,
+      requestId: "req-worktree-check",
+    });
+  });
+
   it("把 worktree service 错误映射为稳定命令错误", async () => {
     const fakeServices = services();
     fakeServices.worktrees.create = () =>
@@ -1078,6 +1110,81 @@ describe("createCommandRouter", () => {
       },
       ok: true,
       requestId: "req-plugin-inspect",
+    });
+  });
+
+  it("分发 plugin.enable 和 plugin.disable", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.builtin", type: "plugin.disable" },
+        protocolVersion: 1,
+        requestId: "req-plugin-disable",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        enabled: false,
+        id: "sample.builtin",
+      },
+      ok: true,
+      requestId: "req-plugin-disable",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.builtin", type: "plugin.enable" },
+        protocolVersion: 1,
+        requestId: "req-plugin-enable",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        enabled: true,
+        id: "sample.builtin",
+      },
+      ok: true,
+      requestId: "req-plugin-enable",
+    });
+  });
+
+  it("local plugin enable/disable 暂不支持时返回 unsupported", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: {
+        ...services(),
+        plugins: {
+          inspect: async () => null,
+          list: async () => ({ diagnostics: [], entries: [] }),
+          setEnabled: () =>
+            Promise.reject(
+              new PluginServiceError(
+                "unsupported",
+                "plugin source kind cannot be enabled yet: local"
+              )
+            ),
+        },
+      },
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.local", type: "plugin.enable" },
+        protocolVersion: 1,
+        requestId: "req-plugin-enable-local",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "unsupported",
+        message: "plugin source kind cannot be enabled yet: local",
+      },
+      ok: false,
+      requestId: "req-plugin-enable-local",
     });
   });
 

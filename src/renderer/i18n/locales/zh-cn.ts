@@ -5,12 +5,14 @@ export const zhCN = {
     nav: {
       appearance: "外观",
       keybindings: "快捷键",
+      plugins: "插件",
       terminal: "终端",
     },
     section: {
       appearance: "外观",
       font: "字体",
       keybindings: "快捷键",
+      plugins: "插件",
       terminal: "终端",
     },
     row: {
@@ -114,6 +116,37 @@ export const zhCN = {
       resetAll: "全部重置",
       unassigned: "未设置",
     },
+    plugins: {
+      title: "插件",
+      description:
+        "内置插件可以在这里启用或停用。本地插件在当前版本只读取插件清单，不执行第三方代码。",
+      status: {
+        enabled: "已启用",
+        disabled: "已停用",
+      },
+      action: {
+        enable: "启用",
+        disable: "停用",
+        enablePlugin: "启用{{name}}",
+        disablePlugin: "停用{{name}}",
+      },
+      permissions: "权限",
+      commands: "命令",
+      panels: "面板",
+      none: "无",
+      loadingTitle: "正在加载插件",
+      loadingDescription: "正在读取插件清单...",
+      emptyTitle: "没有可用插件",
+      emptyDescription: "发现内置或本地插件后会显示在这里。",
+      diagnosticsTitle: "插件诊断",
+      errorTitle: "无法加载插件",
+      source: {
+        builtin: "内置",
+        local: "本地",
+        git: "Git",
+        registry: "Registry",
+      },
+    },
     theme: {
       light: "浅色",
       dark: "深色",
@@ -161,6 +194,7 @@ export const zhCN = {
       view: "视图",
       settings: "设置",
       workspace: "工作区",
+      worktree: "工作树",
       run: "运行",
       panel: "面板",
       terminal: "终端",

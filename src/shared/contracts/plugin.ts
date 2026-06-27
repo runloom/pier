@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
 
+export const WORKTREE_PLUGIN_ID = "pier.worktree";
+
 export const pluginSourceKindSchema = z.enum([
   "builtin",
   "local",
@@ -15,6 +17,36 @@ export const pluginSourceSchema = z.object({
   url: z.string().min(1).optional(),
 });
 export type PluginSource = z.infer<typeof pluginSourceSchema>;
+
+const pluginLocaleCodeSchema = z.string().min(1);
+
+export const pluginLocalizedContributionSchema = z.object({
+  description: z.string().min(1).optional(),
+  title: z.string().min(1).optional(),
+});
+export type PluginLocalizedContribution = z.infer<
+  typeof pluginLocalizedContributionSchema
+>;
+
+export const pluginLocaleMessagesSchema = z.object({
+  commands: z
+    .record(z.string().min(1), pluginLocalizedContributionSchema)
+    .optional(),
+  description: z.string().min(1).optional(),
+  messages: z.record(z.string().min(1), z.string().min(1)).optional(),
+  name: z.string().min(1).optional(),
+  panels: z
+    .record(z.string().min(1), pluginLocalizedContributionSchema)
+    .optional(),
+});
+export type PluginLocaleMessages = z.infer<typeof pluginLocaleMessagesSchema>;
+
+export const pluginLocalizationSchema = z.object({
+  defaultLocale: pluginLocaleCodeSchema,
+  files: z.record(pluginLocaleCodeSchema, z.string().min(1)).default({}),
+  locales: z.array(pluginLocaleCodeSchema).default([]),
+});
+export type PluginLocalization = z.infer<typeof pluginLocalizationSchema>;
 
 export const pluginCommandContributionSchema = z.object({
   category: z.string().min(1).optional(),
@@ -47,6 +79,10 @@ export const pluginManifestSchema = z.object({
   }),
   homepage: z.string().min(1).optional(),
   id: z.string().min(1),
+  localization: pluginLocalizationSchema.optional(),
+  locales: z
+    .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
+    .optional(),
   name: z.string().min(1),
   panels: z.array(pluginPanelContributionSchema).default([]),
   permissions: z.array(pierCapabilitySchema).default([]),

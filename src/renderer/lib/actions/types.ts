@@ -32,6 +32,7 @@ export interface ActionMetadata {
 
 export interface Action {
   category: string;
+  disabledReason?: () => string | null | undefined;
   enabled?: () => boolean;
   handler: () => void | Promise<void>;
   id: string;

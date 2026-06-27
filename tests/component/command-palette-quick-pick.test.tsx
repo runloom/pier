@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { initI18n } from "@/i18n/index.ts";
+import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 
 class TestResizeObserver {
@@ -147,5 +148,34 @@ describe("CommandPalette quick pick rows", () => {
       "aria-current",
       "true"
     );
+  });
+
+  it("marks disabled command actions as disabled and shows the reason", async () => {
+    const dispose = actionRegistry.register({
+      category: "Worktree",
+      disabledReason: () => "Worktree creation is not available yet",
+      enabled: () => false,
+      handler: vi.fn(),
+      id: "test.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Worktree: Create",
+    });
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openPalette();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Worktree: Create")).toBeVisible();
+    });
+    expect(
+      screen.getByText("Worktree: Create").closest("[cmdk-item]")
+    ).toHaveAttribute("data-disabled", "true");
+    expect(
+      screen.getByText("Worktree creation is not available yet")
+    ).toBeVisible();
+
+    dispose();
   });
 });

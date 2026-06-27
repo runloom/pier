@@ -23,6 +23,10 @@ import {
   updateTerminalPanelLifecycleDebug,
 } from "./terminal-lifecycle-debug.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
+import {
+  TerminalStatusBar,
+  useTerminalStatusItems,
+} from "./terminal-status-bar.tsx";
 
 function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
   return new Promise((resolve) => {
@@ -84,6 +88,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     windowZoomLevel
   );
   const anchorRef = useRef<HTMLDivElement>(null);
+  const hasStatusBar = useTerminalStatusItems().length > 0;
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [savedSession, setSavedSession] = useState<
@@ -416,28 +421,40 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const terminalSurfaceStyle = {
     backgroundColor: "var(--terminal-background, var(--background))",
   };
+  const terminalContentClassName = hasStatusBar
+    ? "absolute inset-x-0 top-0 bottom-6"
+    : "absolute inset-0";
   return (
     <div
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-testid="terminal-panel-root"
     >
-      <div className="terminal-anchor absolute inset-0" ref={anchorRef} />
+      <div
+        className={`terminal-anchor ${terminalContentClassName}`}
+        ref={anchorRef}
+      />
       {nativeTerminalReady || error ? null : (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
+          className={`pointer-events-none ${terminalContentClassName}`}
           data-testid="terminal-placeholder"
           style={terminalSurfaceStyle}
         />
       )}
       {error ? (
         <div
-          className="absolute inset-0 flex items-center justify-center"
+          className={`${terminalContentClassName} flex items-center justify-center`}
           style={terminalSurfaceStyle}
         >
           <p className="text-muted-foreground text-sm">{error}</p>
         </div>
       ) : null}
+      <TerminalStatusBar
+        context={effectiveContext}
+        cwd={effectiveCwd}
+        panelId={panelId}
+        title={effectiveTitle}
+      />
     </div>
   );
 }

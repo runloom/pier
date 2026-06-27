@@ -22,6 +22,8 @@ export function usage() {
     "  pier worktrees open <path> --json",
     "  pier plugins list --json",
     "  pier plugins inspect <id> --json",
+    "  pier plugins enable <id> --json",
+    "  pier plugins disable <id> --json",
     "  pier preferences read --json",
   ].join("\n");
 }
@@ -370,6 +372,15 @@ function parsePlugins(action, value, unexpected) {
     return {
       id: requireValue(value),
       type: "plugin.inspect",
+    };
+  }
+  if (action === "enable" || action === "disable") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return {
+      id: requireValue(value),
+      type: `plugin.${action}`,
     };
   }
   throw new Error("unknown pier CLI command");

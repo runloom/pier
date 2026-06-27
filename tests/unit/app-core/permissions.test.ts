@@ -182,6 +182,33 @@ describe("authorizeCommand", () => {
     });
   });
 
+  it("插件启停需要 plugin:write，CLI/MCP 默认客户端不能修改插件状态", () => {
+    expect(
+      authorizeCommand(
+        { id: "pier.worktree", type: "plugin.disable" },
+        client("desktop-renderer")
+      )
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand(
+        { id: "pier.worktree", type: "plugin.enable" },
+        client("cli-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: plugin:write",
+    });
+    expect(
+      authorizeCommand(
+        { id: "pier.worktree", type: "plugin.disable" },
+        client("mcp-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: plugin:write",
+    });
+  });
+
   it("允许 MCP 默认客户端读取工作区状态", () => {
     expect(
       authorizeCommand({ type: "panel.list" }, client("mcp-local"))

@@ -11,6 +11,7 @@ export default defineConfig({
       "@shared": resolve(import.meta.dirname, "src/shared"),
       "@main": resolve(import.meta.dirname, "src/main"),
       "@preload": resolve(import.meta.dirname, "src/preload"),
+      "@plugins": resolve(import.meta.dirname, "src/plugins"),
     },
   },
   test: {

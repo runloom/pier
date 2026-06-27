@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type {
+  PluginLocaleMessages,
   PluginManifest,
   PluginRegistryDiagnostic,
   PluginRegistryDiagnosticSource,
@@ -13,6 +15,7 @@ import {
   readPluginState,
   setPluginEnabledState,
 } from "../state/plugin-state.ts";
+import { loadManifestLocaleFiles } from "./plugin-localization.ts";
 
 export type PluginServiceErrorCode =
   | "invalid_manifest"
@@ -30,9 +33,21 @@ export class PluginServiceError extends Error {
 }
 
 export type PluginDiscoverySource =
-  | { kind: "builtin"; manifest: unknown }
+  | {
+      baseDir?: string;
+      defaultEnabled?: boolean;
+      kind: "builtin";
+      locales?: Record<string, PluginLocaleMessages>;
+      manifest: unknown;
+    }
   | { kind: "local"; path: string }
   | { kind: "git" | "registry"; integrity?: string; url?: string };
+
+export type PluginDiscoverySourceProvider =
+  | readonly PluginDiscoverySource[]
+  | (() =>
+      | Promise<readonly PluginDiscoverySource[]>
+      | readonly PluginDiscoverySource[]);
 
 export interface PluginStateStore {
   read(): Promise<PluginRegistryState>;
@@ -47,7 +62,7 @@ export interface PluginService {
 
 export interface CreatePluginServiceOptions {
   readTextFile?: (path: string) => Promise<string>;
-  sources?: PluginDiscoverySource[];
+  sources?: PluginDiscoverySourceProvider;
   state?: PluginStateStore;
 }
 
@@ -62,11 +77,14 @@ function sourceFromManifest(manifest: PluginManifest): PluginSource {
 
 function entryFromManifest(
   manifest: PluginManifest,
-  state: PluginRegistryState
+  state: PluginRegistryState,
+  source: PluginDiscoverySource
 ): PluginRegistryEntry {
   return {
     commands: manifest.commands,
-    enabled: state.plugins[manifest.id]?.enabled ?? false,
+    enabled:
+      state.plugins[manifest.id]?.enabled ??
+      (source.kind === "builtin" && source.defaultEnabled === true),
     id: manifest.id,
     manifest,
     panels: manifest.panels,
@@ -124,6 +142,22 @@ function parseManifest(raw: unknown): PluginManifest {
   return parsed.data;
 }
 
+function localeBaseDir(source: PluginDiscoverySource): string | null {
+  switch (source.kind) {
+    case "builtin":
+      return source.baseDir ?? null;
+    case "local":
+      return dirname(source.path);
+    case "git":
+    case "registry":
+      return null;
+    default: {
+      const _exhaustive: never = source;
+      return _exhaustive;
+    }
+  }
+}
+
 async function readLocalManifest(
   path: string,
   readTextFile: (path: string) => Promise<string>
@@ -165,12 +199,29 @@ export function createPluginService({
   sources = [],
   state = DEFAULT_STATE,
 }: CreatePluginServiceOptions = {}): PluginService {
+  async function resolveSources(): Promise<readonly PluginDiscoverySource[]> {
+    return typeof sources === "function" ? await sources() : sources;
+  }
+
   async function list(): Promise<PluginRegistryListResult> {
-    const manifests: PluginManifest[] = [];
+    const manifests: Array<{
+      manifest: PluginManifest;
+      source: PluginDiscoverySource;
+    }> = [];
     const diagnostics: PluginRegistryDiagnostic[] = [];
-    for (const source of sources) {
+    for (const source of await resolveSources()) {
       try {
-        manifests.push(await readSourceManifest(source, readTextFile));
+        const manifest = await readSourceManifest(source, readTextFile);
+        const withLocales = await loadManifestLocaleFiles({
+          baseDir: localeBaseDir(source),
+          manifest,
+          readTextFile,
+          source,
+          staticLocales:
+            source.kind === "builtin" ? (source.locales ?? {}) : {},
+        });
+        diagnostics.push(...withLocales.diagnostics);
+        manifests.push({ manifest: withLocales.manifest, source });
       } catch (err) {
         diagnostics.push(diagnosticFromError(source, err));
       }
@@ -178,8 +229,8 @@ export function createPluginService({
     const registryState = await state.read();
     return {
       diagnostics,
-      entries: manifests.map((manifest) =>
-        entryFromManifest(manifest, registryState)
+      entries: manifests.map(({ manifest, source }) =>
+        entryFromManifest(manifest, registryState, source)
       ),
     };
   }
@@ -197,8 +248,17 @@ export function createPluginService({
     if (!existing) {
       throw new PluginServiceError("not_found", `plugin not found: ${id}`);
     }
+    if (existing.source.kind !== "builtin") {
+      throw new PluginServiceError(
+        "unsupported",
+        `plugin source kind cannot be enabled yet: ${existing.source.kind}`
+      );
+    }
     const nextState = await state.setEnabled(id, enabled);
-    return entryFromManifest(existing.manifest, nextState);
+    return entryFromManifest(existing.manifest, nextState, {
+      kind: "builtin",
+      manifest: existing.manifest,
+    });
   }
 
   return { inspect, list, setEnabled };

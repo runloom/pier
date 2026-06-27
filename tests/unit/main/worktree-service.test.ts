@@ -106,6 +106,31 @@ describe("parseGitWorktreeListPorcelainZ", () => {
 });
 
 describe("createWorktreeService", () => {
+  it("检查普通 Git 仓库支持 worktree", async () => {
+    const repo = await initRepo();
+    const realRepo = await realpath(repo);
+    const service = createWorktreeService();
+
+    await expect(service.check({ path: repo })).resolves.toMatchObject({
+      currentPath: realRepo,
+      mainPath: realRepo,
+      path: realRepo,
+      status: "supported",
+    });
+  });
+
+  it("检查非 Git 目录时返回禁用原因", async () => {
+    const dir = await makeTempDir("pier-worktree-capability-");
+    const realDir = await realpath(dir);
+    const service = createWorktreeService();
+
+    await expect(service.check({ path: dir })).resolves.toEqual({
+      path: realDir,
+      reason: "not_git_repo",
+      status: "unsupported",
+    });
+  });
+
   it("列出普通 Git 仓库", async () => {
     const repo = await initRepo();
     const realRepo = await realpath(repo);

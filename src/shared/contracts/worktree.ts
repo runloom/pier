@@ -45,6 +45,11 @@ export const worktreeListRequestSchema = z.object({
 });
 export type WorktreeListRequest = z.infer<typeof worktreeListRequestSchema>;
 
+export const worktreeCheckRequestSchema = z.object({
+  path: z.string().min(1),
+});
+export type WorktreeCheckRequest = z.infer<typeof worktreeCheckRequestSchema>;
+
 export const worktreeCreateRequestSchema = z.object({
   base: z.string().min(1).optional(),
   branch: z.string().min(1),
@@ -80,6 +85,21 @@ export const worktreeListResultSchema = z.discriminatedUnion("status", [
   }),
 ]);
 export type WorktreeListResult = z.infer<typeof worktreeListResultSchema>;
+
+export const worktreeCheckResultSchema = z.discriminatedUnion("status", [
+  z.object({
+    currentPath: z.string().min(1).optional(),
+    mainPath: z.string().min(1),
+    path: z.string().min(1),
+    status: z.literal("supported"),
+  }),
+  z.object({
+    path: z.string().min(1),
+    reason: worktreeUnavailableReasonSchema,
+    status: z.literal("unsupported"),
+  }),
+]);
+export type WorktreeCheckResult = z.infer<typeof worktreeCheckResultSchema>;
 
 export const worktreeCreateResultSchema = z.object({
   created: worktreeItemSchema,

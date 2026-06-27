@@ -232,6 +232,26 @@ describe("parsePierCliArgs", () => {
       id: "sample.local",
       type: "plugin.inspect",
     });
+
+    expect(
+      parsePierCliArgs(["plugins", "enable", "pier.worktree", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-enable",
+      }).envelope.command
+    ).toEqual({
+      id: "pier.worktree",
+      type: "plugin.enable",
+    });
+
+    expect(
+      parsePierCliArgs(["plugins", "disable", "pier.worktree", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-disable",
+      }).envelope.command
+    ).toEqual({
+      id: "pier.worktree",
+      type: "plugin.disable",
+    });
   });
 
   it("拒绝 terminals open --cwd 旧入口", () => {

@@ -3,6 +3,8 @@ import { mkdir as fsMkdir, realpath as fsRealpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import type {
+  WorktreeCheckRequest,
+  WorktreeCheckResult,
   WorktreeCreateRequest,
   WorktreeCreateResult,
   WorktreeItem,
@@ -17,6 +19,7 @@ const execFileAsync = promisify(execFile);
 const SAFE_WORKTREE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 export interface WorktreeService {
+  check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
   create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
   list(request: WorktreeListRequest): Promise<WorktreeListResult>;
   remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
@@ -218,6 +221,25 @@ export function createWorktreeService({
   },
   realpath = fsRealpath,
 }: CreateWorktreeServiceOptions = {}): WorktreeService {
+  async function check({
+    path,
+  }: WorktreeCheckRequest): Promise<WorktreeCheckResult> {
+    const result = await list({ path });
+    if (result.status === "unavailable") {
+      return {
+        path: result.path,
+        reason: result.reason,
+        status: "unsupported",
+      };
+    }
+    return {
+      ...(result.currentPath ? { currentPath: result.currentPath } : {}),
+      mainPath: result.mainPath,
+      path: result.path,
+      status: "supported",
+    };
+  }
+
   async function list({
     path,
   }: WorktreeListRequest): Promise<WorktreeListResult> {
@@ -381,5 +403,5 @@ export function createWorktreeService({
     };
   }
 
-  return { create, list, remove };
+  return { check, create, list, remove };
 }
