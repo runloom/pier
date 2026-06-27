@@ -161,6 +161,109 @@ describe("parsePierCliArgs", () => {
     ).toEqual({ type: "preferences.read" });
   });
 
+  it("解析 worktrees list/create/open", () => {
+    expect(
+      parsePierCliArgs(["worktrees", "list", "--path", ".", "--json"], {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-worktree-list",
+      }).envelope.command
+    ).toEqual({
+      path: "/Users/xyz/ABC/pier",
+      type: "worktree.list",
+    });
+
+    expect(
+      parsePierCliArgs(
+        [
+          "worktrees",
+          "create",
+          "--path",
+          ".",
+          "--name",
+          "feature-a",
+          "--branch",
+          "feature/a",
+          "--base",
+          "origin/main",
+          "--json",
+        ],
+        {
+          clientId: "cli-1",
+          cwd: "/Users/xyz/ABC/pier",
+          requestId: "req-worktree-create",
+        }
+      ).envelope.command
+    ).toEqual({
+      base: "origin/main",
+      branch: "feature/a",
+      name: "feature-a",
+      path: "/Users/xyz/ABC/pier",
+      type: "worktree.create",
+    });
+
+    expect(
+      parsePierCliArgs(["worktrees", "open", "../linked", "--no-focus"], {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-worktree-open",
+      }).envelope.command
+    ).toEqual({
+      focus: false,
+      path: "/Users/xyz/ABC/linked",
+      type: "worktree.open",
+    });
+  });
+
+  it("解析 plugins list/inspect", () => {
+    expect(
+      parsePierCliArgs(["plugins", "list", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-list",
+      }).envelope.command
+    ).toEqual({ type: "plugin.list" });
+
+    expect(
+      parsePierCliArgs(["plugins", "inspect", "sample.local", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-inspect",
+      }).envelope.command
+    ).toEqual({
+      id: "sample.local",
+      type: "plugin.inspect",
+    });
+
+    expect(
+      parsePierCliArgs(["plugins", "enable", "pier.worktree", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-enable",
+      }).envelope.command
+    ).toEqual({
+      id: "pier.worktree",
+      type: "plugin.enable",
+    });
+
+    expect(
+      parsePierCliArgs(["plugins", "disable", "pier.worktree", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-plugin-disable",
+      }).envelope.command
+    ).toEqual({
+      id: "pier.worktree",
+      type: "plugin.disable",
+    });
+  });
+
+  it("拒绝 terminals open --cwd 旧入口", () => {
+    expect(() =>
+      parsePierCliArgs(["terminals", "open", "--cwd", "."], {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-terminals-open-cwd",
+      })
+    ).toThrow("unknown pier CLI command");
+  });
+
   it("解析 terminal open 启动参数", () => {
     expect(
       parsePierCliArgs(

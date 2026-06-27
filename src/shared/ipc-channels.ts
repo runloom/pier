@@ -4,6 +4,8 @@
  * 命名规范: `pier://<domain>:<action>`
  */
 export const PIER = {
+  // command router facade
+  COMMAND_EXECUTE: "pier://command:execute",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CLOSE: "pier://window:close",

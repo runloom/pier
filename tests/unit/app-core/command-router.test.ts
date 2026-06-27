@@ -1,7 +1,9 @@
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
+import { PluginServiceError } from "@main/services/plugin-service.ts";
 import { createTaskService } from "@main/services/tasks/task-service.ts";
+import { WorktreeServiceError } from "@main/services/worktree-service.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
@@ -100,6 +102,120 @@ function services(
         windowZoomLevel: patch.windowZoomLevel ?? 0,
       }),
     },
+    plugins: {
+      inspect: async (id) =>
+        id === "sample.local"
+          ? {
+              commands: [
+                {
+                  id: "sample.command",
+                  permissions: [],
+                  title: "Sample Command",
+                },
+              ],
+              enabled: true,
+              id: "sample.local",
+              manifest: {
+                apiVersion: 1,
+                commands: [
+                  {
+                    id: "sample.command",
+                    permissions: [],
+                    title: "Sample Command",
+                  },
+                ],
+                engines: { pier: ">=0.1.0" },
+                id: "sample.local",
+                name: "Sample Local",
+                panels: [
+                  {
+                    id: "sample.panel",
+                    permissions: [],
+                    title: "Sample Panel",
+                  },
+                ],
+                permissions: ["plugin:read"],
+                source: { kind: "local" },
+                version: "1.0.0",
+              },
+              panels: [
+                {
+                  id: "sample.panel",
+                  permissions: [],
+                  title: "Sample Panel",
+                },
+              ],
+              permissions: ["plugin:read"],
+              source: { kind: "local" },
+              version: "1.0.0",
+            }
+          : null,
+      list: async () => ({
+        diagnostics: [],
+        entries: [
+          {
+            commands: [
+              {
+                id: "sample.command",
+                permissions: [],
+                title: "Sample Command",
+              },
+            ],
+            enabled: true,
+            id: "sample.local",
+            manifest: {
+              apiVersion: 1,
+              commands: [
+                {
+                  id: "sample.command",
+                  permissions: [],
+                  title: "Sample Command",
+                },
+              ],
+              engines: { pier: ">=0.1.0" },
+              id: "sample.local",
+              name: "Sample Local",
+              panels: [
+                {
+                  id: "sample.panel",
+                  permissions: [],
+                  title: "Sample Panel",
+                },
+              ],
+              permissions: ["plugin:read"],
+              source: { kind: "local" },
+              version: "1.0.0",
+            },
+            panels: [
+              { id: "sample.panel", permissions: [], title: "Sample Panel" },
+            ],
+            permissions: ["plugin:read"],
+            source: { kind: "local" },
+            version: "1.0.0",
+          },
+        ],
+      }),
+      setEnabled: async (id, enabled) => ({
+        commands: [],
+        enabled,
+        id,
+        manifest: {
+          apiVersion: 1,
+          commands: [],
+          engines: { pier: ">=0.1.0" },
+          id,
+          name: id,
+          panels: [],
+          permissions: [],
+          source: { kind: "builtin" },
+          version: "1.0.0",
+        },
+        panels: [],
+        permissions: [],
+        source: { kind: "builtin" },
+        version: "1.0.0",
+      }),
+    },
     panelContexts: {
       listRecent: async () => recentContexts,
       recordRecent: (context) => {
@@ -180,6 +296,56 @@ function services(
       clearLayout: async () => undefined,
       readLayout: async () => null,
       saveLayout: async () => undefined,
+    },
+    worktrees: {
+      check: async (args) => ({
+        currentPath: args.path,
+        mainPath: "/repo",
+        path: args.path,
+        status: "supported",
+      }),
+      create: async (args) => ({
+        created: {
+          bare: false,
+          branch: args.branch,
+          detached: false,
+          head: "def456",
+          isCurrent: false,
+          isMain: false,
+          locked: false,
+          lockedReason: null,
+          path: `/repo/.worktrees/${args.name}`,
+          prunable: false,
+          prunableReason: null,
+        },
+        targetPath: `/repo/.worktrees/${args.name}`,
+        worktrees: [],
+      }),
+      list: async (args) => ({
+        currentPath: args.path,
+        mainPath: "/repo",
+        path: args.path,
+        status: "available",
+        worktrees: [
+          {
+            bare: false,
+            branch: "main",
+            detached: false,
+            head: "abc123",
+            isCurrent: args.path === "/repo",
+            isMain: true,
+            locked: false,
+            lockedReason: null,
+            path: "/repo",
+            prunable: false,
+            prunableReason: null,
+          },
+        ],
+      }),
+      remove: async (args) => ({
+        removedPath: args.path,
+        worktrees: [],
+      }),
     },
   };
 }
@@ -794,6 +960,324 @@ describe("createCommandRouter", () => {
       panelId: "terminal-1",
       type: "panel.focus",
       windowId: "main",
+    });
+  });
+
+  it("分发 worktree.list 和 worktree.create", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { path: "/repo", type: "worktree.list" },
+        protocolVersion: 1,
+        requestId: "req-worktree-list",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        mainPath: "/repo",
+        status: "available",
+        worktrees: [{ branch: "main", path: "/repo" }],
+      },
+      ok: true,
+      requestId: "req-worktree-list",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          base: "origin/main",
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-create",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        created: {
+          branch: "feature/a",
+          path: "/repo/.worktrees/feature-a",
+        },
+        targetPath: "/repo/.worktrees/feature-a",
+      },
+      ok: true,
+      requestId: "req-worktree-create",
+    });
+  });
+
+  it("worktree.open 复用 panel.open 的 context 解析和 renderer 命令", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: false,
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-open",
+      })
+    ).resolves.toEqual({
+      data: {
+        context: panelContext("/repo/.worktrees/feature-a"),
+        panelId: "terminal-from-renderer",
+      },
+      ok: true,
+      requestId: "req-worktree-open",
+    });
+
+    expect(rendererCommands.at(-1)).toEqual({
+      context: panelContext("/repo/.worktrees/feature-a"),
+      focus: false,
+      type: "panel.open",
+      windowId: "main",
+    });
+  });
+
+  it("分发 worktree.remove 到 worktree service", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.remove",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-remove",
+      })
+    ).resolves.toEqual({
+      data: {
+        removedPath: "/repo/.worktrees/feature-a",
+        worktrees: [],
+      },
+      ok: true,
+      requestId: "req-worktree-remove",
+    });
+  });
+
+  it("分发 worktree.check 到 worktree service", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { path: "/repo", type: "worktree.check" },
+        protocolVersion: 1,
+        requestId: "req-worktree-check",
+      })
+    ).resolves.toEqual({
+      data: {
+        currentPath: "/repo",
+        mainPath: "/repo",
+        path: "/repo",
+        status: "supported",
+      },
+      ok: true,
+      requestId: "req-worktree-check",
+    });
+  });
+
+  it("把 worktree service 错误映射为稳定命令错误", async () => {
+    const fakeServices = services();
+    fakeServices.worktrees.create = () =>
+      Promise.reject(
+        new WorktreeServiceError(
+          "invalid_branch",
+          "invalid worktree branch: bad branch"
+        )
+      );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          branch: "bad branch",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-invalid-branch",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "invalid_branch",
+        message: "invalid worktree branch: bad branch",
+      },
+      ok: false,
+      requestId: "req-worktree-invalid-branch",
+    });
+  });
+
+  it("分发 plugin.list 和 plugin.inspect", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { type: "plugin.list" },
+        protocolVersion: 1,
+        requestId: "req-plugin-list",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        diagnostics: [],
+        entries: [
+          {
+            commands: [{ id: "sample.command" }],
+            enabled: true,
+            id: "sample.local",
+            panels: [{ id: "sample.panel" }],
+          },
+        ],
+      },
+      ok: true,
+      requestId: "req-plugin-list",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.local", type: "plugin.inspect" },
+        protocolVersion: 1,
+        requestId: "req-plugin-inspect",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        commands: [{ id: "sample.command" }],
+        enabled: true,
+        id: "sample.local",
+        panels: [{ id: "sample.panel" }],
+      },
+      ok: true,
+      requestId: "req-plugin-inspect",
+    });
+  });
+
+  it("分发 plugin.enable 和 plugin.disable", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.builtin", type: "plugin.disable" },
+        protocolVersion: 1,
+        requestId: "req-plugin-disable",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        enabled: false,
+        id: "sample.builtin",
+      },
+      ok: true,
+      requestId: "req-plugin-disable",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.builtin", type: "plugin.enable" },
+        protocolVersion: 1,
+        requestId: "req-plugin-enable",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        enabled: true,
+        id: "sample.builtin",
+      },
+      ok: true,
+      requestId: "req-plugin-enable",
+    });
+  });
+
+  it("local plugin enable/disable 暂不支持时返回 unsupported", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: {
+        ...services(),
+        plugins: {
+          inspect: async () => null,
+          list: async () => ({ diagnostics: [], entries: [] }),
+          setEnabled: () =>
+            Promise.reject(
+              new PluginServiceError(
+                "unsupported",
+                "plugin source kind cannot be enabled yet: local"
+              )
+            ),
+        },
+      },
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "sample.local", type: "plugin.enable" },
+        protocolVersion: 1,
+        requestId: "req-plugin-enable-local",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "unsupported",
+        message: "plugin source kind cannot be enabled yet: local",
+      },
+      ok: false,
+      requestId: "req-plugin-enable-local",
+    });
+  });
+
+  it("plugin.inspect 未命中时返回 not_found", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { id: "missing.plugin", type: "plugin.inspect" },
+        protocolVersion: 1,
+        requestId: "req-plugin-missing",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "not_found",
+        message: "plugin not found: missing.plugin",
+      },
+      ok: false,
+      requestId: "req-plugin-missing",
     });
   });
 });

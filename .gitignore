@@ -51,3 +51,6 @@ playwright-report/
 
 # Per-worktree dev profile
 .pier-dev/
+
+
+.superpowers/

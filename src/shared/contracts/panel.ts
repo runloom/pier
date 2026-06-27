@@ -31,6 +31,7 @@ export const panelContextSchema = z.object({
   updatedAt: z.number().int().nonnegative(),
   worktreeKey: z.string().min(1).optional(),
   worktreeRoot: z.string().min(1).optional(),
+  worktreeSupported: z.boolean().optional(),
 });
 export type PanelContext = z.infer<typeof panelContextSchema>;
 

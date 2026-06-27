@@ -39,10 +39,12 @@ export type ActionCategoryKey =
   | "terminal"
   | "view"
   | "window"
-  | "workspace";
+  | "workspace"
+  | "worktree";
 
 export interface Action {
   category: string;
+  disabledReason?: () => string | null | undefined;
   enabled?: () => boolean;
   handler: () => void | Promise<void>;
   id: string;

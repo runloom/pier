@@ -1,6 +1,7 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type {
   PierCommand,
+  PierCommandErrorCode,
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
 import type {
@@ -8,6 +9,10 @@ import type {
   MenuPopupResult,
   MenuTemplate,
 } from "@shared/contracts/menu.ts";
+import type {
+  PluginRegistryEntry,
+  PluginRegistryListResult,
+} from "@shared/contracts/plugin.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type {
   RendererCommandEnvelope,
@@ -31,6 +36,13 @@ import type {
   WindowCreateResult,
 } from "@shared/contracts/window.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
+import type {
+  WorktreeCheckRequest,
+  WorktreeCheckResult,
+  WorktreeListRequest,
+  WorktreeListResult,
+  WorktreeOpenRequest,
+} from "@shared/contracts/worktree.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -81,6 +93,19 @@ export interface PierCommandPaletteMruAPI {
 
 export interface PierCommandPaletteAPI {
   onToggleRequest: (cb: () => void) => () => void;
+}
+
+export interface PierPluginsAPI {
+  disable: (id: string) => Promise<PluginRegistryEntry>;
+  enable: (id: string) => Promise<PluginRegistryEntry>;
+  inspect: (id: string) => Promise<PluginRegistryEntry>;
+  list: () => Promise<PluginRegistryListResult>;
+}
+
+export interface PierWorktreesAPI {
+  check: (request: WorktreeCheckRequest) => Promise<WorktreeCheckResult>;
+  list: (request: WorktreeListRequest) => Promise<WorktreeListResult>;
+  open: (request: WorktreeOpenRequest) => Promise<unknown>;
 }
 
 /**
@@ -136,6 +161,7 @@ export interface PierWindowAPI {
   menu: PierMenuAPI;
   onWindowLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
   platform: NodeJS.Platform;
+  plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
   readyToShow: () => void;
   rendererCommand: PierRendererCommandAPI;
@@ -144,6 +170,7 @@ export interface PierWindowAPI {
   terminal: TerminalAPI;
   theme: PierThemeAPI;
   workspace: PierWorkspaceAPI;
+  worktrees: PierWorktreesAPI;
 }
 
 /**
@@ -164,6 +191,21 @@ function subscribeIpc<P>(
   return () => {
     ipcRenderer.off(channel, listener);
   };
+}
+
+async function invokePierCommand<T>(command: PierCommand): Promise<T> {
+  const result = (await ipcRenderer.invoke(
+    PIER.COMMAND_EXECUTE,
+    command
+  )) as PierCommandResult;
+  if (result.ok) {
+    return result.data as T;
+  }
+  const error = new Error(result.error.message) as Error & {
+    code?: PierCommandErrorCode;
+  };
+  error.code = result.error.code;
+  throw error;
 }
 
 const preferencesApi: PierPreferencesAPI = {
@@ -279,6 +321,35 @@ const commandPaletteApi: PierCommandPaletteAPI = {
     subscribeIpc(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST, cb),
 };
 
+const pluginsApi: PierPluginsAPI = {
+  list: () =>
+    invokePierCommand<PluginRegistryListResult>({ type: "plugin.list" }),
+  inspect: (id) =>
+    invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.inspect" }),
+  enable: (id) =>
+    invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.enable" }),
+  disable: (id) =>
+    invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.disable" }),
+};
+
+const worktreesApi: PierWorktreesAPI = {
+  check: (request) =>
+    invokePierCommand<WorktreeCheckResult>({
+      path: request.path,
+      type: "worktree.check",
+    }),
+  list: (request) =>
+    invokePierCommand<WorktreeListResult>({
+      path: request.path,
+      type: "worktree.list",
+    }),
+  open: (request) =>
+    invokePierCommand<unknown>({
+      path: request.path,
+      type: "worktree.open",
+    }),
+};
+
 const menuApi: PierMenuAPI = {
   popup: (template, options) =>
     ipcRenderer.invoke("pier:menu:popup", template, options),
@@ -293,29 +364,14 @@ const keybindingApi: PierKeybindingAPI = {
   onModifierState: (cb) => subscribeIpc("pier:keybinding:modifier-state", cb),
 };
 
-function assertCommandResult<T>(result: PierCommandResult): T {
-  if (result.ok) {
-    return result.data as T;
-  }
-  throw new Error(result.error.message);
-}
-
-async function executePierCommand<T>(command: PierCommand): Promise<T> {
-  const result: PierCommandResult = await ipcRenderer.invoke(
-    "pier:command-router:execute",
-    command
-  );
-  return assertCommandResult<T>(result);
-}
-
 const tasksApi: PierTasksAPI = {
   list: (args) =>
-    executePierCommand<TaskListResult>({
+    invokePierCommand<TaskListResult>({
       projectRoot: args.projectRoot,
       type: "run.list",
     }),
   spawn: (args) =>
-    executePierCommand<TaskSpawnResult>({
+    invokePierCommand<TaskSpawnResult>({
       ...(args.focus === undefined ? {} : { focus: args.focus }),
       ...(args.inputs ? { inputs: args.inputs } : {}),
       ...(args.placement ? { placement: args.placement } : {}),
@@ -341,6 +397,7 @@ const api: PierWindowAPI = {
   onWindowLayoutPulse: (cb) =>
     subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
   platform: process.platform,
+  plugins: pluginsApi,
   preferences: preferencesApi,
   readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
   rendererCommand: rendererCommandApi,
@@ -349,6 +406,7 @@ const api: PierWindowAPI = {
   terminal: terminalApi,
   theme: themeApi,
   workspace: workspaceApi,
+  worktrees: worktreesApi,
 };
 
 contextBridge.exposeInMainWorld("pier", api);

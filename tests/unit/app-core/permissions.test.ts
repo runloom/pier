@@ -2,6 +2,7 @@ import { authorizeCommand } from "@main/app-core/permissions.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
   type PierClient,
+  pierCapabilitySchema,
   pierClientKindSchema,
 } from "@shared/contracts/permissions.ts";
 import { describe, expect, it } from "vitest";
@@ -73,6 +74,138 @@ describe("authorizeCommand", () => {
     ).toEqual({
       ok: false,
       reason: "missing capability: window:close",
+    });
+  });
+
+  it("terminal.open 携带启动参数时要求 terminal:control", () => {
+    expect(
+      authorizeCommand(
+        {
+          launch: { command: "pnpm test", cwd: "/repo" },
+          type: "terminal.open",
+        },
+        client("cli-local", ["workspace:open"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: terminal:control",
+    });
+    expect(
+      authorizeCommand(
+        { type: "terminal.open" },
+        client("cli-local", ["workspace:open"])
+      )
+    ).toEqual({ ok: true });
+  });
+
+  it("允许 CLI 默认客户端读取和创建 worktree", () => {
+    expect(
+      authorizeCommand(
+        { path: "/repo", type: "worktree.list" },
+        client("cli-local")
+      )
+    ).toEqual({ ok: true });
+
+    expect(
+      authorizeCommand(
+        {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        client("cli-local")
+      )
+    ).toEqual({ ok: true });
+  });
+
+  it("拒绝 MCP 默认客户端创建 worktree", () => {
+    expect(
+      authorizeCommand(
+        {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        client("mcp-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: worktree:write",
+    });
+  });
+
+  it("预留插件能力但默认不授予 CLI/MCP 高危权限", () => {
+    expect(pierCapabilitySchema.parse("plugin:read")).toBe("plugin:read");
+    expect(pierCapabilitySchema.parse("plugin:write")).toBe("plugin:write");
+    expect(pierCapabilitySchema.parse("command:register")).toBe(
+      "command:register"
+    );
+    expect(pierCapabilitySchema.parse("panel:register")).toBe("panel:register");
+    expect(pierCapabilitySchema.parse("secret:read")).toBe("secret:read");
+    expect(pierCapabilitySchema.parse("network")).toBe("network");
+
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND["cli-local"]).toContain(
+      "plugin:read"
+    );
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND["cli-local"]).not.toEqual(
+      expect.arrayContaining([
+        "plugin:write",
+        "command:register",
+        "panel:register",
+        "secret:read",
+        "network",
+      ])
+    );
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND["mcp-local"]).not.toEqual(
+      expect.arrayContaining([
+        "plugin:read",
+        "plugin:write",
+        "command:register",
+        "panel:register",
+        "secret:read",
+        "network",
+      ])
+    );
+  });
+
+  it("允许 CLI 读取插件信息但拒绝 MCP 默认客户端读取插件信息", () => {
+    expect(
+      authorizeCommand({ type: "plugin.list" }, client("cli-local"))
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand({ type: "plugin.list" }, client("mcp-local"))
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: plugin:read",
+    });
+  });
+
+  it("插件启停需要 plugin:write，CLI/MCP 默认客户端不能修改插件状态", () => {
+    expect(
+      authorizeCommand(
+        { id: "pier.worktree", type: "plugin.disable" },
+        client("desktop-renderer")
+      )
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand(
+        { id: "pier.worktree", type: "plugin.enable" },
+        client("cli-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: plugin:write",
+    });
+    expect(
+      authorizeCommand(
+        { id: "pier.worktree", type: "plugin.disable" },
+        client("mcp-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: plugin:write",
     });
   });
 

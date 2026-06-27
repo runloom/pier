@@ -30,7 +30,8 @@
       "@/*": ["./src/renderer/*"],
       "@shared/*": ["./src/shared/*"],
       "@main/*": ["./src/main/*"],
-      "@preload/*": ["./src/preload/*"]
+      "@preload/*": ["./src/preload/*"],
+      "@plugins/*": ["./src/plugins/*"]
     }
   },
   "include": [

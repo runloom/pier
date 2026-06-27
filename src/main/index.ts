@@ -8,8 +8,8 @@ import {
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { installCsp } from "./csp.ts";
+import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
-import { registerCommandRouterIpc } from "./ipc/command-router.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
@@ -131,6 +131,7 @@ function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
 
 app.whenReady().then(async () => {
   installCsp();
+  await appCore.pluginHost.refresh();
   await installAppMenu({
     appName: app.name,
     eventBus: appCore.eventBus,
@@ -179,6 +180,7 @@ app.whenReady().then(async () => {
   }
 
   registerWindowIpc(ipcMain);
+  registerCommandIpc(ipcMain);
   registerMenuIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
   registerRendererCommandIpc(ipcMain);
@@ -187,7 +189,6 @@ app.whenReady().then(async () => {
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);
-  registerCommandRouterIpc(ipcMain);
   setTerminalPanelClosedHandler((panelId) => {
     appCore.services.tasks.markPanelClosed(panelId);
   });
@@ -250,6 +251,7 @@ app.on("before-quit", (event) => {
     return;
   }
   windowManager.destroyAllForQuit();
+  appCore.pluginHost.dispose();
   localControl?.close().catch(() => {
     // ignore: app 正在退出
   });

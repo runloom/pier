@@ -3,6 +3,7 @@ import type {
   WindowCreateOptions,
   WindowCreateResult,
 } from "@shared/contracts/window.ts";
+import { flushPluginState } from "../state/plugin-state.ts";
 import { flushTerminalSessionState } from "../state/terminal-session-state.ts";
 import {
   createWindowRecord,
@@ -44,7 +45,11 @@ async function flushWindowBeforeClose(windowId: string): Promise<void> {
       err instanceof Error ? err.message : String(err)
     );
   }
-  await Promise.all([flushTerminalSessionState(), flushWindowRecordState()]);
+  await Promise.all([
+    flushPluginState(),
+    flushTerminalSessionState(),
+    flushWindowRecordState(),
+  ]);
 }
 
 function ensureCloseHandler(): void {
@@ -129,6 +134,7 @@ export function createWindowService(
         }
       }
       await Promise.all([
+        flushPluginState(),
         flushTerminalSessionState(),
         flushWindowRecordState(),
       ]);

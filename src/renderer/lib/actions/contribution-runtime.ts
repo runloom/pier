@@ -14,6 +14,7 @@ const CATEGORY_BY_KEY: Record<ActionCategoryKey, string> = {
   view: "View",
   window: "Window",
   workspace: "Workspace",
+  worktree: "Worktree",
 };
 
 const BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel", "hasApi"]);

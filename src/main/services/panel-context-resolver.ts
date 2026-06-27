@@ -73,6 +73,18 @@ async function safeGit(
   }
 }
 
+async function supportsGitWorktree(
+  cwd: string,
+  execGit: NonNullable<ResolvePanelContextOptions["execGit"]>
+): Promise<boolean> {
+  try {
+    await execGit(["worktree", "list", "--porcelain", "-z"], cwd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function realGitPath(
   path: string | undefined,
   realpath: (path: string) => Promise<string>
@@ -119,6 +131,9 @@ export async function resolvePanelContextForPath(
   const projectRoot = gitRoot ?? cwd;
   const worktreeRoot = gitRoot;
   const worktreeKey = worktreeRoot ?? projectRoot;
+  const worktreeSupported = gitRoot
+    ? await supportsGitWorktree(cwd, execGit)
+    : undefined;
 
   return {
     contextId: contextIdFor(worktreeKey),
@@ -133,5 +148,6 @@ export async function resolvePanelContextForPath(
     ...(gitRoot ? { gitRoot } : {}),
     ...(head ? { head } : {}),
     ...(worktreeRoot ? { worktreeRoot } : {}),
+    ...(worktreeSupported == null ? {} : { worktreeSupported }),
   };
 }

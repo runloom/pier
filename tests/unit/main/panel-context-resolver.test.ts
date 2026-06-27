@@ -68,6 +68,7 @@ describe("resolvePanelContextForPath", () => {
       updatedAt: NOW,
       worktreeRoot: repo,
       worktreeKey: repo,
+      worktreeSupported: true,
     });
   });
 
@@ -101,6 +102,7 @@ describe("resolvePanelContextForPath", () => {
       updatedAt: NOW,
       worktreeRoot: worktree,
       worktreeKey: worktree,
+      worktreeSupported: true,
     });
   });
 
@@ -139,5 +141,42 @@ describe("resolvePanelContextForPath", () => {
     });
     expect(context.gitRoot).toBeUndefined();
     expect(context.worktreeRoot).toBeUndefined();
+  });
+
+  it("marks git contexts unsupported when git worktree probing fails", async () => {
+    const project = await makeTempDir("pier-panel-context-worktree-fail-");
+
+    const context = await resolvePanelContextForPath(project, {
+      execGit: (args) => {
+        const command = args.join(" ");
+        if (command === "rev-parse --show-toplevel") {
+          return Promise.resolve(project);
+        }
+        if (command === "rev-parse --path-format=absolute --git-common-dir") {
+          return Promise.resolve(project);
+        }
+        if (command === "branch --show-current") {
+          return Promise.resolve("main");
+        }
+        if (command === "rev-parse --verify HEAD") {
+          return Promise.resolve("abc123");
+        }
+        if (command === "worktree list --porcelain -z") {
+          throw new Error("git worktree unsupported");
+        }
+        throw new Error(`unexpected git command: ${command}`);
+      },
+      now: () => NOW,
+    });
+
+    expect(context).toMatchObject({
+      cwd: project,
+      gitRoot: project,
+      openedPath: project,
+      projectRoot: project,
+      updatedAt: NOW,
+      worktreeRoot: project,
+      worktreeSupported: false,
+    });
   });
 });

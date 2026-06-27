@@ -22,6 +22,7 @@
         "src/renderer/**",
         "tests/**",
         "src/shared/**",
+        "src/plugins/**",
         "src/main/**",
         "src/preload/**",
         "electron.vite.config.ts",

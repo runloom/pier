@@ -1,0 +1,31 @@
+{
+  "commands": {
+    "pier.worktree.create": {
+      "description": "Shows the worktree creation entry. Creation is not available yet.",
+      "title": "Worktree: Create"
+    },
+    "pier.worktree.delete": {
+      "description": "Shows the worktree deletion entry. Deletion is not available yet.",
+      "title": "Worktree: Delete..."
+    },
+    "pier.worktree.list": {
+      "description": "Lists Git worktrees for the current repository and opens the selected worktree.",
+      "title": "Worktree: List"
+    }
+  },
+  "description": "Built-in worktree command palette and terminal status support.",
+  "messages": {
+    "ui.createUnavailable": "Worktree creation is not available yet",
+    "ui.current": "current",
+    "ui.deleteUnavailable": "Worktree deletion is not available yet",
+    "ui.detached": "detached {{head}}",
+    "ui.locked": "Locked",
+    "ui.main": "main",
+    "ui.mainBadge": "main",
+    "ui.selectPlaceholder": "Select a worktree...",
+    "ui.statusOpenLabel": "Open worktrees for {{name}}",
+    "ui.title": "Worktrees",
+    "ui.unsupported": "Current directory does not support Git worktrees"
+  },
+  "name": "Worktree"
+}

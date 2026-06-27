@@ -3,6 +3,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
@@ -141,6 +142,7 @@ const context: PanelContext = {
   source: "command",
   updatedAt: 1_772_000_000_000,
   worktreeKey: "/Users/xyz/ABC/pier",
+  worktreeRoot: "/Users/xyz/ABC/pier",
 };
 
 describe("TerminalPanel lifecycle", () => {
@@ -244,6 +246,7 @@ describe("TerminalPanel lifecycle", () => {
   });
 
   afterEach(() => {
+    terminalStatusItemRegistry.clearForTests();
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -358,6 +361,63 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
+  });
+
+  it("renders plugin terminal status items below the native terminal anchor", async () => {
+    terminalStatusItemRegistry.register({
+      id: "test.worktree-status",
+      isVisible: ({ context: panelContext }) =>
+        Boolean(panelContext?.worktreeRoot),
+      order: 10,
+      render: ({ context: panelContext }) => (
+        <span>{panelContext?.worktreeRoot ?? "missing"}</span>
+      ),
+    });
+
+    const { container, findByTestId } = render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: { context },
+        })}
+      />
+    );
+
+    const statusBar = await findByTestId("terminal-status-bar");
+    expect(statusBar).toHaveTextContent("/Users/xyz/ABC/pier");
+    expect(
+      container.querySelector(".terminal-anchor")?.className ?? ""
+    ).toContain("bottom-6");
+  });
+
+  it("does not reserve status bar space when no item is visible for the panel", () => {
+    terminalStatusItemRegistry.register({
+      id: "test.worktree-status",
+      isVisible: ({ context: panelContext }) =>
+        Boolean(panelContext?.worktreeRoot),
+      order: 10,
+      render: () => <span>worktree</span>,
+    });
+
+    const { container, queryByTestId } = render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context: {
+              contextId: "ctx-home",
+              cwd: "/Users/xyz",
+              openedPath: "/Users/xyz",
+              source: "panel",
+              updatedAt: 1_772_000_000_000,
+            },
+          },
+        })}
+      />
+    );
+
+    expect(queryByTestId("terminal-status-bar")).toBeNull();
+    expect(
+      container.querySelector(".terminal-anchor")?.className ?? ""
+    ).not.toContain("bottom-6");
   });
 
   it("passes launchId into native terminal creation", async () => {

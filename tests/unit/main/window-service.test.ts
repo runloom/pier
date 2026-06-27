@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
       return "w-1";
     }),
     createWindowRecord: vi.fn(async () => ({ id: "record-new" })),
+    flushPluginState: vi.fn(async () => undefined),
     flushTerminalSessionState: vi.fn(async () => undefined),
     flushWindowRecordState: vi.fn(async () => undefined),
     focus: vi.fn(),
@@ -77,6 +78,10 @@ vi.mock("@main/state/window-record-state.ts", () => ({
 
 vi.mock("@main/state/terminal-session-state.ts", () => ({
   flushTerminalSessionState: mocks.flushTerminalSessionState,
+}));
+
+vi.mock("@main/state/plugin-state.ts", () => ({
+  flushPluginState: mocks.flushPluginState,
 }));
 
 vi.mock("@main/windows/window-manager.ts", () => ({
@@ -197,6 +202,7 @@ describe("WindowService", () => {
     });
 
     expect(flushRendererLayout).toHaveBeenCalledWith("main");
+    expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
   });
@@ -216,6 +222,7 @@ describe("WindowService", () => {
 
     expect(flushRendererLayout).toHaveBeenCalledWith("main");
     expect(flushRendererLayout).toHaveBeenCalledWith("w-1");
+    expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
   });

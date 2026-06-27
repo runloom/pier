@@ -395,8 +395,10 @@ function QuickPickView({
   const renderItem = (item: QuickPickItem) => (
     <CommandItem
       aria-current={item.checked === true ? "true" : undefined}
+      className="items-start gap-3 py-2"
       data-checked={item.checked === true}
       data-disabled={item.disabled === true}
+      disabled={item.disabled === true}
       key={item.id}
       onSelect={() => {
         onAccept(item).catch((err) => {
@@ -408,7 +410,7 @@ function QuickPickView({
       }}
       value={item.id}
     >
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 self-center">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate">{item.label}</span>
           {item.badges?.map((badge) => (
@@ -428,7 +430,7 @@ function QuickPickView({
         ) : null}
       </span>
       {item.description ? (
-        <span className="ml-auto min-w-0 max-w-[45%] shrink truncate text-right text-muted-foreground text-xs">
+        <span className="ml-auto min-w-0 max-w-[45%] shrink truncate pt-0.5 text-right text-muted-foreground text-xs">
           {item.description}
         </span>
       ) : null}

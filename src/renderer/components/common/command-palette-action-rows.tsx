@@ -76,9 +76,12 @@ function ActionCommandItem({
 }): ReactNode {
   const Icon = action.metadata?.iconComponent ?? Settings;
   const shortcut = keybindingLabels.get(action.id);
+  const disabled = action.enabled?.() === false;
+  const disabledReason = disabled ? action.disabledReason?.() : null;
   return (
     <CommandItem
-      data-disabled={action.enabled?.() === false}
+      data-disabled={disabled}
+      disabled={disabled}
       onSelect={() => {
         onExecute(action).catch((err) => {
           console.error(
@@ -91,6 +94,11 @@ function ActionCommandItem({
     >
       <Icon className="size-4 shrink-0 opacity-70" />
       <span className="min-w-0 flex-1 truncate">{action.title()}</span>
+      {disabledReason ? (
+        <span className="max-w-56 shrink-0 truncate text-muted-foreground text-xs">
+          {disabledReason}
+        </span>
+      ) : null}
       {shortcut ? (
         <Kbd className="ml-auto bg-transparent font-mono tracking-wider">
           {shortcut}

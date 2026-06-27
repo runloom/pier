@@ -24,6 +24,11 @@ import {
 } from "./terminal-lifecycle-debug.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import {
+  hasVisibleTerminalStatusItems,
+  TerminalStatusBar,
+  useTerminalStatusItems,
+} from "./terminal-status-bar.tsx";
+import {
   mergeTabChrome,
   tabChromeFromParams,
   terminalPanelDescriptor,
@@ -77,6 +82,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     windowZoomLevel
   );
   const anchorRef = useRef<HTMLDivElement>(null);
+  const statusItems = useTerminalStatusItems();
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [savedSession, setSavedSession] = useState<
@@ -109,6 +115,16 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const effectiveTab = mergeTabChrome(
     initialTab ?? savedSession?.tab,
     tabPatch
+  );
+  const statusContext = {
+    context: effectiveContext,
+    cwd: effectiveCwd,
+    panelId,
+    title: effectiveTitle,
+  };
+  const hasStatusBar = hasVisibleTerminalStatusItems(
+    statusItems,
+    statusContext
   );
 
   // descriptor 中 display.long 保留 OSC title/cwd，tab chrome 单独表达固定 tab 呈现。
@@ -411,28 +427,40 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const terminalSurfaceStyle = {
     backgroundColor: "var(--terminal-background, var(--background))",
   };
+  const terminalContentClassName = hasStatusBar
+    ? "absolute inset-x-0 top-0 bottom-6"
+    : "absolute inset-0";
   return (
     <div
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-testid="terminal-panel-root"
     >
-      <div className="terminal-anchor absolute inset-0" ref={anchorRef} />
+      <div
+        className={`terminal-anchor ${terminalContentClassName}`}
+        ref={anchorRef}
+      />
       {nativeTerminalReady || error ? null : (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
+          className={`pointer-events-none ${terminalContentClassName}`}
           data-testid="terminal-placeholder"
           style={terminalSurfaceStyle}
         />
       )}
       {error ? (
         <div
-          className="absolute inset-0 flex items-center justify-center"
+          className={`${terminalContentClassName} flex items-center justify-center`}
           style={terminalSurfaceStyle}
         >
           <p className="text-muted-foreground text-sm">{error}</p>
         </div>
       ) : null}
+      <TerminalStatusBar
+        context={effectiveContext}
+        cwd={effectiveCwd}
+        panelId={panelId}
+        title={effectiveTitle}
+      />
     </div>
   );
 }

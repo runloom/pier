@@ -18,6 +18,7 @@ export default defineConfig({
       alias: {
         "@shared": resolve(import.meta.dirname, "src/shared"),
         "@main": resolve(import.meta.dirname, "src/main"),
+        "@plugins": resolve(import.meta.dirname, "src/plugins"),
       },
     },
   },
@@ -57,6 +58,7 @@ export default defineConfig({
       alias: {
         "@": resolve(import.meta.dirname, "src/renderer"),
         "@shared": resolve(import.meta.dirname, "src/shared"),
+        "@plugins": resolve(import.meta.dirname, "src/plugins"),
       },
     },
     plugins: [react(), tailwindcss()],

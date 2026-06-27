@@ -5,12 +5,14 @@ export const en = {
     nav: {
       appearance: "Appearance",
       keybindings: "Keyboard",
+      plugins: "Plugins",
       terminal: "Terminal",
     },
     section: {
       appearance: "Appearance",
       font: "Font",
       keybindings: "Keyboard Shortcuts",
+      plugins: "Plugins",
       terminal: "Terminal",
     },
     row: {
@@ -118,6 +120,37 @@ export const en = {
       resetAll: "Reset All",
       unassigned: "Unassigned",
     },
+    plugins: {
+      title: "Plugins",
+      description:
+        "Built-in plugins can be enabled or disabled here. Local plugins are manifest-only in this version.",
+      status: {
+        enabled: "Enabled",
+        disabled: "Disabled",
+      },
+      action: {
+        enable: "Enable",
+        disable: "Disable",
+        enablePlugin: "Enable {{name}}",
+        disablePlugin: "Disable {{name}}",
+      },
+      permissions: "Permissions",
+      commands: "Commands",
+      panels: "Panels",
+      none: "None",
+      loadingTitle: "Loading plugins",
+      loadingDescription: "Reading plugin manifests...",
+      emptyTitle: "No plugins found",
+      emptyDescription: "Built-in and local plugins will appear here.",
+      diagnosticsTitle: "Plugin diagnostics",
+      errorTitle: "Unable to load plugins",
+      source: {
+        builtin: "Built-in",
+        local: "Local",
+        git: "Git",
+        registry: "Registry",
+      },
+    },
     theme: {
       light: "Light",
       dark: "Dark",
@@ -166,6 +199,7 @@ export const en = {
       view: "View",
       settings: "Settings",
       workspace: "Workspace",
+      worktree: "Worktree",
       run: "Run",
       panel: "Panel",
       terminal: "Terminal",

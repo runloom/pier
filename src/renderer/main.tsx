@@ -14,6 +14,7 @@ import { registerViewActions } from "./lib/actions/view-actions.ts";
 import { installCommandPaletteMenuRequest } from "./lib/command-palette/menu-request.ts";
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
+import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
@@ -69,6 +70,7 @@ async function bootstrap() {
   registerCommandPaletteMruAction();
   registerTerminalDebugActions();
   registerTerminalActions();
+  await bootstrapBuiltinPlugins();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
   await initKeybindingPreferences();
 
