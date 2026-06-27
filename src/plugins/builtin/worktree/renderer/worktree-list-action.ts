@@ -1,6 +1,7 @@
 import type {
   RendererPluginContext,
   RendererPluginQuickPickItem,
+  RendererPluginQuickPickItemBadge,
   RendererPluginQuickPickSection,
 } from "@plugins/api/renderer.ts";
 import type {
@@ -87,13 +88,42 @@ function itemLabel(
   worktree: WorktreeItem
 ): string {
   if (worktree.isMain) {
-    return worktree.branch
-      ? pluginText(context, "mainWithBranch", "main ({{branch}})", {
-          branch: worktree.branch,
-        })
-      : pluginText(context, "main", "main");
+    return pluginText(context, "main", "main");
   }
   return worktree.branch ?? basename(worktree.path);
+}
+
+function itemDescription(
+  context: RendererPluginContext,
+  worktree: WorktreeItem
+): string | undefined {
+  if (worktree.locked) {
+    return worktree.lockedReason ?? pluginText(context, "locked", "Locked");
+  }
+  if (worktree.isMain) {
+    return worktree.branch ?? undefined;
+  }
+  return;
+}
+
+function itemBadges(
+  context: RendererPluginContext,
+  worktree: WorktreeItem
+): RendererPluginQuickPickItemBadge[] {
+  const badges: RendererPluginQuickPickItemBadge[] = [];
+  if (worktree.isMain) {
+    badges.push({
+      label: pluginText(context, "mainBadge", "main"),
+      variant: "outline",
+    });
+  }
+  if (worktree.locked) {
+    badges.push({
+      label: pluginText(context, "locked", "Locked"),
+      variant: "outline",
+    });
+  }
+  return badges;
 }
 
 function worktreeSearchTerms(worktree: WorktreeItem): readonly string[] {
@@ -111,20 +141,19 @@ function buildWorktreeSections(
 ): RendererPluginQuickPickSection[] {
   const items = result.worktrees
     .filter((worktree) => !(worktree.bare || worktree.prunable))
-    .map((worktree) => ({
-      checked: worktree.isCurrent,
-      ...(worktree.locked
-        ? {
-            description:
-              worktree.lockedReason ?? pluginText(context, "locked", "Locked"),
-          }
-        : {}),
-      detail: worktree.path,
-      disabled: false,
-      id: `worktree:${worktree.path}`,
-      label: itemLabel(context, worktree),
-      searchTerms: worktreeSearchTerms(worktree),
-    }));
+    .map((worktree) => {
+      const description = itemDescription(context, worktree);
+      return {
+        badges: itemBadges(context, worktree),
+        checked: worktree.isCurrent,
+        ...(description ? { description } : {}),
+        detail: worktree.path,
+        disabled: false,
+        id: `worktree:${worktree.path}`,
+        label: itemLabel(context, worktree),
+        searchTerms: worktreeSearchTerms(worktree),
+      };
+    });
   return [
     {
       heading: worktreeTitle(context),

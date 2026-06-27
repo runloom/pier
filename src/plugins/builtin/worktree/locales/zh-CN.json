@@ -16,10 +16,12 @@
   "description": "提供工作树命令面板入口和终端状态栏支持。",
   "messages": {
     "ui.createUnavailable": "创建工作树暂未开放",
+    "ui.current": "当前",
     "ui.deleteUnavailable": "删除工作树暂未开放",
+    "ui.detached": "分离 {{head}}",
     "ui.locked": "已锁定",
     "ui.main": "主工作树",
-    "ui.mainWithBranch": "主工作树（{{branch}}）",
+    "ui.mainBadge": "主工作树",
     "ui.selectPlaceholder": "选择工作树…",
     "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
     "ui.title": "工作树",

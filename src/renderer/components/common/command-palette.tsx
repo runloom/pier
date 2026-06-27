@@ -395,6 +395,7 @@ function QuickPickView({
   const renderItem = (item: QuickPickItem) => (
     <CommandItem
       aria-current={item.checked === true ? "true" : undefined}
+      className="items-start gap-3 py-2"
       data-checked={item.checked === true}
       data-disabled={item.disabled === true}
       disabled={item.disabled === true}
@@ -409,7 +410,7 @@ function QuickPickView({
       }}
       value={item.id}
     >
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 self-center">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate">{item.label}</span>
           {item.badges?.map((badge) => (
@@ -429,7 +430,7 @@ function QuickPickView({
         ) : null}
       </span>
       {item.description ? (
-        <span className="shrink-0 text-muted-foreground text-xs">
+        <span className="max-w-40 shrink-0 truncate pt-0.5 text-muted-foreground text-xs">
           {item.description}
         </span>
       ) : null}

@@ -16,10 +16,12 @@
   "description": "Built-in worktree command palette and terminal status support.",
   "messages": {
     "ui.createUnavailable": "Worktree creation is not available yet",
+    "ui.current": "current",
     "ui.deleteUnavailable": "Worktree deletion is not available yet",
+    "ui.detached": "detached {{head}}",
     "ui.locked": "Locked",
     "ui.main": "main",
-    "ui.mainWithBranch": "main ({{branch}})",
+    "ui.mainBadge": "main",
     "ui.selectPlaceholder": "Select a worktree...",
     "ui.statusOpenLabel": "Open worktrees for {{name}}",
     "ui.title": "Worktrees",

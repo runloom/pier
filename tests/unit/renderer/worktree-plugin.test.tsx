@@ -80,10 +80,12 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           },
           messages: {
             "ui.createUnavailable": "Worktree creation is not available yet",
+            "ui.current": "current",
             "ui.deleteUnavailable": "Worktree deletion is not available yet",
+            "ui.detached": "detached {{head}}",
             "ui.locked": "Locked",
             "ui.main": "main",
-            "ui.mainWithBranch": "main ({{branch}})",
+            "ui.mainBadge": "main",
             "ui.selectPlaceholder": "Select a worktree...",
             "ui.statusOpenLabel": "Open worktrees for {{name}}",
             "ui.title": "Worktrees",
@@ -99,10 +101,12 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           },
           messages: {
             "ui.createUnavailable": "创建工作树暂未开放",
+            "ui.current": "当前",
             "ui.deleteUnavailable": "删除工作树暂未开放",
+            "ui.detached": "分离 {{head}}",
             "ui.locked": "已锁定",
             "ui.main": "主工作树",
-            "ui.mainWithBranch": "主工作树（{{branch}}）",
+            "ui.mainBadge": "主工作树",
             "ui.selectPlaceholder": "选择工作树…",
             "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
             "ui.title": "工作树",
@@ -391,9 +395,13 @@ describe("worktree builtin plugin", () => {
       ?.flatMap((section) => section.items)
       .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-stale");
     expect(main).toMatchObject({
+      badges: expect.arrayContaining([
+        expect.objectContaining({ label: "main" }),
+      ]),
       checked: true,
+      description: "main",
       detail: "/Users/xyz/ABC/pier",
-      label: "main (main)",
+      label: "main",
     });
     expect(linked).toMatchObject({
       detail: "/Users/xyz/ABC/pier-feature",
@@ -406,6 +414,9 @@ describe("worktree builtin plugin", () => {
       ]),
     });
     expect(locked).toMatchObject({
+      badges: expect.arrayContaining([
+        expect.objectContaining({ label: "Locked" }),
+      ]),
       description: "used by another process",
       disabled: false,
       label: "locked/worktree",
@@ -449,7 +460,7 @@ describe("worktree builtin plugin", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open worktrees for pier-feature",
+        name: "Open worktrees for feature/worktree",
       })
     );
 
