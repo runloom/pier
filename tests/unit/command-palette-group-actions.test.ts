@@ -1,26 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { groupActionsForPalette } from "@/components/common/command-palette.tsx";
 import type { Action } from "@/lib/actions/types.ts";
+import {
+  groupActionsForPalette,
+  rankActionsForPalette,
+} from "@/lib/command-palette/action-search.ts";
 
-const mk = (id: string, category: string, sortOrder?: number): Action => ({
-  id,
-  category,
-  title: () => id,
-  handler: () => undefined,
-  surfaces: ["command-palette"],
-  ...(sortOrder == null ? {} : { metadata: { sortOrder } }),
-});
+const mk = (
+  id: string,
+  category: string,
+  sortOrder?: number,
+  title = id,
+  aliases: readonly string[] = []
+): Action => {
+  const action: Action = {
+    id,
+    category,
+    handler: () => undefined,
+    surfaces: ["command-palette"],
+    title: () => title,
+  };
+  if (sortOrder != null || aliases.length > 0) {
+    action.metadata = {};
+    if (sortOrder != null) {
+      action.metadata.sortOrder = sortOrder;
+    }
+    if (aliases.length > 0) {
+      action.metadata.aliases = () => aliases;
+    }
+  }
+  return action;
+};
 
 describe("groupActionsForPalette", () => {
-  it("query 非空 → 按 CATEGORY_META.order 排, 组内保持入参顺序", () => {
+  it("query 非空 → 按本地搜索相关性全局排序, frecency 只做同分兜底", () => {
     const actions = [
-      mk("s1", "Settings", 10),
-      mk("v1", "View", 5),
-      mk("v2", "View", 1),
+      mk("pier.settings.open", "Settings", 10, "Open Settings"),
+      mk("pier.panel.equalizeSplits", "Panel", 1, "Equalize Panels", [
+        "balance panels",
+      ]),
     ];
-    const groups = groupActionsForPalette(actions, new Map(), "foo");
-    expect(groups.map((g) => g.category)).toEqual(["View", "Settings"]);
-    expect(groups[0]?.actions.map((a) => a.id)).toEqual(["v1", "v2"]);
+    const ranked = rankActionsForPalette(
+      actions,
+      new Map([["pier.settings.open", 100]]),
+      "balance",
+      new Map()
+    );
+
+    expect(ranked.map((a) => a.id)).toEqual(["pier.panel.equalizeSplits"]);
   });
 
   it("query 空 + 全无 frecency → 等同 CATEGORY_META.order + sortOrder", () => {

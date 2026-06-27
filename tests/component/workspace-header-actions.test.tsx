@@ -1,14 +1,26 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import i18next from "i18next";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
 } from "@/components/workspace/workspace-header-actions.tsx";
+import { initI18n } from "@/i18n/index.ts";
+import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 let setOverlayActive: ReturnType<typeof vi.fn>;
+let disposePanelActions: (() => void) | null = null;
 let originalHasPointerCapture:
   | typeof HTMLElement.prototype.hasPointerCapture
   | undefined;
@@ -58,13 +70,18 @@ function createPanel(id: string, title: string) {
 }
 
 function createProps(
-  panels: ReturnType<typeof createPanel>[]
+  panels: ReturnType<typeof createPanel>[],
+  groupCount = 1
 ): IDockviewHeaderActionsProps {
   const group = {};
+  const groups = Array.from({ length: groupCount }, (_, index) => ({
+    id: `group-${index + 1}`,
+  }));
   const containerApi = {
     activeGroup: group,
     activePanel: panels[0] ?? null,
     addPanel: vi.fn(),
+    groups,
     panels,
   };
   return {
@@ -78,7 +95,13 @@ function createProps(
   } as unknown as IDockviewHeaderActionsProps;
 }
 
-beforeEach(() => {
+beforeAll(async () => {
+  await initI18n();
+});
+
+beforeEach(async () => {
+  await i18next.changeLanguage("en");
+  disposePanelActions = registerPanelActions();
   setOverlayActive = vi.fn();
   originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
   originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
@@ -118,6 +141,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  disposePanelActions?.();
+  disposePanelActions = null;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   setDockviewTabRevealRoot(null);
@@ -148,32 +173,51 @@ afterEach(() => {
 describe("WorkspaceHeaderActions", () => {
   it("renders the panel size control in the right header action area", () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
 
     expect(
-      screen.getByRole("button", { name: "Maximize panel" })
+      screen.getByRole("button", { name: "Toggle Panel Maximize" })
     ).toBeInTheDocument();
   });
 
   it("toggles the group active panel from the right header action area", () => {
     const panel = createPanel("terminal-1", "Terminal 1");
     const props = createProps([panel]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Maximize panel" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Toggle Panel Maximize" })
+    );
 
     expect(panel.api.setActive).toHaveBeenCalledOnce();
     expect(panel.api.maximize).toHaveBeenCalledOnce();
+  });
+
+  it("does not render equalize in the tab row for split layouts", () => {
+    const panel = createPanel("terminal-1", "Terminal 1");
+    const props = createProps([panel], 2);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderRightActions {...props} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Equalize Panels" })
+    ).not.toBeInTheDocument();
   });
 
   it("renders minimize in the right header action area for a maximized panel", () => {
     const panel = createPanel("terminal-1", "Terminal 1");
     vi.mocked(panel.api.isMaximized).mockReturnValue(true);
     const props = createProps([panel]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Minimize panel" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Toggle Panel Maximize" })
+    );
 
     expect(panel.api.setActive).toHaveBeenCalledOnce();
     expect(panel.api.exitMaximized).toHaveBeenCalledOnce();
@@ -217,6 +261,139 @@ describe("WorkspaceHeaderActions", () => {
     expect(
       await screen.findByRole("combobox", { name: "Hidden tabs" })
     ).toHaveTextContent("1");
+
+    header.remove();
+  });
+
+  it("renders the overflow trigger when a tab is only partially clipped", async () => {
+    const header = document.createElement("div");
+    const tabsContainer = document.createElement("div");
+    const firstTab = document.createElement("div");
+    const firstContent = document.createElement("div");
+    const secondTab = document.createElement("div");
+    const secondContent = document.createElement("div");
+    const actionsContainer = document.createElement("div");
+
+    header.className = "dv-tabs-and-actions-container";
+    tabsContainer.className = "dv-tabs-container";
+    firstTab.className = "dv-tab";
+    secondTab.className = "dv-tab";
+    firstContent.dataset.panelTabId = "terminal-1";
+    secondContent.dataset.panelTabId = "terminal-2";
+    firstTab.append(firstContent);
+    secondTab.append(secondContent);
+    tabsContainer.append(firstTab, secondTab);
+    header.append(tabsContainer, actionsContainer);
+    document.body.append(header);
+
+    setRect(tabsContainer, { bottom: 34, left: 0, right: 120, top: 0 });
+    setRect(firstTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(secondTab, { bottom: 34, left: 80, right: 160, top: 0 });
+
+    render(
+      <WorkspaceHeaderActions
+        {...createProps([
+          createPanel("terminal-1", "Terminal 1"),
+          createPanel("terminal-2", "Terminal 2"),
+        ])}
+      />,
+      { container: actionsContainer }
+    );
+
+    expect(
+      await screen.findByRole("combobox", { name: "Hidden tabs" })
+    ).toHaveTextContent("1");
+
+    header.remove();
+  });
+
+  it("renders the overflow trigger when the tab strip collapses to zero width", async () => {
+    const header = document.createElement("div");
+    const tabsContainer = document.createElement("div");
+    const firstTab = document.createElement("div");
+    const firstContent = document.createElement("div");
+    const secondTab = document.createElement("div");
+    const secondContent = document.createElement("div");
+    const actionsContainer = document.createElement("div");
+
+    header.className = "dv-tabs-and-actions-container";
+    tabsContainer.className = "dv-tabs-container";
+    firstTab.className = "dv-tab";
+    secondTab.className = "dv-tab";
+    firstContent.dataset.panelTabId = "terminal-1";
+    secondContent.dataset.panelTabId = "terminal-2";
+    firstTab.append(firstContent);
+    secondTab.append(secondContent);
+    tabsContainer.append(firstTab, secondTab);
+    header.append(tabsContainer, actionsContainer);
+    document.body.append(header);
+
+    setRect(tabsContainer, { bottom: 34, left: 120, right: 120, top: 0 });
+    setRect(firstTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(secondTab, { bottom: 34, left: 80, right: 160, top: 0 });
+
+    render(
+      <WorkspaceHeaderActions
+        {...createProps([
+          createPanel("terminal-1", "Terminal 1"),
+          createPanel("terminal-2", "Terminal 2"),
+        ])}
+      />,
+      { container: actionsContainer }
+    );
+
+    expect(
+      await screen.findByRole("combobox", { name: "Hidden tabs" })
+    ).toHaveTextContent("2");
+
+    header.remove();
+  });
+
+  it("keeps a zero-width overflow anchor mounted when no tabs are clipped", async () => {
+    const header = document.createElement("div");
+    const tabsContainer = document.createElement("div");
+    const firstTab = document.createElement("div");
+    const firstContent = document.createElement("div");
+    const secondTab = document.createElement("div");
+    const secondContent = document.createElement("div");
+    const actionsContainer = document.createElement("div");
+
+    header.className = "dv-tabs-and-actions-container";
+    tabsContainer.className = "dv-tabs-container";
+    firstTab.className = "dv-tab";
+    secondTab.className = "dv-tab";
+    firstContent.dataset.panelTabId = "terminal-1";
+    secondContent.dataset.panelTabId = "terminal-2";
+    firstTab.append(firstContent);
+    secondTab.append(secondContent);
+    tabsContainer.append(firstTab, secondTab);
+    header.append(tabsContainer, actionsContainer);
+    document.body.append(header);
+
+    setRect(tabsContainer, { bottom: 34, left: 0, right: 240, top: 0 });
+    setRect(firstTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(secondTab, { bottom: 34, left: 80, right: 160, top: 0 });
+
+    render(
+      <WorkspaceHeaderActions
+        {...createProps([
+          createPanel("terminal-1", "Terminal 1"),
+          createPanel("terminal-2", "Terminal 2"),
+        ])}
+      />,
+      { container: actionsContainer }
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("combobox", { name: "Hidden tabs" })
+      ).not.toBeInTheDocument();
+    });
+    const overflowAnchor = actionsContainer.querySelector(
+      '[data-slot="panel-overflow"]'
+    );
+    expect(overflowAnchor).toHaveClass("w-0", "overflow-hidden");
+    expect(overflowAnchor).not.toHaveClass("w-16");
 
     header.remove();
   });

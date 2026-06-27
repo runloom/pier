@@ -7,7 +7,6 @@
  *   - selectedValue 控制高亮项, 切 quick-pick 时初始化为 checked item, 触发
  *     debounced onChangeSelection (preview 去重)。
  */
-import { Settings } from "lucide-react";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -16,6 +15,10 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import {
+  CommandsView,
+  SearchResultsView,
+} from "@/components/common/command-palette-action-rows.tsx";
 import { Badge } from "@/components/primitives/badge.tsx";
 import {
   Command,
@@ -26,62 +29,21 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/primitives/command.tsx";
-import { Kbd } from "@/components/primitives/kbd.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
-import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import {
-  CATEGORY_META,
-  compareActions,
-  compareGroups,
-  UNKNOWN_ORDER,
-} from "@/lib/command-palette/frecency.ts";
+  groupActionsForPalette as groupActionsForPaletteImpl,
+  rankActionsForPalette as rankActionsForPaletteImpl,
+} from "@/lib/command-palette/action-search.ts";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
-
-interface ActionGroup {
-  actions: Action[];
-  category: string;
-}
-
-export function groupActionsForPalette(
-  actions: readonly Action[],
-  frecencyMap: ReadonlyMap<string, number>,
-  query: string
-): ActionGroup[] {
-  const map = new Map<string, Action[]>();
-  for (const action of actions) {
-    const list = map.get(action.category) ?? [];
-    list.push(action);
-    map.set(action.category, list);
-  }
-  const groups = Array.from(map.entries()).map(([category, list]) => ({
-    category,
-    actions: list,
-  }));
-
-  if (query.length > 0) {
-    // 有搜索时不重排组内, 让 cmdk fuzzy score 接管
-    return groups.sort(
-      (a, b) =>
-        (CATEGORY_META[a.category]?.order ?? UNKNOWN_ORDER) -
-        (CATEGORY_META[b.category]?.order ?? UNKNOWN_ORDER)
-    );
-  }
-
-  // 入参可能已被 actionRegistry.list 按 sortOrder 预排; 这里再排一次保证函数自洽, 不依赖上游顺序.
-  for (const g of groups) {
-    g.actions.sort((a, b) => compareActions(a, b, frecencyMap));
-  }
-  return groups.sort((ga, gb) =>
-    compareGroups(ga.actions, gb.actions, frecencyMap)
-  );
-}
 
 function useActions(): readonly Action[] {
   // version 变 → snapshot 变 → useSyncExternalStore 通知 React 重渲,
@@ -136,7 +98,20 @@ export function CommandPalette() {
 
   // 本地 UI 态: 与 controller 保持同步, 但 cmdk 需要 controlled value/query 引用稳定。
   const [query, setQuery] = useState("");
-  const groups = groupActionsForPalette(actions, frecencyMap, query);
+  const normalizedQuery = query.trim();
+  const groups =
+    normalizedQuery.length === 0
+      ? groupActionsForPaletteImpl(actions, frecencyMap, normalizedQuery)
+      : [];
+  const rankedActions =
+    normalizedQuery.length > 0
+      ? rankActionsForPaletteImpl(
+          actions,
+          frecencyMap,
+          normalizedQuery,
+          keybindingLabels
+        )
+      : [];
   const [selectedValue, setSelectedValue] = useState("");
   const lastRequestIdRef = useRef(-1);
   // null = 未 accept; 非 null = 已 accept (值是 item id)。
@@ -252,6 +227,16 @@ export function CommandPalette() {
     }
   };
 
+  useEffect(() => {
+    if (mode !== "commands" || normalizedQuery.length === 0) {
+      return;
+    }
+    if (rankedActions.some((action) => action.id === selectedValue)) {
+      return;
+    }
+    setSelectedValue(rankedActions[0]?.id ?? "");
+  }, [mode, normalizedQuery, rankedActions, selectedValue]);
+
   const handleAcceptQuickPickItem = async (item: QuickPickItem) => {
     if (item.disabled || !quickPick) {
       return;
@@ -300,6 +285,35 @@ export function CommandPalette() {
     mode === "quick-pick" && quickPick
       ? (quickPick.placeholder ?? quickPick.title)
       : t("commandPalette.placeholder.commands");
+  const commandContent: ReactNode =
+    mode === "quick-pick" && quickPick ? (
+      <QuickPickView
+        onAccept={handleAcceptQuickPickItem}
+        query={normalizedQuery}
+        quickPick={quickPick}
+      />
+    ) : null;
+  const actionContent: ReactNode =
+    normalizedQuery.length > 0 ? (
+      <SearchResultsView
+        actions={rankedActions}
+        heading={t("commandPalette.searchResults")}
+        keybindingLabels={keybindingLabels}
+        onExecute={handleExecuteAction}
+      />
+    ) : (
+      <CommandsView
+        categoryHeading={(category) => {
+          const meta = CATEGORY_META[category];
+          return meta
+            ? t(`commandPalette.category.${meta.labelKey}`)
+            : category;
+        }}
+        groups={groups}
+        keybindingLabels={keybindingLabels}
+        onExecute={handleExecuteAction}
+      />
+    );
 
   return (
     <CommandDialog
@@ -313,6 +327,7 @@ export function CommandPalette() {
         loop
         onKeyDown={handleCommandKeyDown}
         onValueChange={handleValueChange}
+        shouldFilter={false}
         value={selectedValue}
       >
         <CommandInput
@@ -322,102 +337,23 @@ export function CommandPalette() {
         />
         <CommandList className="max-h-[min(60vh,520px)]">
           <CommandEmpty>{t("commandPalette.empty")}</CommandEmpty>
-          {mode === "quick-pick" && quickPick ? (
-            <QuickPickView
-              onAccept={handleAcceptQuickPickItem}
-              quickPick={quickPick}
-            />
-          ) : (
-            <CommandsView
-              groups={groups}
-              keybindingLabels={keybindingLabels}
-              onExecute={handleExecuteAction}
-              t={t}
-            />
-          )}
+          {commandContent ?? actionContent}
         </CommandList>
       </Command>
     </CommandDialog>
   );
 }
 
-function CommandsView({
-  groups,
-  keybindingLabels,
-  onExecute,
-  t,
-}: {
-  groups: readonly ActionGroup[];
-  keybindingLabels: ReadonlyMap<string, string>;
-  onExecute: (action: Action) => Promise<void>;
-  t: ReturnType<typeof useT>;
-}): ReactNode {
-  return (
-    <>
-      {groups.map((group) => {
-        const meta = CATEGORY_META[group.category];
-        const heading = meta
-          ? t(`commandPalette.category.${meta.labelKey}`)
-          : group.category;
-        return (
-          <CommandGroup heading={heading} key={group.category}>
-            {group.actions.map((action) => {
-              const Icon = action.metadata?.iconComponent ?? Settings;
-              const shortcut = keybindingLabels.get(action.id);
-              const disabled = action.enabled?.() === false;
-              const disabledReason = disabled
-                ? action.disabledReason?.()
-                : null;
-              return (
-                <CommandItem
-                  data-disabled={disabled}
-                  disabled={disabled}
-                  key={action.id}
-                  keywords={[
-                    action.title(),
-                    ...(action.metadata?.keywords ?? []),
-                  ]}
-                  onSelect={() => {
-                    onExecute(action).catch((err) => {
-                      console.error(
-                        `[command-palette] onSelect ${action.id} rejected:`,
-                        err
-                      );
-                    });
-                  }}
-                  value={action.id}
-                >
-                  <Icon className="size-4 shrink-0 opacity-70" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {action.title()}
-                  </span>
-                  {disabledReason ? (
-                    <span className="max-w-56 shrink-0 truncate text-muted-foreground text-xs">
-                      {disabledReason}
-                    </span>
-                  ) : null}
-                  {shortcut ? (
-                    <Kbd className="ml-auto bg-transparent font-mono tracking-wider">
-                      {shortcut}
-                    </Kbd>
-                  ) : null}
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        );
-      })}
-    </>
-  );
-}
-
 function QuickPickView({
   quickPick,
   onAccept,
+  query,
 }: {
   quickPick: QuickPick;
   onAccept: (item: QuickPickItem) => Promise<void>;
+  query: string;
 }): ReactNode {
+  const filterItem = (item: QuickPickItem) => quickPickItemMatches(item, query);
   const renderItem = (item: QuickPickItem) => (
     <CommandItem
       aria-current={item.checked === true ? "true" : undefined}
@@ -425,7 +361,6 @@ function QuickPickView({
       data-disabled={item.disabled === true}
       disabled={item.disabled === true}
       key={item.id}
-      keywords={[item.label, item.id, ...(item.keywords ?? [])]}
       onSelect={() => {
         onAccept(item).catch((err) => {
           console.error(
@@ -468,10 +403,27 @@ function QuickPickView({
       {quickPick.sections && quickPick.sections.length > 0
         ? quickPick.sections.map((section) => (
             <CommandGroup heading={section.heading} key={section.id}>
-              {section.items.map(renderItem)}
+              {section.items.filter(filterItem).map(renderItem)}
             </CommandGroup>
           ))
-        : (quickPick.items ?? []).map(renderItem)}
+        : (quickPick.items ?? []).filter(filterItem).map(renderItem)}
     </div>
   );
+}
+
+function quickPickItemMatches(item: QuickPickItem, query: string): boolean {
+  const normalizedQuery = query.toLocaleLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+  return [
+    item.id,
+    item.label,
+    item.detail ?? "",
+    item.description ?? "",
+    ...(item.keywords ?? []),
+  ]
+    .join(" ")
+    .toLocaleLowerCase()
+    .includes(normalizedQuery);
 }

@@ -20,7 +20,7 @@ function setRect(
 }
 
 describe("workspace tab overflow", () => {
-  it("returns panels whose dockview tabs are fully outside the tab strip", () => {
+  it("returns panels whose dockview tabs are outside the tab strip", () => {
     const tabsContainer = document.createElement("div");
     const firstTab = document.createElement("div");
     const firstTabContent = document.createElement("div");
@@ -47,7 +47,7 @@ describe("workspace tab overflow", () => {
     ).toEqual(["terminal-2"]);
   });
 
-  it("does not return tabs that are partially visible in the tab strip", () => {
+  it("returns tabs that are partially clipped by the tab strip", () => {
     const tabsContainer = document.createElement("div");
     const firstTab = document.createElement("div");
     const firstTabContent = document.createElement("div");
@@ -71,7 +71,61 @@ describe("workspace tab overflow", () => {
         { id: "terminal-1" },
         { id: "terminal-2" },
       ])
+    ).toEqual(["terminal-2"]);
+  });
+
+  it("does not return tabs that are fully visible in the tab strip", () => {
+    const tabsContainer = document.createElement("div");
+    const firstTab = document.createElement("div");
+    const firstTabContent = document.createElement("div");
+    const secondTab = document.createElement("div");
+    const secondTabContent = document.createElement("div");
+
+    firstTab.className = "dv-tab";
+    secondTab.className = "dv-tab";
+    firstTabContent.dataset.panelTabId = "terminal-1";
+    secondTabContent.dataset.panelTabId = "terminal-2";
+    firstTab.append(firstTabContent);
+    secondTab.append(secondTabContent);
+    tabsContainer.append(firstTab, secondTab);
+
+    setRect(tabsContainer, { bottom: 34, left: 0, right: 180, top: 0 });
+    setRect(firstTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(secondTab, { bottom: 34, left: 80, right: 160, top: 0 });
+
+    expect(
+      getOverflowPanelIds(tabsContainer, [
+        { id: "terminal-1" },
+        { id: "terminal-2" },
+      ])
     ).toEqual([]);
+  });
+
+  it("returns all panel ids in tab DOM order when the tab strip has no width", () => {
+    const tabsContainer = document.createElement("div");
+    const firstTab = document.createElement("div");
+    const firstTabContent = document.createElement("div");
+    const secondTab = document.createElement("div");
+    const secondTabContent = document.createElement("div");
+
+    firstTab.className = "dv-tab";
+    secondTab.className = "dv-tab";
+    firstTabContent.dataset.panelTabId = "terminal-1";
+    secondTabContent.dataset.panelTabId = "terminal-2";
+    firstTab.append(firstTabContent);
+    secondTab.append(secondTabContent);
+    tabsContainer.append(firstTab, secondTab);
+
+    setRect(tabsContainer, { bottom: 34, left: 120, right: 120, top: 0 });
+    setRect(firstTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(secondTab, { bottom: 34, left: 80, right: 160, top: 0 });
+
+    expect(
+      getOverflowPanelIds(tabsContainer, [
+        { id: "terminal-2" },
+        { id: "terminal-1" },
+      ])
+    ).toEqual(["terminal-1", "terminal-2"]);
   });
 
   it("returns clipped panel ids in the dockview tab DOM order", () => {
