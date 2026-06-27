@@ -1,9 +1,11 @@
 import { pierCommandSchema } from "@shared/contracts/commands.ts";
 import {
+  normalizePanelTabChromeInput,
   panelContextSchema,
   panelDescriptorSchema,
   panelSnapshotSchema,
   panelTabChromeSchema,
+  panelTabStatusSchema,
 } from "@shared/contracts/panel.ts";
 import { rendererCommandSchema } from "@shared/contracts/renderer-command.ts";
 import { describe, expect, it } from "vitest";
@@ -19,6 +21,15 @@ const context = {
 };
 
 describe("shared panel contract", () => {
+  it("parses the canonical tab status enum", () => {
+    expect(panelTabStatusSchema.parse("running")).toBe("running");
+    expect(panelTabStatusSchema.parse("waiting")).toBe("waiting");
+    expect(panelTabStatusSchema.parse("blocked")).toBe("blocked");
+    expect(panelTabStatusSchema.parse("succeeded")).toBe("succeeded");
+    expect(panelTabStatusSchema.parse("failed")).toBe("failed");
+    expect(panelTabStatusSchema.safeParse("busy").success).toBe(false);
+  });
+
   it("parses reusable panel context fields", () => {
     expect(
       panelContextSchema.parse({
@@ -62,9 +73,9 @@ describe("shared panel contract", () => {
         label: "Task",
       },
       state: {
-        busy: true,
         colorToken: "state.running",
         label: "Running",
+        status: "running",
       },
       title: "test",
       tooltip: {
@@ -79,9 +90,60 @@ describe("shared panel contract", () => {
     expect(tab).toMatchObject({
       badge: { label: "package.json" },
       icon: { id: "custom.anything.from.host.registry" },
-      state: { busy: true, label: "Running" },
+      state: { label: "Running", status: "running" },
       title: "test",
     });
+  });
+
+  it("does not accept busy as canonical tab state", () => {
+    expect(
+      panelTabChromeSchema.safeParse({
+        state: { busy: true, label: "Running" },
+        title: "test",
+      }).success
+    ).toBe(false);
+  });
+
+  it("normalizes legacy busy tab state at ingress boundaries", () => {
+    const running = normalizePanelTabChromeInput({
+      state: { busy: true, label: "Running" },
+      title: "dev",
+    });
+    expect(running).toEqual({
+      state: { label: "Running", status: "running" },
+      title: "dev",
+    });
+    expect(running?.state).not.toHaveProperty("busy");
+
+    const succeeded = normalizePanelTabChromeInput({
+      state: {
+        busy: false,
+        colorToken: "success",
+        label: "Succeeded",
+      },
+      title: "test",
+    });
+    expect(succeeded?.state).toEqual({
+      colorToken: "success",
+      label: "Succeeded",
+      status: "succeeded",
+    });
+    expect(succeeded?.state).not.toHaveProperty("busy");
+
+    const failed = normalizePanelTabChromeInput({
+      state: {
+        busy: false,
+        colorToken: "destructive",
+        label: "Failed 1",
+      },
+      title: "test",
+    });
+    expect(failed?.state).toEqual({
+      colorToken: "destructive",
+      label: "Failed 1",
+      status: "failed",
+    });
+    expect(failed?.state).not.toHaveProperty("busy");
   });
 
   it("allows descriptors and snapshots to carry tab chrome", () => {
@@ -191,6 +253,30 @@ describe("shared panel contract", () => {
       },
       type: "terminal.open",
     });
+  });
+
+  it("normalizes legacy renderer terminal.open tab state", () => {
+    const command = rendererCommandSchema.parse({
+      context,
+      launchId: "launch-1",
+      tab: {
+        state: { busy: true, label: "Running" },
+        title: "test",
+      },
+      type: "terminal.open",
+    });
+
+    expect(command).toMatchObject({
+      tab: {
+        state: { label: "Running", status: "running" },
+        title: "test",
+      },
+      type: "terminal.open",
+    });
+    if (command.type !== "terminal.open") {
+      throw new Error("expected terminal.open command");
+    }
+    expect(command.tab?.state).not.toHaveProperty("busy");
   });
 
   it("allows public terminal profile management commands", () => {

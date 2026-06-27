@@ -218,7 +218,7 @@ function launchForTask(
     tab: {
       badge: { label: sourceLabel },
       icon: { id: "pier.task", label: "Task" },
-      state: { busy: true, label: "Running" },
+      state: { label: "Running", status: "running" },
       title: task.label,
       tooltip: {
         lines: [

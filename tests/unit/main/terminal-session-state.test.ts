@@ -87,16 +87,17 @@ describe("terminal session state", () => {
     await updateTerminalPanelTab("main", "terminal-1", {
       badge: { label: "package.json" },
       icon: { id: "pier.task" },
-      state: { busy: true, label: "Running" },
+      state: { label: "Running", status: "running" },
       title: "test",
     });
-    await patchTerminalPanelTab("main", "terminal-1", {
+    const legacyPatch = {
       state: {
         busy: false,
         colorToken: "success",
         label: "Succeeded",
       },
-    });
+    } as unknown as Parameters<typeof patchTerminalPanelTab>[2];
+    await patchTerminalPanelTab("main", "terminal-1", legacyPatch);
 
     await expect(
       readTerminalPanelSession("main", "terminal-1")
@@ -106,12 +107,62 @@ describe("terminal session state", () => {
         badge: { label: "package.json" },
         icon: { id: "pier.task" },
         state: {
-          busy: false,
           colorToken: "success",
           label: "Succeeded",
+          status: "succeeded",
         },
         title: "test",
       },
+    });
+  });
+
+  it("normalizes legacy busy tab JSON without resetting the session", async () => {
+    const pier = context("/Users/xyz/ABC/pier");
+    await writeFile(
+      join(userDataDir, "terminal-session-state.json"),
+      JSON.stringify({
+        version: 1,
+        windows: {
+          main: {
+            panels: {
+              "terminal-1": {
+                context: pier,
+                tab: {
+                  icon: { id: "pier.task" },
+                  state: { busy: true, label: "Running" },
+                  title: "test",
+                },
+                title: "test",
+                updatedAt: "2026-06-26T00:00:00.000Z",
+              },
+            },
+          },
+        },
+      })
+    );
+
+    const { flushTerminalSessionState, readTerminalPanelSession } =
+      await import("@main/state/terminal-session-state.ts");
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      context: pier,
+      tab: {
+        icon: { id: "pier.task" },
+        state: { label: "Running", status: "running" },
+        title: "test",
+      },
+      title: "test",
+    });
+    await flushTerminalSessionState();
+
+    const stored = JSON.parse(
+      await readFile(join(userDataDir, "terminal-session-state.json"), "utf-8")
+    );
+    expect(stored.windows.main.panels["terminal-1"].tab.state).toEqual({
+      label: "Running",
+      status: "running",
     });
   });
 

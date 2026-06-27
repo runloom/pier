@@ -10,6 +10,7 @@
  */
 import { join } from "node:path";
 import {
+  normalizePanelTabChromeInput,
   type PanelContext,
   type PanelTabChrome,
   panelContextSchema,
@@ -24,7 +25,10 @@ import {
 
 const terminalPanelSessionSchema = z.object({
   context: panelContextSchema.optional(),
-  tab: panelTabChromeSchema.optional(),
+  tab: z.preprocess(
+    normalizePanelTabChromeInput,
+    panelTabChromeSchema.optional()
+  ),
   title: z.string().optional(),
   updatedAt: z.string(),
 });
@@ -111,24 +115,32 @@ function mergePanelTabChrome(
   current: PanelTabChrome | undefined,
   patch: Partial<PanelTabChrome>
 ): PanelTabChrome | undefined {
+  const normalizedPatch = normalizePanelTabChromeInput(patch);
+  if (!normalizedPatch) {
+    return current;
+  }
   const next = {
     ...(current ?? {}),
-    ...patch,
-    ...(patch.badge
-      ? { badge: { ...(current?.badge ?? {}), ...patch.badge } }
+    ...normalizedPatch,
+    ...(normalizedPatch.badge
+      ? { badge: { ...(current?.badge ?? {}), ...normalizedPatch.badge } }
       : {}),
-    ...(patch.icon
-      ? { icon: { ...(current?.icon ?? {}), ...patch.icon } }
+    ...(normalizedPatch.icon
+      ? { icon: { ...(current?.icon ?? {}), ...normalizedPatch.icon } }
       : {}),
-    ...(patch.state
-      ? { state: { ...(current?.state ?? {}), ...patch.state } }
+    ...(normalizedPatch.state
+      ? { state: { ...(current?.state ?? {}), ...normalizedPatch.state } }
       : {}),
-    ...(patch.tooltip
-      ? { tooltip: { ...(current?.tooltip ?? {}), ...patch.tooltip } }
+    ...(normalizedPatch.tooltip
+      ? {
+          tooltip: {
+            ...(current?.tooltip ?? {}),
+            ...normalizedPatch.tooltip,
+          },
+        }
       : {}),
   };
-  const parsed = panelTabChromeSchema.safeParse(next);
-  return parsed.success ? parsed.data : current;
+  return normalizePanelTabChromeInput(next) ?? current;
 }
 
 export async function updateTerminalPanelContext(
@@ -161,8 +173,8 @@ export async function updateTerminalPanelTab(
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
     return;
   }
-  const parsed = panelTabChromeSchema.safeParse(tab);
-  if (!parsed.success) {
+  const normalized = normalizePanelTabChromeInput(tab);
+  if (!normalized) {
     return;
   }
   const s = await ensureStore();
@@ -172,7 +184,7 @@ export async function updateTerminalPanelTab(
     const current = windowState.panels[panelId] ?? {};
     windowState.panels[panelId] = {
       ...current,
-      tab: parsed.data,
+      tab: normalized,
       updatedAt: new Date().toISOString(),
     };
     return state;
