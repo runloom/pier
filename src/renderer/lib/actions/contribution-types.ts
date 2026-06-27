@@ -7,10 +7,12 @@ export type WorkspaceWhenField =
   | "hasActivePanel"
   | "hasApi"
   | "panelCount";
+export type TerminalWhenField = "hasActivePanel";
 
 export type ActionWhenClause =
   | `workspace.${WorkspaceWhenField}`
-  | `workspace.${WorkspaceWhenField} > ${number}`;
+  | `workspace.${WorkspaceWhenField} > ${number}`
+  | `terminal.${TerminalWhenField}`;
 
 type ActionWhenAnd = "&&" | "&& " | " &&" | " && ";
 
@@ -34,6 +36,9 @@ export interface ActionContribution {
 }
 
 export interface ActionWhenContext {
+  terminal: {
+    hasActivePanel: boolean;
+  };
   workspace: {
     activeGroupPanelCount: number;
     groupCount: number;

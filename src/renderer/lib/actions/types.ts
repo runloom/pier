@@ -21,7 +21,6 @@ export interface ActionMetadata {
    */
   group?: string;
   iconComponent?: LucideIcon;
-  keywords?: readonly string[];
   sortOrder?: number;
   /**
    * 设置后, 该 action 进同名子菜单. 同 surface 内 submenu() 返回相同字符串的

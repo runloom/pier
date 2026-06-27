@@ -3,7 +3,7 @@ export interface SearchDocument<TPayload = unknown> {
   category: string;
   disabled: boolean;
   id: string;
-  kind: "action";
+  kind: "action" | "quick-pick";
   payload: TPayload;
   shortcutLabel?: string;
   source: string;

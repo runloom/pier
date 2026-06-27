@@ -1,22 +1,35 @@
-import i18next from "i18next";
 import { Bug } from "lucide-react";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
+import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
+
+export const TERMINAL_DEBUG_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
+  [
+    {
+      aliasesKey: "commandPalette.aliases.openTerminalDebugWindow",
+      categoryKey: "terminal",
+      group: "8_debug",
+      handler: () => {
+        window.pier.terminal.openDebugWindow().catch((err: unknown) => {
+          console.error("[terminal-debug] open window failed:", err);
+        });
+      },
+      iconComponent: Bug,
+      id: "pier.terminal.openDebugWindow",
+      surfaces: [],
+      titleKey: "commandPalette.action.openTerminalDebugWindow",
+    },
+  ];
 
 export function registerTerminalDebugActions(): () => void {
-  return actionRegistry.register({
-    category: "Terminal",
-    handler: () => {
-      window.pier.terminal.openDebugWindow().catch((err: unknown) => {
-        console.error("[terminal-debug] open window failed:", err);
-      });
-    },
-    id: "pier.terminal.openDebugWindow",
-    metadata: {
-      group: "8_debug",
-      iconComponent: Bug,
-      keywords: ["terminal", "debug", "native", "route"],
-    },
-    surfaces: [],
-    title: () => i18next.t("commandPalette.action.openTerminalDebugWindow"),
-  });
+  const disposers = registerActionContributions(
+    TERMINAL_DEBUG_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
+  );
+
+  return () => {
+    for (const dispose of disposers) {
+      dispose();
+    }
+  };
 }

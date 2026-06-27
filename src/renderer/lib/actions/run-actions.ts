@@ -3,7 +3,9 @@ import { List, Play } from "lucide-react";
 import { panelKindOf } from "@/components/workspace/panel-registry.ts";
 import type { WorkspacePanelSnapshot } from "@/components/workspace/workspace-panel-snapshots.ts";
 import { buildWorkspacePanelSnapshots } from "@/components/workspace/workspace-panel-snapshots.ts";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
+import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type {
   QuickPickItem,
@@ -93,7 +95,7 @@ function buildTerminalPanelSections(openPanels: WorkspacePanelSnapshot[]): {
       badges: terminalTabBadge(panel),
       checked: panel.active === true,
       id: itemId,
-      keywords: [
+      searchTerms: [
         panel.id,
         panel.context?.cwd,
         panel.context?.projectRoot,
@@ -124,94 +126,94 @@ function currentTerminalPanels(): WorkspacePanelSnapshot[] {
   ).filter((panel) => panel.kind === "terminal");
 }
 
-export function registerRunActions(): () => void {
-  const disposers: Array<() => void> = [];
+function openRunTaskQuickPick() {
+  useCommandPaletteController.getState().openQuickPick({
+    title: i18next.t("commandPalette.action.runTask"),
+    placeholder: i18next.t("commandPalette.placeholder.runTask"),
+    items: [
+      {
+        description: i18next.t("commandPalette.run.action.later"),
+        detail: i18next.t("commandPalette.run.taskPlaceholderDetail"),
+        disabled: true,
+        id: "task-placeholder",
+        label: i18next.t("commandPalette.run.taskPlaceholder"),
+      },
+    ],
+    onAccept: () => undefined,
+  });
+}
 
-  disposers.push(
-    actionRegistry.register({
-      category: "Run",
-      handler: () => {
-        useCommandPaletteController.getState().openQuickPick({
-          title: i18next.t("commandPalette.action.runTask"),
-          placeholder: i18next.t("commandPalette.placeholder.runTask"),
+function openTerminalListQuickPick() {
+  const api = useWorkspaceStore.getState().api;
+  if (!api) {
+    return;
+  }
+  const { panelsByItemId, sections } = buildTerminalPanelSections(
+    currentTerminalPanels()
+  );
+  useCommandPaletteController.getState().openQuickPick({
+    title: i18next.t("commandPalette.action.terminalList"),
+    placeholder: i18next.t("commandPalette.placeholder.terminalList"),
+    ...(sections.length > 0
+      ? { sections }
+      : {
           items: [
             {
               description: i18next.t("commandPalette.run.action.later"),
-              detail: i18next.t("commandPalette.run.taskPlaceholderDetail"),
+              detail: i18next.t("commandPalette.run.noTerminalsDetail"),
               disabled: true,
-              id: "task-placeholder",
-              label: i18next.t("commandPalette.run.taskPlaceholder"),
+              id: "terminal-empty",
+              label: i18next.t("commandPalette.run.noTerminals"),
             },
           ],
-          onAccept: () => undefined,
-        });
-      },
-      id: "pier.run.task",
-      metadata: {
-        group: "1_run",
-        iconComponent: Play,
-        keywords: ["task", "run", "任务", "运行"],
-        sortOrder: 0,
-      },
-      surfaces: ["command-palette"],
-      title: () => i18next.t("commandPalette.action.runTask"),
-    })
-  );
+        }),
+    onAccept: (item) => {
+      const panel = panelsByItemId.get(item.id);
+      if (!panel) {
+        return;
+      }
+      const result = activateWorkspacePanel(api, panel.id, {
+        expectedKind: "terminal",
+        kindOfComponent: panelKindOf,
+        reveal: "always",
+      });
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+    },
+  });
+}
 
-  disposers.push(
-    actionRegistry.register({
-      category: "Run",
-      enabled: () => useWorkspaceStore.getState().api != null,
-      handler: () => {
-        const api = useWorkspaceStore.getState().api;
-        if (!api) {
-          return;
-        }
-        const { panelsByItemId, sections } = buildTerminalPanelSections(
-          currentTerminalPanels()
-        );
-        useCommandPaletteController.getState().openQuickPick({
-          title: i18next.t("commandPalette.action.terminalList"),
-          placeholder: i18next.t("commandPalette.placeholder.terminalList"),
-          ...(sections.length > 0
-            ? { sections }
-            : {
-                items: [
-                  {
-                    description: i18next.t("commandPalette.run.action.later"),
-                    detail: i18next.t("commandPalette.run.noTerminalsDetail"),
-                    disabled: true,
-                    id: "terminal-empty",
-                    label: i18next.t("commandPalette.run.noTerminals"),
-                  },
-                ],
-              }),
-          onAccept: (item) => {
-            const panel = panelsByItemId.get(item.id);
-            if (!panel) {
-              return;
-            }
-            const result = activateWorkspacePanel(api, panel.id, {
-              expectedKind: "terminal",
-              kindOfComponent: panelKindOf,
-              reveal: "always",
-            });
-            if (!result.ok) {
-              throw new Error(result.message);
-            }
-          },
-        });
-      },
-      id: "pier.run.terminalList",
-      metadata: {
-        group: "1_run",
-        iconComponent: List,
-        keywords: ["terminal", "list", "session", "终端", "列表"],
-        sortOrder: 2,
-      },
-      surfaces: ["command-palette"],
-      title: () => i18next.t("commandPalette.action.terminalList"),
-    })
+export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
+  {
+    aliasesKey: "commandPalette.aliases.runTask",
+    categoryKey: "run",
+    group: "1_run",
+    handler: openRunTaskQuickPick,
+    iconComponent: Play,
+    id: "pier.run.task",
+    sortOrder: 0,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.runTask",
+  },
+  {
+    aliasesKey: "commandPalette.aliases.terminalList",
+    categoryKey: "run",
+    group: "1_run",
+    handler: openTerminalListQuickPick,
+    iconComponent: List,
+    id: "pier.run.terminalList",
+    sortOrder: 2,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.terminalList",
+    when: "workspace.hasApi",
+  },
+];
+
+export function registerRunActions(): () => void {
+  const disposers = registerActionContributions(
+    RUN_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
   );
 
   return () => {

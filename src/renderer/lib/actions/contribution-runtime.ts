@@ -17,12 +17,14 @@ const CATEGORY_BY_KEY: Record<ActionCategoryKey, string> = {
 };
 
 const BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel", "hasApi"]);
+const TERMINAL_BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel"]);
 const NUMBER_WHEN_FIELDS = new Set([
   "activeGroupPanelCount",
   "groupCount",
   "panelCount",
 ]);
 const BOOLEAN_CLAUSE_RE = /^workspace\.([A-Za-z]+)$/;
+const TERMINAL_BOOLEAN_CLAUSE_RE = /^terminal\.([A-Za-z]+)$/;
 const NUMBER_CLAUSE_RE = /^workspace\.([A-Za-z]+)\s*>\s*(\d+)$/;
 const WHEN_CONJUNCTION_RE = /\s*&&\s*/;
 
@@ -50,6 +52,14 @@ function evaluateActionWhenClause(
     }
   }
 
+  const terminalBooleanMatch = TERMINAL_BOOLEAN_CLAUSE_RE.exec(clause);
+  if (terminalBooleanMatch) {
+    const field = terminalBooleanMatch[1];
+    if (field && TERMINAL_BOOLEAN_WHEN_FIELDS.has(field)) {
+      return booleanTerminalValue(field, context);
+    }
+  }
+
   const numberMatch = NUMBER_CLAUSE_RE.exec(clause);
   if (numberMatch) {
     const field = numberMatch[1];
@@ -60,6 +70,18 @@ function evaluateActionWhenClause(
   }
 
   throw new Error(`Unsupported action contribution condition: ${clause}`);
+}
+
+function booleanTerminalValue(
+  field: string,
+  context: ActionWhenContext
+): boolean {
+  switch (field) {
+    case "hasActivePanel":
+      return context.terminal.hasActivePanel;
+    default:
+      throw new Error(`Unsupported boolean terminal field: ${field}`);
+  }
 }
 
 function booleanWorkspaceValue(

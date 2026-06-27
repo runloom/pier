@@ -9,6 +9,9 @@ import { PANEL_LAYOUT_ACTION_CONTRIBUTIONS } from "@/lib/actions/panel-layout-co
 function runtime(groupCount: number) {
   return {
     getContext: () => ({
+      terminal: {
+        hasActivePanel: true,
+      },
       workspace: {
         activeGroupPanelCount: 1,
         groupCount,
@@ -72,7 +75,6 @@ describe("action contributions", () => {
       "junfen",
       "jfmb",
     ]);
-    expect(action.metadata?.keywords).toBeUndefined();
   });
 
   it("evaluates workspace group count conditions", () => {
@@ -81,6 +83,12 @@ describe("action contributions", () => {
     ).toBe(false);
     expect(
       evaluateActionWhen("workspace.groupCount > 1", runtime(2).getContext())
+    ).toBe(true);
+  });
+
+  it("evaluates terminal active panel conditions", () => {
+    expect(
+      evaluateActionWhen("terminal.hasActivePanel", runtime(1).getContext())
     ).toBe(true);
   });
 
