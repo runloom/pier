@@ -1,6 +1,7 @@
 import type { PierCommandEnvelope } from "../src/shared/contracts/commands.ts";
 
 export interface ParsePierCliArgsOptions {
+  clientEnv?: Record<string, string>;
   clientId?: string;
   cwd?: string;
   requestId?: string;

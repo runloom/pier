@@ -52,6 +52,7 @@ describe("bin/pier.mjs", () => {
       json: true,
     });
     expect(parsed.envelope.requestId).toEqual(expect.any(String));
+    expect(parsed.envelope).not.toHaveProperty("clientEnv");
   });
 
   it("忽略 pnpm 传入的前导 -- 分隔符", async () => {
@@ -378,6 +379,54 @@ describe("bin/pier.mjs", () => {
     });
 
     expect(stdout).toBe("");
+    await server.close();
+  });
+
+  it("真实 socket 请求携带 CLI 环境但 print-envelope 不输出", async () => {
+    const userDataDir = await makeTempDir();
+    const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
+    let seenClientEnv: Record<string, string> | undefined;
+    const server = createPierLocalControlServer({
+      handleRequest: (envelope) => {
+        const parsed = pierCommandEnvelopeSchema.parse(envelope);
+        seenClientEnv = parsed.clientEnv;
+        return Promise.resolve({
+          data: null,
+          ok: true,
+          requestId: parsed.requestId,
+        });
+      },
+      socketPath,
+    });
+    await server.start();
+
+    await execFileAsync("node", ["bin/pier.mjs", "status", "--json"], {
+      env: {
+        ...process.env,
+        PATH: `/cli/bin:${process.env.PATH ?? ""}`,
+        PIER_CONTROL_SOCKET_PATH: socketPath,
+        PIER_TEST_CLIENT_ENV: "from-cli",
+      },
+    });
+
+    expect(seenClientEnv).toMatchObject({
+      PIER_TEST_CLIENT_ENV: "from-cli",
+    });
+    expect(seenClientEnv?.PATH).toContain("/cli/bin");
+
+    const { stdout } = await execFileAsync(
+      "node",
+      ["bin/pier.mjs", "status", "--json", "--print-envelope"],
+      {
+        env: {
+          ...process.env,
+          PATH: `/cli/bin:${process.env.PATH ?? ""}`,
+          PIER_TEST_CLIENT_ENV: "from-cli",
+        },
+      }
+    );
+    expect(JSON.parse(stdout).envelope).not.toHaveProperty("clientEnv");
+
     await server.close();
   });
 
