@@ -61,6 +61,10 @@ final class EventRouterView: NSView {
     /// 时 focused 已切走会路由错).
     static var forwardCmdKeyCallback: ((Int, UInt, String) -> Void)?
 
+    /// Modifier state 转发: terminal NSView 做 firstResponder 时, Web 收不到纯 Cmd
+    /// flagsChanged; 通过此通道只同步修饰键状态, 不消费事件.
+    static var forwardModifierStateCallback: ((Int, UInt) -> Void)?
+
     /// Right-mouse 转发: 用户在 terminal 区域右键 → main → renderer → 弹原生菜单.
     /// 签名 (browserWindowId, panelId, contentX, contentY) — 坐标系是 BrowserWindow
     /// 的 contentView (top-left origin, flipped), 即 Electron renderer 内坐标, 也是
@@ -82,6 +86,15 @@ final class EventRouterView: NSView {
         "Mod+Backquote",
         "Mod+Comma",
         "Mod+Digit0",
+        "Mod+Digit1",
+        "Mod+Digit2",
+        "Mod+Digit3",
+        "Mod+Digit4",
+        "Mod+Digit5",
+        "Mod+Digit6",
+        "Mod+Digit7",
+        "Mod+Digit8",
+        "Mod+Digit9",
         "Mod+Equal",
         "Mod+KeyD",
         "Mod+KeyN",
@@ -89,6 +102,15 @@ final class EventRouterView: NSView {
         "Mod+KeyW",
         "Mod+Minus",
         "Mod+Numpad0",
+        "Mod+Numpad1",
+        "Mod+Numpad2",
+        "Mod+Numpad3",
+        "Mod+Numpad4",
+        "Mod+Numpad5",
+        "Mod+Numpad6",
+        "Mod+Numpad7",
+        "Mod+Numpad8",
+        "Mod+Numpad9",
         "Mod+Shift+Enter",
         "Mod+Shift+Equal",
         "Mod+Shift+KeyD",
@@ -122,10 +144,17 @@ final class EventRouterView: NSView {
         ownerWindow = window
         self.browserWindowId = browserWindowId
         if keyMonitor == nil {
-            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) {
                 [weak self] event in
                 guard let self else { return event }
-                return self.routeKeyDown(event)
+                switch event.type {
+                case .keyDown:
+                    return self.routeKeyDown(event)
+                case .flagsChanged:
+                    return self.routeFlagsChanged(event)
+                default:
+                    return event
+                }
             }
         }
         if mouseMonitor == nil {
@@ -220,6 +249,13 @@ final class EventRouterView: NSView {
         ) {
             return nil
         }
+        return event
+    }
+
+    private func routeFlagsChanged(_ event: NSEvent) -> NSEvent? {
+        guard let window = ownerWindow, event.window === window else { return event }
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        EventRouterView.forwardModifierStateCallback?(browserWindowId, mods.rawValue)
         return event
     }
 
@@ -1665,6 +1701,7 @@ public func ghosttyBridgeFreeString(_ ptr: UnsafeMutablePointer<CChar>?) {
 // JS 端能安全接收. C string 在 @_cdecl 内 withCString 取临时指针调用 cb, cb 返回
 // 后字符串生命周期结束 (addon.mm 端 trampoline 已 std::string 拷贝, 不会 dangling).
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
+public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
 public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
@@ -1679,6 +1716,19 @@ public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallbac
             }
         } else {
             EventRouterView.forwardCmdKeyCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_modifier_forward_callback")
+public func ghosttyBridgeSetModifierForwardCallback(_ cb: ModifierForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            EventRouterView.forwardModifierStateCallback = { wid, mods in
+                cb(wid, mods)
+            }
+        } else {
+            EventRouterView.forwardModifierStateCallback = nil
         }
     }
 }

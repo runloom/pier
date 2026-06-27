@@ -173,6 +173,7 @@ export const zhCN = {
       openTerminalDebugWindow: "打开终端调试窗口",
       openSettings: "打开设置",
       closeActivePanel: "关闭当前面板",
+      focusTab: "切换到第 {{index}} 个标签",
       newTab: "新建标签",
       newWindow: "新建窗口",
       runTask: "运行任务...",

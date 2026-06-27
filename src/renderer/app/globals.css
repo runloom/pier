@@ -794,9 +794,27 @@ body {
   width: 14px;
 }
 
+.dockview-theme-pier .pier-panel-tab-index-hint,
+.dv-tab.dv-tab-dragging .pier-panel-tab-index-hint,
+.dv-tab-ghost-drag .pier-panel-tab-index-hint {
+  align-items: center;
+  color: currentColor;
+  display: inline-flex;
+  height: 14px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 14px;
+  opacity: 0.92;
+}
+
 .dv-tab-ghost-drag .pier-panel-tab-icon {
   height: 14px !important;
   width: 14px !important;
+}
+
+.dv-tab-ghost-drag .pier-panel-tab-index-hint {
+  height: 14px !important;
+  min-width: 14px !important;
 }
 
 .dockview-theme-pier .dv-tab.dv-tab-dragging,

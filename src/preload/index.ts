@@ -83,6 +83,9 @@ export interface PierKeybindingAPI {
   onForward: (
     cb: (chord: { modifierFlags: number; chars: string }) => void
   ) => () => void;
+  onModifierState: (
+    cb: (state: { modifierFlags: number }) => void
+  ) => () => void;
 }
 
 export interface PierMenuAPI {
@@ -261,6 +264,7 @@ const settingsApi: PierSettingsAPI = {
 
 const keybindingApi: PierKeybindingAPI = {
   onForward: (cb) => subscribeIpc("pier:keybinding:forward", cb),
+  onModifierState: (cb) => subscribeIpc("pier:keybinding:modifier-state", cb),
 };
 
 const api: PierWindowAPI = {

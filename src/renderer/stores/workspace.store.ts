@@ -8,9 +8,11 @@ import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
 interface WorkspaceState {
+  activateTabInActiveGroup: (index: number) => void;
   addPanel: (opts: {
     component: string;
     id: string;
@@ -39,6 +41,7 @@ interface WorkspaceState {
     panelId: string,
     direction: "right" | "below" | "left" | "above"
   ) => void;
+  syncTabShortcutHints: () => void;
   toggleActivePanelMaximized: () => void;
 }
 
@@ -113,6 +116,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   hasMaximizedGroup: false,
   setApi: (api) => set({ api, hasMaximizedGroup: false }),
   setHasMaximizedGroup: (hasMaximizedGroup) => set({ hasMaximizedGroup }),
+  syncTabShortcutHints: () => {
+    useTabShortcutHintsStore
+      .getState()
+      .setActiveGroupPanels(get().api?.activeGroup?.panels ?? []);
+  },
+  activateTabInActiveGroup: (index) => {
+    const api = get().api;
+    if (!(api && Number.isInteger(index) && index >= 0)) {
+      return;
+    }
+    const targetPanel = api.activeGroup?.panels[index];
+    if (!targetPanel) {
+      return;
+    }
+    activateWorkspacePanel(api, targetPanel.id, {
+      reveal: "always",
+    });
+  },
   addPanel: (opts) => {
     const api = get().api;
     if (!api) {
