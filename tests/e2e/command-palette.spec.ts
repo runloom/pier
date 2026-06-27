@@ -98,9 +98,15 @@ test.describe("Command Palette e2e", () => {
       ).toHaveCount(0);
       await expect(
         win.locator("[cmdk-group-heading]").filter({
-          hasText: "窗口 1 · 当前窗口 · 第 1 组",
+          hasText: "第 1 组",
         })
       ).toBeVisible();
+      await expect(
+        win.locator("[cmdk-group-heading]").filter({ hasText: "窗口 1" })
+      ).toHaveCount(0);
+      await expect(
+        win.locator("[cmdk-group-heading]").filter({ hasText: "当前窗口" })
+      ).toHaveCount(0);
       await expect(win.getByText("当前", { exact: true })).toHaveCount(0);
       await expect(
         win.locator('[cmdk-item][data-checked="true"]').filter({

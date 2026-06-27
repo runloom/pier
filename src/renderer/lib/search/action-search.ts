@@ -17,10 +17,7 @@ export function buildActionSearchDocument(
   action: Action,
   options: BuildActionSearchDocumentOptions = {}
 ): SearchDocument<Action> {
-  const aliases = uniqueStrings([
-    ...(action.metadata?.aliases?.() ?? []),
-    ...(action.metadata?.keywords ?? []),
-  ]);
+  const aliases = uniqueStrings(action.metadata?.aliases?.() ?? []);
 
   return {
     aliases,

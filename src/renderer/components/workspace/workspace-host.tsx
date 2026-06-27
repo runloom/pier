@@ -155,6 +155,7 @@ function syncTerminalPresentation(
   api: DockviewReadyEvent["api"],
   flushReason: TerminalLayoutFlushReason
 ): void {
+  useWorkspaceStore.getState().syncTabShortcutHints();
   updateTerminalPresentationWorkspace(
     buildTerminalWorkspacePresentationState(api),
     flushReason

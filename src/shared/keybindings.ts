@@ -11,6 +11,22 @@ export interface SharedKeybindingInput {
   readonly scope?: SharedKeybindingScope;
 }
 
+const TAB_FOCUS_KEYMAP: readonly SharedKeybindingInput[] = Array.from(
+  { length: 9 },
+  (_, offset) => offset + 1
+).flatMap((index) => [
+  {
+    commandId: `pier.panel.focusTab${index}`,
+    keys: `Mod+Digit${index}`,
+    scope: "global",
+  },
+  {
+    commandId: `pier.panel.focusTab${index}`,
+    keys: `Mod+Numpad${index}`,
+    scope: "global",
+  },
+]);
+
 export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   {
     commandId: "pier.panel.newTerminal",
@@ -77,6 +93,7 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     keys: "Mod+Numpad0",
     scope: "global",
   },
+  ...TAB_FOCUS_KEYMAP,
   {
     commandId: "pier.panel.splitRight",
     keys: "Mod+KeyD",

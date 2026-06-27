@@ -62,6 +62,9 @@ export interface NativeAddon {
         ) => void)
       | null
   ): void;
+  setModifierForwardCallback(
+    cb: ((browserWindowId: number, modifierFlags: number) => void) | null
+  ): void;
   setMouseForwardCallback(
     cb:
       | ((

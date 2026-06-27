@@ -7,10 +7,12 @@ export type WorkspaceWhenField =
   | "hasActivePanel"
   | "hasApi"
   | "panelCount";
+export type TerminalWhenField = "hasActivePanel";
 
 export type ActionWhenClause =
   | `workspace.${WorkspaceWhenField}`
-  | `workspace.${WorkspaceWhenField} > ${number}`;
+  | `workspace.${WorkspaceWhenField} > ${number}`
+  | `terminal.${TerminalWhenField}`;
 
 type ActionWhenAnd = "&&" | "&& " | " &&" | " && ";
 
@@ -30,10 +32,14 @@ export interface ActionContribution {
   submenuKey?: string;
   surfaces: readonly (string & {})[];
   titleKey: string;
+  titleParams?: Record<string, number | string>;
   when?: ActionWhenExpression;
 }
 
 export interface ActionWhenContext {
+  terminal: {
+    hasActivePanel: boolean;
+  };
   workspace: {
     activeGroupPanelCount: number;
     groupCount: number;
@@ -46,5 +52,5 @@ export interface ActionWhenContext {
 export interface ActionContributionRuntime {
   getContext: () => ActionWhenContext;
   resolveAliases: (key: string) => readonly string[];
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, number | string>) => string;
 }

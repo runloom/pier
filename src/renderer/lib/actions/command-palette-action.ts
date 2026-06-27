@@ -1,23 +1,31 @@
-/**
- * 命令面板自身的 toggle action.
- *
- * surfaces 为空: 不在面板里展示 (在面板里看到 "显示命令面板" 自指条目对用户没价值
- * — 已在面板里了). 仍然保留 action 注册以便键盘 dispatch (Cmd+Shift+P) 通过
- * actionRegistry.get 找到 handler.
- */
-import i18next from "i18next";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
+import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 
-export function registerCommandPaletteAction(): () => void {
-  return actionRegistry.register({
-    id: "pier.commandPalette.toggle",
-    category: "View",
-    metadata: { group: "9_other" },
-    title: () => i18next.t("commandPalette.action.toggleCommandPalette"),
-    surfaces: [],
-    handler: () => {
-      useCommandPaletteController.getState().toggle();
+export const COMMAND_PALETTE_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
+  [
+    {
+      categoryKey: "view",
+      group: "9_other",
+      handler: () => {
+        useCommandPaletteController.getState().toggle();
+      },
+      id: "pier.commandPalette.toggle",
+      surfaces: [],
+      titleKey: "commandPalette.action.toggleCommandPalette",
     },
-  });
+  ];
+
+export function registerCommandPaletteAction(): () => void {
+  const disposers = registerActionContributions(
+    COMMAND_PALETTE_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
+  );
+
+  return () => {
+    for (const dispose of disposers) {
+      dispose();
+    }
+  };
 }

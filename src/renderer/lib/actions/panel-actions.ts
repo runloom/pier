@@ -1,122 +1,97 @@
-/**
- * Panel + Window 相关 action 注册. 多数走快捷键触发, 不在命令面板展示 (和 bay 一致);
- * resetLayout 例外 — 无快捷键, 仅命令面板展示 (避免误触发).
- *
- * 新增 action 时:
- *   1. 在 actionRegistry.register({ id: "pier.<domain>.<name>", ... })
- *   2. 在 keybindings/defaults.ts 加对应 keymap (如需快捷键)
- *   3. 在命令面板展示时, surfaces: ["command-palette"] + i18n title key + icon
- */
-import i18next from "i18next";
 import { Plus, RotateCcw } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
-import type {
-  ActionContributionRuntime,
-  ActionWhenContext,
-} from "@/lib/actions/contribution-types.ts";
-import { PANEL_LAYOUT_ACTION_CONTRIBUTIONS } from "@/lib/actions/panel-layout-contributions.ts";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { createWindow } from "@/lib/ipc/window-ipc.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { PANEL_LAYOUT_ACTION_CONTRIBUTIONS } from "./panel-layout-contributions.ts";
 
-function workspaceActionContext(): ActionWhenContext {
-  const api = useWorkspaceStore.getState().api;
-  return {
-    workspace: {
-      activeGroupPanelCount: api?.activeGroup?.panels?.length ?? 0,
-      groupCount: api?.groups?.length ?? 0,
-      hasActivePanel: api?.activePanel != null,
-      hasApi: api != null,
-      panelCount: api?.panels?.length ?? 0,
+export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
+  {
+    categoryKey: "panel",
+    group: "1_new",
+    handler: () => useWorkspaceStore.getState().addTab(),
+    id: "pier.panel.newTab",
+    surfaces: [],
+    titleKey: "commandPalette.action.newTab",
+    when: "workspace.hasApi",
+  },
+  {
+    aliasesKey: "commandPalette.aliases.newTerminal",
+    categoryKey: "run",
+    group: "1_new",
+    handler: () => {
+      useWorkspaceStore.getState().addTerminal();
     },
-  };
-}
+    iconComponent: Plus,
+    id: "pier.panel.newTerminal",
+    sortOrder: 1,
+    surfaces: ["dockview-tab", "terminal/content", "command-palette"],
+    titleKey: "contextMenu.action.newTerminal",
+    when: "workspace.hasApi",
+  },
+  {
+    categoryKey: "window",
+    group: "1_new",
+    handler: () => {
+      createWindow().catch((err) => {
+        console.error("[actions] newWindow failed:", err);
+      });
+    },
+    id: "pier.window.newWindow",
+    surfaces: [],
+    titleKey: "commandPalette.action.newWindow",
+  },
+  {
+    aliasesKey: "commandPalette.aliases.resetLayout",
+    categoryKey: "workspace",
+    group: "z_workspace",
+    handler: () => {
+      useWorkspaceStore
+        .getState()
+        .resetLayout()
+        .catch((err) => {
+          console.error("[actions] resetLayout failed:", err);
+        });
+    },
+    iconComponent: RotateCcw,
+    id: "pier.workspace.resetLayout",
+    sortOrder: 6,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.resetLayout",
+    when: "workspace.hasApi",
+  },
+];
 
-function resolveI18nAliases(key: string): readonly string[] {
-  const value = i18next.t(key, { returnObjects: true });
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is string => typeof item === "string");
-}
+const TAB_FOCUS_INDICES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-const actionContributionRuntime: ActionContributionRuntime = {
-  getContext: workspaceActionContext,
-  resolveAliases: resolveI18nAliases,
-  t: (key) => i18next.t(key),
-};
+export const PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
+  TAB_FOCUS_INDICES.map(
+    (index): ActionContribution => ({
+      categoryKey: "panel",
+      group: "3_focus",
+      handler: () => {
+        useWorkspaceStore.getState().activateTabInActiveGroup(index - 1);
+      },
+      id: `pier.panel.focusTab${index}`,
+      sortOrder: 10 + index,
+      surfaces: [],
+      titleKey: "commandPalette.action.focusTab",
+      titleParams: { index },
+      when: "workspace.hasApi",
+    })
+  );
+
+export const PANEL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
+  ...PANEL_LAYOUT_ACTION_CONTRIBUTIONS,
+  ...PANEL_HOST_ACTION_CONTRIBUTIONS,
+  ...PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS,
+];
 
 export function registerPanelActions(): () => void {
-  const disposers: Array<() => void> = registerActionContributions(
-    PANEL_LAYOUT_ACTION_CONTRIBUTIONS,
-    actionContributionRuntime
-  );
-
-  disposers.push(
-    actionRegistry.register({
-      category: "Panel",
-      enabled: () => useWorkspaceStore.getState().api != null,
-      handler: () => useWorkspaceStore.getState().addTab(),
-      id: "pier.panel.newTab",
-      metadata: { group: "1_new" },
-      surfaces: [],
-      title: () => i18next.t("commandPalette.action.newTab"),
-    })
-  );
-
-  disposers.push(
-    actionRegistry.register({
-      category: "Run",
-      enabled: () => useWorkspaceStore.getState().api != null,
-      handler: () => {
-        useWorkspaceStore.getState().addTerminal();
-      },
-      id: "pier.panel.newTerminal",
-      metadata: { group: "1_new", iconComponent: Plus, sortOrder: 1 },
-      surfaces: ["dockview-tab", "terminal/content", "command-palette"],
-      title: () => i18next.t("contextMenu.action.newTerminal"),
-    })
-  );
-
-  disposers.push(
-    actionRegistry.register({
-      category: "Window",
-      handler: () => {
-        createWindow().catch((err) => {
-          console.error("[actions] newWindow failed:", err);
-        });
-      },
-      id: "pier.window.newWindow",
-      metadata: { group: "1_new" },
-      surfaces: [],
-      title: () => i18next.t("commandPalette.action.newWindow"),
-    })
-  );
-
-  // 重置布局 — 只在命令面板展示, 无快捷键. 删 disk layout + 清所有 panel + 重建
-  // default terminal panel. 适用于 layout 累积乱了想回到干净状态时.
-  disposers.push(
-    actionRegistry.register({
-      category: "Workspace",
-      enabled: () => useWorkspaceStore.getState().api != null,
-      handler: () => {
-        useWorkspaceStore
-          .getState()
-          .resetLayout()
-          .catch((err) => {
-            console.error("[actions] resetLayout failed:", err);
-          });
-      },
-      id: "pier.workspace.resetLayout",
-      metadata: {
-        group: "z_workspace",
-        iconComponent: RotateCcw,
-        keywords: ["reset", "layout", "重置", "布局", "panel", "面板"],
-        sortOrder: 6,
-      },
-      surfaces: ["command-palette"],
-      title: () => i18next.t("commandPalette.action.resetLayout"),
-    })
+  const disposers = registerActionContributions(
+    PANEL_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
   );
 
   return () => {

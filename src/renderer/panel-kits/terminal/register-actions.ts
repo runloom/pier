@@ -1,33 +1,22 @@
-/**
- * Terminal panel-kit 自有 actions — surface="terminal/content" 投影到终端内右键菜单.
- *
- * 这是 "panel-kit 作为后续插件" 的样板: kit 自己 import actionRegistry, 在自己模块
- * 内 register, 主程序 bootstrap 调一次 registerTerminalActions(). 未来第三方 kit
- * 同样模式 (panel-kits/<name>/register-actions.ts), 不需改 main.tsx.
- *
- * terminal 内容操作由 kit 自己注册; newTerminal 在 panel-actions.ts 内通过 surfaces
- * 扩到 "terminal/content" 直接复用, 不在此文件重复注册.
- */
 import type { TerminalOperation } from "@shared/contracts/terminal.ts";
-import i18next from "i18next";
 import { X } from "lucide-react";
+import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
+import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
-import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import {
+  activeTerminalPanelId,
+  rendererActionContributionRuntime,
+} from "@/lib/actions/renderer-action-runtime.ts";
 
-function activeTerminalPanelId(): string | null {
-  const panel = useWorkspaceStore.getState().api?.activePanel;
-  return panel?.view.contentComponent === "terminal" ? panel.id : null;
-}
-
-function registerTerminalOperationAction(opts: {
+function terminalOperationContribution(opts: {
   id: string;
-  i18nKey: string;
   operation: TerminalOperation;
   sortOrder: number;
-}): () => void {
-  return actionRegistry.register({
-    category: "Terminal",
-    enabled: () => activeTerminalPanelId() != null,
+  titleKey: string;
+}): ActionContribution {
+  return {
+    categoryKey: "terminal",
+    group: "0_edit",
     handler: async () => {
       const panelId = activeTerminalPanelId();
       if (!panelId) {
@@ -42,62 +31,57 @@ function registerTerminalOperationAction(opts: {
       }
     },
     id: opts.id,
-    metadata: { group: "0_edit", sortOrder: opts.sortOrder },
+    sortOrder: opts.sortOrder,
     surfaces: ["terminal/content"],
-    title: () => i18next.t(opts.i18nKey),
-  });
+    titleKey: opts.titleKey,
+    when: "terminal.hasActivePanel",
+  };
 }
 
+export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
+  terminalOperationContribution({
+    id: "pier.terminal.copy",
+    operation: "copy",
+    sortOrder: 1,
+    titleKey: "contextMenu.action.copy",
+  }),
+  terminalOperationContribution({
+    id: "pier.terminal.paste",
+    operation: "paste",
+    sortOrder: 2,
+    titleKey: "contextMenu.action.paste",
+  }),
+  terminalOperationContribution({
+    id: "pier.terminal.selectAll",
+    operation: "selectAll",
+    sortOrder: 3,
+    titleKey: "contextMenu.action.selectAll",
+  }),
+  terminalOperationContribution({
+    id: "pier.terminal.clearScreen",
+    operation: "clearScreen",
+    sortOrder: 4,
+    titleKey: "contextMenu.action.clearScreen",
+  }),
+  {
+    categoryKey: "terminal",
+    group: "9_close",
+    handler: () => {
+      actionRegistry.get("pier.panel.close")?.handler();
+    },
+    iconComponent: X,
+    id: "pier.terminal.close",
+    sortOrder: 1,
+    surfaces: ["terminal/content"],
+    titleKey: "contextMenu.action.closeTerminal",
+    when: "terminal.hasActivePanel",
+  },
+];
+
 export function registerTerminalActions(): () => void {
-  const disposers: Array<() => void> = [];
-
-  disposers.push(
-    registerTerminalOperationAction({
-      id: "pier.terminal.copy",
-      i18nKey: "contextMenu.action.copy",
-      operation: "copy",
-      sortOrder: 1,
-    })
-  );
-  disposers.push(
-    registerTerminalOperationAction({
-      id: "pier.terminal.paste",
-      i18nKey: "contextMenu.action.paste",
-      operation: "paste",
-      sortOrder: 2,
-    })
-  );
-  disposers.push(
-    registerTerminalOperationAction({
-      id: "pier.terminal.selectAll",
-      i18nKey: "contextMenu.action.selectAll",
-      operation: "selectAll",
-      sortOrder: 3,
-    })
-  );
-  disposers.push(
-    registerTerminalOperationAction({
-      id: "pier.terminal.clearScreen",
-      i18nKey: "contextMenu.action.clearScreen",
-      operation: "clearScreen",
-      sortOrder: 4,
-    })
-  );
-
-  disposers.push(
-    actionRegistry.register({
-      category: "Terminal",
-      enabled: () => useWorkspaceStore.getState().api?.activePanel != null,
-      handler: () => {
-        // alias: 把 close 行为统一委派给 pier.panel.close handler.
-        // 未来给"关闭"加 dirty-check / confirm 时只需改一处.
-        actionRegistry.get("pier.panel.close")?.handler();
-      },
-      id: "pier.terminal.close",
-      metadata: { group: "9_close", iconComponent: X, sortOrder: 1 },
-      surfaces: ["terminal/content"],
-      title: () => i18next.t("contextMenu.action.closeTerminal"),
-    })
+  const disposers = registerActionContributions(
+    TERMINAL_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
   );
 
   return () => {

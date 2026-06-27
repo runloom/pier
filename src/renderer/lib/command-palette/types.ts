@@ -16,14 +16,15 @@ export interface QuickPickItemBadge {
 }
 
 export interface QuickPickItem {
+  readonly aliases?: readonly string[];
   readonly badges?: readonly QuickPickItemBadge[];
   readonly checked?: boolean;
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
   readonly id: string;
-  readonly keywords?: readonly string[];
   readonly label: string;
+  readonly searchTerms?: readonly string[];
 }
 
 export interface QuickPickSection {

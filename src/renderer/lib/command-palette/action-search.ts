@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import type { Action } from "@/lib/actions/types.ts";
 import {
   compareActions,
@@ -60,7 +61,11 @@ export function rankActionsForPalette(
 ): Action[] {
   const documents = actions.map((action) => {
     const shortcutLabel = keybindingLabels.get(action.id);
+    const categoryKey = action.metadata?.categoryKey;
     return buildActionSearchDocument(action, {
+      ...(categoryKey
+        ? { categoryLabel: i18next.t(`commandPalette.category.${categoryKey}`) }
+        : {}),
       disabled: action.enabled?.() === false,
       ...(shortcutLabel ? { shortcutLabel } : {}),
     });

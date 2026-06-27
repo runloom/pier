@@ -41,6 +41,8 @@ import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import { rankSearchDocuments } from "@/lib/search/ranker.ts";
+import type { SearchDocument } from "@/lib/search/types.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
@@ -61,6 +63,43 @@ function quickPickItems(quickPick: QuickPick): readonly QuickPickItem[] {
     return quickPick.sections.flatMap((section) => section.items);
   }
   return quickPick.items ?? [];
+}
+
+function quickPickDocument(
+  item: QuickPickItem,
+  sectionHeading?: string
+): SearchDocument<QuickPickItem> {
+  return {
+    aliases: [
+      ...(item.aliases ?? []),
+      ...(item.searchTerms ?? []),
+      ...(sectionHeading ? [sectionHeading] : []),
+    ],
+    category: sectionHeading ?? "",
+    disabled: item.disabled === true,
+    id: item.id,
+    kind: "quick-pick",
+    payload: item,
+    source: "quick-pick",
+    stableId: item.id,
+    title: item.label,
+    ...(item.detail ? { shortcutLabel: item.detail } : {}),
+  };
+}
+
+function quickPickResults(
+  items: readonly QuickPickItem[],
+  query: string,
+  sectionHeading?: string
+): readonly QuickPickItem[] {
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery) {
+    return items;
+  }
+  return rankSearchDocuments(
+    items.map((item) => quickPickDocument(item, sectionHeading)),
+    normalizedQuery
+  ).map((result) => result.document.payload);
 }
 
 /**
@@ -353,7 +392,6 @@ function QuickPickView({
   onAccept: (item: QuickPickItem) => Promise<void>;
   query: string;
 }): ReactNode {
-  const filterItem = (item: QuickPickItem) => quickPickItemMatches(item, query);
   const renderItem = (item: QuickPickItem) => (
     <CommandItem
       aria-current={item.checked === true ? "true" : undefined}
@@ -403,27 +441,12 @@ function QuickPickView({
       {quickPick.sections && quickPick.sections.length > 0
         ? quickPick.sections.map((section) => (
             <CommandGroup heading={section.heading} key={section.id}>
-              {section.items.filter(filterItem).map(renderItem)}
+              {quickPickResults(section.items, query, section.heading).map(
+                renderItem
+              )}
             </CommandGroup>
           ))
-        : (quickPick.items ?? []).filter(filterItem).map(renderItem)}
+        : quickPickResults(quickPick.items ?? [], query).map(renderItem)}
     </div>
   );
-}
-
-function quickPickItemMatches(item: QuickPickItem, query: string): boolean {
-  const normalizedQuery = query.toLocaleLowerCase();
-  if (!normalizedQuery) {
-    return true;
-  }
-  return [
-    item.id,
-    item.label,
-    item.detail ?? "",
-    item.description ?? "",
-    ...(item.keywords ?? []),
-  ]
-    .join(" ")
-    .toLocaleLowerCase()
-    .includes(normalizedQuery);
 }

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
@@ -177,5 +177,85 @@ describe("CommandPalette quick pick rows", () => {
     ).toBeVisible();
 
     dispose();
+  });
+
+  it("filters quick-pick items by i18n aliases", async () => {
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Select Language",
+        placeholder: "Search languages",
+        items: [
+          {
+            aliases: ["jianti", "zhongwen", "中文"],
+            id: "locale:zh-CN",
+            label: "简体中文",
+          },
+          {
+            aliases: ["english", "yingwen"],
+            id: "locale:en",
+            label: "English",
+          },
+        ],
+        onAccept: vi.fn(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("简体中文")).toBeVisible();
+    });
+    fireEvent.change(screen.getByPlaceholderText("Search languages"), {
+      target: { value: "jianti" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("简体中文")).toBeVisible();
+    });
+    expect(screen.queryByText("English")).not.toBeInTheDocument();
+  });
+
+  it("filters grouped quick-pick items by dynamic search terms", async () => {
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Terminal List",
+        placeholder: "Search terminals",
+        sections: [
+          {
+            heading: "Window 1 · Group 1",
+            id: "group-1",
+            items: [
+              {
+                detail: "/Users/xyz/ABC/pier",
+                id: "panel:terminal-1",
+                label: "pier",
+                searchTerms: ["terminal-1", "main"],
+              },
+              {
+                detail: "/Users/xyz/ABC/loomdesk",
+                id: "panel:terminal-2",
+                label: "workspace",
+                searchTerms: ["terminal-2", "loomdesk", "agent-run"],
+              },
+            ],
+          },
+        ],
+        onAccept: vi.fn(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("pier")).toBeVisible();
+    });
+    fireEvent.change(screen.getByPlaceholderText("Search terminals"), {
+      target: { value: "agent-run" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("workspace")).toBeVisible();
+    });
+    expect(screen.queryByText("pier")).not.toBeInTheDocument();
   });
 });

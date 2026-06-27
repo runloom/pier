@@ -7,10 +7,6 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import type { IpcMain, WebContents } from "electron";
 import {
-  isToggleDevToolsNativeChord,
-  toggleDetachedDevTools,
-} from "../devtools.ts";
-import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
   updateTerminalPanelContext,
@@ -39,6 +35,7 @@ import {
   setTerminalFocusAddonProvider,
 } from "./terminal-focus-state.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
+import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
 import { performTerminalOperation } from "./terminal-operations.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
@@ -94,30 +91,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   cachedAddon = addon;
   setTerminalFocusAddonProvider(() => cachedAddon);
   registerTerminalDebugSnapshotIpc(ipcMain, addon);
-
-  // Swift forward callback 必须按 setupWindow 记录的 Electron window id 路由.
-  addon?.setKeyboardForwardCallback((id, modifierFlags, chars) => {
-    recordNativeTerminalRoute(id, "key-forward", null, {
-      chars,
-      modifierFlags,
-    });
-    const targetWindow = findAppWindowByElectronId(id);
-    if (
-      targetWindow &&
-      !targetWindow.isDestroyed() &&
-      isToggleDevToolsNativeChord(modifierFlags, chars)
-    ) {
-      toggleDetachedDevTools(targetWindow);
-      return;
-    }
-
-    forwardToWindow(
-      id,
-      "pier:keybinding:forward",
-      { modifierFlags, chars },
-      "pier-key-forward"
-    );
-  });
+  registerTerminalKeybindingForward(addon);
   // Swift 收到 scoped panelId, renderer 使用 raw panel id.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
     recordNativeTerminalRoute(id, "right-mouse", panelId, { x, y });

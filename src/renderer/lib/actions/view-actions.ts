@@ -1,50 +1,50 @@
-import i18next from "i18next";
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
+import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
+export const VIEW_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
+  {
+    aliasesKey: "commandPalette.aliases.zoomIn",
+    categoryKey: "view",
+    group: "4_view",
+    handler: () => useZoomStore.getState().zoomIn(),
+    iconComponent: ZoomIn,
+    id: "pier.view.zoomIn",
+    sortOrder: 40,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.zoomIn",
+  },
+  {
+    aliasesKey: "commandPalette.aliases.zoomOut",
+    categoryKey: "view",
+    group: "4_view",
+    handler: () => useZoomStore.getState().zoomOut(),
+    iconComponent: ZoomOut,
+    id: "pier.view.zoomOut",
+    sortOrder: 41,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.zoomOut",
+  },
+  {
+    aliasesKey: "commandPalette.aliases.resetZoom",
+    categoryKey: "view",
+    group: "4_view",
+    handler: () => useZoomStore.getState().resetZoom(),
+    iconComponent: RotateCcw,
+    id: "pier.view.resetZoom",
+    sortOrder: 42,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.resetZoom",
+  },
+];
+
 export function registerViewActions(): () => void {
-  const disposers = [
-    actionRegistry.register({
-      id: "pier.view.zoomIn",
-      category: "View",
-      title: () => i18next.t("commandPalette.action.zoomIn"),
-      surfaces: ["command-palette"],
-      metadata: {
-        group: "4_view",
-        iconComponent: ZoomIn,
-        sortOrder: 40,
-        keywords: ["zoom", "zoom in", "放大", "界面"],
-      },
-      handler: () => useZoomStore.getState().zoomIn(),
-    }),
-    actionRegistry.register({
-      id: "pier.view.zoomOut",
-      category: "View",
-      title: () => i18next.t("commandPalette.action.zoomOut"),
-      surfaces: ["command-palette"],
-      metadata: {
-        group: "4_view",
-        iconComponent: ZoomOut,
-        sortOrder: 41,
-        keywords: ["zoom", "zoom out", "缩小", "界面"],
-      },
-      handler: () => useZoomStore.getState().zoomOut(),
-    }),
-    actionRegistry.register({
-      id: "pier.view.resetZoom",
-      category: "View",
-      title: () => i18next.t("commandPalette.action.resetZoom"),
-      surfaces: ["command-palette"],
-      metadata: {
-        group: "4_view",
-        iconComponent: RotateCcw,
-        sortOrder: 42,
-        keywords: ["zoom", "reset zoom", "重置", "界面缩放"],
-      },
-      handler: () => useZoomStore.getState().resetZoom(),
-    }),
-  ];
+  const disposers = registerActionContributions(
+    VIEW_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
+  );
 
   return () => {
     for (const dispose of disposers) {

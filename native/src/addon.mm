@@ -40,6 +40,8 @@ extern "C" {
     // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
     typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
     void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
+    typedef void (*ModifierForwardFn)(long browserWindowId, unsigned long modifiers);
+    void ghostty_bridge_set_modifier_forward_callback(ModifierForwardFn cb);
     void ghostty_bridge_set_app_shortcut_keys(const char** keys, long count);
     // Mouse forward: swift NSEvent monitor 命中 terminal 区域 rightMouseDown → JS.
     // 签名 (browserWindowId, panelId UTF-8, x, y). 用于触发 native 右键菜单.
@@ -350,6 +352,27 @@ static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) 
                                 &g_keyForwardTrampoline);
 }
 
+// ---- Modifier forward (terminal focus 下纯 Cmd 状态转 renderer) ----
+struct ModifierForwardPayload {
+    long windowId;
+    unsigned long modifiers;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::Number::New(env, static_cast<double>(modifiers)),
+        });
+    }
+};
+static ForwardChannel<ModifierForwardPayload> g_modifierChannel("PierModifierForward");
+static void g_modifierForwardTrampoline(long windowId, unsigned long modifiers) {
+    g_modifierChannel.emit({ windowId, modifiers });
+}
+static Napi::Value JsSetModifierForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_modifierChannel,
+                                ghostty_bridge_set_modifier_forward_callback,
+                                &g_modifierForwardTrampoline);
+}
+
 static Napi::Value JsSetAppShortcutKeys(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (info.Length() == 0 || !info[0].IsArray()) {
@@ -610,6 +633,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("debugSnapshot", Napi::Function::New(env, JsDebugSnapshot));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
+    exports.Set("setModifierForwardCallback", Napi::Function::New(env, JsSetModifierForwardCallback));
     exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
