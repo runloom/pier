@@ -19,6 +19,8 @@ const REQUIRED_CAPABILITY_BY_COMMAND: Record<
   "panel.open": "workspace:open",
   "preferences.read": "preferences:read",
   "preferences.update": "preferences:write",
+  "run.list": "workspace:read",
+  "run.spawn": "workspace:open",
   "terminal.open": "workspace:open",
   "terminal.profile.delete": "terminal:control",
   "terminal.profile.list": "terminal:read",

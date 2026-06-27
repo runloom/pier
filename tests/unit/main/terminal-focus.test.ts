@@ -32,6 +32,7 @@ describe("terminal focus restoration", () => {
       setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
+      setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
       setOverlayActive: vi.fn(),

@@ -38,6 +38,7 @@ import { forwardToWindow } from "./terminal-forwarding.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
 import { performTerminalOperation } from "./terminal-operations.ts";
+import { terminalPanelClosed } from "./terminal-panel-closed.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
 import {
   applyLatestTerminalPresentation,
@@ -46,12 +47,14 @@ import {
 } from "./terminal-presentation.ts";
 import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
+import {
+  forwardTerminalTaskTabPatch,
+  persistInitialTerminalTab,
+} from "./terminal-tab-chrome.ts";
 import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
 
-export function getTerminalAddon(): NativeAddon | null {
-  return cachedAddon;
-}
 let cachedAddon: NativeAddon | null = null;
+export const getTerminalAddon = (): NativeAddon | null => cachedAddon;
 
 export function windowFromWebContents(
   webContents: WebContents
@@ -122,6 +125,20 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   addon?.setTitleForwardCallback((id, panelId, title) => {
     recordNativeTerminalRoute(id, "title", panelId, { title });
     const rawPanelId = unscopePanelId(panelId);
+    const taskExitCode = terminalPanelClosed.handleTaskExitTitle(
+      rawPanelId,
+      title
+    );
+    if (taskExitCode !== null) {
+      const targetWindow = findAppWindowByElectronId(id);
+      forwardTerminalTaskTabPatch({
+        browserWindowId: id,
+        exitCode: taskExitCode,
+        panelId: rawPanelId,
+        targetWindow,
+      });
+      return;
+    }
     const targetWindow = findAppWindowByElectronId(id);
     if (targetWindow && !targetWindow.isDestroyed()) {
       const sessionScope = terminalSessionScopeFor(targetWindow);
@@ -147,7 +164,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     }
     try {
       const handle = win.getNativeWindowHandle();
-      // 传 Electron window id 给 swift, 防多窗口 callback 误投到 focused window.
       const ok = addon.setupWindow(handle, win.id);
       recordRendererTerminalRoute(win, "setup", null, { ok });
       return ok ? { ok: true } : { ok: false, error: "setupWindow failed" };
@@ -210,6 +226,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
             args.panelId,
             context
           );
+          await persistInitialTerminalTab(sessionScope, args.panelId, args.tab);
           conformTerminalPresentationAfterCreate(win, addon);
         }
         return ok
@@ -292,6 +309,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (win) {
       const sessionScope = terminalSessionScopeFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
+      terminalPanelClosed.notifyTerminalPanelClosed(panelId);
       removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
         console.error("[pier-cwd-remove] failed:", err);
       });

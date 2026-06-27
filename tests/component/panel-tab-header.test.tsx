@@ -1,9 +1,20 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { IDockviewPanelHeaderProps } from "dockview-react";
+import i18next from "i18next";
 import { act } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
+import { initI18n } from "@/i18n/index.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 
 type ActiveChangeHandler = (event: { isActive: boolean }) => void;
@@ -52,7 +63,29 @@ function setRect(
 }
 
 describe("PanelTabHeader", () => {
-  afterEach(() => {
+  beforeAll(async () => {
+    await initI18n();
+  });
+
+  beforeEach(() => {
+    class ResizeObserverMock {
+      disconnect(): void {
+        // Test polyfill no-op.
+      }
+      observe(): void {
+        // Test polyfill no-op.
+      }
+      unobserve(): void {
+        // Test polyfill no-op.
+      }
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await i18next.changeLanguage("en");
+    usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useTabShortcutHintsStore.getState().reset();
   });
 
@@ -102,6 +135,98 @@ describe("PanelTabHeader", () => {
 
     expect(
       container.querySelector('[data-panel-tab-icon="welcome"]')
+    ).not.toBeNull();
+  });
+
+  it("uses generic tab chrome for title and icon while showing metadata in a shadcn tooltip", async () => {
+    await i18next.changeLanguage("zh-CN");
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "terminal-1": {
+          display: { short: "pier" },
+          tab: {
+            badge: { label: "package.json" },
+            icon: { id: "pier.task", label: "Task" },
+            state: { busy: true, label: "Running" },
+            title: "test",
+            tooltip: {
+              lines: [
+                { label: "Source", value: "package.json" },
+                { label: "Command", value: "pnpm run test" },
+                { label: "CWD", value: "$ZED_WORKTREE_ROOT" },
+              ],
+              title: "test",
+            },
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+
+    expect(
+      container.querySelector(".dv-default-tab-content")
+    ).toHaveTextContent("test");
+    expect(
+      container.querySelector('[data-panel-tab-icon="pier.task"]')
+    ).not.toBeNull();
+    expect(container.querySelector("[data-tab-busy]")).toHaveAttribute(
+      "data-tab-busy",
+      "true"
+    );
+    expect(container.querySelector("[data-tab-state-label]")).toHaveAttribute(
+      "data-tab-state-label",
+      "Running"
+    );
+    expect(container).not.toHaveTextContent("package.json");
+    expect(container).not.toHaveTextContent("Running");
+    expect(container).not.toHaveTextContent("pnpm run test");
+    expect(container.querySelector(".dv-default-tab")).not.toHaveAttribute(
+      "title"
+    );
+    expect(document.querySelector("[data-slot='tooltip-content']")).toBeNull();
+
+    const tabElement = container.querySelector(".dv-default-tab");
+    expect(tabElement).not.toBeNull();
+    if (!tabElement) {
+      return;
+    }
+    act(() => {
+      fireEvent.pointerMove(tabElement, {
+        pointerType: "mouse",
+      });
+    });
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("test");
+    expect(tooltip).toHaveTextContent("来源：package.json");
+    expect(tooltip).toHaveTextContent("命令：pnpm run test");
+    expect(tooltip).toHaveTextContent("目录：$ZED_WORKTREE_ROOT");
+    expect(tooltip).not.toHaveClass("pier-panel-tab-tooltip");
+  });
+
+  it("falls back to the panel kit icon when tab chrome icon id is unknown", () => {
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "terminal-1": {
+          display: { short: "pier" },
+          tab: {
+            icon: { id: "plugin.missing.icon" },
+            title: "plugin tab",
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+
+    expect(
+      container.querySelector('[data-panel-tab-icon="terminal"]')
     ).not.toBeNull();
   });
 

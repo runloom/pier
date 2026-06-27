@@ -39,6 +39,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
+      setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
       setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),

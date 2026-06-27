@@ -26,6 +26,7 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
+import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
@@ -63,15 +64,6 @@ const pierTheme: DockviewTheme = {
   gap: 0,
   dndOverlayMounting: "absolute",
 };
-
-/** 默认布局: 单 terminal panel. 当持久化 layout 不存在或恢复失败时使用. */
-function applyDefaultLayout(api: DockviewReadyEvent["api"]): void {
-  api.addPanel({
-    id: "terminal-1",
-    component: "terminal",
-    title: "Terminal",
-  });
-}
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -213,6 +205,7 @@ function runRendererCommand(envelope: RendererCommandEnvelope): void {
           ...(envelope.command.placement && {
             placement: envelope.command.placement,
           }),
+          ...(envelope.command.tab && { tab: envelope.command.tab }),
         });
         if (!panelId) {
           throw new Error("workspace api not ready");

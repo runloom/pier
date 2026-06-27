@@ -96,6 +96,44 @@ describe("CommandPalette quick pick rows", () => {
     expect(row).toHaveTextContent("切换");
   });
 
+  it("constrains long quick-pick descriptions so task rows do not overflow", async () => {
+    render(<CommandPalette />);
+    const longDescription =
+      "bun run kit:sync && LOOMDESK_BUILD_DEV=1 electron-vite build --config src-electron/electron.vite.config.ts";
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Run Task",
+        placeholder: "Search tasks",
+        items: [
+          {
+            badges: [{ label: "package.json", variant: "secondary" }],
+            description: longDescription,
+            detail: "bun run electron:build:dev",
+            id: "package-script:electron:build:dev",
+            label: "electron:build:dev",
+          },
+        ],
+        onAccept: vi.fn(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("electron:build:dev")).toBeVisible();
+    });
+    expect(screen.getByText("package.json")).toBeVisible();
+    expect(screen.getByText("bun run electron:build:dev")).toBeVisible();
+
+    const description = screen.getByText(longDescription);
+    expect(description).toHaveClass(
+      "min-w-0",
+      "max-w-[45%]",
+      "shrink",
+      "truncate",
+      "text-right"
+    );
+  });
+
   it("renders quick-pick sections with headings", async () => {
     render(<CommandPalette />);
 

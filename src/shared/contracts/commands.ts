@@ -56,6 +56,18 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),
   }),
+  z.object({
+    projectRoot: z.string().min(1),
+    type: z.literal("run.list"),
+  }),
+  z.object({
+    focus: z.boolean().optional(),
+    inputs: z.record(z.string().min(1), z.string()).optional(),
+    placement: pierCommandPlacementSchema.optional(),
+    projectRoot: z.string().min(1),
+    taskId: z.string().min(1),
+    type: z.literal("run.spawn"),
+  }),
   z.object({ type: z.literal("terminal.profile.list") }),
   z.object({
     type: z.literal("terminal.profile.read"),

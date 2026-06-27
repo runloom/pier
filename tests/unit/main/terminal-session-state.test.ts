@@ -74,6 +74,47 @@ describe("terminal session state", () => {
     });
   });
 
+  it("persists and patches tab chrome without requiring business state storage", async () => {
+    const {
+      patchTerminalPanelTab,
+      readTerminalPanelSession,
+      updateTerminalPanelContext,
+      updateTerminalPanelTab,
+    } = await import("@main/state/terminal-session-state.ts");
+
+    const pier = context("/Users/xyz/ABC/pier");
+    await updateTerminalPanelContext("main", "terminal-1", pier);
+    await updateTerminalPanelTab("main", "terminal-1", {
+      badge: { label: "package.json" },
+      icon: { id: "pier.task" },
+      state: { busy: true, label: "Running" },
+      title: "test",
+    });
+    await patchTerminalPanelTab("main", "terminal-1", {
+      state: {
+        busy: false,
+        colorToken: "success",
+        label: "Succeeded",
+      },
+    });
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      context: pier,
+      tab: {
+        badge: { label: "package.json" },
+        icon: { id: "pier.task" },
+        state: {
+          busy: false,
+          colorToken: "success",
+          label: "Succeeded",
+        },
+        title: "test",
+      },
+    });
+  });
+
   it("does not create a session for a title without context", async () => {
     const { readTerminalPanelSession, updateTerminalPanelTitle } = await import(
       "@main/state/terminal-session-state.ts"

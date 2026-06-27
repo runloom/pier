@@ -23,6 +23,11 @@ import {
   updateTerminalPanelLifecycleDebug,
 } from "./terminal-lifecycle-debug.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
+import {
+  mergeTabChrome,
+  tabChromeFromParams,
+  terminalPanelDescriptor,
+} from "./terminal-tab-chrome.ts";
 
 function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
   return new Promise((resolve) => {
@@ -36,19 +41,6 @@ function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
     };
     check();
   });
-}
-
-/**
- * 路径 basename — POSIX 形式 (终端始终在 macOS).
- * 末尾 '/' 容错: "/" → "/"; "/a/b/" → "b"; "/a/b" → "b"; "" → "Terminal".
- */
-export function basename(path: string): string {
-  if (path === "" || path === "/") {
-    return path === "" ? "Terminal" : "/";
-  }
-  const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
-  const idx = trimmed.lastIndexOf("/");
-  return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
 function panelContextFromParams(params: unknown): PanelContext | undefined {
@@ -76,6 +68,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const panelId = api.id;
   const [initialContext] = useState(() => panelContextFromParams(props.params));
   const [initialLaunchId] = useState(() => launchIdFromParams(props.params));
+  const [initialTab] = useState(() => tabChromeFromParams(props.params));
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const windowZoomLevel = useZoomStore((s) => s.windowZoomLevel);
@@ -102,31 +95,32 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     (e) => e.title
   );
+  const tabPatch = usePanelEventState(
+    window.pier.terminal.onTabChromePatch,
+    panelId,
+    (e) => e.tab
+  );
 
   const sessionLoaded = savedSession !== undefined;
   const effectiveContext =
     runtimeContext ?? savedSession?.context ?? initialContext;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
+  const effectiveTab = mergeTabChrome(
+    initialTab ?? savedSession?.tab,
+    tabPatch
+  );
 
-  // descriptor 由 display + context 组成:
-  // - display.short: basename(cwd) — tab strip 稳定显示目录名
-  // - display.long: sequenceTitle ?? cwd — 优先展示 OSC 标题, 否则展示完整 cwd
-  // - context: main 解析出的完整 PanelContext, 不在 renderer 局部拼 cwd
+  // descriptor 中 display.long 保留 OSC title/cwd，tab chrome 单独表达固定 tab 呈现。
   usePanelDescriptor(
     api,
-    sessionLoaded
-      ? {
-          ...(effectiveContext ? { context: effectiveContext } : {}),
-          display: {
-            short: effectiveCwd ? basename(effectiveCwd) : "Terminal",
-            ...(effectiveTitle || effectiveCwd
-              ? { long: effectiveTitle ?? effectiveCwd ?? undefined }
-              : {}),
-            ...(effectiveTitle ? { terminalTitle: effectiveTitle } : {}),
-          },
-        }
-      : null
+    terminalPanelDescriptor({
+      effectiveContext,
+      effectiveCwd,
+      effectiveTab,
+      effectiveTitle,
+      sessionLoaded,
+    })
   );
 
   const monoFontFamilyRef = useRef(monoFontFamily);
@@ -263,6 +257,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           },
           ...(initialContext && { context: initialContext }),
           ...(initialLaunchId && { launchId: initialLaunchId }),
+          ...(initialTab && { tab: initialTab }),
         });
         if (!result.ok) {
           const message = result.error ?? "终端创建失败";
@@ -383,7 +378,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       renderableAnchorObserver?.disconnect();
       layoutRegistration?.dispose();
     };
-  }, [api, panelId, initialContext, initialLaunchId]);
+  }, [api, panelId, initialContext, initialLaunchId, initialTab]);
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {

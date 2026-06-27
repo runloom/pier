@@ -68,6 +68,7 @@ export function buildWorkspacePanelSnapshots(
       ...position,
       ...(descriptor?.context ? { context: descriptor.context } : {}),
       display,
+      ...(descriptor?.tab ? { tab: descriptor.tab } : {}),
     };
   });
 }
