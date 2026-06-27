@@ -10,6 +10,7 @@ import { createPanelContextService } from "../services/panel-context-service.ts"
 import { createPluginService } from "../services/plugin-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
+import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTaskService } from "../services/tasks/task-service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
@@ -101,6 +102,7 @@ function createPierAppCore(): PierAppCore {
       broadcast: broadcastMruState,
     }),
     preferences: createPreferencesService({ eventBus }),
+    processEnvironment: createProcessEnvironmentService(),
     plugins: pluginHost.plugins,
     panelContexts: createPanelContextService(),
     rendererCommand,

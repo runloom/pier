@@ -1,4 +1,7 @@
-import { pierCommandSchema } from "@shared/contracts/commands.ts";
+import {
+  pierCommandEnvelopeSchema,
+  pierCommandSchema,
+} from "@shared/contracts/commands.ts";
 import {
   normalizePanelTabChromeInput,
   panelContextSchema,
@@ -231,6 +234,38 @@ describe("shared panel contract", () => {
       type: "terminal.open",
       windowId: "main",
     });
+  });
+
+  it("allows local command envelopes to carry CLI environment", () => {
+    expect(
+      pierCommandEnvelopeSchema.parse({
+        clientEnv: {
+          PATH: "/opt/homebrew/bin:/usr/bin",
+          PIER_MODE: "dev",
+        },
+        clientId: "cli-local",
+        command: { type: "app.status" },
+        protocolVersion: 1,
+        requestId: "req-client-env",
+      })
+    ).toMatchObject({
+      clientEnv: {
+        PATH: "/opt/homebrew/bin:/usr/bin",
+        PIER_MODE: "dev",
+      },
+      clientId: "cli-local",
+      command: { type: "app.status" },
+    });
+
+    expect(() =>
+      pierCommandEnvelopeSchema.parse({
+        clientEnv: { "1BAD": "value" },
+        clientId: "cli-local",
+        command: { type: "app.status" },
+        protocolVersion: 1,
+        requestId: "req-invalid-client-env",
+      })
+    ).toThrow();
   });
 
   it("allows renderer terminal.open commands to carry launchId without raw env", () => {

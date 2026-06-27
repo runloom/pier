@@ -5,9 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 
 function entry(id: string, enabled: boolean): PluginRegistryEntry {
   return {
-    commands: [],
+    effectivePermissions: [],
     enabled,
-    id,
     manifest: {
       apiVersion: 1,
       commands: [],
@@ -17,12 +16,14 @@ function entry(id: string, enabled: boolean): PluginRegistryEntry {
       panels: [],
       permissions: [],
       source: { kind: "builtin" },
+      terminalStatusItems: [],
       version: "1.0.0",
     },
-    panels: [],
-    permissions: [],
-    source: { kind: "builtin" },
-    version: "1.0.0",
+    runtime: {
+      canToggle: true,
+      enabled,
+      kind: "builtin",
+    },
   };
 }
 

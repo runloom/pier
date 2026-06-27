@@ -28,7 +28,7 @@ function createPluginI18n(
 ): RendererPluginContext["i18n"] {
   const language = () => i18next.language || "en";
   const commandById = (commandId: string) =>
-    entry?.commands.find((command) => command.id === commandId);
+    entry?.manifest.commands.find((command) => command.id === commandId);
 
   return {
     commandDescription: (commandId) => {
@@ -101,6 +101,25 @@ function adaptAction(action: RendererPluginAction): Action {
   };
 }
 
+function assertDeclaredContribution(
+  entry: PluginRegistryEntry | undefined,
+  kind: "action" | "terminalStatusItem",
+  id: string
+): void {
+  if (!entry) {
+    return;
+  }
+  const declared =
+    kind === "action"
+      ? entry.manifest.commands.some((command) => command.id === id)
+      : entry.manifest.terminalStatusItems.some((item) => item.id === id);
+  if (!declared) {
+    throw new Error(
+      `plugin contribution not declared: ${entry.manifest.id}:${kind}:${id}`
+    );
+  }
+}
+
 function adaptQuickPickItem(item: RendererPluginQuickPickItem): QuickPickItem {
   return {
     id: item.id,
@@ -164,7 +183,10 @@ export function createRendererPluginContext(
 ): RendererPluginContext {
   return {
     actions: {
-      register: (action) => actionRegistry.register(adaptAction(action)),
+      register: (action) => {
+        assertDeclaredContribution(entry, "action", action.id);
+        return actionRegistry.register(adaptAction(action));
+      },
     },
     commandPalette: {
       openQuickPick: (quickPick) =>
@@ -182,7 +204,10 @@ export function createRendererPluginContext(
       },
     },
     terminalStatusItems: {
-      register: (item) => terminalStatusItemRegistry.register(item),
+      register: (item) => {
+        assertDeclaredContribution(entry, "terminalStatusItem", item.id);
+        return terminalStatusItemRegistry.register(item);
+      },
     },
     worktrees: {
       check: (request) => window.pier.worktrees.check(request),

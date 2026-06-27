@@ -34,18 +34,18 @@ export class MainPluginRuntime {
     const context = createMainPluginContext();
 
     for (const entry of entries) {
-      if (!(entry.enabled && entry.source.kind === "builtin")) {
+      if (!(entry.runtime.enabled && entry.runtime.kind === "builtin")) {
         continue;
       }
-      const module = this.modules.get(entry.id);
+      const module = this.modules.get(entry.manifest.id);
       if (!module) {
         continue;
       }
-      nextActiveIds.add(entry.id);
-      if (this.disposers.has(entry.id)) {
+      nextActiveIds.add(entry.manifest.id);
+      if (this.disposers.has(entry.manifest.id)) {
         continue;
       }
-      this.disposers.set(entry.id, module.activate(context));
+      this.disposers.set(entry.manifest.id, module.activate(context));
     }
 
     for (const [id, dispose] of this.disposers) {

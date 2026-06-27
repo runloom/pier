@@ -49,7 +49,8 @@ export async function executeRunListCommand(
 export async function executeRunSpawnCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "run.spawn" }>,
-  services: PierCoreServices
+  services: PierCoreServices,
+  options: { clientEnv?: Record<string, string> | undefined } = {}
 ): Promise<PierCommandResult> {
   const preparation = await services.tasks.prepareSpawn({
     inputs: command.inputs,
@@ -86,7 +87,7 @@ export async function executeRunSpawnCommand(
         type: "terminal.open",
       },
       services,
-      { tab: launch.tab }
+      { clientEnv: options.clientEnv, source: "task", tab: launch.tab }
     );
     if (!result.ok) {
       return result;

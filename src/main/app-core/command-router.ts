@@ -22,6 +22,7 @@ import {
   type PluginService,
   PluginServiceError,
 } from "../services/plugin-service.ts";
+import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import {
   type WorktreeService,
@@ -61,6 +62,7 @@ export interface PierCoreServices {
     read(): Promise<ProjectPreferences>;
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
+  processEnvironment: ProcessEnvironmentService;
   rendererCommand: RendererCommandService;
   tasks: {
     list(args: { projectRoot: string }): Promise<TaskListResult>;
@@ -142,6 +144,10 @@ export interface CommandRouter {
 export interface CreateCommandRouterArgs {
   clients: PierClientRegistry;
   services: PierCoreServices;
+}
+
+export interface CommandExecutionContext {
+  clientEnv?: Record<string, string> | undefined;
 }
 
 function requestIdOf(rawEnvelope: unknown): string {
@@ -334,13 +340,16 @@ async function executePanelCommand(
 async function executeRunCommand(
   requestId: string,
   command: PierCommand,
-  services: PierCoreServices
+  services: PierCoreServices,
+  context: CommandExecutionContext
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
     case "run.list":
       return await executeRunListCommand(requestId, command, services);
     case "run.spawn":
-      return await executeRunSpawnCommand(requestId, command, services);
+      return await executeRunSpawnCommand(requestId, command, services, {
+        clientEnv: context.clientEnv,
+      });
     default:
       return null;
   }
@@ -349,11 +358,14 @@ async function executeRunCommand(
 async function executeTerminalCommand(
   requestId: string,
   command: PierCommand,
-  services: PierCoreServices
+  services: PierCoreServices,
+  context: CommandExecutionContext
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
     case "terminal.open":
-      return await executeTerminalOpenCommand(requestId, command, services);
+      return await executeTerminalOpenCommand(requestId, command, services, {
+        clientEnv: context.clientEnv,
+      });
     case "terminal.profile.delete":
       return success(
         requestId,
@@ -383,14 +395,17 @@ async function executeKnownCommand(
   requestId: string,
   command: PierCommand,
   clients: PierClientRegistry,
-  services: PierCoreServices
+  services: PierCoreServices,
+  context: CommandExecutionContext = {}
 ): Promise<PierCommandResult> {
   try {
     const executors = [
       (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
       (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
-      (cmd: PierCommand) => executeRunCommand(requestId, cmd, services),
-      (cmd: PierCommand) => executeTerminalCommand(requestId, cmd, services),
+      (cmd: PierCommand) =>
+        executeRunCommand(requestId, cmd, services, context),
+      (cmd: PierCommand) =>
+        executeTerminalCommand(requestId, cmd, services, context),
       (cmd: PierCommand) =>
         executeAppStateCommand(requestId, cmd, clients, services),
       (cmd: PierCommand) =>
@@ -437,7 +452,7 @@ export function createCommandRouter({
         return failure(requestId, "invalid_command", "invalid command");
       }
 
-      const { clientId, command } = parsed.data;
+      const { clientEnv, clientId, command } = parsed.data;
       const client = clients.get(clientId);
       if (!client) {
         return failure(requestId, "permission_denied", "unknown client");
@@ -448,7 +463,9 @@ export function createCommandRouter({
         return failure(requestId, "permission_denied", auth.reason);
       }
 
-      return await executeKnownCommand(requestId, command, clients, services);
+      return await executeKnownCommand(requestId, command, clients, services, {
+        clientEnv,
+      });
     },
   };
 }

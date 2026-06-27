@@ -57,12 +57,17 @@ function mergeLocaleMessages(
   const commands = mergeContributionMessages(base?.commands, overlay.commands);
   const messages = mergeUiMessages(base?.messages, overlay.messages);
   const panels = mergeContributionMessages(base?.panels, overlay.panels);
+  const terminalStatusItems = mergeContributionMessages(
+    base?.terminalStatusItems,
+    overlay.terminalStatusItems
+  );
   return {
     ...(base ?? {}),
     ...overlay,
     ...(commands ? { commands } : {}),
     ...(messages ? { messages } : {}),
     ...(panels ? { panels } : {}),
+    ...(terminalStatusItems ? { terminalStatusItems } : {}),
   };
 }
 

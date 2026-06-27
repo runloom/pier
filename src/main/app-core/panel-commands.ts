@@ -15,6 +15,11 @@ import type {
   ResolvedTerminalLaunchOptions,
   TerminalLaunchOptions,
 } from "@shared/contracts/terminal-launch.ts";
+import type {
+  ProcessEnvironmentResolveRequest,
+  ProcessEnvironmentService,
+  ProcessEnvironmentSource,
+} from "../services/process-environment-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import { commandFailure, commandSuccess } from "./command-results.ts";
 import {
@@ -30,6 +35,7 @@ export interface PanelCommandServices {
     recordRecent(context: PanelContext): Promise<void>;
     resolveForPath(path: string): Promise<PanelContext>;
   };
+  processEnvironment: ProcessEnvironmentService;
   rendererCommand: RendererCommandService;
   terminalLaunches: {
     consume(
@@ -112,21 +118,22 @@ function normalizePanelSnapshot(
   };
 }
 
-function mergeTerminalLaunchProfile(
+function mergeTerminalLaunchCommandAndCwd(
   launch: TerminalLaunchOptions,
   profile: ResolvedTerminalLaunchOptions | null
 ): ResolvedTerminalLaunchOptions {
-  const env =
-    profile?.env || launch.env
-      ? { ...(profile?.env ?? {}), ...(launch.env ?? {}) }
-      : undefined;
   return {
     ...(profile?.command && { command: profile.command }),
     ...(profile?.cwd && { cwd: profile.cwd }),
-    ...(env && { env }),
     ...(launch.command && { command: launch.command }),
     ...(launch.cwd && { cwd: launch.cwd }),
   };
+}
+
+function optionalEnv(
+  env: Record<string, string>
+): Pick<ResolvedTerminalLaunchOptions, "env"> | Record<string, never> {
+  return Object.keys(env).length > 0 ? { env } : {};
 }
 
 async function listPanels(
@@ -245,7 +252,11 @@ export async function executeTerminalOpenCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "terminal.open" }>,
   services: PanelCommandServices,
-  options: { tab?: PanelTabChrome } = {}
+  options: {
+    clientEnv?: Record<string, string> | undefined;
+    source?: ProcessEnvironmentSource | undefined;
+    tab?: PanelTabChrome;
+  } = {}
 ): Promise<PierCommandResult> {
   const target = resolveCommandWindow(command.windowId, services, {
     requireStableDefault: !command.windowId,
@@ -269,7 +280,20 @@ export async function executeTerminalOpenCommand(
       `unknown terminal profile: ${rawLaunch.profileId}`
     );
   }
-  const launch = mergeTerminalLaunchProfile(rawLaunch, profile);
+  const launchBase = mergeTerminalLaunchCommandAndCwd(rawLaunch, profile);
+  const environmentRequest: ProcessEnvironmentResolveRequest = {
+    cwd: launchBase.cwd,
+    ...(options.clientEnv ? { clientEnv: options.clientEnv } : {}),
+    ...(rawLaunch.env ? { explicitEnv: rawLaunch.env } : {}),
+    ...(profile?.env ? { profileEnv: profile.env } : {}),
+    source: options.source ?? "terminal",
+  };
+  const resolvedEnvironment =
+    await services.processEnvironment.resolve(environmentRequest);
+  const launch: ResolvedTerminalLaunchOptions = {
+    ...launchBase,
+    ...optionalEnv(resolvedEnvironment.env),
+  };
   const context = launch.cwd
     ? await services.panelContexts.resolveForPath(launch.cwd)
     : undefined;

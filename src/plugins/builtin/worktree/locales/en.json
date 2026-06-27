@@ -27,5 +27,11 @@
     "ui.title": "Worktrees",
     "ui.unsupported": "Current directory does not support Git worktrees"
   },
+  "terminalStatusItems": {
+    "pier.worktree.status": {
+      "description": "Shows the current Git worktree in terminal panels.",
+      "title": "Worktree Status"
+    }
+  },
   "name": "Worktree"
 }

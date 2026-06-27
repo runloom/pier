@@ -1,10 +1,5 @@
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { Fragment, useEffect, useMemo, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/primitives/button.tsx";
 import {
   Card,
@@ -15,7 +10,6 @@ import {
   Field,
   FieldContent,
   FieldDescription,
-  FieldError,
   FieldLabel,
 } from "@/components/primitives/field.tsx";
 import { Separator } from "@/components/primitives/separator.tsx";
@@ -116,10 +110,6 @@ export function KeybindingsSection() {
     () => new Map(actions.map((action) => [action.id, action])),
     [actions]
   );
-  const [rowError, setRowError] = useState<{
-    commandId: string;
-    message: string;
-  } | null>(null);
   const recordingCommandId = useKeybindingPreferencesStore(
     (s) => s.recordingCommandId
   );
@@ -146,7 +136,6 @@ export function KeybindingsSection() {
       event.preventDefault();
       event.stopPropagation();
       if (event.key === "Escape") {
-        setRowError(null);
         cancelRecording();
         return;
       }
@@ -155,32 +144,24 @@ export function KeybindingsSection() {
       }
       const chord = chordFromEvent(event);
       if (!hasModifier(chord)) {
-        setRowError({
-          commandId: recordingCommandId,
-          message: t("settings.keybindings.errorNeedsModifier"),
-        });
+        toast.error(t("settings.keybindings.errorNeedsModifier"));
         return;
       }
       setBinding(recordingCommandId, stringifyChord(chord), "global")
         .then((result) => {
           if (result.ok) {
-            setRowError(null);
             return;
           }
-          setRowError({
-            commandId: recordingCommandId,
-            message: localizedError(
+          toast.error(
+            localizedError(
               result.error ?? t("settings.keybindings.errorUnknown"),
               actionsById,
               t
-            ),
-          });
+            )
+          );
         })
         .catch((err) => {
-          setRowError({
-            commandId: recordingCommandId,
-            message: err instanceof Error ? err.message : String(err),
-          });
+          toast.error(err instanceof Error ? err.message : String(err));
         });
     };
     window.addEventListener("keydown", onKeyDown, true);
@@ -199,8 +180,6 @@ export function KeybindingsSection() {
               const custom = hasUserEntry(action.id);
               const hasBinding =
                 keybindingRegistry.getBindingsFor(action.id).length > 0;
-              const error =
-                rowError?.commandId === action.id ? rowError.message : null;
               return (
                 <Fragment key={action.id}>
                   {index > 0 ? <Separator className="bg-border/70" /> : null}
@@ -210,7 +189,6 @@ export function KeybindingsSection() {
                   >
                     <Field
                       className="items-start gap-4"
-                      data-invalid={error ? true : undefined}
                       orientation="horizontal"
                     >
                       <FieldContent className="min-w-0 gap-1">
@@ -218,7 +196,6 @@ export function KeybindingsSection() {
                         <FieldDescription className="text-xs">
                           {localizedDescription(action, t)}
                         </FieldDescription>
-                        {error ? <FieldError>{error}</FieldError> : null}
                       </FieldContent>
                       <ShortcutInput
                         canClear={hasBinding}
@@ -226,16 +203,14 @@ export function KeybindingsSection() {
                         clearLabel={`${t("settings.keybindings.clear")} ${title}`}
                         isRecording={isRecording}
                         keyParts={currentShortcutParts(action.id)}
+                        onCancelRecord={cancelRecording}
                         onClear={() => {
-                          setRowError(null);
                           clearBinding(action.id).catch(() => undefined);
                         }}
                         onRecord={() => {
-                          setRowError(null);
                           startRecording(action.id);
                         }}
                         onReset={() => {
-                          setRowError(null);
                           resetBinding(action.id).catch(() => undefined);
                         }}
                         placeholder={t("settings.keybindings.unassigned")}
@@ -255,7 +230,6 @@ export function KeybindingsSection() {
           <Button
             disabled={!hasAnyUserEntry}
             onClick={() => {
-              setRowError(null);
               resetAllBindings().catch(() => undefined);
             }}
             type="button"

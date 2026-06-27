@@ -3,6 +3,7 @@ import type {
   PluginRegistryListResult,
 } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   Alert,
@@ -18,6 +19,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/primitives/card.tsx";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/primitives/collapsible.tsx";
 import {
   Empty,
   EmptyDescription,
@@ -36,64 +42,14 @@ import {
 import { Skeleton } from "@/components/primitives/skeleton.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { refreshBuiltinPlugins } from "@/lib/plugins/bootstrap.ts";
+import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
 import {
-  resolvePluginCommandDisplay,
-  resolvePluginDisplay,
-  resolvePluginPanelDisplay,
-} from "@/lib/plugins/display.ts";
-
-interface ContributionBadge {
-  id: string;
-  title: string;
-}
-
-function commandContributionBadges(
-  entry: PluginRegistryEntry,
-  locale: string
-): ContributionBadge[] {
-  return entry.commands.map((command) => ({
-    id: command.id,
-    title: resolvePluginCommandDisplay(entry.manifest, command, locale).title,
-  }));
-}
-
-function panelContributionBadges(
-  entry: PluginRegistryEntry,
-  locale: string
-): ContributionBadge[] {
-  return entry.panels.map((panel) => ({
-    id: panel.id,
-    title: resolvePluginPanelDisplay(entry.manifest, panel, locale).title,
-  }));
-}
-
-function BadgeList({
-  emptyLabel,
-  items,
-}: {
-  emptyLabel: string;
-  items: ContributionBadge[];
-}) {
-  if (items.length === 0) {
-    return <span className="text-muted-foreground">{emptyLabel}</span>;
-  }
-
-  return (
-    <>
-      {items.map((item) => (
-        <Badge
-          className="max-w-full gap-1"
-          key={item.id}
-          title={item.id}
-          variant="outline"
-        >
-          <span className="truncate">{item.title}</span>
-          <span className="truncate text-muted-foreground/70">{item.id}</span>
-        </Badge>
-      ))}
-    </>
-  );
-}
+  commandContributionBadges,
+  contributionSummary,
+  PluginDetails,
+  panelContributionBadges,
+  terminalStatusContributionBadges,
+} from "./plugin-details.tsx";
 
 function PluginsLoadingState() {
   const t = useT();
@@ -140,103 +96,101 @@ function PluginRow({
   pending: boolean;
 }) {
   const t = useT();
-  const canToggle =
-    entry.source.kind === "builtin" || entry.source.kind === "local";
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const canToggle = entry.runtime.canToggle;
   const commandContributions = commandContributionBadges(
     entry,
     i18next.language
   );
   const panelContributions = panelContributionBadges(entry, i18next.language);
+  const terminalStatusContributions = terminalStatusContributionBadges(
+    entry,
+    i18next.language
+  );
   const display = resolvePluginDisplay(entry, i18next.language);
   const actionKey = entry.enabled ? "disable" : "enable";
   const actionLabel = t(`settings.plugins.action.${actionKey}`);
   const actionAriaLabel = t(`settings.plugins.action.${actionKey}Plugin`, {
     name: display.name,
   });
-  const statusLabel = t(
-    `settings.plugins.status.${entry.enabled ? "enabled" : "disabled"}`
+  const statusLabel =
+    entry.runtime.kind === "manifest-only"
+      ? t("settings.plugins.status.manifestOnly")
+      : t(
+          `settings.plugins.status.${entry.runtime.enabled ? "enabled" : "disabled"}`
+        );
+  const sourceLabel = t(
+    `settings.plugins.source.${entry.manifest.source.kind}`
   );
-  const sourceLabel = t(`settings.plugins.source.${entry.source.kind}`);
+  const detailsLabel = detailsOpen
+    ? t("settings.plugins.details.hide")
+    : t("settings.plugins.details.show");
+  const detailsAriaLabel = detailsOpen
+    ? t("settings.plugins.details.hidePlugin", { name: display.name })
+    : t("settings.plugins.details.showPlugin", { name: display.name });
 
   return (
-    <Item
-      className="rounded-none border-0 px-(--card-spacing)"
-      data-testid={`plugin-row-${entry.id}`}
-      role="listitem"
-    >
-      <ItemContent className="min-w-0">
-        <ItemTitle className="max-w-full">
-          <span className="truncate">{display.name}</span>
-          <Badge variant={entry.enabled ? "secondary" : "outline"}>
-            {statusLabel}
-          </Badge>
-          <Badge variant="outline">{sourceLabel}</Badge>
-        </ItemTitle>
-        <ItemDescription className="break-all text-xs">
-          {entry.id}
-        </ItemDescription>
-        {display.description ? (
+    <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+      <Item
+        className="rounded-none border-0 px-(--card-spacing)"
+        data-testid={`plugin-row-${entry.manifest.id}`}
+        role="listitem"
+      >
+        <ItemContent className="min-w-0">
+          <ItemTitle className="max-w-full">
+            <span className="truncate">{display.name}</span>
+            <Badge variant={entry.runtime.enabled ? "secondary" : "outline"}>
+              {statusLabel}
+            </Badge>
+            <Badge variant="outline">{sourceLabel}</Badge>
+          </ItemTitle>
           <ItemDescription className="text-xs">
-            {display.description}
+            {display.description ?? contributionSummary(entry, t)}
           </ItemDescription>
-        ) : null}
-      </ItemContent>
-      <ItemActions>
-        <Button
-          aria-label={actionAriaLabel}
-          disabled={!canToggle || pending}
-          onClick={() => onToggle(entry)}
-          size="sm"
-          type="button"
-          variant={entry.enabled ? "outline" : "default"}
-        >
-          {actionLabel}
-        </Button>
-      </ItemActions>
+          {display.description ? (
+            <ItemDescription className="text-xs">
+              {contributionSummary(entry, t)}
+            </ItemDescription>
+          ) : null}
+        </ItemContent>
+        <ItemActions>
+          <CollapsibleTrigger asChild>
+            <Button
+              aria-label={detailsAriaLabel}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {detailsOpen ? <ChevronDown /> : <ChevronRight />}
+              {detailsLabel}
+            </Button>
+          </CollapsibleTrigger>
+          {canToggle ? (
+            <Button
+              aria-label={actionAriaLabel}
+              disabled={pending}
+              onClick={() => onToggle(entry)}
+              size="sm"
+              type="button"
+              variant={entry.enabled ? "outline" : "default"}
+            >
+              {actionLabel}
+            </Button>
+          ) : null}
+        </ItemActions>
 
-      <div className="grid basis-full gap-3 text-xs md:grid-cols-3">
-        <div className="min-w-0">
-          <div className="mb-1 font-medium text-muted-foreground">
-            {t("settings.plugins.permissions")}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {entry.permissions.length > 0 ? (
-              entry.permissions.map((permission) => (
-                <Badge key={permission} variant="outline">
-                  {permission}
-                </Badge>
-              ))
-            ) : (
-              <span className="text-muted-foreground">
-                {t("settings.plugins.none")}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="min-w-0 md:col-span-2">
-          <div className="mb-1 font-medium text-muted-foreground">
-            {t("settings.plugins.commands")}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            <BadgeList
-              emptyLabel={t("settings.plugins.none")}
-              items={commandContributions}
+        {detailsOpen ? (
+          <CollapsibleContent asChild forceMount>
+            <PluginDetails
+              commandContributions={commandContributions}
+              entry={entry}
+              panelContributions={panelContributions}
+              terminalStatusContributions={terminalStatusContributions}
             />
-          </div>
-        </div>
-        <div className="min-w-0 md:col-span-3">
-          <div className="mb-1 font-medium text-muted-foreground">
-            {t("settings.plugins.panels")}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            <BadgeList
-              emptyLabel={t("settings.plugins.none")}
-              items={panelContributions}
-            />
-          </div>
-        </div>
-      </div>
-    </Item>
+          </CollapsibleContent>
+        ) : null}
+      </Item>
+    </Collapsible>
   );
 }
 
@@ -260,12 +214,12 @@ function PluginsListContent({
   return (
     <ItemGroup className="gap-0">
       {result.entries.map((entry, index) => (
-        <Fragment key={entry.id}>
+        <Fragment key={entry.manifest.id}>
           {index > 0 ? <ItemSeparator className="my-0" /> : null}
           <PluginRow
             entry={entry}
             onToggle={onToggle}
-            pending={pendingId === entry.id}
+            pending={pendingId === entry.manifest.id}
           />
         </Fragment>
       ))}
@@ -293,10 +247,10 @@ export function PluginsSection() {
   }, [load]);
 
   const togglePlugin = (entry: PluginRegistryEntry) => {
-    setPendingId(entry.id);
+    setPendingId(entry.manifest.id);
     const request = entry.enabled
-      ? window.pier.plugins.disable(entry.id)
-      : window.pier.plugins.enable(entry.id);
+      ? window.pier.plugins.disable(entry.manifest.id)
+      : window.pier.plugins.enable(entry.manifest.id);
     request
       .then(async () => {
         const nextResult = await window.pier.plugins.list();
