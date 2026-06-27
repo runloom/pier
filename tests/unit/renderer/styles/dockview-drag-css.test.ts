@@ -63,4 +63,17 @@ describe("Pier dockview drag CSS", () => {
     );
     expect(css).toContain("font-weight: 600 !important");
   });
+
+  it("keeps tab shortcut hint metrics aligned with the normal icon slot", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    expect(css).toContain(".dockview-theme-pier .pier-panel-tab-index-hint");
+    expect(css).toContain(".dv-tab.dv-tab-dragging .pier-panel-tab-index-hint");
+    expect(css).toContain(".dv-tab-ghost-drag .pier-panel-tab-index-hint");
+    expect(css).toContain("height: 14px;");
+    expect(css).toContain("min-width: 14px;");
+  });
 });

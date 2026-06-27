@@ -1,20 +1,23 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { act } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
+import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 
 type ActiveChangeHandler = (event: { isActive: boolean }) => void;
 
 function createHeaderProps(
   component: string,
   title: string,
-  onActiveChange?: (handler: ActiveChangeHandler) => void
+  onActiveChange?: (handler: ActiveChangeHandler) => void,
+  id = `${component}-1`
 ): IDockviewPanelHeaderProps {
   return {
     api: {
       component,
-      id: `${component}-1`,
+      id,
       isActive: false,
       onDidActiveChange: vi.fn((handler: ActiveChangeHandler) => {
         onActiveChange?.(handler);
@@ -49,6 +52,10 @@ function setRect(
 }
 
 describe("PanelTabHeader", () => {
+  afterEach(() => {
+    useTabShortcutHintsStore.getState().reset();
+  });
+
   it("renders the icon declared by the panel kit metadata", () => {
     const { container } = render(
       <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
@@ -104,5 +111,65 @@ describe("PanelTabHeader", () => {
     );
 
     expect(container.querySelector("[data-panel-tab-icon]")).toBeNull();
+  });
+
+  it("replaces the active group tab icon with its shortcut number while Command is held", () => {
+    useTabShortcutHintsStore.setState({
+      activeGroupTabHints: { "terminal-1": 1 },
+      commandKeyDown: true,
+    });
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+
+    expect(container.querySelector("[data-panel-tab-icon]")).toBeNull();
+    expect(
+      container.querySelector("[data-panel-tab-index-hint]")
+    ).toHaveTextContent("⌘1");
+  });
+
+  it("keeps the original icon for tabs outside the active group while Command is held", () => {
+    useTabShortcutHintsStore.setState({
+      activeGroupTabHints: { "terminal-1": 1 },
+      commandKeyDown: true,
+    });
+
+    const { container } = render(
+      <PanelTabHeader
+        {...createHeaderProps("terminal", "Terminal", undefined, "terminal-2")}
+      />
+    );
+
+    expect(
+      container.querySelector('[data-panel-tab-icon="terminal"]')
+    ).not.toBeNull();
+    expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
+  });
+
+  it("toggles the active group tab shortcut hint from web Command key events", () => {
+    useTabShortcutHintsStore
+      .getState()
+      .setActiveGroupPanels([{ id: "terminal-1" }]);
+
+    const { container } = render(
+      <>
+        <ShellKeybindings />
+        <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+      </>
+    );
+
+    expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
+
+    fireEvent.keyDown(window, { code: "MetaLeft", metaKey: true });
+    expect(
+      container.querySelector("[data-panel-tab-index-hint]")
+    ).toHaveTextContent("⌘1");
+
+    fireEvent.keyUp(window, { code: "MetaLeft", metaKey: false });
+    expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
+    expect(
+      container.querySelector('[data-panel-tab-icon="terminal"]')
+    ).not.toBeNull();
   });
 });

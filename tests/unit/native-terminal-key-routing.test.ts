@@ -101,4 +101,18 @@ describe("native terminal key routing", () => {
       'exports.Set("setAppShortcutKeys"'
     );
   });
+
+  it("forwards terminal modifier state changes for tab shortcut hints", () => {
+    expect(readGhosttyBridgeSource()).toContain(".flagsChanged");
+    expect(readGhosttyBridgeSource()).toContain(
+      "EventRouterView.forwardModifierStateCallback"
+    );
+    expect(readGhosttyBridgeSource()).toContain(
+      '@_cdecl("ghostty_bridge_set_modifier_forward_callback")'
+    );
+    expect(readNativeAddonSource()).toContain(
+      "ghostty_bridge_set_modifier_forward_callback"
+    );
+    expect(readNativeAddonSource()).toContain("setModifierForwardCallback");
+  });
 });

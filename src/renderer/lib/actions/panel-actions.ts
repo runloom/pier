@@ -46,6 +46,8 @@ const actionContributionRuntime: ActionContributionRuntime = {
   t: (key) => i18next.t(key),
 };
 
+const TAB_FOCUS_INDICES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+
 export function registerPanelActions(): () => void {
   const disposers: Array<() => void> = registerActionContributions(
     PANEL_LAYOUT_ACTION_CONTRIBUTIONS,
@@ -77,6 +79,27 @@ export function registerPanelActions(): () => void {
       title: () => i18next.t("contextMenu.action.newTerminal"),
     })
   );
+
+  for (const index of TAB_FOCUS_INDICES) {
+    disposers.push(
+      actionRegistry.register({
+        category: "Panel",
+        enabled: () => useWorkspaceStore.getState().api != null,
+        handler: () => {
+          useWorkspaceStore.getState().activateTabInActiveGroup(index - 1);
+        },
+        id: `pier.panel.focusTab${index}`,
+        metadata: {
+          categoryKey: "panel",
+          group: "3_focus",
+          sortOrder: 10 + index,
+          titleKey: "commandPalette.action.focusTab",
+        },
+        surfaces: [],
+        title: () => i18next.t("commandPalette.action.focusTab", { index }),
+      })
+    );
+  }
 
   disposers.push(
     actionRegistry.register({

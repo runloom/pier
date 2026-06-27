@@ -17,6 +17,7 @@ import { useEffect } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
+import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 import { isTextInputElement } from "./is-text-input.ts";
 import { chordFromEvent } from "./matcher.ts";
 import { keybindingRegistry } from "./registry.ts";
@@ -137,6 +138,14 @@ function hasFlag(modifierFlags: number, flag: number): boolean {
   return (modifierFlags & flag) !== 0;
 }
 
+function setCommandKeyDown(commandKeyDown: boolean): void {
+  useTabShortcutHintsStore.getState().setCommandKeyDown(commandKeyDown);
+}
+
+function isCommandKeyEvent(e: KeyboardEvent): boolean {
+  return e.code === "MetaLeft" || e.code === "MetaRight" || e.key === "Meta";
+}
+
 function chordFromNativeForward(
   modifierFlags: number,
   chars: string
@@ -162,6 +171,9 @@ export function useKeyboardShortcuts(): void {
       if (isImePending(e)) {
         return;
       }
+      if (isCommandKeyEvent(e) || e.metaKey) {
+        setCommandKeyDown(true);
+      }
       const action = pickAction(chordFromEvent(e), e.target);
       if (!action) {
         return;
@@ -171,6 +183,14 @@ export function useKeyboardShortcuts(): void {
       runAction(action);
     };
     window.addEventListener("keydown", onKeydown, true);
+    const onKeyup = (e: KeyboardEvent) => {
+      if (isCommandKeyEvent(e) || !e.metaKey) {
+        setCommandKeyDown(false);
+      }
+    };
+    window.addEventListener("keyup", onKeyup, true);
+    const onBlur = () => setCommandKeyDown(false);
+    window.addEventListener("blur", onBlur);
 
     // 路径 2: swift IPC forward (terminal NSView 占 firstResponder 时)
     const unsubscribeForward = window.pier?.keybinding?.onForward?.(
@@ -184,10 +204,19 @@ export function useKeyboardShortcuts(): void {
         }
       }
     );
+    const unsubscribeModifierState = window.pier?.keybinding?.onModifierState?.(
+      ({ modifierFlags }) => {
+        setCommandKeyDown(hasFlag(modifierFlags, NS_FLAG_COMMAND));
+      }
+    );
 
     return () => {
       window.removeEventListener("keydown", onKeydown, true);
+      window.removeEventListener("keyup", onKeyup, true);
+      window.removeEventListener("blur", onBlur);
       unsubscribeForward?.();
+      unsubscribeModifierState?.();
+      setCommandKeyDown(false);
     };
   }, []);
 }
