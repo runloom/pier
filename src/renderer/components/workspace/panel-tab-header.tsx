@@ -15,14 +15,44 @@
  */
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
-import { type MouseEvent, useCallback, useEffect, useState } from "react";
+import {
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 import { panelIconOf } from "./panel-registry.ts";
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const [title, setTitle] = useState<string>(props.api.title ?? "");
   const Icon = panelIconOf(props.api.component);
+  const shortcutIndex = useTabShortcutHintsStore((state) =>
+    state.commandKeyDown ? state.activeGroupTabHints[props.api.id] : undefined
+  );
+  let leadingVisual: ReactNode = null;
+  if (shortcutIndex) {
+    leadingVisual = (
+      <span
+        aria-hidden="true"
+        className="pier-panel-tab-index-hint shrink-0 font-semibold text-[10px] text-muted-foreground"
+        data-panel-tab-index-hint={shortcutIndex}
+      >
+        ⌘{shortcutIndex}
+      </span>
+    );
+  } else if (Icon) {
+    leadingVisual = (
+      <Icon
+        aria-hidden="true"
+        className="pier-panel-tab-icon shrink-0"
+        data-panel-tab-icon={props.api.component}
+      />
+    );
+  }
   useEffect(() => {
     // dockview onDidTitleChange fire 时把新 title 写入 state, 触发 tab 重渲.
     const disposable = props.api.onDidTitleChange((e) => {
@@ -54,14 +84,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       role="tab"
       tabIndex={0}
     >
-      {Icon ? (
-        <Icon
-          aria-hidden="true"
-          className="pier-panel-tab-icon shrink-0"
-          data-panel-tab-icon={props.api.component}
-          strokeWidth={2.35}
-        />
-      ) : null}
+      {leadingVisual}
       <span className="dv-default-tab-content">{title}</span>
       <button
         aria-label="Close tab"

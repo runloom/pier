@@ -32,6 +32,7 @@ export interface ActionContribution {
   submenuKey?: string;
   surfaces: readonly (string & {})[];
   titleKey: string;
+  titleParams?: Record<string, number | string>;
   when?: ActionWhenExpression;
 }
 
@@ -51,5 +52,5 @@ export interface ActionWhenContext {
 export interface ActionContributionRuntime {
   getContext: () => ActionWhenContext;
   resolveAliases: (key: string) => readonly string[];
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, number | string>) => string;
 }

@@ -63,9 +63,29 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   },
 ];
 
+const TAB_FOCUS_INDICES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+
+export const PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
+  TAB_FOCUS_INDICES.map(
+    (index): ActionContribution => ({
+      categoryKey: "panel",
+      group: "3_focus",
+      handler: () => {
+        useWorkspaceStore.getState().activateTabInActiveGroup(index - 1);
+      },
+      id: `pier.panel.focusTab${index}`,
+      sortOrder: 10 + index,
+      surfaces: [],
+      titleKey: "commandPalette.action.focusTab",
+      titleParams: { index },
+      when: "workspace.hasApi",
+    })
+  );
+
 export const PANEL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   ...PANEL_LAYOUT_ACTION_CONTRIBUTIONS,
   ...PANEL_HOST_ACTION_CONTRIBUTIONS,
+  ...PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS,
 ];
 
 export function registerPanelActions(): () => void {

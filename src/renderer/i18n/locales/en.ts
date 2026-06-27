@@ -176,6 +176,7 @@ export const en = {
       openTerminalDebugWindow: "Open Terminal Debug Window",
       openSettings: "Open Settings",
       closeActivePanel: "Close Active Panel",
+      focusTab: "Switch to Tab {{index}}",
       newTab: "New Tab",
       newWindow: "New Window",
       runTask: "Run Task...",

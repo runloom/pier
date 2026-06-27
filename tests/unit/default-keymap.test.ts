@@ -11,6 +11,15 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Backquote",
   "Mod+Comma",
   "Mod+Digit0",
+  "Mod+Digit1",
+  "Mod+Digit2",
+  "Mod+Digit3",
+  "Mod+Digit4",
+  "Mod+Digit5",
+  "Mod+Digit6",
+  "Mod+Digit7",
+  "Mod+Digit8",
+  "Mod+Digit9",
   "Mod+Equal",
   "Mod+KeyD",
   "Mod+KeyN",
@@ -18,6 +27,15 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+KeyW",
   "Mod+Minus",
   "Mod+Numpad0",
+  "Mod+Numpad1",
+  "Mod+Numpad2",
+  "Mod+Numpad3",
+  "Mod+Numpad4",
+  "Mod+Numpad5",
+  "Mod+Numpad6",
+  "Mod+Numpad7",
+  "Mod+Numpad8",
+  "Mod+Numpad9",
   "Mod+Shift+Enter",
   "Mod+Shift+Equal",
   "Mod+Shift+KeyD",
@@ -74,6 +92,21 @@ describe("DEFAULT_KEYMAP", () => {
       keys: "Ctrl+Shift+ArrowRight",
       scope: "global",
     });
+  });
+
+  it("contains active group tab switch shortcuts for digit and numpad keys", () => {
+    for (let index = 1; index <= 9; index += 1) {
+      expect(DEFAULT_KEYMAP).toContainEqual({
+        commandId: `pier.panel.focusTab${index}`,
+        keys: `Mod+Digit${index}`,
+        scope: "global",
+      });
+      expect(DEFAULT_KEYMAP).toContainEqual({
+        commandId: `pier.panel.focusTab${index}`,
+        keys: `Mod+Numpad${index}`,
+        scope: "global",
+      });
+    }
   });
 
   it("contains the panel maximize shortcut", () => {

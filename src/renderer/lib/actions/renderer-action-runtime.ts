@@ -37,5 +37,5 @@ export function resolveI18nAliases(key: string): readonly string[] {
 export const rendererActionContributionRuntime: ActionContributionRuntime = {
   getContext: rendererActionContext,
   resolveAliases: resolveI18nAliases,
-  t: (key) => i18next.t(key),
+  t: (key, params) => (params ? i18next.t(key, params) : i18next.t(key)),
 };

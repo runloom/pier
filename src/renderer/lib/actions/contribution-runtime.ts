@@ -134,7 +134,7 @@ export function createActionFromContribution(
     id: contribution.id,
     metadata,
     surfaces: contribution.surfaces,
-    title: () => runtime.t(contribution.titleKey),
+    title: () => runtime.t(contribution.titleKey, contribution.titleParams),
   };
 }
 

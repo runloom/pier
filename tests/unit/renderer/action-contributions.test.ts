@@ -4,6 +4,7 @@ import {
   evaluateActionWhen,
 } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import { PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS } from "@/lib/actions/panel-actions.ts";
 import { PANEL_LAYOUT_ACTION_CONTRIBUTIONS } from "@/lib/actions/panel-layout-contributions.ts";
 
 function runtime(groupCount: number) {
@@ -25,6 +26,14 @@ function runtime(groupCount: number) {
         ? ["平分面板", "balance panels", "junfen", "jfmb"]
         : [],
     t: (key: string) => key,
+  };
+}
+
+function runtimeWithParams() {
+  return {
+    ...runtime(1),
+    t: (key: string, params?: Record<string, number | string>) =>
+      params ? `${key}:${JSON.stringify(params)}` : key,
   };
 }
 
@@ -90,6 +99,29 @@ describe("action contributions", () => {
     expect(
       evaluateActionWhen("terminal.hasActivePanel", runtime(1).getContext())
     ).toBe(true);
+  });
+
+  it("declares numbered tab focus actions as parameterized contributions", () => {
+    expect(
+      PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS.map((action) => action.id)
+    ).toEqual([
+      "pier.panel.focusTab1",
+      "pier.panel.focusTab2",
+      "pier.panel.focusTab3",
+      "pier.panel.focusTab4",
+      "pier.panel.focusTab5",
+      "pier.panel.focusTab6",
+      "pier.panel.focusTab7",
+      "pier.panel.focusTab8",
+      "pier.panel.focusTab9",
+    ]);
+
+    const action = createActionFromContribution(
+      PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS[1] as ActionContribution,
+      runtimeWithParams()
+    );
+
+    expect(action.title()).toBe('commandPalette.action.focusTab:{"index":2}');
   });
 
   it("accepts conjunctions with or without spaces", () => {
