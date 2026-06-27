@@ -43,6 +43,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       setMouseForwardCallback: vi.fn(),
       setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),
+      setSearchForwardCallback: vi.fn(),
       setTerminalConfig: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
@@ -482,5 +483,98 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     );
 
     expect(fakeAddon.setTerminalConfig).not.toHaveBeenCalled();
+  });
+
+  it("maps terminal search IPC to scoped Ghostty binding actions", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    await expect(
+      invokeHandlers.get("pier:terminal:search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "needle"
+      )
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      invokeHandlers.get("pier:terminal:navigate-search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "next"
+      )
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      invokeHandlers.get("pier:terminal:navigate-search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "previous"
+      )
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      invokeHandlers.get("pier:terminal:end-search")?.(
+        { sender: win.webContents },
+        "panel-1"
+      )
+    ).resolves.toEqual({ ok: true });
+
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "search:needle"
+    );
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "navigate_search:next"
+    );
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "navigate_search:previous"
+    );
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "end_search"
+    );
+  });
+
+  it("rejects invalid terminal search IPC input", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+    const oversizedQuery = "x".repeat(513);
+
+    await expect(
+      invokeHandlers.get("pier:terminal:search")?.(
+        { sender: win.webContents },
+        "",
+        "needle"
+      )
+    ).resolves.toEqual({ ok: false, error: "invalid panel id" });
+    await expect(
+      invokeHandlers.get("pier:terminal:search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        oversizedQuery
+      )
+    ).resolves.toEqual({ ok: false, error: "invalid search query" });
+    await expect(
+      invokeHandlers.get("pier:terminal:navigate-search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "sideways"
+      )
+    ).resolves.toEqual({ ok: false, error: "invalid search direction" });
+
+    expect(fakeAddon.performTerminalBindingAction).not.toHaveBeenCalled();
+  });
+
+  it("forwards native terminal search state to the owning renderer window", async () => {
+    const { fakeAddon, win } = await setupHarness();
+    const callback = fakeAddon.setSearchForwardCallback.mock.calls[0]?.[0];
+    if (!callback) {
+      throw new Error("missing search forward callback");
+    }
+
+    callback(7, "7::panel-1", 3, 1);
+
+    expect(win.webContents.send).toHaveBeenCalledWith(
+      "pier:terminal:search-state",
+      { panelId: "panel-1", selected: 1, total: 3 }
+    );
   });
 });

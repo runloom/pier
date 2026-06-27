@@ -65,6 +65,8 @@ function topLevelActionLabels(items: MenuTemplate): string[] {
 describe("terminal content context menu actions", () => {
   const disposers: Array<() => void> = [];
   const performOperation = vi.fn(async () => ({ ok: true }));
+  const dispatchEventSpy = vi.spyOn(window, "dispatchEvent");
+  let searchOpenRequestHandler: (() => void) | null = null;
 
   beforeAll(async () => {
     await initI18n();
@@ -76,11 +78,19 @@ describe("terminal content context menu actions", () => {
       configurable: true,
       value: {
         terminal: {
+          onSearchOpenRequest: vi.fn((handler: () => void) => {
+            searchOpenRequestHandler = handler;
+            return () => {
+              searchOpenRequestHandler = null;
+            };
+          }),
           performOperation,
         },
       },
     });
     performOperation.mockClear();
+    dispatchEventSpy.mockClear();
+    searchOpenRequestHandler = null;
     useWorkspaceStore
       .getState()
       .setApi(createApi(terminalPanel("terminal-1")) as never);
@@ -115,21 +125,24 @@ describe("terminal content context menu actions", () => {
         "pier.terminal.copy",
         "pier.terminal.paste",
         "pier.terminal.selectAll",
+        "pier.terminal.search",
         "pier.terminal.clearScreen",
         "pier.panel.splitRight",
         "pier.panel.focusRight",
       ])
     );
-    expect(ids.slice(0, 4)).toEqual([
+    expect(ids.slice(0, 5)).toEqual([
       "pier.terminal.copy",
       "pier.terminal.paste",
       "pier.terminal.selectAll",
+      "pier.terminal.search",
       "pier.terminal.clearScreen",
     ]);
-    expect(topLevelActionLabels(entries).slice(0, 4)).toEqual([
+    expect(topLevelActionLabels(entries).slice(0, 5)).toEqual([
       "复制",
       "粘贴",
       "全选",
+      "查找",
       "清屏",
     ]);
   });
@@ -161,6 +174,38 @@ describe("terminal content context menu actions", () => {
     expect(performOperation).toHaveBeenCalledWith("terminal-1", "clearScreen");
   });
 
+  it("dispatches the terminal search action to the active terminal panel", async () => {
+    await registerActions();
+
+    const action = actionRegistry.get("pier.terminal.search");
+    if (!action) {
+      throw new Error("missing pier.terminal.search action");
+    }
+
+    await action.handler();
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { panelId: "terminal-1" },
+        type: "pier:terminal:open-search",
+      })
+    );
+    expect(performOperation).not.toHaveBeenCalled();
+  });
+
+  it("opens terminal search from the application menu request", async () => {
+    await registerActions();
+
+    searchOpenRequestHandler?.();
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { panelId: "terminal-1" },
+        type: "pier:terminal:open-search",
+      })
+    );
+  });
+
   it("does not dispatch terminal operations for non-terminal active panels", async () => {
     await registerActions();
     useWorkspaceStore
@@ -175,5 +220,6 @@ describe("terminal content context menu actions", () => {
     await action.handler();
 
     expect(performOperation).not.toHaveBeenCalled();
+    expect(dispatchEventSpy).not.toHaveBeenCalled();
   });
 });

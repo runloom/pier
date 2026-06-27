@@ -63,6 +63,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: false,
       language: "zh-CN",
+      onFindInTerminal: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -86,6 +87,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: true,
       language: "en",
+      onFindInTerminal: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -117,11 +119,13 @@ describe("app menu", () => {
     const onResetZoom = vi.fn();
     const onZoomIn = vi.fn();
     const onZoomOut = vi.fn();
+    const onFindInTerminal = vi.fn();
     const template = buildAppMenuTemplate({
       appName: "Pier",
       getTargetWindow: () => win as never,
       isDev: false,
       language: "en",
+      onFindInTerminal,
       onNewTerminal,
       onNewWindow,
       onOpenCommandPalette: (target) => {
@@ -142,12 +146,38 @@ describe("app menu", () => {
     submenu(itemAt(template, 3))
       .find((item) => item.label === "Command Palette")
       ?.click?.(undefined as never, undefined as never, undefined as never);
+    submenu(itemAt(template, 2))
+      .find((item) => item.label === "Find")
+      ?.click?.(undefined as never, undefined as never, undefined as never);
 
     expect(onNewWindow).toHaveBeenCalledOnce();
     expect(onNewTerminal).toHaveBeenCalledWith(win);
+    expect(onFindInTerminal).toHaveBeenCalledWith(win);
     expect(send).toHaveBeenCalledWith(
       PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST
     );
+  });
+
+  it("adds a Find menu item with the terminal search accelerator", () => {
+    const template = buildAppMenuTemplate({
+      appName: "Pier",
+      getTargetWindow: () => null,
+      isDev: false,
+      language: "en",
+      onFindInTerminal: vi.fn(),
+      onNewTerminal: vi.fn(),
+      onNewWindow: vi.fn(),
+      onOpenCommandPalette: vi.fn(),
+      onResetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+    });
+
+    const editMenu = submenu(itemAt(template, 2));
+    const find = editMenu.find((item) => item.label === "Find");
+
+    expect(find).toMatchObject({ accelerator: "CmdOrCtrl+F" });
+    expect(find).not.toHaveProperty("role");
   });
 
   it("routes zoom menu items through Pier handlers with keymap accelerators", () => {
@@ -159,6 +189,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: false,
       language: "en",
+      onFindInTerminal: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -212,6 +243,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       getSystemLocale: () => "en-US",
       isDev: false,
+      onFindInTerminal: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),

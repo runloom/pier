@@ -16,7 +16,6 @@ import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import {
-  app,
   BaseWindow,
   BrowserWindow,
   ipcMain,
@@ -30,6 +29,7 @@ import {
   blurActivePanelFocus,
   restoreActivePanelFocus,
 } from "../ipc/terminal-focus-state.ts";
+import { isDevRuntime } from "../runtime-mode.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
 import { installMacAppViewGeometry } from "./mac-app-view-geometry.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
@@ -65,7 +65,7 @@ export interface WindowInfo {
   recordId: string;
 }
 
-const isDev = !app.isPackaged;
+const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const RENDERER_READY_SHOW_TIMEOUT_MS = 3000;
 

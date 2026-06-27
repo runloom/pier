@@ -53,6 +53,8 @@ extern "C" {
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
     typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
     void ghostty_bridge_set_pwd_forward_callback(PwdForwardFn cb);
+    typedef void (*SearchForwardFn)(long browserWindowId, const char* panelId, long total, long selected);
+    void ghostty_bridge_set_search_forward_callback(SearchForwardFn cb);
     // Title forward: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 → 此 trampoline → JS.
     // 签名 (browserWindowId, panelId UTF-8, title UTF-8). 与 PWD 同模式.
     typedef void (*TitleForwardFn)(long browserWindowId, const char* panelId, const char* title);
@@ -464,6 +466,31 @@ static Napi::Value JsSetPwdForwardCallback(const Napi::CallbackInfo& info) {
                                 &g_pwdForwardTrampoline);
 }
 
+// ---- Search forward (Ghostty search match state → renderer search bar) ----
+struct SearchForwardPayload {
+    long windowId;
+    std::string panelId;
+    long total;
+    long selected;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::Number::New(env, static_cast<double>(total)),
+            Napi::Number::New(env, static_cast<double>(selected)),
+        });
+    }
+};
+static ForwardChannel<SearchForwardPayload> g_searchChannel("PierSearchForward");
+static void g_searchForwardTrampoline(long windowId, const char* panelId, long total, long selected) {
+    g_searchChannel.emit({ windowId, std::string(panelId), total, selected });
+}
+static Napi::Value JsSetSearchForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_searchChannel,
+                                ghostty_bridge_set_search_forward_callback,
+                                &g_searchForwardTrampoline);
+}
+
 // ---- Title forward (OSC 0/2 → renderer panel descriptor) ----
 struct TitleForwardPayload {
     long windowId;
@@ -636,6 +663,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setModifierForwardCallback", Napi::Function::New(env, JsSetModifierForwardCallback));
     exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
+    exports.Set("setSearchForwardCallback", Napi::Function::New(env, JsSetSearchForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
     exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
     exports.Set("applyTerminalPresentation", Napi::Function::New(env, JsApplyTerminalPresentation));

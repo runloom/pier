@@ -18,6 +18,7 @@ interface MenuText {
   devTools: string;
   edit: string;
   file: string;
+  find: string;
   forceReload: string;
   hide: (appName: string) => string;
   hideOthers: string;
@@ -54,6 +55,7 @@ const MENU_TEXT: Record<AppMenuLanguage, MenuText> = {
     devTools: "Developer Tools",
     edit: "Edit",
     file: "File",
+    find: "Find",
     forceReload: "Force Reload",
     hide: (appName) => `Hide ${appName}`,
     hideOthers: "Hide Others",
@@ -88,6 +90,7 @@ const MENU_TEXT: Record<AppMenuLanguage, MenuText> = {
     devTools: "开发者工具",
     edit: "编辑",
     file: "文件",
+    find: "查找",
     forceReload: "强制重新加载",
     hide: (appName) => `隐藏 ${appName}`,
     hideOthers: "隐藏其他",
@@ -135,6 +138,7 @@ export interface BuildAppMenuTemplateArgs {
   isDev: boolean;
   isMac?: boolean;
   language: AppMenuLanguage;
+  onFindInTerminal: (target: AppWindow | null) => void;
   onNewTerminal: (target: AppWindow | null) => void;
   onNewWindow: () => void;
   onOpenCommandPalette: (target: AppWindow | null) => void;
@@ -168,6 +172,7 @@ export function buildAppMenuTemplate({
   isDev,
   isMac = true,
   language,
+  onFindInTerminal,
   onNewTerminal,
   onNewWindow,
   onOpenCommandPalette,
@@ -213,6 +218,13 @@ export function buildAppMenuTemplate({
             separator(),
             { label: t.selectAll, role: "selectAll" },
           ] satisfies MenuItemConstructorOptions[])),
+      separator(),
+      appCommandMenuItem(
+        "pier.terminal.search",
+        t.find,
+        () => onFindInTerminal(getTargetWindow()),
+        userKeymap
+      ),
     ],
   };
 

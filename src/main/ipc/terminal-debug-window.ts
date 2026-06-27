@@ -1,9 +1,10 @@
 import { join } from "node:path";
 import type { TerminalDebugWindowOpenResult } from "@shared/contracts/terminal.ts";
-import { app, BrowserWindow, type IpcMain } from "electron";
+import { BrowserWindow, type IpcMain } from "electron";
+import { isDevRuntime } from "../runtime-mode.ts";
 import { windowFromWebContents } from "./terminal.ts";
 
-const isDev = !app.isPackaged;
+const isDev = isDevRuntime();
 const openDebugWindows = new Set<BrowserWindow>();
 
 function debugRendererUrl(targetBrowserWindowId: number): string | null {

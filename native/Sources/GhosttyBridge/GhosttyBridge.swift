@@ -97,6 +97,7 @@ final class EventRouterView: NSView {
         "Mod+Digit9",
         "Mod+Equal",
         "Mod+KeyD",
+        "Mod+KeyF",
         "Mod+KeyN",
         "Mod+KeyT",
         "Mod+KeyW",
@@ -352,12 +353,15 @@ final class EventRouterView: NSView {
 /// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
 @MainActor
 final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
+    TerminalSurfaceSearchDelegate,
     TerminalSurfaceTitleDelegate,
     TerminalSurfaceScrollbarDelegate
 {
     let panelId: String
     let browserWindowId: Int
     weak var scrollbarSink: TerminalScrollbarStateSink?
+    private var searchSelected: Int = -1
+    private var searchTotal: Int = 0
 
     /// 全局 callback: 收到 OSC 7 path 时调用, 把 (browserWindowId, panelId, path)
     /// 转给 main process.
@@ -367,6 +371,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// 转给 main process. TUI 应用 (claude / vim / aider) 主动通过 OSC 0/2 写自定义
     /// title — descriptor.long 的最高优先级来源.
     static var forwardTitleCallback: ((Int, String, String) -> Void)?
+
+    /// 全局 callback: Ghostty search result update → main process.
+    /// selected 使用 Ghostty 原始 0-based 序号；无匹配时为 -1。
+    static var forwardSearchCallback: ((Int, String, Int, Int) -> Void)?
 
     init(panelId: String, browserWindowId: Int) {
         self.panelId = panelId
@@ -383,6 +391,28 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 
     func terminalDidUpdateScrollbar(_ state: TerminalScrollbarState) {
         scrollbarSink?.terminalScrollbarStateDidChange(state)
+    }
+
+    private func forwardSearchState() {
+        TerminalEventDelegate.forwardSearchCallback?(
+            browserWindowId,
+            panelId,
+            searchTotal,
+            searchTotal > 0 ? searchSelected : -1
+        )
+    }
+
+    func terminalDidUpdateSearchTotal(_ total: Int) {
+        searchTotal = max(0, total)
+        if searchTotal == 0 {
+            searchSelected = -1
+        }
+        forwardSearchState()
+    }
+
+    func terminalDidUpdateSearchSelected(_ selected: Int) {
+        searchSelected = selected
+        forwardSearchState()
     }
 }
 
@@ -1705,6 +1735,7 @@ public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
 public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, Int) -> Void
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
@@ -1790,6 +1821,21 @@ public func ghosttyBridgeSetPwdForwardCallback(_ cb: PwdForwardCallback?) {
             }
         } else {
             TerminalEventDelegate.forwardPwdCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_search_forward_callback")
+public func ghosttyBridgeSetSearchForwardCallback(_ cb: SearchForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardSearchCallback = { wid, panelId, total, selected in
+                panelId.withCString { pidPtr in
+                    cb(wid, pidPtr, total, selected)
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardSearchCallback = nil
         }
     }
 }

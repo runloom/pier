@@ -77,6 +77,24 @@ final class TerminalCallbackBridge {
             (delegate as? any TerminalSurfaceScrollbarDelegate)?
                 .terminalDidUpdateScrollbar(state)
 
+        case GHOSTTY_ACTION_SEARCH_TOTAL:
+            let total = action.action.search_total.total
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=search_total total=\(total)"
+            )
+            (delegate as? any TerminalSurfaceSearchDelegate)?
+                .terminalDidUpdateSearchTotal(Int(total))
+
+        case GHOSTTY_ACTION_SEARCH_SELECTED:
+            let selected = action.action.search_selected.selected
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=search_selected selected=\(selected)"
+            )
+            (delegate as? any TerminalSurfaceSearchDelegate)?
+                .terminalDidUpdateSearchSelected(Int(selected))
+
         case GHOSTTY_ACTION_PROGRESS_REPORT:
             let report = action.action.progress_report
             let state = TerminalProgressState(report.state) ?? .set

@@ -222,8 +222,12 @@ const terminalApi: TerminalAPI = {
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   debugSnapshot: (args) =>
     ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
+  endSearch: (panelId) =>
+    ipcRenderer.invoke("pier:terminal:end-search", panelId),
   focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
+  navigateSearch: (panelId, direction) =>
+    ipcRenderer.invoke("pier:terminal:navigate-search", panelId, direction),
   reconcile: (activeIds) =>
     ipcRenderer.send("pier:terminal:reconcile", activeIds),
   onContextMenuRequest: (cb) =>
@@ -255,6 +259,9 @@ const terminalApi: TerminalAPI = {
     };
   },
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
+  onSearchOpenRequest: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST, cb),
+  onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),
   onTabChromePatch: (cb) => subscribeIpc("pier:terminal:tab-chrome-patch", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
@@ -262,6 +269,8 @@ const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
+  search: (panelId, query) =>
+    ipcRenderer.invoke("pier:terminal:search", panelId, query),
   setActivePanelKind: (kind, panelId) =>
     ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setAppShortcutKeys: (keys) =>

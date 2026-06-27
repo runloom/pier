@@ -46,6 +46,7 @@ import {
   setTerminalOverlayActive,
 } from "./terminal-presentation.ts";
 import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
+import { registerTerminalSearchIpc } from "./terminal-search.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import {
   forwardTerminalTaskTabPatch,
@@ -152,6 +153,12 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       { panelId: rawPanelId, title },
       "pier-title-forward"
     );
+  });
+  registerTerminalSearchIpc({
+    addon,
+    ipcMain,
+    loadError,
+    windowFromWebContents,
   });
 
   ipcMain.handle("pier:terminal:setup", (event) => {

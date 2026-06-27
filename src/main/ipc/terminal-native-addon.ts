@@ -84,6 +84,16 @@ export interface NativeAddon {
   setPwdForwardCallback(
     cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
   ): void;
+  setSearchForwardCallback(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          total: number,
+          selected: number
+        ) => void)
+      | null
+  ): void;
   setTerminalConfig(parentHandle: Buffer, config: TerminalRuntimeConfig): void;
   setTerminalFocusRequestCallback(
     cb: ((browserWindowId: number, panelId: string) => void) | null

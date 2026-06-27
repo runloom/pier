@@ -273,6 +273,15 @@ export interface TerminalOperationResult {
   error?: string | undefined;
   ok: boolean;
 }
+
+export type TerminalSearchDirection = "next" | "previous";
+
+export interface TerminalSearchStateEvent {
+  panelId: string;
+  selected: number;
+  total: number;
+}
+
 /**
  * ANSI 16 色 palette. 索引语义 = xterm-256color 前 16 槽:
  * 0..7   = black, red, green, yellow, blue, magenta, cyan, white
@@ -329,8 +338,13 @@ export interface TerminalAPI {
   debugSnapshot(
     args?: TerminalDebugSnapshotArgs
   ): Promise<TerminalDebugSnapshot>;
+  endSearch(panelId: string): Promise<TerminalOperationResult>;
   focus(panelId: string): void;
   hide(panelId: string): void;
+  navigateSearch(
+    panelId: string,
+    direction: TerminalSearchDirection
+  ): Promise<TerminalOperationResult>;
   /** 订阅 swift 转发的右键事件. 返回 unsubscribe. */
   onContextMenuRequest: (
     cb: (req: TerminalContextMenuRequest) => void
@@ -348,6 +362,9 @@ export interface TerminalAPI {
   ) => () => void;
   /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
   onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
+  /** main 端应用菜单请求打开当前终端搜索栏. */
+  onSearchOpenRequest(cb: () => void): () => void;
+  onSearchState(cb: (event: TerminalSearchStateEvent) => void): () => void;
   onTabChromePatch(
     cb: (event: TerminalTabChromePatchEvent) => void
   ): () => void;
@@ -373,6 +390,7 @@ export interface TerminalAPI {
    * 调一次即可. fire-and-forget.
    */
   reconcile(activeIds: string[]): void;
+  search(panelId: string, query: string): Promise<TerminalOperationResult>;
   setActivePanelKind: (
     kind: "terminal" | "web",
     panelId: string | null

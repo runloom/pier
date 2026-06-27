@@ -13,13 +13,17 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
 
 /** @type {1} */
 const PROFILE_VERSION = 1;
@@ -28,6 +32,7 @@ const PROFILE_FILE_NAME = "profile.json";
 const RUNTIME_FILE_NAME = "runtime.json";
 const BASE_DEV_PORT = 5173;
 const PORT_SCAN_LIMIT = 100;
+const MAC_DEV_ELECTRON_APP_NAME = "PierDev";
 
 /**
  * @typedef {object} DevProfile
@@ -172,6 +177,36 @@ function readJson(file) {
 function writeJson(file, value) {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(value, null, "\t")}\n`, "utf8");
+}
+
+/**
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{ cwd?: string }} [options]
+ */
+function runChecked(command, args, options = {}) {
+  const res = spawnSync(command, args, {
+    cwd: options.cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (res.status === 0) {
+    return;
+  }
+  const output = [res.stdout, res.stderr].filter(Boolean).join("\n").trim();
+  throw new Error(
+    `${command} ${args.join(" ")} failed${output ? `:\n${output}` : ""}`
+  );
+}
+
+/**
+ * @param {string} plistFile
+ * @param {Record<string, string>} entries
+ */
+function updatePlistStrings(plistFile, entries) {
+  for (const [key, value] of Object.entries(entries)) {
+    runChecked("plutil", ["-replace", key, "-string", value, plistFile]);
+  }
 }
 
 /**
@@ -694,11 +729,88 @@ function waitForExit(child) {
   });
 }
 
+/**
+ * macOS 26 会直接杀掉部分 node_modules 下的原始 Electron.app/Contents/MacOS/Electron.
+ * 复制一份 worktree 本地 dev runtime 并改成 PierDev，让 electron-vite 继续以 dev
+ * 环境启动当前源码。
+ *
+ * @param {DevProfile} profile
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {string | null}
+ */
+function prepareMacDevElectronRuntime(profile, env) {
+  if (process.platform !== "darwin" || env.ELECTRON_EXEC_PATH) {
+    return env.ELECTRON_EXEC_PATH || null;
+  }
+
+  const electronPackageJson = require.resolve("electron/package.json", {
+    paths: [profile.worktreeRoot],
+  });
+  const electronPackageRoot = path.dirname(electronPackageJson);
+  const sourceDist = path.join(electronPackageRoot, "dist");
+  const sourceApp = path.join(sourceDist, "Electron.app");
+  const sourceExec = path.join(sourceApp, "Contents", "MacOS", "Electron");
+  if (!existsSync(sourceExec)) {
+    return null;
+  }
+
+  const sourceVersionFile = path.join(sourceDist, "version");
+  const sourceVersion = existsSync(sourceVersionFile)
+    ? readFileSync(sourceVersionFile, "utf8").trim()
+    : "";
+  const targetRoot = path.join(profile.profileDir, "electron-runtime");
+  const targetApp = path.join(targetRoot, `${MAC_DEV_ELECTRON_APP_NAME}.app`);
+  const targetExec = path.join(
+    targetApp,
+    "Contents",
+    "MacOS",
+    MAC_DEV_ELECTRON_APP_NAME
+  );
+  const stampFile = path.join(targetRoot, "runtime.json");
+  const stamp = readJson(stampFile);
+  const isCurrent =
+    existsSync(targetExec) &&
+    stamp?.sourceApp === sourceApp &&
+    stamp?.sourceVersion === sourceVersion &&
+    stamp?.appName === MAC_DEV_ELECTRON_APP_NAME;
+
+  if (!isCurrent) {
+    rmSync(targetRoot, { force: true, recursive: true });
+    mkdirSync(targetRoot, { recursive: true });
+    runChecked("ditto", [sourceApp, targetApp]);
+    renameSync(
+      path.join(targetApp, "Contents", "MacOS", "Electron"),
+      targetExec
+    );
+    updatePlistStrings(path.join(targetApp, "Contents", "Info.plist"), {
+      CFBundleDisplayName: MAC_DEV_ELECTRON_APP_NAME,
+      CFBundleExecutable: MAC_DEV_ELECTRON_APP_NAME,
+      CFBundleIdentifier: "io.pier.dev-electron",
+      CFBundleName: MAC_DEV_ELECTRON_APP_NAME,
+    });
+    runChecked("codesign", ["--force", "--deep", "--sign", "-", targetApp]);
+    writeJson(stampFile, {
+      appName: MAC_DEV_ELECTRON_APP_NAME,
+      sourceApp,
+      sourceVersion,
+    });
+  }
+
+  return targetExec;
+}
+
 async function electronDev() {
   const profile = resolveDevProfile();
   const env = withDevProfileEnv(process.env, profile);
+  const electronExecPath = prepareMacDevElectronRuntime(profile, env);
+  if (electronExecPath) {
+    env.ELECTRON_EXEC_PATH = electronExecPath;
+  }
   console.log(`[dev-profile] ${profile.profile}: ${profile.rendererUrl}`);
   console.log(`[dev-profile] userData: ${profile.electronUserDataDir}`);
+  if (electronExecPath) {
+    console.log(`[dev-profile] electron: ${electronExecPath}`);
+  }
 
   if (await isPortListening(profile.devPort, profile.host)) {
     const activeRuntime = readRuntime(profile.runtimeFile);
