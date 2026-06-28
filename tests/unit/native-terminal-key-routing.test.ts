@@ -58,6 +58,7 @@ describe("native terminal key routing", () => {
     expect(shortcuts).not.toContain("Mod+Backspace");
     expect(shortcuts).not.toContain("Mod+Delete");
     expect(shortcuts).not.toContain("Mod+KeyK");
+    expect(shortcuts).not.toContain("Mod+KeyV");
     expect(shortcuts).not.toContain("Mod+ArrowLeft");
     expect(shortcuts).not.toContain("Mod+ArrowRight");
   });

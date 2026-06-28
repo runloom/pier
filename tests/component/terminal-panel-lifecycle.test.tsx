@@ -70,7 +70,7 @@ interface TestPanelProps extends IDockviewPanelProps {
 const taskTab: PanelTabChrome = {
   badge: { label: "package.json" },
   icon: { id: "pier.task", label: "Task" },
-  state: { busy: true, label: "Running" },
+  state: { label: "Running", status: "running" },
   title: "test",
   tooltip: {
     lines: [{ label: "Command", value: "pnpm run test" }],
@@ -546,7 +546,7 @@ describe("TerminalPanel lifecycle", () => {
     });
     act(() => {
       for (const listener of tabChromePatchListeners) {
-        listener.cb({
+        const legacyPatch = {
           panelId: "terminal-1",
           tab: {
             state: {
@@ -555,7 +555,8 @@ describe("TerminalPanel lifecycle", () => {
               label: "Failed 1",
             },
           },
-        });
+        } as unknown as Parameters<typeof listener.cb>[0];
+        listener.cb(legacyPatch);
       }
     });
 
@@ -566,9 +567,9 @@ describe("TerminalPanel lifecycle", () => {
         tab: {
           title: "test",
           state: {
-            busy: false,
             colorToken: "destructive",
             label: "Failed 1",
+            status: "failed",
           },
         },
       });

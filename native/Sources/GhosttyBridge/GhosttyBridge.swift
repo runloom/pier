@@ -576,13 +576,12 @@ final class GhosttyBridgeImpl {
     static let shared = GhosttyBridgeImpl()
 
     /// EventRouter 命中矩形向内收缩的像素数, 给 dockview sash (4px) 留出事件通道。
-    /// 终端 scrollbar 必须绘制在这个 inset 内侧, 避免与 sash 抢同一条边界。
+    /// 终端滚动条由 SPM 内部的 NSScrollView 管理, 这里不再计算独立滚动条区域。
     private static let hitInset: CGFloat = 5
 
     private var terminals: [String: Terminal] = [:]
     private var eventRouters: [ObjectIdentifier: EventRouterView] = [:]  // per-window
     private var terminalBackgrounds: [ObjectIdentifier: NSColor] = [:]
-    private var terminalForegrounds: [ObjectIdentifier: NSColor] = [:]
     private var terminalLayouts: [String: TerminalLayoutState] = [:]
     private var liveResizeContentSizes: [ObjectIdentifier: NSSize] = [:]
     private var liveResizeObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
@@ -1206,9 +1205,8 @@ final class GhosttyBridgeImpl {
         )
         terminalView.delegate = eventDelegate
 
-        // Container 负责承载 terminalView 和右侧 overlay scrollbar. 终端内容仍由
-        // Ghostty 的 TerminalView 渲染, scrollbar 只消费 Ghostty 暴露的 scrollback
-        // 状态并把交互转回 TerminalView binding action.
+        // Container 负责把 Pier 的命中/焦点事件路由到 SPM AppKit 容器。
+        // 滚动条由 libghostty-spm 内部的 NSScrollView 承接, Pier 不绘制滚动条。
         let container = TerminalContainerView(
             frame: frame,
             terminalView: terminalView,
@@ -1216,7 +1214,6 @@ final class GhosttyBridgeImpl {
             browserWindowId: browserWindowId
         )
         container.backgroundColor = terminalBackgrounds[parentWindowId] ?? .black
-        container.scrollbarColor = terminalForegrounds[parentWindowId] ?? .white
         eventDelegate.scrollbarSink = container
 
         // PIER: 放在所有 web 渲染相关 NSView 之下.
@@ -1401,7 +1398,6 @@ final class GhosttyBridgeImpl {
         // 是潜在内存泄漏, swift ARC 让无引用 controller 自动 dealloc.
         controllers.removeValue(forKey: windowId)
         terminalBackgrounds.removeValue(forKey: windowId)
-        terminalForegrounds.removeValue(forKey: windowId)
         terminalRuntimePreferences.removeValue(forKey: windowId)
         latestPresentations.removeValue(forKey: windowId)
         latestInputRoutings.removeValue(forKey: windowId)
@@ -1446,13 +1442,6 @@ final class GhosttyBridgeImpl {
             terminalBackgrounds[windowId] = backgroundColor
             for term in terminals.values where term.parentWindow === window {
                 term.containerView.backgroundColor = backgroundColor
-            }
-        }
-        if let foregroundColor = Self.terminalColor(from: foreground) {
-            let windowId = ObjectIdentifier(window)
-            terminalForegrounds[windowId] = foregroundColor
-            for term in terminals.values where term.parentWindow === window {
-                term.containerView.scrollbarColor = foregroundColor
             }
         }
     }

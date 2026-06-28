@@ -1,8 +1,8 @@
 import {
+  normalizePanelTabChromeInput,
   type PanelContext,
   type PanelDescriptor,
   type PanelTabChrome,
-  panelTabChromeSchema,
 } from "@shared/contracts/panel.ts";
 
 /**
@@ -24,10 +24,7 @@ export function tabChromeFromParams(
   if (!params || typeof params !== "object" || !("tab" in params)) {
     return;
   }
-  const parsed = panelTabChromeSchema.safeParse(
-    (params as { tab?: unknown }).tab
-  );
-  return parsed.success ? parsed.data : undefined;
+  return normalizePanelTabChromeInput((params as { tab?: unknown }).tab);
 }
 
 export function mergeTabChrome(
@@ -37,24 +34,32 @@ export function mergeTabChrome(
   if (!patch) {
     return current;
   }
+  const normalizedPatch = normalizePanelTabChromeInput(patch);
+  if (!normalizedPatch) {
+    return current;
+  }
   const next = {
     ...(current ?? {}),
-    ...patch,
-    ...(patch.badge
-      ? { badge: { ...(current?.badge ?? {}), ...patch.badge } }
+    ...normalizedPatch,
+    ...(normalizedPatch.badge
+      ? { badge: { ...(current?.badge ?? {}), ...normalizedPatch.badge } }
       : {}),
-    ...(patch.icon
-      ? { icon: { ...(current?.icon ?? {}), ...patch.icon } }
+    ...(normalizedPatch.icon
+      ? { icon: { ...(current?.icon ?? {}), ...normalizedPatch.icon } }
       : {}),
-    ...(patch.state
-      ? { state: { ...(current?.state ?? {}), ...patch.state } }
+    ...(normalizedPatch.state
+      ? { state: { ...(current?.state ?? {}), ...normalizedPatch.state } }
       : {}),
-    ...(patch.tooltip
-      ? { tooltip: { ...(current?.tooltip ?? {}), ...patch.tooltip } }
+    ...(normalizedPatch.tooltip
+      ? {
+          tooltip: {
+            ...(current?.tooltip ?? {}),
+            ...normalizedPatch.tooltip,
+          },
+        }
       : {}),
   };
-  const parsed = panelTabChromeSchema.safeParse(next);
-  return parsed.success ? parsed.data : current;
+  return normalizePanelTabChromeInput(next) ?? current;
 }
 
 export function terminalPanelDescriptor(args: {

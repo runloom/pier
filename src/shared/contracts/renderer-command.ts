@@ -3,7 +3,11 @@ import {
   type PierCommandErrorCode,
   pierCommandPlacementSchema,
 } from "./commands.ts";
-import { panelContextSchema, panelTabChromeSchema } from "./panel.ts";
+import {
+  normalizePanelTabChromeInput,
+  panelContextSchema,
+  panelTabChromeSchema,
+} from "./panel.ts";
 
 export const rendererCommandSchema = z.discriminatedUnion("type", [
   z.object({
@@ -29,7 +33,10 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     focus: z.boolean().optional(),
     launchId: z.string().min(1),
     placement: pierCommandPlacementSchema.optional(),
-    tab: panelTabChromeSchema.optional(),
+    tab: z.preprocess(
+      normalizePanelTabChromeInput,
+      panelTabChromeSchema.optional()
+    ),
     windowId: z.string().min(1).optional(),
   }),
   z.object({

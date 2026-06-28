@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +24,14 @@ const SWIFT_PATH = resolve(
   "../../native/Sources/GhosttyBridge/GhosttyBridge.swift"
 );
 const SOURCE = readFileSync(SWIFT_PATH, "utf8");
+const TERMINAL_SCROLL_CONTAINER_PATH = resolve(
+  import.meta.dirname,
+  "../../native/Sources/GhosttyBridge/TerminalScrollContainer.swift"
+);
+const SPM_APP_TERMINAL_SCROLL_VIEW_PATH = resolve(
+  import.meta.dirname,
+  "../../native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalScrollView.swift"
+);
 
 const WINDOW_TO_BROWSER_ID_DECL_RE =
   /windowToBrowserWindowId: \[ObjectIdentifier: Int\]/;
@@ -81,6 +89,16 @@ const APPKIT_PASTE_GATED_BY_HOST_RE =
   /@IBAction func paste\(_:\s*Any\?\) \{\s*guard hostKeyboardActive else \{ return \}/;
 const APPKIT_SELECT_ALL_GATED_BY_HOST_RE =
   /@IBAction override open func selectAll\(_:\s*Any\?\) \{\s*guard hostKeyboardActive else \{ return \}/;
+const FORBIDDEN_TERMINAL_OVERLAY_SCROLLBAR_RE =
+  /TerminalScrollbarOverlayView|thumbRect|scrollbarPaintedWidth|scroll_page_lines/;
+const SPM_SCROLL_VIEW_CLASS_RE =
+  /public final class AppTerminalScrollView: NSView/;
+const SPM_OWNS_NATIVE_SCROLL_VIEW_RE =
+  /private let scrollView = FocusNotifyingScrollView\(\)[\s\S]*?private final class FocusNotifyingScrollView: NSScrollView/;
+const SPM_LIVE_SCROLL_RE =
+  /NSScrollView\.didLiveScrollNotification[\s\S]*?scroll_to_row/;
+const SPM_MOUSE_MOVED_METHOD_RE =
+  /public override func mouseMoved\(with event: NSEvent\) \{(?<body>[\s\S]*?)\n {8}\}/;
 
 describe("Swift state invariants (source-level lock)", () => {
   it("windowToBrowserWindowId is set up in setupWindow + torn down in detachWindow", () => {
@@ -128,10 +146,7 @@ describe("Swift state invariants (source-level lock)", () => {
 
   it("only forwards terminal focus intent instead of mutating native keyboard target", () => {
     const scrollContainerSource = readFileSync(
-      resolve(
-        import.meta.dirname,
-        "../../native/Sources/GhosttyBridge/TerminalScrollContainer.swift"
-      ),
+      TERMINAL_SCROLL_CONTAINER_PATH,
       "utf8"
     );
     expect(scrollContainerSource).toMatch(FOCUS_INTENT_FORWARDS_ONLY_RE);
@@ -170,10 +185,7 @@ describe("Swift state invariants (source-level lock)", () => {
 
   it("forwards auxiliary mouse focus intent without native keyboard mutation", () => {
     const scrollContainerSource = readFileSync(
-      resolve(
-        import.meta.dirname,
-        "../../native/Sources/GhosttyBridge/TerminalScrollContainer.swift"
-      ),
+      TERMINAL_SCROLL_CONTAINER_PATH,
       "utf8"
     );
     expect(scrollContainerSource).toMatch(
@@ -222,5 +234,37 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(appTerminalInputSource).toMatch(APPKIT_COPY_GATED_BY_HOST_RE);
     expect(appTerminalInputSource).toMatch(APPKIT_PASTE_GATED_BY_HOST_RE);
     expect(appTerminalInputSource).toMatch(APPKIT_SELECT_ALL_GATED_BY_HOST_RE);
+  });
+
+  it("uses the Ghostty SPM AppKit scroll view instead of a Pier-drawn overlay scrollbar", () => {
+    const scrollContainerSource = readFileSync(
+      TERMINAL_SCROLL_CONTAINER_PATH,
+      "utf8"
+    );
+    expect(scrollContainerSource).not.toMatch(
+      FORBIDDEN_TERMINAL_OVERLAY_SCROLLBAR_RE
+    );
+
+    expect(existsSync(SPM_APP_TERMINAL_SCROLL_VIEW_PATH)).toBe(true);
+    const appTerminalScrollViewSource = readFileSync(
+      SPM_APP_TERMINAL_SCROLL_VIEW_PATH,
+      "utf8"
+    );
+    expect(appTerminalScrollViewSource).toMatch(SPM_SCROLL_VIEW_CLASS_RE);
+    expect(appTerminalScrollViewSource).toMatch(SPM_OWNS_NATIVE_SCROLL_VIEW_RE);
+    expect(appTerminalScrollViewSource).toMatch(SPM_LIVE_SCROLL_RE);
+  });
+
+  it("does not let AppTerminalScrollView.mouseMoved recurse through AppKit responder forwarding", () => {
+    expect(existsSync(SPM_APP_TERMINAL_SCROLL_VIEW_PATH)).toBe(true);
+    const appTerminalScrollViewSource = readFileSync(
+      SPM_APP_TERMINAL_SCROLL_VIEW_PATH,
+      "utf8"
+    );
+    const mouseMoved = appTerminalScrollViewSource.match(
+      SPM_MOUSE_MOVED_METHOD_RE
+    );
+    expect(mouseMoved?.groups?.body).toContain("scrollView.flashScrollers()");
+    expect(mouseMoved?.groups?.body).not.toContain("super.mouseMoved");
   });
 });
