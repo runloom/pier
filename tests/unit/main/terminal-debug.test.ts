@@ -123,7 +123,7 @@ describe("terminal native debug IPC", () => {
     );
     const focusForward =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
-    focusForward?.(win.id, "7::terminal-1", "mouse-down");
+    focusForward?.(win.id, "7::terminal-1");
 
     const snapshot = await invokeHandlers.get("pier:terminal:debug-snapshot")?.(
       { sender: win.webContents }

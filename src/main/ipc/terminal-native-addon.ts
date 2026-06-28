@@ -89,9 +89,7 @@ export interface NativeAddon {
   ): void;
   setTerminalConfig(parentHandle: Buffer, config: TerminalRuntimeConfig): void;
   setTerminalFocusRequestCallback(
-    cb:
-      | ((browserWindowId: number, panelId: string, reason: string) => void)
-      | null
+    cb: ((browserWindowId: number, panelId: string) => void) | null
   ): void;
   /** 热更新 window 下所有 terminal 的字体. controller per window, 内部走 Ghostty TerminalController.setTerminalConfiguration. */
   setTerminalFont(

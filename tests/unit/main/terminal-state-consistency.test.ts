@@ -59,7 +59,6 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
-        isFocused: vi.fn(() => false),
         send: vi.fn(),
       },
     };
@@ -419,7 +418,6 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     expect(win.webContents.focus).toHaveBeenCalledOnce();
 
     vi.mocked(win.webContents.focus).mockClear();
-    vi.mocked(win.webContents.isFocused).mockReturnValue(true);
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
       {

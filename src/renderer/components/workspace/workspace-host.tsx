@@ -23,7 +23,6 @@ import {
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
-  hasExclusiveWebFocusScope,
   releaseTransientWebFocusScopes,
   setTerminalBaseKeyboardFocusTarget,
 } from "@/stores/terminal-input-routing.store.ts";
@@ -386,13 +385,7 @@ export function WorkspaceHost() {
       });
 
       window.pier?.terminal?.onFocusRequest?.((req) => {
-        if (hasExclusiveWebFocusScope()) {
-          // exclusive overlay（搜索、命令面板、设置等）打开中，native 点击不抢焦
-          return;
-        }
-
         releaseTransientWebFocusScopes();
-
         const result = activateTerminalPanelFromFocusRequest(
           event.api,
           req.panelId,

@@ -70,7 +70,6 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
-        isFocused: () => true,
         send: vi.fn(),
       },
     };
@@ -177,7 +176,6 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
-        isFocused: () => true,
         send: vi.fn(),
       },
     });
@@ -447,11 +445,11 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     const focusFwd =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
 
-    focusFwd?.(win.id, "legacy-no-scope", "mouse-down");
+    focusFwd?.(win.id, "legacy-no-scope");
 
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
-      { panelId: "legacy-no-scope", reason: "mouse-down" }
+      { panelId: "legacy-no-scope" }
     );
   });
 });

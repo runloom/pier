@@ -52,7 +52,6 @@ describe("terminal focus restoration", () => {
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
-        isFocused: () => focused,
         send: vi.fn(),
       },
     });
@@ -286,12 +285,12 @@ describe("terminal focus restoration", () => {
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
     fakeAddon.applyTerminalInputRouting.mockClear();
 
-    focusForward?.(ipcWindow.id, "7::panel-2", "mouse-down");
+    focusForward?.(ipcWindow.id, "7::panel-2");
 
     expect(fakeAddon.applyTerminalInputRouting).not.toHaveBeenCalled();
     expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
-      { panelId: "panel-2", reason: "mouse-down" }
+      { panelId: "panel-2" }
     );
   });
 
@@ -452,7 +451,6 @@ describe("terminal focus restoration", () => {
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
-        isFocused: () => true,
         send: vi.fn(),
       },
     };

@@ -35,9 +35,6 @@ function focusWebContentsForEffectiveInputRouting(
   if (previousTargetKey === targetKey && reason !== "terminal-window-focus") {
     return;
   }
-  if (win.webContents.isFocused()) {
-    return;
-  }
   recordWebContentsRoute(win, "focus-webcontents", { reason });
   win.webContents.focus();
 }
