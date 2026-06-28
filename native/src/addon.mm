@@ -45,7 +45,7 @@ extern "C" {
     // 签名 (browserWindowId, panelId UTF-8, x, y). 用于触发 native 右键菜单.
     typedef void (*MouseForwardFn)(long browserWindowId, const char* panelId, double x, double y);
     void ghostty_bridge_set_mouse_forward_callback(MouseForwardFn cb);
-    typedef void (*TerminalFocusRequestFn)(long browserWindowId, const char* panelId);
+    typedef void (*TerminalFocusRequestFn)(long browserWindowId, const char* panelId, const char* reason);
     void ghostty_bridge_set_terminal_focus_request_callback(TerminalFocusRequestFn cb);
     // PWD forward: swift TerminalSurfacePwdDelegate 收到 OSC 7 → 此 trampoline → JS.
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
@@ -410,16 +410,18 @@ static Napi::Value JsSetMouseForwardCallback(const Napi::CallbackInfo& info) {
 struct TerminalFocusRequestPayload {
     long windowId;
     std::string panelId;
+    std::string reason;
     void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
             Napi::Number::New(env, static_cast<double>(windowId)),
             Napi::String::New(env, panelId),
+            Napi::String::New(env, reason),
         });
     }
 };
 static ForwardChannel<TerminalFocusRequestPayload> g_terminalFocusRequestChannel("PierTerminalFocusRequest");
-static void g_terminalFocusRequestTrampoline(long windowId, const char* panelId) {
-    g_terminalFocusRequestChannel.emit({ windowId, std::string(panelId) });
+static void g_terminalFocusRequestTrampoline(long windowId, const char* panelId, const char* reason) {
+    g_terminalFocusRequestChannel.emit({ windowId, std::string(panelId), std::string(reason) });
 }
 static Napi::Value JsSetTerminalFocusRequestCallback(const Napi::CallbackInfo& info) {
     return JsSetForwardCallback(info, g_terminalFocusRequestChannel,

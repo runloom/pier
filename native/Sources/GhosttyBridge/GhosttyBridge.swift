@@ -325,7 +325,7 @@ final class EventRouterView: NSView {
             return event
         }
         if let (panelId, _) = terminalTarget(at: local) {
-            TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId)
+            TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId, "mouse-down")
             EventRouterView.forwardRightMouseCallback?(
                 browserWindowId, panelId, Double(local.x), Double(local.y)
             )
@@ -1819,7 +1819,7 @@ public func ghosttyBridgeFreeString(_ ptr: UnsafeMutablePointer<CChar>?) {
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
 public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
-public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
+public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, Int) -> Void
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
@@ -1885,8 +1885,12 @@ public func ghosttyBridgeSetMouseForwardCallback(_ cb: MouseForwardCallback?) {
 public func ghosttyBridgeSetTerminalFocusRequestCallback(_ cb: TerminalFocusRequestCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            TerminalContainerView.forwardFocusRequestCallback = { wid, panelId in
-                panelId.withCString { ptr in cb(wid, ptr) }
+            TerminalContainerView.forwardFocusRequestCallback = { wid, panelId, reason in
+                panelId.withCString { panelPtr in
+                    reason.withCString { reasonPtr in
+                        cb(wid, panelPtr, reasonPtr)
+                    }
+                }
             }
         } else {
             TerminalContainerView.forwardFocusRequestCallback = nil

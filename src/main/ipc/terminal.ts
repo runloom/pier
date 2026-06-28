@@ -108,13 +108,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       "pier-mouse-forward"
     );
   });
-  addon?.setTerminalFocusRequestCallback((id, panelId) => {
-    recordNativeTerminalRoute(id, "focus-request", panelId);
+  addon?.setTerminalFocusRequestCallback((id, panelId, reason) => {
+    recordNativeTerminalRoute(id, "focus-request", panelId, { reason });
     const rawPanelId = unscopePanelId(panelId);
     forwardToWindow(
       id,
       "pier:terminal:focus-request",
-      { panelId: rawPanelId },
+      { panelId: rawPanelId, reason },
       "pier-terminal-focus-request"
     );
   });

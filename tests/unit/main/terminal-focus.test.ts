@@ -285,7 +285,7 @@ describe("terminal focus restoration", () => {
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
     fakeAddon.applyTerminalInputRouting.mockClear();
 
-    focusForward?.(ipcWindow.id, "7::panel-2");
+    focusForward?.(ipcWindow.id, "7::panel-2", "mouse-down");
 
     expect(fakeAddon.applyTerminalInputRouting).not.toHaveBeenCalled();
     expect(ipcWindow.webContents.send).toHaveBeenCalledWith(

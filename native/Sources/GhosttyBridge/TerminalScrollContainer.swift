@@ -59,7 +59,7 @@ enum TerminalContainerLayout {
 
 @MainActor
 final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
-    static var forwardFocusRequestCallback: ((Int, String) -> Void)?
+    static var forwardFocusRequestCallback: ((Int, String, String) -> Void)?
 
     let terminalView: TerminalView
     private let browserWindowId: Int
@@ -157,7 +157,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     private func activateFocusIntent() {
-        Self.forwardFocusRequestCallback?(browserWindowId, panelId)
+        Self.forwardFocusRequestCallback?(browserWindowId, panelId, "mouse-down")
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -395,7 +395,7 @@ private final class TerminalScrollbarOverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId)
+        TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId, "mouse-down")
         guard isScrollable, let thumbRect else { return }
 
         let local = convert(event.locationInWindow, from: nil)

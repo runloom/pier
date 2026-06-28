@@ -445,7 +445,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     const focusFwd =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
 
-    focusFwd?.(win.id, "legacy-no-scope");
+    focusFwd?.(win.id, "legacy-no-scope", "mouse-down");
 
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
