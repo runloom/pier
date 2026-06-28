@@ -141,7 +141,7 @@ describe("Settings plugins section", () => {
           list,
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
-        terminal: { setOverlayActive: vi.fn() },
+        terminal: { applyInputRouting: vi.fn() },
       },
     });
 
@@ -209,7 +209,7 @@ describe("Settings plugins section", () => {
           list,
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
-        terminal: { setOverlayActive: vi.fn() },
+        terminal: { applyInputRouting: vi.fn() },
       },
     });
 
@@ -276,7 +276,7 @@ describe("Settings plugins section", () => {
           list,
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
-        terminal: { setOverlayActive: vi.fn() },
+        terminal: { applyInputRouting: vi.fn() },
       },
     });
 

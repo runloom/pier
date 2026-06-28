@@ -1,9 +1,12 @@
 import type {
+  TerminalDebugInputRoutingSnapshot,
   TerminalDebugIssue,
   TerminalDebugNativeSnapshot,
   TerminalDebugPresentationSnapshot,
   TerminalDebugRendererSnapshot,
   TerminalFrame,
+  TerminalInputRoutingSnapshot,
+  TerminalKeyboardFocusTarget,
   TerminalPresentationEntry,
   TerminalPresentationSnapshot,
 } from "./contracts/terminal.ts";
@@ -16,7 +19,6 @@ function frameDelta(a: TerminalFrame, b: TerminalFrame): number {
     Math.abs(a.height - b.height)
   );
 }
-
 function shouldRenderPanel(
   renderer: TerminalDebugRendererSnapshot,
   panel: TerminalDebugRendererSnapshot["panels"][number]
@@ -27,7 +29,6 @@ function shouldRenderPanel(
     (!renderer.hasMaximizedGroup || panel.isActivePanel)
   );
 }
-
 function buildRendererPanelLifecycleIssues(
   panel: TerminalDebugRendererSnapshot["panels"][number],
   nativeSurface: TerminalDebugNativeSnapshot["surfaces"][number] | undefined
@@ -71,7 +72,6 @@ function buildRendererPanelLifecycleIssues(
   }
   return [];
 }
-
 function buildRendererPanelNativeIssues(
   renderer: TerminalDebugRendererSnapshot,
   nativeByPanelId: Map<string, TerminalDebugNativeSnapshot["surfaces"][number]>,
@@ -126,7 +126,8 @@ function buildRendererPanelNativeIssues(
 export function buildTerminalDebugIssues(
   renderer: TerminalDebugRendererSnapshot,
   native: TerminalDebugNativeSnapshot,
-  presentation?: TerminalDebugPresentationSnapshot | undefined
+  presentation?: TerminalDebugPresentationSnapshot | undefined,
+  inputRouting?: TerminalDebugInputRoutingSnapshot | undefined
 ): TerminalDebugIssue[] {
   const issues: TerminalDebugIssue[] = [];
   const panelCounts = new Map<string, number>();
@@ -156,6 +157,15 @@ export function buildTerminalDebugIssues(
       ...buildTerminalPresentationIssues(expectedPresentation, native)
     );
   }
+  const expectedInputRouting =
+    inputRouting?.effective ??
+    inputRouting?.desired ??
+    renderer.desiredInputRouting;
+  if (expectedInputRouting) {
+    issues.push(
+      ...buildTerminalInputRoutingIssues(expectedInputRouting, native)
+    );
+  }
   const rendererTerminalIds = new Set(
     renderer.panels
       .filter((panel) => panel.component === "terminal")
@@ -179,6 +189,222 @@ export function buildTerminalDebugIssues(
     }
   }
 
+  return issues;
+}
+
+function sameKeyboardFocusTarget(
+  a: TerminalKeyboardFocusTarget,
+  b: TerminalKeyboardFocusTarget
+): boolean {
+  return (
+    a.kind === b.kind &&
+    (a.kind === "web" || (b.kind === "terminal" && a.panelId === b.panelId))
+  );
+}
+
+type NativeSurface = TerminalDebugNativeSnapshot["surfaces"][number];
+
+interface InputRoutingSurfaceState {
+  cursorActiveSurfaces: NativeSurface[];
+  focusedSurfaces: NativeSurface[];
+  hostKeyboardActiveSurfaces: NativeSurface[];
+  surfaceFocusedSurfaces: NativeSurface[];
+}
+
+function collectInputRoutingSurfaceState(
+  native: TerminalDebugNativeSnapshot
+): InputRoutingSurfaceState {
+  return {
+    cursorActiveSurfaces: native.surfaces.filter(
+      (surface) => surface.cursorSuppressed === false
+    ),
+    focusedSurfaces: native.surfaces.filter(
+      (surface) => surface.isFirstResponder
+    ),
+    hostKeyboardActiveSurfaces: native.surfaces.filter(
+      (surface) => surface.hostKeyboardActive === true
+    ),
+    surfaceFocusedSurfaces: native.surfaces.filter(
+      (surface) => surface.isSurfaceFocused === true
+    ),
+  };
+}
+
+function buildTerminalInputRoutingIssues(
+  expected: TerminalInputRoutingSnapshot,
+  native: TerminalDebugNativeSnapshot
+): TerminalDebugIssue[] {
+  const issues: TerminalDebugIssue[] = [];
+  if (
+    native.window.lastAppliedInputRoutingSequence !== undefined &&
+    native.window.lastAppliedInputRoutingSequence < expected.rendererSequence
+  ) {
+    issues.push({
+      code: "input_routing_stale",
+      message:
+        "native last applied input routing sequence is behind desired input routing",
+      severity: "warning",
+    });
+  }
+  if (
+    !sameKeyboardFocusTarget(
+      expected.keyboardFocusTarget,
+      native.window.keyboardFocusTarget
+    )
+  ) {
+    issues.push({
+      code: "input_routing_keyboard_target_mismatch",
+      message: "desired keyboard focus target does not match native router",
+      ...(expected.keyboardFocusTarget.kind === "terminal"
+        ? { panelId: expected.keyboardFocusTarget.panelId }
+        : {}),
+      severity: "error",
+    });
+  }
+  if (native.window.webOverlayRectCount !== expected.webOverlayRects.length) {
+    issues.push({
+      code: "input_routing_overlay_rect_count_mismatch",
+      message: "desired Web overlay rect count does not match native router",
+      severity: "warning",
+    });
+  }
+  const windowFocused =
+    "windowFocused" in expected ? expected.windowFocused !== false : true;
+  const surfaceState = collectInputRoutingSurfaceState(native);
+  if (expected.keyboardFocusTarget.kind === "web") {
+    return issues.concat(buildWebKeyboardTargetIssues(surfaceState));
+  }
+  if (!windowFocused) {
+    return issues.concat(buildBlurredWindowInputRoutingIssues(surfaceState));
+  }
+  const expectedPanelId = expected.keyboardFocusTarget.panelId;
+  const expectedSurface = native.surfaces.find(
+    (surface) => surface.panelId === expectedPanelId
+  );
+  if (!expectedSurface) {
+    issues.push({
+      code: "input_routing_terminal_target_missing",
+      message: "keyboard target terminal has no native surface",
+      panelId: expectedPanelId,
+      severity: "error",
+    });
+    return issues;
+  }
+  return issues.concat(
+    buildTerminalKeyboardTargetIssues(expectedPanelId, expectedSurface, native)
+  );
+}
+
+function buildWebKeyboardTargetIssues(
+  state: InputRoutingSurfaceState
+): TerminalDebugIssue[] {
+  const issues: TerminalDebugIssue[] = [];
+  if (state.focusedSurfaces.length > 0) {
+    issues.push({
+      code: "input_routing_keyboard_first_responder_mismatch",
+      message: "keyboard target is Web but a terminal is first responder",
+      panelId: state.focusedSurfaces[0]?.panelId,
+      severity: "error",
+    });
+  }
+  if (state.surfaceFocusedSurfaces.length > 0) {
+    issues.push({
+      code: "input_routing_terminal_surface_focus_mismatch",
+      message: "keyboard target is Web but a terminal surface is focused",
+      panelId: state.surfaceFocusedSurfaces[0]?.panelId,
+      severity: "error",
+    });
+  }
+  if (state.hostKeyboardActiveSurfaces.length > 0) {
+    issues.push({
+      code: "input_routing_terminal_cursor_policy_mismatch",
+      message:
+        "keyboard target is Web but a terminal host keyboard state is active",
+      panelId: state.hostKeyboardActiveSurfaces[0]?.panelId,
+      severity: "error",
+    });
+  }
+  if (state.cursorActiveSurfaces.length > 0) {
+    issues.push({
+      code: "input_routing_terminal_cursor_policy_mismatch",
+      message: "keyboard target is Web but a terminal cursor is not suppressed",
+      panelId: state.cursorActiveSurfaces[0]?.panelId,
+      severity: "error",
+    });
+  }
+  return issues;
+}
+
+function buildBlurredWindowInputRoutingIssues(
+  state: InputRoutingSurfaceState
+): TerminalDebugIssue[] {
+  const surface =
+    state.hostKeyboardActiveSurfaces[0] ?? state.cursorActiveSurfaces[0];
+  if (!surface) {
+    return [];
+  }
+  return [
+    {
+      code: "input_routing_terminal_cursor_policy_mismatch",
+      message: "window is blurred but a terminal cursor policy is active",
+      panelId: surface.panelId,
+      severity: "error",
+    },
+  ];
+}
+
+function buildTerminalKeyboardTargetIssues(
+  expectedPanelId: string,
+  expectedSurface: NativeSurface,
+  native: TerminalDebugNativeSnapshot
+): TerminalDebugIssue[] {
+  const issues: TerminalDebugIssue[] = [];
+  if (expectedSurface && !expectedSurface.isFirstResponder) {
+    issues.push({
+      code: "input_routing_keyboard_first_responder_mismatch",
+      message: "keyboard target terminal is not native first responder",
+      panelId: expectedPanelId,
+      severity: "error",
+    });
+  }
+  if (expectedSurface?.isSurfaceFocused === false) {
+    issues.push({
+      code: "input_routing_terminal_surface_focus_mismatch",
+      message: "keyboard target terminal surface is not focused",
+      panelId: expectedPanelId,
+      severity: "error",
+    });
+  }
+  if (expectedSurface.hostKeyboardActive !== true) {
+    issues.push({
+      code: "input_routing_terminal_cursor_policy_mismatch",
+      message: "keyboard target terminal host keyboard state is not active",
+      panelId: expectedPanelId,
+      severity: "error",
+    });
+  }
+  if (expectedSurface.cursorSuppressed !== false) {
+    issues.push({
+      code: "input_routing_terminal_cursor_policy_mismatch",
+      message: "keyboard target terminal cursor is suppressed",
+      panelId: expectedPanelId,
+      severity: "error",
+    });
+  }
+  const wrongHostSurface = native.surfaces.find(
+    (surface) =>
+      surface.panelId !== expectedPanelId &&
+      (surface.hostKeyboardActive === true ||
+        surface.cursorSuppressed === false)
+  );
+  if (wrongHostSurface) {
+    issues.push({
+      code: "input_routing_terminal_cursor_policy_mismatch",
+      message: "non-target terminal has active host keyboard or cursor policy",
+      panelId: wrongHostSurface.panelId,
+      severity: "error",
+    });
+  }
   return issues;
 }
 
@@ -208,27 +434,11 @@ function buildTerminalPresentationIssues(
     });
   }
 
-  const focusedExpected = new Set(
-    expected.terminals
-      .filter((terminal) => terminal.focused)
-      .map((terminal) => terminal.panelId)
-  );
   for (const terminal of expected.terminals) {
     const nativeSurface = nativeByPanelId.get(terminal.panelId);
     issues.push(
       ...buildTerminalPresentationPanelIssues(terminal, nativeSurface)
     );
-    if (
-      nativeSurface &&
-      focusedExpected.has(terminal.panelId) !== nativeSurface.isFirstResponder
-    ) {
-      issues.push({
-        code: "desired_focus_native_first_responder_mismatch",
-        message: "desired terminal focus does not match native first responder",
-        panelId: terminal.panelId,
-        severity: "error",
-      });
-    }
   }
   return issues;
 }

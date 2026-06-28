@@ -19,6 +19,21 @@
         var lastPointerSelectionRect: CGRect?
         var pendingSelectionMenuPoint: CGPoint?
         var onFocusChange: ((Bool) -> Void)?
+        // nil means no focus state has reached the surface yet; the first sync
+        // must propagate even when it is `false` so inactive terminals do not
+        // render an active cursor on creation.
+        var appliedSurfaceFocus: Bool?
+        open var focusesOnMouseDown = true
+        open var hostKeyboardActive = true {
+            didSet {
+                guard hostKeyboardActive != oldValue else { return }
+                synchronizeHostFocusState()
+            }
+        }
+
+        open var cursorSuppressed: Bool {
+            !hostKeyboardActive
+        }
 
         open weak var delegate: (any TerminalSurfaceViewDelegate)? {
             get { core.delegate }

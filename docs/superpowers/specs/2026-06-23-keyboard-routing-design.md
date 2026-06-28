@@ -1,5 +1,10 @@
 # Pier 键盘路由架构设计
 
+> 状态：历史方案，已被 `TerminalInputRoutingSnapshot` 输入路由模型取代。
+> 当前实现以 Web overlay rect、keyboard focus target 和 native per-surface
+> `hostKeyboardActive`/`cursorSuppressed` 为准；不要再按本文的
+> `overlayStack`、`setOverlayActive` 或 `inTerminalMode` 设计实现新功能。
+
 > Spec date: 2026-06-23
 > Status: design approved, implementation pending
 > Author: 不会飞的羊 + Claude (Opus 4.7, via superpowers:brainstorming)

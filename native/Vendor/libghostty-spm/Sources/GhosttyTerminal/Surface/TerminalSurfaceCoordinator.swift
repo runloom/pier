@@ -135,6 +135,10 @@ final class TerminalSurfaceCoordinator {
         let newSurface = TerminalSurface(rawSurface)
         surface = newSurface
         newSurface.setOcclusion(effectiveSurfaceVisible)
+        // Rebuilt surfaces start with Ghostty's default focus state. Reapply
+        // the host-owned state so an inactive terminal created before its
+        // surface exists does not render an active cursor.
+        newSurface.setFocus(isSurfaceFocused)
         controller.shouldProcessWakeup = { [weak self] in
             self?.canRenderFrame == true
         }

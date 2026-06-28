@@ -3,7 +3,6 @@ import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command
 import {
   DockviewReact,
   type DockviewReadyEvent,
-  type DockviewTheme,
   type SerializedDockview,
 } from "dockview-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,6 +22,10 @@ import {
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import {
+  releaseTransientTerminalWebKeyboardFocus,
+  setTerminalBaseKeyboardFocusTarget,
+} from "@/stores/terminal-input-routing.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
@@ -32,6 +35,7 @@ import {
   WorkspaceHeaderRightActions,
 } from "./workspace-header-actions.tsx";
 import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
+import { pierTheme } from "./workspace-theme.ts";
 
 /**
  * WorkspaceHost — dockview-react 的唯一业务边界。
@@ -47,24 +51,6 @@ import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
  * 全局快捷键 dispatch 由 ShellKeybindings 组件统一管理;
  * panel actions 注册由 main.tsx bootstrap 统一调用。
  */
-/**
- * Pier dockview theme 对象 — 配合 CSS class dockview-theme-pier 使用。
- *
- * gap: 0 — Pier 透明 WKWebView + 终端 NSView 架构下, panel content 区域被 NSView
- * 视觉覆盖. 新 sash ::before 内线方案直接渲染在 .dv-sash 容器上 (sash z-index: 99
- * 在 NSView 之上), 不再依赖 panel 间空隙暴露视觉线; gap 改 0 避免 panel 之间透明缝隙
- * 跟 sash 内线并列显示成"两条线"伪影.
- *
- * dndOverlayMounting: 'absolute' — 让 root drop overlay 渲染到 shell 根层级,
- * 配合 setOverlayActive 暂停 EventRouter 拦截, 使 group drop overlay 可接收输入.
- */
-const pierTheme: DockviewTheme = {
-  name: "pier",
-  className: "dockview-theme-pier",
-  gap: 0,
-  dndOverlayMounting: "absolute",
-};
-
 const SAVE_DEBOUNCE_MS = 500;
 
 class RendererCommandExecutionError extends Error {
@@ -117,22 +103,30 @@ type WorkspacePanel = DockviewReadyEvent["api"]["panels"][number];
 function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
   if (!panel) {
     useKeybindingScope.getState().setActivePanel(null, null, null);
+    setTerminalBaseKeyboardFocusTarget({ kind: "web" });
     return;
   }
   const component = panel.view.contentComponent;
   const kind = panelKindOf(component);
   useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
+  setTerminalBaseKeyboardFocusTarget(
+    kind === "terminal"
+      ? { kind: "terminal", panelId: panel.id }
+      : { kind: "web" }
+  );
 }
 
 function buildTerminalWorkspacePresentationState(
   api: DockviewReadyEvent["api"]
 ): TerminalPresentationWorkspaceState {
   const activePanel = api.activePanel;
+  const activePanelKind = activePanel
+    ? panelKindOf(activePanel.view.contentComponent)
+    : "web";
   return {
     activePanelId: activePanel?.id ?? null,
-    activePanelKind: activePanel
-      ? panelKindOf(activePanel.view.contentComponent)
-      : "web",
+    activeTerminalPanelId:
+      activePanelKind === "terminal" ? (activePanel?.id ?? null) : null,
     hasMaximizedGroup: api.hasMaximizedGroup(),
     panels: api.panels.map((panel) => ({
       component: panel.view.contentComponent,
@@ -391,6 +385,7 @@ export function WorkspaceHost() {
       });
 
       window.pier?.terminal?.onFocusRequest?.((req) => {
+        releaseTransientTerminalWebKeyboardFocus();
         const result = activateTerminalPanelFromFocusRequest(
           event.api,
           req.panelId,
@@ -399,6 +394,10 @@ export function WorkspaceHost() {
           }
         );
         if (result.ok) {
+          setTerminalBaseKeyboardFocusTarget({
+            kind: "terminal",
+            panelId: req.panelId,
+          });
           syncTerminalPresentation(event.api, "dockview-active-panel");
         }
       });

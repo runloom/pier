@@ -27,9 +27,11 @@ const ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE =
   /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
 const ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE =
   /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
-
-const SET_ACTIVE_PANEL_KIND_PRIMITIVE_RE =
-  /window\.pier\?\.terminal\?\.setActivePanelKind/;
+const ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE =
+  /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,900}?setTerminalBaseKeyboardFocusTarget/;
+const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
+  [String.raw`window\.pier\?\.terminal\?\.set`, "ActivePanelKind"].join("")
+);
 
 const RECONCILE_CALL_RE =
   /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\)/;
@@ -82,9 +84,10 @@ describe("workspace-host invariants (#17 #19)", () => {
     expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE);
   });
 
-  it("does not call native active-panel primitive from renderer workspace host", () => {
-    // presentation reconciler 是 renderer presentation 唯一写入口.
-    expect(SOURCE).not.toMatch(SET_ACTIVE_PANEL_KIND_PRIMITIVE_RE);
+  it("routes active panel keyboard ownership through the input routing coordinator", () => {
+    // renderer 只更新输入路由目标; native first responder 由 main 校验后统一落地.
+    expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE);
+    expect(SOURCE).not.toMatch(OLD_ACTIVE_PANEL_PRIMITIVE_RE);
   });
 
   it("calls reconcile after layout restore to clean up orphan native NSViews", () => {

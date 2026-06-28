@@ -10,6 +10,7 @@ describe("terminal native debug IPC", () => {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const fakeAddon = {
+      applyTerminalInputRouting: vi.fn(),
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
@@ -21,32 +22,36 @@ describe("terminal native debug IPC", () => {
             {
               alpha: 1,
               browserWindowId: 7,
+              cursorSuppressed: false,
               frame: { height: 240, width: 320, x: 10, y: 20 },
               hasRouterTarget: true,
+              hostKeyboardActive: true,
               isFirstResponder: true,
               isHidden: false,
+              isSurfaceFocused: false,
               panelId: "7::terminal-1",
               targetRect: { height: 230, width: 310, x: 15, y: 25 },
             },
           ],
           window: {
-            activePanelKind: "terminal",
             activeTerminalPanelId: "7::terminal-1",
-            inTerminalMode: true,
-            overlayActive: false,
+            inputRoutingStaleDiscardCount: 2,
+            keyboardFocusTarget: {
+              kind: "terminal",
+              panelId: "7::terminal-1",
+            },
+            terminalTargetCount: 1,
+            webOverlayRectCount: 0,
           },
         })
       ),
       detachWindow: vi.fn(),
-      focusTerminal: vi.fn(),
       hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
-      setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
-      setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),
       setTerminalConfig: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
@@ -128,13 +133,20 @@ describe("terminal native debug IPC", () => {
       native: {
         surfaces: [
           {
+            cursorSuppressed: false,
+            hostKeyboardActive: true,
+            isSurfaceFocused: false,
             nativePanelId: "7::terminal-1",
             panelId: "terminal-1",
           },
         ],
         window: {
-          activePanelKind: "terminal",
           activeTerminalPanelId: "terminal-1",
+          inputRoutingStaleDiscardCount: 2,
+          keyboardFocusTarget: {
+            kind: "terminal",
+            panelId: "terminal-1",
+          },
           nativeActiveTerminalPanelId: "7::terminal-1",
         },
       },

@@ -26,7 +26,10 @@ import {
   type SettingsSectionId,
 } from "@/pages/settings/data/appearance-nav.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
-import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
+import {
+  holdTerminalWebKeyboardFocus,
+  registerTerminalFullscreenWebOverlay,
+} from "@/stores/terminal-input-routing.store.ts";
 
 const SIDEBAR_STYLE: CSSProperties = {
   "--sidebar-width": "10rem",
@@ -44,8 +47,12 @@ export function SettingsDialog() {
     if (!open) {
       return;
     }
-    pushOverlay();
-    return () => popOverlay();
+    const route = registerTerminalFullscreenWebOverlay("settings-dialog");
+    const releaseKeyboard = holdTerminalWebKeyboardFocus("settings-dialog");
+    return () => {
+      releaseKeyboard();
+      route.dispose();
+    };
   }, [open]);
 
   useEffect(

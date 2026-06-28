@@ -157,7 +157,6 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     private func activateFocusIntent() {
-        GhosttyBridgeImpl.shared.focus(panelId: panelId)
         Self.forwardFocusRequestCallback?(browserWindowId, panelId)
     }
 
@@ -396,7 +395,6 @@ private final class TerminalScrollbarOverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        GhosttyBridgeImpl.shared.focus(panelId: panelId)
         TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId)
         guard isScrollable, let thumbRect else { return }
 

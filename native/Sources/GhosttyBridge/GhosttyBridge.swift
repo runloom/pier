@@ -10,7 +10,7 @@
 // PIER: 与 demo 的差异:
 //   - 终端在 WKWebView 之下 (demo 在之上)
 //   - 新增 EventRouterView 做事件路由
-//   - 新增 setupWindow / setOverlayActive API
+//   - 新增 setupWindow / input routing API
 //   - WKWebView 设为透明
 
 import AppKit
@@ -32,8 +32,8 @@ private func stripHash(_ s: String) -> String {
 /// 事件路由 — 统一处理 mouse 和 keyboard 在 Pier 透明 WKWebView + Ghostty NSView
 /// 架构下的分发. 放在 contentView 最顶层.
 ///
-/// Mouse: 透明 NSView, override hitTest 按位置路由 (terminal 区域 → terminal, 否则
-/// fall through 到 web).
+/// Mouse: 透明 NSView, override hitTest 按位置路由:
+/// web 浮层区域 → Web; terminal 区域 → terminal; 其他 → Web.
 ///
 /// Keyboard: 用 NSEvent local monitor 拦截. terminal 一旦 focus 就消费所有 key
 /// (Ghostty TerminalView 是 firstResponder), 导致 web 层 useKeyboardShortcuts 收
@@ -49,7 +49,7 @@ final class EventRouterView: NSView {
     }
 
     var targets: [String: Target] = [:]
-    var overlayActive = false
+    var webOverlayRects: [NSRect] = []
 
     private weak var ownerWindow: NSWindow?
     private var keyMonitor: Any?
@@ -127,13 +127,26 @@ final class EventRouterView: NSView {
     override func draw(_ dirtyRect: NSRect) {}
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard !overlayActive else { return nil }
         guard let sv = superview else { return nil }
         let local = convert(point, from: sv)
-        for (_, target) in targets {
-            if target.rect.contains(local) {
-                let p = target.view.superview?.convert(point, from: sv) ?? point
-                return target.view.hitTest(p)
+        if containsWebOverlay(local) {
+            return nil
+        }
+        if let (_, target) = terminalTarget(at: local) {
+            let p = target.view.superview?.convert(point, from: sv) ?? point
+            return target.view.hitTest(p)
+        }
+        return nil
+    }
+
+    private func containsWebOverlay(_ point: NSPoint) -> Bool {
+        webOverlayRects.contains { $0.contains(point) }
+    }
+
+    private func terminalTarget(at point: NSPoint) -> (String, Target)? {
+        for (panelId, target) in targets {
+            if target.rect.contains(point) {
+                return (panelId, target)
             }
         }
         return nil
@@ -260,17 +273,16 @@ final class EventRouterView: NSView {
         return event
     }
 
-    /// 路由 keyDown: terminal mode 下只截获 Pier 明确声明的 app 快捷键, 其他
+    /// 路由 keyDown: terminal keyboard target 下只截获 Pier 明确声明的 app 快捷键, 其他
     /// Cmd / Ctrl+Shift 组合交给 Ghostty, 避免吞掉终端编辑和 TUI 快捷键.
     private func routeKeyDown(_ event: NSEvent) -> NSEvent? {
         guard let window = ownerWindow, event.window === window else { return event }
 
-        // Web mode (overlay active OR active panel is web): 全 pass through.
-        // firstResponder 已 swap 到 WKWebView, web DOM 自然接所有 key (含 ↑/↓/Enter/Cmd+A/Cmd+T 等).
-        // 不在此处拦截 Cmd+key — let web's useKeyboardShortcuts 路径 1 (DOM keydown capture)
-        // 用 scopeStore 按 [overlay阻断] > [panel] > [global] 优先级 resolve.
+        // Web keyboard target: 全 pass through. Web DOM 自然接所有 key
+        // (含 ↑/↓/Enter/Cmd+A/Cmd+T 等). 不在此处拦截 Cmd+key — let web's
+        // useKeyboardShortcuts 路径 1 (DOM keydown capture) 处理.
         let state = GhosttyBridgeImpl.shared.stateFor(window: window)
-        guard state.inTerminalMode else { return event }
+        guard state.acceptsTerminalKeyboard else { return event }
 
         // Terminal mode: 只把运行时 allowlist 内的 Pier app 快捷键 forward 给 web
         // (路径 2 IPC), 其他组合全部 pass through 给 Ghostty.
@@ -300,26 +312,24 @@ final class EventRouterView: NSView {
 
     /// 路由 rightMouseDown:
     /// - 非 owner window: 放行
-    /// - overlay 打开期间: 放行 (router.isHidden 仅 block hitTest, 不 block NSEvent local
-    ///   monitor; 若不显式 guard, 命令面板期间右键 terminal 会弹菜单在 overlay 下方)
+    /// - 在 web overlay rect 内: 放行给 Web, 不触发 terminal 菜单
     /// - 不在任何 terminal target rect 内: 放行 (空白区 / web panel 让 React onContextMenu 处理)
     /// - 在 terminal rect 内: forward (windowId, panelId, x, y) 给 main, 消费事件
     private func routeRightMouseDown(_ event: NSEvent) -> NSEvent? {
         guard let window = ownerWindow, event.window === window else { return event }
-        let state = GhosttyBridgeImpl.shared.stateFor(window: window)
-        guard !state.overlayActive else { return event }
         // 把 window 坐标转 EventRouterView 局部坐标 (与 hitTest 同套坐标变换);
         // EventRouterView.isFlipped=true 让 local 坐标系是 top-left origin, 跟 Electron
         // BrowserWindow contentView 一致, 可直接给 main 做 Menu.popup({x,y}).
         let local = self.convert(event.locationInWindow, from: nil)
-        for (panelId, target) in targets {
-            if target.rect.contains(local) {
-                GhosttyBridgeImpl.shared.focus(panelId: panelId)
-                EventRouterView.forwardRightMouseCallback?(
-                    browserWindowId, panelId, Double(local.x), Double(local.y)
-                )
-                return nil  // 消费, 不让 terminal NSView 收到右键
-            }
+        if containsWebOverlay(local) {
+            return event
+        }
+        if let (panelId, _) = terminalTarget(at: local) {
+            TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId)
+            EventRouterView.forwardRightMouseCallback?(
+                browserWindowId, panelId, Double(local.x), Double(local.y)
+            )
+            return nil  // 消费, 不让 terminal NSView 收到右键
         }
         return event
     }
@@ -353,6 +363,7 @@ final class EventRouterView: NSView {
 /// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
 @MainActor
 final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
+    TerminalSurfaceFocusDelegate,
     TerminalSurfaceSearchDelegate,
     TerminalSurfaceTitleDelegate,
     TerminalSurfaceScrollbarDelegate
@@ -360,6 +371,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     let panelId: String
     let browserWindowId: Int
     weak var scrollbarSink: TerminalScrollbarStateSink?
+    private(set) var isSurfaceFocused = false
     private var searchSelected: Int = -1
     private var searchTotal: Int = 0
 
@@ -391,6 +403,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 
     func terminalDidUpdateScrollbar(_ state: TerminalScrollbarState) {
         scrollbarSink?.terminalScrollbarStateDidChange(state)
+    }
+
+    func terminalDidChangeFocus(_ focused: Bool) {
+        isSurfaceFocused = focused
     }
 
     private func forwardSearchState() {
@@ -514,13 +530,29 @@ private struct TerminalPresentationEntry: Codable {
 
 private struct TerminalPresentationEnvelope: Codable {
     let activePanelId: String?
-    let activePanelKind: String
     let hasMaximizedGroup: Bool
     let nativeApplySequence: Int
-    let overlayActive: Bool
     let reason: String
     let rendererSequence: Int
     let terminals: [TerminalPresentationEntry]
+    let windowFocused: Bool
+}
+
+private struct TerminalWebOverlayRectEntry: Codable {
+    let frame: TerminalPresentationFrame
+    let id: String
+}
+
+private struct TerminalKeyboardFocusTargetEnvelope: Codable {
+    let kind: String
+    let panelId: String?
+}
+
+private struct TerminalInputRoutingEnvelope: Codable {
+    let keyboardFocusTarget: TerminalKeyboardFocusTargetEnvelope
+    let nativeApplySequence: Int
+    let rendererSequence: Int
+    let webOverlayRects: [TerminalWebOverlayRectEntry]
     let windowFocused: Bool
 }
 
@@ -528,6 +560,12 @@ private struct TerminalPresentationApplyState {
     var lastAppliedNativeApplySequence: Int = 0
     var lastAppliedRendererSequence: Int = 0
     var lastPresentationReason: String = ""
+    var staleDiscardCount: Int = 0
+}
+
+private struct TerminalInputRoutingApplyState {
+    var lastAppliedNativeApplySequence: Int = 0
+    var lastAppliedRendererSequence: Int = 0
     var staleDiscardCount: Int = 0
 }
 
@@ -554,24 +592,47 @@ final class GhosttyBridgeImpl {
     private var controllers: [ObjectIdentifier: TerminalController] = [:]
     private var terminalRuntimePreferences: [ObjectIdentifier: TerminalRuntimePreferences] = [:]
     private var latestPresentations: [ObjectIdentifier: TerminalPresentationEnvelope] = [:]
+    private var latestInputRoutings: [ObjectIdentifier: TerminalInputRoutingEnvelope] = [:]
     private var presentationApplyStates: [ObjectIdentifier: TerminalPresentationApplyState] = [:]
+    private var inputRoutingApplyStates: [ObjectIdentifier: TerminalInputRoutingApplyState] = [:]
 
     // MARK: - Keyboard state
 
-    /// 当前 active 的 panel 类型 — terminal 或 web. 决定 firstResponder 该指向谁.
-    enum PanelKind {
-        case terminal, web
+    enum KeyboardFocusTarget {
+        case terminal(String)
+        case web
+
+        var panelId: String? {
+            switch self {
+            case .terminal(let panelId):
+                return panelId
+            case .web:
+                return nil
+            }
+        }
+
+        var debugPayload: [String: Any] {
+            switch self {
+            case .terminal(let panelId):
+                return ["kind": "terminal", "panelId": panelId]
+            case .web:
+                return ["kind": "web"]
+            }
+        }
     }
 
-    /// Per-window 键盘 routing 状态. 由 web 端 dockview onDidActivePanelChange +
-    /// overlay 生命周期事件驱动; swift 不主动决策, 只读 state.
+    /// Per-window 键盘 routing 状态. renderer/main 通过 input routing 快照驱动;
+    /// native 点击 terminal 时会先本地切到 terminal, 随后 main/renderer 快照校正.
     struct WindowKeyboardState {
-        var activePanelKind: PanelKind = .web   // boot 默认 web (terminal 未必存在)
-        var activeTerminalPanelId: String?
-        var overlayActive = false
+        var keyboardFocusTarget: KeyboardFocusTarget = .web
+        var windowFocused = false
 
-        var inTerminalMode: Bool {
-            activePanelKind == .terminal && !overlayActive
+        var activeTerminalPanelId: String? {
+            keyboardFocusTarget.panelId
+        }
+
+        var acceptsTerminalKeyboard: Bool {
+            windowFocused && activeTerminalPanelId != nil
         }
     }
 
@@ -626,6 +687,15 @@ final class GhosttyBridgeImpl {
         }
     }
 
+    private func applyTerminalRuntimeConfiguration(window: NSWindow) {
+        let windowId = ObjectIdentifier(window)
+        controller(for: window).setTerminalConfiguration(
+            Self.terminalConfiguration(
+                from: terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
+            )
+        )
+    }
+
     private func mutateTerminalRuntimePreferences(
         window: NSWindow,
         _ mutate: (inout TerminalRuntimePreferences) -> Void
@@ -634,9 +704,7 @@ final class GhosttyBridgeImpl {
         var preferences = terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
         mutate(&preferences)
         terminalRuntimePreferences[windowId] = preferences
-        controller(for: window).setTerminalConfiguration(
-            Self.terminalConfiguration(from: preferences)
-        )
+        applyTerminalRuntimeConfiguration(window: window)
     }
 
     private func rememberLayout(
@@ -798,41 +866,13 @@ final class GhosttyBridgeImpl {
         eventRouters[windowId] = router
         installLiveResizeObserver(parent: parent, contentView: contentView)
 
-        // 初始化 per-window keyboard state (PanelKind 默认 .web — 安全, 不抢 firstResponder)
+        // 初始化 per-window keyboard state (默认 Web — 安全, 不抢 firstResponder)
         windowStates[windowId] = WindowKeyboardState()
 
         // 记录 browserWindowId 映射 — PwdDelegate 反查 panel→window→browserId 路由 IPC.
         windowToBrowserWindowId[windowId] = browserWindowId
 
         return true
-    }
-
-    // MARK: - Overlay control (PIER: new API)
-
-    /// Per-window overlay state — 修复 v1 全局污染 bug (window-A 打开命令面板会让 window-B
-    /// overlay 状态被污染). 调用方 (main IPC handler) 必须传明确的 NSWindow.
-    func setOverlayActive(window: NSWindow, _ active: Bool) {
-        let windowId = ObjectIdentifier(window)
-        guard let router = eventRouters[windowId] else { return }
-        router.overlayActive = active
-        // 物理隐藏: 从视图层级中移除, 确保 NSDragging 目标发现能找到 WKWebView
-        router.isHidden = active
-
-        mutateState(window) { state in
-            state.overlayActive = active
-        }
-        applyFirstResponder(for: window)
-    }
-
-    /// 通知 swift 当前 active panel 是 terminal 还是 web. 由 web 端 dockview
-    /// onDidActivePanelChange 触发. swift 不主动决策, 只更新 state — 后续 task
-    /// 加 applyFirstResponder 调用让它真正 swap firstResponder.
-    func setActivePanelKind(window: NSWindow, kind: PanelKind, panelId: String?) {
-        mutateState(window) { state in
-            state.activePanelKind = kind
-            state.activeTerminalPanelId = kind == .terminal ? panelId : nil
-        }
-        applyFirstResponder(for: window)
     }
 
     func applyPresentation(parent: NSWindow, json: String) {
@@ -846,10 +886,27 @@ final class GhosttyBridgeImpl {
         applyPresentation(parent: parent, presentation: presentation)
     }
 
+    func applyInputRouting(parent: NSWindow, json: String) {
+        guard let data = json.data(using: .utf8),
+              let inputRouting = try? JSONDecoder().decode(
+                TerminalInputRoutingEnvelope.self,
+                from: data
+              ) else {
+            return
+        }
+        applyInputRouting(parent: parent, inputRouting: inputRouting)
+    }
+
     private func applyLatestPresentationIfAvailable(parent: NSWindow) {
         let windowId = ObjectIdentifier(parent)
         guard let presentation = latestPresentations[windowId] else { return }
         applyPresentation(parent: parent, presentation: presentation, allowSameSequence: true)
+    }
+
+    private func applyLatestInputRoutingIfAvailable(parent: NSWindow) {
+        let windowId = ObjectIdentifier(parent)
+        guard let inputRouting = latestInputRoutings[windowId] else { return }
+        applyInputRouting(parent: parent, inputRouting: inputRouting, allowSameSequence: true)
     }
 
     private func applyPresentation(
@@ -874,18 +931,6 @@ final class GhosttyBridgeImpl {
         applyState.lastAppliedRendererSequence = presentation.rendererSequence
         applyState.lastPresentationReason = presentation.reason
         presentationApplyStates[windowId] = applyState
-
-        if let router = eventRouters[windowId] {
-            router.overlayActive = presentation.overlayActive
-            router.isHidden = presentation.overlayActive
-        }
-
-        let kind: PanelKind = presentation.activePanelKind == "terminal" ? .terminal : .web
-        mutateState(parent) { state in
-            state.activePanelKind = kind
-            state.activeTerminalPanelId = kind == .terminal ? presentation.activePanelId : nil
-            state.overlayActive = presentation.overlayActive
-        }
 
         var nextTargets: [String: EventRouterView.Target] = [:]
         CATransaction.begin()
@@ -929,15 +974,71 @@ final class GhosttyBridgeImpl {
         }
         eventRouters[windowId]?.targets = nextTargets
         CATransaction.commit()
+        applyLatestInputRoutingIfAvailable(parent: parent)
         applyFirstResponder(for: parent)
     }
 
-    /// 按 windowStates 当前 state 重算 + apply firstResponder.
-    /// 不用 savedFirstResponder restore 模型 — active panel 可能在 overlay 期间被
-    /// 切换, pop overlay 后恢复"之前"的 firstResponder 不一定对 (旧 panel 可能已 close).
-    /// 按当前 state 重算更可靠.
+    private func applyInputRouting(
+        parent: NSWindow,
+        inputRouting: TerminalInputRoutingEnvelope,
+        allowSameSequence: Bool = false
+    ) {
+        let windowId = ObjectIdentifier(parent)
+        var applyState =
+            inputRoutingApplyStates[windowId] ?? TerminalInputRoutingApplyState()
+        let stale = allowSameSequence
+            ? inputRouting.nativeApplySequence < applyState.lastAppliedNativeApplySequence
+            : inputRouting.nativeApplySequence <= applyState.lastAppliedNativeApplySequence
+        if stale {
+            applyState.staleDiscardCount += 1
+            inputRoutingApplyStates[windowId] = applyState
+            return
+        }
+
+        latestInputRoutings[windowId] = inputRouting
+        applyState.lastAppliedNativeApplySequence = inputRouting.nativeApplySequence
+        applyState.lastAppliedRendererSequence = inputRouting.rendererSequence
+        inputRoutingApplyStates[windowId] = applyState
+
+        if let router = eventRouters[windowId] {
+            router.webOverlayRects = inputRouting.webOverlayRects.map { $0.frame.nsRect }
+            router.isHidden = Self.webOverlayRectsCoverRouter(router)
+        }
+
+        mutateState(parent) { state in
+            state.keyboardFocusTarget = Self.keyboardFocusTarget(from: inputRouting)
+            state.windowFocused = inputRouting.windowFocused
+        }
+        applyFirstResponder(for: parent)
+    }
+
+    private static func keyboardFocusTarget(
+        from inputRouting: TerminalInputRoutingEnvelope
+    ) -> KeyboardFocusTarget {
+        if inputRouting.keyboardFocusTarget.kind == "terminal",
+           let panelId = inputRouting.keyboardFocusTarget.panelId,
+           !panelId.isEmpty {
+            return .terminal(panelId)
+        }
+        return .web
+    }
+
+    private static func webOverlayRectsCoverRouter(_ router: EventRouterView) -> Bool {
+        let bounds = router.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return false }
+        let topLeft = NSPoint(x: bounds.minX, y: bounds.minY)
+        let bottomRight = NSPoint(
+            x: bounds.maxX - 0.5,
+            y: bounds.maxY - 0.5
+        )
+        return router.webOverlayRects.contains {
+            $0.contains(topLeft) && $0.contains(bottomRight)
+        }
+    }
+
+    /// 按 windowStates 当前 input routing 重算 + apply firstResponder.
     ///
-    /// v2: web mode 不在 swift 这里 makeFirstResponder — 改由 main 调
+    /// Web keyboard target 不在 swift 这里 makeFirstResponder — 改由 main 调
     /// `BrowserWindow.webContents.focus()` (Electron 标准 API). 原因: Electron 42 用
     /// Chromium (不是 WebKit), view 树是 WebContentsViewCocoa > RenderWidgetHostViewCocoa,
     /// 没有真 WKWebView. v1 makeFirstResponder(找到的 WKWebView) 一直找错 type, fallback
@@ -946,40 +1047,41 @@ final class GhosttyBridgeImpl {
     func applyFirstResponder(for window: NSWindow) {
         let state = stateFor(window: window)
         let activeTerminalId: String? =
-            state.inTerminalMode ? state.activeTerminalPanelId : nil
+            state.acceptsTerminalKeyboard ? state.activeTerminalPanelId : nil
 
-        // 主动给所有非 active terminal 调 resignFirstResponder, 让 ghostty surface
-        // setFocus(false). 修复 drag/panel-swap 期间 AppKit 自动的 resignFirstResponder
-        // 没传播到非当前 firstResponder 的 terminal NSView 的盲点 (firstResponder
-        // 可能漂到 dockview 内部 web view, swap 回 terminal 时只触发新 view 的 become,
-        // 没人触发旧 view 的 resign), 旧 terminal 卡在 focus=true → 多个 cursor 同时
-        // 闪烁的"幽灵焦点". resignFirstResponder super 实现是 no-op, 安全可手动调.
+        // 输入路由是宿主唯一真相:只有 active terminal 能让 Ghostty surface
+        // focused/显示活跃光标。即使 AppKit firstResponder 暂时漂移或拒绝 resign,
+        // hostKeyboardActive=false 也会把对应 surface focus 压回 false。
         let windowId = ObjectIdentifier(window)
         for (panelId, term) in terminals
-            where ObjectIdentifier(term.parentWindow) == windowId
-                && panelId != activeTerminalId {
-            _ = term.terminalView.resignFirstResponder()
+            where ObjectIdentifier(term.parentWindow) == windowId {
+            let hostKeyboardActive = panelId == activeTerminalId
+            term.terminalView.hostKeyboardActive = hostKeyboardActive
+            if hostKeyboardActive {
+                term.terminalView.synchronizeHostFocusState()
+            } else {
+                _ = term.terminalView.resignFirstResponder()
+            }
         }
 
-        if state.inTerminalMode {
-            if let panelId = state.activeTerminalPanelId,
-               let term = terminals[panelId] {
-                if window.firstResponder !== term.terminalView {
-                    window.makeFirstResponder(term.terminalView)
-                }
-                // 无条件 becomeFirstResponder. 双保险:
-                // (1) firstResponder 已是 terminal 时强制刷新 ghostty surface focus —
-                //     修原 detached DevTools 关闭 case;
-                // (2) makeFirstResponder 失败 (oldResponder 拒绝 resign / dockview drag
-                //     内部 view 抢占等) 时仍触发 ghostty surface setFocus(true), 让 user
-                //     按键 dispatch 到 firstResponder (即使不是 terminal) 时, ghostty 至少
-                //     不会 silently drop input.
-                _ = term.terminalView.becomeFirstResponder()
+        if activeTerminalId == nil {
+            if terminals.values.contains(where: { term in
+                ObjectIdentifier(term.parentWindow) == windowId
+                    && window.firstResponder === term.terminalView
+            }) {
+                window.makeFirstResponder(nil)
             }
-            // 没找到 terminal NSView → 不动 firstResponder (保留 web container default)
+            return
         }
-        // Web mode: no-op. main 端在 setActivePanelKind('web') / setOverlayActive(true)
-        // 时调 webContents.focus() 让 Chromium 自己 dispatch.
+
+        if let panelId = activeTerminalId,
+           let term = terminals[panelId] {
+            if window.firstResponder !== term.terminalView {
+                window.makeFirstResponder(term.terminalView)
+            }
+            term.terminalView.synchronizeHostFocusState()
+        }
+        // Web keyboard target: no-op. main 端调 webContents.focus() 让 Chromium 自己 dispatch.
     }
 
     func prepareTerminalForOrdinaryKeyDown(
@@ -987,22 +1089,22 @@ final class GhosttyBridgeImpl {
         event: NSEvent
     ) -> Bool {
         let state = stateFor(window: window)
-        guard state.inTerminalMode,
+        guard state.acceptsTerminalKeyboard,
               let panelId = state.activeTerminalPanelId,
               let term = terminals[panelId] else {
             return false
         }
 
         if window.firstResponder === term.terminalView {
-            _ = term.terminalView.becomeFirstResponder()
             return false
         }
 
+        term.terminalView.hostKeyboardActive = true
         guard window.makeFirstResponder(term.terminalView) else {
             return false
         }
 
-        _ = term.terminalView.becomeFirstResponder()
+        term.terminalView.synchronizeHostFocusState()
 
         // Local event monitors run before AppKit dispatches the key event, but
         // changing firstResponder here is too late for the current event's
@@ -1071,6 +1173,8 @@ final class GhosttyBridgeImpl {
         let frame = computeFrame(in: contentView, viewport: viewport)
 
         let terminalView = TerminalView(frame: .zero)
+        terminalView.focusesOnMouseDown = false
+        terminalView.hostKeyboardActive = false
         terminalView.configuration = TerminalSurfaceOptions(
             backend: .exec,
             command: command,
@@ -1174,7 +1278,7 @@ final class GhosttyBridgeImpl {
         // 都重 apply firstResponder. 幂等, 多次调用无副作用 (applyFirstResponder 内部
         // 已 idempotent).
         let state = stateFor(window: term.parentWindow)
-        if state.inTerminalMode, state.activeTerminalPanelId == panelId {
+        if state.acceptsTerminalKeyboard, state.activeTerminalPanelId == panelId {
             applyFirstResponder(for: term.parentWindow)
         }
     }
@@ -1228,27 +1332,15 @@ final class GhosttyBridgeImpl {
         let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets.removeValue(forKey: panelId)
 
-        // 清 windowState stale activeTerminalPanelId — 防 use-after-free + 让
+        // 清 windowState stale keyboard target — 防 use-after-free + 让
         // applyFirstResponder 不去 access 已 removeFromSuperview 的 terminalView.
-        // close 后 dockview 会自动 fire onDidActivePanelChange to 下一个 panel,
-        // web 端 listener 会再调 setActivePanelKind. 这里立即 swap 是 belt-and-
-        // suspenders (web IPC 延迟时不留 stale state 窗口).
+        // close 后 renderer 的 input routing 快照会再给出下一个目标; 这里先兜底回 Web.
         mutateState(parent) { state in
             if state.activeTerminalPanelId == panelId {
-                state.activeTerminalPanelId = nil
+                state.keyboardFocusTarget = .web
             }
         }
         applyFirstResponder(for: parent)
-    }
-
-    func focus(panelId: String) {
-        guard let term = terminals[panelId] else { return }
-        // 更新 per-window state + 触发 applyFirstResponder (代替原 makeFirstResponder).
-        // 这里只处理 terminal panel focus 场景, web panel focus 由 setActivePanelKind('web') 走.
-        if let window = term.terminalView.window {
-            setActivePanelKind(window: window, kind: .terminal, panelId: panelId)
-            applyFirstResponder(for: window)
-        }
     }
 
     func performBindingAction(panelId: String, action: String) -> Bool {
@@ -1312,7 +1404,10 @@ final class GhosttyBridgeImpl {
         terminalForegrounds.removeValue(forKey: windowId)
         terminalRuntimePreferences.removeValue(forKey: windowId)
         latestPresentations.removeValue(forKey: windowId)
+        latestInputRoutings.removeValue(forKey: windowId)
         presentationApplyStates.removeValue(forKey: windowId)
+        inputRoutingApplyStates.removeValue(forKey: windowId)
+        windowStates.removeValue(forKey: windowId)
         windowToBrowserWindowId.removeValue(forKey: windowId)
     }
 
@@ -1451,10 +1546,10 @@ final class GhosttyBridgeImpl {
         let windowId = ObjectIdentifier(parent)
         let state = stateFor(window: parent)
         let router = eventRouters[windowId]
-        let activePanelKind = state.activePanelKind == .terminal ? "terminal" : "web"
         let activeTerminalPanelId: Any =
             state.activeTerminalPanelId.map { $0 as Any } ?? NSNull()
         let applyState = presentationApplyStates[windowId]
+        let inputApplyState = inputRoutingApplyStates[windowId]
         let browserWindowId = windowToBrowserWindowId[windowId] ?? -1
         let contentView = parent.contentView
         let surfaces: [[String: Any]] = terminals
@@ -1465,11 +1560,14 @@ final class GhosttyBridgeImpl {
                 var payload: [String: Any] = [
                     "alpha": Double(term.containerView.alphaValue),
                     "browserWindowId": browserWindowId,
+                    "cursorSuppressed": term.terminalView.cursorSuppressed,
                     "frame": Self.rectDebugPayload(frame),
                     "hasRouterTarget": router?.targets[panelId] != nil,
+                    "hostKeyboardActive": term.terminalView.hostKeyboardActive,
                     "isFirstResponder": parent.firstResponder === term.terminalView,
                     "isHidden": term.containerView.isHidden,
                     "isOffscreen": frame.minX < -50000 || frame.minY < -50000,
+                    "isSurfaceFocused": term.eventDelegate.isSurfaceFocused,
                     "panelId": panelId,
                 ]
                 if let contentView {
@@ -1486,14 +1584,17 @@ final class GhosttyBridgeImpl {
         return Self.jsonString([
             "surfaces": surfaces,
             "window": [
-                "activePanelKind": activePanelKind,
                 "activeTerminalPanelId": activeTerminalPanelId,
-                "inTerminalMode": state.inTerminalMode,
+                "inputRoutingStaleDiscardCount": inputApplyState?.staleDiscardCount ?? 0,
+                "keyboardFocusTarget": state.keyboardFocusTarget.debugPayload,
+                "lastAppliedInputRoutingSequence":
+                    inputApplyState?.lastAppliedRendererSequence ?? 0,
                 "lastAppliedNativeApplySequence": applyState?.lastAppliedNativeApplySequence ?? 0,
                 "lastAppliedRendererSequence": applyState?.lastAppliedRendererSequence ?? 0,
                 "lastPresentationReason": applyState?.lastPresentationReason ?? "",
-                "overlayActive": state.overlayActive,
                 "staleDiscardCount": applyState?.staleDiscardCount ?? 0,
+                "terminalTargetCount": router?.targets.count ?? 0,
+                "webOverlayRectCount": router?.webOverlayRects.count ?? 0,
             ],
         ])
     }
@@ -1525,17 +1626,6 @@ public func ghosttyBridgeSetupWindow(
         return GhosttyBridgeImpl.shared.setupWindow(
             parent: window, browserWindowId: browserWindowId
         )
-    }
-}
-
-@_cdecl("ghostty_bridge_set_overlay_active")
-public func ghosttyBridgeSetOverlayActive(
-    _ nsWindowPtr: UnsafeMutableRawPointer,
-    _ active: Bool
-) {
-    MainActor.assumeIsolated {
-        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
-        GhosttyBridgeImpl.shared.setOverlayActive(window: window, active)
     }
 }
 
@@ -1650,13 +1740,6 @@ public func ghosttyBridgeHide(_ panelId: UnsafePointer<CChar>) {
 public func ghosttyBridgeClose(_ panelId: UnsafePointer<CChar>) {
     MainActor.assumeIsolated {
         GhosttyBridgeImpl.shared.close(panelId: String(cString: panelId))
-    }
-}
-
-@_cdecl("ghostty_bridge_focus")
-public func ghosttyBridgeFocus(_ panelId: UnsafePointer<CChar>) {
-    MainActor.assumeIsolated {
-        GhosttyBridgeImpl.shared.focus(panelId: String(cString: panelId))
     }
 }
 
@@ -1857,20 +1940,6 @@ public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
     }
 }
 
-@_cdecl("ghostty_bridge_set_active_panel_kind")
-public func ghosttyBridgeSetActivePanelKind(
-    _ nsWindowPtr: UnsafeMutableRawPointer,
-    _ kindRaw: Int,   // 0 = terminal, 1 = web
-    _ panelIdPtr: UnsafePointer<CChar>?
-) {
-    MainActor.assumeIsolated {
-        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
-        let kind: GhosttyBridgeImpl.PanelKind = (kindRaw == 0) ? .terminal : .web
-        let panelId: String? = panelIdPtr.flatMap { String(cString: $0) }
-        GhosttyBridgeImpl.shared.setActivePanelKind(window: window, kind: kind, panelId: panelId)
-    }
-}
-
 @_cdecl("ghostty_bridge_apply_presentation")
 public func ghosttyBridgeApplyPresentation(
     _ nsWindowPtr: UnsafeMutableRawPointer,
@@ -1879,6 +1948,20 @@ public func ghosttyBridgeApplyPresentation(
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
         GhosttyBridgeImpl.shared.applyPresentation(
+            parent: window,
+            json: String(cString: jsonPtr)
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_apply_input_routing")
+public func ghosttyBridgeApplyInputRouting(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ jsonPtr: UnsafePointer<CChar>
+) {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        GhosttyBridgeImpl.shared.applyInputRouting(
             parent: window,
             json: String(cString: jsonPtr)
         )

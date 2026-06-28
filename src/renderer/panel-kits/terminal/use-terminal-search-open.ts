@@ -23,8 +23,8 @@ export function useTerminalSearchOpen({
       ) {
         return;
       }
-      setActive();
       onOpen();
+      setActive();
     };
     window.addEventListener(TERMINAL_OPEN_SEARCH_EVENT, openSearch);
     return () => {

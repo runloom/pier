@@ -87,12 +87,11 @@ function installPierWindowApi() {
         resolve: vi.fn(),
       },
       terminal: {
+        applyInputRouting: vi.fn(),
         applyPresentation: vi.fn(),
-        focus: vi.fn(),
         hide: vi.fn(),
         onFocusRequest: vi.fn(),
         reconcile: vi.fn(),
-        setActivePanelKind: vi.fn(),
         show: vi.fn(),
       },
       workspace: {
@@ -269,7 +268,7 @@ describe("WorkspaceHost", () => {
     expect(window.pier.terminal.applyPresentation).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activePanelId: "welcome-1",
-        activePanelKind: "web",
+        activeTerminalPanelId: null,
         reason: "dockview-maximize",
         terminals: [
           expect.objectContaining({
@@ -285,7 +284,6 @@ describe("WorkspaceHost", () => {
     );
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("resyncs terminal visibility when tabs change while maximized", () => {
@@ -309,7 +307,6 @@ describe("WorkspaceHost", () => {
     dockview.emitMaximizedGroupChange();
     vi.mocked(window.pier.terminal.hide).mockClear();
     vi.mocked(window.pier.terminal.show).mockClear();
-    vi.mocked(window.pier.terminal.focus).mockClear();
     vi.mocked(window.pier.terminal.applyPresentation).mockClear();
 
     terminal.api.isActive = false;
@@ -320,7 +317,7 @@ describe("WorkspaceHost", () => {
     expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
       expect.objectContaining({
         activePanelId: "welcome-1",
-        activePanelKind: "web",
+        activeTerminalPanelId: null,
         terminals: [
           expect.objectContaining({
             panelId: "terminal-1",
@@ -331,7 +328,6 @@ describe("WorkspaceHost", () => {
     );
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("does not show a maximized active terminal until its renderer anchor is visible", () => {
@@ -353,11 +349,9 @@ describe("WorkspaceHost", () => {
       "dockview-maximize"
     );
     expect(window.pier.terminal.show).not.toHaveBeenCalledWith("terminal-1");
-    expect(window.pier.terminal.focus).not.toHaveBeenCalledWith("terminal-1");
 
     vi.mocked(window.pier.terminal.hide).mockClear();
     vi.mocked(window.pier.terminal.show).mockClear();
-    vi.mocked(window.pier.terminal.focus).mockClear();
     vi.mocked(window.pier.terminal.applyPresentation).mockClear();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
       height: 93,
@@ -370,10 +364,10 @@ describe("WorkspaceHost", () => {
 
     expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
       expect.objectContaining({
-        activePanelKind: "terminal",
+        activeTerminalPanelId: "terminal-1",
         terminals: [
           expect.objectContaining({
-            focused: true,
+            focused: false,
             panelId: "terminal-1",
             visible: true,
           }),
@@ -381,7 +375,6 @@ describe("WorkspaceHost", () => {
       })
     );
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
   });
 
@@ -421,7 +414,7 @@ describe("WorkspaceHost", () => {
 
     expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
       expect.objectContaining({
-        activePanelKind: "web",
+        activeTerminalPanelId: null,
         terminals: [
           expect.objectContaining({
             panelId: "terminal-visible",
@@ -436,7 +429,6 @@ describe("WorkspaceHost", () => {
     );
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("resyncs terminal visibility on layout changes after leaving maximized mode", () => {
@@ -540,10 +532,10 @@ describe("WorkspaceHost", () => {
           resolve,
         },
         terminal: {
+          applyInputRouting: vi.fn(),
           applyPresentation: vi.fn(),
           onFocusRequest: vi.fn(),
           reconcile: vi.fn(),
-          setActivePanelKind: vi.fn(),
         },
         workspace: {
           clearLayout: vi.fn(),
@@ -620,9 +612,9 @@ describe("WorkspaceHost", () => {
           resolve: vi.fn(),
         },
         terminal: {
+          applyInputRouting: vi.fn(),
           onFocusRequest: vi.fn(),
           reconcile: vi.fn(),
-          setActivePanelKind: vi.fn(),
         },
         workspace: {
           clearLayout: vi.fn(),

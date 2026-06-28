@@ -22,6 +22,10 @@ import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import {
+  resetTerminalInputRoutingForTests,
+  setTerminalBaseKeyboardFocusTarget,
+} from "@/stores/terminal-input-routing.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 const popupContextMenuAtMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -33,7 +37,6 @@ vi.mock("@/lib/context-menu/use-context-menu.ts", () => ({
 
 vi.mock("@/panel-kits/terminal/terminal-presentation-reconciler.ts", () => ({
   requestTerminalPresentation: requestTerminalPresentationMock,
-  setTerminalPresentationOverlayActive: vi.fn(),
 }));
 
 class TestResizeObserver {
@@ -201,6 +204,7 @@ describe("TerminalPanel lifecycle", () => {
     emitWindowLayoutPulse = null;
     tabChromePatchListeners = [];
     searchStateListeners = [];
+    resetTerminalInputRoutingForTests();
     TestResizeObserver.observeCount = 0;
     TestResizeObserver.instances = [];
     popupContextMenuAtMock.mockClear();
@@ -249,11 +253,11 @@ describe("TerminalPanel lifecycle", () => {
           }
         ),
         terminal: {
+          applyInputRouting: vi.fn(),
           applyPresentation: vi.fn(),
           close: vi.fn(),
           create: vi.fn(async () => ({ ok: true })),
           endSearch: vi.fn(async () => ({ ok: true })),
-          focus: vi.fn(),
           hide: vi.fn(),
           navigateSearch: vi.fn(async () => ({ ok: true })),
           onContextMenuRequest: vi.fn(() => vi.fn()),
@@ -279,7 +283,6 @@ describe("TerminalPanel lifecycle", () => {
           onTitleChange: vi.fn(() => vi.fn()),
           readSession: vi.fn(async () => null),
           search: vi.fn(async () => ({ ok: true })),
-          setActivePanelKind: vi.fn(),
           setFont: vi.fn(),
           setFrame: vi.fn(),
           show: vi.fn(),
@@ -290,6 +293,7 @@ describe("TerminalPanel lifecycle", () => {
 
   afterEach(() => {
     terminalStatusItemRegistry.clearForTests();
+    resetTerminalInputRoutingForTests();
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -785,7 +789,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
     vi.mocked(window.pier.terminal.show).mockClear();
     requestTerminalPresentationMock.mockClear();
 
@@ -798,10 +801,9 @@ describe("TerminalPanel lifecycle", () => {
       );
     });
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
-  it("refocuses an active native terminal when dockview moves it to another group", async () => {
+  it("resyncs an active native terminal when dockview moves it to another group", async () => {
     const props = createPanelProps({ isActive: true });
     render(<TerminalPanel {...props} />);
 
@@ -810,7 +812,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
     requestTerminalPresentationMock.mockClear();
 
     props.emitGroupChange();
@@ -820,7 +821,6 @@ describe("TerminalPanel lifecycle", () => {
         "dockview-layout"
       );
     });
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("does not focus a terminal that becomes visible while inactive", async () => {
@@ -832,7 +832,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
     vi.mocked(window.pier.terminal.show).mockClear();
     requestTerminalPresentationMock.mockClear();
 
@@ -845,7 +844,6 @@ describe("TerminalPanel lifecycle", () => {
       );
     });
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("does not focus a terminal moved between groups while hidden", async () => {
@@ -857,11 +855,7 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
-
     props.emitGroupChange();
-
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("opens the terminal search bar for its panel and focuses the input", async () => {
@@ -880,6 +874,52 @@ describe("TerminalPanel lifecycle", () => {
 
     expect(search).toHaveAccessibleName("Find in terminal");
     expect(input).toHaveFocus();
+  });
+
+  it("keeps Web keyboard ownership while focus moves inside the search bar", async () => {
+    setTerminalBaseKeyboardFocusTarget({
+      kind: "terminal",
+      panelId: "terminal-1",
+    });
+    vi.mocked(window.pier.terminal.applyInputRouting).mockClear();
+    render(<TerminalPanel {...createPanelProps()} />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-search", {
+          detail: { panelId: "terminal-1" },
+        })
+      );
+    });
+    await screen.findByTestId("terminal-search-input");
+
+    await waitFor(() => {
+      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+        expect.objectContaining({ keyboardFocusTarget: { kind: "web" } })
+      );
+    });
+
+    screen.getByRole("button", { name: "Previous match" }).focus();
+    expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyboardFocusTarget: { kind: "web" } })
+    );
+
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    try {
+      outside.focus();
+      await waitFor(() => {
+        expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            keyboardFocusTarget: {
+              kind: "terminal",
+              panelId: "terminal-1",
+            },
+          })
+        );
+      });
+    } finally {
+      outside.remove();
+    }
   });
 
   it("runs terminal search and keyboard navigation from the search bar", async () => {
@@ -999,6 +1039,5 @@ describe("TerminalPanel lifecycle", () => {
     expect(requestTerminalPresentationMock).toHaveBeenCalledWith(
       "dockview-active-panel"
     );
-    expect(window.pier.terminal.setActivePanelKind).not.toHaveBeenCalled();
   });
 });

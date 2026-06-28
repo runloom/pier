@@ -39,21 +39,19 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       (...args: unknown[]) => unknown | Promise<unknown>
     >();
     const fakeAddon = {
+      applyTerminalInputRouting: vi.fn(),
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
-      focusTerminal: vi.fn(),
       hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
-      setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
-      setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
@@ -147,21 +145,19 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       (...args: unknown[]) => unknown | Promise<unknown>
     >();
     const fakeAddon = {
+      applyTerminalInputRouting: vi.fn(),
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
-      focusTerminal: vi.fn(),
       hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
-      setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
-      setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
@@ -281,7 +277,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     );
   });
 
-  it("show / hide / focus / setFrame / close / setActivePanelKind all scope the panelId", async () => {
+  it("show / hide / setFrame / close / input routing all scope the panelId", async () => {
     // 锁住所有 panel-related IPC handler 都给 panelId 加 scope. 缺任何一条 swift 端
     // 就拿到 raw id, dict lookup miss → 整个 panel 操作 silently no-op.
     const { fakeAddon, handlers, invokeHandlers, win } = await setupHarness(7);
@@ -294,10 +290,6 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       { sender: win.webContents },
       "panel-a"
     );
-    handlers.get("pier:terminal:focus")?.(
-      { sender: win.webContents },
-      "panel-a"
-    );
     handlers.get("pier:terminal:set-frame")?.(
       { sender: win.webContents },
       "panel-a",
@@ -307,10 +299,13 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       { sender: win.webContents },
       "panel-a"
     );
-    handlers.get("pier:terminal:set-active-panel-kind")?.(
+    handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
-      "terminal",
-      "panel-a"
+      {
+        keyboardFocusTarget: { kind: "terminal", panelId: "panel-a" },
+        rendererSequence: 1,
+        webOverlayRects: [],
+      }
     );
     await invokeHandlers.get("pier:terminal:create")?.(
       { sender: win.webContents },
@@ -323,17 +318,17 @@ describe("multi-window panel id scoping (#16 #30)", () => {
 
     expect(fakeAddon.showTerminal).toHaveBeenCalledWith("7::panel-a");
     expect(fakeAddon.hideTerminal).toHaveBeenCalledWith("7::panel-a");
-    expect(fakeAddon.focusTerminal).toHaveBeenCalledWith("7::panel-a");
+    expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
+      Buffer.from("win-7"),
+      expect.objectContaining({
+        keyboardFocusTarget: { kind: "terminal", panelId: "7::panel-a" },
+      })
+    );
     expect(fakeAddon.setFrame).toHaveBeenCalledWith(
       "7::panel-a",
       expect.any(Object)
     );
     expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-a");
-    expect(fakeAddon.setActivePanelKind).toHaveBeenCalledWith(
-      Buffer.from("win-7"),
-      0,
-      "7::panel-a"
-    );
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("win-7"),
       "7::panel-a",

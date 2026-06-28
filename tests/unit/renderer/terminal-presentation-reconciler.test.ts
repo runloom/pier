@@ -11,7 +11,7 @@ function workspace(
 ): TerminalPresentationWorkspaceState {
   return {
     activePanelId: "terminal-1",
-    activePanelKind: "terminal",
+    activeTerminalPanelId: "terminal-1",
     hasMaximizedGroup: false,
     panels: [
       {
@@ -40,13 +40,12 @@ function workspace(
 describe("terminal presentation reconciler", () => {
   it("hides every terminal while a web panel is maximized", () => {
     const snapshot = buildTerminalPresentationSnapshot({
-      overlayActive: false,
       readFrame: () => frame,
       reason: "dockview-maximize",
       rendererSequence: 1,
       workspace: workspace({
         activePanelId: "welcome-1",
-        activePanelKind: "web",
+        activeTerminalPanelId: null,
         hasMaximizedGroup: true,
       }),
     });
@@ -57,9 +56,8 @@ describe("terminal presentation reconciler", () => {
     ]);
   });
 
-  it("shows and focuses only the active terminal while maximized", () => {
+  it("shows only the active terminal while maximized", () => {
     const snapshot = buildTerminalPresentationSnapshot({
-      overlayActive: false,
       readFrame: (panelId) => (panelId === "terminal-1" ? frame : null),
       reason: "dockview-maximize",
       rendererSequence: 2,
@@ -69,14 +67,13 @@ describe("terminal presentation reconciler", () => {
     });
 
     expect(snapshot.terminals).toEqual([
-      { focused: true, frame, panelId: "terminal-1", visible: true },
+      { focused: false, frame, panelId: "terminal-1", visible: true },
       { focused: false, frame: null, panelId: "terminal-2", visible: false },
     ]);
   });
 
   it("uses dockview visibility or a real anchor frame outside maximized mode", () => {
     const snapshot = buildTerminalPresentationSnapshot({
-      overlayActive: false,
       readFrame: (panelId) => (panelId === "terminal-2" ? frame : null),
       reason: "dockview-layout",
       rendererSequence: 3,
@@ -89,11 +86,10 @@ describe("terminal presentation reconciler", () => {
     ]);
   });
 
-  it("clears terminal focus while overlay is active without hiding it", () => {
+  it("does not encode keyboard focus in the presentation snapshot", () => {
     const snapshot = buildTerminalPresentationSnapshot({
-      overlayActive: true,
       readFrame: () => frame,
-      reason: "overlay",
+      reason: "dockview-active-panel",
       rendererSequence: 4,
       workspace: workspace({ hasMaximizedGroup: false }),
     });
@@ -104,6 +100,5 @@ describe("terminal presentation reconciler", () => {
       panelId: "terminal-1",
       visible: true,
     });
-    expect(snapshot.overlayActive).toBe(true);
   });
 });

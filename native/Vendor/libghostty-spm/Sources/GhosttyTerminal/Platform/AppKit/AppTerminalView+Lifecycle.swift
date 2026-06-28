@@ -37,15 +37,13 @@
 
         override open func becomeFirstResponder() -> Bool {
             let result = super.becomeFirstResponder()
-            core.setFocus(true)
-            onFocusChange?(true)
+            synchronizeHostFocusState()
             return result
         }
 
         override open func resignFirstResponder() -> Bool {
             let result = super.resignFirstResponder()
-            core.setFocus(false)
-            onFocusChange?(false)
+            applySurfaceFocus(false)
             return result
         }
 
@@ -95,20 +93,16 @@
                 )
             } else {
                 core.stopDisplayLink()
-                core.setFocus(false)
+                applySurfaceFocus(false)
             }
         }
 
         @objc func windowDidBecomeKey(_: Notification) {
-            let focused = window?.isKeyWindow == true
-                && window?.firstResponder === self
-            core.setFocus(focused)
-            onFocusChange?(focused)
+            synchronizeHostFocusState()
         }
 
         @objc func windowDidResignKey(_: Notification) {
-            core.setFocus(false)
-            onFocusChange?(false)
+            applySurfaceFocus(false)
         }
 
         @objc func windowDidChangeScreen(_: Notification) {
@@ -171,6 +165,20 @@
         public func flushHostResizeFrame() {
             updateMetalLayerMetrics()
             core.resizeAndRenderSynchronously()
+        }
+
+        public func synchronizeHostFocusState() {
+            let focused = hostKeyboardActive
+                && window?.isKeyWindow == true
+                && window?.firstResponder === self
+            applySurfaceFocus(focused)
+        }
+
+        private func applySurfaceFocus(_ focused: Bool) {
+            guard appliedSurfaceFocus != focused else { return }
+            appliedSurfaceFocus = focused
+            core.setFocus(focused)
+            onFocusChange?(focused)
         }
 
         func updateMetalLayerMetrics() {

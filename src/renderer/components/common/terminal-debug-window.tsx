@@ -87,14 +87,6 @@ function hasRecentEvent(
   return events.some((event) => actions.includes(event.action));
 }
 
-function latestPanelId(snapshot: TerminalDebugSnapshot | null): string {
-  return (
-    snapshot?.native.window.activeTerminalPanelId ??
-    snapshot?.renderer?.activePanelId ??
-    "-"
-  );
-}
-
 function presentationStatus(
   snapshot: TerminalDebugSnapshot | null
 ): RouteStatus {
@@ -117,12 +109,16 @@ function focusStatus(snapshot: TerminalDebugSnapshot | null): RouteStatus {
   }
   if (
     snapshot.issues?.some(
-      (issue) => issue.code === "desired_focus_native_first_responder_mismatch"
+      (issue) =>
+        issue.code === "input_routing_keyboard_first_responder_mismatch" ||
+        issue.code === "input_routing_keyboard_target_mismatch" ||
+        issue.code === "input_routing_terminal_surface_focus_mismatch" ||
+        issue.code === "input_routing_terminal_target_missing"
     )
   ) {
     return "bad";
   }
-  if (snapshot.native.window.inTerminalMode) {
+  if (snapshot.native.window.keyboardFocusTarget.kind === "terminal") {
     return "ok";
   }
   return "idle";
@@ -199,13 +195,17 @@ function RoutingStateView({
   const focus = focusStatus(snapshot);
   const surfaceStatus =
     (snapshot?.native.surfaces.length ?? 0) > 0 ? presentation : "idle";
-  const activeKind = snapshot?.native.window.activePanelKind ?? "web";
-  const activePanel = latestPanelId(snapshot);
+  const keyboardTarget = snapshot?.native.window.keyboardFocusTarget;
+  const keyboardTargetText =
+    keyboardTarget?.kind === "terminal"
+      ? `terminal:${keyboardTarget.panelId}`
+      : "web";
   const rendererSeq =
-    snapshot?.presentation?.desired?.rendererSequence ??
-    snapshot?.renderer?.desiredPresentation?.rendererSequence ??
+    snapshot?.inputRouting?.desired?.rendererSequence ??
+    snapshot?.renderer?.desiredInputRouting?.rendererSequence ??
     "-";
-  const nativeSeq = snapshot?.native.window.lastAppliedRendererSequence ?? "-";
+  const nativeSeq =
+    snapshot?.native.window.lastAppliedInputRoutingSequence ?? "-";
   const health = routeHealth(snapshot);
 
   return (
@@ -218,15 +218,19 @@ function RoutingStateView({
           <div className="grid h-full min-h-0 grid-cols-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_32px_minmax(0,1fr)_32px_minmax(0,1fr)_32px_minmax(0,1fr)]">
             <NodeCard
               icon={<Columns3 className="size-4" />}
-              label="Web / Dockview"
+              label="Renderer Coordinator"
               status={presentation}
             >
-              {activeKind}:{activePanel}
+              {snapshot?.renderer?.desiredInputRouting?.webOverlayRects
+                .length ??
+                snapshot?.inputRouting?.desired?.webOverlayRects.length ??
+                0}{" "}
+              web rects
             </NodeCard>
             <Connector status={presentation} />
             <NodeCard
               icon={<Activity className="size-4" />}
-              label="Main"
+              label="Main Validator"
               status={presentation}
             >
               r{rendererSeq} {"->"} r{nativeSeq}
@@ -237,17 +241,16 @@ function RoutingStateView({
               label="Native Router"
               status={focus}
             >
-              {snapshot?.native.window.inTerminalMode
-                ? "terminal mode"
-                : "web mode"}
+              {keyboardTargetText}
             </NodeCard>
             <Connector status={surfaceStatus} />
             <NodeCard
               icon={<MonitorDot className="size-4" />}
-              label="Terminal Surface"
+              label="Terminal Targets"
               status={surfaceStatus}
             >
-              {snapshot?.native.surfaces.length ?? 0} targets
+              {snapshot?.native.window.terminalTargetCount ?? 0} targets /{" "}
+              {snapshot?.native.window.webOverlayRectCount ?? 0} web
             </NodeCard>
           </div>
         </div>

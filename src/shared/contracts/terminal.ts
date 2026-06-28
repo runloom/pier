@@ -14,13 +14,38 @@ export type TerminalPresentationReason =
   | "dockview-dimensions"
   | "dockview-layout"
   | "dockview-maximize"
-  | "overlay"
   | "restore"
   | "visibility"
   | "window-blur"
   | "window-focus"
   | "window-resize"
   | `window-${"resize" | "view-zoom" | "zoom"}`;
+
+export interface TerminalWebOverlayRect {
+  frame: TerminalFrame;
+  id: string;
+}
+
+export type TerminalKeyboardFocusTarget =
+  | {
+      kind: "terminal";
+      panelId: string;
+    }
+  | {
+      kind: "web";
+    };
+
+export interface TerminalInputRoutingSnapshot {
+  keyboardFocusTarget: TerminalKeyboardFocusTarget;
+  rendererSequence: number;
+  webOverlayRects: TerminalWebOverlayRect[];
+}
+
+export interface TerminalNativeInputRoutingSnapshot
+  extends TerminalInputRoutingSnapshot {
+  nativeApplySequence: number;
+  windowFocused: boolean;
+}
 
 export interface TerminalPresentationEntry {
   focused: boolean;
@@ -31,9 +56,8 @@ export interface TerminalPresentationEntry {
 
 export interface TerminalPresentationSnapshot {
   activePanelId: string | null;
-  activePanelKind: "terminal" | "web";
+  activeTerminalPanelId: string | null;
   hasMaximizedGroup: boolean;
-  overlayActive: boolean;
   reason: TerminalPresentationReason;
   rendererSequence: number;
   terminals: TerminalPresentationEntry[];
@@ -48,6 +72,11 @@ export interface TerminalNativePresentationSnapshot
 export interface TerminalDebugPresentationSnapshot {
   desired?: TerminalPresentationSnapshot | undefined;
   effective?: TerminalNativePresentationSnapshot | undefined;
+}
+
+export interface TerminalDebugInputRoutingSnapshot {
+  desired?: TerminalInputRoutingSnapshot | undefined;
+  effective?: TerminalNativeInputRoutingSnapshot | undefined;
 }
 
 export type TerminalDebugRoute =
@@ -68,25 +97,30 @@ export interface TerminalDebugEvent {
 }
 
 export interface TerminalDebugNativeWindowSnapshot {
-  activePanelKind: "terminal" | "web";
   activeTerminalPanelId: string | null;
-  inTerminalMode: boolean;
+  inputRoutingStaleDiscardCount?: number | undefined;
+  keyboardFocusTarget: TerminalKeyboardFocusTarget;
+  lastAppliedInputRoutingSequence?: number | undefined;
   lastAppliedNativeApplySequence?: number | undefined;
   lastAppliedRendererSequence?: number | undefined;
   lastPresentationReason?: string | undefined;
   nativeActiveTerminalPanelId: string | null;
-  overlayActive: boolean;
   staleDiscardCount?: number | undefined;
+  terminalTargetCount: number;
+  webOverlayRectCount: number;
 }
 
 export interface TerminalDebugNativeSurfaceSnapshot {
   alpha: number;
   browserWindowId: number;
+  cursorSuppressed?: boolean | undefined;
   frame: TerminalFrame;
   hasRouterTarget: boolean;
+  hostKeyboardActive?: boolean | undefined;
   isFirstResponder: boolean;
   isHidden: boolean;
   isOffscreen: boolean;
+  isSurfaceFocused?: boolean | undefined;
   nativePanelId: string;
   panelId: string;
   targetRect?: TerminalFrame | null | undefined;
@@ -104,11 +138,17 @@ export type TerminalDebugIssueSeverity = "error" | "warning";
 export interface TerminalDebugIssue {
   code:
     | "duplicate_renderer_panel"
-    | "desired_focus_native_first_responder_mismatch"
     | "desired_frame_native_mismatch"
     | "desired_hidden_native_visible"
     | "desired_visible_native_hidden"
     | "frame_mismatch"
+    | "input_routing_keyboard_first_responder_mismatch"
+    | "input_routing_keyboard_target_mismatch"
+    | "input_routing_overlay_rect_count_mismatch"
+    | "input_routing_stale"
+    | "input_routing_terminal_cursor_policy_mismatch"
+    | "input_routing_terminal_target_missing"
+    | "input_routing_terminal_surface_focus_mismatch"
     | "native_hidden_while_anchor_visible"
     | "native_missing"
     | "orphan_native_surface"
@@ -156,6 +196,7 @@ export interface TerminalDebugRendererPanelSnapshot {
 
 export interface TerminalDebugRendererSnapshot {
   activePanelId: string | null;
+  desiredInputRouting?: TerminalInputRoutingSnapshot | undefined;
   desiredPresentation?: TerminalPresentationSnapshot | undefined;
   hasMaximizedGroup: boolean;
   panelCount: number;
@@ -180,6 +221,7 @@ export interface TerminalDebugSnapshotArgs {
 
 export interface TerminalDebugSnapshot {
   events: TerminalDebugEvent[];
+  inputRouting?: TerminalDebugInputRoutingSnapshot | undefined;
   issues?: TerminalDebugIssue[] | undefined;
   native: TerminalDebugNativeSnapshot;
   presentation?: TerminalDebugPresentationSnapshot | undefined;
@@ -327,6 +369,7 @@ export interface TerminalColors {
 }
 
 export interface TerminalAPI {
+  applyInputRouting(snapshot: TerminalInputRoutingSnapshot): void;
   applyPresentation(snapshot: TerminalPresentationSnapshot): void;
   applyTheme(colors: TerminalColors): void;
   /**
@@ -339,7 +382,6 @@ export interface TerminalAPI {
     args?: TerminalDebugSnapshotArgs
   ): Promise<TerminalDebugSnapshot>;
   endSearch(panelId: string): Promise<TerminalOperationResult>;
-  focus(panelId: string): void;
   hide(panelId: string): void;
   navigateSearch(
     panelId: string,
@@ -391,10 +433,6 @@ export interface TerminalAPI {
    */
   reconcile(activeIds: string[]): void;
   search(panelId: string, query: string): Promise<TerminalOperationResult>;
-  setActivePanelKind: (
-    kind: "terminal" | "web",
-    panelId: string | null
-  ) => void;
   setAppShortcutKeys(keys: string[]): void;
   setConfig(config: TerminalRuntimeConfig): void;
   /**
@@ -403,7 +441,6 @@ export interface TerminalAPI {
    */
   setFont(panelId: string, font: TerminalFont): void;
   setFrame(panelId: string, frame: TerminalFrame): void;
-  setOverlayActive(active: boolean): void;
   setup(): Promise<CreateTerminalResult>;
   show(panelId: string): void;
 }

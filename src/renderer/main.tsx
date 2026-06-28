@@ -20,7 +20,7 @@ import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
-import { installDragWatcher } from "./stores/terminal-overlay.store.ts";
+import { installTerminalInputRoutingDragWatcher } from "./stores/terminal-input-routing.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
@@ -57,7 +57,7 @@ async function bootstrap() {
   }
 
   window.pier?.terminal?.setup?.()?.catch(() => undefined);
-  installDragWatcher();
+  installTerminalInputRoutingDragWatcher();
   installCommandPaletteMenuRequest();
   initCommandPaletteMru().catch(() => undefined);
 

@@ -34,6 +34,7 @@ import {
   tabChromeFromParams,
   terminalPanelDescriptor,
 } from "./terminal-tab-chrome.ts";
+import { useTerminalSearchKeyboardOpening } from "./use-terminal-search-keyboard-opening.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
 
 function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
@@ -93,8 +94,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     TerminalPanelSessionSnapshot | null | undefined
   >(undefined);
 
-  // 订阅 swift OSC 7 → main 解析完整 PanelContext → 这里. renderer 不拼接/覆盖
-  // context 字段，避免 cwd 已变但 worktreeKey/gitRoot 仍是旧项目。
   const runtimeContext = usePanelEventState(
     window.pier.terminal.onCwdChange,
     panelId,
@@ -131,7 +130,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     statusContext
   );
 
-  // descriptor 中 display.long 保留 OSC title/cwd，tab chrome 单独表达固定 tab 呈现。
   usePanelDescriptor(
     api,
     terminalPanelDescriptor({
@@ -407,10 +405,17 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     });
   }, [panelId, monoFontFamily, effectiveMonoFontSize]);
 
+  const { holdOpeningKeyboardFocus, releaseOpeningKeyboardFocus } =
+    useTerminalSearchKeyboardOpening(panelId);
   const openTerminalSearch = useCallback(() => {
+    holdOpeningKeyboardFocus();
     setSearchOpen(true);
     setSearchFocusRequest((value) => value + 1);
-  }, []);
+  }, [holdOpeningKeyboardFocus]);
+  const closeTerminalSearch = useCallback(() => {
+    releaseOpeningKeyboardFocus();
+    setSearchOpen(false);
+  }, [releaseOpeningKeyboardFocus]);
   const activatePanel = useCallback(() => {
     api.setActive();
   }, [api]);
@@ -420,9 +425,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     setActive: activatePanel,
   });
 
-  // 订阅 swift 转发的右键: panel 的 NSView 吞掉 React 层 onContextMenu, 唯一拿到
-  // 右键的方式是 swift NSEvent monitor 拦截 + IPC 转发. 这里按 panelId 过滤 (一个
-  // terminal panel 的菜单只该响应它自己的右键).
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
       if (req.panelId !== panelId) {
@@ -474,7 +476,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       ) : null}
       <TerminalSearchBar
         focusRequest={searchFocusRequest}
-        onClose={() => setSearchOpen(false)}
+        onClose={closeTerminalSearch}
+        onKeyboardFocusReady={releaseOpeningKeyboardFocus}
         panelId={panelId}
         visible={searchOpen}
       />

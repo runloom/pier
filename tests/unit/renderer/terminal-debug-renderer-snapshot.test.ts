@@ -68,11 +68,11 @@ describe("terminal debug renderer snapshot", () => {
     const issues = buildTerminalDebugIssues(renderer, {
       surfaces: [],
       window: {
-        activePanelKind: "terminal",
         activeTerminalPanelId: "terminal-1",
-        inTerminalMode: true,
+        keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
         nativeActiveTerminalPanelId: "1::terminal-1",
-        overlayActive: false,
+        terminalTargetCount: 0,
+        webOverlayRectCount: 0,
       },
     });
 

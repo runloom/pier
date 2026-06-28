@@ -215,6 +215,8 @@ const preferencesApi: PierPreferencesAPI = {
 };
 
 const terminalApi: TerminalAPI = {
+  applyInputRouting: (snapshot) =>
+    ipcRenderer.send("pier:terminal:apply-input-routing", snapshot),
   applyPresentation: (snapshot) =>
     ipcRenderer.send("pier:terminal:apply-presentation", snapshot),
   applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
@@ -224,7 +226,6 @@ const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
   endSearch: (panelId) =>
     ipcRenderer.invoke("pier:terminal:end-search", panelId),
-  focus: (panelId) => ipcRenderer.send("pier:terminal:focus", panelId),
   hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
   navigateSearch: (panelId, direction) =>
     ipcRenderer.invoke("pier:terminal:navigate-search", panelId, direction),
@@ -271,8 +272,6 @@ const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   search: (panelId, query) =>
     ipcRenderer.invoke("pier:terminal:search", panelId, query),
-  setActivePanelKind: (kind, panelId) =>
-    ipcRenderer.send("pier:terminal:set-active-panel-kind", kind, panelId),
   setAppShortcutKeys: (keys) =>
     ipcRenderer.send("pier:terminal:set-app-shortcut-keys", keys),
   setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),
@@ -280,9 +279,6 @@ const terminalApi: TerminalAPI = {
     ipcRenderer.send("pier:terminal:set-font", panelId, font),
   setFrame: (panelId, frame) =>
     ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
-  setOverlayActive: (active) =>
-    ipcRenderer.send("pier:terminal:set-overlay", active),
-  // ↑ preload 不带 windowId, main 端用 event.sender 自动找 BrowserWindow.
   setup: () => ipcRenderer.invoke("pier:terminal:setup"),
   show: (panelId) => ipcRenderer.send("pier:terminal:show", panelId),
 };
