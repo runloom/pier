@@ -661,6 +661,28 @@ final class GhosttyBridgeImpl {
         windowStates[windowId] = state
     }
 
+    func setBasePanel(window: NSWindow, target: KeyboardFocusTarget) {
+        mutateState(window) { $0.basePanel = target }
+        applyFirstResponder(for: window)
+    }
+
+    func requestWebFocus(window: NSWindow, id: String) {
+        mutateState(window) {
+            if !$0.webRequests.contains(id) { $0.webRequests.append(id) }
+        }
+        applyFirstResponder(for: window)
+    }
+
+    func releaseWebFocus(window: NSWindow, id: String) {
+        mutateState(window) { $0.webRequests.removeAll { $0 == id } }
+        applyFirstResponder(for: window)
+    }
+
+    // 仅测试用:绕过 IPC 直接设 basePanel(不触发 applyFirstResponder)。
+    func setBasePanelForTesting(_ window: NSWindow, _ target: KeyboardFocusTarget) {
+        mutateState(window) { $0.basePanel = target }
+    }
+
     private func controller(for window: NSWindow) -> TerminalController {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }
