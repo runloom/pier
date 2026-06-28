@@ -50,7 +50,7 @@ const FORBIDDEN_HIDE_GUARD_RE =
 const FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE =
   /private var activePanelId: String\?/;
 const FOCUS_INTENT_FORWARDS_ONLY_RE =
-  /private func activateFocusIntent\(\) \{\s*Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)\s*\}/;
+  /private func activateFocusIntent\(\) \{\s*Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId, "mouse-down"\)\s*\}/;
 const OTHER_MOUSE_DOWN_FOCUSES_BEFORE_FORWARD_RE =
   /override func otherMouseDown\(with event: NSEvent\) \{[\s\S]*?capturedTerminalMouseButton = \.other[\s\S]*?activateFocusIntent\(\)[\s\S]*?terminalView\.otherMouseDown\(with: event\)/;
 const FORBIDDEN_NATIVE_FOCUS_MUTATION_RE =

@@ -52,6 +52,7 @@ describe("terminal focus restoration", () => {
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
+        isFocused: () => focused,
         send: vi.fn(),
       },
     });
@@ -290,7 +291,7 @@ describe("terminal focus restoration", () => {
     expect(fakeAddon.applyTerminalInputRouting).not.toHaveBeenCalled();
     expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
-      { panelId: "panel-2" }
+      { panelId: "panel-2", reason: "mouse-down" }
     );
   });
 
@@ -451,6 +452,7 @@ describe("terminal focus restoration", () => {
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => false,
+        isFocused: () => true,
         send: vi.fn(),
       },
     };
