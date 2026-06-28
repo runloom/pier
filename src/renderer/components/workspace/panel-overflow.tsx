@@ -10,8 +10,8 @@ import {
 } from "react";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
-  holdTerminalWebKeyboardFocus,
   registerTerminalFullscreenWebOverlay,
+  registerWebFocusScope,
 } from "@/stores/terminal-input-routing.store.ts";
 import { Button } from "../primitives/button.tsx";
 import {
@@ -229,9 +229,9 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
       return;
     }
     const route = registerTerminalFullscreenWebOverlay("panel-overflow");
-    const releaseKeyboard = holdTerminalWebKeyboardFocus("panel-overflow");
+    const disposeScope = registerWebFocusScope("panel-overflow", "exclusive");
     return () => {
-      releaseKeyboard();
+      disposeScope();
       route.dispose();
     };
   }, [open]);

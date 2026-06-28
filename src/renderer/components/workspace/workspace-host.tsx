@@ -23,7 +23,7 @@ import {
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
-  releaseTransientTerminalWebKeyboardFocus,
+  releaseTransientWebFocusScopes,
   setTerminalBaseKeyboardFocusTarget,
 } from "@/stores/terminal-input-routing.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -385,7 +385,7 @@ export function WorkspaceHost() {
       });
 
       window.pier?.terminal?.onFocusRequest?.((req) => {
-        releaseTransientTerminalWebKeyboardFocus();
+        releaseTransientWebFocusScopes();
         const result = activateTerminalPanelFromFocusRequest(
           event.api,
           req.panelId,

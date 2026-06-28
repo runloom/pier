@@ -11,8 +11,8 @@ import { Badge } from "@/components/primitives/badge.tsx";
 import { Button } from "@/components/primitives/button.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import {
-  holdTerminalWebKeyboardFocus,
   registerTerminalElementWebOverlay,
+  registerWebFocusScope,
 } from "@/stores/terminal-input-routing.store.ts";
 
 interface TerminalSearchBarProps {
@@ -66,9 +66,9 @@ export function TerminalSearchBar({
     if (releaseSearchKeyboardRef.current) {
       return;
     }
-    releaseSearchKeyboardRef.current = holdTerminalWebKeyboardFocus(
+    releaseSearchKeyboardRef.current = registerWebFocusScope(
       `terminal-search:${panelId}:keyboard`,
-      { transient: true }
+      "transient"
     );
   }, [panelId]);
 

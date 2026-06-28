@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getLastTerminalInputRoutingSnapshot,
-  holdTerminalWebKeyboardFocus,
+  hasExclusiveWebFocusScope,
   registerTerminalFullscreenWebOverlay,
-  releaseTransientTerminalWebKeyboardFocus,
+  registerWebFocusScope,
+  releaseTransientWebFocusScopes,
   resetTerminalInputRoutingForTests,
   setTerminalBaseKeyboardFocusTarget,
 } from "@/stores/terminal-input-routing.store.ts";
@@ -39,15 +40,16 @@ describe("terminal input routing store", () => {
     );
   });
 
-  it("lets Web keyboard owners override and restore the base target", () => {
+  it("lets exclusive Web focus scope override and restore the base target", () => {
     setTerminalBaseKeyboardFocusTarget({
       kind: "terminal",
       panelId: "terminal-1",
     });
-    const release = holdTerminalWebKeyboardFocus("dialog");
+    const release = registerWebFocusScope("dialog", "exclusive");
 
     expect(getLastTerminalInputRoutingSnapshot()?.keyboardFocusTarget).toEqual({
       kind: "web",
+      scope: "exclusive",
     });
 
     release();
@@ -58,18 +60,19 @@ describe("terminal input routing store", () => {
     });
   });
 
-  it("releases only transient Web keyboard owners", () => {
+  it("releases only transient Web focus scopes", () => {
     setTerminalBaseKeyboardFocusTarget({
       kind: "terminal",
       panelId: "terminal-1",
     });
-    const releaseDialog = holdTerminalWebKeyboardFocus("dialog");
-    holdTerminalWebKeyboardFocus("search-input", { transient: true });
+    const releaseDialog = registerWebFocusScope("dialog", "exclusive");
+    registerWebFocusScope("search-input", "transient");
 
-    releaseTransientTerminalWebKeyboardFocus();
+    releaseTransientWebFocusScopes();
 
     expect(getLastTerminalInputRoutingSnapshot()?.keyboardFocusTarget).toEqual({
       kind: "web",
+      scope: "exclusive",
     });
 
     releaseDialog();
@@ -77,6 +80,26 @@ describe("terminal input routing store", () => {
     expect(getLastTerminalInputRoutingSnapshot()?.keyboardFocusTarget).toEqual({
       kind: "terminal",
       panelId: "terminal-1",
+    });
+  });
+
+  it("hasExclusiveWebFocusScope returns true only with exclusive scope", () => {
+    resetTerminalInputRoutingForTests();
+    expect(hasExclusiveWebFocusScope()).toBe(false);
+    const release = registerWebFocusScope("dialog", "exclusive");
+    expect(hasExclusiveWebFocusScope()).toBe(true);
+    release();
+    expect(hasExclusiveWebFocusScope()).toBe(false);
+  });
+
+  it("exclusive scope wins over transient scopes", () => {
+    resetTerminalInputRoutingForTests();
+    registerWebFocusScope("menu", "transient");
+    registerWebFocusScope("dialog", "exclusive");
+
+    expect(getLastTerminalInputRoutingSnapshot()?.keyboardFocusTarget).toEqual({
+      kind: "web",
+      scope: "exclusive",
     });
   });
 

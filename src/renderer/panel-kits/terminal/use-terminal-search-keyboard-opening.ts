@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { holdTerminalWebKeyboardFocus } from "@/stores/terminal-input-routing.store.ts";
+import { registerWebFocusScope } from "@/stores/terminal-input-routing.store.ts";
 
 export function useTerminalSearchKeyboardOpening(panelId: string): {
   holdOpeningKeyboardFocus: () => void;
@@ -11,9 +11,9 @@ export function useTerminalSearchKeyboardOpening(panelId: string): {
     if (releaseRef.current) {
       return;
     }
-    releaseRef.current = holdTerminalWebKeyboardFocus(
+    releaseRef.current = registerWebFocusScope(
       `terminal-search:${panelId}:opening`,
-      { transient: true }
+      "transient"
     );
   }, [panelId]);
 
