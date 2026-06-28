@@ -26,6 +26,8 @@ export interface TerminalWebOverlayRect {
   id: string;
 }
 
+export type WebFocusScopeKind = "exclusive" | "transient";
+
 export type TerminalKeyboardFocusTarget =
   | {
       kind: "terminal";
@@ -33,6 +35,7 @@ export type TerminalKeyboardFocusTarget =
     }
   | {
       kind: "web";
+      scope?: WebFocusScopeKind;
     };
 
 export interface TerminalInputRoutingSnapshot {
@@ -276,6 +279,7 @@ export interface TerminalContextMenuRequest {
 
 export interface TerminalFocusRequest {
   panelId: string;
+  reason: "mouse-down" | "key-event" | "window-become-key" | "system";
 }
 
 /**
