@@ -6,7 +6,7 @@ import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts
 import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { SquareTerminal } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
@@ -23,6 +23,7 @@ import {
   updateTerminalPanelLifecycleDebug,
 } from "./terminal-lifecycle-debug.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
+import { TerminalSearchBar } from "./terminal-search-bar.tsx";
 import {
   hasVisibleTerminalStatusItems,
   TerminalStatusBar,
@@ -33,6 +34,8 @@ import {
   tabChromeFromParams,
   terminalPanelDescriptor,
 } from "./terminal-tab-chrome.ts";
+import { useTerminalSearchKeyboardOpening } from "./use-terminal-search-keyboard-opening.ts";
+import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
 
 function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
   return new Promise((resolve) => {
@@ -85,12 +88,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const statusItems = useTerminalStatusItems();
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
   >(undefined);
 
-  // 订阅 swift OSC 7 → main 解析完整 PanelContext → 这里. renderer 不拼接/覆盖
-  // context 字段，避免 cwd 已变但 worktreeKey/gitRoot 仍是旧项目。
   const runtimeContext = usePanelEventState(
     window.pier.terminal.onCwdChange,
     panelId,
@@ -127,7 +130,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     statusContext
   );
 
-  // descriptor 中 display.long 保留 OSC title/cwd，tab chrome 单独表达固定 tab 呈现。
   usePanelDescriptor(
     api,
     terminalPanelDescriptor({
@@ -403,9 +405,26 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     });
   }, [panelId, monoFontFamily, effectiveMonoFontSize]);
 
-  // 订阅 swift 转发的右键: panel 的 NSView 吞掉 React 层 onContextMenu, 唯一拿到
-  // 右键的方式是 swift NSEvent monitor 拦截 + IPC 转发. 这里按 panelId 过滤 (一个
-  // terminal panel 的菜单只该响应它自己的右键).
+  const { holdOpeningKeyboardFocus, releaseOpeningKeyboardFocus } =
+    useTerminalSearchKeyboardOpening(panelId);
+  const openTerminalSearch = useCallback(() => {
+    holdOpeningKeyboardFocus();
+    setSearchOpen(true);
+    setSearchFocusRequest((value) => value + 1);
+  }, [holdOpeningKeyboardFocus]);
+  const closeTerminalSearch = useCallback(() => {
+    releaseOpeningKeyboardFocus();
+    setSearchOpen(false);
+  }, [releaseOpeningKeyboardFocus]);
+  const activatePanel = useCallback(() => {
+    api.setActive();
+  }, [api]);
+  useTerminalSearchOpen({
+    onOpen: openTerminalSearch,
+    panelId,
+    setActive: activatePanel,
+  });
+
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
       if (req.panelId !== panelId) {
@@ -455,6 +474,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           <p className="text-muted-foreground text-sm">{error}</p>
         </div>
       ) : null}
+      <TerminalSearchBar
+        focusRequest={searchFocusRequest}
+        onClose={closeTerminalSearch}
+        onKeyboardFocusReady={releaseOpeningKeyboardFocus}
+        panelId={panelId}
+        visible={searchOpen}
+      />
       <TerminalStatusBar
         context={effectiveContext}
         cwd={effectiveCwd}

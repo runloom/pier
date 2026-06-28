@@ -1,5 +1,7 @@
 import { PLUGIN_PERMISSION_LABELS_ZH_CN } from "./plugin-permission-labels.ts";
 
+import { terminalLocales } from "./terminal.ts";
+
 export const zhCN = {
   settings: {
     title: "设置",
@@ -466,6 +468,7 @@ export const zhCN = {
       },
     },
   },
+  terminal: terminalLocales.zhCN,
   contextMenu: {
     action: {
       clearScreen: "清屏",
@@ -479,6 +482,7 @@ export const zhCN = {
       focusRight: "向右聚焦",
       focusUp: "向上聚焦",
       equalizePanels: "均分面板",
+      find: "查找",
       newTerminal: "新建终端",
       paste: "粘贴",
       selectAll: "全选",

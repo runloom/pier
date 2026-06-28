@@ -2,12 +2,17 @@ import { createRequire } from "node:module";
 import type {
   TerminalColors,
   TerminalFrame,
+  TerminalNativeInputRoutingSnapshot,
   TerminalNativePresentationSnapshot,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 
 export interface NativeAddon {
+  applyTerminalInputRouting(
+    parentHandle: Buffer,
+    snapshot: TerminalNativeInputRoutingSnapshot
+  ): void;
   applyTerminalPresentation(
     parentHandle: Buffer,
     snapshot: TerminalNativePresentationSnapshot
@@ -32,7 +37,6 @@ export interface NativeAddon {
   debugSnapshot(parentHandle: Buffer): string;
   /** Window 真正销毁时调用一次: closeAll + 卸 EventRouter + 卸 NSEvent monitor */
   detachWindow(parentHandle: Buffer): void;
-  focusTerminal(panelId: string): void;
   hideTerminal(panelId: string): void;
   performTerminalBindingAction(panelId: string, action: string): boolean;
   /**
@@ -41,16 +45,6 @@ export interface NativeAddon {
    * swift 把不在集合里的清掉. 空数组 = 全清 (等价 closeAllTerminals).
    */
   reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
-  /**
-   * 注册 keyboard forward callback. swift NSEvent monitor 检测 Cmd+key 后调用,
-   * 传 (browserWindowId, modifierFlags, chars). browserWindowId 是 setupWindow
-   * 传入的 BrowserWindow.id, 用于多窗口路由. 传 null 解绑.
-   */
-  setActivePanelKind(
-    parentHandle: Buffer,
-    kindRaw: number,
-    panelId: string | null
-  ): void;
   setAppShortcutKeys(keys: string[]): void;
   setFrame(panelId: string, frame: TerminalFrame): void;
   setKeyboardForwardCallback(
@@ -75,7 +69,6 @@ export interface NativeAddon {
         ) => void)
       | null
   ): void;
-  setOverlayActive(parentHandle: Buffer, active: boolean): void;
   /**
    * 注册 PWD forward callback. swift TerminalSurfacePwdDelegate 收到 OSC 7 后调用,
    * 传 (browserWindowId, panelId, cwd). 用 windowId 路由到对应 BrowserWindow 的
@@ -83,6 +76,16 @@ export interface NativeAddon {
    */
   setPwdForwardCallback(
     cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
+  ): void;
+  setSearchForwardCallback(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          total: number,
+          selected: number
+        ) => void)
+      | null
   ): void;
   setTerminalConfig(parentHandle: Buffer, config: TerminalRuntimeConfig): void;
   setTerminalFocusRequestCallback(

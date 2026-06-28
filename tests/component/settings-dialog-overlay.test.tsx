@@ -6,7 +6,7 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 const BACKDROP_FILTER_CLASS = /backdrop-blur|backdrop-filter/;
 
-describe("SettingsDialog overlay", () => {
+describe("SettingsDialog input routing", () => {
   beforeAll(async () => {
     await initI18n();
   });
@@ -19,7 +19,7 @@ describe("SettingsDialog overlay", () => {
   });
 
   it("keeps the default settings backdrop without hiding native terminal surfaces", () => {
-    const setOverlayActive = vi.fn();
+    const applyInputRouting = vi.fn();
     vi.stubGlobal("matchMedia", () => ({
       addEventListener: vi.fn(),
       matches: false,
@@ -27,7 +27,10 @@ describe("SettingsDialog overlay", () => {
     }));
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { terminal: { setOverlayActive } },
+      value: {
+        onWindowLayoutPulse: vi.fn(() => vi.fn()),
+        terminal: { applyInputRouting },
+      },
     });
     useSettingsDialogStore.setState({ isOpen: true });
 
@@ -41,7 +44,14 @@ describe("SettingsDialog overlay", () => {
     expect(overlay?.className).not.toContain("inset-0");
     expect(overlay?.className).not.toContain("bg-black/30");
     expect(overlay?.className).not.toMatch(BACKDROP_FILTER_CLASS);
-    expect(setOverlayActive).toHaveBeenCalledWith(true);
+    expect(applyInputRouting).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        keyboardFocusTarget: { kind: "web" },
+        webOverlayRects: expect.arrayContaining([
+          expect.objectContaining({ id: "settings-dialog" }),
+        ]),
+      })
+    );
   });
 
   it("does not autofocus the first settings navigation item on open", () => {
@@ -52,7 +62,7 @@ describe("SettingsDialog overlay", () => {
     }));
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { terminal: { setOverlayActive: vi.fn() } },
+      value: { terminal: { applyInputRouting: vi.fn() } },
     });
     useSettingsDialogStore.setState({ isOpen: true });
 
@@ -84,7 +94,7 @@ describe("SettingsDialog overlay", () => {
             return vi.fn();
           }),
         },
-        terminal: { setOverlayActive: vi.fn() },
+        terminal: { applyInputRouting: vi.fn() },
       },
     });
 

@@ -20,12 +20,13 @@ import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
+import { isDevRuntime } from "./runtime-mode.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
 import { createWindowZoomController } from "./windows/window-zoom.ts";
 
-const isDev = !app.isPackaged;
+const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
 let localControl: RegisteredLocalControl | null = null;
@@ -128,6 +129,21 @@ function openTerminalFromMenu(target: AppWindow | null): void {
   target.webContents.send(PIER_BROADCAST.NEW_TERMINAL_REQUEST);
 }
 
+function openTerminalSearchFromMenu(target: AppWindow | null): void {
+  if (!target || target.isDestroyed() || target.webContents.isDestroyed()) {
+    return;
+  }
+  if (target.isMinimized()) {
+    target.restore();
+  }
+  if (isMac) {
+    app.focus({ steal: true });
+  }
+  target.focus();
+  target.webContents.focus();
+  target.webContents.send(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST);
+}
+
 function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
   if (!target || target.isDestroyed() || target.webContents.isDestroyed()) {
     return;
@@ -153,6 +169,7 @@ app.whenReady().then(async () => {
     getTargetWindow: getMenuTargetWindow,
     isDev,
     isMac,
+    onFindInTerminal: openTerminalSearchFromMenu,
     onNewTerminal: openTerminalFromMenu,
     onNewWindow: createFreshWindowFromMenu,
     onOpenCommandPalette: toggleCommandPaletteFromMenu,

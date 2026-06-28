@@ -1,11 +1,31 @@
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
-import { act, render, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import i18next from "i18next";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { initI18n } from "@/i18n/index.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import {
+  resetTerminalInputRoutingForTests,
+  setTerminalBaseKeyboardFocusTarget,
+} from "@/stores/terminal-input-routing.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 const popupContextMenuAtMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -78,42 +98,47 @@ function createPanelProps(
   let onDidGroupChange: (() => void) | null = null;
   let onDidVisibilityChange: ((event: { isVisible: boolean }) => void) | null =
     null;
-  const props = {
-    api: {
-      height: 300,
-      id: "terminal-1",
-      get isActive() {
-        return isActive;
-      },
-      get isVisible() {
-        return isVisible;
-      },
-      onDidActiveChange: vi.fn(
-        (listener: (event: { isActive: boolean }) => void) => {
-          onDidActiveChange = listener;
-          return { dispose: vi.fn() };
-        }
-      ),
-      onDidDimensionsChange: vi.fn(
-        (listener: (event: { height: number; width: number }) => void) => {
-          onDidDimensionsChange = listener;
-          return { dispose: vi.fn() };
-        }
-      ),
-      onDidGroupChange: vi.fn((listener: () => void) => {
-        onDidGroupChange = listener;
-        return { dispose: vi.fn() };
-      }),
-      onDidVisibilityChange: vi.fn(
-        (listener: (event: { isVisible: boolean }) => void) => {
-          onDidVisibilityChange = listener;
-          return { dispose: vi.fn() };
-        }
-      ),
-      setActive: vi.fn(),
-      setTitle: vi.fn(),
-      width: 400,
+  const api = {
+    height: 300,
+    id: "terminal-1",
+    get isActive() {
+      return isActive;
     },
+    get isVisible() {
+      return isVisible;
+    },
+    onDidActiveChange: vi.fn(
+      (listener: (event: { isActive: boolean }) => void) => {
+        onDidActiveChange = listener;
+        return { dispose: vi.fn() };
+      }
+    ),
+    onDidDimensionsChange: vi.fn(
+      (listener: (event: { height: number; width: number }) => void) => {
+        onDidDimensionsChange = listener;
+        return { dispose: vi.fn() };
+      }
+    ),
+    onDidGroupChange: vi.fn((listener: () => void) => {
+      onDidGroupChange = listener;
+      return { dispose: vi.fn() };
+    }),
+    onDidVisibilityChange: vi.fn(
+      (listener: (event: { isVisible: boolean }) => void) => {
+        onDidVisibilityChange = listener;
+        return { dispose: vi.fn() };
+      }
+    ),
+    setActive: vi.fn(function (this: unknown) {
+      if (this !== api) {
+        throw new TypeError("setActive must be called as api.setActive()");
+      }
+    }),
+    setTitle: vi.fn(),
+    width: 400,
+  };
+  const props = {
+    api,
     containerApi: {},
     params: options.params ?? {},
     emitGroupChange() {
@@ -160,8 +185,16 @@ describe("TerminalPanel lifecycle", () => {
   let tabChromePatchListeners: Array<{
     cb: (event: { panelId: string; tab: Partial<PanelTabChrome> }) => void;
   }> = [];
+  let searchStateListeners: Array<{
+    cb: (event: { panelId: string; selected: number; total: number }) => void;
+  }> = [];
 
-  beforeEach(() => {
+  beforeAll(async () => {
+    await initI18n();
+  });
+
+  beforeEach(async () => {
+    await i18next.changeLanguage("en");
     anchorFrame = {
       height: 300,
       width: 400,
@@ -170,6 +203,8 @@ describe("TerminalPanel lifecycle", () => {
     };
     emitWindowLayoutPulse = null;
     tabChromePatchListeners = [];
+    searchStateListeners = [];
+    resetTerminalInputRoutingForTests();
     TestResizeObserver.observeCount = 0;
     TestResizeObserver.instances = [];
     popupContextMenuAtMock.mockClear();
@@ -218,13 +253,24 @@ describe("TerminalPanel lifecycle", () => {
           }
         ),
         terminal: {
+          applyInputRouting: vi.fn(),
           applyPresentation: vi.fn(),
           close: vi.fn(),
           create: vi.fn(async () => ({ ok: true })),
-          focus: vi.fn(),
+          endSearch: vi.fn(async () => ({ ok: true })),
           hide: vi.fn(),
+          navigateSearch: vi.fn(async () => ({ ok: true })),
           onContextMenuRequest: vi.fn(() => vi.fn()),
           onCwdChange: vi.fn(() => vi.fn()),
+          onSearchState: vi.fn((cb) => {
+            const listener = { cb };
+            searchStateListeners.push(listener);
+            return () => {
+              searchStateListeners = searchStateListeners.filter(
+                (entry) => entry !== listener
+              );
+            };
+          }),
           onTabChromePatch: vi.fn((cb) => {
             const listener = { cb };
             tabChromePatchListeners.push(listener);
@@ -236,7 +282,7 @@ describe("TerminalPanel lifecycle", () => {
           }),
           onTitleChange: vi.fn(() => vi.fn()),
           readSession: vi.fn(async () => null),
-          setActivePanelKind: vi.fn(),
+          search: vi.fn(async () => ({ ok: true })),
           setFont: vi.fn(),
           setFrame: vi.fn(),
           show: vi.fn(),
@@ -247,6 +293,7 @@ describe("TerminalPanel lifecycle", () => {
 
   afterEach(() => {
     terminalStatusItemRegistry.clearForTests();
+    resetTerminalInputRoutingForTests();
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -743,7 +790,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
     vi.mocked(window.pier.terminal.show).mockClear();
     requestTerminalPresentationMock.mockClear();
 
@@ -756,10 +802,9 @@ describe("TerminalPanel lifecycle", () => {
       );
     });
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
-  it("refocuses an active native terminal when dockview moves it to another group", async () => {
+  it("resyncs an active native terminal when dockview moves it to another group", async () => {
     const props = createPanelProps({ isActive: true });
     render(<TerminalPanel {...props} />);
 
@@ -768,7 +813,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
     requestTerminalPresentationMock.mockClear();
 
     props.emitGroupChange();
@@ -778,7 +822,6 @@ describe("TerminalPanel lifecycle", () => {
         "dockview-layout"
       );
     });
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("does not focus a terminal that becomes visible while inactive", async () => {
@@ -790,7 +833,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
     vi.mocked(window.pier.terminal.show).mockClear();
     requestTerminalPresentationMock.mockClear();
 
@@ -803,7 +845,6 @@ describe("TerminalPanel lifecycle", () => {
       );
     });
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
   });
 
   it("does not focus a terminal moved between groups while hidden", async () => {
@@ -815,11 +856,158 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.focus).mockClear();
-
     props.emitGroupChange();
+  });
 
-    expect(window.pier.terminal.focus).not.toHaveBeenCalled();
+  it("opens the terminal search bar for its panel and focuses the input", async () => {
+    render(<TerminalPanel {...createPanelProps()} />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-search", {
+          detail: { panelId: "terminal-1" },
+        })
+      );
+    });
+
+    const search = await screen.findByTestId("terminal-search-bar");
+    const input = screen.getByTestId("terminal-search-input");
+
+    expect(search).toHaveAccessibleName("Find in terminal");
+    expect(input).toHaveFocus();
+  });
+
+  it("keeps Web keyboard ownership while focus moves inside the search bar", async () => {
+    setTerminalBaseKeyboardFocusTarget({
+      kind: "terminal",
+      panelId: "terminal-1",
+    });
+    vi.mocked(window.pier.terminal.applyInputRouting).mockClear();
+    render(<TerminalPanel {...createPanelProps()} />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-search", {
+          detail: { panelId: "terminal-1" },
+        })
+      );
+    });
+    await screen.findByTestId("terminal-search-input");
+
+    await waitFor(() => {
+      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+        expect.objectContaining({ keyboardFocusTarget: { kind: "web" } })
+      );
+    });
+
+    screen.getByRole("button", { name: "Previous match" }).focus();
+    expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyboardFocusTarget: { kind: "web" } })
+    );
+
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    try {
+      outside.focus();
+      await waitFor(() => {
+        expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            keyboardFocusTarget: {
+              kind: "terminal",
+              panelId: "terminal-1",
+            },
+          })
+        );
+      });
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it("runs terminal search and keyboard navigation from the search bar", async () => {
+    render(<TerminalPanel {...createPanelProps()} />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-search", {
+          detail: { panelId: "terminal-1" },
+        })
+      );
+    });
+    const input = await screen.findByTestId("terminal-search-input");
+
+    fireEvent.change(input, { target: { value: "needle" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.search).toHaveBeenCalledWith(
+        "terminal-1",
+        "needle"
+      );
+    });
+    expect(window.pier.terminal.navigateSearch).toHaveBeenCalledWith(
+      "terminal-1",
+      "next"
+    );
+    expect(window.pier.terminal.navigateSearch).toHaveBeenCalledWith(
+      "terminal-1",
+      "previous"
+    );
+  });
+
+  it("shows terminal search result state and closes cleanly", async () => {
+    render(<TerminalPanel {...createPanelProps()} />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-search", {
+          detail: { panelId: "terminal-1" },
+        })
+      );
+    });
+    const input = await screen.findByTestId("terminal-search-input");
+    fireEvent.change(input, { target: { value: "needle" } });
+
+    act(() => {
+      for (const listener of searchStateListeners) {
+        listener.cb({ panelId: "terminal-1", selected: 1, total: 3 });
+      }
+    });
+
+    expect(screen.getByTestId("terminal-search-match-count")).toHaveTextContent(
+      "2 / 3"
+    );
+
+    act(() => {
+      for (const listener of searchStateListeners) {
+        listener.cb({ panelId: "terminal-1", selected: -1, total: 0 });
+      }
+    });
+
+    expect(screen.getByTestId("terminal-search-match-count")).toHaveTextContent(
+      "No matches"
+    );
+
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(window.pier.terminal.endSearch).toHaveBeenCalledWith("terminal-1");
+    expect(screen.queryByTestId("terminal-search-bar")).toBeNull();
+  });
+
+  it("closes terminal search from the close button", async () => {
+    render(<TerminalPanel {...createPanelProps()} />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-search", {
+          detail: { panelId: "terminal-1" },
+        })
+      );
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Close search" })
+    );
+
+    expect(window.pier.terminal.endSearch).toHaveBeenCalledWith("terminal-1");
+    expect(screen.queryByTestId("terminal-search-bar")).toBeNull();
   });
 
   it("activates the terminal panel before opening a native context menu", async () => {
@@ -852,6 +1040,5 @@ describe("TerminalPanel lifecycle", () => {
     expect(requestTerminalPresentationMock).toHaveBeenCalledWith(
       "dockview-active-panel"
     );
-    expect(window.pier.terminal.setActivePanelKind).not.toHaveBeenCalled();
   });
 });

@@ -16,7 +16,6 @@ import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import {
-  app,
   BaseWindow,
   BrowserWindow,
   ipcMain,
@@ -28,8 +27,11 @@ import { installDetachedDevToolsHandlers } from "../devtools.ts";
 import { getTerminalAddon } from "../ipc/terminal.ts";
 import {
   blurActivePanelFocus,
+  clearTerminalFocusWindowById,
   restoreActivePanelFocus,
 } from "../ipc/terminal-focus-state.ts";
+import { clearTerminalPresentationWindowById } from "../ipc/terminal-presentation.ts";
+import { isDevRuntime } from "../runtime-mode.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
 import { installMacAppViewGeometry } from "./mac-app-view-geometry.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
@@ -65,7 +67,7 @@ export interface WindowInfo {
   recordId: string;
 }
 
-const isDev = !app.isPackaged;
+const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const RENDERER_READY_SHOW_TIMEOUT_MS = 3000;
 
@@ -183,6 +185,7 @@ class WindowManager {
     const window = isMac
       ? this.createMacWindow(baseOpts, webPreferences)
       : this.createBrowserWindow(baseOpts, webPreferences, devIcon);
+    const electronWindowId = window.id;
     rememberAppWindow(window, {
       mode,
       recordId: opts.recordId ?? id,
@@ -262,8 +265,8 @@ class WindowManager {
     // firstResponder === self 时才 setFocus(true), 而我们在 blur 时已把 swift state
     // 改成 web/null + main 端的 active terminal panel 记忆停留在 map 中, AppKit
     // firstResponder 在跨 app switch 后也未必仍指向之前的 terminalView. 这里在 focus
-    // 事件主动 replay user 最后期望的 active panel — swift 端 focusTerminal 会重新
-    // makeFirstResponder + 强制 becomeFirstResponder, 让 Ghostty surface focus 回到 true.
+    // 事件主动 replay user 最后期望的键盘目标；main 会重新应用输入路由快照，
+    // swift 端再按 keyboardFocusTarget 恢复 first responder。
     window.host.on("focus", () => {
       this.rememberFocusedWindow(id);
       restoreActivePanelFocus(window);
@@ -288,11 +291,9 @@ class WindowManager {
       });
     }
 
-    // Crash 兜底: 渲染进程异常退出 (非主动 reload) 时清理 terminal NSView, 防止
-    // 旧 view 残留在 contentView.subviews 中. 正常 reload 不在这里清 — NSView 跟
-    // NSWindow.contentView 是 native subview 关系, webContents reload 不动它; 新
-    // renderer mount 后会调 terminal.reconcile(activeIds) 主动清差集.
     window.webContents.on("render-process-gone", () => {
+      clearTerminalPresentationWindowById(electronWindowId);
+      clearTerminalFocusWindowById(electronWindowId);
       try {
         getTerminalAddon()?.closeAllTerminals(window.getNativeWindowHandle());
       } catch {
@@ -307,13 +308,6 @@ class WindowManager {
       );
     });
 
-    // Window 即将销毁: 在 handle 失效前抢先 detach native 资源 (closeAll + 卸
-    // EventRouter + 卸 NSEvent monitor). 用 `close` 而非 `closed` 因为 `closed`
-    // 时 getNativeWindowHandle 已不可访问.
-    //
-    // 不 detach 的话:
-    // - NSEvent application-level monitor 永远活在 process 里 (内存泄漏)
-    // - GhosttyBridgeImpl.eventRouters dict 累积已死 window 的 router 引用
     window.host.on("close", (event: Electron.Event) => {
       const context = findWindowContext(window);
       if (
@@ -337,6 +331,8 @@ class WindowManager {
         }
         return;
       }
+      clearTerminalPresentationWindowById(electronWindowId);
+      clearTerminalFocusWindowById(electronWindowId);
       try {
         getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());
       } catch {
@@ -345,6 +341,8 @@ class WindowManager {
     });
 
     window.host.on("closed", () => {
+      clearTerminalPresentationWindowById(electronWindowId);
+      clearTerminalFocusWindowById(electronWindowId);
       cleanupShowWait();
       if (window.appView && !window.webContents.isDestroyed()) {
         window.webContents.close();

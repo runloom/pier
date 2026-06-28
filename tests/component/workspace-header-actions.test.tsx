@@ -19,7 +19,7 @@ import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
-let setOverlayActive: ReturnType<typeof vi.fn>;
+let applyInputRouting: ReturnType<typeof vi.fn>;
 let disposePanelActions: (() => void) | null = null;
 let originalHasPointerCapture:
   | typeof HTMLElement.prototype.hasPointerCapture
@@ -102,7 +102,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await i18next.changeLanguage("en");
   disposePanelActions = registerPanelActions();
-  setOverlayActive = vi.fn();
+  applyInputRouting = vi.fn();
   originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
   originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
   originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
@@ -134,8 +134,9 @@ beforeEach(async () => {
     configurable: true,
     value: {
       terminal: {
-        setOverlayActive,
+        applyInputRouting,
       },
+      onWindowLayoutPulse: vi.fn(() => vi.fn()),
     },
   });
 });
@@ -444,7 +445,14 @@ describe("WorkspaceHeaderActions", () => {
     });
 
     await waitFor(() => {
-      expect(setOverlayActive).toHaveBeenLastCalledWith(true);
+      expect(applyInputRouting).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          keyboardFocusTarget: { kind: "web" },
+          webOverlayRects: expect.arrayContaining([
+            expect.objectContaining({ id: "panel-overflow" }),
+          ]),
+        })
+      );
     });
     const item = await screen.findByRole("option", {
       name: "Terminal 2",
@@ -458,7 +466,11 @@ describe("WorkspaceHeaderActions", () => {
 
     expect(overflowPanel.api.setActive).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      expect(setOverlayActive).toHaveBeenLastCalledWith(false);
+      expect(applyInputRouting).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          webOverlayRects: [],
+        })
+      );
     });
 
     header.remove();

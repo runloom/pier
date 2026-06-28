@@ -6,6 +6,7 @@ import {
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/terminal-lifecycle-debug.ts";
 import { getLastTerminalPresentationSnapshot } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
+import { getLastTerminalInputRoutingSnapshot } from "@/stores/terminal-input-routing.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
@@ -21,6 +22,7 @@ export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
   const activePanelId = api.activePanel?.id ?? null;
   return {
     activePanelId,
+    desiredInputRouting: getLastTerminalInputRoutingSnapshot() ?? undefined,
     desiredPresentation: getLastTerminalPresentationSnapshot() ?? undefined,
     hasMaximizedGroup: api.hasMaximizedGroup(),
     panelCount: api.panels.length,

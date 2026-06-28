@@ -14,13 +14,12 @@ export interface TerminalPresentationPanelState {
 
 export interface TerminalPresentationWorkspaceState {
   activePanelId: string | null;
-  activePanelKind: "terminal" | "web";
+  activeTerminalPanelId: string | null;
   hasMaximizedGroup: boolean;
   panels: TerminalPresentationPanelState[];
 }
 
 export interface BuildTerminalPresentationSnapshotArgs {
-  overlayActive: boolean;
   readFrame(panelId: string): TerminalFrame | null;
   reason: TerminalPresentationReason;
   rendererSequence: number;
@@ -28,7 +27,6 @@ export interface BuildTerminalPresentationSnapshotArgs {
 }
 
 let workspaceState: TerminalPresentationWorkspaceState | null = null;
-let overlayActive = false;
 let rendererSequence = 0;
 let pendingFrameRequest: number | null = null;
 let pendingReason: TerminalPresentationReason = "dockview-layout";
@@ -54,13 +52,11 @@ function isTerminalPanel(panel: TerminalPresentationPanelState): boolean {
 }
 
 export function buildTerminalPresentationSnapshot({
-  overlayActive: snapshotOverlayActive,
   readFrame,
   reason,
   rendererSequence: nextRendererSequence,
   workspace,
 }: BuildTerminalPresentationSnapshotArgs): TerminalPresentationSnapshot {
-  let focusedPanelId: string | null = null;
   const terminals = workspace.panels.filter(isTerminalPanel).map((panel) => {
     const frame = readFrame(panel.id);
     const isActivePanel =
@@ -68,19 +64,10 @@ export function buildTerminalPresentationSnapshot({
     const visible =
       frame !== null &&
       (workspace.hasMaximizedGroup
-        ? workspace.activePanelKind === "terminal" && isActivePanel
+        ? workspace.activeTerminalPanelId === panel.id && isActivePanel
         : panel.dockviewVisible || frame !== null);
-    const focused =
-      visible &&
-      focusedPanelId === null &&
-      !snapshotOverlayActive &&
-      workspace.activePanelKind === "terminal" &&
-      workspace.activePanelId === panel.id;
-    if (focused) {
-      focusedPanelId = panel.id;
-    }
     return {
-      focused,
+      focused: false,
       frame,
       panelId: panel.id,
       visible,
@@ -89,9 +76,8 @@ export function buildTerminalPresentationSnapshot({
 
   return {
     activePanelId: workspace.activePanelId,
-    activePanelKind: workspace.activePanelKind,
+    activeTerminalPanelId: workspace.activeTerminalPanelId,
     hasMaximizedGroup: workspace.hasMaximizedGroup,
-    overlayActive: snapshotOverlayActive,
     reason,
     rendererSequence: nextRendererSequence,
     terminals,
@@ -100,14 +86,6 @@ export function buildTerminalPresentationSnapshot({
 
 export function getLastTerminalPresentationSnapshot(): TerminalPresentationSnapshot | null {
   return lastDesiredSnapshot;
-}
-
-export function setTerminalPresentationOverlayActive(active: boolean): void {
-  if (overlayActive === active) {
-    return;
-  }
-  overlayActive = active;
-  requestTerminalPresentation("overlay");
 }
 
 export function updateTerminalPresentationWorkspace(
@@ -148,7 +126,6 @@ export function applyTerminalPresentationNow(
   }
   rendererSequence += 1;
   const snapshot = buildTerminalPresentationSnapshot({
-    overlayActive,
     readFrame: readRegisteredTerminalAnchorFrame,
     reason,
     rendererSequence,
@@ -164,7 +141,6 @@ export function resetTerminalPresentationReconcilerForTests(): void {
     cancelFrame(pendingFrameRequest);
   }
   workspaceState = null;
-  overlayActive = false;
   rendererSequence = 0;
   pendingFrameRequest = null;
   pendingReason = "dockview-layout";

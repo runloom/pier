@@ -1,4 +1,5 @@
-import { app, session } from "electron";
+import { session } from "electron";
+import { isDevRuntime } from "./runtime-mode.ts";
 
 /**
  * 注入 Content-Security-Policy 头.
@@ -11,7 +12,7 @@ import { app, session } from "electron";
  *   - 严格 'self'
  */
 export function installCsp(): void {
-  const isDev = !app.isPackaged;
+  const isDev = isDevRuntime();
 
   const policy = isDev
     ? [

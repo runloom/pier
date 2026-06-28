@@ -11,11 +11,13 @@
 
     extension AppTerminalView {
         override open func keyDown(with event: NSEvent) {
+            guard hostKeyboardActive else { return }
             inputHandler?.handleKeyDown(with: event)
         }
 
         override open func performKeyEquivalent(with event: NSEvent) -> Bool {
             guard event.type == .keyDown else { return false }
+            guard hostKeyboardActive else { return false }
             guard window?.firstResponder === self else { return false }
             guard let surface else { return false }
 
@@ -84,14 +86,17 @@
         }
 
         override open func keyUp(with event: NSEvent) {
+            guard hostKeyboardActive else { return }
             inputHandler?.handleKeyUp(with: event)
         }
 
         override open func flagsChanged(with event: NSEvent) {
+            guard hostKeyboardActive else { return }
             inputHandler?.handleFlagsChanged(with: event)
         }
 
         override open func doCommand(by selector: Selector) {
+            guard hostKeyboardActive else { return }
             if let lastPerformKeyEvent,
                let current = NSApp.currentEvent,
                lastPerformKeyEvent == current.timestamp
@@ -106,10 +111,12 @@
         }
 
         @IBAction open func copy(_: Any?) {
+            guard hostKeyboardActive else { return }
             _ = copySelectedTextToPasteboard()
         }
 
         @IBAction func paste(_: Any?) {
+            guard hostKeyboardActive else { return }
             if let text = NSPasteboard.general.string(forType: .string) {
                 TerminalDebugLog.log(
                     .input,
@@ -120,6 +127,7 @@
         }
 
         @IBAction override open func selectAll(_: Any?) {
+            guard hostKeyboardActive else { return }
             _ = surface?.performBindingAction("select_all")
         }
 
@@ -129,7 +137,9 @@
         }
 
         override open func mouseDown(with event: NSEvent) {
-            window?.makeFirstResponder(self)
+            if focusesOnMouseDown {
+                window?.makeFirstResponder(self)
+            }
             let (x, y) = mousePoint(from: event)
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             pointerSelectionStartPoint = CGPoint(x: x, y: y)
@@ -155,7 +165,9 @@
         }
 
         override open func rightMouseDown(with event: NSEvent) {
-            window?.makeFirstResponder(self)
+            if focusesOnMouseDown {
+                window?.makeFirstResponder(self)
+            }
             let (x, y) = mousePoint(from: event)
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
@@ -195,7 +207,9 @@
         }
 
         override open func otherMouseDown(with event: NSEvent) {
-            window?.makeFirstResponder(self)
+            if focusesOnMouseDown {
+                window?.makeFirstResponder(self)
+            }
             let (x, y) = mousePoint(from: event)
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)

@@ -5,6 +5,7 @@ export const APP_HANDLED_NATIVE_TERMINAL_COMMANDS = [
   "pier.commandPalette.toggle",
   "pier.panel.toggleMaximized",
   "pier.terminal.openDebugWindow",
+  "pier.terminal.search",
   "pier.settings.open",
   "pier.view.zoomIn",
   "pier.view.zoomOut",

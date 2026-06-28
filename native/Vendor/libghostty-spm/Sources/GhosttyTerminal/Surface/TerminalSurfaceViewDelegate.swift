@@ -61,6 +61,12 @@ public protocol TerminalSurfaceScrollbarDelegate: TerminalSurfaceViewDelegate {
     func terminalDidUpdateScrollbar(_ state: TerminalScrollbarState)
 }
 
+@MainActor
+public protocol TerminalSurfaceSearchDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidUpdateSearchTotal(_ total: Int)
+    func terminalDidUpdateSearchSelected(_ selected: Int)
+}
+
 /// State of an OSC 9;4 / DECSET progress report.
 public enum TerminalProgressState: Sendable {
     case remove

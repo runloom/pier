@@ -64,6 +64,11 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    commandId: "pier.terminal.search",
+    keys: "Mod+KeyF",
+    scope: "global",
+  },
+  {
     commandId: "pier.settings.open",
     keys: "Mod+Comma",
     scope: "global",

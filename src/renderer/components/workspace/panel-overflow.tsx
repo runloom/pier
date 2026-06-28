@@ -9,7 +9,10 @@ import {
   useState,
 } from "react";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
-import { popOverlay, pushOverlay } from "@/stores/terminal-overlay.store.ts";
+import {
+  registerTerminalFullscreenWebOverlay,
+  registerWebFocusScope,
+} from "@/stores/terminal-input-routing.store.ts";
 import { Button } from "../primitives/button.tsx";
 import {
   Select,
@@ -225,8 +228,12 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
     if (!open) {
       return;
     }
-    pushOverlay();
-    return () => popOverlay();
+    const route = registerTerminalFullscreenWebOverlay("panel-overflow");
+    const disposeScope = registerWebFocusScope("panel-overflow", "exclusive");
+    return () => {
+      disposeScope();
+      route.dispose();
+    };
   }, [open]);
 
   const hasOverflowPanels = overflowPanels.length > 0;

@@ -1,5 +1,7 @@
 import { PLUGIN_PERMISSION_LABELS_EN } from "./plugin-permission-labels.ts";
 
+import { terminalLocales } from "./terminal.ts";
+
 export const en = {
   settings: {
     title: "Settings",
@@ -454,6 +456,7 @@ export const en = {
       },
     },
   },
+  terminal: terminalLocales.en,
   contextMenu: {
     action: {
       clearScreen: "Clear Screen",
@@ -467,6 +470,7 @@ export const en = {
       focusRight: "Focus Right",
       focusUp: "Focus Up",
       equalizePanels: "Equalize Panels",
+      find: "Find",
       newTerminal: "New Terminal",
       paste: "Paste",
       selectAll: "Select All",

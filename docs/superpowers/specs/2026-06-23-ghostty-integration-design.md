@@ -1,5 +1,10 @@
 # Ghostty 终端集成设计
 
+> 状态：历史方案，输入路由部分已废弃。
+> 当前实现以 `TerminalInputRoutingSnapshot`、Web overlay rect 和 native
+> per-surface `hostKeyboardActive`/`cursorSuppressed` 为准；不要再按本文的
+> `overlayActive`、`setOverlayActive` 或 `focusTerminal` 路由模型实现新功能。
+
 > 日期: 2026-06-23
 > 状态: 已批准，待实现
 

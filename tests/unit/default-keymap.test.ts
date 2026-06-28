@@ -22,6 +22,7 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Digit9",
   "Mod+Equal",
   "Mod+KeyD",
+  "Mod+KeyF",
   "Mod+KeyN",
   "Mod+KeyT",
   "Mod+KeyW",
@@ -156,6 +157,14 @@ describe("DEFAULT_KEYMAP", () => {
         (binding) => binding.commandId === "pier.terminal.toggleDebugOverlay"
       )
     ).toBe(false);
+  });
+
+  it("contains the terminal search shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.terminal.search",
+      keys: "Mod+KeyF",
+      scope: "global",
+    });
   });
 
   it("does not use the macOS Dock Command+Option+D shortcut family for debug window", () => {

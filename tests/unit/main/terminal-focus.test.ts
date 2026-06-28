@@ -20,22 +20,20 @@ describe("terminal focus restoration", () => {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const fakeAddon = {
+      applyTerminalInputRouting: vi.fn(),
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
-      focusTerminal: vi.fn(),
       hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
-      setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
-      setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
@@ -148,14 +146,13 @@ describe("terminal focus restoration", () => {
   function terminalPresentation(panelId = "panel-1", rendererSequence = 1) {
     return {
       activePanelId: panelId,
-      activePanelKind: "terminal" as const,
+      activeTerminalPanelId: panelId,
       hasMaximizedGroup: false,
-      overlayActive: false,
       reason: "dockview-active-panel" as const,
       rendererSequence,
       terminals: [
         {
-          focused: true,
+          focused: false,
           frame: { height: 200, width: 300, x: 1, y: 2 },
           panelId,
           visible: true,
@@ -177,6 +174,14 @@ describe("terminal focus restoration", () => {
       { sender: ipcWindow.webContents },
       terminalPresentation("panel-1")
     );
+    handlers.get("pier:terminal:apply-input-routing")?.(
+      { sender: ipcWindow.webContents },
+      {
+        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        rendererSequence: 2,
+        webOverlayRects: [],
+      }
+    );
     fakeAddon.applyTerminalPresentation.mockClear();
 
     restoreActivePanelFocus(restoreWindow as never);
@@ -186,7 +191,7 @@ describe("terminal focus restoration", () => {
       Buffer.from("window"),
       expect.objectContaining({
         activePanelId: "7::panel-1",
-        activePanelKind: "terminal",
+        activeTerminalPanelId: "7::panel-1",
         reason: "window-focus",
         terminals: [
           expect.objectContaining({
@@ -213,6 +218,14 @@ describe("terminal focus restoration", () => {
       { sender: ipcWindow.webContents },
       terminalPresentation("panel-1")
     );
+    handlers.get("pier:terminal:apply-input-routing")?.(
+      { sender: ipcWindow.webContents },
+      {
+        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        rendererSequence: 2,
+        webOverlayRects: [],
+      }
+    );
     fakeAddon.applyTerminalPresentation.mockClear();
 
     restoreActivePanelFocus(restoreWindow as never);
@@ -222,7 +235,7 @@ describe("terminal focus restoration", () => {
       Buffer.from("window"),
       expect.objectContaining({
         activePanelId: "7::panel-1",
-        activePanelKind: "terminal",
+        activeTerminalPanelId: "7::panel-1",
         reason: "window-focus",
       })
     );
@@ -239,12 +252,18 @@ describe("terminal focus restoration", () => {
       terminalPresentation("panel-1")
     );
 
-    expect(fakeAddon.focusTerminal).not.toHaveBeenCalled();
+    expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      expect.objectContaining({
+        keyboardFocusTarget: { kind: "web" },
+        windowFocused: false,
+      })
+    );
     expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        activePanelId: null,
-        activePanelKind: "web",
+        activePanelId: "7::panel-1",
+        activeTerminalPanelId: "7::panel-1",
         terminals: [
           expect.objectContaining({
             focused: false,
@@ -264,9 +283,11 @@ describe("terminal focus restoration", () => {
     const { fakeAddon, ipcWindow } = await setupTerminalFocusHarness();
     const focusForward =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
+    fakeAddon.applyTerminalInputRouting.mockClear();
 
     focusForward?.(ipcWindow.id, "7::panel-2");
 
+    expect(fakeAddon.applyTerminalInputRouting).not.toHaveBeenCalled();
     expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
       { panelId: "panel-2" }
@@ -398,8 +419,8 @@ describe("terminal focus restoration", () => {
     expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        activePanelId: null,
-        activePanelKind: "web",
+        activePanelId: "7::panel-1",
+        activeTerminalPanelId: "7::panel-1",
         reason: "window-blur",
         terminals: [
           expect.objectContaining({
@@ -434,10 +455,13 @@ describe("terminal focus restoration", () => {
       },
     };
 
-    handlers.get("pier:terminal:set-active-panel-kind")?.(
+    handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: ipcWindow.webContents },
-      "terminal",
-      "panel-1"
+      {
+        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        rendererSequence: 1,
+        webOverlayRects: [],
+      }
     );
     restoreActivePanelFocus(minimizedWindow as never);
 

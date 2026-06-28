@@ -6,6 +6,7 @@ import type {
   TerminalDebugRoute,
   TerminalDebugSnapshot,
   TerminalFrame,
+  TerminalKeyboardFocusTarget,
 } from "@shared/contracts/terminal.ts";
 import { buildTerminalDebugIssues } from "@shared/terminal-debug-diagnostics.ts";
 import type { IpcMain, WebContents } from "electron";
@@ -13,7 +14,10 @@ import type { AppWindow } from "../windows/app-window.ts";
 import { findAppWindowByElectronId } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
-import { readTerminalPresentationDebug } from "./terminal-presentation.ts";
+import {
+  readTerminalInputRoutingDebug,
+  readTerminalPresentationDebug,
+} from "./terminal-presentation.ts";
 import { stableWindowIdFor } from "./terminal-window-scope.ts";
 
 const MAX_EVENTS = 120;
@@ -47,11 +51,11 @@ function emptyNativeSnapshot(error?: string): TerminalDebugNativeSnapshot {
     ...(error ? { error } : {}),
     surfaces: [],
     window: {
-      activePanelKind: "web",
       activeTerminalPanelId: null,
-      inTerminalMode: false,
+      keyboardFocusTarget: { kind: "web" },
       nativeActiveTerminalPanelId: null,
-      overlayActive: false,
+      terminalTargetCount: 0,
+      webOverlayRectCount: 0,
     },
   };
 }
@@ -72,6 +76,17 @@ function booleanValue(value: unknown): boolean {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+function keyboardFocusTargetValue(value: unknown): TerminalKeyboardFocusTarget {
+  const record = objectRecord(value);
+  if (record?.kind === "terminal") {
+    const nativePanelId = stringValue(record.panelId);
+    if (nativePanelId) {
+      return { kind: "terminal", panelId: unscopePanelId(nativePanelId) };
+    }
+  }
+  return { kind: "web" };
 }
 
 function frameValue(value: unknown): TerminalFrame {
@@ -101,8 +116,6 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
   const nativeActiveTerminalPanelId = stringValue(
     rawWindow?.activeTerminalPanelId
   );
-  const activePanelKind =
-    rawWindow?.activePanelKind === "terminal" ? "terminal" : "web";
   const rawSurfaces = Array.isArray(raw.surfaces) ? raw.surfaces : [];
   return {
     surfaces: rawSurfaces.flatMap((entry) => {
@@ -115,11 +128,14 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
         {
           alpha: numberValue(surface.alpha, 1),
           browserWindowId: numberValue(surface.browserWindowId),
+          cursorSuppressed: booleanValue(surface.cursorSuppressed),
           frame: frameValue(surface.frame),
           hasRouterTarget: booleanValue(surface.hasRouterTarget),
+          hostKeyboardActive: booleanValue(surface.hostKeyboardActive),
           isFirstResponder: booleanValue(surface.isFirstResponder),
           isHidden: booleanValue(surface.isHidden),
           isOffscreen: booleanValue(surface.isOffscreen),
+          isSurfaceFocused: booleanValue(surface.isSurfaceFocused),
           nativePanelId,
           panelId: unscopePanelId(nativePanelId),
           targetRect: optionalFrameValue(surface.targetRect),
@@ -128,11 +144,20 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
       ];
     }),
     window: {
-      activePanelKind,
       activeTerminalPanelId: nativeActiveTerminalPanelId
         ? unscopePanelId(nativeActiveTerminalPanelId)
         : null,
-      inTerminalMode: booleanValue(rawWindow?.inTerminalMode),
+      inputRoutingStaleDiscardCount:
+        typeof rawWindow?.inputRoutingStaleDiscardCount === "number"
+          ? rawWindow.inputRoutingStaleDiscardCount
+          : undefined,
+      keyboardFocusTarget: keyboardFocusTargetValue(
+        rawWindow?.keyboardFocusTarget
+      ),
+      lastAppliedInputRoutingSequence:
+        typeof rawWindow?.lastAppliedInputRoutingSequence === "number"
+          ? rawWindow.lastAppliedInputRoutingSequence
+          : undefined,
       lastAppliedNativeApplySequence:
         typeof rawWindow?.lastAppliedNativeApplySequence === "number"
           ? rawWindow.lastAppliedNativeApplySequence
@@ -146,11 +171,12 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           ? rawWindow.lastPresentationReason
           : undefined,
       nativeActiveTerminalPanelId,
-      overlayActive: booleanValue(rawWindow?.overlayActive),
       staleDiscardCount:
         typeof rawWindow?.staleDiscardCount === "number"
           ? rawWindow.staleDiscardCount
           : undefined,
+      terminalTargetCount: numberValue(rawWindow?.terminalTargetCount),
+      webOverlayRectCount: numberValue(rawWindow?.webOverlayRectCount),
     },
   };
 }
@@ -237,14 +263,21 @@ export function readTerminalDebugSnapshot(
   }
 
   const presentation = readTerminalPresentationDebug(win);
+  const inputRouting = readTerminalInputRoutingDebug(win);
   return {
     events: events.filter((event) => event.browserWindowId === win.id),
     ...(renderer
       ? {
-          issues: buildTerminalDebugIssues(renderer, native, presentation),
+          issues: buildTerminalDebugIssues(
+            renderer,
+            native,
+            presentation,
+            inputRouting
+          ),
           renderer,
         }
       : {}),
+    inputRouting,
     native,
     presentation,
   };

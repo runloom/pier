@@ -36,7 +36,7 @@ describe("CommandPalette quick pick rows", () => {
       configurable: true,
       value: {
         terminal: {
-          setOverlayActive: vi.fn(),
+          applyInputRouting: vi.fn(),
         },
       },
     });

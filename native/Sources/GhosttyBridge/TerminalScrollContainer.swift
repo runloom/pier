@@ -15,9 +15,6 @@ private enum TerminalMouseButton {
 @MainActor
 final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     static var forwardFocusRequestCallback: ((Int, String) -> Void)?
-    static var localFocusCallback: (String) -> Void = { panelId in
-        GhosttyBridgeImpl.shared.focus(panelId: panelId)
-    }
 
     let terminalView: TerminalView
     private let terminalScrollView: AppTerminalScrollView
@@ -101,7 +98,6 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     private func activateFocusIntent() {
-        Self.localFocusCallback(panelId)
         Self.forwardFocusRequestCallback?(browserWindowId, panelId)
     }
 

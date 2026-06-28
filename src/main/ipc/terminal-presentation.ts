@@ -1,4 +1,9 @@
 import type {
+  TerminalDebugInputRoutingSnapshot,
+  TerminalDebugPresentationSnapshot,
+  TerminalInputRoutingSnapshot,
+  TerminalKeyboardFocusTarget,
+  TerminalNativeInputRoutingSnapshot,
   TerminalNativePresentationSnapshot,
   TerminalPresentationReason,
   TerminalPresentationSnapshot,
@@ -8,9 +13,10 @@ import type { NativeAddon } from "./terminal-native-addon.ts";
 import { scopePanelId } from "./terminal-panel-id.ts";
 
 interface TerminalPresentationWindowState {
-  desired?: TerminalPresentationSnapshot | undefined;
-  effective?: TerminalNativePresentationSnapshot | undefined;
-  overlayActive: boolean;
+  desiredInputRouting?: TerminalInputRoutingSnapshot | undefined;
+  desiredPresentation?: TerminalPresentationSnapshot | undefined;
+  effectiveInputRouting?: TerminalNativeInputRoutingSnapshot | undefined;
+  effectivePresentation?: TerminalNativePresentationSnapshot | undefined;
 }
 
 const presentationByWindowId = new Map<
@@ -24,50 +30,62 @@ function stateFor(win: AppWindow): TerminalPresentationWindowState {
   if (existing) {
     return existing;
   }
-  const created: TerminalPresentationWindowState = {
-    overlayActive: false,
-  };
+  const created: TerminalPresentationWindowState = {};
   presentationByWindowId.set(win.id, created);
   return created;
 }
 
-function emptyDesired(
+function emptyDesiredPresentation(
   state: TerminalPresentationWindowState,
   reason: TerminalPresentationReason
 ): TerminalPresentationSnapshot {
   return {
     activePanelId: null,
-    activePanelKind: "web",
+    activeTerminalPanelId: null,
     hasMaximizedGroup: false,
-    overlayActive: state.overlayActive,
     reason,
-    rendererSequence: state.desired?.rendererSequence ?? 0,
-    terminals: state.desired?.terminals ?? [],
+    rendererSequence: state.desiredPresentation?.rendererSequence ?? 0,
+    terminals: state.desiredPresentation?.terminals ?? [],
   };
 }
 
-function effectiveFromDesired(
+function desiredInputRouting(
+  state: TerminalPresentationWindowState
+): TerminalInputRoutingSnapshot {
+  return (
+    state.desiredInputRouting ?? {
+      keyboardFocusTarget: { kind: "web" },
+      rendererSequence: 0,
+      webOverlayRects: [],
+    }
+  );
+}
+
+function terminalFocusPanelId(
+  inputRouting: TerminalInputRoutingSnapshot,
+  windowFocused: boolean
+): string | null {
+  if (!windowFocused || inputRouting.keyboardFocusTarget.kind !== "terminal") {
+    return null;
+  }
+  return inputRouting.keyboardFocusTarget.panelId;
+}
+
+function effectivePresentationFromDesired(
   win: AppWindow,
-  state: TerminalPresentationWindowState,
   desired: TerminalPresentationSnapshot,
+  inputRouting: TerminalInputRoutingSnapshot,
   reason: TerminalPresentationReason,
   forcedWindowFocused?: boolean | undefined
 ): TerminalNativePresentationSnapshot {
   const windowFocused =
     forcedWindowFocused ?? (!win.isDestroyed() && win.isFocused());
-  const overlayActive = state.overlayActive || desired.overlayActive;
-  const focusCandidate =
-    desired.activePanelKind === "terminal" && windowFocused && !overlayActive
-      ? desired.activePanelId
-      : null;
+  const focusCandidate = terminalFocusPanelId(inputRouting, windowFocused);
   let focusedPanelId: string | null = null;
   const terminals = desired.terminals.map((terminal) => {
     const visible = terminal.visible && terminal.frame !== null;
     const focused =
-      focusedPanelId === null &&
-      visible &&
-      terminal.focused &&
-      focusCandidate === terminal.panelId;
+      focusedPanelId === null && visible && focusCandidate === terminal.panelId;
     if (focused) {
       focusedPanelId = terminal.panelId;
     }
@@ -80,16 +98,34 @@ function effectiveFromDesired(
 
   return {
     ...desired,
-    activePanelId:
-      focusedPanelId ??
-      (desired.activePanelKind === "web" ? desired.activePanelId : null),
-    activePanelKind: focusedPanelId ? "terminal" : "web",
     nativeApplySequence: nextNativeApplySequence++,
-    overlayActive,
     reason,
     terminals,
     windowFocused,
   };
+}
+
+function effectiveInputRoutingFromDesired(
+  win: AppWindow,
+  desired: TerminalInputRoutingSnapshot,
+  forcedWindowFocused?: boolean | undefined
+): TerminalNativeInputRoutingSnapshot {
+  const windowFocused =
+    forcedWindowFocused ?? (!win.isDestroyed() && win.isFocused());
+  return {
+    ...desired,
+    nativeApplySequence: nextNativeApplySequence++,
+    windowFocused,
+  };
+}
+
+function scopeKeyboardFocusTarget(
+  win: AppWindow,
+  target: TerminalKeyboardFocusTarget
+): TerminalKeyboardFocusTarget {
+  return target.kind === "terminal"
+    ? { kind: "terminal", panelId: scopePanelId(win, target.panelId) }
+    : target;
 }
 
 function scopeNativePresentation(
@@ -99,13 +135,73 @@ function scopeNativePresentation(
   return {
     ...effective,
     activePanelId:
-      effective.activePanelKind === "terminal" && effective.activePanelId
+      effective.activePanelId === effective.activeTerminalPanelId &&
+      effective.activePanelId
         ? scopePanelId(win, effective.activePanelId)
-        : null,
+        : effective.activePanelId,
+    activeTerminalPanelId: effective.activeTerminalPanelId
+      ? scopePanelId(win, effective.activeTerminalPanelId)
+      : null,
     terminals: effective.terminals.map((terminal) => ({
       ...terminal,
       panelId: scopePanelId(win, terminal.panelId),
     })),
+  };
+}
+
+function scopeNativeInputRouting(
+  win: AppWindow,
+  effective: TerminalNativeInputRoutingSnapshot
+): TerminalNativeInputRoutingSnapshot {
+  return {
+    ...effective,
+    keyboardFocusTarget: scopeKeyboardFocusTarget(
+      win,
+      effective.keyboardFocusTarget
+    ),
+  };
+}
+
+export function applyLatestTerminalState(
+  win: AppWindow,
+  addon: NativeAddon | null,
+  reason: TerminalPresentationReason,
+  opts: { windowFocused?: boolean | undefined } = {}
+): {
+  inputRouting: TerminalNativeInputRoutingSnapshot;
+  presentation: TerminalNativePresentationSnapshot;
+} {
+  const state = stateFor(win);
+  const presentation = state.desiredPresentation
+    ? { ...state.desiredPresentation, reason }
+    : emptyDesiredPresentation(state, reason);
+  const inputRouting = desiredInputRouting(state);
+  const effectivePresentation = effectivePresentationFromDesired(
+    win,
+    presentation,
+    inputRouting,
+    reason,
+    opts.windowFocused
+  );
+  const effectiveInputRouting = effectiveInputRoutingFromDesired(
+    win,
+    inputRouting,
+    opts.windowFocused
+  );
+  state.effectivePresentation = effectivePresentation;
+  state.effectiveInputRouting = effectiveInputRouting;
+  const handle = win.getNativeWindowHandle();
+  addon?.applyTerminalPresentation(
+    handle,
+    scopeNativePresentation(win, effectivePresentation)
+  );
+  addon?.applyTerminalInputRouting(
+    handle,
+    scopeNativeInputRouting(win, effectiveInputRouting)
+  );
+  return {
+    inputRouting: effectiveInputRouting,
+    presentation: effectivePresentation,
   };
 }
 
@@ -115,23 +211,7 @@ export function applyLatestTerminalPresentation(
   reason: TerminalPresentationReason,
   opts: { windowFocused?: boolean | undefined } = {}
 ): TerminalNativePresentationSnapshot {
-  const state = stateFor(win);
-  const desired = state.desired
-    ? { ...state.desired, overlayActive: state.overlayActive, reason }
-    : emptyDesired(state, reason);
-  const effective = effectiveFromDesired(
-    win,
-    state,
-    desired,
-    reason,
-    opts.windowFocused
-  );
-  state.effective = effective;
-  addon?.applyTerminalPresentation(
-    win.getNativeWindowHandle(),
-    scopeNativePresentation(win, effective)
-  );
-  return effective;
+  return applyLatestTerminalState(win, addon, reason, opts).presentation;
 }
 
 export function applyRendererTerminalPresentation(
@@ -140,32 +220,45 @@ export function applyRendererTerminalPresentation(
   snapshot: TerminalPresentationSnapshot
 ): TerminalNativePresentationSnapshot {
   const state = stateFor(win);
-  state.desired = snapshot;
-  state.overlayActive = snapshot.overlayActive;
-  return applyLatestTerminalPresentation(win, addon, snapshot.reason);
+  state.desiredPresentation = snapshot;
+  return applyLatestTerminalState(win, addon, snapshot.reason).presentation;
 }
 
-export function setTerminalOverlayActive(
+export function applyRendererTerminalInputRouting(
   win: AppWindow,
   addon: NativeAddon | null,
-  active: boolean
-): TerminalNativePresentationSnapshot {
+  snapshot: TerminalInputRoutingSnapshot
+): TerminalNativeInputRoutingSnapshot {
   const state = stateFor(win);
-  state.overlayActive = active;
-  return applyLatestTerminalPresentation(win, addon, "overlay");
+  state.desiredInputRouting = snapshot;
+  return applyLatestTerminalState(win, addon, "dockview-active-panel")
+    .inputRouting;
 }
 
-export function readTerminalPresentationDebug(win: AppWindow): {
-  desired?: TerminalPresentationSnapshot | undefined;
-  effective?: TerminalNativePresentationSnapshot | undefined;
-} {
+export function readTerminalPresentationDebug(
+  win: AppWindow
+): TerminalDebugPresentationSnapshot {
   const state = presentationByWindowId.get(win.id);
   return {
-    desired: state?.desired,
-    effective: state?.effective,
+    desired: state?.desiredPresentation,
+    effective: state?.effectivePresentation,
+  };
+}
+
+export function readTerminalInputRoutingDebug(
+  win: AppWindow
+): TerminalDebugInputRoutingSnapshot {
+  const state = presentationByWindowId.get(win.id);
+  return {
+    desired: state?.desiredInputRouting,
+    effective: state?.effectiveInputRouting,
   };
 }
 
 export function clearTerminalPresentationWindow(win: AppWindow): void {
-  presentationByWindowId.delete(win.id);
+  clearTerminalPresentationWindowById(win.id);
+}
+
+export function clearTerminalPresentationWindowById(windowId: number): void {
+  presentationByWindowId.delete(windowId);
 }

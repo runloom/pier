@@ -9,11 +9,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * - hide IPC main 端总是 forward 给 swift, swift 内部直接执行 (移 offscreen +
  *   remove EventRouter targets). 切 tab 场景旧 panel 必须真 hide 让出 z-order,
  *   drag 场景靠后续 setFrame 把 NSView 移回新位置自动恢复 visible.
- * - set-active-panel-kind 切到 web 时, main 主动 webContents.focus() — 这是
- *   Electron 的标准路径, swift applyFirstResponder web 分支已 no-op, 由 main 负责.
- * - 跨 BrowserWindow 失焦的 set-active-panel-kind("terminal", id), main 端走
- *   blurActivePanelFocus 而不是 setActivePanelKind, 防止 swift 抢一个不在前台
- *   窗口的 firstResponder.
+ * - input routing 切到 Web 时, main 主动 webContents.focus() — 这是
+ *   Electron 的标准路径, swift Web keyboard target 分支已 no-op, 由 main 负责.
+ * - 跨 BrowserWindow 失焦的 terminal keyboard target, main 端走 blurActivePanelFocus
+ *   防止后台 terminal NSView 抢前台窗口的 firstResponder.
  */
 describe("Swift terminal state consistency via main IPC paths", () => {
   beforeEach(() => {
@@ -26,23 +25,22 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const fakeAddon = {
+      applyTerminalInputRouting: vi.fn(),
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
-      focusTerminal: vi.fn(),
       hideTerminal: vi.fn(),
       performTerminalBindingAction: vi.fn(() => true),
       reconcileTerminals: vi.fn(),
-      setActivePanelKind: vi.fn(),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
-      setOverlayActive: vi.fn(),
       setPwdForwardCallback: vi.fn(),
+      setSearchForwardCallback: vi.fn(),
       setTerminalConfig: vi.fn(),
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
@@ -122,14 +120,13 @@ describe("Swift terminal state consistency via main IPC paths", () => {
   function terminalPresentation(panelId = "panel-1", rendererSequence = 1) {
     return {
       activePanelId: panelId,
-      activePanelKind: "terminal" as const,
+      activeTerminalPanelId: panelId,
       hasMaximizedGroup: false,
-      overlayActive: false,
       reason: "dockview-active-panel" as const,
       rendererSequence,
       terminals: [
         {
-          focused: true,
+          focused: false,
           frame: { height: 400, width: 300, x: 0, y: 0 },
           panelId,
           visible: true,
@@ -145,11 +142,6 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     // 现在 swift hide 总是执行, drag 场景靠 setFrame 把 NSView 移回新位置恢复 visible.
     const { fakeAddon, handlers, win } = await setupHarness();
 
-    handlers.get("pier:terminal:set-active-panel-kind")?.(
-      { sender: win.webContents },
-      "terminal",
-      "panel-1"
-    );
     fakeAddon.hideTerminal.mockClear();
 
     handlers.get("pier:terminal:hide")?.(
@@ -160,26 +152,30 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     expect(fakeAddon.hideTerminal).toHaveBeenCalledWith("7::panel-1");
   });
 
-  it("delegates web focus to webContents (not swift firstResponder)", async () => {
+  it("delegates Web keyboard focus to webContents", async () => {
     // swift applyFirstResponder web 分支已 no-op, 由 main 调 webContents.focus() 让
     // Chromium 的 RenderWidgetHostViewCocoa 拿 firstResponder. Electron 42 用 Chromium
     // 不是 WebKit, 没有真 WKWebView, 旧版本 swift 端 makeFirstResponder(WKWebView) 找
     // 错 type 跑空, 改 webContents.focus() 跨平台一致.
     const { handlers, win } = await setupHarness();
 
-    handlers.get("pier:terminal:set-active-panel-kind")?.(
+    handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
-      "web",
-      "welcome-1"
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: 1,
+        webOverlayRects: [],
+      }
     );
 
     expect(win.webContents.focus).toHaveBeenCalled();
   });
 
-  it("does not steal focus for a background window when asked to set terminal active", async () => {
+  it("does not derive terminal keyboard focus from presentation in a background window", async () => {
     // 多 BrowserWindow 场景: window A 在前台 active panel 改了, window B 也收到 IPC
-    // 但 B.isFocused()=false. main 必须走 blurActivePanelFocus 把 B 的 swift state 设
-    // web/null, 防止 B 的 terminal NSView 在后台抢 NSApp 的 firstResponder 干扰前台.
+    // 但 B.isFocused()=false. presentation 只描述 layout/visibility; keyboard target
+    // 必须来自 renderer input routing 快照. 缺快照时兜底 Web, 防止后台 terminal
+    // NSView 抢 NSApp 的 firstResponder 干扰前台.
     const { fakeAddon, handlers, win } = await setupHarness({
       winFocused: false,
     });
@@ -192,8 +188,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        activePanelId: null,
-        activePanelKind: "web",
+        activePanelId: "7::panel-1",
+        activeTerminalPanelId: "7::panel-1",
         terminals: [
           expect.objectContaining({
             focused: false,
@@ -204,7 +200,13 @@ describe("Swift terminal state consistency via main IPC paths", () => {
         windowFocused: false,
       })
     );
-    expect(fakeAddon.focusTerminal).not.toHaveBeenCalled();
+    expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      expect.objectContaining({
+        keyboardFocusTarget: { kind: "web" },
+        windowFocused: false,
+      })
+    );
   });
 
   it("close IPC removes both swift terminal NSView and persisted cwd session", async () => {
@@ -346,7 +348,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     );
   });
 
-  it("activates web focus only when terminal overlay is enabled", async () => {
+  it("applies Web and terminal keyboard targets through input routing", async () => {
     const { fakeAddon, handlers, win } = await setupHarness();
 
     handlers.get("pier:terminal:apply-presentation")?.(
@@ -354,46 +356,143 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       terminalPresentation("panel-1")
     );
     vi.mocked(win.webContents.focus).mockClear();
-    fakeAddon.applyTerminalPresentation.mockClear();
+    fakeAddon.applyTerminalInputRouting.mockClear();
 
-    handlers.get("pier:terminal:set-overlay")?.(
+    handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
-      true
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: 2,
+        webOverlayRects: [
+          { frame: { height: 400, width: 300, x: 0, y: 0 }, id: "dialog" },
+        ],
+      }
     );
 
-    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        activePanelKind: "web",
-        overlayActive: true,
-        terminals: [
-          expect.objectContaining({
-            focused: false,
-            panelId: "7::panel-1",
-            visible: true,
-          }),
+        keyboardFocusTarget: { kind: "web" },
+        webOverlayRects: [
+          { frame: { height: 400, width: 300, x: 0, y: 0 }, id: "dialog" },
         ],
       })
+    );
+    expect(win.webContents.focus).not.toHaveBeenCalled();
+
+    vi.mocked(win.webContents.focus).mockClear();
+    fakeAddon.applyTerminalInputRouting.mockClear();
+
+    handlers.get("pier:terminal:apply-input-routing")?.(
+      { sender: win.webContents },
+      {
+        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        rendererSequence: 3,
+        webOverlayRects: [],
+      }
+    );
+
+    expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      expect.objectContaining({
+        keyboardFocusTarget: { kind: "terminal", panelId: "7::panel-1" },
+        webOverlayRects: [],
+      })
+    );
+    expect(win.webContents.focus).not.toHaveBeenCalled();
+  });
+
+  it("does not refocus WebContents when only Web overlay rects change", async () => {
+    const { handlers, win } = await setupHarness();
+
+    handlers.get("pier:terminal:apply-input-routing")?.(
+      { sender: win.webContents },
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: 1,
+        webOverlayRects: [
+          { frame: { height: 24, width: 200, x: 10, y: 10 }, id: "search" },
+        ],
+      }
     );
     expect(win.webContents.focus).toHaveBeenCalledOnce();
 
     vi.mocked(win.webContents.focus).mockClear();
-    fakeAddon.applyTerminalPresentation.mockClear();
-
-    handlers.get("pier:terminal:set-overlay")?.(
+    handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
-      false
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: 2,
+        webOverlayRects: [
+          { frame: { height: 24, width: 240, x: 10, y: 10 }, id: "search" },
+        ],
+      }
     );
 
-    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
-      Buffer.from("window"),
-      expect.objectContaining({
-        activePanelId: "7::panel-1",
-        activePanelKind: "terminal",
-        overlayActive: false,
-      })
-    );
     expect(win.webContents.focus).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid input routing snapshots before native or Web focus side effects", async () => {
+    const { fakeAddon, handlers, win } = await setupHarness();
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const invalidSnapshots: unknown[] = [
+      {},
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: -1,
+        webOverlayRects: [],
+      },
+      {
+        keyboardFocusTarget: { kind: "terminal" },
+        rendererSequence: 1,
+        webOverlayRects: [],
+      },
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: 1,
+        webOverlayRects: [
+          { frame: { height: 1, width: 1, x: 0, y: 0 }, id: "dup" },
+          { frame: { height: 1, width: 1, x: 2, y: 2 }, id: "dup" },
+        ],
+      },
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: 1,
+        webOverlayRects: [
+          {
+            frame: { height: 1, width: 1, x: Number.POSITIVE_INFINITY, y: 0 },
+            id: "bad-frame",
+          },
+        ],
+      },
+      {
+        keyboardFocusTarget: { kind: "web" },
+        rendererSequence: 1,
+        webOverlayRects: Array.from({ length: 65 }, (_, index) => ({
+          frame: { height: 1, width: 1, x: index, y: index },
+          id: `rect-${index}`,
+        })),
+      },
+    ];
+
+    try {
+      for (const snapshot of invalidSnapshots) {
+        fakeAddon.applyTerminalInputRouting.mockClear();
+        vi.mocked(win.webContents.focus).mockClear();
+
+        handlers.get("pier:terminal:apply-input-routing")?.(
+          { sender: win.webContents },
+          snapshot
+        );
+
+        expect(fakeAddon.applyTerminalInputRouting).not.toHaveBeenCalled();
+        expect(win.webContents.focus).not.toHaveBeenCalled();
+      }
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("routes terminal theme application through the sender window", async () => {
@@ -482,5 +581,98 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     );
 
     expect(fakeAddon.setTerminalConfig).not.toHaveBeenCalled();
+  });
+
+  it("maps terminal search IPC to scoped Ghostty binding actions", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    await expect(
+      invokeHandlers.get("pier:terminal:search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "needle"
+      )
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      invokeHandlers.get("pier:terminal:navigate-search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "next"
+      )
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      invokeHandlers.get("pier:terminal:navigate-search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "previous"
+      )
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      invokeHandlers.get("pier:terminal:end-search")?.(
+        { sender: win.webContents },
+        "panel-1"
+      )
+    ).resolves.toEqual({ ok: true });
+
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "search:needle"
+    );
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "navigate_search:next"
+    );
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "navigate_search:previous"
+    );
+    expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
+      "7::panel-1",
+      "end_search"
+    );
+  });
+
+  it("rejects invalid terminal search IPC input", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+    const oversizedQuery = "x".repeat(513);
+
+    await expect(
+      invokeHandlers.get("pier:terminal:search")?.(
+        { sender: win.webContents },
+        "",
+        "needle"
+      )
+    ).resolves.toEqual({ ok: false, error: "invalid panel id" });
+    await expect(
+      invokeHandlers.get("pier:terminal:search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        oversizedQuery
+      )
+    ).resolves.toEqual({ ok: false, error: "invalid search query" });
+    await expect(
+      invokeHandlers.get("pier:terminal:navigate-search")?.(
+        { sender: win.webContents },
+        "panel-1",
+        "sideways"
+      )
+    ).resolves.toEqual({ ok: false, error: "invalid search direction" });
+
+    expect(fakeAddon.performTerminalBindingAction).not.toHaveBeenCalled();
+  });
+
+  it("forwards native terminal search state to the owning renderer window", async () => {
+    const { fakeAddon, win } = await setupHarness();
+    const callback = fakeAddon.setSearchForwardCallback.mock.calls[0]?.[0];
+    if (!callback) {
+      throw new Error("missing search forward callback");
+    }
+
+    callback(7, "7::panel-1", 3, 1);
+
+    expect(win.webContents.send).toHaveBeenCalledWith(
+      "pier:terminal:search-state",
+      { panelId: "panel-1", selected: 1, total: 3 }
+    );
   });
 });

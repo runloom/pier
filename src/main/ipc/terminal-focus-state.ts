@@ -1,16 +1,11 @@
-import type { TerminalNativePresentationSnapshot } from "@shared/contracts/terminal.ts";
+import type { TerminalNativeInputRoutingSnapshot } from "@shared/contracts/terminal.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { recordWebContentsRoute } from "./terminal-debug.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
-import { applyLatestTerminalPresentation } from "./terminal-presentation.ts";
+import { applyLatestTerminalState } from "./terminal-presentation.ts";
 
-interface ActivePanelFocusState {
-  kind: "terminal" | "web";
-  panelId: string | null;
-}
-
-const activePanelFocusByWindowId = new Map<number, ActivePanelFocusState>();
 let addonProvider: () => NativeAddon | null = () => null;
+const lastKeyboardFocusTargetByWindowId = new Map<number, string>();
 
 export function setTerminalFocusAddonProvider(
   provider: () => NativeAddon | null
@@ -18,24 +13,26 @@ export function setTerminalFocusAddonProvider(
   addonProvider = provider;
 }
 
-export function rememberActivePanelFocus(
+function focusWebContentsForEffectiveInputRouting(
   win: AppWindow,
-  kind: "terminal" | "web",
-  panelId: string | null
-): void {
-  activePanelFocusByWindowId.set(win.id, { kind, panelId });
-}
-
-function focusWebContentsForEffectivePresentation(
-  win: AppWindow,
-  effective: TerminalNativePresentationSnapshot,
+  effective: TerminalNativeInputRoutingSnapshot,
   reason: string
 ): void {
+  const targetKey =
+    effective.keyboardFocusTarget.kind === "terminal"
+      ? `terminal:${effective.keyboardFocusTarget.panelId}`
+      : "web";
+  const previousTargetKey = lastKeyboardFocusTargetByWindowId.get(win.id);
+  lastKeyboardFocusTargetByWindowId.set(win.id, targetKey);
+
   if (
-    effective.activePanelKind !== "web" ||
+    effective.keyboardFocusTarget.kind !== "web" ||
     !effective.windowFocused ||
     win.webContents.isDestroyed()
   ) {
+    return;
+  }
+  if (previousTargetKey === targetKey && reason !== "terminal-window-focus") {
     return;
   }
   recordWebContentsRoute(win, "focus-webcontents", { reason });
@@ -52,15 +49,15 @@ export function restoreActivePanelFocus(win: AppWindow): void {
   win.focus();
 
   try {
-    const effective = applyLatestTerminalPresentation(
+    const { inputRouting } = applyLatestTerminalState(
       win,
       addonProvider(),
       "window-focus",
       { windowFocused: true }
     );
-    focusWebContentsForEffectivePresentation(
+    focusWebContentsForEffectiveInputRouting(
       win,
-      effective,
+      inputRouting,
       "terminal-window-focus"
     );
   } catch (err) {
@@ -73,7 +70,7 @@ export function blurActivePanelFocus(win: AppWindow): void {
     return;
   }
   try {
-    applyLatestTerminalPresentation(win, addonProvider(), "window-blur", {
+    applyLatestTerminalState(win, addonProvider(), "window-blur", {
       windowFocused: false,
     });
   } catch (err) {
@@ -81,4 +78,12 @@ export function blurActivePanelFocus(win: AppWindow): void {
   }
 }
 
-export { focusWebContentsForEffectivePresentation };
+export function clearTerminalFocusWindow(win: AppWindow): void {
+  clearTerminalFocusWindowById(win.id);
+}
+
+export function clearTerminalFocusWindowById(windowId: number): void {
+  lastKeyboardFocusTargetByWindowId.delete(windowId);
+}
+
+export { focusWebContentsForEffectiveInputRouting };

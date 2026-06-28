@@ -1,5 +1,5 @@
 import type { TerminalOperation } from "@shared/contracts/terminal.ts";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -7,6 +7,7 @@ import {
   activeTerminalPanelId,
   rendererActionContributionRuntime,
 } from "@/lib/actions/renderer-action-runtime.ts";
+import { dispatchTerminalOpenSearch } from "./terminal-search-events.ts";
 
 function terminalOperationContribution(opts: {
   id: string;
@@ -57,10 +58,27 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     sortOrder: 3,
     titleKey: "contextMenu.action.selectAll",
   }),
+  {
+    categoryKey: "terminal",
+    group: "0_edit",
+    handler: () => {
+      const panelId = activeTerminalPanelId();
+      if (!panelId) {
+        return;
+      }
+      dispatchTerminalOpenSearch(panelId);
+    },
+    iconComponent: Search,
+    id: "pier.terminal.search",
+    sortOrder: 4,
+    surfaces: ["terminal/content"],
+    titleKey: "contextMenu.action.find",
+    when: "terminal.hasActivePanel",
+  },
   terminalOperationContribution({
     id: "pier.terminal.clearScreen",
     operation: "clearScreen",
-    sortOrder: 4,
+    sortOrder: 5,
     titleKey: "contextMenu.action.clearScreen",
   }),
   {
@@ -83,6 +101,15 @@ export function registerTerminalActions(): () => void {
     TERMINAL_ACTION_CONTRIBUTIONS,
     rendererActionContributionRuntime
   );
+  const searchOpenRequestDispose = window.pier?.terminal?.onSearchOpenRequest?.(
+    () => {
+      actionRegistry.get("pier.terminal.search")?.handler();
+    }
+  );
+
+  if (searchOpenRequestDispose) {
+    disposers.push(searchOpenRequestDispose);
+  }
 
   return () => {
     for (const dispose of disposers) {

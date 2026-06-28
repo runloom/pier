@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 /**
  * Swift 端跨 setupWindow / focus / show / close / blur 多条路径上的状态不变量,
  * 源文件层 invariant lock 防回归. 这里测试**代码结构**而不是行为, 因为:
- * - swift 端状态 (terminals dict / state.activeTerminalPanelId /
+ * - swift 端状态 (terminals dict / state.keyboardFocusTarget /
  *   windowToBrowserWindowId) 是 process-local, TS 测试拿不到
  * - 行为已经被 IPC 边界的 tests/unit/main/terminal-state-consistency.test.ts 间接覆盖
  *
@@ -14,9 +14,10 @@ import { describe, expect, it } from "vitest";
  *    建立、detachWindow 清理, 否则跨 window 事件路由错乱
  * 2. panel id 跨 window 重复 (#30) — TerminalEventDelegate 必须自持 browserWindowId,
  *    不能靠 panelId 全局反查 (注释明确说 default layout 都用 "terminal-1")
- * 3. close 必须清 stale state.activeTerminalPanelId (#28) — 否则后续 applyFirstResponder
- *    会去 access 已删除的 terminalView
+ * 3. close 必须把 stale terminal keyboard target 清回 Web (#28) — 否则后续
+ *    applyFirstResponder 会去 access 已删除的 terminalView
  * 4. 多 panel hitTest 区分 (#27) — targets dict 用 panelId 做 key, hit 时遍历找命中
+ * 5. Web overlay rect 优先于 terminal target 命中, 右键也复用同一套规则
  */
 const SWIFT_PATH = resolve(
   import.meta.dirname,
@@ -43,19 +44,51 @@ const EVENT_DELEGATE_HOLDS_BROWSER_ID_RE = /let browserWindowId: Int/;
 const EVENT_DELEGATE_INIT_RE = /init\(panelId: String, browserWindowId: Int\)/;
 
 const CLOSE_CLEARS_STALE_STATE_RE =
-  /if state\.activeTerminalPanelId == panelId \{\s*state\.activeTerminalPanelId = nil/;
+  /if state\.activeTerminalPanelId == panelId \{\s*state\.keyboardFocusTarget = \.web/;
 
 const TARGETS_DICT_RE = /var targets: \[String: Target\]/;
 const HIT_ITERATES_TARGETS_RE =
-  /for \(_, target\) in targets \{[\s\S]*?target\.rect\.contains/;
+  /for \(panelId, target\) in targets \{[\s\S]*?target\.rect\.contains/;
+const HIT_TEST_WEB_OVERLAY_FIRST_RE =
+  /if containsWebOverlay\(local\) \{[\s\S]{0,80}?return nil[\s\S]{0,160}?terminalTarget\(at: local\)/;
+const RIGHT_MOUSE_WEB_OVERLAY_FIRST_RE =
+  /if containsWebOverlay\(local\) \{[\s\S]{0,80}?return event[\s\S]{0,160}?terminalTarget\(at: local\)/;
 const FORBIDDEN_HIDE_GUARD_RE =
   /guard panelId != activePanelId else \{ return \}/;
 const FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE =
   /private var activePanelId: String\?/;
-const LOCAL_FOCUS_BEFORE_FORWARD_RE =
-  /private func activateFocusIntent\(\) \{[\s\S]*?Self\.localFocusCallback\(panelId\)[\s\S]*?Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)/;
+const FOCUS_INTENT_FORWARDS_ONLY_RE =
+  /private func activateFocusIntent\(\) \{\s*Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)\s*\}/;
 const OTHER_MOUSE_DOWN_FOCUSES_BEFORE_FORWARD_RE =
   /override func otherMouseDown\(with event: NSEvent\) \{[\s\S]*?capturedTerminalMouseButton = \.other[\s\S]*?activateFocusIntent\(\)[\s\S]*?terminalView\.otherMouseDown\(with: event\)/;
+const FORBIDDEN_NATIVE_FOCUS_MUTATION_RE =
+  /GhosttyBridgeImpl\.shared\.focus\(panelId:|func focus\(panelId: String\)|state\.keyboardFocusTarget = \.terminal\(panelId\)/;
+const TERMINAL_VIEW_MOUSE_FOCUS_POLICY_DECL_RE =
+  /open var focusesOnMouseDown = true/;
+const TERMINAL_VIEW_HOST_KEYBOARD_POLICY_DECL_RE =
+  /open var hostKeyboardActive = true[\s\S]*?synchronizeHostFocusState\(\)/;
+const TERMINAL_VIEW_MOUSE_FOCUS_POLICY_GUARD_RE =
+  /if focusesOnMouseDown \{\s*window\?\.makeFirstResponder\(self\)\s*\}/g;
+const BRIDGE_DISABLES_TERMINAL_VIEW_MOUSE_FOCUS_RE =
+  /let terminalView = TerminalView\(frame: \.zero\)\s*terminalView\.focusesOnMouseDown = false\s*terminalView\.hostKeyboardActive = false/;
+const FORBIDDEN_INPUT_ROUTING_RUNTIME_CURSOR_CONFIG_RE =
+  /applyInputRouting\([\s\S]*?applyTerminalRuntimeConfiguration\(window: parent\)/;
+const FORBIDDEN_TERMINAL_CURSOR_VISIBILITY_CONFIG_RE =
+  /terminalCursorVisible|terminalCursorOpacity|terminalCursorBlink|withCursorOpacity/;
+const APPKIT_FOCUS_GATED_BY_HOST_RE =
+  /override open func becomeFirstResponder\(\) -> Bool \{[\s\S]*?synchronizeHostFocusState\(\)[\s\S]*?\}/;
+const APPKIT_FORBIDS_UNCONDITIONAL_SURFACE_FOCUS_RE =
+  /override open func becomeFirstResponder\(\) -> Bool \{[\s\S]*?core\.setFocus\(true\)[\s\S]*?\}/;
+const INPUT_ROUTING_APPLIES_HOST_FOCUS_RE =
+  /term\.terminalView\.hostKeyboardActive = hostKeyboardActive[\s\S]*?term\.terminalView\.synchronizeHostFocusState\(\)/;
+const APPKIT_COMMANDS_GATED_BY_HOST_RE =
+  /override open func doCommand\(by selector: Selector\) \{\s*guard hostKeyboardActive else \{ return \}/;
+const APPKIT_COPY_GATED_BY_HOST_RE =
+  /@IBAction open func copy\(_:\s*Any\?\) \{\s*guard hostKeyboardActive else \{ return \}/;
+const APPKIT_PASTE_GATED_BY_HOST_RE =
+  /@IBAction func paste\(_:\s*Any\?\) \{\s*guard hostKeyboardActive else \{ return \}/;
+const APPKIT_SELECT_ALL_GATED_BY_HOST_RE =
+  /@IBAction override open func selectAll\(_:\s*Any\?\) \{\s*guard hostKeyboardActive else \{ return \}/;
 const FORBIDDEN_TERMINAL_OVERLAY_SCROLLBAR_RE =
   /TerminalScrollbarOverlayView|thumbRect|scrollbarPaintedWidth|scroll_page_lines/;
 const SPM_SCROLL_VIEW_CLASS_RE =
@@ -82,10 +115,9 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(SOURCE).toMatch(EVENT_DELEGATE_INIT_RE);
   });
 
-  it("close clears state.activeTerminalPanelId to avoid use-after-free in applyFirstResponder", () => {
+  it("close clears stale terminal keyboard target to avoid use-after-free in applyFirstResponder", () => {
     // close 后 NSView removeFromSuperview, 但如果 state.activeTerminalPanelId
-    // 还指向它, 下次 applyFirstResponder 调 terminals[id] 会拿 nil, makeFirstResponder
-    // 路径走不通. 必须主动 clear.
+    // 还指向它, 下次 applyFirstResponder 调 terminals[id] 会拿 nil. 必须主动回到 Web.
     expect(SOURCE).toMatch(CLOSE_CLEARS_STALE_STATE_RE);
   });
 
@@ -94,6 +126,11 @@ describe("Swift state invariants (source-level lock)", () => {
     // 的 target. dict 保证不同 panel 独立, 遍历保证一个 hit point 只命中一个.
     expect(SOURCE).toMatch(TARGETS_DICT_RE);
     expect(SOURCE).toMatch(HIT_ITERATES_TARGETS_RE);
+  });
+
+  it("routes Web overlay rects before terminal targets for hitTest and right click", () => {
+    expect(SOURCE).toMatch(HIT_TEST_WEB_OVERLAY_FIRST_RE);
+    expect(SOURCE).toMatch(RIGHT_MOUSE_WEB_OVERLAY_FIRST_RE);
   });
 
   it("does not contain the bug-prone hide guard against activePanelId", () => {
@@ -107,15 +144,46 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(SOURCE).not.toMatch(FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE);
   });
 
-  it("locally focuses a clicked terminal before forwarding renderer focus intent", () => {
+  it("only forwards terminal focus intent instead of mutating native keyboard target", () => {
     const scrollContainerSource = readFileSync(
       TERMINAL_SCROLL_CONTAINER_PATH,
       "utf8"
     );
-    expect(scrollContainerSource).toMatch(LOCAL_FOCUS_BEFORE_FORWARD_RE);
+    expect(scrollContainerSource).toMatch(FOCUS_INTENT_FORWARDS_ONLY_RE);
+    expect(scrollContainerSource).not.toMatch(
+      FORBIDDEN_NATIVE_FOCUS_MUTATION_RE
+    );
+    expect(SOURCE).not.toMatch(FORBIDDEN_NATIVE_FOCUS_MUTATION_RE);
   });
 
-  it("locally focuses a terminal before forwarding auxiliary mouse input", () => {
+  it("disables Ghostty mouse-down first responder changes for Pier terminals", () => {
+    const appTerminalViewSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        "../../native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView.swift"
+      ),
+      "utf8"
+    );
+    const appTerminalInputSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        "../../native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView+Input.swift"
+      ),
+      "utf8"
+    );
+    expect(appTerminalViewSource).toMatch(
+      TERMINAL_VIEW_MOUSE_FOCUS_POLICY_DECL_RE
+    );
+    expect(appTerminalInputSource).toMatch(
+      TERMINAL_VIEW_MOUSE_FOCUS_POLICY_GUARD_RE
+    );
+    expect(
+      appTerminalInputSource.match(TERMINAL_VIEW_MOUSE_FOCUS_POLICY_GUARD_RE)
+    ).toHaveLength(3);
+    expect(SOURCE).toMatch(BRIDGE_DISABLES_TERMINAL_VIEW_MOUSE_FOCUS_RE);
+  });
+
+  it("forwards auxiliary mouse focus intent without native keyboard mutation", () => {
     const scrollContainerSource = readFileSync(
       TERMINAL_SCROLL_CONTAINER_PATH,
       "utf8"
@@ -123,6 +191,49 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(scrollContainerSource).toMatch(
       OTHER_MOUSE_DOWN_FOCUSES_BEFORE_FORWARD_RE
     );
+  });
+
+  it("gates Ghostty surface focus through per-surface host keyboard ownership", () => {
+    const appTerminalViewSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        "../../native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView.swift"
+      ),
+      "utf8"
+    );
+    const appTerminalLifecycleSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        "../../native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView+Lifecycle.swift"
+      ),
+      "utf8"
+    );
+    expect(appTerminalViewSource).toMatch(
+      TERMINAL_VIEW_HOST_KEYBOARD_POLICY_DECL_RE
+    );
+    expect(appTerminalLifecycleSource).toMatch(APPKIT_FOCUS_GATED_BY_HOST_RE);
+    expect(appTerminalLifecycleSource).not.toMatch(
+      APPKIT_FORBIDS_UNCONDITIONAL_SURFACE_FOCUS_RE
+    );
+    expect(SOURCE).toMatch(INPUT_ROUTING_APPLIES_HOST_FOCUS_RE);
+    expect(SOURCE).not.toMatch(
+      FORBIDDEN_INPUT_ROUTING_RUNTIME_CURSOR_CONFIG_RE
+    );
+    expect(SOURCE).not.toMatch(FORBIDDEN_TERMINAL_CURSOR_VISIBILITY_CONFIG_RE);
+  });
+
+  it("gates AppKit text commands and menu actions through host keyboard ownership", () => {
+    const appTerminalInputSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        "../../native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView+Input.swift"
+      ),
+      "utf8"
+    );
+    expect(appTerminalInputSource).toMatch(APPKIT_COMMANDS_GATED_BY_HOST_RE);
+    expect(appTerminalInputSource).toMatch(APPKIT_COPY_GATED_BY_HOST_RE);
+    expect(appTerminalInputSource).toMatch(APPKIT_PASTE_GATED_BY_HOST_RE);
+    expect(appTerminalInputSource).toMatch(APPKIT_SELECT_ALL_GATED_BY_HOST_RE);
   });
 
   it("uses the Ghostty SPM AppKit scroll view instead of a Pier-drawn overlay scrollbar", () => {

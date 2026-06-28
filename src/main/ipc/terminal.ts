@@ -25,16 +25,14 @@ import { handleTerminalCwdChange } from "./terminal-cwd-forwarding.ts";
 import {
   recordNativeTerminalRoute,
   recordRendererTerminalRoute,
-  recordWebContentsRoute,
 } from "./terminal-debug.ts";
 import { registerTerminalDebugSnapshotIpc } from "./terminal-debug-snapshot.ts";
 import {
-  blurActivePanelFocus,
-  focusWebContentsForEffectivePresentation,
-  rememberActivePanelFocus,
+  focusWebContentsForEffectiveInputRouting,
   setTerminalFocusAddonProvider,
 } from "./terminal-focus-state.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
+import { isTerminalInputRoutingSnapshot } from "./terminal-input-routing-validation.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
 import { performTerminalOperation } from "./terminal-operations.ts";
@@ -42,10 +40,12 @@ import { terminalPanelClosed } from "./terminal-panel-closed.ts";
 import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
 import {
   applyLatestTerminalPresentation,
+  applyRendererTerminalInputRouting,
   applyRendererTerminalPresentation,
-  setTerminalOverlayActive,
+  readTerminalInputRoutingDebug,
 } from "./terminal-presentation.ts";
 import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
+import { registerTerminalSearchIpc } from "./terminal-search.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import {
   forwardTerminalTaskTabPatch,
@@ -81,12 +81,15 @@ function conformTerminalPresentationAfterCreate(
   win: AppWindow,
   addon: NativeAddon | null
 ): void {
-  const effective = applyLatestTerminalPresentation(win, addon, "restore");
-  focusWebContentsForEffectivePresentation(
-    win,
-    effective,
-    "terminal-create-conform"
-  );
+  applyLatestTerminalPresentation(win, addon, "restore");
+  const effectiveInputRouting = readTerminalInputRoutingDebug(win).effective;
+  if (effectiveInputRouting) {
+    focusWebContentsForEffectiveInputRouting(
+      win,
+      effectiveInputRouting,
+      "terminal-create-conform"
+    );
+  }
 }
 
 export function registerTerminalIpc(ipcMain: IpcMain): void {
@@ -107,10 +110,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   });
   addon?.setTerminalFocusRequestCallback((id, panelId) => {
     recordNativeTerminalRoute(id, "focus-request", panelId);
+    const rawPanelId = unscopePanelId(panelId);
     forwardToWindow(
       id,
       "pier:terminal:focus-request",
-      { panelId: unscopePanelId(panelId) },
+      { panelId: rawPanelId },
       "pier-terminal-focus-request"
     );
   });
@@ -152,6 +156,12 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       { panelId: rawPanelId, title },
       "pier-title-forward"
     );
+  });
+  registerTerminalSearchIpc({
+    addon,
+    ipcMain,
+    loadError,
+    windowFromWebContents,
   });
 
   ipcMain.handle("pier:terminal:setup", (event) => {
@@ -250,16 +260,47 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
       recordRendererTerminalRoute(win, "apply-presentation", null, {
         hasMaximizedGroup: snapshot.hasMaximizedGroup,
-        overlayActive: snapshot.overlayActive,
         reason: snapshot.reason,
         rendererSequence: snapshot.rendererSequence,
         terminalCount: snapshot.terminals.length,
       });
-      const effective = applyRendererTerminalPresentation(win, addon, snapshot);
-      focusWebContentsForEffectivePresentation(
+      applyRendererTerminalPresentation(win, addon, snapshot);
+      const effectiveInputRouting =
+        readTerminalInputRoutingDebug(win).effective;
+      if (effectiveInputRouting) {
+        focusWebContentsForEffectiveInputRouting(
+          win,
+          effectiveInputRouting,
+          "terminal-presentation"
+        );
+      }
+    }
+  );
+
+  ipcMain.on(
+    "pier:terminal:apply-input-routing",
+    (event, snapshot: unknown) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      if (!isTerminalInputRoutingSnapshot(snapshot)) {
+        console.error(
+          "[pier-terminal-input-routing] invalid snapshot:",
+          snapshot
+        );
+        return;
+      }
+      recordRendererTerminalRoute(win, "apply-input-routing", null, {
+        keyboardTarget: snapshot.keyboardFocusTarget.kind,
+        rendererSequence: snapshot.rendererSequence,
+        webOverlayRectCount: snapshot.webOverlayRects.length,
+      });
+      const effective = applyRendererTerminalInputRouting(win, addon, snapshot);
+      focusWebContentsForEffectiveInputRouting(
         win,
         effective,
-        "terminal-presentation"
+        "terminal-input-routing"
       );
     }
   );
@@ -316,20 +357,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       addon?.closeTerminal(scopePanelId(win, panelId));
     }
   });
-  ipcMain.on("pier:terminal:focus", (event, panelId: string) => {
-    const win = windowFromWebContents(event.sender);
-    if (win) {
-      rememberActivePanelFocus(win, "terminal", panelId);
-      recordRendererTerminalRoute(win, "focus", panelId, {
-        windowFocused: win.isFocused(),
-      });
-      if (!win.isFocused()) {
-        blurActivePanelFocus(win);
-        return;
-      }
-      addon?.focusTerminal(scopePanelId(win, panelId));
-    }
-  });
   ipcMain.on(
     "pier:terminal:set-frame",
     (event, panelId: string, frame: TerminalFrame) => {
@@ -365,24 +392,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       );
     } catch (err) {
       console.error("[pier-terminal-reconcile] failed:", err);
-    }
-  });
-
-  ipcMain.on("pier:terminal:set-overlay", (event, active: boolean) => {
-    const win = windowFromWebContents(event.sender);
-    if (!win) {
-      return;
-    }
-    recordRendererTerminalRoute(win, "set-overlay", null, { active });
-    try {
-      const effective = setTerminalOverlayActive(win, addon, active);
-      focusWebContentsForEffectivePresentation(
-        win,
-        effective,
-        "terminal-overlay"
-      );
-    } catch (err) {
-      console.error("[pier-set-overlay] failed:", err);
     }
   });
 
@@ -448,43 +457,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         );
       } catch (err) {
         console.error("[pier-terminal-set-font] failed:", err);
-      }
-    }
-  );
-
-  ipcMain.on(
-    "pier:terminal:set-active-panel-kind",
-    (event, kind: "terminal" | "web", panelId: string | null) => {
-      const win = windowFromWebContents(event.sender);
-      if (!win) {
-        return;
-      }
-      rememberActivePanelFocus(win, kind, panelId);
-      recordRendererTerminalRoute(win, "set-active-panel-kind", panelId, {
-        kind,
-      });
-      if (!addon) {
-        return;
-      }
-      if (kind === "terminal" && !win.isFocused()) {
-        blurActivePanelFocus(win);
-        return;
-      }
-      const kindRaw = kind === "terminal" ? 0 : 1;
-      try {
-        addon.setActivePanelKind(
-          win.getNativeWindowHandle(),
-          kindRaw,
-          panelId ? scopePanelId(win, panelId) : null
-        );
-      } catch (err) {
-        console.error("[pier-set-active-panel-kind] failed:", err);
-      }
-      if (kind === "web" && win.isFocused()) {
-        recordWebContentsRoute(win, "focus-webcontents", {
-          reason: "active-web-panel",
-        });
-        win.webContents.focus();
       }
     }
   );

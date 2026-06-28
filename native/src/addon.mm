@@ -6,7 +6,6 @@
 
 extern "C" {
     bool ghostty_bridge_setup_window(void* nsWindow, long browserWindowId);
-    void ghostty_bridge_set_overlay_active(void* nsWindow, bool active);
     bool ghostty_bridge_create_terminal(void* nsWindow, const char* panelId,
                                          double x, double y, double w, double h,
                                          const char* fontFamily, float fontSize,
@@ -24,7 +23,6 @@ extern "C" {
     void ghostty_bridge_show(const char* panelId);
     void ghostty_bridge_hide(const char* panelId);
     void ghostty_bridge_close(const char* panelId);
-    void ghostty_bridge_focus(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     void ghostty_bridge_close_all(void* nsWindow);
     // 孤儿清理:关该 window 下不在 activeIds 中的 NSView. C 方案 reload 零销毁
@@ -53,12 +51,14 @@ extern "C" {
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
     typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
     void ghostty_bridge_set_pwd_forward_callback(PwdForwardFn cb);
+    typedef void (*SearchForwardFn)(long browserWindowId, const char* panelId, long total, long selected);
+    void ghostty_bridge_set_search_forward_callback(SearchForwardFn cb);
     // Title forward: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 → 此 trampoline → JS.
     // 签名 (browserWindowId, panelId UTF-8, title UTF-8). 与 PWD 同模式.
     typedef void (*TitleForwardFn)(long browserWindowId, const char* panelId, const char* title);
     void ghostty_bridge_set_title_forward_callback(TitleForwardFn cb);
-    void ghostty_bridge_set_active_panel_kind(void* nsWindow, long kindRaw, const char* panelId);
     void ghostty_bridge_apply_presentation(void* nsWindow, const char* json);
+    void ghostty_bridge_apply_input_routing(void* nsWindow, const char* json);
     // 应用 Pier 主题派生的终端配色. cursor / selection 可空 (NULL = 不设置).
     // palette 是 16 槽 const char* 数组, 每槽 #RRGGBB hex (含 #). 调用同步, swift 同步
     // 构造 GhosttyThemeDefinition 后立即 setTheme — addon 端的字符串生命周期只需覆盖
@@ -104,14 +104,6 @@ static Napi::Value JsSetupWindow(const Napi::CallbackInfo& info) {
     long browserWindowId = static_cast<long>(info[1].As<Napi::Number>().Int64Value());
     bool ok = ghostty_bridge_setup_window((__bridge void*)win, browserWindowId);
     return Napi::Boolean::New(info.Env(), ok);
-}
-
-static Napi::Value JsSetOverlayActive(const Napi::CallbackInfo& info) {
-    NSWindow* win = WindowFromHandle(info[0]);
-    if (!win) return info.Env().Undefined();
-    bool active = info[1].As<Napi::Boolean>().Value();
-    ghostty_bridge_set_overlay_active((__bridge void*)win, active);
-    return info.Env().Undefined();
 }
 
 static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
@@ -202,12 +194,6 @@ static Napi::Value JsHide(const Napi::CallbackInfo& info) {
 static Napi::Value JsClose(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     ghostty_bridge_close(panelId.c_str());
-    return info.Env().Undefined();
-}
-
-static Napi::Value JsFocus(const Napi::CallbackInfo& info) {
-    std::string panelId = info[0].As<Napi::String>().Utf8Value();
-    ghostty_bridge_focus(panelId.c_str());
     return info.Env().Undefined();
 }
 
@@ -464,6 +450,31 @@ static Napi::Value JsSetPwdForwardCallback(const Napi::CallbackInfo& info) {
                                 &g_pwdForwardTrampoline);
 }
 
+// ---- Search forward (Ghostty search match state → renderer search bar) ----
+struct SearchForwardPayload {
+    long windowId;
+    std::string panelId;
+    long total;
+    long selected;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::Number::New(env, static_cast<double>(total)),
+            Napi::Number::New(env, static_cast<double>(selected)),
+        });
+    }
+};
+static ForwardChannel<SearchForwardPayload> g_searchChannel("PierSearchForward");
+static void g_searchForwardTrampoline(long windowId, const char* panelId, long total, long selected) {
+    g_searchChannel.emit({ windowId, std::string(panelId), total, selected });
+}
+static Napi::Value JsSetSearchForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_searchChannel,
+                                ghostty_bridge_set_search_forward_callback,
+                                &g_searchForwardTrampoline);
+}
+
 // ---- Title forward (OSC 0/2 → renderer panel descriptor) ----
 struct TitleForwardPayload {
     long windowId;
@@ -591,20 +602,6 @@ static Napi::Value JsSetTerminalConfig(const Napi::CallbackInfo& info) {
     return env.Undefined();
 }
 
-static Napi::Value JsSetActivePanelKind(const Napi::CallbackInfo& info) {
-    NSWindow* win = WindowFromHandle(info[0]);
-    if (!win) return info.Env().Undefined();
-    long kindRaw = static_cast<long>(info[1].As<Napi::Number>().Int64Value());
-    const char* panelIdC = nullptr;
-    std::string panelIdHolder;
-    if (info.Length() > 2 && info[2].IsString()) {
-        panelIdHolder = info[2].As<Napi::String>().Utf8Value();
-        panelIdC = panelIdHolder.c_str();
-    }
-    ghostty_bridge_set_active_panel_kind((__bridge void*)win, kindRaw, panelIdC);
-    return info.Env().Undefined();
-}
-
 static Napi::Value JsApplyTerminalPresentation(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     NSWindow* win = WindowFromHandle(info[0]);
@@ -618,15 +615,26 @@ static Napi::Value JsApplyTerminalPresentation(const Napi::CallbackInfo& info) {
     return env.Undefined();
 }
 
+static Napi::Value JsApplyTerminalInputRouting(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return env.Undefined();
+    Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
+    Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
+    Napi::Value encoded = stringify.Call(json, { info[1] });
+    if (!encoded.IsString()) return env.Undefined();
+    std::string payload = encoded.As<Napi::String>().Utf8Value();
+    ghostty_bridge_apply_input_routing((__bridge void*)win, payload.c_str());
+    return env.Undefined();
+}
+
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setupWindow",     Napi::Function::New(env, JsSetupWindow));
-    exports.Set("setOverlayActive", Napi::Function::New(env, JsSetOverlayActive));
     exports.Set("createTerminal",  Napi::Function::New(env, JsCreateTerminal));
     exports.Set("setFrame",        Napi::Function::New(env, JsSetFrame));
     exports.Set("showTerminal",    Napi::Function::New(env, JsShow));
     exports.Set("hideTerminal",    Napi::Function::New(env, JsHide));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
-    exports.Set("focusTerminal",   Napi::Function::New(env, JsFocus));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
     exports.Set("reconcileTerminals", Napi::Function::New(env, JsReconcile));
@@ -636,9 +644,10 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setModifierForwardCallback", Napi::Function::New(env, JsSetModifierForwardCallback));
     exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
+    exports.Set("setSearchForwardCallback", Napi::Function::New(env, JsSetSearchForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
-    exports.Set("setActivePanelKind", Napi::Function::New(env, JsSetActivePanelKind));
     exports.Set("applyTerminalPresentation", Napi::Function::New(env, JsApplyTerminalPresentation));
+    exports.Set("applyTerminalInputRouting", Napi::Function::New(env, JsApplyTerminalInputRouting));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
     exports.Set("setTerminalFocusRequestCallback", Napi::Function::New(env, JsSetTerminalFocusRequestCallback));
     exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));

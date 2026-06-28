@@ -328,10 +328,34 @@ export function LayoutStateView({
                   />
                   <div className="flex gap-1">
                     {surface?.hasRouterTarget ? (
-                      <span className="size-2 bg-violet-500" />
+                      <span
+                        className="size-2 bg-violet-500"
+                        title="router target"
+                      />
                     ) : null}
                     {surface?.isFirstResponder ? (
-                      <span className="size-2 bg-emerald-500" />
+                      <span
+                        className="size-2 bg-emerald-500"
+                        title="first responder"
+                      />
+                    ) : null}
+                    {surface?.isSurfaceFocused ? (
+                      <span
+                        className="size-2 bg-sky-500"
+                        title="surface focused"
+                      />
+                    ) : null}
+                    {surface?.hostKeyboardActive ? (
+                      <span
+                        className="size-2 bg-cyan-500"
+                        title="host keyboard active"
+                      />
+                    ) : null}
+                    {surface?.cursorSuppressed ? (
+                      <span
+                        className="size-2 bg-zinc-400"
+                        title="cursor suppressed"
+                      />
                     ) : null}
                   </div>
                 </div>
