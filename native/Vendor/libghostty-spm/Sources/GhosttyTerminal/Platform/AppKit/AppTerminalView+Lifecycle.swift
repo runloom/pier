@@ -174,7 +174,7 @@
             applySurfaceFocus(focused)
         }
 
-        private func applySurfaceFocus(_ focused: Bool) {
+        public func applySurfaceFocus(_ focused: Bool) {
             guard appliedSurfaceFocus != focused else { return }
             appliedSurfaceFocus = focused
             core.setFocus(focused)

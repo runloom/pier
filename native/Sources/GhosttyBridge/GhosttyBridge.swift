@@ -1048,11 +1048,10 @@ final class GhosttyBridgeImpl {
         let state = stateFor(window: window)
         let activeTerminalId: String? =
             state.acceptsTerminalKeyboard ? state.activeTerminalPanelId : nil
-
-        // 输入路由是宿主唯一真相:只有 active terminal 能让 Ghostty surface
-        // focused/显示活跃光标。即使 AppKit firstResponder 暂时漂移或拒绝 resign,
-        // hostKeyboardActive=false 也会把对应 surface focus 压回 false。
         let windowId = ObjectIdentifier(window)
+
+        // 1. 同步所有 terminal surface 的 hostKeyboardActive / surface focus.
+        // 注意：这里只更新 surface 内部状态，不主动操作 window.firstResponder。
         for (panelId, term) in terminals
             where ObjectIdentifier(term.parentWindow) == windowId {
             let hostKeyboardActive = panelId == activeTerminalId
@@ -1060,28 +1059,32 @@ final class GhosttyBridgeImpl {
             if hostKeyboardActive {
                 term.terminalView.synchronizeHostFocusState()
             } else {
-                _ = term.terminalView.resignFirstResponder()
+                term.terminalView.applySurfaceFocus(false)
             }
         }
 
-        if activeTerminalId == nil {
-            if terminals.values.contains(where: { term in
-                ObjectIdentifier(term.parentWindow) == windowId
-                    && window.firstResponder === term.terminalView
+        // 2. 只在 firstResponder 与 desired 不一致时才操作 window。
+        // 幂等：避免连续两次 target=web 时反复 resign，导致焦点震荡。
+        switch activeTerminalId {
+        case .none:
+            // Web keyboard target: 把 firstResponder 从 terminalView 移走即可。
+            // webContents.focus() 由 main 进程调用，swift 不直接操作 Chromium view。
+            if let focusedTerm = terminals.values.first(where: {
+                ObjectIdentifier($0.parentWindow) == windowId
+                    && window.firstResponder === $0.terminalView
             }) {
                 window.makeFirstResponder(nil)
+                focusedTerm.terminalView.applySurfaceFocus(false)
             }
-            return
-        }
-
-        if let panelId = activeTerminalId,
-           let term = terminals[panelId] {
-            if window.firstResponder !== term.terminalView {
-                window.makeFirstResponder(term.terminalView)
+        case .some(let panelId):
+            if let term = terminals[panelId],
+               ObjectIdentifier(term.parentWindow) == windowId {
+                if window.firstResponder !== term.terminalView {
+                    window.makeFirstResponder(term.terminalView)
+                }
+                term.terminalView.synchronizeHostFocusState()
             }
-            term.terminalView.synchronizeHostFocusState()
         }
-        // Web keyboard target: no-op. main 端调 webContents.focus() 让 Chromium 自己 dispatch.
     }
 
     func prepareTerminalForOrdinaryKeyDown(
