@@ -16,8 +16,10 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   lstatSync,
+  readdirSync,
   readlinkSync,
   rmSync,
+  statSync,
   symlinkSync,
 } from "node:fs";
 import path from "node:path";
@@ -109,13 +111,84 @@ const nativeAddon = path.join(
   "Release",
   "ghostty_native.node"
 );
+const nativeBridgeDylib = path.join(
+  cwd,
+  "native",
+  "build",
+  "Release",
+  "libGhosttyBridge.dylib"
+);
+
+function findNewestMtime(target) {
+  if (!existsSync(target)) {
+    return null;
+  }
+  const stat = statSync(target);
+  if (!stat.isDirectory()) {
+    return { path: target, mtimeMs: stat.mtimeMs };
+  }
+  let newest = null;
+  for (const entry of readdirSync(target, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
+    const sub = findNewestMtime(path.join(target, entry.name));
+    if (sub && (!newest || sub.mtimeMs > newest.mtimeMs)) {
+      newest = sub;
+    }
+  }
+  return newest;
+}
+
+function staleNativeSource() {
+  if (!(existsSync(nativeAddon) && existsSync(nativeBridgeDylib))) {
+    return null;
+  }
+  const nativeRoot = path.join(cwd, "native");
+  const artifactMtime = Math.min(
+    statSync(nativeAddon).mtimeMs,
+    statSync(nativeBridgeDylib).mtimeMs
+  );
+  const sourceCandidates = [
+    path.join(nativeRoot, "src"),
+    path.join(nativeRoot, "Sources"),
+    path.join(nativeRoot, "Vendor", "libghostty-spm", "Sources"),
+    path.join(nativeRoot, "Vendor", "libghostty-spm", "Package.swift"),
+    path.join(nativeRoot, "binding.gyp"),
+    path.join(nativeRoot, "Package.swift"),
+    path.join(nativeRoot, "build.sh"),
+  ];
+  let stale = null;
+  for (const candidate of sourceCandidates) {
+    const newest = findNewestMtime(candidate);
+    if (
+      newest &&
+      newest.mtimeMs > artifactMtime &&
+      (!stale || newest.mtimeMs > stale.mtimeMs)
+    ) {
+      stale = newest;
+    }
+  }
+  return stale;
+}
 
 function ensureNativeAddon() {
-  if (existsSync(nativeAddon)) {
+  const staleSource = staleNativeSource();
+  if (
+    existsSync(nativeAddon) &&
+    existsSync(nativeBridgeDylib) &&
+    !staleSource
+  ) {
     console.log("[setup-worktree] native addon 已编译, 跳过.");
     return;
   }
-  console.log("[setup-worktree] 编译 native addon (首次约 30s)...");
+  if (staleSource) {
+    console.log(
+      `[setup-worktree] native addon 过期 (${staleSource.path}), 重新编译...`
+    );
+  } else {
+    console.log("[setup-worktree] 编译 native addon (首次约 30s)...");
+  }
   const r = spawnSync("pnpm", ["build:native"], { cwd, stdio: "inherit" });
   if (r.status !== 0) {
     console.error(

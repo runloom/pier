@@ -530,6 +530,12 @@ async function predev() {
     "Release",
     "ghostty_native.node"
   );
+  const nativeBridgeDylib = path.join(
+    nativeRoot,
+    "build",
+    "Release",
+    "libGhosttyBridge.dylib"
+  );
   if (!existsSync(nativeAddon)) {
     console.error(
       `[dev-profile] 缺 native addon: ${nativeAddon}\n` +
@@ -538,13 +544,27 @@ async function predev() {
     );
     process.exit(1);
   }
+  if (!existsSync(nativeBridgeDylib)) {
+    console.error(
+      `[dev-profile] 缺 native bridge dylib: ${nativeBridgeDylib}\n` +
+        "  Electron 加载 ghostty_native.node 时需要同目录的 libGhosttyBridge.dylib.\n" +
+        "  请先执行: pnpm build:native"
+    );
+    process.exit(1);
+  }
 
-  // staleness 守卫: 源码 mtime > binary mtime → 拒绝 (旧 binary 缺新加的 napi 导出会在
-  // ipc register 时炸 "addon?.xxx is not a function", 错误地点离根因远, 难定位).
-  const addonMtime = statSync(nativeAddon).mtimeMs;
+  // staleness 守卫: 源码 mtime > runtime artifact mtime → 拒绝. Electron 实际加载
+  // native/build/Release/ghostty_native.node 以及同目录 libGhosttyBridge.dylib;
+  // vendored SPM 代码变更也必须触发重编译, 否则 dev 会继续跑旧 AppKit/Swift 代码。
+  const runtimeArtifactMtime = Math.min(
+    statSync(nativeAddon).mtimeMs,
+    statSync(nativeBridgeDylib).mtimeMs
+  );
   const sourceCandidates = [
     path.join(nativeRoot, "src"),
     path.join(nativeRoot, "Sources"),
+    path.join(nativeRoot, "Vendor", "libghostty-spm", "Sources"),
+    path.join(nativeRoot, "Vendor", "libghostty-spm", "Package.swift"),
     path.join(nativeRoot, "binding.gyp"),
     path.join(nativeRoot, "Package.swift"),
     path.join(nativeRoot, "build.sh"),
@@ -555,7 +575,7 @@ async function predev() {
     const newest = findNewestMtime(candidate);
     if (
       newest &&
-      newest.mtimeMs > addonMtime &&
+      newest.mtimeMs > runtimeArtifactMtime &&
       newest.mtimeMs > staleSourceMtime
     ) {
       staleSourcePath = newest.path;
@@ -565,10 +585,10 @@ async function predev() {
   if (staleSourcePath) {
     console.error(
       "[dev-profile] native addon 过时:\n" +
-        `  binary: ${nativeAddon} (mtime ${new Date(addonMtime).toISOString()})\n` +
+        `  addon: ${nativeAddon} (mtime ${new Date(statSync(nativeAddon).mtimeMs).toISOString()})\n` +
+        `  dylib: ${nativeBridgeDylib} (mtime ${new Date(statSync(nativeBridgeDylib).mtimeMs).toISOString()})\n` +
         `  新源码: ${staleSourcePath} (mtime ${new Date(staleSourceMtime).toISOString()})\n` +
-        "  旧 binary 缺新加的 napi 导出, Electron 启动后会在 ipc register 时报\n" +
-        "  'addon?.xxx is not a function'. 请先执行: pnpm build:native"
+        "  旧 binary/dylib 会让 Electron 运行旧 native 代码. 请先执行: pnpm build:native"
     );
     process.exit(1);
   }
