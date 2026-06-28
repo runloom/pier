@@ -50,7 +50,7 @@ final class FocusArbiterIntentTests: XCTestCase {
     func testRequestAndReleaseWebFocusTogglesEffectiveTarget() {
         let impl = GhosttyBridgeImpl.shared
         let win = NSWindow()
-        impl.setBasePanelForTesting(win, .terminal("terminal-1"))
+        impl.setBasePanel(window: win, target: .terminal("terminal-1"))
         XCTAssertEqual(impl.stateFor(window: win).effectiveTarget, .terminal("terminal-1"))
 
         impl.requestWebFocus(window: win, id: "search:terminal-1")

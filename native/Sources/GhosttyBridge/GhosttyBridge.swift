@@ -678,11 +678,6 @@ final class GhosttyBridgeImpl {
         applyFirstResponder(for: window)
     }
 
-    // 仅测试用:绕过 IPC 直接设 basePanel(不触发 applyFirstResponder)。
-    func setBasePanelForTesting(_ window: NSWindow, _ target: KeyboardFocusTarget) {
-        mutateState(window) { $0.basePanel = target }
-    }
-
     private func controller(for window: NSWindow) -> TerminalController {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }
