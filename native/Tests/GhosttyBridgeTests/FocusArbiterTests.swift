@@ -3,34 +3,44 @@ import XCTest
 
 final class FocusArbiterTests: XCTestCase {
     func testEmptyWebRequestsFollowsBasePanel() {
-        var s = GhosttyBridgeImpl.WindowKeyboardState()
-        s.basePanel = .terminal("terminal-1")
-        XCTAssertEqual(s.effectiveTarget, .terminal("terminal-1"))
+        var state = GhosttyBridgeImpl.WindowKeyboardState()
+        state.basePanel = .terminal("terminal-1")
+        XCTAssertEqual(state.effectiveTarget, .terminal("terminal-1"))
     }
 
     func testAnyWebRequestForcesWeb() {
-        var s = GhosttyBridgeImpl.WindowKeyboardState()
-        s.basePanel = .terminal("terminal-1")
-        s.webRequests = ["search:terminal-1"]
-        XCTAssertEqual(s.effectiveTarget, .web)
+        var state = GhosttyBridgeImpl.WindowKeyboardState()
+        state.basePanel = .terminal("terminal-1")
+        state.webRequests = ["search:terminal-1"]
+        XCTAssertEqual(state.effectiveTarget, .web)
     }
 
     func testReleasingLastWebRequestRestoresBasePanel() {
-        var s = GhosttyBridgeImpl.WindowKeyboardState()
-        s.basePanel = .terminal("terminal-1")
-        s.webRequests = ["search:terminal-1"]
-        s.webRequests.removeAll { $0 == "search:terminal-1" }
-        XCTAssertEqual(s.effectiveTarget, .terminal("terminal-1"))
+        var state = GhosttyBridgeImpl.WindowKeyboardState()
+        state.basePanel = .terminal("terminal-1")
+        state.webRequests = ["search:terminal-1"]
+        state.webRequests.removeAll { $0 == "search:terminal-1" }
+        XCTAssertEqual(state.effectiveTarget, .terminal("terminal-1"))
+    }
+
+    func testMultipleWebRequestsStayWebUntilAllReleased() {
+        var state = GhosttyBridgeImpl.WindowKeyboardState()
+        state.basePanel = .terminal("terminal-1")
+        state.webRequests = ["a", "b"]
+        state.webRequests.removeAll { $0 == "a" }
+        XCTAssertEqual(state.effectiveTarget, .web)
+        state.webRequests.removeAll { $0 == "b" }
+        XCTAssertEqual(state.effectiveTarget, .terminal("terminal-1"))
     }
 
     func testAcceptsTerminalKeyboardRequiresWindowFocusAndTerminalTarget() {
-        var s = GhosttyBridgeImpl.WindowKeyboardState()
-        s.basePanel = .terminal("terminal-1")
-        s.windowFocused = false
-        XCTAssertFalse(s.acceptsTerminalKeyboard)
-        s.windowFocused = true
-        XCTAssertTrue(s.acceptsTerminalKeyboard)
-        s.webRequests = ["x"]
-        XCTAssertFalse(s.acceptsTerminalKeyboard)
+        var state = GhosttyBridgeImpl.WindowKeyboardState()
+        state.basePanel = .terminal("terminal-1")
+        state.windowFocused = false
+        XCTAssertFalse(state.acceptsTerminalKeyboard)
+        state.windowFocused = true
+        XCTAssertTrue(state.acceptsTerminalKeyboard)
+        state.webRequests = ["x"]
+        XCTAssertFalse(state.acceptsTerminalKeyboard)
     }
 }

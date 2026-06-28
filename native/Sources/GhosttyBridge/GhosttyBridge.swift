@@ -625,7 +625,7 @@ final class GhosttyBridgeImpl {
     struct WindowKeyboardState {
         /// dockview active panel 决定的基础目标.
         var basePanel: KeyboardFocusTarget = .web
-        /// web overlay focus 请求栈; 非空时强制 effectiveTarget 为 .web.
+        /// 当前活跃的 web overlay focus 请求集合(无顺序语义); 非空时强制 effectiveTarget 为 .web.
         var webRequests: [String] = []
         var windowFocused = false
 
@@ -1341,7 +1341,7 @@ final class GhosttyBridgeImpl {
         // applyFirstResponder 不去 access 已 removeFromSuperview 的 terminalView.
         // close 后 renderer 的 input routing 快照会再给出下一个目标; 这里先兜底回 Web.
         mutateState(parent) { state in
-            if state.activeTerminalPanelId == panelId {
+            if state.basePanel.panelId == panelId {
                 state.basePanel = .web
             }
         }
