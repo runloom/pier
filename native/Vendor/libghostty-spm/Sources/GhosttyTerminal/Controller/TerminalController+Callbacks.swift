@@ -14,6 +14,9 @@ import GhosttyKit
 
 private enum TerminalCallbacks {
     #if canImport(AppKit)
+        private static let terminalPasteImageDirectoryName = "pier-terminal-pastes"
+        private static let terminalPasteImageRetentionInterval: TimeInterval = 24 * 60 * 60
+
         static func confirmUnsafePaste(text: String) -> Bool {
             if Thread.isMainThread {
                 return MainActor.assumeIsolated {
@@ -38,6 +41,100 @@ private enum TerminalCallbacks {
             alert.addButton(withTitle: "粘贴")
             alert.addButton(withTitle: "取消")
             return alert.runModal() == .alertFirstButtonReturn
+        }
+
+        private static func terminalPasteImagePathFromPasteboard(
+            _ pasteboard: NSPasteboard
+        ) -> String? {
+            guard let pngData = terminalPastePngData(from: pasteboard) else {
+                return nil
+            }
+
+            let fileManager = FileManager.default
+            let directory = fileManager.temporaryDirectory.appendingPathComponent(
+                terminalPasteImageDirectoryName,
+                isDirectory: true
+            )
+
+            do {
+                try fileManager.createDirectory(
+                    at: directory,
+                    withIntermediateDirectories: true
+                )
+                cleanupTerminalPasteImages(in: directory)
+
+                let url = directory.appendingPathComponent(
+                    "clipboard-\(UUID().uuidString).png"
+                )
+                try pngData.write(to: url, options: [.atomic])
+                TerminalDebugLog.log(
+                    .input,
+                    "clipboard image paste materialized path=\(url.path) bytes=\(pngData.count)"
+                )
+                return url.path
+            } catch {
+                TerminalDebugLog.log(
+                    .input,
+                    "clipboard image paste write failed: \(error.localizedDescription)"
+                )
+                return nil
+            }
+        }
+
+        private static func terminalPastePngData(from pasteboard: NSPasteboard) -> Data? {
+            if let data = pasteboard.data(forType: .png), !data.isEmpty {
+                return data
+            }
+
+            if let data = pasteboard.data(forType: .tiff),
+               let pngData = terminalPastePngData(fromTiffData: data)
+            {
+                return pngData
+            }
+
+            guard let images = pasteboard.readObjects(
+                forClasses: [NSImage.self],
+                options: nil
+            ) as? [NSImage] else {
+                return nil
+            }
+            return images.compactMap(terminalPastePngData(from:)).first
+        }
+
+        private static func terminalPastePngData(from image: NSImage) -> Data? {
+            guard let tiffData = image.tiffRepresentation else {
+                return nil
+            }
+            return terminalPastePngData(fromTiffData: tiffData)
+        }
+
+        private static func terminalPastePngData(fromTiffData data: Data) -> Data? {
+            guard let bitmap = NSBitmapImageRep(data: data) else {
+                return nil
+            }
+            return bitmap.representation(using: .png, properties: [:])
+        }
+
+        private static func cleanupTerminalPasteImages(in directory: URL) {
+            let fileManager = FileManager.default
+            guard let urls = try? fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                return
+            }
+
+            let cutoff = Date().addingTimeInterval(-terminalPasteImageRetentionInterval)
+            for url in urls
+                where url.lastPathComponent.hasPrefix("clipboard-")
+                    && url.pathExtension.lowercased() == "png"
+            {
+                let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                if (values?.contentModificationDate ?? .distantPast) < cutoff {
+                    try? fileManager.removeItem(at: url)
+                }
+            }
         }
     #else
         static func confirmUnsafePaste(text _: String) -> Bool {
@@ -124,7 +221,10 @@ private enum TerminalCallbacks {
         #if canImport(UIKit)
             let string = UIPasteboard.general.string
         #elseif canImport(AppKit)
-            let string = NSPasteboard.general.string(forType: .string)
+            let pasteboard = NSPasteboard.general
+            let string =
+                pasteboard.string(forType: .string).flatMap { $0.isEmpty ? nil : $0 }
+                ?? terminalPasteImagePathFromPasteboard(pasteboard)
         #endif
 
         guard let string else {
