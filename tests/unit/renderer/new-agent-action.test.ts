@@ -10,6 +10,7 @@ const toastMocks = vi.hoisted(() => ({ error: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: toastMocks.error } }));
 
 const prepareLaunch = vi.fn();
+const detect = vi.fn(async () => ({ detectedIds: [] as AgentKind[] }));
 const addTerminal = vi.fn(() => "terminal-1");
 
 function runNewAgent(): Promise<void> | void {
@@ -34,7 +35,7 @@ describe("new agent action", () => {
     vi.clearAllMocks();
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { agents: { prepareLaunch } },
+      value: { agents: { detect, prepareLaunch } },
     });
   });
 
@@ -44,6 +45,38 @@ describe("new agent action", () => {
       defaultAgentId: null,
       disabledAgentIds: [],
     });
+  });
+
+  it("首次调用（detectedIds 为空）→ 先探测再 pickAgent，而非直接 toast", async () => {
+    // 模拟未开设置页：detectedIds 为空。ensureDetected → detect 填充 ["claude"]。
+    seedStores({
+      defaultAgentId: null,
+      detectedIds: [],
+      disabledAgentIds: [],
+    });
+    detect.mockResolvedValueOnce({ detectedIds: ["claude"] });
+    prepareLaunch.mockResolvedValueOnce({ launchId: "launch-1" });
+
+    await runNewAgent();
+
+    expect(detect).toHaveBeenCalledTimes(1);
+    expect(prepareLaunch).toHaveBeenCalledWith("claude");
+    expect(addTerminal).toHaveBeenCalledWith({ launchId: "launch-1" });
+    expect(toastMocks.error).not.toHaveBeenCalled();
+  });
+
+  it("detectedIds 已填充 → 不重复探测（避免每次重跑 which）", async () => {
+    seedStores({
+      defaultAgentId: null,
+      detectedIds: ["claude"],
+      disabledAgentIds: [],
+    });
+    prepareLaunch.mockResolvedValueOnce({ launchId: "launch-2" });
+
+    await runNewAgent();
+
+    expect(detect).not.toHaveBeenCalled();
+    expect(prepareLaunch).toHaveBeenCalledWith("claude");
   });
 
   it("无可用 agent → toast，且不创建终端", async () => {

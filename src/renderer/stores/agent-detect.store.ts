@@ -4,11 +4,20 @@ import { create } from "zustand";
 interface AgentDetectState {
   detect: () => Promise<void>;
   detectedIds: AgentKind[];
+  /**
+   * Detect once if not yet probed. Safe to call from anywhere (e.g. the New
+   * Agent action) without relying on the settings page having mounted. No-op
+   * when detection already succeeded; coalesces concurrent callers onto a
+   * single in-flight probe so the palette never re-runs `which` per invocation.
+   */
+  ensureDetected: () => Promise<void>;
   isRefreshing: boolean;
   refresh: () => Promise<void>;
 }
 
-export const useAgentDetectStore = create<AgentDetectState>((set) => ({
+let ensureDetectedInFlight: Promise<void> | null = null;
+
+export const useAgentDetectStore = create<AgentDetectState>((set, get) => ({
   detectedIds: [],
   isRefreshing: false,
 
@@ -21,6 +30,21 @@ export const useAgentDetectStore = create<AgentDetectState>((set) => ({
     } catch (err) {
       console.error("[agent-detect.store] detect failed:", err);
     }
+  },
+
+  ensureDetected() {
+    if (get().detectedIds.length > 0) {
+      return Promise.resolve();
+    }
+    if (ensureDetectedInFlight) {
+      return ensureDetectedInFlight;
+    }
+    ensureDetectedInFlight = get()
+      .detect()
+      .finally(() => {
+        ensureDetectedInFlight = null;
+      });
+    return ensureDetectedInFlight;
   },
 
   async refresh() {
