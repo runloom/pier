@@ -44,12 +44,16 @@ function DefaultAgentPicker() {
     (id) => !disabledAgentIds.includes(id)
   );
 
-  // Auto is active when defaultAgentId is null, or the selected agent is not
-  // in detectedIds, or the selected agent is disabled.
+  const isBlank = defaultAgentId === "blank";
+
+  // Auto is active when no agent is chosen (null), or the chosen agent is no
+  // longer available (not detected / disabled) and thus falls back to auto.
+  // "blank" is a distinct, explicit choice — never an auto-fallback case.
   const autoIsActive =
     defaultAgentId === null ||
-    !detectedIds.includes(defaultAgentId as never) ||
-    disabledAgentIds.includes(defaultAgentId as never);
+    (!isBlank &&
+      (!detectedIds.includes(defaultAgentId) ||
+        disabledAgentIds.includes(defaultAgentId)));
 
   return (
     <fieldset className="flex flex-wrap gap-2">
@@ -62,7 +66,7 @@ function DefaultAgentPicker() {
         {t("settings.agents.defaultPick.auto")}
       </button>
       <button
-        aria-pressed={defaultAgentId === "blank" && !autoIsActive}
+        aria-pressed={isBlank}
         className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
         onClick={() => setDefaultAgentId("blank").catch(() => undefined)}
         type="button"

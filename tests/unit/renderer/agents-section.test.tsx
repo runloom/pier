@@ -76,14 +76,37 @@ describe("AgentsSection", () => {
     expect(autoBtn).toBeInTheDocument();
   });
 
-  it("Auto chip is pressed when defaultAgentId is null", () => {
+  it("Auto pressed and Blank not pressed when defaultAgentId is null", () => {
     useAgentPreferencesStore.setState({
       ...DEFAULT_PREFERENCES,
       defaultAgentId: null,
     });
     render(<AgentsSection />);
-    const autoBtn = screen.getByRole("button", { name: "Auto" });
-    expect(autoBtn).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Auto" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(
+      screen.getByRole("button", { name: "Blank terminal" })
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("Blank pressed and Auto not pressed when defaultAgentId is blank", () => {
+    // Regression: "blank" is a distinct choice, not an auto-fallback. Even
+    // though "blank" is never in detectedIds, Auto must NOT light up.
+    useAgentDetectStore.setState({ detectedIds: ["claude"] });
+    useAgentPreferencesStore.setState({
+      ...DEFAULT_PREFERENCES,
+      defaultAgentId: "blank",
+    });
+    render(<AgentsSection />);
+    expect(
+      screen.getByRole("button", { name: "Blank terminal" })
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Auto" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
   });
 
   it("renders agent-row-claude after detect resolves", async () => {
