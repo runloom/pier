@@ -75,7 +75,7 @@ export function TerminalStatusBar({
   }
   return (
     <div
-      className="absolute inset-x-0 bottom-0 flex h-6 min-w-0 items-center gap-1 overflow-hidden border-border/60 border-t bg-background px-1.5 leading-none"
+      className="absolute inset-x-0 bottom-0 flex h-7 items-center gap-1 px-1.5 leading-none"
       data-testid="terminal-status-bar"
     >
       {visibleItems.map((item) => (
