@@ -214,7 +214,7 @@ describe("WorkspaceHost", () => {
     );
     expect(screen.getByTestId("workspace-tooltip-provider")).toHaveAttribute(
       "data-skip-delay-duration",
-      "1000"
+      "0"
     );
     expect(screen.getByTestId("dockview")).toHaveAttribute(
       "data-disable-tabs-overflow-list",

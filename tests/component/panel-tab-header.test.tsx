@@ -18,10 +18,7 @@ import {
   vi,
 } from "vitest";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
-import {
-  PANEL_TAB_TOOLTIP_DELAY_MS,
-  PanelTabHeader,
-} from "@/components/workspace/panel-tab-header.tsx";
+import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
@@ -30,9 +27,7 @@ type ActiveChangeHandler = (event: { isActive: boolean }) => void;
 
 function render(ui: ReactElement, options?: RenderOptions) {
   return renderBase(
-    <TooltipProvider skipDelayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
-      {ui}
-    </TooltipProvider>,
+    <TooltipProvider skipDelayDuration={0}>{ui}</TooltipProvider>,
     options
   );
 }
@@ -375,7 +370,99 @@ describe("PanelTabHeader", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("keeps tab tooltips continuous across repeated adjacent tab moves", () => {
+  it("does not open the metadata tooltip while Command is held", () => {
+    vi.useFakeTimers();
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "terminal-1": {
+          display: { short: "pier" },
+          tab: {
+            title: "dev",
+            tooltip: {
+              lines: [{ label: "Command", value: "bun run dev" }],
+              title: "dev",
+            },
+          },
+        },
+      },
+    });
+    useTabShortcutHintsStore.setState({
+      activeGroupTabHints: { "terminal-1": 1 },
+      commandKeyDown: true,
+    });
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+    const tabElement = container.querySelector(".dv-default-tab");
+    expect(tabElement).not.toBeNull();
+    if (!tabElement) {
+      return;
+    }
+
+    act(() => {
+      fireEvent.pointerMove(tabElement, {
+        pointerType: "mouse",
+      });
+    });
+    advanceTooltipDelay(1000);
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(
+      container.querySelector("[data-panel-tab-index-hint]")
+    ).toHaveTextContent("⌘1");
+  });
+
+  it("closes an open metadata tooltip when Command is pressed", () => {
+    vi.useFakeTimers();
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "terminal-1": {
+          display: { short: "pier" },
+          tab: {
+            title: "dev",
+            tooltip: {
+              lines: [{ label: "Command", value: "bun run dev" }],
+              title: "dev",
+            },
+          },
+        },
+      },
+    });
+    useTabShortcutHintsStore
+      .getState()
+      .setActiveGroupPanels([{ id: "terminal-1" }]);
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+    const tabElement = container.querySelector(".dv-default-tab");
+    expect(tabElement).not.toBeNull();
+    if (!tabElement) {
+      return;
+    }
+
+    act(() => {
+      fireEvent.pointerMove(tabElement, {
+        pointerType: "mouse",
+      });
+    });
+    advanceTooltipDelay(1000);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("dev");
+
+    act(() => {
+      useTabShortcutHintsStore.getState().setCommandKeyDown(true);
+    });
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(
+      container.querySelector("[data-panel-tab-index-hint]")
+    ).toHaveTextContent("⌘1");
+  });
+
+  it("keeps tab tooltips delayed across repeated adjacent tab moves", () => {
     vi.useFakeTimers();
     usePanelDescriptorStore.setState({
       activeId: null,
@@ -466,6 +553,10 @@ describe("PanelTabHeader", () => {
       });
     });
 
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    advanceTooltipDelay(999);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    advanceTooltipDelay(1);
     expect(screen.getByRole("tooltip")).toHaveTextContent("two");
 
     act(() => {
@@ -478,7 +569,6 @@ describe("PanelTabHeader", () => {
         relatedTarget: thirdTab,
       });
     });
-    advanceTooltipDelay(301);
 
     act(() => {
       fireEvent.pointerMove(thirdTab, {
@@ -486,6 +576,10 @@ describe("PanelTabHeader", () => {
       });
     });
 
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    advanceTooltipDelay(999);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    advanceTooltipDelay(1);
     expect(screen.getByRole("tooltip")).toHaveTextContent("three");
   });
 
@@ -584,6 +678,12 @@ describe("PanelTabHeader", () => {
     expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
 
     fireEvent.keyDown(window, { code: "MetaLeft", metaKey: true });
+    expect(
+      container.querySelector("[data-panel-tab-index-hint]")
+    ).toHaveTextContent("⌘1");
+
+    fireEvent.keyDown(window, { code: "Digit1", metaKey: true });
+    fireEvent.keyUp(window, { code: "Digit1", metaKey: false });
     expect(
       container.querySelector("[data-panel-tab-index-hint]")
     ).toHaveTextContent("⌘1");

@@ -25,10 +25,7 @@ import { setTerminalBasePanel } from "@/stores/terminal-input-routing.store.ts";
 import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
-import {
-  PANEL_TAB_TOOLTIP_DELAY_MS,
-  PanelTabHeader,
-} from "./panel-tab-header.tsx";
+import { PanelTabHeader } from "./panel-tab-header.tsx";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
@@ -346,7 +343,7 @@ export function WorkspaceHost() {
       data-testid="workspace-host-root"
       ref={rootRef}
     >
-      <TooltipProvider skipDelayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
+      <TooltipProvider skipDelayDuration={0}>
         <DockviewReact
           components={panelComponents}
           defaultTabComponent={PanelTabHeader}

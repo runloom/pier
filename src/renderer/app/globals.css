@@ -1,8 +1,9 @@
 @import "tailwindcss";
-@source "../../../packages/ui/src";
-@source "../../plugins";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+
+@source "../../../packages/ui/src";
+@source "../../plugins";
 
 @layer base {
   /* === HarmonyOS Sans SC — 本地打包 UI / CJK 字体 ===
@@ -800,7 +801,6 @@ body {
 .dv-tab.dv-tab-dragging .pier-panel-tab-index-hint,
 .dv-tab-ghost-drag .pier-panel-tab-index-hint {
   align-items: center;
-  color: currentColor;
   display: inline-flex;
   height: 14px;
   justify-content: center;

@@ -192,15 +192,18 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       />
     );
   }
+  const commandKeyDown = useTabShortcutHintsStore(
+    (state) => state.commandKeyDown
+  );
   const shortcutIndex = useTabShortcutHintsStore((state) =>
-    state.commandKeyDown ? state.activeGroupTabHints[props.api.id] : undefined
+    commandKeyDown ? state.activeGroupTabHints[props.api.id] : undefined
   );
   let leadingVisual: ReactNode = null;
   if (shortcutIndex) {
     leadingVisual = (
       <span
         aria-hidden="true"
-        className="pier-panel-tab-index-hint shrink-0 font-semibold text-[10px] text-muted-foreground"
+        className="pier-panel-tab-index-hint shrink-0 font-semibold text-[10px] text-primary"
         data-panel-tab-index-hint={shortcutIndex}
       >
         ⌘{shortcutIndex}
@@ -269,7 +272,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     </div>
   );
 
-  if (!tooltipText) {
+  if (!(tooltipText && !commandKeyDown)) {
     return tabContent;
   }
 
