@@ -3,6 +3,7 @@ import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { resolveAgentCommand } from "../services/agents/agent-launch.ts";
+import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 
 export function registerAgentsIpc(ipcMain: IpcMain): void {
   const detection = createAgentDetectionService();
@@ -29,9 +30,7 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
       if (!command) {
         return { launchId: null };
       }
-      const launchId = await appCore.services.terminalLaunches.register({
-        command,
-      });
+      const launchId = terminalLaunchRegistry.register({ command });
       return { launchId };
     }
   );

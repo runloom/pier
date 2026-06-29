@@ -209,6 +209,9 @@ export const zhCN = {
     title: "命令面板",
     empty: "无匹配命令",
     searchResults: "搜索结果",
+    agents: {
+      noAgentDetected: "未检测到可用 agent",
+    },
     placeholder: {
       commands: "搜索命令…",
       runTask: "搜索任务或命令…",
@@ -258,7 +261,6 @@ export const zhCN = {
         "clear history",
         "reset history",
         "qingkong",
-        "lishi",
       ],
       equalizePanels: [
         "平分面板",
@@ -271,9 +273,7 @@ export const zhCN = {
         "pingfen mianban",
         "junfen mianban",
         "junfen",
-        "jfmb",
         "pingfen",
-        "pfmb",
       ],
       newTerminal: [
         "新建终端",

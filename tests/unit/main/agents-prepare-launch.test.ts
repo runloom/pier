@@ -1,48 +1,24 @@
 import { registerAgentsIpc } from "@main/ipc/agents.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { describe, expect, it, vi } from "vitest";
-
-// A minimal launch registry that captures registered launches for assertions.
-function makeFakeRegistry() {
-  const store = new Map<string, { command: string }>();
-  let nextId = "launch-abc";
-  return {
-    setNextId(id: string) {
-      nextId = id;
-    },
-    register(launch: { command: string }) {
-      const id = nextId;
-      store.set(id, launch);
-      return id;
-    },
-    consume(id: string) {
-      const entry = store.get(id) ?? null;
-      store.delete(id);
-      return entry;
-    },
-    read(id: string) {
-      return store.get(id) ?? null;
-    },
-    discard(id: string) {
-      store.delete(id);
-    },
-  };
-}
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakePreferences = { read: vi.fn() };
-const fakeRegistry = makeFakeRegistry();
+
+// agents.ts imports the concrete terminalLaunchRegistry directly (its
+// register() returns string synchronously). Mock that module so we can spy on
+// register() and assert it is/ isn't called per branch.
+const registerSpy = vi.fn((_launch: { command: string }) => "launch-abc");
+
+vi.mock("@main/state/terminal-launch-state.ts", () => ({
+  terminalLaunchRegistry: {
+    register: (launch: { command: string }) => registerSpy(launch),
+  },
+}));
 
 vi.mock("@main/app-core/app-core.ts", () => ({
   appCore: {
     services: {
       preferences: { read: () => fakePreferences.read() },
-      terminalLaunches: {
-        register: (launch: { command: string }) =>
-          fakeRegistry.register(launch),
-        consume: (id: string) => fakeRegistry.consume(id),
-        read: (id: string) => fakeRegistry.read(id),
-        discard: (id: string) => fakeRegistry.discard(id),
-      },
     },
   },
 }));
@@ -69,6 +45,11 @@ function makeIpcMain() {
   };
 }
 
+beforeEach(() => {
+  registerSpy.mockClear();
+  fakePreferences.read.mockReset();
+});
+
 describe("pier:agents:prepareLaunch", () => {
   it("已知 agent → 注册 launch，返回 non-null launchId", async () => {
     fakePreferences.read.mockResolvedValueOnce({
@@ -85,7 +66,8 @@ describe("pier:agents:prepareLaunch", () => {
     )) as { launchId: string | null };
 
     expect(result.launchId).toBe("launch-abc");
-    expect(fakeRegistry.consume("launch-abc")).toMatchObject({
+    expect(registerSpy).toHaveBeenCalledTimes(1);
+    expect(registerSpy).toHaveBeenCalledWith({
       command: expect.stringContaining("claude"),
     });
   });
@@ -105,7 +87,7 @@ describe("pier:agents:prepareLaunch", () => {
     )) as { launchId: string | null };
 
     expect(result.launchId).toBeNull();
-    // Nothing registered
-    expect(fakeRegistry.read("launch-abc")).toBeNull();
+    // No registration happened (assertion independent of any seeded id).
+    expect(registerSpy).not.toHaveBeenCalled();
   });
 });

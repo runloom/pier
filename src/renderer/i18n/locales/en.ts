@@ -212,6 +212,9 @@ export const en = {
     title: "Command Palette",
     empty: "No matching command",
     searchResults: "Results",
+    agents: {
+      noAgentDetected: "No agent CLI detected",
+    },
     placeholder: {
       commands: "Search commands…",
       runTask: "Search tasks or commands…",
@@ -270,9 +273,7 @@ export const en = {
         "pingfen mianban",
         "junfen mianban",
         "junfen",
-        "jfmb",
         "pingfen",
-        "pfmb",
         "平分面板",
         "均分面板",
       ],

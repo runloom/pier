@@ -1,5 +1,7 @@
 import { pickAgent } from "@shared/agent-selection.ts";
+import i18next from "i18next";
 import { Bot } from "lucide-react";
+import { toast } from "sonner";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -12,7 +14,7 @@ async function handleNewAgent(): Promise<void> {
 
   const agentId = pickAgent(defaultAgentId, detectedIds, disabledAgentIds);
   if (!agentId) {
-    // No usable agent detected — do nothing (caller can add a toast if desired).
+    toast.error(i18next.t("commandPalette.agents.noAgentDetected"));
     return;
   }
 
