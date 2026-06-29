@@ -246,17 +246,19 @@ function buildTerminalInputRoutingIssues(
       severity: "warning",
     });
   }
+  const expectedEffective: TerminalKeyboardFocusTarget =
+    expected.webRequestCount > 0 ? { kind: "web" } : expected.basePanel;
   if (
     !sameKeyboardFocusTarget(
-      expected.keyboardFocusTarget,
+      expectedEffective,
       native.window.keyboardFocusTarget
     )
   ) {
     issues.push({
       code: "input_routing_keyboard_target_mismatch",
       message: "desired keyboard focus target does not match native router",
-      ...(expected.keyboardFocusTarget.kind === "terminal"
-        ? { panelId: expected.keyboardFocusTarget.panelId }
+      ...(expectedEffective.kind === "terminal"
+        ? { panelId: expectedEffective.panelId }
         : {}),
       severity: "error",
     });
@@ -271,13 +273,13 @@ function buildTerminalInputRoutingIssues(
   const windowFocused =
     "windowFocused" in expected ? expected.windowFocused !== false : true;
   const surfaceState = collectInputRoutingSurfaceState(native);
-  if (expected.keyboardFocusTarget.kind === "web") {
+  if (expectedEffective.kind === "web") {
     return issues.concat(buildWebKeyboardTargetIssues(surfaceState));
   }
   if (!windowFocused) {
     return issues.concat(buildBlurredWindowInputRoutingIssues(surfaceState));
   }
-  const expectedPanelId = expected.keyboardFocusTarget.panelId;
+  const expectedPanelId = expectedEffective.panelId;
   const expectedSurface = native.surfaces.find(
     (surface) => surface.panelId === expectedPanelId
   );

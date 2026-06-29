@@ -549,10 +549,11 @@ private struct TerminalKeyboardFocusTargetEnvelope: Codable {
 }
 
 private struct TerminalInputRoutingEnvelope: Codable {
-    let keyboardFocusTarget: TerminalKeyboardFocusTargetEnvelope
+    let basePanel: TerminalKeyboardFocusTargetEnvelope
     let nativeApplySequence: Int
     let rendererSequence: Int
     let webOverlayRects: [TerminalWebOverlayRectEntry]
+    let webRequestCount: Int
     let windowFocused: Bool
 }
 
@@ -1030,17 +1031,20 @@ final class GhosttyBridgeImpl {
         }
 
         mutateState(parent) { state in
-            state.basePanel = Self.keyboardFocusTarget(from: inputRouting)
+            state.basePanel = Self.basePanel(from: inputRouting)
+            state.webRequests = inputRouting.webRequestCount > 0
+                ? Array(repeating: "ipc", count: inputRouting.webRequestCount)
+                : []
             state.windowFocused = inputRouting.windowFocused
         }
         applyFirstResponder(for: parent)
     }
 
-    private static func keyboardFocusTarget(
+    private static func basePanel(
         from inputRouting: TerminalInputRoutingEnvelope
     ) -> KeyboardFocusTarget {
-        if inputRouting.keyboardFocusTarget.kind == "terminal",
-           let panelId = inputRouting.keyboardFocusTarget.panelId,
+        if inputRouting.basePanel.kind == "terminal",
+           let panelId = inputRouting.basePanel.panelId,
            !panelId.isEmpty {
             return .terminal(panelId)
         }

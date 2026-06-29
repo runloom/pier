@@ -26,8 +26,6 @@ export interface TerminalWebOverlayRect {
   id: string;
 }
 
-export type WebFocusScopeKind = "exclusive" | "transient";
-
 export type TerminalKeyboardFocusTarget =
   | {
       kind: "terminal";
@@ -35,11 +33,13 @@ export type TerminalKeyboardFocusTarget =
     }
   | {
       kind: "web";
-      scope?: WebFocusScopeKind;
     };
 
 export interface TerminalInputRoutingSnapshot {
-  keyboardFocusTarget: TerminalKeyboardFocusTarget;
+  /** dockview 活跃面板意图（terminal | web）。 */
+  basePanel: TerminalKeyboardFocusTarget;
+  /** 当前活跃的浮层 web 焦点请求数；>0 即 effective=web。 */
+  webRequestCount: number;
   rendererSequence: number;
   webOverlayRects: TerminalWebOverlayRect[];
 }

@@ -54,21 +54,33 @@ function desiredInputRouting(
 ): TerminalInputRoutingSnapshot {
   return (
     state.desiredInputRouting ?? {
-      keyboardFocusTarget: { kind: "web" },
+      basePanel: { kind: "web" },
       rendererSequence: 0,
       webOverlayRects: [],
+      webRequestCount: 0,
     }
   );
+}
+
+export function computeEffectiveKeyboardTarget(
+  basePanel: TerminalKeyboardFocusTarget,
+  webRequestCount: number
+): TerminalKeyboardFocusTarget {
+  return webRequestCount > 0 ? { kind: "web" } : basePanel;
 }
 
 function terminalFocusPanelId(
   inputRouting: TerminalInputRoutingSnapshot,
   windowFocused: boolean
 ): string | null {
-  if (!windowFocused || inputRouting.keyboardFocusTarget.kind !== "terminal") {
+  const effective = computeEffectiveKeyboardTarget(
+    inputRouting.basePanel,
+    inputRouting.webRequestCount
+  );
+  if (!windowFocused || effective.kind !== "terminal") {
     return null;
   }
-  return inputRouting.keyboardFocusTarget.panelId;
+  return effective.panelId;
 }
 
 function effectivePresentationFromDesired(
@@ -119,7 +131,7 @@ function effectiveInputRoutingFromDesired(
   };
 }
 
-function scopeKeyboardFocusTarget(
+function scopeBasePanel(
   win: AppWindow,
   target: TerminalKeyboardFocusTarget
 ): TerminalKeyboardFocusTarget {
@@ -155,10 +167,7 @@ function scopeNativeInputRouting(
 ): TerminalNativeInputRoutingSnapshot {
   return {
     ...effective,
-    keyboardFocusTarget: scopeKeyboardFocusTarget(
-      win,
-      effective.keyboardFocusTarget
-    ),
+    basePanel: scopeBasePanel(win, effective.basePanel),
   };
 }
 
