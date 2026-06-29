@@ -803,75 +803,8 @@ body {
   height: 14px;
   justify-content: center;
   line-height: 1;
-  min-width: 14px;
-  opacity: 0.92;
-}
-
-.dockview-theme-pier .pier-panel-tab-state-indicator,
-.dv-tab.dv-tab-dragging .pier-panel-tab-state-indicator,
-.dv-tab-ghost-drag .pier-panel-tab-state-indicator {
-  background-color: var(--status-neutral-fg);
-  border-radius: 999px;
-  box-shadow: 0 0 0 1px
-    color-mix(in oklab, var(--background) 65%, transparent);
-  display: inline-block;
-  height: 6px;
-  width: 6px;
-}
-
-.dockview-theme-pier
-  .pier-panel-tab-state-indicator[data-tab-status="running"],
-.dv-tab.dv-tab-dragging
-  .pier-panel-tab-state-indicator[data-tab-status="running"],
-.dv-tab-ghost-drag
-  .pier-panel-tab-state-indicator[data-tab-status="running"] {
-  animation: pier-tab-state-pulse 1.2s ease-in-out infinite;
-  background-color: var(--primary);
-}
-
-.dockview-theme-pier
-  .pier-panel-tab-state-indicator[data-tab-status="waiting"],
-.dockview-theme-pier
-  .pier-panel-tab-state-indicator[data-tab-status="blocked"],
-.dv-tab.dv-tab-dragging
-  .pier-panel-tab-state-indicator[data-tab-status="waiting"],
-.dv-tab.dv-tab-dragging
-  .pier-panel-tab-state-indicator[data-tab-status="blocked"],
-.dv-tab-ghost-drag
-  .pier-panel-tab-state-indicator[data-tab-status="waiting"],
-.dv-tab-ghost-drag
-  .pier-panel-tab-state-indicator[data-tab-status="blocked"] {
-  background-color: var(--status-warning-fg);
-}
-
-.dockview-theme-pier
-  .pier-panel-tab-state-indicator[data-tab-status="failed"],
-.dv-tab.dv-tab-dragging
-  .pier-panel-tab-state-indicator[data-tab-status="failed"],
-.dv-tab-ghost-drag
-  .pier-panel-tab-state-indicator[data-tab-status="failed"] {
-  background-color: var(--status-danger-fg);
-}
-
-.dockview-theme-pier
-  .pier-panel-tab-state-indicator[data-tab-status="succeeded"],
-.dv-tab.dv-tab-dragging
-  .pier-panel-tab-state-indicator[data-tab-status="succeeded"],
-.dv-tab-ghost-drag
-  .pier-panel-tab-state-indicator[data-tab-status="succeeded"] {
-  background-color: var(--status-success-fg);
-}
-
-@keyframes pier-tab-state-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(0.82);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
+  width: 14px;
+  opacity: 0.9;
 }
 
 .dv-tab-ghost-drag .pier-panel-tab-icon {
@@ -897,7 +830,6 @@ body {
   color: var(--foreground) !important;
   display: inline-flex !important;
   height: 32px !important;
-  max-width: 220px !important;
   min-width: 0 !important;
   overflow: hidden !important;
   padding: 0 !important;
@@ -912,7 +844,6 @@ body {
   border-radius: 999px !important;
   box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent) !important;
   height: 32px !important;
-  max-width: 220px !important;
   overflow: hidden !important;
   padding-inline: 10px 12px !important;
   width: fit-content !important;

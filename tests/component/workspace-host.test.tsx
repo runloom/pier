@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
 import {
@@ -25,6 +26,30 @@ vi.mock("dockview-react", async (importOriginal) => {
         data-testid="dockview"
       />
     )),
+  };
+});
+
+vi.mock("@/components/primitives/tooltip.tsx", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/components/primitives/tooltip.tsx")
+    >();
+  return {
+    ...actual,
+    TooltipProvider: ({
+      children,
+      skipDelayDuration,
+    }: {
+      children: ReactNode;
+      skipDelayDuration?: number;
+    }) => (
+      <div
+        data-skip-delay-duration={skipDelayDuration}
+        data-testid="workspace-tooltip-provider"
+      >
+        {children}
+      </div>
+    ),
   };
 });
 
@@ -189,6 +214,10 @@ describe("WorkspaceHost", () => {
     expect(screen.getByTestId("workspace-host-root")).toHaveAttribute(
       "data-dockview-maximized",
       "false"
+    );
+    expect(screen.getByTestId("workspace-tooltip-provider")).toHaveAttribute(
+      "data-skip-delay-duration",
+      "1000"
     );
     expect(screen.getByTestId("dockview")).toHaveAttribute(
       "data-disable-tabs-overflow-list",

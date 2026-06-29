@@ -7,6 +7,7 @@ import {
 } from "dockview-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
+import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
@@ -28,7 +29,10 @@ import {
 } from "@/stores/terminal-input-routing.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
-import { PanelTabHeader } from "./panel-tab-header.tsx";
+import {
+  PANEL_TAB_TOOLTIP_DELAY_MS,
+  PanelTabHeader,
+} from "./panel-tab-header.tsx";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
@@ -478,15 +482,17 @@ export function WorkspaceHost() {
       data-testid="workspace-host-root"
       ref={rootRef}
     >
-      <DockviewReact
-        components={panelComponents}
-        defaultTabComponent={PanelTabHeader}
-        disableTabsOverflowList={true}
-        leftHeaderActionsComponent={WorkspaceHeaderActions}
-        onReady={handleReady}
-        rightHeaderActionsComponent={WorkspaceHeaderRightActions}
-        theme={pierTheme}
-      />
+      <TooltipProvider skipDelayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
+        <DockviewReact
+          components={panelComponents}
+          defaultTabComponent={PanelTabHeader}
+          disableTabsOverflowList={true}
+          leftHeaderActionsComponent={WorkspaceHeaderActions}
+          onReady={handleReady}
+          rightHeaderActionsComponent={WorkspaceHeaderRightActions}
+          theme={pierTheme}
+        />
+      </TooltipProvider>
     </div>
   );
 }

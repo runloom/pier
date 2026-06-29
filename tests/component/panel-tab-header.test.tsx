@@ -18,7 +18,10 @@ import {
 } from "vitest";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
-import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
+import {
+  PANEL_TAB_TOOLTIP_DELAY_MS,
+  PanelTabHeader,
+} from "@/components/workspace/panel-tab-header.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
@@ -26,7 +29,12 @@ import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 type ActiveChangeHandler = (event: { isActive: boolean }) => void;
 
 function render(ui: ReactElement, options?: RenderOptions) {
-  return renderBase(<TooltipProvider>{ui}</TooltipProvider>, options);
+  return renderBase(
+    <TooltipProvider skipDelayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
+      {ui}
+    </TooltipProvider>,
+    options
+  );
 }
 
 function advanceTooltipDelay(milliseconds: number) {
@@ -203,6 +211,15 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector("[data-panel-tab-state-indicator]")
     ).toHaveAttribute("data-tab-status", "running");
+    expect(
+      container.querySelector("[data-panel-tab-state-indicator]")
+    ).not.toHaveClass("pier-panel-tab-state-indicator");
+    expect(
+      container.querySelector("[data-panel-tab-running-ping]")
+    ).toHaveClass("animate-ping", "bg-primary");
+    expect(container.querySelector("[data-panel-tab-running-dot]")).toHaveClass(
+      "bg-primary"
+    );
     expect(container.querySelector("[data-tab-state-label]")).toHaveAttribute(
       "data-tab-state-label",
       "Running"
@@ -239,12 +256,12 @@ describe("PanelTabHeader", () => {
   });
 
   it.each([
-    ["running", "Running"],
-    ["succeeded", "Succeeded"],
-    ["failed", "Failed 1"],
-    ["waiting", "Waiting for input"],
-    ["blocked", "Blocked"],
-  ] as const)("renders the %s tab state indicator", (status, label) => {
+    ["running", "Running", "relative"],
+    ["succeeded", "Succeeded", "bg-[var(--status-success-fg)]"],
+    ["failed", "Failed 1", "bg-[var(--status-danger-fg)]"],
+    ["waiting", "Waiting for input", "bg-[var(--status-warning-fg)]"],
+    ["blocked", "Blocked", "bg-[var(--status-warning-fg)]"],
+  ] as const)("renders the %s tab state indicator with Tailwind classes", (status, label, expectedClassName) => {
     usePanelDescriptorStore.setState({
       activeId: null,
       descriptors: {
@@ -266,9 +283,24 @@ describe("PanelTabHeader", () => {
       "data-tab-status",
       status
     );
-    expect(
-      container.querySelector("[data-panel-tab-state-indicator]")
-    ).toHaveAttribute("data-tab-status", status);
+    const indicator = container.querySelector(
+      "[data-panel-tab-state-indicator]"
+    );
+    expect(indicator).toHaveAttribute("data-tab-status", status);
+    expect(indicator).not.toHaveClass("pier-panel-tab-state-indicator");
+    expect(indicator).toHaveClass(expectedClassName);
+    if (status === "running") {
+      expect(
+        indicator?.querySelector("[data-panel-tab-running-ping]")
+      ).toHaveClass("animate-ping", "bg-primary");
+      expect(
+        indicator?.querySelector("[data-panel-tab-running-dot]")
+      ).toHaveClass("bg-primary");
+    } else {
+      expect(
+        indicator?.querySelector("[data-panel-tab-running-ping]")
+      ).toBeNull();
+    }
   });
 
   it("does not render a state indicator for idle tabs", () => {
@@ -343,7 +375,7 @@ describe("PanelTabHeader", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("shows another tab tooltip immediately after a tab tooltip was open", () => {
+  it("keeps tab tooltips continuous across repeated adjacent tab moves", () => {
     vi.useFakeTimers();
     usePanelDescriptorStore.setState({
       activeId: null,
@@ -368,6 +400,16 @@ describe("PanelTabHeader", () => {
             },
           },
         },
+        "terminal-3": {
+          display: { short: "three" },
+          tab: {
+            title: "three",
+            tooltip: {
+              lines: [{ label: "Command", value: "pnpm build" }],
+              title: "three",
+            },
+          },
+        },
       },
     });
 
@@ -382,14 +424,23 @@ describe("PanelTabHeader", () => {
             "terminal-2"
           )}
         />
+        <PanelTabHeader
+          {...createHeaderProps(
+            "terminal",
+            "Terminal",
+            undefined,
+            "terminal-3"
+          )}
+        />
       </>
     );
-    const [firstTab, secondTab] = Array.from(
+    const [firstTab, secondTab, thirdTab] = Array.from(
       container.querySelectorAll(".dv-default-tab")
     );
     expect(firstTab).not.toBeUndefined();
     expect(secondTab).not.toBeUndefined();
-    if (!(firstTab && secondTab)) {
+    expect(thirdTab).not.toBeUndefined();
+    if (!(firstTab && secondTab && thirdTab)) {
       return;
     }
 
@@ -416,6 +467,26 @@ describe("PanelTabHeader", () => {
     });
 
     expect(screen.getByRole("tooltip")).toHaveTextContent("two");
+
+    act(() => {
+      fireEvent.pointerOut(secondTab, {
+        pointerType: "mouse",
+        relatedTarget: thirdTab,
+      });
+      fireEvent.pointerLeave(secondTab, {
+        pointerType: "mouse",
+        relatedTarget: thirdTab,
+      });
+    });
+    advanceTooltipDelay(301);
+
+    act(() => {
+      fireEvent.pointerMove(thirdTab, {
+        pointerType: "mouse",
+      });
+    });
+
+    expect(screen.getByRole("tooltip")).toHaveTextContent("three");
   });
 
   it("falls back to the panel kit icon when tab chrome icon id is unknown", () => {

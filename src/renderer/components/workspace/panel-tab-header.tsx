@@ -38,7 +38,7 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
 
-const TAB_TOOLTIP_DELAY_MS = 1000;
+export const PANEL_TAB_TOOLTIP_DELAY_MS = 1000;
 
 function localizedTooltipLabel(
   label: string,
@@ -134,19 +134,19 @@ function tabAriaLabel(
   return [title, stateLabel].filter(Boolean).join(", ");
 }
 
-function tabStatusTone(status: PanelTabStatus): string {
+function tabStatusIndicatorClassName(status: PanelTabStatus): string {
+  const baseClassName =
+    "inline-flex size-2 shrink-0 rounded-full ring-1 ring-background/65";
   switch (status) {
-    case "running":
-      return "running";
     case "waiting":
     case "blocked":
-      return "warning";
+      return `${baseClassName} bg-[var(--status-warning-fg)]`;
     case "failed":
-      return "destructive";
+      return `${baseClassName} bg-[var(--status-danger-fg)]`;
     case "succeeded":
-      return "success";
+      return `${baseClassName} bg-[var(--status-success-fg)]`;
     default:
-      return "neutral";
+      return `${baseClassName} bg-[var(--status-neutral-fg)]`;
   }
 }
 
@@ -166,16 +166,35 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     t
   );
   const status = tab?.state?.status;
-  const statusIndicator =
-    status && status !== "idle" ? (
+  let statusIndicator: ReactNode = null;
+  if (status === "running") {
+    statusIndicator = (
       <span
         aria-hidden="true"
-        className="pier-panel-tab-state-indicator shrink-0"
+        className="relative flex size-2.5 items-center justify-center"
         data-panel-tab-state-indicator={status}
-        data-tab-state-tone={tabStatusTone(status)}
+        data-tab-status={status}
+      >
+        <span
+          className="absolute h-full w-full animate-ping rounded-full bg-primary opacity-75"
+          data-panel-tab-running-ping=""
+        />
+        <span
+          className="size-2 rounded-full bg-primary"
+          data-panel-tab-running-dot=""
+        />
+      </span>
+    );
+  } else if (status && status !== "idle") {
+    statusIndicator = (
+      <span
+        aria-hidden="true"
+        className={tabStatusIndicatorClassName(status)}
+        data-panel-tab-state-indicator={status}
         data-tab-status={status}
       />
-    ) : null;
+    );
+  }
   const shortcutIndex = useTabShortcutHintsStore((state) =>
     state.commandKeyDown ? state.activeGroupTabHints[props.api.id] : undefined
   );
@@ -225,7 +244,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const tabContent = (
     <div
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
-      className="dv-default-tab"
+      className="dv-default-tab relative"
       data-panel-tab-id={props.api.id}
       data-tab-state-label={tab?.state?.label}
       data-tab-status={status}
@@ -258,7 +277,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   }
 
   return (
-    <Tooltip delayDuration={TAB_TOOLTIP_DELAY_MS}>
+    <Tooltip delayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
       <TooltipTrigger asChild>{tabContent}</TooltipTrigger>
       <TooltipContent align="start" side="bottom" sideOffset={8}>
         <span className="whitespace-pre-line">{tooltipText}</span>
