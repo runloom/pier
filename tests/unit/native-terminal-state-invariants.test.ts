@@ -255,6 +255,16 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(appTerminalScrollViewSource).toMatch(SPM_LIVE_SCROLL_RE);
   });
 
+  it("applyFirstResponder web branch must not makeFirstResponder(nil)", () => {
+    const src = readFileSync(SWIFT_PATH, "utf8");
+    const fnStart = src.indexOf("func applyFirstResponder(for window");
+    expect(fnStart).toBeGreaterThan(-1);
+    const webBranchStart = src.indexOf("if activeTerminalId == nil", fnStart);
+    expect(webBranchStart).toBeGreaterThan(-1);
+    const webBranch = src.slice(webBranchStart, webBranchStart + 500);
+    expect(webBranch).not.toContain("makeFirstResponder(nil)");
+  });
+
   it("does not let AppTerminalScrollView.mouseMoved recurse through AppKit responder forwarding", () => {
     expect(existsSync(SPM_APP_TERMINAL_SCROLL_VIEW_PATH)).toBe(true);
     const appTerminalScrollViewSource = readFileSync(

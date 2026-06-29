@@ -1089,12 +1089,10 @@ final class GhosttyBridgeImpl {
         }
 
         if activeTerminalId == nil {
-            if terminals.values.contains(where: { term in
-                ObjectIdentifier(term.parentWindow) == windowId
-                    && window.firstResponder === term.terminalView
-            }) {
-                window.makeFirstResponder(nil)
-            }
+            // Web 拥有键盘:surface 的 hostKeyboardActive 已在上面置 false,终端光标已压暗。
+            // 不再把 window 的 firstResponder 强行清回 nil —— 那是非原子的额外一步,会造成
+            // web 层 blur→focus 抖动(搜索框光标闪烁的根因之一)。web 层 firstResponder 由
+            // main 的 webContents.focus() 单一驱动。
             return
         }
 
