@@ -9,6 +9,7 @@
     "pier": "./bin/pier.mjs"
   },
   "license": "TBD",
+  "packageManager": "pnpm@10.23.0",
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=10.0.0"
@@ -19,7 +20,7 @@
     "lint:fix": "ultracite fix",
     "format": "ultracite fix",
     "format:check": "ultracite check",
-    "depcruise": "depcruise --config dependency-cruiser.config.cjs src",
+    "depcruise": "depcruise --config dependency-cruiser.config.cjs src packages",
     "check:file-size": "bash scripts/check-file-size.sh",
     "build:native": "cd native && bash build.sh",
     "build:icons": "node ./scripts/build-app-icons.mjs",
@@ -44,6 +45,7 @@
   },
   "dependencies": {
     "@leeoniya/ufuzzy": "1.0.19",
+    "@pier/ui": "workspace:*",
     "@pierre/theme": "^1.0.3",
     "@shikijs/themes": "^4.2.0",
     "class-variance-authority": "^0.7.1",

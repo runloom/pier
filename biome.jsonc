@@ -25,6 +25,7 @@
         "src/plugins/**",
         "src/main/**",
         "src/preload/**",
+        "packages/ui/src/**",
         "electron.vite.config.ts",
         "vitest.config.ts",
         "tailwind.config.ts",
@@ -51,7 +52,8 @@
     {
       "includes": [
         "src/renderer/components/primitives/**",
-        "src/renderer/hooks/use-mobile.ts"
+        "src/renderer/hooks/use-mobile.ts",
+        "packages/ui/src/**"
       ],
       "linter": {
         "rules": {

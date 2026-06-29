@@ -1,10 +1,9 @@
-import type { ReactNode } from "react";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldLabel,
-} from "@/components/primitives/field.tsx";
+} from "@pier/ui/field.tsx";
 import {
   Select,
   SelectContent,
@@ -12,7 +11,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/primitives/select.tsx";
+} from "@pier/ui/select.tsx";
+import type { ReactNode } from "react";
 
 interface SelectRowOption {
   label: string;

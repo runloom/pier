@@ -1,14 +1,10 @@
+import { Card, CardContent } from "@pier/ui/card.tsx";
+import { FieldDescription, FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import type {
   TerminalCursorStyle,
   TerminalNewCwdPolicy,
 } from "@shared/contracts/preferences.ts";
 import { useState } from "react";
-import { Card, CardContent } from "@/components/primitives/card.tsx";
-import {
-  FieldDescription,
-  FieldSeparator,
-  FieldSet,
-} from "@/components/primitives/field.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";

@@ -12,6 +12,7 @@ export default defineConfig({
       "@main": resolve(import.meta.dirname, "src/main"),
       "@preload": resolve(import.meta.dirname, "src/preload"),
       "@plugins": resolve(import.meta.dirname, "src/plugins"),
+      "@pier/ui": resolve(import.meta.dirname, "packages/ui/src"),
     },
   },
   test: {

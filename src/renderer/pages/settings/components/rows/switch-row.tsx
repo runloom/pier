@@ -1,11 +1,11 @@
-import type { ReactNode } from "react";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldLabel,
-} from "@/components/primitives/field.tsx";
-import { Switch } from "@/components/primitives/switch.tsx";
+} from "@pier/ui/field.tsx";
+import { Switch } from "@pier/ui/switch.tsx";
+import type { ReactNode } from "react";
 
 export interface SwitchRowProps {
   checked: boolean;

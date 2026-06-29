@@ -6,7 +6,7 @@ vi.mock("@/components/common/app-shell.tsx", () => ({
   AppShell: () => <div data-testid="app-shell" />,
 }));
 
-vi.mock("@/components/primitives/tooltip.tsx", () => ({
+vi.mock("@pier/ui/tooltip.tsx", () => ({
   TooltipProvider: ({
     children,
     delayDuration,

@@ -7,7 +7,7 @@ import {
 } from "dockview-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
-import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";

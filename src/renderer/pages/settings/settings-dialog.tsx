@@ -1,12 +1,12 @@
-import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/primitives/dialog.tsx";
+} from "@pier/ui/dialog.tsx";
+import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,

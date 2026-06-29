@@ -1,11 +1,11 @@
-import { render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/primitives/tooltip.tsx";
+} from "@pier/ui/tooltip.tsx";
+import { render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Tooltip primitive", () => {
   beforeEach(() => {

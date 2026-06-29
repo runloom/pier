@@ -1,0 +1,27 @@
+{
+  "name": "@pier/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.tsx",
+    "./utils": "./src/utils.ts"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "2.1.1",
+    "cmdk": "^1.1.1",
+    "embla-carousel-react": "^8.6.0",
+    "input-otp": "^1.4.2",
+    "lucide-react": "1.21.0",
+    "radix-ui": "^1.6.0",
+    "react-resizable-panels": "^4.11.2",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "3.6.0",
+    "vaul": "^1.1.2"
+  },
+  "peerDependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  }
+}

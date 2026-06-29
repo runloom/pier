@@ -1,11 +1,11 @@
-import type { ReactNode } from "react";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldLabel,
-} from "@/components/primitives/field.tsx";
-import { Input } from "@/components/primitives/input.tsx";
+} from "@pier/ui/field.tsx";
+import { Input } from "@pier/ui/input.tsx";
+import type { ReactNode } from "react";
 
 export interface InputRowProps {
   description?: ReactNode;

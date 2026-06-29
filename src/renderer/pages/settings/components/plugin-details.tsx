@@ -1,5 +1,5 @@
+import { Badge } from "@pier/ui/badge.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { Badge } from "@/components/primitives/badge.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import {
   resolvePluginCommandDisplay,

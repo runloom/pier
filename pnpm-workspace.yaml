@@ -1,3 +1,6 @@
+packages:
+  - .
+  - packages/*
 allowBuilds:
   '@biomejs/biome': true
   '@swc/core': true

@@ -29,11 +29,8 @@ vi.mock("dockview-react", async (importOriginal) => {
   };
 });
 
-vi.mock("@/components/primitives/tooltip.tsx", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@/components/primitives/tooltip.tsx")
-    >();
+vi.mock("@pier/ui/tooltip.tsx", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@pier/ui/tooltip.tsx")>();
   return {
     ...actual,
     TooltipProvider: ({
