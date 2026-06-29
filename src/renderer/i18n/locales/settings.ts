@@ -2,6 +2,8 @@ import {
   PLUGIN_PERMISSION_LABELS_EN,
   PLUGIN_PERMISSION_LABELS_ZH_CN,
 } from "./plugin-permission-labels.ts";
+import { agentsLocales } from "./settings-agents.ts";
+
 export const settingsLocales = {
   en: {
     title: "Settings",
@@ -214,43 +216,7 @@ export const settingsLocales = {
       "zh-CN": "简体中文",
       en: "English",
     },
-    agents: {
-      permissionMode: {
-        yolo: "Skip prompts",
-        manual: "Manual",
-        mixed: "Mixed",
-      },
-      defaultPick: {
-        auto: "Auto",
-        blank: "Blank terminal",
-      },
-      list: {
-        title: "Installed agents",
-        description: "Detected agent CLIs",
-        refresh: "Refresh",
-      },
-      status: {
-        detected: "Detected",
-        missing: "Not installed",
-        disabled: "Disabled",
-      },
-      action: {
-        enable: "Enable",
-        disable: "Disable",
-        setDefault: "Set default",
-        isDefault: "Default",
-        expand: "Details",
-      },
-      row: {
-        launchCmd: "Launch command",
-        detectCmd: "Detect command",
-        expectedProcess: "Process",
-        commandOverride: "Command override",
-        commandOverrideDesc: "Override the agent binary path",
-        args: "Launch args",
-        argsDesc: "Args appended to the launch command",
-      },
-    },
+    agents: { ...agentsLocales.en },
   },
   zhCN: {
     title: "设置",
@@ -459,42 +425,6 @@ export const settingsLocales = {
       "zh-CN": "简体中文",
       en: "English",
     },
-    agents: {
-      permissionMode: {
-        yolo: "跳过确认",
-        manual: "逐次确认",
-        mixed: "混合",
-      },
-      defaultPick: {
-        auto: "自动",
-        blank: "空白终端",
-      },
-      list: {
-        title: "已安装的智能体",
-        description: "检测到的 CLI agent",
-        refresh: "刷新",
-      },
-      status: {
-        detected: "已检测",
-        missing: "未安装",
-        disabled: "已停用",
-      },
-      action: {
-        enable: "启用",
-        disable: "停用",
-        setDefault: "设为默认",
-        isDefault: "默认",
-        expand: "详情",
-      },
-      row: {
-        launchCmd: "启动命令",
-        detectCmd: "探测命令",
-        expectedProcess: "进程名",
-        commandOverride: "命令覆盖",
-        commandOverrideDesc: "覆盖 agent 可执行路径",
-        args: "启动参数",
-        argsDesc: "追加到启动命令的参数",
-      },
-    },
+    agents: { ...agentsLocales.zhCN },
   },
 } as const;
