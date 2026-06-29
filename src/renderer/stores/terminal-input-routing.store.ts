@@ -4,6 +4,7 @@ import type {
   TerminalKeyboardFocusTarget,
 } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
+import { sameKeyboardFocusTarget as sameBasePanel } from "@shared/terminal-keyboard-target.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
@@ -22,16 +23,6 @@ let lastSnapshot: TerminalInputRoutingSnapshot | null = null;
 
 function frameKey(frame: TerminalFrame): string {
   return `${frame.x},${frame.y},${frame.width},${frame.height}`;
-}
-
-function sameBasePanel(
-  a: TerminalKeyboardFocusTarget,
-  b: TerminalKeyboardFocusTarget
-): boolean {
-  return (
-    a.kind === b.kind &&
-    (a.kind === "web" || (b.kind === "terminal" && a.panelId === b.panelId))
-  );
 }
 
 function applyTerminalInputRouting(): void {

@@ -662,23 +662,6 @@ final class GhosttyBridgeImpl {
         windowStates[windowId] = state
     }
 
-    func setBasePanel(window: NSWindow, target: KeyboardFocusTarget) {
-        mutateState(window) { $0.basePanel = target }
-        applyFirstResponder(for: window)
-    }
-
-    func requestWebFocus(window: NSWindow, id: String) {
-        mutateState(window) {
-            if !$0.webRequests.contains(id) { $0.webRequests.append(id) }
-        }
-        applyFirstResponder(for: window)
-    }
-
-    func releaseWebFocus(window: NSWindow, id: String) {
-        mutateState(window) { $0.webRequests.removeAll { $0 == id } }
-        applyFirstResponder(for: window)
-    }
-
     private func controller(for window: NSWindow) -> TerminalController {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }
@@ -1032,6 +1015,7 @@ final class GhosttyBridgeImpl {
 
         mutateState(parent) { state in
             state.basePanel = Self.basePanel(from: inputRouting)
+            // 只消费 webRequests 的空/非空；具体 id 不经 IPC 传输（effectiveTarget 仅看 isEmpty）
             state.webRequests = inputRouting.webRequestCount > 0
                 ? Array(repeating: "ipc", count: inputRouting.webRequestCount)
                 : []

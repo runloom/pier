@@ -44,28 +44,3 @@ final class FocusArbiterTests: XCTestCase {
         XCTAssertFalse(state.acceptsTerminalKeyboard)
     }
 }
-
-@MainActor
-final class FocusArbiterIntentTests: XCTestCase {
-    func testRequestAndReleaseWebFocusTogglesEffectiveTarget() {
-        let impl = GhosttyBridgeImpl.shared
-        let win = NSWindow()
-        impl.setBasePanel(window: win, target: .terminal("terminal-1"))
-        XCTAssertEqual(impl.stateFor(window: win).effectiveTarget, .terminal("terminal-1"))
-
-        impl.requestWebFocus(window: win, id: "search:terminal-1")
-        XCTAssertEqual(impl.stateFor(window: win).effectiveTarget, .web)
-
-        impl.releaseWebFocus(window: win, id: "search:terminal-1")
-        XCTAssertEqual(impl.stateFor(window: win).effectiveTarget, .terminal("terminal-1"))
-    }
-
-    func testDuplicateRequestIsIdempotent() {
-        let impl = GhosttyBridgeImpl.shared
-        let win = NSWindow()
-        impl.requestWebFocus(window: win, id: "a")
-        impl.requestWebFocus(window: win, id: "a")
-        impl.releaseWebFocus(window: win, id: "a")
-        XCTAssertTrue(impl.stateFor(window: win).webRequests.isEmpty)
-    }
-}
