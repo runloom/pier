@@ -235,6 +235,7 @@ export const zhCN = {
       focusTab: "切换到第 {{index}} 个标签",
       newTab: "新建标签",
       newWindow: "新建窗口",
+      newAgent: "新建智能体",
       runTask: "运行任务...",
       terminalList: "终端列表...",
       selectTheme: "选择主题",
@@ -284,6 +285,7 @@ export const zhCN = {
         "xinjian zhongduan",
         "zhongduan",
       ],
+      newAgent: ["新建智能体", "智能体", "agent", "new agent"],
       openSettings: [
         "设置",
         "偏好",
@@ -308,7 +310,6 @@ export const zhCN = {
         "reset layout",
         "restore layout",
         "chongzhi buju",
-        "mianban buju",
       ],
       resetZoom: [
         "重置缩放",

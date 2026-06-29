@@ -1,4 +1,4 @@
-import type { DetectAgentsResult } from "@shared/contracts/agent.ts";
+import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type {
   PierCommand,
@@ -67,6 +67,7 @@ export interface PierPreferencesAPI {
 
 export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
+  prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
 }
 
@@ -217,6 +218,8 @@ async function invokePierCommand<T>(command: PierCommand): Promise<T> {
 
 const agentsApi: PierAgentsAPI = {
   detect: () => ipcRenderer.invoke("pier:agents:detect"),
+  prepareLaunch: (agentId: AgentKind) =>
+    ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
   refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
 };
 
