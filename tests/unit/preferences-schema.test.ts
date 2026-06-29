@@ -226,4 +226,18 @@ describe("projectPreferencesSchema — agent preferences", () => {
       projectPreferencesSchema.parse({ agentDefaultEnv: { nope: { A: "1" } } })
     ).toThrow();
   });
+
+  it("提供 agentCommandOverrides 默认 + 校验 key", () => {
+    expect(projectPreferencesSchema.parse({}).agentCommandOverrides).toEqual(
+      {}
+    );
+    expect(
+      projectPreferencesSchema.parse({
+        agentCommandOverrides: { claude: "/opt/claude" },
+      }).agentCommandOverrides.claude
+    ).toBe("/opt/claude");
+    expect(() =>
+      projectPreferencesSchema.parse({ agentCommandOverrides: { nope: "x" } })
+    ).toThrow();
+  });
 });

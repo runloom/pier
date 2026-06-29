@@ -39,6 +39,7 @@ const DEFAULTS: ProjectPreferences = {
   disabledAgentIds: [],
   agentDefaultArgs: {},
   agentDefaultEnv: {},
+  agentCommandOverrides: {},
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;

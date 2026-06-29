@@ -159,6 +159,7 @@ function services(
         disabledAgentIds: [],
         agentDefaultArgs: {},
         agentDefaultEnv: {},
+        agentCommandOverrides: {},
       }),
       update: async (patch) => ({
         language: "system",
@@ -178,6 +179,7 @@ function services(
         disabledAgentIds: [],
         agentDefaultArgs: {},
         agentDefaultEnv: {},
+        agentCommandOverrides: {},
       }),
     },
     processEnvironment: {

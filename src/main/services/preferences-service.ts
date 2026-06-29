@@ -30,6 +30,9 @@ function stripUndefinedPatch(
   patch: ProjectPreferencesPatch
 ): Partial<ProjectPreferences> {
   return {
+    ...(patch.agentCommandOverrides !== undefined && {
+      agentCommandOverrides: patch.agentCommandOverrides,
+    }),
     ...(patch.agentDefaultArgs !== undefined && {
       agentDefaultArgs: patch.agentDefaultArgs,
     }),

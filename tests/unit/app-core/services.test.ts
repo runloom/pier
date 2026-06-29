@@ -23,6 +23,7 @@ const basePreferences: ProjectPreferences = {
   disabledAgentIds: [],
   agentDefaultArgs: {},
   agentDefaultEnv: {},
+  agentCommandOverrides: {},
 };
 
 describe("createPreferencesService", () => {

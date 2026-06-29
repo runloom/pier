@@ -100,6 +100,9 @@ export const projectPreferencesSchema = z.object({
   agentDefaultEnv: z
     .partialRecord(agentKindSchema, z.record(z.string(), z.string()))
     .default({}),
+  agentCommandOverrides: z
+    .partialRecord(agentKindSchema, z.string())
+    .default({}),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;
