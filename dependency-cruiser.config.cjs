@@ -56,7 +56,8 @@ module.exports = {
     {
       name: "packages-ui-not-import-app",
       severity: "error",
-      comment: "共享 UI 包 packages/ui 是叶子层, 不能 import 任何 app 代码 (src)",
+      comment:
+        "共享 UI 包 packages/ui 是叶子层, 不能 import 任何 app 代码 (src)",
       from: { path: "^packages/ui" },
       to: { path: "^src" },
     },
