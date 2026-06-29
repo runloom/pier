@@ -44,7 +44,7 @@ const EVENT_DELEGATE_HOLDS_BROWSER_ID_RE = /let browserWindowId: Int/;
 const EVENT_DELEGATE_INIT_RE = /init\(panelId: String, browserWindowId: Int\)/;
 
 const CLOSE_CLEARS_STALE_STATE_RE =
-  /if state\.activeTerminalPanelId == panelId \{\s*state\.keyboardFocusTarget = \.web/;
+  /if state\.basePanel\.panelId == panelId \{\s*state\.basePanel = \.web/;
 
 const TARGETS_DICT_RE = /var targets: \[String: Target\]/;
 const HIT_ITERATES_TARGETS_RE =
@@ -116,8 +116,8 @@ describe("Swift state invariants (source-level lock)", () => {
   });
 
   it("close clears stale terminal keyboard target to avoid use-after-free in applyFirstResponder", () => {
-    // close 后 NSView removeFromSuperview, 但如果 state.activeTerminalPanelId
-    // 还指向它, 下次 applyFirstResponder 调 terminals[id] 会拿 nil. 必须主动回到 Web.
+    // close 后 NSView removeFromSuperview, 但如果 state.basePanel 还指向它,
+    // 下次 applyFirstResponder 调 terminals[id] 会拿 nil. 必须主动回到 Web.
     expect(SOURCE).toMatch(CLOSE_CLEARS_STALE_STATE_RE);
   });
 
