@@ -121,6 +121,26 @@ describe("createPreferencesService", () => {
     });
     expect(patches).toEqual([{ userKeymap }]);
   });
+
+  it("更新 agent 偏好时不会被服务层过滤", async () => {
+    const patches: Partial<ProjectPreferences>[] = [];
+    const agentPatch = {
+      agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+      agentDefaultEnv: { codex: { X: "1" } },
+      defaultAgentId: "claude" as const,
+      disabledAgentIds: ["pi" as const],
+    };
+    const service = createPreferencesService({
+      readPreferences: async () => basePreferences,
+      updatePreferences: (patch) => {
+        patches.push(patch);
+        return Promise.resolve({ ...basePreferences, ...patch });
+      },
+    });
+
+    await expect(service.update(agentPatch)).resolves.toMatchObject(agentPatch);
+    expect(patches).toEqual([agentPatch]);
+  });
 });
 
 describe("createCommandPaletteMruService", () => {
