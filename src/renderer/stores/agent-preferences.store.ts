@@ -8,6 +8,9 @@ import { create } from "zustand";
 
 const WHITESPACE_RE = /\s+/;
 
+// NOTE: UNSUPPORTED_ARGS entries must be single tokens (no embedded whitespace).
+// A value-bearing flag like "--approval-mode yolo" won't be stripped by this token
+// filter; if one is ever needed, extend this to also drop the following value token.
 export function sanitizeAgentDefaultArgs(
   args: AgentDefaultArgs
 ): AgentDefaultArgs {
@@ -32,6 +35,8 @@ export function sanitizeAgentDefaultArgs(
 
 type DefaultAgentId = AgentKind | "blank" | null;
 
+// agentDefaultEnv is persisted by the backend but not surfaced in the UI yet;
+// add it here when env-var editing lands.
 interface AgentPreferenceSnapshot {
   agentCommandOverrides: Partial<Record<AgentKind, string>>;
   agentDefaultArgs: AgentDefaultArgs;

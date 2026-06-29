@@ -16,4 +16,10 @@ describe("sanitizeAgentDefaultArgs", () => {
       claude: "--x",
     });
   });
+
+  it("全部剥除后 key 消失", () => {
+    expect(
+      sanitizeAgentDefaultArgs({ opencode: "--dangerously-skip-permissions" })
+    ).toEqual({});
+  });
 });
