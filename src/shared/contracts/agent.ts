@@ -56,12 +56,14 @@ export const UNSUPPORTED_ARGS: Partial<Record<AgentKind, readonly string[]>> = {
 
 export type AgentPermissionMode = "yolo" | "manual" | "mixed";
 
-type ArgsRecord = Partial<Record<AgentKind, string>>;
+export type AgentDefaultArgs = Partial<Record<AgentKind, string>>;
 
-const yoloAgentIds = Object.keys(YOLO_FLAGS) as AgentKind[];
+const yoloAgentIds = agentKindSchema.options.filter((id) => id in YOLO_FLAGS);
 
 /** 读 agentDefaultArgs → 汇总成 Yolo/Manual/Mixed（派生，非存储）。 */
-export function resolvePermissionMode(args: ArgsRecord): AgentPermissionMode {
+export function resolvePermissionMode(
+  args: AgentDefaultArgs
+): AgentPermissionMode {
   let sawYolo = false;
   let sawManual = false;
   for (const id of yoloAgentIds) {
@@ -83,11 +85,14 @@ export function resolvePermissionMode(args: ArgsRecord): AgentPermissionMode {
 /** 批量切换。仅动「空或正好是标准 yolo 值」的项，用户自定义保持不动。 */
 export function applyPermissionMode(
   mode: "yolo" | "manual",
-  args: ArgsRecord
-): ArgsRecord {
-  const next: ArgsRecord = { ...args };
+  args: AgentDefaultArgs
+): AgentDefaultArgs {
+  const next: AgentDefaultArgs = { ...args };
   for (const id of yoloAgentIds) {
-    const flag = YOLO_FLAGS[id] as string;
+    const flag = YOLO_FLAGS[id];
+    if (flag === undefined) {
+      continue;
+    }
     const current = next[id]?.trim() ?? "";
     if (current !== "" && current !== flag) {
       continue; // 用户自定义，保留
