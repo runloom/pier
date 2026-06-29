@@ -35,6 +35,10 @@ const DEFAULTS: ProjectPreferences = {
   terminalNewCwdPolicy: DEFAULT_TERMINAL_NEW_CWD_POLICY,
   windowZoomLevel: DEFAULT_WINDOW_ZOOM_LEVEL,
   userKeymap: [],
+  defaultAgentId: null,
+  disabledAgentIds: [],
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;

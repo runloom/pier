@@ -19,6 +19,10 @@ const basePreferences: ProjectPreferences = {
   uiFontFamily: "",
   userKeymap: [],
   windowZoomLevel: 0,
+  defaultAgentId: null,
+  disabledAgentIds: [],
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
 };
 
 describe("createPreferencesService", () => {

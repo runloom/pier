@@ -155,6 +155,10 @@ function services(
         uiFontFamily: "",
         userKeymap: [],
         windowZoomLevel: 0,
+        defaultAgentId: null,
+        disabledAgentIds: [],
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
       }),
       update: async (patch) => ({
         language: "system",
@@ -170,6 +174,10 @@ function services(
         uiFontFamily: "",
         userKeymap: patch.userKeymap ?? [],
         windowZoomLevel: patch.windowZoomLevel ?? 0,
+        defaultAgentId: null,
+        disabledAgentIds: [],
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
       }),
     },
     processEnvironment: {

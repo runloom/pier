@@ -131,6 +131,10 @@ function cliClientServices(): PierCoreServices {
         uiFontFamily: "",
         userKeymap: [],
         windowZoomLevel: 0,
+        defaultAgentId: null,
+        disabledAgentIds: [],
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
       }),
       update: async (patch) => ({
         language: "system",
@@ -146,6 +150,10 @@ function cliClientServices(): PierCoreServices {
         uiFontFamily: "",
         userKeymap: patch.userKeymap ?? [],
         windowZoomLevel: patch.windowZoomLevel ?? 0,
+        defaultAgentId: null,
+        disabledAgentIds: [],
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
       }),
     },
     processEnvironment: {

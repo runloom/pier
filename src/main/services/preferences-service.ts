@@ -30,6 +30,18 @@ function stripUndefinedPatch(
   patch: ProjectPreferencesPatch
 ): Partial<ProjectPreferences> {
   return {
+    ...(patch.agentDefaultArgs !== undefined && {
+      agentDefaultArgs: patch.agentDefaultArgs,
+    }),
+    ...(patch.agentDefaultEnv !== undefined && {
+      agentDefaultEnv: patch.agentDefaultEnv,
+    }),
+    ...(patch.defaultAgentId !== undefined && {
+      defaultAgentId: patch.defaultAgentId,
+    }),
+    ...(patch.disabledAgentIds !== undefined && {
+      disabledAgentIds: patch.disabledAgentIds,
+    }),
     ...(patch.language !== undefined && { language: patch.language }),
     ...(patch.monoFontFamily !== undefined && {
       monoFontFamily: patch.monoFontFamily,
