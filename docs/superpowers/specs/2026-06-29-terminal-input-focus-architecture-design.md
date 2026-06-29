@@ -132,9 +132,13 @@ effectiveTarget == .web:
 
 ### 6.4 斩断反馈环
 
-- 删除搜索框 `onFocusCapture`/`onBlurCapture` 的 register/unregister 逻辑。
-- 浮层在 mount 时发一次 `requestWebFocus`，在 unmount/close 时发一次 `releaseWebFocus`，DOM 的 blur/focus 永不回写。
-- web 被授予后，renderer 只做一次性 caret 放置（保留现有 `queueMicrotask` + `inputRef.focus`），不再被 focus 事件反复驱动。
+- 删除搜索框 `onFocusCapture`/`onBlurCapture` 的 register/unregister 逻辑（Electron #42922 点名的"聚焦即回焦"闪烁反模式）。
+- 焦点请求由**显式意图**驱动，DOM 的 blur/focus 永不回写焦点状态。
+- web 被授予后，renderer 只做一次性 caret 放置（`queueMicrotask` + `inputRef.focus`），不再被 focus 事件反复驱动。
+
+实现层把"浮层焦点请求"分成两类（见 6.6）：
+- **共存浮层**（搜索框这类浮在仍可点击的终端上的小浮层）：请求绑在"激活"态，由 `terminal-overlay-focus.store.ts` 协调器持有，单一活跃浮层拥有键盘；终端点击（`onFocusRequest`）调 `yieldToTerminal()` 让出，浮层保持可见但失焦（并一次性 blur 其 input 保持 DOM 一致）；点回浮层 input 重新激活；Esc 关闭。
+- **全屏/独占浮层**（命令面板、设置、拖拽）：覆盖整个 router，终端点击到不了 native，挂载期间直接持 `requestTerminalWebFocus(id)`，卸载即释放。
 
 ### 6.5 三类区域目标处理
 
@@ -147,15 +151,23 @@ effectiveTarget == .web:
 
 区域 2 与区域 3 在键盘语义上完全相同，差别只在鼠标几何，不再有 `transient` 特例。
 
-### 6.6 未来浮层契约
+### 6.6 浮层契约（鼠标几何 + 键盘焦点）
 
-任何浮在终端上的 web 元素只用一个 hook：
+任何浮在终端上的 web 元素都有两个正交的需求，统一在 primitive 层一次解决：
+
+- **鼠标几何**：必须把自身矩形注册进 `webOverlayRects`，否则 native hitTest 把那片坐标当终端区、鼠标穿透到 Ghostty NSView（tooltip 穿透 bug 的根因）。
+- **键盘焦点**：会吃键盘的浮层（dropdown / select / popover / context-menu）需在打开期间持一个 web 焦点请求，让终端让出键盘；不吃键盘的（tooltip / hover-card）只注册几何。
+
+统一 hook `src/renderer/panel-kits/terminal/use-terminal-overlay.ts`：
 
 ```ts
-useTerminalWebFocus(id)   // mount → requestWebFocus(id); unmount → releaseWebFocus(id)
+useTerminalOverlay({ focus })   // 返回 callback ref，挂到 Radix Content；
+                                // 挂载注册几何（+ focus 时持 web 焦点请求），卸载释放
 ```
 
-组件不需要懂 native、不碰 `firstResponder`、不写焦点状态。鼠标命中仍用 `registerTerminalElementWebOverlay` 注册几何（保持不变，正交于焦点）。
+接在 shadcn 浮层 primitive 的 Content 上（tooltip/hover-card focus=false；popover/select/dropdown/context-menu/menubar focus=true，含 SubContent），用 `useComposedRefs` 与调用方 ref 组合、不破坏 Radix 定位。**改一次 primitive 层，所有浮层（含未来新增）自动正确**——这是"避免后续浮层再炸"的架构保证。组件不需要懂 native、不碰 `firstResponder`、不写焦点状态。
+
+搜索框这类**共存小浮层**额外走 6.4 的激活态协调器（`terminal-overlay-focus.store.ts`），以支持"点终端让出但保持可见"。命令面板/设置等**全屏浮层**仍用 `registerTerminalFullscreenWebOverlay` + `requestTerminalWebFocus`（挂载即持有）。
 
 ## 7. 冗余删除清单
 
