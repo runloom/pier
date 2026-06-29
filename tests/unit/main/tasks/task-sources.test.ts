@@ -38,7 +38,6 @@ describe("task sources", () => {
           {
             command: "pnpm lint",
             label: "lint",
-            problemMatcher: "$tsc",
             type: "shell",
           },
         ],

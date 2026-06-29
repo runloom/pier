@@ -31,7 +31,9 @@
       "@shared/*": ["./src/shared/*"],
       "@main/*": ["./src/main/*"],
       "@preload/*": ["./src/preload/*"],
-      "@plugins/*": ["./src/plugins/*"]
+      "@plugins/*": ["./src/plugins/*"],
+      "@pier/ui/*": ["./packages/ui/src/*"],
+      "@pier/ui": ["./packages/ui/src"]
     }
   },
   "include": [
@@ -40,7 +42,9 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "scripts/**/*.ts",
-    "*.config.ts"
+    "*.config.ts",
+    "packages/ui/src/**/*.ts",
+    "packages/ui/src/**/*.tsx"
   ],
   "exclude": ["node_modules", "out", "dist", "build"]
 }

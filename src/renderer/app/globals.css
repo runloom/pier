@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@source "../../../packages/ui/src";
+@source "../../plugins";
+
 @layer base {
   /* === HarmonyOS Sans SC — 本地打包 UI / CJK 字体 ===
    字体源来自华为官方 HarmonyOS Sans 包内未修改的 SC TTF 文件。
@@ -798,7 +801,6 @@ body {
 .dv-tab.dv-tab-dragging .pier-panel-tab-index-hint,
 .dv-tab-ghost-drag .pier-panel-tab-index-hint {
   align-items: center;
-  color: currentColor;
   display: inline-flex;
   height: 14px;
   justify-content: center;
@@ -830,6 +832,7 @@ body {
   color: var(--foreground) !important;
   display: inline-flex !important;
   height: 32px !important;
+  max-width: 220px !important;
   min-width: 0 !important;
   overflow: hidden !important;
   padding: 0 !important;
@@ -844,6 +847,7 @@ body {
   border-radius: 999px !important;
   box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent) !important;
   height: 32px !important;
+  max-width: 220px !important;
   overflow: hidden !important;
   padding-inline: 10px 12px !important;
   width: fit-content !important;

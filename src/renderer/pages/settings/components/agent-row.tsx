@@ -1,21 +1,16 @@
+import { Badge } from "@pier/ui/badge.tsx";
+import { Button } from "@pier/ui/button.tsx";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@pier/ui/collapsible.tsx";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
-import { Badge } from "@/components/primitives/badge.tsx";
-import { Button } from "@/components/primitives/button.tsx";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/primitives/collapsible.tsx";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemTitle,
-} from "@/components/primitives/item.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";

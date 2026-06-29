@@ -12,6 +12,10 @@ export function usage() {
     "  pier terminal profiles get <profileId> --json",
     "  pier terminal profiles set <profileId> [--cwd <path>] [--env KEY=VALUE] [--command <command> | -- <command...>] --json",
     "  pier terminal profiles delete <profileId> --json",
+    "  pier tasks list [--path <path>] --json",
+    "  pier tasks run <taskId> [--path <path>] [--input id=value] [--window <windowId>] [--split <direction>] [--no-focus] --json",
+    "  pier tasks status <runId> --json",
+    "  pier tasks cancel <runId> [--window <windowId>] --json",
     "  pier status --json",
     "  pier windows list --json",
     "  pier windows focus <windowId> --json",
@@ -104,6 +108,7 @@ function stripOptions(args) {
       arg === "--cwd" ||
       arg === "--profile" ||
       arg === "--env" ||
+      arg === "--input" ||
       arg === "--command"
     ) {
       if (
@@ -116,6 +121,7 @@ function stripOptions(args) {
         arg === "--cwd" ||
         arg === "--profile" ||
         arg === "--env" ||
+        arg === "--input" ||
         arg === "--command"
       ) {
         index++;
@@ -193,6 +199,23 @@ function parseEnv(args) {
     env[key] = entry.slice(separator + 1);
   }
   return env;
+}
+
+function parseTaskInputs(args) {
+  const entries = optionValues(args, "--input");
+  if (entries.length === 0) {
+    return;
+  }
+  const inputs = {};
+  for (const entry of entries) {
+    const separator = entry.indexOf("=");
+    const key = separator >= 0 ? entry.slice(0, separator) : entry;
+    if (!key || separator < 0) {
+      throw new Error("invalid --input value");
+    }
+    inputs[key] = entry.slice(separator + 1);
+  }
+  return inputs;
 }
 
 function parseOpen(action, unexpected, cwd, route) {
@@ -358,6 +381,58 @@ function parseWorktrees(action, value, unexpected, args, cwd, route) {
   throw new Error("unknown pier CLI command");
 }
 
+function projectRootOption(args, cwd) {
+  const path = optionValue(args, "--path");
+  return path ? absolutePath(path, cwd) : cwd;
+}
+
+function parseTasks(action, value, unexpected, args, cwd, route) {
+  if (action === "list") {
+    if (value || unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
+    }
+    return {
+      projectRoot: projectRootOption(args, cwd),
+      type: "run.list",
+    };
+  }
+  if (action === "run") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    const inputs = parseTaskInputs(args);
+    return {
+      ...(route.focus !== undefined && { focus: route.focus }),
+      ...(inputs && { inputs }),
+      ...(route.placement && { placement: route.placement }),
+      ...(route.windowId && { windowId: route.windowId }),
+      projectRoot: projectRootOption(args, cwd),
+      taskId: requireValue(value),
+      type: "run.spawn",
+    };
+  }
+  if (action === "status") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return {
+      runId: requireValue(value),
+      type: "run.status",
+    };
+  }
+  if (action === "cancel") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return {
+      runId: requireValue(value),
+      type: "run.cancel",
+      ...(route.windowId && { windowId: route.windowId }),
+    };
+  }
+  throw new Error("unknown pier CLI command");
+}
+
 function parsePlugins(action, value, unexpected) {
   if (action === "list") {
     if (value || unexpected) {
@@ -406,6 +481,9 @@ function parseCommand(args, cwd) {
   }
   if (domain === "worktrees") {
     return parseWorktrees(action, value, unexpected, args, cwd, route);
+  }
+  if (domain === "tasks") {
+    return parseTasks(action, value, unexpected, args, cwd, route);
   }
   if (domain === "plugins") {
     return parsePlugins(action, value, unexpected);

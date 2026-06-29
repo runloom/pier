@@ -1,38 +1,22 @@
-import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import {
   type PierCommand,
   type PierCommandResult,
-  type ProjectPreferencesPatch,
   pierCommandEnvelopeSchema,
 } from "@shared/contracts/commands.ts";
-import type { WindowInfo } from "@shared/contracts/events.ts";
 import {
   type PanelContext,
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
-import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
-import type {
-  TaskLaunchPlan,
-  TaskListResult,
-  TaskSpawnPreparation,
-} from "@shared/contracts/tasks.ts";
-import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
-import type { WindowCreateOptions } from "@shared/contracts/window.ts";
-import {
-  type PluginService,
-  PluginServiceError,
-} from "../services/plugin-service.ts";
-import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
-import type { RendererCommandService } from "../services/renderer-command-service.ts";
-import {
-  type WorktreeService,
-  WorktreeServiceError,
-} from "../services/worktree-service.ts";
+import { GitExecError } from "../services/git-exec.ts";
+import { PluginServiceError } from "../services/plugin-service.ts";
+import { WorktreeServiceError } from "../services/worktree-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
   commandFailure as failure,
   commandSuccess as success,
 } from "./command-results.ts";
+import type { PierCoreServices } from "./command-router-services.ts";
+import { executeGitCommand } from "./git-commands.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
@@ -41,101 +25,15 @@ import {
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
 import {
+  executeRunCancelCommand,
   executeRunListCommand,
+  executeRunRecentCommand,
   executeRunSpawnCommand,
+  executeRunStatusCommand,
 } from "./run-commands.ts";
 import { orderedWindows } from "./window-routing.ts";
 
-export interface PierCoreServices {
-  commandPaletteMru: {
-    clear(): Promise<MruState>;
-    read(): Promise<MruState>;
-    recordUse(actionId: string): Promise<void>;
-  };
-  panelContexts: {
-    listRecent(): Promise<PanelContext[]>;
-    recordRecent(context: PanelContext): Promise<void>;
-    resolveForPath(path: string): Promise<PanelContext>;
-  };
-  plugins: PluginService;
-  preferences: {
-    read(): Promise<ProjectPreferences>;
-    update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
-  };
-  processEnvironment: ProcessEnvironmentService;
-  rendererCommand: RendererCommandService;
-  tasks: {
-    list(args: { projectRoot: string }): Promise<TaskListResult>;
-    markPanelClosed(panelId: string): void;
-    prepareSpawn(args: {
-      inputs?: Record<string, string> | undefined;
-      projectRoot: string;
-      taskId: string;
-    }): Promise<TaskSpawnPreparation>;
-    recordRecent(launch: TaskLaunchPlan): Promise<void> | void;
-    recordStarted(record: {
-      panelId: string;
-      projectRoot: string;
-      taskId: string;
-    }): void;
-  };
-  terminalLaunches: {
-    consume(
-      launchId: string
-    ):
-      | Promise<ResolvedTerminalLaunchOptions | null>
-      | ResolvedTerminalLaunchOptions
-      | null;
-    discard(launchId: string): Promise<void> | void;
-    read(
-      launchId: string
-    ):
-      | Promise<ResolvedTerminalLaunchOptions | null>
-      | ResolvedTerminalLaunchOptions
-      | null;
-    register(launch: ResolvedTerminalLaunchOptions): Promise<string> | string;
-    sweepExpired?(): Promise<number> | number;
-  };
-  terminalProfiles: {
-    delete(profileId: string): Promise<boolean>;
-    list(): Promise<Record<string, ResolvedTerminalLaunchOptions>>;
-    read(profileId: string): Promise<ResolvedTerminalLaunchOptions | null>;
-    resolve(
-      profileId: string
-    ):
-      | Promise<ResolvedTerminalLaunchOptions | null>
-      | ResolvedTerminalLaunchOptions
-      | null;
-    upsert(
-      profileId: string,
-      profile: ResolvedTerminalLaunchOptions
-    ): Promise<ResolvedTerminalLaunchOptions>;
-  };
-  window: {
-    close(windowId: string): void;
-    create(options?: WindowCreateOptions): Promise<{
-      recordId: string;
-      windowId: string;
-    }>;
-    focus(windowId: string): void;
-    flushOpenWindows(): Promise<void>;
-    flushWindow(windowId: string): Promise<void>;
-    list(): WindowInfo[];
-    restoreMostRecentClosed(): Promise<{
-      recordId: string;
-      windowId: string;
-    } | null>;
-    restoreOpenWindows(): Promise<
-      Array<{ recordId: string; windowId: string }>
-    >;
-  };
-  workspace: {
-    clearLayout(recordId: string): Promise<void>;
-    readLayout(recordId: string): Promise<unknown | null>;
-    saveLayout(layout: unknown, recordId: string): Promise<void>;
-  };
-  worktrees: WorktreeService;
-}
+export type { PierCoreServices } from "./command-router-services.ts";
 
 export interface CommandRouter {
   execute(envelope: unknown): Promise<PierCommandResult>;
@@ -350,6 +248,12 @@ async function executeRunCommand(
       return await executeRunSpawnCommand(requestId, command, services, {
         clientEnv: context.clientEnv,
       });
+    case "run.status":
+      return executeRunStatusCommand(requestId, command, services);
+    case "run.cancel":
+      return executeRunCancelCommand(requestId, command, services);
+    case "run.recent":
+      return executeRunRecentCommand(requestId, services);
     default:
       return null;
   }
@@ -402,6 +306,7 @@ async function executeKnownCommand(
     const executors = [
       (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
       (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
+      (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
       (cmd: PierCommand) =>
         executeRunCommand(requestId, cmd, services, context),
       (cmd: PierCommand) =>
@@ -431,6 +336,15 @@ async function executeKnownCommand(
       const code =
         err.code === "invalid_manifest" ? "invalid_command" : err.code;
       return failure(requestId, code, err.message);
+    }
+    if (err instanceof GitExecError) {
+      // 取 stderr 优先,空则 fallback stdout(git 把 "nothing to commit" 之类放 stdout)
+      // 前 3 行作摘要,让插件能按内容分类("already exists"/"not fully merged"/
+      // "dirty worktree"/"nothing to commit" 等)
+      const rawSummary = err.stderr.trim() || err.stdout.trim();
+      const summary = rawSummary.split("\n").slice(0, 3).join(" | ");
+      const detail = summary.length > 0 ? ` -- ${summary}` : "";
+      return failure(requestId, "git_error", `${err.message}${detail}`);
     }
     return failure(
       requestId,

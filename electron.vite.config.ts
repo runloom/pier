@@ -59,6 +59,7 @@ export default defineConfig({
         "@": resolve(import.meta.dirname, "src/renderer"),
         "@shared": resolve(import.meta.dirname, "src/shared"),
         "@plugins": resolve(import.meta.dirname, "src/plugins"),
+        "@pier/ui": resolve(import.meta.dirname, "packages/ui/src"),
       },
     },
     plugins: [react(), tailwindcss()],

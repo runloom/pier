@@ -1,7 +1,7 @@
+import { CommandGroup, CommandItem } from "@pier/ui/command.tsx";
+import { Kbd } from "@pier/ui/kbd.tsx";
 import { Settings } from "lucide-react";
 import type { ReactNode } from "react";
-import { CommandGroup, CommandItem } from "@/components/primitives/command.tsx";
-import { Kbd } from "@/components/primitives/kbd.tsx";
 import type { Action } from "@/lib/actions/types.ts";
 import type { ActionGroup } from "@/lib/command-palette/action-search.ts";
 

@@ -7,7 +7,7 @@ import {
   createWorktreeService,
   parseGitWorktreeListPorcelainZ,
 } from "@main/services/worktree-service.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const execFileAsync = promisify(execFile);
 const tempDirs: string[] = [];
@@ -374,6 +374,74 @@ describe("createWorktreeService", () => {
     ).rejects.toMatchObject({
       reason: "current_worktree",
     });
+  });
+
+  // C5: 写操作（worktree add/remove）应传 60s 超时，避免大仓库继承 git-exec 默认 10s 失败
+  it("create 给 worktree add 传 timeoutMs: 60_000", async () => {
+    const addCallOptions: Array<{ timeoutMs?: number } | undefined> = [];
+    let created = false;
+    const service = createWorktreeService({
+      execGit: (args, cwd, options) => {
+        if (args[0] === "worktree" && args[1] === "add") {
+          addCallOptions.push(options);
+          created = true;
+          return Promise.resolve("");
+        }
+        if (args[0] === "rev-parse" && args.includes("--show-toplevel")) {
+          return Promise.resolve(`${cwd}\n`);
+        }
+        if (args[0] === "worktree" && args[1] === "list") {
+          const output = created
+            ? [
+                "worktree /repo",
+                "HEAD abc123",
+                "branch refs/heads/main",
+                "",
+                "worktree /repo/.worktrees/feature-a",
+                "HEAD def456",
+                "branch refs/heads/feature/a",
+                "",
+              ]
+            : ["worktree /repo", "HEAD abc123", "branch refs/heads/main", ""];
+          return Promise.resolve(output.join("\0"));
+        }
+        return Promise.resolve("");
+      },
+      mkdir: () => Promise.resolve(undefined),
+      realpath: (path) => Promise.resolve(path),
+    });
+
+    await service.create({
+      branch: "feature/a",
+      name: "feature-a",
+      path: "/repo",
+    });
+
+    expect(addCallOptions[0]?.timeoutMs).toBe(60_000);
+  });
+
+  // S1: list 中 worktree list 失败时 console.warn 透传 stderr/exitCode（避免迁移后信息静默丢失）
+  it("list 失败时 console.warn 透传错误信息", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+      // suppress
+    });
+    const service = createWorktreeService({
+      execGit: (args) => {
+        if (args[0] === "rev-parse") {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "worktree" && args[1] === "list") {
+          return Promise.reject(new Error("simulated git stderr"));
+        }
+        return Promise.resolve("");
+      },
+      realpath: (path) => Promise.resolve(path),
+    });
+
+    await service.list({ path: "/repo" });
+
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("remove 拒绝移除 main .worktrees 目录外的 linked worktree", async () => {

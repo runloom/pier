@@ -1,3 +1,9 @@
+import { Badge } from "@pier/ui/badge.tsx";
+import { Button } from "@pier/ui/button.tsx";
+import { Card, CardContent, CardHeader, CardTitle } from "@pier/ui/card.tsx";
+import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
+import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
+import { Spinner } from "@pier/ui/spinner.tsx";
 import { AGENT_CATALOG, getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import {
   applyPermissionMode,
@@ -6,17 +12,6 @@ import {
 import { RefreshCw } from "lucide-react";
 import { Fragment, useEffect } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
-import { Badge } from "@/components/primitives/badge.tsx";
-import { Button } from "@/components/primitives/button.tsx";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/primitives/card.tsx";
-import { FieldSeparator, FieldSet } from "@/components/primitives/field.tsx";
-import { ItemGroup, ItemSeparator } from "@/components/primitives/item.tsx";
-import { Spinner } from "@/components/primitives/spinner.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";

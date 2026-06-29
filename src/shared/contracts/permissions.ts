@@ -30,6 +30,7 @@ export const pierCapabilitySchema = z.enum([
   "command:register",
   "panel:register",
   "git:read",
+  "git:write",
   "file:read",
   "transcript:read",
   "profile:read",
@@ -75,6 +76,9 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "terminal:control",
     "plugin:read",
     "plugin:write",
+    // 与 worktree:write 同等待遇:主体提供能力,二次确认由插件 UI 负责
+    "git:read",
+    "git:write",
   ],
   "cli-local": [
     "app:read",
@@ -90,6 +94,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "terminal:read",
     "terminal:control",
     "plugin:read",
+    "git:read",
   ],
   "mcp-local": [
     "app:read",
@@ -102,6 +107,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "panel:control",
     "terminal:read",
     "terminal:control",
+    "git:read",
   ],
   "mobile-paired": [
     "app:read",

@@ -13,10 +13,34 @@ const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
   "plugin.inspect",
   "plugin.list",
   "run.list",
+  "run.cancel",
   "run.spawn",
+  "run.status",
   "worktree.check",
   "worktree.list",
   "worktree.open",
+  // git 主体 21 个命令(读 14 + 写 7);capability 守门由 permissions.ts 配对
+  "git.checkoutBranch",
+  "git.commit",
+  "git.createBranch",
+  "git.deleteBranch",
+  "git.discardChanges",
+  "git.getCommit",
+  "git.getCommitPatch",
+  "git.getDiffPatch",
+  "git.getDiffSummary",
+  "git.getDiffText",
+  "git.getFileContent",
+  "git.getLog",
+  "git.getRepoInfo",
+  "git.getStatus",
+  "git.isWorkingTreeClean",
+  "git.listBranches",
+  "git.listTags",
+  "git.resolveRef",
+  "git.stage",
+  "git.unstage",
+  "git.validateBranchName",
 ]);
 
 function isRendererFacadeCommand(command: PierCommand): boolean {
@@ -52,6 +76,16 @@ function senderWindowId(sender: Electron.WebContents): string {
   return windowId;
 }
 
+function commandForSender(command: PierCommand, windowId: string): PierCommand {
+  if (command.type === "run.spawn" && !command.windowId) {
+    return {
+      ...command,
+      windowId,
+    };
+  }
+  return command;
+}
+
 export function registerCommandIpc(ipcMain: IpcMain): void {
   ipcMain.handle(PIER.COMMAND_EXECUTE, async (event, rawCommand: unknown) => {
     const parsed = pierCommandSchema.safeParse(rawCommand);
@@ -65,7 +99,7 @@ export function registerCommandIpc(ipcMain: IpcMain): void {
     const windowId = senderWindowId(event.sender);
     return await appCore.commandRouter.execute({
       clientId: ensureDesktopRendererClient(windowId),
-      command,
+      command: commandForSender(command, windowId),
       protocolVersion: 1,
       requestId: randomUUID(),
     });

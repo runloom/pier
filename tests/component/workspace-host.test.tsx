@@ -29,11 +29,8 @@ vi.mock("dockview-react", async (importOriginal) => {
   };
 });
 
-vi.mock("@/components/primitives/tooltip.tsx", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@/components/primitives/tooltip.tsx")
-    >();
+vi.mock("@pier/ui/tooltip.tsx", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@pier/ui/tooltip.tsx")>();
   return {
     ...actual,
     TooltipProvider: ({
@@ -217,7 +214,7 @@ describe("WorkspaceHost", () => {
     );
     expect(screen.getByTestId("workspace-tooltip-provider")).toHaveAttribute(
       "data-skip-delay-duration",
-      "1000"
+      "0"
     );
     expect(screen.getByTestId("dockview")).toHaveAttribute(
       "data-disable-tabs-overflow-list",

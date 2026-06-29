@@ -1,5 +1,5 @@
-import { Card, CardContent } from "@/components/primitives/card.tsx";
-import { FieldSeparator, FieldSet } from "@/components/primitives/field.tsx";
+import { Card, CardContent } from "@pier/ui/card.tsx";
+import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { LanguageRow } from "@/pages/settings/components/rows/language-row.tsx";
 import { MonoFontRow } from "@/pages/settings/components/rows/mono-font-row.tsx";

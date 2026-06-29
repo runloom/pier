@@ -1,4 +1,3 @@
-import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import {
   DockviewReact,
@@ -7,8 +6,7 @@ import {
 } from "dockview-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
-import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
-import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import {
@@ -27,16 +25,13 @@ import { setTerminalBasePanel } from "@/stores/terminal-input-routing.store.ts";
 import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
-import {
-  PANEL_TAB_TOOLTIP_DELAY_MS,
-  PanelTabHeader,
-} from "./panel-tab-header.tsx";
+import { PanelTabHeader } from "./panel-tab-header.tsx";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
 } from "./workspace-header-actions.tsx";
-import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
+import { runWorkspaceRendererCommand } from "./workspace-renderer-commands.ts";
 import { pierTheme } from "./workspace-theme.ts";
 
 /**
@@ -54,51 +49,6 @@ import { pierTheme } from "./workspace-theme.ts";
  * panel actions 注册由 main.tsx bootstrap 统一调用。
  */
 const SAVE_DEBOUNCE_MS = 500;
-
-class RendererCommandExecutionError extends Error {
-  readonly code: PierCommandErrorCode;
-
-  constructor(code: PierCommandErrorCode, message: string) {
-    super(message);
-    this.name = "RendererCommandExecutionError";
-    this.code = code;
-  }
-}
-
-function rendererCommandErrorCode(
-  code: "kind_mismatch" | "not_found"
-): PierCommandErrorCode {
-  return code === "kind_mismatch" ? "invalid_command" : code;
-}
-
-function panelSnapshots() {
-  const api = useWorkspaceStore.getState().api;
-  if (!api) {
-    throw new Error("workspace api not ready");
-  }
-  return buildWorkspacePanelSnapshots(
-    api,
-    usePanelDescriptorStore.getState().descriptors
-  );
-}
-
-function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
-  const api = useWorkspaceStore.getState().api;
-  if (!api) {
-    throw new Error("workspace api not ready");
-  }
-  const result = activateWorkspacePanel(api, panelId, {
-    ...(expectedKind && { expectedKind }),
-    kindOfComponent: panelKindOf,
-    reveal: "always",
-  });
-  if (!result.ok) {
-    throw new RendererCommandExecutionError(
-      rendererCommandErrorCode(result.code),
-      result.message
-    );
-  }
-}
 
 type WorkspacePanel = DockviewReadyEvent["api"]["panels"][number];
 
@@ -149,95 +99,6 @@ function syncTerminalPresentation(
     flushReason
   );
   flushTerminalLayoutFramesTrailing(flushReason);
-}
-
-function runRendererCommand(envelope: RendererCommandEnvelope): void {
-  try {
-    const state = useWorkspaceStore.getState();
-    switch (envelope.command.type) {
-      case "panel.list": {
-        window.pier.rendererCommand.resolve({
-          data: panelSnapshots(),
-          ok: true,
-          requestId: envelope.requestId,
-        });
-        return;
-      }
-      case "panel.focus": {
-        focusPanel(envelope.command.panelId);
-        window.pier.rendererCommand.resolve({
-          data: null,
-          ok: true,
-          requestId: envelope.requestId,
-        });
-        return;
-      }
-      case "panel.open": {
-        const panelId = state.addTerminal({
-          context: envelope.command.context,
-          ...(envelope.command.placement && {
-            placement: envelope.command.placement,
-          }),
-        });
-        if (!panelId) {
-          throw new Error("workspace api not ready");
-        }
-        window.pier.rendererCommand.resolve({
-          data: {
-            context: envelope.command.context,
-            panelId,
-          },
-          ok: true,
-          requestId: envelope.requestId,
-        });
-        return;
-      }
-      case "terminal.open": {
-        const panelId = state.addTerminal({
-          ...(envelope.command.context && {
-            context: envelope.command.context,
-          }),
-          launchId: envelope.command.launchId,
-          ...(envelope.command.placement && {
-            placement: envelope.command.placement,
-          }),
-          ...(envelope.command.tab && { tab: envelope.command.tab }),
-        });
-        if (!panelId) {
-          throw new Error("workspace api not ready");
-        }
-        window.pier.rendererCommand.resolve({
-          data: {
-            ...(envelope.command.context && {
-              context: envelope.command.context,
-            }),
-            panelId,
-          },
-          ok: true,
-          requestId: envelope.requestId,
-        });
-        return;
-      }
-      case "workspace.flushLayout": {
-        throw new Error("workspace.flushLayout requires workspace api context");
-      }
-      default: {
-        const _exhaustive: never = envelope.command;
-        throw new Error(`unsupported renderer command: ${String(_exhaustive)}`);
-      }
-    }
-  } catch (error) {
-    window.pier.rendererCommand.resolve({
-      error: {
-        ...(error instanceof RendererCommandExecutionError
-          ? { code: error.code }
-          : {}),
-        message: error instanceof Error ? error.message : String(error),
-      },
-      ok: false,
-      requestId: envelope.requestId,
-    });
-  }
 }
 
 export function WorkspaceHost() {
@@ -417,7 +278,7 @@ export function WorkspaceHost() {
           });
           return;
         }
-        runRendererCommand(envelope);
+        runWorkspaceRendererCommand(envelope);
       });
 
       // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时
@@ -482,7 +343,7 @@ export function WorkspaceHost() {
       data-testid="workspace-host-root"
       ref={rootRef}
     >
-      <TooltipProvider skipDelayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
+      <TooltipProvider skipDelayDuration={0}>
         <DockviewReact
           components={panelComponents}
           defaultTabComponent={PanelTabHeader}

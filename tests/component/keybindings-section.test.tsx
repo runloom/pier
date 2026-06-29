@@ -1,3 +1,4 @@
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import {
   fireEvent,
   type RenderOptions,
@@ -18,7 +19,6 @@ import {
   it,
   vi,
 } from "vitest";
-import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";

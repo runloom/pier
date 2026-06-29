@@ -1,11 +1,7 @@
+import { Command, CommandDialog, CommandInput } from "@pier/ui/command.tsx";
+import { Dialog, DialogContent } from "@pier/ui/dialog.tsx";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import {
-  Command,
-  CommandDialog,
-  CommandInput,
-} from "@/components/primitives/command.tsx";
-import { Dialog, DialogContent } from "@/components/primitives/dialog.tsx";
 
 describe("Dialog initial focus", () => {
   it("focuses dialog content by default instead of the first button", () => {

@@ -11,6 +11,7 @@ import { installCsp } from "./csp.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
+import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
@@ -222,8 +223,17 @@ app.whenReady().then(async () => {
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);
-  setTerminalPanelClosedHandler((panelId) => {
-    appCore.services.tasks.markPanelClosed(panelId);
+  registerGitWatchIpc();
+  setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
+    if (typeof exitCode === "number") {
+      appCore.services.tasks
+        .completePanel(panelId, exitCode, windowId)
+        .catch((error) => {
+          console.error("[task-run] failed to complete panel:", error);
+        });
+      return;
+    }
+    appCore.services.tasks.markPanelClosed(panelId, windowId);
   });
   registerCliLocalControl()
     .then((control) => {

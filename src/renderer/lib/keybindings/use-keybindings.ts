@@ -184,7 +184,7 @@ export function useKeyboardShortcuts(): void {
     };
     window.addEventListener("keydown", onKeydown, true);
     const onKeyup = (e: KeyboardEvent) => {
-      if (isCommandKeyEvent(e) || !e.metaKey) {
+      if (isCommandKeyEvent(e)) {
         setCommandKeyDown(false);
       }
     };

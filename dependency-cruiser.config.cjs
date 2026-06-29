@@ -19,10 +19,15 @@ module.exports = {
     {
       name: "preload-narrow-imports",
       severity: "error",
-      comment: "preload 只能 import shared + electron",
+      comment: "preload 只能 import shared + electron + preload 内部",
       from: { path: "^src/preload" },
       to: {
-        pathNot: ["^src/shared", "node_modules/.*electron(/|$)", "^node:"],
+        pathNot: [
+          "^src/shared",
+          "^src/preload",
+          "node_modules/.*electron(/|$)",
+          "^node:",
+        ],
       },
     },
     {
@@ -52,6 +57,14 @@ module.exports = {
         "renderer 不同 panel-kits 不应跨域 import (走 components/common 或 stores 共享)",
       from: { path: "^src/renderer/panel-kits/([^/]+)" },
       to: { path: "^src/renderer/panel-kits/(?!$1)([^/]+)" },
+    },
+    {
+      name: "packages-ui-not-import-app",
+      severity: "error",
+      comment:
+        "共享 UI 包 packages/ui 是叶子层, 不能 import 任何 app 代码 (src)",
+      from: { path: "^packages/ui" },
+      to: { path: "^src" },
     },
     {
       name: "no-circular",

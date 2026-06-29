@@ -1,7 +1,7 @@
+import { Button } from "@pier/ui/button.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { Plus } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { Button } from "../primitives/button.tsx";
 
 /**
  * Tab 栏 add 按钮 — dockview leftHeaderActionsComponent 模式.
@@ -21,13 +21,14 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     <div className="flex h-full items-center justify-center px-1">
       <Button
         aria-label="New Tab"
+        className="bg-transparent"
         onClick={handleAdd}
         size="icon-xs"
         title="New Tab"
         type="button"
         variant="secondary"
       >
-        <Plus />
+        <Plus className="size-4" />
       </Button>
     </div>
   );

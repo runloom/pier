@@ -39,7 +39,6 @@ export function taskCandidate(opts: {
   inputs?: TaskInputRequest[];
   label: string;
   presentation?: TaskCandidate["presentation"];
-  problemMatchers?: unknown[];
   source: TaskSource;
   tags?: string[];
   unsupportedReason?: string;
@@ -61,9 +60,6 @@ export function taskCandidate(opts: {
     ...(opts.hidden ? { hidden: opts.hidden } : {}),
     ...(opts.inputs && opts.inputs.length > 0 ? { inputs: opts.inputs } : {}),
     ...(opts.presentation ? { presentation: opts.presentation } : {}),
-    ...(opts.problemMatchers && opts.problemMatchers.length > 0
-      ? { problemMatchers: opts.problemMatchers }
-      : {}),
     ...(opts.tags && opts.tags.length > 0 ? { tags: opts.tags } : {}),
     ...(opts.unsupportedReason
       ? { unsupportedReason: opts.unsupportedReason }

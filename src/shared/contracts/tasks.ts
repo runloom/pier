@@ -79,7 +79,6 @@ export const taskCandidateSchema = z
     inputs: z.array(taskInputRequestSchema).optional(),
     label: z.string().min(1),
     presentation: taskPresentationSchema.optional(),
-    problemMatchers: z.array(z.unknown()).optional(),
     source: taskSourceSchema,
     tags: z.array(z.string()).optional(),
     unsupportedReason: z.string().optional(),
@@ -108,16 +107,56 @@ export const taskLaunchPlanSchema = z
   .object({
     command: z.string().min(1),
     cwd: z.string().min(1),
+    dependsOn: z.array(z.string()).optional(),
+    dependsOrder: z.enum(["parallel", "sequence"]).optional(),
     env: z.record(z.string().min(1), z.string()).optional(),
     focus: z.boolean(),
     label: z.string().min(1),
     presentation: taskPresentationSchema,
     projectRoot: z.string().min(1),
+    rawCommand: z.string().min(1),
     tab: panelTabChromeSchema,
     taskId: z.string().min(1),
   })
   .strict();
 export type TaskLaunchPlan = z.infer<typeof taskLaunchPlanSchema>;
+
+export const taskRunIdSchema = z.string().min(1);
+export type TaskRunId = z.infer<typeof taskRunIdSchema>;
+
+export const taskRunNodeStatusSchema = z.enum([
+  "pending",
+  "running",
+  "succeeded",
+  "failed",
+  "blocked",
+  "cancelled",
+]);
+export type TaskRunNodeStatus = z.infer<typeof taskRunNodeStatusSchema>;
+
+export const taskRunNodeSnapshotSchema = z
+  .object({
+    blockedBy: z.string().min(1).optional(),
+    exitCode: z.number().int().optional(),
+    label: z.string().min(1),
+    panelId: z.string().min(1).optional(),
+    status: taskRunNodeStatusSchema,
+    taskId: z.string().min(1),
+    windowId: z.string().min(1).optional(),
+  })
+  .strict();
+export type TaskRunNodeSnapshot = z.infer<typeof taskRunNodeSnapshotSchema>;
+
+export const taskRunSnapshotSchema = z
+  .object({
+    nodes: z.record(z.string().min(1), taskRunNodeSnapshotSchema),
+    projectRoot: z.string().min(1),
+    rootTaskId: z.string().min(1),
+    runId: taskRunIdSchema,
+    status: taskRunNodeStatusSchema,
+  })
+  .strict();
+export type TaskRunSnapshot = z.infer<typeof taskRunSnapshotSchema>;
 
 export const taskSpawnPreparationSchema = z.discriminatedUnion("status", [
   z.object({
@@ -127,6 +166,7 @@ export const taskSpawnPreparationSchema = z.discriminatedUnion("status", [
   z.object({
     panelId: z.string().min(1),
     status: z.literal("already-running"),
+    windowId: z.string().min(1).optional(),
   }),
   z.object({
     launches: z.array(taskLaunchPlanSchema).min(1),
@@ -143,6 +183,7 @@ export const taskSpawnResultSchema = z.discriminatedUnion("status", [
   z.object({
     panelId: z.string().min(1),
     status: z.literal("already-running"),
+    windowId: z.string().min(1).optional(),
   }),
   z.object({
     inputs: z.array(taskInputRequestSchema),
@@ -151,6 +192,8 @@ export const taskSpawnResultSchema = z.discriminatedUnion("status", [
   z.object({
     panelIds: z.array(z.string().min(1)),
     primaryPanelId: z.string().min(1),
+    runId: taskRunIdSchema.optional(),
+    snapshot: taskRunSnapshotSchema.optional(),
     status: z.literal("started"),
   }),
   z.object({

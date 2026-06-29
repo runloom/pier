@@ -46,6 +46,16 @@ export interface NativeAddon {
    */
   reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
   setAppShortcutKeys(keys: string[]): void;
+  setCommandFinishedForwardCallback?(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          exitCode: number,
+          durationNanos: number
+        ) => void)
+      | null
+  ): void;
   setFrame(panelId: string, frame: TerminalFrame): void;
   setKeyboardForwardCallback(
     cb:

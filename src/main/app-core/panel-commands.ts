@@ -185,6 +185,17 @@ async function resolveTerminalLaunchBase(
   return { launchBase, profile };
 }
 
+function dataWithWindowId(
+  data: unknown,
+  windowId: string
+): Record<string, unknown> {
+  const record = asRecord(data);
+  return {
+    ...(record ?? {}),
+    windowId,
+  };
+}
+
 async function listPanels(
   command: Extract<PierCommand, { type: "panel.list" }>,
   services: PanelCommandServices
@@ -367,7 +378,10 @@ export async function executeTerminalOpenCommand(
   if (context) {
     await services.panelContexts.recordRecent(context);
   }
-  return commandSuccess(requestId, result.data);
+  return commandSuccess(
+    requestId,
+    dataWithWindowId(result.data, target.window.id)
+  );
 }
 
 export async function executePanelFocusCommand(

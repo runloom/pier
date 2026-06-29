@@ -16,6 +16,7 @@ import type { AppWindow } from "../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
   findAppWindowByWebContents,
+  findInternalWindowId,
 } from "../windows/window-identity.ts";
 import {
   consumeCreateLaunch,
@@ -126,15 +127,39 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       console.error("[pier-cwd-context] failed:", err);
     });
   });
+  addon?.setCommandFinishedForwardCallback?.((id, panelId, exitCode) => {
+    const normalizedExitCode = exitCode < 0 ? 1 : exitCode;
+    recordNativeTerminalRoute(id, "command-finished", panelId, {
+      exitCode: normalizedExitCode,
+    });
+    const rawPanelId = unscopePanelId(panelId);
+    const targetWindow = findAppWindowByElectronId(id);
+    terminalPanelClosed.notifyTerminalPanelExit(
+      rawPanelId,
+      normalizedExitCode,
+      targetWindow
+        ? (findInternalWindowId(targetWindow) ?? undefined)
+        : undefined
+    );
+    forwardTerminalTaskTabPatch({
+      browserWindowId: id,
+      exitCode: normalizedExitCode,
+      panelId: rawPanelId,
+      targetWindow,
+    });
+  });
   addon?.setTitleForwardCallback((id, panelId, title) => {
     recordNativeTerminalRoute(id, "title", panelId, { title });
     const rawPanelId = unscopePanelId(panelId);
+    const targetWindow = findAppWindowByElectronId(id);
     const taskExitCode = terminalPanelClosed.handleTaskExitTitle(
       rawPanelId,
-      title
+      title,
+      targetWindow
+        ? (findInternalWindowId(targetWindow) ?? undefined)
+        : undefined
     );
     if (taskExitCode !== null) {
-      const targetWindow = findAppWindowByElectronId(id);
       forwardTerminalTaskTabPatch({
         browserWindowId: id,
         exitCode: taskExitCode,
@@ -143,7 +168,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       });
       return;
     }
-    const targetWindow = findAppWindowByElectronId(id);
     if (targetWindow && !targetWindow.isDestroyed()) {
       const sessionScope = terminalSessionScopeFor(targetWindow);
       updateTerminalPanelTitle(sessionScope, rawPanelId, title).catch((err) => {
@@ -351,7 +375,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     if (win) {
       const sessionScope = terminalSessionScopeFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
-      terminalPanelClosed.notifyTerminalPanelClosed(panelId);
+      terminalPanelClosed.notifyTerminalPanelClosed(
+        panelId,
+        findInternalWindowId(win) ?? undefined
+      );
       removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
         console.error("[pier-cwd-remove] failed:", err);
       });
