@@ -74,6 +74,7 @@ function WorktreeStatusItem({
         "Open worktrees for {{name}}",
         { name: label }
       )}
+      className="h-5"
       data-testid="worktree-status-trigger"
       onClick={() => {
         openWorktreeListQuickPick(pluginContext, worktreePath).catch(
