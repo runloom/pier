@@ -27,6 +27,19 @@ const ICON_BY_ID: Record<string, FC<{ size?: number }>> = {
   kilo: KiloIcon,
 };
 
+// 本地打包的 favicon（下载自各 agent 域名，文件名即 agentId）。运行时不再依赖
+// Google favicon service——离线可用，且绕开 img-src CSP（外部图源会被拦成空白）。
+// catalog 的 faviconDomain 保留为「下载来源」元数据；要更新图标重新下到此目录即可。
+const LOCAL_FAVICONS = import.meta.glob("./favicons/*.png", {
+  eager: true,
+  query: "?url",
+  import: "default",
+}) as Record<string, string>;
+
+function localFaviconUrl(id: AgentKind): string | undefined {
+  return LOCAL_FAVICONS[`./favicons/${id}.png`];
+}
+
 function AgentImg({ src, size }: { src: string; size: number }) {
   return (
     <img
@@ -60,13 +73,9 @@ export function AgentIcon({
       entry.iconUrl === "openclaude" ? openClaudeLogoUrl : entry.iconUrl;
     return <AgentImg size={size} src={src} />;
   }
-  if (entry?.faviconDomain) {
-    return (
-      <AgentImg
-        size={size}
-        src={`https://www.google.com/s2/favicons?domain=${entry.faviconDomain}&sz=64`}
-      />
-    );
+  const favicon = localFaviconUrl(agentId);
+  if (favicon) {
+    return <AgentImg size={size} src={favicon} />;
   }
   return (
     <AgentLetterIcon

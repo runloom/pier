@@ -19,11 +19,11 @@ describe("AgentIcon 四级 dispatch", () => {
     expect(img?.getAttribute("src")).not.toBe("openclaude");
   });
 
-  it("faviconDomain 渲染 img（grok）", () => {
+  it("本地 favicon 渲染 img（grok，本地资产而非外部 google service）", () => {
     const { container } = render(<AgentIcon agentId="grok" />);
-    expect(container.querySelector("img")?.getAttribute("src")).toContain(
-      "x.ai"
-    );
+    const src = container.querySelector("img")?.getAttribute("src");
+    expect(src).toBeTruthy();
+    expect(src).not.toContain("google.com");
   });
 
   it("空 agentId 渲染首字母兜底 ?", () => {

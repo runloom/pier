@@ -86,6 +86,11 @@ test.describe("Agents Settings e2e", () => {
       await expect(
         win.locator('[data-testid="agent-row-openclaude"]')
       ).toBeAttached({ timeout: 3000 });
+
+      // 视觉验证：截图设置 dialog，确认本地 favicon 实际渲染、非空白
+      await win
+        .locator('[role="dialog"]')
+        .screenshot({ path: "test-results/agents-icons.png" });
     } finally {
       await closePierApp(appContext);
     }
