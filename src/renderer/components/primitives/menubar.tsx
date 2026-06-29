@@ -2,7 +2,9 @@
 
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { Menubar as MenubarPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import { cn } from "@/utils/index.ts";
 
 function Menubar({
@@ -70,6 +72,8 @@ function MenubarContent({
   sideOffset = 8,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Content>) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <MenubarPortal>
       <MenubarPrimitive.Content
@@ -82,6 +86,7 @@ function MenubarContent({
         data-slot="menubar-content"
         sideOffset={sideOffset}
         {...props}
+        ref={composedRef}
       />
     </MenubarPortal>
   );
@@ -251,6 +256,8 @@ function MenubarSubContent({
   className,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.SubContent>) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <MenubarPrimitive.SubContent
       className={cn(
@@ -259,6 +266,7 @@ function MenubarSubContent({
       )}
       data-slot="menubar-sub-content"
       {...props}
+      ref={composedRef}
     />
   );
 }

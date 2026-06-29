@@ -1,6 +1,8 @@
 import { Tooltip as TooltipPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 
+import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import { cn } from "@/utils/index.ts";
 
 function TooltipProvider({
@@ -38,6 +40,8 @@ function TooltipContent({
   sideOffset = 0,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  const overlayRef = useTerminalOverlay({ focus: false });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   const showArrow = side === "top" || side === "bottom";
   const arrowXClass =
     align === "start"
@@ -60,6 +64,7 @@ function TooltipContent({
         side={side}
         sideOffset={sideOffset}
         {...props}
+        ref={composedRef}
       >
         {children}
       </TooltipPrimitive.Content>
