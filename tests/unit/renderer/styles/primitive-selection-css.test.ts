@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 describe("Pier primitive selection CSS", () => {
   it("keeps command palette selected items aligned with accent selection states", () => {
     const commandSource = readFileSync(
-      join(process.cwd(), "src/renderer/components/primitives/command.tsx"),
+      join(process.cwd(), "packages/ui/src/command.tsx"),
       "utf8"
     );
 
