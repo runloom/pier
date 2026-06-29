@@ -1,7 +1,7 @@
+import { Button } from "@pier/ui/button.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { Plus } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { Button } from "../primitives/button.tsx";
 
 /**
  * Tab 栏 add 按钮 — dockview leftHeaderActionsComponent 模式.

@@ -1,10 +1,10 @@
+import { Button } from "@pier/ui/button.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { Button } from "../primitives/button.tsx";
 import { AddPanelAction } from "./add-panel-action.tsx";
 import { PanelOverflowMenu } from "./panel-overflow.tsx";
 

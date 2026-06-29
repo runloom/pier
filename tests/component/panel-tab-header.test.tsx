@@ -1,3 +1,4 @@
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import {
   fireEvent,
   type RenderOptions,
@@ -17,7 +18,6 @@ import {
   vi,
 } from "vitest";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
-import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
 import {
   PANEL_TAB_TOOLTIP_DELAY_MS,
   PanelTabHeader,

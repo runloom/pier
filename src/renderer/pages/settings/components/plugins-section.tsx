@@ -1,35 +1,24 @@
-import type {
-  PluginRegistryEntry,
-  PluginRegistryListResult,
-} from "@shared/contracts/plugin.ts";
-import i18next from "i18next";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { Fragment, useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/primitives/alert.tsx";
-import { Badge } from "@/components/primitives/badge.tsx";
-import { Button } from "@/components/primitives/button.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
+import { Badge } from "@pier/ui/badge.tsx";
+import { Button } from "@pier/ui/button.tsx";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/primitives/card.tsx";
+} from "@pier/ui/card.tsx";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/primitives/collapsible.tsx";
+} from "@pier/ui/collapsible.tsx";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
-} from "@/components/primitives/empty.tsx";
+} from "@pier/ui/empty.tsx";
 import {
   Item,
   ItemActions,
@@ -38,8 +27,15 @@ import {
   ItemGroup,
   ItemSeparator,
   ItemTitle,
-} from "@/components/primitives/item.tsx";
-import { Skeleton } from "@/components/primitives/skeleton.tsx";
+} from "@pier/ui/item.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
+import type {
+  PluginRegistryEntry,
+  PluginRegistryListResult,
+} from "@shared/contracts/plugin.ts";
+import i18next from "i18next";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { refreshBuiltinPlugins } from "@/lib/plugins/bootstrap.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";

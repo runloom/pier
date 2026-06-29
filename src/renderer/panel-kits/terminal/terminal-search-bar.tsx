@@ -1,8 +1,8 @@
+import { Badge } from "@pier/ui/badge.tsx";
+import { Button } from "@pier/ui/button.tsx";
 import type { TerminalSearchStateEvent } from "@shared/contracts/terminal.ts";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Badge } from "@/components/primitives/badge.tsx";
-import { Button } from "@/components/primitives/button.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing.store.ts";
 import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";

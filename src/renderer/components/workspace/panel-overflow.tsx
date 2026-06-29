@@ -1,3 +1,11 @@
+import { Button } from "@pier/ui/button.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+} from "@pier/ui/select.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { ChevronDown } from "lucide-react";
 import {
@@ -13,14 +21,6 @@ import {
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
 } from "@/stores/terminal-input-routing.store.ts";
-import { Button } from "../primitives/button.tsx";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-} from "../primitives/select.tsx";
 import { panelIconOf, panelKindOf } from "./panel-registry.ts";
 
 const CLIP_EPSILON_PX = 1;

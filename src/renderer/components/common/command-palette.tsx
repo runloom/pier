@@ -7,6 +7,17 @@
  *   - selectedValue 控制高亮项, 切 quick-pick 时初始化为 checked item, 触发
  *     debounced onChangeSelection (preview 去重)。
  */
+
+import { Badge } from "@pier/ui/badge.tsx";
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@pier/ui/command.tsx";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -19,16 +30,6 @@ import {
   CommandsView,
   SearchResultsView,
 } from "@/components/common/command-palette-action-rows.tsx";
-import { Badge } from "@/components/primitives/badge.tsx";
-import {
-  Command,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/primitives/command.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";

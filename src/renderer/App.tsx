@@ -1,6 +1,6 @@
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import { AppShell } from "@/components/common/app-shell.tsx";
-import { TooltipProvider } from "@/components/primitives/tooltip.tsx";
 import {
   registerTerminalElementWebOverlay,
   requestTerminalWebFocus,

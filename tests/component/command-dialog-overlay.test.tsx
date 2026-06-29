@@ -1,7 +1,7 @@
+import { CommandDialog } from "@pier/ui/command.tsx";
+import { Dialog, DialogContent } from "@pier/ui/dialog.tsx";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { CommandDialog } from "@/components/primitives/command.tsx";
-import { Dialog, DialogContent } from "@/components/primitives/dialog.tsx";
 
 const BACKDROP_FILTER_CLASS = /backdrop-blur|backdrop-filter/;
 

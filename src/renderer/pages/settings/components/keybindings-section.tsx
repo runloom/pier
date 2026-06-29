@@ -1,19 +1,15 @@
-import { Fragment, useEffect, useMemo, useSyncExternalStore } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/primitives/button.tsx";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-} from "@/components/primitives/card.tsx";
+import { Button } from "@pier/ui/button.tsx";
+import { Card, CardContent, CardFooter } from "@pier/ui/card.tsx";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldLabel,
-} from "@/components/primitives/field.tsx";
-import { Separator } from "@/components/primitives/separator.tsx";
-import { ShortcutInput } from "@/components/primitives/shortcut-input.tsx";
+} from "@pier/ui/field.tsx";
+import { Separator } from "@pier/ui/separator.tsx";
+import { ShortcutInput } from "@pier/ui/shortcut-input.tsx";
+import { Fragment, useEffect, useMemo, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
