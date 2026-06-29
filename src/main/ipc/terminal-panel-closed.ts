@@ -1,16 +1,40 @@
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 
-type TerminalPanelClosedHandler = (panelId: string) => void;
+type TerminalPanelClosedHandler = (
+  panelId: string,
+  exitCode?: number | undefined,
+  windowId?: string | undefined
+) => void;
 
 let handler: TerminalPanelClosedHandler | null = null;
 
-export function notifyTerminalPanelClosed(panelId: string): void {
+export function notifyTerminalPanelClosed(
+  panelId: string,
+  windowId?: string | undefined
+): void {
+  if (windowId) {
+    handler?.(panelId, undefined, windowId);
+    return;
+  }
   handler?.(panelId);
+}
+
+export function notifyTerminalPanelExit(
+  panelId: string,
+  exitCode: number,
+  windowId?: string | undefined
+): void {
+  if (windowId) {
+    handler?.(panelId, exitCode, windowId);
+    return;
+  }
+  handler?.(panelId, exitCode);
 }
 
 export function handleTaskExitTitle(
   panelId: string,
-  title: string
+  title: string,
+  windowId?: string | undefined
 ): number | null {
   if (!title.startsWith(TASK_EXIT_TITLE_PREFIX)) {
     return null;
@@ -19,7 +43,11 @@ export function handleTaskExitTitle(
   if (!Number.isFinite(code)) {
     return null;
   }
-  handler?.(panelId);
+  if (windowId) {
+    handler?.(panelId, code, windowId);
+  } else {
+    handler?.(panelId, code);
+  }
   return code;
 }
 
@@ -32,4 +60,5 @@ export function setTerminalPanelClosedHandler(
 export const terminalPanelClosed = {
   handleTaskExitTitle,
   notifyTerminalPanelClosed,
+  notifyTerminalPanelExit,
 } as const;

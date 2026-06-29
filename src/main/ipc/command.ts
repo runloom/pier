@@ -13,7 +13,9 @@ const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
   "plugin.inspect",
   "plugin.list",
   "run.list",
+  "run.cancel",
   "run.spawn",
+  "run.status",
   "worktree.check",
   "worktree.list",
   "worktree.open",
@@ -52,6 +54,16 @@ function senderWindowId(sender: Electron.WebContents): string {
   return windowId;
 }
 
+function commandForSender(command: PierCommand, windowId: string): PierCommand {
+  if (command.type === "run.spawn" && !command.windowId) {
+    return {
+      ...command,
+      windowId,
+    };
+  }
+  return command;
+}
+
 export function registerCommandIpc(ipcMain: IpcMain): void {
   ipcMain.handle(PIER.COMMAND_EXECUTE, async (event, rawCommand: unknown) => {
     const parsed = pierCommandSchema.safeParse(rawCommand);
@@ -65,7 +77,7 @@ export function registerCommandIpc(ipcMain: IpcMain): void {
     const windowId = senderWindowId(event.sender);
     return await appCore.commandRouter.execute({
       clientId: ensureDesktopRendererClient(windowId),
-      command,
+      command: commandForSender(command, windowId),
       protocolVersion: 1,
       requestId: randomUUID(),
     });

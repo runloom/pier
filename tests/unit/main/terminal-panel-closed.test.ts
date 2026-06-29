@@ -23,7 +23,23 @@ describe("terminal panel closed lifecycle", () => {
 
     expect(exitCode).toBe(0);
     expect(handler).toHaveBeenCalledWith("terminal-1");
-    expect(handler).toHaveBeenCalledWith("terminal-2");
+    expect(handler).toHaveBeenCalledWith("terminal-2", 0);
+  });
+
+  it("passes the window id through panel close and task exit notifications", () => {
+    const handler = vi.fn();
+    setTerminalPanelClosedHandler(handler);
+
+    notifyTerminalPanelClosed("terminal-1", "window-a");
+    const exitCode = handleTaskExitTitle(
+      "terminal-2",
+      `${TASK_EXIT_TITLE_PREFIX}1`,
+      "window-b"
+    );
+
+    expect(exitCode).toBe(1);
+    expect(handler).toHaveBeenCalledWith("terminal-1", undefined, "window-a");
+    expect(handler).toHaveBeenCalledWith("terminal-2", 1, "window-b");
   });
 
   it("does not handle ordinary terminal titles", () => {

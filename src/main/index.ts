@@ -220,8 +220,16 @@ app.whenReady().then(async () => {
   registerThemeIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);
-  setTerminalPanelClosedHandler((panelId) => {
-    appCore.services.tasks.markPanelClosed(panelId);
+  setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
+    if (typeof exitCode === "number") {
+      appCore.services.tasks
+        .completePanel(panelId, exitCode, windowId)
+        .catch((error) => {
+          console.error("[task-run] failed to complete panel:", error);
+        });
+      return;
+    }
+    appCore.services.tasks.markPanelClosed(panelId, windowId);
   });
   registerCliLocalControl()
     .then((control) => {

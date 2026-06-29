@@ -458,6 +458,89 @@ describe("parsePierCliArgs", () => {
     ).toEqual({ profileId: "codex", type: "terminal.profile.delete" });
   });
 
+  it("解析 tasks list 默认使用当前目录，也允许 --path 覆盖", () => {
+    expect(
+      parsePierCliArgs(["tasks", "list", "--json"], {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-tasks-list",
+      }).envelope.command
+    ).toEqual({
+      projectRoot: "/Users/xyz/ABC/pier",
+      type: "run.list",
+    });
+
+    expect(
+      parsePierCliArgs(["tasks", "list", "--path", "../bay", "--json"], {
+        clientId: "cli-1",
+        cwd: "/Users/xyz/ABC/pier",
+        requestId: "req-tasks-list-path",
+      }).envelope.command
+    ).toEqual({
+      projectRoot: "/Users/xyz/ABC/bay",
+      type: "run.list",
+    });
+  });
+
+  it("解析 tasks run/status/cancel", () => {
+    expect(
+      parsePierCliArgs(
+        [
+          "tasks",
+          "run",
+          "package-script:test",
+          "--path",
+          ".",
+          "--input",
+          "pkg=renderer",
+          "--split",
+          "below",
+          "--window",
+          "main",
+          "--no-focus",
+          "--json",
+        ],
+        {
+          clientId: "cli-1",
+          cwd: "/Users/xyz/ABC/pier",
+          requestId: "req-task-run",
+        }
+      ).envelope.command
+    ).toEqual({
+      focus: false,
+      inputs: { pkg: "renderer" },
+      placement: "split-below",
+      projectRoot: "/Users/xyz/ABC/pier",
+      taskId: "package-script:test",
+      type: "run.spawn",
+      windowId: "main",
+    });
+
+    expect(
+      parsePierCliArgs(["tasks", "status", "run-1", "--json"], {
+        clientId: "cli-1",
+        requestId: "req-task-status",
+      }).envelope.command
+    ).toEqual({
+      runId: "run-1",
+      type: "run.status",
+    });
+
+    expect(
+      parsePierCliArgs(
+        ["tasks", "cancel", "run-1", "--window", "main", "--json"],
+        {
+          clientId: "cli-1",
+          requestId: "req-task-cancel",
+        }
+      ).envelope.command
+    ).toEqual({
+      runId: "run-1",
+      type: "run.cancel",
+      windowId: "main",
+    });
+  });
+
   it("拒绝未知命令和缺少值的 CLI 选项", () => {
     expect(() =>
       parsePierCliArgs(["windows", "delete", "main"], {

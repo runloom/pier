@@ -79,6 +79,79 @@ describe("registerCommandIpc", () => {
     );
   });
 
+  it("给 renderer run.spawn 注入 sender windowId", async () => {
+    const { registerCommandIpc } = await import("@main/ipc/command.ts");
+    const handlers = new Map<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >();
+    const ipcMain = {
+      handle: vi.fn(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, (...args) => Promise.resolve(handler(...args)));
+        }
+      ),
+    };
+
+    registerCommandIpc(ipcMain as never);
+
+    const handler = handlers.get(PIER.COMMAND_EXECUTE);
+    if (!handler) {
+      throw new Error("expected command handler");
+    }
+
+    await handler(
+      { sender: { id: "web-contents" } },
+      { projectRoot: "/repo", taskId: "package-script:test", type: "run.spawn" }
+    );
+
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: {
+          projectRoot: "/repo",
+          taskId: "package-script:test",
+          type: "run.spawn",
+          windowId: "main",
+        },
+      })
+    );
+  });
+
+  it("允许 renderer facade 调用 run.status 和 run.cancel", async () => {
+    const { registerCommandIpc } = await import("@main/ipc/command.ts");
+    const handlers = new Map<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >();
+    const ipcMain = {
+      handle: vi.fn(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, (...args) => Promise.resolve(handler(...args)));
+        }
+      ),
+    };
+
+    registerCommandIpc(ipcMain as never);
+
+    const handler = handlers.get(PIER.COMMAND_EXECUTE);
+    if (!handler) {
+      throw new Error("expected command handler");
+    }
+
+    await expect(
+      handler(
+        { sender: { id: "web-contents" } },
+        { runId: "run-1", type: "run.status" }
+      )
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      handler(
+        { sender: { id: "web-contents" } },
+        { runId: "run-1", type: "run.cancel" }
+      )
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it("拒绝 renderer 侧任意 command 直通", async () => {
     const { registerCommandIpc } = await import("@main/ipc/command.ts");
     const handlers = new Map<

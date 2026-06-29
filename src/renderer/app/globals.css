@@ -832,6 +832,7 @@ body {
   color: var(--foreground) !important;
   display: inline-flex !important;
   height: 32px !important;
+  max-width: 220px !important;
   min-width: 0 !important;
   overflow: hidden !important;
   padding: 0 !important;
@@ -846,6 +847,7 @@ body {
   border-radius: 999px !important;
   box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent) !important;
   height: 32px !important;
+  max-width: 220px !important;
   overflow: hidden !important;
   padding-inline: 10px 12px !important;
   width: fit-content !important;
