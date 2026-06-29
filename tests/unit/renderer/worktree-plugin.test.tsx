@@ -245,6 +245,26 @@ describe("worktree builtin plugin", () => {
           })),
           open: vi.fn(async () => ({ context, panelId: "terminal-worktree" })),
         },
+        git: {
+          getStatus: vi.fn(async () => ({
+            branch: {
+              ahead: 0,
+              behind: 0,
+              branch: "main",
+              upstream: null,
+            },
+            files: [],
+          })),
+          getRepoInfo: vi.fn(async () => ({
+            defaultBranch: null,
+            gitCommonDir: "/Users/xyz/ABC/pier/.git",
+            gitRoot: "/Users/xyz/ABC/pier",
+            headOid: "abc123",
+            isBare: false,
+            isWorktree: false,
+          })),
+          watch: vi.fn(() => () => undefined),
+        },
       },
     });
   });

@@ -214,5 +214,10 @@ export function createRendererPluginContext(
       list: (request) => window.pier.worktrees.list(request),
       open: (request) => window.pier.worktrees.open(request),
     },
+    git: {
+      getStatus: (cwd) => window.pier.git.getStatus(cwd),
+      getRepoInfo: (cwd) => window.pier.git.getRepoInfo(cwd),
+      watch: (gitRoot, listener) => window.pier.git.watch(gitRoot, listener),
+    },
   };
 }

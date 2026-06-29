@@ -6,6 +6,8 @@ import {
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createGitService } from "../services/git-service.ts";
+import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
@@ -122,6 +124,8 @@ function createPierAppCore(): PierAppCore {
     }),
     workspace: createWorkspaceService(),
     worktrees: createWorktreeService(),
+    git: createGitService(),
+    gitWatch: createGitWatchService(),
   };
   return {
     clients,

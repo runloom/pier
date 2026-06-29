@@ -18,6 +18,9 @@ import type {
 } from "@shared/contracts/tasks.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import { GitExecError } from "../services/git-exec.ts";
+import type { GitService } from "../services/git-service.ts";
+import type { GitWatchService } from "../services/git-watch-service.ts";
 import {
   type PluginService,
   PluginServiceError,
@@ -33,6 +36,7 @@ import {
   commandFailure as failure,
   commandSuccess as success,
 } from "./command-results.ts";
+import { executeGitCommand } from "./git-commands.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
@@ -52,6 +56,8 @@ export interface PierCoreServices {
     read(): Promise<MruState>;
     recordUse(actionId: string): Promise<void>;
   };
+  git: GitService;
+  gitWatch: GitWatchService;
   panelContexts: {
     listRecent(): Promise<PanelContext[]>;
     recordRecent(context: PanelContext): Promise<void>;
@@ -402,6 +408,7 @@ async function executeKnownCommand(
     const executors = [
       (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
       (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
+      (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
       (cmd: PierCommand) =>
         executeRunCommand(requestId, cmd, services, context),
       (cmd: PierCommand) =>
@@ -431,6 +438,15 @@ async function executeKnownCommand(
       const code =
         err.code === "invalid_manifest" ? "invalid_command" : err.code;
       return failure(requestId, code, err.message);
+    }
+    if (err instanceof GitExecError) {
+      // 取 stderr 优先,空则 fallback stdout(git 把 "nothing to commit" 之类放 stdout)
+      // 前 3 行作摘要,让插件能按内容分类("already exists"/"not fully merged"/
+      // "dirty worktree"/"nothing to commit" 等)
+      const rawSummary = err.stderr.trim() || err.stdout.trim();
+      const summary = rawSummary.split("\n").slice(0, 3).join(" | ");
+      const detail = summary.length > 0 ? ` -- ${summary}` : "";
+      return failure(requestId, "git_error", `${err.message}${detail}`);
     }
     return failure(
       requestId,

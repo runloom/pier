@@ -1,3 +1,8 @@
+import type {
+  GitChangeEvent,
+  GitRepoInfo,
+  GitStatus,
+} from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,
@@ -100,6 +105,18 @@ export interface RendererPluginContext {
   };
   commandPalette: {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
+  };
+  /**
+   * Git 主体能力(对应 main 进程 GitService;插件按 manifest 声明的 capability 调用)。
+   * 只暴露插件常用的 3 个方法,其他按需扩展。
+   */
+  git: {
+    getStatus(cwd: string): Promise<GitStatus>;
+    getRepoInfo(cwd: string): Promise<GitRepoInfo>;
+    watch(
+      gitRoot: string,
+      listener: (event: GitChangeEvent) => void
+    ): () => void;
   };
   i18n: {
     commandDescription(commandId: string): string | undefined;

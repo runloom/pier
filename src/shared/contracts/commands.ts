@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  getFileContentOptionsSchema,
+  gitCommitOptionsSchema,
+  gitCreateBranchOptionsSchema,
+  gitDeleteBranchOptionsSchema,
+  gitDiffOptionsSchema,
+  gitLogOptionsSchema,
+  gitPathsSchema,
+  listBranchesOptionsSchema,
+} from "./git.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
 import { projectPreferencesSchema } from "./preferences.ts";
 import {
@@ -146,6 +156,94 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.disable"),
   }),
+  // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
+  z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
+  z.object({ type: z.literal("git.getRepoInfo"), cwd: z.string().min(1) }),
+  z.object({
+    type: z.literal("git.isWorkingTreeClean"),
+    cwd: z.string().min(1),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    options: gitDiffOptionsSchema.optional(),
+    type: z.literal("git.getDiffText"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    options: gitDiffOptionsSchema.optional(),
+    type: z.literal("git.getDiffSummary"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    options: gitDiffOptionsSchema.optional(),
+    type: z.literal("git.getDiffPatch"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    options: gitLogOptionsSchema.optional(),
+    type: z.literal("git.getLog"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    oid: z.string().min(1),
+    type: z.literal("git.getCommit"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    oid: z.string().min(1),
+    type: z.literal("git.getCommitPatch"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    options: getFileContentOptionsSchema,
+    type: z.literal("git.getFileContent"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    options: listBranchesOptionsSchema,
+    type: z.literal("git.listBranches"),
+  }),
+  z.object({ type: z.literal("git.listTags"), cwd: z.string().min(1) }),
+  z.object({
+    cwd: z.string().min(1),
+    ref: z.string().min(1),
+    type: z.literal("git.resolveRef"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    name: z.string().min(1),
+    type: z.literal("git.validateBranchName"),
+  }),
+  // Git 写命令(需 git:write capability)
+  gitPathsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.stage"),
+  }),
+  gitPathsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.unstage"),
+  }),
+  gitPathsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.discardChanges"),
+  }),
+  gitCommitOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.commit"),
+  }),
+  gitCreateBranchOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.createBranch"),
+  }),
+  gitDeleteBranchOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.deleteBranch"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    name: z.string().min(1),
+    type: z.literal("git.checkoutBranch"),
+  }),
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;
@@ -172,6 +270,11 @@ export type PierCommandErrorCode =
   | "platform_unavailable"
   | "unsupported"
   | "internal_error"
+  /**
+   * git CLI 退出非 0 时的统一错误码;message 含 git 返回的 stderr 摘要,
+   * 插件可据此分类("already exists"、"not fully merged"、"dirty worktree" 等)。
+   */
+  | "git_error"
   | WorktreeOperationErrorReason;
 
 export type PierCommandResult =

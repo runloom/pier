@@ -17,6 +17,28 @@ const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
   "worktree.check",
   "worktree.list",
   "worktree.open",
+  // git 主体 21 个命令(读 14 + 写 7);capability 守门由 permissions.ts 配对
+  "git.checkoutBranch",
+  "git.commit",
+  "git.createBranch",
+  "git.deleteBranch",
+  "git.discardChanges",
+  "git.getCommit",
+  "git.getCommitPatch",
+  "git.getDiffPatch",
+  "git.getDiffSummary",
+  "git.getDiffText",
+  "git.getFileContent",
+  "git.getLog",
+  "git.getRepoInfo",
+  "git.getStatus",
+  "git.isWorkingTreeClean",
+  "git.listBranches",
+  "git.listTags",
+  "git.resolveRef",
+  "git.stage",
+  "git.unstage",
+  "git.validateBranchName",
 ]);
 
 function isRendererFacadeCommand(command: PierCommand): boolean {

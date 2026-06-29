@@ -42,6 +42,28 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "workspace.layout.clear": ["workspace:write"],
   "workspace.layout.read": ["workspace:read"],
   "workspace.layout.save": ["workspace:write"],
+  // Git 全部只读,绑 git:read(写操作未来另加 git:write)
+  "git.getCommit": ["git:read"],
+  "git.getCommitPatch": ["git:read"],
+  "git.getDiffPatch": ["git:read"],
+  "git.getDiffSummary": ["git:read"],
+  "git.getDiffText": ["git:read"],
+  "git.getFileContent": ["git:read"],
+  "git.getLog": ["git:read"],
+  "git.getRepoInfo": ["git:read"],
+  "git.getStatus": ["git:read"],
+  "git.isWorkingTreeClean": ["git:read"],
+  "git.listBranches": ["git:read"],
+  "git.listTags": ["git:read"],
+  "git.resolveRef": ["git:read"],
+  "git.validateBranchName": ["git:read"],
+  "git.stage": ["git:write"],
+  "git.unstage": ["git:write"],
+  "git.discardChanges": ["git:write"],
+  "git.commit": ["git:write"],
+  "git.createBranch": ["git:write"],
+  "git.deleteBranch": ["git:write"],
+  "git.checkoutBranch": ["git:write"],
 };
 
 function terminalOpenCapabilities(
