@@ -5,7 +5,7 @@ import { Badge } from "@/components/primitives/badge.tsx";
 import { Button } from "@/components/primitives/button.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing.store.ts";
-import { useTerminalWebFocus } from "./use-terminal-web-focus.ts";
+import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
@@ -50,8 +50,29 @@ export function TerminalSearchBar({
   const [query, setQuery] = useState("");
   const [searchState, setSearchState] =
     useState<SearchState>(EMPTY_SEARCH_STATE);
+  const searchId = `terminal-search:${panelId}:keyboard`;
+  const activeOverlayId = useTerminalOverlayFocus(
+    (state) => state.activeOverlayId
+  );
 
-  useTerminalWebFocus(`terminal-search:${panelId}:keyboard`, visible);
+  // 打开（可见转 true）时激活为活跃共存浮层；关闭/卸载时让出（若仍活跃）。
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    useTerminalOverlayFocus.getState().activateOverlay(searchId);
+    return () => {
+      useTerminalOverlayFocus.getState().deactivateOverlay(searchId);
+    };
+  }, [visible, searchId]);
+
+  // 终端意图让出键盘后（activeOverlayId 不再是本栏），blur 输入框保持视觉一致；
+  // 搜索栏仍然挂载可见，仅键盘归属移交终端。
+  useEffect(() => {
+    if (visible && activeOverlayId !== searchId) {
+      inputRef.current?.blur();
+    }
+  }, [visible, activeOverlayId, searchId]);
 
   useLayoutEffect(() => {
     if (!visible) {
@@ -136,6 +157,7 @@ export function TerminalSearchBar({
     setQuery("");
     setSearchState(EMPTY_SEARCH_STATE);
     endSearch();
+    useTerminalOverlayFocus.getState().deactivateOverlay(searchId);
     onClose();
   };
 
@@ -175,6 +197,9 @@ export function TerminalSearchBar({
           className="h-7 pl-7 text-xs outline-none placeholder:text-muted-foreground/65"
           data-testid="terminal-search-input"
           onChange={(event) => runSearch(event.currentTarget.value)}
+          onFocus={() =>
+            useTerminalOverlayFocus.getState().activateOverlay(searchId)
+          }
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
