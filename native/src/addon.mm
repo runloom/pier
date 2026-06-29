@@ -57,6 +57,11 @@ extern "C" {
     // 签名 (browserWindowId, panelId UTF-8, title UTF-8). 与 PWD 同模式.
     typedef void (*TitleForwardFn)(long browserWindowId, const char* panelId, const char* title);
     void ghostty_bridge_set_title_forward_callback(TitleForwardFn cb);
+    // Command finished forward: swift shell integration command_finished → JS.
+    // 签名 (browserWindowId, panelId UTF-8, exitCode, durationNanos).
+    typedef void (*CommandFinishedForwardFn)(long browserWindowId, const char* panelId,
+                                             long exitCode, unsigned long long durationNanos);
+    void ghostty_bridge_set_command_finished_forward_callback(CommandFinishedForwardFn cb);
     void ghostty_bridge_apply_presentation(void* nsWindow, const char* json);
     void ghostty_bridge_apply_input_routing(void* nsWindow, const char* json);
     // 应用 Pier 主题派生的终端配色. cursor / selection 可空 (NULL = 不设置).
@@ -498,6 +503,41 @@ static Napi::Value JsSetTitleForwardCallback(const Napi::CallbackInfo& info) {
                                 &g_titleForwardTrampoline);
 }
 
+// ---- Command finished forward (Ghostty shell integration → task run coordinator) ----
+struct CommandFinishedForwardPayload {
+    long windowId;
+    std::string panelId;
+    long exitCode;
+    unsigned long long durationNanos;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::Number::New(env, static_cast<double>(exitCode)),
+            Napi::Number::New(env, static_cast<double>(durationNanos)),
+        });
+    }
+};
+static ForwardChannel<CommandFinishedForwardPayload> g_commandFinishedChannel("PierCommandFinishedForward");
+static void g_commandFinishedForwardTrampoline(
+    long windowId,
+    const char* panelId,
+    long exitCode,
+    unsigned long long durationNanos
+) {
+    g_commandFinishedChannel.emit({
+        windowId,
+        std::string(panelId),
+        exitCode,
+        durationNanos,
+    });
+}
+static Napi::Value JsSetCommandFinishedForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_commandFinishedChannel,
+                                ghostty_bridge_set_command_finished_forward_callback,
+                                &g_commandFinishedForwardTrampoline);
+}
+
 static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -646,6 +686,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
     exports.Set("setSearchForwardCallback", Napi::Function::New(env, JsSetSearchForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
+    exports.Set("setCommandFinishedForwardCallback", Napi::Function::New(env, JsSetCommandFinishedForwardCallback));
     exports.Set("applyTerminalPresentation", Napi::Function::New(env, JsApplyTerminalPresentation));
     exports.Set("applyTerminalInputRouting", Napi::Function::New(env, JsApplyTerminalInputRouting));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));

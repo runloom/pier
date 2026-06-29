@@ -24,7 +24,10 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "preferences.read": ["preferences:read"],
   "preferences.update": ["preferences:write"],
   "run.list": ["workspace:read"],
+  "run.cancel": ["workspace:open"],
+  "run.recent": ["workspace:read"],
   "run.spawn": ["workspace:open"],
+  "run.status": ["workspace:read"],
   "terminal.open": ["workspace:open"],
   "terminal.profile.delete": ["terminal:control"],
   "terminal.profile.list": ["terminal:read"],
@@ -42,7 +45,7 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "workspace.layout.clear": ["workspace:write"],
   "workspace.layout.read": ["workspace:read"],
   "workspace.layout.save": ["workspace:write"],
-  // Git 全部只读,绑 git:read(写操作未来另加 git:write)
+  // Git 读写分开授权:读命令 git:read, 写命令 git:write。
   "git.getCommit": ["git:read"],
   "git.getCommitPatch": ["git:read"],
   "git.getDiffPatch": ["git:read"],

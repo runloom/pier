@@ -7,7 +7,7 @@ import type { PierCoreServices } from "./command-router.ts";
 
 /**
  * 分发 git.* 命令到 main 进程的 GitService。
- * 所有 git.* 命令均为只读,绑 git:read capability(权限校验在 permissions.ts)。
+ * 读命令需 git:read, 写命令需 git:write; 权限校验在 permissions.ts。
  */
 export async function executeGitCommand(
   requestId: string,

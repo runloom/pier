@@ -82,6 +82,37 @@ describe("createRendererCommandService", () => {
     });
   });
 
+  it("关闭 panel 时不主动聚焦窗口", async () => {
+    let focus: boolean | undefined;
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-close",
+      host: {
+        send(_envelope, _windowId, options) {
+          focus = options?.focus;
+          return true;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({
+      panelId: "terminal-1",
+      type: "panel.close",
+    });
+    expect(focus).toBe(false);
+    service.resolve({
+      data: null,
+      ok: true,
+      requestId: "renderer-req-close",
+    });
+
+    await expect(promise).resolves.toEqual({
+      data: null,
+      ok: true,
+      requestId: "renderer-req-close",
+    });
+  });
+
   it("flush layout command 不主动聚焦窗口", async () => {
     let focus: boolean | undefined;
     const service = createRendererCommandService({

@@ -366,6 +366,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceFocusDelegate,
     TerminalSurfaceSearchDelegate,
     TerminalSurfaceTitleDelegate,
+    TerminalSurfaceCommandFinishedDelegate,
     TerminalSurfaceScrollbarDelegate
 {
     let panelId: String
@@ -388,6 +389,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// selected 使用 Ghostty 原始 0-based 序号；无匹配时为 -1。
     static var forwardSearchCallback: ((Int, String, Int, Int) -> Void)?
 
+    /// 全局 callback: Ghostty shell integration command_finished → main process.
+    /// exitCode 为 nil 时在 C ABI 边界统一转成 -1。
+    static var forwardCommandFinishedCallback: ((Int, String, Int, UInt64) -> Void)?
+
     init(panelId: String, browserWindowId: Int) {
         self.panelId = panelId
         self.browserWindowId = browserWindowId
@@ -399,6 +404,15 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 
     func terminalDidChangeTitle(_ title: String) {
         TerminalEventDelegate.forwardTitleCallback?(browserWindowId, panelId, title)
+    }
+
+    func terminalDidFinishCommand(exitCode: Int?, durationNanos: UInt64) {
+        TerminalEventDelegate.forwardCommandFinishedCallback?(
+            browserWindowId,
+            panelId,
+            exitCode ?? -1,
+            durationNanos
+        )
     }
 
     func terminalDidUpdateScrollbar(_ state: TerminalScrollbarState) {
@@ -1820,6 +1834,7 @@ public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePoint
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, Int) -> Void
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+public typealias CommandFinishedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, UInt64) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
 public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallback?) {
@@ -1936,6 +1951,21 @@ public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
             }
         } else {
             TerminalEventDelegate.forwardTitleCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_command_finished_forward_callback")
+public func ghosttyBridgeSetCommandFinishedForwardCallback(_ cb: CommandFinishedForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardCommandFinishedCallback = { wid, panelId, exitCode, durationNanos in
+                panelId.withCString { pidPtr in
+                    cb(wid, pidPtr, exitCode, durationNanos)
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardCommandFinishedCallback = nil
         }
     }
 }

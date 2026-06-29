@@ -41,7 +41,8 @@ const SAVES_LAYOUT_BY_WINDOW_RECORD_RE =
 const LOADS_LAYOUT_BY_WINDOW_RECORD_RE =
   /window\.pier\.workspace\.loadLayout\(\s*windowContext\.recordId\s*\)/;
 const FRESH_MODE_SKIP_RE = /windowContext\.mode !== "fresh"/;
-const FLUSH_LAYOUT_COMMAND_RE = /case "workspace\.flushLayout"/;
+const FLUSH_LAYOUT_COMMAND_RE =
+  /envelope\.command\.type === "workspace\.flushLayout"/;
 const FLUSH_SAVES_CURRENT_LAYOUT_RE =
   /window\.pier\.workspace[\s\S]{0,80}?\.saveLayout\(\s*event\.api\.toJSON\(\),\s*windowContext\.recordId\s*\)/;
 const WRITABLE_MAIN_FALLBACK_RE = /recordId: "main"/;

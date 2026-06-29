@@ -24,6 +24,7 @@ import {
 } from "@shared/contracts/renderer-command-channels.ts";
 import type {
   TaskListResult,
+  TaskRunSnapshot,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import type {
@@ -136,6 +137,7 @@ export interface PierSettingsAPI {
 }
 
 export interface PierTasksAPI {
+  cancel: (args: { runId: string }) => Promise<TaskRunSnapshot>;
   list: (args: { projectRoot: string }) => Promise<TaskListResult>;
   spawn: (args: {
     focus?: boolean;
@@ -149,6 +151,7 @@ export interface PierTasksAPI {
     projectRoot: string;
     taskId: string;
   }) => Promise<TaskSpawnResult>;
+  status: (args: { runId: string }) => Promise<TaskRunSnapshot>;
 }
 
 export interface PierWindowAPI {
@@ -376,6 +379,11 @@ const keybindingApi: PierKeybindingAPI = {
 };
 
 const tasksApi: PierTasksAPI = {
+  cancel: (args) =>
+    invokePierCommand<TaskRunSnapshot>({
+      runId: args.runId,
+      type: "run.cancel",
+    }),
   list: (args) =>
     invokePierCommand<TaskListResult>({
       projectRoot: args.projectRoot,
@@ -389,6 +397,11 @@ const tasksApi: PierTasksAPI = {
       projectRoot: args.projectRoot,
       taskId: args.taskId,
       type: "run.spawn",
+    }),
+  status: (args) =>
+    invokePierCommand<TaskRunSnapshot>({
+      runId: args.runId,
+      type: "run.status",
     }),
 };
 

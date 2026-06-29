@@ -50,7 +50,11 @@ describe("task execution planning", () => {
         version: "2.0.0",
       })
     );
-    const service = createTaskService({ homeDir });
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
     const listed = await service.list({ projectRoot });
     const task = listed.tasks.find(
       (candidate) => candidate.label === "test package"
@@ -108,7 +112,11 @@ describe("task execution planning", () => {
         version: "2.0.0",
       })
     );
-    const service = createTaskService({ homeDir });
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
     const listed = await service.list({ projectRoot });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
 
@@ -125,6 +133,7 @@ describe("task execution planning", () => {
       "lint",
       "verify",
     ]);
+    expect(plan.launches[1]?.dependsOn).toEqual([plan.launches[0]?.taskId]);
     expect(plan.launches[0]?.command).toContain("pnpm lint local");
     expect(plan.launches[1]?.cwd).toBe(projectRoot);
     expect(plan.launches[1]?.command).toContain("pnpm test ");
@@ -141,6 +150,179 @@ describe("task execution planning", () => {
           { label: "CWD", value: projectRoot },
         ]),
       },
+    });
+  });
+
+  it("resolves VS Code dependencies inside the VS Code task source", async () => {
+    await writeFile(
+      join(projectRoot, "package.json"),
+      JSON.stringify({
+        scripts: {
+          lint: "echo package-lint",
+        },
+      })
+    );
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo vscode-lint",
+            label: "lint",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["lint"],
+            dependsOrder: "sequence",
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const task = listed.tasks.find(
+      (candidate) =>
+        candidate.source === "vscode" && candidate.label === "verify"
+    );
+
+    const plan = await service.prepareSpawn({
+      projectRoot,
+      taskId: task?.id ?? "",
+    });
+
+    expect(plan).toMatchObject({ status: "ready" });
+    if (plan.status !== "ready") {
+      throw new Error("expected ready plan");
+    }
+    expect(plan.launches.map((launch) => launch.label)).toEqual([
+      "lint",
+      "verify",
+    ]);
+    expect(plan.launches[0]?.tab).toMatchObject({
+      badge: { label: "VS Code" },
+    });
+    expect(plan.launches[0]?.rawCommand).toBe("echo vscode-lint");
+    expect(plan.launches[1]?.dependsOn).toEqual([plan.launches[0]?.taskId]);
+  });
+
+  it("rejects VS Code plans with missing dependencies", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo verify",
+            dependsOn: ["missing"],
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const task = listed.tasks.find((candidate) => candidate.label === "verify");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: task?.id ?? "" })
+    ).resolves.toEqual({
+      message: "任务 verify 依赖不存在: missing",
+      status: "unsupported",
+    });
+  });
+
+  it("rejects VS Code dependency cycles", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo a",
+            dependsOn: ["b"],
+            label: "a",
+            type: "shell",
+          },
+          {
+            command: "echo b",
+            dependsOn: ["a"],
+            label: "b",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const task = listed.tasks.find((candidate) => candidate.label === "a");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: task?.id ?? "" })
+    ).resolves.toEqual({
+      message: "任务依赖存在循环: a -> b -> a",
+      status: "unsupported",
+    });
+  });
+
+  it("rejects duplicate dependency labels inside the same task source", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo lint-one",
+            label: "lint",
+            type: "shell",
+          },
+          {
+            command: "echo lint-two",
+            label: "lint",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["lint"],
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const task = listed.tasks.find((candidate) => candidate.label === "verify");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: task?.id ?? "" })
+    ).resolves.toEqual({
+      message: "任务标签重复: vscode lint",
+      status: "unsupported",
     });
   });
 
@@ -192,6 +374,213 @@ describe("task execution planning", () => {
     ).resolves.toMatchObject({ status: "ready" });
   });
 
+  it("dedupes a root task while it is still waiting for dependencies", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo lint",
+            label: "lint",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["lint"],
+            dependsOrder: "sequence",
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const verify = listed.tasks.find(
+      (candidate) => candidate.label === "verify"
+    );
+    const plan = await service.prepareSpawn({
+      projectRoot,
+      taskId: verify?.id ?? "",
+    });
+    if (plan.status !== "ready") {
+      throw new Error("expected ready plan");
+    }
+
+    await service.startRun({
+      launches: plan.launches,
+      openTerminal: (launchPlan) =>
+        Promise.resolve({
+          panelId: `panel-${launchPlan.taskId}`,
+          windowId: "main",
+        }),
+      projectRoot,
+      rootTaskId: verify?.id ?? "",
+    });
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: verify?.id ?? "" })
+    ).resolves.toEqual({
+      panelId: plan.launches[0]?.taskId
+        ? `panel-${plan.launches[0].taskId}`
+        : "",
+      status: "already-running",
+      windowId: "main",
+    });
+  });
+
+  it("keeps deduping a root task after an earlier dependency panel finishes", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo client",
+            label: "client",
+            type: "shell",
+          },
+          {
+            command: "echo server",
+            label: "server",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["client", "server"],
+            dependsOrder: "parallel",
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const verify = listed.tasks.find(
+      (candidate) => candidate.label === "verify"
+    );
+    const plan = await service.prepareSpawn({
+      projectRoot,
+      taskId: verify?.id ?? "",
+    });
+    if (plan.status !== "ready") {
+      throw new Error("expected ready plan");
+    }
+
+    await service.startRun({
+      launches: plan.launches,
+      openTerminal: (launchPlan) =>
+        Promise.resolve({
+          panelId: `panel-${launchPlan.label}`,
+          windowId: "main",
+        }),
+      projectRoot,
+      rootTaskId: verify?.id ?? "",
+    });
+    await service.completePanel("panel-client", 0, "main");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: verify?.id ?? "" })
+    ).resolves.toEqual({
+      panelId: "panel-server",
+      status: "already-running",
+      windowId: "main",
+    });
+  });
+
+  it("keeps started task records until failed run panels are marked closed", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo client",
+            label: "client",
+            type: "shell",
+          },
+          {
+            command: "echo server",
+            label: "server",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["client", "server"],
+            dependsOrder: "parallel",
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const client = listed.tasks.find(
+      (candidate) => candidate.label === "client"
+    );
+    const verify = listed.tasks.find(
+      (candidate) => candidate.label === "verify"
+    );
+    const plan = await service.prepareSpawn({
+      projectRoot,
+      taskId: verify?.id ?? "",
+    });
+    if (plan.status !== "ready") {
+      throw new Error("expected ready plan");
+    }
+
+    await expect(
+      service.startRun({
+        launches: plan.launches,
+        openTerminal: (launchPlan) => {
+          if (launchPlan.label === "server") {
+            return Promise.reject(new Error("terminal unavailable"));
+          }
+          return Promise.resolve({
+            panelId: `panel-${launchPlan.taskId}`,
+            windowId: "main",
+          });
+        },
+        projectRoot,
+        rootTaskId: verify?.id ?? "",
+      })
+    ).rejects.toThrow("terminal unavailable");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: client?.id ?? "" })
+    ).resolves.toMatchObject({
+      panelId: `panel-${client?.id ?? ""}`,
+      status: "already-running",
+      windowId: "main",
+    });
+
+    service.markPanelClosed(`panel-${client?.id ?? ""}`, "main");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: client?.id ?? "" })
+    ).resolves.toMatchObject({
+      status: "ready",
+    });
+  });
+
   it("persists recent task history through injected storage", async () => {
     const writes: unknown[] = [];
     const service = createTaskService({
@@ -210,6 +599,7 @@ describe("task execution planning", () => {
       label: "check",
       presentation: {},
       projectRoot,
+      rawCommand: "pnpm check",
       tab: { title: "check" },
       taskId: "package-script:check",
     });

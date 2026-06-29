@@ -21,6 +21,11 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   z.object({
+    type: z.literal("panel.close"),
+    panelId: z.string().min(1),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
     type: z.literal("panel.open"),
     context: panelContextSchema,
     focus: z.boolean().optional(),

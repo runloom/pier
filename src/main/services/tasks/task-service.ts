@@ -1,14 +1,12 @@
 import { basename } from "node:path";
-import {
-  TASK_EXIT_TITLE_PREFIX,
-  type TaskCandidate,
-  type TaskInputRequest,
-  type TaskLaunchPlan,
-  type TaskListResult,
-  type TaskRecentEntry,
-  type TaskRecentState,
-  type TaskSource,
-  type TaskSpawnPreparation,
+import type {
+  TaskCandidate,
+  TaskLaunchPlan,
+  TaskListResult,
+  TaskRecentEntry,
+  TaskRecentState,
+  TaskRunSnapshot,
+  TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
 import {
   EMPTY_TASK_RECENT_STATE,
@@ -16,10 +14,18 @@ import {
   writeTaskRecentState as writeTaskRecentStateDefault,
 } from "../../state/task-recent.ts";
 import {
+  buildTaskLaunches,
+  requiredInputsForTask,
+} from "./task-execution-plan.ts";
+import {
+  createTaskRunCoordinator,
+  type TaskRunCoordinatorStartResult,
+  type TaskRunTerminalOpenResult,
+} from "./task-run-coordinator.ts";
+import {
   type CollectTaskCandidatesOptions,
   collectTaskCandidates,
 } from "./task-sources.ts";
-import { commandWithArgs, projectBasename, shellQuote } from "./utils.ts";
 
 export interface TaskSpawnRequest {
   inputs?: Record<string, string> | undefined;
@@ -31,15 +37,32 @@ export interface TaskStartedRecord {
   panelId: string;
   projectRoot: string;
   taskId: string;
+  windowId?: string | undefined;
 }
 
 export interface TaskService {
+  cancelRun(runId: string): TaskRunSnapshot | null;
+  completePanel(
+    panelId: string,
+    exitCode: number,
+    windowId?: string | undefined
+  ): Promise<TaskRunSnapshot | null>;
   list(args: { projectRoot: string }): Promise<TaskListResult>;
-  markPanelClosed(panelId: string): void;
+  markPanelClosed(panelId: string, windowId?: string | undefined): void;
   prepareSpawn(args: TaskSpawnRequest): Promise<TaskSpawnPreparation>;
   recentTasks(): readonly TaskRecentEntry[];
   recordRecent(launch: TaskLaunchPlan): Promise<void>;
   recordStarted(record: TaskStartedRecord): void;
+  startRun(args: {
+    launches: readonly TaskLaunchPlan[];
+    openTerminal(
+      launch: TaskLaunchPlan,
+      runId: string
+    ): Promise<TaskRunTerminalOpenResult>;
+    projectRoot: string;
+    rootTaskId: string;
+  }): Promise<TaskRunCoordinatorStartResult>;
+  statusRun(runId: string): TaskRunSnapshot | null;
 }
 
 export interface CreateTaskServiceOptions {
@@ -51,217 +74,60 @@ export interface CreateTaskServiceOptions {
 }
 
 interface TaskRunInstance {
+  kind: "panel";
   panelId: string;
   projectRoot: string;
   startedAt: number;
   taskId: string;
+  windowId?: string | undefined;
 }
 
-const VARIABLE_RE = /\$\{([^}]+)\}/g;
+interface TaskRunCoordinatorInstance {
+  kind: "coordinator";
+  projectRoot: string;
+  runId: string;
+  startedAt: number;
+  taskId: string;
+}
 
-const TASK_SOURCE_LABELS: Record<TaskSource, string> = {
-  cargo: "Cargo",
-  history: "Recently Run",
-  just: "Justfile",
-  make: "Makefile",
-  mise: "mise",
-  "package-script": "package.json",
-  pyproject: "pyproject.toml",
-  taskfile: "Taskfile",
-  vscode: "VS Code",
-  zed: "Zed",
-};
+type RunningTaskInstance = TaskRunCoordinatorInstance | TaskRunInstance;
+
+interface TaskPanelRef {
+  panelId: string;
+  windowId?: string | undefined;
+}
 
 function runKey(projectRoot: string, taskId: string): string {
   return `${projectRoot}\0${taskId}`;
 }
 
-function taskByLabel(
-  tasks: readonly TaskCandidate[]
-): Map<string, TaskCandidate> {
-  const map = new Map<string, TaskCandidate>();
-  for (const task of tasks) {
-    map.set(task.label, task);
+function panelRefKey(panelId: string, windowId?: string | undefined): string {
+  return windowId ? `${windowId}\0${panelId}` : panelId;
+}
+
+function isTerminalRunStatus(status: TaskRunSnapshot["status"]): boolean {
+  return (
+    status === "blocked" ||
+    status === "cancelled" ||
+    status === "failed" ||
+    status === "succeeded"
+  );
+}
+
+function focusableRunPanel(
+  snapshot: TaskRunSnapshot,
+  taskId: string
+): TaskPanelRef | null {
+  const root = snapshot.nodes[taskId];
+  if (root?.status === "running" && root.panelId) {
+    return { panelId: root.panelId, windowId: root.windowId };
   }
-  return map;
-}
-
-function inputRequestById(task: TaskCandidate): Map<string, TaskInputRequest> {
-  return new Map((task.inputs ?? []).map((input) => [input.id, input]));
-}
-
-function requiredInputs(
-  task: TaskCandidate,
-  provided: Record<string, string>
-): TaskInputRequest[] {
-  const requests = inputRequestById(task);
-  const missing = new Set<string>();
-  for (const value of valuesWithVariables(task)) {
-    for (const match of value.matchAll(VARIABLE_RE)) {
-      const token = match[1];
-      if (!token?.startsWith("input:")) {
-        continue;
-      }
-      const id = token.slice("input:".length);
-      if (!(id in provided)) {
-        missing.add(id);
-      }
-    }
-  }
-  return [...missing].flatMap((id) => {
-    const request = requests.get(id);
-    return request ? [request] : [];
-  });
-}
-
-function valuesWithVariables(task: TaskCandidate): string[] {
-  return [
-    task.cwd,
-    task.commandSpec.command,
-    task.commandSpec.kind === "process" ? task.commandSpec.args.join(" ") : "",
-    ...Object.values(task.env ?? {}),
-  ];
-}
-
-function resolveVariables(
-  value: string,
-  context: {
-    inputs: Record<string, string>;
-    projectRoot: string;
-  }
-): string {
-  return value.replace(VARIABLE_RE, (_full, token: string) => {
-    if (token === "workspaceFolder" || token === "workspaceRoot") {
-      return context.projectRoot;
-    }
-    if (token === "workspaceFolderBasename") {
-      return projectBasename(context.projectRoot);
-    }
-    if (token === "cwd") {
-      return context.projectRoot;
-    }
-    if (token.startsWith("env:")) {
-      return process.env[token.slice("env:".length)] ?? "";
-    }
-    if (token.startsWith("input:")) {
-      return context.inputs[token.slice("input:".length)] ?? "";
-    }
-    if (
-      token === "file" ||
-      token === "relativeFile" ||
-      token.startsWith("command:")
-    ) {
-      throw new Error(`无法解析变量: \${${token}}`);
-    }
-    return "";
-  });
-}
-
-function resolvedEnv(
-  task: TaskCandidate,
-  context: { inputs: Record<string, string>; projectRoot: string }
-): Record<string, string> | undefined {
-  const entries = Object.entries(task.env ?? {}).map(([key, value]) => [
-    key,
-    resolveVariables(value, context),
-  ]);
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
-
-function buildCommand(
-  task: TaskCandidate,
-  context: { inputs: Record<string, string>; projectRoot: string }
-): string {
-  if (task.commandSpec.kind === "process") {
-    return commandWithArgs(
-      resolveVariables(task.commandSpec.command, context),
-      [...task.commandSpec.args.map((arg) => resolveVariables(arg, context))]
-    );
-  }
-  return resolveVariables(task.commandSpec.command, context);
-}
-
-function withPresentation(command: string, task: TaskCandidate): string {
-  const parts: string[] = [];
-  if (task.presentation?.clear) {
-    parts.push("clear");
-  }
-  if (task.presentation?.showCommand) {
-    parts.push(`printf '%s\\n' ${shellQuote(`+ ${command}`)}`);
-  }
-  parts.push(command);
-  parts.push("code=$?");
-  parts.push(`printf '\\033]0;${TASK_EXIT_TITLE_PREFIX}%s\\007' "$code"`);
-  if (task.presentation?.showSummary) {
-    parts.push("printf '\\n[pier] task exited with %s\\n' \"$code\"");
-  }
-  parts.push('exit "$code"');
-  return parts.join("; ");
-}
-
-function launchForTask(
-  task: TaskCandidate,
-  context: { inputs: Record<string, string>; projectRoot: string }
-): TaskLaunchPlan {
-  const cwd = resolveVariables(task.cwd, context);
-  const rawCommand = buildCommand(task, context);
-  const command = withPresentation(rawCommand, task);
-  const env = resolvedEnv(task, context);
-  const sourceLabel = TASK_SOURCE_LABELS[task.source];
-  return {
-    command,
-    cwd,
-    focus: task.presentation?.focus ?? task.presentation?.reveal !== "never",
-    label: task.label,
-    presentation: task.presentation ?? {},
-    projectRoot: context.projectRoot,
-    tab: {
-      badge: { label: sourceLabel },
-      icon: { id: "pier.task", label: "Task" },
-      state: { label: "Running", status: "running" },
-      title: task.label,
-      tooltip: {
-        lines: [
-          { label: "Source", value: sourceLabel },
-          { label: "Command", value: rawCommand },
-          { label: "CWD", value: cwd },
-        ],
-        title: task.label,
-      },
-    },
-    taskId: task.id,
-    ...(env ? { env } : {}),
-  };
-}
-
-function dependencyTasks(
-  task: TaskCandidate,
-  labels: ReadonlyMap<string, TaskCandidate>
-): TaskCandidate[] {
-  return (task.dependsOn ?? []).flatMap((label) => {
-    const dependency = labels.get(label);
-    return dependency ? [dependency] : [];
-  });
-}
-
-function expandLaunchOrder(
-  task: TaskCandidate,
-  labels: ReadonlyMap<string, TaskCandidate>
-): TaskCandidate[] {
-  const visited = new Set<string>();
-  const ordered: TaskCandidate[] = [];
-  const visit = (current: TaskCandidate) => {
-    if (visited.has(current.id)) {
-      return;
-    }
-    visited.add(current.id);
-    for (const dependency of dependencyTasks(current, labels)) {
-      visit(dependency);
-    }
-    ordered.push(current);
-  };
-  visit(task);
-  return ordered;
+  const runningNode = Object.values(snapshot.nodes).find(
+    (node) => node.status === "running" && node.panelId
+  );
+  return runningNode?.panelId
+    ? { panelId: runningNode.panelId, windowId: runningNode.windowId }
+    : null;
 }
 
 export function createTaskService({
@@ -271,8 +137,9 @@ export function createTaskService({
   recentLimit = 20,
   writeRecentState = writeTaskRecentStateDefault,
 }: CreateTaskServiceOptions = {}): TaskService {
-  const runningByKey = new Map<string, TaskRunInstance>();
-  const runningByPanel = new Map<string, string>();
+  const runningByKey = new Map<string, RunningTaskInstance>();
+  const runningByPanel = new Map<string, Set<string>>();
+  const taskRuns = createTaskRunCoordinator({ now });
   let recentTasks: TaskRecentEntry[] = [];
   let recentLoaded = false;
   let recentLoadPromise: Promise<void> | null = null;
@@ -308,17 +175,183 @@ export function createTaskService({
     } satisfies CollectTaskCandidatesOptions);
   };
 
+  function rememberPanelRun(
+    panelId: string,
+    windowId: string | undefined,
+    key: string
+  ): void {
+    const panelKey = panelRefKey(panelId, windowId);
+    const keys = runningByPanel.get(panelKey) ?? new Set<string>();
+    keys.add(key);
+    runningByPanel.set(panelKey, keys);
+  }
+
+  function forgetRunningPanel(
+    panelId: string,
+    windowId?: string | undefined
+  ): void {
+    const panelKey = panelRefKey(panelId, windowId);
+    const keys = runningByPanel.get(panelKey);
+    if (!keys) {
+      return;
+    }
+    runningByPanel.delete(panelKey);
+    for (const key of keys) {
+      const running = runningByKey.get(key);
+      if (
+        running?.kind === "panel" &&
+        panelRefKey(running.panelId, running.windowId) === panelKey
+      ) {
+        runningByKey.delete(key);
+      }
+    }
+  }
+
+  function markClosed(panelId: string, windowId?: string | undefined): void {
+    taskRuns.markPanelClosed(panelId, windowId);
+    forgetRunningPanel(panelId, windowId);
+  }
+
+  function recordStartedRun({
+    panelId,
+    projectRoot,
+    taskId,
+    windowId,
+  }: TaskStartedRecord): void {
+    const key = runKey(projectRoot, taskId);
+    runningByKey.set(key, {
+      kind: "panel",
+      panelId,
+      projectRoot,
+      startedAt: now(),
+      taskId,
+      ...(windowId ? { windowId } : {}),
+    });
+    rememberPanelRun(panelId, windowId, key);
+  }
+
+  function recordCoordinatorRun({
+    projectRoot,
+    rootTaskId,
+    runId,
+  }: {
+    projectRoot: string;
+    rootTaskId: string;
+    runId: string;
+  }): void {
+    runningByKey.set(runKey(projectRoot, rootTaskId), {
+      kind: "coordinator",
+      projectRoot,
+      runId,
+      startedAt: now(),
+      taskId: rootTaskId,
+    });
+  }
+
+  function forgetSnapshotTasks(snapshot: TaskRunSnapshot): void {
+    for (const node of Object.values(snapshot.nodes)) {
+      runningByKey.delete(runKey(snapshot.projectRoot, node.taskId));
+    }
+  }
+
+  function resolveRunningPanel(
+    key: string,
+    running: RunningTaskInstance
+  ): TaskPanelRef | null {
+    if (running.kind === "panel") {
+      return { panelId: running.panelId, windowId: running.windowId };
+    }
+    const snapshot = taskRuns.status(running.runId);
+    if (!snapshot || isTerminalRunStatus(snapshot.status)) {
+      runningByKey.delete(key);
+      return null;
+    }
+    const panel = focusableRunPanel(snapshot, running.taskId);
+    if (!panel) {
+      runningByKey.delete(key);
+    }
+    return panel;
+  }
+
+  function alreadyRunningPreparation(
+    projectRoot: string,
+    taskId: string
+  ): TaskSpawnPreparation | null {
+    const key = runKey(projectRoot, taskId);
+    const running = runningByKey.get(key);
+    const panel = running ? resolveRunningPanel(key, running) : null;
+    return panel
+      ? {
+          panelId: panel.panelId,
+          status: "already-running",
+          ...(panel.windowId ? { windowId: panel.windowId } : {}),
+        }
+      : null;
+  }
+
+  function buildReadyPreparation(
+    task: TaskCandidate,
+    tasks: TaskListResult["tasks"],
+    inputs: Record<string, string>,
+    projectRoot: string
+  ): TaskSpawnPreparation {
+    try {
+      return {
+        launches: buildTaskLaunches(task, { inputs, projectRoot }, tasks),
+        status: "ready",
+      };
+    } catch (error) {
+      return {
+        message: error instanceof Error ? error.message : String(error),
+        status: "unsupported",
+      };
+    }
+  }
+
+  async function recordRecentLaunch(launch: TaskLaunchPlan): Promise<void> {
+    await ensureRecentLoaded();
+    const entry: TaskRecentEntry = {
+      command: launch.rawCommand ?? launch.command,
+      cwd: launch.cwd,
+      label: launch.label || basename(launch.cwd),
+      source: "history",
+    };
+    recentTasks = [
+      entry,
+      ...recentTasks.filter(
+        (recent) =>
+          !(recent.cwd === entry.cwd && recent.command === entry.command)
+      ),
+    ].slice(0, recentLimit);
+    await writeRecentState({ entries: recentTasks, version: 1 });
+  }
+
   return {
+    cancelRun(runId) {
+      const result = taskRuns.cancel(runId);
+      if (result) {
+        forgetSnapshotTasks(result);
+      }
+      for (const node of Object.values(result?.nodes ?? {})) {
+        if (node.panelId) {
+          forgetRunningPanel(node.panelId, node.windowId);
+        }
+      }
+      return result;
+    },
+    async completePanel(panelId, exitCode, windowId) {
+      const result = await taskRuns.completePanel(panelId, exitCode, windowId);
+      markClosed(panelId, windowId);
+      if (result && isTerminalRunStatus(result.status)) {
+        forgetSnapshotTasks(result);
+      }
+      return result;
+    },
     async list({ projectRoot }) {
       return await collect(projectRoot);
     },
-    markPanelClosed(panelId) {
-      const key = runningByPanel.get(panelId);
-      if (!key) {
-        return;
-      }
-      runningByPanel.delete(panelId);
-      runningByKey.delete(key);
+    markPanelClosed(panelId, windowId) {
+      markClosed(panelId, windowId);
     },
     async prepareSpawn({ projectRoot, taskId, inputs = {} }) {
       const list = await collect(projectRoot);
@@ -336,64 +369,49 @@ export function createTaskService({
         };
       }
       if (task.concurrencyPolicy === "dedupe") {
-        const running = runningByKey.get(runKey(projectRoot, task.id));
+        const running = alreadyRunningPreparation(projectRoot, task.id);
         if (running) {
-          return {
-            panelId: running.panelId,
-            status: "already-running",
-          };
+          return running;
         }
       }
-      const missingInputs = requiredInputs(task, inputs);
+      const missingInputs = requiredInputsForTask(task, inputs);
       if (missingInputs.length > 0) {
         return {
           inputs: missingInputs,
           status: "requires-input",
         };
       }
-      try {
-        const labels = taskByLabel(list.tasks);
-        const launches = expandLaunchOrder(task, labels).map((entry) =>
-          launchForTask(entry, { inputs, projectRoot })
-        );
-        return {
-          launches,
-          status: "ready",
-        };
-      } catch (error) {
-        return {
-          message: error instanceof Error ? error.message : String(error),
-          status: "unsupported",
-        };
-      }
+      return buildReadyPreparation(task, list.tasks, inputs, projectRoot);
     },
     recentTasks: () => recentTasks,
     async recordRecent(launch) {
-      await ensureRecentLoaded();
-      const entry: TaskRecentEntry = {
-        command: launch.command,
-        cwd: launch.cwd,
-        label: launch.label || basename(launch.cwd),
-        source: "history",
-      };
-      recentTasks = [
-        entry,
-        ...recentTasks.filter(
-          (recent) =>
-            !(recent.cwd === entry.cwd && recent.command === entry.command)
-        ),
-      ].slice(0, recentLimit);
-      await writeRecentState({ entries: recentTasks, version: 1 });
+      await recordRecentLaunch(launch);
     },
-    recordStarted({ panelId, projectRoot, taskId }) {
-      const key = runKey(projectRoot, taskId);
-      runningByKey.set(key, {
-        panelId,
+    recordStarted({ panelId, projectRoot, taskId, windowId }) {
+      recordStartedRun({ panelId, projectRoot, taskId, windowId });
+    },
+    async startRun({ launches, openTerminal, projectRoot, rootTaskId }) {
+      const result = await taskRuns.start({
+        launches,
+        openTerminal: async (launch, runId) => {
+          const opened = await openTerminal(launch, runId);
+          recordStartedRun({
+            panelId: opened.panelId,
+            projectRoot: launch.projectRoot,
+            taskId: launch.taskId,
+            windowId: opened.windowId,
+          });
+          await recordRecentLaunch(launch);
+          return opened;
+        },
         projectRoot,
-        startedAt: now(),
-        taskId,
+        rootTaskId,
       });
-      runningByPanel.set(panelId, key);
+      recordCoordinatorRun({ projectRoot, rootTaskId, runId: result.runId });
+      return result;
+    },
+    statusRun(runId) {
+      return taskRuns.status(runId);
     },
   };
 }

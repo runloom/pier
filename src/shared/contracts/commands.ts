@@ -87,6 +87,19 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     projectRoot: z.string().min(1),
     taskId: z.string().min(1),
     type: z.literal("run.spawn"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    runId: z.string().min(1),
+    type: z.literal("run.status"),
+  }),
+  z.object({
+    runId: z.string().min(1),
+    type: z.literal("run.cancel"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    type: z.literal("run.recent"),
   }),
   z.object({ type: z.literal("terminal.profile.list") }),
   z.object({

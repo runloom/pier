@@ -18,19 +18,6 @@ export interface VscodeSourceOptions {
   projectRoot: string;
 }
 
-function normalizeProblemMatchers(value: unknown): unknown[] | undefined {
-  if (typeof value === "string") {
-    return [value];
-  }
-  if (Array.isArray(value)) {
-    return value;
-  }
-  if (value && typeof value === "object") {
-    return [value];
-  }
-  return;
-}
-
 function normalizeDependsOn(value: unknown): string[] | undefined {
   if (typeof value === "string") {
     return [value];
@@ -162,7 +149,6 @@ function vscodeTaskFromRecord(
   const env = optionalEnv(options?.env);
   const group = groupFromVscode(record.group);
   const presentation = presentationFromVscode(record.presentation);
-  const problemMatchers = normalizeProblemMatchers(record.problemMatcher);
   const unsupportedReason = unsupportedVscodeReason(commandSpec, type);
   return candidate({
     commandSpec: commandSpec ?? { command: label, kind: "shell" },
@@ -176,7 +162,6 @@ function vscodeTaskFromRecord(
     inputs: [...inputs],
     label,
     ...(presentation ? { presentation } : {}),
-    ...(problemMatchers ? { problemMatchers } : {}),
     source: "vscode",
     ...(unsupportedReason ? { unsupportedReason } : {}),
   });

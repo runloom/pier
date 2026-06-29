@@ -172,8 +172,8 @@ async function readDefaultBranch(
 }
 
 /**
- * 核心 git 读服务(main 进程)。默认 spawn 原生 git(execGit 可注入便于测试)。
- * 只读:不含任何写操作(stage/commit 等留待后续按 git:write capability 扩展)。
+ * 核心 Git 服务(main 进程)。默认 spawn 原生 git(execGit 可注入便于测试)。
+ * 读写授权在命令入口按 git:read/git:write 控制; 本层负责参数化执行和解析。
  */
 export function createGitService({
   execGit = defaultExecGit,

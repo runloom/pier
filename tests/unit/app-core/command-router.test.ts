@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
@@ -490,6 +493,7 @@ describe("createCommandRouter", () => {
       data: {
         context: panelContext("/tmp/pier"),
         panelId: "terminal-from-renderer",
+        windowId: "main",
       },
       ok: true,
       requestId: "req-terminal-open",
@@ -762,27 +766,143 @@ describe("createCommandRouter", () => {
     });
 
     expect(listResult).toMatchObject({ ok: true });
+    const spawnResult = await router.execute({
+      clientEnv: { FROM_CLI: "cli" },
+      clientId: "desktop-1",
+      command: {
+        focus: true,
+        projectRoot: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn",
+    });
+
+    expect(spawnResult).toMatchObject({
+      data: {
+        panelIds: ["terminal-from-renderer"],
+        primaryPanelId: "terminal-from-renderer",
+        runId: expect.any(String),
+        snapshot: {
+          nodes: {
+            "package-script:test": {
+              panelId: "terminal-from-renderer",
+              status: "running",
+              windowId: "main",
+            },
+          },
+          status: "running",
+        },
+        status: "started",
+      },
+      ok: true,
+      requestId: "req-run-spawn",
+    });
+    const spawnData =
+      spawnResult.ok &&
+      typeof spawnResult.data === "object" &&
+      spawnResult.data !== null
+        ? spawnResult.data
+        : null;
+    if (
+      !(spawnData && "runId" in spawnData) ||
+      typeof spawnData.runId !== "string"
+    ) {
+      throw new Error("run.spawn did not return a runId");
+    }
+    const runId = spawnData.runId;
+    expect(rendererCommands.at(-1)).toMatchObject({
+      launchId: "launch-1",
+      placement: "active-tab",
+      tab: {
+        badge: { label: "package.json" },
+        icon: { id: "pier.task", label: "Task" },
+        state: { label: "Running", status: "running" },
+        title: "test",
+      },
+      type: "terminal.open",
+      windowId: "main",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          runId,
+          type: "run.status",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-status",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        nodes: {
+          "package-script:test": {
+            panelId: "terminal-from-renderer",
+            status: "running",
+            windowId: "main",
+          },
+        },
+        runId,
+        status: "running",
+      },
+      ok: true,
+      requestId: "req-run-status",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          runId,
+          type: "run.cancel",
+          windowId: "main",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-cancel",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        nodes: {
+          "package-script:test": {
+            panelId: "terminal-from-renderer",
+            status: "cancelled",
+            windowId: "main",
+          },
+        },
+        runId,
+        status: "cancelled",
+      },
+      ok: true,
+      requestId: "req-run-cancel",
+    });
+    expect(rendererCommands.at(-1)).toMatchObject({
+      panelId: "terminal-from-renderer",
+      type: "panel.close",
+      windowId: "main",
+    });
+
     await expect(
       router.execute({
         clientEnv: { FROM_CLI: "cli" },
         clientId: "desktop-1",
         command: {
-          focus: true,
           projectRoot: process.cwd(),
           taskId: "package-script:test",
           type: "run.spawn",
+          windowId: "main",
         },
         protocolVersion: 1,
-        requestId: "req-run-spawn",
+        requestId: "req-run-spawn-after-cancel",
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       data: {
-        panelIds: ["terminal-from-renderer"],
-        primaryPanelId: "terminal-from-renderer",
         status: "started",
       },
       ok: true,
-      requestId: "req-run-spawn",
+      requestId: "req-run-spawn-after-cancel",
     });
 
     expect(terminalLaunches).toEqual([
@@ -794,6 +914,10 @@ describe("createCommandRouter", () => {
           FROM_SHELL: "shell",
         }),
       }),
+      expect.objectContaining({
+        command: expect.stringContaining("pnpm run test"),
+        cwd: process.cwd(),
+      }),
     ]);
     expect(resolveEnvironment).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -802,16 +926,590 @@ describe("createCommandRouter", () => {
         source: "task",
       })
     );
-    expect(rendererCommands.at(-1)).toMatchObject({
-      launchId: "launch-1",
-      placement: "active-tab",
-      tab: {
-        badge: { label: "package.json" },
-        icon: { id: "pier.task", label: "Task" },
-        state: { label: "Running", status: "running" },
-        title: "test",
+  });
+
+  it("run.spawn 透传 terminal.open 的稳定错误码", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    fakeServices.rendererCommand.execute = vi.fn((command) => {
+      rendererCommands.push(command);
+      if (command.type === "terminal.open") {
+        return Promise.resolve({
+          error: {
+            code: "platform_unavailable" as const,
+            message: "renderer unavailable",
+          },
+          ok: false as const,
+          requestId: "renderer-terminal-open-failed",
+        });
+      }
+      return Promise.resolve({
+        data: [],
+        ok: true as const,
+        requestId: "renderer-req",
+      });
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          projectRoot: process.cwd(),
+          taskId: "package-script:test",
+          type: "run.spawn",
+          windowId: "main",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-spawn-open-failed",
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: "platform_unavailable",
+        message: "renderer unavailable",
       },
-      type: "terminal.open",
+      ok: false,
+      requestId: "req-run-spawn-open-failed",
+    });
+  });
+
+  it("run.spawn 命中 stale already-running 时透传 focus 失败并清理登记", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    const executeRendererCommand = fakeServices.rendererCommand.execute;
+    fakeServices.rendererCommand.execute = vi.fn((command) => {
+      if (command.type === "panel.focus") {
+        rendererCommands.push(command);
+        return Promise.resolve({
+          error: {
+            code: "not_found" as const,
+            message: "panel not found: missing-panel",
+          },
+          ok: false as const,
+          requestId: "renderer-focus-failed",
+        });
+      }
+      return executeRendererCommand(command);
+    });
+    fakeServices.tasks.recordStarted({
+      panelId: "missing-panel",
+      projectRoot: process.cwd(),
+      taskId: "package-script:test",
+      windowId: "main",
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          projectRoot: process.cwd(),
+          taskId: "package-script:test",
+          type: "run.spawn",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-stale-focus",
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: "not_found",
+        message: "panel not found: missing-panel",
+      },
+      ok: false,
+      requestId: "req-run-stale-focus",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          projectRoot: process.cwd(),
+          taskId: "package-script:test",
+          type: "run.spawn",
+          windowId: "main",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-after-stale-focus",
+      })
+    ).resolves.toMatchObject({
+      data: { status: "started" },
+      ok: true,
+      requestId: "req-run-after-stale-focus",
+    });
+  });
+
+  it("run.spawn 在后续 terminal.open 失败时关闭已打开的任务 panel", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-run-partial-"));
+    try {
+      await mkdir(join(projectRoot, ".vscode"));
+      await writeFile(
+        join(projectRoot, ".vscode", "tasks.json"),
+        JSON.stringify({
+          tasks: [
+            {
+              command: "echo client",
+              label: "client",
+              type: "shell",
+            },
+            {
+              command: "echo server",
+              label: "server",
+              type: "shell",
+            },
+            {
+              command: "echo verify",
+              dependsOn: ["client", "server"],
+              dependsOrder: "parallel",
+              label: "verify",
+              type: "shell",
+            },
+          ],
+          version: "2.0.0",
+        })
+      );
+      const rendererCommands: unknown[] = [];
+      const terminalLaunches: unknown[] = [];
+      const fakeServices = services(
+        rendererCommands,
+        undefined,
+        terminalLaunches
+      );
+      fakeServices.terminalLaunches.register = (launch) => {
+        terminalLaunches.push(launch);
+        return `launch-${terminalLaunches.length}`;
+      };
+      const executeRendererCommand = fakeServices.rendererCommand.execute;
+      fakeServices.rendererCommand.execute = vi.fn((command) => {
+        rendererCommands.push(command);
+        if (command.type === "terminal.open") {
+          if (command.launchId === "launch-2") {
+            return Promise.resolve({
+              error: {
+                code: "platform_unavailable" as const,
+                message: "renderer unavailable",
+              },
+              ok: false as const,
+              requestId: "renderer-terminal-open-failed",
+            });
+          }
+          return Promise.resolve({
+            data: {
+              context: command.context,
+              panelId: `panel-${command.launchId}`,
+            },
+            ok: true as const,
+            requestId: "renderer-terminal-open",
+          });
+        }
+        return executeRendererCommand(command);
+      });
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: fakeServices,
+      });
+      const listResult = await router.execute({
+        clientId: "desktop-1",
+        command: {
+          projectRoot,
+          type: "run.list",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-partial-list",
+      });
+      const tasks =
+        listResult.ok &&
+        typeof listResult.data === "object" &&
+        listResult.data &&
+        "tasks" in listResult.data &&
+        Array.isArray(listResult.data.tasks)
+          ? listResult.data.tasks
+          : [];
+      const verifyTask = tasks.find(
+        (task) =>
+          task &&
+          typeof task === "object" &&
+          "label" in task &&
+          task.label === "verify" &&
+          "id" in task &&
+          typeof task.id === "string"
+      );
+      const clientTask = tasks.find(
+        (task) =>
+          task &&
+          typeof task === "object" &&
+          "label" in task &&
+          task.label === "client" &&
+          "id" in task &&
+          typeof task.id === "string"
+      );
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            projectRoot,
+            taskId: verifyTask?.id ?? "",
+            type: "run.spawn",
+            windowId: "main",
+          },
+          protocolVersion: 1,
+          requestId: "req-run-partial-spawn",
+        })
+      ).resolves.toMatchObject({
+        error: {
+          code: "platform_unavailable",
+          message: "renderer unavailable",
+        },
+        ok: false,
+        requestId: "req-run-partial-spawn",
+      });
+
+      expect(rendererCommands).toContainEqual(
+        expect.objectContaining({
+          panelId: "panel-launch-1",
+          type: "panel.close",
+          windowId: "main",
+        })
+      );
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            projectRoot,
+            taskId: clientTask?.id ?? "",
+            type: "run.spawn",
+            windowId: "main",
+          },
+          protocolVersion: 1,
+          requestId: "req-run-partial-client",
+        })
+      ).resolves.toMatchObject({
+        data: { status: "started" },
+        ok: true,
+      });
+    } finally {
+      await rm(projectRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("run.spawn 在部分打开后的 panel.close 失败时保留已打开任务登记", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-run-close-fail-"));
+    try {
+      await mkdir(join(projectRoot, ".vscode"));
+      await writeFile(
+        join(projectRoot, ".vscode", "tasks.json"),
+        JSON.stringify({
+          tasks: [
+            {
+              command: "echo client",
+              label: "client",
+              type: "shell",
+            },
+            {
+              command: "echo server",
+              label: "server",
+              type: "shell",
+            },
+            {
+              command: "echo verify",
+              dependsOn: ["client", "server"],
+              dependsOrder: "parallel",
+              label: "verify",
+              type: "shell",
+            },
+          ],
+          version: "2.0.0",
+        })
+      );
+      const rendererCommands: unknown[] = [];
+      const terminalLaunches: unknown[] = [];
+      const fakeServices = services(
+        rendererCommands,
+        undefined,
+        terminalLaunches
+      );
+      fakeServices.terminalLaunches.register = (launch) => {
+        terminalLaunches.push(launch);
+        return `launch-${terminalLaunches.length}`;
+      };
+      const executeRendererCommand = fakeServices.rendererCommand.execute;
+      fakeServices.rendererCommand.execute = vi.fn((command) => {
+        rendererCommands.push(command);
+        if (command.type === "terminal.open") {
+          if (command.launchId === "launch-2") {
+            return Promise.resolve({
+              error: {
+                code: "platform_unavailable" as const,
+                message: "renderer unavailable",
+              },
+              ok: false as const,
+              requestId: "renderer-terminal-open-failed",
+            });
+          }
+          return Promise.resolve({
+            data: {
+              context: command.context,
+              panelId: `panel-${command.launchId}`,
+            },
+            ok: true as const,
+            requestId: "renderer-terminal-open",
+          });
+        }
+        if (command.type === "panel.close") {
+          return Promise.resolve({
+            error: {
+              code: "platform_unavailable" as const,
+              message: "close failed",
+            },
+            ok: false as const,
+            requestId: "renderer-close-failed",
+          });
+        }
+        return executeRendererCommand(command);
+      });
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: fakeServices,
+      });
+      const listResult = await router.execute({
+        clientId: "desktop-1",
+        command: {
+          projectRoot,
+          type: "run.list",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-close-fail-list",
+      });
+      const tasks =
+        listResult.ok &&
+        typeof listResult.data === "object" &&
+        listResult.data &&
+        "tasks" in listResult.data &&
+        Array.isArray(listResult.data.tasks)
+          ? listResult.data.tasks
+          : [];
+      const verifyTask = tasks.find(
+        (task) =>
+          task &&
+          typeof task === "object" &&
+          "label" in task &&
+          task.label === "verify" &&
+          "id" in task &&
+          typeof task.id === "string"
+      );
+      const clientTask = tasks.find(
+        (task) =>
+          task &&
+          typeof task === "object" &&
+          "label" in task &&
+          task.label === "client" &&
+          "id" in task &&
+          typeof task.id === "string"
+      );
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            projectRoot,
+            taskId: verifyTask?.id ?? "",
+            type: "run.spawn",
+            windowId: "main",
+          },
+          protocolVersion: 1,
+          requestId: "req-run-close-fail-spawn",
+        })
+      ).resolves.toMatchObject({
+        error: {
+          code: "platform_unavailable",
+          message: "close failed",
+        },
+        ok: false,
+        requestId: "req-run-close-fail-spawn",
+      });
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            projectRoot,
+            taskId: clientTask?.id ?? "",
+            type: "run.spawn",
+            windowId: "main",
+          },
+          protocolVersion: 1,
+          requestId: "req-run-close-fail-client",
+        })
+      ).resolves.toMatchObject({
+        data: {
+          panelId: "panel-launch-1",
+          status: "already-running",
+          windowId: "main",
+        },
+        ok: true,
+      });
+    } finally {
+      await rm(projectRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("run.cancel 使用启动时记录的窗口关闭面板", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    fakeServices.window.list = () => [
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "secondary", recordId: "record-secondary" },
+    ];
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const spawnResult = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        projectRoot: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "secondary",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn-secondary",
+    });
+    const spawnData =
+      spawnResult.ok &&
+      typeof spawnResult.data === "object" &&
+      spawnResult.data !== null
+        ? spawnResult.data
+        : null;
+    if (
+      !(spawnData && "runId" in spawnData) ||
+      typeof spawnData.runId !== "string"
+    ) {
+      throw new Error("run.spawn did not return a runId");
+    }
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          runId: spawnData.runId,
+          type: "run.cancel",
+          windowId: "main",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-cancel-secondary",
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      requestId: "req-run-cancel-secondary",
+    });
+
+    expect(rendererCommands.at(-1)).toMatchObject({
+      panelId: "terminal-from-renderer",
+      type: "panel.close",
+      windowId: "secondary",
+    });
+  });
+
+  it("run.cancel 在 renderer 关闭失败时不提前改写任务状态", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    const executeRendererCommand = fakeServices.rendererCommand.execute;
+    fakeServices.rendererCommand.execute = vi.fn((command) => {
+      if (command.type === "panel.close") {
+        rendererCommands.push(command);
+        return Promise.resolve({
+          error: {
+            code: "platform_unavailable" as const,
+            message: "close failed",
+          },
+          ok: false as const,
+          requestId: "renderer-close-failed",
+        });
+      }
+      return executeRendererCommand(command);
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const spawnResult = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        projectRoot: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-cancel-failure-spawn",
+    });
+    const spawnData =
+      spawnResult.ok &&
+      typeof spawnResult.data === "object" &&
+      spawnResult.data !== null
+        ? spawnResult.data
+        : null;
+    if (
+      !(spawnData && "runId" in spawnData) ||
+      typeof spawnData.runId !== "string"
+    ) {
+      throw new Error("run.spawn did not return a runId");
+    }
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          runId: spawnData.runId,
+          type: "run.cancel",
+          windowId: "main",
+        },
+        protocolVersion: 1,
+        requestId: "req-cancel-failure",
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: "platform_unavailable",
+        message: "close failed",
+      },
+      ok: false,
+      requestId: "req-cancel-failure",
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          runId: spawnData.runId,
+          type: "run.status",
+        },
+        protocolVersion: 1,
+        requestId: "req-cancel-failure-status",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        nodes: {
+          "package-script:test": {
+            status: "running",
+          },
+        },
+        status: "running",
+      },
+      ok: true,
     });
   });
 
