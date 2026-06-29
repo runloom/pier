@@ -177,7 +177,8 @@ describe("terminal focus restoration", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: ipcWindow.webContents },
       {
-        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        basePanel: { kind: "terminal", panelId: "panel-1" },
+        webRequestCount: 0,
         rendererSequence: 2,
         webOverlayRects: [],
       }
@@ -221,7 +222,8 @@ describe("terminal focus restoration", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: ipcWindow.webContents },
       {
-        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        basePanel: { kind: "terminal", panelId: "panel-1" },
+        webRequestCount: 0,
         rendererSequence: 2,
         webOverlayRects: [],
       }
@@ -255,7 +257,7 @@ describe("terminal focus restoration", () => {
     expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
         windowFocused: false,
       })
     );
@@ -458,7 +460,8 @@ describe("terminal focus restoration", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: ipcWindow.webContents },
       {
-        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        basePanel: { kind: "terminal", panelId: "panel-1" },
+        webRequestCount: 0,
         rendererSequence: 1,
         webOverlayRects: [],
       }

@@ -24,7 +24,7 @@ import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
   resetTerminalInputRoutingForTests,
-  setTerminalBaseKeyboardFocusTarget,
+  setTerminalBasePanel,
 } from "@/stores/terminal-input-routing.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
@@ -877,8 +877,8 @@ describe("TerminalPanel lifecycle", () => {
     expect(input).toHaveFocus();
   });
 
-  it("keeps Web keyboard ownership while focus moves inside the search bar", async () => {
-    setTerminalBaseKeyboardFocusTarget({
+  it("holds Web keyboard ownership for the whole search lifecycle, not DOM focus", async () => {
+    setTerminalBasePanel({
       kind: "terminal",
       panelId: "terminal-1",
     });
@@ -893,34 +893,46 @@ describe("TerminalPanel lifecycle", () => {
     });
     await screen.findByTestId("terminal-search-input");
 
+    // 搜索可见 → 持有一次 web 焦点请求，effective = web，basePanel 不被改写。
     await waitFor(() => {
       expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
-        expect.objectContaining({ keyboardFocusTarget: { kind: "web" } })
+        expect.objectContaining({
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
+          webRequestCount: 1,
+        })
       );
     });
 
+    // DOM 焦点移动（栏内或栏外）都不应改变请求计数 —— 不再由 focus/blur 驱动。
     screen.getByRole("button", { name: "Previous match" }).focus();
     expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
-      expect.objectContaining({ keyboardFocusTarget: { kind: "web" } })
+      expect.objectContaining({ webRequestCount: 1 })
     );
 
     const outside = document.createElement("button");
     document.body.append(outside);
     try {
       outside.focus();
-      await waitFor(() => {
-        expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            keyboardFocusTarget: {
-              kind: "terminal",
-              panelId: "terminal-1",
-            },
-          })
-        );
-      });
+      // 焦点移到搜索栏外、搜索仍可见 —— 仍持有 web 请求（不回写 terminal）。
+      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+        expect.objectContaining({ webRequestCount: 1 })
+      );
     } finally {
       outside.remove();
     }
+
+    // 关闭搜索 → 释放请求，effective 回到 basePanel(terminal-1)。
+    fireEvent.keyDown(screen.getByTestId("terminal-search-input"), {
+      key: "Escape",
+    });
+    await waitFor(() => {
+      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
+          webRequestCount: 0,
+        })
+      );
+    });
   });
 
   it("runs terminal search and keyboard navigation from the search bar", async () => {

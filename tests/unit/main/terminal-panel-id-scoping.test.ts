@@ -302,7 +302,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
       {
-        keyboardFocusTarget: { kind: "terminal", panelId: "panel-a" },
+        basePanel: { kind: "terminal", panelId: "panel-a" },
+        webRequestCount: 0,
         rendererSequence: 1,
         webOverlayRects: [],
       }
@@ -321,7 +322,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
       Buffer.from("win-7"),
       expect.objectContaining({
-        keyboardFocusTarget: { kind: "terminal", panelId: "7::panel-a" },
+        basePanel: { kind: "terminal", panelId: "7::panel-a" },
       })
     );
     expect(fakeAddon.setFrame).toHaveBeenCalledWith(
