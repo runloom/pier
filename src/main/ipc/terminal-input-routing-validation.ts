@@ -74,7 +74,10 @@ export function isTerminalInputRoutingSnapshot(
     typeof candidate.rendererSequence !== "number" ||
     !Number.isInteger(candidate.rendererSequence) ||
     candidate.rendererSequence < 0 ||
-    !isKeyboardFocusTarget(candidate.keyboardFocusTarget) ||
+    !isKeyboardFocusTarget(candidate.basePanel) ||
+    typeof candidate.webRequestCount !== "number" ||
+    !Number.isInteger(candidate.webRequestCount) ||
+    candidate.webRequestCount < 0 ||
     !Array.isArray(candidate.webOverlayRects) ||
     candidate.webOverlayRects.length > MAX_INPUT_ROUTING_RECTS
   ) {

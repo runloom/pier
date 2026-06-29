@@ -6,10 +6,13 @@ import type {
   TerminalDebugRendererSnapshot,
   TerminalFrame,
   TerminalInputRoutingSnapshot,
-  TerminalKeyboardFocusTarget,
   TerminalPresentationEntry,
   TerminalPresentationSnapshot,
 } from "./contracts/terminal.ts";
+import {
+  computeEffectiveKeyboardTarget,
+  sameKeyboardFocusTarget,
+} from "./terminal-keyboard-target.ts";
 
 function frameDelta(a: TerminalFrame, b: TerminalFrame): number {
   return Math.max(
@@ -192,16 +195,6 @@ export function buildTerminalDebugIssues(
   return issues;
 }
 
-function sameKeyboardFocusTarget(
-  a: TerminalKeyboardFocusTarget,
-  b: TerminalKeyboardFocusTarget
-): boolean {
-  return (
-    a.kind === b.kind &&
-    (a.kind === "web" || (b.kind === "terminal" && a.panelId === b.panelId))
-  );
-}
-
 type NativeSurface = TerminalDebugNativeSnapshot["surfaces"][number];
 
 interface InputRoutingSurfaceState {
@@ -246,17 +239,21 @@ function buildTerminalInputRoutingIssues(
       severity: "warning",
     });
   }
+  const expectedEffective = computeEffectiveKeyboardTarget(
+    expected.basePanel,
+    expected.webRequestCount
+  );
   if (
     !sameKeyboardFocusTarget(
-      expected.keyboardFocusTarget,
+      expectedEffective,
       native.window.keyboardFocusTarget
     )
   ) {
     issues.push({
       code: "input_routing_keyboard_target_mismatch",
       message: "desired keyboard focus target does not match native router",
-      ...(expected.keyboardFocusTarget.kind === "terminal"
-        ? { panelId: expected.keyboardFocusTarget.panelId }
+      ...(expectedEffective.kind === "terminal"
+        ? { panelId: expectedEffective.panelId }
         : {}),
       severity: "error",
     });
@@ -271,13 +268,13 @@ function buildTerminalInputRoutingIssues(
   const windowFocused =
     "windowFocused" in expected ? expected.windowFocused !== false : true;
   const surfaceState = collectInputRoutingSurfaceState(native);
-  if (expected.keyboardFocusTarget.kind === "web") {
+  if (expectedEffective.kind === "web") {
     return issues.concat(buildWebKeyboardTargetIssues(surfaceState));
   }
   if (!windowFocused) {
     return issues.concat(buildBlurredWindowInputRoutingIssues(surfaceState));
   }
-  const expectedPanelId = expected.keyboardFocusTarget.panelId;
+  const expectedPanelId = expectedEffective.panelId;
   const expectedSurface = native.surfaces.find(
     (surface) => surface.panelId === expectedPanelId
   );

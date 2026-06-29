@@ -292,9 +292,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         return;
       }
       recordRendererTerminalRoute(win, "apply-input-routing", null, {
-        keyboardTarget: snapshot.keyboardFocusTarget.kind,
+        basePanel: snapshot.basePanel.kind,
         rendererSequence: snapshot.rendererSequence,
         webOverlayRectCount: snapshot.webOverlayRects.length,
+        webRequestCount: snapshot.webRequestCount,
       });
       const effective = applyRendererTerminalInputRouting(win, addon, snapshot);
       focusWebContentsForEffectiveInputRouting(

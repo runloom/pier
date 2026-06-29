@@ -1,8 +1,10 @@
 "use client";
 
 import { HoverCard as HoverCardPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 
+import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import { cn } from "@/utils/index.ts";
 
 function HoverCard({
@@ -25,6 +27,8 @@ function HoverCardContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
+  const overlayRef = useTerminalOverlay({ focus: false });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <HoverCardPrimitive.Portal data-slot="hover-card-portal">
       <HoverCardPrimitive.Content
@@ -36,6 +40,7 @@ function HoverCardContent({
         data-slot="hover-card-content"
         sideOffset={sideOffset}
         {...props}
+        ref={composedRef}
       />
     </HoverCardPrimitive.Portal>
   );

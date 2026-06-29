@@ -44,7 +44,7 @@ const EVENT_DELEGATE_HOLDS_BROWSER_ID_RE = /let browserWindowId: Int/;
 const EVENT_DELEGATE_INIT_RE = /init\(panelId: String, browserWindowId: Int\)/;
 
 const CLOSE_CLEARS_STALE_STATE_RE =
-  /if state\.activeTerminalPanelId == panelId \{\s*state\.keyboardFocusTarget = \.web/;
+  /if state\.basePanel\.panelId == panelId \{\s*state\.basePanel = \.web/;
 
 const TARGETS_DICT_RE = /var targets: \[String: Target\]/;
 const HIT_ITERATES_TARGETS_RE =
@@ -116,8 +116,8 @@ describe("Swift state invariants (source-level lock)", () => {
   });
 
   it("close clears stale terminal keyboard target to avoid use-after-free in applyFirstResponder", () => {
-    // close 后 NSView removeFromSuperview, 但如果 state.activeTerminalPanelId
-    // 还指向它, 下次 applyFirstResponder 调 terminals[id] 会拿 nil. 必须主动回到 Web.
+    // close 后 NSView removeFromSuperview, 但如果 state.basePanel 还指向它,
+    // 下次 applyFirstResponder 调 terminals[id] 会拿 nil. 必须主动回到 Web.
     expect(SOURCE).toMatch(CLOSE_CLEARS_STALE_STATE_RE);
   });
 
@@ -253,6 +253,16 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(appTerminalScrollViewSource).toMatch(SPM_SCROLL_VIEW_CLASS_RE);
     expect(appTerminalScrollViewSource).toMatch(SPM_OWNS_NATIVE_SCROLL_VIEW_RE);
     expect(appTerminalScrollViewSource).toMatch(SPM_LIVE_SCROLL_RE);
+  });
+
+  it("applyFirstResponder web branch must not makeFirstResponder(nil)", () => {
+    const src = readFileSync(SWIFT_PATH, "utf8");
+    const fnStart = src.indexOf("func applyFirstResponder(for window");
+    expect(fnStart).toBeGreaterThan(-1);
+    const webBranchStart = src.indexOf("if activeTerminalId == nil", fnStart);
+    expect(webBranchStart).toBeGreaterThan(-1);
+    const webBranch = src.slice(webBranchStart, webBranchStart + 500);
+    expect(webBranch).not.toContain("makeFirstResponder(nil)");
   });
 
   it("does not let AppTerminalScrollView.mouseMoved recurse through AppKit responder forwarding", () => {

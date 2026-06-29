@@ -46,10 +46,11 @@ describe("SettingsDialog input routing", () => {
     expect(overlay?.className).not.toMatch(BACKDROP_FILTER_CLASS);
     expect(applyInputRouting).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
         webOverlayRects: expect.arrayContaining([
           expect.objectContaining({ id: "settings-dialog" }),
         ]),
+        webRequestCount: 1,
       })
     );
   });

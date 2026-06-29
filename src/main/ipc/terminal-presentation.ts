@@ -8,6 +8,7 @@ import type {
   TerminalPresentationReason,
   TerminalPresentationSnapshot,
 } from "@shared/contracts/terminal.ts";
+import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { scopePanelId } from "./terminal-panel-id.ts";
@@ -54,9 +55,10 @@ function desiredInputRouting(
 ): TerminalInputRoutingSnapshot {
   return (
     state.desiredInputRouting ?? {
-      keyboardFocusTarget: { kind: "web" },
+      basePanel: { kind: "web" },
       rendererSequence: 0,
       webOverlayRects: [],
+      webRequestCount: 0,
     }
   );
 }
@@ -65,10 +67,14 @@ function terminalFocusPanelId(
   inputRouting: TerminalInputRoutingSnapshot,
   windowFocused: boolean
 ): string | null {
-  if (!windowFocused || inputRouting.keyboardFocusTarget.kind !== "terminal") {
+  const effective = computeEffectiveKeyboardTarget(
+    inputRouting.basePanel,
+    inputRouting.webRequestCount
+  );
+  if (!windowFocused || effective.kind !== "terminal") {
     return null;
   }
-  return inputRouting.keyboardFocusTarget.panelId;
+  return effective.panelId;
 }
 
 function effectivePresentationFromDesired(
@@ -119,7 +125,7 @@ function effectiveInputRoutingFromDesired(
   };
 }
 
-function scopeKeyboardFocusTarget(
+function scopeBasePanel(
   win: AppWindow,
   target: TerminalKeyboardFocusTarget
 ): TerminalKeyboardFocusTarget {
@@ -155,10 +161,7 @@ function scopeNativeInputRouting(
 ): TerminalNativeInputRoutingSnapshot {
   return {
     ...effective,
-    keyboardFocusTarget: scopeKeyboardFocusTarget(
-      win,
-      effective.keyboardFocusTarget
-    ),
+    basePanel: scopeBasePanel(win, effective.basePanel),
   };
 }
 

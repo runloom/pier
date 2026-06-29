@@ -447,10 +447,11 @@ describe("WorkspaceHeaderActions", () => {
     await waitFor(() => {
       expect(applyInputRouting).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          keyboardFocusTarget: { kind: "web" },
+          basePanel: { kind: "web" },
           webOverlayRects: expect.arrayContaining([
             expect.objectContaining({ id: "panel-overflow" }),
           ]),
+          webRequestCount: 1,
         })
       );
     });

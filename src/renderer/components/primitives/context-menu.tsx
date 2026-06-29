@@ -2,7 +2,9 @@
 
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { ContextMenu as ContextMenuPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import { cn } from "@/utils/index.ts";
 
 function ContextMenu({
@@ -63,6 +65,8 @@ function ContextMenuContent({
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
 }) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
@@ -72,6 +76,7 @@ function ContextMenuContent({
         )}
         data-slot="context-menu-content"
         {...props}
+        ref={composedRef}
       />
     </ContextMenuPrimitive.Portal>
   );
@@ -128,6 +133,8 @@ function ContextMenuSubContent({
   className,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <ContextMenuPrimitive.SubContent
       className={cn(
@@ -136,6 +143,7 @@ function ContextMenuSubContent({
       )}
       data-slot="context-menu-sub-content"
       {...props}
+      ref={composedRef}
     />
   );
 }

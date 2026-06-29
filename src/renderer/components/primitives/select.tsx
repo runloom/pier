@@ -1,6 +1,8 @@
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Select as SelectPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import { cn } from "@/utils/index.ts";
 
 function Select({
@@ -75,6 +77,8 @@ function SelectContent({
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
@@ -89,6 +93,7 @@ function SelectContent({
         data-slot="select-content"
         position={position}
         {...props}
+        ref={composedRef}
       >
         <SelectScrollUpButton />
         <SelectPrimitive.Viewport

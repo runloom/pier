@@ -28,7 +28,7 @@ const ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE =
 const ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE =
   /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
 const ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE =
-  /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,900}?setTerminalBaseKeyboardFocusTarget/;
+  /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,900}?setTerminalBasePanel/;
 const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
   [String.raw`window\.pier\?\.terminal\?\.set`, "ActivePanelKind"].join("")
 );

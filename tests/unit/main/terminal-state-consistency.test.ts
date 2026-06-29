@@ -162,7 +162,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
       {
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
         rendererSequence: 1,
         webOverlayRects: [],
       }
@@ -203,7 +204,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
         windowFocused: false,
       })
     );
@@ -361,7 +362,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
       {
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
         rendererSequence: 2,
         webOverlayRects: [
           { frame: { height: 400, width: 300, x: 0, y: 0 }, id: "dialog" },
@@ -372,7 +374,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
         webOverlayRects: [
           { frame: { height: 400, width: 300, x: 0, y: 0 }, id: "dialog" },
         ],
@@ -386,7 +388,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
       {
-        keyboardFocusTarget: { kind: "terminal", panelId: "panel-1" },
+        basePanel: { kind: "terminal", panelId: "panel-1" },
+        webRequestCount: 0,
         rendererSequence: 3,
         webOverlayRects: [],
       }
@@ -395,7 +398,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        keyboardFocusTarget: { kind: "terminal", panelId: "7::panel-1" },
+        basePanel: { kind: "terminal", panelId: "7::panel-1" },
         webOverlayRects: [],
       })
     );
@@ -408,7 +411,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
       {
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
         rendererSequence: 1,
         webOverlayRects: [
           { frame: { height: 24, width: 200, x: 10, y: 10 }, id: "search" },
@@ -421,7 +425,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     handlers.get("pier:terminal:apply-input-routing")?.(
       { sender: win.webContents },
       {
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
         rendererSequence: 2,
         webOverlayRects: [
           { frame: { height: 24, width: 240, x: 10, y: 10 }, id: "search" },
@@ -440,17 +445,26 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     const invalidSnapshots: unknown[] = [
       {},
       {
-        keyboardFocusTarget: { kind: "web" },
-        rendererSequence: -1,
-        webOverlayRects: [],
-      },
-      {
-        keyboardFocusTarget: { kind: "terminal" },
+        basePanel: { kind: "web" },
+        webRequestCount: -1,
         rendererSequence: 1,
         webOverlayRects: [],
       },
       {
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
+        rendererSequence: -1,
+        webOverlayRects: [],
+      },
+      {
+        basePanel: { kind: "terminal" },
+        webRequestCount: 0,
+        rendererSequence: 1,
+        webOverlayRects: [],
+      },
+      {
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
         rendererSequence: 1,
         webOverlayRects: [
           { frame: { height: 1, width: 1, x: 0, y: 0 }, id: "dup" },
@@ -458,7 +472,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
         ],
       },
       {
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
         rendererSequence: 1,
         webOverlayRects: [
           {
@@ -468,7 +483,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
         ],
       },
       {
-        keyboardFocusTarget: { kind: "web" },
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
         rendererSequence: 1,
         webOverlayRects: Array.from({ length: 65 }, (_, index) => ({
           frame: { height: 1, width: 1, x: index, y: index },

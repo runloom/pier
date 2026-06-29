@@ -1,4 +1,5 @@
 import type { TerminalNativeInputRoutingSnapshot } from "@shared/contracts/terminal.ts";
+import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { recordWebContentsRoute } from "./terminal-debug.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
@@ -18,15 +19,19 @@ function focusWebContentsForEffectiveInputRouting(
   effective: TerminalNativeInputRoutingSnapshot,
   reason: string
 ): void {
+  const effectiveTarget = computeEffectiveKeyboardTarget(
+    effective.basePanel,
+    effective.webRequestCount
+  );
   const targetKey =
-    effective.keyboardFocusTarget.kind === "terminal"
-      ? `terminal:${effective.keyboardFocusTarget.panelId}`
+    effectiveTarget.kind === "terminal"
+      ? `terminal:${effectiveTarget.panelId}`
       : "web";
   const previousTargetKey = lastKeyboardFocusTargetByWindowId.get(win.id);
   lastKeyboardFocusTargetByWindowId.set(win.id, targetKey);
 
   if (
-    effective.keyboardFocusTarget.kind !== "web" ||
+    effectiveTarget.kind !== "web" ||
     !effective.windowFocused ||
     win.webContents.isDestroyed()
   ) {

@@ -1,24 +1,15 @@
 import type { TerminalSearchStateEvent } from "@shared/contracts/terminal.ts";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Badge } from "@/components/primitives/badge.tsx";
 import { Button } from "@/components/primitives/button.tsx";
 import { useT } from "@/i18n/use-t.ts";
-import {
-  registerTerminalElementWebOverlay,
-  registerWebFocusScope,
-} from "@/stores/terminal-input-routing.store.ts";
+import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing.store.ts";
+import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
   onClose: () => void;
-  onKeyboardFocusReady: () => void;
   panelId: string;
   visible: boolean;
 }
@@ -50,48 +41,38 @@ function reportSearchError(action: string, err: unknown): void {
 export function TerminalSearchBar({
   focusRequest,
   onClose,
-  onKeyboardFocusReady,
   panelId,
   visible,
 }: TerminalSearchBarProps) {
   const t = useT();
   const rootRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const releaseSearchKeyboardRef = useRef<(() => void) | null>(null);
   const [query, setQuery] = useState("");
   const [searchState, setSearchState] =
     useState<SearchState>(EMPTY_SEARCH_STATE);
+  const searchId = `terminal-search:${panelId}:keyboard`;
+  const activeOverlayId = useTerminalOverlayFocus(
+    (state) => state.activeOverlayId
+  );
 
-  const ensureSearchKeyboardFocus = useCallback(() => {
-    if (releaseSearchKeyboardRef.current) {
-      return;
-    }
-    releaseSearchKeyboardRef.current = registerWebFocusScope(
-      `terminal-search:${panelId}:keyboard`,
-      "transient"
-    );
-  }, [panelId]);
-
-  const releaseSearchKeyboardFocus = useCallback(() => {
-    releaseSearchKeyboardRef.current?.();
-    releaseSearchKeyboardRef.current = null;
-  }, []);
-
-  useLayoutEffect(() => {
+  // 打开（可见转 true）时激活为活跃共存浮层；关闭/卸载时让出（若仍活跃）。
+  useEffect(() => {
     if (!visible) {
       return;
     }
-    ensureSearchKeyboardFocus();
-    onKeyboardFocusReady();
+    useTerminalOverlayFocus.getState().activateOverlay(searchId);
     return () => {
-      releaseSearchKeyboardFocus();
+      useTerminalOverlayFocus.getState().deactivateOverlay(searchId);
     };
-  }, [
-    visible,
-    ensureSearchKeyboardFocus,
-    onKeyboardFocusReady,
-    releaseSearchKeyboardFocus,
-  ]);
+  }, [visible, searchId]);
+
+  // 终端意图让出键盘后（activeOverlayId 不再是本栏），blur 输入框保持视觉一致；
+  // 搜索栏仍然挂载可见，仅键盘归属移交终端。
+  useEffect(() => {
+    if (visible && activeOverlayId !== searchId) {
+      inputRef.current?.blur();
+    }
+  }, [visible, activeOverlayId, searchId]);
 
   useLayoutEffect(() => {
     if (!visible) {
@@ -109,13 +90,6 @@ export function TerminalSearchBar({
       registration.dispose();
     };
   }, [visible, panelId]);
-
-  useEffect(
-    () => () => {
-      releaseSearchKeyboardFocus();
-    },
-    [releaseSearchKeyboardFocus]
-  );
 
   useEffect(() => {
     if (!visible) {
@@ -180,10 +154,10 @@ export function TerminalSearchBar({
   };
 
   const close = () => {
-    releaseSearchKeyboardFocus();
     setQuery("");
     setSearchState(EMPTY_SEARCH_STATE);
     endSearch();
+    useTerminalOverlayFocus.getState().deactivateOverlay(searchId);
     onClose();
   };
 
@@ -211,15 +185,6 @@ export function TerminalSearchBar({
       className="pointer-events-auto absolute top-3 right-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-border bg-popover p-1 text-popover-foreground shadow-background/40 shadow-lg"
       data-terminal-search-bar=""
       data-testid="terminal-search-bar"
-      onBlurCapture={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget)) {
-          return;
-        }
-        releaseSearchKeyboardFocus();
-      }}
-      onFocusCapture={() => {
-        ensureSearchKeyboardFocus();
-      }}
       ref={rootRef}
     >
       <div className="relative w-52 min-w-0">
@@ -232,6 +197,9 @@ export function TerminalSearchBar({
           className="h-7 pl-7 text-xs outline-none placeholder:text-muted-foreground/65"
           data-testid="terminal-search-input"
           onChange={(event) => runSearch(event.currentTarget.value)}
+          onFocus={() =>
+            useTerminalOverlayFocus.getState().activateOverlay(searchId)
+          }
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();

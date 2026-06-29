@@ -118,9 +118,10 @@ describe("terminal debug diagnostics", () => {
       {
         activePanelId: "terminal-1",
         desiredInputRouting: {
-          keyboardFocusTarget: { kind: "web" },
+          basePanel: { kind: "web" },
           rendererSequence: 4,
           webOverlayRects: [],
+          webRequestCount: 0,
         },
         hasMaximizedGroup: false,
         panelCount: 1,
@@ -179,9 +180,10 @@ describe("terminal debug diagnostics", () => {
       {
         activePanelId: "terminal-1",
         desiredInputRouting: {
-          keyboardFocusTarget: { kind: "web" },
+          basePanel: { kind: "web" },
           rendererSequence: 4,
           webOverlayRects: [],
+          webRequestCount: 0,
         },
         hasMaximizedGroup: false,
         panelCount: 1,
@@ -240,9 +242,10 @@ describe("terminal debug diagnostics", () => {
       {
         activePanelId: "terminal-1",
         desiredInputRouting: {
-          keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
           rendererSequence: 4,
           webOverlayRects: [],
+          webRequestCount: 0,
         },
         hasMaximizedGroup: false,
         panelCount: 1,
@@ -285,9 +288,10 @@ describe("terminal debug diagnostics", () => {
       {
         activePanelId: "terminal-1",
         desiredInputRouting: {
-          keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
           rendererSequence: 3,
           webOverlayRects: [],
+          webRequestCount: 0,
         },
         hasMaximizedGroup: false,
         panelCount: 1,
@@ -332,10 +336,11 @@ describe("terminal debug diagnostics", () => {
       undefined,
       {
         effective: {
-          keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
           nativeApplySequence: 6,
           rendererSequence: 3,
           webOverlayRects: [],
+          webRequestCount: 0,
           windowFocused: false,
         },
       }
@@ -353,9 +358,10 @@ describe("terminal debug diagnostics", () => {
       {
         activePanelId: "terminal-1",
         desiredInputRouting: {
-          keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
           rendererSequence: 4,
           webOverlayRects: [],
+          webRequestCount: 0,
         },
         hasMaximizedGroup: false,
         panelCount: 1,

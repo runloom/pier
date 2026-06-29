@@ -549,10 +549,11 @@ private struct TerminalKeyboardFocusTargetEnvelope: Codable {
 }
 
 private struct TerminalInputRoutingEnvelope: Codable {
-    let keyboardFocusTarget: TerminalKeyboardFocusTargetEnvelope
+    let basePanel: TerminalKeyboardFocusTargetEnvelope
     let nativeApplySequence: Int
     let rendererSequence: Int
     let webOverlayRects: [TerminalWebOverlayRectEntry]
+    let webRequestCount: Int
     let windowFocused: Bool
 }
 
@@ -597,7 +598,7 @@ final class GhosttyBridgeImpl {
 
     // MARK: - Keyboard state
 
-    enum KeyboardFocusTarget {
+    enum KeyboardFocusTarget: Equatable {
         case terminal(String)
         case web
 
@@ -623,11 +624,19 @@ final class GhosttyBridgeImpl {
     /// Per-window 键盘 routing 状态. renderer/main 通过 input routing 快照驱动;
     /// native 点击 terminal 时会先本地切到 terminal, 随后 main/renderer 快照校正.
     struct WindowKeyboardState {
-        var keyboardFocusTarget: KeyboardFocusTarget = .web
+        /// dockview active panel 决定的基础目标.
+        var basePanel: KeyboardFocusTarget = .web
+        /// 当前活跃的 web overlay focus 请求集合(无顺序语义); 非空时强制 effectiveTarget 为 .web.
+        var webRequests: [String] = []
         var windowFocused = false
 
+        /// 由 base + web requests 推导的有效目标: 有任何 web 请求即 .web, 否则跟随 basePanel.
+        var effectiveTarget: KeyboardFocusTarget {
+            webRequests.isEmpty ? basePanel : .web
+        }
+
         var activeTerminalPanelId: String? {
-            keyboardFocusTarget.panelId
+            effectiveTarget.panelId
         }
 
         var acceptsTerminalKeyboard: Bool {
@@ -1005,17 +1014,21 @@ final class GhosttyBridgeImpl {
         }
 
         mutateState(parent) { state in
-            state.keyboardFocusTarget = Self.keyboardFocusTarget(from: inputRouting)
+            state.basePanel = Self.basePanel(from: inputRouting)
+            // 只消费 webRequests 的空/非空；具体 id 不经 IPC 传输（effectiveTarget 仅看 isEmpty）
+            state.webRequests = inputRouting.webRequestCount > 0
+                ? Array(repeating: "ipc", count: inputRouting.webRequestCount)
+                : []
             state.windowFocused = inputRouting.windowFocused
         }
         applyFirstResponder(for: parent)
     }
 
-    private static func keyboardFocusTarget(
+    private static func basePanel(
         from inputRouting: TerminalInputRoutingEnvelope
     ) -> KeyboardFocusTarget {
-        if inputRouting.keyboardFocusTarget.kind == "terminal",
-           let panelId = inputRouting.keyboardFocusTarget.panelId,
+        if inputRouting.basePanel.kind == "terminal",
+           let panelId = inputRouting.basePanel.panelId,
            !panelId.isEmpty {
             return .terminal(panelId)
         }
@@ -1064,12 +1077,10 @@ final class GhosttyBridgeImpl {
         }
 
         if activeTerminalId == nil {
-            if terminals.values.contains(where: { term in
-                ObjectIdentifier(term.parentWindow) == windowId
-                    && window.firstResponder === term.terminalView
-            }) {
-                window.makeFirstResponder(nil)
-            }
+            // Web 拥有键盘:surface 的 hostKeyboardActive 已在上面置 false,终端光标已压暗。
+            // 不再把 window 的 firstResponder 强行清回 nil —— 那是非原子的额外一步,会造成
+            // web 层 blur→focus 抖动(搜索框光标闪烁的根因之一)。web 层 firstResponder 由
+            // main 的 webContents.focus() 单一驱动。
             return
         }
 
@@ -1333,8 +1344,8 @@ final class GhosttyBridgeImpl {
         // applyFirstResponder 不去 access 已 removeFromSuperview 的 terminalView.
         // close 后 renderer 的 input routing 快照会再给出下一个目标; 这里先兜底回 Web.
         mutateState(parent) { state in
-            if state.activeTerminalPanelId == panelId {
-                state.keyboardFocusTarget = .web
+            if state.basePanel.panelId == panelId {
+                state.basePanel = .web
             }
         }
         applyFirstResponder(for: parent)
@@ -1575,7 +1586,7 @@ final class GhosttyBridgeImpl {
             "window": [
                 "activeTerminalPanelId": activeTerminalPanelId,
                 "inputRoutingStaleDiscardCount": inputApplyState?.staleDiscardCount ?? 0,
-                "keyboardFocusTarget": state.keyboardFocusTarget.debugPayload,
+                "keyboardFocusTarget": state.effectiveTarget.debugPayload,
                 "lastAppliedInputRoutingSequence":
                     inputApplyState?.lastAppliedRendererSequence ?? 0,
                 "lastAppliedNativeApplySequence": applyState?.lastAppliedNativeApplySequence ?? 0,

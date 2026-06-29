@@ -23,10 +23,8 @@ import {
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import {
-  releaseTransientWebFocusScopes,
-  setTerminalBaseKeyboardFocusTarget,
-} from "@/stores/terminal-input-routing.store.ts";
+import { setTerminalBasePanel } from "@/stores/terminal-input-routing.store.ts";
+import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
 import {
@@ -107,13 +105,13 @@ type WorkspacePanel = DockviewReadyEvent["api"]["panels"][number];
 function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
   if (!panel) {
     useKeybindingScope.getState().setActivePanel(null, null, null);
-    setTerminalBaseKeyboardFocusTarget({ kind: "web" });
+    setTerminalBasePanel({ kind: "web" });
     return;
   }
   const component = panel.view.contentComponent;
   const kind = panelKindOf(component);
   useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
-  setTerminalBaseKeyboardFocusTarget(
+  setTerminalBasePanel(
     kind === "terminal"
       ? { kind: "terminal", panelId: panel.id }
       : { kind: "web" }
@@ -389,7 +387,6 @@ export function WorkspaceHost() {
       });
 
       window.pier?.terminal?.onFocusRequest?.((req) => {
-        releaseTransientWebFocusScopes();
         const result = activateTerminalPanelFromFocusRequest(
           event.api,
           req.panelId,
@@ -398,7 +395,10 @@ export function WorkspaceHost() {
           }
         );
         if (result.ok) {
-          setTerminalBaseKeyboardFocusTarget({
+          // 终端焦点意图：让任何活跃的共存浮层（如搜索栏）让出键盘但保持可见，
+          // effective 随 basePanel=terminal 转向终端。
+          useTerminalOverlayFocus.getState().yieldToTerminal();
+          setTerminalBasePanel({
             kind: "terminal",
             panelId: req.panelId,
           });

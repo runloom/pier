@@ -28,7 +28,7 @@ import {
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import {
   registerTerminalFullscreenWebOverlay,
-  registerWebFocusScope,
+  requestTerminalWebFocus,
 } from "@/stores/terminal-input-routing.store.ts";
 
 const SIDEBAR_STYLE: CSSProperties = {
@@ -48,9 +48,9 @@ export function SettingsDialog() {
       return;
     }
     const route = registerTerminalFullscreenWebOverlay("settings-dialog");
-    const disposeScope = registerWebFocusScope("settings-dialog", "exclusive");
+    const releaseWebFocus = requestTerminalWebFocus("settings-dialog");
     return () => {
-      disposeScope();
+      releaseWebFocus();
       route.dispose();
     };
   }, [open]);

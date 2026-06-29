@@ -34,7 +34,6 @@ import {
   tabChromeFromParams,
   terminalPanelDescriptor,
 } from "./terminal-tab-chrome.ts";
-import { useTerminalSearchKeyboardOpening } from "./use-terminal-search-keyboard-opening.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
 
 function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
@@ -405,17 +404,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     });
   }, [panelId, monoFontFamily, effectiveMonoFontSize]);
 
-  const { holdOpeningKeyboardFocus, releaseOpeningKeyboardFocus } =
-    useTerminalSearchKeyboardOpening(panelId);
   const openTerminalSearch = useCallback(() => {
-    holdOpeningKeyboardFocus();
     setSearchOpen(true);
     setSearchFocusRequest((value) => value + 1);
-  }, [holdOpeningKeyboardFocus]);
+  }, []);
   const closeTerminalSearch = useCallback(() => {
-    releaseOpeningKeyboardFocus();
     setSearchOpen(false);
-  }, [releaseOpeningKeyboardFocus]);
+  }, []);
   const activatePanel = useCallback(() => {
     api.setActive();
   }, [api]);
@@ -477,7 +472,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       <TerminalSearchBar
         focusRequest={searchFocusRequest}
         onClose={closeTerminalSearch}
-        onKeyboardFocusReady={releaseOpeningKeyboardFocus}
         panelId={panelId}
         visible={searchOpen}
       />

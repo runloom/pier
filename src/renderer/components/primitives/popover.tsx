@@ -1,8 +1,10 @@
 "use client";
 
 import { Popover as PopoverPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 
+import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import { cn } from "@/utils/index.ts";
 
 function Popover({
@@ -23,6 +25,8 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
@@ -34,6 +38,7 @@ function PopoverContent({
         data-slot="popover-content"
         sideOffset={sideOffset}
         {...props}
+        ref={composedRef}
       />
     </PopoverPrimitive.Portal>
   );

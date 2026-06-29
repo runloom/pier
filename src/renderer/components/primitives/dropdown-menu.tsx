@@ -2,7 +2,9 @@
 
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import { cn } from "@/utils/index.ts";
 
 function DropdownMenu({
@@ -36,6 +38,8 @@ function DropdownMenuContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -47,6 +51,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         {...props}
+        ref={composedRef}
       />
     </DropdownMenuPrimitive.Portal>
   );
@@ -245,6 +250,8 @@ function DropdownMenuSubContent({
   className,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const overlayRef = useTerminalOverlay({ focus: true });
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <DropdownMenuPrimitive.SubContent
       className={cn(
@@ -253,6 +260,7 @@ function DropdownMenuSubContent({
       )}
       data-slot="dropdown-menu-sub-content"
       {...props}
+      ref={composedRef}
     />
   );
 }
