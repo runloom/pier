@@ -11,10 +11,12 @@ import {
   panelDisplaySchema,
   panelKindSchema,
 } from "@shared/contracts/panel.ts";
+import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type {
   ResolvedTerminalLaunchOptions,
   TerminalLaunchOptions,
 } from "@shared/contracts/terminal-launch.ts";
+import { resolveAgentCommand } from "../services/agents/agent-launch.ts";
 import type {
   ProcessEnvironmentResolveRequest,
   ProcessEnvironmentService,
@@ -34,6 +36,9 @@ export interface PanelCommandServices {
   panelContexts: {
     recordRecent(context: PanelContext): Promise<void>;
     resolveForPath(path: string): Promise<PanelContext>;
+  };
+  preferences: {
+    read(): Promise<ProjectPreferences>;
   };
   processEnvironment: ProcessEnvironmentService;
   rendererCommand: RendererCommandService;
@@ -134,6 +139,50 @@ function optionalEnv(
   env: Record<string, string>
 ): Pick<ResolvedTerminalLaunchOptions, "env"> | Record<string, never> {
   return Object.keys(env).length > 0 ? { env } : {};
+}
+
+async function resolveAgentLaunchCommand(
+  rawLaunch: TerminalLaunchOptions,
+  services: Pick<PanelCommandServices, "preferences">
+): Promise<string | null | "invalid"> {
+  if (!rawLaunch.agentId) {
+    return null;
+  }
+  const prefs = await services.preferences.read();
+  const agentCmd = resolveAgentCommand({
+    agentId: rawLaunch.agentId,
+    override: prefs.agentCommandOverrides?.[rawLaunch.agentId],
+    agentDefaultArgs: prefs.agentDefaultArgs,
+  });
+  return agentCmd ?? "invalid";
+}
+
+interface ResolvedLaunchBase {
+  launchBase: ResolvedTerminalLaunchOptions;
+  profile: ResolvedTerminalLaunchOptions | null;
+}
+
+async function resolveTerminalLaunchBase(
+  rawLaunch: TerminalLaunchOptions,
+  services: Pick<PanelCommandServices, "preferences" | "terminalProfiles">
+): Promise<ResolvedLaunchBase | { error: string }> {
+  const profile = rawLaunch.profileId
+    ? await services.terminalProfiles.resolve(rawLaunch.profileId)
+    : null;
+  if (rawLaunch.profileId && !profile) {
+    return { error: `unknown terminal profile: ${rawLaunch.profileId}` };
+  }
+  let launchBase = mergeTerminalLaunchCommandAndCwd(rawLaunch, profile);
+  if (!launchBase.command) {
+    const agentCmd = await resolveAgentLaunchCommand(rawLaunch, services);
+    if (agentCmd === "invalid") {
+      return { error: `unknown agent: ${rawLaunch.agentId}` };
+    }
+    if (agentCmd !== null) {
+      launchBase = { ...launchBase, command: agentCmd };
+    }
+  }
+  return { launchBase, profile };
 }
 
 async function listPanels(
@@ -270,17 +319,11 @@ export async function executeTerminalOpenCommand(
   }
 
   const rawLaunch = command.launch ?? {};
-  const profile = rawLaunch.profileId
-    ? await services.terminalProfiles.resolve(rawLaunch.profileId)
-    : null;
-  if (rawLaunch.profileId && !profile) {
-    return commandFailure(
-      requestId,
-      "invalid_command",
-      `unknown terminal profile: ${rawLaunch.profileId}`
-    );
+  const resolved = await resolveTerminalLaunchBase(rawLaunch, services);
+  if ("error" in resolved) {
+    return commandFailure(requestId, "invalid_command", resolved.error);
   }
-  const launchBase = mergeTerminalLaunchCommandAndCwd(rawLaunch, profile);
+  const { launchBase, profile } = resolved;
   const environmentRequest: ProcessEnvironmentResolveRequest = {
     cwd: launchBase.cwd,
     ...(options.clientEnv ? { clientEnv: options.clientEnv } : {}),

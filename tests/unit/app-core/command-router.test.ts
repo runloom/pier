@@ -726,6 +726,84 @@ describe("createCommandRouter", () => {
     ]);
   });
 
+  it("terminal.open 用显式 agentId + agentDefaultArgs 解析为命令", async () => {
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services([], undefined, terminalLaunches);
+    Object.assign(fakeServices, {
+      preferences: {
+        read: async () => ({
+          language: "system",
+          monoFontFamily: "",
+          monoFontSize: 13,
+          stylePresetId: "pierre",
+          terminalCursorBlink: true,
+          terminalCursorStyle: "block",
+          terminalNewCwdPolicy: "activeTerminal",
+          terminalPasteProtection: true,
+          terminalScrollbackMb: 64,
+          theme: "system",
+          uiFontFamily: "",
+          userKeymap: [],
+          windowZoomLevel: 0,
+          defaultAgentId: null,
+          disabledAgentIds: [],
+          agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+          agentDefaultEnv: {},
+          agentCommandOverrides: {},
+        }),
+      },
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+    await router.execute({
+      clientId: "desktop-1",
+      command: {
+        type: "terminal.open",
+        launch: { agentId: "claude", cwd: "/tmp/pier" },
+      },
+      protocolVersion: 1,
+      requestId: "r",
+    });
+    expect(terminalLaunches).toEqual([
+      { command: "claude --dangerously-skip-permissions", cwd: "/tmp/pier" },
+    ]);
+  });
+
+  it("terminal.open 无 agentId 时保持纯 shell（无命令注入）", async () => {
+    const terminalLaunches: unknown[] = [];
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services([], undefined, terminalLaunches),
+    });
+    await router.execute({
+      clientId: "desktop-1",
+      command: { type: "terminal.open", launch: { cwd: "/tmp/pier" } },
+      protocolVersion: 1,
+      requestId: "r-shell",
+    });
+    expect(terminalLaunches).toEqual([{ cwd: "/tmp/pier" }]);
+  });
+
+  it("terminal.open 传入无效 agentId（schema 外）返回 invalid_command", async () => {
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(),
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          type: "terminal.open",
+          launch: { agentId: "not-a-real-agent" as "claude", cwd: "/tmp" },
+        },
+        protocolVersion: 1,
+        requestId: "r-unknown",
+      })
+    ).resolves.toMatchObject({ ok: false, error: { code: "invalid_command" } });
+  });
+
   it("run.spawn 重新解析任务并复用 terminal.open", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];
