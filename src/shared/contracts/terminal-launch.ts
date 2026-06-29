@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentKindSchema } from "./agent.ts";
 
 export const terminalLaunchEnvKeySchema = z
   .string()
@@ -6,6 +7,7 @@ export const terminalLaunchEnvKeySchema = z
 
 export const terminalLaunchOptionsSchema = z
   .object({
+    agentId: agentKindSchema.optional(),
     command: z.string().min(1).optional(),
     cwd: z.string().min(1).optional(),
     env: z.record(terminalLaunchEnvKeySchema, z.string()).optional(),
@@ -15,6 +17,7 @@ export const terminalLaunchOptionsSchema = z
 
 export const resolvedTerminalLaunchOptionsSchema =
   terminalLaunchOptionsSchema.omit({
+    agentId: true,
     profileId: true,
   });
 

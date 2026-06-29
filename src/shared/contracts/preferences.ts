@@ -2,6 +2,7 @@
  * 主题/风格/语言 preferences schema (运行时 emission)
  */
 import { z } from "zod";
+import { agentKindSchema } from "./agent.ts";
 
 export const themePreferenceSchema = z.enum(["light", "dark", "system"]);
 export const resolvedThemeSchema = z.enum(["light", "dark"]);
@@ -90,6 +91,18 @@ export const projectPreferencesSchema = z.object({
     .max(MAX_WINDOW_ZOOM_LEVEL)
     .default(DEFAULT_WINDOW_ZOOM_LEVEL),
   userKeymap: z.array(userKeymapEntrySchema).max(256).default([]),
+  defaultAgentId: z
+    .union([agentKindSchema, z.literal("blank")])
+    .nullable()
+    .default(null),
+  disabledAgentIds: z.array(agentKindSchema).default([]),
+  agentDefaultArgs: z.partialRecord(agentKindSchema, z.string()).default({}),
+  agentDefaultEnv: z
+    .partialRecord(agentKindSchema, z.record(z.string(), z.string()))
+    .default({}),
+  agentCommandOverrides: z
+    .partialRecord(agentKindSchema, z.string())
+    .default({}),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;

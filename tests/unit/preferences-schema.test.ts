@@ -176,3 +176,68 @@ describe("projectPreferencesSchema — user keymap", () => {
     ).toThrow();
   });
 });
+
+describe("projectPreferencesSchema — agent preferences", () => {
+  it("提供 agent 默认值", () => {
+    const parsed = projectPreferencesSchema.parse({});
+    expect(parsed.defaultAgentId).toBeNull();
+    expect(parsed.disabledAgentIds).toEqual([]);
+    expect(parsed.agentDefaultArgs).toEqual({});
+    expect(parsed.agentDefaultEnv).toEqual({});
+  });
+
+  it("接受 agent 偏好值", () => {
+    const parsed = projectPreferencesSchema.parse({
+      defaultAgentId: "claude",
+      disabledAgentIds: ["pi"],
+      agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+      agentDefaultEnv: { codex: { CODEX_X: "1" } },
+    });
+    expect(parsed.defaultAgentId).toBe("claude");
+    expect(parsed.disabledAgentIds).toEqual(["pi"]);
+    expect(parsed.agentDefaultArgs.claude).toBe(
+      "--dangerously-skip-permissions"
+    );
+  });
+
+  it("接受 blank 与 null 作为 defaultAgentId", () => {
+    expect(
+      projectPreferencesSchema.parse({ defaultAgentId: "blank" }).defaultAgentId
+    ).toBe("blank");
+    expect(
+      projectPreferencesSchema.parse({ defaultAgentId: null }).defaultAgentId
+    ).toBeNull();
+  });
+
+  it("拒绝未知 agent id", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ defaultAgentId: "nope" })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ disabledAgentIds: ["nope"] })
+    ).toThrow();
+  });
+
+  it("拒绝 agentDefaultArgs/agentDefaultEnv 的未知 key", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ agentDefaultArgs: { nope: "x" } })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ agentDefaultEnv: { nope: { A: "1" } } })
+    ).toThrow();
+  });
+
+  it("提供 agentCommandOverrides 默认 + 校验 key", () => {
+    expect(projectPreferencesSchema.parse({}).agentCommandOverrides).toEqual(
+      {}
+    );
+    expect(
+      projectPreferencesSchema.parse({
+        agentCommandOverrides: { claude: "/opt/claude" },
+      }).agentCommandOverrides.claude
+    ).toBe("/opt/claude");
+    expect(() =>
+      projectPreferencesSchema.parse({ agentCommandOverrides: { nope: "x" } })
+    ).toThrow();
+  });
+});

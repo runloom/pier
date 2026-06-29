@@ -1,0 +1,327 @@
+import type { AgentCatalogEntry, AgentKind } from "@shared/contracts/agent.ts";
+
+export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
+  {
+    id: "claude",
+    label: "Claude",
+    launchCmd: "claude",
+    detectCmd: "claude",
+    expectedProcess: "claude",
+    iconId: "claude",
+    homepageUrl: "https://claude.com/claude-code",
+  },
+  {
+    id: "codex",
+    label: "Codex",
+    launchCmd: "codex",
+    detectCmd: "codex",
+    expectedProcess: "codex",
+    iconId: "codex",
+    homepageUrl: "https://github.com/openai/codex",
+  },
+  {
+    id: "gemini",
+    label: "Gemini",
+    launchCmd: "gemini",
+    detectCmd: "gemini",
+    expectedProcess: "gemini",
+    iconId: "gemini",
+    homepageUrl: "https://github.com/google-gemini/gemini-cli",
+  },
+  {
+    id: "aider",
+    label: "Aider",
+    launchCmd: "aider",
+    detectCmd: "aider",
+    expectedProcess: "aider",
+    iconId: "aider",
+    homepageUrl: "https://aider.chat/docs/",
+  },
+  {
+    id: "opencode",
+    label: "OpenCode",
+    launchCmd: "opencode",
+    detectCmd: "opencode",
+    expectedProcess: "opencode",
+    faviconDomain: "opencode.ai",
+    homepageUrl: "https://opencode.ai/docs/cli/",
+  },
+  {
+    id: "cursor",
+    label: "Cursor",
+    launchCmd: "cursor-agent",
+    detectCmd: "cursor-agent",
+    expectedProcess: "cursor-agent",
+    faviconDomain: "cursor.com",
+    homepageUrl: "https://cursor.com/cli",
+  },
+  {
+    id: "copilot",
+    label: "GitHub Copilot",
+    launchCmd: "copilot",
+    detectCmd: "copilot",
+    expectedProcess: "copilot",
+    iconId: "copilot",
+    homepageUrl:
+      "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
+  },
+  {
+    id: "droid",
+    label: "Droid",
+    launchCmd: "droid",
+    detectCmd: "droid",
+    expectedProcess: "droid",
+    iconId: "droid",
+    homepageUrl: "https://docs.factory.ai/cli/getting-started/quickstart",
+  },
+  {
+    id: "kimi",
+    label: "Kimi",
+    launchCmd: "kimi",
+    detectCmd: "kimi",
+    expectedProcess: "kimi",
+    faviconDomain: "moonshot.cn",
+    homepageUrl:
+      "https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html",
+  },
+  {
+    id: "pi",
+    label: "Pi",
+    launchCmd: "pi",
+    detectCmd: "pi",
+    expectedProcess: "pi",
+    iconId: "pi",
+    homepageUrl: "https://pi.dev",
+  },
+  {
+    id: "amp",
+    label: "Amp",
+    launchCmd: "amp",
+    detectCmd: "amp",
+    expectedProcess: "amp",
+    faviconDomain: "ampcode.com",
+    homepageUrl: "https://ampcode.com/manual#install",
+  },
+  // orca 全集补全（去 claude-agent-teams——它探测/启动 orca 自身 CLI）。
+  {
+    id: "grok",
+    label: "Grok",
+    launchCmd: "grok",
+    detectCmd: "grok",
+    expectedProcess: "grok",
+    faviconDomain: "x.ai",
+    homepageUrl: "https://x.ai/cli",
+  },
+  {
+    id: "mimo-code",
+    label: "MiMo Code",
+    launchCmd: "mimo",
+    detectCmd: "mimo",
+    expectedProcess: "mimo",
+    faviconDomain: "mimo.xiaomi.com",
+    homepageUrl: "https://mimo.xiaomi.com/coder",
+  },
+  {
+    id: "ante",
+    label: "Ante",
+    launchCmd: "ante",
+    detectCmd: "ante",
+    expectedProcess: "ante",
+    faviconDomain: "antigma.ai",
+    homepageUrl: "https://github.com/AntigmaLabs/ante-preview",
+  },
+  {
+    id: "omp",
+    label: "OMP",
+    launchCmd: "omp",
+    detectCmd: "omp",
+    expectedProcess: "omp",
+    iconId: "omp",
+    homepageUrl: "https://omp.sh",
+  },
+  {
+    id: "antigravity",
+    label: "Antigravity",
+    launchCmd: "agy",
+    detectCmd: "agy",
+    expectedProcess: "agy",
+    faviconDomain: "antigravity.google",
+    homepageUrl: "https://antigravity.google/docs/cli-overview",
+  },
+  {
+    id: "goose",
+    label: "Goose",
+    launchCmd: "goose",
+    detectCmd: "goose",
+    expectedProcess: "goose",
+    faviconDomain: "goose-docs.ai",
+    homepageUrl: "https://block.github.io/goose/docs/quickstart/",
+  },
+  {
+    id: "kilo",
+    label: "Kilocode",
+    launchCmd: "kilo",
+    detectCmd: "kilo",
+    expectedProcess: "kilo",
+    iconId: "kilo",
+    homepageUrl: "https://kilo.ai/docs/cli",
+  },
+  {
+    id: "kiro",
+    label: "Kiro",
+    launchCmd: "kiro-cli chat --tui",
+    detectCmd: "kiro-cli",
+    expectedProcess: "kiro-cli",
+    faviconDomain: "kiro.dev",
+    homepageUrl: "https://kiro.dev/docs/cli/",
+  },
+  {
+    id: "crush",
+    label: "Charm",
+    launchCmd: "crush",
+    detectCmd: "crush",
+    expectedProcess: "crush",
+    faviconDomain: "charm.sh",
+    homepageUrl: "https://github.com/charmbracelet/crush",
+  },
+  {
+    id: "aug",
+    label: "Auggie",
+    launchCmd: "auggie",
+    detectCmd: "auggie",
+    expectedProcess: "auggie",
+    faviconDomain: "augmentcode.com",
+    homepageUrl: "https://docs.augmentcode.com/cli/overview",
+  },
+  {
+    id: "autohand",
+    label: "Autohand Code",
+    launchCmd: "autohand",
+    detectCmd: "autohand",
+    expectedProcess: "autohand",
+    faviconDomain: "autohand.ai",
+    homepageUrl: "https://github.com/autohandai/code-cli",
+  },
+  {
+    id: "cline",
+    label: "Cline",
+    launchCmd: "cline",
+    detectCmd: "cline",
+    expectedProcess: "cline",
+    faviconDomain: "cline.bot",
+    homepageUrl: "https://docs.cline.bot/cline-cli/overview",
+  },
+  {
+    id: "codebuff",
+    label: "Codebuff",
+    launchCmd: "codebuff",
+    detectCmd: "codebuff",
+    expectedProcess: "codebuff",
+    faviconDomain: "codebuff.com",
+    homepageUrl: "https://www.codebuff.com/docs/help/quick-start",
+  },
+  {
+    id: "command-code",
+    label: "Command Code",
+    launchCmd: "command-code --trust",
+    detectCmd: "command-code",
+    expectedProcess: "command-code",
+    faviconDomain: "commandcode.ai",
+    homepageUrl: "https://commandcode.ai/docs/quickstart",
+  },
+  {
+    id: "continue",
+    label: "Continue",
+    launchCmd: "cn",
+    detectCmd: "cn",
+    expectedProcess: "cn",
+    faviconDomain: "continue.dev",
+    homepageUrl: "https://docs.continue.dev/guides/cli",
+  },
+  {
+    id: "mistral-vibe",
+    label: "Mistral Vibe",
+    launchCmd: "vibe",
+    detectCmd: "vibe",
+    detectCmdAliases: ["mistral-vibe"],
+    expectedProcess: "vibe",
+    faviconDomain: "mistral.ai",
+    homepageUrl: "https://github.com/mistralai/mistral-vibe",
+  },
+  {
+    id: "qwen-code",
+    label: "Qwen Code",
+    launchCmd: "qwen-code",
+    detectCmd: "qwen-code",
+    expectedProcess: "qwen-code",
+    faviconDomain: "qwenlm.github.io",
+    homepageUrl: "https://github.com/QwenLM/qwen-code",
+  },
+  {
+    id: "rovo",
+    label: "Rovo Dev",
+    launchCmd: "rovo",
+    detectCmd: "rovo",
+    expectedProcess: "rovo",
+    faviconDomain: "atlassian.com",
+    homepageUrl:
+      "https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/",
+  },
+  {
+    id: "hermes",
+    label: "Hermes",
+    launchCmd: "hermes --tui",
+    detectCmd: "hermes",
+    expectedProcess: "hermes",
+    faviconDomain: "nousresearch.com",
+    homepageUrl: "https://hermes-agent.nousresearch.com/docs/",
+  },
+  {
+    id: "openclaw",
+    label: "OpenClaw",
+    launchCmd: "openclaw",
+    detectCmd: "openclaw",
+    expectedProcess: "openclaw",
+    faviconDomain: "openclaw.ai",
+    homepageUrl: "https://github.com/openclaw/openclaw",
+  },
+  {
+    id: "devin",
+    label: "Devin",
+    launchCmd: "devin",
+    detectCmd: "devin",
+    expectedProcess: "devin",
+    faviconDomain: "devin.ai",
+    homepageUrl: "https://devin.ai/cli",
+  },
+  {
+    id: "openclaude",
+    label: "OpenClaude",
+    launchCmd: "openclaude",
+    detectCmd: "openclaude",
+    expectedProcess: "openclaude",
+    // 图标 favicons/openclaude.png 是 orca 资产，手动放入（非脚本下载）。
+    // orca 未记 homepageUrl，故省略。
+  },
+];
+
+const byId = new Map<string, AgentCatalogEntry>(
+  AGENT_CATALOG.map((entry) => [entry.id, entry])
+);
+
+export function getAgentCatalogEntry(
+  id: AgentKind
+): AgentCatalogEntry | undefined {
+  return byId.get(id);
+}
+
+export function getKnownDetectCommands(): string[] {
+  const out = new Set<string>();
+  for (const entry of AGENT_CATALOG) {
+    out.add(entry.detectCmd);
+    for (const alias of entry.detectCmdAliases ?? []) {
+      out.add(alias);
+    }
+  }
+  return [...out];
+}

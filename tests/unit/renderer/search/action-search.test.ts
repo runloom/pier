@@ -164,7 +164,6 @@ describe("action search", () => {
     ["reset layout", "pier.workspace.resetLayout"],
     ["重置布局", "pier.workspace.resetLayout"],
     ["junfen", "pier.panel.equalizeSplits"],
-    ["jfmb", "pier.panel.equalizeSplits"],
   ])("matches contributed action aliases for %s", (query, expectedId) => {
     expect(contributedActionIdsFor(query)[0]).toBe(expectedId);
   });

@@ -1,3 +1,4 @@
+import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type {
   PierCommand,
@@ -64,6 +65,12 @@ export interface PierPreferencesAPI {
   onChanged: (cb: (next: PreferencesSnapshot) => void) => () => void;
   read: () => Promise<PreferencesSnapshot>;
   update: (patch: Partial<PreferencesSnapshot>) => Promise<PreferencesSnapshot>;
+}
+
+export interface PierAgentsAPI {
+  detect: () => Promise<DetectAgentsResult>;
+  prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
+  refresh: () => Promise<DetectAgentsResult>;
 }
 
 export interface PierThemeAPI {
@@ -155,6 +162,7 @@ export interface PierTasksAPI {
 }
 
 export interface PierWindowAPI {
+  agents: PierAgentsAPI;
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
@@ -214,6 +222,13 @@ async function invokePierCommand<T>(command: PierCommand): Promise<T> {
   error.code = result.error.code;
   throw error;
 }
+
+const agentsApi: PierAgentsAPI = {
+  detect: () => ipcRenderer.invoke("pier:agents:detect"),
+  prepareLaunch: (agentId: AgentKind) =>
+    ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
+  refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
+};
 
 const preferencesApi: PierPreferencesAPI = {
   onChanged: (cb) => subscribeIpc(PIER_BROADCAST.PREFERENCES_CHANGED, cb),
@@ -406,6 +421,7 @@ const tasksApi: PierTasksAPI = {
 };
 
 const api: PierWindowAPI = {
+  agents: agentsApi,
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:close", windowId),
