@@ -7,9 +7,13 @@ import {
   ClaudeIcon,
   CopilotIcon,
   DroidIcon,
+  GeminiIcon,
+  KiloIcon,
+  OmpIcon,
   OpenAIIcon,
   PiIcon,
 } from "./glyphs.tsx";
+import openClaudeLogoUrl from "./openclaude-logo.png?url";
 
 const ICON_BY_ID: Record<string, FC<{ size?: number }>> = {
   claude: ClaudeIcon,
@@ -18,7 +22,23 @@ const ICON_BY_ID: Record<string, FC<{ size?: number }>> = {
   copilot: CopilotIcon,
   droid: DroidIcon,
   pi: PiIcon,
+  gemini: GeminiIcon,
+  omp: OmpIcon,
+  kilo: KiloIcon,
 };
+
+function AgentImg({ src, size }: { src: string; size: number }) {
+  return (
+    <img
+      alt=""
+      aria-hidden
+      height={size}
+      src={src}
+      style={{ borderRadius: 2 }}
+      width={size}
+    />
+  );
+}
 
 export function AgentIcon({
   agentId,
@@ -35,15 +55,16 @@ export function AgentIcon({
   if (Inline) {
     return <Inline size={size} />;
   }
+  if (entry?.iconUrl) {
+    const src =
+      entry.iconUrl === "openclaude" ? openClaudeLogoUrl : entry.iconUrl;
+    return <AgentImg size={size} src={src} />;
+  }
   if (entry?.faviconDomain) {
     return (
-      <img
-        alt=""
-        aria-hidden
-        height={size}
+      <AgentImg
+        size={size}
         src={`https://www.google.com/s2/favicons?domain=${entry.faviconDomain}&sz=64`}
-        style={{ borderRadius: 2 }}
-        width={size}
       />
     );
   }

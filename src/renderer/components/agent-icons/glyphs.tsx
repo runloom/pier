@@ -2,6 +2,8 @@
 // Extracted from orca — SVG paths and colors are preserved exactly.
 // Signatures follow ({ size = 14 }: { size?: number }) convention.
 
+import { useId } from "react";
+
 export function ClaudeIcon({ size = 14 }: { size?: number }) {
   return (
     <svg
@@ -154,6 +156,79 @@ export function AgentLetterIcon({
       >
         {letter}
       </text>
+    </svg>
+  );
+}
+
+// Gemini: star path is verbatim from orca's GeminiIcon. orca fills it with 8
+// blurred color blobs through a mask (~240 lines); at 14px those blurs are
+// imperceptible, so we approximate with a gradient of orca's 4 brand colors.
+export function GeminiIcon({ size = 14 }: { size?: number }) {
+  const id = useId().replaceAll(":", "");
+  const star =
+    "M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z";
+  return (
+    <svg
+      aria-hidden="true"
+      height={size}
+      viewBox="0 0 65 65"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id={id} x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stopColor="#FBBC04" />
+          <stop offset="0.33" stopColor="#FC413D" />
+          <stop offset="0.66" stopColor="#3186FF" />
+          <stop offset="1" stopColor="#00B95C" />
+        </linearGradient>
+      </defs>
+      <path d={star} fill={`url(#${id})`} />
+    </svg>
+  );
+}
+
+// OMP: verbatim from orca's OmpIcon (homepage mark, transparent bg).
+export function OmpIcon({ size = 14 }: { size?: number }) {
+  const id = `${useId().replaceAll(":", "")}-omp`;
+  return (
+    <svg
+      aria-hidden="true"
+      height={size}
+      viewBox="0 0 64 64"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id={id} x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stopColor="oklch(0.7 0.24 340)" />
+          <stop offset="0.5" stopColor="oklch(0.62 0.21 295)" />
+          <stop offset="1" stopColor="oklch(0.81 0.14 200)" />
+        </linearGradient>
+      </defs>
+      <path d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" fill={`url(#${id})`} />
+    </svg>
+  );
+}
+
+// Kilocode: verbatim from orca's KiloIcon. Brand-colored (yellow on black),
+// intentionally NOT currentColor — the Google favicon is black-on-black.
+export function KiloIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height={size}
+      style={{ borderRadius: 2 }}
+      viewBox="0 0 512 512"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M512 0H0V512H512V0Z" fill="black" />
+      <path
+        d="M322 377H377V421H307.857L278 391.143V322H322V377ZM421 307.857L391.143 278H322V322L377 322V377H421V307.857ZM234 278H190V322H234V278ZM91 391.143L120.857 421H234V377H135V278H91V391.143ZM371.172 189.999V120.856L341.315 90.9995H278V135H327.172V189.999H278V233.999H421V189.999H371.172ZM135 91H91V233.999H135V184.5H190V233.999H234V184.5L190 140.5H135V91ZM234 91H190V140.5H234V91Z"
+        fill="#FAF74F"
+      />
     </svg>
   );
 }
