@@ -14,6 +14,7 @@ import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 const DEFAULT_PREFERENCES = {
   agentCommandOverrides: {},
   agentDefaultArgs: {},
+  agentDefaultEnv: {},
   defaultAgentId: null,
   disabledAgentIds: [],
 };
@@ -235,5 +236,16 @@ describe("AgentsSection", () => {
     expect(
       screen.queryByRole("combobox", { name: "Permission Mode" })
     ).not.toBeInTheDocument();
+  });
+
+  it("PermissionModeRow 读 agentDefaultEnv：仅 goose env yolo、args 空 → mixed", () => {
+    // goose 的 yolo 走 env(GOOSE_MODE=auto)；仅它 yolo、其余 flag agent 空 →
+    // 部分 yolo 部分 manual = mixed。证明 env 参与 PermissionModeRow 派生。
+    useAgentPreferencesStore.setState({
+      ...DEFAULT_PREFERENCES,
+      agentDefaultEnv: { goose: { GOOSE_MODE: "auto" } },
+    });
+    render(<AgentsSection />);
+    expect(screen.getByText("Mixed")).toBeInTheDocument();
   });
 });

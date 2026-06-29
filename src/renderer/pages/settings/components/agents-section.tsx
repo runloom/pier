@@ -97,11 +97,15 @@ function DefaultAgentPicker() {
 function PermissionModeRow() {
   const t = useT();
   const agentDefaultArgs = useAgentPreferencesStore((s) => s.agentDefaultArgs);
+  const agentDefaultEnv = useAgentPreferencesStore((s) => s.agentDefaultEnv);
   const setAgentDefaultArgs = useAgentPreferencesStore(
     (s) => s.setAgentDefaultArgs
   );
+  const setAgentDefaultEnv = useAgentPreferencesStore(
+    (s) => s.setAgentDefaultEnv
+  );
 
-  const mode = resolvePermissionMode(agentDefaultArgs);
+  const mode = resolvePermissionMode(agentDefaultArgs, agentDefaultEnv);
 
   if (mode === "mixed") {
     return (
@@ -127,9 +131,13 @@ function PermissionModeRow() {
       id="settings-agent-permission-mode"
       label={t("settings.row.agentPermissionMode")}
       onChange={(next: "yolo" | "manual") => {
-        setAgentDefaultArgs(applyPermissionMode(next, agentDefaultArgs)).catch(
-          () => undefined
+        const applied = applyPermissionMode(
+          next,
+          agentDefaultArgs,
+          agentDefaultEnv
         );
+        setAgentDefaultArgs(applied.args).catch(() => undefined);
+        setAgentDefaultEnv(applied.env).catch(() => undefined);
       }}
       options={PERMISSION_MODE_OPTIONS.map(({ value, labelKey }) => ({
         value,

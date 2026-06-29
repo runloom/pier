@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-/** 起步支持子集（可增量扩展）。★ = 有 orca 内联高质量图标。 */
+/** 内置支持的 agent（orca parity，去 claude-agent-teams）。★ = 有内联高质量图标。 */
 export const agentKindSchema = z.enum([
   "claude", // ★
   "codex", // ★
-  "gemini",
+  "gemini", // ★
   "aider", // ★
   "opencode",
   "cursor",
@@ -13,6 +13,29 @@ export const agentKindSchema = z.enum([
   "kimi",
   "pi", // ★
   "amp",
+  // —— orca parity 补全（去 claude-agent-teams: orca 专有 CLI）——
+  "grok",
+  "mimo-code",
+  "ante",
+  "omp", // ★
+  "antigravity",
+  "goose",
+  "kilo", // ★
+  "kiro",
+  "crush",
+  "aug",
+  "autohand",
+  "cline",
+  "codebuff",
+  "command-code",
+  "continue",
+  "mistral-vibe",
+  "qwen-code",
+  "rovo",
+  "hermes",
+  "openclaw",
+  "devin",
+  "openclaude",
 ]);
 export type AgentKind = z.infer<typeof agentKindSchema>;
 
@@ -24,6 +47,7 @@ export interface AgentCatalogEntry {
   faviconDomain?: string;
   homepageUrl?: string;
   iconId?: string;
+  iconUrl?: string;
   id: AgentKind;
   label: string;
   launchCmd: string;
@@ -36,7 +60,10 @@ export interface DetectAgentsResult {
   detectedIds: AgentKind[];
 }
 
-/** 每个 agent 的「跳过权限」flag（照搬 orca tui-agent-permissions.ts）。 */
+/**
+ * 每个 agent 的「跳过权限」flag（照搬 orca tui-agent-permissions.ts）。
+ * 多 token flag（如 `--approval-mode yolo`）作为 opaque string——整串写入/比较，勿按空格 split。
+ */
 export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   claude: "--dangerously-skip-permissions",
   codex: "--dangerously-bypass-approvals-and-sandbox",
@@ -47,22 +74,51 @@ export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   kimi: "--yolo",
   amp: "--dangerously-allow-all",
   // opencode / droid / pi: 无 yolo flag，保持 CLI 默认
+  // —— orca parity 补全 ——
+  grok: "--permission-mode bypassPermissions",
+  ante: "--yolo",
+  antigravity: "--dangerously-skip-permissions",
+  kiro: "--trust-all-tools",
+  crush: "--yolo",
+  autohand: "--unrestricted",
+  cline: "--auto-approve true",
+  "command-code": "--yolo",
+  continue: '--allow "*"',
+  "mistral-vibe": "--agent auto-approve",
+  "qwen-code": "--approval-mode yolo",
+  rovo: "--yolo",
+  hermes: "--yolo",
+  devin: "--permission-mode bypass",
+  openclaude: "--dangerously-skip-permissions",
+  // 无 yolo: mimo-code / omp / goose(env-only) / aug / codebuff / openclaw / kilo
+};
+
+/** env-based yolo（goose 用环境变量而非 flag）。 */
+export const YOLO_ENV: Partial<Record<AgentKind, Record<string, string>>> = {
+  goose: { GOOSE_MODE: "auto" },
 };
 
 /** 交互 TUI 模式不支持跳权限 flag、需在写入时剥除的 agent。 */
 export const UNSUPPORTED_ARGS: Partial<Record<AgentKind, readonly string[]>> = {
   opencode: ["--dangerously-skip-permissions"],
+  kilo: ["--dangerously-skip-permissions"],
 };
 
 export type AgentPermissionMode = "yolo" | "manual" | "mixed";
 
 export type AgentDefaultArgs = Partial<Record<AgentKind, string>>;
 
-const yoloAgentIds = agentKindSchema.options.filter((id) => id in YOLO_FLAGS);
+export type AgentDefaultEnv = Partial<
+  Record<AgentKind, Record<string, string>>
+>;
 
-/** 读 agentDefaultArgs → 汇总成 Yolo/Manual/Mixed（派生，非存储）。 */
+const yoloAgentIds = agentKindSchema.options.filter((id) => id in YOLO_FLAGS);
+const yoloEnvAgentIds = agentKindSchema.options.filter((id) => id in YOLO_ENV);
+
+/** 读 agentDefaultArgs + agentDefaultEnv → 汇总成 Yolo/Manual/Mixed（派生，非存储）。 */
 export function resolvePermissionMode(
-  args: AgentDefaultArgs
+  args: AgentDefaultArgs,
+  env: AgentDefaultEnv
 ): AgentPermissionMode {
   let sawYolo = false;
   let sawManual = false;
@@ -76,14 +132,27 @@ export function resolvePermissionMode(
       return "mixed";
     }
   }
+  for (const id of yoloEnvAgentIds) {
+    const want = YOLO_ENV[id] ?? {};
+    const have = env[id] ?? {};
+    const matches = Object.entries(want).every(([k, v]) => have[k] === v);
+    const empty = Object.keys(want).every((k) => (have[k] ?? "") === "");
+    if (matches) {
+      sawYolo = true;
+    } else if (empty) {
+      sawManual = true;
+    } else {
+      return "mixed";
+    }
+  }
   if (sawYolo && sawManual) {
     return "mixed";
   }
   return sawYolo ? "yolo" : "manual";
 }
 
-/** 批量切换。仅动「空或正好是标准 yolo 值」的项，用户自定义保持不动。 */
-export function applyPermissionMode(
+/** flag-based agent 的批量切换（仅动空或标准 yolo 值，用户自定义不动）。 */
+function applyFlagMode(
   mode: "yolo" | "manual",
   args: AgentDefaultArgs
 ): AgentDefaultArgs {
@@ -104,4 +173,44 @@ export function applyPermissionMode(
     }
   }
   return next;
+}
+
+/** env-based agent（goose）的批量切换（仅动空或标准 yolo env，用户自定义不动）。 */
+function applyEnvMode(
+  mode: "yolo" | "manual",
+  env: AgentDefaultEnv
+): AgentDefaultEnv {
+  const next: AgentDefaultEnv = { ...env };
+  for (const id of yoloEnvAgentIds) {
+    const want = YOLO_ENV[id] ?? {};
+    const have = { ...(next[id] ?? {}) };
+    const stdOrEmpty = Object.entries(want).every(
+      ([k, v]) => (have[k] ?? "") === "" || have[k] === v
+    );
+    if (!stdOrEmpty) {
+      continue; // 用户自定义，保留
+    }
+    if (mode === "yolo") {
+      next[id] = { ...have, ...want };
+    } else {
+      for (const k of Object.keys(want)) {
+        delete have[k];
+      }
+      if (Object.keys(have).length === 0) {
+        delete next[id];
+      } else {
+        next[id] = have;
+      }
+    }
+  }
+  return next;
+}
+
+/** 批量切换。仅动「空或正好是标准 yolo 值」的项，用户自定义保持不动。返回新的 args + env。 */
+export function applyPermissionMode(
+  mode: "yolo" | "manual",
+  args: AgentDefaultArgs,
+  env: AgentDefaultEnv
+): { args: AgentDefaultArgs; env: AgentDefaultEnv } {
+  return { args: applyFlagMode(mode, args), env: applyEnvMode(mode, env) };
 }

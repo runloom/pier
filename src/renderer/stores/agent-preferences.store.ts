@@ -1,5 +1,6 @@
 import {
   type AgentDefaultArgs,
+  type AgentDefaultEnv,
   type AgentKind,
   UNSUPPORTED_ARGS,
 } from "@shared/contracts/agent.ts";
@@ -35,11 +36,10 @@ export function sanitizeAgentDefaultArgs(
 
 type DefaultAgentId = AgentKind | "blank" | null;
 
-// agentDefaultEnv is persisted by the backend but not surfaced in the UI yet;
-// add it here when env-var editing lands.
 interface AgentPreferenceSnapshot {
   agentCommandOverrides: Partial<Record<AgentKind, string>>;
   agentDefaultArgs: AgentDefaultArgs;
+  agentDefaultEnv: AgentDefaultEnv;
   defaultAgentId: DefaultAgentId;
   disabledAgentIds: AgentKind[];
 }
@@ -50,6 +50,7 @@ interface AgentPreferencesState extends AgentPreferenceSnapshot {
     next: Partial<Record<AgentKind, string>>
   ) => Promise<void>;
   setAgentDefaultArgs: (next: AgentDefaultArgs) => Promise<void>;
+  setAgentDefaultEnv: (next: AgentDefaultEnv) => Promise<void>;
   setDefaultAgentId: (next: DefaultAgentId) => Promise<void>;
   setDisabledAgentIds: (next: AgentKind[]) => Promise<void>;
 }
@@ -58,6 +59,7 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
   (set) => ({
     agentCommandOverrides: {},
     agentDefaultArgs: {},
+    agentDefaultEnv: {},
     defaultAgentId: null,
     disabledAgentIds: [],
 
@@ -108,6 +110,20 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
       }
     },
 
+    async setAgentDefaultEnv(next) {
+      try {
+        const merged = await window.pier.preferences.update({
+          agentDefaultEnv: next,
+        });
+        useAgentPreferencesStore.getState()._hydrate(snapshotFrom(merged));
+      } catch (err) {
+        console.error(
+          "[agent-preferences.store] setAgentDefaultEnv failed:",
+          err
+        );
+      }
+    },
+
     async setAgentCommandOverrides(next) {
       try {
         const merged = await window.pier.preferences.update({
@@ -128,6 +144,7 @@ function snapshotFrom(prefs: ProjectPreferences): AgentPreferenceSnapshot {
   return {
     agentCommandOverrides: prefs.agentCommandOverrides,
     agentDefaultArgs: prefs.agentDefaultArgs,
+    agentDefaultEnv: prefs.agentDefaultEnv,
     defaultAgentId: prefs.defaultAgentId,
     disabledAgentIds: prefs.disabledAgentIds,
   };
