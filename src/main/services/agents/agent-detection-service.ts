@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { platform } from "node:os";
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import { AGENT_CATALOG } from "./agent-catalog.ts";
@@ -7,9 +7,9 @@ const PROBE_TIMEOUT_MS = 5000;
 
 /** 用 which/where 查命令是否在 PATH 上（不 spawn binary，避免副作用）。 */
 function defaultProbe(cmd: string): Promise<boolean> {
-  const probe = platform() === "win32" ? `where ${cmd}` : `which ${cmd}`;
+  const binary = platform() === "win32" ? "where" : "which";
   return new Promise((resolve) => {
-    exec(probe, { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
+    execFile(binary, [cmd], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
       resolve(!err && stdout.trim().length > 0);
     });
   });
