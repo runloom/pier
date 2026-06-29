@@ -54,6 +54,13 @@ module.exports = {
       to: { path: "^src/renderer/panel-kits/(?!$1)([^/]+)" },
     },
     {
+      name: "packages-ui-not-import-app",
+      severity: "error",
+      comment: "共享 UI 包 packages/ui 是叶子层, 不能 import 任何 app 代码 (src)",
+      from: { path: "^packages/ui" },
+      to: { path: "^src" },
+    },
+    {
       name: "no-circular",
       severity: "error",
       comment: "严禁循环依赖",

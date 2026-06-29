@@ -20,7 +20,7 @@
     "lint:fix": "ultracite fix",
     "format": "ultracite fix",
     "format:check": "ultracite check",
-    "depcruise": "depcruise --config dependency-cruiser.config.cjs src",
+    "depcruise": "depcruise --config dependency-cruiser.config.cjs src packages",
     "check:file-size": "bash scripts/check-file-size.sh",
     "build:native": "cd native && bash build.sh",
     "build:icons": "node ./scripts/build-app-icons.mjs",

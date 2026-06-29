@@ -31,7 +31,9 @@
       "@shared/*": ["./src/shared/*"],
       "@main/*": ["./src/main/*"],
       "@preload/*": ["./src/preload/*"],
-      "@plugins/*": ["./src/plugins/*"]
+      "@plugins/*": ["./src/plugins/*"],
+      "@pier/ui/*": ["./packages/ui/src/*"],
+      "@pier/ui": ["./packages/ui/src"]
     }
   },
   "include": [

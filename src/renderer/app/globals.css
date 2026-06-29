@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "../../../packages/ui/src";
+@source "../../plugins";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
