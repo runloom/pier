@@ -6,6 +6,9 @@
 export const PIER = {
   // command router facade
   COMMAND_EXECUTE: "pier://command:execute",
+  // git watch (订阅/退订;事件本身经 PIER_BROADCAST.GIT_CHANGED 广播)
+  GIT_WATCH_START: "pier://git:watch-start",
+  GIT_WATCH_STOP: "pier://git:watch-stop",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CLOSE: "pier://window:close",
@@ -32,6 +35,8 @@ export const PIER_BROADCAST = {
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // macOS 原生全屏进出 (main → renderer, payload { isFullscreen }).
   WINDOW_FULLSCREEN_CHANGED: "pier://window:fullscreen-changed",
+  // git 变更广播 (main → renderer, payload GitChangeEvent).
+  GIT_CHANGED: "pier://git:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

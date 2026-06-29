@@ -1,15 +1,12 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { realpath as fsRealpath, stat as fsStat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { promisify } from "node:util";
 import type {
   PanelContext,
   PanelContextSource,
 } from "@shared/contracts/panel.ts";
-
-const execFileAsync = promisify(execFile);
+import { execGit } from "./git-exec.ts";
 
 export interface ResolvePanelContextOptions {
   execGit?: (
@@ -22,12 +19,8 @@ export interface ResolvePanelContextOptions {
   stat?: (path: string) => Promise<Stats>;
 }
 
-async function defaultExecGit(
-  args: readonly string[],
-  cwd: string
-): Promise<string> {
-  const { stdout } = await execFileAsync("git", [...args], { cwd });
-  return stdout;
+function defaultExecGit(args: readonly string[], cwd: string): Promise<string> {
+  return execGit(args, { cwd });
 }
 
 function outputText(output: string | { stdout: string }): string {

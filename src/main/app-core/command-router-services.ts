@@ -3,18 +3,14 @@ import type { ProjectPreferencesPatch } from "@shared/contracts/commands.ts";
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
-import type {
-  TaskLaunchPlan,
-  TaskListResult,
-  TaskRecentEntry,
-  TaskRunSnapshot,
-  TaskSpawnPreparation,
-} from "@shared/contracts/tasks.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import type { GitService } from "../services/git-service.ts";
+import type { GitWatchService } from "../services/git-watch-service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
+import type { TaskService } from "../services/tasks/task-service.ts";
 import type { WorktreeService } from "../services/worktree-service.ts";
 
 export interface PierCoreServices {
@@ -23,6 +19,8 @@ export interface PierCoreServices {
     read(): Promise<MruState>;
     recordUse(actionId: string): Promise<void>;
   };
+  git: GitService;
+  gitWatch: GitWatchService;
   panelContexts: {
     listRecent(): Promise<PanelContext[]>;
     recordRecent(context: PanelContext): Promise<void>;
@@ -35,43 +33,7 @@ export interface PierCoreServices {
   };
   processEnvironment: ProcessEnvironmentService;
   rendererCommand: RendererCommandService;
-  tasks: {
-    cancelRun(runId: string): TaskRunSnapshot | null;
-    completePanel(
-      panelId: string,
-      exitCode: number,
-      windowId?: string | undefined
-    ): Promise<TaskRunSnapshot | null>;
-    list(args: { projectRoot: string }): Promise<TaskListResult>;
-    markPanelClosed(panelId: string, windowId?: string | undefined): void;
-    prepareSpawn(args: {
-      inputs?: Record<string, string> | undefined;
-      projectRoot: string;
-      taskId: string;
-    }): Promise<TaskSpawnPreparation>;
-    recentTasks(): readonly TaskRecentEntry[];
-    recordStarted(record: {
-      panelId: string;
-      projectRoot: string;
-      taskId: string;
-      windowId?: string | undefined;
-    }): void;
-    startRun(args: {
-      launches: readonly TaskLaunchPlan[];
-      openTerminal(
-        launch: TaskLaunchPlan,
-        runId: string
-      ): Promise<{ panelId: string; windowId?: string | undefined }>;
-      projectRoot: string;
-      rootTaskId: string;
-    }): Promise<{
-      panelIds: string[];
-      primaryPanelId?: string | undefined;
-      runId: string;
-      snapshot: TaskRunSnapshot;
-    }>;
-    statusRun(runId: string): TaskRunSnapshot | null;
-  };
+  tasks: TaskService;
   terminalLaunches: {
     consume(
       launchId: string

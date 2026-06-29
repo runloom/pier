@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
+import { createGitService } from "@main/services/git-service.ts";
+import { createGitWatchService } from "@main/services/git-watch-service.ts";
 import { PluginServiceError } from "@main/services/plugin-service.ts";
 import type {
   ProcessEnvironmentResolveRequest,
@@ -320,6 +322,8 @@ function services(
         worktrees: [],
       }),
     },
+    git: createGitService(),
+    gitWatch: createGitWatchService(),
   };
 }
 

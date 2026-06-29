@@ -46,6 +46,7 @@ import type {
 } from "@shared/contracts/worktree.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
+import { gitApi } from "./git-api.ts";
 
 export interface WindowInfo {
   focused: boolean;
@@ -109,6 +110,8 @@ export interface PierWorktreesAPI {
   open: (request: WorktreeOpenRequest) => Promise<unknown>;
 }
 
+export type { PierGitAPI } from "./git-api.ts";
+
 /**
  * Keyboard chord forward: swift NSEvent monitor 捕获 Cmd+key → main IPC →
  * 这里 dispatch 到 renderer 侧的 listener (shell-keybindings).
@@ -159,6 +162,7 @@ export interface PierWindowAPI {
   createWindow: () => Promise<WindowCreateResult>;
   focusWindow: (windowId: string) => Promise<void>;
   getWindowContext: () => Promise<WindowContext>;
+  git: import("./git-api.ts").PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
@@ -358,6 +362,8 @@ const worktreesApi: PierWorktreesAPI = {
     }),
 };
 
+// gitApi 实现在独立文件 ./git-api.ts(避免 preload/index.ts 超 500 行硬上限)。
+
 const menuApi: PierMenuAPI = {
   popup: (template, options) =>
     ipcRenderer.invoke("pier:menu:popup", template, options),
@@ -425,6 +431,7 @@ const api: PierWindowAPI = {
   theme: themeApi,
   workspace: workspaceApi,
   worktrees: worktreesApi,
+  git: gitApi,
 };
 
 contextBridge.exposeInMainWorld("pier", api);

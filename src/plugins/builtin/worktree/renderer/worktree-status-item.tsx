@@ -3,7 +3,9 @@ import type {
   RendererPluginContext,
   RendererTerminalStatusItemContext,
 } from "@plugins/api/renderer.ts";
+import type { GitStatus } from "@shared/contracts/git.ts";
 import { GitBranch } from "lucide-react";
+import { useEffect, useState } from "react";
 import { openWorktreeListQuickPick } from "./worktree-list-action.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
@@ -29,7 +31,7 @@ function shortHead(head: string | undefined): string | undefined {
   return head ? head.slice(0, 7) : undefined;
 }
 
-function statusLabel(
+function baseLabel(
   pluginContext: RendererPluginContext,
   panelContext: RendererTerminalStatusItemContext["context"],
   worktreeName: string
@@ -46,6 +48,74 @@ function statusLabel(
   return worktreeName;
 }
 
+/**
+ * 实时 git status 钩子。订阅主体 git.watch 广播,初值用 git.getStatus 拉一次。
+ * 调用 unsubscribe 自动在 cleanup 阶段取消订阅(防止 webContents 内 listener 累积)。
+ */
+function useGitStatus(
+  pluginContext: RendererPluginContext,
+  gitRoot: string | undefined
+): GitStatus | null {
+  const [status, setStatus] = useState<GitStatus | null>(null);
+
+  useEffect(() => {
+    if (!gitRoot) {
+      setStatus(null);
+      return;
+    }
+    let cancelled = false;
+    pluginContext.git
+      .getStatus(gitRoot)
+      .then((next) => {
+        if (!cancelled) {
+          setStatus(next);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStatus(null);
+        }
+      });
+    const unsubscribe = pluginContext.git.watch(gitRoot, () => {
+      pluginContext.git
+        .getStatus(gitRoot)
+        .then((next) => {
+          if (!cancelled) {
+            setStatus(next);
+          }
+        })
+        .catch(() => undefined);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [pluginContext, gitRoot]);
+
+  return status;
+}
+
+function formatAheadBehind(status: GitStatus | null): string {
+  if (!status) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (status.branch.ahead > 0) {
+    parts.push(`↑${status.branch.ahead}`);
+  }
+  if (status.branch.behind > 0) {
+    parts.push(`↓${status.branch.behind}`);
+  }
+  return parts.length > 0 ? ` ${parts.join("")}` : "";
+}
+
+function formatChanges(status: GitStatus | null): string {
+  if (!status || status.files.length === 0) {
+    return "";
+  }
+  return ` ·${status.files.length}`;
+}
+
 function WorktreeStatusItem({
   context,
   cwd,
@@ -54,6 +124,7 @@ function WorktreeStatusItem({
   pluginContext: RendererPluginContext;
 }) {
   const worktreePath = context?.worktreeRoot ?? context?.gitRoot;
+  const status = useGitStatus(pluginContext, context?.gitRoot);
   if (!worktreePath) {
     return null;
   }
@@ -61,7 +132,7 @@ function WorktreeStatusItem({
   if (!worktreeName) {
     return null;
   }
-  const label = statusLabel(pluginContext, context, worktreeName);
+  const label = `${baseLabel(pluginContext, context, worktreeName)}${formatAheadBehind(status)}${formatChanges(status)}`;
   const title = [worktreeName, context?.branch, worktreePath, cwd]
     .filter(Boolean)
     .join(" · ");
