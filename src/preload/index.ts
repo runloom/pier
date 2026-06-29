@@ -67,6 +67,7 @@ export interface PierPreferencesAPI {
 
 export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
+  refresh: () => Promise<DetectAgentsResult>;
 }
 
 export interface PierThemeAPI {
@@ -216,6 +217,7 @@ async function invokePierCommand<T>(command: PierCommand): Promise<T> {
 
 const agentsApi: PierAgentsAPI = {
   detect: () => ipcRenderer.invoke("pier:agents:detect"),
+  refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
 };
 
 const preferencesApi: PierPreferencesAPI = {

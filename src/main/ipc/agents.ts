@@ -8,4 +8,8 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
     "pier:agents:detect",
     (): Promise<DetectAgentsResult> => detection.detect()
   );
+  ipcMain.handle(
+    "pier:agents:refresh",
+    (): Promise<DetectAgentsResult> => detection.refresh()
+  );
 }

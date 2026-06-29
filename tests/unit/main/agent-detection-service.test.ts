@@ -19,4 +19,19 @@ describe("agent detection", () => {
     });
     expect((await service.detect()).detectedIds).toEqual([]);
   });
+
+  it("refresh 先水合 PATH 再探测", async () => {
+    let hydrated = false;
+    const service = createAgentDetectionService({
+      probe: (cmd) => Promise.resolve(hydrated && cmd === "claude"),
+      hydratePath: () => {
+        hydrated = true;
+        return Promise.resolve(["/new/bin"]);
+      },
+    });
+    expect((await service.detect()).detectedIds).toEqual([]);
+    const r = await service.refresh();
+    expect(r.detectedIds).toContain("claude");
+    expect(r.addedPathSegments).toEqual(["/new/bin"]);
+  });
 });
