@@ -186,4 +186,54 @@ describe("AgentsSection", () => {
       });
     }
   });
+
+  it("Refresh button calls refresh() and reflects isRefreshing", async () => {
+    const refreshSpy = vi.fn(() => {
+      // While in flight, the store flips isRefreshing on (mirrors the real
+      // store). Assert the spinner role appears during the pending window.
+      useAgentDetectStore.setState({ isRefreshing: true });
+      return Promise.resolve();
+    });
+    useAgentDetectStore.setState({ refresh: refreshSpy } as never);
+
+    render(<AgentsSection />);
+    const refreshBtn = screen.getByRole("button", { name: "Refresh" });
+    fireEvent.click(refreshBtn);
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      // isRefreshing=true → spinner (role="status") swaps in and the button
+      // (now reachable via the spinner's closest button) is disabled.
+      const spinner = screen.getByRole("status");
+      expect(spinner).toBeInTheDocument();
+      expect(spinner.closest("button")).toBeDisabled();
+    });
+  });
+
+  it("PermissionModeRow shows the manual select value by default", () => {
+    useAgentPreferencesStore.setState({
+      ...DEFAULT_PREFERENCES,
+      agentDefaultArgs: {},
+    });
+    render(<AgentsSection />);
+    // empty args → resolvePermissionMode = "manual" → a select (combobox)
+    // renders, not the read-only Mixed badge.
+    const combobox = screen.getByRole("combobox", { name: "Permission Mode" });
+    expect(combobox).toHaveTextContent("Manual");
+    expect(screen.queryByText("Mixed")).not.toBeInTheDocument();
+  });
+
+  it("PermissionModeRow renders a read-only Mixed badge when derived mode is mixed", () => {
+    // A custom (non-standard) flag on one yolo-capable agent forces "mixed".
+    useAgentPreferencesStore.setState({
+      ...DEFAULT_PREFERENCES,
+      agentDefaultArgs: { claude: "--some-custom-flag" },
+    });
+    render(<AgentsSection />);
+    expect(screen.getByText("Mixed")).toBeInTheDocument();
+    // No interactive permission-mode select in the mixed (read-only) state.
+    expect(
+      screen.queryByRole("combobox", { name: "Permission Mode" })
+    ).not.toBeInTheDocument();
+  });
 });

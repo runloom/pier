@@ -35,10 +35,25 @@ function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
     (s) => s.setAgentDefaultArgs
   );
 
-  const [cmdDraft, setCmdDraft] = useState(
-    agentCommandOverrides[agentId] ?? ""
-  );
-  const [argsDraft, setArgsDraft] = useState(agentDefaultArgs[agentId] ?? "");
+  const persistedCmd = agentCommandOverrides[agentId] ?? "";
+  const persistedArgs = agentDefaultArgs[agentId] ?? "";
+
+  // Local edit drafts seeded from the store. Re-sync when the persisted value
+  // changes externally while mounted (mirrors terminal-section's scrollback row)
+  // so a concurrent preference update isn't clobbered by a stale on-blur save.
+  const [cmdDraft, setCmdDraft] = useState(persistedCmd);
+  const [prevCmd, setPrevCmd] = useState(persistedCmd);
+  if (persistedCmd !== prevCmd) {
+    setPrevCmd(persistedCmd);
+    setCmdDraft(persistedCmd);
+  }
+
+  const [argsDraft, setArgsDraft] = useState(persistedArgs);
+  const [prevArgs, setPrevArgs] = useState(persistedArgs);
+  if (persistedArgs !== prevArgs) {
+    setPrevArgs(persistedArgs);
+    setArgsDraft(persistedArgs);
+  }
 
   if (!entry) {
     return null;

@@ -1,4 +1,4 @@
-import { AGENT_CATALOG } from "@shared/agent-catalog.ts";
+import { AGENT_CATALOG, getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import {
   applyPermissionMode,
   resolvePermissionMode,
@@ -57,6 +57,7 @@ function DefaultAgentPicker() {
 
   return (
     <fieldset className="flex flex-wrap gap-2">
+      <legend className="sr-only">{t("settings.row.defaultAgent")}</legend>
       <button
         aria-pressed={autoIsActive}
         className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
@@ -74,7 +75,7 @@ function DefaultAgentPicker() {
         {t("settings.agents.defaultPick.blank")}
       </button>
       {activeDetectedIds.map((id) => {
-        const entry = AGENT_CATALOG.find((e) => e.id === id);
+        const entry = getAgentCatalogEntry(id);
         const isActive = defaultAgentId === id;
         return (
           <button
@@ -135,7 +136,7 @@ function PermissionModeRow() {
         label: t(labelKey),
       }))}
       triggerWidth="w-[140px]"
-      value={mode as "yolo" | "manual"}
+      value={mode}
     />
   );
 }
