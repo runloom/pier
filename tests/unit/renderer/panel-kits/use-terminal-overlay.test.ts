@@ -1,8 +1,15 @@
+import {
+  TerminalOverlayContext,
+  useTerminalOverlay,
+} from "@pier/ui/use-terminal-overlay.tsx";
 import { renderHook } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useTerminalOverlay } from "@/panel-kits/terminal/use-terminal-overlay.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
+  registerTerminalElementWebOverlay,
+  requestTerminalWebFocus,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing.store.ts";
 
@@ -43,6 +50,19 @@ function snapshot() {
   return getLastTerminalInputRoutingSnapshot();
 }
 
+const registry = {
+  registerElement: registerTerminalElementWebOverlay,
+  requestFocus: requestTerminalWebFocus,
+};
+
+function wrapper({ children }: { children: ReactNode }) {
+  return createElement(
+    TerminalOverlayContext.Provider,
+    { value: registry },
+    children
+  );
+}
+
 describe("useTerminalOverlay", () => {
   beforeEach(() => {
     resetTerminalInputRoutingForTests();
@@ -69,7 +89,9 @@ describe("useTerminalOverlay", () => {
   });
 
   it("registers geometry and a web focus request while attached (focus=true)", () => {
-    const { result } = renderHook(() => useTerminalOverlay({ focus: true }));
+    const { result } = renderHook(() => useTerminalOverlay({ focus: true }), {
+      wrapper,
+    });
     const el = makeSizedElement();
 
     result.current(el);
@@ -84,7 +106,9 @@ describe("useTerminalOverlay", () => {
   });
 
   it("registers geometry only, no focus request, when focus=false", () => {
-    const { result } = renderHook(() => useTerminalOverlay({ focus: false }));
+    const { result } = renderHook(() => useTerminalOverlay({ focus: false }), {
+      wrapper,
+    });
     const el = makeSizedElement();
 
     result.current(el);
@@ -99,7 +123,9 @@ describe("useTerminalOverlay", () => {
   });
 
   it("re-attaching to a new element disposes the previous registration", () => {
-    const { result } = renderHook(() => useTerminalOverlay({ focus: true }));
+    const { result } = renderHook(() => useTerminalOverlay({ focus: true }), {
+      wrapper,
+    });
 
     result.current(makeSizedElement());
     result.current(makeSizedElement());
