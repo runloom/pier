@@ -301,7 +301,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     detectCmd: "openclaude",
     expectedProcess: "openclaude",
     iconUrl: "openclaude",
-    homepageUrl: "https://openclaude.gitlawb.com/",
+    // orca 未记 homepageUrl；不臆造（曾误填不存在的 gitlawb.com）。
   },
 ];
 

@@ -1,6 +1,6 @@
 import type { AgentKind } from "./contracts/agent.ts";
 
-// orca tui-agent-config 注册序（claude 首位，去 claude-agent-teams）。
+// 近似 orca tui-agent-config 注册序（derived，非逐字；claude 首位，去 claude-agent-teams）。
 export const AGENT_AUTO_PICK_ORDER: readonly AgentKind[] = [
   "claude",
   "openclaude",

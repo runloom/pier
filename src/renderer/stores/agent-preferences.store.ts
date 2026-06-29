@@ -11,7 +11,9 @@ const WHITESPACE_RE = /\s+/;
 
 // NOTE: UNSUPPORTED_ARGS entries must be single tokens (no embedded whitespace).
 // A value-bearing flag like "--approval-mode yolo" won't be stripped by this token
-// filter; if one is ever needed, extend this to also drop the following value token.
+// filter. If a multi-token UNSUPPORTED entry is ever needed, switch to whole-string
+// matching (next !== flag, as resolve/applyPermissionMode do) rather than extending
+// the token split — splitting can't safely handle opaque values like --allow "*".
 export function sanitizeAgentDefaultArgs(
   args: AgentDefaultArgs
 ): AgentDefaultArgs {
