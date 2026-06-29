@@ -786,7 +786,57 @@ describe("createCommandRouter", () => {
     expect(terminalLaunches).toEqual([{ cwd: "/tmp/pier" }]);
   });
 
-  it("terminal.open 传入无效 agentId（schema 外）返回 invalid_command", async () => {
+  it("terminal.open 显式 launch.command 优先于 agentId", async () => {
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services([], undefined, terminalLaunches);
+    Object.assign(fakeServices, {
+      preferences: {
+        read: async () => ({
+          language: "system",
+          monoFontFamily: "",
+          monoFontSize: 13,
+          stylePresetId: "pierre",
+          terminalCursorBlink: true,
+          terminalCursorStyle: "block",
+          terminalNewCwdPolicy: "activeTerminal",
+          terminalPasteProtection: true,
+          terminalScrollbackMb: 64,
+          theme: "system",
+          uiFontFamily: "",
+          userKeymap: [],
+          windowZoomLevel: 0,
+          defaultAgentId: null,
+          disabledAgentIds: [],
+          agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+          agentDefaultEnv: {},
+          agentCommandOverrides: {},
+        }),
+      },
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+    await router.execute({
+      clientId: "desktop-1",
+      command: {
+        type: "terminal.open",
+        launch: {
+          agentId: "claude",
+          command: "echo explicit",
+          cwd: "/tmp/pier",
+        },
+      },
+      protocolVersion: 1,
+      requestId: "r-priority",
+    });
+    // explicit command wins; the agent's resolved command is NOT used
+    expect(terminalLaunches).toEqual([
+      { command: "echo explicit", cwd: "/tmp/pier" },
+    ]);
+  });
+
+  it("terminal.open 非法 agentId 在 envelope schema 校验阶段被拒（invalid_command）", async () => {
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
       services: services(),
@@ -796,6 +846,10 @@ describe("createCommandRouter", () => {
         clientId: "desktop-1",
         command: {
           type: "terminal.open",
+          // "not-a-real-agent" is outside agentKindSchema's enum, so the
+          // command envelope fails Zod validation before reaching the handler.
+          // (The catalog-null branch inside the handler is unreachable because
+          // every AgentKind enum member has a catalog entry.)
           launch: { agentId: "not-a-real-agent" as "claude", cwd: "/tmp" },
         },
         protocolVersion: 1,

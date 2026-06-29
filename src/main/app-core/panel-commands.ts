@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   PierCommand,
   PierCommandErrorCode,
@@ -141,20 +142,20 @@ function optionalEnv(
   return Object.keys(env).length > 0 ? { env } : {};
 }
 
+/** ok:false ⇒ unknown agent (catalog miss) → invalid_command. */
+type AgentCmdResult = { ok: true; command: string } | { ok: false };
+
 async function resolveAgentLaunchCommand(
-  rawLaunch: TerminalLaunchOptions,
+  agentId: AgentKind,
   services: Pick<PanelCommandServices, "preferences">
-): Promise<string | null | "invalid"> {
-  if (!rawLaunch.agentId) {
-    return null;
-  }
+): Promise<AgentCmdResult> {
   const prefs = await services.preferences.read();
-  const agentCmd = resolveAgentCommand({
-    agentId: rawLaunch.agentId,
-    override: prefs.agentCommandOverrides?.[rawLaunch.agentId],
+  const command = resolveAgentCommand({
+    agentId,
+    override: prefs.agentCommandOverrides?.[agentId],
     agentDefaultArgs: prefs.agentDefaultArgs,
   });
-  return agentCmd ?? "invalid";
+  return command === null ? { ok: false } : { ok: true, command };
 }
 
 interface ResolvedLaunchBase {
@@ -173,14 +174,13 @@ async function resolveTerminalLaunchBase(
     return { error: `unknown terminal profile: ${rawLaunch.profileId}` };
   }
   let launchBase = mergeTerminalLaunchCommandAndCwd(rawLaunch, profile);
-  if (!launchBase.command) {
-    const agentCmd = await resolveAgentLaunchCommand(rawLaunch, services);
-    if (agentCmd === "invalid") {
+  // Explicit command / profile command wins; only resolve agent when neither set.
+  if (!launchBase.command && rawLaunch.agentId) {
+    const result = await resolveAgentLaunchCommand(rawLaunch.agentId, services);
+    if (!result.ok) {
       return { error: `unknown agent: ${rawLaunch.agentId}` };
     }
-    if (agentCmd !== null) {
-      launchBase = { ...launchBase, command: agentCmd };
-    }
+    launchBase = { ...launchBase, command: result.command };
   }
   return { launchBase, profile };
 }
