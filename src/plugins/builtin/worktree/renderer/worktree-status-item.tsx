@@ -1,3 +1,4 @@
+import { Button } from "@pier/ui/button.tsx";
 import type {
   RendererPluginContext,
   RendererTerminalStatusItemContext,
@@ -66,14 +67,14 @@ function WorktreeStatusItem({
     .join(" · ");
 
   return (
-    <button
+    <Button
       aria-label={pluginText(
         pluginContext,
         "statusOpenLabel",
         "Open worktrees for {{name}}",
         { name: label }
       )}
-      className="flex items-center gap-1 rounded-lg px-1.5 text-muted-foreground text-xs hover:bg-muted"
+      className="h-6"
       data-testid="worktree-status-trigger"
       onClick={() => {
         openWorktreeListQuickPick(pluginContext, worktreePath).catch(
@@ -82,12 +83,13 @@ function WorktreeStatusItem({
           }
         );
       }}
+      size="xs"
       title={title}
-      type="button"
+      variant="outline"
     >
-      <GitBranch className="size-3 shrink-0 text-muted-foreground/80" />
-      <span className="truncate font-medium text-foreground/80">{label}</span>
-    </button>
+      <GitBranch />
+      {label}
+    </Button>
   );
 }
 
