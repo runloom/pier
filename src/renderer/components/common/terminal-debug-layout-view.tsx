@@ -4,6 +4,7 @@ import type {
   TerminalDebugRendererPanelSnapshot,
   TerminalDebugSnapshot,
   TerminalFrame,
+  TerminalWebOverlayRect,
 } from "@shared/contracts/terminal.ts";
 
 type LayoutState = "creating" | "hidden" | "missing" | "rendered";
@@ -151,6 +152,32 @@ function snapshotBounds(snapshot: TerminalDebugSnapshot | null): Bounds | null {
   );
 }
 
+function overlayRects(
+  snapshot: TerminalDebugSnapshot | null
+): TerminalWebOverlayRect[] {
+  const routing = snapshot?.inputRouting;
+  return (
+    routing?.desired?.webOverlayRects ??
+    routing?.effective?.webOverlayRects ??
+    []
+  );
+}
+
+/** Extend the terminal bounds so floating overlays stay in frame when scaled. */
+export function mergedLayoutBounds(
+  base: Bounds | null,
+  overlays: TerminalWebOverlayRect[]
+): Bounds | null {
+  if (overlays.length === 0) {
+    return base;
+  }
+  const frames: TerminalFrame[] = overlays.map((rect) => rect.frame);
+  if (base) {
+    frames.push(base);
+  }
+  return boundsFor(frames);
+}
+
 function boxStyle(frame: TerminalFrame, bounds: Bounds) {
   return {
     height: `${Math.max(1, (frame.height / bounds.height) * 100)}%`,
@@ -195,6 +222,33 @@ function StateLegend() {
       <LegendChip state="creating" />
       <LegendChip state="hidden" />
       <LegendChip state="missing" />
+      <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600">
+        <span className="size-2 border border-purple-500 border-dashed bg-purple-500/20" />
+        overlay
+      </span>
+    </div>
+  );
+}
+
+function OverlayBox({
+  bounds,
+  rect,
+}: {
+  bounds: Bounds;
+  rect: TerminalWebOverlayRect;
+}) {
+  return (
+    <div
+      className="pointer-events-none absolute z-20 flex flex-col items-start border-2 border-purple-500 border-dashed bg-purple-500/15"
+      style={boxStyle(rect.frame, bounds)}
+      title="web overlay"
+    >
+      <span className="m-0.5 inline-flex max-w-full items-center gap-1 bg-purple-600 px-1 py-0.5 font-medium text-[10px] text-white">
+        <span className="truncate">{shortId(rect.id)}</span>
+        <span className="shrink-0 opacity-80">
+          {Math.round(rect.frame.width)}×{Math.round(rect.frame.height)}
+        </span>
+      </span>
     </div>
   );
 }
@@ -279,7 +333,8 @@ export function LayoutStateView({
   const panels = terminalPanels(snapshot);
   const surfaces = nativeByPanelId(snapshot);
   const groupedIssues = issuesByPanelId(snapshot);
-  const bounds = snapshotBounds(snapshot);
+  const overlays = overlayRects(snapshot);
+  const bounds = mergedLayoutBounds(snapshotBounds(snapshot), overlays);
 
   return (
     <section className="flex h-full min-h-[520px] flex-col overflow-hidden border border-[#d0d0d0] bg-white">
@@ -295,73 +350,78 @@ export function LayoutStateView({
       <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(24,24,27,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(24,24,27,0.055)_1px,transparent_1px)] bg-[size:44px_44px]" />
         {bounds ? (
-          panels.map((panel) => {
-            if (!panel.anchorFrame) {
-              return null;
-            }
-            const surface = surfaces.get(panel.panelId);
-            const state = panelState(
-              panel,
-              surface,
-              groupedIssues.get(panel.panelId) ?? []
-            );
-            return (
-              <div
-                className={`absolute min-h-12 overflow-hidden border-2 ${stateClass(state)}`}
-                key={panel.panelId}
-                style={boxStyle(panel.anchorFrame, bounds)}
-              >
-                <div className="flex h-7 items-center gap-2 border-black/10 border-b bg-zinc-900 px-2 text-white">
-                  <span className="min-w-0 flex-1 truncate font-semibold text-xs">
-                    {shortId(panel.panelId)}
-                  </span>
-                  <span
-                    className={`shrink-0 font-medium text-[10px] uppercase ${stateChipClass(state)}`}
-                  >
-                    {state}
-                  </span>
-                </div>
-                <div className="flex h-[calc(100%-1.75rem)] min-h-9 items-end justify-between gap-2 p-2">
-                  <AlignmentDots
-                    isAligned={aligned(panel, surface)}
-                    surface={surface}
-                  />
-                  <div className="flex gap-1">
-                    {surface?.hasRouterTarget ? (
-                      <span
-                        className="size-2 bg-violet-500"
-                        title="router target"
-                      />
-                    ) : null}
-                    {surface?.isFirstResponder ? (
-                      <span
-                        className="size-2 bg-emerald-500"
-                        title="first responder"
-                      />
-                    ) : null}
-                    {surface?.isSurfaceFocused ? (
-                      <span
-                        className="size-2 bg-sky-500"
-                        title="surface focused"
-                      />
-                    ) : null}
-                    {surface?.hostKeyboardActive ? (
-                      <span
-                        className="size-2 bg-cyan-500"
-                        title="host keyboard active"
-                      />
-                    ) : null}
-                    {surface?.cursorSuppressed ? (
-                      <span
-                        className="size-2 bg-zinc-400"
-                        title="cursor suppressed"
-                      />
-                    ) : null}
+          <>
+            {panels.map((panel) => {
+              if (!panel.anchorFrame) {
+                return null;
+              }
+              const surface = surfaces.get(panel.panelId);
+              const state = panelState(
+                panel,
+                surface,
+                groupedIssues.get(panel.panelId) ?? []
+              );
+              return (
+                <div
+                  className={`absolute min-h-12 overflow-hidden border-2 ${stateClass(state)}`}
+                  key={panel.panelId}
+                  style={boxStyle(panel.anchorFrame, bounds)}
+                >
+                  <div className="flex h-7 items-center gap-2 border-black/10 border-b bg-zinc-900 px-2 text-white">
+                    <span className="min-w-0 flex-1 truncate font-semibold text-xs">
+                      {shortId(panel.panelId)}
+                    </span>
+                    <span
+                      className={`shrink-0 font-medium text-[10px] uppercase ${stateChipClass(state)}`}
+                    >
+                      {state}
+                    </span>
+                  </div>
+                  <div className="flex h-[calc(100%-1.75rem)] min-h-9 items-end justify-between gap-2 p-2">
+                    <AlignmentDots
+                      isAligned={aligned(panel, surface)}
+                      surface={surface}
+                    />
+                    <div className="flex gap-1">
+                      {surface?.hasRouterTarget ? (
+                        <span
+                          className="size-2 bg-violet-500"
+                          title="router target"
+                        />
+                      ) : null}
+                      {surface?.isFirstResponder ? (
+                        <span
+                          className="size-2 bg-emerald-500"
+                          title="first responder"
+                        />
+                      ) : null}
+                      {surface?.isSurfaceFocused ? (
+                        <span
+                          className="size-2 bg-sky-500"
+                          title="surface focused"
+                        />
+                      ) : null}
+                      {surface?.hostKeyboardActive ? (
+                        <span
+                          className="size-2 bg-cyan-500"
+                          title="host keyboard active"
+                        />
+                      ) : null}
+                      {surface?.cursorSuppressed ? (
+                        <span
+                          className="size-2 bg-zinc-400"
+                          title="cursor suppressed"
+                        />
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+            {overlays.map((rect) => (
+              <OverlayBox bounds={bounds} key={rect.id} rect={rect} />
+            ))}
+          </>
         ) : (
           <EmptyCanvas />
         )}
