@@ -1,5 +1,5 @@
+import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
 import { describe, expect, it } from "vitest";
-import { computeEffectiveKeyboardTarget } from "@main/ipc/terminal-presentation.ts";
 
 describe("computeEffectiveKeyboardTarget", () => {
   it("is web when webRequestCount > 0 even if basePanel is terminal", () => {

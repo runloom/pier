@@ -1,11 +1,9 @@
 import type { TerminalNativeInputRoutingSnapshot } from "@shared/contracts/terminal.ts";
+import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { recordWebContentsRoute } from "./terminal-debug.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
-import {
-  applyLatestTerminalState,
-  computeEffectiveKeyboardTarget,
-} from "./terminal-presentation.ts";
+import { applyLatestTerminalState } from "./terminal-presentation.ts";
 
 let addonProvider: () => NativeAddon | null = () => null;
 const lastKeyboardFocusTargetByWindowId = new Map<number, string>();

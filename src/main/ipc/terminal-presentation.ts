@@ -8,6 +8,7 @@ import type {
   TerminalPresentationReason,
   TerminalPresentationSnapshot,
 } from "@shared/contracts/terminal.ts";
+import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { scopePanelId } from "./terminal-panel-id.ts";
@@ -60,13 +61,6 @@ function desiredInputRouting(
       webRequestCount: 0,
     }
   );
-}
-
-export function computeEffectiveKeyboardTarget(
-  basePanel: TerminalKeyboardFocusTarget,
-  webRequestCount: number
-): TerminalKeyboardFocusTarget {
-  return webRequestCount > 0 ? { kind: "web" } : basePanel;
 }
 
 function terminalFocusPanelId(

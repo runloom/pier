@@ -6,10 +6,13 @@ import type {
   TerminalDebugRendererSnapshot,
   TerminalFrame,
   TerminalInputRoutingSnapshot,
-  TerminalKeyboardFocusTarget,
   TerminalPresentationEntry,
   TerminalPresentationSnapshot,
 } from "./contracts/terminal.ts";
+import {
+  computeEffectiveKeyboardTarget,
+  sameKeyboardFocusTarget,
+} from "./terminal-keyboard-target.ts";
 
 function frameDelta(a: TerminalFrame, b: TerminalFrame): number {
   return Math.max(
@@ -192,16 +195,6 @@ export function buildTerminalDebugIssues(
   return issues;
 }
 
-function sameKeyboardFocusTarget(
-  a: TerminalKeyboardFocusTarget,
-  b: TerminalKeyboardFocusTarget
-): boolean {
-  return (
-    a.kind === b.kind &&
-    (a.kind === "web" || (b.kind === "terminal" && a.panelId === b.panelId))
-  );
-}
-
 type NativeSurface = TerminalDebugNativeSnapshot["surfaces"][number];
 
 interface InputRoutingSurfaceState {
@@ -246,8 +239,10 @@ function buildTerminalInputRoutingIssues(
       severity: "warning",
     });
   }
-  const expectedEffective: TerminalKeyboardFocusTarget =
-    expected.webRequestCount > 0 ? { kind: "web" } : expected.basePanel;
+  const expectedEffective = computeEffectiveKeyboardTarget(
+    expected.basePanel,
+    expected.webRequestCount
+  );
   if (
     !sameKeyboardFocusTarget(
       expectedEffective,
