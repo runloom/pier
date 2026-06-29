@@ -19,10 +19,15 @@ module.exports = {
     {
       name: "preload-narrow-imports",
       severity: "error",
-      comment: "preload 只能 import shared + electron",
+      comment: "preload 只能 import shared + electron + preload 内部",
       from: { path: "^src/preload" },
       to: {
-        pathNot: ["^src/shared", "node_modules/.*electron(/|$)", "^node:"],
+        pathNot: [
+          "^src/shared",
+          "^src/preload",
+          "node_modules/.*electron(/|$)",
+          "^node:",
+        ],
       },
     },
     {

@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
 import { mkdir as fsMkdir, realpath as fsRealpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { promisify } from "node:util";
 import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
@@ -14,8 +12,8 @@ import type {
   WorktreeRemoveRequest,
   WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
+import { execGit } from "./git-exec.ts";
 
-const execFileAsync = promisify(execFile);
 const SAFE_WORKTREE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 export interface WorktreeService {
@@ -26,7 +24,11 @@ export interface WorktreeService {
 }
 
 export interface CreateWorktreeServiceOptions {
-  execGit?: (args: readonly string[], cwd: string) => Promise<string>;
+  execGit?: (
+    args: readonly string[],
+    cwd: string,
+    options?: { timeoutMs?: number }
+  ) => Promise<string>;
   mkdir?: (path: string) => Promise<void>;
   realpath?: (path: string) => Promise<string>;
 }
@@ -41,12 +43,12 @@ export class WorktreeServiceError extends Error {
   }
 }
 
-async function defaultExecGit(
+function defaultExecGit(
   args: readonly string[],
-  cwd: string
+  cwd: string,
+  options?: { timeoutMs?: number }
 ): Promise<string> {
-  const { stdout } = await execFileAsync("git", [...args], { cwd });
-  return stdout;
+  return execGit(args, { cwd, ...options });
 }
 
 async function safeRealpath(
@@ -265,7 +267,11 @@ export function createWorktreeService({
         ["worktree", "list", "--porcelain", "-z"],
         realCurrentPath
       );
-    } catch {
+    } catch (err) {
+      console.warn(
+        "[worktree-service] worktree list failed:",
+        err instanceof Error ? err.message : err
+      );
       return {
         path: resolvedPath,
         reason: "git_unavailable",
@@ -322,7 +328,8 @@ export function createWorktreeService({
         targetPath,
         ...(request.base ? [request.base] : []),
       ],
-      before.mainPath
+      before.mainPath,
+      { timeoutMs: 60_000 }
     );
 
     const after = await list({ path: targetPath });
@@ -385,7 +392,9 @@ export function createWorktreeService({
     }
 
     try {
-      await execGit(["worktree", "remove", target.path], before.mainPath);
+      await execGit(["worktree", "remove", target.path], before.mainPath, {
+        timeoutMs: 60_000,
+      });
     } catch (err) {
       serviceError(
         "git_unavailable",

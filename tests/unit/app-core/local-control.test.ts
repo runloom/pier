@@ -13,6 +13,8 @@ import {
   createCommandRouter,
   type PierCoreServices,
 } from "@main/app-core/command-router.ts";
+import { createGitService } from "@main/services/git-service.ts";
+import { createGitWatchService } from "@main/services/git-watch-service.ts";
 import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { createWorktreeService } from "@main/services/worktree-service.ts";
 import {
@@ -207,6 +209,8 @@ function cliClientServices(): PierCoreServices {
       saveLayout: async () => undefined,
     },
     worktrees: createWorktreeService(),
+    git: createGitService(),
+    gitWatch: createGitWatchService(),
   };
 }
 
