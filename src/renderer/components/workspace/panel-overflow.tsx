@@ -11,7 +11,7 @@ import {
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
   registerTerminalFullscreenWebOverlay,
-  registerWebFocusScope,
+  requestTerminalWebFocus,
 } from "@/stores/terminal-input-routing.store.ts";
 import { Button } from "../primitives/button.tsx";
 import {
@@ -229,9 +229,9 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
       return;
     }
     const route = registerTerminalFullscreenWebOverlay("panel-overflow");
-    const disposeScope = registerWebFocusScope("panel-overflow", "exclusive");
+    const releaseWebFocus = requestTerminalWebFocus("panel-overflow");
     return () => {
-      disposeScope();
+      releaseWebFocus();
       route.dispose();
     };
   }, [open]);

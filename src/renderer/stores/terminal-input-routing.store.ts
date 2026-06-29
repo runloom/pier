@@ -2,17 +2,11 @@ import type {
   TerminalFrame,
   TerminalInputRoutingSnapshot,
   TerminalKeyboardFocusTarget,
-  WebFocusScopeKind,
 } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
-
-interface WebFocusScope {
-  id: string;
-  kind: WebFocusScopeKind;
-}
 
 interface WebOverlayRegistration {
   dispose(): void;
@@ -20,9 +14,9 @@ interface WebOverlayRegistration {
 }
 
 const webOverlayRects = new Map<string, TerminalFrame>();
-const webFocusScopes = new Map<string, WebFocusScope>();
+const webRequestIds = new Set<string>();
 
-let baseKeyboardFocusTarget: TerminalKeyboardFocusTarget = { kind: "web" };
+let basePanel: TerminalKeyboardFocusTarget = { kind: "web" };
 let rendererSequence = 0;
 let lastSnapshot: TerminalInputRoutingSnapshot | null = null;
 
@@ -30,7 +24,7 @@ function frameKey(frame: TerminalFrame): string {
   return `${frame.x},${frame.y},${frame.width},${frame.height}`;
 }
 
-function sameKeyboardFocusTarget(
+function sameBasePanel(
   a: TerminalKeyboardFocusTarget,
   b: TerminalKeyboardFocusTarget
 ): boolean {
@@ -40,28 +34,16 @@ function sameKeyboardFocusTarget(
   );
 }
 
-function effectiveKeyboardFocusTarget(): TerminalKeyboardFocusTarget {
-  if (webFocusScopes.size === 0) {
-    return baseKeyboardFocusTarget;
-  }
-  const hasExclusive = Array.from(webFocusScopes.values()).some(
-    (scope) => scope.kind === "exclusive"
-  );
-  return {
-    kind: "web",
-    scope: hasExclusive ? "exclusive" : "transient",
-  };
-}
-
 function applyTerminalInputRouting(): void {
   rendererSequence += 1;
   const snapshot: TerminalInputRoutingSnapshot = {
-    keyboardFocusTarget: effectiveKeyboardFocusTarget(),
+    basePanel,
     rendererSequence,
     webOverlayRects: Array.from(webOverlayRects, ([id, frame]) => ({
       frame,
       id,
     })),
+    webRequestCount: webRequestIds.size,
   };
   lastSnapshot = snapshot;
   window.pier?.terminal?.applyInputRouting?.(snapshot);
@@ -103,49 +85,30 @@ export function getLastTerminalInputRoutingSnapshot(): TerminalInputRoutingSnaps
   return lastSnapshot;
 }
 
-export function setTerminalBaseKeyboardFocusTarget(
+export function setTerminalBasePanel(
   target: TerminalKeyboardFocusTarget
 ): void {
-  if (sameKeyboardFocusTarget(baseKeyboardFocusTarget, target)) {
+  if (sameBasePanel(basePanel, target)) {
     return;
   }
-  baseKeyboardFocusTarget = target;
+  basePanel = target;
   applyTerminalInputRouting();
 }
 
-export function registerWebFocusScope(
-  id: string,
-  kind: WebFocusScopeKind
-): () => void {
-  const previous = webFocusScopes.get(id);
-  webFocusScopes.set(id, { id, kind });
-  if (!previous || previous.kind !== kind) {
+/**
+ * 浮在终端上的 web 元素声明一次键盘焦点意图。任意活跃请求即把 effective 拉成
+ * web。返回的释放函数 idempotent —— 多次调用只在首次真正移除请求时重算。
+ */
+export function requestTerminalWebFocus(id: string): () => void {
+  if (!webRequestIds.has(id)) {
+    webRequestIds.add(id);
     applyTerminalInputRouting();
   }
   return () => {
-    if (webFocusScopes.delete(id)) {
+    if (webRequestIds.delete(id)) {
       applyTerminalInputRouting();
     }
   };
-}
-
-export function hasExclusiveWebFocusScope(): boolean {
-  return Array.from(webFocusScopes.values()).some(
-    (scope) => scope.kind === "exclusive"
-  );
-}
-
-export function releaseTransientWebFocusScopes(): void {
-  let changed = false;
-  for (const [id, scope] of webFocusScopes) {
-    if (scope.kind === "transient") {
-      webFocusScopes.delete(id);
-      changed = true;
-    }
-  }
-  if (changed) {
-    applyTerminalInputRouting();
-  }
 }
 
 export function registerTerminalElementWebOverlay(
@@ -254,9 +217,9 @@ interface DragWatcherDocument extends Document {
 
 function beginFullscreenWebInputCapture(id: string): () => void {
   const route = registerTerminalFullscreenWebOverlay(id);
-  const disposeScope = registerWebFocusScope(id, "exclusive");
+  const releaseWebFocus = requestTerminalWebFocus(id);
   return () => {
-    disposeScope();
+    releaseWebFocus();
     route.dispose();
   };
 }
@@ -394,8 +357,8 @@ export function installTerminalInputRoutingDragWatcher(): void {
 
 export function resetTerminalInputRoutingForTests(): void {
   webOverlayRects.clear();
-  webFocusScopes.clear();
-  baseKeyboardFocusTarget = { kind: "web" };
+  webRequestIds.clear();
+  basePanel = { kind: "web" };
   rendererSequence = 0;
   lastSnapshot = null;
   dragWatcherInstalled = false;

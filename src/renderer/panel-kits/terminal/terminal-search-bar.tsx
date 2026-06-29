@@ -1,24 +1,15 @@
 import type { TerminalSearchStateEvent } from "@shared/contracts/terminal.ts";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Badge } from "@/components/primitives/badge.tsx";
 import { Button } from "@/components/primitives/button.tsx";
 import { useT } from "@/i18n/use-t.ts";
-import {
-  registerTerminalElementWebOverlay,
-  registerWebFocusScope,
-} from "@/stores/terminal-input-routing.store.ts";
+import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing.store.ts";
+import { useTerminalWebFocus } from "./use-terminal-web-focus.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
   onClose: () => void;
-  onKeyboardFocusReady: () => void;
   panelId: string;
   visible: boolean;
 }
@@ -50,48 +41,17 @@ function reportSearchError(action: string, err: unknown): void {
 export function TerminalSearchBar({
   focusRequest,
   onClose,
-  onKeyboardFocusReady,
   panelId,
   visible,
 }: TerminalSearchBarProps) {
   const t = useT();
   const rootRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const releaseSearchKeyboardRef = useRef<(() => void) | null>(null);
   const [query, setQuery] = useState("");
   const [searchState, setSearchState] =
     useState<SearchState>(EMPTY_SEARCH_STATE);
 
-  const ensureSearchKeyboardFocus = useCallback(() => {
-    if (releaseSearchKeyboardRef.current) {
-      return;
-    }
-    releaseSearchKeyboardRef.current = registerWebFocusScope(
-      `terminal-search:${panelId}:keyboard`,
-      "transient"
-    );
-  }, [panelId]);
-
-  const releaseSearchKeyboardFocus = useCallback(() => {
-    releaseSearchKeyboardRef.current?.();
-    releaseSearchKeyboardRef.current = null;
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!visible) {
-      return;
-    }
-    ensureSearchKeyboardFocus();
-    onKeyboardFocusReady();
-    return () => {
-      releaseSearchKeyboardFocus();
-    };
-  }, [
-    visible,
-    ensureSearchKeyboardFocus,
-    onKeyboardFocusReady,
-    releaseSearchKeyboardFocus,
-  ]);
+  useTerminalWebFocus(`terminal-search:${panelId}:keyboard`, visible);
 
   useLayoutEffect(() => {
     if (!visible) {
@@ -109,13 +69,6 @@ export function TerminalSearchBar({
       registration.dispose();
     };
   }, [visible, panelId]);
-
-  useEffect(
-    () => () => {
-      releaseSearchKeyboardFocus();
-    },
-    [releaseSearchKeyboardFocus]
-  );
 
   useEffect(() => {
     if (!visible) {
@@ -180,7 +133,6 @@ export function TerminalSearchBar({
   };
 
   const close = () => {
-    releaseSearchKeyboardFocus();
     setQuery("");
     setSearchState(EMPTY_SEARCH_STATE);
     endSearch();
@@ -211,15 +163,6 @@ export function TerminalSearchBar({
       className="pointer-events-auto absolute top-3 right-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-border bg-popover p-1 text-popover-foreground shadow-background/40 shadow-lg"
       data-terminal-search-bar=""
       data-testid="terminal-search-bar"
-      onBlurCapture={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget)) {
-          return;
-        }
-        releaseSearchKeyboardFocus();
-      }}
-      onFocusCapture={() => {
-        ensureSearchKeyboardFocus();
-      }}
       ref={rootRef}
     >
       <div className="relative w-52 min-w-0">

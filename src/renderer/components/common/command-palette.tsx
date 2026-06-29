@@ -47,7 +47,7 @@ import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import {
   registerTerminalFullscreenWebOverlay,
-  registerWebFocusScope,
+  requestTerminalWebFocus,
 } from "@/stores/terminal-input-routing.store.ts";
 
 function useActions(): readonly Action[] {
@@ -173,11 +173,11 @@ export function CommandPalette() {
       return;
     }
     const route = registerTerminalFullscreenWebOverlay("command-palette");
-    const disposeScope = registerWebFocusScope("command-palette", "exclusive");
+    const releaseWebFocus = requestTerminalWebFocus("command-palette");
     useKeybindingScope.getState().pushBlockingScope("overlay:command-palette");
     return () => {
       useKeybindingScope.getState().popBlockingScope("overlay:command-palette");
-      disposeScope();
+      releaseWebFocus();
       route.dispose();
     };
   }, [isOpen]);
