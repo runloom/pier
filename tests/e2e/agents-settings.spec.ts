@@ -77,6 +77,15 @@ test.describe("Agents Settings e2e", () => {
       await expect(win.getByText("自动", { exact: true }).first()).toBeVisible({
         timeout: 3000,
       });
+
+      // 断言 4：orca parity 补全的新 agent 也在 catalog 驱动列表里（列表底部，
+      // 可能在视口外，故用 toBeAttached 验证已渲染而不强求可见）
+      await expect(
+        win.locator('[data-testid="agent-row-qwen-code"]')
+      ).toBeAttached({ timeout: 3000 });
+      await expect(
+        win.locator('[data-testid="agent-row-openclaude"]')
+      ).toBeAttached({ timeout: 3000 });
     } finally {
       await closePierApp(appContext);
     }

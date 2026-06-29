@@ -57,4 +57,20 @@ describe("resolveAgentCommand", () => {
       resolveAgentCommand({ agentId: "claude", agentDefaultArgs: {} })
     ).toBe("/platform/claude");
   });
+  it("多 token yolo flag 整串拼接、不拆分（qwen-code）", () => {
+    expect(
+      resolveAgentCommand({
+        agentId: "qwen-code",
+        agentDefaultArgs: { "qwen-code": "--approval-mode yolo" },
+      })
+    ).toBe("qwen-code --approval-mode yolo");
+  });
+  it("带参 launchCmd + yolo flag 拼接（kiro）", () => {
+    expect(
+      resolveAgentCommand({
+        agentId: "kiro",
+        agentDefaultArgs: { kiro: "--trust-all-tools" },
+      })
+    ).toBe("kiro-cli chat --tui --trust-all-tools");
+  });
 });

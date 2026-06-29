@@ -22,4 +22,16 @@ describe("sanitizeAgentDefaultArgs", () => {
       sanitizeAgentDefaultArgs({ opencode: "--dangerously-skip-permissions" })
     ).toEqual({});
   });
+
+  it("多 token yolo flag 不被拆分（qwen-code 不在 UNSUPPORTED）", () => {
+    expect(
+      sanitizeAgentDefaultArgs({ "qwen-code": "--approval-mode yolo" })
+    ).toEqual({ "qwen-code": "--approval-mode yolo" });
+  });
+
+  it("kilo 的 UNSUPPORTED flag 被剥除", () => {
+    expect(
+      sanitizeAgentDefaultArgs({ kilo: "--dangerously-skip-permissions" })
+    ).toEqual({});
+  });
 });
