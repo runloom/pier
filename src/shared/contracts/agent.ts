@@ -47,7 +47,6 @@ export interface AgentCatalogEntry {
   faviconDomain?: string;
   homepageUrl?: string;
   iconId?: string;
-  iconUrl?: string;
   id: AgentKind;
   label: string;
   launchCmd: string;

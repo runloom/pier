@@ -12,11 +12,11 @@ describe("AgentIcon 四级 dispatch", () => {
     }
   });
 
-  it("iconUrl 渲染 img（openclaude 哨兵 → PNG，非字面值）", () => {
+  it("本地图标 img（openclaude → favicons/openclaude.png）", () => {
     const { container } = render(<AgentIcon agentId="openclaude" />);
     const img = container.querySelector("img");
     expect(img).not.toBeNull();
-    expect(img?.getAttribute("src")).not.toBe("openclaude");
+    expect(img?.getAttribute("src")).not.toContain("google.com");
   });
 
   it("本地 favicon 渲染 img（grok，本地资产而非外部 google service）", () => {

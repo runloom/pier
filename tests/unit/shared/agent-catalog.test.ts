@@ -42,9 +42,11 @@ describe("AGENT_CATALOG 完整性（orca parity）", () => {
       }
     }
   });
-  it("openclaude 用 iconUrl，gemini 转内联 iconId", () => {
-    expect(getAgentCatalogEntry("openclaude")?.iconUrl).toBeTruthy();
+  it("gemini 转内联 iconId；openclaude 无图标声明（走本地 favicons 文件）", () => {
     expect(getAgentCatalogEntry("gemini")?.iconId).toBe("gemini");
+    const oc = getAgentCatalogEntry("openclaude");
+    expect(oc?.iconId).toBeUndefined();
+    expect(oc?.faviconDomain).toBeUndefined();
   });
   it("带参 launchCmd 与 detectCmd 分离（kiro/hermes/command-code）", () => {
     expect(getAgentCatalogEntry("kiro")?.detectCmd).toBe("kiro-cli");

@@ -13,7 +13,6 @@ import {
   OpenAIIcon,
   PiIcon,
 } from "./glyphs.tsx";
-import openClaudeLogoUrl from "./openclaude-logo.png?url";
 
 const ICON_BY_ID: Record<string, FC<{ size?: number }>> = {
   claude: ClaudeIcon,
@@ -27,30 +26,18 @@ const ICON_BY_ID: Record<string, FC<{ size?: number }>> = {
   kilo: KiloIcon,
 };
 
-// 本地打包的 favicon（下载自各 agent 域名，文件名即 agentId）。运行时不再依赖
-// Google favicon service——离线可用，且绕开 img-src CSP（外部图源会被拦成空白）。
-// catalog 的 faviconDomain 保留为「下载来源」元数据；要更新图标重新下到此目录即可。
-const LOCAL_FAVICONS = import.meta.glob("./favicons/*.png", {
+// 本地打包的 agent 图标（favicons/<id>.png）。多数下载自各域名（见
+// scripts/download-agent-favicons.sh），openclaude.png 是 orca 资产手动放入。
+// 运行时用本地资产——离线 + 绕开 img-src CSP（外部图源会被拦成空白）。
+// catalog 的 faviconDomain 仅作下载脚本的数据源，运行时不读。
+const LOCAL_ICONS = import.meta.glob("./favicons/*.png", {
   eager: true,
   query: "?url",
   import: "default",
 }) as Record<string, string>;
 
-function localFaviconUrl(id: AgentKind): string | undefined {
-  return LOCAL_FAVICONS[`./favicons/${id}.png`];
-}
-
-function AgentImg({ src, size }: { src: string; size: number }) {
-  return (
-    <img
-      alt=""
-      aria-hidden
-      height={size}
-      src={src}
-      style={{ borderRadius: 2 }}
-      width={size}
-    />
-  );
+function localIconUrl(id: AgentKind): string | undefined {
+  return LOCAL_ICONS[`./favicons/${id}.png`];
 }
 
 export function AgentIcon({
@@ -68,14 +55,18 @@ export function AgentIcon({
   if (Inline) {
     return <Inline size={size} />;
   }
-  if (entry?.iconUrl) {
-    const src =
-      entry.iconUrl === "openclaude" ? openClaudeLogoUrl : entry.iconUrl;
-    return <AgentImg size={size} src={src} />;
-  }
-  const favicon = localFaviconUrl(agentId);
-  if (favicon) {
-    return <AgentImg size={size} src={favicon} />;
+  const localIcon = localIconUrl(agentId);
+  if (localIcon) {
+    return (
+      <img
+        alt=""
+        aria-hidden
+        height={size}
+        src={localIcon}
+        style={{ borderRadius: 2 }}
+        width={size}
+      />
+    );
   }
   return (
     <AgentLetterIcon
