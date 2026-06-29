@@ -2,7 +2,7 @@ import {
   AGENT_CATALOG,
   getAgentCatalogEntry,
   getKnownDetectCommands,
-} from "@main/services/agents/agent-catalog.ts";
+} from "@shared/agent-catalog.ts";
 import { agentKindSchema } from "@shared/contracts/agent.ts";
 import { describe, expect, it } from "vitest";
 

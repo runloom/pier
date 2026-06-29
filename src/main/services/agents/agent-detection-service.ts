@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { platform } from "node:os";
+import { AGENT_CATALOG } from "@shared/agent-catalog.ts";
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
-import { AGENT_CATALOG } from "./agent-catalog.ts";
 
 const PROBE_TIMEOUT_MS = 5000;
 

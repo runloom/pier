@@ -1,6 +1,6 @@
 import { platform } from "node:os";
+import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentDefaultArgs, AgentKind } from "@shared/contracts/agent.ts";
-import { getAgentCatalogEntry } from "./agent-catalog.ts";
 
 export interface ResolveAgentCommandArgs {
   /** preferences.agentDefaultArgs。 */

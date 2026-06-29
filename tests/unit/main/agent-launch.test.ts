@@ -1,14 +1,12 @@
-import { getAgentCatalogEntry } from "@main/services/agents/agent-catalog.ts";
 import { resolveAgentCommand } from "@main/services/agents/agent-launch.ts";
+import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentCatalogEntry, AgentKind } from "@shared/contracts/agent.ts";
 import { describe, expect, it, vi } from "vitest";
 
 // 默认透传真实目录，仅在需要时用 mockReturnValueOnce 注入桩，保留其余用例走真实 catalog。
-vi.mock("@main/services/agents/agent-catalog.ts", async (importOriginal) => {
+vi.mock("@shared/agent-catalog.ts", async (importOriginal) => {
   const actual =
-    await importOriginal<
-      typeof import("@main/services/agents/agent-catalog.ts")
-    >();
+    await importOriginal<typeof import("@shared/agent-catalog.ts")>();
   return {
     ...actual,
     getAgentCatalogEntry: vi.fn((id: AgentKind) =>
