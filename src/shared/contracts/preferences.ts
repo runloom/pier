@@ -96,9 +96,9 @@ export const projectPreferencesSchema = z.object({
     .nullable()
     .default(null),
   disabledAgentIds: z.array(agentKindSchema).default([]),
-  agentDefaultArgs: z.record(z.string(), z.string()).default({}),
+  agentDefaultArgs: z.partialRecord(agentKindSchema, z.string()).default({}),
   agentDefaultEnv: z
-    .record(z.string(), z.record(z.string(), z.string()))
+    .partialRecord(agentKindSchema, z.record(z.string(), z.string()))
     .default({}),
 });
 

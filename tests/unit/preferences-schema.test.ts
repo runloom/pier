@@ -217,4 +217,13 @@ describe("projectPreferencesSchema — agent preferences", () => {
       projectPreferencesSchema.parse({ disabledAgentIds: ["nope"] })
     ).toThrow();
   });
+
+  it("拒绝 agentDefaultArgs/agentDefaultEnv 的未知 key", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ agentDefaultArgs: { nope: "x" } })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ agentDefaultEnv: { nope: { A: "1" } } })
+    ).toThrow();
+  });
 });
