@@ -8,6 +8,7 @@ import {
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { installCsp } from "./csp.ts";
+import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
@@ -213,6 +214,7 @@ app.whenReady().then(async () => {
   registerWindowIpc(ipcMain);
   registerCommandIpc(ipcMain);
   registerMenuIpc(ipcMain);
+  registerAgentsIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
   registerRendererCommandIpc(ipcMain);
   registerTerminalIpc(ipcMain);
