@@ -9,6 +9,7 @@
     "pier": "./bin/pier.mjs"
   },
   "license": "TBD",
+  "packageManager": "pnpm@10.23.0",
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=10.0.0"
