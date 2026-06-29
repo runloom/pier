@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@leeoniya/ufuzzy": "1.0.19",
+    "@pier/ui": "workspace:*",
     "@pierre/theme": "^1.0.3",
     "@shikijs/themes": "^4.2.0",
     "class-variance-authority": "^0.7.1",
