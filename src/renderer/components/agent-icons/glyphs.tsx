@@ -122,44 +122,6 @@ export function CopilotIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export function AgentLetterIcon({
-  letter,
-  size = 14,
-}: {
-  letter: string;
-  size?: number;
-}) {
-  return (
-    <svg
-      aria-hidden="true"
-      className="text-current"
-      height={size}
-      viewBox="0 0 14 14"
-      width={size}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect
-        fill="currentColor"
-        fillOpacity="0.2"
-        height="14"
-        rx="3"
-        width="14"
-      />
-      <text
-        fill="currentColor"
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fontSize="8.5"
-        fontWeight="700"
-        textAnchor="middle"
-        x="7"
-        y="10.5"
-      >
-        {letter}
-      </text>
-    </svg>
-  );
-}
-
 // Gemini: star path is verbatim from orca's GeminiIcon. orca fills it with 8
 // blurred color blobs through a mask (~240 lines); at 14px those blurs are
 // imperceptible, so we approximate with a gradient of orca's 4 brand colors.

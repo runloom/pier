@@ -1,8 +1,8 @@
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { Bot } from "lucide-react";
 import type { FC } from "react";
 import {
-  AgentLetterIcon,
   AiderIcon,
   ClaudeIcon,
   CopilotIcon,
@@ -47,31 +47,27 @@ export function AgentIcon({
   agentId: AgentKind | null | undefined;
   size?: number;
 }) {
-  if (!agentId) {
-    return <AgentLetterIcon letter="?" size={size} />;
+  if (agentId) {
+    const entry = getAgentCatalogEntry(agentId);
+    const Inline = entry?.iconId ? ICON_BY_ID[entry.iconId] : undefined;
+    if (Inline) {
+      return <Inline size={size} />;
+    }
+    const localIcon = localIconUrl(agentId);
+    if (localIcon) {
+      return (
+        <img
+          alt=""
+          aria-hidden
+          height={size}
+          src={localIcon}
+          style={{ borderRadius: 2 }}
+          width={size}
+        />
+      );
+    }
   }
-  const entry = getAgentCatalogEntry(agentId);
-  const Inline = entry?.iconId ? ICON_BY_ID[entry.iconId] : undefined;
-  if (Inline) {
-    return <Inline size={size} />;
-  }
-  const localIcon = localIconUrl(agentId);
-  if (localIcon) {
-    return (
-      <img
-        alt=""
-        aria-hidden
-        height={size}
-        src={localIcon}
-        style={{ borderRadius: 2 }}
-        width={size}
-      />
-    );
-  }
-  return (
-    <AgentLetterIcon
-      letter={(entry?.label ?? agentId).charAt(0).toUpperCase()}
-      size={size}
-    />
-  );
+  // 兜底：agent 未知（null，第二轮 panel 识别用）或暂无本地图标 →
+  // lucide Bot（与 agents nav 图标一致）。
+  return <Bot aria-hidden size={size} />;
 }

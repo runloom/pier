@@ -26,8 +26,10 @@ describe("AgentIcon 四级 dispatch", () => {
     expect(src).not.toContain("google.com");
   });
 
-  it("空 agentId 渲染首字母兜底 ?", () => {
+  it("空 agentId 渲染 lucide Bot 兜底（无自定义字母 text）", () => {
     const { container } = render(<AgentIcon agentId={null} />);
-    expect(container.querySelector("svg text")?.textContent).toBe("?");
+    const svg = container.querySelector("svg");
+    expect(svg).toBeTruthy();
+    expect(svg?.querySelector("text")).toBeNull();
   });
 });
