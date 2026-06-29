@@ -134,4 +134,16 @@ describe("useTerminalOverlay", () => {
     expect(snapshot()?.webOverlayRects).toHaveLength(1);
     expect(snapshot()?.webRequestCount).toBe(1);
   });
+
+  it("degrades to noop without a Provider — no throw, store state unchanged", () => {
+    // 不包 Provider，使用默认 noopRegistry。
+    const { result } = renderHook(() => useTerminalOverlay({ focus: true }));
+
+    // 不应抛错，也不应写入 terminal-input-routing store（snapshot 保持 null）。
+    expect(() => result.current(makeSizedElement())).not.toThrow();
+    expect(snapshot()).toBeNull();
+
+    expect(() => result.current(null)).not.toThrow();
+    expect(snapshot()).toBeNull();
+  });
 });
