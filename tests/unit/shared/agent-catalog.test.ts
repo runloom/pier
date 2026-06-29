@@ -22,3 +22,33 @@ describe("AGENT_CATALOG", () => {
     expect(cmds).toContain("cursor-agent"); // cursor 的 detectCmd
   });
 });
+
+describe("AGENT_CATALOG 完整性（orca parity）", () => {
+  it("每个 AgentKind 有且仅有一条 entry，且 id 一致", () => {
+    for (const id of agentKindSchema.options) {
+      const entry = getAgentCatalogEntry(id);
+      expect(entry, `缺 entry: ${id}`).toBeDefined();
+      expect(entry?.id).toBe(id);
+    }
+    expect(AGENT_CATALOG.length).toBe(agentKindSchema.options.length);
+  });
+  it("copilot label 为 GitHub Copilot", () => {
+    expect(getAgentCatalogEntry("copilot")?.label).toBe("GitHub Copilot");
+  });
+  it("有 iconId 的 entry 不冗余设 faviconDomain", () => {
+    for (const e of AGENT_CATALOG) {
+      if (e.iconId) {
+        expect(e.faviconDomain, `${e.id} 冗余 favicon`).toBeUndefined();
+      }
+    }
+  });
+  it("openclaude 用 iconUrl，gemini 转内联 iconId", () => {
+    expect(getAgentCatalogEntry("openclaude")?.iconUrl).toBeTruthy();
+    expect(getAgentCatalogEntry("gemini")?.iconId).toBe("gemini");
+  });
+  it("带参 launchCmd 与 detectCmd 分离（kiro/hermes/command-code）", () => {
+    expect(getAgentCatalogEntry("kiro")?.detectCmd).toBe("kiro-cli");
+    expect(getAgentCatalogEntry("kiro")?.launchCmd).toBe("kiro-cli chat --tui");
+    expect(getAgentCatalogEntry("hermes")?.launchCmd).toBe("hermes --tui");
+  });
+});
