@@ -131,7 +131,7 @@ describe("KeybindingsSection", () => {
 
     expect(screen.getByText("关闭面板")).toBeInTheDocument();
     expect(screen.getByText("关闭其他面板")).toBeInTheDocument();
-    expect(screen.getByText("关闭所有面板")).toBeInTheDocument();
+    expect(screen.queryByText("关闭所有面板")).not.toBeInTheDocument();
     expect(screen.getByText("关闭当前面板。")).toBeInTheDocument();
     const terminalRow = screen.getByTestId(
       "keybinding-row-pier.terminal.close"

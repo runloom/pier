@@ -81,7 +81,8 @@ function sortOrderOf(a: Action): number {
 }
 
 function actionToMenuItem(a: Action): MenuItem {
-  const binding = keybindingRegistry.getBindingsFor(a.id)[0];
+  const shortcutSourceId = a.metadata?.shortcutSourceId ?? a.id;
+  const binding = keybindingRegistry.getBindingsFor(shortcutSourceId)[0];
   const accelerator = binding
     ? toElectronAccelerator(binding.chord)
     : undefined;

@@ -21,6 +21,11 @@ export interface ActionMetadata {
    */
   group?: string;
   iconComponent?: LucideIcon;
+  /**
+   * 菜单 accelerator 展示可借用另一条 command 的 keybinding.
+   * 用于菜单 action 与快捷键 action 分离, 但用户需要看到同一个快捷键提示的场景.
+   */
+  shortcutSourceId?: string;
   sortOrder?: number;
   /**
    * 设置后, 该 action 进同名子菜单. 同 surface 内 submenu() 返回相同字符串的

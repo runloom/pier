@@ -28,6 +28,7 @@ export interface ActionContribution {
   handler: () => void | Promise<void>;
   iconComponent?: LucideIcon;
   id: string;
+  shortcutSourceId?: string;
   sortOrder?: number;
   submenuKey?: string;
   surfaces: readonly (string & {})[];

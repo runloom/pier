@@ -47,7 +47,6 @@ describe("action contributions", () => {
         "pier.panel.equalizeSplits",
         "pier.panel.close",
         "pier.panel.closeOthers",
-        "pier.panel.closeAll",
         "pier.panel.splitRight",
         "pier.panel.splitDown",
         "pier.panel.splitLeft",
@@ -58,6 +57,21 @@ describe("action contributions", () => {
         "pier.panel.focusUp",
       ])
     );
+  });
+
+  it("keeps dockview tab close menu scoped to the current group", () => {
+    const dockviewTabActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter(
+      (action) => action.surfaces.includes("dockview-tab")
+    );
+    const closeAction = dockviewTabActions.find(
+      (action) => action.id === "pier.panel.close"
+    );
+
+    expect(dockviewTabActions.map((action) => action.id)).toEqual([
+      "pier.panel.close",
+      "pier.panel.closeOthers",
+    ]);
+    expect(closeAction?.shortcutSourceId).toBe("pier.panel.closeActive");
   });
 
   it("builds runtime actions from contribution metadata and aliases", () => {

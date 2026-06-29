@@ -28,9 +28,14 @@ function webPanel(id: string) {
   };
 }
 
-function createApi(panels: ReturnType<typeof terminalPanel>[]) {
+function createApi(
+  panels: ReturnType<typeof terminalPanel>[],
+  groups = [{ panels }]
+) {
   return {
+    activeGroup: groups[0] ?? null,
     activePanel: panels[0] ?? null,
+    groups,
     addPanel: vi.fn(),
     panels,
     removePanel: vi.fn(),
@@ -208,11 +213,15 @@ describe("workspace terminal close lifecycle", () => {
     ).toBeLessThan(firstInvocationOrder(closeCurrentWindowMock));
   });
 
-  it("closes only terminal panels removed by closeOthers", () => {
+  it("closes only panels from the same group during closeOthers", () => {
     const keep = terminalPanel("terminal-keep");
     const terminal = terminalPanel("terminal-close");
     const web = webPanel("welcome-close");
-    const api = createApi([keep, terminal, web]);
+    const otherGroupTerminal = terminalPanel("terminal-other-group");
+    const api = createApi(
+      [keep, terminal, web, otherGroupTerminal],
+      [{ panels: [keep, terminal, web] }, { panels: [otherGroupTerminal] }]
+    );
 
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -223,6 +232,7 @@ describe("workspace terminal close lifecycle", () => {
     expect(api.removePanel).toHaveBeenCalledWith(terminal);
     expect(api.removePanel).toHaveBeenCalledWith(web);
     expect(api.removePanel).not.toHaveBeenCalledWith(keep);
+    expect(api.removePanel).not.toHaveBeenCalledWith(otherGroupTerminal);
   });
 
   it("clears layout before closing terminal panels during closeAll", async () => {

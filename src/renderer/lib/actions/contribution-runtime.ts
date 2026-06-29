@@ -160,6 +160,9 @@ function createMetadata(
   if (contribution.iconComponent) {
     metadata.iconComponent = contribution.iconComponent;
   }
+  if (contribution.shortcutSourceId) {
+    metadata.shortcutSourceId = contribution.shortcutSourceId;
+  }
   if (contribution.sortOrder != null) {
     metadata.sortOrder = contribution.sortOrder;
   }

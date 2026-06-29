@@ -53,6 +53,7 @@ interface TerminalPanelParams {
 }
 
 type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
+type WorkspacePanelRef = DockviewApi["panels"][number];
 
 function terminalPanelContext(
   panelId: string | undefined
@@ -105,6 +106,23 @@ function uniquePanelId(api: DockviewApi, prefix: string): string {
     suffix += 1;
   }
   return `${base}-${suffix}`;
+}
+
+function panelsInSameGroup(
+  api: DockviewApi,
+  panelId: string
+): readonly WorkspacePanelRef[] {
+  const group = api.groups.find((candidate) =>
+    candidate.panels.some((panel) => panel.id === panelId)
+  );
+  if (group) {
+    return group.panels;
+  }
+  const activeGroupPanels = api.activeGroup?.panels;
+  if (activeGroupPanels?.some((panel) => panel.id === panelId)) {
+    return activeGroupPanels;
+  }
+  return api.panels;
 }
 
 /**
@@ -300,7 +318,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!keepPanel) {
       return;
     }
-    const toClose = api.panels.filter((p) => p.id !== panelId);
+    const toClose = panelsInSameGroup(api, keepPanel.id).filter(
+      (p) => p.id !== panelId
+    );
     for (const p of toClose) {
       if (p.view.contentComponent === "terminal") {
         window.pier?.terminal?.close?.(p.id);

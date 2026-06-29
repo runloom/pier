@@ -123,4 +123,25 @@ describe("buildMenuEntries", () => {
       first?.type === "action" ? first.accelerator : undefined;
     expect(accelerator).toBe("CmdOrCtrl+K");
   });
+
+  it("支持从指定 commandId 反查菜单 accelerator", () => {
+    actionRegistry.register({
+      id: "t.menu-close",
+      category: "T",
+      title: () => "Close",
+      surfaces: ["test/shortcut-source"],
+      metadata: { shortcutSourceId: "t.close-active" },
+      handler: () => undefined,
+    });
+    keybindingRegistry.registerDefaults([
+      { commandId: "t.close-active", keys: "Mod+KeyW", scope: "global" },
+    ]);
+
+    const entries = buildMenuEntries("test/shortcut-source");
+    const first = entries[0];
+    const accelerator =
+      first?.type === "action" ? first.accelerator : undefined;
+
+    expect(accelerator).toBe("CmdOrCtrl+W");
+  });
 });
