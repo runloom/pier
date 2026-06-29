@@ -102,7 +102,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     faviconDomain: "ampcode.com",
     homepageUrl: "https://ampcode.com/manual#install",
   },
-  // —— orca parity 补全（22 个，去 claude-agent-teams: orca 专有 CLI）——
+  // orca 全集补全（去 claude-agent-teams——它探测/启动 orca 自身 CLI）。
   {
     id: "grok",
     label: "Grok",
@@ -300,8 +300,8 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     launchCmd: "openclaude",
     detectCmd: "openclaude",
     expectedProcess: "openclaude",
-    // 图标走本地 favicons/openclaude.png（orca 资产，手动放入，非下载）。
-    // orca 未记 homepageUrl；不臆造（曾误填不存在的 gitlawb.com）。
+    // 图标 favicons/openclaude.png 是 orca 资产，手动放入（非脚本下载）。
+    // orca 未记 homepageUrl，故省略。
   },
 ];
 

@@ -1,26 +1,25 @@
 import { z } from "zod";
 
-/** 内置支持的 agent（orca parity，去 claude-agent-teams）。★ = 有内联高质量图标。 */
+/** 内置支持的 agent（orca 全集，去 claude-agent-teams——它探测/启动 orca 自身 CLI）。 */
 export const agentKindSchema = z.enum([
-  "claude", // ★
-  "codex", // ★
-  "gemini", // ★
-  "aider", // ★
+  "claude",
+  "codex",
+  "gemini",
+  "aider",
   "opencode",
   "cursor",
-  "copilot", // ★
-  "droid", // ★
+  "copilot",
+  "droid",
   "kimi",
-  "pi", // ★
+  "pi",
   "amp",
-  // —— orca parity 补全（去 claude-agent-teams: orca 专有 CLI）——
   "grok",
   "mimo-code",
   "ante",
-  "omp", // ★
+  "omp",
   "antigravity",
   "goose",
-  "kilo", // ★
+  "kilo",
   "kiro",
   "crush",
   "aug",
@@ -72,8 +71,6 @@ export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   copilot: "--yolo",
   kimi: "--yolo",
   amp: "--dangerously-allow-all",
-  // opencode / droid / pi: 无 yolo flag，保持 CLI 默认
-  // —— orca parity 补全 ——
   grok: "--permission-mode bypassPermissions",
   ante: "--yolo",
   antigravity: "--dangerously-skip-permissions",
@@ -89,7 +86,7 @@ export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   hermes: "--yolo",
   devin: "--permission-mode bypass",
   openclaude: "--dangerously-skip-permissions",
-  // 无 yolo: mimo-code / omp / goose(env-only) / aug / codebuff / openclaw / kilo
+  // 其余 agent 无 yolo flag：goose 走 YOLO_ENV，opencode/kilo 见 UNSUPPORTED_ARGS。
 };
 
 /** env-based yolo（goose 用环境变量而非 flag）。 */

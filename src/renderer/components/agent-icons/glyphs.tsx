@@ -1,6 +1,4 @@
-// Inline SVG brand glyphs for agents with high-quality logos.
-// Extracted from orca — SVG paths and colors are preserved exactly.
-// Signatures follow ({ size = 14 }: { size?: number }) convention.
+// Inline brand glyphs — SVG paths/colors copied verbatim from orca.
 
 import { useId } from "react";
 
