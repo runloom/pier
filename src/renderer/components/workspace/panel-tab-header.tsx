@@ -28,6 +28,10 @@ import {
   useEffect,
   useState,
 } from "react";
+import {
+  runtimeStatusLabel,
+  runtimeStatusVisual,
+} from "@/components/common/runtime-status-visual.ts";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
@@ -131,21 +135,32 @@ function tabAriaLabel(
   return [title, stateLabel].filter(Boolean).join(", ");
 }
 
-function tabStatusIndicatorClassName(status: PanelTabStatus): string {
-  const baseClassName =
-    "inline-flex size-2 shrink-0 rounded-full ring-1 ring-background/65";
-  switch (status) {
-    case "waiting":
-    case "blocked":
-    case "cancelled":
-      return `${baseClassName} bg-[var(--status-warning-fg)]`;
-    case "failed":
-      return `${baseClassName} bg-[var(--status-danger-fg)]`;
-    case "succeeded":
-      return `${baseClassName} bg-[var(--status-success-fg)]`;
-    default:
-      return `${baseClassName} bg-[var(--status-neutral-fg)]`;
+function tabStatusIndicator(
+  status: PanelTabStatus,
+  label: string | undefined
+): ReactNode {
+  if (status === "idle") {
+    return null;
   }
+  const displayLabel = label ?? runtimeStatusLabel(status);
+  const visual = runtimeStatusVisual(status);
+  const Icon = visual.Icon;
+  return (
+    <span
+      aria-label={displayLabel}
+      className={`inline-flex size-4 shrink-0 items-center justify-center ${visual.textClassName}`}
+      data-panel-tab-state-indicator={status}
+      data-tab-status={status}
+      role="img"
+      title={displayLabel}
+    >
+      <Icon
+        aria-hidden="true"
+        className={`size-3 shrink-0 ${visual.iconClassName}`}
+        data-panel-tab-state-icon={status}
+      />
+    </span>
+  );
 }
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
@@ -164,35 +179,9 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     t
   );
   const status = tab?.state?.status;
-  let statusIndicator: ReactNode = null;
-  if (status === "running") {
-    statusIndicator = (
-      <span
-        aria-hidden="true"
-        className="relative flex size-2.5 items-center justify-center"
-        data-panel-tab-state-indicator={status}
-        data-tab-status={status}
-      >
-        <span
-          className="absolute h-full w-full animate-ping rounded-full bg-primary opacity-75"
-          data-panel-tab-running-ping=""
-        />
-        <span
-          className="size-2 rounded-full bg-primary"
-          data-panel-tab-running-dot=""
-        />
-      </span>
-    );
-  } else if (status && status !== "idle") {
-    statusIndicator = (
-      <span
-        aria-hidden="true"
-        className={tabStatusIndicatorClassName(status)}
-        data-panel-tab-state-indicator={status}
-        data-tab-status={status}
-      />
-    );
-  }
+  const statusIndicator = status
+    ? tabStatusIndicator(status, tab?.state?.label)
+    : null;
   const commandKeyDown = useTabShortcutHintsStore(
     (state) => state.commandKeyDown
   );

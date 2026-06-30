@@ -464,6 +464,21 @@ describe("TerminalPanel lifecycle", () => {
     ).toContain("bottom-6");
   });
 
+  it("does not render a terminal status bar only because the panel has task metadata", () => {
+    const { container, queryByTestId } = render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: { context, tab: taskTab, task: taskMetadata },
+        })}
+      />
+    );
+
+    expect(queryByTestId("terminal-status-bar")).toBeNull();
+    expect(
+      container.querySelector(".terminal-anchor")?.className ?? ""
+    ).not.toContain("bottom-6");
+  });
+
   it("does not reserve status bar space when no item is visible for the panel", () => {
     terminalStatusItemRegistry.register({
       id: "test.worktree-status",
