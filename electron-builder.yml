@@ -16,6 +16,8 @@ files:
 extraResources:
   - from: bin/pier.mjs
     to: bin/pier
+  - from: resources/fonts
+    to: fonts
 
 asar: true
 asarUnpack:
