@@ -214,11 +214,13 @@ function openPluginPanel(panelId: string): void {
     return;
   }
   const registration = getPluginPanelRegistrations().get(panelId);
+  const params = registration?.getParams?.();
   api.addPanel({
     id: panelId,
     component: panelId,
     title: resolveRegistrationTitle(registration, panelId),
     position: { direction: "right" },
+    ...(params ? { params } : {}),
   });
   scheduleRevealDockviewTabByPanelId(panelId);
 }

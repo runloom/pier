@@ -4,20 +4,24 @@ const registrations = new Map<string, PluginPanelRegistration>();
 const listeners = new Set<() => void>();
 let revision = 0;
 
+/**
+ * dispose 注册时调用的清理钩子。workspace-host 注入,用于关闭已打开的 dockview
+ * panel —— 仅删 registration 不关 panel 会让禁用插件后旧 dockview 实例残留,
+ * 重启时 fromJSON 找不到 component(因 component 已 unregister)。
+ */
+let panelCloser: ((panelId: string) => void) | null = null;
+
+export function setPluginPanelCloser(
+  closer: ((panelId: string) => void) | null
+): void {
+  panelCloser = closer;
+}
+
 function notify(): void {
   revision += 1;
   for (const listener of listeners) {
     listener();
   }
-}
-
-/**
- * 注册表版本号(每次 register/dispose/clear 自增)。
- * useSyncExternalStore 的 snapshot 函数返回引用稳定的原始值,
- * 让 React 仅在版本变化时重渲染,避免每次 render 拿到新对象。
- */
-export function getPluginPanelRevision(): number {
-  return revision;
 }
 
 export function registerPluginPanel(
@@ -27,6 +31,9 @@ export function registerPluginPanel(
   notify();
   return () => {
     if (registrations.get(registration.id) === registration) {
+      // 先关已打开的 dockview 实例,再删 component 注册 —— 顺序反了的话,
+      // dockview render 时找不到 component 会报错。
+      panelCloser?.(registration.id);
       registrations.delete(registration.id);
       notify();
     }
@@ -38,6 +45,15 @@ export function getPluginPanelRegistrations(): ReadonlyMap<
   PluginPanelRegistration
 > {
   return registrations;
+}
+
+/**
+ * 注册表版本号(每次 register/dispose/clear 自增)。
+ * useSyncExternalStore 的 snapshot 函数返回引用稳定的原始值,
+ * 让 React 仅在版本变化时重渲染,避免每次 render 拿到新对象。
+ */
+export function getPluginPanelRevision(): number {
+  return revision;
 }
 
 /**

@@ -17,11 +17,25 @@ export function registerGitPluginContributions(
     registerGitStatusItem(context),
     context.panels.register({
       component: GitChangesPanel,
+      // 把已 i18n 化的占位文案经 addPanel.params 注入组件 —— 插件不能 import
+      // renderer 的 i18n hook,这是把宿主 i18n 结果带给 panel 组件的通道。
+      getParams: () => ({
+        heading: context.i18n.t(
+          "ui.panelTitle.gitChanges",
+          undefined,
+          "Git Changes"
+        ),
+        hint: context.i18n.t(
+          "ui.panelHint.gitChangesPlaceholder",
+          undefined,
+          "Change preview coming soon"
+        ),
+      }),
       icon: GitBranch,
       id: "pier.git.changes",
       kind: "web",
-      // thunk 形式让 locale 切换时 tab 标题实时跟随;manifest 声明该 panel,
-      // i18n 通过 panels[id].title 解析,fallback 用插件 messages 的 ui.panelTitle.gitChanges。
+      // thunk 形式让 locale 切换时 tab 标题实时跟随;新打开的 panel 取当时 locale,
+      // 已打开实例的 tab 标题不会重算(dockview 限制,acknowledged)。
       title: () =>
         context.i18n.t("ui.panelTitle.gitChanges", undefined, "Git Changes"),
     }),

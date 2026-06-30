@@ -103,6 +103,12 @@ export interface RendererTerminalStatusItem {
 
 export interface PluginPanelRegistration {
   component: FunctionComponent<IDockviewPanelProps>;
+  /**
+   * 可选 thunk:open 时计算 dockview addPanel 的 params,组件经 props.params 读。
+   * 用于把已 i18n 化的字符串等运行时数据传给 panel 组件 —— 插件不能直接 import
+   * renderer 的 i18n hook,这是把宿主 i18n 结果带入组件的标准通道。
+   */
+  getParams?: () => Record<string, unknown>;
   icon: LucideIcon;
   /**
    * Panel 标识。本字段同时充当 dockview 的 component 名与 panel 单例 id,
@@ -145,6 +151,10 @@ export interface RendererPluginContext {
   };
   panels: {
     getActiveContext(): PanelContext | null;
+    /**
+     * 单例打开指定 panel。panelId 必须在本插件 manifest 的 panels[] 中声明 ——
+     * 不支持打开其它插件贡献的 panel(权限/所有权对称约束)。
+     */
     open(panelId: string): void;
     register(registration: PluginPanelRegistration): () => void;
   };

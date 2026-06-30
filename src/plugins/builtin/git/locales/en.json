@@ -27,6 +27,7 @@
     "ui.mainBadge": "main",
     "ui.selectPlaceholder": "Select a worktree...",
     "ui.statusOpenLabel": "Open worktrees for {{name}}",
+    "ui.panelHint.gitChangesPlaceholder": "Change preview coming soon",
     "ui.panelTitle.gitChanges": "Git Changes",
     "ui.title": "Worktrees",
     "ui.unsupported": "Current directory does not support Git worktrees"

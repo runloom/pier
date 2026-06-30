@@ -16,6 +16,7 @@ import "dockview-react/dist/styles/dockview.css";
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import {
   getPluginPanelRevision,
+  setPluginPanelCloser,
   subscribePluginPanelRegistry,
 } from "@/lib/plugins/plugin-panel-registry.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
@@ -153,6 +154,15 @@ export function WorkspaceHost() {
       // 异步加载完成前触发, 延迟暴露 api 会让 action handler 调 store.addTerminal
       // 时 api=null 静默 drop, 用户感受是"快捷键失效, 按两次才行".
       setApi(event.api);
+
+      // 注入插件 panel 关闭钩子:插件 dispose(禁用/卸载)时关掉其已打开的 dockview
+      // 实例,避免遗留 panel 在下次 fromJSON 找不到 component。
+      setPluginPanelCloser((panelId: string) => {
+        const panel = event.api.panels.find((p) => p.id === panelId);
+        if (panel) {
+          event.api.removePanel(panel);
+        }
+      });
 
       // 防 save-loop: fromJSON / 默认 layout 应用期间 onDidLayoutChange 触发的
       // change event 是 program-driven, 不该 save (会 round-trip 存"恢复出来的"
