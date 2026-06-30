@@ -10,7 +10,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 function entryWithPanel(): PluginRegistryEntry {
   return {
-    effectivePermissions: ["panel:register", "panel:control"],
+    effectivePermissions: ["panel:register", "panel:open"],
     enabled: true,
     manifest: {
       apiVersion: 1,
@@ -19,7 +19,7 @@ function entryWithPanel(): PluginRegistryEntry {
       id: "pier.test",
       name: "Test",
       panels: [{ id: "pier.test.panel", permissions: [], title: "Test" }],
-      permissions: ["panel:register", "panel:control"],
+      permissions: ["panel:register", "panel:open"],
       source: { kind: "builtin" },
       terminalStatusItems: [],
       version: "1.0.0",
