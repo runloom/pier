@@ -18,6 +18,11 @@ import {
   requiredInputsForTask,
 } from "./task-execution-plan.ts";
 import {
+  recentCommandKey,
+  recentTaskKey,
+  sortTasksByRecentUse,
+} from "./task-recent-ranking.ts";
+import {
   createTaskRunCoordinator,
   type TaskRunCoordinatorStartResult,
   type TaskRunTerminalOpenResult,
@@ -168,11 +173,15 @@ export function createTaskService({
 
   const collect = async (projectRoot: string) => {
     await ensureRecentLoaded();
-    return await collectTaskCandidates({
+    const result = await collectTaskCandidates({
       projectRoot,
       recentTasks,
       ...(homeDir ? { homeDir } : {}),
     } satisfies CollectTaskCandidatesOptions);
+    return {
+      ...result,
+      tasks: sortTasksByRecentUse(result.tasks, recentTasks, now()),
+    };
   };
 
   function rememberPanelRun(
@@ -310,17 +319,35 @@ export function createTaskService({
 
   async function recordRecentLaunch(launch: TaskLaunchPlan): Promise<void> {
     await ensureRecentLoaded();
+    const usedAt = now();
+    const existing = recentTasks.find((recent) =>
+      recent.taskId
+        ? recentTaskKey(recent.cwd, recent.taskId) ===
+          recentTaskKey(launch.cwd, launch.taskId)
+        : recentCommandKey(recent.cwd, recent.command) ===
+          recentCommandKey(launch.cwd, launch.rawCommand ?? launch.command)
+    );
     const entry: TaskRecentEntry = {
       command: launch.rawCommand ?? launch.command,
       cwd: launch.cwd,
+      lastUsedAt: usedAt,
       label: launch.label || basename(launch.cwd),
       source: "history",
+      taskId: launch.taskId,
+      useCount: (existing?.useCount ?? 0) + 1,
     };
     recentTasks = [
       entry,
       ...recentTasks.filter(
         (recent) =>
-          !(recent.cwd === entry.cwd && recent.command === entry.command)
+          !(
+            (recent.taskId
+              ? recentTaskKey(recent.cwd, recent.taskId) ===
+                recentTaskKey(entry.cwd, launch.taskId)
+              : false) ||
+            recentCommandKey(recent.cwd, recent.command) ===
+              recentCommandKey(entry.cwd, entry.command)
+          )
       ),
     ].slice(0, recentLimit);
     await writeRecentState({ entries: recentTasks, version: 1 });

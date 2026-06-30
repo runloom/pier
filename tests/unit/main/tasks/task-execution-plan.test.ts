@@ -10,6 +10,7 @@ const INPUT_PKG_VAR = `${TASK_VAR_PREFIX}{input:pkg}`;
 const ENV_TARGET_VAR = `${TASK_VAR_PREFIX}{env:PIER_TARGET}`;
 const WORKSPACE_FOLDER_VAR = `${TASK_VAR_PREFIX}{workspaceFolder}`;
 const WORKSPACE_FOLDER_BASENAME_VAR = `${TASK_VAR_PREFIX}{workspaceFolderBasename}`;
+const DAY_MS = 86_400_000;
 
 describe("task execution planning", () => {
   let projectRoot = "";
@@ -583,8 +584,10 @@ describe("task execution planning", () => {
 
   it("persists recent task history through injected storage", async () => {
     const writes: unknown[] = [];
+    const now = 1_772_000_000_000;
     const service = createTaskService({
       homeDir,
+      now: () => now,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: (state) => {
         writes.push(state);
@@ -610,8 +613,11 @@ describe("task execution planning", () => {
           {
             command: "pnpm check",
             cwd: projectRoot,
+            lastUsedAt: now,
             label: "check",
             source: "history",
+            taskId: "package-script:check",
+            useCount: 1,
           },
         ],
         version: 1,
@@ -626,5 +632,56 @@ describe("task execution planning", () => {
         }),
       ]),
     });
+  });
+
+  it("sorts task candidates by recent use weight", async () => {
+    const now = 100 * DAY_MS;
+    await writeFile(
+      join(projectRoot, "package.json"),
+      JSON.stringify({
+        scripts: {
+          alpha: "node alpha.js",
+          beta: "node beta.js",
+          gamma: "node gamma.js",
+        },
+      })
+    );
+    await writeFile(join(projectRoot, "pnpm-lock.yaml"), "lockfileVersion: 9");
+    const service = createTaskService({
+      homeDir,
+      now: () => now,
+      readRecentState: async () => ({
+        entries: [
+          {
+            command: "pnpm run alpha",
+            cwd: projectRoot,
+            label: "alpha",
+            lastUsedAt: now,
+            source: "history",
+            taskId: "package-script:alpha",
+            useCount: 1,
+          },
+          {
+            command: "pnpm run beta",
+            cwd: projectRoot,
+            label: "beta",
+            lastUsedAt: now - 14 * DAY_MS,
+            source: "history",
+            taskId: "package-script:beta",
+            useCount: 4,
+          },
+        ],
+        version: 1,
+      }),
+      writeRecentState: async () => undefined,
+    });
+
+    const listed = await service.list({ projectRoot });
+
+    expect(
+      listed.tasks
+        .filter((task) => task.source === "package-script")
+        .map((task) => task.label)
+    ).toEqual(["beta", "alpha", "gamma"]);
   });
 });
