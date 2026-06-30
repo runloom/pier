@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { isDevRuntime } from "../runtime-mode.ts";
 
@@ -13,9 +14,16 @@ import { isDevRuntime } from "../runtime-mode.ts";
  * - prod：extraResources 把 resources/fonts 复制到 process.resourcesPath/fonts。
  */
 export function assetRootDir(): string {
-  return isDevRuntime()
-    ? join(process.cwd(), "resources/fonts")
-    : join(process.resourcesPath, "fonts");
+  if (isDevRuntime()) {
+    const devRoot = join(process.cwd(), "resources/fonts");
+    if (!existsSync(devRoot)) {
+      console.warn(
+        `[fonts] resources/fonts 不存在 (cwd=${process.cwd()}), 字体可能加载失败 — 确认从 worktree 根启动`
+      );
+    }
+    return devRoot;
+  }
+  return join(process.resourcesPath, "fonts");
 }
 
 /** 注册给 CoreText 的全部 ttf 绝对路径。 */

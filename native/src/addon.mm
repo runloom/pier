@@ -126,7 +126,8 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     if (info[3].IsArray()) {
         Napi::Array arr = info[3].As<Napi::Array>();
         for (uint32_t i = 0; i < arr.Length(); i++) {
-            if (i > 0) fontFamily += "\n";
+            if (!arr.Get(i).IsString()) continue;
+            if (!fontFamily.empty()) fontFamily += "\n";
             fontFamily += arr.Get(i).As<Napi::String>().Utf8Value();
         }
     }
@@ -613,7 +614,8 @@ static Napi::Value JsSetFontConfig(const Napi::CallbackInfo& info) {
     if (info[1].IsArray()) {
         Napi::Array arr = info[1].As<Napi::Array>();
         for (uint32_t i = 0; i < arr.Length(); i++) {
-            if (i > 0) fontFamily += "\n";
+            if (!arr.Get(i).IsString()) continue;
+            if (!fontFamily.empty()) fontFamily += "\n";
             fontFamily += arr.Get(i).As<Napi::String>().Utf8Value();
         }
     }
@@ -631,7 +633,8 @@ static Napi::Value JsRegisterFonts(const Napi::CallbackInfo& info) {
     if (info.Length() >= 1 && info[0].IsArray()) {
         Napi::Array arr = info[0].As<Napi::Array>();
         for (uint32_t i = 0; i < arr.Length(); i++) {
-            if (i > 0) joined += "\n";
+            if (!arr.Get(i).IsString()) continue;
+            if (!joined.empty()) joined += "\n";
             joined += arr.Get(i).As<Napi::String>().Utf8Value();
         }
     }

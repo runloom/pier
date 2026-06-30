@@ -45,8 +45,9 @@
       format("truetype");
   }
 
-  /* === JetBrainsMono Nerd Font Mono — 内嵌 ttf subset,作为等宽字体 ===
-   subset 覆盖 ASCII / Latin-1 / Latin Extended-A / 通用符号 / Box Drawing /
+  /* === JetBrainsMono Nerd Font Mono — 全量 Nerd Font ttf,作为等宽字体 ===
+   字体文件是完整 Nerd Font(非 subset);下面 unicode-range 仅限定从中取用的
+   码位:ASCII / Latin-1 / Latin Extended-A / 通用符号 / Box Drawing /
    Geometric / Powerline / dev icons / file types。
    font-display:block — 终端字体必须在首次渲染前 ready。 */
   @font-face {
@@ -241,7 +242,7 @@
   --shell-scrollbar-corner: transparent;
   /* === 字体体系 ===
      UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
-     Mono: JetBrainsMono Nerd Font (打包 subset) + ui-monospace fallback
+     Mono: JetBrainsMono Nerd Font (全量打包 ttf) + ui-monospace fallback
      通过 CSS 变量暴露，后续设置页面可动态修改。 */
   --pier-ui-font-family:
     "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",

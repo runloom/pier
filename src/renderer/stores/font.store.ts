@@ -122,6 +122,9 @@ export function computeMonoFontFamilyList(userInput: string): string[] {
       continue;
     }
     const key = cleaned.toLowerCase();
+    if (GENERIC_FAMILIES.has(key)) {
+      continue;
+    }
     if (seen.has(key)) {
       continue;
     }

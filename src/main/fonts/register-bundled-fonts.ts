@@ -5,12 +5,18 @@ import { bundledFontPaths } from "./asset-paths.ts";
 export function registerBundledFonts(): void {
   const { addon, error } = loadNativeAddon();
   if (!addon) {
-    console.warn("[fonts] addon 未加载，跳过字体注册:", error);
+    console.warn(
+      "[fonts] 字体未注册给 CoreText, 终端中文可能回退系统字体: addon 未加载",
+      error
+    );
     return;
   }
   try {
     addon.registerFonts(bundledFontPaths());
   } catch (err) {
-    console.error("[fonts] registerFonts 失败:", err);
+    console.warn(
+      "[fonts] 字体未注册给 CoreText, 终端中文可能回退系统字体: registerFonts 失败",
+      err
+    );
   }
 }

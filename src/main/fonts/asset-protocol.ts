@@ -9,6 +9,10 @@ export const ASSET_SCHEME = "pier-asset";
 const LEADING_PARENT_DIRS = /^(\.\.[/\\])+/;
 const LEADING_SLASHES = /^[/\\]+/;
 
+// 字体内容缓存：首屏多个 @font-face 会请求同一 8MB ttf 多次，
+// 缓存避免重复读盘 (每次仍 new Response 包裹同一 Buffer)。
+const fontCache = new Map<string, Buffer<ArrayBuffer>>();
+
 /** app ready 之前调用：声明 scheme 为 privileged，否则 @font-face 加载会被安全策略拦。 */
 export function registerAssetScheme(): void {
   protocol.registerSchemesAsPrivileged([
@@ -27,10 +31,16 @@ export function handleAssetProtocol(): void {
       .replace(LEADING_PARENT_DIRS, "")
       .replace(LEADING_SLASHES, "");
     if (url.host !== "fonts" || !file.endsWith(".ttf")) {
+      console.warn("[pier-asset] 拒绝非法字体请求:", request.url);
       return new Response(null, { status: 404 });
+    }
+    const cached = fontCache.get(file);
+    if (cached) {
+      return new Response(cached, { headers: { "content-type": "font/ttf" } });
     }
     try {
       const buf = await readFile(join(assetRootDir(), file));
+      fontCache.set(file, buf);
       return new Response(buf, { headers: { "content-type": "font/ttf" } });
     } catch {
       return new Response(null, { status: 404 });

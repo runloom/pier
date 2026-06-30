@@ -90,4 +90,18 @@ describe("computeMonoFontFamilyList", () => {
       "Menlo",
     ]);
   });
+
+  it("剔除 CSS generic (monospace 等不进结果)", () => {
+    const result = computeMonoFontFamilyList(
+      "Fira Code, monospace, ui-monospace"
+    );
+    expect(result).not.toContain("monospace");
+    expect(result).not.toContain("ui-monospace");
+    expect(result).toEqual([
+      "Fira Code",
+      "JetBrainsMono Nerd Font Mono",
+      "HarmonyOS Sans SC",
+      "Menlo",
+    ]);
+  });
 });
