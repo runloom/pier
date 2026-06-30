@@ -14,7 +14,7 @@
     font-style: normal;
     font-weight: 300;
     font-display: swap;
-    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Light.ttf")
+    src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Light.ttf")
       format("truetype");
   }
 
@@ -23,7 +23,7 @@
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Regular.ttf")
+    src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Regular.ttf")
       format("truetype");
   }
 
@@ -32,7 +32,7 @@
     font-style: normal;
     font-weight: 500;
     font-display: swap;
-    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Medium.ttf")
+    src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Medium.ttf")
       format("truetype");
   }
 
@@ -41,12 +41,13 @@
     font-style: normal;
     font-weight: 600 700;
     font-display: swap;
-    src: url("/fonts/HarmonyOSSans/HarmonyOS_Sans_SC_Bold.ttf")
+    src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Bold.ttf")
       format("truetype");
   }
 
-  /* === JetBrainsMono Nerd Font Mono — 内嵌 woff2 subset,作为等宽字体 ===
-   subset 覆盖 ASCII / Latin-1 / Latin Extended-A / 通用符号 / Box Drawing /
+  /* === JetBrainsMono Nerd Font Mono — 全量 Nerd Font ttf,作为等宽字体 ===
+   字体文件是完整 Nerd Font(非 subset);下面 unicode-range 仅限定从中取用的
+   码位:ASCII / Latin-1 / Latin Extended-A / 通用符号 / Box Drawing /
    Geometric / Powerline / dev icons / file types。
    font-display:block — 终端字体必须在首次渲染前 ready。 */
   @font-face {
@@ -54,7 +55,7 @@
     font-style: normal;
     font-weight: 400;
     font-display: block;
-    src: url("/fonts/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
+    src: url("pier-asset://fonts/JetBrainsMonoNerdFontMono-Regular.ttf") format("truetype");
     unicode-range:
       U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
       U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
@@ -66,7 +67,7 @@
     font-style: normal;
     font-weight: 700;
     font-display: block;
-    src: url("/fonts/JetBrainsMonoNerdFontMono-Bold.woff2") format("woff2");
+    src: url("pier-asset://fonts/JetBrainsMonoNerdFontMono-Bold.ttf") format("truetype");
     unicode-range:
       U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
       U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
@@ -78,7 +79,7 @@
     font-style: italic;
     font-weight: 400;
     font-display: block;
-    src: url("/fonts/JetBrainsMonoNerdFontMono-Italic.woff2") format("woff2");
+    src: url("pier-asset://fonts/JetBrainsMonoNerdFontMono-Italic.ttf") format("truetype");
     unicode-range:
       U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
       U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
@@ -90,8 +91,8 @@
     font-style: italic;
     font-weight: 700;
     font-display: block;
-    src: url("/fonts/JetBrainsMonoNerdFontMono-BoldItalic.woff2")
-      format("woff2");
+    src: url("pier-asset://fonts/JetBrainsMonoNerdFontMono-BoldItalic.ttf")
+      format("truetype");
     unicode-range:
       U+0020-007F, U+00A0-00FF, U+0100-017F, U+2000-206F, U+2190-21FF,
       U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+E000-F8FF,
@@ -241,7 +242,7 @@
   --shell-scrollbar-corner: transparent;
   /* === 字体体系 ===
      UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
-     Mono: JetBrainsMono Nerd Font (打包 subset) + ui-monospace fallback
+     Mono: JetBrainsMono Nerd Font (全量打包 ttf) + ui-monospace fallback
      通过 CSS 变量暴露，后续设置页面可动态修改。 */
   --pier-ui-font-family:
     "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",

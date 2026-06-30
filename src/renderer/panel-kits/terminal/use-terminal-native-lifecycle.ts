@@ -3,7 +3,7 @@ import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { type RefObject, useEffect, useRef } from "react";
-import { computeMonoFontFamily } from "@/stores/font.store.ts";
+import { computeMonoFontFamilyList } from "@/stores/font.store.ts";
 import {
   readTerminalAnchorFrame,
   registerTerminalLayoutAnchor,
@@ -178,7 +178,7 @@ export function useTerminalNativeLifecycle({
           panelId,
           frame,
           font: {
-            family: computeMonoFontFamily(monoFontFamilyRef.current),
+            family: computeMonoFontFamilyList(monoFontFamilyRef.current),
             size: effectiveMonoFontSizeRef.current,
           },
           ...(initialContext && { context: initialContext }),

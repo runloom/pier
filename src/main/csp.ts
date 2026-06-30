@@ -21,7 +21,7 @@ export function installCsp(): void {
         "style-src 'self' 'unsafe-inline'",
         "connect-src 'self' http://localhost:* ws://localhost:*",
         "img-src 'self' data: blob:",
-        "font-src 'self' data:",
+        "font-src 'self' data: pier-asset:",
       ].join("; ")
     : [
         "default-src 'self'",
@@ -29,7 +29,7 @@ export function installCsp(): void {
         "style-src 'self' 'unsafe-inline'",
         "connect-src 'self'",
         "img-src 'self' data:",
-        "font-src 'self' data:",
+        "font-src 'self' data: pier-asset:",
       ].join("; ");
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {

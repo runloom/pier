@@ -14,6 +14,7 @@
 //   - WKWebView 设为透明
 
 import AppKit
+import CoreText
 import Darwin
 import GhosttyTerminal
 import GhosttyTheme
@@ -459,7 +460,7 @@ private struct Terminal {
 }
 
 private struct TerminalRuntimePreferences {
-    var fontFamily: String = ""
+    var fontFamilies: [String] = []
     var fontSize: Float = 0
     var cursorStyle: TerminalCursorStyle = .block
     var cursorBlink: Bool = true
@@ -661,8 +662,8 @@ final class GhosttyBridgeImpl {
     ) -> TerminalConfiguration {
         TerminalConfiguration { builder in
             configureDefaultTerminalAppearance(&builder)
-            if !preferences.fontFamily.isEmpty {
-                builder.withFontFamily(preferences.fontFamily)
+            for family in preferences.fontFamilies where !family.isEmpty {
+                builder.withFontFamily(family)
             }
             if preferences.fontSize > 0 {
                 builder.withFontSize(preferences.fontSize)
@@ -726,6 +727,10 @@ final class GhosttyBridgeImpl {
         builder.withWindowPaddingY(terminalPaddingY)
         builder.withCustom("scrollbar", "system")
         builder.withCustom("keybind", "super+backspace=text:\\x15")
+        // 文字锐度: 在线性空间做边缘 alpha 混合并按字形亮度校正。macOS 默认 native 在
+        // Display P3 空间混合, 会让深色底上的浅色字边缘偏暗/偏粗(显"肉"); linear-corrected
+        // 去掉这层暗化又不像纯 linear 那样发细。见 ghostty alpha-blending 文档。
+        builder.withCustom("alpha-blending", "linear-corrected")
     }
 
     nonisolated private static func terminalColor(from value: String) -> NSColor? {
@@ -1394,8 +1399,11 @@ final class GhosttyBridgeImpl {
         fontFamily: String,
         fontSize: Float
     ) {
+        let families = fontFamily.split(separator: "\n").map(String.init)
+        // 防止非 renderer 调用方传空字符串导致 ghostty 完全无 font-family.
+        let safe = families.isEmpty ? ["Menlo"] : families
         mutateTerminalRuntimePreferences(window: window) { preferences in
-            preferences.fontFamily = fontFamily
+            preferences.fontFamilies = safe
             preferences.fontSize = fontSize
         }
     }
@@ -1615,6 +1623,28 @@ public func ghosttyBridgeSetFontConfig(
             fontSize: fontSize
         )
     }
+}
+
+/// 把打包字体 ttf 注册给当前进程的 CoreText (.process scope, 不污染系统字体库),
+/// 让 ghostty 能按 font-family 找到这些非系统字体. 启动时调一次.
+/// 路径数组过 C 边界用 `\n` join 成单个字符串, 这里 split 还原.
+@_cdecl("ghostty_bridge_register_fonts")
+public func ghosttyBridgeRegisterFonts(_ pathsPtr: UnsafePointer<CChar>) {
+    let joined = String(cString: pathsPtr)
+    let paths = joined.split(separator: "\n").map(String.init)
+    var registered = 0
+    for path in paths where !path.isEmpty {
+        let url = URL(fileURLWithPath: path) as CFURL
+        var errorRef: Unmanaged<CFError>?
+        let ok = CTFontManagerRegisterFontsForURL(url, .process, &errorRef)
+        if ok {
+            registered += 1
+        } else {
+            let desc = errorRef?.takeRetainedValue().localizedDescription ?? "unknown"
+            NSLog("[ghostty-bridge] register font failed: \(path) — \(desc)")
+        }
+    }
+    NSLog("[ghostty-bridge] registered \(registered)/\(paths.count) bundled fonts")
 }
 
 @_cdecl("ghostty_bridge_set_terminal_config")
