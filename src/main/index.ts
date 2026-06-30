@@ -12,6 +12,7 @@ import {
   handleAssetProtocol,
   registerAssetScheme,
 } from "./fonts/asset-protocol.ts";
+import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
@@ -225,6 +226,8 @@ app.whenReady().then(async () => {
   registerAgentsIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
   registerRendererCommandIpc(ipcMain);
+  // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
+  registerBundledFonts();
   registerTerminalIpc(ipcMain);
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);

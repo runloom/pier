@@ -45,6 +45,8 @@ export interface NativeAddon {
    * swift 把不在集合里的清掉. 空数组 = 全清 (等价 closeAllTerminals).
    */
   reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
+  /** 把打包字体 ttf 的绝对路径注册给 CoreText (.process scope)，让 ghostty 能找到。启动时调一次。 */
+  registerFonts(paths: string[]): void;
   setAppShortcutKeys(keys: string[]): void;
   setCommandFinishedForwardCallback?(
     cb:

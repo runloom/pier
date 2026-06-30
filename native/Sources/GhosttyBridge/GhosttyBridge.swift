@@ -14,6 +14,7 @@
 //   - WKWebView 设为透明
 
 import AppKit
+import CoreText
 import Darwin
 import GhosttyTerminal
 import GhosttyTheme
@@ -1710,6 +1711,28 @@ public func ghosttyBridgeSetFontConfig(
             fontSize: fontSize
         )
     }
+}
+
+/// 把打包字体 ttf 注册给当前进程的 CoreText (.process scope, 不污染系统字体库),
+/// 让 ghostty 能按 font-family 找到这些非系统字体. 启动时调一次.
+/// 路径数组过 C 边界用 `\n` join 成单个字符串, 这里 split 还原.
+@_cdecl("ghostty_bridge_register_fonts")
+public func ghosttyBridgeRegisterFonts(_ pathsPtr: UnsafePointer<CChar>) {
+    let joined = String(cString: pathsPtr)
+    let paths = joined.split(separator: "\n").map(String.init)
+    var registered = 0
+    for path in paths where !path.isEmpty {
+        let url = URL(fileURLWithPath: path) as CFURL
+        var errorRef: Unmanaged<CFError>?
+        let ok = CTFontManagerRegisterFontsForURL(url, .process, &errorRef)
+        if ok {
+            registered += 1
+        } else {
+            let desc = errorRef?.takeRetainedValue().localizedDescription ?? "unknown"
+            NSLog("[ghostty-bridge] register font failed: \(path) — \(desc)")
+        }
+    }
+    NSLog("[ghostty-bridge] registered \(registered)/\(paths.count) bundled fonts")
 }
 
 @_cdecl("ghostty_bridge_set_terminal_config")
