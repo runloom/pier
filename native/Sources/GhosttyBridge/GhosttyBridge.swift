@@ -817,6 +817,10 @@ final class GhosttyBridgeImpl {
         builder.withWindowPaddingY(terminalPaddingY)
         builder.withCustom("scrollbar", "system")
         builder.withCustom("keybind", "super+backspace=text:\\x15")
+        // 文字锐度: 在线性空间做边缘 alpha 混合并按字形亮度校正。macOS 默认 native 在
+        // Display P3 空间混合, 会让深色底上的浅色字边缘偏暗/偏粗(显"肉"); linear-corrected
+        // 去掉这层暗化又不像纯 linear 那样发细。见 ghostty alpha-blending 文档。
+        builder.withCustom("alpha-blending", "linear-corrected")
     }
 
     nonisolated private static func terminalColor(from value: String) -> NSColor? {
@@ -1491,8 +1495,10 @@ final class GhosttyBridgeImpl {
         fontSize: Float
     ) {
         let families = fontFamily.split(separator: "\n").map(String.init)
+        // 防止非 renderer 调用方传空字符串导致 ghostty 完全无 font-family.
+        let safe = families.isEmpty ? ["Menlo"] : families
         mutateTerminalRuntimePreferences(window: window) { preferences in
-            preferences.fontFamilies = families
+            preferences.fontFamilies = safe
             preferences.fontSize = fontSize
         }
     }
