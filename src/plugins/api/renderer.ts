@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 export type RendererPluginMessageValues = Record<string, number | string>;
 
 export type RendererPluginActionCategoryKey =
+  | "git"
   | "panel"
   | "run"
   | "settings"
