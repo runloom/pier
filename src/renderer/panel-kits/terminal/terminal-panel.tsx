@@ -1,7 +1,12 @@
 import {
   type PanelContext,
+  type PanelTabChrome,
   panelContextSchema,
 } from "@shared/contracts/panel.ts";
+import {
+  type TaskPanelMetadata,
+  taskPanelMetadataSchema,
+} from "@shared/contracts/tasks.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
@@ -13,16 +18,6 @@ import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
-import {
-  readTerminalAnchorFrame,
-  registerTerminalLayoutAnchor,
-  type TerminalLayoutRegistration,
-} from "./terminal-layout-coordinator.ts";
-import {
-  disposeTerminalPanelLifecycleDebug,
-  type TerminalLifecycleDebugPatch,
-  updateTerminalPanelLifecycleDebug,
-} from "./terminal-lifecycle-debug.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import { TerminalSearchBar } from "./terminal-search-bar.tsx";
 import {
@@ -36,29 +31,14 @@ import {
   tabChromeFromParams,
   terminalPanelDescriptor,
 } from "./terminal-tab-chrome.ts";
+import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
-
-function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
-  return new Promise((resolve) => {
-    const check = () => {
-      const frame = readTerminalAnchorFrame(anchor);
-      if (frame) {
-        resolve();
-        return;
-      }
-      requestAnimationFrame(check);
-    };
-    check();
-  });
-}
 
 function panelContextFromParams(params: unknown): PanelContext | undefined {
   if (!params || typeof params !== "object" || !("context" in params)) {
     return;
   }
-  const parsed = panelContextSchema.safeParse(
-    (params as { context?: unknown }).context
-  );
+  const parsed = panelContextSchema.safeParse(params.context);
   return parsed.success ? parsed.data : undefined;
 }
 
@@ -66,10 +46,84 @@ function launchIdFromParams(params: unknown): string | undefined {
   if (!params || typeof params !== "object" || !("launchId" in params)) {
     return;
   }
-  const launchId = (params as { launchId?: unknown }).launchId;
+  const launchId = params.launchId;
   return typeof launchId === "string" && launchId.length > 0
     ? launchId
     : undefined;
+}
+
+function taskFromParams(params: unknown): TaskPanelMetadata | undefined {
+  if (!params || typeof params !== "object" || !("task" in params)) {
+    return;
+  }
+  const parsed = taskPanelMetadataSchema.safeParse(params.task);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function RestoredTaskResultView({
+  className,
+  fontFamily,
+  fontSize,
+  task,
+}: {
+  className: string;
+  fontFamily: string;
+  fontSize: number;
+  task: TaskPanelMetadata;
+}) {
+  const rows = [
+    ["Task", task.label],
+    ["Status", task.status],
+    ["Command", task.rawCommand],
+    ["CWD", task.cwd],
+  ] as const;
+
+  return (
+    <div
+      className={`${className} overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]`}
+      data-testid="terminal-task-result"
+      style={{ fontFamily, fontSize }}
+    >
+      <p className="mb-1 text-muted-foreground">[pier] restored task</p>
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
+        {rows.map(([label, value]) => (
+          <div className="contents" key={label}>
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 break-words">{value}</dd>
+          </div>
+        ))}
+        {task.exitCode === undefined ? null : (
+          <div className="contents">
+            <dt className="text-muted-foreground">Exit code</dt>
+            <dd>{task.exitCode}</dd>
+          </div>
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function restoredTaskResultFromSession(
+  task: TaskPanelMetadata | undefined
+): TaskPanelMetadata | undefined {
+  if (!task) {
+    return;
+  }
+  return task.status === "running" ? { ...task, status: "cancelled" } : task;
+}
+
+function restoredTaskTabPatch(
+  task: TaskPanelMetadata | undefined
+): Partial<PanelTabChrome> | null {
+  return task?.status === "running" || task?.status === "cancelled"
+    ? {
+        state: {
+          colorToken: "warning",
+          label: "Cancelled",
+          status: "cancelled",
+        },
+      }
+    : null;
 }
 
 export function TerminalPanel(props: IDockviewPanelProps) {
@@ -78,6 +132,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [initialContext] = useState(() => panelContextFromParams(props.params));
   const [initialLaunchId] = useState(() => launchIdFromParams(props.params));
   const [initialTab] = useState(() => tabChromeFromParams(props.params));
+  const [initialTask] = useState(() => taskFromParams(props.params));
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const windowZoomLevel = useZoomStore((s) => s.windowZoomLevel);
@@ -115,12 +170,16 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
 
   const sessionLoaded = savedSession !== undefined;
+  const restoredTaskResult = restoredTaskResultFromSession(savedSession?.task);
   const effectiveContext =
     runtimeContext ?? savedSession?.context ?? initialContext;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
   const effectiveTab = mergeTabChrome(
-    initialTab ?? savedSession?.tab,
+    mergeTabChrome(
+      savedSession?.tab ?? initialTab,
+      restoredTaskTabPatch(savedSession?.task)
+    ),
     tabPatch
   );
   const statusContext = {
@@ -145,11 +204,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     })
   );
 
-  const monoFontFamilyRef = useRef(monoFontFamily);
-  const effectiveMonoFontSizeRef = useRef(effectiveMonoFontSize);
-  monoFontFamilyRef.current = monoFontFamily;
-  effectiveMonoFontSizeRef.current = effectiveMonoFontSize;
-
   useEffect(() => {
     let disposed = false;
     setSavedSession(undefined);
@@ -171,236 +225,20 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     };
   }, [panelId]);
 
-  useEffect(() => {
-    const anchor = anchorRef.current;
-    if (!anchor) {
-      return;
-    }
-
-    let disposed = false;
-    const subscriptions: Array<{ dispose(): void }> = [];
-    let layoutRegistration: TerminalLayoutRegistration | null = null;
-    let renderableAnchorObserver: ResizeObserver | null = null;
-    let didCreateNativeTerminal = false;
-    let createPromise: Promise<void> | null = null;
-    let createAttemptCount = 0;
-    let lifecycleError: string | null = null;
-    let lifecycleNativeTerminalReady = false;
-    setNativeTerminalReady(false);
-
-    const markLifecycle = (patch: TerminalLifecycleDebugPatch): void => {
-      if (patch.error !== undefined) {
-        lifecycleError = patch.error;
-      }
-      if (patch.nativeTerminalReady !== undefined) {
-        lifecycleNativeTerminalReady = patch.nativeTerminalReady;
-      }
-      updateTerminalPanelLifecycleDebug(panelId, {
-        createAttemptCount,
-        didCreateNativeTerminal,
-        error: lifecycleError,
-        hasRenderableAnchor: readTerminalAnchorFrame(anchor) !== null,
-        nativeTerminalReady: lifecycleNativeTerminalReady,
-        placeholderVisible: !(lifecycleNativeTerminalReady || lifecycleError),
-        ...patch,
-      });
-    };
-
-    markLifecycle({
-      createPending: false,
-      didCreateNativeTerminal: false,
-      error: null,
-      nativeTerminalReady: false,
-      phase: "mounted",
-    });
-
-    const sendFrameNow = () => {
-      if (disposed || !didCreateNativeTerminal) {
-        return;
-      }
-      layoutRegistration?.flushNow("dockview-dimensions");
-    };
-
-    const logCreateError = (err: unknown) => {
-      console.error(`[terminal-panel] create ${panelId} failed:`, err);
-      markLifecycle({
-        createPending: false,
-        error: err instanceof Error ? err.message : String(err),
-        phase: "error",
-      });
-    };
-
-    const hasRenderableAnchor = () => readTerminalAnchorFrame(anchor) !== null;
-
-    const shouldCreateNativeTerminal = () =>
-      api.isVisible || api.isActive || hasRenderableAnchor();
-
-    const ensureNativeTerminal = (): Promise<void> => {
-      if (didCreateNativeTerminal) {
-        return Promise.resolve();
-      }
-      if (createPromise) {
-        return createPromise;
-      }
-      markLifecycle({
-        createPending: true,
-        phase: hasRenderableAnchor() ? "creating" : "waiting_for_anchor",
-      });
-      createPromise = (async () => {
-        await waitForRealSize(anchor);
-        if (disposed || didCreateNativeTerminal) {
-          return;
-        }
-
-        const frame = readTerminalAnchorFrame(anchor);
-        if (!frame) {
-          const message = "无法获取面板坐标";
-          setError(message);
-          markLifecycle({
-            createPending: false,
-            error: message,
-            phase: "error",
-          });
-          return;
-        }
-
-        createAttemptCount += 1;
-        markLifecycle({
-          createAttemptCount,
-          createPending: true,
-          phase: "creating",
-        });
-        const result = await window.pier.terminal.create({
-          panelId,
-          frame,
-          font: {
-            family: computeMonoFontFamily(monoFontFamilyRef.current),
-            size: effectiveMonoFontSizeRef.current,
-          },
-          ...(initialContext && { context: initialContext }),
-          ...(initialLaunchId && { launchId: initialLaunchId }),
-          ...(initialTab && { tab: initialTab }),
-        });
-        if (!result.ok) {
-          const message = result.error ?? "终端创建失败";
-          setError(message);
-          markLifecycle({
-            createPending: false,
-            error: message,
-            phase: "error",
-          });
-          return;
-        }
-
-        didCreateNativeTerminal = true;
-        setNativeTerminalReady(true);
-        markLifecycle({
-          createPending: false,
-          didCreateNativeTerminal: true,
-          error: null,
-          nativeTerminalReady: true,
-          phase: "ready",
-        });
-        layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
-        renderableAnchorObserver?.disconnect();
-        renderableAnchorObserver = null;
-        layoutRegistration.flushTrailing("visibility");
-        requestTerminalPresentation("visibility");
-      })().finally(() => {
-        createPromise = null;
-      });
-      return createPromise;
-    };
-
-    const ensureNativeTerminalIfRenderable = () => {
-      markLifecycle({
-        hasRenderableAnchor: hasRenderableAnchor(),
-      });
-      if (!shouldCreateNativeTerminal()) {
-        return;
-      }
-      ensureNativeTerminal().catch(logCreateError);
-    };
-
-    if (!(api.isVisible || api.isActive)) {
-      renderableAnchorObserver = new ResizeObserver(() => {
-        ensureNativeTerminalIfRenderable();
-      });
-      renderableAnchorObserver.observe(anchor);
-    }
-
-    subscriptions.push(
-      api.onDidVisibilityChange((e) => {
-        if (e.isVisible) {
-          ensureNativeTerminal()
-            .then(() => {
-              if (!disposed && didCreateNativeTerminal) {
-                layoutRegistration?.flushTrailing("visibility");
-                requestTerminalPresentation("visibility");
-              }
-            })
-            .catch(logCreateError);
-        } else if (didCreateNativeTerminal) {
-          layoutRegistration?.flushTrailing("visibility");
-          requestTerminalPresentation("visibility");
-        }
-      })
-    );
-
-    subscriptions.push(
-      api.onDidActiveChange((e) => {
-        if (e.isActive) {
-          ensureNativeTerminal()
-            .then(() => {
-              if (!disposed && didCreateNativeTerminal) {
-                requestTerminalPresentation("dockview-active-panel");
-              }
-            })
-            .catch(logCreateError);
-        }
-      })
-    );
-
-    subscriptions.push(
-      api.onDidGroupChange(() => {
-        if (!(api.isActive && api.isVisible)) {
-          return;
-        }
-        ensureNativeTerminal()
-          .then(() => {
-            if (!disposed && didCreateNativeTerminal) {
-              layoutRegistration?.flushTrailing("dockview-layout");
-              requestTerminalPresentation("dockview-layout");
-            }
-          })
-          .catch(logCreateError);
-      })
-    );
-
-    subscriptions.push(
-      api.onDidDimensionsChange(() => {
-        ensureNativeTerminalIfRenderable();
-        sendFrameNow();
-      })
-    );
-
-    ensureNativeTerminalIfRenderable();
-    requestAnimationFrame(() => {
-      if (!disposed) {
-        ensureNativeTerminalIfRenderable();
-      }
-    });
-
-    return () => {
-      disposed = true;
-      disposeTerminalPanelLifecycleDebug(panelId);
-      for (const s of subscriptions) {
-        s.dispose();
-      }
-      renderableAnchorObserver?.disconnect();
-      layoutRegistration?.dispose();
-    };
-  }, [api, panelId, initialContext, initialLaunchId, initialTab]);
+  useTerminalNativeLifecycle({
+    api,
+    anchorRef,
+    effectiveMonoFontSize,
+    initialContext,
+    initialLaunchId,
+    initialTab,
+    initialTask,
+    monoFontFamily,
+    panelId,
+    sessionLoaded,
+    setError,
+    setNativeTerminalReady,
+  });
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {
@@ -454,25 +292,36 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-testid="terminal-panel-root"
     >
-      <div
-        className={`terminal-anchor ${terminalContentClassName}`}
-        ref={anchorRef}
-      />
-      {showPlaceholder ? (
-        <TerminalSurfacePlaceholder
+      {restoredTaskResult ? (
+        <RestoredTaskResultView
           className={terminalContentClassName}
-          cwd={effectiveCwd}
-          tabTitle={effectiveTab?.title ?? null}
-          title={effectiveTitle}
+          fontFamily={computeMonoFontFamily(monoFontFamily)}
+          fontSize={effectiveMonoFontSize}
+          task={restoredTaskResult}
         />
-      ) : null}
-      {error ? (
-        <div
-          className={`${terminalContentClassName} flex items-center justify-center bg-[var(--terminal-background,var(--background))]`}
-        >
-          <p className="text-muted-foreground text-sm">{error}</p>
-        </div>
-      ) : null}
+      ) : (
+        <>
+          <div
+            className={`terminal-anchor ${terminalContentClassName}`}
+            ref={anchorRef}
+          />
+          {showPlaceholder ? (
+            <TerminalSurfacePlaceholder
+              className={terminalContentClassName}
+              cwd={effectiveCwd}
+              tabTitle={effectiveTab?.title ?? null}
+              title={effectiveTitle}
+            />
+          ) : null}
+          {error ? (
+            <div
+              className={`${terminalContentClassName} flex items-center justify-center bg-[var(--terminal-background,var(--background))]`}
+            >
+              <p className="text-muted-foreground text-sm">{error}</p>
+            </div>
+          ) : null}
+        </>
+      )}
       <TerminalSearchBar
         focusRequest={searchFocusRequest}
         onClose={closeTerminalSearch}

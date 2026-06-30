@@ -16,6 +16,11 @@ import {
   panelContextSchema,
   panelTabChromeSchema,
 } from "@shared/contracts/panel.ts";
+import {
+  type TaskPanelMetadata,
+  type TaskPanelStatus,
+  taskPanelMetadataSchema,
+} from "@shared/contracts/tasks.ts";
 import { app } from "electron";
 import { z } from "zod";
 import {
@@ -29,6 +34,7 @@ const terminalPanelSessionSchema = z.object({
     normalizePanelTabChromeInput,
     panelTabChromeSchema.optional()
   ),
+  task: taskPanelMetadataSchema.optional(),
   title: z.string().optional(),
   updatedAt: z.string(),
 });
@@ -189,6 +195,75 @@ export async function updateTerminalPanelTab(
     };
     return state;
   });
+}
+
+export async function updateTerminalPanelTask(
+  windowId: string,
+  panelId: string,
+  task: TaskPanelMetadata
+): Promise<void> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return;
+  }
+  const parsed = taskPanelMetadataSchema.safeParse(task);
+  if (!parsed.success) {
+    return;
+  }
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId] ?? emptyWindowSession();
+    state.windows[windowId] = windowState;
+    const current = windowState.panels[panelId] ?? {};
+    windowState.panels[panelId] = {
+      ...current,
+      task: parsed.data,
+      updatedAt: new Date().toISOString(),
+    };
+    return state;
+  });
+}
+
+export async function patchTerminalPanelTaskStatus(
+  windowId: string,
+  panelId: string,
+  patch: {
+    exitCode?: number | undefined;
+    finishedAt?: number | undefined;
+    status: TaskPanelStatus;
+  }
+): Promise<boolean> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return false;
+  }
+  let patched = false;
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId];
+    const current = windowState?.panels[panelId];
+    if (!(windowState && current?.task && current.task.status === "running")) {
+      return state;
+    }
+    const nextTask = {
+      ...current.task,
+      status: patch.status,
+      ...(patch.exitCode === undefined ? {} : { exitCode: patch.exitCode }),
+      ...(patch.finishedAt === undefined
+        ? {}
+        : { finishedAt: patch.finishedAt }),
+    };
+    const parsed = taskPanelMetadataSchema.safeParse(nextTask);
+    if (!parsed.success) {
+      return state;
+    }
+    windowState.panels[panelId] = {
+      ...current,
+      task: parsed.data,
+      updatedAt: new Date().toISOString(),
+    };
+    patched = true;
+    return state;
+  });
+  return patched;
 }
 
 export async function patchTerminalPanelTab(

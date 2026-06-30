@@ -603,6 +603,7 @@ describe("task execution planning", () => {
       presentation: {},
       projectRoot,
       rawCommand: "pnpm check",
+      source: "package-script",
       tab: { title: "check" },
       taskId: "package-script:check",
     });

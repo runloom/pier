@@ -256,6 +256,7 @@ describe("PanelTabHeader", () => {
     ["failed", "Failed 1", "bg-[var(--status-danger-fg)]"],
     ["waiting", "Waiting for input", "bg-[var(--status-warning-fg)]"],
     ["blocked", "Blocked", "bg-[var(--status-warning-fg)]"],
+    ["cancelled", "Cancelled", "bg-[var(--status-warning-fg)]"],
   ] as const)("renders the %s tab state indicator with Tailwind classes", (status, label, expectedClassName) => {
     usePanelDescriptorStore.setState({
       activeId: null,

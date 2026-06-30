@@ -184,7 +184,9 @@ function AgentListCard() {
         <ItemGroup className="gap-0">
           {orderedEntries.map((entry, index) => (
             <Fragment key={entry.id}>
-              {index > 0 ? <ItemSeparator className="my-0" /> : null}
+              {index > 0 ? (
+                <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
+              ) : null}
               <AgentRow agentId={entry.id} />
             </Fragment>
           ))}

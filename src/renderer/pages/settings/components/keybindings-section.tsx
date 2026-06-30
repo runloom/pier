@@ -178,7 +178,9 @@ export function KeybindingsSection() {
                 keybindingRegistry.getBindingsFor(action.id).length > 0;
               return (
                 <Fragment key={action.id}>
-                  {index > 0 ? <Separator className="bg-border/70" /> : null}
+                  {index > 0 ? (
+                    <Separator className="mx-(--card-spacing) bg-border/70 data-horizontal:w-auto" />
+                  ) : null}
                   <div
                     className="px-4 py-3"
                     data-testid={`keybinding-row-${action.id}`}

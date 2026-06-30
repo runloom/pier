@@ -67,6 +67,7 @@ export const panelTabStatusSchema = z.enum([
   "blocked",
   "succeeded",
   "failed",
+  "cancelled",
 ]);
 export type PanelTabStatus = z.infer<typeof panelTabStatusSchema>;
 

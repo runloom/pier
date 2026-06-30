@@ -312,4 +312,24 @@ describe("AgentsSection", () => {
     render(<AgentsSection />);
     expect(screen.getByText("Mixed")).toBeInTheDocument();
   });
+
+  it("insets agent list dividers to the card content gutter", async () => {
+    const { container } = render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-row-codex")).toBeInTheDocument();
+    });
+
+    const separators = container.querySelectorAll(
+      '[data-slot="item-separator"]'
+    );
+    expect(separators.length).toBeGreaterThan(0);
+    for (const separator of separators) {
+      expect(separator).toHaveClass(
+        "mx-(--card-spacing)",
+        "data-horizontal:w-auto"
+      );
+      expect(separator).not.toHaveClass("data-horizontal:w-full");
+    }
+  });
 });

@@ -188,6 +188,7 @@ function launchForTask(
     presentation: task.presentation ?? {},
     projectRoot: context.projectRoot,
     rawCommand,
+    source: task.source,
     tab: {
       badge: { label: sourceLabel },
       icon: { id: "pier.task", label: "Task" },

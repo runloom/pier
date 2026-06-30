@@ -24,7 +24,7 @@ export function tabChromeFromParams(
   if (!params || typeof params !== "object" || !("tab" in params)) {
     return;
   }
-  return normalizePanelTabChromeInput((params as { tab?: unknown }).tab);
+  return normalizePanelTabChromeInput(params.tab);
 }
 
 export function mergeTabChrome(
