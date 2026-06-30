@@ -18,10 +18,11 @@ export const CATEGORY_META: Record<
   View: { order: 0, labelKey: "view" },
   Workspace: { order: 1, labelKey: "workspace" },
   Worktree: { order: 2, labelKey: "worktree" },
-  Run: { order: 3, labelKey: "run" },
-  Panel: { order: 4, labelKey: "panel" },
-  Window: { order: 5, labelKey: "window" },
-  Settings: { order: 6, labelKey: "settings" },
+  Git: { order: 3, labelKey: "git" },
+  Run: { order: 4, labelKey: "run" },
+  Panel: { order: 5, labelKey: "panel" },
+  Window: { order: 6, labelKey: "window" },
+  Settings: { order: 7, labelKey: "settings" },
 };
 
 export const UNKNOWN_ORDER = Object.keys(CATEGORY_META).length;

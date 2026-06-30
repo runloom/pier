@@ -38,6 +38,7 @@ export interface ActionMetadata {
 }
 
 export type ActionCategoryKey =
+  | "git"
   | "panel"
   | "run"
   | "settings"

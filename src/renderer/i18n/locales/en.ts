@@ -19,6 +19,7 @@ export const en = {
       language: "Select language",
     },
     category: {
+      git: "Git",
       view: "View",
       settings: "Settings",
       workspace: "Workspace",
@@ -29,6 +30,7 @@ export const en = {
       window: "Window",
     },
     action: {
+      openGitChanges: "Open Git Changes",
       toggleCommandPalette: "Show Command Palette",
       openTerminalDebugWindow: "Open Terminal Debug Window",
       openSettings: "Open Settings",

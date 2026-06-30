@@ -15,6 +15,7 @@ import { installCommandPaletteMenuRequest } from "./lib/command-palette/menu-req
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
+import { registerGitChangesActions } from "./panel-kits/git-changes/register-actions.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
@@ -76,6 +77,7 @@ async function bootstrap() {
   registerCommandPaletteMruAction();
   registerTerminalDebugActions();
   registerTerminalActions();
+  registerGitChangesActions();
   await bootstrapBuiltinPlugins();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
   await initKeybindingPreferences();

@@ -35,6 +35,7 @@ interface WorkspaceState {
   equalizeSplits: () => void;
   focusGroup: (direction: "right" | "down" | "left" | "up") => void;
   hasMaximizedGroup: boolean;
+  openGitChanges: () => void;
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
   setHasMaximizedGroup: (hasMaximizedGroup: boolean) => void;
@@ -307,6 +308,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       window.pier?.terminal?.close?.(panel.id);
     }
     api.removePanel(panel);
+  },
+
+  openGitChanges: () => {
+    const api = get().api;
+    if (!api) {
+      return;
+    }
+    const existing = api.panels.find((panel) => panel.id === "git-changes");
+    if (existing) {
+      activateWorkspacePanel(api, existing.id, { reveal: "always" });
+      return;
+    }
+    api.addPanel({
+      id: "git-changes",
+      component: "gitChanges",
+      title: "Git 变更",
+      position: { direction: "right" },
+    });
+    scheduleRevealDockviewTabByPanelId("git-changes");
   },
 
   closeOthers: (panelId) => {

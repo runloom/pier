@@ -19,6 +19,7 @@ export const zhCN = {
       language: "选择界面语言",
     },
     category: {
+      git: "Git",
       view: "视图",
       settings: "设置",
       workspace: "工作区",
@@ -29,6 +30,7 @@ export const zhCN = {
       window: "窗口",
     },
     action: {
+      openGitChanges: "打开变更面板",
       toggleCommandPalette: "显示命令面板",
       openTerminalDebugWindow: "打开终端调试窗口",
       openSettings: "打开设置",
