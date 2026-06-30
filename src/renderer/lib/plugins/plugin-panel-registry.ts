@@ -70,5 +70,6 @@ export function subscribePluginPanelRegistry(listener: () => void): () => void {
 
 export function clearPluginPanelsForTests(): void {
   registrations.clear();
+  panelCloser = null;
   notify();
 }

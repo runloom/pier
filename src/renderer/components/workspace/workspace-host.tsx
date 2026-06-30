@@ -148,6 +148,10 @@ export function WorkspaceHost() {
     []
   );
 
+  // WorkspaceHost unmount 时清掉模块级 panelCloser —— closer 闭包持的是旧
+  // event.api,若不清,下次 mount 前的插件 dispose 会 removePanel 到死 api 上。
+  useEffect(() => () => setPluginPanelCloser(null), []);
+
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
       // setApi 立即暴露 — bootstrap 阶段 keymap action (Cmd+T 等) 可能在 layout

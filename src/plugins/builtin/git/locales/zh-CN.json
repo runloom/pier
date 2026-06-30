@@ -32,6 +32,12 @@
     "ui.title": "工作树",
     "ui.unsupported": "当前目录不支持 Git worktree"
   },
+  "panels": {
+    "pier.git.changes": {
+      "description": "Git 变更预览的占位面板,正式实现稍后到来。",
+      "title": "Git 变更"
+    }
+  },
   "terminalStatusItems": {
     "pier.worktree.status": {
       "description": "在终端面板中显示当前 Git 工作树。",
