@@ -133,10 +133,30 @@ export const taskPanelStatusSchema = z.enum([
 ]);
 export type TaskPanelStatus = z.infer<typeof taskPanelStatusSchema>;
 
+export const taskExitReasonSchema = z.enum([
+  "process",
+  "user",
+  "renderer-dispose",
+  "restore",
+  "unknown",
+]);
+export type TaskExitReason = z.infer<typeof taskExitReasonSchema>;
+
+export const taskExitSourceSchema = z.enum([
+  "native-process-close",
+  "shell-command-finished",
+  "task-exit-marker",
+  "panel-close",
+  "restore",
+]);
+export type TaskExitSource = z.infer<typeof taskExitSourceSchema>;
+
 export const taskPanelMetadataSchema = z
   .object({
     cwd: z.string().min(1),
     exitCode: z.number().int().optional(),
+    exitReason: taskExitReasonSchema.optional(),
+    exitSource: taskExitSourceSchema.optional(),
     finishedAt: z.number().int().nonnegative().optional(),
     label: z.string().min(1),
     projectRoot: z.string().min(1),

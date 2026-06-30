@@ -11,6 +11,7 @@ const ENV_TARGET_VAR = `${TASK_VAR_PREFIX}{env:PIER_TARGET}`;
 const WORKSPACE_FOLDER_VAR = `${TASK_VAR_PREFIX}{workspaceFolder}`;
 const WORKSPACE_FOLDER_BASENAME_VAR = `${TASK_VAR_PREFIX}{workspaceFolderBasename}`;
 const DAY_MS = 86_400_000;
+const SHELL_LAUNCH_PREFIX_RE = /^\/bin\/sh -lc /;
 
 describe("task execution planning", () => {
   let projectRoot = "";
@@ -138,6 +139,7 @@ describe("task execution planning", () => {
     expect(plan.launches[0]?.command).toContain("pnpm lint local");
     expect(plan.launches[1]?.cwd).toBe(projectRoot);
     expect(plan.launches[1]?.command).toContain("pnpm test ");
+    expect(plan.launches[1]?.command).toMatch(SHELL_LAUNCH_PREFIX_RE);
     expect(plan.launches[1]?.command).toContain(TASK_EXIT_TITLE_PREFIX);
     expect(plan.launches[1]?.env).toEqual({ PIER_ENV: "local" });
     expect(plan.launches[1]?.tab).toMatchObject({
@@ -580,6 +582,71 @@ describe("task execution planning", () => {
     ).resolves.toMatchObject({
       status: "ready",
     });
+  });
+
+  it("dedupes task completion after native process close and ignores late duplicate exits", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo build",
+            label: "build",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["build"],
+            dependsOrder: "sequence",
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const verify = listed.tasks.find(
+      (candidate) => candidate.label === "verify"
+    );
+    const plan = await service.prepareSpawn({
+      projectRoot,
+      taskId: verify?.id ?? "",
+    });
+    if (plan.status !== "ready") {
+      throw new Error("expected ready plan");
+    }
+
+    const opened: string[] = [];
+    const run = await service.startRun({
+      launches: plan.launches,
+      openTerminal: (launchPlan) => {
+        opened.push(launchPlan.label);
+        return Promise.resolve({
+          panelId: `panel-${launchPlan.label}`,
+          windowId: "main",
+        });
+      },
+      projectRoot,
+      rootTaskId: verify?.id ?? "",
+    });
+
+    await service.completePanel("panel-build", 0, "main");
+    await expect(
+      service.completePanel("panel-build", 1, "main")
+    ).resolves.toBeNull();
+
+    const buildNode = Object.values(
+      service.statusRun(run.runId)?.nodes ?? {}
+    ).find((node) => node.label === "build");
+    expect(opened).toEqual(["build", "verify"]);
+    expect(buildNode?.status).toBe("succeeded");
   });
 
   it("persists recent task history through injected storage", async () => {

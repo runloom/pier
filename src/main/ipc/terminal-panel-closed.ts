@@ -31,11 +31,7 @@ export function notifyTerminalPanelExit(
   handler?.(panelId, exitCode);
 }
 
-export function handleTaskExitTitle(
-  panelId: string,
-  title: string,
-  windowId?: string | undefined
-): number | null {
+export function parseTaskExitTitle(title: string): number | null {
   if (!title.startsWith(TASK_EXIT_TITLE_PREFIX)) {
     return null;
   }
@@ -43,12 +39,7 @@ export function handleTaskExitTitle(
   if (!Number.isFinite(code)) {
     return null;
   }
-  if (windowId) {
-    handler?.(panelId, code, windowId);
-  } else {
-    handler?.(panelId, code);
-  }
-  return code;
+  return code < 0 ? 1 : code;
 }
 
 export function setTerminalPanelClosedHandler(
@@ -58,7 +49,7 @@ export function setTerminalPanelClosedHandler(
 }
 
 export const terminalPanelClosed = {
-  handleTaskExitTitle,
+  parseTaskExitTitle,
   notifyTerminalPanelClosed,
   notifyTerminalPanelExit,
 } as const;

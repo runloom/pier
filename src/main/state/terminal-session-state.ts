@@ -17,6 +17,8 @@ import {
   panelTabChromeSchema,
 } from "@shared/contracts/panel.ts";
 import {
+  type TaskExitReason,
+  type TaskExitSource,
   type TaskPanelMetadata,
   type TaskPanelStatus,
   taskPanelMetadataSchema,
@@ -228,6 +230,8 @@ export async function patchTerminalPanelTaskStatus(
   panelId: string,
   patch: {
     exitCode?: number | undefined;
+    exitReason?: TaskExitReason | undefined;
+    exitSource?: TaskExitSource | undefined;
     finishedAt?: number | undefined;
     status: TaskPanelStatus;
   }
@@ -247,6 +251,12 @@ export async function patchTerminalPanelTaskStatus(
       ...current.task,
       status: patch.status,
       ...(patch.exitCode === undefined ? {} : { exitCode: patch.exitCode }),
+      ...(patch.exitReason === undefined
+        ? {}
+        : { exitReason: patch.exitReason }),
+      ...(patch.exitSource === undefined
+        ? {}
+        : { exitSource: patch.exitSource }),
       ...(patch.finishedAt === undefined
         ? {}
         : { finishedAt: patch.finishedAt }),

@@ -10,7 +10,6 @@ import type { IpcMain, WebContents } from "electron";
 import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
-  updateTerminalPanelTitle,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import {
@@ -52,10 +51,8 @@ import {
 import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalSearchIpc } from "./terminal-search.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
-import {
-  forwardTerminalTaskTabPatch,
-  persistInitialTerminalTab,
-} from "./terminal-tab-chrome.ts";
+import { persistInitialTerminalTab } from "./terminal-tab-chrome.ts";
+import { registerTerminalTaskLifecycleForwarding } from "./terminal-task-lifecycle-wiring.ts";
 import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
 
 let cachedAddon: NativeAddon | null = null;
@@ -88,6 +85,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   setTerminalFocusAddonProvider(() => cachedAddon);
   registerTerminalDebugSnapshotIpc(ipcMain, addon);
   registerTerminalKeybindingForward(addon);
+  const taskLifecycle = registerTerminalTaskLifecycleForwarding(addon);
   // Swift 收到 scoped panelId, renderer 使用 raw panel id.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
     recordNativeTerminalRoute(id, "right-mouse", panelId, { x, y });
@@ -115,64 +113,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     handleTerminalCwdChange(id, rawPanelId, cwd, targetWindow).catch((err) => {
       console.error("[pier-cwd-context] failed:", err);
     });
-  });
-  addon?.setCommandFinishedForwardCallback?.((id, panelId, exitCode) => {
-    const normalizedExitCode = exitCode < 0 ? 1 : exitCode;
-    recordNativeTerminalRoute(id, "command-finished", panelId, {
-      exitCode: normalizedExitCode,
-    });
-    const rawPanelId = unscopePanelId(panelId);
-    const targetWindow = findAppWindowByElectronId(id);
-    terminalPanelClosed.notifyTerminalPanelExit(
-      rawPanelId,
-      normalizedExitCode,
-      targetWindow
-        ? (findInternalWindowId(targetWindow) ?? undefined)
-        : undefined
-    );
-    forwardTerminalTaskTabPatch({
-      browserWindowId: id,
-      exitCode: normalizedExitCode,
-      panelId: rawPanelId,
-      targetWindow,
-    }).catch((err) => {
-      console.error("[pier-task-tab-patch:command-finished] failed:", err);
-    });
-  });
-  addon?.setTitleForwardCallback((id, panelId, title) => {
-    recordNativeTerminalRoute(id, "title", panelId, { title });
-    const rawPanelId = unscopePanelId(panelId);
-    const targetWindow = findAppWindowByElectronId(id);
-    const taskExitCode = terminalPanelClosed.handleTaskExitTitle(
-      rawPanelId,
-      title,
-      targetWindow
-        ? (findInternalWindowId(targetWindow) ?? undefined)
-        : undefined
-    );
-    if (taskExitCode !== null) {
-      forwardTerminalTaskTabPatch({
-        browserWindowId: id,
-        exitCode: taskExitCode,
-        panelId: rawPanelId,
-        targetWindow,
-      }).catch((err) => {
-        console.error("[pier-task-tab-patch:title-forward] failed:", err);
-      });
-      return;
-    }
-    if (targetWindow && !targetWindow.isDestroyed()) {
-      const sessionScope = terminalSessionScopeFor(targetWindow);
-      updateTerminalPanelTitle(sessionScope, rawPanelId, title).catch((err) => {
-        console.error("[pier-title-persist] failed:", err);
-      });
-    }
-    forwardToWindow(
-      id,
-      "pier:terminal:title-change",
-      { panelId: rawPanelId, title },
-      "pier-title-forward"
-    );
   });
   registerTerminalSearchIpc({
     addon,
@@ -224,6 +164,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       try {
         const handle = win.getNativeWindowHandle();
         const sessionScope = terminalSessionScopeFor(win);
+        taskLifecycle.resetPanel(
+          args.panelId,
+          findInternalWindowId(win) ?? undefined
+        );
         const saved = await readTerminalPanelSession(
           sessionScope,
           args.panelId
