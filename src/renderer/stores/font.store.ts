@@ -30,10 +30,18 @@ const MONO_FALLBACK = [
   "monospace",
 ];
 
+// 终端 (ghostty) 专用 fallback：必须是真实字体名，不能含 ui-monospace/monospace 这类 CSS generic
+const MONO_TERMINAL_FALLBACK = [
+  "JetBrainsMono Nerd Font Mono",
+  "HarmonyOS Sans SC",
+  "Menlo",
+];
+
 // ── 工具函数 ─────────────────────────────────────────────────────────────────
 
 const RE_QUOTED = /^["']/;
 const RE_HAS_SPACE = /\s/;
+const RE_STRIP_QUOTES = /^["']|["']$/g;
 const GENERIC_FAMILIES = new Set([
   "serif",
   "sans-serif",
@@ -95,6 +103,32 @@ export function computeUiFontFamily(userInput: string): string {
 
 export function computeMonoFontFamily(userInput: string): string {
   return buildFontFamily(parseUserInput(userInput), MONO_FALLBACK);
+}
+
+/**
+ * 终端字体族列表 — 返回去重后的字体名数组 (用户字体在前 + 内置 fallback)。
+ * 与 computeMonoFontFamily(CSS 串) 区别：用于 ghostty 多行 font-family，
+ * 不拼逗号、不加引号、剔除 CSS generic。
+ */
+export function computeMonoFontFamilyList(userInput: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const name of [
+    ...parseUserInput(userInput),
+    ...MONO_TERMINAL_FALLBACK,
+  ]) {
+    const cleaned = name.trim().replace(RE_STRIP_QUOTES, "").trim();
+    if (!cleaned) {
+      continue;
+    }
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(cleaned);
+  }
+  return result.length > 0 ? result : ["Menlo"];
 }
 
 // ── DOM 同步 ─────────────────────────────────────────────────────────────────

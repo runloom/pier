@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useFontStore } from "@/stores/font.store.ts";
+import {
+  computeMonoFontFamilyList,
+  useFontStore,
+} from "@/stores/font.store.ts";
 
 describe("font.store — monoFontSize", () => {
   beforeEach(() => {
@@ -45,5 +48,46 @@ describe("font.store — monoFontSize", () => {
     await useFontStore.getState().setMonoFontSize(18);
     expect(updateMock).toHaveBeenCalledWith({ monoFontSize: 18 });
     expect(useFontStore.getState().monoFontSize).toBe(18);
+  });
+});
+
+describe("computeMonoFontFamilyList", () => {
+  it("空输入返回内置 fallback 链", () => {
+    expect(computeMonoFontFamilyList("")).toEqual([
+      "JetBrainsMono Nerd Font Mono",
+      "HarmonyOS Sans SC",
+      "Menlo",
+    ]);
+  });
+
+  it("用户字体置于链首", () => {
+    expect(computeMonoFontFamilyList("Fira Code")).toEqual([
+      "Fira Code",
+      "JetBrainsMono Nerd Font Mono",
+      "HarmonyOS Sans SC",
+      "Menlo",
+    ]);
+  });
+
+  it("去掉引号与首尾空白", () => {
+    expect(computeMonoFontFamilyList('  "My Mono"  ')[0]).toBe("My Mono");
+  });
+
+  it("大小写不敏感去重", () => {
+    expect(computeMonoFontFamilyList("menlo")).toEqual([
+      "menlo",
+      "JetBrainsMono Nerd Font Mono",
+      "HarmonyOS Sans SC",
+    ]);
+  });
+
+  it("多个用户字体按逗号拆分且保序", () => {
+    expect(computeMonoFontFamilyList("Fira Code, Cascadia Code")).toEqual([
+      "Fira Code",
+      "Cascadia Code",
+      "JetBrainsMono Nerd Font Mono",
+      "HarmonyOS Sans SC",
+      "Menlo",
+    ]);
   });
 });
