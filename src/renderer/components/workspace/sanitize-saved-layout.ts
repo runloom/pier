@@ -167,12 +167,22 @@ export function sanitizeSavedLayout(
   const gridRoot = (grid as { root?: unknown }).root;
   const prunedRoot = pruneNode(gridRoot, keepPanelIds);
   if (prunedRoot === null) {
+    // 已知局限:主 grid 完全空但 floating/popout 还有 survivor 时,本函数仍返 null;
+    // dockview 不接受 root=null 的 grid,而合成最小合法 root 涉及 dockview 内部约束。
+    // 此场景需要用户先把主 grid 弄空又留浮窗,概率极低,留待真实数据出现再处理。
     return null;
   }
 
+  // grid.maximizedNode 是 dockview 的"最大化路径",指向剪枝前的某个 leaf。
+  // 剪枝可能让该路径失效,fromJSON 会抛错或最大化错的 panel。统一丢掉:用户重启后
+  // 自行点 maximize,数据无损失,行为可预测。
+  const { maximizedNode: _, ...gridWithoutMaximized } = grid as Record<
+    string,
+    unknown
+  >;
   const sanitized: Record<string, unknown> = {
     ...root,
-    grid: { ...(grid as object), root: prunedRoot },
+    grid: { ...gridWithoutMaximized, root: prunedRoot },
     panels: sanitizedPanels,
   };
   const floatingGroups = pruneFloatingGroups(root.floatingGroups, keepPanelIds);

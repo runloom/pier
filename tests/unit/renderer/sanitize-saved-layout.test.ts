@@ -255,6 +255,26 @@ describe("sanitizeSavedLayout", () => {
     expect(popout[0]?.data?.activeView).toBe("welcome-1");
   });
 
+  it("drops grid.maximizedNode after pruning to avoid stale paths", () => {
+    const input = layout({
+      leaves: [{ groupId: "1", views: ["terminal-1"] }],
+      panels: [
+        { contentComponent: "terminal", id: "terminal-1" },
+        { contentComponent: "pier.git.changes", id: "git-changes" },
+      ],
+    });
+    // 模拟用户禁用插件前曾把 git-changes 最大化 —— maximizedNode 指向旧路径。
+    (input.grid as Record<string, unknown>).maximizedNode = {
+      location: [0],
+      maximized: true,
+    };
+    const result = sanitizeSavedLayout(input, known);
+    expect(result).not.toBeNull();
+    expect(
+      (result?.grid as Record<string, unknown>).maximizedNode
+    ).toBeUndefined();
+  });
+
   it("returns null for malformed input", () => {
     expect(sanitizeSavedLayout(null, known)).toBeNull();
     expect(sanitizeSavedLayout({}, known)).toBeNull();
