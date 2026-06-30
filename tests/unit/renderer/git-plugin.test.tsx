@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { worktreeRendererPlugin } from "@plugins/builtin/worktree/renderer/index.ts";
+import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
+  GIT_PLUGIN_ID,
   type PluginRegistryEntry,
-  WORKTREE_PLUGIN_ID,
 } from "@shared/contracts/plugin.ts";
 import {
   cleanup,
@@ -68,7 +68,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       apiVersion: 1,
       commands,
       engines: { pier: ">=0.1.0" },
-      id: WORKTREE_PLUGIN_ID,
+      id: GIT_PLUGIN_ID,
       localization: {
         defaultLocale: "en",
         files: {},
@@ -117,7 +117,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           },
         },
       },
-      name: "Worktree",
+      name: "Git",
       panels: [],
       permissions: ["worktree:read", "workspace:open", "command:register"],
       source: { kind: "builtin" },
@@ -138,11 +138,11 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
   };
 }
 
-describe("worktree builtin plugin", () => {
+describe("git builtin plugin", () => {
   let dispose: (() => void) | null = null;
 
   function activateWorktreePlugin(): () => void {
-    return worktreeRendererPlugin.activate(
+    return gitRendererPlugin.activate(
       createRendererPluginContext(pluginEntry(true))
     );
   }
@@ -575,17 +575,17 @@ describe("worktree builtin plugin", () => {
     expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
-  it("renderer builtin catalog owns the worktree plugin module", () => {
+  it("renderer builtin catalog owns the git plugin module", () => {
     expect(
       BUILTIN_RENDERER_PLUGIN_MODULES.map((plugin) => plugin.id)
-    ).toContain(WORKTREE_PLUGIN_ID);
-    expect(worktreeRendererPlugin.id).toBe(WORKTREE_PLUGIN_ID);
+    ).toContain(GIT_PLUGIN_ID);
+    expect(gitRendererPlugin.id).toBe(GIT_PLUGIN_ID);
   });
 
   it("worktree renderer 插件只通过 plugin host API 访问宿主能力", async () => {
     const files = [
-      "src/plugins/builtin/worktree/renderer/worktree-list-action.ts",
-      "src/plugins/builtin/worktree/renderer/worktree-status-item.tsx",
+      "src/plugins/builtin/git/renderer/worktree-list-action.ts",
+      "src/plugins/builtin/git/renderer/git-status-item.tsx",
     ];
     const source = (
       await Promise.all(

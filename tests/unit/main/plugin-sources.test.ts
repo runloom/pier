@@ -11,8 +11,8 @@ import { join } from "node:path";
 import { BUILTIN_PLUGIN_SOURCES } from "@main/plugins/builtin-catalog.ts";
 import { createPluginService } from "@main/services/plugin-service.ts";
 import { createDefaultPluginSources } from "@main/services/plugin-sources.ts";
-import { WORKTREE_PLUGIN_MANIFEST } from "@plugins/builtin/worktree/manifest.ts";
-import { WORKTREE_PLUGIN_ID } from "@shared/contracts/plugin.ts";
+import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
+import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
@@ -45,18 +45,18 @@ describe("createDefaultPluginSources", () => {
     });
 
     expect(sources[0]).toMatchObject({
-      baseDir: expect.stringContaining("src/plugins/builtin/worktree"),
+      baseDir: expect.stringContaining("src/plugins/builtin/git"),
       defaultEnabled: true,
       kind: "builtin",
-      manifest: WORKTREE_PLUGIN_MANIFEST,
+      manifest: GIT_PLUGIN_MANIFEST,
     });
-    expect(WORKTREE_PLUGIN_MANIFEST).toMatchObject({
+    expect(GIT_PLUGIN_MANIFEST).toMatchObject({
       commands: [
         { id: "pier.worktree.list" },
         { id: "pier.worktree.create" },
         { id: "pier.worktree.delete" },
       ],
-      id: WORKTREE_PLUGIN_ID,
+      id: GIT_PLUGIN_ID,
       localization: {
         files: {
           en: "locales/en.json",
@@ -66,7 +66,7 @@ describe("createDefaultPluginSources", () => {
       },
       source: { kind: "builtin" },
     });
-    expect(WORKTREE_PLUGIN_MANIFEST.locales).toBeUndefined();
+    expect(GIT_PLUGIN_MANIFEST.locales).toBeUndefined();
   });
 
   it("内置 worktree 插件包包含 manifest 声明的全部 locale 文件和 main/renderer 入口", async () => {
@@ -76,7 +76,7 @@ describe("createDefaultPluginSources", () => {
       throw new Error("expected builtin worktree plugin source");
     }
     expect(worktreeSource).toMatchObject({
-      id: WORKTREE_PLUGIN_ID,
+      id: GIT_PLUGIN_ID,
       locales: {
         en: {
           messages: {
@@ -89,7 +89,7 @@ describe("createDefaultPluginSources", () => {
           },
         },
       },
-      main: { id: WORKTREE_PLUGIN_ID },
+      main: { id: GIT_PLUGIN_ID },
     });
 
     await expect(
@@ -99,7 +99,7 @@ describe("createDefaultPluginSources", () => {
       access(join(worktreeSource.baseDir, "renderer", "index.ts"))
     ).resolves.toBeUndefined();
 
-    const files = WORKTREE_PLUGIN_MANIFEST.localization?.files ?? {};
+    const files = GIT_PLUGIN_MANIFEST.localization?.files ?? {};
     await expect(Object.keys(files).sort()).toEqual(["en", "zh-CN"]);
     await Promise.all(
       Object.values(files).map((filePath) =>
@@ -127,9 +127,9 @@ describe("createDefaultPluginSources", () => {
 
   it("通过 main builtin catalog 获取 worktree 插件包静态嵌入 locale", async () => {
     expect(BUILTIN_PLUGIN_SOURCES[0]).toMatchObject({
-      baseDir: expect.stringContaining("src/plugins/builtin/worktree"),
-      id: WORKTREE_PLUGIN_ID,
-      manifest: WORKTREE_PLUGIN_MANIFEST,
+      baseDir: expect.stringContaining("src/plugins/builtin/git"),
+      id: GIT_PLUGIN_ID,
+      manifest: GIT_PLUGIN_MANIFEST,
       locales: {
         en: { name: "Worktree" },
         "zh-CN": { name: "工作树" },
@@ -145,7 +145,7 @@ describe("createDefaultPluginSources", () => {
       state: emptyState,
     });
 
-    await expect(service.inspect(WORKTREE_PLUGIN_ID)).resolves.toMatchObject({
+    await expect(service.inspect(GIT_PLUGIN_ID)).resolves.toMatchObject({
       manifest: {
         locales: {
           en: {

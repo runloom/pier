@@ -1,9 +1,9 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MainPluginModule } from "@plugins/api/main.ts";
-import { WORKTREE_PLUGIN_LOCALES } from "@plugins/builtin/worktree/locales/index.ts";
-import { worktreeMainPlugin } from "@plugins/builtin/worktree/main/index.ts";
-import { WORKTREE_PLUGIN_MANIFEST } from "@plugins/builtin/worktree/manifest.ts";
+import { GIT_PLUGIN_LOCALES } from "@plugins/builtin/git/locales/index.ts";
+import { gitMainPlugin } from "@plugins/builtin/git/main/index.ts";
+import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
 import type { PluginDiscoverySource } from "../services/plugin-service.ts";
 
 export type BuiltinPluginSource = Extract<
@@ -16,22 +16,22 @@ export type BuiltinPluginSource = Extract<
 };
 
 function pluginPackageBaseDir(): string {
-  const url = new URL("../../plugins/builtin/worktree/", import.meta.url);
+  const url = new URL("../../plugins/builtin/git/", import.meta.url);
   if (url.protocol === "file:") {
     return fileURLToPath(url);
   }
-  return resolve(process.cwd(), "src/plugins/builtin/worktree");
+  return resolve(process.cwd(), "src/plugins/builtin/git");
 }
 
 export const BUILTIN_PLUGIN_SOURCES = [
   {
     baseDir: pluginPackageBaseDir(),
     defaultEnabled: true,
-    id: WORKTREE_PLUGIN_MANIFEST.id,
+    id: GIT_PLUGIN_MANIFEST.id,
     kind: "builtin",
-    locales: WORKTREE_PLUGIN_LOCALES,
-    main: worktreeMainPlugin,
-    manifest: WORKTREE_PLUGIN_MANIFEST,
+    locales: GIT_PLUGIN_LOCALES,
+    main: gitMainPlugin,
+    manifest: GIT_PLUGIN_MANIFEST,
   },
 ] satisfies readonly BuiltinPluginSource[];
 

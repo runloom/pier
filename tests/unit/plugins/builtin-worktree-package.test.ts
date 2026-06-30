@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const WORKTREE_PLUGIN_DIR = join(process.cwd(), "src/plugins/builtin/worktree");
+const WORKTREE_PLUGIN_DIR = join(process.cwd(), "src/plugins/builtin/git");
 const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 const HOST_REGISTRY_RE =
   /actionRegistry|terminalStatusItemRegistry|useCommandPaletteController|usePanelDescriptorStore/;

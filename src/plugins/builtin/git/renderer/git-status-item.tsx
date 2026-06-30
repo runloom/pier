@@ -165,7 +165,7 @@ function WorktreeStatusItem({
   );
 }
 
-export function registerWorktreeStatusItem(
+export function registerGitStatusItem(
   context: RendererPluginContext
 ): () => void {
   return context.terminalStatusItems.register({
