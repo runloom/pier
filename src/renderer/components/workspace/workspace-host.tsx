@@ -4,9 +4,20 @@ import {
   type DockviewReadyEvent,
   type SerializedDockview,
 } from "dockview-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
+import {
+  getPluginPanelRevision,
+  subscribePluginPanelRegistry,
+} from "@/lib/plugins/plugin-panel-registry.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import {
@@ -111,9 +122,18 @@ export function WorkspaceHost() {
   );
   const [hasMaximizedGroup, setHasMaximizedGroup] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  // 插件 panel 在 bootstrapBuiltinPlugins()（main.tsx, App render 前）注册，
-  // 首次 render 时已就绪；memo 保证 dockview 拿到稳定引用。
-  const panelComponents = useMemo(() => getPanelComponents(), []);
+  // 插件 panel 在 bootstrapBuiltinPlugins()（main.tsx, App render 前）注册;
+  // 首次 render 时已就绪。同时订阅插件注册表变化(revision),Settings 启用/禁用插件后
+  // 重算 dockview 组件表,避免 useMemo([]) 留下陈旧 snapshot。
+  // useSyncExternalStore 的 snapshot 必须引用稳定,所以返回 revision 数字而非对象;
+  // 组件表用 useMemo(revision) 派生。
+  const panelRevision = useSyncExternalStore(
+    subscribePluginPanelRegistry,
+    getPluginPanelRevision,
+    getPluginPanelRevision
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: panelRevision 是 useSyncExternalStore 暴露的版本号,用作 refresh trigger — getPanelComponents() 读全局可变插件 panel 注册表,需在 revision 变化时重算。
+  const panelComponents = useMemo(() => getPanelComponents(), [panelRevision]);
 
   useEffect(() => {
     setDockviewTabRevealRoot(rootRef.current);

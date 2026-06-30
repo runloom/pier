@@ -113,27 +113,27 @@ describe("createDefaultPluginSources", () => {
     );
     expect(englishLocale).toMatchObject({
       commands: {
+        "pier.git.changes.open": { title: "Git: Open Changes" },
         "pier.worktree.create": { title: "Worktree: Create" },
         "pier.worktree.delete": { title: "Worktree: Delete..." },
         "pier.worktree.list": { title: "Worktree: List" },
       },
-      description:
-        "Built-in worktree command palette and terminal status support.",
+      description: "Built-in git command palette and terminal status support.",
       messages: {
         "ui.title": "Worktrees",
       },
-      name: "Worktree",
+      name: "Git",
     });
   });
 
-  it("通过 main builtin catalog 获取 worktree 插件包静态嵌入 locale", async () => {
+  it("通过 main builtin catalog 获取 git 插件包静态嵌入 locale", async () => {
     expect(BUILTIN_PLUGIN_SOURCES[0]).toMatchObject({
       baseDir: expect.stringContaining("src/plugins/builtin/git"),
       id: GIT_PLUGIN_ID,
       manifest: GIT_PLUGIN_MANIFEST,
       locales: {
-        en: { name: "Worktree" },
-        "zh-CN": { name: "工作树" },
+        en: { name: "Git" },
+        "zh-CN": { name: "Git" },
       },
     });
 
@@ -151,28 +151,30 @@ describe("createDefaultPluginSources", () => {
         locales: {
           en: {
             commands: {
+              "pier.git.changes.open": { title: "Git: Open Changes" },
               "pier.worktree.create": { title: "Worktree: Create" },
               "pier.worktree.delete": { title: "Worktree: Delete..." },
               "pier.worktree.list": { title: "Worktree: List" },
             },
             description:
-              "Built-in worktree command palette and terminal status support.",
+              "Built-in git command palette and terminal status support.",
             messages: {
               "ui.title": "Worktrees",
             },
-            name: "Worktree",
+            name: "Git",
           },
           "zh-CN": {
             commands: {
+              "pier.git.changes.open": { title: "Git: 打开变更面板" },
               "pier.worktree.create": { title: "创建工作树" },
               "pier.worktree.delete": { title: "删除工作树..." },
               "pier.worktree.list": { title: "工作树列表" },
             },
-            description: "提供工作树命令面板入口和终端状态栏支持。",
+            description: "提供 Git 命令面板入口和终端状态栏支持。",
             messages: {
               "ui.title": "工作树",
             },
-            name: "工作树",
+            name: "Git",
           },
         },
       },

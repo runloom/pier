@@ -20,7 +20,10 @@ export function registerGitPluginContributions(
       icon: GitBranch,
       id: "pier.git.changes",
       kind: "web",
-      title: "Git 变更",
+      // thunk 形式让 locale 切换时 tab 标题实时跟随;manifest 声明该 panel,
+      // i18n 通过 panels[id].title 解析,fallback 用插件 messages 的 ui.panelTitle.gitChanges。
+      title: () =>
+        context.i18n.t("ui.panelTitle.gitChanges", undefined, "Git Changes"),
     }),
     registerGitChangesAction(context),
   ];

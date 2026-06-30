@@ -192,6 +192,17 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
   };
 }
 
+function resolveRegistrationTitle(
+  registration: PluginPanelRegistration | undefined,
+  fallback: string
+): string {
+  const title = registration?.title;
+  if (typeof title === "function") {
+    return title();
+  }
+  return title ?? fallback;
+}
+
 function openPluginPanel(panelId: string): void {
   const api = useWorkspaceStore.getState().api;
   if (!api) {
@@ -206,7 +217,7 @@ function openPluginPanel(panelId: string): void {
   api.addPanel({
     id: panelId,
     component: panelId,
-    title: registration?.title ?? panelId,
+    title: resolveRegistrationTitle(registration, panelId),
     position: { direction: "right" },
   });
   scheduleRevealDockviewTabByPanelId(panelId);
@@ -236,7 +247,12 @@ export function createRendererPluginContext(
           ? (state.descriptors[state.activeId]?.context ?? null)
           : null;
       },
-      open: (panelId) => openPluginPanel(panelId),
+      open: (panelId) => {
+        // 与 register 对称:必须在自己 manifest 声明的 panel 才能打开,
+        // 防止 A 插件越权打开 B 插件的 panel。
+        assertDeclaredContribution(entry, "panel", panelId);
+        openPluginPanel(panelId);
+      },
       register: (registration: PluginPanelRegistration) => {
         assertDeclaredContribution(entry, "panel", registration.id);
         return registerPluginPanel(registration);

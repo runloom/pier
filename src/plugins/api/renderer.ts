@@ -104,9 +104,14 @@ export interface RendererTerminalStatusItem {
 export interface PluginPanelRegistration {
   component: FunctionComponent<IDockviewPanelProps>;
   icon: LucideIcon;
+  /**
+   * Panel 标识。本字段同时充当 dockview 的 component 名与 panel 单例 id,
+   * 三者必须一致(panels.open 据此查 component、addPanel 据此当 id)。
+   */
   id: string;
   kind: "terminal" | "web";
-  title?: string;
+  /** 可选 tab 标题。传 thunk 让 locale 切换时实时生效;省略则 fallback 到 id。 */
+  title?: (() => string) | string;
 }
 
 export interface RendererPluginContext {
