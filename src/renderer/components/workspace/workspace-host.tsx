@@ -163,17 +163,23 @@ export function WorkspaceHost() {
 
       // 注入插件 panel 关闭钩子:插件 dispose(禁用/卸载)时关掉其已打开的 dockview
       // 实例,避免遗留 panel 在下次 fromJSON 找不到 component。
-      // 若是最后一个 panel,先补一个 welcome 占位再删,避免空 workspace 被 debounce
-      // 持久化为空布局(用户视角:禁用插件不应清空整个工作区)。
+      // 按 contentComponent 匹配而非 id —— 分屏快捷键会创建同 component 但生成新 id
+      // 的副本,光关单例会留下残留。同 component 的所有 panel 一起清理。
+      // 若关完后会让 workspace 全空,先补一个 welcome 占位,避免空 workspace 被
+      // debounce 持久化为空布局(用户视角:禁用插件不应清空整个工作区)。
       setPluginPanelCloser((panelId: string) => {
-        const panel = event.api.panels.find((p) => p.id === panelId);
-        if (!panel) {
+        const victims = event.api.panels.filter(
+          (p) => p.view.contentComponent === panelId
+        );
+        if (victims.length === 0) {
           return;
         }
-        if (event.api.totalPanels <= 1) {
+        if (event.api.totalPanels - victims.length <= 0) {
           useWorkspaceStore.getState().addTab();
         }
-        event.api.removePanel(panel);
+        for (const panel of victims) {
+          event.api.removePanel(panel);
+        }
       });
 
       // 防 save-loop: fromJSON / 默认 layout 应用期间 onDidLayoutChange 触发的
