@@ -207,8 +207,11 @@ export const taskRecentEntrySchema = z
   .object({
     command: z.string().min(1),
     cwd: z.string().min(1),
+    lastUsedAt: z.number().int().optional(),
     label: z.string().min(1),
     source: z.literal("history"),
+    taskId: z.string().min(1).optional(),
+    useCount: z.number().int().nonnegative().optional(),
   })
   .strict();
 export type TaskRecentEntry = z.infer<typeof taskRecentEntrySchema>;
