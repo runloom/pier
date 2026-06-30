@@ -1,6 +1,7 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
+import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
 import { gitChangesPanelKit } from "@/panel-kits/git-changes/git-changes-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
@@ -14,12 +15,9 @@ interface PanelKitMetadata {
 }
 
 /**
- * Panel kit 元数据聚合表 — dockview addPanel 的 component 名映射到 kit 能力。
- *
- * 新增 panel 类型时:
- * 1. 在 panel-kits/<name>/ 下实现并导出 kit 元数据
- * 2. 在此登记一行 component 名到 kit 元数据的映射
- * 3. 业务侧调 useWorkspaceStore().addPanel({ component: <name>, ... })
+ * Core（主系统）panel kit 静态表 — terminal native bridge、welcome fallback、
+ * git-changes 等系统预留能力。业务插件 panel 通过 plugin-panel-registry 动态叠加，
+ * 见 getPanelComponents()。新增主系统 panel 时在此登记一行。
  */
 export const panelKits = {
   gitChanges: gitChangesPanelKit,
@@ -27,36 +25,45 @@ export const panelKits = {
   welcome: welcomePanelKit,
 } satisfies Record<string, PanelKitMetadata>;
 
-const panelKitByComponent: Readonly<Record<string, PanelKitMetadata>> =
+const corePanelKitByComponent: Readonly<Record<string, PanelKitMetadata>> =
   panelKits;
 
-export const panelComponents: Record<
+/**
+ * dockview component 名 → React 组件。合并 core 静态 panel 与插件动态 panel。
+ * 在 workspace-host render 时调用（此时 bootstrap 已注册插件 panel）。
+ */
+export function getPanelComponents(): Record<
   string,
   FunctionComponent<IDockviewPanelProps>
-> = {
-  gitChanges: panelKits.gitChanges.component,
-  terminal: panelKits.terminal.component,
-  welcome: panelKits.welcome.component,
-};
+> {
+  const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
+    gitChanges: panelKits.gitChanges.component,
+    terminal: panelKits.terminal.component,
+    welcome: panelKits.welcome.component,
+  };
+  for (const [id, registration] of getPluginPanelRegistrations()) {
+    components[id] = registration.component;
+  }
+  return components;
+}
 
 /**
- * Panel kit 类型元数据 — keyboard 路由用。
+ * Panel kit 类型（keyboard 路由用）。core 优先，插件 panel 次之，未知 default 'web'。
  * - 'terminal': panel 内是 Ghostty native NSView, 需要 firstResponder = terminalView
  * - 'web': panel 内全是 web DOM, firstResponder = WKWebView
- *
- * 新加 panel kit 时在这里登记一行。未知 panel default 'web' 安全
- * (不会让 terminal 抢 firstResponder)。
  */
-export const panelKinds = {
-  gitChanges: panelKits.gitChanges.kind,
-  terminal: panelKits.terminal.kind,
-  welcome: panelKits.welcome.kind,
-} as const;
-
 export function panelKindOf(component: string): "terminal" | "web" {
-  return panelKitByComponent[component]?.kind ?? "web";
+  const core = corePanelKitByComponent[component];
+  if (core) {
+    return core.kind;
+  }
+  return getPluginPanelRegistrations().get(component)?.kind ?? "web";
 }
 
 export function panelIconOf(component: string): LucideIcon | null {
-  return panelKitByComponent[component]?.icon ?? null;
+  const core = corePanelKitByComponent[component];
+  if (core) {
+    return core.icon;
+  }
+  return getPluginPanelRegistrations().get(component)?.icon ?? null;
 }

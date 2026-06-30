@@ -4,7 +4,7 @@ import {
   type DockviewReadyEvent,
   type SerializedDockview,
 } from "dockview-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
@@ -27,7 +27,7 @@ import {
 } from "@/stores/terminal-input-routing.store.ts";
 import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { panelComponents, panelKindOf } from "./panel-registry.ts";
+import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
@@ -111,6 +111,9 @@ export function WorkspaceHost() {
   );
   const [hasMaximizedGroup, setHasMaximizedGroup] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // 插件 panel 在 bootstrapBuiltinPlugins()（main.tsx, App render 前）注册，
+  // 首次 render 时已就绪；memo 保证 dockview 拿到稳定引用。
+  const panelComponents = useMemo(() => getPanelComponents(), []);
 
   useEffect(() => {
     setDockviewTabRevealRoot(rootRef.current);
