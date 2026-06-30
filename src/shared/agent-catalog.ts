@@ -300,8 +300,8 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     launchCmd: "openclaude",
     detectCmd: "openclaude",
     expectedProcess: "openclaude",
+    homepageUrl: "https://openclaude.gitlawb.com/",
     // 图标 favicons/openclaude.png 是 orca 资产，手动放入（非脚本下载）。
-    // orca 未记 homepageUrl，故省略。
   },
 ];
 

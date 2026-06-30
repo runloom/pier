@@ -10,8 +10,8 @@ export const agentsLocales = {
       blank: "Blank terminal",
     },
     list: {
-      title: "Installed agents",
-      description: "Detected agent CLIs",
+      title: "Agent CLIs",
+      description: "Supported and detected agent CLIs",
       refresh: "Refresh",
     },
     status: {
@@ -25,6 +25,7 @@ export const agentsLocales = {
       setDefault: "Set default",
       isDefault: "Default",
       expand: "Details",
+      website: "Website",
     },
     row: {
       launchCmd: "Launch command",
@@ -38,17 +39,17 @@ export const agentsLocales = {
   },
   zhCN: {
     permissionMode: {
-      yolo: "跳过确认",
-      manual: "逐次确认",
-      mixed: "混合",
+      yolo: "跳过权限确认",
+      manual: "手动确认权限",
+      mixed: "已自定义",
     },
     defaultPick: {
       auto: "自动",
       blank: "空白终端",
     },
     list: {
-      title: "已安装的智能体",
-      description: "检测到的 CLI agent",
+      title: "智能体列表",
+      description: "支持和检测到的 CLI agent",
       refresh: "刷新",
     },
     status: {
@@ -62,6 +63,7 @@ export const agentsLocales = {
       setDefault: "设为默认",
       isDefault: "默认",
       expand: "详情",
+      website: "官网",
     },
     row: {
       launchCmd: "启动命令",

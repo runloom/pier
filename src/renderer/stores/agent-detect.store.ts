@@ -5,59 +5,71 @@ interface AgentDetectState {
   detect: () => Promise<void>;
   detectedIds: AgentKind[];
   /**
-   * Detect once if not yet probed. Safe to call from anywhere (e.g. the New
-   * Agent action) without relying on the settings page having mounted. No-op
-   * when detection already succeeded; coalesces concurrent callers onto a
-   * single in-flight probe so the palette never re-runs `which` per invocation.
+   * Detect once if not yet probed. Safe to call from anywhere without relying
+   * on a specific settings panel lifecycle. No-op when detection already
+   * succeeded, including the valid "no agents installed" empty result.
    */
   ensureDetected: () => Promise<void>;
+  hasDetected: boolean;
+  isDetecting: boolean;
   isRefreshing: boolean;
   refresh: () => Promise<void>;
 }
 
-let ensureDetectedInFlight: Promise<void> | null = null;
+let detectInFlight: Promise<void> | null = null;
 
 export const useAgentDetectStore = create<AgentDetectState>((set, get) => ({
   detectedIds: [],
+  hasDetected: false,
+  isDetecting: false,
   isRefreshing: false,
 
-  async detect() {
-    try {
-      const result = await window.pier?.agents?.detect?.();
-      if (result) {
-        set({ detectedIds: result.detectedIds });
-      }
-    } catch (err) {
-      console.error("[agent-detect.store] detect failed:", err);
+  detect() {
+    if (detectInFlight) {
+      return detectInFlight;
     }
+
+    detectInFlight = (async () => {
+      set({ isDetecting: true });
+      try {
+        const result = await window.pier?.agents?.detect?.();
+        if (result) {
+          set({ detectedIds: result.detectedIds, hasDetected: true });
+        }
+      } catch (err) {
+        console.error("[agent-detect.store] detect failed:", err);
+      } finally {
+        set({ isDetecting: false });
+      }
+    })().finally(() => {
+      detectInFlight = null;
+    });
+
+    return detectInFlight;
   },
 
   ensureDetected() {
-    if (get().detectedIds.length > 0) {
+    if (get().hasDetected || get().detectedIds.length > 0) {
       return Promise.resolve();
     }
-    if (ensureDetectedInFlight) {
-      return ensureDetectedInFlight;
-    }
-    ensureDetectedInFlight = get()
-      .detect()
-      .finally(() => {
-        ensureDetectedInFlight = null;
-      });
-    return ensureDetectedInFlight;
+    return get().detect();
   },
 
   async refresh() {
-    set({ isRefreshing: true });
+    set({ isDetecting: true, isRefreshing: true });
     try {
       const result = await window.pier?.agents?.refresh?.();
       if (result) {
-        set({ detectedIds: result.detectedIds });
+        set({ detectedIds: result.detectedIds, hasDetected: true });
       }
     } catch (err) {
       console.error("[agent-detect.store] refresh failed:", err);
     } finally {
-      set({ isRefreshing: false });
+      set({ isDetecting: false, isRefreshing: false });
     }
   },
 }));
+
+export function initAgentDetection(): Promise<void> {
+  return useAgentDetectStore.getState().ensureDetected();
+}

@@ -8,7 +8,7 @@ import {
 import { Item, ItemActions, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
@@ -126,13 +126,13 @@ function resolveStatusLabel(
   isDetected: boolean,
   t: ReturnType<typeof useT>
 ): string {
+  if (!isDetected) {
+    return t("settings.agents.status.missing");
+  }
   if (isDisabled) {
     return t("settings.agents.status.disabled");
   }
-  if (isDetected) {
-    return t("settings.agents.status.detected");
-  }
-  return t("settings.agents.status.missing");
+  return t("settings.agents.status.detected");
 }
 
 function resolveStatusVariant(
@@ -162,7 +162,9 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
   const entry = getAgentCatalogEntry(agentId);
   const isDetected = detectedIds.includes(agentId);
   const isDisabled = disabledAgentIds.includes(agentId);
-  const isDefault = defaultAgentId === agentId;
+  const isAvailable = isDetected && !isDisabled;
+  const isDefault = isAvailable && defaultAgentId === agentId;
+  const canExpand = isDetected;
 
   const statusLabel = resolveStatusLabel(isDisabled, isDetected, t);
   const statusVariant = resolveStatusVariant(isDisabled, isDetected);
@@ -199,18 +201,32 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
           </ItemTitle>
         </ItemContent>
         <ItemActions>
-          <CollapsibleTrigger asChild>
-            <Button
-              aria-label={t("settings.agents.action.expand")}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              {open ? <ChevronDown /> : <ChevronRight />}
-              {t("settings.agents.action.expand")}
+          {canExpand ? (
+            <CollapsibleTrigger asChild>
+              <Button
+                aria-label={t("settings.agents.action.expand")}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {open ? <ChevronDown /> : <ChevronRight />}
+                {t("settings.agents.action.expand")}
+              </Button>
+            </CollapsibleTrigger>
+          ) : null}
+          {!isDetected && entry?.homepageUrl ? (
+            <Button asChild size="icon-sm" variant="outline">
+              <a
+                aria-label={t("settings.agents.action.website")}
+                href={entry.homepageUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <ExternalLink />
+              </a>
             </Button>
-          </CollapsibleTrigger>
-          {isDefault ? null : (
+          ) : null}
+          {isAvailable && !isDefault ? (
             <Button
               onClick={() => setDefaultAgentId(agentId).catch(() => undefined)}
               size="sm"
@@ -219,20 +235,22 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
             >
               {t("settings.agents.action.setDefault")}
             </Button>
-          )}
-          <Button
-            onClick={toggleDisabled}
-            size="sm"
-            type="button"
-            variant={isDisabled ? "default" : "outline"}
-          >
-            {isDisabled
-              ? t("settings.agents.action.enable")
-              : t("settings.agents.action.disable")}
-          </Button>
+          ) : null}
+          {isDetected ? (
+            <Button
+              onClick={toggleDisabled}
+              size="sm"
+              type="button"
+              variant={isDisabled ? "default" : "outline"}
+            >
+              {isDisabled
+                ? t("settings.agents.action.enable")
+                : t("settings.agents.action.disable")}
+            </Button>
+          ) : null}
         </ItemActions>
 
-        {open ? (
+        {open && canExpand ? (
           <CollapsibleContent asChild forceMount>
             <AgentExpandedDetails agentId={agentId} />
           </CollapsibleContent>

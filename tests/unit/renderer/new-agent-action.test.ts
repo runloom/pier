@@ -21,8 +21,14 @@ function seedStores(opts: {
   defaultAgentId: AgentKind | "blank" | null;
   detectedIds: AgentKind[];
   disabledAgentIds: AgentKind[];
+  hasDetected?: boolean;
 }): void {
-  useAgentDetectStore.setState({ detectedIds: opts.detectedIds });
+  useAgentDetectStore.setState({
+    detectedIds: opts.detectedIds,
+    hasDetected: opts.hasDetected ?? opts.detectedIds.length > 0,
+    isDetecting: false,
+    isRefreshing: false,
+  });
   useAgentPreferencesStore.setState({
     defaultAgentId: opts.defaultAgentId,
     disabledAgentIds: opts.disabledAgentIds,
@@ -40,7 +46,12 @@ describe("new agent action", () => {
   });
 
   afterEach(() => {
-    useAgentDetectStore.setState({ detectedIds: [] });
+    useAgentDetectStore.setState({
+      detectedIds: [],
+      hasDetected: false,
+      isDetecting: false,
+      isRefreshing: false,
+    });
     useAgentPreferencesStore.setState({
       defaultAgentId: null,
       disabledAgentIds: [],
@@ -89,6 +100,22 @@ describe("new agent action", () => {
 
     await runNewAgent();
 
+    expect(toastMocks.error).toHaveBeenCalledTimes(1);
+    expect(prepareLaunch).not.toHaveBeenCalled();
+    expect(addTerminal).not.toHaveBeenCalled();
+  });
+
+  it("启动探测已完成但结果为空 → 不重复探测，直接 toast", async () => {
+    seedStores({
+      defaultAgentId: null,
+      detectedIds: [],
+      disabledAgentIds: [],
+      hasDetected: true,
+    });
+
+    await runNewAgent();
+
+    expect(detect).not.toHaveBeenCalled();
     expect(toastMocks.error).toHaveBeenCalledTimes(1);
     expect(prepareLaunch).not.toHaveBeenCalled();
     expect(addTerminal).not.toHaveBeenCalled();
