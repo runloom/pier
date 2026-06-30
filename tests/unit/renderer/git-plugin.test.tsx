@@ -21,6 +21,10 @@ import { useCommandPaletteController } from "@/lib/command-palette/controller.ts
 import { refreshBuiltinPlugins } from "@/lib/plugins/bootstrap.ts";
 import { BUILTIN_RENDERER_PLUGIN_MODULES } from "@/lib/plugins/builtin-catalog.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
+import {
+  clearPluginPanelsForTests,
+  getPluginPanelRegistrations,
+} from "@/lib/plugins/plugin-panel-registry.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 
@@ -56,12 +60,19 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       permissions: [],
       title: "Worktree: Delete...",
     },
+    {
+      id: "pier.git.changes.open",
+      permissions: ["panel:open"],
+      title: "Git: Open Changes",
+    },
   ];
   return {
     effectivePermissions: [
       "workspace:open",
       "worktree:read",
       "command:register",
+      "panel:register",
+      "panel:open",
     ],
     enabled,
     manifest: {
@@ -77,6 +88,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       locales: {
         en: {
           commands: {
+            "pier.git.changes.open": { title: "Git: Open Changes" },
             "pier.worktree.create": { title: "Worktree: Create" },
             "pier.worktree.delete": { title: "Worktree: Delete..." },
             "pier.worktree.list": { title: "Worktree: List" },
@@ -98,6 +110,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
         "zh-CN": {
           commands: {
+            "pier.git.changes.open": { title: "Git: 打开变更面板" },
             "pier.worktree.create": { title: "创建工作树" },
             "pier.worktree.delete": { title: "删除工作树..." },
             "pier.worktree.list": { title: "工作树列表" },
@@ -118,8 +131,20 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
       },
       name: "Git",
-      panels: [],
-      permissions: ["worktree:read", "workspace:open", "command:register"],
+      panels: [
+        {
+          id: "pier.git.changes",
+          permissions: ["panel:register", "panel:open"],
+          title: "Git Changes",
+        },
+      ],
+      permissions: [
+        "worktree:read",
+        "workspace:open",
+        "command:register",
+        "panel:register",
+        "panel:open",
+      ],
       source: { kind: "builtin" },
       terminalStatusItems: [
         {
@@ -274,6 +299,7 @@ describe("git builtin plugin", () => {
     dispose?.();
     dispose = null;
     terminalStatusItemRegistry.clearForTests();
+    clearPluginPanelsForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     vi.restoreAllMocks();
   });
@@ -291,6 +317,13 @@ describe("git builtin plugin", () => {
         .map((item) => item.id)
         .includes("pier.worktree.status")
     ).toBe(true);
+  });
+
+  it("启用时注册 git-changes panel 和打开变更命令", () => {
+    dispose = activateWorktreePlugin();
+
+    expect(getPluginPanelRegistrations().has("pier.git.changes")).toBe(true);
+    expect(actionRegistry.get("pier.git.changes.open")).toBeDefined();
   });
 
   it("worktree 命令接入命令面板 aliases 搜索模型", () => {

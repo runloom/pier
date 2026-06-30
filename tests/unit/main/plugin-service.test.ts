@@ -160,7 +160,9 @@ describe("pluginManifestSchema", () => {
     expect(collectEffectivePermissions(GIT_PLUGIN_MANIFEST)).toEqual([
       "workspace:open",
       "worktree:read",
+      "panel:open",
       "command:register",
+      "panel:register",
     ]);
   });
 

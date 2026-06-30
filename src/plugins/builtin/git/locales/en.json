@@ -1,5 +1,8 @@
 {
   "commands": {
+    "pier.git.changes.open": {
+      "title": "Git: Open Changes"
+    },
     "pier.worktree.create": {
       "description": "Shows the worktree creation entry. Creation is not available yet.",
       "title": "Worktree: Create"

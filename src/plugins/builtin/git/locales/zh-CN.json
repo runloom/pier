@@ -1,5 +1,8 @@
 {
   "commands": {
+    "pier.git.changes.open": {
+      "title": "Git: 打开变更面板"
+    },
     "pier.worktree.create": {
       "description": "创建工作树入口当前仅展示，暂未开放。",
       "title": "创建工作树"

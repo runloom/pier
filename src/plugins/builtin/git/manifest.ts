@@ -24,6 +24,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       permissions: [],
       title: "Worktree: Delete...",
     },
+    {
+      category: "Git",
+      id: "pier.git.changes.open",
+      permissions: ["panel:open"],
+      title: "Git: Open Changes",
+    },
   ],
   description: "Built-in git command palette and terminal status support.",
   engines: { pier: ">=0.1.0" },
@@ -37,8 +43,20 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     locales: ["en", "zh-CN"],
   },
   name: "Git",
-  panels: [],
-  permissions: ["command:register", "worktree:read", "workspace:open"],
+  panels: [
+    {
+      id: "pier.git.changes",
+      permissions: ["panel:register", "panel:open"],
+      title: "Git Changes",
+    },
+  ],
+  permissions: [
+    "command:register",
+    "worktree:read",
+    "workspace:open",
+    "panel:register",
+    "panel:open",
+  ],
   publisher: "Pier",
   source: { kind: "builtin" },
   terminalStatusItems: [

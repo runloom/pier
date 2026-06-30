@@ -30,7 +30,6 @@ export const zhCN = {
       window: "窗口",
     },
     action: {
-      openGitChanges: "打开变更面板",
       toggleCommandPalette: "显示命令面板",
       openTerminalDebugWindow: "打开终端调试窗口",
       openSettings: "打开设置",

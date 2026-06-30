@@ -30,7 +30,6 @@ export const en = {
       window: "Window",
     },
     action: {
-      openGitChanges: "Open Git Changes",
       toggleCommandPalette: "Show Command Palette",
       openTerminalDebugWindow: "Open Terminal Debug Window",
       openSettings: "Open Settings",

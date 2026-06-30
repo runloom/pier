@@ -2,7 +2,6 @@ import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
-import { gitChangesPanelKit } from "@/panel-kits/git-changes/git-changes-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
@@ -15,12 +14,11 @@ interface PanelKitMetadata {
 }
 
 /**
- * Core（主系统）panel kit 静态表 — terminal native bridge、welcome fallback、
- * git-changes 等系统预留能力。业务插件 panel 通过 plugin-panel-registry 动态叠加，
+ * Core（主系统）panel kit 静态表 — terminal native bridge、welcome fallback
+ * 等系统预留能力。业务插件 panel 通过 plugin-panel-registry 动态叠加，
  * 见 getPanelComponents()。新增主系统 panel 时在此登记一行。
  */
 export const panelKits = {
-  gitChanges: gitChangesPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
 } satisfies Record<string, PanelKitMetadata>;
@@ -36,13 +34,14 @@ export function getPanelComponents(): Record<
   string,
   FunctionComponent<IDockviewPanelProps>
 > {
-  const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {
-    gitChanges: panelKits.gitChanges.component,
-    terminal: panelKits.terminal.component,
-    welcome: panelKits.welcome.component,
-  };
+  const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {};
+  for (const [id, kit] of Object.entries(corePanelKitByComponent)) {
+    components[id] = kit.component;
+  }
   for (const [id, registration] of getPluginPanelRegistrations()) {
-    components[id] = registration.component;
+    if (!(id in components)) {
+      components[id] = registration.component;
+    }
   }
   return components;
 }

@@ -55,6 +55,7 @@ describe("createDefaultPluginSources", () => {
         { id: "pier.worktree.list" },
         { id: "pier.worktree.create" },
         { id: "pier.worktree.delete" },
+        { id: "pier.git.changes.open" },
       ],
       id: GIT_PLUGIN_ID,
       localization: {
