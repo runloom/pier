@@ -211,7 +211,9 @@ function PluginsListContent({
     <ItemGroup className="gap-0">
       {result.entries.map((entry, index) => (
         <Fragment key={entry.manifest.id}>
-          {index > 0 ? <ItemSeparator className="my-0" /> : null}
+          {index > 0 ? (
+            <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
+          ) : null}
           <PluginRow
             entry={entry}
             onToggle={onToggle}
