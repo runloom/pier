@@ -146,8 +146,20 @@ function PermissionModeRow() {
 
 function AgentListCard() {
   const t = useT();
+  const detectedIds = useAgentDetectStore((s) => s.detectedIds);
   const isRefreshing = useAgentDetectStore((s) => s.isRefreshing);
   const refresh = useAgentDetectStore((s) => s.refresh);
+  const detectedIdSet = new Set(detectedIds);
+  const orderedEntries = AGENT_CATALOG.map((entry, index) => ({
+    entry,
+    index,
+  }))
+    .sort((left, right) => {
+      const leftRank = detectedIdSet.has(left.entry.id) ? 0 : 1;
+      const rightRank = detectedIdSet.has(right.entry.id) ? 0 : 1;
+      return leftRank - rightRank || left.index - right.index;
+    })
+    .map(({ entry }) => entry);
 
   return (
     <Card>
@@ -170,7 +182,7 @@ function AgentListCard() {
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-0">
         <ItemGroup className="gap-0">
-          {AGENT_CATALOG.map((entry, index) => (
+          {orderedEntries.map((entry, index) => (
             <Fragment key={entry.id}>
               {index > 0 ? <ItemSeparator className="my-0" /> : null}
               <AgentRow agentId={entry.id} />
@@ -184,11 +196,11 @@ function AgentListCard() {
 
 export function AgentsSection() {
   const t = useT();
-  const detect = useAgentDetectStore((s) => s.detect);
+  const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
 
   useEffect(() => {
-    detect().catch(() => undefined);
-  }, [detect]);
+    ensureDetected().catch(() => undefined);
+  }, [ensureDetected]);
 
   return (
     <div className="px-4 pb-4" id="agents">

@@ -8,8 +8,8 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import type { ActionContribution } from "./contribution-types.ts";
 
 async function handleNewAgent(): Promise<void> {
-  // Detection only auto-runs when the settings page mounts; ensure it has run
-  // so New Agent works on first invocation without opening agent settings.
+  // Startup kicks this off globally; this remains a cheap safety net for tests,
+  // debug windows, or early invocations that race the initial probe.
   await useAgentDetectStore.getState().ensureDetected();
 
   const { detectedIds } = useAgentDetectStore.getState();

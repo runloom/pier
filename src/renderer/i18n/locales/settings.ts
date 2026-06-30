@@ -265,8 +265,8 @@ export const settingsLocales = {
       terminalNewCwdPolicyDesc: "控制新建或拆分终端时使用哪个工作目录",
       defaultAgent: "默认智能体",
       defaultAgentDesc: "新建 agent 动作默认启动的 CLI",
-      agentPermissionMode: "权限模式",
-      agentPermissionModeDesc: "批量控制是否跳过 agent 权限确认",
+      agentPermissionMode: "权限确认方式",
+      agentPermissionModeDesc: "新建 agent 时，统一设置是否自动跳过权限确认",
     },
     terminal: {
       cursorStyle: {

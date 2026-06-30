@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -50,7 +51,12 @@ describe("AgentsSection", () => {
   beforeEach(async () => {
     await initI18n();
 
-    useAgentDetectStore.setState({ detectedIds: [], isRefreshing: false });
+    useAgentDetectStore.setState({
+      detectedIds: [],
+      hasDetected: false,
+      isDetecting: false,
+      isRefreshing: false,
+    });
     useAgentPreferencesStore.setState(DEFAULT_PREFERENCES);
 
     Object.defineProperty(window, "pier", {
@@ -62,7 +68,12 @@ describe("AgentsSection", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
-    useAgentDetectStore.setState({ detectedIds: [], isRefreshing: false });
+    useAgentDetectStore.setState({
+      detectedIds: [],
+      hasDetected: false,
+      isDetecting: false,
+      isRefreshing: false,
+    });
     useAgentPreferencesStore.setState(DEFAULT_PREFERENCES);
   });
 
@@ -126,6 +137,22 @@ describe("AgentsSection", () => {
     });
   });
 
+  it("sorts detected agent rows before missing rows", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: makePierMock(["codex"]),
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("listitem")[0]).toHaveAttribute(
+        "data-testid",
+        "agent-row-codex"
+      );
+    });
+  });
+
   it("shows detected badge for claude after detect", async () => {
     render(<AgentsSection />);
     await waitFor(() => {
@@ -186,6 +213,43 @@ describe("AgentsSection", () => {
         );
       });
     }
+  });
+
+  it("missing agent rows do not show stale default or enablement actions", async () => {
+    useAgentPreferencesStore.setState({
+      ...DEFAULT_PREFERENCES,
+      defaultAgentId: "codex",
+      disabledAgentIds: ["codex"],
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(useAgentDetectStore.getState().detectedIds).toEqual(["claude"]);
+    });
+
+    const codexRow = screen.getByTestId("agent-row-codex");
+    const codex = within(codexRow);
+    expect(codex.getByText("Not installed")).toBeInTheDocument();
+    expect(codex.queryByText("Default")).not.toBeInTheDocument();
+    expect(
+      codex.queryByRole("button", { name: "Details" })
+    ).not.toBeInTheDocument();
+    const websiteLink = codex.getByRole("link", { name: "Website" });
+    expect(websiteLink).toHaveAttribute(
+      "href",
+      "https://github.com/openai/codex"
+    );
+    expect(websiteLink).toHaveAttribute("target", "_blank");
+    expect(
+      codex.queryByRole("button", { name: "Set default" })
+    ).not.toBeInTheDocument();
+    expect(
+      codex.queryByRole("button", { name: "Disable" })
+    ).not.toBeInTheDocument();
+    expect(
+      codex.queryByRole("button", { name: "Enable" })
+    ).not.toBeInTheDocument();
   });
 
   it("Refresh button calls refresh() and reflects isRefreshing", async () => {

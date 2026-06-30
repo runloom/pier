@@ -57,7 +57,34 @@ export function createAgentDetectionService({
   hydratePath = defaultHydratePath,
   probe = defaultProbe,
 }: CreateAgentDetectionServiceArgs = {}): AgentDetectionService {
+  let pathHydrated = false;
+  let hydrateInFlight: Promise<string[]> | null = null;
+
+  async function hydratePathOnce(): Promise<void> {
+    if (pathHydrated) {
+      return;
+    }
+    if (!hydrateInFlight) {
+      hydrateInFlight = hydratePath()
+        .then((added) => {
+          pathHydrated = true;
+          return added;
+        })
+        .finally(() => {
+          hydrateInFlight = null;
+        });
+    }
+    await hydrateInFlight;
+  }
+
+  async function hydratePathNow(): Promise<string[]> {
+    const added = await hydratePath();
+    pathHydrated = true;
+    return added;
+  }
+
   async function detect(): Promise<DetectAgentsResult> {
+    await hydratePathOnce();
     const checks = await Promise.all(
       AGENT_CATALOG.map(async (entry) => {
         const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
@@ -72,7 +99,7 @@ export function createAgentDetectionService({
   return {
     detect,
     async refresh() {
-      const added = await hydratePath();
+      const added = await hydratePathNow();
       const detectResult = await detect();
       return { ...detectResult, addedPathSegments: added };
     },

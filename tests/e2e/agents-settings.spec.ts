@@ -5,6 +5,7 @@ import {
   type ElectronApplication,
   _electron as electron,
   expect,
+  type Page,
   test,
 } from "@playwright/test";
 
@@ -16,6 +17,8 @@ const OUT_MAIN = join(
   "main",
   "index.js"
 );
+const SETTINGS_ACCELERATOR =
+  process.platform === "darwin" ? "Meta+Comma" : "Control+Comma";
 
 async function launchPierApp(): Promise<{
   app: ElectronApplication;
@@ -39,6 +42,17 @@ async function closePierApp({
   rmSync(userDataDir, { recursive: true, force: true });
 }
 
+async function openAgentsSettings(win: Page): Promise<void> {
+  await win.waitForTimeout(1500);
+  await win.keyboard.press(SETTINGS_ACCELERATOR);
+
+  const dialog = win.locator('[role="dialog"]');
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+
+  await win.locator("button").filter({ hasText: "智能体" }).first().click();
+  await win.waitForTimeout(600);
+}
+
 test.describe("Agents Settings e2e", () => {
   test("智能体设置区域可见并渲染 Auto 选项和 claude agent 行", async () => {
     // Electron 冷启动 + React 挂载需要比默认 30s 更多余量
@@ -48,20 +62,7 @@ test.describe("Agents Settings e2e", () => {
       const win = await appContext.app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
 
-      // 命令面板打开设置（等待 React 完全挂载后再发键）
-      await win.waitForTimeout(1500);
-      await win.keyboard.press("Meta+Shift+KeyP");
-      await win.waitForTimeout(1000);
-      await win.locator("[cmdk-item]").filter({ hasText: "打开设置" }).click();
-      await win.waitForTimeout(600);
-
-      // 设置 dialog 应该出现
-      const dialog = win.locator('[role="dialog"]');
-      await expect(dialog).toBeVisible({ timeout: 5000 });
-
-      // 点击侧边栏 "智能体" nav 项（取第一个以规避严格模式）
-      await win.locator("button").filter({ hasText: "智能体" }).first().click();
-      await win.waitForTimeout(600);
+      await openAgentsSettings(win);
 
       // 断言 1：catalog 中 claude 行始终渲染（不依赖机器是否安装 claude）
       await expect(win.locator('[data-testid="agent-row-claude"]')).toBeVisible(
@@ -96,35 +97,37 @@ test.describe("Agents Settings e2e", () => {
     }
   });
 
-  test("展开 claude agent 行显示启动命令", async () => {
+  test("claude agent 行按安装状态显示详情或官网", async () => {
     test.setTimeout(60_000);
     const appContext = await launchPierApp();
     try {
       const win = await appContext.app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
 
-      // 打开设置，进入智能体区域
-      await win.waitForTimeout(1500);
-      await win.keyboard.press("Meta+Shift+KeyP");
-      await win.waitForTimeout(1000);
-      await win.locator("[cmdk-item]").filter({ hasText: "打开设置" }).click();
-      await win.waitForTimeout(600);
-
-      const dialog = win.locator('[role="dialog"]');
-      await expect(dialog).toBeVisible({ timeout: 5000 });
-
-      await win.locator("button").filter({ hasText: "智能体" }).first().click();
-      await win.waitForTimeout(600);
+      await openAgentsSettings(win);
 
       // claude agent 行始终渲染
       const claudeRow = win.locator('[data-testid="agent-row-claude"]');
       await expect(claudeRow).toBeVisible({ timeout: 8000 });
 
-      // 展开详情
+      const isMissing = await claudeRow
+        .getByText("未安装", { exact: true })
+        .isVisible()
+        .catch(() => false);
+
+      if (isMissing) {
+        await expect(
+          claudeRow.getByRole("button", { name: "详情" })
+        ).toHaveCount(0);
+        await expect(
+          claudeRow.getByRole("link", { name: "官网" })
+        ).toHaveAttribute("href", "https://claude.com/claude-code");
+        return;
+      }
+
       await claudeRow.getByRole("button", { name: "详情" }).click();
       await win.waitForTimeout(400);
 
-      // 展开后可见启动命令 "claude"（固定来自 AGENT_CATALOG，不依赖机器环境）
       await expect(
         claudeRow.locator(".font-mono").filter({ hasText: "claude" }).first()
       ).toBeVisible({ timeout: 3000 });
