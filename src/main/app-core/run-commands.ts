@@ -5,6 +5,7 @@ import type {
 } from "@shared/contracts/commands.ts";
 import type {
   TaskLaunchPlan,
+  TaskPanelMetadata,
   TaskRunSnapshot,
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
@@ -120,6 +121,23 @@ function terminalLaunchFor(plan: TaskLaunchPlan): {
   };
 }
 
+function taskPanelMetadataFor(
+  launch: TaskLaunchPlan,
+  runId: string
+): TaskPanelMetadata {
+  return {
+    cwd: launch.cwd,
+    label: launch.label,
+    projectRoot: launch.projectRoot,
+    rawCommand: launch.rawCommand,
+    runId,
+    source: launch.source,
+    startedAt: Date.now(),
+    status: "running",
+    taskId: launch.taskId,
+  };
+}
+
 async function focusAlreadyRunningTask(
   requestId: string,
   command: Extract<PierCommand, { type: "run.spawn" }>,
@@ -208,7 +226,8 @@ export async function executeRunSpawnCommand(
   try {
     started = await services.tasks.startRun({
       launches: preparation.launches,
-      openTerminal: async (launch) => {
+      openTerminal: async (launch, runId) => {
+        const task = taskPanelMetadataFor(launch, runId);
         const result = await executeTerminalOpenCommand(
           requestId,
           {
@@ -219,7 +238,12 @@ export async function executeRunSpawnCommand(
             ...(command.windowId ? { windowId: command.windowId } : {}),
           },
           services,
-          { clientEnv: options.clientEnv, source: "task", tab: launch.tab }
+          {
+            clientEnv: options.clientEnv,
+            source: "task",
+            tab: launch.tab,
+            task,
+          }
         );
         if (!result.ok) {
           throw new RunTerminalOpenError(

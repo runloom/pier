@@ -13,6 +13,7 @@ import {
   panelKindSchema,
 } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type {
   ResolvedTerminalLaunchOptions,
   TerminalLaunchOptions,
@@ -316,6 +317,7 @@ export async function executeTerminalOpenCommand(
     clientEnv?: Record<string, string> | undefined;
     source?: ProcessEnvironmentSource | undefined;
     tab?: PanelTabChrome;
+    task?: TaskPanelMetadata;
   } = {}
 ): Promise<PierCommandResult> {
   const target = resolveCommandWindow(command.windowId, services, {
@@ -360,6 +362,7 @@ export async function executeTerminalOpenCommand(
       launchId,
       placement: command.placement,
       ...(options.tab && { tab: options.tab }),
+      ...(options.task && { task: options.task }),
       type: "terminal.open",
       windowId: target.window.id,
     });

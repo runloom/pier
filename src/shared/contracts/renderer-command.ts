@@ -8,6 +8,7 @@ import {
   panelContextSchema,
   panelTabChromeSchema,
 } from "./panel.ts";
+import { taskPanelMetadataSchema } from "./tasks.ts";
 
 export const rendererCommandSchema = z.discriminatedUnion("type", [
   z.object({
@@ -42,6 +43,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
       normalizePanelTabChromeInput,
       panelTabChromeSchema.optional()
     ),
+    task: taskPanelMetadataSchema.optional(),
     windowId: z.string().min(1).optional(),
   }),
   z.object({

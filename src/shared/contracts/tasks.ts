@@ -103,6 +103,9 @@ export const taskListResultSchema = z
   .strict();
 export type TaskListResult = z.infer<typeof taskListResultSchema>;
 
+export const taskRunIdSchema = z.string().min(1);
+export type TaskRunId = z.infer<typeof taskRunIdSchema>;
+
 export const taskLaunchPlanSchema = z
   .object({
     command: z.string().min(1),
@@ -115,14 +118,37 @@ export const taskLaunchPlanSchema = z
     presentation: taskPresentationSchema,
     projectRoot: z.string().min(1),
     rawCommand: z.string().min(1),
+    source: taskSourceSchema,
     tab: panelTabChromeSchema,
     taskId: z.string().min(1),
   })
   .strict();
 export type TaskLaunchPlan = z.infer<typeof taskLaunchPlanSchema>;
 
-export const taskRunIdSchema = z.string().min(1);
-export type TaskRunId = z.infer<typeof taskRunIdSchema>;
+export const taskPanelStatusSchema = z.enum([
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+]);
+export type TaskPanelStatus = z.infer<typeof taskPanelStatusSchema>;
+
+export const taskPanelMetadataSchema = z
+  .object({
+    cwd: z.string().min(1),
+    exitCode: z.number().int().optional(),
+    finishedAt: z.number().int().nonnegative().optional(),
+    label: z.string().min(1),
+    projectRoot: z.string().min(1),
+    rawCommand: z.string().min(1),
+    runId: taskRunIdSchema,
+    source: taskSourceSchema,
+    startedAt: z.number().int().nonnegative(),
+    status: taskPanelStatusSchema,
+    taskId: z.string().min(1),
+  })
+  .strict();
+export type TaskPanelMetadata = z.infer<typeof taskPanelMetadataSchema>;
 
 export const taskRunNodeStatusSchema = z.enum([
   "pending",

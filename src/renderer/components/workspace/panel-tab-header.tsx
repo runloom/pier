@@ -137,6 +137,7 @@ function tabStatusIndicatorClassName(status: PanelTabStatus): string {
   switch (status) {
     case "waiting":
     case "blocked":
+    case "cancelled":
       return `${baseClassName} bg-[var(--status-warning-fg)]`;
     case "failed":
       return `${baseClassName} bg-[var(--status-danger-fg)]`;

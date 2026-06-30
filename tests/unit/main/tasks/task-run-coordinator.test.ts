@@ -17,6 +17,7 @@ function launch(
     presentation: {},
     projectRoot: "/repo",
     rawCommand: label,
+    source: "history",
     tab: { title: label },
     taskId,
     ...overrides,

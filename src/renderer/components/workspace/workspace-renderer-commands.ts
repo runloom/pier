@@ -105,6 +105,7 @@ function addTerminalForCommand(
       placement: command.placement,
     }),
     ...(command.tab && { tab: command.tab }),
+    ...(command.task && { task: command.task }),
   });
   if (!panelId) {
     throw new Error("workspace api not ready");

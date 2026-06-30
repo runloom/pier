@@ -1,5 +1,6 @@
 import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
+import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
@@ -26,6 +27,7 @@ interface WorkspaceState {
     placement?: PierCommandPlacement;
     referenceGroup?: WorkspaceGroupRef;
     tab?: PanelTabChrome;
+    task?: TaskPanelMetadata;
   }) => string | null;
   api: DockviewApi | null;
   closeActivePanel: () => void;
@@ -50,6 +52,7 @@ interface TerminalPanelParams {
   context?: PanelContext;
   launchId?: string;
   tab?: PanelTabChrome;
+  task?: TaskPanelMetadata;
 }
 
 type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
@@ -68,14 +71,16 @@ function terminalPanelParams(args: {
   context: PanelContext | undefined;
   launchId: string | undefined;
   tab: PanelTabChrome | undefined;
+  task: TaskPanelMetadata | undefined;
 }): TerminalPanelParams | undefined {
-  if (!(args.context || args.launchId || args.tab)) {
+  if (!(args.context || args.launchId || args.tab || args.task)) {
     return;
   }
   return {
     ...(args.context && { context: args.context }),
     ...(args.launchId && { launchId: args.launchId }),
     ...(args.tab && { tab: args.tab }),
+    ...(args.task && { task: args.task }),
   };
 }
 
@@ -241,6 +246,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       context,
       launchId: opts?.launchId,
       tab: opts?.tab,
+      task: opts?.task,
     });
     const titlePath = context?.cwd;
     api.addPanel({

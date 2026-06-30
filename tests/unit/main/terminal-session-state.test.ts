@@ -1,8 +1,27 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type * as TerminalSessionStateModule from "@main/state/terminal-session-state.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+function taskMetadata(
+  overrides: Partial<TaskPanelMetadata> = {}
+): TaskPanelMetadata {
+  return {
+    cwd: "/Users/xyz/ABC/pier",
+    label: "test",
+    projectRoot: "/Users/xyz/ABC/pier",
+    rawCommand: "pnpm test",
+    runId: "run-1",
+    source: "package-script",
+    startedAt: 1_772_000_000_000,
+    status: "running",
+    taskId: "package-script:test",
+    ...overrides,
+  };
+}
 
 function context(root: string, updatedAt = 1_772_000_000_000): PanelContext {
   return {
@@ -14,6 +33,13 @@ function context(root: string, updatedAt = 1_772_000_000_000): PanelContext {
     updatedAt,
     worktreeKey: root,
   };
+}
+
+async function loadTerminalSessionState(): Promise<
+  typeof TerminalSessionStateModule
+> {
+  // Dynamic import is required because each test resets modules and mocks electron app.getPath before this state module resolves userData.
+  return await import("@main/state/terminal-session-state.ts");
 }
 
 describe("terminal session state", () => {
@@ -42,7 +68,7 @@ describe("terminal session state", () => {
 
   it("persists and reads the last context by window and panel", async () => {
     const { readTerminalPanelSession, updateTerminalPanelContext } =
-      await import("@main/state/terminal-session-state.ts");
+      await loadTerminalSessionState();
 
     const pier = context("/Users/xyz/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
@@ -60,7 +86,7 @@ describe("terminal session state", () => {
       readTerminalPanelSession,
       updateTerminalPanelContext,
       updateTerminalPanelTitle,
-    } = await import("@main/state/terminal-session-state.ts");
+    } = await loadTerminalSessionState();
 
     const pier = context("/Users/xyz/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
@@ -80,7 +106,7 @@ describe("terminal session state", () => {
       readTerminalPanelSession,
       updateTerminalPanelContext,
       updateTerminalPanelTab,
-    } = await import("@main/state/terminal-session-state.ts");
+    } = await loadTerminalSessionState();
 
     const pier = context("/Users/xyz/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
@@ -116,6 +142,101 @@ describe("terminal session state", () => {
     });
   });
 
+  it("persists task identity and patches terminal task status", async () => {
+    const {
+      patchTerminalPanelTaskStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelTask,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-1",
+      taskMetadata({ status: "running" })
+    );
+
+    await expect(
+      patchTerminalPanelTaskStatus("main", "terminal-1", {
+        exitCode: 1,
+        finishedAt: 1_772_000_001_000,
+        status: "failed",
+      })
+    ).resolves.toBe(true);
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      task: {
+        exitCode: 1,
+        finishedAt: 1_772_000_001_000,
+        label: "test",
+        rawCommand: "pnpm test",
+        runId: "run-1",
+        status: "failed",
+        taskId: "package-script:test",
+      },
+    });
+  });
+
+  it("does not rewrite completed task status", async () => {
+    const {
+      patchTerminalPanelTaskStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelTask,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-1",
+      taskMetadata({
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      })
+    );
+
+    await expect(
+      patchTerminalPanelTaskStatus("main", "terminal-1", {
+        exitCode: 1,
+        finishedAt: 1_772_000_002_000,
+        status: "failed",
+      })
+    ).resolves.toBe(false);
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      task: {
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      },
+    });
+  });
+
+  it("does not patch task status for plain terminal sessions", async () => {
+    const {
+      patchTerminalPanelTaskStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelContext,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelContext(
+      "main",
+      "terminal-1",
+      context("/Users/xyz/ABC/pier")
+    );
+
+    await expect(
+      patchTerminalPanelTaskStatus("main", "terminal-1", {
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      })
+    ).resolves.toBe(false);
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.not.toHaveProperty("task");
+  });
+
   it("normalizes legacy busy tab JSON without resetting the session", async () => {
     const pier = context("/Users/xyz/ABC/pier");
     await writeFile(
@@ -142,7 +263,7 @@ describe("terminal session state", () => {
     );
 
     const { flushTerminalSessionState, readTerminalPanelSession } =
-      await import("@main/state/terminal-session-state.ts");
+      await loadTerminalSessionState();
 
     await expect(
       readTerminalPanelSession("main", "terminal-1")
@@ -167,9 +288,8 @@ describe("terminal session state", () => {
   });
 
   it("does not create a session for a title without context", async () => {
-    const { readTerminalPanelSession, updateTerminalPanelTitle } = await import(
-      "@main/state/terminal-session-state.ts"
-    );
+    const { readTerminalPanelSession, updateTerminalPanelTitle } =
+      await loadTerminalSessionState();
 
     await updateTerminalPanelTitle("main", "terminal-1", "Shell");
 
@@ -180,7 +300,7 @@ describe("terminal session state", () => {
 
   it("serializes concurrent context updates without dropping panel sessions", async () => {
     const { readTerminalPanelSession, updateTerminalPanelContext } =
-      await import("@main/state/terminal-session-state.ts");
+      await loadTerminalSessionState();
 
     await expect(
       Promise.all(
@@ -209,7 +329,7 @@ describe("terminal session state", () => {
       removeTerminalPanelSession,
       updateTerminalPanelContext,
       updateTerminalPanelTitle,
-    } = await import("@main/state/terminal-session-state.ts");
+    } = await loadTerminalSessionState();
 
     const pier = context("/Users/xyz/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
@@ -251,7 +371,7 @@ describe("terminal session state", () => {
     );
 
     const { flushTerminalSessionState, readTerminalPanelSession } =
-      await import("@main/state/terminal-session-state.ts");
+      await loadTerminalSessionState();
 
     await expect(
       readTerminalPanelSession("main", "terminal-1")

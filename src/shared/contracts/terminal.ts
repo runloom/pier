@@ -1,4 +1,5 @@
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
+import type { TaskPanelMetadata } from "./tasks.ts";
 
 export interface TerminalFrame {
   /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
@@ -170,6 +171,7 @@ export type TerminalDebugRendererTerminalPhase =
   | "error"
   | "mounted"
   | "ready"
+  | "waiting_for_session"
   | "waiting_for_anchor";
 
 export interface TerminalDebugRendererTerminalLifecycleSnapshot {
@@ -263,6 +265,7 @@ export interface CreateTerminalArgs {
   launchId?: string | undefined;
   panelId: string;
   tab?: PanelTabChrome | undefined;
+  task?: TaskPanelMetadata | undefined;
 }
 
 export interface CreateTerminalResult {
@@ -309,6 +312,7 @@ export interface TerminalTabChromePatchEvent {
 export interface TerminalPanelSessionSnapshot {
   context?: PanelContext | undefined;
   tab?: PanelTabChrome | undefined;
+  task?: TaskPanelMetadata | undefined;
   title?: string | undefined;
   updatedAt: string;
 }
