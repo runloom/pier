@@ -1,3 +1,4 @@
+import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
   GitChangeEvent,
   GitRepoInfo,
@@ -12,7 +13,7 @@ import type {
   WorktreeOpenRequest,
 } from "@shared/contracts/worktree.ts";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { FunctionComponent, ReactNode } from "react";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
@@ -98,6 +99,14 @@ export interface RendererTerminalStatusItem {
   isVisible?: (context: RendererTerminalStatusItemContext) => boolean;
   order?: number;
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
+}
+
+export interface PluginPanelRegistration {
+  component: FunctionComponent<IDockviewPanelProps>;
+  icon: LucideIcon;
+  id: string;
+  kind: "terminal" | "web";
+  title?: string;
 }
 
 export interface RendererPluginContext {
