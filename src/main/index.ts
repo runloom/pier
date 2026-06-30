@@ -8,6 +8,10 @@ import {
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { installCsp } from "./csp.ts";
+import {
+  handleAssetProtocol,
+  registerAssetScheme,
+} from "./fonts/asset-protocol.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
@@ -161,8 +165,11 @@ function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
   target.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST);
 }
 
+registerAssetScheme();
+
 app.whenReady().then(async () => {
   installCsp();
+  handleAssetProtocol();
   await appCore.pluginHost.refresh();
   await installAppMenu({
     appName: app.name,
