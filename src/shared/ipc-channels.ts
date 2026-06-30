@@ -37,6 +37,9 @@ export const PIER_BROADCAST = {
   WINDOW_FULLSCREEN_CHANGED: "pier://window:fullscreen-changed",
   // git 变更广播 (main → renderer, payload GitChangeEvent).
   GIT_CHANGED: "pier://git:changed",
+  // renderer 下发的 presentation 已被 native 同步应用 (main → renderer,
+  // payload { rendererSequence })，用于 resize 撤占位的精确握手。
+  TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

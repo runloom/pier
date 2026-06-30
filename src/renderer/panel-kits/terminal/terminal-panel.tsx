@@ -11,6 +11,7 @@ import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
+import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import {
   readTerminalAnchorFrame,
@@ -29,6 +30,7 @@ import {
   TerminalStatusBar,
   useTerminalStatusItems,
 } from "./terminal-status-bar.tsx";
+import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
   mergeTabChrome,
   tabChromeFromParams,
@@ -79,6 +81,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const windowZoomLevel = useZoomStore((s) => s.windowZoomLevel);
+  const resizePlaceholderVisible = useTerminalResizeStore(
+    (s) => s.placeholderVisible
+  );
   const effectiveMonoFontSize = effectiveTerminalFontSize(
     monoFontSize,
     windowZoomLevel
@@ -444,6 +449,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const terminalContentClassName = hasStatusBar
     ? "absolute inset-x-0 top-0 bottom-6"
     : "absolute inset-0";
+  // 占位显示：终端首次就绪前，或窗口 resize 期间（见 TerminalSurfacePlaceholder）。
+  const showPlaceholder =
+    !error && (!nativeTerminalReady || resizePlaceholderVisible);
   return (
     <div
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
@@ -453,14 +461,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         className={`terminal-anchor ${terminalContentClassName}`}
         ref={anchorRef}
       />
-      {nativeTerminalReady || error ? null : (
-        <div
-          aria-hidden="true"
-          className={`pointer-events-none ${terminalContentClassName}`}
-          data-testid="terminal-placeholder"
+      {showPlaceholder ? (
+        <TerminalSurfacePlaceholder
+          className={terminalContentClassName}
           style={terminalSurfaceStyle}
         />
-      )}
+      ) : null}
       {error ? (
         <div
           className={`${terminalContentClassName} flex items-center justify-center`}
