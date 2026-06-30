@@ -19,6 +19,7 @@ export const zhCN = {
       language: "选择界面语言",
     },
     category: {
+      git: "Git",
       view: "视图",
       settings: "设置",
       workspace: "工作区",

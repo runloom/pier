@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { worktreeRendererPlugin } from "@plugins/builtin/worktree/renderer/index.ts";
+import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
+  GIT_PLUGIN_ID,
   type PluginRegistryEntry,
-  WORKTREE_PLUGIN_ID,
 } from "@shared/contracts/plugin.ts";
 import {
   cleanup,
@@ -21,6 +21,10 @@ import { useCommandPaletteController } from "@/lib/command-palette/controller.ts
 import { refreshBuiltinPlugins } from "@/lib/plugins/bootstrap.ts";
 import { BUILTIN_RENDERER_PLUGIN_MODULES } from "@/lib/plugins/builtin-catalog.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
+import {
+  clearPluginPanelsForTests,
+  getPluginPanelRegistrations,
+} from "@/lib/plugins/plugin-panel-registry.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 
@@ -56,19 +60,26 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       permissions: [],
       title: "Worktree: Delete...",
     },
+    {
+      id: "pier.git.changes.open",
+      permissions: ["panel:open"],
+      title: "Git: Open Changes",
+    },
   ];
   return {
     effectivePermissions: [
       "workspace:open",
       "worktree:read",
       "command:register",
+      "panel:register",
+      "panel:open",
     ],
     enabled,
     manifest: {
       apiVersion: 1,
       commands,
       engines: { pier: ">=0.1.0" },
-      id: WORKTREE_PLUGIN_ID,
+      id: GIT_PLUGIN_ID,
       localization: {
         defaultLocale: "en",
         files: {},
@@ -77,6 +88,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       locales: {
         en: {
           commands: {
+            "pier.git.changes.open": { title: "Git: Open Changes" },
             "pier.worktree.create": { title: "Worktree: Create" },
             "pier.worktree.delete": { title: "Worktree: Delete..." },
             "pier.worktree.list": { title: "Worktree: List" },
@@ -98,6 +110,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
         "zh-CN": {
           commands: {
+            "pier.git.changes.open": { title: "Git: 打开变更面板" },
             "pier.worktree.create": { title: "创建工作树" },
             "pier.worktree.delete": { title: "删除工作树..." },
             "pier.worktree.list": { title: "工作树列表" },
@@ -117,9 +130,21 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           },
         },
       },
-      name: "Worktree",
-      panels: [],
-      permissions: ["worktree:read", "workspace:open", "command:register"],
+      name: "Git",
+      panels: [
+        {
+          id: "pier.git.changes",
+          permissions: ["panel:register", "panel:open"],
+          title: "Git Changes",
+        },
+      ],
+      permissions: [
+        "worktree:read",
+        "workspace:open",
+        "command:register",
+        "panel:register",
+        "panel:open",
+      ],
       source: { kind: "builtin" },
       terminalStatusItems: [
         {
@@ -138,11 +163,11 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
   };
 }
 
-describe("worktree builtin plugin", () => {
+describe("git builtin plugin", () => {
   let dispose: (() => void) | null = null;
 
   function activateWorktreePlugin(): () => void {
-    return worktreeRendererPlugin.activate(
+    return gitRendererPlugin.activate(
       createRendererPluginContext(pluginEntry(true))
     );
   }
@@ -274,6 +299,7 @@ describe("worktree builtin plugin", () => {
     dispose?.();
     dispose = null;
     terminalStatusItemRegistry.clearForTests();
+    clearPluginPanelsForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     vi.restoreAllMocks();
   });
@@ -291,6 +317,13 @@ describe("worktree builtin plugin", () => {
         .map((item) => item.id)
         .includes("pier.worktree.status")
     ).toBe(true);
+  });
+
+  it("启用时注册 git-changes panel 和打开变更命令", () => {
+    dispose = activateWorktreePlugin();
+
+    expect(getPluginPanelRegistrations().has("pier.git.changes")).toBe(true);
+    expect(actionRegistry.get("pier.git.changes.open")).toBeDefined();
   });
 
   it("worktree 命令接入命令面板 aliases 搜索模型", () => {
@@ -575,17 +608,19 @@ describe("worktree builtin plugin", () => {
     expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
-  it("renderer builtin catalog owns the worktree plugin module", () => {
+  it("renderer builtin catalog owns the git plugin module", () => {
     expect(
       BUILTIN_RENDERER_PLUGIN_MODULES.map((plugin) => plugin.id)
-    ).toContain(WORKTREE_PLUGIN_ID);
-    expect(worktreeRendererPlugin.id).toBe(WORKTREE_PLUGIN_ID);
+    ).toContain(GIT_PLUGIN_ID);
+    expect(gitRendererPlugin.id).toBe(GIT_PLUGIN_ID);
   });
 
   it("worktree renderer 插件只通过 plugin host API 访问宿主能力", async () => {
     const files = [
-      "src/plugins/builtin/worktree/renderer/worktree-list-action.ts",
-      "src/plugins/builtin/worktree/renderer/worktree-status-item.tsx",
+      "src/plugins/builtin/git/renderer/worktree-list-action.ts",
+      "src/plugins/builtin/git/renderer/git-status-item.tsx",
+      "src/plugins/builtin/git/renderer/git-changes-action.ts",
+      "src/plugins/builtin/git/renderer/git-changes-panel.tsx",
     ];
     const source = (
       await Promise.all(

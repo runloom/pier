@@ -1,12 +1,20 @@
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
+import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
 import {
-  DockviewReact,
-  type DockviewReadyEvent,
-  type SerializedDockview,
-} from "dockview-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
+import {
+  getPluginPanelRevision,
+  setPluginPanelCloser,
+  subscribePluginPanelRegistry,
+} from "@/lib/plugins/plugin-panel-registry.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import {
@@ -27,8 +35,9 @@ import {
 } from "@/stores/terminal-input-routing.store.ts";
 import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { panelComponents, panelKindOf } from "./panel-registry.ts";
+import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
+import { sanitizeSavedLayout } from "./sanitize-saved-layout.ts";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
@@ -111,6 +120,23 @@ export function WorkspaceHost() {
   );
   const [hasMaximizedGroup, setHasMaximizedGroup] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // 插件 panel 在 bootstrapBuiltinPlugins()（main.tsx, App render 前）注册;
+  // 首次 render 时已就绪。同时订阅插件注册表变化(revision),Settings 启用/禁用插件后
+  // 重算 dockview 组件表,避免 useMemo([]) 留下陈旧 snapshot。
+  // useSyncExternalStore 的 snapshot 必须引用稳定,所以返回 revision 数字而非对象;
+  // 组件表用 useMemo(revision) 派生。
+  const panelRevision = useSyncExternalStore(
+    subscribePluginPanelRegistry,
+    getPluginPanelRevision,
+    getPluginPanelRevision
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: panelRevision 是 useSyncExternalStore 暴露的版本号,用作 refresh trigger — getPanelComponents() 读全局可变插件 panel 注册表,需在 revision 变化时重算。
+  const panelComponents = useMemo(() => getPanelComponents(), [panelRevision]);
+  // 给 handleReady 闭包用:sanitize 需要"当前已注册的 component 名集合",
+  // 但 handleReady 是稳定 useCallback,不应把 panelComponents 加进 deps
+  // (否则 dockview re-init); ref 让 onReady 时读到最新值。
+  const panelComponentsRef = useRef(panelComponents);
+  panelComponentsRef.current = panelComponents;
 
   useEffect(() => {
     setDockviewTabRevealRoot(rootRef.current);
@@ -124,12 +150,43 @@ export function WorkspaceHost() {
     []
   );
 
+  // WorkspaceHost unmount 时清掉模块级 panelCloser —— closer 闭包持的是旧
+  // event.api,若不清,下次 mount 前的插件 dispose 会 removePanel 到死 api 上。
+  useEffect(() => () => setPluginPanelCloser(null), []);
+
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
       // setApi 立即暴露 — bootstrap 阶段 keymap action (Cmd+T 等) 可能在 layout
       // 异步加载完成前触发, 延迟暴露 api 会让 action handler 调 store.addTerminal
       // 时 api=null 静默 drop, 用户感受是"快捷键失效, 按两次才行".
       setApi(event.api);
+
+      // 注入插件 panel 关闭钩子:插件 dispose(禁用/卸载)时关掉其已打开的 dockview
+      // 实例,避免遗留 panel 在下次 fromJSON 找不到 component。
+      // 按 contentComponent 匹配而非 id —— 分屏快捷键会创建同 component 但生成新 id
+      // 的副本,光关单例会留下残留。同 component 的所有 panel 一起清理。
+      // 若关完后会让 workspace 全空,先补一个 welcome 占位,避免空 workspace 被
+      // debounce 持久化为空布局(用户视角:禁用插件不应清空整个工作区)。
+      setPluginPanelCloser((panelId: string) => {
+        const victims = event.api.panels.filter(
+          (p) => p.view.contentComponent === panelId
+        );
+        if (victims.length === 0) {
+          return;
+        }
+        if (event.api.totalPanels - victims.length <= 0) {
+          useWorkspaceStore.getState().addTab();
+        }
+        for (const panel of victims) {
+          try {
+            event.api.removePanel(panel);
+          } catch {
+            // 同 group 内有多个 plugin panel 时,第一个 remove 会触发 removeGroup,
+            // 其后续 panel 的 group 引用已失效,dockview 会 throw。忽略即可 —— 整组
+            // 已随第一个 panel 一起销毁,后续目标已无需再删。
+          }
+        }
+      });
 
       // 防 save-loop: fromJSON / 默认 layout 应用期间 onDidLayoutChange 触发的
       // change event 是 program-driven, 不该 save (会 round-trip 存"恢复出来的"
@@ -302,7 +359,18 @@ export function WorkspaceHost() {
         isApplyingPersistedLayout = true;
         try {
           if (saved && typeof saved === "object") {
-            event.api.fromJSON(saved as SerializedDockview);
+            // 剔除引用未注册 component 的 panel(如禁用插件后旧 layout 残留
+            // pier.git.changes) —— 直接 fromJSON 会抛错让整个 layout 回退 default,
+            // 把用户的终端等也丢了。先 sanitize 保住其它 panel。
+            const sanitized = sanitizeSavedLayout(
+              saved,
+              new Set(Object.keys(panelComponentsRef.current))
+            );
+            if (sanitized) {
+              event.api.fromJSON(sanitized);
+            } else {
+              applyDefaultLayout(event.api);
+            }
           } else {
             applyDefaultLayout(event.api);
           }

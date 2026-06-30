@@ -19,6 +19,7 @@ export const en = {
       language: "Select language",
     },
     category: {
+      git: "Git",
       view: "View",
       settings: "Settings",
       workspace: "Workspace",

@@ -21,6 +21,7 @@ export const pierCapabilitySchema = z.enum([
   "window:create",
   "window:focus",
   "window:close",
+  "panel:open",
   "panel:read",
   "panel:control",
   "terminal:read",
