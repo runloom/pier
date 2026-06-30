@@ -10,7 +10,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
-import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
+import {
+  computeMonoFontFamilyList,
+  useFontStore,
+} from "@/stores/font.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import {
   readTerminalAnchorFrame,
@@ -269,7 +272,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           panelId,
           frame,
           font: {
-            family: computeMonoFontFamily(monoFontFamilyRef.current),
+            family: computeMonoFontFamilyList(monoFontFamilyRef.current),
             size: effectiveMonoFontSizeRef.current,
           },
           ...(initialContext && { context: initialContext }),
@@ -399,7 +402,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {
-      family: computeMonoFontFamily(monoFontFamily),
+      family: computeMonoFontFamilyList(monoFontFamily),
       size: effectiveMonoFontSize,
     });
   }, [panelId, monoFontFamily, effectiveMonoFontSize]);

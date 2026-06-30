@@ -238,12 +238,15 @@ export interface TerminalDebugWindowOpenResult {
 }
 
 /**
- * Terminal 字体配置. family 已在 renderer 侧调 computeMonoFontFamily 处理过 fallback
- * 链, native 端拿到的是完整 font-family 字符串 (含逗号分隔的 fallback). size 单位 px,
- * 是基础 monoFontSize 叠加整体界面缩放后的有效字号, 范围 8-48.
+ * Terminal 字体配置. family 是有序的字体族 fallback 链, 已在 renderer 侧由
+ * computeMonoFontFamilyList 产出 (用户字体在前 + 真实字体名 fallback, 不含 CSS
+ * generic). native 端逐项喂给 ghostty 的 font-family (每行一个、可重复), 而非拼成
+ * 逗号串 —— ghostty 不吃逗号. size 单位 px, 是基础 monoFontSize 叠加整体界面缩放
+ * 后的有效字号, 范围 8-48.
  */
 export interface TerminalFont {
-  family: string;
+  /** 字体族 fallback 链 (有序)，已在 renderer 侧由 computeMonoFontFamilyList 产出，native 端逐项喂给 ghostty font-family。 */
+  family: string[];
   size: number;
 }
 

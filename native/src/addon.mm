@@ -122,7 +122,14 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     double y = frame.Get("y").As<Napi::Number>().DoubleValue();
     double w = frame.Get("width").As<Napi::Number>().DoubleValue();
     double h = frame.Get("height").As<Napi::Number>().DoubleValue();
-    std::string fontFamily = info[3].As<Napi::String>().Utf8Value();
+    std::string fontFamily;
+    if (info[3].IsArray()) {
+        Napi::Array arr = info[3].As<Napi::Array>();
+        for (uint32_t i = 0; i < arr.Length(); i++) {
+            if (i > 0) fontFamily += "\n";
+            fontFamily += arr.Get(i).As<Napi::String>().Utf8Value();
+        }
+    }
     float fontSize = info[4].As<Napi::Number>().FloatValue();
     const char* cwdPtr = nullptr;
     const char* commandPtr = nullptr;
@@ -602,7 +609,14 @@ static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
 static Napi::Value JsSetFontConfig(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
-    std::string fontFamily = info[1].As<Napi::String>().Utf8Value();
+    std::string fontFamily;
+    if (info[1].IsArray()) {
+        Napi::Array arr = info[1].As<Napi::Array>();
+        for (uint32_t i = 0; i < arr.Length(); i++) {
+            if (i > 0) fontFamily += "\n";
+            fontFamily += arr.Get(i).As<Napi::String>().Utf8Value();
+        }
+    }
     float fontSize = info[2].As<Napi::Number>().FloatValue();
     ghostty_bridge_set_font_config(
         (__bridge void*)win,

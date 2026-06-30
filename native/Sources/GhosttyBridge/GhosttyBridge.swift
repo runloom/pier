@@ -460,7 +460,7 @@ private struct Terminal {
 }
 
 private struct TerminalRuntimePreferences {
-    var fontFamily: String = ""
+    var fontFamilies: [String] = []
     var fontSize: Float = 0
     var cursorStyle: TerminalCursorStyle = .block
     var cursorBlink: Bool = true
@@ -703,8 +703,8 @@ final class GhosttyBridgeImpl {
     ) -> TerminalConfiguration {
         TerminalConfiguration { builder in
             configureDefaultTerminalAppearance(&builder)
-            if !preferences.fontFamily.isEmpty {
-                builder.withFontFamily(preferences.fontFamily)
+            for family in preferences.fontFamilies where !family.isEmpty {
+                builder.withFontFamily(family)
             }
             if preferences.fontSize > 0 {
                 builder.withFontSize(preferences.fontSize)
@@ -1490,8 +1490,9 @@ final class GhosttyBridgeImpl {
         fontFamily: String,
         fontSize: Float
     ) {
+        let families = fontFamily.split(separator: "\n").map(String.init)
         mutateTerminalRuntimePreferences(window: window) { preferences in
-            preferences.fontFamily = fontFamily
+            preferences.fontFamilies = families
             preferences.fontSize = fontSize
         }
     }

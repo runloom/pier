@@ -30,7 +30,7 @@ export interface NativeAddon {
     parentHandle: Buffer,
     panelId: string,
     frame: TerminalFrame,
-    fontFamily: string,
+    fontFamilies: string[],
     fontSize: number,
     launch: ResolvedTerminalLaunchOptions | undefined
   ): boolean;
@@ -106,7 +106,7 @@ export interface NativeAddon {
   /** 热更新 window 下所有 terminal 的字体. controller per window, 内部走 Ghostty TerminalController.setTerminalConfiguration. */
   setTerminalFont(
     parentHandle: Buffer,
-    fontFamily: string,
+    fontFamilies: string[],
     fontSize: number
   ): void;
   /**
