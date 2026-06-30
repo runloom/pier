@@ -2,14 +2,14 @@ import { GitBranch } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
-import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { openGitChangesPanel } from "./open-git-changes.ts";
 
 export const GIT_CHANGES_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
     categoryKey: "git",
     group: "1_new",
     handler: () => {
-      useWorkspaceStore.getState().openGitChanges();
+      openGitChangesPanel();
     },
     iconComponent: GitBranch,
     id: "pier.git.changes.open",
