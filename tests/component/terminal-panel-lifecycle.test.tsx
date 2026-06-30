@@ -1,4 +1,5 @@
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
+import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import {
   act,
   fireEvent,
@@ -82,6 +83,27 @@ const taskTab: PanelTabChrome = {
   },
 };
 
+const completedTaskTab: PanelTabChrome = {
+  ...taskTab,
+  state: {
+    colorToken: "success",
+    label: "Succeeded",
+    status: "succeeded",
+  },
+};
+
+const taskMetadata: TaskPanelMetadata = {
+  cwd: "/Users/xyz/ABC/pier",
+  label: "test",
+  projectRoot: "/Users/xyz/ABC/pier",
+  rawCommand: "pnpm run test",
+  runId: "run-1",
+  source: "package-script",
+  startedAt: 1_772_000_000_000,
+  status: "running",
+  taskId: "package-script:test",
+};
+
 function createPanelProps(
   options: {
     isActive?: boolean;
@@ -90,6 +112,7 @@ function createPanelProps(
       context?: PanelContext;
       launchId?: string;
       tab?: PanelTabChrome;
+      task?: TaskPanelMetadata;
     };
   } = {}
 ): TestPanelProps {
@@ -494,7 +517,12 @@ describe("TerminalPanel lifecycle", () => {
 
   it("uses tab chrome params for descriptor title and native creation metadata", async () => {
     const props = createPanelProps({
-      params: { context, launchId: "launch-1", tab: taskTab },
+      params: {
+        context,
+        launchId: "launch-1",
+        tab: taskTab,
+        task: taskMetadata,
+      },
     });
 
     render(<TerminalPanel {...props} />);
@@ -512,6 +540,7 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({
           panelId: "terminal-1",
           tab: taskTab,
+          task: taskMetadata,
         })
       );
     });
@@ -536,6 +565,109 @@ describe("TerminalPanel lifecycle", () => {
     ).toMatchObject({
       display: { terminalTitle: "vite" },
       tab: taskTab,
+    });
+  });
+
+  it("prefers saved task tab status over stale layout params", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      context,
+      tab: completedTaskTab,
+      task: { ...taskMetadata, exitCode: 0, status: "succeeded" },
+      title: "test",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+    const props = createPanelProps({
+      params: {
+        context,
+        launchId: "launch-1",
+        tab: taskTab,
+        task: taskMetadata,
+      },
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(
+        usePanelDescriptorStore.getState().descriptors["terminal-1"]
+      ).toMatchObject({
+        tab: {
+          state: {
+            label: "Succeeded",
+            status: "succeeded",
+          },
+        },
+      });
+    });
+  });
+
+  it("renders restored completed task as a result view without native terminal", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      context,
+      tab: completedTaskTab,
+      task: { ...taskMetadata, exitCode: 0, status: "succeeded" },
+      title: "test",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context,
+            launchId: "launch-1",
+            tab: taskTab,
+            task: taskMetadata,
+          },
+        })}
+      />
+    );
+
+    const result = await screen.findByTestId("terminal-task-result");
+    expect(result).toHaveClass("px-2", "py-1.5", "font-mono");
+    expect(result).not.toHaveClass("p-4", "text-sm");
+    expect(result).toHaveStyle({ fontSize: "13px" });
+    expect(result).toHaveTextContent("[pier] restored task");
+    expect(result).toHaveTextContent("Tasktest");
+    expect(result).toHaveTextContent("Statussucceeded");
+    expect(result).toHaveTextContent("Commandpnpm run test");
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
+  });
+
+  it("renders restored running task as a cancelled result without native terminal", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      context,
+      tab: taskTab,
+      task: taskMetadata,
+      title: "test",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context,
+            launchId: "launch-1",
+            tab: taskTab,
+            task: taskMetadata,
+          },
+        })}
+      />
+    );
+
+    const result = await screen.findByTestId("terminal-task-result");
+    expect(result).toHaveTextContent("Tasktest");
+    expect(result).toHaveTextContent("Statuscancelled");
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(
+        usePanelDescriptorStore.getState().descriptors["terminal-1"]?.tab?.state
+      ).toMatchObject({
+        colorToken: "warning",
+        label: "Cancelled",
+        status: "cancelled",
+      });
     });
   });
 
@@ -665,13 +797,9 @@ describe("TerminalPanel lifecycle", () => {
     const placeholder = container.querySelector(
       '[data-testid="terminal-placeholder"]'
     );
-    expect(root?.getAttribute("style") ?? "").not.toContain(
-      "--terminal-background"
-    );
+    expect(root?.className ?? "").not.toContain("--terminal-background");
     expect(placeholder).not.toBeNull();
-    expect(placeholder?.getAttribute("style")).toContain(
-      "--terminal-background"
-    );
+    expect(placeholder?.className ?? "").toContain("--terminal-background");
 
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
@@ -698,10 +826,8 @@ describe("TerminalPanel lifecycle", () => {
 
     const errorText = await findByText("终端创建失败");
     const root = container.querySelector('[data-testid="terminal-panel-root"]');
-    expect(root?.getAttribute("style") ?? "").not.toContain(
-      "--terminal-background"
-    );
-    expect(errorText.parentElement?.getAttribute("style")).toContain(
+    expect(root?.className ?? "").not.toContain("--terminal-background");
+    expect(errorText.parentElement?.className ?? "").toContain(
       "--terminal-background"
     );
   });

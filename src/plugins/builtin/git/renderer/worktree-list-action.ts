@@ -229,7 +229,7 @@ function registerWorktreeListAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Worktree",
+    category: "Git",
     disabledReason: () => {
       const target = activeWorktreeTarget(context);
       return target.enabled ? null : target.reason;
@@ -258,7 +258,7 @@ function registerWorktreeListAction(
         "gong zuo shu",
         context.i18n.commandTitle("pier.worktree.list", "Worktree: List"),
       ],
-      categoryKey: "worktree",
+      categoryKey: "git",
       group: "1_worktree",
       iconComponent: GitFork,
       sortOrder: 1,
@@ -273,7 +273,7 @@ function registerDisabledWorktreeCreateAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Worktree",
+    category: "Git",
     disabledReason: () => createDisabledReason(context),
     enabled: () => false,
     handler: () => undefined,
@@ -292,7 +292,7 @@ function registerDisabledWorktreeCreateAction(
         "chuangjian gongzuoshu",
         context.i18n.commandTitle("pier.worktree.create", "Worktree: Create"),
       ],
-      categoryKey: "worktree",
+      categoryKey: "git",
       group: "1_worktree",
       iconComponent: GitBranch,
       sortOrder: 2,
@@ -307,7 +307,7 @@ function registerDisabledWorktreeDeleteAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Worktree",
+    category: "Git",
     disabledReason: () => deleteDisabledReason(context),
     enabled: () => false,
     handler: () => undefined,
@@ -330,7 +330,7 @@ function registerDisabledWorktreeDeleteAction(
           "Worktree: Delete..."
         ),
       ],
-      categoryKey: "worktree",
+      categoryKey: "git",
       group: "1_worktree",
       iconComponent: Trash2,
       sortOrder: 3,

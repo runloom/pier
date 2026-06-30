@@ -3,6 +3,7 @@ import type {
   TerminalPresentationReason,
   TerminalPresentationSnapshot,
 } from "@shared/contracts/terminal.ts";
+import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { readRegisteredTerminalAnchorFrame } from "./terminal-layout-coordinator.ts";
 
 export interface TerminalPresentationPanelState {
@@ -23,6 +24,11 @@ export interface BuildTerminalPresentationSnapshotArgs {
   readFrame(panelId: string): TerminalFrame | null;
   reason: TerminalPresentationReason;
   rendererSequence: number;
+  /**
+   * resize 期间为 true：强制所有终端 visible=false，让 native 终端隐身，
+   * 由 web 侧占位顶替，做到终端与 web UI 几何零错位。
+   */
+  suppressVisible?: boolean;
   workspace: TerminalPresentationWorkspaceState;
 }
 
@@ -55,9 +61,16 @@ export function buildTerminalPresentationSnapshot({
   readFrame,
   reason,
   rendererSequence: nextRendererSequence,
+  suppressVisible = false,
   workspace,
 }: BuildTerminalPresentationSnapshotArgs): TerminalPresentationSnapshot {
   const terminals = workspace.panels.filter(isTerminalPanel).map((panel) => {
+    // resize 隐身：终端 visible=false 且不下发 frame。frame=null 让 native
+    // applyPresentation 跳过 applyHostFrame（否则会先摆到可见位 + 同步 Metal 重渲染
+    // 再移走，每帧抖动）；visible=false 是明确意图。两者一致表达隐身，单独成支以免混淆。
+    if (suppressVisible) {
+      return { focused: false, frame: null, panelId: panel.id, visible: false };
+    }
     const frame = readFrame(panel.id);
     const isActivePanel =
       workspace.activePanelId === panel.id || panel.dockviewActive;
@@ -129,9 +142,13 @@ export function applyTerminalPresentationNow(
     readFrame: readRegisteredTerminalAnchorFrame,
     reason,
     rendererSequence,
+    suppressVisible: useTerminalResizeStore.getState().suppressTerminals,
     workspace: workspaceState,
   });
   lastDesiredSnapshot = snapshot;
+  useTerminalResizeStore.setState({
+    lastDownlinkSequence: snapshot.rendererSequence,
+  });
   window.pier?.terminal?.applyPresentation?.(snapshot);
   return snapshot;
 }

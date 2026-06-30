@@ -1,6 +1,7 @@
 import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
+import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 type WindowLayoutPulseReason = WindowLayoutPulse["reason"];
@@ -33,6 +34,7 @@ export interface TerminalLayoutRegistration {
 const anchors = new Map<string, TerminalAnchorState>();
 let windowResizeInstalled = false;
 let windowLayoutPulseDispose: (() => void) | null = null;
+let presentationAppliedDispose: (() => void) | null = null;
 let presentationScheduler:
   | ((reason: TerminalLayoutFlushReason) => void)
   | null = null;
@@ -186,7 +188,103 @@ export function flushTerminalLayoutFramesTrailing(
 }
 
 function handleWindowResize(): void {
+  // resize 隐身期间终端已藏，跳过 flush（否则与 pulse 路径重复下发隐身帧）。
+  if (useTerminalResizeStore.getState().suppressTerminals) {
+    return;
+  }
   flushTerminalLayoutFramesTrailing("window-resize");
+}
+
+// 兜底：进入隐身后若迟迟收不到 'end'（maximize/全屏只发 zoom、或平台漏发 resized），
+// 超时自动恢复，绝不让终端永久卡在隐身。每个 active 帧续期。
+const RESIZE_FALLBACK_MS = 1000;
+// 兜底：等 native「就位」ack 撤占位时，ack 万一丢失的超时保险。
+const RESTORE_ACK_TIMEOUT_MS = 500;
+let resizeFallbackTimer: number | null = null;
+let restoreAckTimer: number | null = null;
+let awaitingRestoreAck = false;
+
+function clearResizeFallback(): void {
+  if (resizeFallbackTimer !== null) {
+    clearTimeout(resizeFallbackTimer);
+    resizeFallbackTimer = null;
+  }
+}
+
+function dismissResizePlaceholder(): void {
+  awaitingRestoreAck = false;
+  if (restoreAckTimer !== null) {
+    clearTimeout(restoreAckTimer);
+    restoreAckTimer = null;
+  }
+  useTerminalResizeStore.setState({ placeholderVisible: false });
+}
+
+function enterResizeSuppression(): void {
+  // 拖拽持续 → 每个 active 帧续期兜底计时。
+  clearResizeFallback();
+  resizeFallbackTimer = window.setTimeout(
+    exitResizeSuppression,
+    RESIZE_FALLBACK_MS
+  );
+  // 已隐身：后续 active 帧只续期，不重复下发。
+  if (useTerminalResizeStore.getState().suppressTerminals) {
+    return;
+  }
+  // 取消上一轮可能仍在等待的撤占位 ack。
+  awaitingRestoreAck = false;
+  if (restoreAckTimer !== null) {
+    clearTimeout(restoreAckTimer);
+    restoreAckTimer = null;
+  }
+  useTerminalResizeStore.setState({
+    placeholderVisible: true,
+    suppressTerminals: true,
+  });
+  // 立即下发一帧：所有 native 终端 visible=false 隐身，露出 web 占位。
+  notifyPresentationChange("visibility");
+}
+
+function exitResizeSuppression(): void {
+  clearResizeFallback();
+  // 未在隐身（已恢复或从未进入）：幂等空操作。
+  if (!useTerminalResizeStore.getState().suppressTerminals) {
+    return;
+  }
+  // 终端恢复可见（仍在占位幕布之后），最终 frame 由随后的 trailing flush 补齐。
+  useTerminalResizeStore.setState({ suppressTerminals: false });
+  notifyPresentationChange("visibility");
+  // 等 native 把最终几何应用到位的「就位」ack 再撤占位（精确握手，替代盲等帧数）。
+  awaitingRestoreAck = true;
+  if (restoreAckTimer !== null) {
+    clearTimeout(restoreAckTimer);
+  }
+  restoreAckTimer = window.setTimeout(
+    dismissResizePlaceholder,
+    RESTORE_ACK_TIMEOUT_MS
+  );
+}
+
+// native 同步应用某帧后回的「就位」ack。当其 sequence 追上 renderer 最新下发
+// （含 trailing flush 补的最终 frame），说明终端几何已落位，可安全撤占位。
+function handleRestoreAck(rendererSequence: number): void {
+  if (!awaitingRestoreAck) {
+    return;
+  }
+  if (
+    rendererSequence >= useTerminalResizeStore.getState().lastDownlinkSequence
+  ) {
+    dismissResizePlaceholder();
+  }
+}
+
+function handleResizePhase(phase: WindowLayoutPulse["phase"]): void {
+  if (phase === "active") {
+    enterResizeSuppression();
+    return;
+  }
+  // 'end'，以及任何缺失/未知 phase：一律收尾恢复，绝不静默卡在隐身。
+  exitResizeSuppression();
 }
 
 function ensureGlobalListeners(): void {
@@ -203,7 +301,24 @@ function ensureGlobalListeners(): void {
         ) {
           useZoomStore.setState({ windowZoomLevel: pulse.windowZoomLevel });
         }
+        if (pulse.reason === "resize") {
+          handleResizePhase(pulse.phase);
+          // active 期间终端隐身，无需 flush 终端 frame（end 才补最终位置）。
+          if (pulse.phase === "active") {
+            return;
+          }
+        } else if (pulse.reason === "zoom") {
+          // maximize/unmaximize/全屏完成：动画期可能已被 'resize'→active 藏过终端，
+          // 而 zoom 不带 end。这里收尾恢复，避免终端卡在隐身。
+          exitResizeSuppression();
+        }
         flushTerminalLayoutFramesTrailing(`window-${pulse.reason}`);
+      }) ?? null;
+  }
+  if (!presentationAppliedDispose) {
+    presentationAppliedDispose =
+      window.pier?.onTerminalPresentationApplied?.((payload) => {
+        handleRestoreAck(payload.rendererSequence);
       }) ?? null;
   }
 }
@@ -218,6 +333,22 @@ function maybeDisposeGlobalListeners(): void {
   }
   windowLayoutPulseDispose?.();
   windowLayoutPulseDispose = null;
+  presentationAppliedDispose?.();
+  presentationAppliedDispose = null;
+  // 最后一个终端卸载：清理 resize 隐身的挂起计时器并复位 store，
+  // 避免悬挂回调在 listener 移除后触发、或 store 残留隐身态。
+  clearResizeFallback();
+  awaitingRestoreAck = false;
+  if (restoreAckTimer !== null) {
+    clearTimeout(restoreAckTimer);
+    restoreAckTimer = null;
+  }
+  if (useTerminalResizeStore.getState().suppressTerminals) {
+    useTerminalResizeStore.setState({
+      placeholderVisible: false,
+      suppressTerminals: false,
+    });
+  }
 }
 
 export function registerTerminalLayoutAnchor(

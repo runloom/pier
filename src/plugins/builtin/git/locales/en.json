@@ -1,5 +1,8 @@
 {
   "commands": {
+    "pier.git.changes.open": {
+      "title": "Git: Open Changes"
+    },
     "pier.worktree.create": {
       "description": "Shows the worktree creation entry. Creation is not available yet.",
       "title": "Worktree: Create"
@@ -13,7 +16,7 @@
       "title": "Worktree: List"
     }
   },
-  "description": "Built-in worktree command palette and terminal status support.",
+  "description": "Built-in git command palette and terminal status support.",
   "messages": {
     "ui.createUnavailable": "Worktree creation is not available yet",
     "ui.current": "current",
@@ -24,8 +27,16 @@
     "ui.mainBadge": "main",
     "ui.selectPlaceholder": "Select a worktree...",
     "ui.statusOpenLabel": "Open worktrees for {{name}}",
+    "ui.panelHint.gitChangesPlaceholder": "Change preview coming soon",
+    "ui.panelTitle.gitChanges": "Git Changes",
     "ui.title": "Worktrees",
     "ui.unsupported": "Current directory does not support Git worktrees"
+  },
+  "panels": {
+    "pier.git.changes": {
+      "description": "Placeholder panel for upcoming git change preview.",
+      "title": "Git Changes"
+    }
   },
   "terminalStatusItems": {
     "pier.worktree.status": {
@@ -33,5 +44,5 @@
       "title": "Worktree Status"
     }
   },
-  "name": "Worktree"
+  "name": "Git"
 }

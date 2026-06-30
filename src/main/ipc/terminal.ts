@@ -5,11 +5,11 @@ import type {
   TerminalFrame,
   TerminalPresentationSnapshot,
 } from "@shared/contracts/terminal.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
 import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
-  updateTerminalPanelContext,
   updateTerminalPanelTitle,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -33,6 +33,10 @@ import {
   setTerminalFocusAddonProvider,
 } from "./terminal-focus-state.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
+import {
+  persistInitialTerminalContext,
+  persistInitialTerminalTask,
+} from "./terminal-initial-session.ts";
 import { isTerminalInputRoutingSnapshot } from "./terminal-input-routing-validation.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
@@ -61,21 +65,6 @@ export function windowFromWebContents(
   webContents: WebContents
 ): AppWindow | null {
   return findAppWindowByWebContents(webContents);
-}
-
-async function persistInitialTerminalContext(
-  sessionScope: string,
-  panelId: string,
-  context: CreateTerminalArgs["context"]
-): Promise<void> {
-  if (!context) {
-    return;
-  }
-  try {
-    await updateTerminalPanelContext(sessionScope, panelId, context);
-  } catch (err) {
-    console.error("[pier-context-initial-persist] failed:", err);
-  }
 }
 
 function conformTerminalPresentationAfterCreate(
@@ -146,6 +135,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       exitCode: normalizedExitCode,
       panelId: rawPanelId,
       targetWindow,
+    }).catch((err) => {
+      console.error("[pier-task-tab-patch:command-finished] failed:", err);
     });
   });
   addon?.setTitleForwardCallback((id, panelId, title) => {
@@ -165,6 +156,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         exitCode: taskExitCode,
         panelId: rawPanelId,
         targetWindow,
+      }).catch((err) => {
+        console.error("[pier-task-tab-patch:title-forward] failed:", err);
       });
       return;
     }
@@ -235,10 +228,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const { context, nativeLaunch } = resolveCreateTerminalLaunch(
+        const { context, nativeLaunch, task } = resolveCreateTerminalLaunch(
           args,
           saved
         );
+        // Task identity is persisted before native launch so immediate command-finished
+        // callbacks can be gated to the task panel instead of repainting plain terminals.
+        await persistInitialTerminalTask(sessionScope, args.panelId, task);
         recordRendererTerminalRoute(win, "create", args.panelId, {
           height: args.frame.height,
           width: args.frame.width,
@@ -289,6 +285,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         terminalCount: snapshot.terminals.length,
       });
       applyRendererTerminalPresentation(win, addon, snapshot);
+      // native applyTerminalPresentation 是同步调用，此刻几何已就位 → 回 ack，
+      // 让 renderer 精确握手撤除 resize 占位（替代盲等帧数）。
+      event.sender.send(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, {
+        rendererSequence: snapshot.rendererSequence,
+      });
       const effectiveInputRouting =
         readTerminalInputRoutingDebug(win).effective;
       if (effectiveInputRouting) {

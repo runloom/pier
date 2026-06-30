@@ -1,0 +1,320 @@
+import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
+import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
+import type { IDockviewPanelProps } from "dockview-react";
+import { type RefObject, useEffect, useRef } from "react";
+import { computeMonoFontFamilyList } from "@/stores/font.store.ts";
+import {
+  readTerminalAnchorFrame,
+  registerTerminalLayoutAnchor,
+  type TerminalLayoutRegistration,
+} from "./terminal-layout-coordinator.ts";
+import {
+  disposeTerminalPanelLifecycleDebug,
+  type TerminalLifecycleDebugPatch,
+  updateTerminalPanelLifecycleDebug,
+} from "./terminal-lifecycle-debug.ts";
+import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
+
+interface UseTerminalNativeLifecycleArgs {
+  anchorRef: RefObject<HTMLDivElement | null>;
+  api: IDockviewPanelProps["api"];
+  effectiveMonoFontSize: number;
+  initialContext: PanelContext | undefined;
+  initialLaunchId: string | undefined;
+  initialTab: CreateTerminalArgs["tab"] | undefined;
+  initialTask: TaskPanelMetadata | undefined;
+  monoFontFamily: string;
+  panelId: string;
+  sessionLoaded: boolean;
+  setError: (error: string | null) => void;
+  setNativeTerminalReady: (ready: boolean) => void;
+}
+
+function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  const check = () => {
+    const frame = readTerminalAnchorFrame(anchor);
+    if (frame) {
+      resolve();
+      return;
+    }
+    requestAnimationFrame(check);
+  };
+  check();
+  return promise;
+}
+
+export function useTerminalNativeLifecycle({
+  api,
+  anchorRef,
+  effectiveMonoFontSize,
+  initialContext,
+  initialLaunchId,
+  initialTab,
+  initialTask,
+  monoFontFamily,
+  panelId,
+  sessionLoaded,
+  setError,
+  setNativeTerminalReady,
+}: UseTerminalNativeLifecycleArgs): void {
+  const monoFontFamilyRef = useRef(monoFontFamily);
+  const effectiveMonoFontSizeRef = useRef(effectiveMonoFontSize);
+  monoFontFamilyRef.current = monoFontFamily;
+  effectiveMonoFontSizeRef.current = effectiveMonoFontSize;
+
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) {
+      return;
+    }
+
+    let disposed = false;
+    const subscriptions: Array<{ dispose(): void }> = [];
+    let layoutRegistration: TerminalLayoutRegistration | null = null;
+    let renderableAnchorObserver: ResizeObserver | null = null;
+    let didCreateNativeTerminal = false;
+    let createPromise: Promise<void> | null = null;
+    let createAttemptCount = 0;
+    let lifecycleError: string | null = null;
+    let lifecycleNativeTerminalReady = false;
+    setNativeTerminalReady(false);
+
+    const markLifecycle = (patch: TerminalLifecycleDebugPatch): void => {
+      if (patch.error !== undefined) {
+        lifecycleError = patch.error;
+      }
+      if (patch.nativeTerminalReady !== undefined) {
+        lifecycleNativeTerminalReady = patch.nativeTerminalReady;
+      }
+      updateTerminalPanelLifecycleDebug(panelId, {
+        createAttemptCount,
+        didCreateNativeTerminal,
+        error: lifecycleError,
+        hasRenderableAnchor: readTerminalAnchorFrame(anchor) !== null,
+        nativeTerminalReady: lifecycleNativeTerminalReady,
+        placeholderVisible: !(lifecycleNativeTerminalReady || lifecycleError),
+        ...patch,
+      });
+    };
+
+    markLifecycle({
+      createPending: false,
+      didCreateNativeTerminal: false,
+      error: null,
+      nativeTerminalReady: false,
+      phase: "mounted",
+    });
+
+    if (!sessionLoaded) {
+      markLifecycle({
+        createPending: false,
+        phase: "waiting_for_session",
+      });
+      return () => {
+        disposed = true;
+        disposeTerminalPanelLifecycleDebug(panelId);
+      };
+    }
+
+    const sendFrameNow = () => {
+      if (disposed || !didCreateNativeTerminal) {
+        return;
+      }
+      layoutRegistration?.flushNow("dockview-dimensions");
+    };
+
+    const logCreateError = (err: unknown) => {
+      console.error(`[terminal-panel] create ${panelId} failed:`, err);
+      markLifecycle({
+        createPending: false,
+        error: err instanceof Error ? err.message : String(err),
+        phase: "error",
+      });
+    };
+
+    const hasRenderableAnchor = () => readTerminalAnchorFrame(anchor) !== null;
+
+    const shouldCreateNativeTerminal = () =>
+      api.isVisible || api.isActive || hasRenderableAnchor();
+
+    const ensureNativeTerminal = (): Promise<void> => {
+      if (didCreateNativeTerminal) {
+        return Promise.resolve();
+      }
+      if (createPromise) {
+        return createPromise;
+      }
+      markLifecycle({
+        createPending: true,
+        phase: hasRenderableAnchor() ? "creating" : "waiting_for_anchor",
+      });
+      createPromise = (async () => {
+        await waitForRealSize(anchor);
+        if (disposed || didCreateNativeTerminal) {
+          return;
+        }
+
+        const frame = readTerminalAnchorFrame(anchor);
+        if (!frame) {
+          const message = "无法获取面板坐标";
+          setError(message);
+          markLifecycle({
+            createPending: false,
+            error: message,
+            phase: "error",
+          });
+          return;
+        }
+
+        createAttemptCount += 1;
+        markLifecycle({
+          createAttemptCount,
+          createPending: true,
+          phase: "creating",
+        });
+        const result = await window.pier.terminal.create({
+          panelId,
+          frame,
+          font: {
+            family: computeMonoFontFamilyList(monoFontFamilyRef.current),
+            size: effectiveMonoFontSizeRef.current,
+          },
+          ...(initialContext && { context: initialContext }),
+          ...(initialLaunchId && { launchId: initialLaunchId }),
+          ...(initialTab && { tab: initialTab }),
+          ...(initialTask && { task: initialTask }),
+        });
+        if (!result.ok) {
+          const message = result.error ?? "终端创建失败";
+          setError(message);
+          markLifecycle({
+            createPending: false,
+            error: message,
+            phase: "error",
+          });
+          return;
+        }
+
+        didCreateNativeTerminal = true;
+        setNativeTerminalReady(true);
+        markLifecycle({
+          createPending: false,
+          didCreateNativeTerminal: true,
+          error: null,
+          nativeTerminalReady: true,
+          phase: "ready",
+        });
+        layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
+        renderableAnchorObserver?.disconnect();
+        renderableAnchorObserver = null;
+        layoutRegistration.flushTrailing("visibility");
+        requestTerminalPresentation("visibility");
+      })().finally(() => {
+        createPromise = null;
+      });
+      return createPromise;
+    };
+
+    const ensureNativeTerminalIfRenderable = () => {
+      markLifecycle({
+        hasRenderableAnchor: hasRenderableAnchor(),
+      });
+      if (!shouldCreateNativeTerminal()) {
+        return;
+      }
+      ensureNativeTerminal().catch(logCreateError);
+    };
+
+    if (!(api.isVisible || api.isActive)) {
+      renderableAnchorObserver = new ResizeObserver(() => {
+        ensureNativeTerminalIfRenderable();
+      });
+      renderableAnchorObserver.observe(anchor);
+    }
+
+    subscriptions.push(
+      api.onDidVisibilityChange((e) => {
+        if (e.isVisible) {
+          ensureNativeTerminal()
+            .then(() => {
+              if (!disposed && didCreateNativeTerminal) {
+                layoutRegistration?.flushTrailing("visibility");
+                requestTerminalPresentation("visibility");
+              }
+            })
+            .catch(logCreateError);
+        } else if (didCreateNativeTerminal) {
+          layoutRegistration?.flushTrailing("visibility");
+          requestTerminalPresentation("visibility");
+        }
+      })
+    );
+
+    subscriptions.push(
+      api.onDidActiveChange((e) => {
+        if (e.isActive) {
+          ensureNativeTerminal()
+            .then(() => {
+              if (!disposed && didCreateNativeTerminal) {
+                requestTerminalPresentation("dockview-active-panel");
+              }
+            })
+            .catch(logCreateError);
+        }
+      })
+    );
+
+    subscriptions.push(
+      api.onDidGroupChange(() => {
+        if (!(api.isActive && api.isVisible)) {
+          return;
+        }
+        ensureNativeTerminal()
+          .then(() => {
+            if (!disposed && didCreateNativeTerminal) {
+              layoutRegistration?.flushTrailing("dockview-layout");
+              requestTerminalPresentation("dockview-layout");
+            }
+          })
+          .catch(logCreateError);
+      })
+    );
+
+    subscriptions.push(
+      api.onDidDimensionsChange(() => {
+        ensureNativeTerminalIfRenderable();
+        sendFrameNow();
+      })
+    );
+
+    ensureNativeTerminalIfRenderable();
+    requestAnimationFrame(() => {
+      if (!disposed) {
+        ensureNativeTerminalIfRenderable();
+      }
+    });
+
+    return () => {
+      disposed = true;
+      disposeTerminalPanelLifecycleDebug(panelId);
+      for (const s of subscriptions) {
+        s.dispose();
+      }
+      renderableAnchorObserver?.disconnect();
+      layoutRegistration?.dispose();
+    };
+  }, [
+    api,
+    anchorRef,
+    initialContext,
+    initialLaunchId,
+    initialTab,
+    initialTask,
+    panelId,
+    sessionLoaded,
+    setError,
+    setNativeTerminalReady,
+  ]);
+}

@@ -1,3 +1,4 @@
+import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
   GitChangeEvent,
   GitRepoInfo,
@@ -12,11 +13,12 @@ import type {
   WorktreeOpenRequest,
 } from "@shared/contracts/worktree.ts";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { FunctionComponent, ReactNode } from "react";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
 export type RendererPluginActionCategoryKey =
+  | "git"
   | "panel"
   | "run"
   | "settings"
@@ -99,6 +101,25 @@ export interface RendererTerminalStatusItem {
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
 }
 
+export interface PluginPanelRegistration {
+  component: FunctionComponent<IDockviewPanelProps>;
+  /**
+   * 可选 thunk:open 时计算 dockview addPanel 的 params,组件经 props.params 读。
+   * 用于把已 i18n 化的字符串等运行时数据传给 panel 组件 —— 插件不能直接 import
+   * renderer 的 i18n hook,这是把宿主 i18n 结果带入组件的标准通道。
+   */
+  getParams?: () => Record<string, unknown>;
+  icon: LucideIcon;
+  /**
+   * Panel 标识。本字段同时充当 dockview 的 component 名与 panel 单例 id,
+   * 三者必须一致(panels.open 据此查 component、addPanel 据此当 id)。
+   */
+  id: string;
+  kind: "terminal" | "web";
+  /** 可选 tab 标题。传 thunk 让 locale 切换时实时生效;省略则 fallback 到 id。 */
+  title?: (() => string) | string;
+}
+
 export interface RendererPluginContext {
   actions: {
     register(action: RendererPluginAction): () => void;
@@ -130,6 +151,12 @@ export interface RendererPluginContext {
   };
   panels: {
     getActiveContext(): PanelContext | null;
+    /**
+     * 单例打开指定 panel。panelId 必须在本插件 manifest 的 panels[] 中声明 ——
+     * 不支持打开其它插件贡献的 panel(权限/所有权对称约束)。
+     */
+    open(panelId: string): void;
+    register(registration: PluginPanelRegistration): () => void;
   };
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;

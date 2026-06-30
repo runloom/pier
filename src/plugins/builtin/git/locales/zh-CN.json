@@ -1,5 +1,8 @@
 {
   "commands": {
+    "pier.git.changes.open": {
+      "title": "Git: 打开变更面板"
+    },
     "pier.worktree.create": {
       "description": "创建工作树入口当前仅展示，暂未开放。",
       "title": "创建工作树"
@@ -13,7 +16,7 @@
       "title": "工作树列表"
     }
   },
-  "description": "提供工作树命令面板入口和终端状态栏支持。",
+  "description": "提供 Git 命令面板入口和终端状态栏支持。",
   "messages": {
     "ui.createUnavailable": "创建工作树暂未开放",
     "ui.current": "当前",
@@ -24,8 +27,16 @@
     "ui.mainBadge": "主工作树",
     "ui.selectPlaceholder": "选择工作树…",
     "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
+    "ui.panelHint.gitChangesPlaceholder": "变更预览即将到来",
+    "ui.panelTitle.gitChanges": "Git 变更",
     "ui.title": "工作树",
     "ui.unsupported": "当前目录不支持 Git worktree"
+  },
+  "panels": {
+    "pier.git.changes": {
+      "description": "Git 变更预览的占位面板,正式实现稍后到来。",
+      "title": "Git 变更"
+    }
   },
   "terminalStatusItems": {
     "pier.worktree.status": {
@@ -33,5 +44,5 @@
       "title": "工作树状态"
     }
   },
-  "name": "工作树"
+  "name": "Git"
 }

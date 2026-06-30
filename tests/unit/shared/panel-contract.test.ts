@@ -30,6 +30,7 @@ describe("shared panel contract", () => {
     expect(panelTabStatusSchema.parse("blocked")).toBe("blocked");
     expect(panelTabStatusSchema.parse("succeeded")).toBe("succeeded");
     expect(panelTabStatusSchema.parse("failed")).toBe("failed");
+    expect(panelTabStatusSchema.parse("cancelled")).toBe("cancelled");
     expect(panelTabStatusSchema.safeParse("busy").success).toBe(false);
   });
 

@@ -174,6 +174,9 @@ export interface PierWindowAPI {
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
+  onTerminalPresentationApplied: (
+    cb: (payload: { rendererSequence: number }) => void
+  ) => () => void;
   onWindowLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
   platform: NodeJS.Platform;
   plugins: PierPluginsAPI;
@@ -434,6 +437,8 @@ const api: PierWindowAPI = {
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
   menu: menuApi,
+  onTerminalPresentationApplied: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, cb),
   onWindowLayoutPulse: (cb) =>
     subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
   platform: process.platform,

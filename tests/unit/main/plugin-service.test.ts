@@ -6,7 +6,7 @@ import {
   createPluginService,
   type PluginServiceError,
 } from "@main/services/plugin-service.ts";
-import { WORKTREE_PLUGIN_MANIFEST } from "@plugins/builtin/worktree/manifest.ts";
+import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -157,10 +157,12 @@ describe("pluginManifestSchema", () => {
   });
 
   it("工作树插件当前不会因为未开放入口声明写权限", () => {
-    expect(collectEffectivePermissions(WORKTREE_PLUGIN_MANIFEST)).toEqual([
+    expect(collectEffectivePermissions(GIT_PLUGIN_MANIFEST)).toEqual([
       "workspace:open",
       "worktree:read",
+      "panel:open",
       "command:register",
+      "panel:register",
     ]);
   });
 
