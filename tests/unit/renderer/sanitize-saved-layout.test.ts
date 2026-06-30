@@ -30,32 +30,44 @@ function panelDict(entries: readonly PanelEntry[]) {
 }
 
 function leaf({ groupId, views, activeView }: LeafSpec) {
+  const data: Record<string, unknown> = {
+    id: groupId,
+    views: [...views],
+  };
+  if (activeView !== undefined) {
+    data.activeView = activeView;
+  }
   return {
-    data: {
-      activeView: activeView ?? views[0],
-      id: groupId,
-      views: [...views],
-    },
+    data,
     size: 800,
     type: "leaf",
   };
+}
+
+function group(spec: LeafSpec, extra: Record<string, unknown> = {}) {
+  const data: Record<string, unknown> = {
+    id: spec.groupId,
+    views: [...spec.views],
+  };
+  if (spec.activeView !== undefined) {
+    data.activeView = spec.activeView;
+  }
+  return { data, ...extra };
 }
 
 function layout(opts: {
   panels: readonly PanelEntry[];
   leaves: readonly LeafSpec[];
   floatingGroups?: readonly LeafSpec[];
+  popoutGroups?: readonly LeafSpec[];
 }) {
   return {
     activeGroup: opts.leaves[0]?.groupId,
-    floatingGroups: (opts.floatingGroups ?? []).map((spec) => ({
-      data: {
-        activeView: spec.activeView ?? spec.views[0],
-        id: spec.groupId,
-        views: [...spec.views],
-      },
-      position: { left: 100, top: 100, width: 400, height: 300 },
-    })),
+    floatingGroups: (opts.floatingGroups ?? []).map((spec) =>
+      group(spec, {
+        position: { left: 100, top: 100, width: 400, height: 300 },
+      })
+    ),
     grid: {
       height: 800,
       orientation: "HORIZONTAL",
@@ -67,7 +79,9 @@ function layout(opts: {
       width: 1200,
     },
     panels: panelDict(opts.panels),
-    popoutGroups: [],
+    popoutGroups: (opts.popoutGroups ?? []).map((spec) =>
+      group(spec, { url: "popout://" })
+    ),
   };
 }
 
@@ -187,6 +201,58 @@ describe("sanitizeSavedLayout", () => {
     expect(floating.length).toBe(1);
     expect(floating[0]?.data?.views).toEqual(["welcome-1"]);
     expect(floating[0]?.data?.activeView).toBe("welcome-1");
+  });
+
+  it("uses fallback activeView when the source group omits one", () => {
+    const result = sanitizeSavedLayout(
+      layout({
+        leaves: [{ groupId: "1", views: ["terminal-1", "welcome-1"] }],
+        panels: [
+          { contentComponent: "terminal", id: "terminal-1" },
+          { contentComponent: "welcome", id: "welcome-1" },
+        ],
+      }),
+      known
+    );
+    expect(result).not.toBeNull();
+    const branch = result?.grid.root as {
+      data?: Array<{ data?: { activeView?: string } }>;
+    };
+    // 源里没声明 activeView → fallback 到 keptViews 最后一项("welcome-1")。
+    expect(branch.data?.[0]?.data?.activeView).toBe("welcome-1");
+  });
+
+  it("sanitizes popoutGroups the same way as floatingGroups", () => {
+    const result = sanitizeSavedLayout(
+      layout({
+        leaves: [{ groupId: "1", views: ["terminal-1"] }],
+        panels: [
+          { contentComponent: "terminal", id: "terminal-1" },
+          { contentComponent: "welcome", id: "welcome-1" },
+          { contentComponent: "pier.git.changes", id: "git-changes" },
+        ],
+        popoutGroups: [
+          { groupId: "p1", views: ["git-changes"] },
+          {
+            activeView: "git-changes",
+            groupId: "p2",
+            views: ["welcome-1", "git-changes"],
+          },
+        ],
+      }),
+      known
+    );
+    expect(result).not.toBeNull();
+    const popout = (
+      result as unknown as {
+        popoutGroups: Array<{
+          data?: { activeView?: string; views?: string[] };
+        }>;
+      }
+    ).popoutGroups;
+    expect(popout.length).toBe(1);
+    expect(popout[0]?.data?.views).toEqual(["welcome-1"]);
+    expect(popout[0]?.data?.activeView).toBe("welcome-1");
   });
 
   it("returns null for malformed input", () => {
