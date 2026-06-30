@@ -5,6 +5,7 @@ import type {
   TerminalFrame,
   TerminalPresentationSnapshot,
 } from "@shared/contracts/terminal.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
 import {
   readTerminalPanelSession,
@@ -284,6 +285,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         terminalCount: snapshot.terminals.length,
       });
       applyRendererTerminalPresentation(win, addon, snapshot);
+      // native applyTerminalPresentation 是同步调用，此刻几何已就位 → 回 ack，
+      // 让 renderer 精确握手撤除 resize 占位（替代盲等帧数）。
+      event.sender.send(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, {
+        rendererSequence: snapshot.rendererSequence,
+      });
       const effectiveInputRouting =
         readTerminalInputRoutingDebug(win).effective;
       if (effectiveInputRouting) {

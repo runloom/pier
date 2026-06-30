@@ -39,7 +39,7 @@ describe("EventRouter target rect uses viewport (top-left) coordinates", () => {
 
   it("all call sites pass viewport (top-left), never the post-flip frame", () => {
     const allTargetRectCalls = [...source.matchAll(ALL_CALL_SITES_RE)];
-    expect(allTargetRectCalls.length).toBeGreaterThanOrEqual(3); // createTerminal-reload, createTerminal-new, setFrame
+    expect(allTargetRectCalls.length).toBeGreaterThanOrEqual(2); // applyPresentation, setFrame
 
     for (const match of allTargetRectCalls) {
       expect(match[1]).toBe("viewport: viewport");

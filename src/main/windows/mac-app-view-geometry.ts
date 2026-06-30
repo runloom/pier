@@ -9,19 +9,23 @@ export function installMacAppViewGeometry(
     const [width = 0, height = 0] = host.getContentSize();
     appView.setBounds({ x: 0, y: 0, width, height });
   };
-  const sendLayoutPulse = (reason: "resize" | "zoom") => {
+  const sendLayoutPulse = (
+    reason: "resize" | "zoom",
+    phase?: "active" | "end"
+  ) => {
     if (!appView.webContents.isDestroyed()) {
       appView.webContents.send(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, {
         reason,
+        ...(phase ? { phase } : {}),
       });
     }
   };
   resizeAppView();
   host.on("resize", () => {
     resizeAppView();
-    sendLayoutPulse("resize");
+    sendLayoutPulse("resize", "active");
   });
-  host.on("resized", () => sendLayoutPulse("resize"));
+  host.on("resized", () => sendLayoutPulse("resize", "end"));
   host.on("maximize", () => sendLayoutPulse("zoom"));
   host.on("unmaximize", () => sendLayoutPulse("zoom"));
   host.on("enter-full-screen", () => sendLayoutPulse("zoom"));
