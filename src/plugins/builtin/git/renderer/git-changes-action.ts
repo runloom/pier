@@ -18,7 +18,7 @@ export function registerGitChangesAction(
         context.i18n.commandTitle("pier.git.changes.open", "Git: Open Changes"),
       ],
       categoryKey: "git",
-      group: "1_new",
+      group: "1_worktree",
       iconComponent: GitBranch,
       sortOrder: 4,
     },

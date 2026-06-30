@@ -619,6 +619,8 @@ describe("git builtin plugin", () => {
     const files = [
       "src/plugins/builtin/git/renderer/worktree-list-action.ts",
       "src/plugins/builtin/git/renderer/git-status-item.tsx",
+      "src/plugins/builtin/git/renderer/git-changes-action.ts",
+      "src/plugins/builtin/git/renderer/git-changes-panel.tsx",
     ];
     const source = (
       await Promise.all(
