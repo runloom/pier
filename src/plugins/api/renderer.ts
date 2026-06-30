@@ -140,6 +140,8 @@ export interface RendererPluginContext {
   };
   panels: {
     getActiveContext(): PanelContext | null;
+    open(panelId: string): void;
+    register(registration: PluginPanelRegistration): () => void;
   };
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;

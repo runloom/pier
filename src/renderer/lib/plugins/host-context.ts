@@ -1,4 +1,5 @@
 import type {
+  PluginPanelRegistration,
   RendererPluginAction,
   RendererPluginContext,
   RendererPluginMessageValues,
@@ -10,6 +11,7 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import { terminalStatusItemRegistry } from "../../panel-kits/terminal/terminal-status-bar.tsx";
 import { usePanelDescriptorStore } from "../../stores/panel-descriptor.store.ts";
+import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
 import { useCommandPaletteController } from "../command-palette/controller.ts";
@@ -18,10 +20,16 @@ import type {
   QuickPickItem,
   QuickPickSection,
 } from "../command-palette/types.ts";
+import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
+import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
 import {
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
+import {
+  getPluginPanelRegistrations,
+  registerPluginPanel,
+} from "./plugin-panel-registry.ts";
 
 function createPluginI18n(
   entry?: PluginRegistryEntry
@@ -103,16 +111,22 @@ function adaptAction(action: RendererPluginAction): Action {
 
 function assertDeclaredContribution(
   entry: PluginRegistryEntry | undefined,
-  kind: "action" | "terminalStatusItem",
+  kind: "action" | "panel" | "terminalStatusItem",
   id: string
 ): void {
   if (!entry) {
     return;
   }
-  const declared =
-    kind === "action"
-      ? entry.manifest.commands.some((command) => command.id === id)
-      : entry.manifest.terminalStatusItems.some((item) => item.id === id);
+  let declared: boolean;
+  if (kind === "action") {
+    declared = entry.manifest.commands.some((command) => command.id === id);
+  } else if (kind === "panel") {
+    declared = entry.manifest.panels.some((panel) => panel.id === id);
+  } else {
+    declared = entry.manifest.terminalStatusItems.some(
+      (item) => item.id === id
+    );
+  }
   if (!declared) {
     throw new Error(
       `plugin contribution not declared: ${entry.manifest.id}:${kind}:${id}`
@@ -178,6 +192,26 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
   };
 }
 
+function openPluginPanel(panelId: string): void {
+  const api = useWorkspaceStore.getState().api;
+  if (!api) {
+    return;
+  }
+  const existing = api.panels.find((panel) => panel.id === panelId);
+  if (existing) {
+    activateWorkspacePanel(api, existing.id, { reveal: "always" });
+    return;
+  }
+  const registration = getPluginPanelRegistrations().get(panelId);
+  api.addPanel({
+    id: panelId,
+    component: panelId,
+    title: registration?.title ?? panelId,
+    position: { direction: "right" },
+  });
+  scheduleRevealDockviewTabByPanelId(panelId);
+}
+
 export function createRendererPluginContext(
   entry?: PluginRegistryEntry
 ): RendererPluginContext {
@@ -201,6 +235,11 @@ export function createRendererPluginContext(
         return state.activeId
           ? (state.descriptors[state.activeId]?.context ?? null)
           : null;
+      },
+      open: (panelId) => openPluginPanel(panelId),
+      register: (registration: PluginPanelRegistration) => {
+        assertDeclaredContribution(entry, "panel", registration.id);
+        return registerPluginPanel(registration);
       },
     },
     terminalStatusItems: {
