@@ -68,14 +68,13 @@ let pendingTerminalApply: {
 } | null = null;
 let scheduledTerminalFrame: number | null = null;
 
-function syncTerminalBackground(background: string): void {
+function syncTerminalSurface(background: string, foreground: string): void {
   if (typeof document === "undefined") {
     return;
   }
-  document.documentElement.style.setProperty(
-    "--terminal-background",
-    background
-  );
+  const root = document.documentElement.style;
+  root.setProperty("--terminal-background", background);
+  root.setProperty("--terminal-foreground", foreground);
 }
 
 function flushPendingTerminalApply(): void {
@@ -102,7 +101,7 @@ function applyTerminalColors(
   try {
     const shiki = getShikiTheme(presetId, resolved);
     const colors = deriveTerminalColors(shiki, resolved);
-    syncTerminalBackground(colors.background);
+    syncTerminalSurface(colors.background, colors.foreground);
     pendingTerminalApply = { colors, presetId, resolved };
   } catch (err) {
     console.error("[theme.store] deriveTerminalColors failed:", err);

@@ -196,7 +196,7 @@ function handleWindowResize(): void {
 }
 
 // 兜底：进入隐身后若迟迟收不到 'end'（maximize/全屏只发 zoom、或平台漏发 resized），
-// 超时自动恢复，绝不让终端永久卡在隐身（见 review #1/#2）。每个 active 帧续期。
+// 超时自动恢复，绝不让终端永久卡在隐身。每个 active 帧续期。
 const RESIZE_FALLBACK_MS = 1000;
 // 兜底：等 native「就位」ack 撤占位时，ack 万一丢失的超时保险。
 const RESTORE_ACK_TIMEOUT_MS = 500;
@@ -283,7 +283,7 @@ function handleResizePhase(phase: WindowLayoutPulse["phase"]): void {
     enterResizeSuppression();
     return;
   }
-  // 'end'，以及任何缺失/未知 phase：一律收尾恢复，绝不静默卡在隐身（见 review #8）。
+  // 'end'，以及任何缺失/未知 phase：一律收尾恢复，绝不静默卡在隐身。
   exitResizeSuppression();
 }
 
@@ -309,7 +309,7 @@ function ensureGlobalListeners(): void {
           }
         } else if (pulse.reason === "zoom") {
           // maximize/unmaximize/全屏完成：动画期可能已被 'resize'→active 藏过终端，
-          // 而 zoom 不带 end。这里收尾恢复，避免终端卡在隐身（见 review #1/#2）。
+          // 而 zoom 不带 end。这里收尾恢复，避免终端卡在隐身。
           exitResizeSuppression();
         }
         flushTerminalLayoutFramesTrailing(`window-${pulse.reason}`);
@@ -336,7 +336,7 @@ function maybeDisposeGlobalListeners(): void {
   presentationAppliedDispose?.();
   presentationAppliedDispose = null;
   // 最后一个终端卸载：清理 resize 隐身的挂起计时器并复位 store，
-  // 避免悬挂回调在 listener 移除后触发、或 store 残留隐身态（见 review #9）。
+  // 避免悬挂回调在 listener 移除后触发、或 store 残留隐身态。
   clearResizeFallback();
   awaitingRestoreAck = false;
   if (restoreAckTimer !== null) {

@@ -665,13 +665,9 @@ describe("TerminalPanel lifecycle", () => {
     const placeholder = container.querySelector(
       '[data-testid="terminal-placeholder"]'
     );
-    expect(root?.getAttribute("style") ?? "").not.toContain(
-      "--terminal-background"
-    );
+    expect(root?.className ?? "").not.toContain("--terminal-background");
     expect(placeholder).not.toBeNull();
-    expect(placeholder?.getAttribute("style")).toContain(
-      "--terminal-background"
-    );
+    expect(placeholder?.className ?? "").toContain("--terminal-background");
 
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
@@ -698,10 +694,8 @@ describe("TerminalPanel lifecycle", () => {
 
     const errorText = await findByText("终端创建失败");
     const root = container.querySelector('[data-testid="terminal-panel-root"]');
-    expect(root?.getAttribute("style") ?? "").not.toContain(
-      "--terminal-background"
-    );
-    expect(errorText.parentElement?.getAttribute("style")).toContain(
+    expect(root?.className ?? "").not.toContain("--terminal-background");
+    expect(errorText.parentElement?.className ?? "").toContain(
       "--terminal-background"
     );
   });

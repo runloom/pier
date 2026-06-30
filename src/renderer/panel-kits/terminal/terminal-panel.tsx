@@ -443,9 +443,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     };
   }, [panelId, api.setActive]);
 
-  const terminalSurfaceStyle = {
-    backgroundColor: "var(--terminal-background, var(--background))",
-  };
   const terminalContentClassName = hasStatusBar
     ? "absolute inset-x-0 top-0 bottom-6"
     : "absolute inset-0";
@@ -464,13 +461,14 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       {showPlaceholder ? (
         <TerminalSurfacePlaceholder
           className={terminalContentClassName}
-          style={terminalSurfaceStyle}
+          cwd={effectiveCwd}
+          tabTitle={effectiveTab?.title ?? null}
+          title={effectiveTitle}
         />
       ) : null}
       {error ? (
         <div
-          className={`${terminalContentClassName} flex items-center justify-center`}
-          style={terminalSurfaceStyle}
+          className={`${terminalContentClassName} flex items-center justify-center bg-[var(--terminal-background,var(--background))]`}
         >
           <p className="text-muted-foreground text-sm">{error}</p>
         </div>

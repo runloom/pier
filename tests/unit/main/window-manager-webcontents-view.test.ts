@@ -280,18 +280,31 @@ describe.runIf(process.platform === "darwin")(
       electronMock.webContents.send.mockClear();
 
       electronMock.hostListeners.get("resize")?.();
+      electronMock.hostListeners.get("resized")?.();
       electronMock.hostListeners.get("maximize")?.();
       electronMock.hostListeners.get("unmaximize")?.();
 
-      expect(electronMock.webContents.send).toHaveBeenCalledWith(
+      expect(electronMock.webContents.send).toHaveBeenNthCalledWith(
+        1,
         "pier:window:layout-pulse",
-        { reason: "resize" }
+        { phase: "active", reason: "resize" }
       );
-      expect(electronMock.webContents.send).toHaveBeenCalledWith(
+      expect(electronMock.webContents.send).toHaveBeenNthCalledWith(
+        2,
+        "pier:window:layout-pulse",
+        { phase: "end", reason: "resize" }
+      );
+      expect(electronMock.webContents.send).toHaveBeenNthCalledWith(
+        3,
         "pier:window:layout-pulse",
         { reason: "zoom" }
       );
-      expect(electronMock.webContents.send).toHaveBeenCalledTimes(3);
+      expect(electronMock.webContents.send).toHaveBeenNthCalledWith(
+        4,
+        "pier:window:layout-pulse",
+        { reason: "zoom" }
+      );
+      expect(electronMock.webContents.send).toHaveBeenCalledTimes(4);
     });
 
     it("waits for renderer ready before showing the foreground window", async () => {
