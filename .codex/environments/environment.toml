@@ -4,6 +4,6 @@ name = "pier"
 
 [setup]
 script = '''
-pnpm i
+pnpm setup:worktree
 pnpm build:native
 '''
