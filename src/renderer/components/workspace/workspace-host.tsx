@@ -1,9 +1,5 @@
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
-import {
-  DockviewReact,
-  type DockviewReadyEvent,
-  type SerializedDockview,
-} from "dockview-react";
+import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
 import {
   useCallback,
   useEffect,
@@ -41,6 +37,7 @@ import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.t
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
+import { sanitizeSavedLayout } from "./sanitize-saved-layout.ts";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
@@ -135,6 +132,11 @@ export function WorkspaceHost() {
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: panelRevision 是 useSyncExternalStore 暴露的版本号,用作 refresh trigger — getPanelComponents() 读全局可变插件 panel 注册表,需在 revision 变化时重算。
   const panelComponents = useMemo(() => getPanelComponents(), [panelRevision]);
+  // 给 handleReady 闭包用:sanitize 需要"当前已注册的 component 名集合",
+  // 但 handleReady 是稳定 useCallback,不应把 panelComponents 加进 deps
+  // (否则 dockview re-init); ref 让 onReady 时读到最新值。
+  const panelComponentsRef = useRef(panelComponents);
+  panelComponentsRef.current = panelComponents;
 
   useEffect(() => {
     setDockviewTabRevealRoot(rootRef.current);
@@ -345,7 +347,18 @@ export function WorkspaceHost() {
         isApplyingPersistedLayout = true;
         try {
           if (saved && typeof saved === "object") {
-            event.api.fromJSON(saved as SerializedDockview);
+            // 剔除引用未注册 component 的 panel(如禁用插件后旧 layout 残留
+            // pier.git.changes) —— 直接 fromJSON 会抛错让整个 layout 回退 default,
+            // 把用户的终端等也丢了。先 sanitize 保住其它 panel。
+            const sanitized = sanitizeSavedLayout(
+              saved,
+              new Set(Object.keys(panelComponentsRef.current))
+            );
+            if (sanitized) {
+              event.api.fromJSON(sanitized);
+            } else {
+              applyDefaultLayout(event.api);
+            }
           } else {
             applyDefaultLayout(event.api);
           }
