@@ -1,6 +1,7 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
+import { gitChangesPanelKit } from "@/panel-kits/git-changes/git-changes-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
@@ -21,6 +22,7 @@ interface PanelKitMetadata {
  * 3. 业务侧调 useWorkspaceStore().addPanel({ component: <name>, ... })
  */
 export const panelKits = {
+  gitChanges: gitChangesPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
 } satisfies Record<string, PanelKitMetadata>;
@@ -32,6 +34,7 @@ export const panelComponents: Record<
   string,
   FunctionComponent<IDockviewPanelProps>
 > = {
+  gitChanges: panelKits.gitChanges.component,
   terminal: panelKits.terminal.component,
   welcome: panelKits.welcome.component,
 };
@@ -45,6 +48,7 @@ export const panelComponents: Record<
  * (不会让 terminal 抢 firstResponder)。
  */
 export const panelKinds = {
+  gitChanges: panelKits.gitChanges.kind,
   terminal: panelKits.terminal.kind,
   welcome: panelKits.welcome.kind,
 } as const;
