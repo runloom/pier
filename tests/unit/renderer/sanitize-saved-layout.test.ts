@@ -203,13 +203,18 @@ describe("sanitizeSavedLayout", () => {
     expect(floating[0]?.data?.activeView).toBe("welcome-1");
   });
 
-  it("uses fallback activeView when the source group omits one", () => {
+  it("uses fallback activeView when the source group omits one (during pruning)", () => {
+    // 需要触发剪枝路径才会跑 sanitizeGroupViews 的 fallback —— 否则无剪枝直接透传,
+    // 原 layout 没 activeView 就保留没 activeView。
     const result = sanitizeSavedLayout(
       layout({
-        leaves: [{ groupId: "1", views: ["terminal-1", "welcome-1"] }],
+        leaves: [
+          { groupId: "1", views: ["terminal-1", "welcome-1", "git-changes"] },
+        ],
         panels: [
           { contentComponent: "terminal", id: "terminal-1" },
           { contentComponent: "welcome", id: "welcome-1" },
+          { contentComponent: "pier.git.changes", id: "git-changes" },
         ],
       }),
       known
@@ -218,7 +223,7 @@ describe("sanitizeSavedLayout", () => {
     const branch = result?.grid.root as {
       data?: Array<{ data?: { activeView?: string } }>;
     };
-    // 源里没声明 activeView → fallback 到 keptViews 最后一项("welcome-1")。
+    // 源里没声明 activeView,git-changes 被剪 → fallback 到 keptViews 最后一项。
     expect(branch.data?.[0]?.data?.activeView).toBe("welcome-1");
   });
 
@@ -253,6 +258,68 @@ describe("sanitizeSavedLayout", () => {
     expect(popout.length).toBe(1);
     expect(popout[0]?.data?.views).toEqual(["welcome-1"]);
     expect(popout[0]?.data?.activeView).toBe("welcome-1");
+  });
+
+  it("passes through untouched layout when nothing needs pruning (preserves maximizedNode)", () => {
+    const input = layout({
+      leaves: [
+        { groupId: "1", views: ["terminal-1"] },
+        { groupId: "2", views: ["welcome-1"] },
+      ],
+      panels: [
+        { contentComponent: "terminal", id: "terminal-1" },
+        { contentComponent: "welcome", id: "welcome-1" },
+      ],
+    });
+    (input.grid as Record<string, unknown>).maximizedNode = {
+      location: [0],
+      maximized: true,
+    };
+    const result = sanitizeSavedLayout(input, known);
+    expect(result).not.toBeNull();
+    // 健康 layout 不该被剥 maximizedNode —— 用户保存的最大化状态保留。
+    expect((result?.grid as Record<string, unknown>).maximizedNode).toEqual({
+      location: [0],
+      maximized: true,
+    });
+  });
+
+  it("repoints activeGroup to a surviving group when the original is pruned", () => {
+    const input = layout({
+      leaves: [
+        { groupId: "1", views: ["git-changes"] },
+        { groupId: "2", views: ["terminal-1"] },
+      ],
+      panels: [
+        { contentComponent: "pier.git.changes", id: "git-changes" },
+        { contentComponent: "terminal", id: "terminal-1" },
+      ],
+    });
+    input.activeGroup = "1"; // 被剪掉的 group
+    const result = sanitizeSavedLayout(input, known);
+    expect(result).not.toBeNull();
+    expect((result as unknown as { activeGroup?: string }).activeGroup).toBe(
+      "2"
+    );
+  });
+
+  it("keeps activeGroup unchanged when it still points to a surviving group", () => {
+    const input = layout({
+      leaves: [
+        { groupId: "1", views: ["terminal-1"] },
+        { groupId: "2", views: ["git-changes"] },
+      ],
+      panels: [
+        { contentComponent: "terminal", id: "terminal-1" },
+        { contentComponent: "pier.git.changes", id: "git-changes" },
+      ],
+    });
+    input.activeGroup = "1"; // 仍 surviving
+    const result = sanitizeSavedLayout(input, known);
+    expect(result).not.toBeNull();
+    expect((result as unknown as { activeGroup?: string }).activeGroup).toBe(
+      "1"
+    );
   });
 
   it("drops grid.maximizedNode after pruning to avoid stale paths", () => {

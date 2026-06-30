@@ -178,7 +178,13 @@ export function WorkspaceHost() {
           useWorkspaceStore.getState().addTab();
         }
         for (const panel of victims) {
-          event.api.removePanel(panel);
+          try {
+            event.api.removePanel(panel);
+          } catch {
+            // 同 group 内有多个 plugin panel 时,第一个 remove 会触发 removeGroup,
+            // 其后续 panel 的 group 引用已失效,dockview 会 throw。忽略即可 —— 整组
+            // 已随第一个 panel 一起销毁,后续目标已无需再删。
+          }
         }
       });
 

@@ -63,6 +63,31 @@ function sanitizeGroupViews(
   };
 }
 
+function resolveActiveGroup(
+  original: unknown,
+  surviving: ReadonlySet<string>
+): string | undefined {
+  if (typeof original === "string" && surviving.has(original)) {
+    return original;
+  }
+  return surviving.values().next().value;
+}
+
+function collectLeafGroupIds(node: unknown, out: Set<string>): void {
+  if (isLeaf(node)) {
+    const id = node.data?.id;
+    if (typeof id === "string") {
+      out.add(id);
+    }
+    return;
+  }
+  if (isBranch(node)) {
+    for (const child of node.data ?? []) {
+      collectLeafGroupIds(child, out);
+    }
+  }
+}
+
 function pruneNode(
   node: unknown,
   keepPanelIds: ReadonlySet<string>
@@ -142,6 +167,7 @@ export function sanitizeSavedLayout(
 
   const keepPanelIds = new Set<string>();
   const sanitizedPanels: Record<string, unknown> = {};
+  let panelsPruned = false;
   for (const [panelId, state] of Object.entries(
     panels as Record<string, unknown>
   )) {
@@ -153,6 +179,8 @@ export function sanitizeSavedLayout(
     ) {
       sanitizedPanels[panelId] = state;
       keepPanelIds.add(panelId);
+    } else {
+      panelsPruned = true;
     }
   }
 
@@ -173,18 +201,34 @@ export function sanitizeSavedLayout(
     return null;
   }
 
-  // grid.maximizedNode 是 dockview 的"最大化路径",指向剪枝前的某个 leaf。
-  // 剪枝可能让该路径失效,fromJSON 会抛错或最大化错的 panel。统一丢掉:用户重启后
-  // 自行点 maximize,数据无损失,行为可预测。
+  // 无 panel 被剪 → 透传原 layout,保留 maximizedNode / activeGroup 等用户状态。
+  if (!panelsPruned) {
+    return saved as SerializedDockview;
+  }
+
+  // 真实发生剪枝。处理两个连带状态:
+  // 1) maximizedNode 是"最大化路径",剪枝可能让它指向无效 leaf;fromJSON 会抛错
+  //    或最大化错的 panel,统一丢掉(用户重启后自行点 maximize,数据无损失)。
+  // 2) activeGroup 可能指向被剪掉的 group;dockview 复原后无 active panel,焦点/
+  //    快捷键全废。检测失效后改指 surviving group(优先用剪枝后 grid 的第一个 leaf)。
   const { maximizedNode: _, ...gridWithoutMaximized } = grid as Record<
     string,
     unknown
   >;
+  const survivingGroupIds = new Set<string>();
+  collectLeafGroupIds(prunedRoot, survivingGroupIds);
+
   const sanitized: Record<string, unknown> = {
     ...root,
     grid: { ...gridWithoutMaximized, root: prunedRoot },
     panels: sanitizedPanels,
   };
+
+  sanitized.activeGroup = resolveActiveGroup(
+    (root as { activeGroup?: unknown }).activeGroup,
+    survivingGroupIds
+  );
+
   const floatingGroups = pruneFloatingGroups(root.floatingGroups, keepPanelIds);
   if (floatingGroups !== undefined) {
     sanitized.floatingGroups = floatingGroups;
