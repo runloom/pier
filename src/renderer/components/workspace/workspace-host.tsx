@@ -21,7 +21,10 @@ import {
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { setTerminalBasePanel } from "@/stores/terminal-input-routing.store.ts";
+import {
+  activateTerminalInputRouting,
+  setTerminalBasePanel,
+} from "@/stores/terminal-input-routing.store.ts";
 import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelComponents, panelKindOf } from "./panel-registry.ts";
@@ -258,11 +261,8 @@ export function WorkspaceHost() {
         if (result.ok) {
           // 终端焦点意图：让任何活跃的共存浮层（如搜索栏）让出键盘但保持可见，
           // effective 随 basePanel=terminal 转向终端。
+          activateTerminalInputRouting(req.panelId);
           useTerminalOverlayFocus.getState().yieldToTerminal();
-          setTerminalBasePanel({
-            kind: "terminal",
-            panelId: req.panelId,
-          });
           syncTerminalPresentation(event.api, "dockview-active-panel");
         }
       });

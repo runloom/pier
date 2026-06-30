@@ -54,6 +54,8 @@ const FALLBACK_PALETTE_LIGHT: AnsiPalette = [
   "#f5f5f5",
 ];
 
+const MIN_DIM_TEXT_CONTRAST = 3;
+
 function pickHex(
   colors: Record<string, string>,
   key: string,
@@ -105,7 +107,11 @@ function derivePalette(
     pickHex(colors, "terminal.ansiMagenta", background) ?? fb5,
     pickHex(colors, "terminal.ansiCyan", background) ?? fb6,
     pickHex(colors, "terminal.ansiWhite", background) ?? fb7,
-    pickHex(colors, "terminal.ansiBrightBlack", background) ?? fb8,
+    visibleColor(
+      background,
+      pickHex(colors, "terminal.ansiBrightBlack", background) ?? fb8,
+      MIN_DIM_TEXT_CONTRAST
+    ),
     pickHex(colors, "terminal.ansiBrightRed", background) ?? fb9,
     pickHex(colors, "terminal.ansiBrightGreen", background) ?? fb10,
     pickHex(colors, "terminal.ansiBrightYellow", background) ?? fb11,

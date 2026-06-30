@@ -57,8 +57,8 @@ const FORBIDDEN_HIDE_GUARD_RE =
   /guard panelId != activePanelId else \{ return \}/;
 const FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE =
   /private var activePanelId: String\?/;
-const FOCUS_INTENT_FORWARDS_ONLY_RE =
-  /private func activateFocusIntent\(\) \{\s*Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)\s*\}/;
+const FOCUS_INTENT_ACTIVATES_NATIVE_FIRST_RE =
+  /private func activateFocusIntent\(\) \{\s*if let window \{\s*GhosttyBridgeImpl\.shared\.activateTerminalFocus\(parent: window, panelId: panelId\)\s*\}\s*Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)\s*\}/;
 const OTHER_MOUSE_DOWN_FOCUSES_BEFORE_FORWARD_RE =
   /override func otherMouseDown\(with event: NSEvent\) \{[\s\S]*?capturedTerminalMouseButton = \.other[\s\S]*?activateFocusIntent\(\)[\s\S]*?terminalView\.otherMouseDown\(with: event\)/;
 const FORBIDDEN_NATIVE_FOCUS_MUTATION_RE =
@@ -144,12 +144,14 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(SOURCE).not.toMatch(FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE);
   });
 
-  it("only forwards terminal focus intent instead of mutating native keyboard target", () => {
+  it("activates terminal focus locally before forwarding focus intent", () => {
     const scrollContainerSource = readFileSync(
       TERMINAL_SCROLL_CONTAINER_PATH,
       "utf8"
     );
-    expect(scrollContainerSource).toMatch(FOCUS_INTENT_FORWARDS_ONLY_RE);
+    expect(scrollContainerSource).toMatch(
+      FOCUS_INTENT_ACTIVATES_NATIVE_FIRST_RE
+    );
     expect(scrollContainerSource).not.toMatch(
       FORBIDDEN_NATIVE_FOCUS_MUTATION_RE
     );

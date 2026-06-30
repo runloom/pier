@@ -43,4 +43,31 @@ final class FocusArbiterTests: XCTestCase {
         state.webRequests = ["x"]
         XCTAssertFalse(state.acceptsTerminalKeyboard)
     }
+
+    @MainActor
+    func testNativeTerminalFocusIntentClearsWebRequests() {
+        let window = NSWindow()
+        let impl = GhosttyBridgeImpl.shared
+        impl.applyInputRouting(
+            parent: window,
+            json: """
+            {
+              "basePanel": { "kind": "terminal", "panelId": "terminal-1" },
+              "nativeApplySequence": 1,
+              "rendererSequence": 1,
+              "webOverlayRects": [],
+              "webRequestCount": 1,
+              "windowFocused": true
+            }
+            """
+        )
+        XCTAssertEqual(impl.stateFor(window: window).effectiveTarget, .web)
+
+        impl.activateTerminalFocus(parent: window, panelId: "terminal-1")
+
+        let state = impl.stateFor(window: window)
+        XCTAssertEqual(state.basePanel, .terminal("terminal-1"))
+        XCTAssertTrue(state.webRequests.isEmpty)
+        XCTAssertEqual(state.effectiveTarget, .terminal("terminal-1"))
+    }
 }

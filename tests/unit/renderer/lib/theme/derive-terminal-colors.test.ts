@@ -82,3 +82,39 @@ describe("deriveTerminalColors — selection colors", () => {
     ).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe("deriveTerminalColors — ANSI dim text", () => {
+  it("keeps autosuggestion gray readable in dark themes", () => {
+    const colors = deriveTerminalColors(
+      {
+        colors: {
+          "editor.background": "#0b0b0b",
+          "editor.foreground": "#eeeeee",
+          "terminal.ansiBrightBlack": "#111111",
+        },
+      },
+      "dark"
+    );
+
+    expect(
+      contrast(colors.background, colors.palette[8])
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps autosuggestion gray readable in light themes", () => {
+    const colors = deriveTerminalColors(
+      {
+        colors: {
+          "editor.background": "#fbfbfb",
+          "editor.foreground": "#111111",
+          "terminal.ansiBrightBlack": "#f1f1f1",
+        },
+      },
+      "light"
+    );
+
+    expect(
+      contrast(colors.background, colors.palette[8])
+    ).toBeGreaterThanOrEqual(3);
+  });
+});

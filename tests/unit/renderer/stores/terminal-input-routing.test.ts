@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  activateTerminalInputRouting,
   getLastTerminalInputRoutingSnapshot,
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
@@ -78,6 +79,27 @@ describe("terminal input routing store", () => {
     requestTerminalWebFocus("a");
     requestTerminalWebFocus("a");
     expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(1);
+  });
+
+  it("terminal focus intent clears all web focus requests", () => {
+    setTerminalBasePanel({ kind: "web" });
+    requestTerminalWebFocus("stale-dialog");
+    requestTerminalWebFocus("stale-popover");
+
+    activateTerminalInputRouting("terminal-1");
+
+    expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+      expect.objectContaining({
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        webRequestCount: 0,
+      })
+    );
+    expect(applyInputRouting).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        webRequestCount: 0,
+      })
+    );
   });
 
   it("registers and disposes a fullscreen Web overlay rect", () => {

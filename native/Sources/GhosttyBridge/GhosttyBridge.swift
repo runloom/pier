@@ -676,6 +676,15 @@ final class GhosttyBridgeImpl {
         windowStates[windowId] = state
     }
 
+    func activateTerminalFocus(parent: NSWindow, panelId: String) {
+        mutateState(parent) { state in
+            state.basePanel = .terminal(panelId)
+            state.webRequests.removeAll()
+            state.windowFocused = true
+        }
+        applyFirstResponder(for: parent)
+    }
+
     private func controller(for window: NSWindow) -> TerminalController {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }

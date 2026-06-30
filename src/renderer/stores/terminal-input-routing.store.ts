@@ -86,6 +86,20 @@ export function setTerminalBasePanel(
   applyTerminalInputRouting();
 }
 
+export function activateTerminalInputRouting(panelId: string): void {
+  const nextBasePanel: TerminalKeyboardFocusTarget = {
+    kind: "terminal",
+    panelId,
+  };
+  const shouldApply =
+    !sameBasePanel(basePanel, nextBasePanel) || webRequestIds.size > 0;
+  basePanel = nextBasePanel;
+  webRequestIds.clear();
+  if (shouldApply) {
+    applyTerminalInputRouting();
+  }
+}
+
 /**
  * 浮在终端上的 web 元素声明一次键盘焦点意图。任意活跃请求即把 effective 拉成
  * web。返回的释放函数 idempotent —— 多次调用只在首次真正移除请求时重算。
