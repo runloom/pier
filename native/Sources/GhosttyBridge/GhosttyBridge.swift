@@ -1595,22 +1595,23 @@ final class GhosttyBridgeImpl {
                 return payload
             }
 
-        return Self.jsonString([
+        let windowPayload: [String: Any] = [
+            "activeTerminalPanelId": activeTerminalPanelId,
+            "inputRoutingStaleDiscardCount": inputApplyState?.staleDiscardCount ?? 0,
+            "keyboardFocusTarget": state.effectiveTarget.debugPayload,
+            "lastAppliedInputRoutingSequence": inputApplyState?.lastAppliedRendererSequence ?? 0,
+            "lastAppliedNativeApplySequence": applyState?.lastAppliedNativeApplySequence ?? 0,
+            "lastAppliedRendererSequence": applyState?.lastAppliedRendererSequence ?? 0,
+            "lastPresentationReason": applyState?.lastPresentationReason ?? "",
+            "staleDiscardCount": applyState?.staleDiscardCount ?? 0,
+            "terminalTargetCount": router?.targets.count ?? 0,
+            "webOverlayRectCount": router?.webOverlayRects.count ?? 0,
+        ]
+        let snapshot: [String: Any] = [
             "surfaces": surfaces,
-            "window": [
-                "activeTerminalPanelId": activeTerminalPanelId,
-                "inputRoutingStaleDiscardCount": inputApplyState?.staleDiscardCount ?? 0,
-                "keyboardFocusTarget": state.effectiveTarget.debugPayload,
-                "lastAppliedInputRoutingSequence":
-                    inputApplyState?.lastAppliedRendererSequence ?? 0,
-                "lastAppliedNativeApplySequence": applyState?.lastAppliedNativeApplySequence ?? 0,
-                "lastAppliedRendererSequence": applyState?.lastAppliedRendererSequence ?? 0,
-                "lastPresentationReason": applyState?.lastPresentationReason ?? "",
-                "staleDiscardCount": applyState?.staleDiscardCount ?? 0,
-                "terminalTargetCount": router?.targets.count ?? 0,
-                "webOverlayRectCount": router?.webOverlayRects.count ?? 0,
-            ],
-        ])
+            "window": windowPayload,
+        ]
+        return Self.jsonString(snapshot)
     }
 
     // MARK: - Coordinate conversion

@@ -30,9 +30,9 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  forceCodeSigning: true
   gatekeeperAssess: false
-  identity: null
-  notarize: false
+  notarize: true
 
 dmg:
   contents:
