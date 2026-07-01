@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
+import { installBundledFontFaces } from "./app/fonts.ts";
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { initI18n } from "./i18n/index.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
@@ -28,6 +29,7 @@ import { initTheme } from "./stores/theme.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
 
 async function bootstrap() {
+  installBundledFontFaces();
   const params = new URLSearchParams(window.location.search);
   const debugMode = params.get("pierDebug");
   const targetBrowserWindowId = Number(params.get("targetBrowserWindowId"));

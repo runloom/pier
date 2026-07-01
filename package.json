@@ -37,7 +37,7 @@
     "electron:dev": "node ./scripts/dev-profile.mjs electron-dev",
     "electron:preview": "electron-vite preview",
     "build:electron": "electron-vite build",
-    "build:dist": "pnpm build:native && pnpm build:electron && electron-builder",
+    "build:dist": "pnpm build:native && pnpm build:electron && electron-builder --publish never",
     "build": "pnpm build:electron",
     "setup:worktree": "node ./scripts/setup-worktree.mjs",
     "prepare": "husky",
