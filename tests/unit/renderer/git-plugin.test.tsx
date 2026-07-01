@@ -88,10 +88,22 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       locales: {
         en: {
           commands: {
-            "pier.git.changes.open": { title: "Git: Open Changes" },
-            "pier.worktree.create": { title: "Worktree: Create" },
-            "pier.worktree.delete": { title: "Worktree: Delete..." },
-            "pier.worktree.list": { title: "Worktree: List" },
+            "pier.git.changes.open": {
+              aliases: ["locale git changes"],
+              title: "Git: Open Changes",
+            },
+            "pier.worktree.create": {
+              aliases: ["locale worktree create"],
+              title: "Worktree: Create",
+            },
+            "pier.worktree.delete": {
+              aliases: ["locale worktree delete"],
+              title: "Worktree: Delete...",
+            },
+            "pier.worktree.list": {
+              aliases: ["locale worktree list"],
+              title: "Worktree: List",
+            },
           },
           messages: {
             "ui.createUnavailable": "Worktree creation is not available yet",
@@ -110,10 +122,22 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
         "zh-CN": {
           commands: {
-            "pier.git.changes.open": { title: "Git: 打开变更面板" },
-            "pier.worktree.create": { title: "创建工作树" },
-            "pier.worktree.delete": { title: "删除工作树..." },
-            "pier.worktree.list": { title: "工作树列表" },
+            "pier.git.changes.open": {
+              aliases: ["本地化 Git 变更"],
+              title: "Git: 打开变更面板",
+            },
+            "pier.worktree.create": {
+              aliases: ["本地化创建工作树"],
+              title: "创建工作树",
+            },
+            "pier.worktree.delete": {
+              aliases: ["本地化删除工作树"],
+              title: "删除工作树...",
+            },
+            "pier.worktree.list": {
+              aliases: ["本地化工作树列表"],
+              title: "工作树列表",
+            },
           },
           messages: {
             "ui.createUnavailable": "创建工作树暂未开放",
@@ -331,13 +355,19 @@ describe("git builtin plugin", () => {
 
     expect(
       actionRegistry.get("pier.worktree.list")?.metadata?.aliases?.()
-    ).toEqual(expect.arrayContaining(["git worktree list", "工作树列表"]));
+    ).toEqual(
+      expect.arrayContaining(["locale worktree list", "本地化工作树列表"])
+    );
     expect(
       actionRegistry.get("pier.worktree.create")?.metadata?.aliases?.()
-    ).toEqual(expect.arrayContaining(["git worktree add", "创建工作树"]));
+    ).toEqual(
+      expect.arrayContaining(["locale worktree create", "本地化创建工作树"])
+    );
     expect(
       actionRegistry.get("pier.worktree.delete")?.metadata?.aliases?.()
-    ).toEqual(expect.arrayContaining(["git worktree remove", "删除工作树"]));
+    ).toEqual(
+      expect.arrayContaining(["locale worktree delete", "本地化删除工作树"])
+    );
   });
 
   it("禁用时不注册任何 renderer 贡献", async () => {

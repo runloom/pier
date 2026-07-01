@@ -1,17 +1,41 @@
 {
   "commands": {
     "pier.git.changes.open": {
+      "aliases": ["git changes", "open changes"],
       "title": "Git: Open Changes"
     },
     "pier.worktree.create": {
+      "aliases": [
+        "worktree",
+        "worktree create",
+        "worktree add",
+        "git worktree add",
+        "new worktree",
+        "create worktree"
+      ],
       "description": "Shows the worktree creation entry. Creation is not available yet.",
       "title": "Worktree: Create"
     },
     "pier.worktree.delete": {
+      "aliases": [
+        "worktree",
+        "worktree delete",
+        "worktree remove",
+        "git worktree remove",
+        "remove worktree",
+        "delete worktree"
+      ],
       "description": "Shows the worktree deletion entry. Deletion is not available yet.",
       "title": "Worktree: Delete..."
     },
     "pier.worktree.list": {
+      "aliases": [
+        "worktree",
+        "worktree list",
+        "git worktree",
+        "git worktree list",
+        "workspace worktree"
+      ],
       "description": "Lists Git worktrees for the current repository and opens the selected worktree.",
       "title": "Worktree: List"
     }

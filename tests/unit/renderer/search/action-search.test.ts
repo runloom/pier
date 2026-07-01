@@ -4,6 +4,7 @@ import { initI18n } from "@/i18n/index.ts";
 import { ALL_ACTION_CONTRIBUTIONS } from "@/lib/actions/all-action-contributions.ts";
 import { createActionFromContribution } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContributionRuntime } from "@/lib/actions/contribution-types.ts";
+import { resolveActionAliases } from "@/lib/actions/renderer-action-runtime.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import {
   buildActionSearchDocument,
@@ -39,12 +40,7 @@ const runtime: ActionContributionRuntime = {
       panelCount: 3,
     },
   }),
-  resolveAliases: (key) => {
-    const value = i18next.t(key, { returnObjects: true });
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === "string")
-      : [];
-  },
+  resolveAliases: resolveActionAliases,
   t: (key) => i18next.t(key),
 };
 

@@ -1,9 +1,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import i18next from "i18next";
+import { beforeAll, describe, expect, it } from "vitest";
+import { initI18n } from "@/i18n/index.ts";
 import { en } from "@/i18n/locales/en.ts";
 import { zhCN } from "@/i18n/locales/zh-cn.ts";
 import { ALL_ACTION_CONTRIBUTIONS } from "@/lib/actions/all-action-contributions.ts";
+import { resolveI18nAliases } from "@/lib/actions/renderer-action-runtime.ts";
 import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
 
 const ROOT = process.cwd();
@@ -57,7 +60,18 @@ function nestedValue(source: unknown, key: string): unknown {
     );
 }
 
+function isOptionalStringArray(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.every((item) => typeof item === "string"))
+  );
+}
+
 describe("action contribution boundary", () => {
+  beforeAll(async () => {
+    await initI18n();
+  });
+
   it("does not use legacy action keywords in production renderer code", () => {
     const offenders = sourceFiles(PRODUCTION_SOURCE_DIR)
       .map((filePath) => ({
@@ -92,21 +106,65 @@ describe("action contribution boundary", () => {
     expect(missing).toEqual([]);
   });
 
-  it("resolves every contribution aliasesKey in English and Chinese locales", () => {
-    const aliasesKeys = ALL_ACTION_CONTRIBUTIONS.flatMap((contribution) =>
-      contribution.aliasesKey ? [contribution.aliasesKey] : []
+  it("does not declare aliases on host action contributions", () => {
+    const offenders = ALL_ACTION_CONTRIBUTIONS.filter((contribution) =>
+      Object.hasOwn(contribution, "aliases")
+    ).map((contribution) => contribution.id);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("resolves host action aliases by action id in English and Chinese locales", () => {
+    const aliasKeys = ALL_ACTION_CONTRIBUTIONS.map(
+      (contribution) => `commandPalette.aliases.${contribution.id}`
     );
-    const invalid = aliasesKeys.filter((key) => {
+    const invalid = aliasKeys.filter((key) => {
       const enValue = nestedValue(en, key);
       const zhValue = nestedValue(zhCN, key);
       return !(
-        Array.isArray(enValue) &&
-        enValue.every((item) => typeof item === "string") &&
-        Array.isArray(zhValue) &&
-        zhValue.every((item) => typeof item === "string")
+        isOptionalStringArray(enValue) && isOptionalStringArray(zhValue)
       );
     });
 
     expect(invalid).toEqual([]);
+  });
+
+  it("keeps each host aliases locale scoped to its own language", () => {
+    expect(en.commandPalette.aliases.locale.system).toEqual([
+      "system",
+      "auto",
+      "follow system",
+    ]);
+    expect(en.commandPalette.aliases.locale.en).toEqual(["en", "english"]);
+    expect(en.commandPalette.aliases.pier.view.zoomIn).toEqual([
+      "zoom in",
+      "increase zoom",
+    ]);
+
+    expect(zhCN.commandPalette.aliases.locale.system).toEqual([
+      "系统",
+      "跟随系统",
+      "自动",
+      "xitong",
+      "zidong",
+    ]);
+    expect(zhCN.commandPalette.aliases.locale.en).toEqual([
+      "英文",
+      "英语",
+      "yingwen",
+    ]);
+    expect(zhCN.commandPalette.aliases.pier.view.zoomIn).toEqual([
+      "放大",
+      "放大界面",
+      "fangda",
+    ]);
+  });
+
+  it("resolves host aliases from every registered locale", async () => {
+    await i18next.changeLanguage("en");
+
+    expect(
+      resolveI18nAliases("commandPalette.aliases.pier.view.zoomIn")
+    ).toEqual(["zoom in", "increase zoom", "放大", "放大界面", "fangda"]);
   });
 });

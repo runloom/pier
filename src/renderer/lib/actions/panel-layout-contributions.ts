@@ -37,7 +37,6 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       when: "workspace.hasActivePanel",
     },
     {
-      aliasesKey: "commandPalette.aliases.equalizePanels",
       categoryKey: "panel",
       group: "4_layout",
       handler: () => useWorkspaceStore.getState().equalizeSplits(),

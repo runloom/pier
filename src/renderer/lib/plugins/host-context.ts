@@ -23,6 +23,7 @@ import type {
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
 import {
+  resolvePluginCommandAliases,
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
@@ -64,39 +65,64 @@ function createPluginI18n(
   };
 }
 
+function pluginCommandAliases(
+  entry: PluginRegistryEntry | undefined,
+  commandId: string
+): readonly string[] {
+  const command = entry?.manifest.commands.find(
+    (item) => item.id === commandId
+  );
+  if (!(entry && command)) {
+    return [];
+  }
+  return resolvePluginCommandAliases(
+    entry.manifest,
+    command,
+    i18next.language || "en"
+  );
+}
+
 function adaptActionMetadata(
-  metadata: RendererPluginAction["metadata"]
+  metadata: RendererPluginAction["metadata"],
+  entry: PluginRegistryEntry | undefined,
+  actionId: string
 ): ActionMetadata | undefined {
-  if (!metadata) {
+  const hasPluginCommandAliases =
+    entry?.manifest.commands.some((command) => command.id === actionId) ??
+    false;
+  if (!(metadata || hasPluginCommandAliases)) {
     return;
   }
   const adapted: ActionMetadata = {};
-  if (metadata.aliases) {
-    adapted.aliases = metadata.aliases;
+  if (hasPluginCommandAliases) {
+    adapted.aliases = () => pluginCommandAliases(entry, actionId);
   }
-  if (metadata.categoryKey) {
+  if (metadata?.categoryKey) {
     adapted.categoryKey = metadata.categoryKey;
   }
-  if (metadata.excludeFromMru === true) {
+  if (metadata?.excludeFromMru === true) {
     adapted.excludeFromMru = true;
   }
-  if (metadata.group) {
+  if (metadata?.group) {
     adapted.group = metadata.group;
   }
-  if (metadata.iconComponent) {
+  if (metadata?.iconComponent) {
     adapted.iconComponent = metadata.iconComponent;
   }
-  if (metadata.sortOrder != null) {
+  if (metadata?.sortOrder != null) {
     adapted.sortOrder = metadata.sortOrder;
   }
-  if (metadata.submenu) {
+  if (metadata?.submenu) {
     adapted.submenu = metadata.submenu;
   }
   return adapted;
 }
 
-function adaptAction(action: RendererPluginAction): Action {
-  const metadata = adaptActionMetadata(action.metadata);
+function adaptAction(
+  action: RendererPluginAction,
+  entry: PluginRegistryEntry | undefined
+): Action {
+  const metadata = adaptActionMetadata(action.metadata, entry, action.id);
   return {
     category: action.category,
     handler: action.handler,
@@ -232,7 +258,7 @@ export function createRendererPluginContext(
     actions: {
       register: (action) => {
         assertDeclaredContribution(entry, "action", action.id);
-        return actionRegistry.register(adaptAction(action));
+        return actionRegistry.register(adaptAction(action, entry));
       },
     },
     commandPalette: {

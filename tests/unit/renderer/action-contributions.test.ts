@@ -21,8 +21,8 @@ function runtime(groupCount: number) {
         panelCount: groupCount,
       },
     }),
-    resolveAliases: (key: string) =>
-      key === "commandPalette.aliases.equalizePanels"
+    resolveAliases: (actionId: string) =>
+      actionId === "pier.panel.equalizeSplits"
         ? ["平分面板", "balance panels", "junfen", "jfmb"]
         : [],
     t: (key: string) => key,
@@ -79,9 +79,6 @@ describe("action contributions", () => {
       (action) => action.id === "pier.panel.equalizeSplits"
     );
 
-    expect(contribution?.aliasesKey).toBe(
-      "commandPalette.aliases.equalizePanels"
-    );
     expect(contribution?.when).toBe("workspace.groupCount > 1");
     if (!contribution) {
       throw new Error("missing equalize contribution");

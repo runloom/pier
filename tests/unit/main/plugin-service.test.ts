@@ -93,6 +93,7 @@ describe("pluginManifestSchema", () => {
           "zh-CN": {
             commands: {
               "sample.sayHello": {
+                aliases: ["hello", "ni hao"],
                 description: "输出问候语。",
                 title: "打招呼",
               },
@@ -126,7 +127,10 @@ describe("pluginManifestSchema", () => {
       locales: {
         "zh-CN": {
           commands: {
-            "sample.sayHello": { title: "打招呼" },
+            "sample.sayHello": {
+              aliases: ["hello", "ni hao"],
+              title: "打招呼",
+            },
           },
           description: "示例内置插件",
           messages: {
@@ -278,6 +282,13 @@ describe("createPluginService", () => {
           files: { "zh-CN": "locales/zh-CN.json" },
           locales: ["en", "zh-CN"],
         },
+        locales: {
+          "zh-CN": {
+            commands: {
+              "sample.sayHello": { title: "打招呼" },
+            },
+          },
+        },
         name: "Sample Local",
         source: { kind: "local", url: localPath },
       })
@@ -286,7 +297,7 @@ describe("createPluginService", () => {
       localePath,
       JSON.stringify({
         commands: {
-          "sample.sayHello": { title: "打招呼" },
+          "sample.sayHello": { aliases: ["ni hao"] },
         },
         description: "本地示例插件",
         name: "本地示例",
@@ -303,7 +314,7 @@ describe("createPluginService", () => {
         locales: {
           "zh-CN": {
             commands: {
-              "sample.sayHello": { title: "打招呼" },
+              "sample.sayHello": { aliases: ["ni hao"], title: "打招呼" },
             },
             description: "本地示例插件",
             name: "本地示例",

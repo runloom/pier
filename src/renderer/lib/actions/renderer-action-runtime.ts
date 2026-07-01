@@ -26,16 +26,51 @@ export function rendererActionContext(): ActionWhenContext {
   };
 }
 
-export function resolveI18nAliases(key: string): readonly string[] {
-  const value = i18next.t(key, { returnObjects: true });
+function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function nestedValue(source: unknown, key: string): unknown {
+  return key
+    .split(".")
+    .reduce<unknown>(
+      (current, segment) =>
+        current && typeof current === "object"
+          ? (current as Record<string, unknown>)[segment]
+          : undefined,
+      source
+    );
+}
+
+function registeredI18nLanguages(): string[] {
+  return Object.keys(i18next.store.data);
+}
+
+function aliasesForLanguage(language: string, key: string): string[] {
+  const bundle = i18next.getResourceBundle(language, "translation");
+  const value = nestedValue(bundle, key);
   if (!Array.isArray(value)) {
     return [];
   }
   return value.filter((item): item is string => typeof item === "string");
 }
 
+export function resolveI18nAliases(key: string): readonly string[] {
+  const languages = uniqueStrings([
+    i18next.language,
+    ...registeredI18nLanguages(),
+  ]);
+  return uniqueStrings(
+    languages.flatMap((language) => aliasesForLanguage(language, key))
+  );
+}
+
+export function resolveActionAliases(actionId: string): readonly string[] {
+  return resolveI18nAliases(`commandPalette.aliases.${actionId}`);
+}
+
 export const rendererActionContributionRuntime: ActionContributionRuntime = {
   getContext: rendererActionContext,
-  resolveAliases: resolveI18nAliases,
+  resolveAliases: resolveActionAliases,
   t: (key, params) => (params ? i18next.t(key, params) : i18next.t(key)),
 };

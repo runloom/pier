@@ -6,7 +6,6 @@ import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action
 export const TERMINAL_DEBUG_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
   [
     {
-      aliasesKey: "commandPalette.aliases.openTerminalDebugWindow",
       categoryKey: "terminal",
       group: "8_debug",
       handler: () => {

@@ -411,7 +411,6 @@ function openTerminalListQuickPick() {
 
 export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
-    aliasesKey: "commandPalette.aliases.runTask",
     categoryKey: "run",
     group: "1_run",
     handler: openRunTaskQuickPick,
@@ -422,7 +421,6 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "commandPalette.action.runTask",
   },
   {
-    aliasesKey: "commandPalette.aliases.terminalList",
     categoryKey: "run",
     group: "1_run",
     handler: openTerminalListQuickPick,

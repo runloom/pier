@@ -9,14 +9,6 @@ export function registerGitChangesAction(
     handler: () => context.panels.open("pier.git.changes"),
     id: "pier.git.changes.open",
     metadata: {
-      aliases: () => [
-        "git changes",
-        "open changes",
-        "变更",
-        "打开变更面板",
-        "biangeng",
-        context.i18n.commandTitle("pier.git.changes.open", "Git: Open Changes"),
-      ],
       categoryKey: "git",
       group: "1_worktree",
       iconComponent: GitBranch,

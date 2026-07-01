@@ -1,17 +1,32 @@
 {
   "commands": {
     "pier.git.changes.open": {
+      "aliases": ["变更", "打开变更面板", "biangeng"],
       "title": "Git: 打开变更面板"
     },
     "pier.worktree.create": {
+      "aliases": [
+        "工作树",
+        "创建工作树",
+        "gongzuoshu",
+        "chuangjian gongzuoshu"
+      ],
       "description": "创建工作树入口当前仅展示，暂未开放。",
       "title": "创建工作树"
     },
     "pier.worktree.delete": {
+      "aliases": [
+        "工作树",
+        "删除工作树",
+        "移除工作树",
+        "gongzuoshu",
+        "shanchu gongzuoshu"
+      ],
       "description": "删除工作树入口当前仅展示，暂未开放。",
       "title": "删除工作树..."
     },
     "pier.worktree.list": {
+      "aliases": ["工作树", "工作树列表", "gongzuoshu", "gong zuo shu"],
       "description": "列出当前仓库的 Git worktree 并打开目标工作树。",
       "title": "工作树列表"
     }

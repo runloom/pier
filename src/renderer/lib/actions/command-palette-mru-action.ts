@@ -7,7 +7,6 @@ import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 export const COMMAND_PALETTE_MRU_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
   [
     {
-      aliasesKey: "commandPalette.aliases.clearRecent",
       categoryKey: "settings",
       excludeFromMru: true,
       handler: () => {

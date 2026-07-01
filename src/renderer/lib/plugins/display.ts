@@ -40,6 +40,17 @@ function localeCandidates(
   ]);
 }
 
+function allLocaleCandidates(
+  manifest: PluginManifest,
+  locale: string
+): string[] {
+  return unique([
+    ...localeCandidates(locale, manifest.localization?.defaultLocale),
+    ...(manifest.localization?.locales ?? []),
+    ...Object.keys(manifest.locales ?? {}),
+  ]);
+}
+
 function resolveFromLocales(
   manifest: PluginManifest,
   locale: string,
@@ -59,6 +70,22 @@ function resolveFromLocales(
     }
   }
   return;
+}
+
+function resolveListFromLocales(
+  manifest: PluginManifest,
+  locale: string,
+  pick: (messages: PluginLocaleMessages) => readonly string[] | undefined
+): string[] {
+  const values: string[] = [];
+  for (const candidate of allLocaleCandidates(manifest, locale)) {
+    const value = manifest.locales?.[candidate];
+    if (!value) {
+      continue;
+    }
+    values.push(...(pick(value) ?? []));
+  }
+  return unique(values);
 }
 
 function interpolateMessage(
@@ -126,6 +153,18 @@ export function resolvePluginCommandDisplay(
       ) ?? command.title,
     ...(description ? { description } : {}),
   };
+}
+
+export function resolvePluginCommandAliases(
+  manifest: PluginManifest,
+  command: PluginCommandContribution,
+  locale: string
+): string[] {
+  return resolveListFromLocales(
+    manifest,
+    locale,
+    (messages) => messages.commands?.[command.id]?.aliases
+  );
 }
 
 export function resolvePluginPanelDisplay(

@@ -21,7 +21,6 @@ export type ActionWhenExpression =
   | `${ActionWhenClause}${ActionWhenAnd}${string}`;
 
 export interface ActionContribution {
-  aliasesKey?: string;
   categoryKey: ActionCategoryKey;
   excludeFromMru?: boolean;
   group?: string;
@@ -52,6 +51,6 @@ export interface ActionWhenContext {
 
 export interface ActionContributionRuntime {
   getContext: () => ActionWhenContext;
-  resolveAliases: (key: string) => readonly string[];
+  resolveAliases: (actionId: string) => readonly string[];
   t: (key: string, params?: Record<string, number | string>) => string;
 }

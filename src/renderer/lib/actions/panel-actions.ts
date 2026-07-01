@@ -17,7 +17,6 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     when: "workspace.hasApi",
   },
   {
-    aliasesKey: "commandPalette.aliases.newTerminal",
     categoryKey: "run",
     group: "1_new",
     handler: () => {
@@ -43,7 +42,6 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "commandPalette.action.newWindow",
   },
   {
-    aliasesKey: "commandPalette.aliases.resetLayout",
     categoryKey: "workspace",
     group: "z_workspace",
     handler: () => {

@@ -6,7 +6,6 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 export const SETTINGS_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
-    aliasesKey: "commandPalette.aliases.openSettings",
     categoryKey: "settings",
     group: "5_appearance",
     handler: () => {

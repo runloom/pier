@@ -1,6 +1,7 @@
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 import type {
   PluginLocaleMessages,
+  PluginLocalizedContribution,
   PluginManifest,
   PluginRegistryDiagnostic,
   PluginRegistryDiagnosticSource,
@@ -30,6 +31,25 @@ function parseLocaleMessages(raw: unknown): PluginLocaleMessages {
   return parsed.data;
 }
 
+function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function mergeLocalizedContribution(
+  base: PluginLocalizedContribution | undefined,
+  overlay: PluginLocalizedContribution
+): PluginLocalizedContribution {
+  const aliases = uniqueStrings([
+    ...(base?.aliases ?? []),
+    ...(overlay.aliases ?? []),
+  ]);
+  return {
+    ...(base ?? {}),
+    ...overlay,
+    ...(aliases.length > 0 ? { aliases } : {}),
+  };
+}
+
 function mergeContributionMessages(
   base: PluginLocaleMessages["commands"],
   overlay: PluginLocaleMessages["commands"]
@@ -37,7 +57,11 @@ function mergeContributionMessages(
   if (!(base || overlay)) {
     return;
   }
-  return { ...(base ?? {}), ...(overlay ?? {}) };
+  const merged = { ...(base ?? {}) };
+  for (const [id, contribution] of Object.entries(overlay ?? {})) {
+    merged[id] = mergeLocalizedContribution(base?.[id], contribution);
+  }
+  return merged;
 }
 
 function mergeUiMessages(
