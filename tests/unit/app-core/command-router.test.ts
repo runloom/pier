@@ -145,6 +145,13 @@ function services(
       read: async () => ({ entries: [], version: 1 }),
       recordUse: async () => undefined,
     },
+    secrets: {
+      get: async () => null,
+      set: async () => undefined,
+      delete: async () => undefined,
+      list: async () => [],
+      flush: async () => undefined,
+    },
     preferences: {
       read: async () => ({
         language: "system",

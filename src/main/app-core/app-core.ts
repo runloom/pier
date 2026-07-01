@@ -19,6 +19,7 @@ import { createTerminalProfileService } from "../services/terminal-profile-servi
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
+import { createSecretsStore } from "../state/secrets-store.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { windowManager } from "../windows/window-manager.ts";
@@ -104,6 +105,7 @@ function createPierAppCore(): PierAppCore {
       broadcast: broadcastMruState,
     }),
     preferences: createPreferencesService({ eventBus }),
+    secrets: createSecretsStore(),
     processEnvironment: createProcessEnvironmentService(),
     plugins: pluginHost.plugins,
     panelContexts: createPanelContextService(),

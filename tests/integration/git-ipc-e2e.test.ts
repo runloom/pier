@@ -63,6 +63,7 @@ function makeServices(): PierCoreServices {
     panelContexts: trap as never,
     plugins: trap as never,
     preferences: trap as never,
+    secrets: trap as never,
     processEnvironment: trap as never,
     rendererCommand: trap as never,
     tasks: trap as never,

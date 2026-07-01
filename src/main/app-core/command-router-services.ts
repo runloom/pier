@@ -12,6 +12,7 @@ import type { ProcessEnvironmentService } from "../services/process-environment-
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
 import type { WorktreeService } from "../services/worktree-service.ts";
+import type { SecretsStore } from "../state/secrets-store.ts";
 
 export interface PierCoreServices {
   commandPaletteMru: {
@@ -33,6 +34,7 @@ export interface PierCoreServices {
   };
   processEnvironment: ProcessEnvironmentService;
   rendererCommand: RendererCommandService;
+  secrets: SecretsStore;
   tasks: TaskService;
   terminalLaunches: {
     consume(

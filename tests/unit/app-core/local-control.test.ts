@@ -113,6 +113,13 @@ function cliClientServices(): PierCoreServices {
         worktreeKey: path,
       }),
     },
+    secrets: {
+      get: async () => null,
+      set: async () => undefined,
+      delete: async () => undefined,
+      list: async () => [],
+      flush: async () => undefined,
+    },
     plugins: {
       inspect: async () => null,
       list: async () => ({ diagnostics: [], entries: [] }),

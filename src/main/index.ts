@@ -20,6 +20,7 @@ import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
+import { registerSecretsIpc } from "./ipc/secrets.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
@@ -225,6 +226,7 @@ app.whenReady().then(async () => {
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
+  registerSecretsIpc(ipcMain, appCore.services.secrets);
   registerRendererCommandIpc(ipcMain);
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
   registerBundledFonts();
@@ -290,17 +292,22 @@ app.on("before-quit", (event) => {
   if (!didFlushBeforeQuit) {
     event.preventDefault();
     didFlushBeforeQuit = true;
-    appCore.services.window
-      .flushOpenWindows()
-      .catch((error) => {
+    Promise.all([
+      appCore.services.window.flushOpenWindows().catch((error) => {
         console.error(
           "[window] failed to flush windows before quit:",
           error instanceof Error ? error.message : String(error)
         );
-      })
-      .finally(() => {
-        app.quit();
-      });
+      }),
+      appCore.services.secrets.flush().catch((error) => {
+        console.error(
+          "[secrets] failed to flush before quit:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }),
+    ]).finally(() => {
+      app.quit();
+    });
     return;
   }
   windowManager.destroyAllForQuit();
