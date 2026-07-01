@@ -18,7 +18,12 @@ export function registerAssetScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: ASSET_SCHEME,
-      privileges: { standard: true, secure: true, supportFetchAPI: true },
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+      },
     },
   ]);
 }
