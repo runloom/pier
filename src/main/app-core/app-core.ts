@@ -126,8 +126,17 @@ function createPierAppCore(): PierAppCore {
     }),
     workspace: createWorkspaceService(),
     worktrees: createWorktreeService(),
-    git: createGitService(),
-    gitWatch: createGitWatchService(),
+    ...(() => {
+      // git 与 gitWatch 一体：watch 广播需带 status snapshot（多订阅共享 + 免竞态），
+      // 所以在这里显式绑 getStatus，避免拆构造顺序
+      const git = createGitService();
+      return {
+        git,
+        gitWatch: createGitWatchService({
+          getStatus: (gitRoot: string) => git.getStatus(gitRoot),
+        }),
+      };
+    })(),
   };
   return {
     clients,

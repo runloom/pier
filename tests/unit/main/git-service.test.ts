@@ -23,6 +23,7 @@ describe("parseGitStatus", () => {
       ahead: 2,
       behind: 1,
       branch: "main",
+      oid: "abc123",
       upstream: "origin/main",
     });
     expect(result.files).toEqual([]);
@@ -35,14 +36,25 @@ describe("parseGitStatus", () => {
       ahead: 0,
       behind: 0,
       branch: "main",
+      oid: null,
       upstream: null,
     });
   });
 
-  it("detached HEAD 时 branch 为 null", () => {
-    const output = "# branch.head (detached)\0";
+  it("detached HEAD 时 branch 为 null，oid 保留可用于 UI 短 sha", () => {
+    const output = `${["# branch.oid 5c8f9a1", "# branch.head (detached)"].join(
+      "\0"
+    )}\0`;
 
-    expect(parseGitStatus(output).branch.branch).toBeNull();
+    const parsed = parseGitStatus(output);
+    expect(parsed.branch.branch).toBeNull();
+    expect(parsed.branch.oid).toBe("5c8f9a1");
+  });
+
+  it("空仓库 `# branch.oid (initial)` → oid 为 null", () => {
+    const output = "# branch.oid (initial)\0";
+
+    expect(parseGitStatus(output).branch.oid).toBeNull();
   });
 
   it("解析 ordinary 变更文件的 XY 状态码与路径", () => {
@@ -258,27 +270,66 @@ describe("parseGitBranchRefs", () => {
 });
 
 describe("createGitService", () => {
-  it("getStatus 用 porcelain=v2 --branch -z 并解析结果", async () => {
-    const calls: Array<{ args: readonly string[]; cwd: string }> = [];
+  it("getStatus 汇总 status + delta + stash + repoState + upstreamGone", async () => {
+    const argSets: Array<readonly string[]> = [];
     const service = createGitService({
       execGit: (args, cwd) => {
-        calls.push({ args, cwd });
-        return Promise.resolve(
-          `${[
-            "# branch.head main",
-            "1 .M N... 100644 100644 100644 a b src/foo.ts",
-          ].join("\0")}\0`
-        );
+        argSets.push(args);
+        if (args[0] === "status") {
+          expect(cwd).toBe("/repo");
+          return Promise.resolve(
+            `${[
+              "# branch.head main",
+              "# branch.upstream origin/main",
+              "1 .M N... 100644 100644 100644 a b src/foo.ts",
+            ].join("\0")}\0`
+          );
+        }
+        if (args[0] === "diff") {
+          // staged 与 unstaged 都返回 numstat
+          return Promise.resolve(
+            args.includes("--cached") ? "5\t2\ta.ts\0" : "3\t1\tb.ts\0"
+          );
+        }
+        if (args[0] === "rev-list") {
+          // stash count
+          return Promise.resolve("2\n");
+        }
+        if (args[0] === "rev-parse") {
+          // gitDir
+          return Promise.resolve("/tmp/nonexistent-gitdir\n");
+        }
+        if (args[0] === "for-each-ref") {
+          // upstream track
+          return Promise.resolve("[ahead 1]\n");
+        }
+        return Promise.resolve("");
       },
     });
 
     const status = await service.getStatus("/repo");
 
-    expect(calls).toEqual([
-      { args: ["status", "--porcelain=v2", "--branch", "-z"], cwd: "/repo" },
-    ]);
+    expect(argSets.some((a) => a[0] === "status")).toBe(true);
+    expect(argSets.some((a) => a[0] === "diff" && a.includes("--cached"))).toBe(
+      true
+    );
+    expect(
+      argSets.some((a) => a[0] === "diff" && !a.includes("--cached"))
+    ).toBe(true);
+    expect(argSets.some((a) => a[0] === "rev-list")).toBe(true);
+    expect(argSets.some((a) => a[0] === "for-each-ref")).toBe(true);
     expect(status.branch.branch).toBe("main");
+    expect(status.branch.upstreamGone).toBe(false);
     expect(status.files).toHaveLength(1);
+    expect(status.counts).toEqual({
+      conflict: 0,
+      modified: 1,
+      staged: 0,
+      untracked: 0,
+    });
+    expect(status.delta).toEqual({ deletions: 3, insertions: 8 });
+    expect(status.stashCount).toBe(2);
+    expect(status.repoState).toEqual({ kind: "clean" });
   });
 
   // C3: 默认带 --no-color + --no-ext-diff（防用户配 diff.external 覆盖输出）
@@ -356,6 +407,7 @@ describe("createGitService", () => {
     await expect(service.getRepoInfo("/repo")).resolves.toEqual({
       defaultBranch: "main",
       gitCommonDir: "/repo/.git",
+      gitDir: "/repo/.git",
       gitRoot: "/repo",
       headOid: "abc123",
       isBare: false,

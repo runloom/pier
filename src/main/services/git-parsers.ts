@@ -3,22 +3,44 @@
  * 所有解析器都接受字符串、不发副作用、不依赖任何运行时状态;便于单测喂 fixture。
  */
 import type {
-  GitBranchInfo,
   GitBranchRef,
   GitCommit,
+  GitCounts,
   GitDiffFilePatch,
   GitDiffHunk,
   GitDiffPatch,
   GitDiffStat,
   GitFileStatus,
-  GitStatus,
 } from "../../shared/contracts/git.ts";
+
+/**
+ * `parseGitStatus` 输出的中间形态：只含 `git status --porcelain=v2` 能直接解析出的信息。
+ * `upstreamGone / counts / delta / repoState / stashCount` 由 service 端合成到最终 GitStatus。
+ */
+export interface ParsedGitStatus {
+  branch: {
+    ahead: number;
+    behind: number;
+    branch: string | null;
+    oid: string | null;
+    upstream: string | null;
+  };
+  files: GitFileStatus[];
+}
 
 const BRANCH_AB_RE = /^\+(\d+) -(\d+)$/;
 const DIFF_HEADER_RE = /^diff --git a\/(.+) b\/(.+)$/;
 const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
-function applyBranchHeader(branch: GitBranchInfo, header: string): void {
+function applyBranchHeader(
+  branch: ParsedGitStatus["branch"],
+  header: string
+): void {
+  if (header.startsWith("branch.oid ")) {
+    const oid = header.slice("branch.oid ".length);
+    branch.oid = oid === "(initial)" ? null : oid;
+    return;
+  }
   if (header.startsWith("branch.head ")) {
     const name = header.slice("branch.head ".length);
     branch.branch = name === "(detached)" ? null : name;
@@ -72,11 +94,12 @@ function parseUnmergedEntry(record: string): GitFileStatus {
  * 记录以 NUL 分隔；"# " 开头是分支 header,"1"/"2"/"u"/"?" 开头是文件条目。
  * rename("2")额外占用紧跟的 origPath 记录。
  */
-export function parseGitStatus(output: string): GitStatus {
-  const branch: GitBranchInfo = {
+export function parseGitStatus(output: string): ParsedGitStatus {
+  const branch: ParsedGitStatus["branch"] = {
     ahead: 0,
     behind: 0,
     branch: null,
+    oid: null,
     upstream: null,
   };
   const files: GitFileStatus[] = [];
@@ -111,6 +134,34 @@ export function parseGitStatus(output: string): GitStatus {
   }
 
   return { branch, files };
+}
+
+/**
+ * 从 files 派生工作区分类计数：staged / modified / untracked / conflict。
+ * 与 porcelain v2 XY 状态码约定一致（unmerged 用 `u` 单独标记）。
+ */
+export function deriveCounts(files: readonly GitFileStatus[]): GitCounts {
+  let staged = 0;
+  let modified = 0;
+  let untracked = 0;
+  let conflict = 0;
+  for (const file of files) {
+    if (file.index === "u" || file.worktree === "u") {
+      conflict += 1;
+      continue;
+    }
+    if (file.index === "?" && file.worktree === "?") {
+      untracked += 1;
+      continue;
+    }
+    if (file.index !== "." && file.index !== "?") {
+      staged += 1;
+    }
+    if (file.worktree !== "." && file.worktree !== "?") {
+      modified += 1;
+    }
+  }
+  return { conflict, modified, staged, untracked };
 }
 
 /**

@@ -17,12 +17,19 @@ import type {
 } from "../../shared/contracts/git.ts";
 import { execGit } from "./git-exec.ts";
 import {
+  deriveCounts,
   parseGitBranchRefs,
   parseGitLog,
   parseGitNumstat,
   parseGitStatus,
   parseUnifiedDiff,
 } from "./git-parsers.ts";
+import {
+  detectRepoState,
+  detectUpstreamGone,
+  getLineDelta,
+  getStashCount,
+} from "./git-status-detectors.ts";
 
 const GIT_LOG_FORMAT = "%H%x1f%an%x1f%aI%x1f%s%x1e";
 const ORIGIN_HEAD_RE = /^refs\/remotes\/origin\/(.+)$/;
@@ -258,6 +265,7 @@ export function createGitService({
       return {
         defaultBranch,
         gitCommonDir,
+        gitDir,
         gitRoot,
         headOid,
         isBare: bareOutput === "true",
@@ -265,11 +273,39 @@ export function createGitService({
       };
     },
     getStatus: async (cwd) => {
-      const output = await execGit(
-        ["status", "--porcelain=v2", "--branch", "-z"],
-        cwd
-      );
-      return parseGitStatus(output);
+      // wave 1：可并发的独立 op（status 输出 + 增删 + stash + gitDir 解析）
+      const [statusOut, delta, stashCount, gitDirOut] = await Promise.all([
+        execGit(["status", "--porcelain=v2", "--branch", "-z"], cwd),
+        getLineDelta(execGit, cwd),
+        getStashCount(execGit, cwd),
+        execGit(
+          ["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
+          cwd
+        ),
+      ]);
+      const parsed = parseGitStatus(statusOut);
+      const counts = deriveCounts(parsed.files);
+      // wave 2：依赖 wave 1 的派生值（gitDir + conflictCount / branch 名）
+      const gitDir = gitDirOut.trim();
+      const [repoState, upstreamGone] = await Promise.all([
+        detectRepoState(gitDir, counts.conflict),
+        detectUpstreamGone(execGit, cwd, parsed.branch.branch),
+      ]);
+      return {
+        branch: {
+          ahead: parsed.branch.ahead,
+          behind: parsed.branch.behind,
+          branch: parsed.branch.branch,
+          oid: parsed.branch.oid,
+          upstream: parsed.branch.upstream,
+          upstreamGone,
+        },
+        counts,
+        delta,
+        files: parsed.files,
+        repoState,
+        stashCount,
+      };
     },
     isWorkingTreeClean: async (cwd) => {
       const output = await execGit(
