@@ -38,6 +38,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     context: panelContextSchema.optional(),
     focus: z.boolean().optional(),
     launchId: z.string().min(1),
+    panelId: z.string().min(1).optional(),
     placement: pierCommandPlacementSchema.optional(),
     tab: z.preprocess(
       normalizePanelTabChromeInput,

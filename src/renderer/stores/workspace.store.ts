@@ -5,12 +5,13 @@ import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
-import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
+import { focusWorkspaceGroup } from "@/stores/workspace-focus-group.ts";
+import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 
 interface WorkspaceState {
   activateTabInActiveGroup: (index: number) => void;
@@ -129,22 +130,6 @@ function panelsInSameGroup(
   }
   return api.panels;
 }
-
-/**
- * 拿 dockview group 的 HTMLElement. dockview 没把 group.element 列入 public API,
- * cast + instanceof 守卫: 升级 dockview 若改 group 类型, focus 安全降级为 no-op
- * 而非 crash.
- */
-function getGroupElement(g: unknown): HTMLElement | null {
-  const el = (g as { element?: HTMLElement } | null)?.element;
-  return el instanceof HTMLElement ? el : null;
-}
-
-/**
- * = pierTheme.gap (4) + 1. 改 gap 必须同步此常量.
- * 容忍像素让相邻 group 的边界比较不被 gap 卡掉.
- */
-const FOCUS_TOL_PX = 5;
 
 async function clearCurrentWindowLayout(): Promise<void> {
   const context = await window.pier.getWindowContext();
@@ -271,22 +256,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
     if (api.totalPanels <= 1) {
       if (panel.view.contentComponent === "terminal") {
-        window.pier?.terminal?.close?.(panel.id);
+        closeNativeTerminalPanel(panel.id);
       }
       closeCurrentWindow().catch((err) => {
         console.error("[workspace] closeCurrentWindow failed:", err);
       });
       return;
     }
-    // 主动先发 native terminal close IPC, 再 removePanel — native session 生命周期
-    // 只绑定显式 workspace close 操作, 不绑定 React unmount. 这样 Electron reload
-    // 卸载 renderer tree 时不会误杀可复用的 Ghostty surface / PTY.
-    //
-    // 用 panel.view.contentComponent 而非 panel.params?.component:
-    // contentComponent 是 dockview 注册组件的 stable readonly string (panel-registry
-    // 的 key), params 是用户传入的自由数据, 不保证有 component 字段.
+    // 主动先发 native close IPC, 再 removePanel；不把 React unmount 当显式关闭.
+    // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
     if (panel.view.contentComponent === "terminal") {
-      window.pier?.terminal?.close?.(panel.id);
+      closeNativeTerminalPanel(panel.id);
     }
     api.removePanel(panel);
   },
@@ -302,7 +282,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
     if (api.totalPanels <= 1) {
       if (panel.view.contentComponent === "terminal") {
-        window.pier?.terminal?.close?.(panel.id);
+        closeNativeTerminalPanel(panel.id);
       }
       closeCurrentWindow().catch((err) => {
         console.error("[workspace] closeCurrentWindow failed:", err);
@@ -310,7 +290,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     if (panel.view.contentComponent === "terminal") {
-      window.pier?.terminal?.close?.(panel.id);
+      closeNativeTerminalPanel(panel.id);
     }
     api.removePanel(panel);
   },
@@ -329,7 +309,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     );
     for (const p of toClose) {
       if (p.view.contentComponent === "terminal") {
-        window.pier?.terminal?.close?.(p.id);
+        closeNativeTerminalPanel(p.id);
       }
       api.removePanel(p);
     }
@@ -350,7 +330,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const all = [...api.panels];
     for (const p of all) {
       if (p.view.contentComponent === "terminal") {
-        window.pier?.terminal?.close?.(p.id);
+        closeNativeTerminalPanel(p.id);
       }
       api.removePanel(p);
     }
@@ -408,52 +388,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   focusGroup: (direction) => {
     const api = get().api;
-    if (!api) {
-      return;
+    if (api) {
+      focusWorkspaceGroup(api, direction);
     }
-    const active = api.activeGroup;
-    if (!active) {
-      return;
-    }
-    if (api.groups.length < 2) {
-      return;
-    }
-
-    const activeEl = getGroupElement(active);
-    if (!activeEl) {
-      return;
-    }
-    const activeRect = activeEl.getBoundingClientRect();
-
-    const candidates = api.groups.map((g) => ({
-      id: g.id,
-      isActive: g.id === active.id,
-      rect: getGroupElement(g)?.getBoundingClientRect() ?? null,
-    }));
-    const targetIdx = pickFocusTarget(
-      activeRect,
-      candidates,
-      direction,
-      FOCUS_TOL_PX
-    );
-    if (targetIdx === null) {
-      return;
-    }
-
-    const targetGroup = api.groups[targetIdx];
-    if (!targetGroup) {
-      return;
-    }
-    const targetPanel = targetGroup.activePanel ?? targetGroup.panels[0];
-    if (!targetPanel) {
-      return;
-    }
-
-    // 写回 dockview 单源 — onDidActivePanelChange 回调会自动联动
-    // DescriptorStore / KeybindingScope / Swift firstResponder.
-    activateWorkspacePanel(api, targetPanel.id, {
-      reveal: "always",
-    });
   },
 
   toggleActivePanelMaximized: () => {
@@ -485,7 +422,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const panels = [...api.panels];
     for (const p of panels) {
       if (p.view.contentComponent === "terminal") {
-        window.pier?.terminal?.close?.(p.id);
+        closeNativeTerminalPanel(p.id);
       }
       api.removePanel(p);
     }

@@ -1,6 +1,9 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
-import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
+import type {
+  CreateTerminalArgs,
+  CreateTerminalResult,
+} from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { type RefObject, useEffect, useRef } from "react";
 import { computeMonoFontFamily } from "@/stores/font.store.ts";
@@ -63,6 +66,7 @@ export function useTerminalNativeLifecycle({
   const effectiveMonoFontSizeRef = useRef(effectiveMonoFontSize);
   monoFontFamilyRef.current = monoFontFamily;
   effectiveMonoFontSizeRef.current = effectiveMonoFontSize;
+  const lifecycleVersionRef = useRef(0);
 
   useEffect(() => {
     const anchor = anchorRef.current;
@@ -71,6 +75,8 @@ export function useTerminalNativeLifecycle({
     }
 
     let disposed = false;
+    const lifecycleVersion = lifecycleVersionRef.current + 1;
+    lifecycleVersionRef.current = lifecycleVersion;
     const subscriptions: Array<{ dispose(): void }> = [];
     let layoutRegistration: TerminalLayoutRegistration | null = null;
     let renderableAnchorObserver: ResizeObserver | null = null;
@@ -136,8 +142,31 @@ export function useTerminalNativeLifecycle({
 
     const hasRenderableAnchor = () => readTerminalAnchorFrame(anchor) !== null;
 
+    const isDisposed = () =>
+      disposed || lifecycleVersionRef.current !== lifecycleVersion;
+
     const shouldCreateNativeTerminal = () =>
       api.isVisible || api.isActive || hasRenderableAnchor();
+
+    const markCreateFailure = (message: string) => {
+      setError(message);
+      markLifecycle({
+        createPending: false,
+        error: message,
+        phase: "error",
+      });
+    };
+
+    const acceptCreateResult = (result: CreateTerminalResult): boolean => {
+      if (isDisposed()) {
+        return false;
+      }
+      if (!result.ok) {
+        markCreateFailure(result.error ?? "终端创建失败");
+        return false;
+      }
+      return true;
+    };
 
     const ensureNativeTerminal = (): Promise<void> => {
       if (didCreateNativeTerminal) {
@@ -152,19 +181,13 @@ export function useTerminalNativeLifecycle({
       });
       createPromise = (async () => {
         await waitForRealSize(anchor);
-        if (disposed || didCreateNativeTerminal) {
+        if (isDisposed() || didCreateNativeTerminal) {
           return;
         }
 
         const frame = readTerminalAnchorFrame(anchor);
         if (!frame) {
-          const message = "无法获取面板坐标";
-          setError(message);
-          markLifecycle({
-            createPending: false,
-            error: message,
-            phase: "error",
-          });
+          markCreateFailure("无法获取面板坐标");
           return;
         }
 
@@ -186,14 +209,7 @@ export function useTerminalNativeLifecycle({
           ...(initialTab && { tab: initialTab }),
           ...(initialTask && { task: initialTask }),
         });
-        if (!result.ok) {
-          const message = result.error ?? "终端创建失败";
-          setError(message);
-          markLifecycle({
-            createPending: false,
-            error: message,
-            phase: "error",
-          });
+        if (!acceptCreateResult(result)) {
           return;
         }
 
@@ -291,7 +307,7 @@ export function useTerminalNativeLifecycle({
 
     ensureNativeTerminalIfRenderable();
     requestAnimationFrame(() => {
-      if (!disposed) {
+      if (!isDisposed()) {
         ensureNativeTerminalIfRenderable();
       }
     });

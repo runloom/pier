@@ -35,6 +35,7 @@ export interface QuickPickSection {
 
 export interface QuickPick {
   readonly items?: readonly QuickPickItem[];
+  readonly loading?: boolean;
   onAccept(item: QuickPickItem): void | Promise<void>;
   /** 箭头键导航 / 鼠标 hover 时实时 preview。不传 → 无 preview。 */
   onChangeSelection?(item: QuickPickItem): void;

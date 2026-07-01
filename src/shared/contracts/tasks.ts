@@ -204,6 +204,14 @@ export const taskRunSnapshotSchema = z
   .strict();
 export type TaskRunSnapshot = z.infer<typeof taskRunSnapshotSchema>;
 
+export const taskPanelRefSchema = z
+  .object({
+    panelId: z.string().min(1),
+    windowId: z.string().min(1).optional(),
+  })
+  .strict();
+export type TaskPanelRef = z.infer<typeof taskPanelRefSchema>;
+
 export const taskSpawnPreparationSchema = z.discriminatedUnion("status", [
   z.object({
     inputs: z.array(taskInputRequestSchema),
@@ -216,6 +224,8 @@ export const taskSpawnPreparationSchema = z.discriminatedUnion("status", [
   }),
   z.object({
     launches: z.array(taskLaunchPlanSchema).min(1),
+    restartRunId: taskRunIdSchema.optional(),
+    reusablePanels: z.record(z.string().min(1), taskPanelRefSchema).optional(),
     status: z.literal("ready"),
   }),
   z.object({

@@ -17,6 +17,7 @@ import {
   buildTaskLaunches,
   requiredInputsForTask,
 } from "./task-execution-plan.ts";
+import { createTaskPanelReuseRegistry } from "./task-panel-reuse-registry.ts";
 import {
   recentCommandKey,
   recentTaskKey,
@@ -31,6 +32,12 @@ import {
   type CollectTaskCandidatesOptions,
   collectTaskCandidates,
 } from "./task-sources.ts";
+import {
+  restartPreparation as buildRestartPreparation,
+  isTerminalRunStatus,
+  type RestartPreparation,
+  type RunningTaskInstance,
+} from "./task-spawn-restart.ts";
 
 export interface TaskSpawnRequest {
   inputs?: Record<string, string> | undefined;
@@ -78,61 +85,12 @@ export interface CreateTaskServiceOptions {
   writeRecentState?: (state: TaskRecentState) => Promise<void>;
 }
 
-interface TaskRunInstance {
-  kind: "panel";
-  panelId: string;
-  projectRoot: string;
-  startedAt: number;
-  taskId: string;
-  windowId?: string | undefined;
-}
-
-interface TaskRunCoordinatorInstance {
-  kind: "coordinator";
-  projectRoot: string;
-  runId: string;
-  startedAt: number;
-  taskId: string;
-}
-
-type RunningTaskInstance = TaskRunCoordinatorInstance | TaskRunInstance;
-
-interface TaskPanelRef {
-  panelId: string;
-  windowId?: string | undefined;
-}
-
 function runKey(projectRoot: string, taskId: string): string {
   return `${projectRoot}\0${taskId}`;
 }
 
 function panelRefKey(panelId: string, windowId?: string | undefined): string {
   return windowId ? `${windowId}\0${panelId}` : panelId;
-}
-
-function isTerminalRunStatus(status: TaskRunSnapshot["status"]): boolean {
-  return (
-    status === "blocked" ||
-    status === "cancelled" ||
-    status === "failed" ||
-    status === "succeeded"
-  );
-}
-
-function focusableRunPanel(
-  snapshot: TaskRunSnapshot,
-  taskId: string
-): TaskPanelRef | null {
-  const root = snapshot.nodes[taskId];
-  if (root?.status === "running" && root.panelId) {
-    return { panelId: root.panelId, windowId: root.windowId };
-  }
-  const runningNode = Object.values(snapshot.nodes).find(
-    (node) => node.status === "running" && node.panelId
-  );
-  return runningNode?.panelId
-    ? { panelId: runningNode.panelId, windowId: runningNode.windowId }
-    : null;
 }
 
 export function createTaskService({
@@ -216,9 +174,23 @@ export function createTaskService({
     }
   }
 
-  function markClosed(panelId: string, windowId?: string | undefined): void {
+  const dedicatedPanels = createTaskPanelReuseRegistry();
+
+  function markProcessFinished(
+    panelId: string,
+    windowId?: string | undefined
+  ): void {
     taskRuns.markPanelClosed(panelId, windowId);
     forgetRunningPanel(panelId, windowId);
+  }
+
+  function markPanelActuallyClosed(
+    panelId: string,
+    windowId?: string | undefined
+  ): void {
+    taskRuns.markPanelClosed(panelId, windowId);
+    forgetRunningPanel(panelId, windowId);
+    dedicatedPanels.forget(panelId, windowId);
   }
 
   function recordStartedRun({
@@ -237,6 +209,7 @@ export function createTaskService({
       ...(windowId ? { windowId } : {}),
     });
     rememberPanelRun(panelId, windowId, key);
+    dedicatedPanels.remember(panelId, windowId, key);
   }
 
   function recordCoordinatorRun({
@@ -263,39 +236,26 @@ export function createTaskService({
     }
   }
 
-  function resolveRunningPanel(
-    key: string,
-    running: RunningTaskInstance
-  ): TaskPanelRef | null {
-    if (running.kind === "panel") {
-      return { panelId: running.panelId, windowId: running.windowId };
-    }
-    const snapshot = taskRuns.status(running.runId);
-    if (!snapshot || isTerminalRunStatus(snapshot.status)) {
-      runningByKey.delete(key);
-      return null;
-    }
-    const panel = focusableRunPanel(snapshot, running.taskId);
-    if (!panel) {
-      runningByKey.delete(key);
-    }
-    return panel;
-  }
-
-  function alreadyRunningPreparation(
+  function restartPreparation(
     projectRoot: string,
-    taskId: string
-  ): TaskSpawnPreparation | null {
+    taskId: string,
+    launches: readonly TaskLaunchPlan[]
+  ): RestartPreparation {
     const key = runKey(projectRoot, taskId);
-    const running = runningByKey.get(key);
-    const panel = running ? resolveRunningPanel(key, running) : null;
-    return panel
-      ? {
-          panelId: panel.panelId,
-          status: "already-running",
-          ...(panel.windowId ? { windowId: panel.windowId } : {}),
-        }
-      : null;
+    return buildRestartPreparation({
+      deleteRunning: (runningKey) => {
+        runningByKey.delete(runningKey);
+      },
+      key,
+      launches,
+      reusablePanelsForLaunches: (nextLaunches) =>
+        dedicatedPanels.reusablePanelsForLaunches(nextLaunches, (launch) =>
+          runKey(projectRoot, launch.taskId)
+        ),
+      running: runningByKey.get(key),
+      statusRun: (runId) => taskRuns.status(runId),
+      taskId,
+    });
   }
 
   function buildReadyPreparation(
@@ -368,7 +328,7 @@ export function createTaskService({
     },
     async completePanel(panelId, exitCode, windowId) {
       const result = await taskRuns.completePanel(panelId, exitCode, windowId);
-      markClosed(panelId, windowId);
+      markProcessFinished(panelId, windowId);
       if (result && isTerminalRunStatus(result.status)) {
         forgetSnapshotTasks(result);
       }
@@ -378,7 +338,7 @@ export function createTaskService({
       return await collect(projectRoot);
     },
     markPanelClosed(panelId, windowId) {
-      markClosed(panelId, windowId);
+      markPanelActuallyClosed(panelId, windowId);
     },
     async prepareSpawn({ projectRoot, taskId, inputs = {} }) {
       const list = await collect(projectRoot);
@@ -395,12 +355,6 @@ export function createTaskService({
           status: "unsupported",
         };
       }
-      if (task.concurrencyPolicy === "dedupe") {
-        const running = alreadyRunningPreparation(projectRoot, task.id);
-        if (running) {
-          return running;
-        }
-      }
       const missingInputs = requiredInputsForTask(task, inputs);
       if (missingInputs.length > 0) {
         return {
@@ -408,7 +362,22 @@ export function createTaskService({
           status: "requires-input",
         };
       }
-      return buildReadyPreparation(task, list.tasks, inputs, projectRoot);
+      const preparation = buildReadyPreparation(
+        task,
+        list.tasks,
+        inputs,
+        projectRoot
+      );
+      if (
+        preparation.status !== "ready" ||
+        task.concurrencyPolicy === "allow-concurrent"
+      ) {
+        return preparation;
+      }
+      return {
+        ...preparation,
+        ...restartPreparation(projectRoot, task.id, preparation.launches),
+      };
     },
     recentTasks: () => recentTasks,
     async recordRecent(launch) {

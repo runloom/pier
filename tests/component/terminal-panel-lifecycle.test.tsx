@@ -19,6 +19,7 @@ import {
   vi,
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
@@ -32,6 +33,67 @@ import {
   useTerminalOverlayFocus,
 } from "@/stores/terminal-overlay-focus.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+
+interface TerminalRelaunchRequest {
+  context?: PanelContext | undefined;
+  launchId: string;
+  panelId: string;
+  sequence: number;
+  tab?: PanelTabChrome | undefined;
+  task?: TaskPanelMetadata | undefined;
+}
+
+type TerminalRelaunchInput = Omit<TerminalRelaunchRequest, "sequence">;
+
+const terminalRelaunchStoreMock = vi.hoisted(() => {
+  let sequence = 0;
+  const requests = new Map<string, TerminalRelaunchRequest>();
+  const listeners = new Set<() => void>();
+
+  return {
+    getSnapshot(panelId: string): TerminalRelaunchRequest | null {
+      return requests.get(panelId) ?? null;
+    },
+    requestTerminalRelaunch(request: TerminalRelaunchInput): void {
+      sequence += 1;
+      requests.set(request.panelId, { ...request, sequence });
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+    reset(): void {
+      sequence = 0;
+      requests.clear();
+      listeners.clear();
+    },
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+});
+
+vi.mock("@/stores/terminal-relaunch.store.ts", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+
+  return {
+    requestTerminalRelaunch: terminalRelaunchStoreMock.requestTerminalRelaunch,
+    useTerminalRelaunchRequest(
+      panelId: string
+    ): TerminalRelaunchRequest | null {
+      return React.useSyncExternalStore(
+        terminalRelaunchStoreMock.subscribe,
+        () => terminalRelaunchStoreMock.getSnapshot(panelId),
+        () => null
+      );
+    },
+  };
+});
+
+const requestTerminalRelaunch =
+  terminalRelaunchStoreMock.requestTerminalRelaunch;
 
 const popupContextMenuAtMock = vi.hoisted(() => vi.fn(async () => undefined));
 const requestTerminalPresentationMock = vi.hoisted(() => vi.fn());
@@ -57,9 +119,7 @@ class TestResizeObserver {
   observe() {
     TestResizeObserver.observeCount += 1;
   }
-  disconnect() {
-    // Test no-op.
-  }
+  disconnect = vi.fn();
   emit() {
     this.cb([], this as unknown as ResizeObserver);
   }
@@ -103,6 +163,15 @@ const taskMetadata: TaskPanelMetadata = {
   status: "running",
   taskId: "package-script:test",
 };
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, reject, resolve };
+}
 
 function createPanelProps(
   options: {
@@ -209,6 +278,13 @@ describe("TerminalPanel lifecycle", () => {
   let emitWindowLayoutPulse:
     | ((pulse: { reason: "resize" | "view-zoom" | "zoom" }) => void)
     | null = null;
+  let cwdChangeListeners: Array<{
+    cb: (event: { context: PanelContext; panelId: string }) => void;
+  }> = [];
+  let titleChangeListeners: Array<{
+    cb: (event: { panelId: string; title: string }) => void;
+  }> = [];
+
   let tabChromePatchListeners: Array<{
     cb: (event: { panelId: string; tab: Partial<PanelTabChrome> }) => void;
   }> = [];
@@ -231,6 +307,10 @@ describe("TerminalPanel lifecycle", () => {
     emitWindowLayoutPulse = null;
     tabChromePatchListeners = [];
     searchStateListeners = [];
+    cwdChangeListeners = [];
+    titleChangeListeners = [];
+    terminalRelaunchStoreMock.reset();
+
     resetTerminalInputRoutingForTests();
     resetTerminalOverlayFocusForTests();
     TestResizeObserver.observeCount = 0;
@@ -289,7 +369,15 @@ describe("TerminalPanel lifecycle", () => {
           hide: vi.fn(),
           navigateSearch: vi.fn(async () => ({ ok: true })),
           onContextMenuRequest: vi.fn(() => vi.fn()),
-          onCwdChange: vi.fn(() => vi.fn()),
+          onCwdChange: vi.fn((cb) => {
+            const listener = { cb };
+            cwdChangeListeners.push(listener);
+            return () => {
+              cwdChangeListeners = cwdChangeListeners.filter(
+                (entry) => entry !== listener
+              );
+            };
+          }),
           onSearchState: vi.fn((cb) => {
             const listener = { cb };
             searchStateListeners.push(listener);
@@ -308,7 +396,15 @@ describe("TerminalPanel lifecycle", () => {
               );
             };
           }),
-          onTitleChange: vi.fn(() => vi.fn()),
+          onTitleChange: vi.fn((cb) => {
+            const listener = { cb };
+            titleChangeListeners.push(listener);
+            return () => {
+              titleChangeListeners = titleChangeListeners.filter(
+                (entry) => entry !== listener
+              );
+            };
+          }),
           readSession: vi.fn(async () => null),
           search: vi.fn(async () => ({ ok: true })),
           setFont: vi.fn(),
@@ -528,6 +624,418 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
+  });
+
+  it("awaits terminal close before relaunching the same panel and resets runtime descriptor state", async () => {
+    const closeDeferred = createDeferred<void>();
+    vi.mocked(window.pier.terminal.close).mockImplementationOnce(
+      () => closeDeferred.promise
+    );
+    const firstRuntimeContext: PanelContext = {
+      ...context,
+      contextId: "ctx-old-runtime",
+      cwd: "/Users/xyz/ABC/pier/old-run",
+      openedPath: "/Users/xyz/ABC/pier/old-run",
+      updatedAt: 1_772_000_001_000,
+      worktreeKey: "/Users/xyz/ABC/pier/old-run",
+      worktreeRoot: "/Users/xyz/ABC/pier/old-run",
+    };
+    const firstRunTabPatch: Partial<PanelTabChrome> = {
+      state: {
+        label: "Old run",
+        status: "running",
+      },
+      title: "old runtime tab",
+      tooltip: {
+        title: "old runtime tab",
+      },
+    };
+    const relaunchContext: PanelContext = {
+      ...context,
+      contextId: "ctx-relaunch",
+      cwd: "/Users/xyz/ABC/pier/packages/app",
+      openedPath: "/Users/xyz/ABC/pier/packages/app",
+      updatedAt: 1_772_000_002_000,
+      worktreeKey: "/Users/xyz/ABC/pier/packages/app",
+      worktreeRoot: "/Users/xyz/ABC/pier/packages/app",
+    };
+    const relaunchTab: PanelTabChrome = {
+      badge: { label: "app" },
+      icon: { id: "pier.task", label: "Task" },
+      state: { label: "Relaunching", status: "running" },
+      title: "lint",
+      tooltip: {
+        lines: [{ label: "Command", value: "pnpm run lint" }],
+        title: "lint",
+      },
+    };
+    const relaunchTask: TaskPanelMetadata = {
+      ...taskMetadata,
+      cwd: "/Users/xyz/ABC/pier/packages/app",
+      label: "lint",
+      rawCommand: "pnpm run lint",
+      runId: "run-2",
+      startedAt: 1_772_000_002_000,
+      taskId: "package-script:lint",
+    };
+    const props = createPanelProps({
+      params: {
+        context,
+        launchId: "launch-1",
+        tab: taskTab,
+        task: taskMetadata,
+      },
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          launchId: "launch-1",
+          panelId: "terminal-1",
+          tab: taskTab,
+          task: taskMetadata,
+        })
+      );
+    });
+
+    act(() => {
+      for (const listener of cwdChangeListeners) {
+        listener.cb({ context: firstRuntimeContext, panelId: "terminal-1" });
+      }
+      for (const listener of titleChangeListeners) {
+        listener.cb({ panelId: "terminal-1", title: "old runtime title" });
+      }
+      for (const listener of tabChromePatchListeners) {
+        listener.cb({ panelId: "terminal-1", tab: firstRunTabPatch });
+      }
+    });
+
+    await waitFor(() => {
+      expect(
+        usePanelDescriptorStore.getState().descriptors["terminal-1"]
+      ).toMatchObject({
+        context: firstRuntimeContext,
+        display: {
+          long: "old runtime title",
+          short: "old runtime tab",
+          terminalTitle: "old runtime title",
+        },
+        tab: expect.objectContaining({
+          title: "old runtime tab",
+        }),
+      });
+    });
+
+    act(() => {
+      requestTerminalRelaunch({
+        context: relaunchContext,
+        launchId: "launch-2",
+        panelId: "terminal-1",
+        tab: relaunchTab,
+        task: relaunchTask,
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1", {
+        reason: "relaunch",
+      });
+    });
+    expect(window.pier.terminal.create).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      closeDeferred.resolve();
+      await closeDeferred.promise;
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledTimes(2);
+    });
+    expect(window.pier.terminal.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        context: relaunchContext,
+        launchId: "launch-2",
+        panelId: "terminal-1",
+        tab: relaunchTab,
+        task: relaunchTask,
+      })
+    );
+
+    await waitFor(() => {
+      const descriptor =
+        usePanelDescriptorStore.getState().descriptors["terminal-1"];
+      expect(descriptor?.context).toEqual(relaunchContext);
+      expect(descriptor?.display).toEqual({
+        long: relaunchContext.cwd,
+        short: "lint",
+      });
+      expect(descriptor?.tab).toEqual(relaunchTab);
+    });
+
+    const postRelaunchContext: PanelContext = {
+      ...relaunchContext,
+      contextId: "ctx-relaunch-runtime",
+      cwd: "/Users/xyz/ABC/pier/packages/app/src",
+      openedPath: "/Users/xyz/ABC/pier/packages/app/src",
+      updatedAt: 1_772_000_002_500,
+      worktreeKey: "/Users/xyz/ABC/pier/packages/app/src",
+      worktreeRoot: "/Users/xyz/ABC/pier/packages/app/src",
+    };
+    const postRelaunchTabPatch: Partial<PanelTabChrome> = {
+      state: {
+        label: "Runtime ready",
+        status: "running",
+      },
+      title: "new runtime tab",
+      tooltip: {
+        title: "new runtime tab",
+      },
+    };
+
+    act(() => {
+      for (const listener of cwdChangeListeners) {
+        listener.cb({ context: postRelaunchContext, panelId: "terminal-1" });
+      }
+      for (const listener of titleChangeListeners) {
+        listener.cb({ panelId: "terminal-1", title: "new runtime title" });
+      }
+      for (const listener of tabChromePatchListeners) {
+        listener.cb({ panelId: "terminal-1", tab: postRelaunchTabPatch });
+      }
+    });
+
+    await waitFor(() => {
+      expect(
+        usePanelDescriptorStore.getState().descriptors["terminal-1"]
+      ).toMatchObject({
+        context: postRelaunchContext,
+        display: {
+          long: "new runtime title",
+          short: "new runtime tab",
+          terminalTitle: "new runtime title",
+        },
+        tab: expect.objectContaining({
+          state: {
+            label: "Runtime ready",
+            status: "running",
+          },
+          title: "new runtime tab",
+        }),
+      });
+    });
+  });
+
+  it("renders relaunch close failures without creating a replacement native terminal", async () => {
+    const closeError = new Error("close boom");
+    vi.mocked(window.pier.terminal.close).mockRejectedValueOnce(closeError);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const relaunchContext: PanelContext = {
+      ...context,
+      contextId: "ctx-relaunch-close-error",
+      cwd: "/Users/xyz/ABC/pier/packages/app",
+      openedPath: "/Users/xyz/ABC/pier/packages/app",
+      updatedAt: 1_772_000_002_750,
+      worktreeKey: "/Users/xyz/ABC/pier/packages/app",
+      worktreeRoot: "/Users/xyz/ABC/pier/packages/app",
+    };
+    const relaunchTab: PanelTabChrome = {
+      badge: { label: "app" },
+      icon: { id: "pier.task", label: "Task" },
+      state: { label: "Relaunching", status: "running" },
+      title: "lint",
+      tooltip: {
+        lines: [{ label: "Command", value: "pnpm run lint" }],
+        title: "lint",
+      },
+    };
+    const relaunchTask: TaskPanelMetadata = {
+      ...taskMetadata,
+      cwd: "/Users/xyz/ABC/pier/packages/app",
+      label: "lint",
+      rawCommand: "pnpm run lint",
+      runId: "run-2",
+      startedAt: 1_772_000_002_750,
+      taskId: "package-script:lint",
+    };
+    const { container, findByText } = render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context,
+            launchId: "launch-1",
+            tab: taskTab,
+            task: taskMetadata,
+          },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          launchId: "launch-1",
+          panelId: "terminal-1",
+        })
+      );
+    });
+
+    act(() => {
+      requestTerminalRelaunch({
+        context: relaunchContext,
+        launchId: "launch-2",
+        panelId: "terminal-1",
+        tab: relaunchTab,
+        task: relaunchTask,
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1", {
+        reason: "relaunch",
+      });
+    });
+    const errorText = await findByText("close boom");
+    expect(window.pier.terminal.create).toHaveBeenCalledTimes(1);
+    const root = container.querySelector('[data-testid="terminal-panel-root"]');
+    expect(root?.className ?? "").not.toContain("--terminal-background");
+    expect(errorText.parentElement?.className ?? "").toContain(
+      "--terminal-background"
+    );
+  });
+
+  it("ignores stale terminal create completions after relaunch cleanup", async () => {
+    const firstCreate = createDeferred<{ ok: true }>();
+    const secondCreate = createDeferred<{ ok: true }>();
+    const closeDeferred = createDeferred<void>();
+    vi.mocked(window.pier.terminal.create)
+      .mockImplementationOnce(() => firstCreate.promise)
+      .mockImplementationOnce(() => secondCreate.promise);
+    vi.mocked(window.pier.terminal.close).mockImplementationOnce(
+      () => closeDeferred.promise
+    );
+    const relaunchContext: PanelContext = {
+      ...context,
+      contextId: "ctx-relaunch-race",
+      cwd: "/Users/xyz/ABC/pier/packages/app",
+      openedPath: "/Users/xyz/ABC/pier/packages/app",
+      updatedAt: 1_772_000_003_000,
+      worktreeKey: "/Users/xyz/ABC/pier/packages/app",
+      worktreeRoot: "/Users/xyz/ABC/pier/packages/app",
+    };
+    const relaunchTab: PanelTabChrome = {
+      badge: { label: "app" },
+      icon: { id: "pier.task", label: "Task" },
+      state: { label: "Relaunching", status: "running" },
+      title: "lint",
+      tooltip: {
+        lines: [{ label: "Command", value: "pnpm run lint" }],
+        title: "lint",
+      },
+    };
+    const relaunchTask: TaskPanelMetadata = {
+      ...taskMetadata,
+      cwd: "/Users/xyz/ABC/pier/packages/app",
+      label: "lint",
+      rawCommand: "pnpm run lint",
+      runId: "run-2",
+      startedAt: 1_772_000_003_000,
+      taskId: "package-script:lint",
+    };
+
+    const { container } = render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context,
+            launchId: "launch-1",
+            tab: taskTab,
+            task: taskMetadata,
+          },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          launchId: "launch-1",
+          panelId: "terminal-1",
+        })
+      );
+    });
+    expect(
+      container.querySelector('[data-testid="terminal-placeholder"]')
+    ).not.toBeNull();
+    expect(hasRegisteredTerminalAnchor("terminal-1")).toBe(false);
+
+    act(() => {
+      requestTerminalRelaunch({
+        context: relaunchContext,
+        launchId: "launch-2",
+        panelId: "terminal-1",
+        tab: relaunchTab,
+        task: relaunchTask,
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.close).toHaveBeenCalled();
+    });
+    expect(vi.mocked(window.pier.terminal.close).mock.calls.at(-1)?.[0]).toBe(
+      "terminal-1"
+    );
+    expect(window.pier.terminal.create).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      closeDeferred.resolve();
+      await closeDeferred.promise;
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledTimes(2);
+    });
+    expect(window.pier.terminal.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        context: relaunchContext,
+        launchId: "launch-2",
+        panelId: "terminal-1",
+        tab: relaunchTab,
+        task: relaunchTask,
+      })
+    );
+    requestTerminalPresentationMock.mockClear();
+
+    await act(async () => {
+      firstCreate.resolve({ ok: true });
+      await firstCreate.promise;
+    });
+
+    expect(
+      container.querySelector('[data-testid="terminal-placeholder"]')
+    ).not.toBeNull();
+    expect(hasRegisteredTerminalAnchor("terminal-1")).toBe(false);
+    expect(requestTerminalPresentationMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      secondCreate.resolve({ ok: true });
+      await secondCreate.promise;
+    });
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="terminal-placeholder"]')
+      ).toBeNull();
+      expect(hasRegisteredTerminalAnchor("terminal-1")).toBe(true);
+    });
+    expect(requestTerminalPresentationMock).toHaveBeenCalledTimes(1);
+    expect(requestTerminalPresentationMock).toHaveBeenCalledWith("visibility");
   });
 
   it("uses tab chrome params for descriptor title and native creation metadata", async () => {

@@ -84,6 +84,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => null),
+      patchTerminalPanelTab: vi.fn(async () => undefined),
+      patchTerminalPanelTaskStatus: vi.fn(async () => true),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
@@ -214,16 +216,13 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     // close 路径必须双侧清理:swift 端释放 NSView (closeTerminal) + main 端删 session
     // state (removeTerminalPanelSession 让下次 fresh 创建 panel 同 id 时不会 reload
     // 旧 cwd). 缺一边都会导致 stale state 泄漏.
-    const { fakeAddon, handlers, win } = await setupHarness();
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
 
-    handlers.get("pier:terminal:close")?.(
+    await invokeHandlers.get("pier:terminal:close")?.(
       { sender: win.webContents },
       "panel-1"
     );
-
-    // wait microtask for the async removeTerminalPanelSession promise to resolve
-    await new Promise((resolve) => setImmediate(resolve));
 
     expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenCalledWith(

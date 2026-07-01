@@ -1,4 +1,5 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -8,6 +9,10 @@ vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: closeCurrentWindowMock,
 }));
 
+import {
+  requestTerminalRelaunch,
+  useTerminalRelaunchRequest,
+} from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 function terminalPanel(id: string) {
@@ -91,6 +96,30 @@ describe("workspace terminal close lifecycle", () => {
     useWorkspaceStore.getState().closePanel("terminal-1");
 
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
+    expect(api.removePanel).toHaveBeenCalledWith(panel);
+  });
+
+  it("clears a pending terminal relaunch request when that terminal panel is explicitly closed", () => {
+    const panel = terminalPanel("terminal-relaunch-close");
+    const api = createApi([panel, webPanel("welcome-1")]);
+    const relaunch = renderHook(() => useTerminalRelaunchRequest(panel.id));
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    act(() => {
+      requestTerminalRelaunch({
+        launchId: "launch-retry",
+        panelId: panel.id,
+      });
+    });
+    expect(relaunch.result.current?.launchId).toBe("launch-retry");
+
+    act(() => {
+      useWorkspaceStore.getState().closePanel(panel.id);
+    });
+
+    expect(relaunch.result.current).toBeNull();
+    expect(window.pier.terminal.close).toHaveBeenCalledWith(panel.id);
     expect(api.removePanel).toHaveBeenCalledWith(panel);
   });
 

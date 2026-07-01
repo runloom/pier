@@ -228,6 +228,10 @@ export const en = {
       noTerminalsDetail: "New terminals will appear here",
       noTaskContext: "No active project",
       noTaskContextDetail: "Focus a project-backed panel before running a task",
+      loadFailed: "Failed to load tasks",
+      loadingTasks: "Finding tasks...",
+      loadingTasksDetail:
+        "Scanning supported task sources in the active project",
       noTasks: "No runnable tasks found",
       noTasksDetail:
         "Supported sources include package.json, VS Code, Zed, Cargo, Make, mise, Justfile, Taskfile, and pyproject",

@@ -3,7 +3,9 @@ import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { requestTerminalRelaunch } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 import { panelKindOf } from "./panel-registry.ts";
 import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
 
@@ -67,7 +69,7 @@ async function closePanelForCommand(panelId: string): Promise<void> {
   }
   if (api.totalPanels <= 1) {
     if (panel.view.contentComponent === "terminal") {
-      window.pier?.terminal?.close?.(panel.id);
+      closeNativeTerminalPanel(panel.id);
     }
     await closeCurrentWindow();
     return;
@@ -96,21 +98,54 @@ function addTerminalForCommand(
     { type: "terminal.open" }
   >
 ): string {
-  const panelId = useWorkspaceStore.getState().addTerminal({
-    ...(command.context && {
-      context: command.context,
-    }),
+  if (!command.panelId) {
+    const panelId = useWorkspaceStore.getState().addTerminal({
+      ...(command.context && {
+        context: command.context,
+      }),
+      launchId: command.launchId,
+      ...(command.placement && {
+        placement: command.placement,
+      }),
+      ...(command.tab && { tab: command.tab }),
+      ...(command.task && { task: command.task }),
+    });
+    if (!panelId) {
+      throw new Error("workspace api not ready");
+    }
+    return panelId;
+  }
+
+  const api = useWorkspaceStore.getState().api;
+  if (!api) {
+    throw new Error("workspace api not ready");
+  }
+  const panel = api.panels.find(
+    (candidate) => candidate.id === command.panelId
+  );
+  if (!panel) {
+    throw new RendererCommandExecutionError(
+      "not_found",
+      `panel not found: ${command.panelId}`
+    );
+  }
+  if (panelKindOf(panel.view.contentComponent) !== "terminal") {
+    throw new RendererCommandExecutionError(
+      "invalid_command",
+      `panel is not a terminal: ${command.panelId}`
+    );
+  }
+  if (command.focus !== false) {
+    focusPanel(command.panelId, "terminal");
+  }
+  requestTerminalRelaunch({
+    panelId: command.panelId,
     launchId: command.launchId,
-    ...(command.placement && {
-      placement: command.placement,
-    }),
+    ...(command.context && { context: command.context }),
     ...(command.tab && { tab: command.tab }),
     ...(command.task && { task: command.task }),
   });
-  if (!panelId) {
-    throw new Error("workspace api not ready");
-  }
-  return panelId;
+  return command.panelId;
 }
 
 export function runWorkspaceRendererCommand(

@@ -95,6 +95,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => null),
+      patchTerminalPanelTab: vi.fn(async () => undefined),
+      patchTerminalPanelTaskStatus: vi.fn(async () => true),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
@@ -199,6 +201,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => null),
+      patchTerminalPanelTab: vi.fn(async () => undefined),
+      patchTerminalPanelTaskStatus: vi.fn(async () => true),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
@@ -295,7 +299,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       "panel-a",
       { x: 0, y: 0, width: 1, height: 1 }
     );
-    handlers.get("pier:terminal:close")?.(
+    await invokeHandlers.get("pier:terminal:close")?.(
       { sender: win.webContents },
       "panel-a"
     );

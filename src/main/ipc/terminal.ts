@@ -1,5 +1,6 @@
 import type {
   CreateTerminalArgs,
+  TerminalCloseOptions,
   TerminalColors,
   TerminalFont,
   TerminalFrame,
@@ -315,21 +316,33 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       call(win, panelId);
     });
   }
-  ipcMain.on("pier:terminal:close", (event, panelId: string) => {
-    const win = windowFromWebContents(event.sender);
-    if (win) {
+  ipcMain.handle(
+    "pier:terminal:close",
+    async (
+      event,
+      panelId: string,
+      options?: TerminalCloseOptions | undefined
+    ) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return;
+      }
+      const windowId = findInternalWindowId(win) ?? undefined;
       const sessionScope = terminalSessionScopeFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
-      terminalPanelClosed.notifyTerminalPanelClosed(
-        panelId,
-        findInternalWindowId(win) ?? undefined
-      );
-      removeTerminalPanelSession(sessionScope, panelId).catch((err) => {
-        console.error("[pier-cwd-remove] failed:", err);
-      });
+      if (options?.reason === "relaunch") {
+        taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
+      } else {
+        terminalPanelClosed.notifyTerminalPanelClosed(panelId, windowId);
+      }
       addon?.closeTerminal(scopePanelId(win, panelId));
+      try {
+        await removeTerminalPanelSession(sessionScope, panelId);
+      } catch (err) {
+        console.error("[pier-cwd-remove] failed:", err);
+      }
     }
-  });
+  );
   ipcMain.on(
     "pier:terminal:set-frame",
     (event, panelId: string, frame: TerminalFrame) => {

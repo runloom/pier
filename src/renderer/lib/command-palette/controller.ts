@@ -21,12 +21,19 @@ interface SessionState {
 }
 
 interface ControllerState extends SessionState {
+  /** 清掉 accept 关闭后暂存的回退栈。 */
+  clearPendingAcceptStack: () => void;
   /** 点击遮罩 / 显式 close: 不调 onDismiss, 由 UI dismiss effect 兜底。 */
   close: () => void;
+  /** accept 已确认后立即视觉关闭，并把当前 picker 暂存给后续异步 openQuickPick 回退。 */
+  closeAfterAccept: () => void;
   /** Esc: 栈非空回退一层, 栈空关闭面板。 */
   goBack: () => void;
   openPalette: () => void;
   openQuickPick: (qp: QuickPick) => void;
+  replaceQuickPick: (qp: QuickPick) => void;
+  /** 延后一拍清暂存栈，让连续 input picker 能在同一异步链里接上回退栈。 */
+  schedulePendingAcceptStackClear: () => void;
   setOpen: (open: boolean) => void;
   stack: readonly SessionState[];
   toggle: () => void;
@@ -49,89 +56,147 @@ function snapshot(state: ControllerState): SessionState {
 }
 
 export const useCommandPaletteController = create<ControllerState>(
-  (set, get) => ({
-    ...INITIAL,
-    stack: [],
+  (set, get) => {
+    let pendingAcceptStack: readonly SessionState[] | null = null;
+    let pendingAcceptClearTimer: ReturnType<typeof setTimeout> | null = null;
 
-    openPalette: () => {
-      const state = get();
-      if (state.open && state.quickPick?.onDismiss) {
-        state.quickPick.onDismiss();
+    const cancelPendingAcceptStackClear = () => {
+      if (pendingAcceptClearTimer !== null) {
+        clearTimeout(pendingAcceptClearTimer);
+        pendingAcceptClearTimer = null;
       }
-      set({
-        open: true,
-        requestId: state.requestId + 1,
-        mode: "commands",
-        quickPick: null,
-        stack: [],
-      });
-    },
+    };
 
-    openQuickPick: (qp) => {
-      const state = get();
-      const nextStack = state.open ? [...state.stack, snapshot(state)] : [];
-      set({
-        open: true,
-        requestId: state.requestId + 1,
-        mode: "quick-pick",
-        quickPick: qp,
-        stack: nextStack,
-      });
-    },
+    const clearPendingAcceptStack = () => {
+      cancelPendingAcceptStackClear();
+      pendingAcceptStack = null;
+    };
 
-    goBack: () => {
-      const state = get();
-      if (!state.open) {
-        return;
-      }
-      if (state.quickPick?.onDismiss) {
-        state.quickPick.onDismiss();
-      }
-      const prev = state.stack.at(-1);
-      if (prev) {
+    const schedulePendingAcceptStackClear = () => {
+      cancelPendingAcceptStackClear();
+      pendingAcceptClearTimer = setTimeout(() => {
+        pendingAcceptClearTimer = null;
+        pendingAcceptStack = null;
+      }, 0);
+    };
+
+    return {
+      ...INITIAL,
+      stack: [],
+
+      clearPendingAcceptStack,
+      schedulePendingAcceptStackClear,
+
+      closeAfterAccept: () => {
+        const state = get();
+        if (!state.open) {
+          return;
+        }
+        cancelPendingAcceptStackClear();
+        pendingAcceptStack = [...state.stack, snapshot(state)];
         set({
-          ...prev,
+          open: false,
+          requestId: state.requestId + 1,
+          stack: [],
+        });
+      },
+
+      openPalette: () => {
+        clearPendingAcceptStack();
+        const state = get();
+        if (state.open && state.quickPick?.onDismiss) {
+          state.quickPick.onDismiss();
+        }
+        set({
           open: true,
           requestId: state.requestId + 1,
-          stack: state.stack.slice(0, -1),
+          mode: "commands",
+          quickPick: null,
+          stack: [],
         });
-        return;
-      }
-      set({
-        open: false,
-        requestId: state.requestId + 1,
-        mode: "commands",
-        quickPick: null,
-        stack: [],
-      });
-    },
+      },
 
-    close: () => {
-      const state = get();
-      if (!state.open) {
-        return;
-      }
-      set({
-        open: false,
-        requestId: state.requestId + 1,
-        stack: [],
-      });
-    },
+      openQuickPick: (qp) => {
+        const state = get();
+        const nextStack = state.open
+          ? [...state.stack, snapshot(state)]
+          : (pendingAcceptStack ?? []);
+        clearPendingAcceptStack();
+        set({
+          open: true,
+          requestId: state.requestId + 1,
+          mode: "quick-pick",
+          quickPick: qp,
+          stack: nextStack,
+        });
+      },
 
-    toggle: () => {
-      if (get().open) {
-        get().close();
-      } else {
-        get().openPalette();
-      }
-    },
+      replaceQuickPick: (qp) => {
+        if (!get().open) {
+          return;
+        }
+        set({
+          mode: "quick-pick",
+          quickPick: qp,
+        });
+      },
 
-    setOpen: (open) => {
-      if (open) {
-        get().openPalette();
-      } else {
-        get().close();
-      }
-    },
-  })
+      goBack: () => {
+        clearPendingAcceptStack();
+        const state = get();
+        if (!state.open) {
+          return;
+        }
+        if (state.quickPick?.onDismiss) {
+          state.quickPick.onDismiss();
+        }
+        const prev = state.stack.at(-1);
+        if (prev) {
+          set({
+            ...prev,
+            open: true,
+            requestId: state.requestId + 1,
+            stack: state.stack.slice(0, -1),
+          });
+          return;
+        }
+        set({
+          open: false,
+          requestId: state.requestId + 1,
+          mode: "commands",
+          quickPick: null,
+          stack: [],
+        });
+      },
+
+      close: () => {
+        clearPendingAcceptStack();
+        const state = get();
+        if (!state.open) {
+          return;
+        }
+        set({
+          open: false,
+          requestId: state.requestId + 1,
+          stack: [],
+        });
+      },
+
+      toggle: () => {
+        if (get().open) {
+          get().close();
+        } else {
+          get().openPalette();
+        }
+      },
+
+      setOpen: (open) => {
+        if (open) {
+          get().openPalette();
+        } else {
+          get().close();
+        }
+      },
+    };
+  }
 );

@@ -81,9 +81,14 @@ export function resolveCreateTerminalLaunch(
   task?: TaskPanelMetadata | undefined;
 } {
   const launch = readCreateLaunch(args);
-  const context = saved?.context ?? args.context;
+  const explicitCreate = Boolean(launch);
+  const context = explicitCreate
+    ? (args.context ?? saved?.context)
+    : (saved?.context ?? args.context);
   const cwd = context?.cwd ?? launch?.cwd;
-  const task = saved?.task ?? args.task;
+  const task = explicitCreate
+    ? (args.task ?? saved?.task)
+    : (saved?.task ?? args.task);
   if (task && !launch) {
     const restoredTask: TaskPanelMetadata =
       task.status === "running" ? { ...task, status: "cancelled" } : task;
@@ -96,7 +101,7 @@ export function resolveCreateTerminalLaunch(
   return {
     context,
     nativeLaunch: nativeLaunchOptions(launch, cwd, {
-      restoredSession: Boolean(saved),
+      restoredSession: Boolean(saved && !explicitCreate),
     }),
     ...(task && { task }),
   };

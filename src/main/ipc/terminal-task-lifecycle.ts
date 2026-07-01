@@ -93,6 +93,7 @@ function normalizedCompletionCode(code: number | undefined): number {
 export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
   const exitCodeHints = new Map<string, ExitCodeHintArgs>();
   const finishedPanels = new Set<string>();
+  const ignoredNativeUserClosePanels = new Set<string>();
 
   const finish = async (args: FinishArgs): Promise<boolean> => {
     const key = panelKey(args.panelId, args.windowId);
@@ -184,12 +185,21 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       exitCodeHints.delete(key);
       finishedPanels.delete(key);
     },
+    ignoreNextNativeUserClose(
+      panelId: string,
+      windowId?: string | undefined
+    ): void {
+      ignoredNativeUserClosePanels.add(panelKey(panelId, windowId));
+    },
     async completeFromNativeProcessClose(
       args: NativeProcessCloseArgs
     ): Promise<boolean> {
       const key = panelKey(args.panelId, args.windowId);
       const hint = exitCodeHints.get(key);
       exitCodeHints.delete(key);
+      if (args.processAlive && ignoredNativeUserClosePanels.delete(key)) {
+        return false;
+      }
       if (args.processAlive) {
         return await finish({
           browserWindowId: args.browserWindowId,

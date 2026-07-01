@@ -16,6 +16,10 @@ import { createTerminalTaskLifecycle } from "./terminal-task-lifecycle.ts";
 import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
 
 export interface RegisteredTerminalTaskLifecycle {
+  ignoreNextNativeUserClose(
+    panelId: string,
+    windowId?: string | undefined
+  ): void;
   resetPanel(panelId: string, windowId?: string | undefined): void;
 }
 

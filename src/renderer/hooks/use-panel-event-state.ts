@@ -18,14 +18,26 @@ import { useEffect, useRef, useState } from "react";
 export function usePanelEventState<E extends { panelId: string }, V>(
   subscribe: (cb: (event: E) => void) => () => void,
   panelId: string,
-  extract: (event: E) => V | null | undefined
+  extract: (event: E) => V | null | undefined,
+  resetKey?: unknown
 ): V | null {
-  const [value, setValue] = useState<V | null>(null);
+  const [state, setState] = useState<{
+    panelId: string;
+    resetKey: unknown;
+    value: V | null;
+  }>(() => ({ panelId, resetKey, value: null }));
 
   // extract 通常是 inline lambda, 每次渲染新引用. useRef 让 effect 总是用最新的
   // 但不把 extract 放进 deps — 避免每次渲染 re-subscribe + re-add listener.
   const extractRef = useRef(extract);
   extractRef.current = extract;
+  const resetKeyRef = useRef(resetKey);
+  resetKeyRef.current = resetKey;
+
+  const value =
+    state.panelId === panelId && Object.is(state.resetKey, resetKey)
+      ? state.value
+      : null;
 
   useEffect(() => {
     const dispose = subscribe((event) => {
@@ -36,7 +48,11 @@ export function usePanelEventState<E extends { panelId: string }, V>(
       if (next === null || next === undefined || next === "") {
         return;
       }
-      setValue(next);
+      setState({
+        panelId,
+        resetKey: resetKeyRef.current,
+        value: next,
+      });
     });
     return dispose;
   }, [panelId, subscribe]);

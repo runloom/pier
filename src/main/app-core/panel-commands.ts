@@ -13,7 +13,10 @@ import {
   panelKindSchema,
 } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
-import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
+import type {
+  TaskPanelMetadata,
+  TaskPanelRef,
+} from "@shared/contracts/tasks.ts";
 import type {
   ResolvedTerminalLaunchOptions,
   TerminalLaunchOptions,
@@ -197,6 +200,17 @@ function dataWithWindowId(
   };
 }
 
+function resolveTerminalOpenTarget(
+  command: Extract<PierCommand, { type: "terminal.open" }>,
+  services: PanelCommandServices,
+  reusePanel: TaskPanelRef | undefined
+) {
+  const windowId = reusePanel?.windowId ?? command.windowId;
+  return resolveCommandWindow(windowId, services, {
+    requireStableDefault: !windowId,
+  });
+}
+
 async function listPanels(
   command: Extract<PierCommand, { type: "panel.list" }>,
   services: PanelCommandServices
@@ -318,11 +332,14 @@ export async function executeTerminalOpenCommand(
     source?: ProcessEnvironmentSource | undefined;
     tab?: PanelTabChrome;
     task?: TaskPanelMetadata;
+    reusePanel?: TaskPanelRef | undefined;
   } = {}
 ): Promise<PierCommandResult> {
-  const target = resolveCommandWindow(command.windowId, services, {
-    requireStableDefault: !command.windowId,
-  });
+  const target = resolveTerminalOpenTarget(
+    command,
+    services,
+    options.reusePanel
+  );
   if (!target.window) {
     return commandFailure(
       requestId,
@@ -360,6 +377,7 @@ export async function executeTerminalOpenCommand(
       ...(context && { context }),
       focus: command.focus,
       launchId,
+      ...(options.reusePanel ? { panelId: options.reusePanel.panelId } : {}),
       placement: command.placement,
       ...(options.tab && { tab: options.tab }),
       ...(options.task && { task: options.task }),

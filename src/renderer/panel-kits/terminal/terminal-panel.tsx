@@ -16,6 +16,7 @@ import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
+import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
@@ -58,6 +59,14 @@ function taskFromParams(params: unknown): TaskPanelMetadata | undefined {
   }
   const parsed = taskPanelMetadataSchema.safeParse(params.task);
   return parsed.success ? parsed.data : undefined;
+}
+
+interface ActiveTerminalLaunch {
+  context?: PanelContext | undefined;
+  launchId?: string | undefined;
+  sequence: number;
+  tab?: PanelTabChrome | undefined;
+  task?: TaskPanelMetadata | undefined;
 }
 
 function RestoredTaskResultView({
@@ -129,10 +138,16 @@ function restoredTaskTabPatch(
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
-  const [initialContext] = useState(() => panelContextFromParams(props.params));
-  const [initialLaunchId] = useState(() => launchIdFromParams(props.params));
-  const [initialTab] = useState(() => tabChromeFromParams(props.params));
-  const [initialTask] = useState(() => taskFromParams(props.params));
+  const [activeLaunch, setActiveLaunch] = useState<ActiveTerminalLaunch>(
+    () => ({
+      context: panelContextFromParams(props.params),
+      launchId: launchIdFromParams(props.params),
+      sequence: 0,
+      tab: tabChromeFromParams(props.params),
+      task: taskFromParams(props.params),
+    })
+  );
+  const relaunchRequest = useTerminalRelaunchRequest(panelId);
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
   const windowZoomLevel = useZoomStore((s) => s.windowZoomLevel);
@@ -152,32 +167,36 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
   >(undefined);
+  const sessionReadVersionRef = useRef(0);
 
   const runtimeContext = usePanelEventState(
     window.pier.terminal.onCwdChange,
     panelId,
-    (e) => e.context
+    (e) => e.context,
+    activeLaunch.sequence
   );
   const sequenceTitle = usePanelEventState(
     window.pier.terminal.onTitleChange,
     panelId,
-    (e) => e.title
+    (e) => e.title,
+    activeLaunch.sequence
   );
   const tabPatch = usePanelEventState(
     window.pier.terminal.onTabChromePatch,
     panelId,
-    (e) => e.tab
+    (e) => e.tab,
+    activeLaunch.sequence
   );
 
   const sessionLoaded = savedSession !== undefined;
   const restoredTaskResult = restoredTaskResultFromSession(savedSession?.task);
   const effectiveContext =
-    runtimeContext ?? savedSession?.context ?? initialContext;
+    runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
-      savedSession?.tab ?? initialTab,
+      savedSession?.tab ?? activeLaunch.tab,
       restoredTaskTabPatch(savedSession?.task)
     ),
     tabPatch
@@ -206,17 +225,19 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
   useEffect(() => {
     let disposed = false;
+    const readVersion = sessionReadVersionRef.current + 1;
+    sessionReadVersionRef.current = readVersion;
     setSavedSession(undefined);
     window.pier.terminal
       .readSession(panelId)
       .then((session) => {
-        if (!disposed) {
+        if (!disposed && sessionReadVersionRef.current === readVersion) {
           setSavedSession(session);
         }
       })
       .catch((err: unknown) => {
         console.error(`[terminal-panel] read session ${panelId} failed:`, err);
-        if (!disposed) {
+        if (!disposed && sessionReadVersionRef.current === readVersion) {
           setSavedSession(null);
         }
       });
@@ -225,14 +246,51 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     };
   }, [panelId]);
 
+  useEffect(() => {
+    if (
+      !relaunchRequest ||
+      relaunchRequest.sequence === activeLaunch.sequence
+    ) {
+      return;
+    }
+    let disposed = false;
+    sessionReadVersionRef.current += 1;
+    setError(null);
+    setNativeTerminalReady(false);
+    setSavedSession(null);
+    window.pier.terminal
+      .close(panelId, { reason: "relaunch" })
+      .then(() => {
+        if (disposed) {
+          return;
+        }
+        setActiveLaunch({
+          context: relaunchRequest.context,
+          launchId: relaunchRequest.launchId,
+          sequence: relaunchRequest.sequence,
+          tab: relaunchRequest.tab,
+          task: relaunchRequest.task,
+        });
+      })
+      .catch((err: unknown) => {
+        console.error(`[terminal-panel] relaunch ${panelId} failed:`, err);
+        if (!disposed) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [activeLaunch.sequence, panelId, relaunchRequest]);
+
   useTerminalNativeLifecycle({
     api,
     anchorRef,
     effectiveMonoFontSize,
-    initialContext,
-    initialLaunchId,
-    initialTab,
-    initialTask,
+    initialContext: activeLaunch.context,
+    initialLaunchId: activeLaunch.launchId,
+    initialTab: activeLaunch.tab,
+    initialTask: activeLaunch.task,
     monoFontFamily,
     panelId,
     sessionLoaded,

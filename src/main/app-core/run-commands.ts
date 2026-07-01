@@ -6,6 +6,7 @@ import type {
 import type {
   TaskLaunchPlan,
   TaskPanelMetadata,
+  TaskPanelRef,
   TaskRunSnapshot,
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
@@ -30,11 +31,6 @@ type AlreadyRunningTaskPreparation = Extract<
   TaskSpawnPreparation,
   { status: "already-running" }
 >;
-
-interface TaskPanelRef {
-  panelId: string;
-  windowId?: string | undefined;
-}
 
 function dataPanelId(data: unknown): string | null {
   if (
@@ -66,6 +62,10 @@ function panelRefsFromSnapshot(snapshot: TaskRunSnapshot): TaskPanelRef[] {
   return Object.values(snapshot.nodes).flatMap((node) =>
     node.panelId ? [{ panelId: node.panelId, windowId: node.windowId }] : []
   );
+}
+
+function taskPanelRefKey(ref: TaskPanelRef): string {
+  return ref.windowId ? `${ref.windowId}\0${ref.panelId}` : ref.panelId;
 }
 
 async function closePanelRefs(
@@ -221,46 +221,92 @@ export async function executeRunSpawnCommand(
     );
   }
 
+  if (preparation.restartRunId) {
+    const snapshot = services.tasks.statusRun(preparation.restartRunId);
+    if (snapshot) {
+      services.tasks.cancelRun(preparation.restartRunId);
+      const reusablePanelKeys = new Set(
+        Object.values(preparation.reusablePanels ?? {}).map(taskPanelRefKey)
+      );
+      const obsoletePanelRefs = panelRefsFromSnapshot(snapshot).filter(
+        (ref) => !reusablePanelKeys.has(taskPanelRefKey(ref))
+      );
+      const closeFailure = await closePanelRefs(
+        requestId,
+        obsoletePanelRefs,
+        services
+      );
+      if (closeFailure) {
+        return closeFailure;
+      }
+    }
+  }
+
   let started: Awaited<ReturnType<typeof services.tasks.startRun>>;
   const openedPanelRefs: TaskPanelRef[] = [];
+  const openTerminalForLaunch = async (
+    launch: TaskLaunchPlan,
+    runId: string,
+    reusePanel?: TaskPanelRef | undefined
+  ): Promise<TaskPanelRef> => {
+    const task = taskPanelMetadataFor(launch, runId);
+    const result = await executeTerminalOpenCommand(
+      requestId,
+      {
+        focus: command.focus ?? launch.focus,
+        launch: terminalLaunchFor(launch),
+        placement: command.placement ?? "active-tab",
+        type: "terminal.open",
+        ...(command.windowId ? { windowId: command.windowId } : {}),
+      },
+      services,
+      {
+        clientEnv: options.clientEnv,
+        ...(reusePanel ? { reusePanel } : {}),
+        source: "task",
+        tab: launch.tab,
+        task,
+      }
+    );
+    if (!result.ok) {
+      throw new RunTerminalOpenError(
+        result.error.code ?? "platform_unavailable",
+        result.error.message
+      );
+    }
+    const panelId = dataPanelId(result.data);
+    if (!panelId) {
+      throw new Error("terminal.open did not return a panel id");
+    }
+    const windowId = dataWindowId(result.data);
+    if (!windowId) {
+      throw new Error("terminal.open did not return a window id");
+    }
+    const opened = { panelId, windowId };
+    openedPanelRefs.push(opened);
+    return opened;
+  };
   try {
     started = await services.tasks.startRun({
       launches: preparation.launches,
       openTerminal: async (launch, runId) => {
-        const task = taskPanelMetadataFor(launch, runId);
-        const result = await executeTerminalOpenCommand(
-          requestId,
-          {
-            focus: command.focus ?? launch.focus,
-            launch: terminalLaunchFor(launch),
-            placement: command.placement ?? "active-tab",
-            type: "terminal.open",
-            ...(command.windowId ? { windowId: command.windowId } : {}),
-          },
-          services,
-          {
-            clientEnv: options.clientEnv,
-            source: "task",
-            tab: launch.tab,
-            task,
+        const reusePanel = preparation.reusablePanels?.[launch.taskId];
+        try {
+          return await openTerminalForLaunch(launch, runId, reusePanel);
+        } catch (error) {
+          if (
+            reusePanel &&
+            error instanceof RunTerminalOpenError &&
+            error.code === "not_found"
+          ) {
+            services.tasks.markPanelClosed(
+              reusePanel.panelId,
+              reusePanel.windowId
+            );
+            return await openTerminalForLaunch(launch, runId);
           }
-        );
-        if (!result.ok) {
-          throw new RunTerminalOpenError(
-            result.error.code ?? "platform_unavailable",
-            result.error.message
-          );
+          throw error;
         }
-        const panelId = dataPanelId(result.data);
-        if (!panelId) {
-          throw new Error("terminal.open did not return a panel id");
-        }
-        const windowId = dataWindowId(result.data);
-        if (!windowId) {
-          throw new Error("terminal.open did not return a window id");
-        }
-        openedPanelRefs.push({ panelId, windowId });
-        return { panelId, windowId };
       },
       projectRoot: command.projectRoot,
       rootTaskId: command.taskId,
