@@ -29,7 +29,6 @@ export type RendererPluginActionCategoryKey =
   | "worktree";
 
 export interface RendererPluginActionMetadata {
-  aliases?: () => readonly string[];
   categoryKey?: RendererPluginActionCategoryKey;
   excludeFromMru?: boolean;
   group?: string;

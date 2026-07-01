@@ -21,6 +21,7 @@ export type PluginSource = z.infer<typeof pluginSourceSchema>;
 const pluginLocaleCodeSchema = z.string().min(1);
 
 export const pluginLocalizedContributionSchema = z.object({
+  aliases: z.array(z.string().min(1)).optional(),
   description: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
 });

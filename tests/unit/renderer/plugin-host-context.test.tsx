@@ -42,12 +42,15 @@ const pluginEntry = {
     localization: {
       defaultLocale: "en",
       files: {},
-      locales: ["en", "zh-CN"],
+      locales: ["en", "zh-CN", "fr"],
     },
     locales: {
       en: {
         commands: {
-          "sample.list": { title: "Sample: List" },
+          "sample.list": {
+            aliases: ["sample list", "sample command"],
+            title: "Sample: List",
+          },
         },
         messages: {
           "ui.statusOpenLabel": "Open sample for {{name}}",
@@ -56,11 +59,22 @@ const pluginEntry = {
       },
       "zh-CN": {
         commands: {
-          "sample.list": { title: "示例列表" },
+          "sample.list": {
+            aliases: ["示例列表", "shili liebiao"],
+            title: "示例列表",
+          },
         },
         messages: {
           "ui.statusOpenLabel": "打开 {{name}} 的示例",
           "ui.title": "示例",
+        },
+      },
+      fr: {
+        commands: {
+          "sample.list": {
+            aliases: ["liste exemple"],
+            title: "Liste d'exemples",
+          },
         },
       },
     },
@@ -121,7 +135,6 @@ describe("createRendererPluginContext", () => {
       handler: () => undefined,
       id: "test.action",
       metadata: {
-        aliases: () => ["sample alias"],
         categoryKey: "worktree",
       },
       surfaces: ["command-palette"],
@@ -132,12 +145,35 @@ describe("createRendererPluginContext", () => {
     expect(actionRegistry.get("test.action")?.metadata).toMatchObject({
       categoryKey: "worktree",
     });
-    expect(actionRegistry.get("test.action")?.metadata?.aliases?.()).toEqual([
-      "sample alias",
-    ]);
 
     dispose();
     expect(actionRegistry.get("test.action")).toBeUndefined();
+  });
+
+  it("adds declared command aliases from plugin locales during action registration", async () => {
+    await i18next.changeLanguage("zh-CN");
+    const context = createRendererPluginContext(pluginEntry);
+
+    const dispose = context.actions.register({
+      category: "Test",
+      handler: () => undefined,
+      id: "sample.list",
+      metadata: {
+        categoryKey: "worktree",
+      },
+      surfaces: ["command-palette"],
+      title: () => "Sample",
+    });
+
+    expect(actionRegistry.get("sample.list")?.metadata?.aliases?.()).toEqual([
+      "示例列表",
+      "shili liebiao",
+      "sample list",
+      "sample command",
+      "liste exemple",
+    ]);
+
+    dispose();
   });
 
   it("rejects action registration not declared by the plugin manifest", () => {

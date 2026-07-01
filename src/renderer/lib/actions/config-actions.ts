@@ -18,21 +18,22 @@ import { applyThemeVisual, useThemeStore } from "@/stores/theme.store.ts";
 
 const THEME_OPTIONS_DATA = [
   {
-    aliasesKey: "commandPalette.aliases.theme.light",
     id: "light",
     labelKey: "settings.theme.light",
   },
   {
-    aliasesKey: "commandPalette.aliases.theme.dark",
     id: "dark",
     labelKey: "settings.theme.dark",
   },
   {
-    aliasesKey: "commandPalette.aliases.theme.system",
     id: "system",
     labelKey: "settings.theme.system",
   },
 ] as const;
+
+function themeAliasesKey(value: ThemePreference): string {
+  return `commandPalette.aliases.theme.${value}`;
+}
 
 function stylePresetAliasesKey(value: StylePresetId): string {
   return `commandPalette.aliases.stylePreset.${value}`;
@@ -51,7 +52,7 @@ function openThemeQuickPick() {
     title: i18next.t("commandPalette.action.selectTheme"),
     placeholder: i18next.t("commandPalette.placeholder.theme"),
     items: THEME_OPTIONS_DATA.map((opt) => ({
-      aliases: resolveI18nAliases(opt.aliasesKey),
+      aliases: resolveI18nAliases(themeAliasesKey(opt.id)),
       checked: opt.id === originalTheme,
       id: opt.id,
       label: i18next.t(opt.labelKey),
@@ -119,7 +120,6 @@ function openLocaleQuickPick() {
 
 export const CONFIG_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
-    aliasesKey: "commandPalette.aliases.selectTheme",
     categoryKey: "settings",
     group: "5_appearance",
     handler: openThemeQuickPick,
@@ -130,7 +130,6 @@ export const CONFIG_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "commandPalette.action.selectTheme",
   },
   {
-    aliasesKey: "commandPalette.aliases.selectStyle",
     categoryKey: "settings",
     group: "5_appearance",
     handler: openStylePresetQuickPick,
@@ -141,7 +140,6 @@ export const CONFIG_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "commandPalette.action.selectStyle",
   },
   {
-    aliasesKey: "commandPalette.aliases.selectLanguage",
     categoryKey: "settings",
     group: "5_appearance",
     handler: openLocaleQuickPick,

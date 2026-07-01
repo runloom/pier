@@ -6,7 +6,6 @@ import { useZoomStore } from "@/stores/zoom.store.ts";
 
 export const VIEW_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
-    aliasesKey: "commandPalette.aliases.zoomIn",
     categoryKey: "view",
     group: "4_view",
     handler: () => useZoomStore.getState().zoomIn(),
@@ -17,7 +16,6 @@ export const VIEW_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "commandPalette.action.zoomIn",
   },
   {
-    aliasesKey: "commandPalette.aliases.zoomOut",
     categoryKey: "view",
     group: "4_view",
     handler: () => useZoomStore.getState().zoomOut(),
@@ -28,7 +26,6 @@ export const VIEW_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "commandPalette.action.zoomOut",
   },
   {
-    aliasesKey: "commandPalette.aliases.resetZoom",
     categoryKey: "view",
     group: "4_view",
     handler: () => useZoomStore.getState().resetZoom(),

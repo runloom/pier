@@ -145,13 +145,10 @@ function createMetadata(
   runtime: ActionContributionRuntime
 ): ActionMetadata {
   const metadata: ActionMetadata = {
+    aliases: () => runtime.resolveAliases(contribution.id),
     categoryKey: contribution.categoryKey,
     titleKey: contribution.titleKey,
   };
-  const aliasesKey = contribution.aliasesKey;
-  if (aliasesKey) {
-    metadata.aliases = () => runtime.resolveAliases(aliasesKey);
-  }
   if (contribution.group) {
     metadata.group = contribution.group;
   }

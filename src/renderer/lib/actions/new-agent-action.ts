@@ -32,7 +32,6 @@ async function handleNewAgent(): Promise<void> {
 
 export const NEW_AGENT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
-    aliasesKey: "commandPalette.aliases.newAgent",
     categoryKey: "run",
     group: "1_new",
     handler: handleNewAgent,
