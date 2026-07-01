@@ -310,12 +310,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             ref={anchorRef}
           />
           {showPlaceholder ? (
-            <TerminalSurfacePlaceholder
-              className={terminalContentClassName}
-              cwd={effectiveCwd}
-              tabTitle={effectiveTab?.title ?? null}
-              title={effectiveTitle}
-            />
+            <TerminalSurfacePlaceholder className={terminalContentClassName} />
           ) : null}
           {error ? (
             <div
