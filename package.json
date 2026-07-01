@@ -96,5 +96,14 @@
     "vite": "8.0.16",
     "vitest": "4.1.8"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "@swc/core",
+      "electron",
+      "electron-winstaller",
+      "esbuild"
+    ]
+  },
   "$pin-policy": "exact pin 到 install 当日 latest stable; 不用 latest 字面; 升级走 plan unlock"
 }
