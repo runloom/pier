@@ -8,6 +8,11 @@ import {
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { installCsp } from "./csp.ts";
+import {
+  handleAssetProtocol,
+  registerAssetScheme,
+} from "./fonts/asset-protocol.ts";
+import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
@@ -161,8 +166,11 @@ function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
   target.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST);
 }
 
+registerAssetScheme();
+
 app.whenReady().then(async () => {
   installCsp();
+  handleAssetProtocol();
   await appCore.pluginHost.refresh();
   await installAppMenu({
     appName: app.name,
@@ -218,6 +226,8 @@ app.whenReady().then(async () => {
   registerAgentsIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
   registerRendererCommandIpc(ipcMain);
+  // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
+  registerBundledFonts();
   registerTerminalIpc(ipcMain);
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);

@@ -15,7 +15,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
-import { computeMonoFontFamily, useFontStore } from "@/stores/font.store.ts";
+import {
+  computeMonoFontFamily,
+  computeMonoFontFamilyList,
+  useFontStore,
+} from "@/stores/font.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
@@ -300,7 +304,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
   useEffect(() => {
     window.pier.terminal.setFont(panelId, {
-      family: computeMonoFontFamily(monoFontFamily),
+      family: computeMonoFontFamilyList(monoFontFamily),
       size: effectiveMonoFontSize,
     });
   }, [panelId, monoFontFamily, effectiveMonoFontSize]);
@@ -364,12 +368,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             ref={anchorRef}
           />
           {showPlaceholder ? (
-            <TerminalSurfacePlaceholder
-              className={terminalContentClassName}
-              cwd={effectiveCwd}
-              tabTitle={effectiveTab?.title ?? null}
-              title={effectiveTitle}
-            />
+            <TerminalSurfacePlaceholder className={terminalContentClassName} />
           ) : null}
           {error ? (
             <div

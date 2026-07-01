@@ -1,8 +1,8 @@
 import type { RendererPluginModule } from "@plugins/api/renderer.ts";
-import { worktreeRendererPlugin } from "@plugins/builtin/worktree/renderer/index.ts";
+import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 
 export const BUILTIN_RENDERER_PLUGIN_MODULES = [
-  worktreeRendererPlugin,
+  gitRendererPlugin,
 ] satisfies readonly RendererPluginModule[];
 
 export function getBuiltinRendererPluginModule(

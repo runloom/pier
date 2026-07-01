@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const WORKTREE_PLUGIN_DIR = join(process.cwd(), "src/plugins/builtin/worktree");
+const GIT_PLUGIN_DIR = join(process.cwd(), "src/plugins/builtin/git");
 const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 const HOST_REGISTRY_RE =
   /actionRegistry|terminalStatusItemRegistry|useCommandPaletteController|usePanelDescriptorStore/;
@@ -24,9 +24,9 @@ async function collectSourceFiles(dir: string): Promise<string[]> {
   return files.flat();
 }
 
-describe("builtin worktree plugin package boundary", () => {
+describe("builtin git plugin package boundary", () => {
   it("does not import host process implementation modules", async () => {
-    const files = await collectSourceFiles(WORKTREE_PLUGIN_DIR);
+    const files = await collectSourceFiles(GIT_PLUGIN_DIR);
     const sources = await Promise.all(
       files.map(async (file) => ({
         file: relative(process.cwd(), file),
@@ -61,7 +61,7 @@ describe("builtin worktree plugin package boundary", () => {
   });
 
   it("does not reach into renderer registries or stores directly", async () => {
-    const files = await collectSourceFiles(WORKTREE_PLUGIN_DIR);
+    const files = await collectSourceFiles(GIT_PLUGIN_DIR);
     const source = (
       await Promise.all(files.map((file) => readFile(file, "utf8")))
     ).join("\n");
@@ -72,7 +72,7 @@ describe("builtin worktree plugin package boundary", () => {
 
   it("uses command palette aliases and search terms instead of legacy keywords", async () => {
     const files = [
-      ...(await collectSourceFiles(WORKTREE_PLUGIN_DIR)),
+      ...(await collectSourceFiles(GIT_PLUGIN_DIR)),
       join(process.cwd(), "src/plugins/api/renderer.ts"),
     ];
     const offenders = (

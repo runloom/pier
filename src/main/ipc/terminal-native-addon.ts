@@ -30,7 +30,7 @@ export interface NativeAddon {
     parentHandle: Buffer,
     panelId: string,
     frame: TerminalFrame,
-    fontFamily: string,
+    fontFamilies: string[],
     fontSize: number,
     launch: ResolvedTerminalLaunchOptions | undefined
   ): boolean;
@@ -45,6 +45,8 @@ export interface NativeAddon {
    * swift 把不在集合里的清掉. 空数组 = 全清 (等价 closeAllTerminals).
    */
   reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
+  /** 把打包字体 ttf 的绝对路径注册给 CoreText (.process scope)，让 ghostty 能找到。启动时调一次。 */
+  registerFonts(paths: string[]): void;
   setAppShortcutKeys(keys: string[]): void;
   setCommandFinishedForwardCallback?(
     cb:
@@ -113,7 +115,7 @@ export interface NativeAddon {
   /** 热更新 window 下所有 terminal 的字体. controller per window, 内部走 Ghostty TerminalController.setTerminalConfiguration. */
   setTerminalFont(
     parentHandle: Buffer,
-    fontFamily: string,
+    fontFamilies: string[],
     fontSize: number
   ): void;
   /**

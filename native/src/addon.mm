@@ -15,6 +15,8 @@ extern "C" {
                                          const char** envValues,
                                          long envCount);
     void ghostty_bridge_set_font_config(void* nsWindow, const char* fontFamily, float fontSize);
+    // 打包字体注册给当前进程 CoreText. 多路径用 '\n' join 成单个 C 字符串, swift 端 split 还原.
+    void ghostty_bridge_register_fonts(const char* pathsJoined);
     void ghostty_bridge_set_terminal_config(void* nsWindow, const char* cursorStyle,
                                             bool cursorBlink, double scrollbackLimitBytes,
                                             bool pasteProtection);
@@ -125,7 +127,15 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     double y = frame.Get("y").As<Napi::Number>().DoubleValue();
     double w = frame.Get("width").As<Napi::Number>().DoubleValue();
     double h = frame.Get("height").As<Napi::Number>().DoubleValue();
-    std::string fontFamily = info[3].As<Napi::String>().Utf8Value();
+    std::string fontFamily;
+    if (info[3].IsArray()) {
+        Napi::Array arr = info[3].As<Napi::Array>();
+        for (uint32_t i = 0; i < arr.Length(); i++) {
+            if (!arr.Get(i).IsString()) continue;
+            if (!fontFamily.empty()) fontFamily += "\n";
+            fontFamily += arr.Get(i).As<Napi::String>().Utf8Value();
+        }
+    }
     float fontSize = info[4].As<Napi::Number>().FloatValue();
     const char* cwdPtr = nullptr;
     const char* commandPtr = nullptr;
@@ -636,13 +646,35 @@ static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
 static Napi::Value JsSetFontConfig(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
-    std::string fontFamily = info[1].As<Napi::String>().Utf8Value();
+    std::string fontFamily;
+    if (info[1].IsArray()) {
+        Napi::Array arr = info[1].As<Napi::Array>();
+        for (uint32_t i = 0; i < arr.Length(); i++) {
+            if (!arr.Get(i).IsString()) continue;
+            if (!fontFamily.empty()) fontFamily += "\n";
+            fontFamily += arr.Get(i).As<Napi::String>().Utf8Value();
+        }
+    }
     float fontSize = info[2].As<Napi::Number>().FloatValue();
     ghostty_bridge_set_font_config(
         (__bridge void*)win,
         fontFamily.c_str(),
         fontSize
     );
+    return info.Env().Undefined();
+}
+
+static Napi::Value JsRegisterFonts(const Napi::CallbackInfo& info) {
+    std::string joined;
+    if (info.Length() >= 1 && info[0].IsArray()) {
+        Napi::Array arr = info[0].As<Napi::Array>();
+        for (uint32_t i = 0; i < arr.Length(); i++) {
+            if (!arr.Get(i).IsString()) continue;
+            if (!joined.empty()) joined += "\n";
+            joined += arr.Get(i).As<Napi::String>().Utf8Value();
+        }
+    }
+    ghostty_bridge_register_fonts(joined.c_str());
     return info.Env().Undefined();
 }
 
@@ -731,6 +763,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));
     exports.Set("setTerminalFont", Napi::Function::New(env, JsSetFontConfig));
     exports.Set("setTerminalConfig", Napi::Function::New(env, JsSetTerminalConfig));
+    exports.Set("registerFonts", Napi::Function::New(env, JsRegisterFonts));
     return exports;
 }
 
