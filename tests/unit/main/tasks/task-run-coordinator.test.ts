@@ -278,6 +278,38 @@ describe("task run coordinator", () => {
     });
   });
 
+  it("ignores duplicate completion events after the first terminal result", async () => {
+    const opened: TaskRunLaunchPlan[] = [];
+    const coordinator = createTaskRunCoordinator({
+      openTerminal: (plan) => {
+        opened.push(plan);
+        return Promise.resolve({ panelId: `panel-${plan.taskId}` });
+      },
+    });
+
+    const result = await coordinator.start({
+      launches: [
+        launch("build", "build"),
+        launch("verify", "verify", {
+          dependsOn: ["build"],
+          dependsOrder: "sequence",
+        }),
+      ],
+      projectRoot: "/repo",
+      rootTaskId: "verify",
+    });
+
+    await coordinator.completePanel("panel-build", 0);
+    await expect(
+      coordinator.completePanel("panel-build", 1)
+    ).resolves.toBeNull();
+
+    expect(opened.map((plan) => plan.taskId)).toEqual(["build", "verify"]);
+    expect(coordinator.status(result.runId)?.nodes.build?.status).toBe(
+      "succeeded"
+    );
+  });
+
   it("reclaims old finished runs above the retention limit", async () => {
     const coordinator = createTaskRunCoordinator({
       openTerminal: (plan) =>

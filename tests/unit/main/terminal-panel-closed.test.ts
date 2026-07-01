@@ -1,6 +1,7 @@
 import {
-  handleTaskExitTitle,
   notifyTerminalPanelClosed,
+  notifyTerminalPanelExit,
+  parseTaskExitTitle,
   setTerminalPanelClosedHandler,
 } from "@main/ipc/terminal-panel-closed.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
@@ -11,17 +12,13 @@ describe("terminal panel closed lifecycle", () => {
     setTerminalPanelClosedHandler(null);
   });
 
-  it("notifies the registered handler for panel close and task exit marker", () => {
+  it("notifies the registered handler for panel close and task exit", () => {
     const handler = vi.fn();
     setTerminalPanelClosedHandler(handler);
 
     notifyTerminalPanelClosed("terminal-1");
-    const exitCode = handleTaskExitTitle(
-      "terminal-2",
-      `${TASK_EXIT_TITLE_PREFIX}0`
-    );
+    notifyTerminalPanelExit("terminal-2", 0);
 
-    expect(exitCode).toBe(0);
     expect(handler).toHaveBeenCalledWith("terminal-1");
     expect(handler).toHaveBeenCalledWith("terminal-2", 0);
   });
@@ -31,22 +28,27 @@ describe("terminal panel closed lifecycle", () => {
     setTerminalPanelClosedHandler(handler);
 
     notifyTerminalPanelClosed("terminal-1", "window-a");
-    const exitCode = handleTaskExitTitle(
-      "terminal-2",
-      `${TASK_EXIT_TITLE_PREFIX}1`,
-      "window-b"
-    );
+    notifyTerminalPanelExit("terminal-2", 1, "window-b");
 
-    expect(exitCode).toBe(1);
     expect(handler).toHaveBeenCalledWith("terminal-1", undefined, "window-a");
     expect(handler).toHaveBeenCalledWith("terminal-2", 1, "window-b");
   });
 
-  it("does not handle ordinary terminal titles", () => {
+  it("parses task exit titles without notifying the close handler", () => {
     const handler = vi.fn();
     setTerminalPanelClosedHandler(handler);
 
-    expect(handleTaskExitTitle("terminal-1", "vim")).toBeNull();
+    expect(parseTaskExitTitle(`${TASK_EXIT_TITLE_PREFIX}2`)).toBe(2);
+    expect(parseTaskExitTitle(`${TASK_EXIT_TITLE_PREFIX}-5`)).toBe(1);
+    expect(parseTaskExitTitle("pier-task-exit:nope")).toBeNull();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("does not parse ordinary terminal titles", () => {
+    const handler = vi.fn();
+    setTerminalPanelClosedHandler(handler);
+
+    expect(parseTaskExitTitle("vim")).toBeNull();
     expect(handler).not.toHaveBeenCalled();
   });
 });

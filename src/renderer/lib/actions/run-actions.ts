@@ -25,15 +25,12 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 
-function basenameOf(path: string | undefined): string | undefined {
-  if (!path) {
-    return;
-  }
-  return path.split(PATH_SEPARATOR_RE).filter(Boolean).at(-1);
-}
-
 function terminalLabel(panel: WorkspacePanelSnapshot): string {
-  return panel.display?.short ?? basenameOf(panel.context?.cwd) ?? panel.id;
+  return (
+    panel.display?.short ??
+    panel.context?.cwd?.split(PATH_SEPARATOR_RE).filter(Boolean).at(-1) ??
+    panel.id
+  );
 }
 
 function terminalTabBadge(panel: WorkspacePanelSnapshot): QuickPickItemBadge[] {
@@ -309,7 +306,6 @@ function focusTerminalPanel(panelId: string): void {
     console.error("[run-actions] focus task terminal failed:", result.message);
   }
 }
-
 async function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
   let result = await spawnTask({ projectRoot, taskId: item.id });
   if (result.status === "requires-input") {
@@ -327,13 +323,14 @@ async function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
     focusTerminalPanel(result.panelId);
   }
 }
-
 async function openRunTaskQuickPick() {
   const projectRoot = activeProjectRoot();
+  const title = i18next.t("commandPalette.action.runTask");
+  const placeholder = i18next.t("commandPalette.placeholder.runTask");
   if (!projectRoot) {
     useCommandPaletteController.getState().openQuickPick({
-      title: i18next.t("commandPalette.action.runTask"),
-      placeholder: i18next.t("commandPalette.placeholder.runTask"),
+      title,
+      placeholder,
       items: [
         {
           detail: i18next.t("commandPalette.run.noTaskContextDetail"),
@@ -346,26 +343,80 @@ async function openRunTaskQuickPick() {
     });
     return;
   }
-
-  const result = await window.pier.tasks.list({ projectRoot });
-  const sections = buildTaskSections(result);
+  let cancelled = false;
   useCommandPaletteController.getState().openQuickPick({
-    title: i18next.t("commandPalette.action.runTask"),
-    placeholder: i18next.t("commandPalette.placeholder.runTask"),
-    ...(sections.length > 0
-      ? { sections }
-      : {
-          items: [
-            {
-              detail: i18next.t("commandPalette.run.noTasksDetail"),
-              disabled: true,
-              id: "task-empty",
-              label: i18next.t("commandPalette.run.noTasks"),
-            },
-          ],
-        }),
-    onAccept: (item) => handleTaskAccept(projectRoot, item),
+    title,
+    placeholder,
+    loading: true,
+    items: [
+      {
+        detail: i18next.t("commandPalette.run.loadingTasksDetail"),
+        disabled: true,
+        id: "task-loading",
+        label: i18next.t("commandPalette.run.loadingTasks"),
+      },
+    ],
+    onAccept: () => undefined,
+    onDismiss: () => {
+      cancelled = true;
+    },
   });
+  const requestId = useCommandPaletteController.getState().requestId;
+  const shouldReplaceLoadingPick = () => {
+    const state = useCommandPaletteController.getState();
+    return (
+      !cancelled &&
+      state.open &&
+      state.mode === "quick-pick" &&
+      state.requestId === requestId
+    );
+  };
+  // 让出一个 macrotask, 先 paint loading row, 再触发 cold task discovery。
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  if (!shouldReplaceLoadingPick()) {
+    return;
+  }
+  try {
+    const result = await window.pier.tasks.list({ projectRoot });
+    if (!shouldReplaceLoadingPick()) {
+      return;
+    }
+    const sections = buildTaskSections(result);
+    useCommandPaletteController.getState().replaceQuickPick({
+      title,
+      placeholder,
+      ...(sections.length > 0
+        ? { sections }
+        : {
+            items: [
+              {
+                detail: i18next.t("commandPalette.run.noTasksDetail"),
+                disabled: true,
+                id: "task-empty",
+                label: i18next.t("commandPalette.run.noTasks"),
+              },
+            ],
+          }),
+      onAccept: (item) => handleTaskAccept(projectRoot, item),
+    });
+  } catch (error) {
+    if (!shouldReplaceLoadingPick()) {
+      return;
+    }
+    useCommandPaletteController.getState().replaceQuickPick({
+      title,
+      placeholder,
+      items: [
+        {
+          detail: error instanceof Error ? error.message : String(error),
+          disabled: true,
+          id: "task-load-error",
+          label: i18next.t("commandPalette.run.loadFailed"),
+        },
+      ],
+      onAccept: () => undefined,
+    });
+  }
 }
 
 function openTerminalListQuickPick() {

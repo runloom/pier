@@ -245,7 +245,10 @@ const terminalApi: TerminalAPI = {
   applyPresentation: (snapshot) =>
     ipcRenderer.send("pier:terminal:apply-presentation", snapshot),
   applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
-  close: (panelId) => ipcRenderer.send("pier:terminal:close", panelId),
+  close: (panelId, options) =>
+    ipcRenderer
+      .invoke("pier:terminal:close", panelId, options)
+      .then(() => undefined),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
   debugSnapshot: (args) =>
     ipcRenderer.invoke("pier:terminal:debug-snapshot", args),

@@ -1,15 +1,12 @@
 import type {
+  TaskExitReason,
+  TaskExitSource,
+} from "@shared/contracts/tasks.ts";
+import type {
   CreateTerminalArgs,
   TerminalTabChromePatchEvent,
 } from "@shared/contracts/terminal.ts";
-import {
-  patchTerminalPanelTab,
-  patchTerminalPanelTaskStatus,
-  updateTerminalPanelTab,
-} from "../state/terminal-session-state.ts";
-import type { AppWindow } from "../windows/app-window.ts";
-import { forwardToWindow } from "./terminal-forwarding.ts";
-import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
+import { updateTerminalPanelTab } from "../state/terminal-session-state.ts";
 
 export async function persistInitialTerminalTab(
   sessionScope: string,
@@ -26,10 +23,26 @@ export async function persistInitialTerminalTab(
   }
 }
 
-function taskExitTabPatch(
-  exitCode: number
+export interface TerminalTaskExitStatus {
+  code?: number | undefined;
+  reason: TaskExitReason;
+  source: TaskExitSource;
+}
+
+export function taskExitTabPatch(
+  exit: TerminalTaskExitStatus
 ): TerminalTabChromePatchEvent["tab"] {
-  if (exitCode === 0) {
+  if (exit.reason === "user") {
+    return {
+      state: {
+        colorToken: "warning",
+        label: "Cancelled",
+        status: "cancelled",
+      },
+    };
+  }
+
+  if (exit.code === 0) {
     return {
       state: {
         colorToken: "success",
@@ -38,46 +51,22 @@ function taskExitTabPatch(
       },
     };
   }
+
+  if (typeof exit.code === "number") {
+    return {
+      state: {
+        colorToken: "destructive",
+        label: `Failed ${exit.code}`,
+        status: "failed",
+      },
+    };
+  }
+
   return {
     state: {
       colorToken: "destructive",
-      label: `Failed ${exitCode}`,
+      label: "Failed",
       status: "failed",
     },
   };
-}
-
-export async function forwardTerminalTaskTabPatch(args: {
-  browserWindowId: number;
-  exitCode: number;
-  panelId: string;
-  targetWindow: AppWindow | null;
-}): Promise<boolean> {
-  if (!(args.targetWindow && !args.targetWindow.isDestroyed())) {
-    return false;
-  }
-  const normalizedExitCode = args.exitCode < 0 ? 1 : args.exitCode;
-  const patch = taskExitTabPatch(normalizedExitCode);
-  const sessionScope = terminalSessionScopeFor(args.targetWindow);
-  const status = normalizedExitCode === 0 ? "succeeded" : "failed";
-  const patchedTask = await patchTerminalPanelTaskStatus(
-    sessionScope,
-    args.panelId,
-    {
-      exitCode: normalizedExitCode,
-      finishedAt: Date.now(),
-      status,
-    }
-  );
-  if (!patchedTask) {
-    return false;
-  }
-  await patchTerminalPanelTab(sessionScope, args.panelId, patch);
-  forwardToWindow(
-    args.browserWindowId,
-    "pier:terminal:tab-chrome-patch",
-    { panelId: args.panelId, tab: patch },
-    "pier-task-tab-patch"
-  );
-  return true;
 }

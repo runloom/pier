@@ -7,15 +7,9 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 
 class TestResizeObserver {
-  observe() {
-    // Test no-op.
-  }
-  unobserve() {
-    // Test no-op.
-  }
-  disconnect() {
-    // Test no-op.
-  }
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
 }
 
 const originalScrollIntoView = Element.prototype.scrollIntoView;
@@ -171,7 +165,7 @@ describe("CommandPalette quick pick rows", () => {
           },
         ],
         onAccept: vi.fn(),
-      } as never);
+      });
     });
 
     await waitFor(() => {
@@ -295,5 +289,609 @@ describe("CommandPalette quick pick rows", () => {
       expect(screen.getByText("workspace")).toBeVisible();
     });
     expect(screen.queryByText("pier")).not.toBeInTheDocument();
+  });
+
+  it("closes immediately when accepting a quick-pick item starts slow async work", async () => {
+    render(<CommandPalette />);
+    let resolveAccept!: () => void;
+    const accepted = new Promise<void>((resolve) => {
+      resolveAccept = resolve;
+    });
+    const onAccept = vi.fn(() => accepted);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Run Task",
+        placeholder: "Search tasks",
+        items: [
+          {
+            id: "package-script:test",
+            label: "test",
+          },
+        ],
+        onAccept,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("test")).toBeVisible();
+    });
+    const row = screen.getByText("test").closest("[cmdk-item]");
+    expect(row).toBeInstanceOf(HTMLElement);
+
+    act(() => {
+      fireEvent.click(row as HTMLElement);
+    });
+
+    const wasOpenWhileAcceptPending =
+      useCommandPaletteController.getState().open;
+    const wasItemVisibleWhileAcceptPending =
+      screen.queryByText("test") !== null;
+
+    await act(async () => {
+      resolveAccept();
+      await accepted;
+    });
+
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    expect(wasOpenWhileAcceptPending).toBe(false);
+    expect(wasItemVisibleWhileAcceptPending).toBe(false);
+
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(screen.queryByText("test")).not.toBeInTheDocument();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("preserves quick-pick back stack when pending async accept opens a follow-up picker", async () => {
+    render(<CommandPalette />);
+    let resolveAccept!: () => void;
+    const accepted = new Promise<void>((resolve) => {
+      resolveAccept = resolve;
+    });
+    const onAccept = vi.fn(() => accepted);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Run Task",
+        placeholder: "Search tasks",
+        items: [
+          {
+            id: "package-script:test",
+            label: "test",
+          },
+        ],
+        onAccept,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("test")).toBeVisible();
+    });
+    const row = screen.getByText("test").closest("[cmdk-item]");
+    expect(row).toBeInstanceOf(HTMLElement);
+
+    act(() => {
+      fireEvent.click(row as HTMLElement);
+    });
+
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(screen.queryByText("test")).not.toBeInTheDocument();
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Choose Input",
+        placeholder: "Choose a value",
+        items: [
+          {
+            id: "choice",
+            label: "choice",
+          },
+        ],
+        onAccept: vi.fn(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("choice")).toBeVisible();
+    });
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("test")).toBeVisible();
+    });
+    expect(screen.queryByText("choice")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveAccept();
+      await accepted;
+    });
+
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("preserves nested async accept back stack across two follow-up quick-picks", async () => {
+    render(<CommandPalette />);
+    let resolveAccept!: () => void;
+    const accepted = new Promise<void>((resolve) => {
+      resolveAccept = resolve;
+    });
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const selectedInputs: string[] = [];
+    const onAccept = vi.fn(async () => {
+      await Promise.resolve();
+      try {
+        const first = await new Promise<string | null>((resolve) => {
+          useCommandPaletteController.getState().openQuickPick({
+            title: "Choose First Input",
+            placeholder: "Choose first input",
+            items: [
+              {
+                id: "first",
+                label: "first",
+              },
+            ],
+            onAccept: (item) => {
+              selectedInputs.push(item.id);
+              resolve(item.id);
+            },
+            onDismiss: () => {
+              resolve(null);
+            },
+          });
+        });
+        if (first === null) {
+          return;
+        }
+        await Promise.resolve();
+        await new Promise<string | null>((resolve) => {
+          useCommandPaletteController.getState().openQuickPick({
+            title: "Choose Second Input",
+            placeholder: "Choose second input",
+            items: [
+              {
+                id: "second",
+                label: "second",
+              },
+            ],
+            onAccept: (item) => {
+              selectedInputs.push(item.id);
+              resolve(item.id);
+            },
+            onDismiss: () => {
+              resolve(null);
+            },
+          });
+        });
+      } finally {
+        await accepted;
+      }
+    });
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Run Task",
+        placeholder: "Search tasks",
+        items: [
+          {
+            id: "task",
+            label: "task",
+          },
+        ],
+        onAccept,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("task")).toBeVisible();
+    });
+    const taskRow = screen.getByText("task").closest("[cmdk-item]");
+    expect(taskRow).toBeInstanceOf(HTMLElement);
+
+    act(() => {
+      fireEvent.click(taskRow as HTMLElement);
+    });
+
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(screen.queryByText("task")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("first")).toBeVisible();
+    });
+    const firstRow = screen.getByText("first").closest("[cmdk-item]");
+    expect(firstRow).toBeInstanceOf(HTMLElement);
+
+    act(() => {
+      fireEvent.click(firstRow as HTMLElement);
+    });
+
+    expect(screen.queryByText("first")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("second")).toBeVisible();
+    });
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("first")).toBeVisible();
+    });
+    expect(screen.queryByText("second")).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("task")).toBeVisible();
+    });
+    expect(screen.queryByText("first")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveAccept();
+      await accepted;
+    });
+
+    expect(selectedInputs).toEqual(["first"]);
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("clears pending accepted picker stack before the next unrelated quick-pick opens", async () => {
+    render(<CommandPalette />);
+    let resolveAccept!: () => void;
+    const accepted = new Promise<void>((resolve) => {
+      resolveAccept = resolve;
+    });
+    const onAccept = vi.fn(() => accepted);
+    const onDismiss = vi.fn();
+    const unrelatedDismiss = vi.fn();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Run Task",
+        placeholder: "Search tasks",
+        items: [
+          {
+            id: "package-script:test",
+            label: "test",
+          },
+        ],
+        onAccept,
+        onDismiss,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("test")).toBeVisible();
+    });
+    const row = screen.getByText("test").closest("[cmdk-item]");
+    expect(row).toBeInstanceOf(HTMLElement);
+
+    act(() => {
+      fireEvent.click(row as HTMLElement);
+    });
+
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(screen.queryByText("test")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveAccept();
+      await accepted;
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Unrelated Picker",
+        placeholder: "Search unrelated",
+        items: [
+          {
+            id: "unrelated",
+            label: "unrelated",
+          },
+        ],
+        onAccept: vi.fn(),
+        onDismiss: unrelatedDismiss,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("unrelated")).toBeVisible();
+    });
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    await waitFor(() => {
+      expect(useCommandPaletteController.getState().open).toBe(false);
+    });
+    expect(screen.queryByText("unrelated")).not.toBeInTheDocument();
+    expect(screen.queryByText("test")).not.toBeInTheDocument();
+    expect(unrelatedDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("logs rejected async accepts without dismissing the accepted picker after it already closed", async () => {
+    render(<CommandPalette />);
+    let rejectAccept!: (error: Error) => void;
+    const accepted = new Promise<void>((_resolve, reject) => {
+      rejectAccept = reject;
+    });
+    const onAccept = vi.fn(() => accepted);
+    const onDismiss = vi.fn();
+    const rejection = new Error("boom");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Run Task",
+        placeholder: "Search tasks",
+        items: [
+          {
+            id: "package-script:test",
+            label: "test",
+          },
+        ],
+        onAccept,
+        onDismiss,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("test")).toBeVisible();
+    });
+    const row = screen.getByText("test").closest("[cmdk-item]");
+    expect(row).toBeInstanceOf(HTMLElement);
+
+    act(() => {
+      fireEvent.click(row as HTMLElement);
+    });
+
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(screen.queryByText("test")).not.toBeInTheDocument();
+
+    await act(async () => {
+      rejectAccept(rejection);
+      await accepted.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "[command-palette] onAccept threw:",
+        rejection
+      );
+    });
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(screen.queryByText("test")).not.toBeInTheDocument();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("preserves a typed quick-pick query when loading rows are replaced", async () => {
+    const dispose = actionRegistry.register({
+      category: "Run",
+      handler: vi.fn(),
+      id: "test.previous-command",
+      surfaces: ["command-palette"],
+      title: () => "Previous Command Anchor",
+    });
+
+    try {
+      render(<CommandPalette />);
+
+      act(() => {
+        useCommandPaletteController.getState().openPalette();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Previous Command Anchor")).toBeVisible();
+      });
+
+      const loadingQuickPick = {
+        title: "Run Task",
+        placeholder: "Search tasks",
+        loading: true,
+        items: [
+          {
+            disabled: true,
+            id: "task-loading",
+            label: "Finding tasks...",
+          },
+        ],
+        onAccept: vi.fn(),
+      };
+
+      act(() => {
+        useCommandPaletteController.getState().openQuickPick(loadingQuickPick);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Finding tasks...")).toBeVisible();
+      });
+      act(() => {
+        fireEvent.change(screen.getByPlaceholderText("Search tasks"), {
+          target: { value: "test" },
+        });
+      });
+      expect(screen.getByPlaceholderText("Search tasks")).toHaveValue("test");
+
+      const replaceQuickPick =
+        useCommandPaletteController.getState().replaceQuickPick;
+
+      act(() => {
+        replaceQuickPick({
+          title: "Run Task",
+          placeholder: "Search tasks",
+          sections: [
+            {
+              heading: "package.json",
+              id: "package-script",
+              items: [
+                {
+                  detail: "pnpm run test",
+                  id: "package-script:test",
+                  label: "test",
+                },
+                {
+                  detail: "pnpm run build",
+                  id: "package-script:build",
+                  label: "build",
+                },
+              ],
+            },
+          ],
+          onAccept: vi.fn(),
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("test")).toBeVisible();
+      });
+      expect(screen.getByPlaceholderText("Search tasks")).toHaveValue("test");
+      expect(screen.queryByText("build")).not.toBeInTheDocument();
+
+      act(() => {
+        fireEvent.keyDown(document, { key: "Escape" });
+      });
+
+      await waitFor(() => {
+        expect(useCommandPaletteController.getState().mode).toBe("commands");
+      });
+      expect(screen.getByText("Previous Command Anchor")).toBeVisible();
+      expect(screen.queryByText("Finding tasks...")).not.toBeInTheDocument();
+    } finally {
+      act(() => {
+        useCommandPaletteController.setState({
+          mode: "commands",
+          open: false,
+          quickPick: null,
+          requestId: 0,
+          stack: [],
+        });
+      });
+      dispose();
+    }
+  });
+
+  it("replaces an open quick-pick without creating a new session or back-stack entry", async () => {
+    const dispose = actionRegistry.register({
+      category: "Run",
+      handler: vi.fn(),
+      id: "test.replace-contract-anchor",
+      surfaces: ["command-palette"],
+      title: () => "Replace Contract Anchor",
+    });
+
+    try {
+      render(<CommandPalette />);
+
+      act(() => {
+        useCommandPaletteController.getState().openPalette();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Replace Contract Anchor")).toBeVisible();
+      });
+
+      const loadingQuickPick = {
+        title: "Run Task",
+        placeholder: "Search tasks",
+        loading: true,
+        items: [
+          {
+            disabled: true,
+            id: "task-loading",
+            label: "Finding tasks...",
+          },
+        ],
+        onAccept: vi.fn(),
+      };
+
+      act(() => {
+        useCommandPaletteController.getState().openQuickPick(loadingQuickPick);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Finding tasks...")).toBeVisible();
+      });
+
+      const beforeReplace = useCommandPaletteController.getState();
+      expect(beforeReplace.requestId).toBe(2);
+      expect(beforeReplace.stack).toHaveLength(1);
+      expect(beforeReplace.stack.at(-1)?.mode).toBe("commands");
+
+      act(() => {
+        useCommandPaletteController.getState().replaceQuickPick({
+          title: "Run Task",
+          placeholder: "Search tasks",
+          items: [
+            {
+              id: "package-script:test",
+              label: "test",
+            },
+          ],
+          onAccept: vi.fn(),
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("test")).toBeVisible();
+      });
+
+      const afterReplace = useCommandPaletteController.getState();
+      expect(afterReplace.requestId).toBe(beforeReplace.requestId);
+      expect(afterReplace.stack).toEqual(beforeReplace.stack);
+      expect(afterReplace.quickPick?.items?.[0]?.id).toBe(
+        "package-script:test"
+      );
+
+      act(() => {
+        fireEvent.keyDown(document, { key: "Escape" });
+      });
+
+      await waitFor(() => {
+        expect(useCommandPaletteController.getState().mode).toBe("commands");
+      });
+      expect(screen.getByText("Replace Contract Anchor")).toBeVisible();
+      expect(screen.queryByText("Finding tasks...")).not.toBeInTheDocument();
+      expect(screen.queryByText("test")).not.toBeInTheDocument();
+    } finally {
+      act(() => {
+        useCommandPaletteController.setState({
+          mode: "commands",
+          open: false,
+          quickPick: null,
+          requestId: 0,
+          stack: [],
+        });
+      });
+      dispose();
+    }
   });
 });

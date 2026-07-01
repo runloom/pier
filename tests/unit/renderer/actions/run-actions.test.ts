@@ -3,6 +3,7 @@ import type {
   TaskListResult,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
+import type { DockviewApi } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -44,7 +45,7 @@ function installWorkspaceApi() {
     ],
     panels: [terminalCurrent, terminalOther, welcome],
   };
-  useWorkspaceStore.getState().setApi(api as never);
+  useWorkspaceStore.getState().setApi(api as unknown as DockviewApi);
   usePanelDescriptorStore.setState({
     activeId: "terminal-current",
     descriptors: {
@@ -87,6 +88,28 @@ function taskList(projectRoot = "/Users/xyz/ABC/pier"): TaskListResult {
       },
     ],
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, reject, resolve };
+}
+
+function nextMacrotask() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+function runTaskAction() {
+  const handler = actionRegistry.get("pier.run.task")?.handler;
+  if (!handler) {
+    throw new Error("expected Run Task action to be registered");
+  }
+  return handler();
 }
 
 describe("run actions", () => {
@@ -162,16 +185,67 @@ describe("run actions", () => {
     expect(quickPick?.items).toBeUndefined();
   });
 
-  it("opens real task candidates from the active project", async () => {
+  it("opens a disabled no-context Run Task picker without listing tasks", async () => {
+    disposeRunActions = registerRunActions();
+
+    const run = runTaskAction();
+
+    expect(useCommandPaletteController.getState()).toMatchObject({
+      mode: "quick-pick",
+      open: true,
+      quickPick: {
+        items: [
+          {
+            detail: "Focus a project-backed panel before running a task",
+            disabled: true,
+            id: "task-no-context",
+            label: "No active project",
+          },
+        ],
+        placeholder: "Search tasks or commands…",
+        title: "Run Task...",
+      },
+    });
+    expect(window.pier.tasks.list).not.toHaveBeenCalled();
+
+    await run;
+
+    expect(window.pier.tasks.list).not.toHaveBeenCalled();
+  });
+
+  it("opens a loading task picker before starting task discovery", async () => {
     installWorkspaceApi();
     disposeRunActions = registerRunActions();
 
-    await actionRegistry.get("pier.run.task")?.handler();
+    const run = runTaskAction();
+
+    expect(useCommandPaletteController.getState()).toMatchObject({
+      mode: "quick-pick",
+      open: true,
+      quickPick: {
+        items: [
+          {
+            disabled: true,
+            id: "task-loading",
+          },
+        ],
+        loading: true,
+      },
+    });
+    expect(window.pier.tasks.list).not.toHaveBeenCalled();
+
+    await nextMacrotask();
 
     expect(window.pier.tasks.list).toHaveBeenCalledWith({
       projectRoot: "/Users/xyz/ABC/pier",
     });
-    const quickPick = useCommandPaletteController.getState().quickPick;
+
+    await run;
+
+    const state = useCommandPaletteController.getState();
+    expect(state.stack).toHaveLength(0);
+    const quickPick = state.quickPick;
+    expect(quickPick?.loading).toBeUndefined();
     expect(quickPick?.sections?.[0]?.heading).toBe("package.json");
     expect(quickPick?.sections?.[0]?.items[0]).toMatchObject({
       description: "vitest",
@@ -183,6 +257,40 @@ describe("run actions", () => {
       disabled: true,
       detail: "不支持 VS Code 扩展任务类型: custom",
       label: "custom",
+    });
+  });
+
+  it("does not reopen Run Task when task discovery resolves after dismissal", async () => {
+    installWorkspaceApi();
+    const list = deferred<TaskListResult>();
+    vi.mocked(window.pier.tasks.list).mockReturnValueOnce(list.promise);
+    disposeRunActions = registerRunActions();
+
+    const run = runTaskAction();
+    useCommandPaletteController.getState().goBack();
+    list.resolve(taskList());
+    await run;
+
+    expect(useCommandPaletteController.getState()).toMatchObject({
+      mode: "commands",
+      open: false,
+      quickPick: null,
+    });
+  });
+
+  it("replaces the Run Task loading picker with a disabled load error row", async () => {
+    installWorkspaceApi();
+    vi.mocked(window.pier.tasks.list).mockRejectedValueOnce(new Error("boom"));
+    disposeRunActions = registerRunActions();
+
+    await runTaskAction();
+
+    const state = useCommandPaletteController.getState();
+    expect(state.stack).toHaveLength(0);
+    expect(state.quickPick?.items?.[0]).toMatchObject({
+      detail: "boom",
+      disabled: true,
+      id: "task-load-error",
     });
   });
 
@@ -278,7 +386,7 @@ describe("run actions", () => {
       activePanel: welcome,
       groups: [{ panels: [welcome] }],
       panels: [welcome],
-    } as never);
+    } as unknown as DockviewApi);
     disposeRunActions = registerRunActions();
 
     await actionRegistry.get("pier.run.terminalList")?.handler();

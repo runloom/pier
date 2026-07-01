@@ -233,6 +233,9 @@ export const zhCN = {
       noTerminalsDetail: "新建终端后会显示在这里",
       noTaskContext: "没有活跃项目",
       noTaskContextDetail: "先聚焦带项目上下文的面板，再运行任务",
+      loadFailed: "任务加载失败",
+      loadingTasks: "正在查找任务...",
+      loadingTasksDetail: "正在扫描当前项目支持的任务源",
       noTasks: "未发现可运行任务",
       noTasksDetail:
         "支持 package.json、VS Code、Zed、Cargo、Make、mise、Justfile、Taskfile 和 pyproject",

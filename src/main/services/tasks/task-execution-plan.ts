@@ -147,6 +147,10 @@ function buildCommand(
   return resolveVariables(task.commandSpec.command, context);
 }
 
+function shellCommand(script: string): string {
+  return `/bin/sh -lc ${shellQuote(script)}`;
+}
+
 function withPresentation(command: string, task: TaskCandidate): string {
   const parts: string[] = [];
   if (task.presentation?.clear) {
@@ -162,7 +166,7 @@ function withPresentation(command: string, task: TaskCandidate): string {
     parts.push("printf '\\n[pier] task exited with %s\\n' \"$code\"");
   }
   parts.push('exit "$code"');
-  return parts.join("; ");
+  return shellCommand(parts.join("; "));
 }
 
 function launchForTask(

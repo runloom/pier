@@ -69,6 +69,13 @@ function quickPickItems(quickPick: QuickPick): readonly QuickPickItem[] {
   return quickPick.items ?? [];
 }
 
+function isQuickPickItemSelectable(
+  quickPick: QuickPick,
+  item: QuickPickItem
+): boolean {
+  return quickPick.loading !== true && item.disabled !== true;
+}
+
 function quickPickDocument(
   item: QuickPickItem,
   sectionHeading?: string
@@ -197,13 +204,34 @@ export function CommandPalette() {
     if (mode === "quick-pick" && quickPick) {
       const items = quickPickItems(quickPick);
       const checked =
-        items.find((i) => i.checked && !i.disabled) ??
-        items.find((i) => !i.disabled);
+        items.find(
+          (i) => i.checked && isQuickPickItemSelectable(quickPick, i)
+        ) ?? items.find((i) => isQuickPickItemSelectable(quickPick, i));
       setSelectedValue(checked?.id ?? "");
     } else {
       setSelectedValue("");
     }
   }, [isOpen, requestId, mode, quickPick]);
+
+  // replaceQuickPick 保留 requestId/query；同一 session 换内容时只修正选中项。
+  useEffect(() => {
+    if (!isOpen || mode !== "quick-pick" || !quickPick) {
+      return;
+    }
+    if (requestId !== lastRequestIdRef.current) {
+      return;
+    }
+    const items = quickPickItems(quickPick);
+    const selected = items.find((item) => item.id === selectedValue);
+    if (selected && isQuickPickItemSelectable(quickPick, selected)) {
+      return;
+    }
+    const next =
+      items.find(
+        (item) => item.checked && isQuickPickItemSelectable(quickPick, item)
+      ) ?? items.find((item) => isQuickPickItemSelectable(quickPick, item));
+    setSelectedValue(next?.id ?? "");
+  }, [isOpen, mode, quickPick, requestId, selectedValue]);
 
   // 关闭 (Esc 已走 goBack 路径或点击遮罩) 时, 若 quick-pick 未 accept 调 onDismiss。
   // goBack() 内联调过 onDismiss, 但 close() 路径 (点击遮罩) 没调, 这里补。
@@ -259,7 +287,7 @@ export function CommandPalette() {
       return;
     }
     const item = quickPickItems(quickPick).find((i) => i.id === next);
-    if (!item || item.disabled) {
+    if (!(item && isQuickPickItemSelectable(quickPick, item))) {
       return;
     }
     quickPick.onChangeSelection(item);
@@ -283,22 +311,24 @@ export function CommandPalette() {
   }, [mode, normalizedQuery, rankedActions, selectedValue]);
 
   const handleAcceptQuickPickItem = async (item: QuickPickItem) => {
-    if (item.disabled || !quickPick) {
+    if (!(quickPick && isQuickPickItemSelectable(quickPick, item))) {
       return;
     }
     const before = useCommandPaletteController.getState().requestId;
     acceptedItemIdRef.current = item.id;
     try {
-      await quickPick.onAccept(item);
-      // 若 onAccept 没开新一轮 (requestId 未变) 且面板仍开着, 收尾关掉。
-      const after = useCommandPaletteController.getState();
-      if (after.requestId === before && after.open) {
-        useCommandPaletteController.getState().close();
+      const accepted = quickPick.onAccept(item);
+      // 先视觉关闭当前 picker；若 accept 稍后再开 picker，controller 会保留回退栈。
+      const afterAccept = useCommandPaletteController.getState();
+      if (afterAccept.requestId === before && afterAccept.open) {
+        afterAccept.closeAfterAccept();
       }
+      await accepted;
     } catch (err) {
-      // accept 失败: 复位 flag 让 Esc 仍能触发 onDismiss; err 上报便于排查 (不静默).
       acceptedItemIdRef.current = null;
       console.error("[command-palette] onAccept threw:", err);
+    } finally {
+      useCommandPaletteController.getState().schedulePendingAcceptStackClear();
     }
   };
 
@@ -398,62 +428,72 @@ function QuickPickView({
   onAccept: (item: QuickPickItem) => Promise<void>;
   query: string;
 }): ReactNode {
-  const renderItem = (item: QuickPickItem) => (
-    <CommandItem
-      aria-current={item.checked === true ? "true" : undefined}
-      className="items-start gap-3 py-2"
-      data-checked={item.checked === true}
-      data-disabled={item.disabled === true}
-      disabled={item.disabled === true}
-      key={item.id}
-      onSelect={() => {
-        onAccept(item).catch((err) => {
-          console.error(
-            `[command-palette] quick-pick onAccept ${item.id} rejected:`,
-            err
-          );
-        });
-      }}
-      value={item.id}
-    >
-      <span className="min-w-0 flex-1 self-center">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{item.label}</span>
-          {item.badges?.map((badge) => (
-            <Badge
-              className="h-4.5 px-1.5 text-[10px]"
-              key={`${item.id}:${badge.label}`}
-              variant={badge.variant ?? "secondary"}
-            >
-              {badge.label}
-            </Badge>
-          ))}
+  const renderItem = (item: QuickPickItem) => {
+    const disabled = !isQuickPickItemSelectable(quickPick, item);
+    return (
+      <CommandItem
+        aria-current={item.checked === true ? "true" : undefined}
+        className="items-start gap-3 py-2"
+        data-checked={item.checked === true}
+        data-disabled={disabled}
+        disabled={disabled}
+        key={item.id}
+        onSelect={() => {
+          if (disabled) {
+            return;
+          }
+          onAccept(item).catch((err) => {
+            console.error(
+              `[command-palette] quick-pick onAccept ${item.id} rejected:`,
+              err
+            );
+          });
+        }}
+        value={item.id}
+      >
+        <span className="min-w-0 flex-1 self-center">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate">{item.label}</span>
+            {item.badges?.map((badge) => (
+              <Badge
+                className="h-4.5 px-1.5 text-[10px]"
+                key={`${item.id}:${badge.label}`}
+                variant={badge.variant ?? "secondary"}
+              >
+                {badge.label}
+              </Badge>
+            ))}
+          </span>
+          {item.detail ? (
+            <span className="block truncate text-muted-foreground text-xs">
+              {item.detail}
+            </span>
+          ) : null}
         </span>
-        {item.detail ? (
-          <span className="block truncate text-muted-foreground text-xs">
-            {item.detail}
+        {item.description ? (
+          <span className="ml-auto min-w-0 max-w-[45%] shrink truncate pt-0.5 text-right text-muted-foreground text-xs">
+            {item.description}
           </span>
         ) : null}
-      </span>
-      {item.description ? (
-        <span className="ml-auto min-w-0 max-w-[45%] shrink truncate pt-0.5 text-right text-muted-foreground text-xs">
-          {item.description}
-        </span>
-      ) : null}
-    </CommandItem>
-  );
+      </CommandItem>
+    );
+  };
 
   return (
     <div className="mt-2">
       {quickPick.sections && quickPick.sections.length > 0
         ? quickPick.sections.map((section) => (
             <CommandGroup heading={section.heading} key={section.id}>
-              {quickPickResults(section.items, query, section.heading).map(
-                renderItem
-              )}
+              {(quickPick.loading === true
+                ? section.items
+                : quickPickResults(section.items, query, section.heading)
+              ).map(renderItem)}
             </CommandGroup>
           ))
-        : quickPickResults(quickPick.items ?? [], query).map(renderItem)}
+        : (quickPick.loading === true
+            ? (quickPick.items ?? [])
+            : quickPickResults(quickPick.items ?? [], query)
+          ).map(renderItem)}
     </div>
   );
 }

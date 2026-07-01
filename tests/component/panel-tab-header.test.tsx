@@ -209,12 +209,18 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector("[data-panel-tab-state-indicator]")
     ).not.toHaveClass("pier-panel-tab-state-indicator");
-    expect(
-      container.querySelector("[data-panel-tab-running-ping]")
-    ).toHaveClass("animate-ping", "bg-primary");
-    expect(container.querySelector("[data-panel-tab-running-dot]")).toHaveClass(
-      "bg-primary"
+    expect(container.querySelector("[data-panel-tab-state-icon]")).toHaveClass(
+      "animate-spin",
+      "motion-reduce:animate-none"
     );
+    expect(
+      container.querySelector("[data-panel-tab-state-indicator]")
+    ).toHaveAccessibleName("Running");
+    expect(container.querySelector("[data-panel-tab-running-ping]")).toBeNull();
+    expect(container.querySelector("[data-panel-tab-running-dot]")).toBeNull();
+    expect(
+      container.querySelector("[data-panel-tab-state-icon]")
+    ).toHaveAttribute("data-panel-tab-state-icon", "running");
     expect(container.querySelector("[data-tab-state-label]")).toHaveAttribute(
       "data-tab-state-label",
       "Running"
@@ -251,13 +257,18 @@ describe("PanelTabHeader", () => {
   });
 
   it.each([
-    ["running", "Running", "relative"],
-    ["succeeded", "Succeeded", "bg-[var(--status-success-fg)]"],
-    ["failed", "Failed 1", "bg-[var(--status-danger-fg)]"],
-    ["waiting", "Waiting for input", "bg-[var(--status-warning-fg)]"],
-    ["blocked", "Blocked", "bg-[var(--status-warning-fg)]"],
-    ["cancelled", "Cancelled", "bg-[var(--status-warning-fg)]"],
-  ] as const)("renders the %s tab state indicator with Tailwind classes", (status, label, expectedClassName) => {
+    ["running", "Running", "running", "text-primary"],
+    ["succeeded", "Succeeded", "succeeded", "text-[var(--status-success-fg)]"],
+    ["failed", "Failed 1", "failed", "text-[var(--status-danger-fg)]"],
+    [
+      "waiting",
+      "Waiting for input",
+      "waiting",
+      "text-[var(--status-warning-fg)]",
+    ],
+    ["blocked", "Blocked", "blocked", "text-[var(--status-warning-fg)]"],
+    ["cancelled", "Cancelled", "cancelled", "text-[var(--status-warning-fg)]"],
+  ] as const)("renders the %s tab state as a semantic icon", (status, label, icon, expectedClassName) => {
     usePanelDescriptorStore.setState({
       activeId: null,
       descriptors: {
@@ -284,14 +295,16 @@ describe("PanelTabHeader", () => {
     );
     expect(indicator).toHaveAttribute("data-tab-status", status);
     expect(indicator).not.toHaveClass("pier-panel-tab-state-indicator");
+    expect(indicator).toHaveAttribute("aria-label", label);
+    expect(indicator).not.toHaveTextContent(label);
+    expect(
+      indicator?.querySelector("[data-panel-tab-state-icon]")
+    ).toHaveAttribute("data-panel-tab-state-icon", icon);
     expect(indicator).toHaveClass(expectedClassName);
     if (status === "running") {
       expect(
-        indicator?.querySelector("[data-panel-tab-running-ping]")
-      ).toHaveClass("animate-ping", "bg-primary");
-      expect(
-        indicator?.querySelector("[data-panel-tab-running-dot]")
-      ).toHaveClass("bg-primary");
+        indicator?.querySelector("[data-panel-tab-state-icon]")
+      ).toHaveClass("motion-reduce:animate-none");
     } else {
       expect(
         indicator?.querySelector("[data-panel-tab-running-ping]")

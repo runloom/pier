@@ -81,6 +81,15 @@ export interface NativeAddon {
         ) => void)
       | null
   ): void;
+  setProcessClosedForwardCallback?(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          processAlive: boolean
+        ) => void)
+      | null
+  ): void;
   /**
    * 注册 PWD forward callback. swift TerminalSurfacePwdDelegate 收到 OSC 7 后调用,
    * 传 (browserWindowId, panelId, cwd). 用 windowId 路由到对应 BrowserWindow 的

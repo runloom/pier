@@ -368,6 +368,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceSearchDelegate,
     TerminalSurfaceTitleDelegate,
     TerminalSurfaceCommandFinishedDelegate,
+    TerminalSurfaceCloseDelegate,
     TerminalSurfaceScrollbarDelegate
 {
     let panelId: String
@@ -394,6 +395,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// exitCode 为 nil 时在 C ABI 边界统一转成 -1。
     static var forwardCommandFinishedCallback: ((Int, String, Int, UInt64) -> Void)?
 
+    /// 全局 callback: Ghostty surface close → main process.
+    /// processAlive=false 表示底层进程已自然退出；true 表示 surface 关闭时进程仍存活。
+    static var forwardProcessClosedCallback: ((Int, String, Bool) -> Void)?
+
     init(panelId: String, browserWindowId: Int) {
         self.panelId = panelId
         self.browserWindowId = browserWindowId
@@ -413,6 +418,14 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
             panelId,
             exitCode ?? -1,
             durationNanos
+        )
+    }
+
+    func terminalDidClose(processAlive: Bool) {
+        TerminalEventDelegate.forwardProcessClosedCallback?(
+            browserWindowId,
+            panelId,
+            processAlive
         )
     }
 
@@ -1780,6 +1793,7 @@ public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>,
 public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, Int) -> Void
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias CommandFinishedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, UInt64) -> Void
+public typealias ProcessClosedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Bool) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
 public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallback?) {
@@ -1911,6 +1925,21 @@ public func ghosttyBridgeSetCommandFinishedForwardCallback(_ cb: CommandFinished
             }
         } else {
             TerminalEventDelegate.forwardCommandFinishedCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_process_closed_forward_callback")
+public func ghosttyBridgeSetProcessClosedForwardCallback(_ cb: ProcessClosedForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardProcessClosedCallback = { wid, panelId, processAlive in
+                panelId.withCString { pidPtr in
+                    cb(wid, pidPtr, processAlive)
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardProcessClosedCallback = nil
         }
     }
 }

@@ -379,15 +379,20 @@ export interface TerminalColors {
   selectionForeground?: string | undefined;
 }
 
+export interface TerminalCloseOptions {
+  reason?: "relaunch" | "workspace" | undefined;
+}
+
 export interface TerminalAPI {
   applyInputRouting(snapshot: TerminalInputRoutingSnapshot): void;
   applyPresentation(snapshot: TerminalPresentationSnapshot): void;
   applyTheme(colors: TerminalColors): void;
   /**
-   * 关闭 terminal panel 的 native NSView. fire-and-forget — swift 端 close 是同步
-   * 调用, 调用方不需要 await. 调用 idempotent (panelId 不存在时 no-op).
+   * 关闭 terminal panel 的 native NSView. 普通 workspace close 可以忽略返回的
+   * promise；同 panel relaunch 必须 await, 避免旧 close 删除新 session 状态.
+   * 调用 idempotent (panelId 不存在时 no-op).
    */
-  close(panelId: string): void;
+  close(panelId: string, options?: TerminalCloseOptions): Promise<void>;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
   debugSnapshot(
     args?: TerminalDebugSnapshotArgs

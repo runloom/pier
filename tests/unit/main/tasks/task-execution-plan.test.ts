@@ -11,6 +11,7 @@ const ENV_TARGET_VAR = `${TASK_VAR_PREFIX}{env:PIER_TARGET}`;
 const WORKSPACE_FOLDER_VAR = `${TASK_VAR_PREFIX}{workspaceFolder}`;
 const WORKSPACE_FOLDER_BASENAME_VAR = `${TASK_VAR_PREFIX}{workspaceFolderBasename}`;
 const DAY_MS = 86_400_000;
+const SHELL_LAUNCH_PREFIX_RE = /^\/bin\/sh -lc /;
 
 describe("task execution planning", () => {
   let projectRoot = "";
@@ -138,6 +139,7 @@ describe("task execution planning", () => {
     expect(plan.launches[0]?.command).toContain("pnpm lint local");
     expect(plan.launches[1]?.cwd).toBe(projectRoot);
     expect(plan.launches[1]?.command).toContain("pnpm test ");
+    expect(plan.launches[1]?.command).toMatch(SHELL_LAUNCH_PREFIX_RE);
     expect(plan.launches[1]?.command).toContain(TASK_EXIT_TITLE_PREFIX);
     expect(plan.launches[1]?.env).toEqual({ PIER_ENV: "local" });
     expect(plan.launches[1]?.tab).toMatchObject({
@@ -327,7 +329,7 @@ describe("task execution planning", () => {
     });
   });
 
-  it("uses the running registry only for non-concurrent tasks", async () => {
+  it("prepares reusable panels only for non-concurrent running tasks", async () => {
     await mkdir(join(projectRoot, ".zed"));
     await writeFile(
       join(projectRoot, ".zed", "tasks.json"),
@@ -361,21 +363,130 @@ describe("task execution planning", () => {
 
     await expect(
       service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
-    ).resolves.toEqual({
-      panelId: "terminal-dev",
-      status: "already-running",
+    ).resolves.toMatchObject({
+      reusablePanels: {
+        [dev?.id ?? ""]: { panelId: "terminal-dev" },
+      },
+      status: "ready",
     });
-    await expect(
-      service.prepareSpawn({ projectRoot, taskId: test?.id ?? "" })
-    ).resolves.toMatchObject({ status: "ready" });
-
-    service.markPanelClosed("terminal-dev");
-    await expect(
-      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
-    ).resolves.toMatchObject({ status: "ready" });
+    const concurrentPreparation = await service.prepareSpawn({
+      projectRoot,
+      taskId: test?.id ?? "",
+    });
+    expect(concurrentPreparation).toMatchObject({ status: "ready" });
+    expect(concurrentPreparation).not.toHaveProperty("reusablePanels");
   });
 
-  it("dedupes a root task while it is still waiting for dependencies", async () => {
+  it("keeps a completed dedupe task panel reusable", async () => {
+    await mkdir(join(projectRoot, ".zed"));
+    await writeFile(
+      join(projectRoot, ".zed", "tasks.json"),
+      JSON.stringify([
+        {
+          allow_concurrent_runs: false,
+          command: "pnpm dev",
+          label: "dev",
+        },
+      ])
+    );
+    const service = createTaskService({ homeDir });
+    const listed = await service.list({ projectRoot });
+    const dev = listed.tasks.find((candidate) => candidate.label === "dev");
+
+    service.recordStarted({
+      panelId: "terminal-dev",
+      projectRoot,
+      taskId: dev?.id ?? "",
+      windowId: "main",
+    });
+    await service.completePanel("terminal-dev", 0, "main");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
+    ).resolves.toMatchObject({
+      reusablePanels: {
+        [dev?.id ?? ""]: { panelId: "terminal-dev", windowId: "main" },
+      },
+      status: "ready",
+    });
+  });
+
+  it("preserves reusable mapping when native close finalizes a relaunching panel", async () => {
+    await mkdir(join(projectRoot, ".zed"));
+    await writeFile(
+      join(projectRoot, ".zed", "tasks.json"),
+      JSON.stringify([
+        {
+          allow_concurrent_runs: false,
+          command: "pnpm dev",
+          label: "dev",
+        },
+      ])
+    );
+    const service = createTaskService({ homeDir });
+    const listed = await service.list({ projectRoot });
+    const dev = listed.tasks.find((candidate) => candidate.label === "dev");
+
+    service.recordStarted({
+      panelId: "terminal-dev",
+      projectRoot,
+      taskId: dev?.id ?? "",
+      windowId: "main",
+    });
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
+    ).resolves.toMatchObject({
+      reusablePanels: {
+        [dev?.id ?? ""]: { panelId: "terminal-dev", windowId: "main" },
+      },
+      status: "ready",
+    });
+
+    await service.completePanel("terminal-dev", 0, "main");
+
+    await expect(
+      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
+    ).resolves.toMatchObject({
+      reusablePanels: {
+        [dev?.id ?? ""]: { panelId: "terminal-dev", windowId: "main" },
+      },
+      status: "ready",
+    });
+  });
+
+  it("forgets a dedicated dedupe task panel after explicit panel close", async () => {
+    await mkdir(join(projectRoot, ".zed"));
+    await writeFile(
+      join(projectRoot, ".zed", "tasks.json"),
+      JSON.stringify([
+        {
+          allow_concurrent_runs: false,
+          command: "pnpm dev",
+          label: "dev",
+        },
+      ])
+    );
+    const service = createTaskService({ homeDir });
+    const listed = await service.list({ projectRoot });
+    const dev = listed.tasks.find((candidate) => candidate.label === "dev");
+
+    service.recordStarted({
+      panelId: "terminal-dev",
+      projectRoot,
+      taskId: dev?.id ?? "",
+      windowId: "main",
+    });
+    service.markPanelClosed("terminal-dev", "main");
+
+    const preparation = await service.prepareSpawn({
+      projectRoot,
+      taskId: dev?.id ?? "",
+    });
+    expect(preparation).toMatchObject({ status: "ready" });
+    expect(preparation).not.toHaveProperty("reusablePanels");
+  });
+
+  it("prepares restart metadata for a root task while it is still waiting for dependencies", async () => {
     await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
       join(projectRoot, ".vscode", "tasks.json"),
@@ -414,7 +525,7 @@ describe("task execution planning", () => {
       throw new Error("expected ready plan");
     }
 
-    await service.startRun({
+    const run = await service.startRun({
       launches: plan.launches,
       openTerminal: (launchPlan) =>
         Promise.resolve({
@@ -424,19 +535,26 @@ describe("task execution planning", () => {
       projectRoot,
       rootTaskId: verify?.id ?? "",
     });
+    const lint = plan.launches[0];
+    if (!lint) {
+      throw new Error("expected lint launch");
+    }
 
     await expect(
       service.prepareSpawn({ projectRoot, taskId: verify?.id ?? "" })
-    ).resolves.toEqual({
-      panelId: plan.launches[0]?.taskId
-        ? `panel-${plan.launches[0].taskId}`
-        : "",
-      status: "already-running",
-      windowId: "main",
+    ).resolves.toMatchObject({
+      restartRunId: run.runId,
+      reusablePanels: {
+        [lint.taskId]: {
+          panelId: `panel-${lint.taskId}`,
+          windowId: "main",
+        },
+      },
+      status: "ready",
     });
   });
 
-  it("keeps deduping a root task after an earlier dependency panel finishes", async () => {
+  it("prepares restart metadata for every open dependency panel after one dependency finishes", async () => {
     await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
       join(projectRoot, ".vscode", "tasks.json"),
@@ -480,7 +598,7 @@ describe("task execution planning", () => {
       throw new Error("expected ready plan");
     }
 
-    await service.startRun({
+    const run = await service.startRun({
       launches: plan.launches,
       openTerminal: (launchPlan) =>
         Promise.resolve({
@@ -491,17 +609,30 @@ describe("task execution planning", () => {
       rootTaskId: verify?.id ?? "",
     });
     await service.completePanel("panel-client", 0, "main");
+    const reusablePanels = Object.fromEntries(
+      plan.launches
+        .filter(
+          (launch) => launch.label === "client" || launch.label === "server"
+        )
+        .map((launch) => [
+          launch.taskId,
+          {
+            panelId: `panel-${launch.label}`,
+            windowId: "main",
+          },
+        ])
+    );
 
     await expect(
       service.prepareSpawn({ projectRoot, taskId: verify?.id ?? "" })
-    ).resolves.toEqual({
-      panelId: "panel-server",
-      status: "already-running",
-      windowId: "main",
+    ).resolves.toMatchObject({
+      restartRunId: run.runId,
+      reusablePanels,
+      status: "ready",
     });
   });
 
-  it("keeps started task records until failed run panels are marked closed", async () => {
+  it("keeps started task records reusable until failed run panels are marked closed", async () => {
     await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
       join(projectRoot, ".vscode", "tasks.json"),
@@ -568,18 +699,88 @@ describe("task execution planning", () => {
     await expect(
       service.prepareSpawn({ projectRoot, taskId: client?.id ?? "" })
     ).resolves.toMatchObject({
-      panelId: `panel-${client?.id ?? ""}`,
-      status: "already-running",
-      windowId: "main",
+      reusablePanels: {
+        [client?.id ?? ""]: {
+          panelId: `panel-${client?.id ?? ""}`,
+          windowId: "main",
+        },
+      },
+      status: "ready",
     });
 
     service.markPanelClosed(`panel-${client?.id ?? ""}`, "main");
 
-    await expect(
-      service.prepareSpawn({ projectRoot, taskId: client?.id ?? "" })
-    ).resolves.toMatchObject({
-      status: "ready",
+    const preparation = await service.prepareSpawn({
+      projectRoot,
+      taskId: client?.id ?? "",
     });
+    expect(preparation).toMatchObject({ status: "ready" });
+    expect(preparation).not.toHaveProperty("reusablePanels");
+  });
+
+  it("dedupes task completion after native process close and ignores late duplicate exits", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo build",
+            label: "build",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["build"],
+            dependsOrder: "sequence",
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRoot });
+    const verify = listed.tasks.find(
+      (candidate) => candidate.label === "verify"
+    );
+    const plan = await service.prepareSpawn({
+      projectRoot,
+      taskId: verify?.id ?? "",
+    });
+    if (plan.status !== "ready") {
+      throw new Error("expected ready plan");
+    }
+
+    const opened: string[] = [];
+    const run = await service.startRun({
+      launches: plan.launches,
+      openTerminal: (launchPlan) => {
+        opened.push(launchPlan.label);
+        return Promise.resolve({
+          panelId: `panel-${launchPlan.label}`,
+          windowId: "main",
+        });
+      },
+      projectRoot,
+      rootTaskId: verify?.id ?? "",
+    });
+
+    await service.completePanel("panel-build", 0, "main");
+    await expect(
+      service.completePanel("panel-build", 1, "main")
+    ).resolves.toBeNull();
+
+    const buildNode = Object.values(
+      service.statusRun(run.runId)?.nodes ?? {}
+    ).find((node) => node.label === "build");
+    expect(opened).toEqual(["build", "verify"]);
+    expect(buildNode?.status).toBe("succeeded");
   });
 
   it("persists recent task history through injected storage", async () => {

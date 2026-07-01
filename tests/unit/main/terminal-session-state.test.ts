@@ -177,6 +177,76 @@ describe("terminal session state", () => {
     });
   });
 
+  it("persists task exit reason and source with terminal task status", async () => {
+    const {
+      patchTerminalPanelTaskStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelTask,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-1",
+      taskMetadata({ status: "running" })
+    );
+
+    await expect(
+      patchTerminalPanelTaskStatus("main", "terminal-1", {
+        exitCode: 0,
+        exitReason: "process",
+        exitSource: "native-process-close",
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      })
+    ).resolves.toBe(true);
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      task: {
+        exitCode: 0,
+        exitReason: "process",
+        exitSource: "native-process-close",
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      },
+    });
+  });
+
+  it("persists unknown process exits without an exit code", async () => {
+    const {
+      patchTerminalPanelTaskStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelTask,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-1",
+      taskMetadata({ status: "running" })
+    );
+
+    await expect(
+      patchTerminalPanelTaskStatus("main", "terminal-1", {
+        exitReason: "process",
+        exitSource: "native-process-close",
+        finishedAt: 1_772_000_001_000,
+        status: "failed",
+      })
+    ).resolves.toBe(true);
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      task: {
+        exitReason: "process",
+        exitSource: "native-process-close",
+        finishedAt: 1_772_000_001_000,
+        status: "failed",
+      },
+    });
+  });
+
   it("does not rewrite completed task status", async () => {
     const {
       patchTerminalPanelTaskStatus,

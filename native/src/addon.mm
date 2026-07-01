@@ -64,6 +64,11 @@ extern "C" {
     typedef void (*CommandFinishedForwardFn)(long browserWindowId, const char* panelId,
                                              long exitCode, unsigned long long durationNanos);
     void ghostty_bridge_set_command_finished_forward_callback(CommandFinishedForwardFn cb);
+    // Process closed forward: swift TerminalSurfaceCloseDelegate → JS.
+    // 签名 (browserWindowId, panelId UTF-8, processAlive).
+    typedef void (*ProcessClosedForwardFn)(long browserWindowId, const char* panelId,
+                                           bool processAlive);
+    void ghostty_bridge_set_process_closed_forward_callback(ProcessClosedForwardFn cb);
     void ghostty_bridge_apply_presentation(void* nsWindow, const char* json);
     void ghostty_bridge_apply_input_routing(void* nsWindow, const char* json);
     // 应用 Pier 主题派生的终端配色. cursor / selection 可空 (NULL = 不设置).
@@ -548,6 +553,37 @@ static Napi::Value JsSetCommandFinishedForwardCallback(const Napi::CallbackInfo&
                                 &g_commandFinishedForwardTrampoline);
 }
 
+// ---- Process closed forward (Ghostty surface close → task lifecycle) ----
+struct ProcessClosedForwardPayload {
+    long windowId;
+    std::string panelId;
+    bool processAlive;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::Boolean::New(env, processAlive),
+        });
+    }
+};
+static ForwardChannel<ProcessClosedForwardPayload> g_processClosedChannel("PierProcessClosedForward");
+static void g_processClosedForwardTrampoline(
+    long windowId,
+    const char* panelId,
+    bool processAlive
+) {
+    g_processClosedChannel.emit({
+        windowId,
+        std::string(panelId),
+        processAlive,
+    });
+}
+static Napi::Value JsSetProcessClosedForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_processClosedChannel,
+                                ghostty_bridge_set_process_closed_forward_callback,
+                                &g_processClosedForwardTrampoline);
+}
+
 static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -719,6 +755,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setSearchForwardCallback", Napi::Function::New(env, JsSetSearchForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
     exports.Set("setCommandFinishedForwardCallback", Napi::Function::New(env, JsSetCommandFinishedForwardCallback));
+    exports.Set("setProcessClosedForwardCallback", Napi::Function::New(env, JsSetProcessClosedForwardCallback));
     exports.Set("applyTerminalPresentation", Napi::Function::New(env, JsApplyTerminalPresentation));
     exports.Set("applyTerminalInputRouting", Napi::Function::New(env, JsApplyTerminalInputRouting));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));

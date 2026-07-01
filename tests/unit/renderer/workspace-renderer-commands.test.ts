@@ -1,3 +1,4 @@
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -7,6 +8,10 @@ vi.mock("@/lib/ipc/window-ipc.ts", () => ({
 }));
 
 import { runWorkspaceRendererCommand } from "@/components/workspace/workspace-renderer-commands.ts";
+import {
+  requestTerminalRelaunch,
+  useTerminalRelaunchRequest,
+} from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 function terminalPanel(id: string) {
@@ -53,7 +58,7 @@ describe("workspace renderer commands", () => {
           windowId: "main",
         })),
         rendererCommand: { resolve: vi.fn() },
-        terminal: { close: vi.fn() },
+        terminal: { close: vi.fn(async () => undefined) },
         workspace: { clearLayout: vi.fn(async () => undefined) },
       },
     });
@@ -77,6 +82,44 @@ describe("workspace renderer commands", () => {
       ok: true,
       requestId: "renderer-close-existing",
     });
+  });
+
+  it("tolerates a missing terminal close API and clears a relaunch request when closing through a renderer command", async () => {
+    const terminal = terminalPanel("terminal-missing-close");
+    const welcome = webPanel("welcome-1");
+    const api = createApi([terminal, welcome]);
+    const relaunch = renderHook(() => useTerminalRelaunchRequest(terminal.id));
+    useWorkspaceStore.getState().setApi(api as never);
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        ...window.pier,
+        terminal: {},
+      },
+    });
+
+    act(() => {
+      requestTerminalRelaunch({
+        launchId: "launch-pending",
+        panelId: terminal.id,
+      });
+    });
+    expect(relaunch.result.current?.launchId).toBe("launch-pending");
+
+    await act(async () => {
+      await runWorkspaceRendererCommand({
+        command: { panelId: terminal.id, type: "panel.close" },
+        requestId: "renderer-close-missing-terminal-api",
+      });
+    });
+
+    expect(api.removePanel).toHaveBeenCalledWith(terminal);
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: null,
+      ok: true,
+      requestId: "renderer-close-missing-terminal-api",
+    });
+    expect(relaunch.result.current).toBeNull();
   });
 
   it("returns not_found when closing a missing panel", async () => {

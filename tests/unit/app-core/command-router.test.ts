@@ -866,9 +866,10 @@ describe("createCommandRouter", () => {
     ).resolves.toMatchObject({ ok: false, error: { code: "invalid_command" } });
   });
 
-  it("run.spawn 重新解析任务并复用 terminal.open", async () => {
+  it("run.spawn 重新解析任务并复用运行中和已完成的 terminal.open", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];
+    const newPanelIdsRequested: string[] = [];
     const resolveEnvironment = vi.fn(
       async (
         request: ProcessEnvironmentResolveRequest
@@ -892,6 +893,37 @@ describe("createCommandRouter", () => {
       terminalLaunches,
       resolveEnvironment
     );
+    fakeServices.terminalLaunches.register = (launch) => {
+      terminalLaunches.push(launch);
+      return `launch-${terminalLaunches.length}`;
+    };
+    const executeRendererCommand = fakeServices.rendererCommand.execute;
+    fakeServices.rendererCommand.execute = vi.fn((command) => {
+      rendererCommands.push(command);
+      if (command.type === "terminal.open") {
+        if (command.panelId) {
+          return Promise.resolve({
+            data: {
+              context: command.context,
+              panelId: command.panelId,
+            },
+            ok: true as const,
+            requestId: "renderer-terminal-reuse",
+          });
+        }
+        const panelId = "terminal-from-renderer";
+        newPanelIdsRequested.push(panelId);
+        return Promise.resolve({
+          data: {
+            context: command.context,
+            panelId,
+          },
+          ok: true as const,
+          requestId: "renderer-terminal-open",
+        });
+      }
+      return executeRendererCommand(command);
+    });
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
       services: fakeServices,
@@ -964,9 +996,15 @@ describe("createCommandRouter", () => {
         state: { label: "Running", status: "running" },
         title: "test",
       },
+      task: {
+        runId,
+        status: "running",
+        taskId: "package-script:test",
+      },
       type: "terminal.open",
       windowId: "main",
     });
+    expect(rendererCommands.at(-1)).not.toHaveProperty("panelId");
 
     await expect(
       router.execute({
@@ -994,59 +1032,152 @@ describe("createCommandRouter", () => {
       requestId: "req-run-status",
     });
 
-    await expect(
-      router.execute({
-        clientId: "desktop-1",
-        command: {
-          runId,
-          type: "run.cancel",
-          windowId: "main",
-        },
-        protocolVersion: 1,
-        requestId: "req-run-cancel",
-      })
-    ).resolves.toMatchObject({
+    const secondSpawnResult = await router.execute({
+      clientEnv: { FROM_CLI: "cli" },
+      clientId: "desktop-1",
+      command: {
+        projectRoot: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn-reuse",
+    });
+
+    expect(secondSpawnResult).toMatchObject({
       data: {
-        nodes: {
-          "package-script:test": {
-            panelId: "terminal-from-renderer",
-            status: "cancelled",
-            windowId: "main",
+        panelIds: ["terminal-from-renderer"],
+        primaryPanelId: "terminal-from-renderer",
+        runId: expect.any(String),
+        snapshot: {
+          nodes: {
+            "package-script:test": {
+              panelId: "terminal-from-renderer",
+              status: "running",
+              windowId: "main",
+            },
           },
+          status: "running",
         },
-        runId,
-        status: "cancelled",
+        status: "started",
       },
       ok: true,
-      requestId: "req-run-cancel",
+      requestId: "req-run-spawn-reuse",
     });
+    const secondSpawnData =
+      secondSpawnResult.ok &&
+      typeof secondSpawnResult.data === "object" &&
+      secondSpawnResult.data !== null
+        ? secondSpawnResult.data
+        : null;
+    if (
+      !(secondSpawnData && "runId" in secondSpawnData) ||
+      typeof secondSpawnData.runId !== "string"
+    ) {
+      throw new Error("second run.spawn did not return a runId");
+    }
+    const secondRunId = secondSpawnData.runId;
+    expect(secondRunId).not.toBe(runId);
     expect(rendererCommands.at(-1)).toMatchObject({
+      launchId: "launch-2",
       panelId: "terminal-from-renderer",
-      type: "panel.close",
+      placement: "active-tab",
+      tab: {
+        badge: { label: "package.json" },
+        icon: { id: "pier.task", label: "Task" },
+        state: { label: "Running", status: "running" },
+        title: "test",
+      },
+      task: {
+        runId: secondRunId,
+        status: "running",
+        taskId: "package-script:test",
+      },
+      type: "terminal.open",
       windowId: "main",
     });
 
     await expect(
-      router.execute({
-        clientEnv: { FROM_CLI: "cli" },
-        clientId: "desktop-1",
-        command: {
-          projectRoot: process.cwd(),
-          taskId: "package-script:test",
-          type: "run.spawn",
+      fakeServices.tasks.completePanel("terminal-from-renderer", 0, "main")
+    ).resolves.toMatchObject({
+      nodes: {
+        "package-script:test": {
+          panelId: "terminal-from-renderer",
+          status: "succeeded",
           windowId: "main",
         },
-        protocolVersion: 1,
-        requestId: "req-run-spawn-after-cancel",
-      })
-    ).resolves.toMatchObject({
+      },
+      runId: secondRunId,
+      status: "succeeded",
+    });
+
+    const thirdSpawnResult = await router.execute({
+      clientEnv: { FROM_CLI: "cli" },
+      clientId: "desktop-1",
+      command: {
+        projectRoot: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn-completed-reuse",
+    });
+
+    expect(thirdSpawnResult).toMatchObject({
       data: {
+        panelIds: ["terminal-from-renderer"],
+        primaryPanelId: "terminal-from-renderer",
+        runId: expect.any(String),
+        snapshot: {
+          nodes: {
+            "package-script:test": {
+              panelId: "terminal-from-renderer",
+              status: "running",
+              windowId: "main",
+            },
+          },
+          status: "running",
+        },
         status: "started",
       },
       ok: true,
-      requestId: "req-run-spawn-after-cancel",
+      requestId: "req-run-spawn-completed-reuse",
     });
-
+    const thirdSpawnData =
+      thirdSpawnResult.ok &&
+      typeof thirdSpawnResult.data === "object" &&
+      thirdSpawnResult.data !== null
+        ? thirdSpawnResult.data
+        : null;
+    if (
+      !(thirdSpawnData && "runId" in thirdSpawnData) ||
+      typeof thirdSpawnData.runId !== "string"
+    ) {
+      throw new Error("third run.spawn did not return a runId");
+    }
+    const thirdRunId = thirdSpawnData.runId;
+    expect(thirdRunId).not.toBe(secondRunId);
+    expect(rendererCommands.at(-1)).toMatchObject({
+      launchId: "launch-3",
+      panelId: "terminal-from-renderer",
+      placement: "active-tab",
+      tab: {
+        badge: { label: "package.json" },
+        icon: { id: "pier.task", label: "Task" },
+        state: { label: "Running", status: "running" },
+        title: "test",
+      },
+      task: {
+        runId: thirdRunId,
+        status: "running",
+        taskId: "package-script:test",
+      },
+      type: "terminal.open",
+      windowId: "main",
+    });
+    expect(newPanelIdsRequested).toEqual(["terminal-from-renderer"]);
     expect(terminalLaunches).toEqual([
       expect.objectContaining({
         command: expect.stringContaining("pnpm run test"),
@@ -1059,6 +1190,18 @@ describe("createCommandRouter", () => {
       expect.objectContaining({
         command: expect.stringContaining("pnpm run test"),
         cwd: process.cwd(),
+        env: expect.objectContaining({
+          FROM_CLI: "cli",
+          FROM_SHELL: "shell",
+        }),
+      }),
+      expect.objectContaining({
+        command: expect.stringContaining("pnpm run test"),
+        cwd: process.cwd(),
+        env: expect.objectContaining({
+          FROM_CLI: "cli",
+          FROM_SHELL: "shell",
+        }),
       }),
     ]);
     expect(resolveEnvironment).toHaveBeenCalledWith(
@@ -1123,20 +1266,42 @@ describe("createCommandRouter", () => {
     });
   });
 
-  it("run.spawn 命中 stale already-running 时透传 focus 失败并清理登记", async () => {
+  it("run.spawn 在 stale reusable panel not_found 时重试新 terminal.open", async () => {
     const rendererCommands: unknown[] = [];
-    const fakeServices = services(rendererCommands);
+    const terminalLaunches: unknown[] = [];
+    const freshPanelIdsRequested: string[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    fakeServices.terminalLaunches.register = (launch) => {
+      terminalLaunches.push(launch);
+      return `launch-${terminalLaunches.length}`;
+    };
     const executeRendererCommand = fakeServices.rendererCommand.execute;
     fakeServices.rendererCommand.execute = vi.fn((command) => {
-      if (command.type === "panel.focus") {
-        rendererCommands.push(command);
+      rendererCommands.push(command);
+      if (command.type === "terminal.open") {
+        if (command.panelId === "missing-panel") {
+          return Promise.resolve({
+            error: {
+              code: "not_found" as const,
+              message: "panel not found: missing-panel",
+            },
+            ok: false as const,
+            requestId: "renderer-terminal-reuse-missing",
+          });
+        }
+        const panelId = "terminal-after-stale-retry";
+        freshPanelIdsRequested.push(panelId);
         return Promise.resolve({
-          error: {
-            code: "not_found" as const,
-            message: "panel not found: missing-panel",
+          data: {
+            context: command.context,
+            panelId,
           },
-          ok: false as const,
-          requestId: "renderer-focus-failed",
+          ok: true as const,
+          requestId: "renderer-terminal-open",
         });
       }
       return executeRendererCommand(command);
@@ -1152,46 +1317,81 @@ describe("createCommandRouter", () => {
       services: fakeServices,
     });
 
-    await expect(
-      router.execute({
-        clientId: "desktop-1",
-        command: {
-          projectRoot: process.cwd(),
-          taskId: "package-script:test",
-          type: "run.spawn",
-        },
-        protocolVersion: 1,
-        requestId: "req-run-stale-focus",
-      })
-    ).resolves.toMatchObject({
-      error: {
-        code: "not_found",
-        message: "panel not found: missing-panel",
-      },
-      ok: false,
-      requestId: "req-run-stale-focus",
-    });
+    const spawnCommand = {
+      projectRoot: process.cwd(),
+      taskId: "package-script:test",
+      type: "run.spawn" as const,
+      windowId: "main",
+    };
 
     await expect(
       router.execute({
         clientId: "desktop-1",
-        command: {
-          projectRoot: process.cwd(),
-          taskId: "package-script:test",
-          type: "run.spawn",
-          windowId: "main",
-        },
+        command: spawnCommand,
         protocolVersion: 1,
-        requestId: "req-run-after-stale-focus",
+        requestId: "req-run-stale-reuse",
       })
     ).resolves.toMatchObject({
-      data: { status: "started" },
+      data: {
+        primaryPanelId: "terminal-after-stale-retry",
+        status: "started",
+      },
       ok: true,
-      requestId: "req-run-after-stale-focus",
+      requestId: "req-run-stale-reuse",
     });
+
+    expect(rendererCommands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          launchId: "launch-1",
+          panelId: "missing-panel",
+          type: "terminal.open",
+          windowId: "main",
+        }),
+        expect.objectContaining({
+          launchId: "launch-2",
+          type: "terminal.open",
+          windowId: "main",
+        }),
+      ])
+    );
+    expect(rendererCommands.at(-1)).toMatchObject({
+      launchId: "launch-2",
+      type: "terminal.open",
+      windowId: "main",
+    });
+    expect(rendererCommands.at(-1)).not.toHaveProperty("panelId");
+    expect(freshPanelIdsRequested).toEqual(["terminal-after-stale-retry"]);
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: spawnCommand,
+        protocolVersion: 1,
+        requestId: "req-run-reuse-after-stale-retry",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        primaryPanelId: "terminal-after-stale-retry",
+        status: "started",
+      },
+      ok: true,
+      requestId: "req-run-reuse-after-stale-retry",
+    });
+
+    expect(rendererCommands.at(-1)).toMatchObject({
+      launchId: "launch-3",
+      panelId: "terminal-after-stale-retry",
+      type: "terminal.open",
+      windowId: "main",
+    });
+    expect(freshPanelIdsRequested).toEqual([
+      "terminal-after-stale-retry",
+      "terminal-after-stale-retry",
+    ]);
   });
 
-  it("run.spawn 在后续 terminal.open 失败时关闭已打开的任务 panel", async () => {
+  it("run.spawn 在后续 terminal.open 失败时关闭已重启的任务 panel", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "pier-run-partial-"));
     try {
       await mkdir(join(projectRoot, ".vscode"));
@@ -1235,6 +1435,16 @@ describe("createCommandRouter", () => {
       fakeServices.rendererCommand.execute = vi.fn((command) => {
         rendererCommands.push(command);
         if (command.type === "terminal.open") {
+          if (command.panelId === "panel-client-reuse") {
+            return Promise.resolve({
+              data: {
+                context: command.context,
+                panelId: command.panelId,
+              },
+              ok: true as const,
+              requestId: "renderer-terminal-reuse",
+            });
+          }
           if (command.launchId === "launch-2") {
             return Promise.resolve({
               error: {
@@ -1295,6 +1505,15 @@ describe("createCommandRouter", () => {
           "id" in task &&
           typeof task.id === "string"
       );
+      if (typeof clientTask?.id !== "string") {
+        throw new Error("client task not found");
+      }
+      fakeServices.tasks.recordStarted({
+        panelId: "panel-client-reuse",
+        projectRoot,
+        taskId: clientTask.id,
+        windowId: "main",
+      });
 
       await expect(
         router.execute({
@@ -1319,6 +1538,21 @@ describe("createCommandRouter", () => {
 
       expect(rendererCommands).toContainEqual(
         expect.objectContaining({
+          launchId: "launch-1",
+          panelId: "panel-client-reuse",
+          type: "terminal.open",
+          windowId: "main",
+        })
+      );
+      expect(rendererCommands).toContainEqual(
+        expect.objectContaining({
+          panelId: "panel-client-reuse",
+          type: "panel.close",
+          windowId: "main",
+        })
+      );
+      expect(rendererCommands).not.toContainEqual(
+        expect.objectContaining({
           panelId: "panel-launch-1",
           type: "panel.close",
           windowId: "main",
@@ -1329,7 +1563,7 @@ describe("createCommandRouter", () => {
           clientId: "desktop-1",
           command: {
             projectRoot,
-            taskId: clientTask?.id ?? "",
+            taskId: clientTask.id,
             type: "run.spawn",
             windowId: "main",
           },
@@ -1345,7 +1579,7 @@ describe("createCommandRouter", () => {
     }
   });
 
-  it("run.spawn 在部分打开后的 panel.close 失败时保留已打开任务登记", async () => {
+  it("run.spawn 在重启后的 panel.close 失败时保留任务登记", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "pier-run-close-fail-"));
     try {
       await mkdir(join(projectRoot, ".vscode"));
@@ -1389,6 +1623,16 @@ describe("createCommandRouter", () => {
       fakeServices.rendererCommand.execute = vi.fn((command) => {
         rendererCommands.push(command);
         if (command.type === "terminal.open") {
+          if (command.panelId === "panel-client-reuse") {
+            return Promise.resolve({
+              data: {
+                context: command.context,
+                panelId: command.panelId,
+              },
+              ok: true as const,
+              requestId: "renderer-terminal-reuse",
+            });
+          }
           if (command.launchId === "launch-2") {
             return Promise.resolve({
               error: {
@@ -1459,6 +1703,15 @@ describe("createCommandRouter", () => {
           "id" in task &&
           typeof task.id === "string"
       );
+      if (typeof clientTask?.id !== "string") {
+        throw new Error("client task not found");
+      }
+      fakeServices.tasks.recordStarted({
+        panelId: "panel-client-reuse",
+        projectRoot,
+        taskId: clientTask.id,
+        windowId: "main",
+      });
 
       await expect(
         router.execute({
@@ -1481,12 +1734,19 @@ describe("createCommandRouter", () => {
         requestId: "req-run-close-fail-spawn",
       });
 
+      expect(rendererCommands).toContainEqual(
+        expect.objectContaining({
+          panelId: "panel-client-reuse",
+          type: "panel.close",
+          windowId: "main",
+        })
+      );
       await expect(
         router.execute({
           clientId: "desktop-1",
           command: {
             projectRoot,
-            taskId: clientTask?.id ?? "",
+            taskId: clientTask.id,
             type: "run.spawn",
             windowId: "main",
           },
@@ -1495,11 +1755,15 @@ describe("createCommandRouter", () => {
         })
       ).resolves.toMatchObject({
         data: {
-          panelId: "panel-launch-1",
-          status: "already-running",
-          windowId: "main",
+          primaryPanelId: "panel-client-reuse",
+          status: "started",
         },
         ok: true,
+      });
+      expect(rendererCommands.at(-1)).toMatchObject({
+        panelId: "panel-client-reuse",
+        type: "terminal.open",
+        windowId: "main",
       });
     } finally {
       await rm(projectRoot, { force: true, recursive: true });
