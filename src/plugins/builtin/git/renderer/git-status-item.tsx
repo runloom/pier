@@ -3,9 +3,27 @@ import type {
   RendererPluginContext,
   RendererTerminalStatusItemContext,
 } from "@plugins/api/renderer.ts";
-import type { GitStatus } from "@shared/contracts/git.ts";
-import { GitBranch } from "lucide-react";
+import type {
+  GitCounts,
+  GitDelta,
+  GitRepoState,
+  GitStatus,
+} from "@shared/contracts/git.ts";
+import type React from "react";
 import { useEffect, useState } from "react";
+import { pluginText } from "./git-plugin-text.ts";
+import {
+  BranchLabel,
+  LargeChangeWarning,
+  LineDelta,
+  RepoStatePill,
+  SdDivider,
+  StashBadge,
+  SyncCounts,
+  UpstreamPill,
+  WorkingTreeCounts,
+  WorktreeBadge,
+} from "./git-status-parts.tsx";
 import { openWorktreeListQuickPick } from "./worktree-list-action.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
@@ -18,39 +36,10 @@ function basename(path: null | string | undefined): string {
   return parts.at(-1) ?? path;
 }
 
-function pluginText(
-  context: RendererPluginContext,
-  key: string,
-  fallback: string,
-  values?: Record<string, number | string>
-): string {
-  return context.i18n.t(`ui.${key}`, values, fallback);
-}
-
-function shortHead(head: string | undefined): string | undefined {
-  return head ? head.slice(0, 7) : undefined;
-}
-
-function baseLabel(
-  pluginContext: RendererPluginContext,
-  panelContext: RendererTerminalStatusItemContext["context"],
-  worktreeName: string
-): string {
-  if (panelContext?.branch) {
-    return panelContext.branch;
-  }
-  const head = shortHead(panelContext?.head);
-  if (head) {
-    return pluginText(pluginContext, "detached", "detached {{head}}", {
-      head,
-    });
-  }
-  return worktreeName;
-}
-
 /**
- * 实时 git status 钩子。订阅主体 git.watch 广播,初值用 git.getStatus 拉一次。
- * 调用 unsubscribe 自动在 cleanup 阶段取消订阅(防止 webContents 内 listener 累积)。
+ * 实时 git status 钩子。订阅 git.watch 广播，初值走 git.getStatus。
+ * monotonic seq 拒收旧响应，防止快速触发时的乱序覆盖。
+ * broadcast 携带 status snapshot 时走 fast path，跳过 IPC。
  */
 function useGitStatus(
   pluginContext: RendererPluginContext,
@@ -63,31 +52,35 @@ function useGitStatus(
       setStatus(null);
       return;
     }
-    let cancelled = false;
-    pluginContext.git
-      .getStatus(gitRoot)
-      .then((next) => {
-        if (!cancelled) {
-          setStatus(next);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setStatus(null);
-        }
-      });
-    const unsubscribe = pluginContext.git.watch(gitRoot, () => {
+    let seq = 0;
+    let alive = true;
+    const apply = (next: GitStatus): void => {
+      if (alive) {
+        setStatus(next);
+      }
+    };
+    const refetch = (): void => {
+      const mySeq = ++seq;
       pluginContext.git
         .getStatus(gitRoot)
         .then((next) => {
-          if (!cancelled) {
-            setStatus(next);
+          if (mySeq === seq) {
+            apply(next);
           }
         })
         .catch(() => undefined);
+    };
+    refetch();
+    const unsubscribe = pluginContext.git.watch(gitRoot, (event) => {
+      if (event.status) {
+        seq += 1;
+        apply(event.status);
+      } else {
+        refetch();
+      }
     });
     return () => {
-      cancelled = true;
+      alive = false;
       unsubscribe();
     };
   }, [pluginContext, gitRoot]);
@@ -95,25 +88,135 @@ function useGitStatus(
   return status;
 }
 
-function formatAheadBehind(status: GitStatus | null): string {
-  if (!status) {
-    return "";
-  }
-  const parts: string[] = [];
-  if (status.branch.ahead > 0) {
-    parts.push(`↑${status.branch.ahead}`);
-  }
-  if (status.branch.behind > 0) {
-    parts.push(`↓${status.branch.behind}`);
-  }
-  return parts.length > 0 ? ` ${parts.join("")}` : "";
+/**
+ * 大规模变更预警阈值。AI burst 场景下一次动百个文件是常态，超过任一阈值都算"值得警惕"。
+ * v1 硬编码；如需可调，走 preferences（Phase C）而不是环境变量或 remote config。
+ */
+const LARGE_CHANGE_FILE_THRESHOLD = 100;
+const LARGE_CHANGE_LINE_THRESHOLD = 2000;
+
+interface StatusFlags {
+  ahead: number;
+  behind: number;
+  counts: GitCounts;
+  delta: GitDelta | null;
+  hasDelta: boolean;
+  hasLargeChange: boolean;
+  hasRepoState: boolean;
+  hasSync: boolean;
+  hasWorkingChanges: boolean;
+  isDistinctWorktree: boolean;
+  repoState: GitRepoState;
+  stashCount: number;
 }
 
-function formatChanges(status: GitStatus | null): string {
-  if (!status || status.files.length === 0) {
-    return "";
-  }
-  return ` ·${status.files.length}`;
+function deriveStatusFlags(
+  status: GitStatus | null,
+  context: RendererTerminalStatusItemContext["context"]
+): StatusFlags {
+  const counts = status?.counts ?? {
+    conflict: 0,
+    modified: 0,
+    staged: 0,
+    untracked: 0,
+  };
+  const repoState = status?.repoState ?? ({ kind: "clean" } as GitRepoState);
+  const delta = status?.delta ?? null;
+  const ahead = status?.branch?.ahead ?? 0;
+  const behind = status?.branch?.behind ?? 0;
+  const totalChanges =
+    counts.staged + counts.modified + counts.untracked + counts.conflict;
+  const totalLines = delta ? delta.insertions + delta.deletions : 0;
+  return {
+    ahead,
+    behind,
+    counts,
+    delta,
+    hasDelta: delta !== null && (delta.insertions > 0 || delta.deletions > 0),
+    hasLargeChange:
+      totalChanges > LARGE_CHANGE_FILE_THRESHOLD ||
+      totalLines > LARGE_CHANGE_LINE_THRESHOLD,
+    hasRepoState: repoState.kind !== "clean",
+    hasSync: ahead > 0 || behind > 0,
+    hasWorkingChanges: totalChanges > 0,
+    isDistinctWorktree: Boolean(
+      context?.worktreeRoot && context.worktreeRoot !== context.gitRoot
+    ),
+    repoState,
+    stashCount: status?.stashCount ?? 0,
+  };
+}
+
+function StatusBody({
+  branch,
+  context,
+  flags,
+  pluginContext,
+  worktreeName,
+}: {
+  branch: GitStatus["branch"] | null;
+  context: RendererTerminalStatusItemContext["context"];
+  flags: StatusFlags;
+  pluginContext: RendererPluginContext;
+  worktreeName: string;
+}): React.ReactElement {
+  return (
+    <>
+      {flags.isDistinctWorktree && (
+        <>
+          <WorktreeBadge name={worktreeName} />
+          <SdDivider />
+        </>
+      )}
+      <BranchLabel
+        branch={branch}
+        panelBranch={context?.branch}
+        panelHead={context?.head}
+        pluginContext={pluginContext}
+        worktreeFallback={worktreeName}
+      />
+      <UpstreamPill branch={branch} pluginContext={pluginContext} />
+      {flags.hasRepoState && (
+        <>
+          <SdDivider />
+          <RepoStatePill
+            pluginContext={pluginContext}
+            state={flags.repoState}
+          />
+        </>
+      )}
+      {flags.hasSync && (
+        <>
+          <SdDivider />
+          <SyncCounts
+            ahead={flags.ahead}
+            behind={flags.behind}
+            pluginContext={pluginContext}
+          />
+        </>
+      )}
+      {(flags.hasWorkingChanges || flags.hasDelta) && (
+        <>
+          <SdDivider />
+          <WorkingTreeCounts
+            counts={flags.counts}
+            pluginContext={pluginContext}
+          />
+          <LineDelta delta={flags.delta} pluginContext={pluginContext} />
+          <LargeChangeWarning
+            pluginContext={pluginContext}
+            show={flags.hasLargeChange}
+          />
+        </>
+      )}
+      {flags.stashCount > 0 && (
+        <>
+          <SdDivider />
+          <StashBadge count={flags.stashCount} pluginContext={pluginContext} />
+        </>
+      )}
+    </>
+  );
 }
 
 function WorktreeStatusItem({
@@ -132,8 +235,15 @@ function WorktreeStatusItem({
   if (!worktreeName) {
     return null;
   }
-  const label = `${baseLabel(pluginContext, context, worktreeName)}${formatAheadBehind(status)}${formatChanges(status)}`;
-  const title = [worktreeName, context?.branch, worktreePath, cwd]
+
+  const branch = status?.branch ?? null;
+  const flags = deriveStatusFlags(status, context);
+  const tooltipHint = pluginText(
+    pluginContext,
+    "statusOpenTooltip",
+    "Click to switch worktree"
+  );
+  const tooltipDetail = [worktreeName, branch?.branch, worktreePath, cwd]
     .filter(Boolean)
     .join(" · ");
 
@@ -143,9 +253,9 @@ function WorktreeStatusItem({
         pluginContext,
         "statusOpenLabel",
         "Open worktrees for {{name}}",
-        { name: label }
+        { name: branch?.branch ?? context?.branch ?? worktreeName }
       )}
-      className="h-5"
+      className="h-5 gap-1 px-2 font-normal text-xs"
       data-testid="worktree-status-trigger"
       onClick={() => {
         openWorktreeListQuickPick(pluginContext, worktreePath).catch(
@@ -155,12 +265,17 @@ function WorktreeStatusItem({
         );
       }}
       size="xs"
-      title={title}
+      title={`${tooltipHint}\n${tooltipDetail}`}
       type="button"
       variant="outline"
     >
-      <GitBranch />
-      {label}
+      <StatusBody
+        branch={branch}
+        context={context}
+        flags={flags}
+        pluginContext={pluginContext}
+        worktreeName={worktreeName}
+      />
     </Button>
   );
 }

@@ -13,19 +13,69 @@ export const gitFileStatusSchema = z.object({
 });
 export type GitFileStatus = z.infer<typeof gitFileStatusSchema>;
 
-/** 当前分支与上游的领先/落后信息。detached HEAD 时 branch 为 null。 */
+/** 当前分支与上游的领先/落后信息。detached HEAD 时 branch 为 null；空仓库 oid 为 null。 */
 export const gitBranchInfoSchema = z.object({
   ahead: z.number(),
   behind: z.number(),
   branch: z.string().nullable(),
+  /** HEAD 指向的 commit oid。空仓库为 null；detached 时用于渲染短 sha。 */
+  oid: z.string().nullable(),
   upstream: z.string().nullable(),
+  /** upstream 已配置但对端 ref 已删（`for-each-ref upstream:track` 含 `[gone]`）。 */
+  upstreamGone: z.boolean(),
 });
 export type GitBranchInfo = z.infer<typeof gitBranchInfoSchema>;
 
-/** 工作区整体状态：分支信息 + 变更文件列表。 */
+/** 工作区文件类别聚合计数。避免 renderer 每次遍历 files 数组。 */
+export const gitCountsSchema = z.object({
+  conflict: z.number(),
+  modified: z.number(),
+  staged: z.number(),
+  untracked: z.number(),
+});
+export type GitCounts = z.infer<typeof gitCountsSchema>;
+
+/** 行级增删汇总（staged + unstaged）。binary 文件不计入。 */
+export const gitDeltaSchema = z.object({
+  deletions: z.number(),
+  insertions: z.number(),
+});
+export type GitDelta = z.infer<typeof gitDeltaSchema>;
+
+/**
+ * 仓库特殊操作状态。检测方式：
+ * - merging: `.git/MERGE_HEAD` 存在
+ * - rebasing: `.git/rebase-merge/` 或 `.git/rebase-apply/` 存在；current/total 读 msgnum/end
+ * - cherry-picking: `.git/CHERRY_PICK_HEAD` 存在
+ * - reverting: `.git/REVERT_HEAD` 存在
+ * - bisecting: `.git/BISECT_START` 存在；good/bad 从 BISECT_LOG 数
+ *
+ * 优先级（互斥）：bisecting > rebasing > merging > cherry-picking > reverting > clean。
+ */
+export const gitRepoStateSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("clean") }),
+  z.object({ conflictCount: z.number(), kind: z.literal("merging") }),
+  z.object({
+    conflictCount: z.number(),
+    current: z.number(),
+    kind: z.literal("rebasing"),
+    total: z.number(),
+  }),
+  z.object({ conflictCount: z.number(), kind: z.literal("cherry-picking") }),
+  z.object({ conflictCount: z.number(), kind: z.literal("reverting") }),
+  z.object({ bad: z.number(), good: z.number(), kind: z.literal("bisecting") }),
+]);
+export type GitRepoState = z.infer<typeof gitRepoStateSchema>;
+
+/** 工作区整体状态：分支信息 + 变更文件列表 + 聚合派生字段。 */
 export const gitStatusSchema = z.object({
   branch: gitBranchInfoSchema,
+  counts: gitCountsSchema,
+  /** null 表示 diff --numstat 失败（非致命）。 */
+  delta: gitDeltaSchema.nullable(),
   files: z.array(gitFileStatusSchema),
+  repoState: gitRepoStateSchema,
+  stashCount: z.number(),
 });
 export type GitStatus = z.infer<typeof gitStatusSchema>;
 
@@ -60,6 +110,12 @@ export type GitCommit = z.infer<typeof gitCommitSchema>;
 export const gitRepoInfoSchema = z.object({
   defaultBranch: z.string().nullable(),
   gitCommonDir: z.string(),
+  /**
+   * 本 worktree 的 gitDir（`.git` 指向的绝对路径）。
+   * MERGE_HEAD / rebase-merge / CHERRY_PICK_HEAD / REVERT_HEAD / BISECT_START
+   * 等操作状态文件都在 gitDir 下（per-worktree），而非 gitCommonDir 下。
+   */
+  gitDir: z.string(),
   gitRoot: z.string(),
   headOid: z.string().nullable(),
   isBare: z.boolean(),
@@ -161,6 +217,12 @@ export const gitChangeKindSchema = z.enum(["worktree", "head", "both"]);
 export const gitChangeEventSchema = z.object({
   changeKind: gitChangeKindSchema,
   gitRoot: z.string(),
+  /**
+   * 广播时同步下发的最新 status snapshot。多个 renderer 订阅者共享同一份，
+   * 免除各自重新 IPC 拉取 + 消除 out-of-order fetch 竞态。
+   * 首次订阅（无广播）时 renderer 走 getStatus 拉初值。
+   */
+  status: gitStatusSchema.optional(),
 });
 export type GitChangeKind = z.infer<typeof gitChangeKindSchema>;
 export type GitChangeEvent = z.infer<typeof gitChangeEventSchema>;
