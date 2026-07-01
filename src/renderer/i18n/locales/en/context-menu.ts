@@ -1,0 +1,27 @@
+export const contextMenu = {
+  action: {
+    clearScreen: "Clear Screen",
+    closeAll: "Close All Panels",
+    closeOthers: "Close Other Panels",
+    closePanel: "Close Panel",
+    closeTerminal: "Close Terminal",
+    copy: "Copy",
+    focusDown: "Focus Down",
+    focusLeft: "Focus Left",
+    focusRight: "Focus Right",
+    focusUp: "Focus Up",
+    equalizePanels: "Equalize Panels",
+    find: "Find",
+    newTerminal: "New Terminal",
+    paste: "Paste",
+    selectAll: "Select All",
+    splitDown: "Split Down",
+    splitLeft: "Split Left",
+    splitRight: "Split Right",
+    splitUp: "Split Up",
+  },
+  submenu: {
+    focus: "Focus",
+    split: "Split",
+  },
+} as const;

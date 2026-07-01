@@ -1,7 +1,7 @@
 import i18next from "i18next";
 import { FALLBACK_LOCALE, resolveLanguagePreference } from "./language.ts";
-import { en } from "./locales/en.ts";
-import { zhCN } from "./locales/zh-cn.ts";
+import { en } from "./locales/en/index.ts";
+import { zhCN } from "./locales/zh-CN/index.ts";
 
 let initialized = false;
 

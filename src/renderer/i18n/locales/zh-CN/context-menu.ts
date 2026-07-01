@@ -1,0 +1,27 @@
+export const contextMenu = {
+  action: {
+    clearScreen: "清屏",
+    closeAll: "关闭所有面板",
+    closeOthers: "关闭其他面板",
+    closePanel: "关闭面板",
+    closeTerminal: "关闭终端",
+    copy: "复制",
+    focusDown: "向下聚焦",
+    focusLeft: "向左聚焦",
+    focusRight: "向右聚焦",
+    focusUp: "向上聚焦",
+    equalizePanels: "均分面板",
+    find: "查找",
+    newTerminal: "新建终端",
+    paste: "粘贴",
+    selectAll: "全选",
+    splitDown: "向下拆分",
+    splitLeft: "向左拆分",
+    splitRight: "向右拆分",
+    splitUp: "向上拆分",
+  },
+  submenu: {
+    focus: "聚焦",
+    split: "拆分",
+  },
+} as const;
