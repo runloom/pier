@@ -5,12 +5,7 @@ import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissio
 import { PIER } from "@shared/ipc-channels.ts";
 import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
-import { commandAllowsRendererFacade } from "../app-core/permissions.ts";
 import { windowManager } from "../windows/window-manager.ts";
-
-function isRendererFacadeCommand(command: PierCommand): boolean {
-  return commandAllowsRendererFacade(command.type);
-}
 
 function ensureDesktopRendererClient(windowId: string): string {
   const clientId = `desktop-renderer:${windowId}`;
@@ -58,9 +53,6 @@ export function registerCommandIpc(ipcMain: IpcMain): void {
       throw new Error("invalid command");
     }
     const command: PierCommand = parsed.data;
-    if (!isRendererFacadeCommand(command)) {
-      throw new Error("unsupported renderer command");
-    }
     const windowId = senderWindowId(event.sender);
     return await appCore.commandRouter.execute({
       clientId: ensureDesktopRendererClient(windowId),

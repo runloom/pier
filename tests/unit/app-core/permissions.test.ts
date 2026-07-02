@@ -1,7 +1,4 @@
-import {
-  authorizeCommand,
-  commandAllowsRendererFacade,
-} from "@main/app-core/permissions.ts";
+import { authorizeCommand } from "@main/app-core/permissions.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
@@ -250,22 +247,6 @@ describe("authorizeCommand", () => {
         reason: "missing capability: file:read",
       });
     }
-  });
-
-  it("commandAllowsRendererFacade: worktree 域命令走通用通道", () => {
-    // worktree 域没有专用 IPC handle, 全部走 PIER.COMMAND_EXECUTE
-    expect(commandAllowsRendererFacade("worktree.create")).toBe(true);
-    expect(commandAllowsRendererFacade("worktree.creationDefaults")).toBe(true);
-    expect(commandAllowsRendererFacade("worktree.openTerminal")).toBe(true);
-  });
-
-  it("commandAllowsRendererFacade: 有专用 IPC 通道的命令不走通用通道", () => {
-    // preferences/window/terminal.open 有各自的 pier:* 专用 handle;
-    // 通用通道拒绝, 避免同一命令暴露两条 IPC 通路。
-    expect(commandAllowsRendererFacade("preferences.read")).toBe(false);
-    expect(commandAllowsRendererFacade("preferences.update")).toBe(false);
-    expect(commandAllowsRendererFacade("window.close")).toBe(false);
-    expect(commandAllowsRendererFacade("terminal.open")).toBe(false);
   });
 
   it("requires file:write for file mutation commands", () => {
