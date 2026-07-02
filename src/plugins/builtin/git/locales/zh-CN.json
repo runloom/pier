@@ -212,6 +212,7 @@
     "ui.worktreeCreate.creating": "创建中…",
     "ui.worktreeCreate.description": "为任务创建一个隔离的 worktree",
     "ui.worktreeCreate.emptyHint": "留空回车自动起名",
+    "ui.worktreeCreate.inputLabel": "任务或分支",
     "ui.worktreeCreate.inputPlaceholder": "描述任务,或直接输入分支名",
     "ui.worktreeCreate.launchFailed": "终端启动失败: {{message}}",
     "ui.worktreeCreate.locationLabel": "位置",

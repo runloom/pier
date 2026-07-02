@@ -217,6 +217,7 @@
     "ui.worktreeCreate.creating": "Creating…",
     "ui.worktreeCreate.description": "Create an isolated worktree for a task",
     "ui.worktreeCreate.emptyHint": "Empty input creates an auto codename",
+    "ui.worktreeCreate.inputLabel": "Task or branch",
     "ui.worktreeCreate.inputPlaceholder": "Describe the task, or type a branch name",
     "ui.worktreeCreate.launchFailed": "Terminal launch failed: {{message}}",
     "ui.worktreeCreate.locationLabel": "Location",

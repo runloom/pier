@@ -23,7 +23,7 @@ import {
   openPluginOverlay,
 } from "@/stores/plugin-overlay.store.ts";
 
-const NEW_WORKTREE_LABEL = "New worktree";
+const NEW_WORKTREE_LABEL = "Task or branch";
 const BRANCH_LABEL = "Branch";
 
 function interpolate(

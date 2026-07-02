@@ -1,13 +1,15 @@
 import { Badge } from "@pier/ui/badge.tsx";
+import { Button } from "@pier/ui/button.tsx";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
+import { Field, FieldContent, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
-import { InputGroup, InputGroupInput } from "@pier/ui/input-group.tsx";
 import { Kbd } from "@pier/ui/kbd.tsx";
 import {
   Select,
@@ -24,8 +26,6 @@ import {
   deriveWorktreeCreation,
   sanitizeWorktreeName,
 } from "@shared/worktree-naming.ts";
-import { GitBranch } from "lucide-react";
-import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
 const HEAD_SENTINEL = "__head__";
@@ -42,15 +42,6 @@ interface WorktreeCreateOverlayProps {
   close: () => void;
   context: RendererPluginContext;
   data: WorktreeCreateOverlayData;
-}
-
-function FieldRow({ label, children }: { children: ReactNode; label: string }) {
-  return (
-    <>
-      <span className="text-muted-foreground">{label}</span>
-      {children}
-    </>
-  );
 }
 
 function errorMessage(error: unknown): string {
@@ -142,13 +133,8 @@ function WorktreeCreateOverlay({
       }}
       open
     >
-      <DialogContent
-        className="top-[14vh] translate-y-0 gap-0 overflow-hidden rounded-3xl! p-0 sm:max-w-130"
-        closeOnOverlayClick
-        initialFocus="firstFocusable"
-        showCloseButton={false}
-      >
-        <DialogHeader className="sr-only">
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
           <DialogTitle>{text("title", undefined, "New worktree")}</DialogTitle>
           <DialogDescription>
             {text(
@@ -158,16 +144,16 @@ function WorktreeCreateOverlay({
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-1.5 px-3 pt-2.5 text-muted-foreground text-xs">
-          <GitBranch className="size-3.5" />
-          {text("title", undefined, "New worktree")}
-        </div>
-        <div className="p-1">
-          <InputGroup className="h-8! bg-input/50">
-            <InputGroupInput
-              aria-label={text("title", undefined, "New worktree")}
+
+        <div className="flex flex-col gap-4">
+          <Field>
+            <FieldLabel htmlFor="worktree-create-input">
+              {text("inputLabel", undefined, "Task or branch")}
+            </FieldLabel>
+            <Input
               autoFocus
               disabled={creating}
+              id="worktree-create-input"
               onChange={(event) => {
                 setInput(event.target.value);
                 setError(null);
@@ -186,15 +172,20 @@ function WorktreeCreateOverlay({
               )}
               value={input}
             />
-          </InputGroup>
-        </div>
-        <div className="grid grid-cols-[52px_1fr] items-center gap-x-3 gap-y-1.5 px-3 pt-1 pb-2.5 text-xs">
-          <FieldRow label={text("branchLabel", undefined, "Branch")}>
-            <span className="flex min-w-0 items-center gap-1.5">
+          </Field>
+
+          <Field className="!items-center" orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="worktree-create-branch">
+                {text("branchLabel", undefined, "Branch")}
+              </FieldLabel>
+            </FieldContent>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <Input
                 aria-label={text("branchLabel", undefined, "Branch")}
-                className="h-6 flex-1 rounded-lg px-2 py-0 font-mono text-xs"
+                className="flex-1 font-mono text-sm"
                 disabled={creating}
+                id="worktree-create-branch"
                 onChange={(event) => {
                   setBranch(event.target.value);
                   setBranchEdited(true);
@@ -203,19 +194,31 @@ function WorktreeCreateOverlay({
                 value={derived.branch}
               />
               {showAutoBadge ? (
-                <Badge className="h-4.5 px-1.5 text-[10px]" variant="secondary">
+                <Badge variant="secondary">
                   {text("autoBadge", undefined, "Auto")}
                 </Badge>
               ) : null}
-            </span>
-          </FieldRow>
-          <FieldRow label={text("locationLabel", undefined, "Location")}>
-            <span className="truncate px-2 font-mono text-muted-foreground">
+            </div>
+          </Field>
+
+          <Field className="!items-center" orientation="horizontal">
+            <FieldContent>
+              <FieldLabel>
+                {text("locationLabel", undefined, "Location")}
+              </FieldLabel>
+            </FieldContent>
+            <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-sm">
               {`.worktrees/${derived.name}`}
             </span>
-          </FieldRow>
-          <FieldRow label={text("baseLabel", undefined, "Base")}>
-            <span className="flex min-w-0 items-center">
+          </Field>
+
+          <Field className="!items-center" orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="worktree-create-base">
+                {text("baseLabel", undefined, "Base")}
+              </FieldLabel>
+            </FieldContent>
+            <div className="flex min-w-0 flex-1">
               <Select
                 disabled={creating}
                 onValueChange={(value) => {
@@ -224,7 +227,10 @@ function WorktreeCreateOverlay({
                 }}
                 value={baseBranch ?? HEAD_SENTINEL}
               >
-                <SelectTrigger className="h-6 w-fit gap-1 rounded-lg border-transparent bg-input/50 px-2 font-mono text-xs shadow-none">
+                <SelectTrigger
+                  className="font-mono text-sm"
+                  id="worktree-create-base"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -241,15 +247,18 @@ function WorktreeCreateOverlay({
                   ))}
                 </SelectContent>
               </Select>
-            </span>
-          </FieldRow>
-          <FieldRow label={text("prepareLabel", undefined, "Prepare")}>
-            <span className="flex min-w-0 flex-wrap items-center gap-1 px-2">
+            </div>
+          </Field>
+
+          <Field className="!items-center" orientation="horizontal">
+            <FieldContent>
+              <FieldLabel>
+                {text("prepareLabel", undefined, "Prepare")}
+              </FieldLabel>
+            </FieldContent>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {data.defaults.copyPatterns.length > 0 ? (
-                <Badge
-                  className="h-4.5 px-1.5 font-normal text-[10px]"
-                  variant="secondary"
-                >
+                <Badge variant="secondary">
                   {text(
                     "prepareCopy",
                     { count: data.defaults.copyPatterns.length },
@@ -258,15 +267,12 @@ function WorktreeCreateOverlay({
                 </Badge>
               ) : null}
               {data.defaults.setupCommand.trim() ? (
-                <Badge
-                  className="h-4.5 px-1.5 font-normal text-[10px]"
-                  variant="secondary"
-                >
+                <Badge variant="secondary">
                   {text("prepareSetup", undefined, "Run setup command")}
                 </Badge>
               ) : null}
               {hasPrepare ? null : (
-                <span className="text-muted-foreground">
+                <span className="text-muted-foreground text-sm">
                   {text(
                     "prepareNone",
                     undefined,
@@ -274,35 +280,46 @@ function WorktreeCreateOverlay({
                   )}
                 </span>
               )}
+            </div>
+          </Field>
+
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+        </div>
+
+        <DialogFooter className="items-center sm:justify-between">
+          <span className="flex items-center gap-3 text-muted-foreground text-xs">
+            <span className="flex items-center gap-1">
+              <Kbd>⏎</Kbd>
+              {text("createAndStartHint", undefined, "Create and start")}
             </span>
-          </FieldRow>
-        </div>
-        {error ? (
-          <p className="px-3 pb-2 text-destructive text-xs">{error}</p>
-        ) : null}
-        <div className="flex items-center gap-3 border-t px-3 py-2 text-muted-foreground text-xs">
-          <span className="flex items-center gap-1">
-            <Kbd>⏎</Kbd>
-            {creating
-              ? text("creating", undefined, "Creating…")
-              : text("createAndStartHint", undefined, "Create and start")}
+            <span className="flex items-center gap-1">
+              <Kbd>⇧⏎</Kbd>
+              {text("createOnlyHint", undefined, "Create only")}
+            </span>
           </span>
-          <span className="flex items-center gap-1">
-            <Kbd>⇧⏎</Kbd>
-            {text("createOnlyHint", undefined, "Create only")}
-          </span>
-          <span className="flex items-center gap-1">
-            <Kbd>esc</Kbd>
-            {text("cancelHint", undefined, "Cancel")}
-          </span>
-          <span className="ml-auto truncate">
-            {text(
-              "emptyHint",
-              undefined,
-              "Empty input creates an auto codename"
-            )}
-          </span>
-        </div>
+          <div className="flex gap-2">
+            <Button
+              disabled={creating}
+              onClick={() => submit(false).catch(() => undefined)}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {text("createOnlyHint", undefined, "Create only")}
+            </Button>
+            <Button
+              disabled={creating}
+              onClick={() => submit(true).catch(() => undefined)}
+              size="sm"
+              type="button"
+              variant="default"
+            >
+              {creating
+                ? text("creating", undefined, "Creating…")
+                : text("createAndStartHint", undefined, "Create and start")}
+            </Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
