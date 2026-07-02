@@ -9,6 +9,7 @@ import {
   resolvePluginTerminalStatusItemDisplay,
 } from "@/lib/plugins/display.ts";
 import { ContributionTable } from "./contribution-table.tsx";
+import { PluginSettingsContribution } from "./plugin-settings-contribution.tsx";
 
 export interface CommandContributionRow {
   category?: string;
@@ -281,6 +282,7 @@ export function PluginDetails({
         rows={terminalStatusRows}
         title={t("settings.plugins.terminalStatusItems")}
       />
+      <PluginSettingsContribution entry={entry} />
       <div className="min-w-0">
         <div className="mb-1 font-medium text-muted-foreground">
           {t("settings.plugins.permissions")}
