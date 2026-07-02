@@ -14,9 +14,9 @@ import {
   Cherry,
   CloudOff,
   FilePlus,
+  FolderGit2,
   GitBranch,
   GitCompareArrows,
-  GitFork,
   GitMerge,
   GitPullRequestArrow,
   type LucideIcon,
@@ -92,7 +92,7 @@ function Pill({
 export function WorktreeBadge({ name }: { name: string }): React.ReactElement {
   return (
     <span className="inline-flex items-center gap-1">
-      <GitFork aria-hidden="true" className="h-3 w-3" />
+      <FolderGit2 aria-hidden="true" className="h-3 w-3" />
       <span className="max-w-[120px] truncate">{name}</span>
     </span>
   );

@@ -1,6 +1,7 @@
 export const commandPalette = {
   title: "Command Palette",
   empty: "No matching command",
+  emptyQuickPick: "No matching items",
   searchResults: "Results",
   agents: {
     noAgentDetected: "No agent CLI detected",

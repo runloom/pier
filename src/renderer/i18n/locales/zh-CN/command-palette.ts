@@ -1,6 +1,7 @@
 export const commandPalette = {
   title: "命令面板",
   empty: "无匹配命令",
+  emptyQuickPick: "无匹配项",
   searchResults: "搜索结果",
   agents: {
     noAgentDetected: "未检测到可用 agent",

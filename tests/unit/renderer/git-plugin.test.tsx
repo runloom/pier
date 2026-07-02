@@ -792,15 +792,16 @@ describe("git builtin plugin", () => {
     const prunable = quickPick?.sections
       ?.flatMap((section) => section.items)
       .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-stale");
+    // 标题直接用分支名, "主工作树" 语义只由 badge 表达, 不再重复放 description。
     expect(main).toMatchObject({
       badges: expect.arrayContaining([
         expect.objectContaining({ label: "main" }),
       ]),
       checked: true,
-      description: "main",
       detail: "/Users/xyz/ABC/pier",
       label: "main",
     });
+    expect(main?.description).toBeUndefined();
     expect(linked).toMatchObject({
       detail: "/Users/xyz/ABC/pier-feature",
       label: "feature/worktree",
