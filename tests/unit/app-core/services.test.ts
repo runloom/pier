@@ -4,30 +4,11 @@ import { createPreferencesService } from "@main/services/preferences-service.ts"
 import { EMPTY_MRU_STATE } from "@shared/contracts/command-palette-mru.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { describe, expect, it } from "vitest";
+import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
-const basePreferences: ProjectPreferences = {
-  language: "system",
-  monoFontFamily: "",
-  monoFontSize: 13,
-  stylePresetId: "pierre",
-  terminalCursorBlink: true,
-  terminalCursorStyle: "block",
-  terminalNewCwdPolicy: "activeTerminal",
-  terminalPasteProtection: true,
-  terminalScrollbackMb: 64,
-  theme: "system",
-  uiFontFamily: "",
-  userKeymap: [],
-  windowZoomLevel: 0,
-  defaultAgentId: null,
-  disabledAgentIds: [],
-  agentDefaultArgs: {},
-  agentDefaultEnv: {},
-  agentCommandOverrides: {},
+const basePreferences: ProjectPreferences = makeFakePreferences({
   agentStatusHooks: false,
-  gitAutoFetchEnabled: true,
-  gitAutoFetchIntervalMinutes: 5,
-};
+});
 
 describe("createPreferencesService", () => {
   it("更新偏好后发布 preferences.changed 事件并标注变更字段", async () => {
