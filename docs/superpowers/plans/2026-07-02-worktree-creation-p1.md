@@ -17,6 +17,7 @@
 - i18n：renderer 文案进 `src/renderer/i18n/locales/{en,zh-CN}/`，en 与 zh-CN 必须同步加。
 - 分支名默认前缀 `wt/`；copy patterns 默认 `[".env*", "*.local", ".claude/settings.local.json"]`；setup 命令默认空字符串。
 - **对 spec 的一处已知偏差**：spec 帧 2 的「base 默认 origin/HEAD + 后台 fetch」在 P1 降级为「默认当前 HEAD，下拉可选任意本地/远端分支」——仓库目前没有 fetch IPC（git-status-bar spec 已声明其为独立决策），P2 引入 fetch 后再切默认值。
+- **对 spec 的另一处已知偏差**：spec 帧 3 的成功 toast 在 P1 未实现「Reveal in Finder」动作按钮，也未在 toast 中展示 `copiedFiles`（已复制的 ignored 文件列表）——两者均留待 P2。
 
 ---
 

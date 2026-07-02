@@ -5,6 +5,7 @@
 import type { GitBranchRef } from "@shared/contracts/git.ts";
 import type { WorktreeNameSource } from "@shared/worktree-naming.ts";
 import { deriveWorktreeCreation } from "@shared/worktree-naming.ts";
+import i18next from "i18next";
 import { toast } from "sonner";
 import { create } from "zustand";
 
@@ -74,7 +75,11 @@ export async function openWorktreeCreatePanel(target: {
       path: target.path,
     });
     if (listResult.status !== "available") {
-      toast.error(listResult.reason);
+      toast.error(
+        i18next.t("worktree.create.unavailable", {
+          message: listResult.reason,
+        })
+      );
       return;
     }
     const [branches, preferences] = await Promise.all([
@@ -106,7 +111,11 @@ export async function openWorktreeCreatePanel(target: {
       },
     });
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : String(err));
+    toast.error(
+      i18next.t("worktree.create.openFailed", {
+        message: err instanceof Error ? err.message : String(err),
+      })
+    );
   }
 }
 
@@ -161,7 +170,9 @@ export async function submitWorktreeCreate(options: {
         });
       } catch (err) {
         toast.error(
-          `终端启动失败: ${err instanceof Error ? err.message : String(err)}`
+          i18next.t("worktree.create.launchFailed", {
+            message: err instanceof Error ? err.message : String(err),
+          })
         );
       }
     }

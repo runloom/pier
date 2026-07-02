@@ -37,9 +37,23 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
   const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
+  const activeContext = usePanelDescriptorStore((s) =>
+    s.activeId ? s.descriptors[s.activeId]?.context : undefined
+  );
 
   const enabledAgents = detectedIds.filter(
     (id) => !disabledAgentIds.includes(id)
+  );
+
+  const worktreePath =
+    activeContext?.worktreeRoot ??
+    activeContext?.gitRoot ??
+    activeContext?.projectRoot ??
+    activeContext?.cwd;
+  const worktreeEnabled = Boolean(
+    worktreePath &&
+      (activeContext?.worktreeRoot || activeContext?.gitRoot) &&
+      activeContext?.worktreeSupported !== false
   );
 
   return (
@@ -83,6 +97,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
             <span>{t("workspace.addPanelMenu.newTask")}</span>
           </DropdownMenuItem>
           <DropdownMenuItem
+            disabled={!worktreeEnabled}
             onClick={() => {
               const state = usePanelDescriptorStore.getState();
               const context = state.activeId

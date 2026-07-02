@@ -752,7 +752,7 @@ describe("WorkspaceHeaderActions", () => {
     });
   });
 
-  it("does nothing when the add-panel menu has no active panel path", async () => {
+  it("disables New Worktree when the add-panel menu has no active panel path", async () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
@@ -760,12 +760,63 @@ describe("WorkspaceHeaderActions", () => {
     render(<WorkspaceHeaderActions {...props} />);
 
     openAddPanelMenu();
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "New Worktree" })
-    );
+    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+
+    fireEvent.click(item);
 
     expect(window.pier.worktrees.list).not.toHaveBeenCalled();
     expect(useWorktreeCreateStore.getState().session).toBeNull();
+  });
+
+  it("disables New Worktree when the active panel is not a git repo", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+    usePanelDescriptorStore.setState({
+      activeId: "terminal-1",
+      descriptors: {
+        "terminal-1": {
+          context: {
+            contextId: "ctx-repo",
+            cwd: "/home/user",
+            updatedAt: 0,
+          },
+          display: { short: "home" },
+        },
+      },
+    });
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("disables New Worktree when worktreeSupported is false", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+    usePanelDescriptorStore.setState({
+      activeId: "terminal-1",
+      descriptors: {
+        "terminal-1": {
+          context: {
+            contextId: "ctx-repo",
+            cwd: "/repo",
+            gitRoot: "/repo",
+            updatedAt: 0,
+            worktreeSupported: false,
+          },
+          display: { short: "repo" },
+        },
+      },
+    });
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
+    expect(item).toHaveAttribute("aria-disabled", "true");
   });
 
   it("launches an agent terminal in the clicked header group", async () => {

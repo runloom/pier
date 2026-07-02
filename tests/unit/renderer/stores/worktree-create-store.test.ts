@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { initI18n } from "@/i18n/index.ts";
 import {
   closeWorktreeCreatePanel,
   openWorktreeCreatePanel,
@@ -17,6 +26,10 @@ const createMock = vi.fn();
 const listBranchesMock = vi.fn();
 const preferencesReadMock = vi.fn();
 const terminalOpenMock = vi.fn();
+
+beforeAll(async () => {
+  await initI18n();
+});
 
 beforeEach(() => {
   listMock.mockResolvedValue({
@@ -183,6 +196,22 @@ describe("worktree-create.store", () => {
     expect(toastMocks.error).toHaveBeenCalledWith(
       expect.stringContaining("ipc down")
     );
+    expect(useWorktreeCreateStore.getState().session).toBeNull();
+  });
+
+  it("worktrees.list 返回 unavailable 时经 i18n 提示原因,而非裸 enum", async () => {
+    listMock.mockResolvedValueOnce({
+      path: "/repo",
+      reason: "not_git_repo",
+      status: "unavailable",
+    });
+    await expect(
+      openWorktreeCreatePanel({ path: "/repo" })
+    ).resolves.toBeUndefined();
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      expect.stringContaining("not_git_repo")
+    );
+    expect(toastMocks.error).not.toHaveBeenCalledWith("not_git_repo");
     expect(useWorktreeCreateStore.getState().session).toBeNull();
   });
 });
