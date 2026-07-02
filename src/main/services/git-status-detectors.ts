@@ -1,6 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { GitDelta, GitRepoState } from "../../shared/contracts/git.ts";
+import { GitExecError } from "./git-exec.ts";
 import { parseGitNumstat } from "./git-parsers.ts";
 
 /** git-service.ts 注入进来；测试可传 fake。 */
@@ -179,5 +180,71 @@ export async function detectUpstreamGone(
     return out.includes("[gone]");
   } catch {
     return false;
+  }
+}
+
+/**
+ * 默认分支 remote-tracking ref 缓存（key: gitCommonDir，session 生命周期）。
+ * origin/HEAD 不存在（手工 remote / 无远端）记 null，短路后续查询。
+ */
+const defaultBranchRefCache = new Map<string, string | null>();
+
+export function clearDefaultBranchRefCacheForTests(): void {
+  defaultBranchRefCache.clear();
+}
+
+export async function resolveDefaultBranchRef(
+  execGit: ExecGitFn,
+  cwd: string,
+  gitCommonDir: string
+): Promise<string | null> {
+  const cached = defaultBranchRefCache.get(gitCommonDir);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let ref: string | null = null;
+  try {
+    const out = await execGit(
+      ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+      cwd
+    );
+    const trimmed = out.trim();
+    ref = trimmed.startsWith("refs/remotes/") ? trimmed : null;
+  } catch {
+    ref = null;
+  }
+  defaultBranchRefCache.set(gitCommonDir, ref);
+  return ref;
+}
+
+/**
+ * HEAD 是否已是默认分支 remote-tracking ref 的祖先。
+ * merge-base --is-ancestor: exit 0 = 是，exit 1 = 否，其余（如 ref 不存在）= null。
+ * squash merge 检测不到（commit 被重写）——spec 已知限制。
+ */
+export async function detectMergedIntoDefault(
+  execGit: ExecGitFn,
+  cwd: string,
+  branch: string | null,
+  gitCommonDir: string
+): Promise<boolean | null> {
+  if (branch === null || branch.length === 0) {
+    return null;
+  }
+  const defaultRef = await resolveDefaultBranchRef(execGit, cwd, gitCommonDir);
+  if (defaultRef === null) {
+    return null;
+  }
+  if (defaultRef === `refs/remotes/origin/${branch}`) {
+    return null;
+  }
+  try {
+    await execGit(["merge-base", "--is-ancestor", "HEAD", defaultRef], cwd);
+    return true;
+  } catch (error) {
+    if (error instanceof GitExecError && error.exitCode === 1) {
+      return false;
+    }
+    return null;
   }
 }

@@ -46,8 +46,10 @@ import {
   parseGitNumstat,
   parseGitStatus,
   parseUnifiedDiff,
+  splitNonEmptyLines,
 } from "./git-parsers.ts";
 import {
+  detectMergedIntoDefault,
   detectRepoState,
   detectUpstreamGone,
   getLineDelta,
@@ -332,10 +334,7 @@ export function createGitService({
         ],
         cwd
       );
-      const lines = pathOutput
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+      const lines = splitNonEmptyLines(pathOutput);
       const gitRoot = lines[0] ?? "";
       const gitDir = lines[1] ?? "";
       const gitCommonDir = lines[2] ?? "";
@@ -357,33 +356,42 @@ export function createGitService({
       };
     },
     getStatus: async (cwd) => {
-      // wave 1：可并发的独立 op（status 输出 + 增删 + stash + gitDir 解析）
+      // wave 1：可并发的独立 op（status 输出 + 增删 + stash + gitDir/gitCommonDir 解析）
       const [statusOut, delta, stashCount, gitDirOut] = await Promise.all([
         execGit(["status", "--porcelain=v2", "--branch", "-z"], cwd),
         getLineDelta(execGit, cwd),
         getStashCount(execGit, cwd),
         execGit(
-          ["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
+          [
+            "rev-parse",
+            "--path-format=absolute",
+            "--absolute-git-dir",
+            "--git-common-dir",
+          ],
           cwd
         ),
       ]);
       const parsed = parseGitStatus(statusOut);
       const counts = deriveCounts(parsed.files);
-      // wave 2：依赖 wave 1 的派生值（gitDir + conflictCount / branch 名）
-      const gitDir = gitDirOut.trim();
-      const [repoState, upstreamGone] = await Promise.all([
+      // wave 2：依赖 wave 1 的派生值（gitDir + conflictCount / branch 名 / gitCommonDir）
+      const dirLines = splitNonEmptyLines(gitDirOut);
+      const gitDir = dirLines[0] ?? "";
+      const gitCommonDir = dirLines[1] ?? gitDir;
+      const branchName = parsed.branch.branch;
+      const [repoState, upstreamGone, mergedIntoDefault] = await Promise.all([
         detectRepoState(gitDir, counts.conflict),
-        detectUpstreamGone(execGit, cwd, parsed.branch.branch),
+        detectUpstreamGone(execGit, cwd, branchName),
+        detectMergedIntoDefault(execGit, cwd, branchName, gitCommonDir),
       ]);
       return {
         branch: {
           ahead: parsed.branch.ahead,
           behind: parsed.branch.behind,
           branch: parsed.branch.branch,
+          mergedIntoDefault,
           oid: parsed.branch.oid,
           upstream: parsed.branch.upstream,
           upstreamGone,
-          mergedIntoDefault: null,
         },
         counts,
         delta,

@@ -1,7 +1,10 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execGit as execGitRaw } from "@main/services/git-exec.ts";
 import {
+  clearDefaultBranchRefCacheForTests,
+  detectMergedIntoDefault,
   detectRepoState,
   detectUpstreamGone,
   type ExecGitFn,
@@ -9,6 +12,39 @@ import {
   getStashCount,
 } from "@main/services/git-status-detectors.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+/** 真实 execGit 适配为 detectors 期待的 ExecGitFn 形态：(args, cwd, options) → (args, {cwd, ...options})。 */
+const execGit: ExecGitFn = (args, cwd, options) =>
+  execGitRaw(args, { cwd, ...options });
+
+/** git-common-dir 绝对路径，供 detectMergedIntoDefault 的 gitCommonDir 参数使用。 */
+function commonDirOf(dir: string): Promise<string> {
+  return execGitRaw(
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    { cwd: dir }
+  ).then((s) => s.trim());
+}
+
+/** 本地裸仓 + clone，制造真实 origin/HEAD（clone 自带 origin/HEAD → 默认分支）。 */
+async function makeClonePair(
+  prefix: string
+): Promise<{ dir: string; run: (args: string[]) => Promise<string> }> {
+  const base = await mkdtemp(join(tmpdir(), prefix));
+  const bare = join(base, "remote.git");
+  const clone = join(base, "local");
+  const raw = (args: string[], cwd: string) => execGitRaw(args, { cwd });
+  await raw(["init", "-q", "--bare", "-b", "main", bare], base);
+  await raw(["clone", "-q", bare, clone], base);
+  await raw(["config", "user.email", "pier@example.com"], clone);
+  await raw(["config", "user.name", "Pier Test"], clone);
+  const run = (args: string[]) => raw(args, clone);
+  await run(["commit", "-q", "--allow-empty", "-m", "init"]);
+  await run(["push", "-q", "-u", "origin", "main"]);
+  // 克隆时远端仓库为空，git 无法在 clone 时探测默认分支设置 origin/HEAD；
+  // 首次 push 后手动补上，让后续测试拿到真实的 refs/remotes/origin/HEAD。
+  await run(["remote", "set-head", "origin", "-a"]);
+  return { dir: clone, run };
+}
 
 describe("detectRepoState", () => {
   let gitDir: string;
@@ -196,5 +232,116 @@ describe("detectUpstreamGone", () => {
   it("execGit reject → false", async () => {
     const execGit: ExecGitFn = () => Promise.reject(new Error("boom"));
     expect(await detectUpstreamGone(execGit, "/repo", "main")).toBe(false);
+  });
+});
+
+describe("detectMergedIntoDefault", () => {
+  const tempDirs: string[] = [];
+
+  beforeEach(() => {
+    clearDefaultBranchRefCacheForTests();
+  });
+
+  afterEach(async () => {
+    await Promise.all(
+      tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true }))
+    );
+  });
+
+  it("merge 合入默认分支后为 true", async () => {
+    const { dir, run } = await makeClonePair("pier-merged-");
+    tempDirs.push(join(dir, ".."));
+    await run(["checkout", "-q", "-b", "feature/a"]);
+    await run(["commit", "-q", "--allow-empty", "-m", "work"]);
+    await run(["checkout", "-q", "main"]);
+    await run(["merge", "-q", "--no-ff", "feature/a", "-m", "merge"]);
+    await run(["push", "-q", "origin", "main"]);
+    await run(["checkout", "-q", "feature/a"]);
+    const result = await detectMergedIntoDefault(
+      execGit,
+      dir,
+      "feature/a",
+      await commonDirOf(dir)
+    );
+    expect(result).toBe(true);
+  });
+
+  it("未合入时为 false", async () => {
+    const { dir, run } = await makeClonePair("pier-unmerged-");
+    tempDirs.push(join(dir, ".."));
+    await run(["checkout", "-q", "-b", "feature/b"]);
+    await run(["commit", "-q", "--allow-empty", "-m", "wip"]);
+    const result = await detectMergedIntoDefault(
+      execGit,
+      dir,
+      "feature/b",
+      await commonDirOf(dir)
+    );
+    expect(result).toBe(false);
+  });
+
+  it("squash 合入检测不到（已知限制，记 false）", async () => {
+    const { dir, run } = await makeClonePair("pier-squash-");
+    tempDirs.push(join(dir, ".."));
+    await run(["checkout", "-q", "-b", "feature/c"]);
+    await writeFile(join(dir, "f.txt"), "x");
+    await run(["add", "f.txt"]);
+    await run(["commit", "-q", "-m", "work"]);
+    await run(["checkout", "-q", "main"]);
+    await run(["merge", "-q", "--squash", "feature/c"]);
+    await run(["commit", "-q", "-m", "squashed"]);
+    await run(["push", "-q", "origin", "main"]);
+    await run(["checkout", "-q", "feature/c"]);
+    const result = await detectMergedIntoDefault(
+      execGit,
+      dir,
+      "feature/c",
+      await commonDirOf(dir)
+    );
+    expect(result).toBe(false);
+  });
+
+  it("无 origin/HEAD（本地 init 仓库）为 null", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-noremote-"));
+    tempDirs.push(dir);
+    await execGitRaw(["init", "-q", "-b", "main"], { cwd: dir });
+    await execGitRaw(["config", "user.email", "pier@example.com"], {
+      cwd: dir,
+    });
+    await execGitRaw(["config", "user.name", "Pier Test"], { cwd: dir });
+    await execGitRaw(["commit", "-q", "--allow-empty", "-m", "init"], {
+      cwd: dir,
+    });
+    const result = await detectMergedIntoDefault(
+      execGit,
+      dir,
+      "main",
+      await commonDirOf(dir)
+    );
+    expect(result).toBe(null);
+  });
+
+  it("当前就在默认分支上为 null", async () => {
+    const { dir } = await makeClonePair("pier-ondefault-");
+    tempDirs.push(join(dir, ".."));
+    const result = await detectMergedIntoDefault(
+      execGit,
+      dir,
+      "main",
+      await commonDirOf(dir)
+    );
+    expect(result).toBe(null);
+  });
+
+  it("detached（branch 为 null）为 null", async () => {
+    const { dir } = await makeClonePair("pier-detached-");
+    tempDirs.push(join(dir, ".."));
+    const result = await detectMergedIntoDefault(
+      execGit,
+      dir,
+      null,
+      await commonDirOf(dir)
+    );
+    expect(result).toBe(null);
   });
 });
