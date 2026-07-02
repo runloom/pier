@@ -241,3 +241,15 @@ describe("projectPreferencesSchema — agent preferences", () => {
     ).toThrow();
   });
 });
+
+describe("agentStatusHooks preference", () => {
+  it("默认 true（opt-out：关闭即卸载）", () => {
+    const parsed = projectPreferencesSchema.parse({});
+    expect(parsed.agentStatusHooks).toBe(true);
+  });
+
+  it("接受布尔覆盖", () => {
+    const parsed = projectPreferencesSchema.parse({ agentStatusHooks: true });
+    expect(parsed.agentStatusHooks).toBe(true);
+  });
+});

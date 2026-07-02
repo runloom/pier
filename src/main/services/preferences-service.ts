@@ -39,6 +39,9 @@ function stripUndefinedPatch(
     ...(patch.agentDefaultEnv !== undefined && {
       agentDefaultEnv: patch.agentDefaultEnv,
     }),
+    ...(patch.agentStatusHooks !== undefined && {
+      agentStatusHooks: patch.agentStatusHooks,
+    }),
     ...(patch.defaultAgentId !== undefined && {
       defaultAgentId: patch.defaultAgentId,
     }),

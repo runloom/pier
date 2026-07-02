@@ -103,6 +103,8 @@ export const projectPreferencesSchema = z.object({
   agentCommandOverrides: z
     .partialRecord(agentKindSchema, z.string())
     .default({}),
+  /** 是否向 ~/.claude/settings.json 安装 Pier agent 状态 hook（opt-out, 默认开; 关闭即卸载）。 */
+  agentStatusHooks: z.boolean().default(true),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;

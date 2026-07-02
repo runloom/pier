@@ -24,6 +24,7 @@ const basePreferences: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  agentStatusHooks: false,
 };
 
 describe("createPreferencesService", () => {

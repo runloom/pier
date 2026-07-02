@@ -145,6 +145,7 @@ function cliClientServices(): PierCoreServices {
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        agentStatusHooks: false,
       }),
       update: async (patch) => ({
         language: "system",
@@ -165,6 +166,7 @@ function cliClientServices(): PierCoreServices {
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        agentStatusHooks: false,
       }),
     },
     processEnvironment: {

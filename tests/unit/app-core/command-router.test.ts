@@ -172,6 +172,7 @@ function services(
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        agentStatusHooks: false,
       }),
       update: async (patch) => ({
         language: "system",
@@ -192,6 +193,7 @@ function services(
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        agentStatusHooks: false,
       }),
     },
     processEnvironment: {
