@@ -2,20 +2,24 @@
   "commands": {
     "pier.git.changes.open": {
       "aliases": ["git changes", "open changes"],
+      "category": "Git",
       "title": "Git: Open Changes"
     },
     "pier.git.merge": {
       "aliases": ["git merge", "merge branch", "branch merge"],
+      "category": "Git",
       "description": "Select a branch and merge it into the current branch.",
       "title": "Merge Branch..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "abort merge"],
+      "category": "Git",
       "description": "Abort the current merge operation.",
       "title": "Abort Merge"
     },
     "pier.git.stash": {
       "aliases": ["git stash", "stash save"],
+      "category": "Git",
       "description": "Stash local changes, including untracked files.",
       "title": "Stash"
     },
@@ -27,21 +31,25 @@
         "apply stash",
         "restore stash"
       ],
+      "category": "Git",
       "description": "Select a stash, apply it, and remove it from the stash list.",
       "title": "Pop Stash..."
     },
     "pier.git.rebase": {
       "aliases": ["git rebase", "rebase branch"],
+      "category": "Git",
       "description": "Select a branch and rebase the current branch onto it.",
       "title": "Rebase Branch..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["git rebase abort", "abort rebase"],
+      "category": "Git",
       "description": "Abort the current rebase operation.",
       "title": "Abort Rebase"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["git rebase continue", "continue rebase"],
+      "category": "Git",
       "description": "Continue the current rebase operation.",
       "title": "Continue Rebase"
     },
@@ -54,6 +62,7 @@
         "reset commit",
         "undo last commit"
       ],
+      "category": "Git",
       "description": "Undo the last commit while preserving its changes as staged.",
       "title": "Undo Last Commit"
     },
@@ -66,6 +75,7 @@
         "new worktree",
         "create worktree"
       ],
+      "category": "Worktree",
       "description": "Creates a Git worktree under the repository-managed worktrees directory.",
       "title": "Create Worktree"
     },
@@ -78,6 +88,7 @@
         "remove worktree",
         "delete worktree"
       ],
+      "category": "Worktree",
       "description": "Selects and removes a Git worktree.",
       "title": "Delete Worktrees..."
     },
@@ -88,6 +99,7 @@
         "git worktree prune",
         "cleanup worktree"
       ],
+      "category": "Worktree",
       "description": "Prunes stale Git worktree entries.",
       "title": "Prune Stale Worktrees"
     },
@@ -99,6 +111,7 @@
         "git worktree list",
         "workspace worktree"
       ],
+      "category": "Worktree",
       "description": "Lists Git worktrees for the current repository and opens the selected worktree.",
       "title": "List Worktrees"
     }
