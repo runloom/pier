@@ -338,13 +338,22 @@ const themeApi: PierThemeAPI = {
 
 const workspaceApi: PierWorkspaceAPI = {
   clearLayout: (recordId) =>
-    ipcRenderer.invoke("pier:workspace:clear-layout", recordId),
+    invokePierCommand<null>({ recordId, type: "workspace.layout.clear" }).then(
+      () => undefined
+    ),
   loadLayout: (recordId) =>
-    ipcRenderer.invoke("pier:workspace:load-layout", recordId),
+    invokePierCommand<unknown | null>({
+      recordId,
+      type: "workspace.layout.read",
+    }),
   onNewTerminalRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.NEW_TERMINAL_REQUEST, cb),
   saveLayout: (layout, recordId) =>
-    ipcRenderer.invoke("pier:workspace:save-layout", layout, recordId),
+    invokePierCommand<null>({
+      layout,
+      recordId,
+      type: "workspace.layout.save",
+    }).then(() => undefined),
 };
 
 const rendererCommandApi: PierRendererCommandAPI = {

@@ -30,7 +30,6 @@ import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
-import { registerWorkspaceIpc } from "./ipc/workspace.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
@@ -274,7 +273,6 @@ app.whenReady().then(async () => {
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerNotificationIpc(ipcMain);
-  registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);
   registerGitWatchIpc();
   setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
