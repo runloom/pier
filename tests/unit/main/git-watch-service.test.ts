@@ -611,4 +611,48 @@ describe("createGitWatchService — 真实仓库 refs 验证", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("defaultRefsSignature 对 upstream 配置变化敏感（refs 无增删、oid 不变，真实仓库）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-refs-sig-upstream-"));
+    try {
+      await execGit(["init", "-q", "-b", "main"], { cwd: dir });
+      await execGit(["config", "user.email", "test@pier.local"], {
+        cwd: dir,
+      });
+      await execGit(["config", "user.name", "Pier Test"], { cwd: dir });
+      await execGit(["commit", "-q", "--allow-empty", "-m", "init"], {
+        cwd: dir,
+      });
+      // feature 分支此时无 upstream
+      await execGit(["branch", "feature"], { cwd: dir });
+      const computeWorktreeSignature = vi.fn(async () => "w");
+      const service = createGitWatchService({
+        computeHeadSignature: async () => "h",
+        computeRepoStateSignature: async () => "s",
+        computeWorktreeSignature,
+        fsWatch: () => new FakeWatcher(),
+        pollMs: 60_000,
+      });
+      const listener = vi.fn();
+      const unsubscribe = service.watch(dir, listener);
+      // baseline(首次 force refresh)完成
+      await vi.waitFor(() => {
+        expect(computeWorktreeSignature).toHaveBeenCalledTimes(1);
+      });
+      // refs/heads 无增删、oid 不变；唯一变化是 branch.feature.merge/remote 配置
+      await execGit(["branch", "--set-upstream-to=main", "feature"], {
+        cwd: dir,
+      });
+      service.pulse(dir);
+      await vi.waitFor(() => {
+        expect(listener).toHaveBeenCalledWith(
+          expect.objectContaining({ changeKind: "refs" })
+        );
+      });
+      unsubscribe();
+      await service.dispose();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

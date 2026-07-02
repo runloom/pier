@@ -39,8 +39,9 @@
 3 签名扩为 4 签名，管道结构不动：
 
 - **新增 `refsSig`**：
-  `git for-each-ref --format='%(refname)%00%(objectname)%00%(upstream:track)' refs/heads refs/remotes refs/stash`
-  输出取 sha256。覆盖 fetch / push / prune / stash ref 操作、分支增删、upstream 配置变化。
+  `git for-each-ref --format='%(refname)%00%(objectname)%00%(upstream)' refs/heads refs/remotes refs/stash`
+  （`%(upstream:track)` 同步时为空串抓不到 set-upstream，`%(upstream)` 直接携带配置；gone 场景由
+  remote-tracking ref 删除本身覆盖）输出取 sha256。覆盖 fetch / push / prune / stash ref 操作、分支增删、upstream 配置变化。
 - **增强 `worktreeSig`**：hash 输入从 porcelain v2 输出扩为
   `porcelain v2 + diff --numstat -z --no-renames + diff --cached --numstat -z --no-renames`
   三段拼接。修复 +N/-N 滞后；与 getStatus 里 getLineDelta 的数据源一致。
