@@ -45,6 +45,10 @@ import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 import { gitApi } from "./git-api.ts";
+import {
+  type PierTerminalStatusBarPrefsAPI,
+  terminalStatusBarPrefsApi,
+} from "./terminal-status-bar-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
 export interface WindowInfo {
@@ -121,6 +125,7 @@ export interface PierPluginsAPI {
 }
 
 export type { PierGitAPI } from "./git-api.ts";
+export type { PierTerminalStatusBarPrefsAPI } from "./terminal-status-bar-api.ts";
 export type { PierWorktreesAPI } from "./worktree-api.ts";
 
 /**
@@ -199,6 +204,7 @@ export interface PierWindowAPI {
   settings: PierSettingsAPI;
   tasks: PierTasksAPI;
   terminal: TerminalAPI;
+  terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
   theme: PierThemeAPI;
   workspace: PierWorkspaceAPI;
   worktrees: PierWorktreesAPI;
@@ -460,6 +466,7 @@ const api: PierWindowAPI = {
   settings: settingsApi,
   tasks: tasksApi,
   terminal: terminalApi,
+  terminalStatusBarPrefs: terminalStatusBarPrefsApi,
   theme: themeApi,
   workspace: workspaceApi,
   worktrees: worktreesApi,
