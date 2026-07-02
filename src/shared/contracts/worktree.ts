@@ -119,3 +119,20 @@ export const worktreeRemoveResultSchema = z.object({
   worktrees: z.array(worktreeItemSchema),
 });
 export type WorktreeRemoveResult = z.infer<typeof worktreeRemoveResultSchema>;
+
+export const worktreeCreationDefaultsSchema = z.object({
+  branchPrefix: z.string(),
+  copyPatterns: z.array(z.string()),
+  setupCommand: z.string(),
+});
+export type WorktreeCreationDefaults = z.infer<
+  typeof worktreeCreationDefaultsSchema
+>;
+
+export const worktreeOpenTerminalRequestSchema = z.object({
+  path: z.string().min(1),
+  runSetup: z.boolean(),
+});
+export type WorktreeOpenTerminalRequest = z.infer<
+  typeof worktreeOpenTerminalRequestSchema
+>;

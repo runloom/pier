@@ -27,6 +27,7 @@ import {
   worktreeCreateRequestSchema,
   worktreeListRequestSchema,
   worktreeOpenRequestSchema,
+  worktreeOpenTerminalRequestSchema,
   worktreePruneRequestSchema,
   worktreeRemoveRequestSchema,
 } from "./worktree.ts";
@@ -156,11 +157,15 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   worktreeCreateRequestSchema.extend({
     type: z.literal("worktree.create"),
   }),
+  z.object({ type: z.literal("worktree.creationDefaults") }),
   worktreeOpenRequestSchema.extend({
     focus: z.boolean().optional(),
     placement: pierCommandPlacementSchema.optional(),
     type: z.literal("worktree.open"),
     windowId: z.string().min(1).optional(),
+  }),
+  worktreeOpenTerminalRequestSchema.extend({
+    type: z.literal("worktree.openTerminal"),
   }),
   worktreeRemoveRequestSchema.extend({
     type: z.literal("worktree.remove"),

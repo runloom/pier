@@ -21,9 +21,11 @@ import type {
   WorktreeCheckResult,
   WorktreeCreateRequest,
   WorktreeCreateResult,
+  WorktreeCreationDefaults,
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
+  WorktreeOpenTerminalRequest,
   WorktreePruneRequest,
   WorktreeRemoveRequest,
   WorktreeRemoveResult,
@@ -262,9 +264,11 @@ export interface RendererPluginContext {
   worktrees: {
     check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
     create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
+    creationDefaults(): Promise<WorktreeCreationDefaults>;
     list(request: WorktreeListRequest): Promise<WorktreeListResult>;
     open(request: WorktreeOpenRequest): Promise<unknown>;
     openCreatePanel(request: WorktreeOpenRequest): void;
+    openTerminal(request: WorktreeOpenTerminalRequest): Promise<unknown>;
     prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
     remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
   };

@@ -2668,4 +2668,178 @@ describe("createCommandRouter", () => {
       requestId: "req-plugin-missing",
     });
   });
+
+  describe("worktree.creationDefaults / worktree.openTerminal", () => {
+    it("creationDefaults 只返回三个 worktree 偏好键", async () => {
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: services(),
+      });
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: { type: "worktree.creationDefaults" },
+          protocolVersion: 1,
+          requestId: "req-wt-defaults",
+        })
+      ).resolves.toEqual({
+        data: {
+          branchPrefix: "wt/",
+          copyPatterns: [".env*", "*.local", ".claude/settings.local.json"],
+          setupCommand: "",
+        },
+        ok: true,
+        requestId: "req-wt-defaults",
+      });
+    });
+
+    it("openTerminal 拒绝不是本仓 worktree 的 path", async () => {
+      const rendererCommands: unknown[] = [];
+      const terminalLaunches: unknown[] = [];
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: services(rendererCommands, undefined, terminalLaunches),
+      });
+
+      const result = await router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/not/a/worktree",
+          runSetup: true,
+          type: "worktree.openTerminal",
+        },
+        protocolVersion: 1,
+        requestId: "req-wt-open-term",
+      });
+      expect(result.ok).toBe(false);
+      expect(result).toMatchObject({
+        error: { code: "invalid_path" },
+        ok: false,
+        requestId: "req-wt-open-term",
+      });
+      // 拒绝路径时不应有任何 terminal launch 被注册或转发给 renderer。
+      expect(terminalLaunches).toEqual([]);
+      expect(rendererCommands).toEqual([]);
+    });
+
+    it("openTerminal runSetup=true 但偏好 setupCommand 为空时 launch 只带 cwd", async () => {
+      const rendererCommands: unknown[] = [];
+      const terminalLaunches: unknown[] = [];
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: services(rendererCommands, undefined, terminalLaunches),
+      });
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            path: "/repo/.worktrees/feature-a",
+            runSetup: true,
+            type: "worktree.openTerminal",
+          },
+          protocolVersion: 1,
+          requestId: "req-wt-open-term-empty-setup",
+        })
+      ).resolves.toMatchObject({
+        ok: true,
+        requestId: "req-wt-open-term-empty-setup",
+      });
+
+      expect(terminalLaunches.at(-1)).toEqual({
+        cwd: "/repo/.worktrees/feature-a",
+      });
+    });
+
+    it("openTerminal runSetup 且偏好有 setup 命令时 launch 带 command,否则只带 cwd", async () => {
+      const rendererCommands: unknown[] = [];
+      const terminalLaunches: unknown[] = [];
+      const fakeServices = services(
+        rendererCommands,
+        undefined,
+        terminalLaunches
+      );
+      Object.assign(fakeServices, {
+        preferences: {
+          read: async () => ({
+            language: "system",
+            monoFontFamily: "",
+            monoFontSize: 13,
+            stylePresetId: "pierre",
+            terminalCursorBlink: true,
+            terminalCursorStyle: "block",
+            terminalNewCwdPolicy: "activeTerminal",
+            terminalPasteProtection: true,
+            terminalScrollbackMb: 64,
+            theme: "system",
+            uiFontFamily: "",
+            userKeymap: [],
+            windowZoomLevel: 0,
+            defaultAgentId: null,
+            disabledAgentIds: [],
+            agentDefaultArgs: {},
+            agentDefaultEnv: {},
+            agentCommandOverrides: {},
+            worktreeBranchPrefix: "wt/",
+            worktreeCopyPatterns: [
+              ".env*",
+              "*.local",
+              ".claude/settings.local.json",
+            ],
+            worktreeSetupCommand: "pnpm setup:worktree",
+          }),
+        },
+      });
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: fakeServices,
+      });
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            path: "/repo/.worktrees/feature-a",
+            runSetup: true,
+            type: "worktree.openTerminal",
+          },
+          protocolVersion: 1,
+          requestId: "req-wt-open-term-setup",
+        })
+      ).resolves.toMatchObject({
+        ok: true,
+        requestId: "req-wt-open-term-setup",
+      });
+
+      expect(terminalLaunches.at(-1)).toEqual({
+        command: "pnpm setup:worktree",
+        cwd: "/repo/.worktrees/feature-a",
+      });
+      expect(rendererCommands.at(-1)).toMatchObject({
+        launchId: "launch-1",
+        type: "terminal.open",
+      });
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            path: "/repo/.worktrees/feature-a",
+            runSetup: false,
+            type: "worktree.openTerminal",
+          },
+          protocolVersion: 1,
+          requestId: "req-wt-open-term-no-setup",
+        })
+      ).resolves.toMatchObject({
+        ok: true,
+        requestId: "req-wt-open-term-no-setup",
+      });
+
+      expect(terminalLaunches.at(-1)).toEqual({
+        cwd: "/repo/.worktrees/feature-a",
+      });
+    });
+  });
 });

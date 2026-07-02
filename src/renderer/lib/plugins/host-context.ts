@@ -386,11 +386,13 @@ export function createRendererPluginContext(
     worktrees: {
       check: (request) => window.pier.worktrees.check(request),
       create: (request) => window.pier.worktrees.create(request),
+      creationDefaults: () => window.pier.worktrees.creationDefaults(),
       list: (request) => window.pier.worktrees.list(request),
       open: (request) => window.pier.worktrees.open(request),
       openCreatePanel: (request) => {
         openWorktreeCreatePanel({ path: request.path }).catch(() => undefined);
       },
+      openTerminal: (request) => window.pier.worktrees.openTerminal(request),
       prune: (request) => window.pier.worktrees.prune(request),
       remove: (request) => window.pier.worktrees.remove(request),
     },
