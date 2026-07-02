@@ -60,12 +60,7 @@ function PreviewRow({
   return (
     <Field className="!items-center" orientation="horizontal">
       <FieldContent>
-        <FieldLabel
-          className="font-normal text-muted-foreground text-sm"
-          htmlFor={htmlFor}
-        >
-          {label}
-        </FieldLabel>
+        <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
       </FieldContent>
       {children}
     </Field>
@@ -169,7 +164,7 @@ function WorktreeCreateOverlay({
           </DialogDescription>
         </DialogHeader>
 
-        <FieldSet className="gap-4">
+        <FieldSet>
           <Field>
             <FieldLabel htmlFor="worktree-create-input">
               {text("inputLabel", undefined, "Task or branch")}
@@ -198,7 +193,6 @@ function WorktreeCreateOverlay({
             >
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <Input
-                  aria-label={text("branchLabel", undefined, "Branch")}
                   className="flex-1 font-mono text-sm"
                   disabled={creating}
                   id="worktree-create-branch"
