@@ -60,7 +60,10 @@ export function declaredTerminalStatusItemsById(
 ): ReadonlyMap<string, PluginTerminalStatusItemContribution> {
   const byId = new Map<string, PluginTerminalStatusItemContribution>();
   for (const entry of plugins) {
-    if (!entry.enabled) {
+    // F12:口径统一用 entry.runtime.enabled(与 runtime 激活、pluginNavItems、
+    // collectEnabledConfigurationProperties 同源),而不是顶层 entry.enabled
+    // (manifest/配置期望值,可能与运行时实际激活态漂移)。
+    if (!entry.runtime.enabled) {
       continue;
     }
     for (const item of entry.manifest.terminalStatusItems) {

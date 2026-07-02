@@ -36,6 +36,7 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "terminal.profile.list": ["terminal:read"],
   "terminal.profile.read": ["terminal:read"],
   "terminal.profile.upsert": ["terminal:control"],
+  "terminalStatusBar.prefs.applyOverrides": ["preferences:write"],
   "terminalStatusBar.prefs.getAll": ["preferences:read"],
   "terminalStatusBar.prefs.resetItem": ["preferences:write"],
   "terminalStatusBar.prefs.setItemOverride": ["preferences:write"],

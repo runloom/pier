@@ -1,13 +1,44 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  hasDeclaredTerminalStatusItems,
   hasVisibleTerminalStatusItems,
+  shouldMountTerminalStatusBar,
   TerminalStatusBar,
   terminalStatusItemRegistry,
   useTerminalStatusBarItems,
 } from "@/panel-kits/terminal/terminal-status-bar.tsx";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
+
+function pluginEntryWithStatusItem(id: string): PluginRegistryEntry {
+  return {
+    effectivePermissions: [],
+    enabled: true,
+    manifest: {
+      apiVersion: 1,
+      commands: [],
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: id,
+      panels: [],
+      permissions: [],
+      source: { kind: "builtin" },
+      terminalStatusItems: [{ id: `${id}.item`, permissions: [], title: id }],
+      version: "1.0.0",
+    },
+    runtime: { canToggle: true, enabled: true, kind: "builtin" },
+  };
+}
+
+const INITIAL_PLUGIN_STATE = {
+  diagnostics: [],
+  error: null,
+  initialized: false,
+  plugins: [],
+};
 
 const context: PanelContext = {
   branch: "feature/worktree",
@@ -48,6 +79,7 @@ function setPrefs(
 afterEach(() => {
   terminalStatusItemRegistry.clearForTests();
   setPrefs({});
+  usePluginRegistryStore.setState(INITIAL_PLUGIN_STATE);
 });
 
 describe("terminal status bar grouped rendering", () => {
@@ -91,7 +123,7 @@ describe("terminal status bar grouped rendering", () => {
     expect(bar).toHaveTextContent("LR");
   });
 
-  it("hidden 覆盖过滤该项;全部隐藏时状态栏不渲染", () => {
+  it("hidden 覆盖过滤该项渲染;无插件声明状态项时容器整体不挂载", () => {
     terminalStatusItemRegistry.register({
       id: "test.only",
       render: () => <span>Only</span>,
@@ -100,10 +132,41 @@ describe("terminal status bar grouped rendering", () => {
 
     renderBar();
 
+    // 本测试从未往 plugin-registry.store 写入声明项,declaredTerminalStatusItemsById
+    // 为空 —— 属于 F4「零声明项」分支,容器整体不挂载(与「有声明但全隐藏」区分)。
     expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
   });
 
-  it("isVisible 动态可见性在 hidden 过滤之后仍生效", () => {
+  it("F4:有已启用插件声明状态项时,即使全部生效隐藏,容器仍挂载(右键面保留)", () => {
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      error: null,
+      initialized: true,
+      plugins: [pluginEntryWithStatusItem("pier.a")],
+    });
+    setPrefs({ "pier.a.item": { hidden: true } });
+
+    renderBar();
+
+    const bar = screen.getByTestId("terminal-status-bar");
+    expect(bar).toBeInTheDocument();
+    expect(bar).toHaveTextContent("");
+  });
+
+  it("F4:零声明项(无已启用插件声明 terminalStatusItems)时容器整体不挂载", () => {
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      error: null,
+      initialized: true,
+      plugins: [],
+    });
+
+    renderBar();
+
+    expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
+  });
+
+  it("isVisible 动态可见性在 hidden 过滤之后仍生效(不影响挂载判定,只影响渲染内容)", () => {
     terminalStatusItemRegistry.register({
       id: "test.invisible",
       isVisible: () => false,
@@ -112,6 +175,7 @@ describe("terminal status bar grouped rendering", () => {
 
     renderBar();
 
+    // 同上:未声明任何插件状态项,零声明分支容器不挂载。
     expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
   });
 
@@ -143,6 +207,51 @@ describe("hasVisibleTerminalStatusItems", () => {
       hasVisibleTerminalStatusItems(
         { left: [], right: [{ id: "x", render: () => null }] },
         statusContext
+      )
+    ).toBe(true);
+  });
+});
+
+describe("hasDeclaredTerminalStatusItems(F4:挂载判定口径 —— 有声明项即挂载,不看 hidden)", () => {
+  it("已启用插件声明了 terminalStatusItems 时为 true(与 hidden 生效值无关)", () => {
+    expect(
+      hasDeclaredTerminalStatusItems([pluginEntryWithStatusItem("pier.a")])
+    ).toBe(true);
+  });
+
+  it("零声明项(空插件列表或均无 terminalStatusItems)时为 false", () => {
+    expect(hasDeclaredTerminalStatusItems([])).toBe(false);
+  });
+});
+
+describe("shouldMountTerminalStatusBar(F4:与 terminal-panel.tsx hasStatusBar 必须同一实现)", () => {
+  const statusContext = {
+    context,
+    cwd: context.cwd ?? null,
+    panelId: "terminal-1",
+    title: null,
+  };
+
+  it("零声明且零可见 → false", () => {
+    expect(
+      shouldMountTerminalStatusBar({ left: [], right: [] }, statusContext, [])
+    ).toBe(false);
+  });
+
+  it("有声明但零可见(全部 hidden)→ true", () => {
+    expect(
+      shouldMountTerminalStatusBar({ left: [], right: [] }, statusContext, [
+        pluginEntryWithStatusItem("pier.a"),
+      ])
+    ).toBe(true);
+  });
+
+  it("零声明但有可见项(运行时注册未声明)→ true", () => {
+    expect(
+      shouldMountTerminalStatusBar(
+        { left: [{ id: "x", render: () => null }], right: [] },
+        statusContext,
+        []
       )
     ).toBe(true);
   });

@@ -12,9 +12,13 @@ import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import { Switch } from "@pier/ui/switch.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+import type {
+  TerminalStatusBarOverridePatches,
+  TerminalStatusBarPrefs,
+} from "@shared/contracts/terminal-status-bar.ts";
 import i18next from "i18next";
 import { ArrowDown, ArrowLeftRight, ArrowUp, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginTerminalStatusItemDisplay } from "@/lib/plugins/display.ts";
 import {
@@ -42,7 +46,8 @@ function buildRows(
   const left: StatusBarRow[] = [];
   const right: StatusBarRow[] = [];
   for (const entry of plugins) {
-    if (!entry.enabled) {
+    // F12:与 merge.ts / menu.ts 同口径,用 entry.runtime.enabled(实际运行时激活态)。
+    if (!entry.runtime.enabled) {
       continue;
     }
     for (const item of entry.manifest.terminalStatusItems) {
@@ -74,6 +79,11 @@ function buildRows(
   return { left, right };
 }
 
+/**
+ * F8:交换后按 normalizedGroupOrders 给顺序有变化的项组一次批量 patch,经
+ * applyOverrides 单次 IPC 原子应用(全部落盘 + 恰一次广播),取代逐项顺序
+ * 调用 patchItemOverride(N 次 IPC 无原子性 —— 半途失败会留下不一致的中间态)。
+ */
 async function moveWithinGroup(
   rows: readonly StatusBarRow[],
   index: number,
@@ -92,13 +102,17 @@ async function moveWithinGroup(
   ids[index] = other;
   ids[target] = moved;
   const orders = normalizedGroupOrders(ids);
-  const patch = useTerminalStatusBarPrefsStore.getState().patchItemOverride;
+  const patches: TerminalStatusBarOverridePatches = {};
   for (const row of rows) {
     const nextOrder = orders[row.id];
     if (nextOrder !== undefined && nextOrder !== row.order) {
-      await patch(row.id, { order: nextOrder });
+      patches[row.id] = { order: nextOrder };
     }
   }
+  if (Object.keys(patches).length === 0) {
+    return;
+  }
+  await useTerminalStatusBarPrefsStore.getState().applyOverrides(patches);
 }
 
 function StatusBarRowView({
@@ -115,8 +129,11 @@ function StatusBarRowView({
     (s) => s.patchItemOverride
   );
   const resetItem = useTerminalStatusBarPrefsStore((s) => s.resetItem);
-  const swallow = (err: unknown) => {
-    console.error("[status-bar-settings] update failed:", err);
+  // F9:store 的 patch/批量/reset 动作 IPC 失败时会 rethrow(不再悄悄吞错),
+  // 调用方在这里统一兜底成 toast,让用户能感知失败而不是静默无变化。
+  const reportFailure = (err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    toast.error(t("settings.statusBar.updateFailed"), { description: message });
   };
   return (
     <div
@@ -142,14 +159,14 @@ function StatusBarRowView({
         onCheckedChange={(checked) => {
           patchItemOverride(row.id, {
             hidden: checked ? null : true,
-          }).catch(swallow);
+          }).catch(reportFailure);
         }}
       />
       <Button
         aria-label={t("settings.statusBar.moveUp")}
         disabled={index === 0}
         onClick={() => {
-          moveWithinGroup(rows, index, -1).catch(swallow);
+          moveWithinGroup(rows, index, -1).catch(reportFailure);
         }}
         size="icon-sm"
         title={t("settings.statusBar.moveUp")}
@@ -162,7 +179,7 @@ function StatusBarRowView({
         aria-label={t("settings.statusBar.moveDown")}
         disabled={index === rows.length - 1}
         onClick={() => {
-          moveWithinGroup(rows, index, 1).catch(swallow);
+          moveWithinGroup(rows, index, 1).catch(reportFailure);
         }}
         size="icon-sm"
         title={t("settings.statusBar.moveDown")}
@@ -180,7 +197,7 @@ function StatusBarRowView({
         onClick={() => {
           patchItemOverride(row.id, {
             alignment: row.alignment === "left" ? "right" : "left",
-          }).catch(swallow);
+          }).catch(reportFailure);
         }}
         size="icon-sm"
         title={
@@ -197,7 +214,7 @@ function StatusBarRowView({
         aria-label={t("settings.statusBar.reset")}
         disabled={!row.hasOverride}
         onClick={() => {
-          resetItem(row.id).catch(swallow);
+          resetItem(row.id).catch(reportFailure);
         }}
         size="icon-sm"
         title={t("settings.statusBar.reset")}

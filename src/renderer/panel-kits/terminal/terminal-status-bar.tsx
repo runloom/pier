@@ -2,6 +2,7 @@ import type {
   RendererTerminalStatusItem,
   RendererTerminalStatusItemContext,
 } from "@plugins/api/renderer.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { useMemo, useSyncExternalStore } from "react";
 import { Notifier } from "@/lib/util/notifier.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
@@ -97,6 +98,38 @@ export function hasVisibleTerminalStatusItems(
   return visible.left.length + visible.right.length > 0;
 }
 
+/**
+ * F4:挂载判定口径 —— 只要有已启用插件在 manifest 里声明了 terminalStatusItems
+ * (无论该项当前 hidden 生效值如何),状态栏容器就应该挂载,以保留 h-7 高度和
+ * 右键管理入口。此前用 hasVisibleTerminalStatusItems(合并层已在内部把 hidden
+ * 项过滤掉)判定挂载,会导致「全部隐藏后容器 unmount → 找不到入口重新打开」的
+ * 自锁:用户想恢复显示,却连右键菜单都没有了。
+ *
+ * 与 terminal-panel.tsx 的 hasStatusBar 判定必须同一口径 —— 两处都改这个函数,
+ * 不要各自维出一份等价逻辑。
+ */
+export function hasDeclaredTerminalStatusItems(
+  plugins: readonly PluginRegistryEntry[]
+): boolean {
+  return declaredTerminalStatusItemsById(plugins).size > 0;
+}
+
+/**
+ * F4:挂载判定的唯一实现 —— TerminalStatusBar 组件与 terminal-panel.tsx 的
+ * hasStatusBar(控制 h-7 内容区留白)都必须调这一个函数,禁止各自重复等价逻辑
+ * (曾经两处判定口径不一致是本 bug 的根因之一)。
+ */
+export function shouldMountTerminalStatusBar(
+  groups: TerminalStatusBarGroups<TerminalStatusItem>,
+  context: TerminalStatusItemContext,
+  plugins: readonly PluginRegistryEntry[]
+): boolean {
+  return (
+    hasDeclaredTerminalStatusItems(plugins) ||
+    hasVisibleTerminalStatusItems(groups, context)
+  );
+}
+
 function renderStatusGroup(
   items: readonly TerminalStatusItem[],
   statusContext: TerminalStatusItemContext
@@ -115,9 +148,13 @@ export function TerminalStatusBar({
   title,
 }: TerminalStatusItemContext) {
   const groups = useTerminalStatusBarItems();
+  const plugins = usePluginRegistryStore((s) => s.plugins);
   const statusContext = { context, cwd, panelId, title };
   const visible = visibleTerminalStatusItems(groups, statusContext);
-  if (visible.left.length + visible.right.length === 0) {
+  // F4:挂载判定见 shouldMountTerminalStatusBar 注释 —— 此前只看「当前有可见
+  // 项」,用户把全部项都隐藏后容器连同右键管理入口一起 unmount,没有任何 UI
+  // 能再打开恢复,构成自锁。
+  if (!shouldMountTerminalStatusBar(groups, statusContext, plugins)) {
     return null;
   }
   return (

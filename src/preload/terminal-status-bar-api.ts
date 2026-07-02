@@ -4,20 +4,26 @@ import type {
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
 import type {
-  TerminalStatusBarItemOverride,
+  TerminalStatusBarItemOverridePatch,
+  TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 
 export interface PierTerminalStatusBarPrefsAPI {
+  /** F8:批量 patch 一次 IPC 原子应用(itemId → patch)。 */
+  applyOverrides: (
+    patches: TerminalStatusBarOverridePatches
+  ) => Promise<TerminalStatusBarPrefs>;
   getAll: () => Promise<TerminalStatusBarPrefs>;
   /** 订阅 main 广播的完整快照(含发起窗口自身)。返回解绑函数。 */
   onChanged: (cb: (prefs: TerminalStatusBarPrefs) => void) => () => void;
   resetItem: (itemId: string) => Promise<TerminalStatusBarPrefs>;
+  /** F7:直传 patch,合成交给 main(单线程串行),renderer 不再本地合成。 */
   setItemOverride: (
     itemId: string,
-    override: TerminalStatusBarItemOverride
+    patch: TerminalStatusBarItemOverridePatch
   ) => Promise<TerminalStatusBarPrefs>;
 }
 
@@ -38,6 +44,11 @@ async function invokePierCommand<T>(command: PierCommand): Promise<T> {
 }
 
 export const terminalStatusBarPrefsApi: PierTerminalStatusBarPrefsAPI = {
+  applyOverrides: (patches) =>
+    invokePierCommand<TerminalStatusBarPrefs>({
+      patches,
+      type: "terminalStatusBar.prefs.applyOverrides",
+    }),
   getAll: () =>
     invokePierCommand<TerminalStatusBarPrefs>({
       type: "terminalStatusBar.prefs.getAll",
@@ -59,10 +70,10 @@ export const terminalStatusBarPrefsApi: PierTerminalStatusBarPrefsAPI = {
       itemId,
       type: "terminalStatusBar.prefs.resetItem",
     }),
-  setItemOverride: (itemId, override) =>
+  setItemOverride: (itemId, patch) =>
     invokePierCommand<TerminalStatusBarPrefs>({
       itemId,
-      override,
+      patch,
       type: "terminalStatusBar.prefs.setItemOverride",
     }),
 };

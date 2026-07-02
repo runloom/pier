@@ -1,8 +1,10 @@
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import { describe, expect, it } from "vitest";
 import {
   compareOuterFirst,
   type DeclaredTerminalStatusItem,
+  declaredTerminalStatusItemsById,
   mergeTerminalStatusItems,
   normalizedGroupOrders,
   resolveEffectiveTerminalStatusItemConfig,
@@ -26,6 +28,29 @@ function prefsOf(
   overrides: TerminalStatusBarPrefs["items"] = {}
 ): TerminalStatusBarPrefs {
   return { items: overrides, version: 1 };
+}
+
+function pluginEntry(
+  id: string,
+  opts: { enabled: boolean; runtimeEnabled: boolean }
+): PluginRegistryEntry {
+  return {
+    effectivePermissions: [],
+    enabled: opts.enabled,
+    manifest: {
+      apiVersion: 1,
+      commands: [],
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: id,
+      panels: [],
+      permissions: [],
+      source: { kind: "builtin" },
+      terminalStatusItems: [{ id: `${id}.item`, permissions: [], title: id }],
+      version: "1.0.0",
+    },
+    runtime: { canToggle: true, enabled: opts.runtimeEnabled, kind: "builtin" },
+  };
 }
 
 describe("resolveEffectiveTerminalStatusItemConfig", () => {
@@ -165,5 +190,21 @@ describe("compareOuterFirst / normalizedGroupOrders", () => {
       y: 10,
       z: 20,
     });
+  });
+});
+
+describe("declaredTerminalStatusItemsById(F12:口径统一用 runtime.enabled)", () => {
+  it("enabled=false 但 runtime.enabled=true 时仍纳入(以运行时激活态为准)", () => {
+    const byId = declaredTerminalStatusItemsById([
+      pluginEntry("pier.drift", { enabled: false, runtimeEnabled: true }),
+    ]);
+    expect(byId.has("pier.drift.item")).toBe(true);
+  });
+
+  it("enabled=true 但 runtime.enabled=false 时被排除(以运行时激活态为准)", () => {
+    const byId = declaredTerminalStatusItemsById([
+      pluginEntry("pier.drift", { enabled: true, runtimeEnabled: false }),
+    ]);
+    expect(byId.has("pier.drift.item")).toBe(false);
   });
 });

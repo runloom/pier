@@ -17,14 +17,19 @@ import {
   vi,
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import {
-  declaredRows,
-  openTerminalStatusBarContextMenu,
-} from "@/panel-kits/terminal/terminal-status-bar-menu.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+
+const toastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...args: unknown[]) => toastError(...args) },
+}));
+
+const { declaredRows, openTerminalStatusBarContextMenu } = await import(
+  "@/panel-kits/terminal/terminal-status-bar-menu.ts"
+);
 
 function terminalStatusItemEntry(
   id: string,
@@ -33,7 +38,8 @@ function terminalStatusItemEntry(
     order?: number;
     title: string;
   }>,
-  enabled = true
+  enabled = true,
+  runtimeEnabled: boolean = enabled
 ): PluginRegistryEntry {
   return {
     effectivePermissions: [],
@@ -55,7 +61,7 @@ function terminalStatusItemEntry(
       })),
       version: "1.0.0",
     },
-    runtime: { canToggle: true, enabled, kind: "builtin" },
+    runtime: { canToggle: true, enabled: runtimeEnabled, kind: "builtin" },
   };
 }
 
@@ -97,6 +103,38 @@ describe("declaredRows", () => {
     );
 
     expect(rows.map((row) => row.itemId)).toEqual(["enabled.item"]);
+  });
+
+  it("F12:口径以 runtime.enabled 为准 —— 顶层 enabled=false 但 runtime.enabled=true 时仍纳入", () => {
+    const rows = declaredRows(
+      [
+        terminalStatusItemEntry(
+          "pier.drift",
+          [{ id: "drift.item", title: "Drift Item" }],
+          /* enabled */ false,
+          /* runtimeEnabled */ true
+        ),
+      ],
+      prefsOf()
+    );
+
+    expect(rows.map((row) => row.itemId)).toEqual(["drift.item"]);
+  });
+
+  it("F12:顶层 enabled=true 但 runtime.enabled=false 时被排除", () => {
+    const rows = declaredRows(
+      [
+        terminalStatusItemEntry(
+          "pier.drift",
+          [{ id: "drift.item", title: "Drift Item" }],
+          /* enabled */ true,
+          /* runtimeEnabled */ false
+        ),
+      ],
+      prefsOf()
+    );
+
+    expect(rows).toEqual([]);
   });
 
   it("按 title 字典序排序,与声明顺序无关", () => {
@@ -152,6 +190,7 @@ describe("openTerminalStatusBarContextMenu", () => {
     popupMock.mockImplementation(async () => ({ actionId: null }));
     setItemOverride.mockClear();
     resetItem.mockClear();
+    toastError.mockClear();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -193,7 +232,7 @@ describe("openTerminalStatusBarContextMenu", () => {
     );
   }
 
-  it("已隐藏项再点击 → setItemOverride 收到 { hidden: null } 语义的清覆盖(改走 resetItem)", async () => {
+  it("已隐藏项再点击 → patchItemOverride 收到 { hidden: null } 并原样透传给 main(F7:不再本地合成判断清空)", async () => {
     popupMock.mockImplementation((template: readonly MenuItem[]) => {
       const rows = checkboxItems(template);
       const hiddenRow = rows.find((item) => item.id.endsWith("hidden.item"));
@@ -202,11 +241,13 @@ describe("openTerminalStatusBarContextMenu", () => {
 
     await openTerminalStatusBarContextMenu(fakeMouseEvent());
 
-    // patchItemOverride({ hidden: null }) 与已有覆盖({ hidden: true })合成后
-    // 字段全清空 → withItemOverridePatch 返回 null → 落 resetItem(见
-    // terminal-status-bar-prefs.store.ts patchItemOverride 实现)。
-    expect(resetItem).toHaveBeenCalledWith("hidden.item");
-    expect(setItemOverride).not.toHaveBeenCalled();
+    // F7:renderer 不再读自身 prefs 判断合成后是否为空 —— { hidden: null } 原样
+    // 经 setItemOverride(patch) 传给 main,由 main 侧 withItemOverridePatch 合成
+    // 并在结果为空时删除该 key(见 src/main/state/terminal-status-bar-prefs.ts)。
+    expect(setItemOverride).toHaveBeenCalledWith("hidden.item", {
+      hidden: null,
+    });
+    expect(resetItem).not.toHaveBeenCalled();
   });
 
   it("可见项点击 → setItemOverride(itemId, { hidden: true })", async () => {
@@ -222,6 +263,24 @@ describe("openTerminalStatusBarContextMenu", () => {
       hidden: true,
     });
     expect(resetItem).not.toHaveBeenCalled();
+  });
+
+  it("F9:显隐切换 IPC 失败时 toast 报错(不吞错误)", async () => {
+    setItemOverride.mockImplementationOnce(() =>
+      Promise.reject(new Error("menu toggle boom"))
+    );
+    popupMock.mockImplementation((template: readonly MenuItem[]) => {
+      const rows = checkboxItems(template);
+      const visibleRow = rows.find((item) => item.id.endsWith("visible.item"));
+      return Promise.resolve({ actionId: visibleRow?.id ?? null });
+    });
+
+    await openTerminalStatusBarContextMenu(fakeMouseEvent());
+
+    expect(toastError).toHaveBeenCalledWith(
+      "Failed to update status bar item",
+      expect.objectContaining({ description: "menu toggle boom" })
+    );
   });
 
   it("勾选项 checked 态反映当前 hidden 生效值(取反)", async () => {

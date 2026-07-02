@@ -33,6 +33,7 @@ export const settings = {
     visible: "Visible",
     reset: "Reset to plugin default",
     modified: "Modified",
+    updateFailed: "Failed to update status bar item",
   },
   row: {
     theme: "Theme",

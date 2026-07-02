@@ -17,6 +17,11 @@ import { TerminalStatusBarBlock } from "@/pages/settings/components/terminal-sta
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 
+const toastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...args: unknown[]) => toastError(...args) },
+}));
+
 function statusItem(
   id: string,
   overrides: Partial<PluginTerminalStatusItemContribution> = {}
@@ -27,7 +32,8 @@ function statusItem(
 function entry(
   id: string,
   enabled: boolean,
-  terminalStatusItems: PluginTerminalStatusItemContribution[] = []
+  terminalStatusItems: PluginTerminalStatusItemContribution[] = [],
+  runtimeEnabled: boolean = enabled
 ): PluginRegistryEntry {
   return {
     effectivePermissions: [],
@@ -44,7 +50,7 @@ function entry(
       terminalStatusItems,
       version: "1.0.0",
     },
-    runtime: { canToggle: true, enabled, kind: "builtin" },
+    runtime: { canToggle: true, enabled: runtimeEnabled, kind: "builtin" },
   };
 }
 
@@ -68,12 +74,17 @@ const INITIAL_PREFS_STATE = {
 describe("TerminalStatusBarBlock", () => {
   beforeEach(async () => {
     await initI18n();
+    toastError.mockClear();
     usePluginRegistryStore.setState(INITIAL_PLUGIN_STATE);
     useTerminalStatusBarPrefsStore.setState(INITIAL_PREFS_STATE);
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
         terminalStatusBarPrefs: {
+          applyOverrides: vi.fn(async (patches) => ({
+            items: patches,
+            version: 1,
+          })),
           getAll: vi.fn(async () => emptyPrefs()),
           onChanged: vi.fn(() => () => undefined),
           resetItem: vi.fn(async () => emptyPrefs()),
@@ -108,6 +119,42 @@ describe("TerminalStatusBarBlock", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.git", false, [statusItem("pier.worktree.status")])],
+    });
+    render(<TerminalStatusBarBlock />);
+    expect(
+      screen.getByText("Enabled plugins declare no status bar items")
+    ).toBeInTheDocument();
+  });
+
+  it("F12:enabled 与 runtime.enabled 漂移时以 runtime.enabled 为准(顶层 enabled=false 但运行时已激活仍展示)", () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [
+        entry(
+          "pier.git",
+          false,
+          [statusItem("pier.worktree.status")],
+          /* runtimeEnabled */ true
+        ),
+      ],
+    });
+    render(<TerminalStatusBarBlock />);
+    expect(
+      screen.getByTestId("status-bar-row-pier.worktree.status")
+    ).toBeInTheDocument();
+  });
+
+  it("F12:顶层 enabled=true 但 runtime.enabled=false 时不展示", () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [
+        entry(
+          "pier.git",
+          true,
+          [statusItem("pier.worktree.status")],
+          /* runtimeEnabled */ false
+        ),
+      ],
     });
     render(<TerminalStatusBarBlock />);
     expect(
@@ -210,7 +257,7 @@ describe("TerminalStatusBarBlock", () => {
     });
   });
 
-  it("上移把组内第二项与第一项交换,按 normalizedGroupOrders 写差异 order", async () => {
+  it("上移把组内第二项与第一项交换,按 normalizedGroupOrders 以单次批量 IPC 写差异 order(F8)", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [
@@ -226,11 +273,81 @@ describe("TerminalStatusBarBlock", () => {
     fireEvent.click(upButtons[1] as HTMLElement);
 
     await waitFor(() => {
-      // 交换后目标序:b.item, a.item -> b.item order 0(未变,跳过写入不保证),
-      // a.item order 变为 10 (原 0 -> 10),两项目标 order 只要有变化即写入。
+      // F8:moveWithinGroup 改走批量命令 applyOverrides,一次 IPC 携带全部
+      // 有变化的 order patch,而不是 N 次顺序 setItemOverride(原子性 + 单次广播)。
       expect(
-        window.pier.terminalStatusBarPrefs.setItemOverride
-      ).toHaveBeenCalledWith("a.item", { order: 10 });
+        window.pier.terminalStatusBarPrefs.applyOverrides
+      ).toHaveBeenCalledWith({ "a.item": { order: 10 } });
+    });
+    expect(
+      window.pier.terminalStatusBarPrefs.setItemOverride
+    ).not.toHaveBeenCalled();
+    expect(
+      window.pier.terminalStatusBarPrefs.applyOverrides
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it("F9:批量重排 IPC 失败时 toast 报错(不吞错误)", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        terminalStatusBarPrefs: {
+          applyOverrides: vi.fn(() => Promise.reject(new Error("boom"))),
+          getAll: vi.fn(async () => emptyPrefs()),
+          onChanged: vi.fn(() => () => undefined),
+          resetItem: vi.fn(async () => emptyPrefs()),
+          setItemOverride: vi.fn(async () => emptyPrefs()),
+        },
+      },
+    });
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [
+        entry("pier.git", true, [statusItem("a.item"), statusItem("b.item")]),
+      ],
+    });
+    render(<TerminalStatusBarBlock />);
+    const upButtons = screen.getAllByRole("button", {
+      name: "Move up (outward)",
+    });
+    fireEvent.click(upButtons[1] as HTMLElement);
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith(
+        "Failed to update status bar item",
+        expect.objectContaining({ description: "boom" })
+      );
+    });
+  });
+
+  it("F9:显示开关 IPC 失败时 toast 报错(不吞错误)", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        terminalStatusBarPrefs: {
+          applyOverrides: vi.fn(async () => emptyPrefs()),
+          getAll: vi.fn(async () => emptyPrefs()),
+          onChanged: vi.fn(() => () => undefined),
+          resetItem: vi.fn(async () => emptyPrefs()),
+          setItemOverride: vi.fn(() =>
+            Promise.reject(new Error("switch boom"))
+          ),
+        },
+      },
+    });
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.git", true, [statusItem("pier.worktree.status")])],
+    });
+    render(<TerminalStatusBarBlock />);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Visible" }));
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith(
+        "Failed to update status bar item",
+        expect.objectContaining({ description: "switch boom" })
+      );
     });
   });
 

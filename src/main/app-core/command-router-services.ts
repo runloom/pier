@@ -5,7 +5,8 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type {
-  TerminalStatusBarItemOverride,
+  TerminalStatusBarItemOverridePatch,
+  TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
@@ -75,11 +76,14 @@ export interface PierCoreServices {
     ): Promise<ResolvedTerminalLaunchOptions>;
   };
   terminalStatusBarPrefs: {
+    applyOverrides(
+      patches: TerminalStatusBarOverridePatches
+    ): Promise<TerminalStatusBarPrefs>;
     getAll(): Promise<TerminalStatusBarPrefs>;
     resetItem(itemId: string): Promise<TerminalStatusBarPrefs>;
     setItemOverride(
       itemId: string,
-      override: TerminalStatusBarItemOverride
+      patch: TerminalStatusBarItemOverridePatch
     ): Promise<TerminalStatusBarPrefs>;
   };
   window: {

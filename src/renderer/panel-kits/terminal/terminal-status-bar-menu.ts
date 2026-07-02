@@ -13,6 +13,7 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import i18next from "i18next";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import { toast } from "sonner";
 import { resolvePluginTerminalStatusItemDisplay } from "@/lib/plugins/display.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
@@ -38,7 +39,9 @@ export function declaredRows(
   const locale = i18next.language || "en";
   const rows: DeclaredItemRow[] = [];
   for (const entry of plugins) {
-    if (!entry.enabled) {
+    // F12:与 merge.ts / terminal-status-bar-block.tsx 同口径,用
+    // entry.runtime.enabled(实际运行时激活态)而非顶层 entry.enabled。
+    if (!entry.runtime.enabled) {
       continue;
     }
     for (const item of entry.manifest.terminalStatusItems) {
@@ -102,8 +105,17 @@ export async function openTerminalStatusBarContextMenu(
       return;
     }
     // 取消勾选 → hidden: true;重新勾选 → 清除 hidden 字段(回落默认可见)。
-    await useTerminalStatusBarPrefsStore
-      .getState()
-      .patchItemOverride(itemId, { hidden: row.hidden ? null : true });
+    // F9:store 侧 IPC 失败会 rethrow(不再悄悄吞错),这里兜底成 toast 让用户
+    // 能感知失败,而不是菜单关闭后状态栏毫无变化却查不出原因。
+    try {
+      await useTerminalStatusBarPrefsStore
+        .getState()
+        .patchItemOverride(itemId, { hidden: row.hidden ? null : true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(i18next.t("settings.statusBar.updateFailed"), {
+        description: message,
+      });
+    }
   }
 }

@@ -32,6 +32,7 @@ export const settings = {
     visible: "显示",
     reset: "恢复插件默认",
     modified: "已修改",
+    updateFailed: "状态栏项更新失败",
   },
   row: {
     theme: "主题",

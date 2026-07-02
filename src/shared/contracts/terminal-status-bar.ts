@@ -29,12 +29,29 @@ export function emptyTerminalStatusBarPrefs(): TerminalStatusBarPrefs {
   return { items: {}, version: 1 };
 }
 
-/** patch 字段语义:值 → 设置;null → 清除该字段;缺省 → 保留现值。 */
-export interface TerminalStatusBarItemOverridePatch {
-  alignment?: "left" | "right" | null;
-  hidden?: boolean | null;
-  order?: number | null;
-}
+/**
+ * patch 字段语义:值 → 设置;null → 清除该字段;缺省(key 不存在)→ 保留现值。
+ * 类型从 zod schema 推导(而不是手写 interface)—— 工程开了
+ * exactOptionalPropertyTypes,手写 `?: T | null` 与 z.optional() 推出的
+ * `T | null | undefined` 不是同一类型,两处会互相打架。
+ */
+export const terminalStatusBarItemOverridePatchSchema = z.object({
+  alignment: terminalStatusItemAlignmentSchema.nullable().optional(),
+  hidden: z.boolean().nullable().optional(),
+  order: z.number().nullable().optional(),
+});
+export type TerminalStatusBarItemOverridePatch = z.infer<
+  typeof terminalStatusBarItemOverridePatchSchema
+>;
+
+/** 批量 patch 命令 payload:itemId → patch。main 侧按 key 逐项 applyItemOverridePatch。 */
+export const terminalStatusBarOverridePatchesSchema = z.record(
+  z.string().min(1),
+  terminalStatusBarItemOverridePatchSchema
+);
+export type TerminalStatusBarOverridePatches = z.infer<
+  typeof terminalStatusBarOverridePatchesSchema
+>;
 
 /**
  * 以 patch 合成下一个 override。全部字段清空时返回 null —— 调用方应改走

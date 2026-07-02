@@ -252,8 +252,13 @@ async function executeAppStateCommand(
         requestId,
         await services.terminalStatusBarPrefs.setItemOverride(
           command.itemId,
-          command.override
+          command.patch
         )
+      );
+    case "terminalStatusBar.prefs.applyOverrides":
+      return success(
+        requestId,
+        await services.terminalStatusBarPrefs.applyOverrides(command.patches)
       );
     default:
       return null;

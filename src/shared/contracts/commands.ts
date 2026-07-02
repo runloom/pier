@@ -22,7 +22,10 @@ import {
   terminalLaunchEnvKeySchema,
   terminalLaunchOptionsSchema,
 } from "./terminal-launch.ts";
-import { terminalStatusBarItemOverrideSchema } from "./terminal-status-bar.ts";
+import {
+  terminalStatusBarItemOverridePatchSchema,
+  terminalStatusBarOverridePatchesSchema,
+} from "./terminal-status-bar.ts";
 import {
   type WorktreeOperationErrorReason,
   worktreeCheckRequestSchema,
@@ -193,12 +196,20 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("terminalStatusBar.prefs.getAll") }),
   z.object({
     itemId: z.string().min(1),
-    override: terminalStatusBarItemOverrideSchema,
+    // F7:携带 patch(值→设置;null→清除;缺省→保留现值),main 侧单线程合成,
+    // 消除 renderer 端 read-modify-write 竞态(见 withItemOverridePatch)。
+    patch: terminalStatusBarItemOverridePatchSchema,
     type: z.literal("terminalStatusBar.prefs.setItemOverride"),
   }),
   z.object({
     itemId: z.string().min(1),
     type: z.literal("terminalStatusBar.prefs.resetItem"),
+  }),
+  z.object({
+    // F8:批量 patch 一次 IPC 原子应用(全部落盘 + 恰一次广播),
+    // moveWithinGroup 等多字段重排场景改走这条,替代 N 次顺序 setItemOverride。
+    patches: terminalStatusBarOverridePatchesSchema,
+    type: z.literal("terminalStatusBar.prefs.applyOverrides"),
   }),
   // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),

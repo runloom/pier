@@ -279,6 +279,7 @@ function services(
       upsert: async (_profileId, profile) => profile,
     },
     terminalStatusBarPrefs: {
+      applyOverrides: () => Promise.resolve({ items: {}, version: 1 }),
       getAll: () => Promise.resolve({ items: {}, version: 1 }),
       resetItem: () => Promise.resolve({ items: {}, version: 1 }),
       setItemOverride: () => Promise.resolve({ items: {}, version: 1 }),
