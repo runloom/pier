@@ -7,6 +7,7 @@ import { actionRegistry } from "./registry.ts";
 import type { Action, ActionCategoryKey, ActionMetadata } from "./types.ts";
 
 const CATEGORY_BY_KEY: Record<ActionCategoryKey, string> = {
+  file: "File",
   git: "Git",
   panel: "Panel",
   run: "Run",

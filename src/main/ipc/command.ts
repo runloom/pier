@@ -22,6 +22,12 @@ const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
   "worktree.open",
   "worktree.prune",
   "worktree.remove",
+  "file.list",
+  "file.readText",
+  "file.writeText",
+  "file.rename",
+  "file.move",
+  "file.trash",
   // git 主体命令;capability 守门由 permissions.ts 配对
   "git.checkoutBranch",
   "git.commit",

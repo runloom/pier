@@ -5,6 +5,7 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import type { FileService } from "../services/file-service.ts";
 import type { GitService } from "../services/git-service.ts";
 import type { GitWatchService } from "../services/git-watch-service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
@@ -20,6 +21,7 @@ export interface PierCoreServices {
     read(): Promise<MruState>;
     recordUse(actionId: string): Promise<void>;
   };
+  files?: FileService;
   git: GitService;
   gitWatch: GitWatchService;
   panelContexts: {

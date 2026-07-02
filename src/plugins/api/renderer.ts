@@ -1,8 +1,22 @@
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
+  FileListRequest,
+  FileListResult,
+  FileMoveRequest,
+  FileMoveResult,
+  FileReadTextRequest,
+  FileRenameRequest,
+  FileRenameResult,
+  FileTrashRequest,
+  FileTrashResult,
+  FileWriteTextRequest,
+  FileWriteTextResult,
+} from "@shared/contracts/file.ts";
+import type {
   GitBranchRef,
   GitChangeEvent,
   GitDiffBranchesResult,
+  GitDiffPatch,
   GitMergeAbortResult,
   GitMergeResult,
   GitRebaseAbortResult,
@@ -42,7 +56,8 @@ export type RendererPluginActionCategoryKey =
   | "view"
   | "window"
   | "workspace"
-  | "worktree";
+  | "worktree"
+  | "file";
 
 export interface RendererPluginActionMetadata {
   categoryKey?: RendererPluginActionCategoryKey;
@@ -175,6 +190,17 @@ export interface RendererPluginContext {
       title: string;
     }): Promise<boolean>;
   };
+  files: {
+    list(
+      requestOrRoot: FileListRequest | string,
+      options?: { path?: string }
+    ): Promise<FileListResult>;
+    move(request: FileMoveRequest): Promise<FileMoveResult>;
+    readText(request: FileReadTextRequest): Promise<string>;
+    rename(request: FileRenameRequest): Promise<FileRenameResult>;
+    trash(request: FileTrashRequest): Promise<FileTrashResult>;
+    writeText(request: FileWriteTextRequest): Promise<FileWriteTextResult>;
+  };
   /**
    * Git 主体能力(对应 main 进程 GitService;插件按 manifest 声明的 capability 调用)。
    * 这里仅做 preload facade 的窄透传,git 业务交互仍由插件自己实现。
@@ -183,6 +209,21 @@ export interface RendererPluginContext {
     abortMerge(cwd: string): Promise<GitMergeAbortResult>;
     abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
     continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
+    discardChanges(cwd: string, paths: string[]): Promise<boolean>;
+    getDiffPatch(
+      cwd: string,
+      options?: {
+        from?: string;
+        path?: string;
+        paths?: string[];
+        staged?: boolean;
+        to?: string;
+      }
+    ): Promise<GitDiffPatch>;
+    getFileContent(
+      cwd: string,
+      options: { path: string; ref?: string }
+    ): Promise<string>;
     getStatus(cwd: string): Promise<GitStatus>;
     getRepoInfo(cwd: string): Promise<GitRepoInfo>;
     listBranches(
@@ -201,11 +242,13 @@ export interface RendererPluginContext {
     merge(cwd: string, branch: string): Promise<GitMergeResult>;
     popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
     rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
+    stage(cwd: string, paths: string[]): Promise<boolean>;
     stash(
       cwd: string,
       options?: { includeUntracked?: boolean; message?: string }
     ): Promise<GitStashResult>;
     undoLastCommit(cwd: string): Promise<GitUndoCommitResult>;
+    unstage(cwd: string, paths: string[]): Promise<boolean>;
     watch(
       gitRoot: string,
       listener: (event: GitChangeEvent) => void
