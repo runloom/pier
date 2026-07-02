@@ -103,6 +103,22 @@ export function collectEffectivePermissions(
   );
 }
 
+export function findPluginIdDotPrefixConflict(
+  acceptedIds: readonly string[],
+  candidateId: string
+): string | null {
+  for (const id of acceptedIds) {
+    if (
+      id === candidateId ||
+      id.startsWith(`${candidateId}.`) ||
+      candidateId.startsWith(`${id}.`)
+    ) {
+      return id;
+    }
+  }
+  return null;
+}
+
 function isExecutableSource(source: PluginDiscoverySource): boolean {
   return source.kind === "builtin";
 }
@@ -265,6 +281,18 @@ export function createPluginService({
             source.kind === "builtin" ? (source.locales ?? {}) : {},
         });
         diagnostics.push(...withLocales.diagnostics);
+        const conflict = findPluginIdDotPrefixConflict(
+          manifests.map((item) => item.manifest.id),
+          withLocales.manifest.id
+        );
+        if (conflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `plugin id must not be a dot-separated prefix of another plugin id ("${conflict}"): ${withLocales.manifest.id}`,
+            source: diagnosticSource(source),
+          });
+          continue;
+        }
         manifests.push({ manifest: withLocales.manifest, source });
       } catch (err) {
         diagnostics.push(diagnosticFromError(source, err));
