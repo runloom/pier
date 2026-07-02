@@ -103,7 +103,7 @@ describe("usePluginSettingsStore", () => {
     expect(usePluginSettingsStore.getState().values).toEqual({});
   });
 
-  it("set IPC 失败时置 error 且不抛出、values 不变", async () => {
+  it("set IPC 失败时置 error 并 rethrow、values 不变", async () => {
     getAllMock.mockResolvedValue({ values: { "pier.a.x": 1 }, version: 1 });
     await initPluginSettingsStore();
     const valuesBefore = usePluginSettingsStore.getState().values;
@@ -111,12 +111,12 @@ describe("usePluginSettingsStore", () => {
 
     await expect(
       usePluginSettingsStore.getState().set("pier.a.x", 2)
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("ipc boom");
     expect(usePluginSettingsStore.getState().error).toBe("ipc boom");
     expect(usePluginSettingsStore.getState().values).toBe(valuesBefore);
   });
 
-  it("reset IPC 失败时置 error 且不抛出、values 不变", async () => {
+  it("reset IPC 失败时置 error 并 rethrow、values 不变", async () => {
     getAllMock.mockResolvedValue({ values: { "pier.a.x": 1 }, version: 1 });
     await initPluginSettingsStore();
     const valuesBefore = usePluginSettingsStore.getState().values;
@@ -124,7 +124,7 @@ describe("usePluginSettingsStore", () => {
 
     await expect(
       usePluginSettingsStore.getState().reset("pier.a.x")
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("ipc boom");
     expect(usePluginSettingsStore.getState().error).toBe("ipc boom");
     expect(usePluginSettingsStore.getState().values).toBe(valuesBefore);
   });
@@ -133,7 +133,9 @@ describe("usePluginSettingsStore", () => {
     getAllMock.mockResolvedValue({ values: {}, version: 1 });
     await initPluginSettingsStore();
     setMock.mockRejectedValueOnce(new Error("ipc boom"));
-    await usePluginSettingsStore.getState().set("pier.a.x", false);
+    await expect(
+      usePluginSettingsStore.getState().set("pier.a.x", false)
+    ).rejects.toThrow("ipc boom");
     expect(usePluginSettingsStore.getState().error).toBe("ipc boom");
 
     setMock.mockResolvedValue({ values: { "pier.a.x": false }, version: 1 });

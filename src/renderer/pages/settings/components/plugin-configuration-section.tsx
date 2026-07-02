@@ -42,10 +42,11 @@ async function writeSetting(
   value: JsonValue,
   failedText: string
 ): Promise<void> {
-  await usePluginSettingsStore.getState().set(key, value);
-  const { error } = usePluginSettingsStore.getState();
-  if (error) {
-    toast.error(failedText, { description: error });
+  try {
+    await usePluginSettingsStore.getState().set(key, value);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    toast.error(failedText, { description: message });
   }
 }
 
@@ -238,11 +239,9 @@ function PluginSettingRow({
         usePluginSettingsStore
           .getState()
           .reset(settingKey)
-          .then(() => {
-            const { error } = usePluginSettingsStore.getState();
-            if (error) {
-              toast.error(failedText, { description: error });
-            }
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            toast.error(failedText, { description: message });
           });
       }}
       resetLabel={t("settings.pluginConfiguration.resetToDefault")}

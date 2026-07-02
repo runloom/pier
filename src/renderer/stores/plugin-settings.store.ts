@@ -65,7 +65,10 @@ export const usePluginSettingsStore = create<PluginSettingsStoreState>(
         get().applySnapshot(snapshot);
         set({ error: null });
       } catch (err) {
+        // 与 main 侧 context.configuration.reset 同形：记录 error 供 UI 订阅后 rethrow，
+        // 让插件 API 的 await 能感知失败（不能悄悄 resolve）。
         set({ error: errorMessage(err) });
+        throw err;
       }
     },
     set: async (key, value) => {
@@ -75,7 +78,10 @@ export const usePluginSettingsStore = create<PluginSettingsStoreState>(
         get().applySnapshot(snapshot);
         set({ error: null });
       } catch (err) {
+        // 与 main 侧 context.configuration.set 同形：记录 error 供 UI 订阅后 rethrow，
+        // 让插件 API 的 await 能感知失败（不能悄悄 resolve）。
         set({ error: errorMessage(err) });
+        throw err;
       }
     },
     values: {},

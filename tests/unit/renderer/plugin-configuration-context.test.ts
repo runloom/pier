@@ -95,6 +95,22 @@ describe("RendererPluginContext.configuration", () => {
     );
   });
 
+  it("set/reset IPC 失败时插件侧 await 感知 reject（与 main context 同形）", async () => {
+    setMock.mockReset().mockRejectedValue(new Error("ipc boom"));
+    resetMock.mockReset().mockRejectedValue(new Error("reset boom"));
+    const context = createRendererPluginContext(gitEntry());
+
+    await expect(
+      context.configuration.set("pier.git.statusItem.showDirtyIndicator", false)
+    ).rejects.toThrow("ipc boom");
+    expect(usePluginSettingsStore.getState().error).toBe("ipc boom");
+
+    await expect(
+      context.configuration.reset("pier.git.statusItem.showDirtyIndicator")
+    ).rejects.toThrow("reset boom");
+    expect(usePluginSettingsStore.getState().error).toBe("reset boom");
+  });
+
   it("onDidChange 经 subscribePluginSettingsChanges 派发 affectsConfiguration", () => {
     const context = createRendererPluginContext(gitEntry());
     const hits: boolean[] = [];
