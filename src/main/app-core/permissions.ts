@@ -6,93 +6,213 @@ import type {
 
 export type AuthorizationResult = { ok: true } | { ok: false; reason: string };
 
-const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
-  PierCommand["type"],
-  readonly PierCapability[]
-> = {
-  "app.status": ["app:read"],
-  "commandPaletteMru.clear": ["app:read"],
-  "commandPaletteMru.read": ["app:read"],
-  "commandPaletteMru.record": ["app:read"],
-  "panel.focus": ["panel:control"],
-  "panel.list": ["panel:read"],
-  "panel.open": ["workspace:open"],
-  "plugin.inspect": ["plugin:read"],
-  "plugin.disable": ["plugin:write"],
-  "plugin.enable": ["plugin:write"],
-  "plugin.list": ["plugin:read"],
-  "pluginSettings.getAll": ["plugin:read"],
-  "pluginSettings.reset": ["plugin:write"],
-  "pluginSettings.set": ["plugin:write"],
-  "preferences.read": ["preferences:read"],
-  "preferences.update": ["preferences:write"],
-  "run.list": ["workspace:read"],
-  "run.cancel": ["workspace:open"],
-  "run.recent": ["workspace:read"],
-  "run.spawn": ["workspace:open"],
-  "run.status": ["workspace:read"],
-  "terminal.open": ["workspace:open"],
-  "terminal.profile.delete": ["terminal:control"],
-  "terminal.profile.list": ["terminal:read"],
-  "terminal.profile.read": ["terminal:read"],
-  "terminal.profile.upsert": ["terminal:control"],
-  "terminalStatusBar.prefs.applyOverrides": ["preferences:write"],
-  "terminalStatusBar.prefs.getAll": ["preferences:read"],
-  "terminalStatusBar.prefs.resetItem": ["preferences:write"],
-  "terminalStatusBar.prefs.setItemOverride": ["preferences:write"],
-  "window.close": ["window:close"],
-  "window.create": ["window:create"],
-  "window.focus": ["window:focus"],
-  "window.list": ["window:read"],
-  "worktree.check": ["worktree:read"],
-  "worktree.create": ["worktree:write"],
-  "worktree.creationDefaults": ["worktree:read"],
-  "worktree.list": ["worktree:read"],
-  "worktree.open": ["worktree:read", "workspace:open"],
-  "worktree.openTerminal": ["worktree:write"],
-  "worktree.prune": ["worktree:write"],
-  "worktree.remove": ["worktree:write"],
-  "workspace.layout.clear": ["workspace:write"],
-  "workspace.layout.read": ["workspace:read"],
-  "workspace.layout.save": ["workspace:write"],
-  "file.list": ["file:read"],
-  "file.readText": ["file:read"],
-  "file.writeText": ["file:write"],
-  "file.rename": ["file:write"],
-  "file.move": ["file:write"],
-  "file.trash": ["file:write"],
+/**
+ * 每条命令一行元数据:
+ *   capabilities   —— 授权层要求的能力集 (authorizeCommand 校验)
+ *   rendererFacade —— 是否允许通过通用 PIER.COMMAND_EXECUTE IPC 通道被
+ *                     渲染进程直接调用 (src/main/ipc/command.ts 校验)
+ *
+ * 单一真源:加命令时 TypeScript 的 Record 全 key 类型强制两个字段必须一起填,
+ * 避免 permissions 与 IPC 白名单漂移 (2026-07-03 事故:Plug-Task 2 加
+ * worktree.creationDefaults/openTerminal 时白名单遗漏,面板打开即报
+ * "unsupported renderer command")。
+ *
+ * rendererFacade=false 的命令并非 renderer 不可调用,而是有专用 IPC 通道
+ * (如 preferences.read → "pier:preferences:read"),不通过通用通道。
+ */
+export interface CommandMetadata {
+  readonly capabilities: readonly PierCapability[];
+  readonly rendererFacade: boolean;
+}
+
+const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
+  "app.status": { capabilities: ["app:read"], rendererFacade: false },
+  "commandPaletteMru.clear": {
+    capabilities: ["app:read"],
+    rendererFacade: false,
+  },
+  "commandPaletteMru.read": {
+    capabilities: ["app:read"],
+    rendererFacade: false,
+  },
+  "commandPaletteMru.record": {
+    capabilities: ["app:read"],
+    rendererFacade: false,
+  },
+  "panel.focus": { capabilities: ["panel:control"], rendererFacade: false },
+  "panel.list": { capabilities: ["panel:read"], rendererFacade: false },
+  "panel.open": { capabilities: ["workspace:open"], rendererFacade: false },
+  "plugin.disable": { capabilities: ["plugin:write"], rendererFacade: true },
+  "plugin.enable": { capabilities: ["plugin:write"], rendererFacade: true },
+  "plugin.inspect": { capabilities: ["plugin:read"], rendererFacade: true },
+  "plugin.list": { capabilities: ["plugin:read"], rendererFacade: true },
+  "pluginSettings.getAll": {
+    capabilities: ["plugin:read"],
+    rendererFacade: true,
+  },
+  "pluginSettings.reset": {
+    capabilities: ["plugin:write"],
+    rendererFacade: true,
+  },
+  "pluginSettings.set": {
+    capabilities: ["plugin:write"],
+    rendererFacade: true,
+  },
+  "preferences.read": {
+    capabilities: ["preferences:read"],
+    rendererFacade: false,
+  },
+  "preferences.update": {
+    capabilities: ["preferences:write"],
+    rendererFacade: false,
+  },
+  "run.cancel": { capabilities: ["workspace:open"], rendererFacade: true },
+  "run.list": { capabilities: ["workspace:read"], rendererFacade: true },
+  "run.recent": { capabilities: ["workspace:read"], rendererFacade: false },
+  "run.spawn": { capabilities: ["workspace:open"], rendererFacade: true },
+  "run.status": { capabilities: ["workspace:read"], rendererFacade: true },
+  // terminal.open 静态元数据只记基础 capabilities;launch 存在时的额外
+  // 能力由 requiredCapabilitiesForCommand 动态叠加。
+  "terminal.open": {
+    capabilities: ["workspace:open"],
+    rendererFacade: false,
+  },
+  "terminal.profile.delete": {
+    capabilities: ["terminal:control"],
+    rendererFacade: false,
+  },
+  "terminal.profile.list": {
+    capabilities: ["terminal:read"],
+    rendererFacade: false,
+  },
+  "terminal.profile.read": {
+    capabilities: ["terminal:read"],
+    rendererFacade: false,
+  },
+  "terminal.profile.upsert": {
+    capabilities: ["terminal:control"],
+    rendererFacade: false,
+  },
+  "terminalStatusBar.prefs.applyOverrides": {
+    capabilities: ["preferences:write"],
+    rendererFacade: false,
+  },
+  "terminalStatusBar.prefs.getAll": {
+    capabilities: ["preferences:read"],
+    rendererFacade: true,
+  },
+  "terminalStatusBar.prefs.resetItem": {
+    capabilities: ["preferences:write"],
+    rendererFacade: true,
+  },
+  "terminalStatusBar.prefs.setItemOverride": {
+    capabilities: ["preferences:write"],
+    rendererFacade: true,
+  },
+  "window.close": { capabilities: ["window:close"], rendererFacade: false },
+  "window.create": { capabilities: ["window:create"], rendererFacade: false },
+  "window.focus": { capabilities: ["window:focus"], rendererFacade: false },
+  "window.list": { capabilities: ["window:read"], rendererFacade: false },
+  "worktree.check": { capabilities: ["worktree:read"], rendererFacade: true },
+  "worktree.create": {
+    capabilities: ["worktree:write"],
+    rendererFacade: true,
+  },
+  "worktree.creationDefaults": {
+    capabilities: ["worktree:read"],
+    rendererFacade: true,
+  },
+  "worktree.list": { capabilities: ["worktree:read"], rendererFacade: true },
+  "worktree.open": {
+    capabilities: ["worktree:read", "workspace:open"],
+    rendererFacade: true,
+  },
+  "worktree.openTerminal": {
+    capabilities: ["worktree:write"],
+    rendererFacade: true,
+  },
+  "worktree.prune": {
+    capabilities: ["worktree:write"],
+    rendererFacade: true,
+  },
+  "worktree.remove": {
+    capabilities: ["worktree:write"],
+    rendererFacade: true,
+  },
+  "workspace.layout.clear": {
+    capabilities: ["workspace:write"],
+    rendererFacade: false,
+  },
+  "workspace.layout.read": {
+    capabilities: ["workspace:read"],
+    rendererFacade: false,
+  },
+  "workspace.layout.save": {
+    capabilities: ["workspace:write"],
+    rendererFacade: false,
+  },
+  "file.list": { capabilities: ["file:read"], rendererFacade: true },
+  "file.move": { capabilities: ["file:write"], rendererFacade: true },
+  "file.readText": { capabilities: ["file:read"], rendererFacade: true },
+  "file.rename": { capabilities: ["file:write"], rendererFacade: true },
+  "file.trash": { capabilities: ["file:write"], rendererFacade: true },
+  "file.writeText": { capabilities: ["file:write"], rendererFacade: true },
   // Git 读写分开授权:读命令 git:read, 写命令 git:write。
-  "git.getCommit": ["git:read"],
-  "git.getCommitPatch": ["git:read"],
-  "git.getDiffPatch": ["git:read"],
-  "git.getDiffSummary": ["git:read"],
-  "git.getDiffText": ["git:read"],
-  "git.getFileContent": ["git:read"],
-  "git.getLog": ["git:read"],
-  "git.getRepoInfo": ["git:read"],
-  "git.getStatus": ["git:read"],
-  "git.isWorkingTreeClean": ["git:read"],
-  "git.listBranches": ["git:read"],
-  "git.searchBranches": ["git:read"],
-  "git.listTags": ["git:read"],
-  "git.resolveRef": ["git:read"],
-  "git.validateBranchName": ["git:read"],
-  "git.stage": ["git:write"],
-  "git.unstage": ["git:write"],
-  "git.discardChanges": ["git:write"],
-  "git.commit": ["git:write"],
-  "git.createBranch": ["git:write"],
-  "git.deleteBranch": ["git:write"],
-  "git.checkoutBranch": ["git:write"],
-  "git.merge": ["git:write"],
-  "git.mergeAbort": ["git:write"],
-  "git.stash": ["git:write"],
-  "git.stashPop": ["git:write"],
-  "git.stashList": ["git:read"],
-  "git.rebase": ["git:write"],
-  "git.rebaseAbort": ["git:write"],
-  "git.rebaseContinue": ["git:write"],
-  "git.undoLastCommit": ["git:write"],
+  "git.checkoutBranch": {
+    capabilities: ["git:write"],
+    rendererFacade: true,
+  },
+  "git.commit": { capabilities: ["git:write"], rendererFacade: true },
+  "git.createBranch": { capabilities: ["git:write"], rendererFacade: true },
+  "git.deleteBranch": { capabilities: ["git:write"], rendererFacade: true },
+  "git.discardChanges": {
+    capabilities: ["git:write"],
+    rendererFacade: true,
+  },
+  "git.getCommit": { capabilities: ["git:read"], rendererFacade: true },
+  "git.getCommitPatch": { capabilities: ["git:read"], rendererFacade: true },
+  "git.getDiffPatch": { capabilities: ["git:read"], rendererFacade: true },
+  "git.getDiffSummary": {
+    capabilities: ["git:read"],
+    rendererFacade: true,
+  },
+  "git.getDiffText": { capabilities: ["git:read"], rendererFacade: true },
+  "git.getFileContent": {
+    capabilities: ["git:read"],
+    rendererFacade: true,
+  },
+  "git.getLog": { capabilities: ["git:read"], rendererFacade: true },
+  "git.getRepoInfo": { capabilities: ["git:read"], rendererFacade: true },
+  "git.getStatus": { capabilities: ["git:read"], rendererFacade: true },
+  "git.isWorkingTreeClean": {
+    capabilities: ["git:read"],
+    rendererFacade: true,
+  },
+  "git.listBranches": { capabilities: ["git:read"], rendererFacade: true },
+  "git.listTags": { capabilities: ["git:read"], rendererFacade: true },
+  "git.merge": { capabilities: ["git:write"], rendererFacade: true },
+  "git.mergeAbort": { capabilities: ["git:write"], rendererFacade: true },
+  "git.rebase": { capabilities: ["git:write"], rendererFacade: true },
+  "git.rebaseAbort": { capabilities: ["git:write"], rendererFacade: true },
+  "git.rebaseContinue": {
+    capabilities: ["git:write"],
+    rendererFacade: true,
+  },
+  "git.resolveRef": { capabilities: ["git:read"], rendererFacade: true },
+  "git.searchBranches": { capabilities: ["git:read"], rendererFacade: true },
+  "git.stage": { capabilities: ["git:write"], rendererFacade: true },
+  "git.stash": { capabilities: ["git:write"], rendererFacade: true },
+  "git.stashList": { capabilities: ["git:read"], rendererFacade: true },
+  "git.stashPop": { capabilities: ["git:write"], rendererFacade: true },
+  "git.undoLastCommit": {
+    capabilities: ["git:write"],
+    rendererFacade: true,
+  },
+  "git.unstage": { capabilities: ["git:write"], rendererFacade: true },
+  "git.validateBranchName": {
+    capabilities: ["git:read"],
+    rendererFacade: true,
+  },
 };
 
 function terminalOpenCapabilities(
@@ -110,7 +230,7 @@ function requiredCapabilitiesForCommand(
   if (command.type === "terminal.open") {
     return terminalOpenCapabilities(command);
   }
-  return REQUIRED_CAPABILITIES_BY_COMMAND[command.type];
+  return COMMAND_METADATA[command.type].capabilities;
 }
 
 export function authorizeCommand(
@@ -128,4 +248,10 @@ export function authorizeCommand(
     ok: false,
     reason: `missing capability: ${missing}`,
   };
+}
+
+export function commandAllowsRendererFacade(
+  type: PierCommand["type"]
+): boolean {
+  return COMMAND_METADATA[type].rendererFacade;
 }
