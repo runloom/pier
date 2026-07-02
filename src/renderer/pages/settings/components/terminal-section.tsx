@@ -9,6 +9,7 @@ import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
+import { TerminalStatusBarBlock } from "@/pages/settings/components/terminal-status-bar-block.tsx";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
 const SCROLLBACK_MIN = 10;
@@ -157,6 +158,7 @@ export function TerminalSection() {
           </FieldSet>
         </CardContent>
       </Card>
+      <TerminalStatusBarBlock />
     </div>
   );
 }
