@@ -60,6 +60,8 @@ export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
 export const DEFAULT_WINDOW_ZOOM_LEVEL = 0;
 export const MIN_WINDOW_ZOOM_LEVEL = -3;
 export const MAX_WINDOW_ZOOM_LEVEL = 5;
+export const DEFAULT_GIT_AUTO_FETCH_ENABLED = true;
+export const DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES = 5;
 
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
@@ -103,6 +105,13 @@ export const projectPreferencesSchema = z.object({
   agentCommandOverrides: z
     .partialRecord(agentKindSchema, z.string())
     .default({}),
+  gitAutoFetchEnabled: z.boolean().default(DEFAULT_GIT_AUTO_FETCH_ENABLED),
+  gitAutoFetchIntervalMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(120)
+    .default(DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;
