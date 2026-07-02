@@ -142,6 +142,10 @@ function taskSourceLabel(source: TaskSource): string {
   switch (source) {
     case "cargo":
       return i18next.t("commandPalette.run.taskTab.source.cargo");
+    case "composer":
+      return i18next.t("commandPalette.run.taskTab.source.composer");
+    case "deno":
+      return i18next.t("commandPalette.run.taskTab.source.deno");
     case "history":
       return i18next.t("commandPalette.run.taskTab.source.history");
     case "just":

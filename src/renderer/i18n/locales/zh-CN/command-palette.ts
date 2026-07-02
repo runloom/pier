@@ -187,7 +187,7 @@ export const commandPalette = {
     loadingTasksDetail: "正在扫描当前项目支持的任务源",
     noTasks: "未发现可运行任务",
     noTasksDetail:
-      "支持 package.json、VS Code、Zed、Cargo、Make、mise、Justfile、Taskfile 和 pyproject",
+      "支持 package.json、deno.json、composer.json、VS Code、Zed、Cargo、Make、mise、Justfile、Taskfile 和 pyproject",
     section: {
       group: "第 {{group}} 组",
       taskErrors: "任务来源错误",
@@ -196,6 +196,8 @@ export const commandPalette = {
       hidden: "隐藏",
       source: {
         cargo: "Cargo",
+        composer: "Composer",
+        deno: "Deno",
         history: "最近运行",
         just: "Justfile",
         make: "Makefile",
