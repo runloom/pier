@@ -2,10 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   closeWorktreeCreatePanel,
   openWorktreeCreatePanel,
+  setWorktreeCreateBase,
   submitWorktreeCreate,
   updateWorktreeCreateInput,
   useWorktreeCreateStore,
 } from "@/stores/worktree-create.store.ts";
+
+const toastMocks = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+
+vi.mock("sonner", () => ({ toast: toastMocks }));
 
 const listMock = vi.fn();
 const createMock = vi.fn();
@@ -127,5 +132,57 @@ describe("worktree-create.store", () => {
     const session = useWorktreeCreateStore.getState().session;
     expect(session?.error).toContain("invalid worktree branch");
     expect(session?.phase).toBe("idle");
+  });
+
+  it("setupCommand 为空时 terminal.open 不带 command 字段", async () => {
+    preferencesReadMock.mockResolvedValue({
+      worktreeBranchPrefix: "wt/",
+      worktreeCopyPatterns: [".env*"],
+      worktreeSetupCommand: "  ",
+    });
+    await openWorktreeCreatePanel({ path: "/repo" });
+    updateWorktreeCreateInput("fix focus");
+    await submitWorktreeCreate({ start: true });
+    expect(terminalOpenMock).toHaveBeenCalledWith({
+      focus: true,
+      launch: { cwd: "/repo/.worktrees/fix-focus" },
+    });
+  });
+
+  it("设置 base 分支后 create 携带 base", async () => {
+    await openWorktreeCreatePanel({ path: "/repo" });
+    updateWorktreeCreateInput("fix focus");
+    setWorktreeCreateBase("main");
+    await submitWorktreeCreate({ start: false });
+    expect(createMock).toHaveBeenCalledWith({
+      base: "main",
+      branch: "wt/fix-focus",
+      name: "fix-focus",
+      path: "/repo",
+    });
+  });
+
+  it("terminal.open 失败时报错但不抛出,worktree 创建结果不回滚", async () => {
+    terminalOpenMock.mockRejectedValueOnce(new Error("spawn failed"));
+    await openWorktreeCreatePanel({ path: "/repo" });
+    updateWorktreeCreateInput("fix focus");
+    await expect(
+      submitWorktreeCreate({ start: true })
+    ).resolves.toBeUndefined();
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      expect.stringContaining("spawn failed")
+    );
+    expect(useWorktreeCreateStore.getState().session).toBeNull();
+  });
+
+  it("worktrees.list 意外拒绝时报错且不创建会话", async () => {
+    listMock.mockRejectedValueOnce(new Error("ipc down"));
+    await expect(
+      openWorktreeCreatePanel({ path: "/repo" })
+    ).resolves.toBeUndefined();
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      expect.stringContaining("ipc down")
+    );
+    expect(useWorktreeCreateStore.getState().session).toBeNull();
   });
 });

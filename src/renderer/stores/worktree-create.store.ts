@@ -69,37 +69,45 @@ let activeBranchPrefix = "wt/";
 export async function openWorktreeCreatePanel(target: {
   path: string;
 }): Promise<void> {
-  const listResult = await window.pier.worktrees.list({ path: target.path });
-  if (listResult.status !== "available") {
-    toast.error(listResult.reason);
-    return;
+  try {
+    const listResult = await window.pier.worktrees.list({
+      path: target.path,
+    });
+    if (listResult.status !== "available") {
+      toast.error(listResult.reason);
+      return;
+    }
+    const [branches, preferences] = await Promise.all([
+      window.pier.git.listBranches(listResult.mainPath, { kind: "all" }),
+      window.pier.preferences.read(),
+    ]);
+    activeBranchPrefix = preferences.worktreeBranchPrefix;
+    const existingBranches = branches.map((ref) => ref.name);
+    const existingNames = listResult.worktrees.map((item) =>
+      basename(item.path)
+    );
+    const base = {
+      existingBranches,
+      existingNames,
+      input: "",
+    };
+    useWorktreeCreateStore.setState({
+      session: {
+        ...base,
+        ...deriveFor(base, activeBranchPrefix),
+        baseBranch: null,
+        branchEdited: false,
+        branches,
+        copyPatternCount: preferences.worktreeCopyPatterns.length,
+        error: null,
+        mainPath: listResult.mainPath,
+        phase: "idle",
+        setupCommand: preferences.worktreeSetupCommand,
+      },
+    });
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err));
   }
-  const [branches, preferences] = await Promise.all([
-    window.pier.git.listBranches(listResult.mainPath, { kind: "all" }),
-    window.pier.preferences.read(),
-  ]);
-  activeBranchPrefix = preferences.worktreeBranchPrefix;
-  const existingBranches = branches.map((ref) => ref.name);
-  const existingNames = listResult.worktrees.map((item) => basename(item.path));
-  const base = {
-    existingBranches,
-    existingNames,
-    input: "",
-  };
-  useWorktreeCreateStore.setState({
-    session: {
-      ...base,
-      ...deriveFor(base, activeBranchPrefix),
-      baseBranch: null,
-      branchEdited: false,
-      branches,
-      copyPatternCount: preferences.worktreeCopyPatterns.length,
-      error: null,
-      mainPath: listResult.mainPath,
-      phase: "idle",
-      setupCommand: preferences.worktreeSetupCommand,
-    },
-  });
 }
 
 export function updateWorktreeCreateInput(input: string): void {
@@ -142,14 +150,20 @@ export async function submitWorktreeCreate(options: {
     closeWorktreeCreatePanel();
     toast.success(`${session.branch} · ${result.targetPath}`);
     if (options.start) {
-      const setup = session.setupCommand.trim();
-      await window.pier.terminal.open({
-        focus: true,
-        launch: {
-          ...(setup ? { command: setup } : {}),
-          cwd: result.targetPath,
-        },
-      });
+      try {
+        const setup = session.setupCommand.trim();
+        await window.pier.terminal.open({
+          focus: true,
+          launch: {
+            ...(setup ? { command: setup } : {}),
+            cwd: result.targetPath,
+          },
+        });
+      } catch (err) {
+        toast.error(
+          `终端启动失败: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
   } catch (err) {
     patchSession({
