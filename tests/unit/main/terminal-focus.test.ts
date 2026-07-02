@@ -90,7 +90,13 @@ describe("terminal focus restoration", () => {
         },
         updatedAt: "2026-06-24T00:00:00.000Z",
       })),
+      flushTerminalSessionState: vi.fn(async () => undefined),
+      patchTerminalPanelTab: vi.fn(async () => undefined),
+      patchTerminalPanelTaskStatus: vi.fn(async () => undefined),
+      removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelContext: vi.fn(async () => undefined),
+      updateTerminalPanelTab: vi.fn(async () => undefined),
+      updateTerminalPanelTask: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/state/panel-context-state.ts", () => ({
@@ -354,7 +360,9 @@ describe("terminal focus restoration", () => {
     );
   });
 
-  it("does not replay one-shot launch command/env when a saved terminal session exists", async () => {
+  // #41 (task rerun): launchId 仍在 registry = 用户显式发起的新 launch,
+  // 即使同 panel 已有保存会话也要重放 command/env (rerun 复用同一 panel)。
+  it("replays launch command/env when the launchId still resolves (task rerun)", async () => {
     const { consumeLaunch, fakeAddon, invokeHandlers, ipcWindow } =
       await setupTerminalFocusHarness({
         launch: {
@@ -364,6 +372,38 @@ describe("terminal focus restoration", () => {
           profileId: "codex",
         },
       });
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        launchId: "launch-rerun",
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      Buffer.from("window"),
+      "7::terminal-1",
+      { x: 1, y: 2, width: 300, height: 200 },
+      "Menlo",
+      13,
+      {
+        command: "pnpm test",
+        cwd: "/Users/xyz/ABC/pier",
+        env: { SECRET: "token" },
+      }
+    );
+    expect(consumeLaunch).toHaveBeenCalledWith("launch-rerun");
+  });
+
+  // 一次性 launch 已被 consume (或 app 重启后 in-memory registry 清空) 时,
+  // 携带陈旧 launchId 的重建绝不能重放 command/env — 只还原 cwd。
+  it("does not replay a consumed one-shot launch on session restore", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow } =
+      await setupTerminalFocusHarness();
 
     const result = await invokeHandlers.get("pier:terminal:create")?.(
       { sender: ipcWindow.webContents },
@@ -384,7 +424,6 @@ describe("terminal focus restoration", () => {
       13,
       { cwd: "/Users/xyz/ABC/pier" }
     );
-    expect(consumeLaunch).toHaveBeenCalledWith("launch-restore");
   });
 
   it("does not make the host window transparent during terminal setup", async () => {
