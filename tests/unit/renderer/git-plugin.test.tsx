@@ -37,6 +37,7 @@ import {
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { useWorktreeCreateStore } from "@/stores/worktree-create.store.ts";
 
 const toastMocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -589,6 +590,13 @@ describe("git builtin plugin", () => {
         terminal: {
           applyInputRouting: vi.fn(),
         },
+        preferences: {
+          read: vi.fn(async () => ({
+            worktreeBranchPrefix: "wt/",
+            worktreeCopyPatterns: [],
+            worktreeSetupCommand: "",
+          })),
+        },
       },
     });
   });
@@ -604,6 +612,7 @@ describe("git builtin plugin", () => {
     clearPluginPanelsForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useWorkspaceStore.setState({ api: null });
+    useWorktreeCreateStore.setState({ session: null });
     resetTerminalInputRoutingForTests();
     useKeybindingScope.setState({
       activePanelComponent: null,
@@ -853,17 +862,15 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("Worktree 创建命令通过插件调用 worktree.create", async () => {
-    vi.spyOn(window, "prompt")
-      .mockReturnValueOnce("new-worktree")
-      .mockReturnValueOnce("feature/new-worktree");
+  it("Worktree 创建命令打开创建面板", async () => {
     dispose = activateWorktreePlugin();
 
     await actionRegistry.get("pier.worktree.create")?.handler();
+    await vi.waitFor(() => {
+      expect(useWorktreeCreateStore.getState().session).not.toBeNull();
+    });
 
-    expect(window.pier.worktrees.create).toHaveBeenCalledWith({
-      branch: "feature/new-worktree",
-      name: "new-worktree",
+    expect(window.pier.worktrees.list).toHaveBeenCalledWith({
       path: "/Users/xyz/ABC/pier",
     });
   });

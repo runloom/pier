@@ -252,6 +252,7 @@ export interface RendererPluginContext {
     create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
     list(request: WorktreeListRequest): Promise<WorktreeListResult>;
     open(request: WorktreeOpenRequest): Promise<unknown>;
+    openCreatePanel(request: WorktreeOpenRequest): void;
     prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
     remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
   };

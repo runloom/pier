@@ -9,13 +9,15 @@ import {
 } from "@pier/ui/dropdown-menu.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
-import { Play, Plus, Terminal } from "lucide-react";
+import { GitBranchPlus, Play, Plus, Terminal } from "lucide-react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { openRunTaskQuickPick } from "@/lib/actions/run-actions.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { openWorktreeCreatePanel } from "@/stores/worktree-create.store.ts";
 
 /**
  * Tab 栏 add 按钮 — dockview leftHeaderActionsComponent 模式.
@@ -79,6 +81,25 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
           >
             <Play className="size-4" />
             <span>{t("workspace.addPanelMenu.newTask")}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              const state = usePanelDescriptorStore.getState();
+              const context = state.activeId
+                ? state.descriptors[state.activeId]?.context
+                : undefined;
+              const path =
+                context?.worktreeRoot ??
+                context?.gitRoot ??
+                context?.projectRoot ??
+                context?.cwd;
+              if (path) {
+                openWorktreeCreatePanel({ path }).catch(() => undefined);
+              }
+            }}
+          >
+            <GitBranchPlus className="size-4" />
+            <span>{t("workspace.addPanelMenu.newWorktree")}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>

@@ -18,6 +18,7 @@ import {
   usePanelDescriptorStore,
 } from "../../stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
+import { openWorktreeCreatePanel } from "../../stores/worktree-create.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
 import { useCommandPaletteController } from "../command-palette/controller.ts";
@@ -369,6 +370,9 @@ export function createRendererPluginContext(
       create: (request) => window.pier.worktrees.create(request),
       list: (request) => window.pier.worktrees.list(request),
       open: (request) => window.pier.worktrees.open(request),
+      openCreatePanel: (request) => {
+        openWorktreeCreatePanel({ path: request.path }).catch(() => undefined);
+      },
       prune: (request) => window.pier.worktrees.prune(request),
       remove: (request) => window.pier.worktrees.remove(request),
     },

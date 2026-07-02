@@ -21,7 +21,9 @@ import { useCommandPaletteController } from "@/lib/command-palette/controller.ts
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { useWorktreeCreateStore } from "@/stores/worktree-create.store.ts";
 
 let applyInputRouting: ReturnType<typeof vi.fn>;
 let detectAgents: ReturnType<typeof vi.fn>;
@@ -160,6 +162,25 @@ beforeEach(async () => {
         prepareLaunch: prepareAgentLaunch,
       },
       onWindowLayoutPulse: vi.fn(() => vi.fn()),
+      worktrees: {
+        list: vi.fn(async () => ({
+          currentPath: "/repo",
+          mainPath: "/repo",
+          path: "/repo",
+          status: "available",
+          worktrees: [],
+        })),
+      },
+      git: {
+        listBranches: vi.fn(async () => []),
+      },
+      preferences: {
+        read: vi.fn(async () => ({
+          worktreeBranchPrefix: "wt/",
+          worktreeCopyPatterns: [],
+          worktreeSetupCommand: "",
+        })),
+      },
     },
   });
 });
@@ -171,6 +192,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   setDockviewTabRevealRoot(null);
   useWorkspaceStore.getState().setApi(null);
+  usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+  useWorktreeCreateStore.setState({ session: null });
   useAgentDetectStore.setState({
     detectedIds: [],
     hasDetected: false,
@@ -694,6 +717,55 @@ describe("WorkspaceHeaderActions", () => {
         ],
       },
     });
+  });
+
+  it("opens the worktree create panel from the header add-panel menu", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+    usePanelDescriptorStore.setState({
+      activeId: "terminal-1",
+      descriptors: {
+        "terminal-1": {
+          context: {
+            contextId: "ctx-repo",
+            cwd: "/repo",
+            gitRoot: "/repo",
+            updatedAt: 0,
+          },
+          display: { short: "repo" },
+        },
+      },
+    });
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "New Worktree" })
+    );
+
+    await waitFor(() => {
+      expect(useWorktreeCreateStore.getState().session).not.toBeNull();
+    });
+    expect(window.pier.worktrees.list).toHaveBeenCalledWith({
+      path: "/repo",
+    });
+  });
+
+  it("does nothing when the add-panel menu has no active panel path", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+    usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "New Worktree" })
+    );
+
+    expect(window.pier.worktrees.list).not.toHaveBeenCalled();
+    expect(useWorktreeCreateStore.getState().session).toBeNull();
   });
 
   it("launches an agent terminal in the clicked header group", async () => {
