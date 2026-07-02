@@ -60,7 +60,7 @@ function IconNum({
 }
 
 /**
- * 状态级（detached）与操作级（进行中）用带底色边框的胶囊。
+ * 状态级（detached）与操作级（进行中）用扁平化文字胶囊（仅 text 色无底色边框）。
  * 信息级 / 需注意级走内联图标，见 UpstreamPill。
  */
 const PILL_BASE =
@@ -68,7 +68,7 @@ const PILL_BASE =
 const PILL_VARIANT = {
   progress: "text-status-info-fg",
   danger: "text-status-danger-fg",
-  neutral: "text-muted-foreground",
+  neutral: "text-foreground",
   success: "text-status-success-fg",
 } as const;
 
