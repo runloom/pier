@@ -24,6 +24,8 @@ const basePreferences: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  gitAutoFetchEnabled: true,
+  gitAutoFetchIntervalMinutes: 5,
 };
 
 describe("createPreferencesService", () => {

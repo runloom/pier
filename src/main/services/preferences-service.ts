@@ -45,6 +45,12 @@ function stripUndefinedPatch(
     ...(patch.disabledAgentIds !== undefined && {
       disabledAgentIds: patch.disabledAgentIds,
     }),
+    ...(patch.gitAutoFetchEnabled !== undefined && {
+      gitAutoFetchEnabled: patch.gitAutoFetchEnabled,
+    }),
+    ...(patch.gitAutoFetchIntervalMinutes !== undefined && {
+      gitAutoFetchIntervalMinutes: patch.gitAutoFetchIntervalMinutes,
+    }),
     ...(patch.language !== undefined && { language: patch.language }),
     ...(patch.monoFontFamily !== undefined && {
       monoFontFamily: patch.monoFontFamily,

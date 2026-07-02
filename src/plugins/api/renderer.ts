@@ -82,9 +82,11 @@ export interface RendererPluginQuickPickItem {
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
+  readonly icon?: LucideIcon;
   readonly id: string;
   readonly label: string;
   readonly searchTerms?: readonly string[];
+  readonly variant?: "default" | "destructive";
 }
 
 export interface RendererPluginQuickPickSection {

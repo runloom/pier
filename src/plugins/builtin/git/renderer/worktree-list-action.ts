@@ -8,7 +8,7 @@ import type {
   WorktreeItem,
   WorktreeListResult,
 } from "@shared/contracts/worktree.ts";
-import { GitFork } from "lucide-react";
+import { FolderGit2 } from "lucide-react";
 import { registerWorktreeOperationActions } from "./worktree-operation-actions.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
@@ -68,13 +68,8 @@ function activeWorktreeTarget(
   return { enabled: true, path };
 }
 
-function itemLabel(
-  context: RendererPluginContext,
-  worktree: WorktreeItem
-): string {
-  if (worktree.isMain) {
-    return pluginText(context, "main", "main");
-  }
+function itemLabel(worktree: WorktreeItem): string {
+  // 标题直接用分支名(和分支列表同语言);"主工作树" 语义交给 badge, 避免重复。
   return worktree.branch ?? basename(worktree.path);
 }
 
@@ -84,9 +79,6 @@ function itemDescription(
 ): string | undefined {
   if (worktree.locked) {
     return worktree.lockedReason ?? pluginText(context, "locked", "Locked");
-  }
-  if (worktree.isMain) {
-    return worktree.branch ?? undefined;
   }
   return;
 }
@@ -134,8 +126,9 @@ function buildWorktreeSections(
         ...(description ? { description } : {}),
         detail: worktree.path,
         disabled: false,
+        icon: FolderGit2,
         id: `worktree:${worktree.path}`,
-        label: itemLabel(context, worktree),
+        label: itemLabel(worktree),
         searchTerms: worktreeSearchTerms(worktree),
       };
     });
@@ -248,7 +241,7 @@ function registerWorktreeListAction(
     metadata: {
       categoryKey: "git",
       group: "1_worktree",
-      iconComponent: GitFork,
+      iconComponent: FolderGit2,
       sortOrder: 1,
     },
     surfaces: ["command-palette"],

@@ -6,7 +6,7 @@ import type {
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
-import { List, Play } from "lucide-react";
+import { List, Play, SquareTerminal } from "lucide-react";
 import { panelKindOf } from "@/components/workspace/panel-registry.ts";
 import type { WorkspacePanelSnapshot } from "@/components/workspace/workspace-panel-snapshots.ts";
 import { buildWorkspacePanelSnapshots } from "@/components/workspace/workspace-panel-snapshots.ts";
@@ -94,6 +94,7 @@ function buildTerminalPanelSections(openPanels: WorkspacePanelSnapshot[]): {
     const item: QuickPickItem = {
       badges: terminalTabBadge(panel),
       checked: panel.active === true,
+      icon: SquareTerminal,
       id: itemId,
       searchTerms: [
         panel.id,
@@ -141,6 +142,10 @@ function taskSourceLabel(source: TaskSource): string {
   switch (source) {
     case "cargo":
       return i18next.t("commandPalette.run.taskTab.source.cargo");
+    case "composer":
+      return i18next.t("commandPalette.run.taskTab.source.composer");
+    case "deno":
+      return i18next.t("commandPalette.run.taskTab.source.deno");
     case "history":
       return i18next.t("commandPalette.run.taskTab.source.history");
     case "just":
@@ -173,21 +178,18 @@ function commandDetail(task: TaskCandidate): string {
 
 function taskItem(task: TaskCandidate): QuickPickItem {
   const description = task.description ?? task.group;
+  // 列表已按来源分组, 行内不再重复来源 badge; 只保留「隐藏」这类附加语义。
   return {
-    badges: [
-      {
-        label: taskSourceLabel(task.source),
-        variant: task.unsupportedReason ? "outline" : "secondary",
-      },
-      ...(task.hidden
-        ? [
+    ...(task.hidden
+      ? {
+          badges: [
             {
               label: i18next.t("commandPalette.run.taskTab.hidden"),
               variant: "outline" as const,
             },
-          ]
-        : []),
-    ],
+          ],
+        }
+      : {}),
     detail: task.unsupportedReason ?? commandDetail(task),
     disabled: Boolean(task.unsupportedReason),
     id: task.id,

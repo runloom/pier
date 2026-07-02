@@ -79,7 +79,7 @@ export function TerminalStatusBar({
       data-testid="terminal-status-bar"
     >
       {visibleItems.map((item) => (
-        <div className="min-w-0 shrink-0" key={item.id}>
+        <div className="min-w-0" key={item.id}>
           {item.render(statusContext)}
         </div>
       ))}
