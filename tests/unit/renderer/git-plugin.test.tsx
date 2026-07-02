@@ -21,13 +21,13 @@ import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
-import { refreshBuiltinPlugins } from "@/lib/plugins/bootstrap.ts";
 import { BUILTIN_RENDERER_PLUGIN_MODULES } from "@/lib/plugins/builtin-catalog.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
 import {
   clearPluginPanelsForTests,
   getPluginPanelRegistrations,
 } from "@/lib/plugins/plugin-panel-registry.ts";
+import { rendererPluginRuntime } from "@/lib/plugins/runtime.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
@@ -600,6 +600,7 @@ describe("git builtin plugin", () => {
     cleanup();
     dispose?.();
     dispose = null;
+    rendererPluginRuntime.dispose();
     terminalStatusItemRegistry.clearForTests();
     clearPluginPanelsForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
@@ -682,13 +683,8 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("禁用时不注册任何 renderer 贡献", async () => {
-    vi.mocked(window.pier.plugins.list).mockResolvedValueOnce({
-      diagnostics: [],
-      entries: [pluginEntry(false)],
-    } as never);
-
-    await refreshBuiltinPlugins();
+  it("禁用时不注册任何 renderer 贡献", () => {
+    rendererPluginRuntime.refresh([pluginEntry(false)]);
 
     expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
     expect(actionRegistry.get("pier.worktree.create")).toBeUndefined();
@@ -1507,27 +1503,18 @@ describe("git builtin plugin", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("runtime 刷新会替换贡献而不会误删新注册的 action", async () => {
-    vi.mocked(window.pier.plugins.list).mockResolvedValue({
-      diagnostics: [],
-      entries: [pluginEntry(true)],
-    } as never);
-
-    await refreshBuiltinPlugins();
+  it("runtime 刷新会替换贡献而不会误删新注册的 action", () => {
+    rendererPluginRuntime.refresh([pluginEntry(true)]);
     expect(actionRegistry.get("pier.worktree.list")).toBeDefined();
 
-    await refreshBuiltinPlugins();
+    rendererPluginRuntime.refresh([pluginEntry(true)]);
     expect(actionRegistry.get("pier.worktree.list")).toBeDefined();
 
-    vi.mocked(window.pier.plugins.list).mockResolvedValue({
-      diagnostics: [],
-      entries: [pluginEntry(false)],
-    } as never);
-    await refreshBuiltinPlugins();
+    rendererPluginRuntime.refresh([pluginEntry(false)]);
     expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
   });
 
-  it("不会激活 enabled local 插件的 renderer 代码", async () => {
+  it("不会激活 enabled local 插件的 renderer 代码", () => {
     const localEntry: PluginRegistryEntry = {
       ...pluginEntry(true),
       enabled: true,
@@ -1542,12 +1529,7 @@ describe("git builtin plugin", () => {
         kind: "manifest-only",
       },
     };
-    vi.mocked(window.pier.plugins.list).mockResolvedValue({
-      diagnostics: [],
-      entries: [localEntry],
-    } as never);
-
-    await refreshBuiltinPlugins();
+    rendererPluginRuntime.refresh([localEntry]);
 
     expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
     expect(terminalStatusItemRegistry.list()).toEqual([]);

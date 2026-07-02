@@ -29,16 +29,13 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import type {
-  PluginRegistryEntry,
-  PluginRegistryListResult,
-} from "@shared/contracts/plugin.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { refreshBuiltinPlugins } from "@/lib/plugins/bootstrap.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import {
   commandContributionBadges,
   contributionSummary,
@@ -191,25 +188,27 @@ function PluginRow({
 }
 
 function PluginsListContent({
+  entries,
+  initialized,
   onToggle,
   pendingId,
-  result,
 }: {
+  entries: readonly PluginRegistryEntry[];
+  initialized: boolean;
   onToggle(entry: PluginRegistryEntry): void;
   pendingId: string | null;
-  result: PluginRegistryListResult | null;
 }) {
-  if (!result) {
+  if (!initialized) {
     return <PluginsLoadingState />;
   }
 
-  if (result.entries.length === 0) {
+  if (entries.length === 0) {
     return <PluginsEmptyState />;
   }
 
   return (
     <ItemGroup className="gap-0">
-      {result.entries.map((entry, index) => (
+      {entries.map((entry, index) => (
         <Fragment key={entry.manifest.id}>
           {index > 0 ? (
             <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
@@ -227,41 +226,34 @@ function PluginsListContent({
 
 export function PluginsSection() {
   const t = useT();
-  const [result, setResult] = useState<PluginRegistryListResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const plugins = usePluginRegistryStore((state) => state.plugins);
+  const diagnostics = usePluginRegistryStore((state) => state.diagnostics);
+  const initialized = usePluginRegistryStore((state) => state.initialized);
+  const storeError = usePluginRegistryStore((state) => state.error);
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setError(null);
-      setResult(await window.pier.plugins.list());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
-
-  useEffect(() => {
-    load().catch(() => undefined);
-  }, [load]);
 
   const togglePlugin = (entry: PluginRegistryEntry) => {
     setPendingId(entry.manifest.id);
+    setToggleError(null);
     const request = entry.enabled
       ? window.pier.plugins.disable(entry.manifest.id)
       : window.pier.plugins.enable(entry.manifest.id);
     request
-      .then(async () => {
-        const nextResult = await window.pier.plugins.list();
-        setResult(nextResult);
-        await refreshBuiltinPlugins(nextResult.entries);
-      })
+      // PLUGINS_CHANGED 广播会同步所有窗口(含本窗口); 这里在 resolve 路径
+      // 再显式 refresh 一次, 让发起窗口不依赖广播到达时序, 与 preferences
+      // 的"发起端确定性更新"约定一致。runtime 刷新由 bootstrap 的 store
+      // 订阅按运行态集合去重, 不会重复 reactivate。
+      .then(() => usePluginRegistryStore.getState().refresh())
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
+        setToggleError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
         setPendingId(null);
       });
   };
+
+  const error = toggleError ?? storeError;
 
   return (
     <div className="px-4 pb-4" id="plugins">
@@ -280,7 +272,7 @@ export function PluginsSection() {
               </Alert>
             </div>
           ) : null}
-          {result?.diagnostics.length ? (
+          {diagnostics.length ? (
             <div className="px-(--card-spacing)">
               <Alert>
                 <AlertTitle>
@@ -288,7 +280,7 @@ export function PluginsSection() {
                 </AlertTitle>
                 <AlertDescription>
                   <div className="flex flex-col gap-1">
-                    {result.diagnostics.map((diagnostic) => (
+                    {diagnostics.map((diagnostic) => (
                       <div
                         key={`${diagnostic.source.kind}:${diagnostic.message}`}
                       >
@@ -301,9 +293,10 @@ export function PluginsSection() {
             </div>
           ) : null}
           <PluginsListContent
+            entries={plugins}
+            initialized={initialized}
             onToggle={togglePlugin}
             pendingId={pendingId}
-            result={result}
           />
         </CardContent>
       </Card>

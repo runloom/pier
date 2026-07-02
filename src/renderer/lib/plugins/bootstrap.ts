@@ -22,24 +22,6 @@ export function activeBuiltinPluginKey(
 }
 
 /**
- * 过渡期兼容入口(Task 6 移除): 直接按给定/拉取的 entries 刷新 runtime。
- */
-export async function refreshBuiltinPlugins(
-  entries?: readonly PluginRegistryEntry[]
-): Promise<void> {
-  try {
-    if (entries) {
-      rendererPluginRuntime.refresh(entries);
-      return;
-    }
-    const result = await window.pier.plugins.list();
-    rendererPluginRuntime.refresh(result.entries);
-  } catch {
-    rendererPluginRuntime.dispose();
-  }
-}
-
-/**
  * 启动引导: renderer 插件 runtime 由 plugin-registry 镜像 store 驱动 —
  * store 变化(初始拉取 / PLUGINS_CHANGED 广播 / 手动 refresh)且运行态
  * 集合有实质变化时刷新 runtime。返回解绑 + dispose 的清理函数。
