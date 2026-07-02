@@ -3,10 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execGit } from "@main/services/git-exec.ts";
-import {
-  createGitWatchService,
-  defaultWorktreeSignature,
-} from "@main/services/git-watch-service.ts";
+import { createGitWatchService } from "@main/services/git-watch-service.ts";
+import { defaultWorktreeSignature } from "@main/services/git-watch-signatures.ts";
 import type { GitChangeEvent, GitStatus } from "@shared/contracts/git.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -204,6 +202,31 @@ describe("createGitWatchService", () => {
     await service.dispose();
   });
 
+  // A5: poll 聚焦门控——非聚焦时 poll tick 不 refresh
+  it("isPollActive=false 时 poll tick 不触发 refresh；恢复 true 后触发", async () => {
+    const fakeWatcher = new FakeWatcher();
+    const rec = makeRecorder();
+    let active = false;
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => fakeWatcher,
+      isPollActive: () => active,
+    });
+    service.watch("/repo", () => undefined);
+    await vi.runOnlyPendingTimersAsync();
+    const baselineCalls = rec.worktreeSigCalls;
+
+    // 非聚焦：poll tick 不应重算签名
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(rec.worktreeSigCalls).toBe(baselineCalls);
+
+    // 聚焦恢复：poll tick 恢复重算
+    active = true;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(rec.worktreeSigCalls).toBeGreaterThan(baselineCalls);
+    await service.dispose();
+  });
+
   // A3: 初始 baseline 采集未完成时,fs 事件不应触发误报
   it("baseline 完成前的 fs 事件不会误报 changeKind=both", async () => {
     const fakeWatcher = new FakeWatcher();
@@ -291,7 +314,8 @@ describe("createGitWatchService", () => {
     expect(events).toEqual([
       { changeKind: "worktree", gitRoot: "/repo", status: snapshot },
     ]);
-    expect(getStatus).toHaveBeenCalledExactlyOnceWith("/repo");
+    // 注入的签名替身不填充 lastRawByRoot，故 prefetched 为 undefined（A7）
+    expect(getStatus).toHaveBeenCalledExactlyOnceWith("/repo", undefined);
     await service.dispose();
   });
 
@@ -545,6 +569,91 @@ describe("createGitWatchService", () => {
     await service.dispose();
   });
 
+  // A4: numstat 瞬时失败不吞信号——失败态签名 ≠ 前后成功态
+  it("numstat 瞬时失败产生独立签名（失败 ≠ 成功且成功前后一致）", async () => {
+    let call = 0;
+    // 每次 defaultWorktreeSignature 会调 1 次 status + 2 次 numstat。
+    // 让第二轮的两条 numstat 失败，其余成功。
+    const execFake = (args: readonly string[]): Promise<string> => {
+      if (args[0] === "status") {
+        return Promise.resolve("# branch.head main\0");
+      }
+      // numstat
+      call += 1;
+      // 第 2 轮（call 3、4）失败
+      if (call === 3 || call === 4) {
+        return Promise.reject(new Error("index.lock"));
+      }
+      return Promise.resolve("");
+    };
+    const sig1 = await defaultWorktreeSignature("/repo", execFake);
+    const sig2 = await defaultWorktreeSignature("/repo", execFake);
+    const sig3 = await defaultWorktreeSignature("/repo", execFake);
+    expect(sig2).not.toBe(sig1);
+    expect(sig2).not.toBe(sig3);
+    expect(sig3).toBe(sig1);
+  });
+
+  // A6: 每 root refresh 串行化 + trailing 合并
+  it("并发 pulse 串行化：慢签名下总轮数=2，广播顺序与轮次一致", async () => {
+    // 让 microtask 队列跑空（fake timer 下 vi.waitFor 不推进真实时间，改手动 flush）
+    const flush = async () => {
+      for (let i = 0; i < 8; i += 1) {
+        await Promise.resolve();
+      }
+    };
+    const fakeWatcher = new FakeWatcher();
+    // 可控 resolve 的签名函数：每轮返回不同 worktreeSig
+    let round = 0;
+    const gates: Array<() => void> = [];
+    const computeWorktreeSignature = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          const thisRound = round;
+          round += 1;
+          gates.push(() => resolve(`w${thisRound}`));
+        })
+    );
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "h",
+      computeRepoStateSignature: async () => "s",
+      computeRefsSignature: async () => "f",
+      computeWorktreeSignature,
+      fsWatch: () => fakeWatcher,
+      pollMs: 60_000,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (e) => events.push(e));
+
+    // baseline 轮（round 0）：放行让 baseline 完成
+    await flush();
+    expect(gates.length).toBe(1);
+    gates[0]?.();
+    await flush();
+    expect(computeWorktreeSignature).toHaveBeenCalledTimes(1);
+
+    // 并发两次 pulse：第一次进入 refresh，第二次应被合并成 trailing 一轮
+    service.pulse("/repo");
+    service.pulse("/repo");
+    await flush();
+    // 只有第一轮 refresh 在跑；第二个 pulse 不应叠加新的签名调用
+    expect(gates.length).toBe(2);
+    expect(computeWorktreeSignature).toHaveBeenCalledTimes(2);
+    // 放行第一轮（round 1）
+    gates[1]?.();
+    await flush();
+    // trailing 轮（round 2）应被触发
+    expect(gates.length).toBe(3);
+    expect(computeWorktreeSignature).toHaveBeenCalledTimes(3);
+    gates[2]?.();
+    await flush();
+    expect(events.length).toBe(2);
+
+    // 广播顺序与签名轮次一致：两轮都是 worktree 变化
+    expect(events.map((e) => e.changeKind)).toEqual(["worktree", "worktree"]);
+    await service.dispose();
+  });
+
   // Task 2 spec 缺口③:已 modify 文件继续编辑时,porcelain v2 输出不变但 numstat 变化
   it("worktree 签名折进 numstat,已修改文件继续编辑时签名变化", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-worktree-sig-"));
@@ -609,6 +718,57 @@ describe("createGitWatchService — 真实仓库 refs 验证", () => {
       await service.dispose();
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // A3: refsSig 捕捉 refs/remotes/origin/HEAD 符号指向变化
+  it("defaultRefsSignature 对 origin/HEAD 符号指向变化敏感（同 commit，真实仓库）", async () => {
+    const base = await mkdtemp(join(tmpdir(), "pier-refs-symref-"));
+    try {
+      const bare = join(base, "remote.git");
+      const clone = join(base, "local");
+      await execGit(["init", "-q", "--bare", "-b", "main", bare], {
+        cwd: base,
+      });
+      await execGit(["clone", "-q", bare, clone], { cwd: base });
+      await execGit(["config", "user.email", "test@pier.local"], {
+        cwd: clone,
+      });
+      await execGit(["config", "user.name", "Pier Test"], { cwd: clone });
+      await execGit(["commit", "-q", "--allow-empty", "-m", "init"], {
+        cwd: clone,
+      });
+      await execGit(["push", "-q", "-u", "origin", "main"], { cwd: clone });
+      // 再建一个远端分支 other（同 commit），并补 origin/HEAD 指向 main
+      await execGit(["branch", "other"], { cwd: clone });
+      await execGit(["push", "-q", "origin", "other"], { cwd: clone });
+      await execGit(["remote", "set-head", "origin", "main"], { cwd: clone });
+
+      const computeWorktreeSignature = vi.fn(async () => "w");
+      const service = createGitWatchService({
+        computeHeadSignature: async () => "h",
+        computeRepoStateSignature: async () => "s",
+        computeWorktreeSignature,
+        fsWatch: () => new FakeWatcher(),
+        pollMs: 60_000,
+      });
+      const listener = vi.fn();
+      const unsubscribe = service.watch(clone, listener);
+      await vi.waitFor(() => {
+        expect(computeWorktreeSignature).toHaveBeenCalledTimes(1);
+      });
+      // 唯一变化：origin/HEAD 的 symref target（main → other），refs oid 全不变
+      await execGit(["remote", "set-head", "origin", "other"], { cwd: clone });
+      service.pulse(clone);
+      await vi.waitFor(() => {
+        expect(listener).toHaveBeenCalledWith(
+          expect.objectContaining({ changeKind: "refs" })
+        );
+      });
+      unsubscribe();
+      await service.dispose();
+    } finally {
+      await rm(base, { recursive: true, force: true });
     }
   });
 

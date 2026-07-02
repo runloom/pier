@@ -113,19 +113,34 @@ export async function detectRepoState(
   return { kind: "clean" };
 }
 
+/** getLineDelta 可复用的预取 numstat 原始输出（A7）。 */
+export interface PrefetchedNumstat {
+  stagedNumstat: string;
+  unstagedNumstat: string;
+}
+
 /**
  * 汇总当前 worktree 的行级增删（staged + unstaged）。binary 文件不计入。
  * 任一 diff 失败返回 null（非致命，UI 层降级显示）。
+ * 提供 prefetched 时直接解析已有输出，跳过两条 numstat spawn（A7）。
  */
 export async function getLineDelta(
   execGit: ExecGitFn,
-  cwd: string
+  cwd: string,
+  prefetched?: PrefetchedNumstat
 ): Promise<GitDelta | null> {
   try {
-    const [unstagedOut, stagedOut] = await Promise.all([
-      execGit(["diff", "--numstat", "-z", "--no-renames"], cwd),
-      execGit(["diff", "--cached", "--numstat", "-z", "--no-renames"], cwd),
-    ]);
+    let unstagedOut: string;
+    let stagedOut: string;
+    if (prefetched === undefined) {
+      [unstagedOut, stagedOut] = await Promise.all([
+        execGit(["diff", "--numstat", "-z", "--no-renames"], cwd),
+        execGit(["diff", "--cached", "--numstat", "-z", "--no-renames"], cwd),
+      ]);
+    } else {
+      unstagedOut = prefetched.unstagedNumstat;
+      stagedOut = prefetched.stagedNumstat;
+    }
     const stats = [
       ...parseGitNumstat(unstagedOut),
       ...parseGitNumstat(stagedOut),
@@ -184,37 +199,88 @@ export async function detectUpstreamGone(
 }
 
 /**
- * 默认分支 remote-tracking ref 缓存（key: gitCommonDir，session 生命周期）。
- * origin/HEAD 不存在（手工 remote / 无远端）记 null，短路后续查询。
+ * 默认分支 remote-tracking ref 缓存（key: gitCommonDir）。
+ * TTL 5 分钟；过期视为 miss 重新探测。解析为 null 时**不写缓存**，
+ * 让每次调用重探一次（新建 origin/HEAD 后能立即生效），成本一个子进程可接受。
  */
-const defaultBranchRefCache = new Map<string, string | null>();
+const DEFAULT_BRANCH_REF_TTL_MS = 5 * 60_000;
+
+interface DefaultBranchRefCacheEntry {
+  at: number;
+  ref: string;
+}
+
+const defaultBranchRefCache = new Map<string, DefaultBranchRefCacheEntry>();
 
 export function clearDefaultBranchRefCacheForTests(): void {
   defaultBranchRefCache.clear();
 }
 
+/**
+ * 从 `refs/remotes/*​/HEAD` 枚举默认分支 remote-tracking ref。
+ * 多远端时 origin 优先，否则取第一条 symref 非空的条目。
+ * 返回完整 symref target（如 `refs/remotes/upstream/main`）；无则 null。
+ */
 export async function resolveDefaultBranchRef(
   execGit: ExecGitFn,
   cwd: string,
-  gitCommonDir: string
+  gitCommonDir: string,
+  now: () => number = Date.now
 ): Promise<string | null> {
   const cached = defaultBranchRefCache.get(gitCommonDir);
-  if (cached !== undefined) {
-    return cached;
+  if (cached !== undefined && now() - cached.at < DEFAULT_BRANCH_REF_TTL_MS) {
+    return cached.ref;
   }
-  let ref: string | null = null;
+  const ref = await probeDefaultBranchRef(execGit, cwd);
+  if (ref === null) {
+    // null 不缓存：下次调用重探，新建的 origin/HEAD 能立即被发现。
+    defaultBranchRefCache.delete(gitCommonDir);
+    return null;
+  }
+  defaultBranchRefCache.set(gitCommonDir, { at: now(), ref });
+  return ref;
+}
+
+async function probeDefaultBranchRef(
+  execGit: ExecGitFn,
+  cwd: string
+): Promise<string | null> {
+  let output: string;
   try {
-    const out = await execGit(
-      ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+    output = await execGit(
+      [
+        "for-each-ref",
+        "--format=%(refname)%00%(symref)",
+        "refs/remotes/*/HEAD",
+      ],
       cwd
     );
-    const trimmed = out.trim();
-    ref = trimmed.startsWith("refs/remotes/") ? trimmed : null;
   } catch {
-    ref = null;
+    return null;
   }
-  defaultBranchRefCache.set(gitCommonDir, ref);
-  return ref;
+  let fallback: string | null = null;
+  for (const line of output.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+    const [refname = "", symref = ""] = line.split("\0");
+    if (symref.length === 0 || !symref.startsWith("refs/remotes/")) {
+      continue;
+    }
+    if (refname === "refs/remotes/origin/HEAD") {
+      return symref; // origin 优先
+    }
+    fallback ??= symref;
+  }
+  return fallback;
+}
+
+/**
+ * 从 `refs/remotes/<remote>/<name>` 剥离出分支名 `<name>`（保留带斜杠分支名）。
+ * 前两段固定为 refs/remotes，第三段是 remote 名。
+ */
+function branchNameFromRemoteRef(remoteRef: string): string {
+  return remoteRef.split("/").slice(3).join("/");
 }
 
 /**
@@ -235,7 +301,7 @@ export async function detectMergedIntoDefault(
   if (defaultRef === null) {
     return null;
   }
-  if (defaultRef === `refs/remotes/origin/${branch}`) {
+  if (branchNameFromRemoteRef(defaultRef) === branch) {
     return null;
   }
   try {

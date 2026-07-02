@@ -41,7 +41,6 @@ import {
   undoLastCommit,
 } from "./git-operations.ts";
 import {
-  deriveCounts,
   parseGitLog,
   parseGitNumstat,
   parseGitStatus,
@@ -49,12 +48,9 @@ import {
   splitNonEmptyLines,
 } from "./git-parsers.ts";
 import {
-  detectMergedIntoDefault,
-  detectRepoState,
-  detectUpstreamGone,
-  getLineDelta,
-  getStashCount,
-} from "./git-status-detectors.ts";
+  assembleGitStatus,
+  type PrefetchedStatus,
+} from "./git-status-assembler.ts";
 
 const GIT_LOG_FORMAT = "%H%x1f%an%x1f%aI%x1f%s%x1e";
 const ORIGIN_HEAD_RE = /^refs\/remotes\/origin\/(.+)$/;
@@ -113,7 +109,7 @@ export interface GitService {
   getFileContent(cwd: string, options: GetFileContentOptions): Promise<string>;
   getLog(cwd: string, options?: GitLogOptions): Promise<GitCommit[]>;
   getRepoInfo(cwd: string): Promise<GitRepoInfo>;
-  getStatus(cwd: string): Promise<GitStatus>;
+  getStatus(cwd: string, prefetched?: PrefetchedStatus): Promise<GitStatus>;
   isWorkingTreeClean(cwd: string): Promise<boolean>;
   listBranches(
     cwd: string,
@@ -355,51 +351,7 @@ export function createGitService({
         isWorktree: gitDir !== gitCommonDir,
       };
     },
-    getStatus: async (cwd) => {
-      // wave 1：可并发的独立 op（status 输出 + 增删 + stash + gitDir/gitCommonDir 解析）
-      const [statusOut, delta, stashCount, gitDirOut] = await Promise.all([
-        execGit(["status", "--porcelain=v2", "--branch", "-z"], cwd),
-        getLineDelta(execGit, cwd),
-        getStashCount(execGit, cwd),
-        execGit(
-          [
-            "rev-parse",
-            "--path-format=absolute",
-            "--absolute-git-dir",
-            "--git-common-dir",
-          ],
-          cwd
-        ),
-      ]);
-      const parsed = parseGitStatus(statusOut);
-      const counts = deriveCounts(parsed.files);
-      // wave 2：依赖 wave 1 的派生值（gitDir + conflictCount / branch 名 / gitCommonDir）
-      const dirLines = splitNonEmptyLines(gitDirOut);
-      const gitDir = dirLines[0] ?? "";
-      const gitCommonDir = dirLines[1] ?? gitDir;
-      const branchName = parsed.branch.branch;
-      const [repoState, upstreamGone, mergedIntoDefault] = await Promise.all([
-        detectRepoState(gitDir, counts.conflict),
-        detectUpstreamGone(execGit, cwd, branchName),
-        detectMergedIntoDefault(execGit, cwd, branchName, gitCommonDir),
-      ]);
-      return {
-        branch: {
-          ahead: parsed.branch.ahead,
-          behind: parsed.branch.behind,
-          branch: parsed.branch.branch,
-          mergedIntoDefault,
-          oid: parsed.branch.oid,
-          upstream: parsed.branch.upstream,
-          upstreamGone,
-        },
-        counts,
-        delta,
-        files: parsed.files,
-        repoState,
-        stashCount,
-      };
-    },
+    getStatus: (cwd, prefetched) => assembleGitStatus(execGit, cwd, prefetched),
     isWorkingTreeClean: async (cwd) => {
       const output = await execGit(
         ["status", "--porcelain=v2", "--branch", "-z"],
@@ -416,10 +368,7 @@ export function createGitService({
         ["for-each-ref", "--format=%(refname:short)", "refs/tags"],
         cwd
       );
-      return output
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+      return splitNonEmptyLines(output);
     },
     resolveRef: async (cwd, ref) => {
       const output = await execGit(

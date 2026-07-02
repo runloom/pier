@@ -239,6 +239,11 @@ app.whenReady().then(async () => {
   gitAutofetch.start();
   app.on("browser-window-focus", () => {
     gitAutofetch.onFocusGained();
+    // 聚焦补课：后台 poll 被门控跳过（A5），聚焦瞬间对活跃仓库全量重算一次签名，
+    // 弥补后台错过的 poll，走既有 watch 广播管道。
+    for (const root of appCore.services.gitWatch.activeRoots()) {
+      appCore.services.gitWatch.pulse(root);
+    }
   });
   app.on("will-quit", () => {
     gitAutofetch.dispose();
