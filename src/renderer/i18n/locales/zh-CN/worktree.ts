@@ -1,0 +1,20 @@
+export const worktree = {
+  create: {
+    autoBadge: "自动",
+    baseHead: "当前 HEAD",
+    baseLabel: "基于",
+    branchLabel: "分支",
+    cancelHint: "取消",
+    createAndStartHint: "创建并开工",
+    createOnlyHint: "仅创建",
+    creating: "创建中…",
+    emptyHint: "留空回车自动起名",
+    inputPlaceholder: "描述任务,或直接输入分支名",
+    locationLabel: "位置",
+    prepareCopy: "复制 {{count}} 组 ignored 文件",
+    prepareLabel: "准备",
+    prepareNone: "未配置准备步骤",
+    prepareSetup: "运行 setup 命令",
+    title: "新建 worktree",
+  },
+} as const;

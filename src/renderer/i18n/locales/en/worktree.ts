@@ -1,0 +1,20 @@
+export const worktree = {
+  create: {
+    autoBadge: "Auto",
+    baseHead: "Current HEAD",
+    baseLabel: "Base",
+    branchLabel: "Branch",
+    cancelHint: "Cancel",
+    createAndStartHint: "Create and start",
+    createOnlyHint: "Create only",
+    creating: "Creating…",
+    emptyHint: "Empty input creates an auto codename",
+    inputPlaceholder: "Describe the task, or type a branch name",
+    locationLabel: "Location",
+    prepareCopy: "Copy {{count}} ignored file patterns",
+    prepareLabel: "Prepare",
+    prepareNone: "No prepare steps configured",
+    prepareSetup: "Run setup command",
+    title: "New worktree",
+  },
+} as const;

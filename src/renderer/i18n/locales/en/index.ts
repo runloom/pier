@@ -4,6 +4,7 @@ import { dialog } from "./dialog.ts";
 import { settings } from "./settings.ts";
 import { terminal } from "./terminal.ts";
 import { workspace } from "./workspace.ts";
+import { worktree } from "./worktree.ts";
 
 export const en = {
   commandPalette,
@@ -12,4 +13,5 @@ export const en = {
   settings,
   terminal,
   workspace,
+  worktree,
 } as const;
