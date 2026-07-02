@@ -1,4 +1,7 @@
+import type { PierCapability } from "@shared/contracts/permissions.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -17,18 +20,19 @@ import {
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 function pluginEntry(overrides: {
   description?: string;
   enabled: boolean;
-  effectivePermissions?: string[];
+  effectivePermissions?: PierCapability[];
   id: string;
-  locales?: Record<string, unknown>;
+  locales?: PluginRegistryEntry["manifest"]["locales"];
   name: string;
   sourceKind: "builtin" | "local";
-}) {
-  const commands = [
+}): PluginRegistryEntry {
+  const commands: PluginRegistryEntry["manifest"]["commands"] = [
     {
       id: `${overrides.id}.list`,
       permissions: ["worktree:read"],
@@ -77,6 +81,13 @@ function pluginEntry(overrides: {
   };
 }
 
+const REGISTRY_INITIAL_STATE = {
+  diagnostics: [],
+  error: null,
+  initialized: false,
+  plugins: [],
+};
+
 describe("Settings plugins section", () => {
   beforeAll(async () => {
     await initI18n();
@@ -90,6 +101,7 @@ describe("Settings plugins section", () => {
       removeEventListener: vi.fn(),
     }));
     useSettingsDialogStore.setState({ isOpen: true });
+    usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
   });
 
   afterEach(() => {
@@ -97,6 +109,7 @@ describe("Settings plugins section", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     useSettingsDialogStore.setState({ isOpen: false });
+    usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
   });
 
   it("默认列表只展示插件摘要，详情展开后展示诊断信息", async () => {
@@ -118,16 +131,10 @@ describe("Settings plugins section", () => {
       name: "Local Example",
       sourceKind: "local",
     });
-    const list = vi
-      .fn()
-      .mockResolvedValueOnce({
-        diagnostics: [],
-        entries: [enabledWorktree, localPlugin],
-      })
-      .mockResolvedValueOnce({
-        diagnostics: [],
-        entries: [disabledWorktree, localPlugin],
-      });
+    const list = vi.fn().mockResolvedValueOnce({
+      diagnostics: [],
+      entries: [disabledWorktree, localPlugin],
+    });
     const disable = vi.fn(async () => disabledWorktree);
     const enable = vi.fn();
 
@@ -143,6 +150,13 @@ describe("Settings plugins section", () => {
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
         terminal: { applyInputRouting: vi.fn() },
       },
+    });
+    // 组件不再挂载时自拉取, 而是读取 registry 镜像 store(2b1e7c5);
+    // 与 tests/unit/renderer/plugins-section.test.tsx 的播种模式保持一致。
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      initialized: true,
+      plugins: [enabledWorktree, localPlugin],
     });
 
     render(<SettingsDialog />);
@@ -187,18 +201,9 @@ describe("Settings plugins section", () => {
   });
 
   it("加载插件时使用 shadcn skeleton 加载态", async () => {
-    let resolveList: (
-      result: Awaited<ReturnType<typeof window.pier.plugins.list>>
-    ) => void = () => undefined;
-    const list = vi.fn(
-      () =>
-        new Promise<Awaited<ReturnType<typeof window.pier.plugins.list>>>(
-          (resolve) => {
-            resolveList = resolve;
-          }
-        )
-    );
-
+    // 组件不再自拉取, loading 态完全由 registry 镜像 store 的 `initialized`
+    // 驱动(2b1e7c5); beforeEach 已播种 REGISTRY_INITIAL_STATE(initialized:
+    // false), 这里模拟 bootstrap 的 initPluginRegistry()/广播落地把它翻转。
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -206,7 +211,7 @@ describe("Settings plugins section", () => {
           disable: vi.fn(),
           enable: vi.fn(),
           inspect: vi.fn(),
-          list,
+          list: vi.fn(),
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
         terminal: { applyInputRouting: vi.fn() },
@@ -220,7 +225,13 @@ describe("Settings plugins section", () => {
     expect(await screen.findByTestId("plugins-loading")).toBeVisible();
     expect(screen.getByText("Loading plugins")).toBeVisible();
 
-    resolveList({ diagnostics: [], entries: [] });
+    act(() => {
+      usePluginRegistryStore.setState({
+        diagnostics: [],
+        initialized: true,
+        plugins: [],
+      });
+    });
     await waitFor(() => {
       expect(screen.queryByTestId("plugins-loading")).not.toBeInTheDocument();
     });
@@ -261,11 +272,6 @@ describe("Settings plugins section", () => {
       name: "Local Example",
       sourceKind: "local",
     });
-    const list = vi.fn().mockResolvedValue({
-      diagnostics: [],
-      entries: [enabledWorktree, localPlugin],
-    });
-
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -273,11 +279,16 @@ describe("Settings plugins section", () => {
           disable: vi.fn(),
           enable: vi.fn(),
           inspect: vi.fn(),
-          list,
+          list: vi.fn(),
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
         terminal: { applyInputRouting: vi.fn() },
       },
+    });
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      initialized: true,
+      plugins: [enabledWorktree, localPlugin],
     });
 
     render(<SettingsDialog />);
