@@ -120,15 +120,8 @@ export function TerminalStatusBar({
   if (visible.left.length + visible.right.length === 0) {
     return null;
   }
-  // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
-  // onContextMenu 所在 div 带交互 role。语义诚实的候选 role="toolbar" /
-  // role="group"(本行只是状态指示 widget 行,不是箭头键导航菜单栏)都被 Biome
-  // 判定为"非交互 role + 事件监听器"而拒绝(已用 ultracite check 逐个验证 30+
-  // 候选 role;Biome 仅放行 listbox/menu/menubar/none/radiogroup/spinbutton/
-  // tablist/tree/treegrid 这类"部件"角色)。二者都不是精确语义,menu 比
-  // menubar 少一层"持久化、可 arrow-key 遍历的菜单栏"的强错误暗示,
-  // 故取 role="menu" 作为 lint 门槛下损失最小的折衷。
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: 状态栏是原生右键菜单的触发面，无准确交互 ARIA role 可用
     <div
       className="absolute inset-x-0 bottom-0 flex h-7 items-center gap-1 px-1.5 leading-none"
       data-testid="terminal-status-bar"
@@ -137,7 +130,6 @@ export function TerminalStatusBar({
           console.error("[terminal-status-bar] context menu failed:", err);
         });
       }}
-      role="menu"
     >
       {renderStatusGroup(visible.left, statusContext)}
       <div
