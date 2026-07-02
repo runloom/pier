@@ -24,13 +24,14 @@ import { resolveEffectiveTerminalStatusItemConfig } from "./terminal-status-bar-
 const MANAGE_ACTION_ID = "pier.terminalStatusBar.manage";
 const TOGGLE_PREFIX = "pier.terminalStatusBar.toggle:";
 
-interface DeclaredItemRow {
+export interface DeclaredItemRow {
   hidden: boolean;
   itemId: string;
   title: string;
 }
 
-function declaredRows(
+/** 导出供单测直接覆盖(过滤 disabled 插件 / 按 title 排序 / hidden 生效值解析)。 */
+export function declaredRows(
   plugins: readonly PluginRegistryEntry[],
   prefs: TerminalStatusBarPrefs
 ): DeclaredItemRow[] {
