@@ -301,6 +301,12 @@ const terminalApi: TerminalAPI = {
   onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),
   onTabChromePatch: (cb) => subscribeIpc("pier:terminal:tab-chrome-patch", cb),
   onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
+  open: (request) =>
+    invokePierCommand({
+      type: "terminal.open",
+      ...(request.focus !== undefined && { focus: request.focus }),
+      ...(request.launch && { launch: request.launch }),
+    }),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
   performOperation: (panelId, operation) =>
     ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
