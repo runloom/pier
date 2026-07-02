@@ -17,6 +17,10 @@ import {
   type PanelDescriptor,
   usePanelDescriptorStore,
 } from "../../stores/panel-descriptor.store.ts";
+import {
+  closePluginOverlay,
+  openPluginOverlay,
+} from "../../stores/plugin-overlay.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { openWorktreeCreatePanel } from "../../stores/worktree-create.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
@@ -340,6 +344,20 @@ export function createRendererPluginContext(
         toast.success(message, toastNotificationOptions(options));
       },
       system: (options) => window.pier.notifications.system(options),
+    },
+    overlays: {
+      close: (id) => {
+        if (!entry) {
+          return;
+        }
+        closePluginOverlay(entry.manifest.id, id);
+      },
+      open: (overlay) => {
+        if (!entry) {
+          return;
+        }
+        openPluginOverlay(entry.manifest.id, overlay);
+      },
     },
     panels: {
       getActiveContext: () => {
