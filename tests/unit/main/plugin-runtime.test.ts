@@ -1,5 +1,7 @@
 import { createMainPluginHostApi } from "@main/plugins/host-api.ts";
 import { MainPluginRuntime } from "@main/plugins/runtime.ts";
+import type { PluginSettingsService } from "@main/services/plugin-settings-service.ts";
+import type { MainPluginContext } from "@plugins/api/main.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -27,11 +29,36 @@ function entry(id: string, enabled: boolean): PluginRegistryEntry {
   };
 }
 
+function stubContext(): MainPluginContext {
+  return {
+    configuration: {
+      get: <T>(_key: string): T => undefined as unknown as T,
+      onDidChange: () => () => undefined,
+      reset: () => Promise.resolve(),
+      set: () => Promise.resolve(),
+    },
+  };
+}
+
+function stubSettings(): PluginSettingsService {
+  return {
+    getAll: () => Promise.resolve({ values: {}, version: 1 }),
+    getValues: () => ({}),
+    init: () => Promise.resolve(),
+    onDidChange: () => () => undefined,
+    reset: () => Promise.resolve({ values: {}, version: 1 }),
+    set: () => Promise.resolve({ values: {}, version: 1 }),
+  };
+}
+
 describe("MainPluginRuntime", () => {
   it("activates enabled builtin modules and disposes disabled modules", () => {
     const dispose = vi.fn();
     const activate = vi.fn(() => dispose);
-    const runtime = new MainPluginRuntime([{ activate, id: "sample.plugin" }]);
+    const runtime = new MainPluginRuntime(
+      [{ activate, id: "sample.plugin" }],
+      stubContext
+    );
 
     runtime.refresh([entry("sample.plugin", true)]);
     expect(activate).toHaveBeenCalledTimes(1);
@@ -41,6 +68,22 @@ describe("MainPluginRuntime", () => {
 
     runtime.refresh([entry("sample.plugin", false)]);
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("为每个启用插件按 entry 创建独立 context", () => {
+    const seen: string[] = [];
+    const runtime = new MainPluginRuntime(
+      [
+        { activate: () => () => undefined, id: "pier.a" },
+        { activate: () => () => undefined, id: "pier.b" },
+      ],
+      (entry) => {
+        seen.push(entry.manifest.id);
+        return stubContext();
+      }
+    );
+    runtime.refresh([entry("pier.a", true), entry("pier.b", true)]);
+    expect(seen).toEqual(["pier.a", "pier.b"]);
   });
 });
 
@@ -56,7 +99,11 @@ describe("createMainPluginHostApi", () => {
       setEnabled: vi.fn(async () => plugin),
     };
 
-    const host = createMainPluginHostApi({ plugins, runtime });
+    const host = createMainPluginHostApi({
+      plugins,
+      runtime,
+      settings: stubSettings(),
+    });
 
     await host.refresh();
     await host.plugins.setEnabled("sample.plugin", false);
@@ -76,7 +123,11 @@ describe("createMainPluginHostApi", () => {
       setEnabled: vi.fn(),
     };
 
-    const host = createMainPluginHostApi({ plugins, runtime });
+    const host = createMainPluginHostApi({
+      plugins,
+      runtime,
+      settings: stubSettings(),
+    });
 
     host.dispose();
 
@@ -100,6 +151,7 @@ describe("createMainPluginHostApi", () => {
       onRegistryChanged,
       plugins,
       runtime,
+      settings: stubSettings(),
     });
 
     await host.refresh();
@@ -108,5 +160,31 @@ describe("createMainPluginHostApi", () => {
 
     await host.plugins.setEnabled("sample.plugin", false);
     expect(onRegistryChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it("先 await settings.init() 再 list plugins，保证 activate 期间同步 get 可用", async () => {
+    const runtime = { refresh: vi.fn() };
+    const plugin = entry("sample.plugin", true);
+    const calls: string[] = [];
+    const plugins = {
+      inspect: vi.fn(async () => plugin),
+      list: vi.fn(() => {
+        calls.push("list");
+        return Promise.resolve({ diagnostics: [], entries: [plugin] });
+      }),
+      setEnabled: vi.fn(async () => plugin),
+    };
+    const settings: PluginSettingsService = {
+      ...stubSettings(),
+      init: () => {
+        calls.push("init");
+        return Promise.resolve();
+      },
+    };
+
+    const host = createMainPluginHostApi({ plugins, runtime, settings });
+    await host.refresh();
+
+    expect(calls).toEqual(["init", "list"]);
   });
 });

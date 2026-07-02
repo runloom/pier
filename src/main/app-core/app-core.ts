@@ -141,6 +141,7 @@ function createPierAppCore(): PierAppCore {
   const pluginHost = createMainPluginHostApi({
     onRegistryChanged: broadcastPluginRegistryChanged,
     plugins: basePlugins,
+    settings: pluginSettings,
   });
   const services: PierCoreServices = {
     commandPaletteMru: createCommandPaletteMruService({

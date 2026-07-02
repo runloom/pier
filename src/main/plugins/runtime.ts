@@ -1,6 +1,10 @@
 import type { MainPluginContext, MainPluginModule } from "@plugins/api/main.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { BUILTIN_MAIN_PLUGIN_MODULES } from "./builtin-catalog.ts";
+
+export type MainPluginContextFactory = (
+  entry: PluginRegistryEntry,
+  entries: readonly PluginRegistryEntry[]
+) => MainPluginContext;
 
 function indexModules(
   modules: readonly MainPluginModule[]
@@ -8,18 +12,17 @@ function indexModules(
   return new Map(modules.map((module) => [module.id, module]));
 }
 
-function createMainPluginContext(): MainPluginContext {
-  return {};
-}
-
 export class MainPluginRuntime {
+  private readonly createContext: MainPluginContextFactory;
   private readonly disposers = new Map<string, () => void>();
   private readonly modules: ReadonlyMap<string, MainPluginModule>;
 
   constructor(
-    modules: readonly MainPluginModule[] = BUILTIN_MAIN_PLUGIN_MODULES
+    modules: readonly MainPluginModule[],
+    createContext: MainPluginContextFactory
   ) {
     this.modules = indexModules(modules);
+    this.createContext = createContext;
   }
 
   dispose(): void {
@@ -31,7 +34,6 @@ export class MainPluginRuntime {
 
   refresh(entries: readonly PluginRegistryEntry[]): void {
     const nextActiveIds = new Set<string>();
-    const context = createMainPluginContext();
 
     for (const entry of entries) {
       if (!(entry.runtime.enabled && entry.runtime.kind === "builtin")) {
@@ -45,7 +47,11 @@ export class MainPluginRuntime {
       if (this.disposers.has(entry.manifest.id)) {
         continue;
       }
-      this.disposers.set(entry.manifest.id, module.activate(context));
+      // 按插件创建 context — set/reset 的所有权断言需要插件身份。
+      this.disposers.set(
+        entry.manifest.id,
+        module.activate(this.createContext(entry, entries))
+      );
     }
 
     for (const [id, dispose] of this.disposers) {
