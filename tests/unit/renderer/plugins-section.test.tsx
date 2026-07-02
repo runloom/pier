@@ -153,4 +153,29 @@ describe("PluginsSection", () => {
       screen.queryByTestId("plugin-settings-link-pier.git")
     ).not.toBeInTheDocument();
   });
+
+  it("runtime.enabled=false 时(即使 manifest.configuration 存在)不渲染 Settings 内链", () => {
+    const disabledWithConfiguration: PluginRegistryEntry = {
+      ...entry("pier.git", false),
+      manifest: {
+        ...entry("pier.git", false).manifest,
+        configuration: {
+          properties: {
+            "pier.git.example": { default: true, type: "boolean" },
+          },
+        },
+      },
+      runtime: { canToggle: true, enabled: false, kind: "builtin" },
+    };
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [disabledWithConfiguration],
+    });
+    render(<PluginsSection />);
+
+    expect(
+      screen.queryByTestId("plugin-settings-link-pier.git")
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
+  });
 });

@@ -169,7 +169,8 @@ function PluginRow({
   );
   const metaText = `v${entry.manifest.version} · ${entry.manifest.publisher ?? "—"}`;
   const countItems = contributionCountItems(entry, t);
-  const hasConfiguration = Boolean(entry.manifest.configuration);
+  const hasConfiguration =
+    Boolean(entry.manifest.configuration) && entry.runtime.enabled;
 
   return (
     <Item

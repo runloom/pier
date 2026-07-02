@@ -24,7 +24,7 @@ import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 
 /** 组内排序：order 升序（缺省按 key 字典序垫底），同 order 按 key 字典序。 */
-export function sortedConfigurationKeys(
+function sortedConfigurationKeys(
   properties: Record<string, PluginConfigurationProperty>
 ): string[] {
   return Object.keys(properties).sort((a, b) => {
