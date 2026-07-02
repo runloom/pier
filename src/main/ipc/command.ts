@@ -17,9 +17,12 @@ const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
   "run.spawn",
   "run.status",
   "worktree.check",
+  "worktree.create",
   "worktree.list",
   "worktree.open",
-  // git 主体 21 个命令(读 14 + 写 7);capability 守门由 permissions.ts 配对
+  "worktree.prune",
+  "worktree.remove",
+  // git 主体命令;capability 守门由 permissions.ts 配对
   "git.checkoutBranch",
   "git.commit",
   "git.createBranch",
@@ -37,9 +40,19 @@ const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
   "git.isWorkingTreeClean",
   "git.listBranches",
   "git.listTags",
+  "git.merge",
+  "git.mergeAbort",
+  "git.rebase",
+  "git.rebaseAbort",
+  "git.rebaseContinue",
   "git.resolveRef",
+  "git.searchBranches",
   "git.stage",
+  "git.stash",
+  "git.stashList",
+  "git.stashPop",
   "git.unstage",
+  "git.undoLastCommit",
   "git.validateBranchName",
 ]);
 

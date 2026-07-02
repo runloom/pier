@@ -41,6 +41,7 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "worktree.create": ["worktree:write"],
   "worktree.list": ["worktree:read"],
   "worktree.open": ["worktree:read", "workspace:open"],
+  "worktree.prune": ["worktree:write"],
   "worktree.remove": ["worktree:write"],
   "workspace.layout.clear": ["workspace:write"],
   "workspace.layout.read": ["workspace:read"],
@@ -57,6 +58,7 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "git.getStatus": ["git:read"],
   "git.isWorkingTreeClean": ["git:read"],
   "git.listBranches": ["git:read"],
+  "git.searchBranches": ["git:read"],
   "git.listTags": ["git:read"],
   "git.resolveRef": ["git:read"],
   "git.validateBranchName": ["git:read"],
@@ -67,6 +69,15 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "git.createBranch": ["git:write"],
   "git.deleteBranch": ["git:write"],
   "git.checkoutBranch": ["git:write"],
+  "git.merge": ["git:write"],
+  "git.mergeAbort": ["git:write"],
+  "git.stash": ["git:write"],
+  "git.stashPop": ["git:write"],
+  "git.stashList": ["git:read"],
+  "git.rebase": ["git:write"],
+  "git.rebaseAbort": ["git:write"],
+  "git.rebaseContinue": ["git:write"],
+  "git.undoLastCommit": ["git:write"],
 };
 
 function terminalOpenCapabilities(

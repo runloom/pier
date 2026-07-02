@@ -3,6 +3,8 @@
  * Action / ActionMetadata 在 lib/actions/types.ts 中定义（共享）。
  */
 
+import type { ReactNode } from "react";
+
 export type CommandPaletteSurface = "command-palette" | (string & {});
 
 export interface QuickPickItemBadge {
@@ -19,6 +21,7 @@ export interface QuickPickItem {
   readonly aliases?: readonly string[];
   readonly badges?: readonly QuickPickItemBadge[];
   readonly checked?: boolean;
+  readonly data?: unknown;
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
@@ -42,6 +45,7 @@ export interface QuickPick {
   /** Esc / 点击遮罩关闭时还原到打开前的值。不传 → 关闭即确认。 */
   onDismiss?(): void;
   readonly placeholder?: string;
+  renderItem?(item: QuickPickItem): ReactNode;
   readonly sections?: readonly QuickPickSection[];
   readonly title: string;
 }

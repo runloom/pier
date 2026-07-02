@@ -2,23 +2,46 @@ import type { z } from "zod";
 import type {
   GitBranchRef,
   GitCommit,
+  GitDiffBranchesResult,
   GitDiffPatch,
   GitDiffSummary,
+  GitMergeAbortResult,
+  GitMergeResult,
+  GitRebaseAbortResult,
+  GitRebaseContinueResult,
+  GitRebaseResult,
   GitRepoInfo,
+  GitStashListResult,
+  GitStashPopResult,
+  GitStashResult,
   GitStatus,
+  GitUndoCommitResult,
   getFileContentOptionsSchema,
   gitCommitOptionsSchema,
   gitCreateBranchOptionsSchema,
   gitDeleteBranchOptionsSchema,
   gitDiffOptionsSchema,
+  gitDiffSearchBranchesOptionsSchema,
   gitLogOptionsSchema,
   gitPathsSchema,
   listBranchesOptionsSchema,
 } from "../../shared/contracts/git.ts";
+import { listBranches as listGitBranches } from "./git-branch-list.ts";
+import { searchBranches as searchGitBranches } from "./git-branch-search.ts";
 import { execGit } from "./git-exec.ts";
 import {
+  abortMerge,
+  abortRebase,
+  continueRebase,
+  listStashes,
+  mergeBranch,
+  popStash,
+  rebaseBranch,
+  stashChanges,
+  undoLastCommit,
+} from "./git-operations.ts";
+import {
   deriveCounts,
-  parseGitBranchRefs,
   parseGitLog,
   parseGitNumstat,
   parseGitStatus,
@@ -38,6 +61,9 @@ const ORIGIN_HEAD_RE = /^refs\/remotes\/origin\/(.+)$/;
 export type GitDiffOptions = z.infer<typeof gitDiffOptionsSchema>;
 export type GitLogOptions = z.infer<typeof gitLogOptionsSchema>;
 export type ListBranchesOptions = z.infer<typeof listBranchesOptionsSchema>;
+export type GitDiffSearchBranchesOptions = z.infer<
+  typeof gitDiffSearchBranchesOptionsSchema
+>;
 export type GetFileContentOptions = z.infer<typeof getFileContentOptionsSchema>;
 export type GitPathsRequest = z.infer<typeof gitPathsSchema>;
 export type GitCommitOptions = z.infer<typeof gitCommitOptionsSchema>;
@@ -65,8 +91,11 @@ function assertSafeBranchName(name: string): void {
 }
 
 export interface GitService {
+  abortMerge(cwd: string): Promise<GitMergeAbortResult>;
+  abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
   checkoutBranch(cwd: string, name: string): Promise<void>;
   commit(cwd: string, options: GitCommitOptions): Promise<void>;
+  continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
   createBranch(cwd: string, options: GitCreateBranchOptions): Promise<void>;
   deleteBranch(cwd: string, options: GitDeleteBranchOptions): Promise<void>;
   discardChanges(cwd: string, request: GitPathsRequest): Promise<void>;
@@ -88,10 +117,23 @@ export interface GitService {
     cwd: string,
     options: ListBranchesOptions
   ): Promise<GitBranchRef[]>;
+  listStashes(cwd: string): Promise<GitStashListResult>;
   listTags(cwd: string): Promise<string[]>;
+  merge(cwd: string, branch: string): Promise<GitMergeResult>;
+  popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
+  rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
   resolveRef(cwd: string, ref: string): Promise<string>;
+  searchBranches(
+    cwd: string,
+    options?: GitDiffSearchBranchesOptions
+  ): Promise<GitDiffBranchesResult>;
   // —— 写(需 git:write capability) ——
   stage(cwd: string, request: GitPathsRequest): Promise<void>;
+  stash(
+    cwd: string,
+    options: { includeUntracked?: boolean; message?: string }
+  ): Promise<GitStashResult>;
+  undoLastCommit(cwd: string): Promise<GitUndoCommitResult>;
   unstage(cwd: string, request: GitPathsRequest): Promise<void>;
   validateBranchName(cwd: string, name: string): Promise<boolean>;
 }
@@ -100,7 +142,11 @@ export interface CreateGitServiceOptions {
   execGit?: (
     args: readonly string[],
     cwd: string,
-    options?: { timeoutMs?: number }
+    options?: {
+      env?: Readonly<Record<string, string>>;
+      onSuccessStderr?: (stderr: string) => void;
+      timeoutMs?: number;
+    }
   ) => Promise<string>;
 }
 
@@ -110,14 +156,26 @@ function diffRangeArgs(options: GitDiffOptions): string[] {
     args.push("--cached");
   }
   if (options.from && options.to) {
-    args.push(`${options.from}..${options.to}`);
+    args.push(
+      `${safeGitRevision(options.from, "diff from")}..${safeGitRevision(
+        options.to,
+        "diff to"
+      )}`
+    );
   } else if (options.from) {
-    args.push(options.from);
+    args.push(safeGitRevision(options.from, "diff from"));
   }
   if (options.paths && options.paths.length > 0) {
     args.push("--", ...options.paths);
   }
   return args;
+}
+
+function safeGitRevision(value: string, label: string): string {
+  if (value.startsWith("-")) {
+    throw new Error(`${label} must not start with "-"`);
+  }
+  return value;
 }
 
 function logArgs(options: GitLogOptions): string[] {
@@ -148,7 +206,11 @@ function logArgs(options: GitLogOptions): string[] {
 function defaultExecGit(
   args: readonly string[],
   cwd: string,
-  options?: { timeoutMs?: number }
+  options?: {
+    env?: Readonly<Record<string, string>>;
+    onSuccessStderr?: (stderr: string) => void;
+    timeoutMs?: number;
+  }
 ): Promise<string> {
   return execGit(args, { cwd, ...options });
 }
@@ -186,9 +248,17 @@ export function createGitService({
   execGit = defaultExecGit,
 }: CreateGitServiceOptions = {}): GitService {
   return {
+    abortMerge: (cwd) => abortMerge(execGit, cwd),
+    abortRebase: (cwd) => abortRebase(execGit, cwd),
+    continueRebase: (cwd) => continueRebase(execGit, cwd),
     getCommit: async (cwd, oid) => {
       const output = await execGit(
-        ["log", "-1", `--format=${GIT_LOG_FORMAT}`, oid],
+        [
+          "log",
+          "-1",
+          `--format=${GIT_LOG_FORMAT}`,
+          safeGitRevision(oid, "commit oid"),
+        ],
         cwd
       );
       const head = parseGitLog(output)[0];
@@ -199,7 +269,13 @@ export function createGitService({
     },
     getCommitPatch: async (cwd, oid) => {
       const text = await execGit(
-        ["show", "--format=", "--no-color", "--no-ext-diff", oid],
+        [
+          "show",
+          "--format=",
+          "--no-color",
+          "--no-ext-diff",
+          safeGitRevision(oid, "commit oid"),
+        ],
         cwd
       );
       return parseUnifiedDiff(text);
@@ -230,7 +306,15 @@ export function createGitService({
         cwd
       ),
     getFileContent: (cwd, options) =>
-      execGit(["show", `${options.ref ?? "HEAD"}:${options.path}`], cwd),
+      execGit(
+        [
+          "show",
+          `${safeGitRevision(options.ref ?? "HEAD", "file ref")}:${
+            options.path
+          }`,
+        ],
+        cwd
+      ),
     getLog: async (cwd, options = {}) => {
       const output = await execGit(logArgs(options), cwd);
       return parseGitLog(output);
@@ -314,26 +398,10 @@ export function createGitService({
       );
       return parseGitStatus(output).files.length === 0;
     },
-    listBranches: async (cwd, options) => {
-      const refs = ["refs/heads", "refs/remotes"].filter((ref) => {
-        if (options.kind === "local") {
-          return ref === "refs/heads";
-        }
-        if (options.kind === "remote") {
-          return ref === "refs/remotes";
-        }
-        return true;
-      });
-      const output = await execGit(
-        [
-          "for-each-ref",
-          "--format=%(refname)%00%(upstream:short)%00%(objectname)%00%(HEAD)",
-          ...refs,
-        ],
-        cwd
-      );
-      return parseGitBranchRefs(output);
-    },
+    listBranches: (cwd, options) => listGitBranches(execGit, cwd, options),
+    searchBranches: (cwd, options = {}) =>
+      searchGitBranches(execGit, cwd, options),
+    listStashes: (cwd) => listStashes(execGit, cwd),
     listTags: async (cwd) => {
       const output = await execGit(
         ["for-each-ref", "--format=%(refname:short)", "refs/tags"],
@@ -345,7 +413,10 @@ export function createGitService({
         .filter((line) => line.length > 0);
     },
     resolveRef: async (cwd, ref) => {
-      const output = await execGit(["rev-parse", "--verify", ref], cwd);
+      const output = await execGit(
+        ["rev-parse", "--verify", safeGitRevision(ref, "ref")],
+        cwd
+      );
       return output.trim();
     },
     validateBranchName: async (cwd, name) => {
@@ -411,5 +482,10 @@ export function createGitService({
       assertSafeBranchName(name);
       await execGit(["switch", name], cwd, { timeoutMs: WRITE_TIMEOUT_MS });
     },
+    merge: (cwd, branch) => mergeBranch(execGit, cwd, branch),
+    popStash: (cwd, index) => popStash(execGit, cwd, index),
+    rebase: (cwd, branch) => rebaseBranch(execGit, cwd, branch),
+    stash: (cwd, options) => stashChanges(execGit, cwd, options),
+    undoLastCommit: (cwd) => undoLastCommit(execGit, cwd),
   };
 }

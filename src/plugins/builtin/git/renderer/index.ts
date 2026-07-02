@@ -4,6 +4,7 @@ import type {
 } from "@plugins/api/renderer.ts";
 import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
 import { GitBranch } from "lucide-react";
+import { registerGitActions } from "./git-actions.ts";
 import { registerGitChangesAction } from "./git-changes-action.ts";
 import { GitChangesPanel } from "./git-changes-panel.tsx";
 import { registerGitStatusItem } from "./git-status-item.tsx";
@@ -14,6 +15,7 @@ export function registerGitPluginContributions(
 ): () => void {
   const disposers = [
     registerWorktreeActions(context),
+    registerGitActions(context),
     registerGitStatusItem(context),
     context.panels.register({
       component: GitChangesPanel,

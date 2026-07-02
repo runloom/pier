@@ -32,7 +32,7 @@ function pluginEntry(overrides: {
     {
       id: `${overrides.id}.list`,
       permissions: ["worktree:read"],
-      title: "Worktree: List",
+      title: "List Worktrees",
     },
   ];
   return {

@@ -1,3 +1,4 @@
+import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { DocumentTitle } from "@/components/common/document-title.tsx";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
@@ -20,6 +21,7 @@ export function AppShell() {
       <ShellKeybindings />
       <CommandPalette />
       <SettingsDialog />
+      <AppDialogHost />
       <TerminalDebugSnapshotBridge />
       <Toaster />
     </div>

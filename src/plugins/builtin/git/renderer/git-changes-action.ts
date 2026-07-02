@@ -6,7 +6,13 @@ export function registerGitChangesAction(
 ): () => void {
   return context.actions.register({
     category: "Git",
-    handler: () => context.panels.open("pier.git.changes"),
+    handler: () => {
+      const sourceContext = context.panels.getActiveContext();
+      context.panels.open(
+        "pier.git.changes",
+        sourceContext ? { context: sourceContext } : undefined
+      );
+    },
     id: "pier.git.changes.open",
     metadata: {
       categoryKey: "git",

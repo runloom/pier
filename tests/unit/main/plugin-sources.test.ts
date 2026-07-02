@@ -50,13 +50,16 @@ describe("createDefaultPluginSources", () => {
       kind: "builtin",
       manifest: GIT_PLUGIN_MANIFEST,
     });
+    expect(GIT_PLUGIN_MANIFEST.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "pier.worktree.list" }),
+        expect.objectContaining({ id: "pier.worktree.create" }),
+        expect.objectContaining({ id: "pier.worktree.delete" }),
+        expect.objectContaining({ id: "pier.worktree.prune" }),
+        expect.objectContaining({ id: "pier.git.changes.open" }),
+      ])
+    );
     expect(GIT_PLUGIN_MANIFEST).toMatchObject({
-      commands: [
-        { id: "pier.worktree.list" },
-        { id: "pier.worktree.create" },
-        { id: "pier.worktree.delete" },
-        { id: "pier.git.changes.open" },
-      ],
       id: GIT_PLUGIN_ID,
       localization: {
         files: {
@@ -114,9 +117,9 @@ describe("createDefaultPluginSources", () => {
     expect(englishLocale).toMatchObject({
       commands: {
         "pier.git.changes.open": { title: "Git: Open Changes" },
-        "pier.worktree.create": { title: "Worktree: Create" },
-        "pier.worktree.delete": { title: "Worktree: Delete..." },
-        "pier.worktree.list": { title: "Worktree: List" },
+        "pier.worktree.create": { title: "Create Worktree" },
+        "pier.worktree.delete": { title: "Delete Worktrees..." },
+        "pier.worktree.list": { title: "List Worktrees" },
       },
       description: "Built-in git command palette and terminal status support.",
       messages: {
@@ -152,9 +155,9 @@ describe("createDefaultPluginSources", () => {
           en: {
             commands: {
               "pier.git.changes.open": { title: "Git: Open Changes" },
-              "pier.worktree.create": { title: "Worktree: Create" },
-              "pier.worktree.delete": { title: "Worktree: Delete..." },
-              "pier.worktree.list": { title: "Worktree: List" },
+              "pier.worktree.create": { title: "Create Worktree" },
+              "pier.worktree.delete": { title: "Delete Worktrees..." },
+              "pier.worktree.list": { title: "List Worktrees" },
             },
             description:
               "Built-in git command palette and terminal status support.",

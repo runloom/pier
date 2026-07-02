@@ -66,10 +66,9 @@ function IconNum({
 const PILL_BASE =
   "inline-flex items-center gap-0.5 rounded border px-1.5 py-0 text-[10px] leading-4";
 const PILL_VARIANT = {
-  progress:
-    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900",
+  progress: "border-status-info-border bg-status-info-bg text-status-info-fg",
   danger:
-    "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-900",
+    "border-status-danger-border bg-status-danger-bg text-status-danger-fg",
   neutral: "bg-muted text-muted-foreground border-border",
 } as const;
 
@@ -306,13 +305,13 @@ export function WorkingTreeCounts({
   return (
     <span className="inline-flex items-center gap-1.5">
       <IconNum
-        color="text-emerald-600 dark:text-emerald-500"
+        color="text-success"
         icon={Check}
         label={pluginText(pluginContext, "srStaged", "staged")}
         n={counts.staged}
       />
       <IconNum
-        color="text-amber-600 dark:text-amber-500"
+        color="text-warning"
         icon={Pencil}
         label={pluginText(pluginContext, "srModified", "modified")}
         n={counts.modified}
@@ -351,11 +350,11 @@ export function LineDelta({
   const deletionsLabel = pluginText(pluginContext, "srDeletions", "deletions");
   return (
     <span className="inline-flex items-center gap-1 tabular-nums">
-      <span className="font-medium text-emerald-600 dark:text-emerald-500">
+      <span className="font-medium text-success">
         +{delta.insertions}
         <span className="sr-only"> {insertionsLabel},</span>
       </span>
-      <span className="font-medium text-red-600 dark:text-red-500">
+      <span className="font-medium text-destructive">
         -{delta.deletions}
         <span className="sr-only"> {deletionsLabel},</span>
       </span>

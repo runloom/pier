@@ -5,8 +5,13 @@ import {
   gitCreateBranchOptionsSchema,
   gitDeleteBranchOptionsSchema,
   gitDiffOptionsSchema,
+  gitDiffSearchBranchesOptionsSchema,
   gitLogOptionsSchema,
+  gitMergeOptionsSchema,
   gitPathsSchema,
+  gitRebaseOptionsSchema,
+  gitStashOptionsSchema,
+  gitStashPopOptionsSchema,
   listBranchesOptionsSchema,
 } from "./git.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
@@ -22,6 +27,7 @@ import {
   worktreeCreateRequestSchema,
   worktreeListRequestSchema,
   worktreeOpenRequestSchema,
+  worktreePruneRequestSchema,
   worktreeRemoveRequestSchema,
 } from "./worktree.ts";
 
@@ -159,6 +165,9 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   worktreeRemoveRequestSchema.extend({
     type: z.literal("worktree.remove"),
   }),
+  worktreePruneRequestSchema.extend({
+    type: z.literal("worktree.prune"),
+  }),
   z.object({ type: z.literal("plugin.list") }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.inspect"),
@@ -216,6 +225,11 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     options: listBranchesOptionsSchema,
     type: z.literal("git.listBranches"),
   }),
+  z.object({
+    cwd: z.string().min(1),
+    options: gitDiffSearchBranchesOptionsSchema.optional(),
+    type: z.literal("git.searchBranches"),
+  }),
   z.object({ type: z.literal("git.listTags"), cwd: z.string().min(1) }),
   z.object({
     cwd: z.string().min(1),
@@ -256,6 +270,42 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     cwd: z.string().min(1),
     name: z.string().min(1),
     type: z.literal("git.checkoutBranch"),
+  }),
+  gitMergeOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.merge"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.mergeAbort"),
+  }),
+  gitStashOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.stash"),
+  }),
+  gitStashPopOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.stashPop"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.stashList"),
+  }),
+  gitRebaseOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.rebase"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.rebaseAbort"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.rebaseContinue"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.undoLastCommit"),
   }),
 ]);
 
