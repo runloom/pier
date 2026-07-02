@@ -10,12 +10,14 @@ import {
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { GitBranchPlus, Play, Plus, Terminal } from "lucide-react";
+import { useSyncExternalStore } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { openRunTaskQuickPick } from "@/lib/actions/run-actions.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const WORKTREE_CREATE_ACTION_ID = "pier.worktree.create";
@@ -38,6 +40,14 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
   const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
+  // 订阅 active panel 变化以便 New Worktree 菜单项 disabled 状态跟随 (值不使用,纯粹为重渲注册订阅)。
+  usePanelDescriptorStore((s) => s.activeId);
+  // 订阅 actionRegistry 版本变化:插件卸载/重装会替换 action, enabled()/handler 引用随之变化。
+  useSyncExternalStore(
+    (cb) => actionRegistry.subscribe(cb),
+    () => actionRegistry.getVersion(),
+    () => 0
+  );
 
   const enabledAgents = detectedIds.filter(
     (id) => !disabledAgentIds.includes(id)
@@ -91,7 +101,16 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
           <DropdownMenuItem
             disabled={!worktreeCreateEnabled}
             onClick={() => {
-              actionRegistry.get(WORKTREE_CREATE_ACTION_ID)?.handler();
+              const action = actionRegistry.get(WORKTREE_CREATE_ACTION_ID);
+              if (!action) {
+                return;
+              }
+              Promise.resolve(action.handler()).catch((err) => {
+                console.error(
+                  `[add-panel-action] action ${action.id} failed:`,
+                  err
+                );
+              });
             }}
           >
             <GitBranchPlus className="size-4" />

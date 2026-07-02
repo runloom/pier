@@ -1,5 +1,11 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import i18next from "i18next";
 import {
@@ -775,6 +781,49 @@ describe("WorkspaceHeaderActions", () => {
     openAddPanelMenu();
     const item = await screen.findByRole("menuitem", { name: "New Worktree" });
     expect(item).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("keeps New Worktree reactive to active panel context changes", async () => {
+    // enabled() 读取 usePanelDescriptorStore 的实时快照 (镜像 git 插件的
+    // activeWorktreeTarget 实现), 而不是测试注册时捕获的闭包值 —— 这样才能
+    // 验证组件本身对 store 变化保持反应式, 而非碰巧因为别的 state 变了才重渲。
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () =>
+        usePanelDescriptorStore.getState().activeId === "git-panel",
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    usePanelDescriptorStore.setState({
+      activeId: "git-panel",
+      descriptors: {
+        "git-panel": { display: { short: "Git Panel" } },
+      },
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
+    expect(item).not.toHaveAttribute("aria-disabled", "true");
+
+    // 模拟用户把 active panel 切到一个非 git 上下文的 terminal —— 不触发任何
+    // 无关 state (agent 检测等), 只改 usePanelDescriptorStore。
+    act(() => {
+      usePanelDescriptorStore.getState().setActive("plain-panel");
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("menuitem", { name: "New Worktree" })
+      ).toHaveAttribute("aria-disabled", "true");
+    });
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("launches an agent terminal in the clicked header group", async () => {
