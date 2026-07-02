@@ -273,6 +273,35 @@ describe("git-autofetch-service", () => {
     expect(execGit).toHaveBeenCalledTimes(1);
   });
 
+  it("鉴权冷却期内 focusCatchup 也被拦截，不执行 fetch", async () => {
+    let fail = true;
+    const authExecGit = vi.fn(() => {
+      if (fail) {
+        return Promise.reject(
+          new GitExecError({
+            args: ["fetch"],
+            cwd: "/repo/wt-a",
+            exitCode: 128,
+            message: "auth",
+            stderr: "fatal: could not read Username for 'https://github.com'",
+            stdout: "",
+          })
+        );
+      }
+      return Promise.resolve("");
+    }) satisfies ExecGit;
+    const h = makeHarness({ execGit: authExecGit });
+    h.advance(5 * 60_000);
+    await h.service.tick(); // 命中鉴权失败，进入 60min 冷却
+    expect(authExecGit).toHaveBeenCalledTimes(1);
+    fail = false;
+    // 冷却期内（35min < 60min），即使满足 focusCatchup 其他条件也被拦截
+    h.advance(35 * 60_000);
+    await h.service.tick({ focusCatchup: true });
+    expect(authExecGit).toHaveBeenCalledTimes(1); // 未执行
+    expect(h.pulsed).toHaveLength(0);
+  });
+
   it("B5: 第一个 root 是死路径时回退到下一个仍能 fetch 成功", async () => {
     const execGit = vi.fn((_args: readonly string[], opts: GitExecOptions) => {
       if (opts.cwd === "/repo/dead-a") {

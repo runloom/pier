@@ -1561,6 +1561,45 @@ describe("git builtin plugin", () => {
     expect(screen.getByTestId("upstream-gone-pill")).toBeInTheDocument();
   });
 
+  it("DETACHED 胶囊使用 text-foreground（neutral 风格），与 muted 计数区分", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: null,
+        mergedIntoDefault: null,
+        oid: "abc1234def",
+        upstream: null,
+        upstreamGone: false,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    const { branch: _omitted, ...contextWithoutBranch } = context;
+    render(
+      statusItem.render({
+        context: contextWithoutBranch,
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const pill = await screen.findByText("DETACHED");
+    expect(pill.className).toContain("text-foreground");
+  });
+
   it("分支名不设固定宽度上限，仅靠 truncate 在溢出时截断", async () => {
     const longBranch =
       "Ysheep666/GIT-能力增强-一个足够长的分支名不该在空间够用时被截断";
