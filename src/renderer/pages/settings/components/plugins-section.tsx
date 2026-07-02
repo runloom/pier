@@ -37,11 +37,11 @@ import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import {
-  commandContributionBadges,
+  commandContributionRows,
   contributionSummary,
   PluginDetails,
-  panelContributionBadges,
-  terminalStatusContributionBadges,
+  panelContributionRows,
+  terminalStatusContributionRows,
 } from "./plugin-details.tsx";
 
 function PluginsLoadingState() {
@@ -91,12 +91,9 @@ function PluginRow({
   const t = useT();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const canToggle = entry.runtime.canToggle;
-  const commandContributions = commandContributionBadges(
-    entry,
-    i18next.language
-  );
-  const panelContributions = panelContributionBadges(entry, i18next.language);
-  const terminalStatusContributions = terminalStatusContributionBadges(
+  const commandContributions = commandContributionRows(entry, i18next.language);
+  const panelContributions = panelContributionRows(entry, i18next.language);
+  const terminalStatusContributions = terminalStatusContributionRows(
     entry,
     i18next.language
   );

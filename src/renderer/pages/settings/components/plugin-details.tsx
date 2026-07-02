@@ -1,74 +1,77 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { ExternalLink } from "lucide-react";
+import type { ReactNode } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import {
   resolvePluginCommandDisplay,
   resolvePluginPanelDisplay,
   resolvePluginTerminalStatusItemDisplay,
 } from "@/lib/plugins/display.ts";
+import { ContributionTable } from "./contribution-table.tsx";
 
-export interface ContributionBadge {
+export interface CommandContributionRow {
+  category?: string;
   id: string;
   title: string;
 }
 
-export function commandContributionBadges(
-  entry: PluginRegistryEntry,
-  locale: string
-): ContributionBadge[] {
-  return entry.manifest.commands.map((command) => ({
-    id: command.id,
-    title: resolvePluginCommandDisplay(entry.manifest, command, locale).title,
-  }));
+export interface PanelContributionRow {
+  description?: string;
+  id: string;
+  title: string;
 }
 
-export function panelContributionBadges(
+export type TerminalStatusContributionRow = PanelContributionRow;
+
+export function commandContributionRows(
   entry: PluginRegistryEntry,
   locale: string
-): ContributionBadge[] {
-  return entry.manifest.panels.map((panel) => ({
-    id: panel.id,
-    title: resolvePluginPanelDisplay(entry.manifest, panel, locale).title,
-  }));
+): CommandContributionRow[] {
+  return entry.manifest.commands.map((command) => {
+    const display = resolvePluginCommandDisplay(
+      entry.manifest,
+      command,
+      locale
+    );
+    return {
+      id: command.id,
+      title: display.title,
+      ...(display.category ? { category: display.category } : {}),
+    };
+  });
 }
 
-export function terminalStatusContributionBadges(
+export function panelContributionRows(
   entry: PluginRegistryEntry,
   locale: string
-): ContributionBadge[] {
-  return entry.manifest.terminalStatusItems.map((item) => ({
-    id: item.id,
-    title: resolvePluginTerminalStatusItemDisplay(entry.manifest, item, locale)
-      .title,
-  }));
+): PanelContributionRow[] {
+  return entry.manifest.panels.map((panel) => {
+    const display = resolvePluginPanelDisplay(entry.manifest, panel, locale);
+    return {
+      id: panel.id,
+      title: display.title,
+      ...(display.description ? { description: display.description } : {}),
+    };
+  });
 }
 
-function ContributionBadgeList({
-  emptyLabel,
-  items,
-}: {
-  emptyLabel: string;
-  items: ContributionBadge[];
-}) {
-  if (items.length === 0) {
-    return <span className="text-muted-foreground">{emptyLabel}</span>;
-  }
-
-  return (
-    <>
-      {items.map((item) => (
-        <Badge
-          className="max-w-full gap-1"
-          key={item.id}
-          title={item.id}
-          variant="outline"
-        >
-          <span className="truncate">{item.title}</span>
-          <span className="truncate text-muted-foreground/70">{item.id}</span>
-        </Badge>
-      ))}
-    </>
-  );
+export function terminalStatusContributionRows(
+  entry: PluginRegistryEntry,
+  locale: string
+): TerminalStatusContributionRow[] {
+  return entry.manifest.terminalStatusItems.map((item) => {
+    const display = resolvePluginTerminalStatusItemDisplay(
+      entry.manifest,
+      item,
+      locale
+    );
+    return {
+      id: item.id,
+      title: display.title,
+      ...(display.description ? { description: display.description } : {}),
+    };
+  });
 }
 
 function countLabel(
@@ -122,47 +125,103 @@ function permissionLabel(
   });
 }
 
+function isHttpUrl(value: string): boolean {
+  return value.startsWith("https://") || value.startsWith("http://");
+}
+
+interface PluginMetaRow {
+  href?: string;
+  label: string;
+  value: string;
+}
+
+function pluginMetaRows(
+  entry: PluginRegistryEntry,
+  t: ReturnType<typeof useT>
+): PluginMetaRow[] {
+  const rows: PluginMetaRow[] = [
+    { label: t("settings.plugins.pluginId"), value: entry.manifest.id },
+    { label: t("settings.plugins.version"), value: entry.manifest.version },
+    {
+      label: t("settings.plugins.publisher"),
+      value: entry.manifest.publisher ?? t("settings.plugins.none"),
+    },
+  ];
+  if (entry.manifest.homepage) {
+    rows.push({
+      label: t("settings.plugins.homepage"),
+      value: entry.manifest.homepage,
+      ...(isHttpUrl(entry.manifest.homepage)
+        ? { href: entry.manifest.homepage }
+        : {}),
+    });
+  }
+  if (entry.manifest.repository) {
+    rows.push({
+      label: t("settings.plugins.repository"),
+      value: entry.manifest.repository,
+      ...(isHttpUrl(entry.manifest.repository)
+        ? { href: entry.manifest.repository }
+        : {}),
+    });
+  }
+  return rows;
+}
+
 function PluginMeta({ entry }: { entry: PluginRegistryEntry }) {
   const t = useT();
-  const rows = [
-    [t("settings.plugins.pluginId"), entry.manifest.id],
-    [t("settings.plugins.version"), entry.manifest.version],
-    [
-      t("settings.plugins.publisher"),
-      entry.manifest.publisher ?? t("settings.plugins.none"),
-    ],
-  ];
-
   return (
     <div className="grid gap-2 text-xs sm:grid-cols-3">
-      {rows.map(([label, value]) => (
-        <div className="min-w-0" key={label}>
-          <div className="font-medium text-muted-foreground">{label}</div>
-          <div className="truncate" title={value}>
-            {value}
-          </div>
+      {pluginMetaRows(entry, t).map((row) => (
+        <div className="min-w-0" key={row.label}>
+          <div className="font-medium text-muted-foreground">{row.label}</div>
+          {row.href ? (
+            <a
+              className="inline-flex max-w-full items-center gap-1 text-primary hover:underline"
+              href={row.href}
+              rel="noreferrer"
+              target="_blank"
+              title={row.value}
+            >
+              <span className="truncate">{row.value}</span>
+              <ExternalLink aria-hidden className="size-3 shrink-0" />
+            </a>
+          ) : (
+            <div className="truncate" title={row.value}>
+              {row.value}
+            </div>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-function ContributionSection({
-  emptyLabel,
-  items,
+function ContributionTableSection({
+  headers,
+  rows,
   title,
 }: {
-  emptyLabel: string;
-  items: ContributionBadge[];
+  headers: string[];
+  rows: ReactNode[][];
   title: string;
 }) {
+  if (rows.length === 0) {
+    return null;
+  }
   return (
     <div className="min-w-0">
       <div className="mb-1 font-medium text-muted-foreground">{title}</div>
-      <div className="flex flex-wrap gap-1">
-        <ContributionBadgeList emptyLabel={emptyLabel} items={items} />
-      </div>
+      <ContributionTable headers={headers} rows={rows} />
     </div>
+  );
+}
+
+function idCell(id: string): ReactNode {
+  return (
+    <code className="whitespace-nowrap font-mono" key={`${id}-id`}>
+      {id}
+    </code>
   );
 }
 
@@ -172,48 +231,72 @@ export function PluginDetails({
   panelContributions,
   terminalStatusContributions,
 }: {
-  commandContributions: ContributionBadge[];
+  commandContributions: CommandContributionRow[];
   entry: PluginRegistryEntry;
-  panelContributions: ContributionBadge[];
-  terminalStatusContributions: ContributionBadge[];
+  panelContributions: PanelContributionRow[];
+  terminalStatusContributions: TerminalStatusContributionRow[];
 }) {
   const t = useT();
+  const commandRows: ReactNode[][] = commandContributions.map((row) => [
+    row.title,
+    idCell(row.id),
+    row.category ?? "",
+  ]);
+  const panelRows: ReactNode[][] = panelContributions.map((row) => [
+    row.title,
+    idCell(row.id),
+    row.description ?? "",
+  ]);
+  const terminalStatusRows: ReactNode[][] = terminalStatusContributions.map(
+    (row) => [row.title, idCell(row.id), row.description ?? ""]
+  );
+
   return (
     <div className="basis-full space-y-4 border-border/60 border-t pt-3 text-xs">
       <PluginMeta entry={entry} />
-      <div className="grid gap-3 md:grid-cols-2">
-        <ContributionSection
-          emptyLabel={t("settings.plugins.none")}
-          items={commandContributions}
-          title={t("settings.plugins.commands")}
-        />
-        <ContributionSection
-          emptyLabel={t("settings.plugins.none")}
-          items={terminalStatusContributions}
-          title={t("settings.plugins.terminalStatusItems")}
-        />
-        <ContributionSection
-          emptyLabel={t("settings.plugins.none")}
-          items={panelContributions}
-          title={t("settings.plugins.panels")}
-        />
-        <div className="min-w-0">
-          <div className="mb-1 font-medium text-muted-foreground">
-            {t("settings.plugins.permissions")}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {entry.effectivePermissions.length > 0 ? (
-              entry.effectivePermissions.map((permission) => (
-                <Badge key={permission} title={permission} variant="outline">
-                  {permissionLabel(permission, t)}
-                </Badge>
-              ))
-            ) : (
-              <span className="text-muted-foreground">
-                {t("settings.plugins.none")}
-              </span>
-            )}
-          </div>
+      <ContributionTableSection
+        headers={[
+          t("settings.plugins.table.title"),
+          t("settings.plugins.table.id"),
+          t("settings.plugins.table.category"),
+        ]}
+        rows={commandRows}
+        title={t("settings.plugins.commands")}
+      />
+      <ContributionTableSection
+        headers={[
+          t("settings.plugins.table.title"),
+          t("settings.plugins.table.id"),
+          t("settings.plugins.table.description"),
+        ]}
+        rows={panelRows}
+        title={t("settings.plugins.panels")}
+      />
+      <ContributionTableSection
+        headers={[
+          t("settings.plugins.table.title"),
+          t("settings.plugins.table.id"),
+          t("settings.plugins.table.description"),
+        ]}
+        rows={terminalStatusRows}
+        title={t("settings.plugins.terminalStatusItems")}
+      />
+      <div className="min-w-0">
+        <div className="mb-1 font-medium text-muted-foreground">
+          {t("settings.plugins.permissions")}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {entry.effectivePermissions.length > 0 ? (
+            entry.effectivePermissions.map((permission) => (
+              <Badge key={permission} title={permission} variant="outline">
+                {permissionLabel(permission, t)}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-muted-foreground">
+              {t("settings.plugins.none")}
+            </span>
+          )}
         </div>
       </div>
     </div>
