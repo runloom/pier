@@ -109,4 +109,42 @@ describe("terminal status bar prefs mirror store", () => {
       useTerminalStatusBarPrefsStore.getState().prefs.items["a.b"]
     ).toBeUndefined();
   });
+
+  it("patchItemOverride IPC 失败时置 error 且不抛出、prefs 不变", async () => {
+    const { initTerminalStatusBarPrefs, useTerminalStatusBarPrefsStore } =
+      await import("@/stores/terminal-status-bar-prefs.store.ts");
+    await initTerminalStatusBarPrefs();
+    const prefsBefore = useTerminalStatusBarPrefsStore.getState().prefs;
+    setItemOverride.mockImplementationOnce(() =>
+      Promise.reject(new Error("ipc boom"))
+    );
+    await expect(
+      useTerminalStatusBarPrefsStore
+        .getState()
+        .patchItemOverride("a.b", { hidden: true })
+    ).resolves.toBeUndefined();
+    expect(useTerminalStatusBarPrefsStore.getState().error).toBe("ipc boom");
+    expect(useTerminalStatusBarPrefsStore.getState().prefs).toBe(prefsBefore);
+  });
+
+  it("失败后成功操作会清空 error", async () => {
+    const { initTerminalStatusBarPrefs, useTerminalStatusBarPrefsStore } =
+      await import("@/stores/terminal-status-bar-prefs.store.ts");
+    await initTerminalStatusBarPrefs();
+    setItemOverride.mockImplementationOnce(() =>
+      Promise.reject(new Error("ipc boom"))
+    );
+    await useTerminalStatusBarPrefsStore
+      .getState()
+      .patchItemOverride("a.b", { hidden: true });
+    expect(useTerminalStatusBarPrefsStore.getState().error).toBe("ipc boom");
+
+    await useTerminalStatusBarPrefsStore
+      .getState()
+      .patchItemOverride("a.b", { hidden: true });
+    expect(useTerminalStatusBarPrefsStore.getState().error).toBeNull();
+    expect(
+      useTerminalStatusBarPrefsStore.getState().prefs.items["a.b"]
+    ).toEqual({ hidden: true });
+  });
 });

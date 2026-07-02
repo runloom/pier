@@ -14,6 +14,8 @@ import {
 import { create } from "zustand";
 
 interface TerminalStatusBarPrefsState {
+  /** 最近一次 IPC 操作失败的错误消息;操作成功后清空。 */
+  error: string | null;
   initialized: boolean;
   /** 以 patch 语义更新单项覆盖;合成结果为空时自动改走 resetItem。 */
   patchItemOverride(
@@ -24,25 +26,39 @@ interface TerminalStatusBarPrefsState {
   resetItem(itemId: string): Promise<void>;
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export const useTerminalStatusBarPrefsStore =
   create<TerminalStatusBarPrefsState>((set, get) => ({
+    error: null,
     initialized: false,
     patchItemOverride: async (itemId, patch) => {
       const current = get().prefs.items[itemId];
       const next = withItemOverridePatch(current, patch);
-      const prefs =
-        next === null
-          ? await window.pier.terminalStatusBarPrefs.resetItem(itemId)
-          : await window.pier.terminalStatusBarPrefs.setItemOverride(
-              itemId,
-              next
-            );
-      set({ prefs });
+      try {
+        const prefs =
+          next === null
+            ? await window.pier.terminalStatusBarPrefs.resetItem(itemId)
+            : await window.pier.terminalStatusBarPrefs.setItemOverride(
+                itemId,
+                next
+              );
+        set({ error: null, prefs });
+      } catch (err) {
+        set({ error: errorMessage(err) });
+      }
     },
     prefs: emptyTerminalStatusBarPrefs(),
     resetItem: async (itemId) => {
-      const prefs = await window.pier.terminalStatusBarPrefs.resetItem(itemId);
-      set({ prefs });
+      try {
+        const prefs =
+          await window.pier.terminalStatusBarPrefs.resetItem(itemId);
+        set({ error: null, prefs });
+      } catch (err) {
+        set({ error: errorMessage(err) });
+      }
     },
   }));
 
@@ -50,6 +66,17 @@ export async function initTerminalStatusBarPrefs(): Promise<void> {
   window.pier.terminalStatusBarPrefs.onChanged((prefs) => {
     useTerminalStatusBarPrefsStore.setState({ initialized: true, prefs });
   });
-  const prefs = await window.pier.terminalStatusBarPrefs.getAll();
-  useTerminalStatusBarPrefsStore.setState({ initialized: true, prefs });
+  try {
+    const prefs = await window.pier.terminalStatusBarPrefs.getAll();
+    useTerminalStatusBarPrefsStore.setState({
+      error: null,
+      initialized: true,
+      prefs,
+    });
+  } catch (err) {
+    useTerminalStatusBarPrefsStore.setState({
+      error: errorMessage(err),
+      initialized: true,
+    });
+  }
 }
