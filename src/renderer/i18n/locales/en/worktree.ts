@@ -8,6 +8,7 @@ export const worktree = {
     createAndStartHint: "Create and start",
     createOnlyHint: "Create only",
     creating: "Creating…",
+    description: "Create an isolated worktree for a task",
     emptyHint: "Empty input creates an auto codename",
     inputPlaceholder: "Describe the task, or type a branch name",
     launchFailed: "Terminal launch failed: {{message}}",

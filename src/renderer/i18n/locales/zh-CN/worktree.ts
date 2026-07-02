@@ -8,6 +8,7 @@ export const worktree = {
     createAndStartHint: "创建并开工",
     createOnlyHint: "仅创建",
     creating: "创建中…",
+    description: "为任务创建一个隔离的 worktree",
     emptyHint: "留空回车自动起名",
     inputPlaceholder: "描述任务,或直接输入分支名",
     launchFailed: "终端启动失败: {{message}}",
