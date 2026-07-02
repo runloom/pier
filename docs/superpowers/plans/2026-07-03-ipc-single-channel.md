@@ -19,7 +19,7 @@
 
 ---
 
-### Task F1: 迁 `preferences.read/update`（探路，2 条）
+### Task 1: 迁 `preferences.read/update`（探路，2 条）
 
 **Files:**
 - Modify: `src/preload/index.ts`（preferencesApi 实现，行 244-250 附近）
@@ -68,7 +68,7 @@ git commit -m "refactor(ipc): route preferences.read/update through command chan
 
 ---
 
-### Task F2: 迁 `window.close/create/focus/list`（同域批量，4 条）
+### Task 2: 迁 `window.close/create/focus/list`（同域批量，4 条）
 
 **Files:**
 - Modify: `src/preload/index.ts`（window API 实现）
@@ -117,7 +117,7 @@ git commit -m "refactor(ipc): route window.close/create/focus/list through comma
 
 ---
 
-### Task F3: 迁 `workspace.layout.clear/read/save`（同域批量，3 条）
+### Task 3: 迁 `workspace.layout.clear/read/save`（同域批量，3 条）
 
 **Files:**
 - Modify: `src/preload/index.ts`（workspace layout API 实现）
@@ -164,7 +164,7 @@ git commit -m "refactor(ipc): route workspace.layout.* through command channel"
 
 ---
 
-### Task F4: 迁 `commandPaletteMru.read/clear/record`（3 条，含 send → invoke）
+### Task 4: 迁 `commandPaletteMru.read/clear/record`（3 条，含 send → invoke）
 
 **Files:**
 - Modify: `src/preload/index.ts`（command palette MRU API）
@@ -205,7 +205,7 @@ git commit -m "refactor(ipc): route commandPaletteMru.* through command channel"
 
 ---
 
-### Task F5: 删 rendererFacade 概念层 + 清理 shared 常量 + 全量验证
+### Task 5: 删 rendererFacade 概念层 + 清理 shared 常量 + 全量验证
 
 **Files:**
 - Modify: `src/main/app-core/permissions.ts`（删 `rendererFacade` 字段、`commandAllowsRendererFacade` helper）
