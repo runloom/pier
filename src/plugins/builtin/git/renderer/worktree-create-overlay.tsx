@@ -17,6 +17,12 @@ import {
 } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@pier/ui/input-group.tsx";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -176,9 +182,8 @@ function WorktreeCreateOverlay({
             <FieldLabel htmlFor="worktree-create-branch">
               {text("branchLabel", undefined, "Branch")}
             </FieldLabel>
-            <div className="flex items-center gap-2">
-              <Input
-                className="flex-1 font-mono"
+            <InputGroup className="font-mono">
+              <InputGroupInput
                 disabled={creating}
                 id="worktree-create-branch"
                 onChange={(event) => {
@@ -189,14 +194,16 @@ function WorktreeCreateOverlay({
                 value={derived.branch}
               />
               {showAutoBadge ? (
-                <Badge variant="secondary">
-                  {text("autoBadge", undefined, "Auto")}
-                </Badge>
+                <InputGroupAddon align="inline-end">
+                  <InputGroupText>
+                    {text("autoBadge", undefined, "Auto")}
+                  </InputGroupText>
+                </InputGroupAddon>
               ) : null}
-            </div>
-            <FieldDescription className="font-mono">
-              {`.worktrees/${derived.name}`}
-            </FieldDescription>
+              <InputGroupAddon align="block-end">
+                <InputGroupText>{`.worktrees/${derived.name}`}</InputGroupText>
+              </InputGroupAddon>
+            </InputGroup>
           </Field>
 
           <Field>
