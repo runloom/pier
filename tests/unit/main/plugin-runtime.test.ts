@@ -45,6 +45,7 @@ function stubSettings(): PluginSettingsService {
     getAll: () => Promise.resolve({ values: {}, version: 1 }),
     getValues: () => ({}),
     init: () => Promise.resolve(),
+    invalidateCache: () => undefined,
     onDidChange: () => () => undefined,
     reset: () => Promise.resolve({ values: {}, version: 1 }),
     set: () => Promise.resolve({ values: {}, version: 1 }),
@@ -84,6 +85,34 @@ describe("MainPluginRuntime", () => {
     );
     runtime.refresh([entry("pier.a", true), entry("pier.b", true)]);
     expect(seen).toEqual(["pier.a", "pier.b"]);
+  });
+
+  it("已激活插件的 getEntries 在后续 refresh 后现算最新快照（不冻结首次激活时的 entries）", () => {
+    let getEntriesForA: (() => readonly PluginRegistryEntry[]) | undefined;
+    const runtime = new MainPluginRuntime(
+      [
+        { activate: () => () => undefined, id: "pier.a" },
+        { activate: () => () => undefined, id: "pier.b" },
+      ],
+      (entryArg, getEntries) => {
+        if (entryArg.manifest.id === "pier.a") {
+          getEntriesForA = getEntries;
+        }
+        return stubContext();
+      }
+    );
+
+    // 首次 refresh：只有 pier.a 存在，激活并捕获它的 getEntries。
+    runtime.refresh([entry("pier.a", true)]);
+    expect(getEntriesForA?.()).toEqual([entry("pier.a", true)]);
+
+    // 第二次 refresh：pier.b 加入 registry；pier.a 已激活，不会重新创建 context，
+    // 但它捕获的 getEntries() 现算应反映最新快照（含 pier.b）。
+    runtime.refresh([entry("pier.a", true), entry("pier.b", true)]);
+    expect(getEntriesForA?.()).toEqual([
+      entry("pier.a", true),
+      entry("pier.b", true),
+    ]);
   });
 });
 

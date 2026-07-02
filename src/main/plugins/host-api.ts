@@ -22,7 +22,8 @@ export function createMainPluginHostApi({
   settings,
   runtime = new MainPluginRuntime(
     BUILTIN_MAIN_PLUGIN_MODULES,
-    (entry, entries) => createMainPluginContext({ entries, entry, settings })
+    (entry, getEntries) =>
+      createMainPluginContext({ entry, getEntries, settings })
   ),
 }: {
   /**
@@ -38,6 +39,9 @@ export function createMainPluginHostApi({
     // plugin-settings store 的异步 init 必须先于 runtime.refresh 完成，
     // 保证插件 activate 期间 context.configuration.get() 同步可用。
     await settings.init();
+    // registry 即将重新发现 — 失效 enabled-properties 缓存（F13），
+    // 保证下次 settings.set() 校验用的是本次 refresh 后的最新插件声明。
+    settings.invalidateCache();
     const result = await plugins.list();
     runtime.refresh(result.entries);
     onRegistryChanged?.(result);

@@ -20,17 +20,18 @@ function assertOwnedConfigurationKey(
 }
 
 export function createMainPluginContext({
-  entries,
+  getEntries,
   entry,
   settings,
 }: {
-  entries: readonly PluginRegistryEntry[];
+  getEntries: () => readonly PluginRegistryEntry[];
   entry: PluginRegistryEntry;
   settings: PluginSettingsService;
 }): MainPluginContext {
-  const properties = collectEnabledConfigurationProperties(entries);
-
   function effectiveValue(key: string): unknown {
+    // 现算而非冻结快照 — registry 变化后跨插件 get() 需读到最新 schema（F6）。
+    // main 端调用频率低，现算优于带版本号缓存的复杂度。
+    const properties = collectEnabledConfigurationProperties(getEntries());
     const property = properties.get(key);
     const userValue = settings.getValues()[key];
     return property

@@ -131,6 +131,91 @@ describe("PluginSettingsService", () => {
     ).rejects.toMatchObject({ code: "invalid_command" });
   });
 
+  it("set 与当前存储值相等（Object.is）→ 短路：不写 store、不 emit、直接返回当前快照", async () => {
+    const store = createPluginSettingsStore({
+      filePath: join(tempDir, "plugin-settings.json"),
+    });
+    const service = createPluginSettingsService({
+      plugins: pluginsWith([gitEntry()]),
+      store,
+    });
+
+    const first = await service.set(
+      "pier.git.statusItem.showDirtyIndicator",
+      false
+    );
+    expect(first.values["pier.git.statusItem.showDirtyIndicator"]).toBe(false);
+
+    const payloads: unknown[] = [];
+    service.onDidChange((payload) => payloads.push(payload));
+    const setValueSpy = vi.spyOn(store, "setValue");
+
+    const second = await service.set(
+      "pier.git.statusItem.showDirtyIndicator",
+      false
+    );
+
+    expect(second).toEqual(first);
+    expect(payloads).toHaveLength(0);
+    expect(setValueSpy).not.toHaveBeenCalled();
+  });
+
+  it("连续两次 set 只触发一次 plugins.list()（enabled-properties 缓存）", async () => {
+    let listCalls = 0;
+    const entries = [gitEntry()];
+    const plugins: PluginService = {
+      inspect: () => Promise.reject(new Error("unused in this test")),
+      list: () => {
+        listCalls += 1;
+        return Promise.resolve({ diagnostics: [], entries });
+      },
+      setEnabled: () => Promise.reject(new Error("unused in this test")),
+    };
+    const service = createPluginSettingsService({
+      plugins,
+      store: createPluginSettingsStore({
+        filePath: join(tempDir, "plugin-settings.json"),
+      }),
+    });
+
+    await service.set("pier.git.statusItem.mode", "manual");
+    expect(listCalls).toBe(1);
+
+    await service.set("pier.git.statusItem.limit", 5);
+    expect(listCalls).toBe(1);
+  });
+
+  it("invalidateCache() 后下次 set 重建缓存（registry 变化可见）", async () => {
+    let listCalls = 0;
+    let entries = [gitEntry()];
+    const plugins: PluginService = {
+      inspect: () => Promise.reject(new Error("unused in this test")),
+      list: () => {
+        listCalls += 1;
+        return Promise.resolve({ diagnostics: [], entries });
+      },
+      setEnabled: () => Promise.reject(new Error("unused in this test")),
+    };
+    const service = createPluginSettingsService({
+      plugins,
+      store: createPluginSettingsStore({
+        filePath: join(tempDir, "plugin-settings.json"),
+      }),
+    });
+
+    await service.set("pier.git.statusItem.mode", "manual");
+    expect(listCalls).toBe(1);
+
+    // registry 变化：git 插件被禁用，key 应变为 not_found。
+    entries = [gitEntry(false)];
+    service.invalidateCache();
+
+    await expect(
+      service.set("pier.git.statusItem.limit", 5)
+    ).rejects.toMatchObject({ code: "not_found" });
+    expect(listCalls).toBe(2);
+  });
+
   it("reset 删除 key 且仅在 key 存在时广播", async () => {
     const service = makeService();
     const payloads: unknown[] = [];

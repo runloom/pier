@@ -129,6 +129,7 @@ function cliClientServices(): PierCoreServices {
       getAll: async () => ({ values: {}, version: 1 }),
       getValues: () => ({}),
       init: async () => undefined,
+      invalidateCache: () => undefined,
       onDidChange: () => () => undefined,
       reset: async () => ({ values: {}, version: 1 }),
       set: async () => ({ values: {}, version: 1 }),
