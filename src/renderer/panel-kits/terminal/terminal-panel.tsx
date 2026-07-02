@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { useAgentSessionStore } from "@/stores/agent-session.store.ts";
 import {
   computeMonoFontFamily,
   computeMonoFontFamilyList,
@@ -32,6 +33,7 @@ import {
 } from "./terminal-status-bar.tsx";
 import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
+  agentTabChromeOverlay,
   mergeTabChrome,
   tabChromeFromParams,
   terminalPanelDescriptor,
@@ -198,12 +200,17 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
+  const agentSession = useAgentSessionStore((s) => s.sessions[panelId]);
+  // agent 会话呈现 overlay 叠在最外层：icon/title 换 agent 的, 会话消失自动回退。
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
-      savedSession?.tab ?? activeLaunch.tab,
-      restoredTaskTabPatch(savedSession?.task)
+      mergeTabChrome(
+        savedSession?.tab ?? activeLaunch.tab,
+        restoredTaskTabPatch(savedSession?.task)
+      ),
+      tabPatch
     ),
-    tabPatch
+    agentTabChromeOverlay(agentSession)
   );
   const statusContext = {
     context: effectiveContext,

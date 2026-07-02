@@ -1,3 +1,9 @@
+import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import {
+  type AgentSessionSnapshot,
+  agentTabIconId,
+  tabStatusForAgentStatus,
+} from "@shared/contracts/agent-session.ts";
 import {
   normalizePanelTabChromeInput,
   type PanelContext,
@@ -85,5 +91,29 @@ export function terminalPanelDescriptor(args: {
       ...(args.effectiveTitle ? { terminalTitle: args.effectiveTitle } : {}),
     },
     ...(args.effectiveTab ? { tab: args.effectiveTab } : {}),
+  };
+}
+
+/**
+ * agent 会话的 tab 呈现 overlay：状态点 + icon + title 全部由 renderer store
+ * 单源驱动（纯呈现层, 不进 tab-chrome-patch 持久化管线）——reload 后经
+ * snapshot pull 自动恢复, 会话消失即自动回退, 无 main/renderer 生命周期
+ * 不同步问题。标题启发式会话无 agentId, 只带状态点不换 icon/title。
+ */
+export function agentTabChromeOverlay(
+  session: AgentSessionSnapshot | undefined
+): Partial<PanelTabChrome> | null {
+  if (!session) {
+    return null;
+  }
+  const status = { state: { status: tabStatusForAgentStatus(session.status) } };
+  if (!session.agentId) {
+    return status;
+  }
+  const entry = getAgentCatalogEntry(session.agentId);
+  return {
+    ...status,
+    icon: { id: agentTabIconId(session.agentId) },
+    title: entry?.label ?? session.agentId,
   };
 }
