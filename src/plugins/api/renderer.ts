@@ -35,9 +35,11 @@ import type {
   WorktreeCheckResult,
   WorktreeCreateRequest,
   WorktreeCreateResult,
+  WorktreeCreationDefaults,
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
+  WorktreeOpenTerminalRequest,
   WorktreePruneRequest,
   WorktreeRemoveRequest,
   WorktreeRemoveResult,
@@ -132,6 +134,7 @@ export interface RendererTerminalStatusItemContext {
 export interface RendererTerminalStatusItem {
   id: string;
   isVisible?: (context: RendererTerminalStatusItemContext) => boolean;
+  order?: number;
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
 }
 
@@ -281,6 +284,18 @@ export interface RendererPluginContext {
       title: string;
     }): Promise<{ shown: boolean }>;
   };
+  /**
+   * 宿主级模态 overlay。渲染、blocking overlay、终端输入路由与 keybinding
+   * scope 均由宿主统一处理;全局单例,新 overlay 会顶替当前未决的旧 overlay。
+   * 不设 manifest 权限;插件 deactivate 时宿主自动关闭其残留 overlay。
+   */
+  overlays: {
+    close(id: string): void;
+    open(overlay: {
+      id: string;
+      render: (controls: { close: () => void }) => ReactNode;
+    }): void;
+  };
   panels: {
     getActiveContext(): PanelContext | null;
     /**
@@ -296,8 +311,10 @@ export interface RendererPluginContext {
   worktrees: {
     check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
     create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
+    creationDefaults(): Promise<WorktreeCreationDefaults>;
     list(request: WorktreeListRequest): Promise<WorktreeListResult>;
     open(request: WorktreeOpenRequest): Promise<unknown>;
+    openTerminal(request: WorktreeOpenTerminalRequest): Promise<unknown>;
     prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
     remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
   };

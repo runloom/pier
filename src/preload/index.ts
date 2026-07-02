@@ -246,8 +246,13 @@ const agentsApi: PierAgentsAPI = {
 
 const preferencesApi: PierPreferencesAPI = {
   onChanged: (cb) => subscribeIpc(PIER_BROADCAST.PREFERENCES_CHANGED, cb),
-  read: () => ipcRenderer.invoke("pier:preferences:read"),
-  update: (patch) => ipcRenderer.invoke("pier:preferences:update", patch),
+  read: () =>
+    invokePierCommand<ProjectPreferences>({ type: "preferences.read" }),
+  update: (patch) =>
+    invokePierCommand<ProjectPreferences>({
+      patch,
+      type: "preferences.update",
+    }),
 };
 
 const terminalApi: TerminalAPI = {
@@ -333,13 +338,22 @@ const themeApi: PierThemeAPI = {
 
 const workspaceApi: PierWorkspaceAPI = {
   clearLayout: (recordId) =>
-    ipcRenderer.invoke("pier:workspace:clear-layout", recordId),
+    invokePierCommand<null>({ recordId, type: "workspace.layout.clear" }).then(
+      () => undefined
+    ),
   loadLayout: (recordId) =>
-    ipcRenderer.invoke("pier:workspace:load-layout", recordId),
+    invokePierCommand<unknown | null>({
+      recordId,
+      type: "workspace.layout.read",
+    }),
   onNewTerminalRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.NEW_TERMINAL_REQUEST, cb),
   saveLayout: (layout, recordId) =>
-    ipcRenderer.invoke("pier:workspace:save-layout", layout, recordId),
+    invokePierCommand<null>({
+      layout,
+      recordId,
+      type: "workspace.layout.save",
+    }).then(() => undefined),
 };
 
 const rendererCommandApi: PierRendererCommandAPI = {
@@ -349,10 +363,16 @@ const rendererCommandApi: PierRendererCommandAPI = {
 };
 
 const commandPaletteMruApi: PierCommandPaletteMruAPI = {
-  read: () => ipcRenderer.invoke("pier:command-palette-mru:read"),
-  recordUse: (actionId) =>
-    ipcRenderer.send("pier:command-palette-mru:record", actionId),
-  clear: () => ipcRenderer.invoke("pier:command-palette-mru:clear"),
+  read: () => invokePierCommand<MruState>({ type: "commandPaletteMru.read" }),
+  recordUse: (actionId) => {
+    invokePierCommand<null>({
+      actionId,
+      type: "commandPaletteMru.record",
+    }).catch((err) => {
+      console.error("[command-palette-mru] record failed:", err);
+    });
+  },
+  clear: () => invokePierCommand<MruState>({ type: "commandPaletteMru.clear" }),
   onChange: (handler) => {
     const listener = (_event: unknown, state: MruState) => {
       handler(state);
@@ -436,16 +456,17 @@ const api: PierWindowAPI = {
   agentSessions: agentSessionsApi,
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
-    ipcRenderer.invoke("pier://window:close", windowId),
+    invokePierCommand<void>({ type: "window.close", windowId }),
   commandPalette: commandPaletteApi,
   commandPaletteMru: commandPaletteMruApi,
-  createWindow: () => ipcRenderer.invoke("pier://window:create"),
+  createWindow: () =>
+    invokePierCommand<WindowCreateResult>({ type: "window.create" }),
   focusWindow: (windowId) =>
-    ipcRenderer.invoke("pier://window:focus", windowId),
+    invokePierCommand<void>({ type: "window.focus", windowId }),
   files: filesApi,
   getWindowContext: () => ipcRenderer.invoke("pier://window:context"),
   keybinding: keybindingApi,
-  listWindows: () => ipcRenderer.invoke("pier://window:list"),
+  listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   menu: menuApi,
   notifications: notificationsApi,
   onTerminalPresentationApplied: (cb) =>

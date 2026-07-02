@@ -49,6 +49,9 @@ const PATCHABLE_KEYS = [
   "uiFontFamily",
   "userKeymap",
   "windowZoomLevel",
+  "worktreeBranchPrefix",
+  "worktreeCopyPatterns",
+  "worktreeSetupCommand",
 ] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
 
 function stripUndefinedPatch(

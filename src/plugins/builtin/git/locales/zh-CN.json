@@ -72,7 +72,10 @@
         "工作树",
         "创建工作树",
         "gongzuoshu",
-        "chuangjian gongzuoshu"
+        "chuangjian gongzuoshu",
+        "新建工作树",
+        "创建 worktree",
+        "xin jian gong zuo shu"
       ],
       "category": "工作树",
       "description": "在仓库托管的工作树目录下创建 Git worktree。",
@@ -198,7 +201,24 @@
     "ui.gitUndoCommitSuccess": "已撤销上次提交（更改保留为暂存状态）",
     "ui.gitUndoCommitNothing": "没有可撤销的提交",
     "ui.title": "工作树",
-    "ui.unsupported": "当前目录不支持 Git worktree"
+    "ui.unsupported": "当前目录不支持 Git worktree",
+    "ui.worktreeCreate.autoBadge": "自动",
+    "ui.worktreeCreate.baseHead": "当前 HEAD",
+    "ui.worktreeCreate.baseLabel": "基于",
+    "ui.worktreeCreate.branchLabel": "分支",
+    "ui.worktreeCreate.createAndStartHint": "创建并开工",
+    "ui.worktreeCreate.createOnlyHint": "仅创建",
+    "ui.worktreeCreate.creating": "创建中…",
+    "ui.worktreeCreate.description": "为任务创建一个隔离的 worktree",
+    "ui.worktreeCreate.inputLabel": "任务或分支",
+    "ui.worktreeCreate.inputPlaceholder": "描述任务,或直接输入分支名",
+    "ui.worktreeCreate.launchFailed": "终端启动失败: {{message}}",
+    "ui.worktreeCreate.openFailed": "无法打开 worktree 创建: {{message}}",
+    "ui.worktreeCreate.prepareCopy": "复制 {{count}} 组 ignored 文件",
+    "ui.worktreeCreate.prepareLabel": "准备",
+    "ui.worktreeCreate.prepareSetup": "运行 setup 命令",
+    "ui.worktreeCreate.title": "新建 worktree",
+    "ui.worktreeCreate.unavailable": "worktree 不可用: {{message}}"
   },
   "panels": {
     "pier.git.changes": {

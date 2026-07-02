@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { WorktreeItem } from "@shared/contracts/worktree.ts";
 import { BrushCleaning, FolderGit2, GitBranch, Trash2 } from "lucide-react";
+import { openWorktreeCreateOverlay } from "./worktree-create-overlay.tsx";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 
@@ -105,13 +106,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function promptText(title: string, defaultValue = ""): string | null {
-  // biome-ignore lint/suspicious/noAlert: command palette has no text input primitive yet.
-  const value = window.prompt(title, defaultValue);
-  const trimmed = value?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 async function confirmQuickPick(
   context: RendererPluginContext,
   title: string,
@@ -148,46 +142,45 @@ function registerWorktreeCreateAction(
     },
     enabled: () => activeWorktreeTarget(context).enabled,
     handler: async () => {
-      const title = context.i18n.commandTitle(
-        "pier.worktree.create",
-        "Create Worktree"
-      );
       const target = activeWorktreeTarget(context);
       if (!target.enabled) {
         openUnavailablePick(context, target.reason);
         return;
       }
-      const name = promptText(
-        pluginText(context, "createNamePrompt", "New worktree name")
-      );
-      if (!name) {
-        return;
-      }
-      const branch = promptText(
-        pluginText(context, "createBranchPrompt", "New branch name"),
-        name
-      );
-      if (!branch) {
-        return;
-      }
       try {
-        const result = await context.worktrees.create({
-          branch,
-          name,
-          path: target.path,
+        const listResult = await context.worktrees.list({ path: target.path });
+        if (listResult.status !== "available") {
+          context.notifications.error(
+            pluginText(
+              context,
+              "worktreeCreate.unavailable",
+              "Worktrees are unavailable: {{message}}",
+              { message: listResult.reason }
+            )
+          );
+          return;
+        }
+        const [branches, defaults] = await Promise.all([
+          context.git.listBranches(listResult.mainPath, { kind: "all" }),
+          context.worktrees.creationDefaults(),
+        ]);
+        openWorktreeCreateOverlay(context, {
+          branches,
+          defaults,
+          existingBranches: branches.map((ref) => ref.name),
+          existingNames: listResult.worktrees.map((item) =>
+            basename(item.path)
+          ),
+          mainPath: listResult.mainPath,
         });
-        showWorktreeMessage(
-          context,
-          title,
-          pluginText(context, "worktreeCreateSuccess", "Worktree created"),
-          result.targetPath
-        );
       } catch (err) {
-        showWorktreeMessage(
-          context,
-          title,
-          operationFailedReason(context),
-          errorMessage(err)
+        context.notifications.error(
+          pluginText(
+            context,
+            "worktreeCreate.openFailed",
+            "Couldn't open worktree creation: {{message}}",
+            { message: errorMessage(err) }
+          )
         );
       }
     },

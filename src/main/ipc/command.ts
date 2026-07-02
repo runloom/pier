@@ -7,71 +7,6 @@ import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
-const RENDERER_FACADE_COMMAND_TYPES = new Set<PierCommand["type"]>([
-  "plugin.disable",
-  "plugin.enable",
-  "plugin.inspect",
-  "plugin.list",
-  "pluginSettings.getAll",
-  "pluginSettings.reset",
-  "pluginSettings.set",
-  "run.list",
-  "run.cancel",
-  "run.spawn",
-  "run.status",
-  "worktree.check",
-  "worktree.create",
-  "worktree.list",
-  "worktree.open",
-  "worktree.prune",
-  "worktree.remove",
-  "terminalStatusBar.prefs.getAll",
-  "terminalStatusBar.prefs.resetItem",
-  "terminalStatusBar.prefs.setItemOverride",
-  "file.list",
-  "file.readText",
-  "file.writeText",
-  "file.rename",
-  "file.move",
-  "file.trash",
-  // git 主体命令;capability 守门由 permissions.ts 配对
-  "git.checkoutBranch",
-  "git.commit",
-  "git.createBranch",
-  "git.deleteBranch",
-  "git.discardChanges",
-  "git.getCommit",
-  "git.getCommitPatch",
-  "git.getDiffPatch",
-  "git.getDiffSummary",
-  "git.getDiffText",
-  "git.getFileContent",
-  "git.getLog",
-  "git.getRepoInfo",
-  "git.getStatus",
-  "git.isWorkingTreeClean",
-  "git.listBranches",
-  "git.listTags",
-  "git.merge",
-  "git.mergeAbort",
-  "git.rebase",
-  "git.rebaseAbort",
-  "git.rebaseContinue",
-  "git.resolveRef",
-  "git.searchBranches",
-  "git.stage",
-  "git.stash",
-  "git.stashList",
-  "git.stashPop",
-  "git.unstage",
-  "git.undoLastCommit",
-  "git.validateBranchName",
-]);
-
-function isRendererFacadeCommand(command: PierCommand): boolean {
-  return RENDERER_FACADE_COMMAND_TYPES.has(command.type);
-}
-
 function ensureDesktopRendererClient(windowId: string): string {
   const clientId = `desktop-renderer:${windowId}`;
   const existing = appCore.clients.heartbeat(clientId);
@@ -118,9 +53,6 @@ export function registerCommandIpc(ipcMain: IpcMain): void {
       throw new Error("invalid command");
     }
     const command: PierCommand = parsed.data;
-    if (!isRendererFacadeCommand(command)) {
-      throw new Error("unsupported renderer command");
-    }
     const windowId = senderWindowId(event.sender);
     return await appCore.commandRouter.execute({
       clientId: ensureDesktopRendererClient(windowId),

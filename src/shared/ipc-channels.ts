@@ -11,12 +11,8 @@ export const PIER = {
   GIT_WATCH_STOP: "pier://git:watch-stop",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
-  WINDOW_CLOSE: "pier://window:close",
   WINDOW_CONTEXT: "pier://window:context",
-  WINDOW_CREATE: "pier://window:create",
-  WINDOW_FOCUS: "pier://window:focus",
   WINDOW_FULLSCREEN_STATE: "pier://window:fullscreen-state",
-  WINDOW_LIST: "pier://window:list",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
 } as const;
 

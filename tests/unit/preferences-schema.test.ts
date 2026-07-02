@@ -242,6 +242,30 @@ describe("projectPreferencesSchema — agent preferences", () => {
   });
 });
 
+describe("worktree preferences", () => {
+  it("空对象解析出 worktree 默认值", () => {
+    const prefs = projectPreferencesSchema.parse({});
+    expect(prefs.worktreeBranchPrefix).toBe("wt/");
+    expect(prefs.worktreeCopyPatterns).toEqual([
+      ".env*",
+      "*.local",
+      ".claude/settings.local.json",
+    ]);
+    expect(prefs.worktreeSetupCommand).toBe("");
+  });
+
+  it("可覆盖 worktree 键", () => {
+    const prefs = projectPreferencesSchema.parse({
+      worktreeBranchPrefix: "feature/",
+      worktreeCopyPatterns: [".env"],
+      worktreeSetupCommand: "pnpm setup:worktree",
+    });
+    expect(prefs.worktreeBranchPrefix).toBe("feature/");
+    expect(prefs.worktreeCopyPatterns).toEqual([".env"]);
+    expect(prefs.worktreeSetupCommand).toBe("pnpm setup:worktree");
+  });
+});
+
 describe("agentStatusHooks preference", () => {
   it("默认 true（opt-out：关闭即卸载）", () => {
     const parsed = projectPreferencesSchema.parse({});

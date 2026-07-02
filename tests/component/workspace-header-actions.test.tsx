@@ -1,5 +1,11 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import i18next from "i18next";
 import {
@@ -17,15 +23,18 @@ import {
 } from "@/components/workspace/workspace-header-actions.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
+import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 let applyInputRouting: ReturnType<typeof vi.fn>;
 let detectAgents: ReturnType<typeof vi.fn>;
 let disposePanelActions: (() => void) | null = null;
+let disposeWorktreeCreateAction: (() => void) | null = null;
 let prepareAgentLaunch: ReturnType<typeof vi.fn>;
 let originalHasPointerCapture:
   | typeof HTMLElement.prototype.hasPointerCapture
@@ -160,6 +169,25 @@ beforeEach(async () => {
         prepareLaunch: prepareAgentLaunch,
       },
       onWindowLayoutPulse: vi.fn(() => vi.fn()),
+      worktrees: {
+        list: vi.fn(async () => ({
+          currentPath: "/repo",
+          mainPath: "/repo",
+          path: "/repo",
+          status: "available",
+          worktrees: [],
+        })),
+      },
+      git: {
+        listBranches: vi.fn(async () => []),
+      },
+      preferences: {
+        read: vi.fn(async () => ({
+          worktreeBranchPrefix: "wt/",
+          worktreeCopyPatterns: [],
+          worktreeSetupCommand: "",
+        })),
+      },
     },
   });
 });
@@ -167,10 +195,13 @@ beforeEach(async () => {
 afterEach(() => {
   disposePanelActions?.();
   disposePanelActions = null;
+  disposeWorktreeCreateAction?.();
+  disposeWorktreeCreateAction = null;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   setDockviewTabRevealRoot(null);
   useWorkspaceStore.getState().setApi(null);
+  usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
   useAgentDetectStore.setState({
     detectedIds: [],
     hasDetected: false,
@@ -694,6 +725,196 @@ describe("WorkspaceHeaderActions", () => {
         ],
       },
     });
+  });
+
+  it("invokes the registered worktree create action when enabled", async () => {
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => true,
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "New Worktree" })
+    );
+
+    await waitFor(() => {
+      expect(handler).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("disables New Worktree when the registered action reports disabled", async () => {
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => false,
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("disables New Worktree when no action is registered", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("keeps New Worktree reactive to active panel context changes", async () => {
+    // enabled() 读取 usePanelDescriptorStore 的实时快照 (镜像 git 插件的
+    // activeWorktreeTarget 实现), 而不是测试注册时捕获的闭包值 —— 这样才能
+    // 验证组件本身对 store 变化保持反应式, 而非碰巧因为别的 state 变了才重渲。
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () =>
+        usePanelDescriptorStore.getState().activeId === "git-panel",
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    usePanelDescriptorStore.setState({
+      activeId: "git-panel",
+      descriptors: {
+        "git-panel": { display: { short: "Git Panel" } },
+      },
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
+    expect(item).not.toHaveAttribute("aria-disabled", "true");
+
+    // 模拟用户把 active panel 切到一个非 git 上下文的 terminal —— 不触发任何
+    // 无关 state (agent 检测等), 只改 usePanelDescriptorStore。
+    act(() => {
+      usePanelDescriptorStore.getState().setActive("plain-panel");
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("menuitem", { name: "New Worktree" })
+      ).toHaveAttribute("aria-disabled", "true");
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("catches handler rejections and logs errors when the worktree action throws", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error");
+    const handler = vi.fn().mockRejectedValue(new Error("boom"));
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => true,
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "New Worktree" })
+    );
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+    expect(consoleErrorSpy.mock.calls[0]?.[1]?.message).toBe("boom");
+  });
+
+  it("subscriptions to active panel context re-render component on context change", async () => {
+    // This test verifies that the component's subscription to descriptor context
+    // (not just activeId) allows the New Worktree menu item's disabled state to update
+    // when the active panel's context changes (e.g., user cd-ing to different directory).
+    const enabledStates: boolean[] = [];
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => {
+        const state = usePanelDescriptorStore.getState();
+        const descriptor = state.activeId
+          ? state.descriptors[state.activeId]
+          : null;
+        const isEnabled = descriptor?.context?.cwd === "/repo";
+        enabledStates.push(isEnabled);
+        return isEnabled;
+      },
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    usePanelDescriptorStore.setState({
+      activeId: "panel-1",
+      descriptors: {
+        "panel-1": {
+          display: { short: "Panel" },
+          context: { contextId: "ctx-1", updatedAt: 0, cwd: "/repo" },
+        },
+      },
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    // First menu open - enabled() should be called
+    const initialCallCount = enabledStates.length;
+    openAddPanelMenu();
+    await screen.findByRole("menuitem", { name: "New Worktree" });
+
+    // Update store: replace context object (same activeId but different cwd)
+    // This simulates user cd-ing to a different directory in the active terminal
+    act(() => {
+      const state = usePanelDescriptorStore.getState();
+      usePanelDescriptorStore.setState({
+        descriptors: {
+          ...state.descriptors,
+          "panel-1": {
+            display: { short: "Panel" },
+            context: { contextId: "ctx-1", updatedAt: 1, cwd: "/different" },
+          },
+        },
+      });
+    });
+
+    // After store update, component should have re-rendered and enabled()
+    // should have been called again with the new context
+    expect(enabledStates.length).toBeGreaterThan(initialCallCount);
+    // Verify that enabled() observed both true and false states
+    expect(enabledStates).toContain(true);
+    expect(enabledStates).toContain(false);
   });
 
   it("launches an agent terminal in the clicked header group", async () => {

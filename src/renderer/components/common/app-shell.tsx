@@ -2,6 +2,7 @@ import { AgentSessionsBridge } from "@/components/common/agent-sessions-bridge.t
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { DocumentTitle } from "@/components/common/document-title.tsx";
+import { PluginOverlayHost } from "@/components/common/plugin-overlay-host.tsx";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { TerminalDebugSnapshotBridge } from "@/components/common/terminal-debug-snapshot-bridge.tsx";
 import { TitleBar } from "@/components/common/title-bar.tsx";
@@ -23,6 +24,7 @@ export function AppShell() {
       <CommandPalette />
       <SettingsDialog />
       <AppDialogHost />
+      <PluginOverlayHost />
       <TerminalDebugSnapshotBridge />
       <AgentSessionsBridge />
       <Toaster />

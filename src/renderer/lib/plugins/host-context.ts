@@ -47,6 +47,7 @@ import {
   resolvePluginMessage,
 } from "./display.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
+import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 import {
   getPluginPanelRegistrations,
   registerPluginPanel,
@@ -427,6 +428,7 @@ export function createRendererPluginContext(
       },
       system: (options) => window.pier.notifications.system(options),
     },
+    overlays: createPluginOverlaysApi(entry),
     panels: {
       getActiveContext: () => {
         const state = usePanelDescriptorStore.getState();
@@ -482,8 +484,10 @@ export function createRendererPluginContext(
     worktrees: {
       check: (request) => window.pier.worktrees.check(request),
       create: (request) => window.pier.worktrees.create(request),
+      creationDefaults: () => window.pier.worktrees.creationDefaults(),
       list: (request) => window.pier.worktrees.list(request),
       open: (request) => window.pier.worktrees.open(request),
+      openTerminal: (request) => window.pier.worktrees.openTerminal(request),
       prune: (request) => window.pier.worktrees.prune(request),
       remove: (request) => window.pier.worktrees.remove(request),
     },

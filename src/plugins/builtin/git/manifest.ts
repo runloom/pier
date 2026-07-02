@@ -15,7 +15,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     {
       category: "Worktree",
       id: "pier.worktree.create",
-      permissions: ["worktree:write"],
+      permissions: ["worktree:read", "worktree:write"],
       title: "Create Worktree",
     },
     {

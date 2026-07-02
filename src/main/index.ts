@@ -19,11 +19,9 @@ import {
 } from "./ipc/agent-session.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
-import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerNotificationIpc } from "./ipc/notification.ts";
-import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerSecretsIpc } from "./ipc/secrets.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
@@ -31,7 +29,6 @@ import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
-import { registerWorkspaceIpc } from "./ipc/workspace.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
@@ -267,7 +264,6 @@ app.whenReady().then(async () => {
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
   registerAgentSessionIpc(ipcMain);
-  registerPreferencesIpc(ipcMain);
   registerSecretsIpc(ipcMain, appCore.services.secrets);
   registerRendererCommandIpc(ipcMain);
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
@@ -276,8 +272,6 @@ app.whenReady().then(async () => {
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerNotificationIpc(ipcMain);
-  registerWorkspaceIpc(ipcMain);
-  registerCommandPaletteMruIpc(ipcMain);
   registerGitWatchIpc();
   setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
     if (typeof exitCode === "number") {

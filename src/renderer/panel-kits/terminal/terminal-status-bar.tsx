@@ -135,7 +135,7 @@ function renderStatusGroup(
   statusContext: TerminalStatusItemContext
 ) {
   return items.map((item) => (
-    <div className="min-w-0 shrink-0" key={item.id}>
+    <div className="min-w-0" key={item.id}>
       {item.render(statusContext)}
     </div>
   ));

@@ -1,5 +1,3 @@
-import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   type PierCommand,
   type PierCommandResult,
@@ -9,6 +7,7 @@ import {
   type PanelContext,
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
+import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
 import { FileServiceError } from "../services/file-service.ts";
 import { GitExecError } from "../services/git-exec.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
@@ -37,6 +36,7 @@ import {
   executeRunStatusCommand,
 } from "./run-commands.ts";
 import { orderedWindows } from "./window-routing.ts";
+import { executeWorktreeCommand } from "./worktree-commands.ts";
 
 export type { PierCoreServices } from "./command-router-services.ts";
 
@@ -137,81 +137,6 @@ async function executePluginCommand(
   }
 }
 
-async function executeWorktreeCommand(
-  requestId: string,
-  command: PierCommand,
-  services: PierCoreServices
-): Promise<PierCommandResult | null> {
-  switch (command.type) {
-    case "worktree.check":
-      return success(requestId, await services.worktrees.check(command));
-    case "worktree.list":
-      return success(requestId, await services.worktrees.list(command));
-    case "worktree.create":
-      return success(requestId, await services.worktrees.create(command));
-    case "worktree.open":
-      return await executeWorktreeOpenCommand(requestId, command, services);
-    case "worktree.remove":
-      return success(requestId, await services.worktrees.remove(command));
-    case "worktree.prune":
-      return success(requestId, await services.worktrees.prune(command));
-    default:
-      return null;
-  }
-}
-
-function canonicalPath(path: string): string {
-  // git worktree list 输出 realpath 化的路径;用户传入的可能经过符号链接
-  // (macOS 上 /tmp → /private/tmp)。路径不存在时回退纯字符串归一化。
-  try {
-    return realpathSync.native(path);
-  } catch {
-    return resolve(path);
-  }
-}
-
-function sameResolvedPath(a: string, b: string): boolean {
-  return canonicalPath(a) === canonicalPath(b);
-}
-
-async function executeWorktreeOpenCommand(
-  requestId: string,
-  command: Extract<PierCommand, { type: "worktree.open" }>,
-  services: PierCoreServices
-): Promise<PierCommandResult> {
-  // 按目标路径自身所属仓库校验,与调用方 cwd 无关。
-  const result = await services.worktrees.list({ path: command.path });
-  if (result.status === "unavailable") {
-    return failure(
-      requestId,
-      result.reason,
-      `path is not a known worktree for this repository: ${command.path}`
-    );
-  }
-  const target = result.worktrees.find(
-    (item) =>
-      sameResolvedPath(item.path, command.path) && !(item.bare || item.prunable)
-  );
-  if (!target) {
-    return failure(
-      requestId,
-      "invalid_path",
-      `path is not a known worktree for this repository: ${command.path}`
-    );
-  }
-  return await executePanelOpenCommand(
-    requestId,
-    {
-      focus: command.focus,
-      path: target.path,
-      placement: command.placement,
-      type: "panel.open",
-      windowId: command.windowId,
-    },
-    services
-  );
-}
-
 async function executeAppStateCommand(
   requestId: string,
   command: PierCommand,
@@ -237,11 +162,17 @@ async function executeAppStateCommand(
       return success(requestId, null);
     case "preferences.read":
       return success(requestId, await services.preferences.read());
-    case "preferences.update":
-      return success(
-        requestId,
-        await services.preferences.update(command.patch)
-      );
+    case "preferences.update": {
+      const merged = await services.preferences.update(command.patch);
+      if (command.patch.agentStatusHooks !== undefined) {
+        applyAgentStatusHooksPreference(merged.agentStatusHooks).catch(
+          (err) => {
+            console.error("[preferences] agent hook install failed:", err);
+          }
+        );
+      }
+      return success(requestId, merged);
+    }
     case "terminalStatusBar.prefs.getAll":
       return success(requestId, await services.terminalStatusBarPrefs.getAll());
     case "terminalStatusBar.prefs.resetItem":
