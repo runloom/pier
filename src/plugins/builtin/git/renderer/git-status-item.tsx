@@ -255,7 +255,7 @@ function WorktreeStatusItem({
         "Open worktrees for {{name}}",
         { name: branch?.branch ?? context?.branch ?? worktreeName }
       )}
-      className="h-5 gap-1 px-2 font-normal text-xs"
+      className="h-5 min-w-0 max-w-full gap-1 px-2 font-normal text-xs"
       data-testid="worktree-status-trigger"
       onClick={() => {
         openWorktreeListQuickPick(pluginContext, worktreePath).catch(

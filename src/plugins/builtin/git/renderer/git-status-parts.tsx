@@ -64,7 +64,7 @@ function IconNum({
  * 信息级 / 需注意级走内联图标，见 UpstreamPill。
  */
 const PILL_BASE =
-  "inline-flex items-center gap-0.5 rounded border px-1.5 py-0 text-[10px] leading-4";
+  "inline-flex items-center gap-0.5 whitespace-nowrap rounded border px-1.5 py-0 text-[10px] leading-4";
 const PILL_VARIANT = {
   progress: "border-status-info-border bg-status-info-bg text-status-info-fg",
   danger:
@@ -76,13 +76,18 @@ function Pill({
   variant,
   icon: Icon,
   children,
+  testId,
 }: {
   children: React.ReactNode;
   icon?: LucideIcon;
+  testId?: string;
   variant: keyof typeof PILL_VARIANT;
 }): React.ReactElement {
   return (
-    <span className={`${PILL_BASE} ${PILL_VARIANT[variant]}`}>
+    <span
+      className={`${PILL_BASE} ${PILL_VARIANT[variant]}`}
+      data-testid={testId}
+    >
       {Icon && <Icon aria-hidden="true" className="h-3 w-3" />}
       {children}
     </span>
@@ -91,9 +96,9 @@ function Pill({
 
 export function WorktreeBadge({ name }: { name: string }): React.ReactElement {
   return (
-    <span className="inline-flex items-center gap-1">
-      <GitFork aria-hidden="true" className="h-3 w-3" />
-      <span className="max-w-[120px] truncate">{name}</span>
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <GitFork aria-hidden="true" className="h-3 w-3 shrink-0" />
+      <span className="truncate">{name}</span>
     </span>
   );
 }
@@ -115,9 +120,9 @@ export function BranchLabel({
   const effectiveBranch = branch?.branch ?? panelBranch ?? null;
   if (effectiveBranch) {
     return (
-      <span className="inline-flex items-center gap-1">
-        <GitBranch aria-hidden="true" className="h-3 w-3" />
-        <span className="max-w-[120px] truncate">{effectiveBranch}</span>
+      <span className="inline-flex min-w-0 items-center gap-1">
+        <GitBranch aria-hidden="true" className="h-3 w-3 shrink-0" />
+        <span className="truncate">{effectiveBranch}</span>
       </span>
     );
   }
@@ -136,16 +141,16 @@ export function BranchLabel({
     );
   }
   return (
-    <span className="inline-flex items-center gap-1">
-      <GitBranch aria-hidden="true" className="h-3 w-3" />
-      <span className="max-w-[120px] truncate">{worktreeFallback}</span>
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <GitBranch aria-hidden="true" className="h-3 w-3 shrink-0" />
+      <span className="truncate">{worktreeFallback}</span>
     </span>
   );
 }
 
 /**
- * Upstream 状态走内联图标 + tooltip，视觉权重低于分支名和操作 pill。
- * no upstream 用 muted 灰；upstream gone 用 destructive 红。
+ * Upstream 状态：no upstream 走 muted 内联图标 + tooltip（信息级）；
+ * upstream gone 升级为红色文字胶囊（需注意级）——只有小图标时用户容易忽略"远端已删"。
  */
 export function UpstreamPill({
   branch,
@@ -158,12 +163,10 @@ export function UpstreamPill({
     return null;
   }
   if (branch.upstreamGone) {
-    const label = pluginText(pluginContext, "upstreamGone", "upstream gone");
     return (
-      <span className="inline-flex items-center text-destructive" title={label}>
-        <CloudOff aria-hidden="true" className="h-3 w-3" />
-        <span className="sr-only">{label}</span>
-      </span>
+      <Pill icon={CloudOff} testId="upstream-gone-pill" variant="danger">
+        {pluginText(pluginContext, "upstreamGone", "upstream gone")}
+      </Pill>
     );
   }
   if (branch.upstream === null) {
