@@ -9,6 +9,7 @@ export const settings = {
     plugins: "Plugins",
     terminal: "Terminal",
     agents: "Agents",
+    pluginGroup: "Plugin Settings",
   },
   section: {
     appearance: "Appearance",
@@ -201,6 +202,18 @@ export const settings = {
       git: "Git",
       registry: "Registry",
     },
+  },
+  pluginConfiguration: {
+    columns: {
+      description: "Description",
+      setting: "Setting",
+      value: "Value",
+    },
+    modified: "Modified",
+    openSettings: "Open Settings",
+    resetToDefault: "Reset to default",
+    settingsTable: "Settings",
+    writeFailed: "Failed to update setting",
   },
   theme: {
     light: "Light",

@@ -9,6 +9,7 @@ export const settings = {
     plugins: "插件",
     terminal: "终端",
     agents: "智能体",
+    pluginGroup: "插件设置",
   },
   section: {
     appearance: "外观",
@@ -197,6 +198,18 @@ export const settings = {
       git: "Git",
       registry: "Registry",
     },
+  },
+  pluginConfiguration: {
+    columns: {
+      description: "描述",
+      setting: "设置项",
+      value: "当前值",
+    },
+    modified: "已修改",
+    openSettings: "打开设置",
+    resetToDefault: "恢复默认",
+    settingsTable: "设置",
+    writeFailed: "设置更新失败",
   },
   theme: {
     light: "浅色",
