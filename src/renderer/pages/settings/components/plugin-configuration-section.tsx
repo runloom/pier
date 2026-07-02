@@ -37,15 +37,16 @@ export function sortedConfigurationKeys(
   });
 }
 
-function writeSetting(key: string, value: JsonValue, failedText: string): void {
-  usePluginSettingsStore
-    .getState()
-    .set(key, value)
-    .catch((err: unknown) => {
-      toast.error(failedText, {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    });
+async function writeSetting(
+  key: string,
+  value: JsonValue,
+  failedText: string
+): Promise<void> {
+  await usePluginSettingsStore.getState().set(key, value);
+  const { error } = usePluginSettingsStore.getState();
+  if (error) {
+    toast.error(failedText, { description: error });
+  }
 }
 
 function SettingRowShell({
@@ -99,7 +100,8 @@ function StringSettingRow({
   label: string;
   max?: number | undefined;
   min?: number | undefined;
-  onCommit: (raw: string) => void;
+  /** 返回 clamp/规整后的最终值，供输入框无条件回弹展示。 */
+  onCommit: (raw: string) => string;
   type: "number" | "text";
 }) {
   const [draft, setDraft] = useState(effective);
@@ -116,7 +118,7 @@ function StringSettingRow({
       label={label}
       {...(max === undefined ? {} : { max })}
       {...(min === undefined ? {} : { min })}
-      onBlur={onCommit}
+      onBlur={(raw) => setDraft(onCommit(raw))}
       onChange={setDraft}
       type={type}
       value={draft}
@@ -205,6 +207,7 @@ function PluginSettingRow({
           if (next !== effective) {
             writeSetting(settingKey, next, failedText);
           }
+          return String(next);
         }}
         type="number"
       />
@@ -220,6 +223,7 @@ function PluginSettingRow({
           if (raw !== effective) {
             writeSetting(settingKey, raw, failedText);
           }
+          return raw;
         }}
         type="text"
       />
@@ -234,7 +238,12 @@ function PluginSettingRow({
         usePluginSettingsStore
           .getState()
           .reset(settingKey)
-          .catch(() => undefined);
+          .then(() => {
+            const { error } = usePluginSettingsStore.getState();
+            if (error) {
+              toast.error(failedText, { description: error });
+            }
+          });
       }}
       resetLabel={t("settings.pluginConfiguration.resetToDefault")}
     >

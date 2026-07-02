@@ -12,6 +12,14 @@ import { PluginConfigurationSection } from "@/pages/settings/components/plugin-c
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: toastMocks,
+}));
+
 function entry(id: string, enabled = true): PluginRegistryEntry {
   return {
     effectivePermissions: [],
@@ -174,6 +182,53 @@ describe("PluginConfigurationSection", () => {
     });
   });
 
+  it("number 控件 blur 提交空值被 clamp 到 min 时, 输入框显示值回弹为 clamp 结果", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    const limitInput = screen.getByDisplayValue("10");
+
+    // JSDOM 对 type=number 输入非数字文本会拒绝写入, value 变为 ""。
+    // raw="" → Number("")=0 是 finite → clamp 到 min(1)，与 effective(10) 不同 → 会写入。
+    fireEvent.change(limitInput, { target: { value: "" } });
+    fireEvent.blur(limitInput);
+
+    await waitFor(() => {
+      expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+        "pier.demo.limit",
+        1
+      );
+    });
+    // 展示值必须跟随 clamp 结果(1)回弹，不能停留在空字符串。
+    expect(limitInput).toHaveValue(1);
+  });
+
+  it("number 控件 blur 提交值 clamp 后与当前 effective 相同(no-op)时, 输入框显示值仍回弹为 effective", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    // effective 卡在 min 边界(1)，此时空输入 clamp 结果(1)与 effective 相同 → no-op 提交。
+    usePluginSettingsStore.setState({
+      initialized: true,
+      values: { "pier.demo.limit": 1 },
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    const limitInput = screen.getByDisplayValue("1");
+    fireEvent.change(limitInput, { target: { value: "" } });
+    fireEvent.blur(limitInput);
+
+    // no-op: 不写入，但展示值必须回弹为 effective(1)，不能停留在空字符串。
+    await waitFor(() => {
+      expect(limitInput).toHaveValue(1);
+    });
+    expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
+  });
+
   it("string 控件 blur 提交原始值", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
@@ -189,6 +244,99 @@ describe("PluginConfigurationSection", () => {
       expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
         "pier.demo.name",
         "custom-name"
+      );
+    });
+  });
+
+  it("string 控件 blur 提交值与 effective 相同(no-op)时, 输入框显示值仍回弹为 effective", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    const nameInput = screen.getByDisplayValue("default-name");
+    fireEvent.change(nameInput, { target: { value: "default-name" } });
+    fireEvent.blur(nameInput);
+
+    await waitFor(() => {
+      expect(nameInput).toHaveValue("default-name");
+    });
+    expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
+  });
+
+  it("写入失败时 store.error 非空, 触发 toast.error 提示", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        pluginSettings: {
+          getAll: vi.fn(async () => ({ values: {}, version: 1 })),
+          onChanged: vi.fn(() => () => undefined),
+          reset: vi.fn(async (key: string) => ({
+            values: { [key]: undefined },
+            version: 1,
+          })),
+          set: vi.fn(() => {
+            throw new Error("ipc boom");
+          }),
+        },
+      },
+    });
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    fireEvent.click(screen.getByRole("switch"));
+
+    await waitFor(() => {
+      expect(usePluginSettingsStore.getState().error).toBe("ipc boom");
+    });
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalledWith(
+        "Failed to update setting",
+        expect.objectContaining({ description: "ipc boom" })
+      );
+    });
+  });
+
+  it("重置失败时 store.error 非空, 触发 toast.error 提示", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        pluginSettings: {
+          getAll: vi.fn(async () => ({ values: {}, version: 1 })),
+          onChanged: vi.fn(() => () => undefined),
+          reset: vi.fn(() => {
+            throw new Error("reset boom");
+          }),
+          set: vi.fn(async (key: string, value: unknown) => ({
+            values: { [key]: value },
+            version: 1,
+          })),
+        },
+      },
+    });
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    usePluginSettingsStore.setState({
+      initialized: true,
+      values: { "pier.demo.enabledFlag": false },
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset to default" }));
+
+    await waitFor(() => {
+      expect(usePluginSettingsStore.getState().error).toBe("reset boom");
+    });
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalledWith(
+        "Failed to update setting",
+        expect.objectContaining({ description: "reset boom" })
       );
     });
   });
