@@ -9,6 +9,7 @@ import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
+import { TerminalStatusBarBlock } from "@/pages/settings/components/terminal-status-bar-block.tsx";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
 const SCROLLBACK_MIN = 10;
@@ -98,65 +99,68 @@ export function TerminalSection() {
   return (
     <div className="px-4 pb-4" id="terminal">
       <h1 className="mb-4 text-xl">{t("settings.section.terminal")}</h1>
-      <Card>
-        <CardContent>
-          <FieldSet>
-            <SelectRow<TerminalCursorStyle>
-              description={t("settings.row.terminalCursorStyleDesc")}
-              id="settings-terminal-cursor-style"
-              label={t("settings.row.terminalCursorStyle")}
-              onChange={(next) => {
-                setTerminalCursorStyle(next).catch(() => undefined);
-              }}
-              options={CURSOR_STYLE_OPTIONS.map((value) => ({
-                value,
-                label: t(`settings.terminal.cursorStyle.${value}`),
-              }))}
-              value={terminalCursorStyle}
-            />
-            <FieldSeparator />
-            <SwitchRow
-              checked={terminalCursorBlink}
-              description={t("settings.row.terminalCursorBlinkDesc")}
-              id="settings-terminal-cursor-blink"
-              label={t("settings.row.terminalCursorBlink")}
-              onCheckedChange={(next) => {
-                setTerminalCursorBlink(next).catch(() => undefined);
-              }}
-            />
-            <FieldSeparator />
-            <TerminalScrollbackRow />
-            <FieldDescription>
-              {t("settings.row.terminalScrollbackRuntimeNote")}
-            </FieldDescription>
-            <FieldSeparator />
-            <SwitchRow
-              checked={terminalPasteProtection}
-              description={t("settings.row.terminalPasteProtectionDesc")}
-              id="settings-terminal-paste-protection"
-              label={t("settings.row.terminalPasteProtection")}
-              onCheckedChange={(next) => {
-                setTerminalPasteProtection(next).catch(() => undefined);
-              }}
-            />
-            <FieldSeparator />
-            <SelectRow<TerminalNewCwdPolicy>
-              description={t("settings.row.terminalNewCwdPolicyDesc")}
-              id="settings-terminal-new-cwd-policy"
-              label={t("settings.row.terminalNewCwdPolicy")}
-              onChange={(next) => {
-                setTerminalNewCwdPolicy(next).catch(() => undefined);
-              }}
-              options={NEW_CWD_POLICY_OPTIONS.map((value) => ({
-                value,
-                label: t(`settings.terminal.newCwdPolicy.${value}`),
-              }))}
-              triggerWidth="w-[180px]"
-              value={terminalNewCwdPolicy}
-            />
-          </FieldSet>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-4">
+        <Card>
+          <CardContent>
+            <FieldSet>
+              <SelectRow<TerminalCursorStyle>
+                description={t("settings.row.terminalCursorStyleDesc")}
+                id="settings-terminal-cursor-style"
+                label={t("settings.row.terminalCursorStyle")}
+                onChange={(next) => {
+                  setTerminalCursorStyle(next).catch(() => undefined);
+                }}
+                options={CURSOR_STYLE_OPTIONS.map((value) => ({
+                  value,
+                  label: t(`settings.terminal.cursorStyle.${value}`),
+                }))}
+                value={terminalCursorStyle}
+              />
+              <FieldSeparator />
+              <SwitchRow
+                checked={terminalCursorBlink}
+                description={t("settings.row.terminalCursorBlinkDesc")}
+                id="settings-terminal-cursor-blink"
+                label={t("settings.row.terminalCursorBlink")}
+                onCheckedChange={(next) => {
+                  setTerminalCursorBlink(next).catch(() => undefined);
+                }}
+              />
+              <FieldSeparator />
+              <TerminalScrollbackRow />
+              <FieldDescription>
+                {t("settings.row.terminalScrollbackRuntimeNote")}
+              </FieldDescription>
+              <FieldSeparator />
+              <SwitchRow
+                checked={terminalPasteProtection}
+                description={t("settings.row.terminalPasteProtectionDesc")}
+                id="settings-terminal-paste-protection"
+                label={t("settings.row.terminalPasteProtection")}
+                onCheckedChange={(next) => {
+                  setTerminalPasteProtection(next).catch(() => undefined);
+                }}
+              />
+              <FieldSeparator />
+              <SelectRow<TerminalNewCwdPolicy>
+                description={t("settings.row.terminalNewCwdPolicyDesc")}
+                id="settings-terminal-new-cwd-policy"
+                label={t("settings.row.terminalNewCwdPolicy")}
+                onChange={(next) => {
+                  setTerminalNewCwdPolicy(next).catch(() => undefined);
+                }}
+                options={NEW_CWD_POLICY_OPTIONS.map((value) => ({
+                  value,
+                  label: t(`settings.terminal.newCwdPolicy.${value}`),
+                }))}
+                triggerWidth="w-[180px]"
+                value={terminalNewCwdPolicy}
+              />
+            </FieldSet>
+          </CardContent>
+        </Card>
+        <TerminalStatusBarBlock />
+      </div>
     </div>
   );
 }

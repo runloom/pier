@@ -126,6 +126,15 @@ function cliClientServices(): PierCoreServices {
       list: async () => ({ diagnostics: [], entries: [] }),
       setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
+    pluginSettings: {
+      getAll: async () => ({ values: {}, version: 1 }),
+      getValues: () => ({}),
+      init: async () => undefined,
+      invalidateCache: () => undefined,
+      onDidChange: () => () => undefined,
+      reset: async () => ({ values: {}, version: 1 }),
+      set: async () => ({ values: {}, version: 1 }),
+    },
     preferences: {
       read: async () => makeFakePreferences({ agentStatusHooks: false }),
       update: async (patch) =>
@@ -173,6 +182,12 @@ function cliClientServices(): PierCoreServices {
       read: async () => null,
       resolve: async () => null,
       upsert: async (_profileId, profile) => profile,
+    },
+    terminalStatusBarPrefs: {
+      applyOverrides: () => Promise.resolve({ items: {}, version: 1 }),
+      getAll: () => Promise.resolve({ items: {}, version: 1 }),
+      resetItem: () => Promise.resolve({ items: {}, version: 1 }),
+      setItemOverride: () => Promise.resolve({ items: {}, version: 1 }),
     },
     window: {
       close: () => undefined,

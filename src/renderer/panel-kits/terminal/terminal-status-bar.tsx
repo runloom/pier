@@ -2,8 +2,17 @@ import type {
   RendererTerminalStatusItem,
   RendererTerminalStatusItemContext,
 } from "@plugins/api/renderer.ts";
-import { useSyncExternalStore } from "react";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { useMemo, useSyncExternalStore } from "react";
 import { Notifier } from "@/lib/util/notifier.ts";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
+import { openTerminalStatusBarContextMenu } from "./terminal-status-bar-menu.ts";
+import {
+  declaredTerminalStatusItemsById,
+  mergeTerminalStatusItems,
+  type TerminalStatusBarGroups,
+} from "./terminal-status-bar-merge.ts";
 
 export type TerminalStatusItemContext = RendererTerminalStatusItemContext;
 export type TerminalStatusItem = RendererTerminalStatusItem;
@@ -22,8 +31,10 @@ class TerminalStatusItemRegistry extends Notifier {
   }
 
   list(): readonly TerminalStatusItem[] {
-    return Array.from(this.items.values()).sort(
-      (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id)
+    // 运行时注册对象不再承载排序;稳定输出按 id,呈现顺序由合并层
+    // (manifest 声明 + 用户覆盖,见 terminal-status-bar-merge.ts)决定。
+    return Array.from(this.items.values()).sort((a, b) =>
+      a.id.localeCompare(b.id)
     );
   }
 
@@ -47,18 +58,87 @@ export function useTerminalStatusItems(): readonly TerminalStatusItem[] {
   return terminalStatusItemRegistry.list();
 }
 
+/**
+ * 组件层合并管道:registry 注册对象 × plugin-registry.store(manifest 声明,
+ * Phase 0 产物) × terminal-status-bar-prefs.store(用户覆盖)。
+ * plugin registry 未 initialized 时 plugins 为空数组,自然退化为全默认值。
+ */
+export function useTerminalStatusBarItems(): TerminalStatusBarGroups<TerminalStatusItem> {
+  const registered = useTerminalStatusItems();
+  const plugins = usePluginRegistryStore((s) => s.plugins);
+  const prefs = useTerminalStatusBarPrefsStore((s) => s.prefs);
+  return useMemo(
+    () =>
+      mergeTerminalStatusItems(
+        registered,
+        declaredTerminalStatusItemsById(plugins),
+        prefs
+      ),
+    [registered, plugins, prefs]
+  );
+}
+
 export function visibleTerminalStatusItems(
-  items: readonly TerminalStatusItem[],
+  groups: TerminalStatusBarGroups<TerminalStatusItem>,
   context: TerminalStatusItemContext
-): readonly TerminalStatusItem[] {
-  return items.filter((item) => item.isVisible?.(context) ?? true);
+): TerminalStatusBarGroups<TerminalStatusItem> {
+  const isVisible = (item: TerminalStatusItem) =>
+    item.isVisible?.(context) ?? true;
+  return {
+    left: groups.left.filter(isVisible),
+    right: groups.right.filter(isVisible),
+  };
 }
 
 export function hasVisibleTerminalStatusItems(
-  items: readonly TerminalStatusItem[],
+  groups: TerminalStatusBarGroups<TerminalStatusItem>,
   context: TerminalStatusItemContext
 ): boolean {
-  return visibleTerminalStatusItems(items, context).length > 0;
+  const visible = visibleTerminalStatusItems(groups, context);
+  return visible.left.length + visible.right.length > 0;
+}
+
+/**
+ * F4:挂载判定口径 —— 只要有已启用插件在 manifest 里声明了 terminalStatusItems
+ * (无论该项当前 hidden 生效值如何),状态栏容器就应该挂载,以保留 h-7 高度和
+ * 右键管理入口。此前用 hasVisibleTerminalStatusItems(合并层已在内部把 hidden
+ * 项过滤掉)判定挂载,会导致「全部隐藏后容器 unmount → 找不到入口重新打开」的
+ * 自锁:用户想恢复显示,却连右键菜单都没有了。
+ *
+ * 与 terminal-panel.tsx 的 hasStatusBar 判定必须同一口径 —— 两处都改这个函数,
+ * 不要各自维出一份等价逻辑。
+ */
+export function hasDeclaredTerminalStatusItems(
+  plugins: readonly PluginRegistryEntry[]
+): boolean {
+  return declaredTerminalStatusItemsById(plugins).size > 0;
+}
+
+/**
+ * F4:挂载判定的唯一实现 —— TerminalStatusBar 组件与 terminal-panel.tsx 的
+ * hasStatusBar(控制 h-7 内容区留白)都必须调这一个函数,禁止各自重复等价逻辑
+ * (曾经两处判定口径不一致是本 bug 的根因之一)。
+ */
+export function shouldMountTerminalStatusBar(
+  groups: TerminalStatusBarGroups<TerminalStatusItem>,
+  context: TerminalStatusItemContext,
+  plugins: readonly PluginRegistryEntry[]
+): boolean {
+  return (
+    hasDeclaredTerminalStatusItems(plugins) ||
+    hasVisibleTerminalStatusItems(groups, context)
+  );
+}
+
+function renderStatusGroup(
+  items: readonly TerminalStatusItem[],
+  statusContext: TerminalStatusItemContext
+) {
+  return items.map((item) => (
+    <div className="min-w-0 shrink-0" key={item.id}>
+      {item.render(statusContext)}
+    </div>
+  ));
 }
 
 export function TerminalStatusBar({
@@ -67,22 +147,33 @@ export function TerminalStatusBar({
   panelId,
   title,
 }: TerminalStatusItemContext) {
-  const items = useTerminalStatusItems();
+  const groups = useTerminalStatusBarItems();
+  const plugins = usePluginRegistryStore((s) => s.plugins);
   const statusContext = { context, cwd, panelId, title };
-  const visibleItems = visibleTerminalStatusItems(items, statusContext);
-  if (visibleItems.length === 0) {
+  const visible = visibleTerminalStatusItems(groups, statusContext);
+  // F4:挂载判定见 shouldMountTerminalStatusBar 注释 —— 此前只看「当前有可见
+  // 项」,用户把全部项都隐藏后容器连同右键管理入口一起 unmount,没有任何 UI
+  // 能再打开恢复,构成自锁。
+  if (!shouldMountTerminalStatusBar(groups, statusContext, plugins)) {
     return null;
   }
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: 状态栏是原生右键菜单的触发面，无准确交互 ARIA role 可用
     <div
       className="absolute inset-x-0 bottom-0 flex h-7 items-center gap-1 px-1.5 leading-none"
       data-testid="terminal-status-bar"
+      onContextMenu={(event) => {
+        openTerminalStatusBarContextMenu(event).catch((err: unknown) => {
+          console.error("[terminal-status-bar] context menu failed:", err);
+        });
+      }}
     >
-      {visibleItems.map((item) => (
-        <div className="min-w-0" key={item.id}>
-          {item.render(statusContext)}
-        </div>
-      ))}
+      {renderStatusGroup(visible.left, statusContext)}
+      <div
+        className="min-w-0 flex-1"
+        data-testid="terminal-status-bar-spacer"
+      />
+      {renderStatusGroup(visible.right, statusContext)}
     </div>
   );
 }

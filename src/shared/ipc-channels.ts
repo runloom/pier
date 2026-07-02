@@ -37,9 +37,16 @@ export const PIER_BROADCAST = {
   WINDOW_FULLSCREEN_CHANGED: "pier://window:fullscreen-changed",
   // git 变更广播 (main → renderer, payload GitChangeEvent).
   GIT_CHANGED: "pier://git:changed",
+  // 插件 registry 变更广播 (main → renderer, payload PluginRegistryListResult).
+  // main 在插件 setEnabled / registry refresh 后发送最新快照给所有窗口.
+  PLUGINS_CHANGED: "pier://plugins:changed",
   // renderer 下发的 presentation 已被 native 同步应用 (main → renderer,
   // payload { rendererSequence })，用于 resize 撤占位的精确握手。
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
+  // 终端状态栏用户覆盖变更后广播完整快照 (main → renderer, payload TerminalStatusBarPrefs).
+  TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
+  // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
+  PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
   // agent 会话状态全量快照广播 (main → 所有 renderer, payload AgentSessionsBroadcast).
   AGENT_SESSIONS_CHANGED: "pier://agent-session:changed",
 } as const;

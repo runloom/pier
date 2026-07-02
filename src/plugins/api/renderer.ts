@@ -44,6 +44,7 @@ import type {
 } from "@shared/contracts/worktree.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
+import type { PluginConfigurationApi } from "./configuration.ts";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
@@ -131,7 +132,6 @@ export interface RendererTerminalStatusItemContext {
 export interface RendererTerminalStatusItem {
   id: string;
   isVisible?: (context: RendererTerminalStatusItemContext) => boolean;
-  order?: number;
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
 }
 
@@ -172,6 +172,7 @@ export interface RendererPluginContext {
   commandPalette: {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
   };
+  configuration: PluginConfigurationApi;
   /**
    * 宿主级模态弹窗。渲染、blocking overlay、终端输入路由与 keybinding scope
    * 均由宿主统一处理;全局单例,新弹窗会顶替未决的旧弹窗(旧的按取消 resolve)。

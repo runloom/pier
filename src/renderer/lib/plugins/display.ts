@@ -17,6 +17,11 @@ export interface PluginContributionDisplayText {
   title: string;
 }
 
+export interface PluginCommandDisplayText
+  extends PluginContributionDisplayText {
+  category?: string;
+}
+
 export type PluginMessageValues = Record<string, number | string>;
 
 function unique(values: string[]): string[] {
@@ -137,7 +142,13 @@ export function resolvePluginCommandDisplay(
   manifest: PluginManifest,
   command: PluginCommandContribution,
   locale: string
-): PluginContributionDisplayText {
+): PluginCommandDisplayText {
+  const category =
+    resolveFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.commands?.[command.id]?.category
+    ) ?? command.category;
   const description =
     resolveFromLocales(
       manifest,
@@ -151,6 +162,7 @@ export function resolvePluginCommandDisplay(
         locale,
         (messages) => messages.commands?.[command.id]?.title
       ) ?? command.title,
+    ...(category ? { category } : {}),
     ...(description ? { description } : {}),
   };
 }
@@ -209,4 +221,88 @@ export function resolvePluginTerminalStatusItemDisplay(
       ) ?? item.title,
     ...(description ? { description } : {}),
   };
+}
+
+function resolveArrayFromLocales(
+  manifest: PluginManifest,
+  locale: string,
+  pick: (messages: PluginLocaleMessages) => readonly string[] | undefined
+): readonly string[] | undefined {
+  for (const candidate of localeCandidates(
+    locale,
+    manifest.localization?.defaultLocale
+  )) {
+    const value = manifest.locales?.[candidate];
+    if (!value) {
+      continue;
+    }
+    const resolved = pick(value);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return;
+}
+
+export interface PluginSettingDisplayText {
+  description?: string;
+  enumDescriptions?: readonly string[];
+  label: string;
+}
+
+/** label 缺省 = key 去掉 `<pluginId>.` 前缀后的全部剩余段（避免尾段撞名）。 */
+export function defaultPluginSettingLabel(
+  pluginId: string,
+  key: string
+): string {
+  const prefix = `${pluginId}.`;
+  return key.startsWith(prefix) ? key.slice(prefix.length) : key;
+}
+
+export function resolvePluginSettingDisplay(
+  manifest: PluginManifest,
+  key: string,
+  locale: string
+): PluginSettingDisplayText {
+  const property = manifest.configuration?.properties[key];
+  const description =
+    resolveFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.settings?.[key]?.description
+    ) ?? property?.description;
+  const localeEnumDescriptions = resolveArrayFromLocales(
+    manifest,
+    locale,
+    (messages) => messages.settings?.[key]?.enumDescriptions
+  );
+  // locale 侧 enumDescriptions 未与 manifest enum 做等长校验；UI 按下标映射到 enum 值，
+  // 长度不符会导致下标错位（标签指向错误的枚举值）。忽略并回落 manifest，而不是直接采用。
+  const enumDescriptions =
+    (localeEnumDescriptions &&
+    property?.enum &&
+    localeEnumDescriptions.length !== property.enum.length
+      ? undefined
+      : localeEnumDescriptions) ?? property?.enumDescriptions;
+  return {
+    label:
+      resolveFromLocales(
+        manifest,
+        locale,
+        (messages) => messages.settings?.[key]?.label
+      ) ?? defaultPluginSettingLabel(manifest.id, key),
+    ...(description ? { description } : {}),
+    ...(enumDescriptions ? { enumDescriptions } : {}),
+  };
+}
+
+/** 设置导航插件项 label：configuration.title ?? 插件显示名（后者走 manifest i18n）。 */
+export function resolvePluginConfigurationTitle(
+  entry: PluginRegistryEntry,
+  locale: string
+): string {
+  return (
+    entry.manifest.configuration?.title ??
+    resolvePluginDisplay(entry, locale).name
+  );
 }

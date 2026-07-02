@@ -21,15 +21,16 @@ import {
   computeMonoFontFamilyList,
   useFontStore,
 } from "@/stores/font.store.ts";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import { TerminalSearchBar } from "./terminal-search-bar.tsx";
 import {
-  hasVisibleTerminalStatusItems,
+  shouldMountTerminalStatusBar,
   TerminalStatusBar,
-  useTerminalStatusItems,
+  useTerminalStatusBarItems,
 } from "./terminal-status-bar.tsx";
 import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
@@ -165,7 +166,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     windowZoomLevel
   );
   const anchorRef = useRef<HTMLDivElement>(null);
-  const statusItems = useTerminalStatusItems();
+  const statusItems = useTerminalStatusBarItems();
+  const pluginRegistryEntries = usePluginRegistryStore((s) => s.plugins);
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -218,9 +220,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     title: effectiveTitle,
   };
-  const hasStatusBar = hasVisibleTerminalStatusItems(
+  // F4:与 TerminalStatusBar 组件的挂载判定同一实现(shouldMountTerminalStatusBar)—
+  // 否则两处口径漂移会导致「容器已挂载但内容区没给它留 h-7」或反之的错位。
+  const hasStatusBar = shouldMountTerminalStatusBar(
     statusItems,
-    statusContext
+    statusContext,
+    pluginRegistryEntries
   );
 
   usePanelDescriptor(

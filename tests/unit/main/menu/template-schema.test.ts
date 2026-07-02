@@ -74,4 +74,21 @@ describe("MenuTemplateSchema", () => {
       ])
     ).toThrow();
   });
+
+  it("接受 checkbox 项(状态栏显隐勾选用)", () => {
+    const ok = [
+      { type: "checkbox", id: "pier.x.toggle", label: "Item", checked: true },
+      { type: "separator" },
+      { type: "action", id: "pier.x.manage", label: "Manage" },
+    ];
+    expect(() => MenuTemplateSchema.parse(ok)).not.toThrow();
+  });
+
+  it("拒绝缺 checked 的 checkbox 项", () => {
+    expect(() =>
+      MenuTemplateSchema.parse([
+        { type: "checkbox", id: "pier.x", label: "Item" },
+      ])
+    ).toThrow();
+  });
 });

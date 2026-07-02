@@ -1,9 +1,13 @@
+import type { PierCapability } from "@shared/contracts/permissions.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import i18next from "i18next";
 import {
@@ -17,18 +21,19 @@ import {
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 function pluginEntry(overrides: {
   description?: string;
   enabled: boolean;
-  effectivePermissions?: string[];
+  effectivePermissions?: PierCapability[];
   id: string;
-  locales?: Record<string, unknown>;
+  locales?: PluginRegistryEntry["manifest"]["locales"];
   name: string;
   sourceKind: "builtin" | "local";
-}) {
-  const commands = [
+}): PluginRegistryEntry {
+  const commands: PluginRegistryEntry["manifest"]["commands"] = [
     {
       id: `${overrides.id}.list`,
       permissions: ["worktree:read"],
@@ -77,6 +82,13 @@ function pluginEntry(overrides: {
   };
 }
 
+const REGISTRY_INITIAL_STATE = {
+  diagnostics: [],
+  error: null,
+  initialized: false,
+  plugins: [],
+};
+
 describe("Settings plugins section", () => {
   beforeAll(async () => {
     await initI18n();
@@ -90,6 +102,7 @@ describe("Settings plugins section", () => {
       removeEventListener: vi.fn(),
     }));
     useSettingsDialogStore.setState({ isOpen: true });
+    usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
   });
 
   afterEach(() => {
@@ -97,9 +110,10 @@ describe("Settings plugins section", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     useSettingsDialogStore.setState({ isOpen: false });
+    usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
   });
 
-  it("默认列表只展示插件摘要，详情展开后展示诊断信息", async () => {
+  it("插件列表始终以摘要行展示：名称/状态/来源/计数摘要，不含底层 ID、命令表或权限明细", async () => {
     const enabledWorktree = pluginEntry({
       enabled: true,
       id: "pier.worktree",
@@ -118,16 +132,10 @@ describe("Settings plugins section", () => {
       name: "Local Example",
       sourceKind: "local",
     });
-    const list = vi
-      .fn()
-      .mockResolvedValueOnce({
-        diagnostics: [],
-        entries: [enabledWorktree, localPlugin],
-      })
-      .mockResolvedValueOnce({
-        diagnostics: [],
-        entries: [disabledWorktree, localPlugin],
-      });
+    const list = vi.fn().mockResolvedValueOnce({
+      diagnostics: [],
+      entries: [disabledWorktree, localPlugin],
+    });
     const disable = vi.fn(async () => disabledWorktree);
     const enable = vi.fn();
 
@@ -144,33 +152,40 @@ describe("Settings plugins section", () => {
         terminal: { applyInputRouting: vi.fn() },
       },
     });
+    // 组件不再挂载时自拉取, 而是读取 registry 镜像 store(2b1e7c5);
+    // 与 tests/unit/renderer/plugins-section.test.tsx 的播种模式保持一致。
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      initialized: true,
+      plugins: [enabledWorktree, localPlugin],
+    });
 
     render(<SettingsDialog />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Plugins" }));
 
     expect(await screen.findByText("Worktree")).toBeVisible();
-    expect(screen.getByText("Built-in")).toBeVisible();
+    // builtin 插件不展示 Source badge(方向 D:只有唯一 source 时展示徽章无信息量)。
+    expect(screen.queryByText("Built-in")).not.toBeInTheDocument();
     expect(screen.getByText("Local Example")).toBeVisible();
+    // non-builtin(local)插件展示 Source badge。
+    expect(screen.getByText("Local")).toBeVisible();
     expect(screen.getByText("Manifest preview")).toBeVisible();
     expect(screen.queryByText("pier.worktree")).not.toBeInTheDocument();
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
     expect(screen.queryByText("plugin:read")).not.toBeInTheDocument();
-    expect(screen.queryByText("Panels")).not.toBeInTheDocument();
-    expect(screen.queryByText("None")).not.toBeInTheDocument();
+    expect(screen.queryByText("Read plugin manifests")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Read Git worktree information")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show Worktree details" })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Show Worktree details" })
-    );
-
-    expect(screen.getByText("Plugin ID")).toBeVisible();
-    expect(screen.getByText("pier.worktree")).toBeVisible();
-    expect(screen.getByText("Commands")).toBeVisible();
-    expect(screen.getByText("pier.worktree.list")).toBeVisible();
-    expect(screen.getByText("Terminal status items")).toBeVisible();
-    expect(screen.getByText("pier.worktree.status")).toBeVisible();
-    expect(screen.getByText("Read plugin manifests")).toBeVisible();
-    expect(screen.getByText("Read Git worktree information")).toBeVisible();
+    // 计数摘要行(图标+文案)直接可见, 不需要展开任何详情。
+    const worktreeRow = within(screen.getByTestId("plugin-row-pier.worktree"));
+    expect(worktreeRow.getByText("1 command")).toBeVisible();
+    expect(worktreeRow.getByText("1 terminal status item")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Disable Worktree" }));
 
@@ -187,18 +202,9 @@ describe("Settings plugins section", () => {
   });
 
   it("加载插件时使用 shadcn skeleton 加载态", async () => {
-    let resolveList: (
-      result: Awaited<ReturnType<typeof window.pier.plugins.list>>
-    ) => void = () => undefined;
-    const list = vi.fn(
-      () =>
-        new Promise<Awaited<ReturnType<typeof window.pier.plugins.list>>>(
-          (resolve) => {
-            resolveList = resolve;
-          }
-        )
-    );
-
+    // 组件不再自拉取, loading 态完全由 registry 镜像 store 的 `initialized`
+    // 驱动(2b1e7c5); beforeEach 已播种 REGISTRY_INITIAL_STATE(initialized:
+    // false), 这里模拟 bootstrap 的 initPluginRegistry()/广播落地把它翻转。
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -206,7 +212,7 @@ describe("Settings plugins section", () => {
           disable: vi.fn(),
           enable: vi.fn(),
           inspect: vi.fn(),
-          list,
+          list: vi.fn(),
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
         terminal: { applyInputRouting: vi.fn() },
@@ -220,7 +226,13 @@ describe("Settings plugins section", () => {
     expect(await screen.findByTestId("plugins-loading")).toBeVisible();
     expect(screen.getByText("Loading plugins")).toBeVisible();
 
-    resolveList({ diagnostics: [], entries: [] });
+    act(() => {
+      usePluginRegistryStore.setState({
+        diagnostics: [],
+        initialized: true,
+        plugins: [],
+      });
+    });
     await waitFor(() => {
       expect(screen.queryByTestId("plugins-loading")).not.toBeInTheDocument();
     });
@@ -261,11 +273,6 @@ describe("Settings plugins section", () => {
       name: "Local Example",
       sourceKind: "local",
     });
-    const list = vi.fn().mockResolvedValue({
-      diagnostics: [],
-      entries: [enabledWorktree, localPlugin],
-    });
-
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -273,11 +280,16 @@ describe("Settings plugins section", () => {
           disable: vi.fn(),
           enable: vi.fn(),
           inspect: vi.fn(),
-          list,
+          list: vi.fn(),
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
         terminal: { applyInputRouting: vi.fn() },
       },
+    });
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      initialized: true,
+      plugins: [enabledWorktree, localPlugin],
     });
 
     render(<SettingsDialog />);
@@ -293,11 +305,15 @@ describe("Settings plugins section", () => {
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "停用工作树" })).toBeVisible();
     expect(screen.getByText("仅清单预览")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "显示工作树详情" })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "显示工作树详情" }));
-
-    expect(screen.getByText("工作树列表")).toBeVisible();
-    expect(screen.getByText("工作树状态")).toBeVisible();
-    expect(screen.getByText("读取 Git 工作树信息")).toBeVisible();
+    // 命令/状态项标题不再单独展示, 只展示 i18n 计数摘要。
+    expect(screen.queryByText("工作树列表")).not.toBeInTheDocument();
+    expect(screen.queryByText("工作树状态")).not.toBeInTheDocument();
+    const worktreeRow = within(screen.getByTestId("plugin-row-pier.worktree"));
+    expect(worktreeRow.getByText("1 个命令")).toBeVisible();
+    expect(worktreeRow.getByText("1 个终端状态项")).toBeVisible();
   });
 });

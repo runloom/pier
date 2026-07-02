@@ -18,4 +18,7 @@ export const terminal = {
     placeholder: "Find",
     previous: "Previous match",
   },
+  statusBar: {
+    manage: "Manage Status Bar…",
+  },
 } as const;

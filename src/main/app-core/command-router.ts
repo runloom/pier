@@ -12,6 +12,7 @@ import {
 import { FileServiceError } from "../services/file-service.ts";
 import { GitExecError } from "../services/git-exec.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
+import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
@@ -119,6 +120,18 @@ async function executePluginCommand(
       }
       return success(requestId, plugin);
     }
+    case "pluginSettings.getAll":
+      return success(requestId, await services.pluginSettings.getAll());
+    case "pluginSettings.set":
+      return success(
+        requestId,
+        await services.pluginSettings.set(command.key, command.value)
+      );
+    case "pluginSettings.reset":
+      return success(
+        requestId,
+        await services.pluginSettings.reset(command.key)
+      );
     default:
       return null;
   }
@@ -228,6 +241,26 @@ async function executeAppStateCommand(
       return success(
         requestId,
         await services.preferences.update(command.patch)
+      );
+    case "terminalStatusBar.prefs.getAll":
+      return success(requestId, await services.terminalStatusBarPrefs.getAll());
+    case "terminalStatusBar.prefs.resetItem":
+      return success(
+        requestId,
+        await services.terminalStatusBarPrefs.resetItem(command.itemId)
+      );
+    case "terminalStatusBar.prefs.setItemOverride":
+      return success(
+        requestId,
+        await services.terminalStatusBarPrefs.setItemOverride(
+          command.itemId,
+          command.patch
+        )
+      );
+    case "terminalStatusBar.prefs.applyOverrides":
+      return success(
+        requestId,
+        await services.terminalStatusBarPrefs.applyOverrides(command.patches)
       );
     default:
       return null;
@@ -343,6 +376,36 @@ async function executeTerminalCommand(
   }
 }
 
+function mapCommandError(requestId: string, err: unknown): PierCommandResult {
+  if (err instanceof WorktreeServiceError) {
+    return failure(requestId, err.reason, err.message);
+  }
+  if (err instanceof FileServiceError) {
+    return failure(requestId, "invalid_command", err.message);
+  }
+  if (err instanceof PluginServiceError) {
+    const code = err.code === "invalid_manifest" ? "invalid_command" : err.code;
+    return failure(requestId, code, err.message);
+  }
+  if (err instanceof PluginSettingsServiceError) {
+    return failure(requestId, err.code, err.message);
+  }
+  if (err instanceof GitExecError) {
+    // 取 stderr 优先,空则 fallback stdout(git 把 "nothing to commit" 之类放 stdout)
+    // 前 3 行作摘要,让插件能按内容分类("already exists"/"not fully merged"/
+    // "dirty worktree"/"nothing to commit" 等)
+    const rawSummary = err.stderr.trim() || err.stdout.trim();
+    const summary = rawSummary.split("\n").slice(0, 3).join(" | ");
+    const detail = summary.length > 0 ? ` -- ${summary}` : "";
+    return failure(requestId, "git_error", `${err.message}${detail}`);
+  }
+  return failure(
+    requestId,
+    "internal_error",
+    err instanceof Error ? err.message : String(err)
+  );
+}
+
 async function executeCommandByDomain(
   requestId: string,
   command: PierCommand,
@@ -397,31 +460,7 @@ async function executeKnownCommand(
       `unsupported command: ${command.type}`
     );
   } catch (err) {
-    if (err instanceof WorktreeServiceError) {
-      return failure(requestId, err.reason, err.message);
-    }
-    if (err instanceof FileServiceError) {
-      return failure(requestId, "invalid_command", err.message);
-    }
-    if (err instanceof PluginServiceError) {
-      const code =
-        err.code === "invalid_manifest" ? "invalid_command" : err.code;
-      return failure(requestId, code, err.message);
-    }
-    if (err instanceof GitExecError) {
-      // 取 stderr 优先,空则 fallback stdout(git 把 "nothing to commit" 之类放 stdout)
-      // 前 3 行作摘要,让插件能按内容分类("already exists"/"not fully merged"/
-      // "dirty worktree"/"nothing to commit" 等)
-      const rawSummary = err.stderr.trim() || err.stdout.trim();
-      const summary = rawSummary.split("\n").slice(0, 3).join(" | ");
-      const detail = summary.length > 0 ? ` -- ${summary}` : "";
-      return failure(requestId, "git_error", `${err.message}${detail}`);
-    }
-    return failure(
-      requestId,
-      "internal_error",
-      err instanceof Error ? err.message : String(err)
-    );
+    return mapCommandError(requestId, err);
   }
 }
 

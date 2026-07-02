@@ -18,4 +18,7 @@ export const terminal = {
     placeholder: "查找",
     previous: "上一个匹配",
   },
+  statusBar: {
+    manage: "管理状态栏…",
+  },
 } as const;

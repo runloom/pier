@@ -58,8 +58,9 @@ export function getPluginPanelRevision(): number {
 
 /**
  * 订阅插件 panel 注册表变化(给 useSyncExternalStore 用)。
- * 用户在 Settings 启用/禁用插件时,refreshBuiltinPlugins() 触发 dispose+re-activate,
- * 订阅者据此重算 dockview 组件表,保证开关插件后能立即打开/收起对应面板,无需重启。
+ * 用户在 Settings 启用/禁用插件时, PLUGINS_CHANGED 广播落进 plugin-registry
+ * 镜像 store, bootstrap 的订阅据此对 runtime dispose+re-activate,
+ * 订阅者随之重算 dockview 组件表,保证开关插件后能立即打开/收起对应面板,无需重启。
  */
 export function subscribePluginPanelRegistry(listener: () => void): () => void {
   listeners.add(listener);

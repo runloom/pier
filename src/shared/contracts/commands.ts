@@ -23,12 +23,17 @@ import {
   listBranchesOptionsSchema,
 } from "./git.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
+import { jsonValueSchema } from "./plugin-settings.ts";
 import { projectPreferencesSchema } from "./preferences.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
   terminalLaunchEnvKeySchema,
   terminalLaunchOptionsSchema,
 } from "./terminal-launch.ts";
+import {
+  terminalStatusBarItemOverridePatchSchema,
+  terminalStatusBarOverridePatchesSchema,
+} from "./terminal-status-bar.ts";
 import {
   type WorktreeOperationErrorReason,
   worktreeCheckRequestSchema,
@@ -185,6 +190,34 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.disable"),
+  }),
+  z.object({ type: z.literal("pluginSettings.getAll") }),
+  z.object({
+    key: z.string().min(1),
+    type: z.literal("pluginSettings.set"),
+    value: jsonValueSchema,
+  }),
+  z.object({
+    key: z.string().min(1),
+    type: z.literal("pluginSettings.reset"),
+  }),
+  z.object({ type: z.literal("terminalStatusBar.prefs.getAll") }),
+  z.object({
+    itemId: z.string().min(1),
+    // F7:携带 patch(值→设置;null→清除;缺省→保留现值),main 侧单线程合成,
+    // 消除 renderer 端 read-modify-write 竞态(见 withItemOverridePatch)。
+    patch: terminalStatusBarItemOverridePatchSchema,
+    type: z.literal("terminalStatusBar.prefs.setItemOverride"),
+  }),
+  z.object({
+    itemId: z.string().min(1),
+    type: z.literal("terminalStatusBar.prefs.resetItem"),
+  }),
+  z.object({
+    // F8:批量 patch 一次 IPC 原子应用(全部落盘 + 恰一次广播),
+    // moveWithinGroup 等多字段重排场景改走这条,替代 N 次顺序 setItemOverride。
+    patches: terminalStatusBarOverridePatchesSchema,
+    type: z.literal("terminalStatusBar.prefs.applyOverrides"),
   }),
   fileListRequestSchema.extend({
     type: z.literal("file.list"),

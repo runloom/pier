@@ -2,20 +2,24 @@
   "commands": {
     "pier.git.changes.open": {
       "aliases": ["变更", "打开变更面板", "biangeng"],
+      "category": "Git",
       "title": "Git: 打开变更面板"
     },
     "pier.git.merge": {
       "aliases": ["合并分支", "git merge", "he bing fen zhi"],
+      "category": "Git",
       "description": "选择一个分支并合并到当前分支。",
       "title": "合并分支..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["中止合并", "git merge abort", "zhong zhi he bing"],
+      "category": "Git",
       "description": "中止当前合并操作。",
       "title": "中止合并"
     },
     "pier.git.stash": {
       "aliases": ["暂存更改", "git stash", "zan cun geng gai"],
+      "category": "Git",
       "description": "储藏本地变更，包含未跟踪文件。",
       "title": "暂存更改"
     },
@@ -28,21 +32,25 @@
         "tan chu zan cun",
         "hui fu zan cun"
       ],
+      "category": "Git",
       "description": "选择一个储藏，应用并从储藏列表移除。",
       "title": "弹出暂存..."
     },
     "pier.git.rebase": {
       "aliases": ["变基到分支", "git rebase", "bian ji fen zhi"],
+      "category": "Git",
       "description": "选择一个分支并将当前分支变基到它之上。",
       "title": "变基到分支..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["中止变基", "git rebase abort", "zhong zhi bian ji"],
+      "category": "Git",
       "description": "中止当前变基操作。",
       "title": "中止变基"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["继续变基", "git rebase continue", "ji xu bian ji"],
+      "category": "Git",
       "description": "继续当前变基操作。",
       "title": "继续变基"
     },
@@ -55,6 +63,7 @@
         "che xiao ti jiao",
         "hui tui ti jiao"
       ],
+      "category": "Git",
       "description": "撤销上次提交，并保留变更为已暂存。",
       "title": "撤销上次提交"
     },
@@ -65,6 +74,7 @@
         "gongzuoshu",
         "chuangjian gongzuoshu"
       ],
+      "category": "工作树",
       "description": "在仓库托管的工作树目录下创建 Git worktree。",
       "title": "创建工作树"
     },
@@ -76,6 +86,7 @@
         "gongzuoshu",
         "shanchu gongzuoshu"
       ],
+      "category": "工作树",
       "description": "选择并删除 Git worktree。",
       "title": "删除工作树..."
     },
@@ -86,11 +97,13 @@
         "worktree prune",
         "qing li gong zuo shu"
       ],
+      "category": "工作树",
       "description": "清理失效的 Git worktree 记录。",
       "title": "清理工作树"
     },
     "pier.worktree.list": {
       "aliases": ["工作树", "工作树列表", "gongzuoshu", "gong zuo shu"],
+      "category": "工作树",
       "description": "列出当前仓库的 Git worktree 并打开目标工作树。",
       "title": "工作树列表"
     }
@@ -191,6 +204,12 @@
     "pier.git.changes": {
       "description": "Git 变更预览的占位面板,正式实现稍后到来。",
       "title": "Git 变更"
+    }
+  },
+  "settings": {
+    "pier.git.statusItem.showDirtyIndicator": {
+      "label": "显示变更指示",
+      "description": "在工作树状态项中显示变更文件计数与行数增减。"
     }
   },
   "terminalStatusItems": {
