@@ -34,6 +34,7 @@ import { registerWindowIpc } from "./ipc/window.ts";
 import { registerWorkspaceIpc } from "./ipc/workspace.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
+import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
@@ -215,6 +216,41 @@ app.whenReady().then(async () => {
         snapshot: event.snapshot,
       });
     }
+  });
+
+  // git autofetch：只写 git、经 watch 签名广播进入既有数据流（spec §4）
+  const initialPrefs = await appCore.services.preferences.read();
+  let autofetchConfig = {
+    enabled: initialPrefs.gitAutoFetchEnabled,
+    intervalMinutes: initialPrefs.gitAutoFetchIntervalMinutes,
+  };
+  appCore.eventBus.subscribe((event) => {
+    if (event.type === "preferences.changed") {
+      autofetchConfig = {
+        enabled: event.snapshot.gitAutoFetchEnabled,
+        intervalMinutes: event.snapshot.gitAutoFetchIntervalMinutes,
+      };
+    }
+  });
+  const gitAutofetch = createGitAutofetchService({
+    activeRoots: () => appCore.services.gitWatch.activeRoots(),
+    getConfig: () => autofetchConfig,
+    isFocused: () => windowManager.getFocused() !== null,
+    pulse: (gitRoot) => {
+      appCore.services.gitWatch.pulse(gitRoot);
+    },
+  });
+  gitAutofetch.start();
+  app.on("browser-window-focus", () => {
+    gitAutofetch.onFocusGained();
+    // 聚焦补课：后台 poll 被门控跳过（A5），聚焦瞬间对活跃仓库全量重算一次签名，
+    // 弥补后台错过的 poll，走既有 watch 广播管道。
+    for (const root of appCore.services.gitWatch.activeRoots()) {
+      appCore.services.gitWatch.pulse(root);
+    }
+  });
+  app.on("will-quit", () => {
+    gitAutofetch.dispose();
   });
 
   // mac dev: dock icon 默认是 Electron 紫色; 显式设成 Pier 图标.

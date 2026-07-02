@@ -1,6 +1,7 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import { GitBranch } from "lucide-react";
+import { formatRelativeTime } from "./format-relative-time.ts";
 
 /** Badge 默认尺寸偏大,统一压缩到行内 4px 网格;色彩语义交给 variant。 */
 const ROW_BADGE_CLASS = "h-4 rounded-sm px-1.5 text-[10px]";
@@ -140,51 +141,4 @@ function branchAheadBehind(
     ahead: aheadFromCurrent ?? 0,
     behind: behindFromCurrent ?? 0,
   };
-}
-
-function getIntlLocale(): string {
-  if (typeof document !== "undefined" && document.documentElement.lang) {
-    return document.documentElement.lang;
-  }
-  if (typeof navigator !== "undefined" && navigator.language) {
-    return navigator.language;
-  }
-  return "en-US";
-}
-
-function parseIsoDate(value: null | string | undefined): Date | null {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date : null;
-}
-
-function formatRelativeTime(value: null | string | undefined): string {
-  const date = parseIsoDate(value);
-  if (!date) {
-    return "";
-  }
-  const diffMs = date.getTime() - Date.now();
-  const absMs = Math.abs(diffMs);
-  const locale = getIntlLocale();
-  const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (absMs < hour) {
-    return relative.format(Math.round(diffMs / minute), "minute");
-  }
-  if (absMs < day) {
-    return relative.format(Math.round(diffMs / hour), "hour");
-  }
-  if (absMs < 7 * day) {
-    return relative.format(Math.round(diffMs / day), "day");
-  }
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    ...(sameYear ? {} : { year: "numeric" as const }),
-  }).format(date);
 }

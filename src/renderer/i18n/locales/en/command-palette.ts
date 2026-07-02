@@ -1,6 +1,7 @@
 export const commandPalette = {
   title: "Command Palette",
   empty: "No matching command",
+  emptyQuickPick: "No matching items",
   searchResults: "Results",
   agents: {
     noAgentDetected: "No agent CLI detected",
@@ -144,7 +145,7 @@ export const commandPalette = {
     loadingTasksDetail: "Scanning supported task sources in the active project",
     noTasks: "No runnable tasks found",
     noTasksDetail:
-      "Supported sources include package.json, VS Code, Zed, Cargo, Make, mise, Justfile, Taskfile, and pyproject",
+      "Supported sources include package.json, deno.json, composer.json, VS Code, Zed, Cargo, Make, mise, Justfile, Taskfile, and pyproject",
     section: {
       group: "Group {{group}}",
       taskErrors: "Task Source Errors",
@@ -153,6 +154,8 @@ export const commandPalette = {
       hidden: "Hidden",
       source: {
         cargo: "Cargo",
+        composer: "Composer",
+        deno: "Deno",
         history: "Recently Run",
         just: "Justfile",
         make: "Makefile",

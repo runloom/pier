@@ -70,6 +70,10 @@ function localizedTooltipValue(
   switch (value) {
     case "Cargo":
       return t("commandPalette.run.taskTab.source.cargo");
+    case "Composer":
+      return t("commandPalette.run.taskTab.source.composer");
+    case "Deno":
+      return t("commandPalette.run.taskTab.source.deno");
     case "Recently Run":
       return t("commandPalette.run.taskTab.source.history");
     case "Justfile":

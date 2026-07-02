@@ -52,6 +52,9 @@ vi.mock("sonner", () => ({
 
 const now = 1_772_000_000_000;
 
+/** 分支名不应再带 max-w-[...] 固定宽度上限（只在容器溢出时 truncate）。 */
+const FIXED_MAX_WIDTH_CLASS_RE = /max-w-\[/;
+
 const context: PanelContext = {
   branch: "main",
   contextId: "ctx-pier",
@@ -545,6 +548,7 @@ describe("git builtin plugin", () => {
               ahead: 0,
               behind: 0,
               branch: "main",
+              mergedIntoDefault: null,
               oid: "abc123",
               upstream: null,
               upstreamGone: false,
@@ -792,15 +796,16 @@ describe("git builtin plugin", () => {
     const prunable = quickPick?.sections
       ?.flatMap((section) => section.items)
       .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-stale");
+    // 标题直接用分支名, "主工作树" 语义只由 badge 表达, 不再重复放 description。
     expect(main).toMatchObject({
       badges: expect.arrayContaining([
         expect.objectContaining({ label: "main" }),
       ]),
       checked: true,
-      description: "main",
       detail: "/Users/xyz/ABC/pier",
       label: "main",
     });
+    expect(main?.description).toBeUndefined();
     expect(linked).toMatchObject({
       detail: "/Users/xyz/ABC/pier-feature",
       label: "feature/worktree",
@@ -1478,6 +1483,163 @@ describe("git builtin plugin", () => {
         path: "/Users/xyz/ABC/pier-feature",
       });
     });
+  });
+
+  it("upstream 已 gone 时展示带文字的红色胶囊", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/gone-branch",
+        oid: "abc123",
+        upstream: "origin/feature/gone-branch",
+        upstreamGone: true,
+        mergedIntoDefault: null,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/gone-branch" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const pill = await screen.findByTestId("upstream-gone-pill");
+    expect(pill).toHaveTextContent("upstream gone");
+  });
+
+  it("分支已合入默认分支时展示 merged 胶囊，可与 gone 胶囊共存", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/done",
+        mergedIntoDefault: true,
+        oid: "abc123",
+        upstream: "origin/feature/done",
+        upstreamGone: true,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/done" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const merged = await screen.findByTestId("merged-pill");
+    expect(merged).toHaveTextContent("merged");
+    expect(screen.getByTestId("upstream-gone-pill")).toBeInTheDocument();
+  });
+
+  it("DETACHED 胶囊使用 text-foreground（neutral 风格），与 muted 计数区分", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: null,
+        mergedIntoDefault: null,
+        oid: "abc1234def",
+        upstream: null,
+        upstreamGone: false,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    const { branch: _omitted, ...contextWithoutBranch } = context;
+    render(
+      statusItem.render({
+        context: contextWithoutBranch,
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const pill = await screen.findByText("DETACHED");
+    expect(pill.className).toContain("text-foreground");
+  });
+
+  it("分支名不设固定宽度上限，仅靠 truncate 在溢出时截断", async () => {
+    const longBranch =
+      "Ysheep666/GIT-能力增强-一个足够长的分支名不该在空间够用时被截断";
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: longBranch,
+        oid: "abc123",
+        upstream: null,
+        upstreamGone: false,
+        mergedIntoDefault: null,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: longBranch },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const label = await screen.findByText(longBranch);
+    expect(label.className).toContain("truncate");
+    expect(label.className).not.toMatch(FIXED_MAX_WIDTH_CLASS_RE);
   });
 
   it("终端状态栏在非 Git context 下不渲染 worktree 入口", () => {

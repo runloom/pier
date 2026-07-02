@@ -173,6 +173,8 @@ function services(
         agentDefaultEnv: {},
         agentCommandOverrides: {},
         agentStatusHooks: false,
+        gitAutoFetchEnabled: true,
+        gitAutoFetchIntervalMinutes: 5,
       }),
       update: async (patch) => ({
         language: "system",
@@ -194,6 +196,8 @@ function services(
         agentDefaultEnv: {},
         agentCommandOverrides: {},
         agentStatusHooks: false,
+        gitAutoFetchEnabled: patch.gitAutoFetchEnabled ?? true,
+        gitAutoFetchIntervalMinutes: patch.gitAutoFetchIntervalMinutes ?? 5,
       }),
     },
     processEnvironment: {
