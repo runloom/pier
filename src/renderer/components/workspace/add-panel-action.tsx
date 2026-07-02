@@ -12,12 +12,13 @@ import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { GitBranchPlus, Play, Plus, Terminal } from "lucide-react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
+import { actionRegistry } from "@/lib/actions/registry.ts";
 import { openRunTaskQuickPick } from "@/lib/actions/run-actions.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
-import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { openWorktreeCreatePanel } from "@/stores/worktree-create.store.ts";
+
+const WORKTREE_CREATE_ACTION_ID = "pier.worktree.create";
 
 /**
  * Tab 栏 add 按钮 — dockview leftHeaderActionsComponent 模式.
@@ -37,23 +38,14 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
   const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
-  const activeContext = usePanelDescriptorStore((s) =>
-    s.activeId ? s.descriptors[s.activeId]?.context : undefined
-  );
 
   const enabledAgents = detectedIds.filter(
     (id) => !disabledAgentIds.includes(id)
   );
 
-  const worktreePath =
-    activeContext?.worktreeRoot ??
-    activeContext?.gitRoot ??
-    activeContext?.projectRoot ??
-    activeContext?.cwd;
-  const worktreeEnabled = Boolean(
-    worktreePath &&
-      (activeContext?.worktreeRoot || activeContext?.gitRoot) &&
-      activeContext?.worktreeSupported !== false
+  const worktreeCreateAction = actionRegistry.get(WORKTREE_CREATE_ACTION_ID);
+  const worktreeCreateEnabled = Boolean(
+    worktreeCreateAction && (worktreeCreateAction.enabled?.() ?? true)
   );
 
   return (
@@ -97,20 +89,9 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
             <span>{t("workspace.addPanelMenu.newTask")}</span>
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={!worktreeEnabled}
+            disabled={!worktreeCreateEnabled}
             onClick={() => {
-              const state = usePanelDescriptorStore.getState();
-              const context = state.activeId
-                ? state.descriptors[state.activeId]?.context
-                : undefined;
-              const path =
-                context?.worktreeRoot ??
-                context?.gitRoot ??
-                context?.projectRoot ??
-                context?.cwd;
-              if (path) {
-                openWorktreeCreatePanel({ path }).catch(() => undefined);
-              }
+              actionRegistry.get(WORKTREE_CREATE_ACTION_ID)?.handler();
             }}
           >
             <GitBranchPlus className="size-4" />

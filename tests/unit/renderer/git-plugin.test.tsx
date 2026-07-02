@@ -38,7 +38,6 @@ import {
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { useWorktreeCreateStore } from "@/stores/worktree-create.store.ts";
 
 const toastMocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -619,7 +618,6 @@ describe("git builtin plugin", () => {
     clearPluginPanelsForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useWorkspaceStore.setState({ api: null });
-    useWorktreeCreateStore.setState({ session: null });
     usePluginOverlayStore.setState({ current: null });
     resetTerminalInputRoutingForTests();
     useKeybindingScope.setState({

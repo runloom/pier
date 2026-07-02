@@ -1,6 +1,5 @@
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskPanelMetadata } from "./tasks.ts";
-import type { TerminalLaunchOptions } from "./terminal-launch.ts";
 
 export interface TerminalFrame {
   /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
@@ -432,10 +431,6 @@ export interface TerminalAPI {
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
-  open: (request: {
-    focus?: boolean;
-    launch?: TerminalLaunchOptions;
-  }) => Promise<unknown>;
   openDebugWindow(): Promise<TerminalDebugWindowOpenResult>;
   performOperation(
     panelId: string,

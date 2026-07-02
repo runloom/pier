@@ -177,7 +177,6 @@ function createMockContext(): RendererPluginContext {
       creationDefaults: unimplemented("worktrees.creationDefaults"),
       list: unimplemented("worktrees.list"),
       open: unimplemented("worktrees.open"),
-      openCreatePanel: unimplemented("worktrees.openCreatePanel"),
       openTerminal: openTerminalMock,
       prune: unimplemented("worktrees.prune"),
       remove: unimplemented("worktrees.remove"),

@@ -4,7 +4,6 @@ import { dialog } from "./dialog.ts";
 import { settings } from "./settings.ts";
 import { terminal } from "./terminal.ts";
 import { workspace } from "./workspace.ts";
-import { worktree } from "./worktree.ts";
 
 export const zhCN = {
   commandPalette,
@@ -13,5 +12,4 @@ export const zhCN = {
   settings,
   terminal,
   workspace,
-  worktree,
 } as const;

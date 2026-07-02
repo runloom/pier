@@ -22,7 +22,6 @@ import {
   openPluginOverlay,
 } from "../../stores/plugin-overlay.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
-import { openWorktreeCreatePanel } from "../../stores/worktree-create.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
 import { useCommandPaletteController } from "../command-palette/controller.ts";
@@ -389,9 +388,6 @@ export function createRendererPluginContext(
       creationDefaults: () => window.pier.worktrees.creationDefaults(),
       list: (request) => window.pier.worktrees.list(request),
       open: (request) => window.pier.worktrees.open(request),
-      openCreatePanel: (request) => {
-        openWorktreeCreatePanel({ path: request.path }).catch(() => undefined);
-      },
       openTerminal: (request) => window.pier.worktrees.openTerminal(request),
       prune: (request) => window.pier.worktrees.prune(request),
       remove: (request) => window.pier.worktrees.remove(request),

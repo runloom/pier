@@ -17,17 +17,18 @@ import {
 } from "@/components/workspace/workspace-header-actions.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
+import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { useWorktreeCreateStore } from "@/stores/worktree-create.store.ts";
 
 let applyInputRouting: ReturnType<typeof vi.fn>;
 let detectAgents: ReturnType<typeof vi.fn>;
 let disposePanelActions: (() => void) | null = null;
+let disposeWorktreeCreateAction: (() => void) | null = null;
 let prepareAgentLaunch: ReturnType<typeof vi.fn>;
 let originalHasPointerCapture:
   | typeof HTMLElement.prototype.hasPointerCapture
@@ -188,12 +189,13 @@ beforeEach(async () => {
 afterEach(() => {
   disposePanelActions?.();
   disposePanelActions = null;
+  disposeWorktreeCreateAction?.();
+  disposeWorktreeCreateAction = null;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   setDockviewTabRevealRoot(null);
   useWorkspaceStore.getState().setApi(null);
   usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
-  useWorktreeCreateStore.setState({ session: null });
   useAgentDetectStore.setState({
     detectedIds: [],
     hasDetected: false,
@@ -719,23 +721,18 @@ describe("WorkspaceHeaderActions", () => {
     });
   });
 
-  it("opens the worktree create panel from the header add-panel menu", async () => {
+  it("invokes the registered worktree create action when enabled", async () => {
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => true,
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
-    usePanelDescriptorStore.setState({
-      activeId: "terminal-1",
-      descriptors: {
-        "terminal-1": {
-          context: {
-            contextId: "ctx-repo",
-            cwd: "/repo",
-            gitRoot: "/repo",
-            updatedAt: 0,
-          },
-          display: { short: "repo" },
-        },
-      },
-    });
 
     render(<WorkspaceHeaderActions {...props} />);
 
@@ -745,46 +742,22 @@ describe("WorkspaceHeaderActions", () => {
     );
 
     await waitFor(() => {
-      expect(useWorktreeCreateStore.getState().session).not.toBeNull();
-    });
-    expect(window.pier.worktrees.list).toHaveBeenCalledWith({
-      path: "/repo",
+      expect(handler).toHaveBeenCalledOnce();
     });
   });
 
-  it("disables New Worktree when the add-panel menu has no active panel path", async () => {
-    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
-    useWorkspaceStore.getState().setApi(props.containerApi as never);
-    usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
-
-    render(<WorkspaceHeaderActions {...props} />);
-
-    openAddPanelMenu();
-    const item = await screen.findByRole("menuitem", { name: "New Worktree" });
-    expect(item).toHaveAttribute("aria-disabled", "true");
-
-    fireEvent.click(item);
-
-    expect(window.pier.worktrees.list).not.toHaveBeenCalled();
-    expect(useWorktreeCreateStore.getState().session).toBeNull();
-  });
-
-  it("disables New Worktree when the active panel is not a git repo", async () => {
-    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
-    useWorkspaceStore.getState().setApi(props.containerApi as never);
-    usePanelDescriptorStore.setState({
-      activeId: "terminal-1",
-      descriptors: {
-        "terminal-1": {
-          context: {
-            contextId: "ctx-repo",
-            cwd: "/home/user",
-            updatedAt: 0,
-          },
-          display: { short: "home" },
-        },
-      },
+  it("disables New Worktree when the registered action reports disabled", async () => {
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => false,
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
     });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderActions {...props} />);
 
@@ -793,24 +766,9 @@ describe("WorkspaceHeaderActions", () => {
     expect(item).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("disables New Worktree when worktreeSupported is false", async () => {
+  it("disables New Worktree when no action is registered", async () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
-    usePanelDescriptorStore.setState({
-      activeId: "terminal-1",
-      descriptors: {
-        "terminal-1": {
-          context: {
-            contextId: "ctx-repo",
-            cwd: "/repo",
-            gitRoot: "/repo",
-            updatedAt: 0,
-            worktreeSupported: false,
-          },
-          display: { short: "repo" },
-        },
-      },
-    });
 
     render(<WorkspaceHeaderActions {...props} />);
 
