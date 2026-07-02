@@ -66,21 +66,25 @@ function SettingRowShell({
   return (
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">{children}</div>
-      {modified ? (
-        <>
-          <Badge variant="secondary">{modifiedLabel}</Badge>
-          <Button
-            aria-label={resetLabel}
-            onClick={onReset}
-            size="xs"
-            title={resetLabel}
-            type="button"
-            variant="ghost"
-          >
-            <RotateCcw />
-          </Button>
-        </>
-      ) : null}
+      {modified ? <Badge variant="secondary">{modifiedLabel}</Badge> : null}
+      <Button
+        // Reset 按钮始终挂载(不随 modified 卸载): 卸载会在点击后把键盘焦点
+        // 甩回 body。用 aria-disabled + onClick 短路代替条件渲染/原生 disabled。
+        aria-disabled={!modified}
+        aria-label={resetLabel}
+        onClick={() => {
+          if (!modified) {
+            return;
+          }
+          onReset();
+        }}
+        size="xs"
+        title={resetLabel}
+        type="button"
+        variant="ghost"
+      >
+        <RotateCcw />
+      </Button>
     </div>
   );
 }

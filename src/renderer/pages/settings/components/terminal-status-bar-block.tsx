@@ -9,7 +9,13 @@
  */
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
-import { Card, CardContent } from "@pier/ui/card.tsx";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@pier/ui/card.tsx";
 import { Switch } from "@pier/ui/switch.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type {
@@ -163,9 +169,12 @@ function StatusBarRowView({
         }}
       />
       <Button
+        aria-disabled={index === 0}
         aria-label={t("settings.statusBar.moveUp")}
-        disabled={index === 0}
         onClick={() => {
+          if (index === 0) {
+            return;
+          }
           moveWithinGroup(rows, index, -1).catch(reportFailure);
         }}
         size="icon-sm"
@@ -176,9 +185,12 @@ function StatusBarRowView({
         <ArrowUp />
       </Button>
       <Button
+        aria-disabled={index === rows.length - 1}
         aria-label={t("settings.statusBar.moveDown")}
-        disabled={index === rows.length - 1}
         onClick={() => {
+          if (index === rows.length - 1) {
+            return;
+          }
           moveWithinGroup(rows, index, 1).catch(reportFailure);
         }}
         size="icon-sm"
@@ -211,9 +223,12 @@ function StatusBarRowView({
         <ArrowLeftRight />
       </Button>
       <Button
+        aria-disabled={!row.hasOverride}
         aria-label={t("settings.statusBar.reset")}
-        disabled={!row.hasOverride}
         onClick={() => {
+          if (!row.hasOverride) {
+            return;
+          }
           resetItem(row.id).catch(reportFailure);
         }}
         size="icon-sm"
@@ -255,31 +270,29 @@ export function TerminalStatusBarBlock() {
   const prefs = useTerminalStatusBarPrefsStore((s) => s.prefs);
   const { left, right } = buildRows(plugins, prefs);
   return (
-    <>
-      <h2 className="mt-6 mb-2 text-base">{t("settings.statusBar.title")}</h2>
-      <Card>
-        <CardContent>
-          <p className="mb-2 text-muted-foreground text-xs">
-            {t("settings.statusBar.description")}
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("settings.statusBar.title")}</CardTitle>
+        <CardDescription>{t("settings.statusBar.description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {left.length + right.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            {t("settings.statusBar.empty")}
           </p>
-          {left.length + right.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {t("settings.statusBar.empty")}
-            </p>
-          ) : (
-            <>
-              <StatusBarGroup
-                heading={t("settings.statusBar.leftGroup")}
-                rows={left}
-              />
-              <StatusBarGroup
-                heading={t("settings.statusBar.rightGroup")}
-                rows={right}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </>
+        ) : (
+          <>
+            <StatusBarGroup
+              heading={t("settings.statusBar.leftGroup")}
+              rows={left}
+            />
+            <StatusBarGroup
+              heading={t("settings.statusBar.rightGroup")}
+              rows={right}
+            />
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

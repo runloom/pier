@@ -176,18 +176,29 @@ describe("TerminalStatusBarBlock", () => {
     expect(screen.queryByText("Modified")).toBeNull();
   });
 
-  it("单项时上移下移按钮均禁用(组首且组尾)", () => {
+  it("单项时上移下移按钮均禁用(组首且组尾)(M2: aria-disabled 而非原生 disabled,按钮仍挂载可聚焦)", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.git", true, [statusItem("pier.worktree.status")])],
     });
     render(<TerminalStatusBarBlock />);
+    const upButton = screen.getByRole("button", { name: "Move up (outward)" });
+    const downButton = screen.getByRole("button", {
+      name: "Move down (inward)",
+    });
+    expect(upButton).toHaveAttribute("aria-disabled", "true");
+    expect(upButton).not.toBeDisabled();
+    expect(downButton).toHaveAttribute("aria-disabled", "true");
+    expect(downButton).not.toBeDisabled();
+
+    // 仍可聚焦(未被原生 disabled 挡在 tab 序列外),点击被 onClick 内部短路。
+    upButton.focus();
+    expect(document.activeElement).toBe(upButton);
+    fireEvent.click(upButton);
+    fireEvent.click(downButton);
     expect(
-      screen.getByRole("button", { name: "Move up (outward)" })
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Move down (inward)" })
-    ).toBeDisabled();
+      window.pier.terminalStatusBarPrefs.applyOverrides
+    ).not.toHaveBeenCalled();
   });
 
   it("关闭显示开关写 hidden:true 覆盖", async () => {
@@ -224,15 +235,19 @@ describe("TerminalStatusBarBlock", () => {
     });
   });
 
-  it("恢复默认按钮在无覆盖时禁用,有覆盖时可点并调用 resetItem", async () => {
+  it("恢复默认按钮在无覆盖时 aria-disabled(点击不调用 resetItem),有覆盖时可点并调用 resetItem(M2)", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.git", true, [statusItem("pier.worktree.status")])],
     });
     render(<TerminalStatusBarBlock />);
-    expect(
-      screen.getByRole("button", { name: "Reset to plugin default" })
-    ).toBeDisabled();
+    const idleResetButton = screen.getByRole("button", {
+      name: "Reset to plugin default",
+    });
+    expect(idleResetButton).toHaveAttribute("aria-disabled", "true");
+    expect(idleResetButton).not.toBeDisabled();
+    fireEvent.click(idleResetButton);
+    expect(window.pier.terminalStatusBarPrefs.resetItem).not.toHaveBeenCalled();
 
     act(() => {
       useTerminalStatusBarPrefsStore.setState({
@@ -247,7 +262,8 @@ describe("TerminalStatusBarBlock", () => {
     const resetButton = screen.getByRole("button", {
       name: "Reset to plugin default",
     });
-    expect(resetButton).not.toBeDisabled();
+    expect(resetButton).toBe(idleResetButton);
+    expect(resetButton).toHaveAttribute("aria-disabled", "false");
     fireEvent.click(resetButton);
 
     await waitFor(() => {
@@ -255,6 +271,51 @@ describe("TerminalStatusBarBlock", () => {
         "pier.worktree.status"
       );
     });
+  });
+
+  it("点击 Reset 后按钮仍挂载并带 aria-disabled,键盘焦点不跌落 body(M2)", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.git", true, [statusItem("pier.worktree.status")])],
+    });
+    act(() => {
+      useTerminalStatusBarPrefsStore.setState({
+        prefs: {
+          items: { "pier.worktree.status": { hidden: true } },
+          version: 1,
+        },
+      });
+    });
+    render(<TerminalStatusBarBlock />);
+
+    const resetButton = screen.getByRole("button", {
+      name: "Reset to plugin default",
+    });
+    resetButton.focus();
+    expect(document.activeElement).toBe(resetButton);
+
+    fireEvent.click(resetButton);
+    await waitFor(() => {
+      expect(window.pier.terminalStatusBarPrefs.resetItem).toHaveBeenCalledWith(
+        "pier.worktree.status"
+      );
+    });
+
+    // resetItem 的 IPC mock 不会自动回写 store, 用 setState 模拟 reset 成功落地后
+    // prefs 清空的那一刻(hasOverride: true → false) —— 断言按钮仍是同一个挂载
+    // 节点、aria-disabled 翻转为 true, 且键盘焦点没有因为卸载/重建而跌落到 body。
+    act(() => {
+      useTerminalStatusBarPrefsStore.setState({
+        prefs: { items: {}, version: 1 },
+      });
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Reset to plugin default" })
+    ).toBe(resetButton);
+    expect(resetButton).toHaveAttribute("aria-disabled", "true");
+    expect(document.activeElement).toBe(resetButton);
+    expect(document.activeElement).not.toBe(document.body);
   });
 
   it("上移把组内第二项与第一项交换,按 normalizedGroupOrders 以单次批量 IPC 写差异 order(F8)", async () => {
@@ -351,7 +412,7 @@ describe("TerminalStatusBarBlock", () => {
     });
   });
 
-  it("组首项上移按钮禁用,组尾项下移按钮禁用", () => {
+  it("组首项上移按钮禁用,组尾项下移按钮禁用(M2: aria-disabled)", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [
@@ -365,9 +426,11 @@ describe("TerminalStatusBarBlock", () => {
     const downButtons = screen.getAllByRole("button", {
       name: "Move down (inward)",
     });
-    expect(upButtons[0]).toBeDisabled();
-    expect(downButtons.at(-1)).toBeDisabled();
-    expect(downButtons[0]).not.toBeDisabled();
-    expect(upButtons.at(-1)).not.toBeDisabled();
+    expect(upButtons[0]).toHaveAttribute("aria-disabled", "true");
+    expect(downButtons.at(-1)).toHaveAttribute("aria-disabled", "true");
+    expect(downButtons[0]).toHaveAttribute("aria-disabled", "false");
+    expect(upButtons.at(-1)).toHaveAttribute("aria-disabled", "false");
+    expect(upButtons[0]).not.toBeDisabled();
+    expect(downButtons.at(-1)).not.toBeDisabled();
   });
 });
