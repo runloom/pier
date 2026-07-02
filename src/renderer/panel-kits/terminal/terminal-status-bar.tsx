@@ -22,8 +22,10 @@ class TerminalStatusItemRegistry extends Notifier {
   }
 
   list(): readonly TerminalStatusItem[] {
-    return Array.from(this.items.values()).sort(
-      (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id)
+    // 运行时注册对象不再承载排序;稳定输出按 id,呈现顺序由合并层
+    // (manifest 声明 + 用户覆盖,见 terminal-status-bar-merge.ts)决定。
+    return Array.from(this.items.values()).sort((a, b) =>
+      a.id.localeCompare(b.id)
     );
   }
 

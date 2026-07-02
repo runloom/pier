@@ -114,7 +114,6 @@ export interface RendererTerminalStatusItemContext {
 export interface RendererTerminalStatusItem {
   id: string;
   isVisible?: (context: RendererTerminalStatusItemContext) => boolean;
-  order?: number;
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
 }
 

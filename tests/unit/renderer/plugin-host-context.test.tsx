@@ -128,7 +128,6 @@ describe("createRendererPluginContext", () => {
 
     const dispose = context.terminalStatusItems.register({
       id: "test.status",
-      order: 20,
       render: () => "status",
     });
 

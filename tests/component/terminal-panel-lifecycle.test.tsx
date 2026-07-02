@@ -539,7 +539,6 @@ describe("TerminalPanel lifecycle", () => {
       id: "test.worktree-status",
       isVisible: ({ context: panelContext }) =>
         Boolean(panelContext?.worktreeRoot),
-      order: 10,
       render: ({ context: panelContext }) => (
         <span>{panelContext?.worktreeRoot ?? "missing"}</span>
       ),
@@ -580,7 +579,6 @@ describe("TerminalPanel lifecycle", () => {
       id: "test.worktree-status",
       isVisible: ({ context: panelContext }) =>
         Boolean(panelContext?.worktreeRoot),
-      order: 10,
       render: () => <span>worktree</span>,
     });
 

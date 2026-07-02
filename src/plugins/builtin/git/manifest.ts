@@ -121,6 +121,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   terminalStatusItems: [
     {
       id: "pier.worktree.status",
+      order: 10,
       permissions: ["worktree:read", "workspace:open"],
       title: "Worktree Status",
     },

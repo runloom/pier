@@ -27,12 +27,10 @@ describe("terminalStatusItemRegistry", () => {
   it("按顺序渲染注册的终端状态项", () => {
     terminalStatusItemRegistry.register({
       id: "test.second",
-      order: 20,
       render: () => <span>Second</span>,
     });
     terminalStatusItemRegistry.register({
       id: "test.first",
-      order: 10,
       render: () => <span>First</span>,
     });
 
@@ -53,7 +51,6 @@ describe("terminalStatusItemRegistry", () => {
   it("dispose 后移除状态项", () => {
     const dispose = terminalStatusItemRegistry.register({
       id: "test.item",
-      order: 10,
       render: () => <span>Visible</span>,
     });
     dispose();
@@ -75,7 +72,6 @@ describe("terminalStatusItemRegistry", () => {
       id: "test.hidden",
       isVisible: ({ context: panelContext }) =>
         Boolean(panelContext?.worktreeRoot),
-      order: 10,
       render: () => <span>Hidden</span>,
     });
 

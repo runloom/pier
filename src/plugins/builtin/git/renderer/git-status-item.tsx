@@ -292,7 +292,6 @@ export function registerGitStatusItem(
             ? undefined
             : panelContext?.gitRoot)
       ),
-    order: 10,
     render: (statusContext) => (
       <WorktreeStatusItem {...statusContext} pluginContext={context} />
     ),
