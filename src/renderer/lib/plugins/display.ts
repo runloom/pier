@@ -222,3 +222,80 @@ export function resolvePluginTerminalStatusItemDisplay(
     ...(description ? { description } : {}),
   };
 }
+
+function resolveArrayFromLocales(
+  manifest: PluginManifest,
+  locale: string,
+  pick: (messages: PluginLocaleMessages) => readonly string[] | undefined
+): readonly string[] | undefined {
+  for (const candidate of localeCandidates(
+    locale,
+    manifest.localization?.defaultLocale
+  )) {
+    const value = manifest.locales?.[candidate];
+    if (!value) {
+      continue;
+    }
+    const resolved = pick(value);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return;
+}
+
+export interface PluginSettingDisplayText {
+  description?: string;
+  enumDescriptions?: readonly string[];
+  label: string;
+}
+
+/** label 缺省 = key 去掉 `<pluginId>.` 前缀后的全部剩余段（避免尾段撞名）。 */
+export function defaultPluginSettingLabel(
+  pluginId: string,
+  key: string
+): string {
+  const prefix = `${pluginId}.`;
+  return key.startsWith(prefix) ? key.slice(prefix.length) : key;
+}
+
+export function resolvePluginSettingDisplay(
+  manifest: PluginManifest,
+  key: string,
+  locale: string
+): PluginSettingDisplayText {
+  const property = manifest.configuration?.properties[key];
+  const description =
+    resolveFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.settings?.[key]?.description
+    ) ?? property?.description;
+  const enumDescriptions =
+    resolveArrayFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.settings?.[key]?.enumDescriptions
+    ) ?? property?.enumDescriptions;
+  return {
+    label:
+      resolveFromLocales(
+        manifest,
+        locale,
+        (messages) => messages.settings?.[key]?.label
+      ) ?? defaultPluginSettingLabel(manifest.id, key),
+    ...(description ? { description } : {}),
+    ...(enumDescriptions ? { enumDescriptions } : {}),
+  };
+}
+
+/** 设置导航插件项 label：configuration.title ?? 插件显示名（后者走 manifest i18n）。 */
+export function resolvePluginConfigurationTitle(
+  entry: PluginRegistryEntry,
+  locale: string
+): string {
+  return (
+    entry.manifest.configuration?.title ??
+    resolvePluginDisplay(entry, locale).name
+  );
+}

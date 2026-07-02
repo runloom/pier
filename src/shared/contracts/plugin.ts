@@ -37,6 +37,15 @@ export type PluginLocalizedCommandContribution = z.infer<
   typeof pluginLocalizedCommandContributionSchema
 >;
 
+export const pluginLocalizedSettingSchema = z.object({
+  description: z.string().min(1).optional(),
+  enumDescriptions: z.array(z.string().min(1)).optional(),
+  label: z.string().min(1).optional(),
+});
+export type PluginLocalizedSetting = z.infer<
+  typeof pluginLocalizedSettingSchema
+>;
+
 export const pluginLocaleMessagesSchema = z.object({
   commands: z
     .record(z.string().min(1), pluginLocalizedCommandContributionSchema)
@@ -46,6 +55,9 @@ export const pluginLocaleMessagesSchema = z.object({
   name: z.string().min(1).optional(),
   panels: z
     .record(z.string().min(1), pluginLocalizedContributionSchema)
+    .optional(),
+  settings: z
+    .record(z.string().min(1), pluginLocalizedSettingSchema)
     .optional(),
   terminalStatusItems: z
     .record(z.string().min(1), pluginLocalizedContributionSchema)
