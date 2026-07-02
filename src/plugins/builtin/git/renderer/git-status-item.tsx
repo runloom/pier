@@ -16,6 +16,7 @@ import {
   BranchLabel,
   LargeChangeWarning,
   LineDelta,
+  MergedPill,
   RepoStatePill,
   SdDivider,
   StashBadge,
@@ -176,6 +177,10 @@ function StatusBody({
         worktreeFallback={worktreeName}
       />
       <UpstreamPill branch={branch} pluginContext={pluginContext} />
+      <MergedPill
+        merged={branch?.mergedIntoDefault ?? null}
+        pluginContext={pluginContext}
+      />
       {flags.hasRepoState && (
         <>
           <SdDivider />

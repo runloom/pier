@@ -70,6 +70,8 @@ const PILL_VARIANT = {
   danger:
     "border-status-danger-border bg-status-danger-bg text-status-danger-fg",
   neutral: "bg-muted text-muted-foreground border-border",
+  success:
+    "border-status-success-border bg-status-success-bg text-status-success-fg",
 } as const;
 
 function Pill({
@@ -182,6 +184,24 @@ export function UpstreamPill({
     );
   }
   return null;
+}
+
+/** 已合入默认分支。与 UpstreamPill(gone) 共存时即"可清理 worktree"的完整信号。 */
+export function MergedPill({
+  merged,
+  pluginContext,
+}: {
+  merged: boolean | null;
+  pluginContext: RendererPluginContext;
+}): React.ReactElement | null {
+  if (merged !== true) {
+    return null;
+  }
+  return (
+    <Pill icon={Check} testId="merged-pill" variant="success">
+      {pluginText(pluginContext, "mergedIntoDefault", "merged")}
+    </Pill>
+  );
 }
 
 /** 5 种进行中操作共用同一渲染路径（progress 或有冲突时 danger），配置表驱动。 */

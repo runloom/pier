@@ -1522,6 +1522,45 @@ describe("git builtin plugin", () => {
     expect(pill).toHaveTextContent("upstream gone");
   });
 
+  it("分支已合入默认分支时展示 merged 胶囊，可与 gone 胶囊共存", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/done",
+        mergedIntoDefault: true,
+        oid: "abc123",
+        upstream: "origin/feature/done",
+        upstreamGone: true,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/done" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const merged = await screen.findByTestId("merged-pill");
+    expect(merged).toHaveTextContent("merged");
+    expect(screen.getByTestId("upstream-gone-pill")).toBeInTheDocument();
+  });
+
   it("分支名不设固定宽度上限，仅靠 truncate 在溢出时截断", async () => {
     const longBranch =
       "Ysheep666/GIT-能力增强-一个足够长的分支名不该在空间够用时被截断";
