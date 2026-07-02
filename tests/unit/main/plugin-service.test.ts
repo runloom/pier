@@ -209,6 +209,14 @@ describe("createPluginService", () => {
         name: "Sample Local",
         permissions: ["plugin:read"],
         source: { kind: "local", url: localPath },
+        // terminalStatusItems id 须跨插件唯一，避免与 sample.builtin 的 "sample.status" 冲突。
+        terminalStatusItems: [
+          {
+            id: "sample.local.status",
+            permissions: ["terminal:read"],
+            title: "Sample Local Status",
+          },
+        ],
       })
     );
     const service = createPluginService({

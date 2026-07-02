@@ -42,6 +42,7 @@ interface AgentPreferenceSnapshot {
   agentCommandOverrides: Partial<Record<AgentKind, string>>;
   agentDefaultArgs: AgentDefaultArgs;
   agentDefaultEnv: AgentDefaultEnv;
+  agentStatusHooks: boolean;
   defaultAgentId: DefaultAgentId;
   disabledAgentIds: AgentKind[];
 }
@@ -53,6 +54,7 @@ interface AgentPreferencesState extends AgentPreferenceSnapshot {
   ) => Promise<void>;
   setAgentDefaultArgs: (next: AgentDefaultArgs) => Promise<void>;
   setAgentDefaultEnv: (next: AgentDefaultEnv) => Promise<void>;
+  setAgentStatusHooks: (next: boolean) => Promise<void>;
   setDefaultAgentId: (next: DefaultAgentId) => Promise<void>;
   setDisabledAgentIds: (next: AgentKind[]) => Promise<void>;
 }
@@ -62,6 +64,7 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
     agentCommandOverrides: {},
     agentDefaultArgs: {},
     agentDefaultEnv: {},
+    agentStatusHooks: false,
     defaultAgentId: null,
     disabledAgentIds: [],
 
@@ -139,6 +142,20 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
         );
       }
     },
+
+    async setAgentStatusHooks(next) {
+      try {
+        const merged = await window.pier.preferences.update({
+          agentStatusHooks: next,
+        });
+        useAgentPreferencesStore.getState()._hydrate(snapshotFrom(merged));
+      } catch (err) {
+        console.error(
+          "[agent-preferences.store] setAgentStatusHooks failed:",
+          err
+        );
+      }
+    },
   })
 );
 
@@ -147,6 +164,7 @@ function snapshotFrom(prefs: ProjectPreferences): AgentPreferenceSnapshot {
     agentCommandOverrides: prefs.agentCommandOverrides,
     agentDefaultArgs: prefs.agentDefaultArgs,
     agentDefaultEnv: prefs.agentDefaultEnv,
+    agentStatusHooks: prefs.agentStatusHooks,
     defaultAgentId: prefs.defaultAgentId,
     disabledAgentIds: prefs.disabledAgentIds,
   };

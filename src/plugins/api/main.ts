@@ -1,7 +1,7 @@
-declare const mainPluginContextBrand: unique symbol;
+import type { PluginConfigurationApi } from "./configuration.ts";
 
 export interface MainPluginContext {
-  readonly [mainPluginContextBrand]?: never;
+  configuration: PluginConfigurationApi;
 }
 
 export interface MainPluginModule {

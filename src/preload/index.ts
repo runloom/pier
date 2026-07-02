@@ -1,11 +1,6 @@
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type {
-  PierCommand,
-  PierCommandErrorCode,
-  PierCommandResult,
-} from "@shared/contracts/commands.ts";
-import type {
   MenuPopupOptions,
   MenuPopupResult,
   MenuTemplate,
@@ -44,7 +39,18 @@ import type {
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
-import { gitApi } from "./git-api.ts";
+import {
+  agentSessionsApi,
+  type PierAgentSessionsAPI,
+} from "./agent-session-api.ts";
+import { filesApi, type PierFilesAPI } from "./file-api.ts";
+import { gitApi, type PierGitAPI } from "./git-api.ts";
+import { invokePierCommand } from "./ipc-envelope.ts";
+import { pluginSettingsApi } from "./plugin-settings-api.ts";
+import {
+  type PierTerminalStatusBarPrefsAPI,
+  terminalStatusBarPrefsApi,
+} from "./terminal-status-bar-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
 export interface WindowInfo {
@@ -113,9 +119,17 @@ export interface PierPluginsAPI {
   enable: (id: string) => Promise<PluginRegistryEntry>;
   inspect: (id: string) => Promise<PluginRegistryEntry>;
   list: () => Promise<PluginRegistryListResult>;
+  /**
+   * 订阅插件 registry 变更 — main 在 setEnabled / registry refresh 后
+   * 广播最新快照给所有 BrowserWindow, 包括发起变更的窗口.
+   */
+  onChanged: (cb: (snapshot: PluginRegistryListResult) => void) => () => void;
 }
 
+export type { PierFilesAPI } from "./file-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
+export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
+export type { PierTerminalStatusBarPrefsAPI } from "./terminal-status-bar-api.ts";
 export type { PierWorktreesAPI } from "./worktree-api.ts";
 
 /**
@@ -168,15 +182,17 @@ export interface PierTasksAPI {
 }
 
 export interface PierWindowAPI {
+  agentSessions: PierAgentSessionsAPI;
   agents: PierAgentsAPI;
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<WindowCreateResult>;
+  files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
   getWindowContext: () => Promise<WindowContext>;
-  git: import("./git-api.ts").PierGitAPI;
+  git: PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
@@ -186,6 +202,7 @@ export interface PierWindowAPI {
   ) => () => void;
   onWindowLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
   platform: NodeJS.Platform;
+  pluginSettings: import("./plugin-settings-api.ts").PierPluginSettingsAPI;
   plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
   readyToShow: () => void;
@@ -194,6 +211,7 @@ export interface PierWindowAPI {
   settings: PierSettingsAPI;
   tasks: PierTasksAPI;
   terminal: TerminalAPI;
+  terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
   theme: PierThemeAPI;
   workspace: PierWorkspaceAPI;
   worktrees: PierWorktreesAPI;
@@ -217,21 +235,6 @@ function subscribeIpc<P>(
   return () => {
     ipcRenderer.off(channel, listener);
   };
-}
-
-async function invokePierCommand<T>(command: PierCommand): Promise<T> {
-  const result = (await ipcRenderer.invoke(
-    PIER.COMMAND_EXECUTE,
-    command
-  )) as PierCommandResult;
-  if (result.ok) {
-    return result.data as T;
-  }
-  const error = new Error(result.error.message) as Error & {
-    code?: PierCommandErrorCode;
-  };
-  error.code = result.error.code;
-  throw error;
 }
 
 const agentsApi: PierAgentsAPI = {
@@ -382,9 +385,10 @@ const pluginsApi: PierPluginsAPI = {
     invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.enable" }),
   disable: (id) =>
     invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.disable" }),
+  onChanged: (cb) => subscribeIpc(PIER_BROADCAST.PLUGINS_CHANGED, cb),
 };
 
-// gitApi 实现在独立文件 ./git-api.ts(避免 preload/index.ts 超 500 行硬上限)。
+// gitApi / pluginSettingsApi 实现在独立文件(避免 preload/index.ts 超 500 行硬上限)。
 
 const menuApi: PierMenuAPI = {
   popup: (template, options) =>
@@ -429,6 +433,7 @@ const tasksApi: PierTasksAPI = {
 
 const api: PierWindowAPI = {
   agents: agentsApi,
+  agentSessions: agentSessionsApi,
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:close", windowId),
@@ -437,6 +442,7 @@ const api: PierWindowAPI = {
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:focus", windowId),
+  files: filesApi,
   getWindowContext: () => ipcRenderer.invoke("pier://window:context"),
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
@@ -448,12 +454,14 @@ const api: PierWindowAPI = {
     subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
   platform: process.platform,
   plugins: pluginsApi,
+  pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,
   readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
   rendererCommand: rendererCommandApi,
   settings: settingsApi,
   tasks: tasksApi,
   terminal: terminalApi,
+  terminalStatusBarPrefs: terminalStatusBarPrefsApi,
   theme: themeApi,
   workspace: workspaceApi,
   worktrees: worktreesApi,

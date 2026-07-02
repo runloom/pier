@@ -4,6 +4,7 @@ export const pluginPermissions = {
   "evidence:write": "Write evidence records",
   "file:read": "Read files",
   "git:read": "Read Git state",
+  "git:write": "Write Git state",
   network: "Use network access",
   "panel:control": "Control panels",
   "panel:open": "Open panels",

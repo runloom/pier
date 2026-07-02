@@ -126,6 +126,12 @@ function createMockContext(): RendererPluginContext {
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
     },
+    configuration: {
+      get: unimplemented("configuration.get"),
+      onDidChange: unimplemented("configuration.onDidChange"),
+      reset: unimplemented("configuration.reset"),
+      set: unimplemented("configuration.set"),
+    },
     dialogs: {
       alert: unimplemented("dialogs.alert"),
       confirm: unimplemented("dialogs.confirm"),
@@ -134,6 +140,9 @@ function createMockContext(): RendererPluginContext {
       abortMerge: unimplemented("git.abortMerge"),
       abortRebase: unimplemented("git.abortRebase"),
       continueRebase: unimplemented("git.continueRebase"),
+      discardChanges: unimplemented("git.discardChanges"),
+      getDiffPatch: unimplemented("git.getDiffPatch"),
+      getFileContent: unimplemented("git.getFileContent"),
       getRepoInfo: unimplemented("git.getRepoInfo"),
       getStatus: unimplemented("git.getStatus"),
       listBranches: unimplemented("git.listBranches"),
@@ -142,9 +151,19 @@ function createMockContext(): RendererPluginContext {
       popStash: unimplemented("git.popStash"),
       rebase: unimplemented("git.rebase"),
       searchBranches: unimplemented("git.searchBranches"),
+      stage: unimplemented("git.stage"),
       stash: unimplemented("git.stash"),
       undoLastCommit: unimplemented("git.undoLastCommit"),
+      unstage: unimplemented("git.unstage"),
       watch: unimplemented("git.watch"),
+    },
+    files: {
+      list: unimplemented("files.list"),
+      move: unimplemented("files.move"),
+      readText: unimplemented("files.readText"),
+      rename: unimplemented("files.rename"),
+      trash: unimplemented("files.trash"),
+      writeText: unimplemented("files.writeText"),
     },
     i18n: {
       commandDescription: unimplemented("i18n.commandDescription"),

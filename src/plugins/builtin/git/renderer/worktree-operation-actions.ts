@@ -1,6 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { WorktreeItem } from "@shared/contracts/worktree.ts";
-import { BrushCleaning, GitBranch, Trash2 } from "lucide-react";
+import { BrushCleaning, FolderGit2, GitBranch, Trash2 } from "lucide-react";
 import { openWorktreeCreateOverlay } from "./worktree-create-overlay.tsx";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
@@ -56,13 +56,7 @@ function activeWorktreeTarget(
   return { enabled: true, path };
 }
 
-function itemLabel(
-  context: RendererPluginContext,
-  worktree: WorktreeItem
-): string {
-  if (worktree.isMain) {
-    return pluginText(context, "main", "main");
-  }
+function itemLabel(worktree: WorktreeItem): string {
   return worktree.branch ?? basename(worktree.path);
 }
 
@@ -122,7 +116,8 @@ async function confirmQuickPick(
     context.commandPalette.openQuickPick({
       items: [
         { id: "cancel", label: pluginText(context, "cancel", "Cancel") },
-        { id: "confirm", label: confirmLabel },
+        // 两个调用方 (删除/清理 worktree) 都是破坏性操作, 确认项统一警示色。
+        { id: "confirm", label: confirmLabel, variant: "destructive" },
       ],
       onAccept: (item) => {
         resolve(item.id === "confirm");
@@ -244,8 +239,9 @@ function registerWorktreeDeleteAction(
       }
       const items = candidates.map((worktree) => ({
         detail: worktree.path,
+        icon: FolderGit2,
         id: `delete:${worktree.path}`,
-        label: itemLabel(context, worktree),
+        label: itemLabel(worktree),
         searchTerms: worktreeSearchTerms(worktree),
       }));
       const worktreesById = new Map(
@@ -298,7 +294,7 @@ async function deleteSelectedWorktree(
     context,
     title,
     pluginText(context, "deleteConfirm", "Delete worktree {{name}}?", {
-      name: itemLabel(context, worktree),
+      name: itemLabel(worktree),
     }),
     pluginText(context, "deleteConfirmButton", "Delete")
   );

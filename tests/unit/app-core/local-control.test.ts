@@ -24,6 +24,7 @@ import {
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it } from "vitest";
+import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 const tempDirs: string[] = [];
 const WINDOWS_NAMED_PIPE_PATTERN = /^\\\\\.\\pipe\\pier-control-[a-f0-9]{16}$/;
@@ -125,61 +126,19 @@ function cliClientServices(): PierCoreServices {
       list: async () => ({ diagnostics: [], entries: [] }),
       setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
+    pluginSettings: {
+      getAll: async () => ({ values: {}, version: 1 }),
+      getValues: () => ({}),
+      init: async () => undefined,
+      invalidateCache: () => undefined,
+      onDidChange: () => () => undefined,
+      reset: async () => ({ values: {}, version: 1 }),
+      set: async () => ({ values: {}, version: 1 }),
+    },
     preferences: {
-      read: async () => ({
-        language: "system",
-        monoFontFamily: "",
-        monoFontSize: 13,
-        stylePresetId: "pierre",
-        terminalCursorBlink: true,
-        terminalCursorStyle: "block",
-        terminalNewCwdPolicy: "activeTerminal",
-        terminalPasteProtection: true,
-        terminalScrollbackMb: 64,
-        theme: "system",
-        uiFontFamily: "",
-        userKeymap: [],
-        windowZoomLevel: 0,
-        defaultAgentId: null,
-        disabledAgentIds: [],
-        agentDefaultArgs: {},
-        agentDefaultEnv: {},
-        agentCommandOverrides: {},
-        worktreeBranchPrefix: "wt/",
-        worktreeCopyPatterns: [
-          ".env*",
-          "*.local",
-          ".claude/settings.local.json",
-        ],
-        worktreeSetupCommand: "",
-      }),
-      update: async (patch) => ({
-        language: "system",
-        monoFontFamily: "",
-        monoFontSize: 13,
-        stylePresetId: "pierre",
-        terminalCursorBlink: true,
-        terminalCursorStyle: "block",
-        terminalNewCwdPolicy: "activeTerminal",
-        terminalPasteProtection: true,
-        terminalScrollbackMb: 64,
-        theme: patch.theme ?? "system",
-        uiFontFamily: "",
-        userKeymap: patch.userKeymap ?? [],
-        windowZoomLevel: patch.windowZoomLevel ?? 0,
-        defaultAgentId: null,
-        disabledAgentIds: [],
-        agentDefaultArgs: {},
-        agentDefaultEnv: {},
-        agentCommandOverrides: {},
-        worktreeBranchPrefix: patch.worktreeBranchPrefix ?? "wt/",
-        worktreeCopyPatterns: patch.worktreeCopyPatterns ?? [
-          ".env*",
-          "*.local",
-          ".claude/settings.local.json",
-        ],
-        worktreeSetupCommand: patch.worktreeSetupCommand ?? "",
-      }),
+      read: async () => makeFakePreferences({ agentStatusHooks: false }),
+      update: async (patch) =>
+        makeFakePreferences({ agentStatusHooks: false, ...patch }),
     },
     processEnvironment: {
       resolve: async (request) => ({
@@ -223,6 +182,12 @@ function cliClientServices(): PierCoreServices {
       read: async () => null,
       resolve: async () => null,
       upsert: async (_profileId, profile) => profile,
+    },
+    terminalStatusBarPrefs: {
+      applyOverrides: () => Promise.resolve({ items: {}, version: 1 }),
+      getAll: () => Promise.resolve({ items: {}, version: 1 }),
+      resetItem: () => Promise.resolve({ items: {}, version: 1 }),
+      setItemOverride: () => Promise.resolve({ items: {}, version: 1 }),
     },
     window: {
       close: () => undefined,

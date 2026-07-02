@@ -47,6 +47,17 @@ function toMenuItem(
       submenu: item.submenu.map((child) => toMenuItem(child, onPicked)),
     };
   }
+  if (item.type === "checkbox") {
+    return {
+      type: "checkbox",
+      checked: item.checked,
+      label: item.label,
+      enabled: item.enabled ?? true,
+      click: (_menuItem: MenuItem) => {
+        onPicked(item.id);
+      },
+    };
+  }
   // action
   return {
     label: item.label,

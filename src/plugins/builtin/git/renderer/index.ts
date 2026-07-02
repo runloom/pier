@@ -6,7 +6,7 @@ import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
 import { GitBranch } from "lucide-react";
 import { registerGitActions } from "./git-actions.ts";
 import { registerGitChangesAction } from "./git-changes-action.ts";
-import { GitChangesPanel } from "./git-changes-panel.tsx";
+import { createGitChangesPanel } from "./git-changes-panel.tsx";
 import { registerGitStatusItem } from "./git-status-item.tsx";
 import { registerWorktreeActions } from "./worktree-list-action.ts";
 
@@ -18,9 +18,10 @@ export function registerGitPluginContributions(
     registerGitActions(context),
     registerGitStatusItem(context),
     context.panels.register({
-      component: GitChangesPanel,
-      // 把已 i18n 化的占位文案经 addPanel.params 注入组件 —— 插件不能 import
-      // renderer 的 i18n hook,这是把宿主 i18n 结果带给 panel 组件的通道。
+      component: createGitChangesPanel(context),
+      // Only serializable params belong in Dockview layout state. The runtime
+      // Git API is injected through the registered component closure so restored
+      // panels keep working after layout hydration.
       getParams: () => ({
         heading: context.i18n.t(
           "ui.panelTitle.gitChanges",

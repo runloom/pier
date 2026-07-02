@@ -1,3 +1,4 @@
+import { AgentSessionsBridge } from "@/components/common/agent-sessions-bridge.tsx";
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { DocumentTitle } from "@/components/common/document-title.tsx";
@@ -25,6 +26,7 @@ export function AppShell() {
       <AppDialogHost />
       <PluginOverlayHost />
       <TerminalDebugSnapshotBridge />
+      <AgentSessionsBridge />
       <Toaster />
     </div>
   );

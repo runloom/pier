@@ -15,23 +15,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { useAgentSessionStore } from "@/stores/agent-session.store.ts";
 import {
   computeMonoFontFamily,
   computeMonoFontFamilyList,
   useFontStore,
 } from "@/stores/font.store.ts";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import { TerminalSearchBar } from "./terminal-search-bar.tsx";
 import {
-  hasVisibleTerminalStatusItems,
+  shouldMountTerminalStatusBar,
   TerminalStatusBar,
-  useTerminalStatusItems,
+  useTerminalStatusBarItems,
 } from "./terminal-status-bar.tsx";
 import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
+  agentTabChromeOverlay,
   mergeTabChrome,
   tabChromeFromParams,
   terminalPanelDescriptor,
@@ -163,7 +166,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     windowZoomLevel
   );
   const anchorRef = useRef<HTMLDivElement>(null);
-  const statusItems = useTerminalStatusItems();
+  const statusItems = useTerminalStatusBarItems();
+  const pluginRegistryEntries = usePluginRegistryStore((s) => s.plugins);
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -198,12 +202,17 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
+  const agentSession = useAgentSessionStore((s) => s.sessions[panelId]);
+  // agent 会话呈现 overlay 叠在最外层：icon/title 换 agent 的, 会话消失自动回退。
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
-      savedSession?.tab ?? activeLaunch.tab,
-      restoredTaskTabPatch(savedSession?.task)
+      mergeTabChrome(
+        savedSession?.tab ?? activeLaunch.tab,
+        restoredTaskTabPatch(savedSession?.task)
+      ),
+      tabPatch
     ),
-    tabPatch
+    agentTabChromeOverlay(agentSession)
   );
   const statusContext = {
     context: effectiveContext,
@@ -211,9 +220,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     title: effectiveTitle,
   };
-  const hasStatusBar = hasVisibleTerminalStatusItems(
+  // F4:与 TerminalStatusBar 组件的挂载判定同一实现(shouldMountTerminalStatusBar)—
+  // 否则两处口径漂移会导致「容器已挂载但内容区没给它留 h-7」或反之的错位。
+  const hasStatusBar = shouldMountTerminalStatusBar(
     statusItems,
-    statusContext
+    statusContext,
+    pluginRegistryEntries
   );
 
   usePanelDescriptor(

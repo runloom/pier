@@ -15,6 +15,7 @@
  */
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import { agentKindFromTabIconId } from "@shared/contracts/agent-session.ts";
 import type {
   PanelTabStatus,
   PanelTabTooltip,
@@ -28,6 +29,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import {
   runtimeStatusLabel,
   runtimeStatusVisual,
@@ -68,6 +70,10 @@ function localizedTooltipValue(
   switch (value) {
     case "Cargo":
       return t("commandPalette.run.taskTab.source.cargo");
+    case "Composer":
+      return t("commandPalette.run.taskTab.source.composer");
+    case "Deno":
+      return t("commandPalette.run.taskTab.source.deno");
     case "Recently Run":
       return t("commandPalette.run.taskTab.source.history");
     case "Justfile":
@@ -171,6 +177,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   );
   const tab = descriptor?.tab;
   const { Icon, iconId } = resolvePanelTabIcon(tab, props.api.component);
+  const agentKind = agentKindFromTabIconId(tab?.icon?.id);
   const displayTitle = tab?.title ?? title;
   const tooltipText = tabTooltipText(
     tab?.tooltip,
@@ -197,6 +204,16 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         data-panel-tab-index-hint={shortcutIndex}
       >
         ⌘{shortcutIndex}
+      </span>
+    );
+  } else if (agentKind) {
+    leadingVisual = (
+      <span
+        aria-hidden="true"
+        className="flex shrink-0 items-center"
+        data-panel-tab-icon={tab?.icon?.id}
+      >
+        <AgentIcon agentId={agentKind} size={14} />
       </span>
     );
   } else if (Icon) {

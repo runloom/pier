@@ -16,6 +16,9 @@ import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
+const FILES_PLUGIN_ID = "pier.files";
+const FILES_PANEL_ID = "pier.files.explorer";
+
 const emptyState = {
   read: () => Promise.resolve({ plugins: {}, version: 1 as const }),
   setEnabled: (id: string, enabled: boolean) =>
@@ -71,6 +74,42 @@ describe("createDefaultPluginSources", () => {
       source: { kind: "builtin" },
     });
     expect(GIT_PLUGIN_MANIFEST.locales).toBeUndefined();
+  });
+
+  it("includes the builtin Files plugin manifest and explorer panel declaration", async () => {
+    const sources = await createDefaultPluginSources({
+      readDir: async () => [],
+      userDataDir: "/tmp/pier-user-data",
+    });
+    const filesSource = sources.find(
+      (source) =>
+        source.kind === "builtin" &&
+        "id" in source &&
+        source.id === FILES_PLUGIN_ID
+    );
+
+    expect(filesSource).toBeDefined();
+    if (!filesSource) {
+      throw new Error("expected builtin Files plugin source");
+    }
+    expect(filesSource).toMatchObject({
+      defaultEnabled: true,
+      id: FILES_PLUGIN_ID,
+      kind: "builtin",
+      main: { id: FILES_PLUGIN_ID },
+      manifest: {
+        id: FILES_PLUGIN_ID,
+        panels: [
+          expect.objectContaining({
+            component: FILES_PANEL_ID,
+            id: FILES_PANEL_ID,
+            permissions: expect.arrayContaining(["file:read"]),
+          }),
+        ],
+        permissions: expect.arrayContaining(["file:read", "panel:register"]),
+        source: { kind: "builtin" },
+      },
+    });
   });
 
   it("内置 worktree 插件包包含 manifest 声明的全部 locale 文件和 main/renderer 入口", async () => {

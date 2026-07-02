@@ -5,6 +5,8 @@ export const TASK_EXIT_TITLE_PREFIX = "pier-task-exit:";
 
 export const taskSourceSchema = z.enum([
   "package-script",
+  "deno",
+  "composer",
   "vscode",
   "zed",
   "cargo",

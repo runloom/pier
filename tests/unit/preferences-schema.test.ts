@@ -265,3 +265,32 @@ describe("worktree preferences", () => {
     expect(prefs.worktreeSetupCommand).toBe("pnpm setup:worktree");
   });
 });
+
+describe("agentStatusHooks preference", () => {
+  it("默认 true（opt-out：关闭即卸载）", () => {
+    const parsed = projectPreferencesSchema.parse({});
+    expect(parsed.agentStatusHooks).toBe(true);
+  });
+
+  it("接受布尔覆盖", () => {
+    const parsed = projectPreferencesSchema.parse({ agentStatusHooks: true });
+    expect(parsed.agentStatusHooks).toBe(true);
+  });
+});
+
+describe("projectPreferencesSchema — git autofetch preferences", () => {
+  it("空对象解析出默认值：开启、5 分钟", () => {
+    const prefs = projectPreferencesSchema.parse({});
+    expect(prefs.gitAutoFetchEnabled).toBe(true);
+    expect(prefs.gitAutoFetchIntervalMinutes).toBe(5);
+  });
+
+  it("间隔下限 1 上限 120", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ gitAutoFetchIntervalMinutes: 0 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ gitAutoFetchIntervalMinutes: 121 })
+    ).toThrow();
+  });
+});

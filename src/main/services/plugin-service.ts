@@ -103,6 +103,39 @@ export function collectEffectivePermissions(
   );
 }
 
+export function findPluginIdDotPrefixConflict(
+  acceptedIds: readonly string[],
+  candidateId: string
+): string | null {
+  for (const id of acceptedIds) {
+    if (
+      id === candidateId ||
+      id.startsWith(`${candidateId}.`) ||
+      candidateId.startsWith(`${id}.`)
+    ) {
+      return id;
+    }
+  }
+  return null;
+}
+
+export function findTerminalStatusItemIdConflict(
+  acceptedManifests: readonly PluginManifest[],
+  candidate: PluginManifest
+): string | null {
+  const acceptedIds = new Set(
+    acceptedManifests.flatMap((manifest) =>
+      manifest.terminalStatusItems.map((item) => item.id)
+    )
+  );
+  for (const item of candidate.terminalStatusItems) {
+    if (acceptedIds.has(item.id)) {
+      return item.id;
+    }
+  }
+  return null;
+}
+
 function isExecutableSource(source: PluginDiscoverySource): boolean {
   return source.kind === "builtin";
 }
@@ -265,6 +298,30 @@ export function createPluginService({
             source.kind === "builtin" ? (source.locales ?? {}) : {},
         });
         diagnostics.push(...withLocales.diagnostics);
+        const conflict = findPluginIdDotPrefixConflict(
+          manifests.map((item) => item.manifest.id),
+          withLocales.manifest.id
+        );
+        if (conflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `plugin id must not be a dot-separated prefix of another plugin id ("${conflict}"): ${withLocales.manifest.id}`,
+            source: diagnosticSource(source),
+          });
+          continue;
+        }
+        const statusItemConflict = findTerminalStatusItemIdConflict(
+          manifests.map((item) => item.manifest),
+          withLocales.manifest
+        );
+        if (statusItemConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `terminalStatusItems id must be unique across plugins ("${statusItemConflict}"): ${withLocales.manifest.id}`,
+            source: diagnosticSource(source),
+          });
+          continue;
+        }
         manifests.push({ manifest: withLocales.manifest, source });
       } catch (err) {
         diagnostics.push(diagnosticFromError(source, err));

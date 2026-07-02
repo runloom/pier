@@ -1,5 +1,9 @@
 import { useEffect } from "react";
 import { resolveLong } from "@/components/common/document-title.tsx";
+import {
+  agentSessionCounts,
+  useAgentSessionStore,
+} from "@/stores/agent-session.store.ts";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 
 const TITLEBAR_HEIGHT = "38px";
@@ -30,12 +34,37 @@ export function TitleBar() {
 
   // resolveLong 可能返回空字符串 (descriptor 字段空值降级时), `||` 而非 `??`,
   // 让空串也回退到 "Pier" — 与 document-title.tsx 的兜底行为对齐.
+  const runningCount = useAgentSessionStore(
+    (s) => agentSessionCounts(s.sessions).running
+  );
+  const waitingCount = useAgentSessionStore(
+    (s) => agentSessionCounts(s.sessions).waiting
+  );
   const text = (active && resolveLong(active)) || "Pier";
   return (
-    <div className="app-drag flex h-[38px] shrink-0 items-center justify-center border-[var(--sidebar-border)] border-b bg-[var(--sidebar)]">
+    <div className="app-drag relative flex h-[38px] shrink-0 items-center justify-center border-[var(--sidebar-border)] border-b bg-[var(--sidebar)]">
       <span className="select-none font-medium text-muted-foreground text-xs">
         {text}
       </span>
+      {(runningCount > 0 || waitingCount > 0) && (
+        <div
+          className="app-no-drag absolute right-3 flex items-center gap-2 text-xs"
+          data-testid="titlebar-agent-counts"
+        >
+          {runningCount > 0 && (
+            <span className="flex items-center gap-1 text-primary">
+              <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+              {runningCount}
+            </span>
+          )}
+          {waitingCount > 0 && (
+            <span className="flex items-center gap-1 text-amber-500">
+              <span className="size-1.5 rounded-full bg-amber-500" />
+              {waitingCount}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

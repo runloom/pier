@@ -60,6 +60,8 @@ export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
 export const DEFAULT_WINDOW_ZOOM_LEVEL = 0;
 export const MIN_WINDOW_ZOOM_LEVEL = -3;
 export const MAX_WINDOW_ZOOM_LEVEL = 5;
+export const DEFAULT_GIT_AUTO_FETCH_ENABLED = true;
+export const DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES = 5;
 
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
@@ -109,6 +111,15 @@ export const projectPreferencesSchema = z.object({
     .max(64)
     .default([".env*", "*.local", ".claude/settings.local.json"]),
   worktreeSetupCommand: z.string().max(1024).default(""),
+  /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
+  agentStatusHooks: z.boolean().default(true),
+  gitAutoFetchEnabled: z.boolean().default(DEFAULT_GIT_AUTO_FETCH_ENABLED),
+  gitAutoFetchIntervalMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(120)
+    .default(DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;

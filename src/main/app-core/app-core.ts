@@ -1,15 +1,20 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
+import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
+import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app } from "electron";
 import {
   createMainPluginHostApi,
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
+import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
@@ -21,6 +26,12 @@ import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
 import { createSecretsStore } from "../state/secrets-store.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
+import {
+  applyTerminalStatusBarItemOverridePatch,
+  applyTerminalStatusBarItemOverridePatches,
+  readTerminalStatusBarPrefs,
+  resetTerminalStatusBarItem,
+} from "../state/terminal-status-bar-prefs.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import {
@@ -46,6 +57,27 @@ function broadcastMruState(state: MruState): void {
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
       win.webContents.send("pier:command-palette-mru:changed", state);
+    }
+  }
+}
+
+function broadcastTerminalStatusBarPrefs(prefs: TerminalStatusBarPrefs): void {
+  for (const win of windowManager.getAll()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(
+        PIER_BROADCAST.TERMINAL_STATUS_BAR_PREFS_CHANGED,
+        prefs
+      );
+    }
+  }
+}
+
+function broadcastPluginRegistryChanged(
+  result: PluginRegistryListResult
+): void {
+  for (const win of windowManager.getAll()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(PIER_BROADCAST.PLUGINS_CHANGED, result);
     }
   }
 }
@@ -97,21 +129,60 @@ function createPierAppCore(): PierAppCore {
   const rendererCommand = createRendererCommandService({
     host: { send: sendRendererCommand },
   });
+  const basePlugins = createPluginService({
+    sources: createDefaultPluginSources,
+  });
+  const pluginSettings = createPluginSettingsService({ plugins: basePlugins });
+  pluginSettings.onDidChange((payload) => {
+    for (const win of windowManager.getAll()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(PIER_BROADCAST.PLUGIN_SETTINGS_CHANGED, payload);
+      }
+    }
+  });
   const pluginHost = createMainPluginHostApi({
-    plugins: createPluginService({ sources: createDefaultPluginSources }),
+    onRegistryChanged: broadcastPluginRegistryChanged,
+    plugins: basePlugins,
+    settings: pluginSettings,
   });
   const services: PierCoreServices = {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
+    files: createFileService(),
     preferences: createPreferencesService({ eventBus }),
     secrets: createSecretsStore(),
     processEnvironment: createProcessEnvironmentService(),
     plugins: pluginHost.plugins,
+    pluginSettings,
     panelContexts: createPanelContextService(),
     rendererCommand,
     tasks: createTaskService(),
     terminalProfiles: createTerminalProfileService(),
+    terminalStatusBarPrefs: {
+      applyOverrides: async (patches) => {
+        // F8:一次 mutate 应用全部 patch + 恰一次广播(而非逐项 N 次 IPC)。
+        const next = await applyTerminalStatusBarItemOverridePatches(patches);
+        broadcastTerminalStatusBarPrefs(next);
+        return next;
+      },
+      getAll: () => readTerminalStatusBarPrefs(),
+      resetItem: async (itemId) => {
+        const next = await resetTerminalStatusBarItem(itemId);
+        broadcastTerminalStatusBarPrefs(next);
+        return next;
+      },
+      setItemOverride: async (itemId, patch) => {
+        // F7:main 侧单线程合成(patch → withItemOverridePatch),不再接收
+        // renderer 合成好的整体覆盖,消除 lost-update 竞态。
+        const next = await applyTerminalStatusBarItemOverridePatch(
+          itemId,
+          patch
+        );
+        broadcastTerminalStatusBarPrefs(next);
+        return next;
+      },
+    },
     terminalLaunches: terminalLaunchRegistry,
     window: createWindowService({
       flushRendererLayout: async (windowId) => {
@@ -133,7 +204,10 @@ function createPierAppCore(): PierAppCore {
       return {
         git,
         gitWatch: createGitWatchService({
-          getStatus: (gitRoot: string) => git.getStatus(gitRoot),
+          getStatus: (gitRoot, prefetched) =>
+            git.getStatus(gitRoot, prefetched),
+          // poll 仅在有窗口聚焦时执行；后台错过的 poll 由聚焦补课 pulse 弥补（index.ts）
+          isPollActive: () => windowManager.getFocused() !== null,
         }),
       };
     })(),

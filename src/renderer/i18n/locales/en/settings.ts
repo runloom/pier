@@ -9,6 +9,7 @@ export const settings = {
     plugins: "Plugins",
     terminal: "Terminal",
     agents: "Agents",
+    pluginGroup: "Plugin Settings",
   },
   section: {
     appearance: "Appearance",
@@ -17,6 +18,22 @@ export const settings = {
     plugins: "Plugins",
     terminal: "Terminal",
     agents: "Agents",
+  },
+  statusBar: {
+    title: "Status Bar",
+    description:
+      "Show, hide, and reorder terminal status bar items. Higher in the list means closer to the outer edge.",
+    leftGroup: "Left",
+    rightGroup: "Right",
+    empty: "Enabled plugins declare no status bar items",
+    moveUp: "Move up (outward)",
+    moveDown: "Move down (inward)",
+    moveToLeft: "Move to left group",
+    moveToRight: "Move to right group",
+    visible: "Visible",
+    reset: "Reset to plugin default",
+    modified: "Modified",
+    updateFailed: "Failed to update status bar item",
   },
   row: {
     theme: "Theme",
@@ -142,19 +159,6 @@ export const settings = {
       enablePlugin: "Enable {{name}}",
       disablePlugin: "Disable {{name}}",
     },
-    details: {
-      hide: "Hide details",
-      hidePlugin: "Hide {{name}} details",
-      show: "Details",
-      showPlugin: "Show {{name}} details",
-    },
-    permissions: "Permissions",
-    commands: "Commands",
-    panels: "Panels",
-    terminalStatusItems: "Terminal status items",
-    pluginId: "Plugin ID",
-    version: "Version",
-    publisher: "Publisher",
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",
@@ -164,7 +168,6 @@ export const settings = {
       terminalStatusItem: "{{count}} terminal status item",
       terminalStatusItems: "{{count}} terminal status items",
     },
-    none: "None",
     permissionLabels: pluginPermissions,
     loadingTitle: "Loading plugins",
     loadingDescription: "Reading plugin manifests...",
@@ -178,6 +181,13 @@ export const settings = {
       git: "Git",
       registry: "Registry",
     },
+    openSettings: "Settings",
+    openSettingsPlugin: "Open {{name}} settings",
+  },
+  pluginConfiguration: {
+    modified: "Modified",
+    resetToDefault: "Reset to default",
+    writeFailed: "Failed to update setting",
   },
   theme: {
     light: "Light",
@@ -246,6 +256,11 @@ export const settings = {
       commandOverrideDesc: "Override the agent binary path",
       args: "Launch args",
       argsDesc: "Args appended to the launch command",
+    },
+    statusHooks: {
+      label: "Agent status awareness",
+      description:
+        "Panels show live Claude Code running/waiting state via status hooks in ~/.claude/settings.json. Turn off to remove Pier-managed hooks and stop reinstalling them",
     },
   },
 } as const;

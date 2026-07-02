@@ -26,88 +26,45 @@ export interface CreatePreferencesServiceArgs {
   ) => Promise<ProjectPreferences>;
 }
 
-function stripUndefinedPatchFirstHalf(
-  patch: ProjectPreferencesPatch,
-  result: Partial<ProjectPreferences>
-): void {
-  if (patch.agentCommandOverrides !== undefined) {
-    result.agentCommandOverrides = patch.agentCommandOverrides;
-  }
-  if (patch.agentDefaultArgs !== undefined) {
-    result.agentDefaultArgs = patch.agentDefaultArgs;
-  }
-  if (patch.agentDefaultEnv !== undefined) {
-    result.agentDefaultEnv = patch.agentDefaultEnv;
-  }
-  if (patch.defaultAgentId !== undefined) {
-    result.defaultAgentId = patch.defaultAgentId;
-  }
-  if (patch.disabledAgentIds !== undefined) {
-    result.disabledAgentIds = patch.disabledAgentIds;
-  }
-  if (patch.language !== undefined) {
-    result.language = patch.language;
-  }
-  if (patch.monoFontFamily !== undefined) {
-    result.monoFontFamily = patch.monoFontFamily;
-  }
-  if (patch.monoFontSize !== undefined) {
-    result.monoFontSize = patch.monoFontSize;
-  }
-  if (patch.stylePresetId !== undefined) {
-    result.stylePresetId = patch.stylePresetId;
-  }
-  if (patch.terminalCursorBlink !== undefined) {
-    result.terminalCursorBlink = patch.terminalCursorBlink;
-  }
-}
-
-function stripUndefinedPatchSecondHalf(
-  patch: ProjectPreferencesPatch,
-  result: Partial<ProjectPreferences>
-): void {
-  if (patch.terminalCursorStyle !== undefined) {
-    result.terminalCursorStyle = patch.terminalCursorStyle;
-  }
-  if (patch.terminalNewCwdPolicy !== undefined) {
-    result.terminalNewCwdPolicy = patch.terminalNewCwdPolicy;
-  }
-  if (patch.terminalPasteProtection !== undefined) {
-    result.terminalPasteProtection = patch.terminalPasteProtection;
-  }
-  if (patch.terminalScrollbackMb !== undefined) {
-    result.terminalScrollbackMb = patch.terminalScrollbackMb;
-  }
-  if (patch.theme !== undefined) {
-    result.theme = patch.theme;
-  }
-  if (patch.uiFontFamily !== undefined) {
-    result.uiFontFamily = patch.uiFontFamily;
-  }
-  if (patch.userKeymap !== undefined) {
-    result.userKeymap = patch.userKeymap;
-  }
-  if (patch.windowZoomLevel !== undefined) {
-    result.windowZoomLevel = patch.windowZoomLevel;
-  }
-  if (patch.worktreeBranchPrefix !== undefined) {
-    result.worktreeBranchPrefix = patch.worktreeBranchPrefix;
-  }
-  if (patch.worktreeCopyPatterns !== undefined) {
-    result.worktreeCopyPatterns = patch.worktreeCopyPatterns;
-  }
-  if (patch.worktreeSetupCommand !== undefined) {
-    result.worktreeSetupCommand = patch.worktreeSetupCommand;
-  }
-}
+/** 白名单键——patch 里 undefined 的字段不下传 (zod 会替代为默认值)。 */
+const PATCHABLE_KEYS = [
+  "agentCommandOverrides",
+  "agentDefaultArgs",
+  "agentDefaultEnv",
+  "agentStatusHooks",
+  "defaultAgentId",
+  "disabledAgentIds",
+  "gitAutoFetchEnabled",
+  "gitAutoFetchIntervalMinutes",
+  "language",
+  "monoFontFamily",
+  "monoFontSize",
+  "stylePresetId",
+  "terminalCursorBlink",
+  "terminalCursorStyle",
+  "terminalNewCwdPolicy",
+  "terminalPasteProtection",
+  "terminalScrollbackMb",
+  "theme",
+  "uiFontFamily",
+  "userKeymap",
+  "windowZoomLevel",
+  "worktreeBranchPrefix",
+  "worktreeCopyPatterns",
+  "worktreeSetupCommand",
+] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
 
 function stripUndefinedPatch(
   patch: ProjectPreferencesPatch
 ): Partial<ProjectPreferences> {
-  const result: Partial<ProjectPreferences> = {};
-  stripUndefinedPatchFirstHalf(patch, result);
-  stripUndefinedPatchSecondHalf(patch, result);
-  return result;
+  const out: Partial<ProjectPreferences> = {};
+  for (const key of PATCHABLE_KEYS) {
+    const value = patch[key];
+    if (value !== undefined) {
+      (out as Record<string, unknown>)[key] = value;
+    }
+  }
+  return out;
 }
 
 export function createPreferencesService({

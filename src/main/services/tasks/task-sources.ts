@@ -7,6 +7,8 @@ import type {
   TaskSource,
   TaskSourceError,
 } from "@shared/contracts/tasks.ts";
+import { composerSource } from "./composer-source.ts";
+import { denoSource } from "./deno-source.ts";
 import {
   taskCandidate as candidate,
   optionalEnv,
@@ -41,7 +43,12 @@ const LINE_SPLIT_RE = /\r?\n/;
 const SAFE_TOML_SECTION_RE = /^\[([^\]]+)\]$/;
 const SAFE_TOML_ENTRY_RE = /^([A-Za-z0-9_.-]+)\s*=\s*"([^"]+)"\s*$/;
 const TASKFILE_ROOT_RE = /^tasks:\s*$/;
-const TASKFILE_NAME_RE = /^ {2}([A-Za-z0-9_.-]+):\s*$/;
+// 任务名允许命名空间冒号 (docs:build), 缩进宽度以块内首个任务为准。
+const TASKFILE_NAME_RE =
+  /^(\s+)([A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+)*):\s*(?:#.*)?$/;
+const LEADING_WHITESPACE_RE = /^\s/;
+const JUST_PRIVATE_ATTR_RE = /^\[[^\]]*private[^\]]*\]$/;
+const JUST_RECIPE_RE = /^([A-Za-z0-9_.-]+)(?:\s+[^:=]+)?\s*:(?!=)/;
 
 async function packageScriptSource({
   projectRoot,
@@ -158,7 +165,7 @@ async function cargoSource({
   if (!(await pathExists(join(projectRoot, "Cargo.toml")))) {
     return [];
   }
-  return ["build", "test", "check", "run"].map((name) =>
+  const builtin = ["build", "test", "check", "run"].map((name) =>
     candidate({
       commandSpec: { command: `cargo ${name}`, kind: "shell" },
       cwd: projectRoot,
@@ -168,6 +175,23 @@ async function cargoSource({
       tags: ["rust"],
     })
   );
+  // .cargo/config.toml 的 [alias] 自定义子命令 (cargo <alias>)。
+  const config =
+    (await readTextIfExists(join(projectRoot, ".cargo", "config.toml"))) ??
+    (await readTextIfExists(join(projectRoot, ".cargo", "config")));
+  const aliases = config ? tomlSectionEntries(config, "alias") : {};
+  const aliasTasks = Object.entries(aliases).map(([name, expansion]) =>
+    candidate({
+      commandSpec: { command: `cargo ${name}`, kind: "shell" },
+      cwd: projectRoot,
+      description: `cargo ${expansion}`,
+      idParts: ["cargo", "alias", name],
+      label: `cargo ${name}`,
+      source: "cargo",
+      tags: ["rust"],
+    })
+  );
+  return [...builtin, ...aliasTasks];
 }
 
 async function makeSource({
@@ -258,9 +282,11 @@ async function miseSource({
   if (!text) {
     return [];
   }
-  const names = [...text.matchAll(/^\[tasks\.([A-Za-z0-9_.-]+)\]$/gm)].flatMap(
-    (match) => (match[1] ? [match[1]] : [])
-  );
+  // 段名任务两种写法: [tasks.build] 与带引号的 [tasks."docs:build"]。
+  const names = [
+    ...text.matchAll(/^\[tasks\.([A-Za-z0-9_.-]+)\]\s*$/gm),
+    ...text.matchAll(/^\[tasks\."([^"]+)"\]\s*$/gm),
+  ].flatMap((match) => (match[1] ? [match[1]] : []));
   const inlineTasks = Object.keys(tomlSectionEntries(text, "tasks"));
   return [...new Set([...names, ...inlineTasks])]
     .filter((name): name is string => typeof name === "string")
@@ -287,12 +313,29 @@ async function justSource({
   if (!text) {
     return [];
   }
-  const recipes = [...text.matchAll(/^([A-Za-z0-9_.-]+)(?:\s+[^:=]+)?\s*:/gm)]
-    .map((match) => match[1])
-    .filter(
-      (name): name is string =>
-        typeof name === "string" && !name.startsWith("_")
-    );
+  // 逐行扫描而非全文 matchAll: 需要排除赋值行 (alias/set/export 的 `:=`)
+  // 和被 [private] 属性标记的 recipe。
+  const recipes: string[] = [];
+  let privatePending = false;
+  for (const line of text.split(LINE_SPLIT_RE)) {
+    const trimmed = line.trim();
+    if (JUST_PRIVATE_ATTR_RE.test(trimmed)) {
+      privatePending = true;
+      continue;
+    }
+    const match = line.match(JUST_RECIPE_RE);
+    if (!match?.[1] || line.includes(":=")) {
+      if (trimmed.length > 0 && !trimmed.startsWith("#")) {
+        privatePending = false;
+      }
+      continue;
+    }
+    if (privatePending || match[1].startsWith("_")) {
+      privatePending = false;
+      continue;
+    }
+    recipes.push(match[1]);
+  }
   return [...new Set(recipes)]
     .filter((name): name is string => typeof name === "string")
     .map((name) =>
@@ -313,17 +356,33 @@ function taskfileNames(text: string): string[] {
   const lines = text.split(LINE_SPLIT_RE);
   const names: string[] = [];
   let inTasks = false;
+  // 块内首个任务的缩进作为该层级基准 (兼容 2/4 空格或 tab)。
+  let taskIndent: null | string = null;
   for (const line of lines) {
-    if (TASKFILE_ROOT_RE.test(line.trim())) {
+    if (TASKFILE_ROOT_RE.test(line)) {
       inTasks = true;
+      taskIndent = null;
       continue;
     }
     if (!inTasks) {
       continue;
     }
+    // 顶格出现其他 root key (vars:/env:/includes: 等) 即离开 tasks 块,
+    // 否则后续块的二级键会被误当成任务。
+    if (
+      line.length > 0 &&
+      !(LEADING_WHITESPACE_RE.test(line) || line.startsWith("#"))
+    ) {
+      inTasks = false;
+      continue;
+    }
     const match = line.match(TASKFILE_NAME_RE);
-    if (match?.[1]) {
-      names.push(match[1]);
+    if (!(match?.[1] && match[2])) {
+      continue;
+    }
+    taskIndent ??= match[1];
+    if (match[1] === taskIndent) {
+      names.push(match[2]);
     }
   }
   return names;
@@ -370,6 +429,8 @@ function historySource({
 
 export const taskSourceProviders: readonly TaskSourceProvider[] = [
   { id: "package-script", list: packageScriptSource },
+  { id: "deno", list: denoSource },
+  { id: "composer", list: composerSource },
   { id: "vscode", list: vscodeSource },
   { id: "zed", list: zedSource },
   { id: "cargo", list: cargoSource },

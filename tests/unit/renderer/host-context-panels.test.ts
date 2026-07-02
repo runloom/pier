@@ -58,7 +58,10 @@ function mockApi(existingPanelIds: readonly string[] = []) {
   const addPanel = vi.fn();
   const api = {
     addPanel,
-    panels: existingPanelIds.map((id) => ({ id })),
+    panels: existingPanelIds.map((id) => ({
+      api: { updateParameters: vi.fn() },
+      id,
+    })),
   } as unknown as DockviewApi;
   return { addPanel, api };
 }

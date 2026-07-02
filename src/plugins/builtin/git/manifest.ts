@@ -85,8 +85,19 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       title: "Undo Last Commit",
     },
   ],
+  configuration: {
+    properties: {
+      "pier.git.statusItem.showDirtyIndicator": {
+        default: true,
+        description:
+          "Show working tree change counts and line delta in the worktree status item.",
+        type: "boolean",
+      },
+    },
+  },
   description: "Built-in git command palette and terminal status support.",
   engines: { pier: ">=0.1.0" },
+  homepage: "https://github.com/runloom/pier",
   id: SHARED_GIT_PLUGIN_ID,
   localization: {
     defaultLocale: "en",
@@ -115,10 +126,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     "git:write",
   ],
   publisher: "Pier",
+  repository: "https://github.com/runloom/pier",
   source: { kind: "builtin" },
   terminalStatusItems: [
     {
       id: "pier.worktree.status",
+      order: 10,
       permissions: ["worktree:read", "workspace:open"],
       title: "Worktree Status",
     },

@@ -15,6 +15,7 @@ import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
+import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 
@@ -144,6 +145,23 @@ function PermissionModeRow() {
   );
 }
 
+function AgentStatusHooksRow() {
+  const t = useT();
+  const enabled = useAgentPreferencesStore((s) => s.agentStatusHooks);
+  const setEnabled = useAgentPreferencesStore((s) => s.setAgentStatusHooks);
+  return (
+    <SwitchRow
+      checked={enabled}
+      description={t("settings.agents.statusHooks.description")}
+      id="agent-status-hooks"
+      label={t("settings.agents.statusHooks.label")}
+      onCheckedChange={(next) => {
+        setEnabled(next).catch(() => undefined);
+      }}
+    />
+  );
+}
+
 function AgentListCard() {
   const t = useT();
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
@@ -219,6 +237,8 @@ export function AgentsSection() {
               </div>
               <FieldSeparator />
               <PermissionModeRow />
+              <FieldSeparator />
+              <AgentStatusHooksRow />
             </FieldSet>
           </CardContent>
         </Card>

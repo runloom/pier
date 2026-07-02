@@ -1,9 +1,4 @@
 import type {
-  PierCommand,
-  PierCommandErrorCode,
-  PierCommandResult,
-} from "@shared/contracts/commands.ts";
-import type {
   GitBranchRef,
   GitChangeEvent,
   GitCommit,
@@ -24,6 +19,7 @@ import type {
 } from "@shared/contracts/git.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
+import { invokePierCommand } from "./ipc-envelope.ts";
 
 /** diff 范围/路径选项(IPC 层用值类型;详细 zod 在 contracts/git.ts) */
 export interface GitDiffOptionsValue {
@@ -141,21 +137,6 @@ export interface PierGitAPI {
     gitRoot: string,
     listener: (event: GitChangeEvent) => void
   ) => () => void;
-}
-
-async function invokePierCommand<T>(command: PierCommand): Promise<T> {
-  const result = (await ipcRenderer.invoke(
-    PIER.COMMAND_EXECUTE,
-    command
-  )) as PierCommandResult;
-  if (result.ok) {
-    return result.data as T;
-  }
-  const error = new Error(result.error.message) as Error & {
-    code?: PierCommandErrorCode;
-  };
-  error.code = result.error.code;
-  throw error;
 }
 
 export const gitApi: PierGitAPI = {

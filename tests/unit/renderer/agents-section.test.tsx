@@ -11,7 +11,13 @@ import { initI18n } from "@/i18n/index.ts";
 import { AgentsSection } from "@/pages/settings/components/agents-section.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
+/**
+ * agent-preferences store 只关心 5 个字段, 但整个 preferences 对象需要
+ * 完整——用 makeFakePreferences() 补齐其他默认。DEFAULT_PREFERENCES 仅
+ * 保留 store 关心的 5 字段, 便于 setState 直接使用。
+ */
 const DEFAULT_PREFERENCES = {
   agentCommandOverrides: {},
   agentDefaultArgs: {},
@@ -27,17 +33,7 @@ function makePierMock(detectedIds: string[] = []) {
       refresh: vi.fn(async () => ({ detectedIds })),
     },
     preferences: {
-      read: vi.fn(async () => ({
-        ...DEFAULT_PREFERENCES,
-        theme: "system",
-        stylePreset: "pierre",
-        language: "system",
-        terminalCursorStyle: "block",
-        terminalCursorBlink: true,
-        terminalScrollbackMb: 64,
-        terminalPasteProtection: true,
-        terminalNewCwdPolicy: "activeTerminal",
-      })),
+      read: vi.fn(async () => makeFakePreferences(DEFAULT_PREFERENCES)),
       update: vi.fn(async (patch: Record<string, unknown>) => ({
         ...DEFAULT_PREFERENCES,
         ...patch,
