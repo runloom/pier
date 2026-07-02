@@ -12,6 +12,7 @@ import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { GitService } from "../services/git-service.ts";
 import type { GitWatchService } from "../services/git-watch-service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
+import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
@@ -31,6 +32,7 @@ export interface PierCoreServices {
     recordRecent(context: PanelContext): Promise<void>;
     resolveForPath(path: string): Promise<PanelContext>;
   };
+  pluginSettings: PluginSettingsService;
   plugins: PluginService;
   preferences: {
     read(): Promise<ProjectPreferences>;

@@ -15,6 +15,7 @@ import {
   listBranchesOptionsSchema,
 } from "./git.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
+import { jsonValueSchema } from "./plugin-settings.ts";
 import { projectPreferencesSchema } from "./preferences.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
@@ -178,6 +179,16 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.disable"),
+  }),
+  z.object({ type: z.literal("pluginSettings.getAll") }),
+  z.object({
+    key: z.string().min(1),
+    type: z.literal("pluginSettings.set"),
+    value: jsonValueSchema,
+  }),
+  z.object({
+    key: z.string().min(1),
+    type: z.literal("pluginSettings.reset"),
   }),
   z.object({ type: z.literal("terminalStatusBar.prefs.getAll") }),
   z.object({

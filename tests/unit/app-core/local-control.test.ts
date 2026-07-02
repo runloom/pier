@@ -125,6 +125,14 @@ function cliClientServices(): PierCoreServices {
       list: async () => ({ diagnostics: [], entries: [] }),
       setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
+    pluginSettings: {
+      getAll: async () => ({ values: {}, version: 1 }),
+      getValues: () => ({}),
+      init: async () => undefined,
+      onDidChange: () => () => undefined,
+      reset: async () => ({ values: {}, version: 1 }),
+      set: async () => ({ values: {}, version: 1 }),
+    },
     preferences: {
       read: async () => ({
         language: "system",

@@ -45,6 +45,8 @@ export const PIER_BROADCAST = {
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
   // 终端状态栏用户覆盖变更后广播完整快照 (main → renderer, payload TerminalStatusBarPrefs).
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
+  // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
+  PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

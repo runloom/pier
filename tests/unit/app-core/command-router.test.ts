@@ -208,6 +208,14 @@ function services(
       }),
       setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
+    pluginSettings: {
+      getAll: async () => ({ values: {}, version: 1 }),
+      getValues: () => ({}),
+      init: async () => undefined,
+      onDidChange: () => () => undefined,
+      reset: async () => ({ values: {}, version: 1 }),
+      set: async () => ({ values: {}, version: 1 }),
+    },
     panelContexts: {
       listRecent: async () => recentContexts,
       recordRecent: (context) => {

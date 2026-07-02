@@ -13,6 +13,7 @@ import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
+import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
 import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
@@ -126,9 +127,20 @@ function createPierAppCore(): PierAppCore {
   const rendererCommand = createRendererCommandService({
     host: { send: sendRendererCommand },
   });
+  const basePlugins = createPluginService({
+    sources: createDefaultPluginSources,
+  });
+  const pluginSettings = createPluginSettingsService({ plugins: basePlugins });
+  pluginSettings.onDidChange((payload) => {
+    for (const win of windowManager.getAll()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(PIER_BROADCAST.PLUGIN_SETTINGS_CHANGED, payload);
+      }
+    }
+  });
   const pluginHost = createMainPluginHostApi({
     onRegistryChanged: broadcastPluginRegistryChanged,
-    plugins: createPluginService({ sources: createDefaultPluginSources }),
+    plugins: basePlugins,
   });
   const services: PierCoreServices = {
     commandPaletteMru: createCommandPaletteMruService({
@@ -138,6 +150,7 @@ function createPierAppCore(): PierAppCore {
     secrets: createSecretsStore(),
     processEnvironment: createProcessEnvironmentService(),
     plugins: pluginHost.plugins,
+    pluginSettings,
     panelContexts: createPanelContextService(),
     rendererCommand,
     tasks: createTaskService(),
