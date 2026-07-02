@@ -5,7 +5,7 @@ import {
   FieldLabel,
 } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 export interface InputRowProps {
   description?: ReactNode;
@@ -17,6 +17,7 @@ export interface InputRowProps {
   min?: number;
   onBlur?: (value: string) => void;
   onChange?: (value: string) => void;
+  onEscape?: () => void;
   placeholder?: string;
   step?: number;
   type?: "text" | "number";
@@ -37,7 +38,16 @@ export function InputRow({
   value,
   onChange,
   onBlur,
+  onEscape,
 }: InputRowProps) {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      // Enter 走与 blur 相同的提交路径。
+      e.currentTarget.blur();
+    } else if (e.key === "Escape") {
+      onEscape?.();
+    }
+  };
   return (
     <Field className="!items-center" orientation="horizontal">
       <FieldContent>
@@ -52,6 +62,7 @@ export function InputRow({
         min={min}
         onBlur={(e) => onBlur?.(e.currentTarget.value)}
         onChange={(e) => onChange?.(e.currentTarget.value)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         step={step}
         type={type}

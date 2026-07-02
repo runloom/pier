@@ -10,7 +10,7 @@ import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
 import { RotateCcw } from "lucide-react";
-import { Fragment, type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -111,6 +111,24 @@ function StringSettingRow({
     setPrev(effective);
     setDraft(effective);
   }
+
+  // unmount 时若草稿未提交(未 blur/Enter/Escape)则 flush 写入, 避免切走面板时静默丢草稿。
+  // ref 持最新 draft/effective/onCommit, 因为 cleanup 闭包只在挂载时创建一次。
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const effectiveRef = useRef(effective);
+  effectiveRef.current = effective;
+  const onCommitRef = useRef(onCommit);
+  onCommitRef.current = onCommit;
+  useEffect(() => {
+    return () => {
+      if (draftRef.current !== effectiveRef.current) {
+        // cleanup 里不能 setState, 只发起提交 IPC。
+        onCommitRef.current(draftRef.current);
+      }
+    };
+  }, []);
+
   return (
     <InputRow
       {...(description === undefined ? {} : { description })}
@@ -121,6 +139,7 @@ function StringSettingRow({
       {...(min === undefined ? {} : { min })}
       onBlur={(raw) => setDraft(onCommit(raw))}
       onChange={setDraft}
+      onEscape={() => setDraft(effective)}
       type={type}
       value={draft}
     />
@@ -132,6 +151,11 @@ function numberFromDraft(
   property: PluginConfigurationProperty,
   fallback: number
 ): number {
+  // 清空输入框后 trim 为空字符串: Number("")===0 是 finite, 不能当成合法输入走 clamp,
+  // 否则会把 min-clamp 值当作用户意图提交。直接回退到当前生效值 (不写入)。
+  if (raw.trim() === "") {
+    return fallback;
+  }
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) {
     return fallback;
@@ -162,9 +186,10 @@ function PluginSettingRow({
     i18next.language
   );
   const effective = effectiveConfigurationValue(property, userValue);
-  const modified =
-    userValue !== undefined &&
-    JSON.stringify(effective) !== JSON.stringify(property.default);
+  // modified 语义与 usePluginSettingsStore 的持久化语义对齐: values 里只存用户改过的值,
+  // 因此 "该 key 是否被用户覆盖" 应直接看 userValue 是否存在, 而不是比较 effective 与 default
+  // (覆盖值恰好等于 default 时仍是一次用户写入, 需要展示 Modified/Reset 以便清除幽灵覆盖)。
+  const modified = userValue !== undefined;
   const failedText = t("settings.pluginConfiguration.writeFailed");
   const rowId = `plugin-setting-${settingKey}`;
 

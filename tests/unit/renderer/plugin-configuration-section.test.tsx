@@ -182,7 +182,7 @@ describe("PluginConfigurationSection", () => {
     });
   });
 
-  it("number 控件 blur 提交空值被 clamp 到 min 时, 输入框显示值回弹为 clamp 结果", async () => {
+  it("number 控件 blur 提交空值时不写入, 输入框显示值回弹为当前 effective(F2)", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
@@ -192,18 +192,15 @@ describe("PluginConfigurationSection", () => {
     const limitInput = screen.getByDisplayValue("10");
 
     // JSDOM 对 type=number 输入非数字文本会拒绝写入, value 变为 ""。
-    // raw="" → Number("")=0 是 finite → clamp 到 min(1)，与 effective(10) 不同 → 会写入。
+    // raw="" trim 后为空 → 不应按 Number("")=0 处理, 应直接回退到当前 effective(10), 不写入。
     fireEvent.change(limitInput, { target: { value: "" } });
     fireEvent.blur(limitInput);
 
+    // 展示值必须回弹为 effective(10)，不能停留在空字符串，也不能被 clamp 到 min。
     await waitFor(() => {
-      expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
-        "pier.demo.limit",
-        1
-      );
+      expect(limitInput).toHaveValue(10);
     });
-    // 展示值必须跟随 clamp 结果(1)回弹，不能停留在空字符串。
-    expect(limitInput).toHaveValue(1);
+    expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
   });
 
   it("number 控件 blur 提交值 clamp 后与当前 effective 相同(no-op)时, 输入框显示值仍回弹为 effective", async () => {
@@ -227,6 +224,85 @@ describe("PluginConfigurationSection", () => {
       expect(limitInput).toHaveValue(1);
     });
     expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
+  });
+
+  it("string 控件 Enter 提交, 与 blur 走相同提交路径(F10)", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    const nameInput = screen.getByDisplayValue("default-name");
+    nameInput.focus();
+    fireEvent.change(nameInput, { target: { value: "enter-name" } });
+    fireEvent.keyDown(nameInput, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+        "pier.demo.name",
+        "enter-name"
+      );
+    });
+  });
+
+  it("number 控件 Enter 提交并 clamp(F10)", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    const limitInput = screen.getByDisplayValue("10");
+    limitInput.focus();
+    fireEvent.change(limitInput, { target: { value: "999" } });
+    fireEvent.keyDown(limitInput, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+        "pier.demo.limit",
+        20
+      );
+    });
+  });
+
+  it("string 控件 Escape 丢弃草稿, 回弹为 effective, 不提交(F10)", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    const nameInput = screen.getByDisplayValue("default-name");
+    fireEvent.change(nameInput, { target: { value: "unsaved-draft" } });
+    fireEvent.keyDown(nameInput, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(nameInput).toHaveValue("default-name");
+    });
+    expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
+  });
+
+  it("组件 unmount 时若草稿未提交则 flush 写入(F10)", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    const { unmount } = render(
+      <PluginConfigurationSection pluginId="pier.demo" />
+    );
+
+    const nameInput = screen.getByDisplayValue("default-name");
+    fireEvent.change(nameInput, { target: { value: "flush-on-unmount" } });
+    // 不触发 blur/Enter, 直接卸载。
+    unmount();
+
+    await waitFor(() => {
+      expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+        "pier.demo.name",
+        "flush-on-unmount"
+      );
+    });
   });
 
   it("string 控件 blur 提交原始值", async () => {
@@ -360,6 +436,35 @@ describe("PluginConfigurationSection", () => {
       expect(window.pier.pluginSettings.reset).toHaveBeenCalledWith(
         "pier.demo.enabledFlag"
       );
+    });
+  });
+
+  it("覆盖值与 default 相同时仍显示已修改标记, Reset 后消失(F11)", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    // 用户写入的值与 schema default 相同(true) — 幽灵覆盖场景。
+    usePluginSettingsStore.setState({
+      initialized: true,
+      values: { "pier.demo.enabledFlag": true },
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    expect(screen.getByText("Modified")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset to default" }));
+
+    await waitFor(() => {
+      expect(window.pier.pluginSettings.reset).toHaveBeenCalledWith(
+        "pier.demo.enabledFlag"
+      );
+    });
+
+    usePluginSettingsStore.setState({ values: {} });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Modified")).toBeNull();
     });
   });
 
