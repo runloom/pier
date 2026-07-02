@@ -82,9 +82,23 @@ export type PluginPanelContribution = z.infer<
   typeof pluginPanelContributionSchema
 >;
 
+export const terminalStatusItemAlignmentSchema = z.enum(["left", "right"]);
+export type TerminalStatusItemAlignment = z.infer<
+  typeof terminalStatusItemAlignmentSchema
+>;
+
 export const pluginTerminalStatusItemContributionSchema = z.object({
+  /**
+   * 状态栏左右分组,缺省 "left"。与 order 的组合语义(设计文档 §3.3,勿改):
+   * 同侧内 order 越小越靠外侧 —— left 组 order 小 → 靠左;right 组 order 小 → 靠右。
+   * 同 order 按 id 字典序,字典序小者更靠外侧。
+   * 默认值不在 schema 注入,统一由 renderer 合并层给(用户覆盖 ?? manifest ?? 默认)。
+   */
+  alignment: terminalStatusItemAlignmentSchema.optional(),
   description: z.string().min(1).optional(),
   id: z.string().min(1),
+  /** 同侧排序权重,缺省 0。语义见 alignment 注释。 */
+  order: z.number().optional(),
   permissions: z.array(pierCapabilitySchema).default([]),
   title: z.string().min(1),
 });
