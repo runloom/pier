@@ -1,15 +1,11 @@
 import type {
-  PierCommand,
-  PierCommandErrorCode,
-  PierCommandResult,
-} from "@shared/contracts/commands.ts";
-import type {
   TerminalStatusBarItemOverridePatch,
   TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
-import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
+import { invokePierCommand } from "./ipc-envelope.ts";
 
 export interface PierTerminalStatusBarPrefsAPI {
   /** F8:批量 patch 一次 IPC 原子应用(itemId → patch)。 */
@@ -25,22 +21,6 @@ export interface PierTerminalStatusBarPrefsAPI {
     itemId: string,
     patch: TerminalStatusBarItemOverridePatch
   ) => Promise<TerminalStatusBarPrefs>;
-}
-
-// 与 index.ts / git-api.ts 同款 envelope 解包(独立文件避免 index.ts 触 500 行上限)。
-async function invokePierCommand<T>(command: PierCommand): Promise<T> {
-  const result = (await ipcRenderer.invoke(
-    PIER.COMMAND_EXECUTE,
-    command
-  )) as PierCommandResult;
-  if (result.ok) {
-    return result.data as T;
-  }
-  const error = new Error(result.error.message) as Error & {
-    code?: PierCommandErrorCode;
-  };
-  error.code = result.error.code;
-  throw error;
 }
 
 export const terminalStatusBarPrefsApi: PierTerminalStatusBarPrefsAPI = {

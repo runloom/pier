@@ -1,11 +1,6 @@
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type {
-  PierCommand,
-  PierCommandErrorCode,
-  PierCommandResult,
-} from "@shared/contracts/commands.ts";
-import type {
   MenuPopupOptions,
   MenuPopupResult,
   MenuTemplate,
@@ -45,6 +40,7 @@ import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 import { gitApi } from "./git-api.ts";
+import { invokePierCommand } from "./ipc-envelope.ts";
 import { pluginSettingsApi } from "./plugin-settings-api.ts";
 import {
   type PierTerminalStatusBarPrefsAPI,
@@ -231,21 +227,6 @@ function subscribeIpc<P>(
   return () => {
     ipcRenderer.off(channel, listener);
   };
-}
-
-async function invokePierCommand<T>(command: PierCommand): Promise<T> {
-  const result = (await ipcRenderer.invoke(
-    PIER.COMMAND_EXECUTE,
-    command
-  )) as PierCommandResult;
-  if (result.ok) {
-    return result.data as T;
-  }
-  const error = new Error(result.error.message) as Error & {
-    code?: PierCommandErrorCode;
-  };
-  error.code = result.error.code;
-  throw error;
 }
 
 const agentsApi: PierAgentsAPI = {

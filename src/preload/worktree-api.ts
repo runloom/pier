@@ -1,9 +1,4 @@
 import type {
-  PierCommand,
-  PierCommandErrorCode,
-  PierCommandResult,
-} from "@shared/contracts/commands.ts";
-import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
   WorktreeCreateRequest,
@@ -15,8 +10,7 @@ import type {
   WorktreeRemoveRequest,
   WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
-import { PIER } from "@shared/ipc-channels.ts";
-import { ipcRenderer } from "electron";
+import { invokePierCommand } from "./ipc-envelope.ts";
 
 export interface PierWorktreesAPI {
   check: (request: WorktreeCheckRequest) => Promise<WorktreeCheckResult>;
@@ -25,21 +19,6 @@ export interface PierWorktreesAPI {
   open: (request: WorktreeOpenRequest) => Promise<unknown>;
   prune: (request: WorktreePruneRequest) => Promise<WorktreeListResult>;
   remove: (request: WorktreeRemoveRequest) => Promise<WorktreeRemoveResult>;
-}
-
-async function invokePierCommand<T>(command: PierCommand): Promise<T> {
-  const result = (await ipcRenderer.invoke(
-    PIER.COMMAND_EXECUTE,
-    command
-  )) as PierCommandResult;
-  if (result.ok) {
-    return result.data as T;
-  }
-  const error = new Error(result.error.message) as Error & {
-    code?: PierCommandErrorCode;
-  };
-  error.code = result.error.code;
-  throw error;
 }
 
 export const worktreesApi: PierWorktreesAPI = {
