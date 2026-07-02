@@ -27,7 +27,7 @@ function HoverCardContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
-  const overlayRef = useTerminalOverlay({ focus: false });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <HoverCardPrimitive.Portal data-slot="hover-card-portal">

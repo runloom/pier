@@ -40,7 +40,7 @@ function TooltipContent({
   sideOffset = 0,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
-  const overlayRef = useTerminalOverlay({ focus: false });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   const showArrow = side === "top" || side === "bottom";
   const arrowXClass =

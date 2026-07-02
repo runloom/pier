@@ -72,7 +72,7 @@ function MenubarContent({
   sideOffset = 8,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Content>) {
-  const overlayRef = useTerminalOverlay({ focus: true });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <MenubarPortal>
@@ -256,7 +256,7 @@ function MenubarSubContent({
   className,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.SubContent>) {
-  const overlayRef = useTerminalOverlay({ focus: true });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <MenubarPrimitive.SubContent

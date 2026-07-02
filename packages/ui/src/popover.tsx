@@ -25,7 +25,7 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
-  const overlayRef = useTerminalOverlay({ focus: true });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <PopoverPrimitive.Portal>
