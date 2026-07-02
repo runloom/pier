@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activateTerminalInputRouting,
   getLastTerminalInputRoutingSnapshot,
+  installTerminalInputRoutingBlurSuppressor,
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
   resetTerminalInputRoutingForTests,
@@ -114,5 +115,81 @@ describe("terminal input routing store", () => {
     expect(getLastTerminalInputRoutingSnapshot()?.webOverlayRects).toHaveLength(
       0
     );
+  });
+});
+
+describe("terminal→web hand-off transient blur suppression", () => {
+  let applyInputRouting: ReturnType<typeof vi.fn>;
+  let radixBlurListener: ReturnType<typeof vi.fn<() => void>>;
+
+  const dispatchWindowBlur = () => window.dispatchEvent(new Event("blur"));
+
+  beforeEach(() => {
+    resetTerminalInputRoutingForTests();
+    applyInputRouting = vi.fn();
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        onWindowLayoutPulse: vi.fn(() => vi.fn()),
+        terminal: { applyInputRouting },
+      },
+    });
+    installTerminalInputRoutingBlurSuppressor();
+    // 模拟 Radix Select/Menu 的 close-on-blur —— 在抑制器之后注册
+    radixBlurListener = vi.fn<() => void>();
+    window.addEventListener("blur", radixBlurListener);
+  });
+
+  afterEach(() => {
+    window.removeEventListener("blur", radixBlurListener);
+    vi.useRealTimers();
+  });
+
+  it("swallows the first blur after an effective terminal→web flip", () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    requestTerminalWebFocus("pier.click"); // effective: terminal → web
+
+    dispatchWindowBlur();
+
+    expect(radixBlurListener).not.toHaveBeenCalled();
+  });
+
+  it("suppression consumes a single blur only", () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    requestTerminalWebFocus("pier.click");
+
+    dispatchWindowBlur();
+    dispatchWindowBlur();
+
+    expect(radixBlurListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not arm when effective target is already web", () => {
+    setTerminalBasePanel({ kind: "web" });
+    requestTerminalWebFocus("pier.click"); // web → web, 无 flip
+
+    dispatchWindowBlur();
+
+    expect(radixBlurListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not arm on web→terminal flips (terminal click must still close menus)", () => {
+    setTerminalBasePanel({ kind: "web" });
+    activateTerminalInputRouting("terminal-1"); // web → terminal
+
+    dispatchWindowBlur();
+
+    expect(radixBlurListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("arm expires after the hand-off window", () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    requestTerminalWebFocus("pier.click");
+
+    vi.advanceTimersByTime(400);
+    dispatchWindowBlur();
+
+    expect(radixBlurListener).toHaveBeenCalledTimes(1);
   });
 });

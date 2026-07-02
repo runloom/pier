@@ -1,6 +1,11 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
+import {
+  installTerminalInputRoutingBlurSuppressor,
+  installTerminalInputRoutingDragWatcher,
+  installTerminalInputRoutingPointerDownListener,
+} from "@/stores/terminal-input-routing.store.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { initI18n } from "./i18n/index.ts";
@@ -23,7 +28,6 @@ import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
-import { installTerminalInputRoutingDragWatcher } from "./stores/terminal-input-routing.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
@@ -65,7 +69,10 @@ async function bootstrap() {
   initAgentDetection().catch((err) => {
     console.error("[pier] agent detection init failed:", err);
   });
+  // blur 抑制器必须最先注册 (早于一切 window blur 监听, 含 Radix), 见其 doc comment
+  installTerminalInputRoutingBlurSuppressor();
   installTerminalInputRoutingDragWatcher();
+  installTerminalInputRoutingPointerDownListener();
   installCommandPaletteMenuRequest();
   initCommandPaletteMru().catch(() => undefined);
 
