@@ -1,3 +1,4 @@
+import { GitExecError } from "@main/services/git-exec.ts";
 import {
   parseGitBranchRefs,
   parseGitLog,
@@ -6,7 +7,24 @@ import {
   parseUnifiedDiff,
 } from "@main/services/git-parsers.ts";
 import { createGitService } from "@main/services/git-service.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("node:fs/promises", () => ({
+  default: {
+    realpath: vi.fn(async (target: string) => target),
+    stat: vi.fn(async () => ({ isDirectory: () => true })),
+  },
+  realpath: vi.fn(async (target: string) => target),
+  stat: vi.fn(async () => ({ isDirectory: () => true })),
+}));
+
+function isGitRootRequest(args: readonly string[]): boolean {
+  return (
+    args.length === 2 &&
+    args[0] === "rev-parse" &&
+    args[1] === "--show-toplevel"
+  );
+}
 
 describe("parseGitStatus", () => {
   it("解析 branch header 的分支名与 ahead/behind", () => {
@@ -240,6 +258,7 @@ describe("parseGitBranchRefs", () => {
     const output = `${[
       ["refs/heads/main", "origin/main", "abc123", "*"].join("\0"),
       ["refs/heads/feature/a", "", "def456", " "].join("\0"),
+      ["refs/remotes/origin/HEAD", "", "abc123", " "].join("\0"),
       ["refs/remotes/origin/main", "", "abc123", " "].join("\0"),
     ].join("\n")}\n`;
 
@@ -365,6 +384,19 @@ describe("createGitService", () => {
       "--no-ext-diff",
       "--cached",
     ]);
+  });
+
+  it("getDiffText 拒绝以 dash 开头的 revision 参数", () => {
+    const service = createGitService({
+      execGit: () => Promise.resolve(""),
+    });
+
+    expect(() =>
+      service.getDiffText("/repo", { from: "--output=/tmp/pwned" })
+    ).toThrow('diff from must not start with "-"');
+    expect(() =>
+      service.getDiffText("/repo", { from: "HEAD", to: "--output=/tmp/pwned" })
+    ).toThrow('diff to must not start with "-"');
   });
 
   it("getDiffSummary 解析 numstat 并汇总增删", async () => {
@@ -502,8 +534,226 @@ describe("createGitService", () => {
 
     await service.listBranches("/repo", { kind: "all" });
 
+    expect(calls[0]).toContain("--sort=-committerdate");
     expect(calls[0]).toContain("refs/heads");
     expect(calls[0]).toContain("refs/remotes");
+  });
+
+  it("searchBranches 按 LoomDesk 形态返回分支候选和 ahead/behind", async () => {
+    const calls: Array<readonly string[]> = [];
+    const record = (fields: readonly string[]) => `${fields.join("\x1f")}\x1e`;
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "symbolic-ref") {
+          return Promise.resolve("refs/remotes/origin/main\n");
+        }
+        if (args[0] === "rev-list") {
+          return Promise.resolve("2\t1\n");
+        }
+        return Promise.resolve(
+          [
+            record([
+              "refs/remotes/origin/feature/newer",
+              "origin/feature/newer",
+              "aaa1111",
+              " ",
+              "remote subject",
+              "Remote Author",
+              "2026-01-03T00:00:00Z",
+              "",
+            ]),
+            record([
+              "refs/heads/feature/local",
+              "feature/local",
+              "bbb2222",
+              " ",
+              "local subject",
+              "Local Author",
+              "2026-01-02T00:00:00Z",
+              "",
+            ]),
+            record([
+              "refs/heads/main",
+              "main",
+              "ccc3333",
+              " ",
+              "main subject",
+              "Main Author",
+              "2026-01-01T00:00:00Z",
+              "origin/main",
+            ]),
+            record([
+              "refs/remotes/origin/HEAD",
+              "origin/HEAD",
+              "ccc3333",
+              " ",
+              "",
+              "",
+              "",
+              "",
+            ]),
+            record([
+              "refs/heads/topic/current",
+              "topic/current",
+              "ddd4444",
+              "*",
+              "current subject",
+              "Current Author",
+              "2026-01-04T00:00:00Z",
+              "",
+            ]),
+          ].join("")
+        );
+      },
+    });
+
+    const result = await service.searchBranches("/repo", { limit: 50 });
+
+    expect(calls.some((args) => args.includes("--sort=-committerdate"))).toBe(
+      true
+    );
+    const branchArgs = calls.find(
+      (args) => args[0] === "for-each-ref" && args.includes("refs/heads")
+    );
+    const branchFormat = branchArgs?.find((arg) => arg.startsWith("--format="));
+    expect(branchFormat).toContain("\x1f");
+    expect(branchFormat).toContain("\x1e");
+    expect(branchFormat).not.toContain("%x1f");
+    expect(branchFormat).not.toContain("%x1e");
+    expect(result.status).toBe("ok");
+    expect(result.currentBranch).toBe("topic/current");
+    expect(result.items.map((item) => item.id)).toEqual([
+      "refs/heads/main",
+      "refs/heads/feature/local",
+      "refs/remotes/origin/feature/newer",
+    ]);
+    expect(result.items[0]).toMatchObject({
+      aheadFromCurrent: 2,
+      authorName: "Main Author",
+      behindFromCurrent: 1,
+      commit: "ccc3333",
+      kind: "local",
+      name: "main",
+      pinReason: "default",
+      refName: "refs/heads/main",
+      subject: "main subject",
+    });
+  });
+
+  it("searchBranches 支持大 limit 返回 50+ 分支且 ahead/behind 补水有上限", async () => {
+    const record = (index: number) =>
+      `${[
+        `refs/heads/feature/${index}`,
+        `feature/${index}`,
+        `abc${index}`,
+        " ",
+        "",
+        "",
+        "2026-01-01T00:00:00Z",
+        "",
+      ].join("\x1f")}\x1e`;
+    let revListCalls = 0;
+    const service = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "symbolic-ref") {
+          return Promise.resolve("");
+        }
+        if (args[0] === "rev-list") {
+          revListCalls += 1;
+          return Promise.resolve("0\t0\n");
+        }
+        return Promise.resolve(
+          Array.from({ length: 120 }, (_item, index) => record(index)).join("")
+        );
+      },
+    });
+
+    const result = await service.searchBranches("/repo", { limit: 1000 });
+
+    expect(result.status).toBe("ok");
+    // 超过旧的 50/100 上限的分支也能被返回(命令面板本地过滤需要全量候选)
+    expect(result.items).toHaveLength(120);
+    // ahead/behind 每项一次 rev-list,必须有界,不能随分支数线性放大阻塞时间
+    expect(revListCalls).toBeLessThanOrEqual(20);
+    expect(result.items[0]).toMatchObject({
+      aheadFromCurrent: 0,
+      behindFromCurrent: 0,
+    });
+    expect(result.items[119]).toMatchObject({
+      aheadFromCurrent: null,
+      behindFromCurrent: null,
+    });
+  });
+
+  it("searchBranches 默认 limit 与错误 currentBranch 返回值对齐 LoomDesk", async () => {
+    const record = (index: number) =>
+      `${[
+        `refs/heads/feature/${index}`,
+        `feature/${index}`,
+        `abc${index}`,
+        " ",
+        "",
+        "",
+        "2026-01-01T00:00:00Z",
+        "",
+      ].join("\x1f")}\x1e`;
+    const service = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "symbolic-ref") {
+          return Promise.resolve("");
+        }
+        if (args[0] === "rev-list") {
+          return Promise.resolve("0\t0\n");
+        }
+        return Promise.resolve(
+          Array.from({ length: 25 }, (_item, index) => record(index)).join("")
+        );
+      },
+    });
+
+    await expect(service.searchBranches("/repo")).resolves.toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({ name: "feature/0" }),
+      ]),
+      status: "ok",
+    });
+    const result = await service.searchBranches("/repo");
+    expect(result.items).toHaveLength(20);
+
+    const failingService = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd: "/repo",
+          exitCode: 1,
+          message: "git failed",
+          stderr: "fatal: boom",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(
+      failingService.searchBranches("/repo", { currentBranch: "main" })
+    ).resolves.toMatchObject({
+      currentBranch: null,
+      items: [],
+      message: "fatal: boom",
+      status: "error",
+    });
   });
 
   // B/C: 三个轻量方法
@@ -518,6 +768,28 @@ describe("createGitService", () => {
 
     await expect(service.resolveRef("/repo", "HEAD")).resolves.toBe("abc123");
     expect(calls[0]).toEqual(["rev-parse", "--verify", "HEAD"]);
+  });
+
+  it("show/rev-parse 类 read API 拒绝以 dash 开头的 revision 参数", async () => {
+    const service = createGitService({
+      execGit: () => Promise.resolve(""),
+    });
+
+    await expect(
+      service.getCommit("/repo", "--output=/tmp/pwned")
+    ).rejects.toThrow('commit oid must not start with "-"');
+    await expect(
+      service.getCommitPatch("/repo", "--output=/tmp/pwned")
+    ).rejects.toThrow('commit oid must not start with "-"');
+    expect(() =>
+      service.getFileContent("/repo", {
+        path: "README.md",
+        ref: "--output=/tmp/pwned",
+      })
+    ).toThrow('file ref must not start with "-"');
+    await expect(
+      service.resolveRef("/repo", "--output=/tmp/pwned")
+    ).rejects.toThrow('ref must not start with "-"');
   });
 
   it("validateBranchName 合法名返回 true", async () => {
@@ -863,6 +1135,279 @@ describe("createGitService", () => {
     await service.checkoutBranch("/repo", "main");
 
     expect(calls[0]).toEqual(["switch", "main"]);
+  });
+
+  it("merge 非冲突错误按 LoomDesk 返回 unavailable", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: bad ref",
+          stderr: "merge: missing-branch - not something we can merge",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.merge("/repo", "missing-branch")).resolves.toEqual({
+      kind: "unavailable",
+      message: "merge: missing-branch - not something we can merge",
+    });
+  });
+
+  it("listStashes 按 LoomDesk 返回 ok entries 包装", async () => {
+    const service = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve(
+          "stash@{0}\u001fWIP on main\u001f2026-01-01T00:00:00Z\u001fabc123\n"
+        );
+      },
+    });
+
+    await expect(service.listStashes("/repo")).resolves.toEqual({
+      entries: [
+        {
+          date: "2026-01-01T00:00:00Z",
+          hash: "abc123",
+          index: 0,
+          message: "WIP on main",
+        },
+      ],
+      kind: "ok",
+    });
+  });
+
+  it("stashPop 非冲突错误按 LoomDesk 返回 unavailable", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: bad stash",
+          stderr: "fatal: log for 'stash' only has 0 entries",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.popStash("/repo", 0)).resolves.toEqual({
+      kind: "unavailable",
+      message: "fatal: log for 'stash' only has 0 entries",
+    });
+  });
+
+  it("stashPop 已有未合并文件时非冲突失败不误报 conflict", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "diff") {
+          // pop 前后未合并文件数不变（既有 merge 冲突残留）
+          return Promise.resolve("src/pre-existing.ts\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: dirty tree",
+          stderr:
+            "error: Your local changes to the following files would be overwritten by merge:",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.popStash("/repo", 0)).resolves.toEqual({
+      kind: "unavailable",
+      message:
+        "error: Your local changes to the following files would be overwritten by merge:",
+    });
+  });
+
+  it("stashPop 失败后新增未合并文件仍判定为 conflict", async () => {
+    let popAttempted = false;
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve(popAttempted ? "src/conflict.ts\n" : "");
+        }
+        popAttempted = true;
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: pop failed",
+          stderr: "error: could not restore untracked files from stash",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.popStash("/repo", 0)).resolves.toEqual({
+      kind: "conflict",
+    });
+  });
+
+  it("rebase 冲突按 LoomDesk 返回 conflict 而不是抛出", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve("src/conflict.ts\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: conflict",
+          stderr: "CONFLICT (content): Merge conflict in src/conflict.ts",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.rebase("/repo", "main")).resolves.toEqual({
+      kind: "conflict",
+      message: "CONFLICT (content): Merge conflict in src/conflict.ts",
+    });
+  });
+
+  it("rebase 使用 stdout+stderr 判定 already_up_to_date", async () => {
+    const seenOptions: Array<
+      | {
+          onSuccessStderr?: (stderr: string) => void;
+          timeoutMs?: number;
+        }
+      | undefined
+    > = [];
+    const service = createGitService({
+      execGit: (args, _cwd, options) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        seenOptions.push(options);
+        options?.onSuccessStderr?.("Current branch feature is up to date.\n");
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.rebase("/repo", "main")).resolves.toEqual({
+      kind: "already_up_to_date",
+    });
+    expect(seenOptions[0]).toMatchObject({
+      timeoutMs: 60_000,
+    });
+    expect(seenOptions[0]?.onSuccessStderr).toEqual(expect.any(Function));
+  });
+
+  it("rebase ok message 只返回 stdout,stderr 仅用于判定", async () => {
+    const service = createGitService({
+      execGit: (args, _cwd, options) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        options?.onSuccessStderr?.("Successfully rebased and updated refs.\n");
+        return Promise.resolve("Rebased local commits\n");
+      },
+    });
+
+    await expect(service.rebase("/repo", "main")).resolves.toEqual({
+      kind: "ok",
+      message: "Rebased local commits",
+    });
+  });
+
+  it("rebaseContinue 使用 GIT_EDITOR=true 并返回 unavailable 而不是抛出", async () => {
+    const seenOptions: Array<
+      { env?: Readonly<Record<string, string>>; timeoutMs?: number } | undefined
+    > = [];
+    const service = createGitService({
+      execGit: (args, cwd, options) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        seenOptions.push(options);
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: no rebase in progress",
+          stderr: "fatal: No rebase in progress?",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.continueRebase("/repo")).resolves.toEqual({
+      kind: "unavailable",
+      message: "fatal: No rebase in progress?",
+    });
+    expect(seenOptions[0]).toMatchObject({
+      env: { GIT_EDITOR: "true" },
+      timeoutMs: 60_000,
+    });
+  });
+
+  it("undoLastCommit 在非 Git 仓库按 LoomDesk 返回 unavailable", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 128,
+          message: "git 退出码 128: not a git repository",
+          stderr:
+            "fatal: not a git repository (or any of the parent directories): .git",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.undoLastCommit("/tmp")).resolves.toEqual({
+      kind: "unavailable",
+      message: "Invalid git repository",
+    });
+  });
+
+  it("undoLastCommit 在空仓库 HEAD 不存在时返回 nothing_to_undo", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 128,
+          message: "git 退出码 128: ambiguous HEAD",
+          stderr:
+            "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.undoLastCommit("/repo")).resolves.toEqual({
+      kind: "nothing_to_undo",
+    });
   });
 
   it("listTags 返回标签名数组", async () => {

@@ -1,11 +1,8 @@
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 
 /**
- * git-changes 占位面板。第一阶段只渲染占位文案。
- * 已 i18n 化的标题/提示由插件 activate 经 PluginPanelRegistration.getParams 注入,
- * 组件从 props.params 读 —— 插件不能直接 import renderer 的 i18n hook。
- * 故意不调用 usePanelDescriptor;tab 标题由 panels.register 的 title 经 addPanel 设置。
- * 未来填真实内容、需要向宿主发布 PanelContext 时,要经插件 API 补对应机制。
+ * git-changes 占位面板。当前阶段仅保留入口和占位文案，实际 Git 快捷操作
+ * 全部由插件命令面板 action 承载。
  */
 export function GitChangesPanel(
   props: IDockviewPanelProps<{ heading?: string; hint?: string }>

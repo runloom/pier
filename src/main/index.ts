@@ -18,6 +18,7 @@ import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
+import { registerNotificationIpc } from "./ipc/notification.ts";
 import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerSecretsIpc } from "./ipc/secrets.ts";
@@ -233,6 +234,7 @@ app.whenReady().then(async () => {
   registerTerminalIpc(ipcMain);
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);
+  registerNotificationIpc(ipcMain);
   registerWorkspaceIpc(ipcMain);
   registerCommandPaletteMruIpc(ipcMain);
   registerGitWatchIpc();

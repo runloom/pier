@@ -37,8 +37,10 @@ export class GitExecError extends Error {
 
 export interface GitExecOptions {
   cwd: string;
+  env?: Readonly<Record<string, string>>;
   /** stdout + stderr 累计字节上限（默认 16MB）。按 chunk byteLength 累加，非 string.length。 */
   maxOutputBytes?: number;
+  onSuccessStderr?: (stderr: string) => void;
   timeoutMs?: number;
 }
 
@@ -83,7 +85,7 @@ export function createExecGit({
       const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
       const child = spawn("git", [...args], {
         cwd: options.cwd,
-        env: { ...process.env, ...GIT_ENV },
+        env: { ...process.env, ...GIT_ENV, ...(options.env ?? {}) },
         stdio: ["ignore", "pipe", "pipe"],
       });
 
@@ -138,6 +140,7 @@ export function createExecGit({
         stdout += stdoutDecoder.end();
         stderr += stderrDecoder.end();
         if (payload.cause === "ok" && streamErrors.length === 0) {
+          options.onSuccessStderr?.(stderr);
           resolve(stdout);
           return;
         }

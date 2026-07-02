@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
@@ -332,7 +332,27 @@ function services(
             prunable: false,
             prunableReason: null,
           },
+          {
+            bare: false,
+            branch: "feature/a",
+            detached: false,
+            head: "def456",
+            isCurrent: args.path === "/repo/.worktrees/feature-a",
+            isMain: false,
+            locked: false,
+            lockedReason: null,
+            path: "/repo/.worktrees/feature-a",
+            prunable: false,
+            prunableReason: null,
+          },
         ],
+      }),
+      prune: async (args) => ({
+        currentPath: args.path,
+        mainPath: "/repo",
+        path: args.path,
+        status: "available",
+        worktrees: [],
       }),
       remove: async (args) => ({
         removedPath: args.path,
@@ -2172,21 +2192,24 @@ describe("createCommandRouter", () => {
       services: services(),
     });
 
-    await expect(
-      router.execute({
-        clientId: "desktop-1",
-        command: { path: "/repo", type: "worktree.list" },
-        protocolVersion: 1,
-        requestId: "req-worktree-list",
-      })
-    ).resolves.toMatchObject({
+    const listResult = await router.execute({
+      clientId: "desktop-1",
+      command: { path: "/repo", type: "worktree.list" },
+      protocolVersion: 1,
+      requestId: "req-worktree-list",
+    });
+    expect(listResult).toMatchObject({
       data: {
         mainPath: "/repo",
         status: "available",
-        worktrees: [{ branch: "main", path: "/repo" }],
       },
       ok: true,
       requestId: "req-worktree-list",
+    });
+    expect(listResult.ok ? listResult.data : null).toMatchObject({
+      worktrees: expect.arrayContaining([
+        expect.objectContaining({ branch: "main", path: "/repo" }),
+      ]),
     });
 
     await expect(
@@ -2249,6 +2272,138 @@ describe("createCommandRouter", () => {
       type: "panel.open",
       windowId: "main",
     });
+  });
+
+  it("worktree.open 拒绝打开当前仓库 worktree 列表之外的路径", async () => {
+    const rendererCommands: unknown[] = [];
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: services(rendererCommands),
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/tmp/not-a-known-worktree",
+          type: "worktree.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-open-invalid",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "invalid_path",
+        message:
+          "path is not a known worktree for this repository: /tmp/not-a-known-worktree",
+      },
+      ok: false,
+      requestId: "req-worktree-open-invalid",
+    });
+    expect(rendererCommands).toEqual([]);
+  });
+
+  it("worktree.open 在目标仓库之外调用时按目标路径自身校验", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    const baseList = fakeServices.worktrees.list;
+    // 模拟真实行为:非 /repo 内的路径(如 CLI 的 cwd)不是 git 仓库
+    fakeServices.worktrees = {
+      ...fakeServices.worktrees,
+      list: async (args) =>
+        args.path.startsWith("/repo")
+          ? await baseList(args)
+          : {
+              path: args.path,
+              reason: "not_git_repo",
+              status: "unavailable",
+              worktrees: [],
+            },
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: false,
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-open-outside",
+      })
+    ).resolves.toEqual({
+      data: {
+        context: panelContext("/repo/.worktrees/feature-a"),
+        panelId: "terminal-from-renderer",
+      },
+      ok: true,
+      requestId: "req-worktree-open-outside",
+    });
+  });
+
+  it("worktree.open 通过符号链接路径能匹配 realpath 后的 worktree", async () => {
+    const linkedPath = await mkdtemp(join(tmpdir(), "pier-wt-"));
+    const canonicalPath = await realpath(linkedPath);
+    try {
+      const rendererCommands: unknown[] = [];
+      const fakeServices = services(rendererCommands);
+      // git worktree list 报告的是 realpath 化的路径
+      fakeServices.worktrees = {
+        ...fakeServices.worktrees,
+        list: async (args) => ({
+          currentPath: args.path,
+          mainPath: canonicalPath,
+          path: args.path,
+          status: "available",
+          worktrees: [
+            {
+              bare: false,
+              branch: "main",
+              detached: false,
+              head: "abc123",
+              isCurrent: true,
+              isMain: true,
+              locked: false,
+              lockedReason: null,
+              path: canonicalPath,
+              prunable: false,
+              prunableReason: null,
+            },
+          ],
+        }),
+      };
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: fakeServices,
+      });
+
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            focus: false,
+            path: linkedPath,
+            type: "worktree.open",
+          },
+          protocolVersion: 1,
+          requestId: "req-worktree-open-symlink",
+        })
+      ).resolves.toEqual({
+        data: {
+          context: panelContext(canonicalPath),
+          panelId: "terminal-from-renderer",
+        },
+        ok: true,
+        requestId: "req-worktree-open-symlink",
+      });
+    } finally {
+      await rm(linkedPath, { force: true, recursive: true });
+    }
   });
 
   it("分发 worktree.remove 到 worktree service", async () => {

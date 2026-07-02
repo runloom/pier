@@ -1,16 +1,32 @@
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
+  GitBranchRef,
   GitChangeEvent,
+  GitDiffBranchesResult,
+  GitMergeAbortResult,
+  GitMergeResult,
+  GitRebaseAbortResult,
+  GitRebaseContinueResult,
+  GitRebaseResult,
   GitRepoInfo,
+  GitStashListResult,
+  GitStashPopResult,
+  GitStashResult,
   GitStatus,
+  GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
+  WorktreeCreateRequest,
+  WorktreeCreateResult,
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
+  WorktreePruneRequest,
+  WorktreeRemoveRequest,
+  WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
@@ -62,6 +78,7 @@ export interface RendererPluginQuickPickItem {
   readonly aliases?: readonly string[];
   readonly badges?: readonly RendererPluginQuickPickItemBadge[];
   readonly checked?: boolean;
+  readonly data?: unknown;
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
@@ -82,6 +99,7 @@ export interface RendererPluginQuickPick {
   onChangeSelection?(item: RendererPluginQuickPickItem): void;
   onDismiss?(): void;
   readonly placeholder?: string;
+  renderItem?(item: RendererPluginQuickPickItem): ReactNode;
   readonly sections?: readonly RendererPluginQuickPickSection[];
   readonly title: string;
 }
@@ -119,6 +137,17 @@ export interface PluginPanelRegistration {
   title?: (() => string) | string;
 }
 
+/** loading 通知句柄:后续更新/收尾都作用在同一条 toast 上。 */
+export interface RendererPluginLoadingNotification {
+  dismiss(): void;
+  info(message: string): void;
+  success(message: string): void;
+}
+
+export interface RendererPluginNotificationOptions {
+  description?: string;
+}
+
 export interface RendererPluginContext {
   actions: {
     register(action: RendererPluginAction): () => void;
@@ -127,12 +156,54 @@ export interface RendererPluginContext {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
   };
   /**
+   * 宿主级模态弹窗。渲染、blocking overlay、终端输入路由与 keybinding scope
+   * 均由宿主统一处理;全局单例,新弹窗会顶替未决的旧弹窗(旧的按取消 resolve)。
+   * confirmLabel/cancelLabel 省略时用宿主 i18n 的默认文案(OK/Cancel)。
+   */
+  dialogs: {
+    alert(options: {
+      body?: string;
+      confirmLabel?: string;
+      title: string;
+    }): Promise<void>;
+    confirm(options: {
+      body?: string;
+      cancelLabel?: string;
+      confirmLabel?: string;
+      title: string;
+    }): Promise<boolean>;
+  };
+  /**
    * Git 主体能力(对应 main 进程 GitService;插件按 manifest 声明的 capability 调用)。
-   * 只暴露插件常用的 3 个方法,其他按需扩展。
+   * 这里仅做 preload facade 的窄透传,git 业务交互仍由插件自己实现。
    */
   git: {
+    abortMerge(cwd: string): Promise<GitMergeAbortResult>;
+    abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
+    continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
     getStatus(cwd: string): Promise<GitStatus>;
     getRepoInfo(cwd: string): Promise<GitRepoInfo>;
+    listBranches(
+      cwd: string,
+      options: { kind: "all" | "local" | "remote" }
+    ): Promise<GitBranchRef[]>;
+    searchBranches(
+      cwd: string,
+      options?: {
+        currentBranch?: null | string;
+        limit?: number;
+        query?: string;
+      }
+    ): Promise<GitDiffBranchesResult>;
+    listStashes(cwd: string): Promise<GitStashListResult>;
+    merge(cwd: string, branch: string): Promise<GitMergeResult>;
+    popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
+    rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
+    stash(
+      cwd: string,
+      options?: { includeUntracked?: boolean; message?: string }
+    ): Promise<GitStashResult>;
+    undoLastCommit(cwd: string): Promise<GitUndoCommitResult>;
     watch(
       gitRoot: string,
       listener: (event: GitChangeEvent) => void
@@ -148,13 +219,29 @@ export interface RendererPluginContext {
       fallback?: string
     ): string;
   };
+  /**
+   * 通知能力。error/info/success/loading 是应用内 toast(由宿主统一渲染与
+   * 排队,插件不感知具体 toast 库);system 是 OS 级系统通知(走 main 进程
+   * Electron Notification,窗口失焦/最小化时也可见)。需要用户决策的场景用
+   * dialogs;这里只做结果播报。
+   */
+  notifications: {
+    error(message: string, options?: RendererPluginNotificationOptions): void;
+    info(message: string, options?: RendererPluginNotificationOptions): void;
+    loading(message: string): RendererPluginLoadingNotification;
+    success(message: string, options?: RendererPluginNotificationOptions): void;
+    system(options: {
+      body?: string;
+      title: string;
+    }): Promise<{ shown: boolean }>;
+  };
   panels: {
     getActiveContext(): PanelContext | null;
     /**
      * 单例打开指定 panel。panelId 必须在本插件 manifest 的 panels[] 中声明 ——
      * 不支持打开其它插件贡献的 panel(权限/所有权对称约束)。
      */
-    open(panelId: string): void;
+    open(panelId: string, options?: { context?: PanelContext }): void;
     register(registration: PluginPanelRegistration): () => void;
   };
   terminalStatusItems: {
@@ -162,8 +249,11 @@ export interface RendererPluginContext {
   };
   worktrees: {
     check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
+    create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
     list(request: WorktreeListRequest): Promise<WorktreeListResult>;
     open(request: WorktreeOpenRequest): Promise<unknown>;
+    prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
+    remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
   };
 }
 

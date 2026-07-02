@@ -4,6 +4,60 @@
       "aliases": ["变更", "打开变更面板", "biangeng"],
       "title": "Git: 打开变更面板"
     },
+    "pier.git.merge": {
+      "aliases": ["合并分支", "git merge", "he bing fen zhi"],
+      "description": "选择一个分支并合并到当前分支。",
+      "title": "合并分支..."
+    },
+    "pier.git.mergeAbort": {
+      "aliases": ["中止合并", "git merge abort", "zhong zhi he bing"],
+      "description": "中止当前合并操作。",
+      "title": "中止合并"
+    },
+    "pier.git.stash": {
+      "aliases": ["暂存更改", "git stash", "zan cun geng gai"],
+      "description": "储藏本地变更，包含未跟踪文件。",
+      "title": "暂存更改"
+    },
+    "pier.git.stashPop": {
+      "aliases": [
+        "弹出暂存",
+        "恢复暂存",
+        "恢复",
+        "git stash pop",
+        "tan chu zan cun",
+        "hui fu zan cun"
+      ],
+      "description": "选择一个储藏，应用并从储藏列表移除。",
+      "title": "弹出暂存..."
+    },
+    "pier.git.rebase": {
+      "aliases": ["变基到分支", "git rebase", "bian ji fen zhi"],
+      "description": "选择一个分支并将当前分支变基到它之上。",
+      "title": "变基到分支..."
+    },
+    "pier.git.rebaseAbort": {
+      "aliases": ["中止变基", "git rebase abort", "zhong zhi bian ji"],
+      "description": "中止当前变基操作。",
+      "title": "中止变基"
+    },
+    "pier.git.rebaseContinue": {
+      "aliases": ["继续变基", "git rebase continue", "ji xu bian ji"],
+      "description": "继续当前变基操作。",
+      "title": "继续变基"
+    },
+    "pier.git.undoLastCommit": {
+      "aliases": [
+        "撤销上次提交",
+        "回退提交",
+        "回退",
+        "undo commit",
+        "che xiao ti jiao",
+        "hui tui ti jiao"
+      ],
+      "description": "撤销上次提交，并保留变更为已暂存。",
+      "title": "撤销上次提交"
+    },
     "pier.worktree.create": {
       "aliases": [
         "工作树",
@@ -11,7 +65,7 @@
         "gongzuoshu",
         "chuangjian gongzuoshu"
       ],
-      "description": "创建工作树入口当前仅展示，暂未开放。",
+      "description": "在仓库托管的工作树目录下创建 Git worktree。",
       "title": "创建工作树"
     },
     "pier.worktree.delete": {
@@ -22,8 +76,18 @@
         "gongzuoshu",
         "shanchu gongzuoshu"
       ],
-      "description": "删除工作树入口当前仅展示，暂未开放。",
+      "description": "选择并删除 Git worktree。",
       "title": "删除工作树..."
+    },
+    "pier.worktree.prune": {
+      "aliases": [
+        "工作树",
+        "清理工作树",
+        "worktree prune",
+        "qing li gong zuo shu"
+      ],
+      "description": "清理失效的 Git worktree 记录。",
+      "title": "清理工作树"
     },
     "pier.worktree.list": {
       "aliases": ["工作树", "工作树列表", "gongzuoshu", "gong zuo shu"],
@@ -33,6 +97,7 @@
   },
   "description": "提供 Git 命令面板入口和终端状态栏支持。",
   "messages": {
+    "ui.cancel": "取消",
     "ui.createUnavailable": "创建工作树暂未开放",
     "ui.current": "当前",
     "ui.deleteUnavailable": "删除工作树暂未开放",
@@ -63,8 +128,61 @@
     "ui.srInsertions": "行新增",
     "ui.srDeletions": "行删除",
     "ui.largeChange": "变更过大",
+    "ui.gitUnsupported": "当前目录不是 Git 仓库",
     "ui.panelHint.gitChangesPlaceholder": "变更预览即将到来",
     "ui.panelTitle.gitChanges": "Git 变更",
+    "ui.branchDefault": "默认",
+    "ui.branchRemote": "远端",
+    "ui.createNamePrompt": "新工作树名称",
+    "ui.createBranchPrompt": "新分支名称",
+    "ui.worktreeCreateSuccess": "工作树已创建",
+    "ui.worktreeOperationFailed": "工作树操作失败",
+    "ui.noWorktreeToDelete": "没有可删除的工作树",
+    "ui.deletePlaceholder": "选择工作树",
+    "ui.deleteConfirm": "删除工作树 {{name}}?",
+    "ui.deleteConfirmButton": "删除",
+    "ui.worktreeDeleteSuccess": "工作树已删除",
+    "ui.noPrunableWorktrees": "没有失效工作树",
+    "ui.pruneConfirm": "清理失效工作树记录?",
+    "ui.pruneConfirmButton": "清理",
+    "ui.worktreePruneSuccess": "已清理失效工作树",
+    "ui.gitErrorUnavailable": "Git 操作失败",
+    "ui.gitConflictOpenReview": "打开 Review",
+    "ui.gitLoadingBranches": "正在加载分支...",
+    "ui.gitLoadingMerge": "正在合并...",
+    "ui.gitLoadingMergeAbort": "正在中止合并...",
+    "ui.gitLoadingStash": "正在暂存...",
+    "ui.gitLoadingStashPop": "正在应用暂存...",
+    "ui.gitLoadingRebase": "正在变基...",
+    "ui.gitLoadingRebaseAbort": "正在中止变基...",
+    "ui.gitLoadingRebaseContinue": "正在继续变基...",
+    "ui.gitLoadingUndoCommit": "正在撤销提交...",
+    "ui.gitNoOtherBranches": "没有其他分支",
+    "ui.gitMergeSelectBranch": "选择要合并到当前分支的分支",
+    "ui.gitRebaseSelectBranch": "选择要变基到的目标分支",
+    "ui.gitMergeSuccess": "已成功合并分支 {{branch}}",
+    "ui.gitMergeAlreadyUpToDate": "分支 {{branch}} 没有需要合并的新提交。",
+    "ui.gitMergeConflictTitle": "合并冲突",
+    "ui.gitMergeConflictBody": "合并产生了 {{count}} 个冲突，需要手动解决。",
+    "ui.gitMergeAbortSuccess": "已中止合并",
+    "ui.gitStashSuccess": "更改已暂存",
+    "ui.gitStashNothing": "没有可暂存的本地更改",
+    "ui.gitStashSelect": "选择要弹出的暂存",
+    "ui.gitStashListEmpty": "暂存列表为空",
+    "ui.gitStashPopSuccess": "暂存已应用并移除",
+    "ui.gitStashConflictTitle": "暂存冲突",
+    "ui.gitStashConflictBody": "暂存已应用但产生了冲突，需要手动解决。",
+    "ui.gitRebaseSuccess": "已成功变基到 {{branch}}",
+    "ui.gitRebaseAlreadyUpToDate": "当前分支已基于 {{branch}}，无需变基。",
+    "ui.gitRebaseConflictTitle": "变基冲突",
+    "ui.gitRebaseConflict": "变基因冲突暂停，请解决冲突后继续。",
+    "ui.gitRebaseAbortSuccess": "已中止变基",
+    "ui.gitRebaseContinueSuccess": "已继续变基",
+    "ui.gitRebaseContinueConflict": "变基仍有冲突，请解决后继续。",
+    "ui.gitUndoCommitConfirm": "撤销上次提交？更改将保留为暂存状态。",
+    "ui.gitUndoCommitConfirmButton": "撤销",
+    "ui.gitUndoCommitSuccess": "已撤销上次提交（更改保留为暂存状态）",
+    "ui.gitUndoCommitNothing": "没有可撤销的提交",
     "ui.title": "工作树",
     "ui.unsupported": "当前目录不支持 Git worktree"
   },

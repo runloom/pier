@@ -9,6 +9,7 @@ import type {
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOperationErrorReason,
+  WorktreePruneRequest,
   WorktreeRemoveRequest,
   WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
@@ -20,6 +21,7 @@ export interface WorktreeService {
   check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
   create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
   list(request: WorktreeListRequest): Promise<WorktreeListResult>;
+  prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
   remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
 }
 
@@ -412,5 +414,18 @@ export function createWorktreeService({
     };
   }
 
-  return { check, create, list, remove };
+  async function prune(
+    request: WorktreePruneRequest
+  ): Promise<WorktreeListResult> {
+    const before = await list({ path: request.path });
+    if (before.status === "unavailable") {
+      return before;
+    }
+    await execGit(["worktree", "prune"], before.mainPath, {
+      timeoutMs: 60_000,
+    });
+    return await list({ path: before.mainPath });
+  }
+
+  return { check, create, list, prune, remove };
 }

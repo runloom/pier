@@ -4,6 +4,59 @@
       "aliases": ["git changes", "open changes"],
       "title": "Git: Open Changes"
     },
+    "pier.git.merge": {
+      "aliases": ["git merge", "merge branch", "branch merge"],
+      "description": "Select a branch and merge it into the current branch.",
+      "title": "Merge Branch..."
+    },
+    "pier.git.mergeAbort": {
+      "aliases": ["git merge abort", "abort merge"],
+      "description": "Abort the current merge operation.",
+      "title": "Abort Merge"
+    },
+    "pier.git.stash": {
+      "aliases": ["git stash", "stash save"],
+      "description": "Stash local changes, including untracked files.",
+      "title": "Stash"
+    },
+    "pier.git.stashPop": {
+      "aliases": [
+        "git stash pop",
+        "git stash apply",
+        "pop stash",
+        "apply stash",
+        "restore stash"
+      ],
+      "description": "Select a stash, apply it, and remove it from the stash list.",
+      "title": "Pop Stash..."
+    },
+    "pier.git.rebase": {
+      "aliases": ["git rebase", "rebase branch"],
+      "description": "Select a branch and rebase the current branch onto it.",
+      "title": "Rebase Branch..."
+    },
+    "pier.git.rebaseAbort": {
+      "aliases": ["git rebase abort", "abort rebase"],
+      "description": "Abort the current rebase operation.",
+      "title": "Abort Rebase"
+    },
+    "pier.git.rebaseContinue": {
+      "aliases": ["git rebase continue", "continue rebase"],
+      "description": "Continue the current rebase operation.",
+      "title": "Continue Rebase"
+    },
+    "pier.git.undoLastCommit": {
+      "aliases": [
+        "undo commit",
+        "git undo",
+        "git reset",
+        "git reset soft",
+        "reset commit",
+        "undo last commit"
+      ],
+      "description": "Undo the last commit while preserving its changes as staged.",
+      "title": "Undo Last Commit"
+    },
     "pier.worktree.create": {
       "aliases": [
         "worktree",
@@ -13,8 +66,8 @@
         "new worktree",
         "create worktree"
       ],
-      "description": "Shows the worktree creation entry. Creation is not available yet.",
-      "title": "Worktree: Create"
+      "description": "Creates a Git worktree under the repository-managed worktrees directory.",
+      "title": "Create Worktree"
     },
     "pier.worktree.delete": {
       "aliases": [
@@ -25,8 +78,18 @@
         "remove worktree",
         "delete worktree"
       ],
-      "description": "Shows the worktree deletion entry. Deletion is not available yet.",
-      "title": "Worktree: Delete..."
+      "description": "Selects and removes a Git worktree.",
+      "title": "Delete Worktrees..."
+    },
+    "pier.worktree.prune": {
+      "aliases": [
+        "worktree",
+        "worktree prune",
+        "git worktree prune",
+        "cleanup worktree"
+      ],
+      "description": "Prunes stale Git worktree entries.",
+      "title": "Prune Stale Worktrees"
     },
     "pier.worktree.list": {
       "aliases": [
@@ -37,11 +100,12 @@
         "workspace worktree"
       ],
       "description": "Lists Git worktrees for the current repository and opens the selected worktree.",
-      "title": "Worktree: List"
+      "title": "List Worktrees"
     }
   },
   "description": "Built-in git command palette and terminal status support.",
   "messages": {
+    "ui.cancel": "Cancel",
     "ui.createUnavailable": "Worktree creation is not available yet",
     "ui.current": "current",
     "ui.deleteUnavailable": "Worktree deletion is not available yet",
@@ -72,8 +136,61 @@
     "ui.srInsertions": "insertions",
     "ui.srDeletions": "deletions",
     "ui.largeChange": "large change",
+    "ui.gitUnsupported": "Current directory is not a Git repository",
     "ui.panelHint.gitChangesPlaceholder": "Change preview coming soon",
     "ui.panelTitle.gitChanges": "Git Changes",
+    "ui.branchDefault": "default",
+    "ui.branchRemote": "remote",
+    "ui.createNamePrompt": "New worktree name",
+    "ui.createBranchPrompt": "New branch name",
+    "ui.worktreeCreateSuccess": "Worktree created",
+    "ui.worktreeOperationFailed": "Worktree operation failed",
+    "ui.noWorktreeToDelete": "No worktree can be deleted",
+    "ui.deletePlaceholder": "Select a worktree",
+    "ui.deleteConfirm": "Delete worktree {{name}}?",
+    "ui.deleteConfirmButton": "Delete",
+    "ui.worktreeDeleteSuccess": "Worktree deleted",
+    "ui.noPrunableWorktrees": "No stale worktrees found",
+    "ui.pruneConfirm": "Prune stale worktree entries?",
+    "ui.pruneConfirmButton": "Prune",
+    "ui.worktreePruneSuccess": "Stale worktrees pruned",
+    "ui.gitErrorUnavailable": "Git operation failed",
+    "ui.gitConflictOpenReview": "Open Review",
+    "ui.gitLoadingBranches": "Loading branches...",
+    "ui.gitLoadingMerge": "Merging...",
+    "ui.gitLoadingMergeAbort": "Aborting merge...",
+    "ui.gitLoadingStash": "Stashing changes...",
+    "ui.gitLoadingStashPop": "Applying stash...",
+    "ui.gitLoadingRebase": "Rebasing...",
+    "ui.gitLoadingRebaseAbort": "Aborting rebase...",
+    "ui.gitLoadingRebaseContinue": "Continuing rebase...",
+    "ui.gitLoadingUndoCommit": "Undoing commit...",
+    "ui.gitNoOtherBranches": "No other branches found",
+    "ui.gitMergeSelectBranch": "Select a branch to merge into the current branch",
+    "ui.gitRebaseSelectBranch": "Select a branch to rebase onto",
+    "ui.gitMergeSuccess": "Successfully merged branch {{branch}}",
+    "ui.gitMergeAlreadyUpToDate": "Branch {{branch}} has no new commits to merge.",
+    "ui.gitMergeConflictTitle": "Merge Conflicts",
+    "ui.gitMergeConflictBody": "Merge resulted in {{count}} conflict(s) that need to be resolved.",
+    "ui.gitMergeAbortSuccess": "Merge aborted",
+    "ui.gitStashSuccess": "Changes stashed",
+    "ui.gitStashNothing": "No local changes to stash",
+    "ui.gitStashSelect": "Select a stash to pop",
+    "ui.gitStashListEmpty": "No stashes found",
+    "ui.gitStashPopSuccess": "Stash applied and removed",
+    "ui.gitStashConflictTitle": "Stash Conflicts",
+    "ui.gitStashConflictBody": "Stash was applied but resulted in conflicts that need to be resolved.",
+    "ui.gitRebaseSuccess": "Successfully rebased onto {{branch}}",
+    "ui.gitRebaseAlreadyUpToDate": "Current branch is already up to date with {{branch}}.",
+    "ui.gitRebaseConflictTitle": "Rebase Conflicts",
+    "ui.gitRebaseConflict": "Rebase paused due to conflicts. Resolve them, then continue.",
+    "ui.gitRebaseAbortSuccess": "Rebase aborted",
+    "ui.gitRebaseContinueSuccess": "Rebase continued",
+    "ui.gitRebaseContinueConflict": "Rebase still has conflicts. Resolve them, then continue.",
+    "ui.gitUndoCommitConfirm": "Undo the last commit? Changes will be preserved as staged.",
+    "ui.gitUndoCommitConfirmButton": "Undo",
+    "ui.gitUndoCommitSuccess": "Last commit undone (changes preserved as staged)",
+    "ui.gitUndoCommitNothing": "No commits to undo",
     "ui.title": "Worktrees",
     "ui.unsupported": "Current directory does not support Git worktrees"
   },

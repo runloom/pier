@@ -160,13 +160,16 @@ describe("pluginManifestSchema", () => {
     ]);
   });
 
-  it("工作树插件当前不会因为未开放入口声明写权限", () => {
+  it("git 插件声明变更面板和命令需要的 git 权限", () => {
     expect(collectEffectivePermissions(GIT_PLUGIN_MANIFEST)).toEqual([
       "workspace:open",
       "worktree:read",
+      "worktree:write",
       "panel:open",
       "command:register",
       "panel:register",
+      "git:read",
+      "git:write",
     ]);
   });
 

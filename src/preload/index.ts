@@ -11,6 +11,10 @@ import type {
   MenuTemplate,
 } from "@shared/contracts/menu.ts";
 import type {
+  SystemNotificationRequest,
+  SystemNotificationResult,
+} from "@shared/contracts/notification.ts";
+import type {
   PluginRegistryEntry,
   PluginRegistryListResult,
 } from "@shared/contracts/plugin.ts";
@@ -38,16 +42,10 @@ import type {
   WindowCreateResult,
 } from "@shared/contracts/window.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
-import type {
-  WorktreeCheckRequest,
-  WorktreeCheckResult,
-  WorktreeListRequest,
-  WorktreeListResult,
-  WorktreeOpenRequest,
-} from "@shared/contracts/worktree.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 import { gitApi } from "./git-api.ts";
+import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
 export interface WindowInfo {
   focused: boolean;
@@ -71,6 +69,12 @@ export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
+}
+
+export interface PierNotificationsAPI {
+  system: (
+    request: SystemNotificationRequest
+  ) => Promise<SystemNotificationResult>;
 }
 
 export interface PierThemeAPI {
@@ -111,13 +115,8 @@ export interface PierPluginsAPI {
   list: () => Promise<PluginRegistryListResult>;
 }
 
-export interface PierWorktreesAPI {
-  check: (request: WorktreeCheckRequest) => Promise<WorktreeCheckResult>;
-  list: (request: WorktreeListRequest) => Promise<WorktreeListResult>;
-  open: (request: WorktreeOpenRequest) => Promise<unknown>;
-}
-
 export type { PierGitAPI } from "./git-api.ts";
+export type { PierWorktreesAPI } from "./worktree-api.ts";
 
 /**
  * Keyboard chord forward: swift NSEvent monitor 捕获 Cmd+key → main IPC →
@@ -181,6 +180,7 @@ export interface PierWindowAPI {
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
+  notifications: PierNotificationsAPI;
   onTerminalPresentationApplied: (
     cb: (payload: { rendererSequence: number }) => void
   ) => () => void;
@@ -319,6 +319,10 @@ const terminalApi: TerminalAPI = {
   show: (panelId) => ipcRenderer.send("pier:terminal:show", panelId),
 };
 
+const notificationsApi: PierNotificationsAPI = {
+  system: (request) => ipcRenderer.invoke("pier:notification:system", request),
+};
+
 const themeApi: PierThemeAPI = {
   setNativeChrome: (resolved, chromeColor) =>
     ipcRenderer.invoke("pier:theme:set-native-chrome", resolved, chromeColor),
@@ -380,24 +384,6 @@ const pluginsApi: PierPluginsAPI = {
     invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.disable" }),
 };
 
-const worktreesApi: PierWorktreesAPI = {
-  check: (request) =>
-    invokePierCommand<WorktreeCheckResult>({
-      path: request.path,
-      type: "worktree.check",
-    }),
-  list: (request) =>
-    invokePierCommand<WorktreeListResult>({
-      path: request.path,
-      type: "worktree.list",
-    }),
-  open: (request) =>
-    invokePierCommand<unknown>({
-      path: request.path,
-      type: "worktree.open",
-    }),
-};
-
 // gitApi 实现在独立文件 ./git-api.ts(避免 preload/index.ts 超 500 行硬上限)。
 
 const menuApi: PierMenuAPI = {
@@ -455,6 +441,7 @@ const api: PierWindowAPI = {
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),
   menu: menuApi,
+  notifications: notificationsApi,
   onTerminalPresentationApplied: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, cb),
   onWindowLayoutPulse: (cb) =>

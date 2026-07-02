@@ -134,6 +134,21 @@ describe("GitService 端到端(真临时仓库)", () => {
     expect(branchesAfterDelete.map((b) => b.name)).toEqual(["main"]);
   });
 
+  it("searchBranches 用真实 for-each-ref 输出列出当前分支以外的候选", async () => {
+    const repo = await makeRepo();
+    const git = createGitService();
+    await git.createBranch(repo, { name: "feature/search-branches" });
+
+    const result = await git.searchBranches(repo, { limit: 50, query: "" });
+
+    expect(result.status).toBe("ok");
+    expect(result.currentBranch).toBe("main");
+    expect(result.items.map((item) => item.name)).toContain(
+      "feature/search-branches"
+    );
+    expect(result.items.map((item) => item.name)).not.toContain("main");
+  });
+
   it("validateBranchName 对合法/非法名返回正确布尔值", async () => {
     const repo = await makeRepo();
     const git = createGitService();

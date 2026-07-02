@@ -291,6 +291,45 @@ describe("CommandPalette quick pick rows", () => {
     expect(screen.queryByText("pier")).not.toBeInTheDocument();
   });
 
+  it("filters quick-pick items without reordering matches", async () => {
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Select Branch",
+        placeholder: "Search branches",
+        items: [
+          {
+            id: "refs/heads/zebra",
+            label: "zebra",
+            searchTerms: ["match"],
+          },
+          {
+            id: "refs/heads/alpha",
+            label: "alpha",
+            searchTerms: ["match"],
+          },
+        ],
+        onAccept: vi.fn(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("zebra")).toBeVisible();
+    });
+    fireEvent.change(screen.getByPlaceholderText("Search branches"), {
+      target: { value: "match" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("alpha")).toBeVisible();
+    });
+    const labels = screen
+      .getAllByRole("option")
+      .map((row) => row.textContent ?? "");
+    expect(labels).toEqual(["zebra", "alpha"]);
+  });
+
   it("closes immediately when accepting a quick-pick item starts slow async work", async () => {
     render(<CommandPalette />);
     let resolveAccept!: () => void;

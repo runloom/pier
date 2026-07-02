@@ -1,3 +1,4 @@
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { DockviewApi } from "dockview-react";
 import { House } from "lucide-react";
@@ -7,6 +8,7 @@ import {
   clearPluginPanelsForTests,
   getPluginPanelRegistrations,
 } from "@/lib/plugins/plugin-panel-registry.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("@/lib/workspace/panel-activation.ts", () => ({
@@ -67,6 +69,7 @@ describe("host-context panels", () => {
     vi.mocked(activateWorkspacePanel).mockReset();
     vi.mocked(scheduleRevealDockviewTabByPanelId).mockReset();
     useWorkspaceStore.setState({ api: null });
+    usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     vi.restoreAllMocks();
   });
 
@@ -117,6 +120,48 @@ describe("host-context panels", () => {
       "pier.test.panel"
     );
     expect(activateWorkspacePanel).not.toHaveBeenCalled();
+  });
+
+  it("open without a source context preserves the panel's stored context", () => {
+    const storedContext: PanelContext = {
+      contextId: "ctx-1",
+      gitRoot: "/repo",
+      updatedAt: 1,
+    };
+    usePanelDescriptorStore.getState().upsert("pier.test.panel", {
+      context: storedContext,
+      display: { short: "Test" },
+    });
+    const { api } = mockApi(["pier.test.panel"]);
+    useWorkspaceStore.setState({ api });
+    const ctx = createRendererPluginContext(entryWithPanel());
+
+    ctx.panels.open("pier.test.panel");
+
+    expect(
+      usePanelDescriptorStore.getState().descriptors["pier.test.panel"]?.context
+    ).toEqual(storedContext);
+  });
+
+  it("open with a source context replaces the panel's stored context", () => {
+    usePanelDescriptorStore.getState().upsert("pier.test.panel", {
+      context: { contextId: "ctx-old", gitRoot: "/old", updatedAt: 1 },
+      display: { short: "Test" },
+    });
+    const { api } = mockApi(["pier.test.panel"]);
+    useWorkspaceStore.setState({ api });
+    const ctx = createRendererPluginContext(entryWithPanel());
+    const nextContext: PanelContext = {
+      contextId: "ctx-new",
+      gitRoot: "/new",
+      updatedAt: 2,
+    };
+
+    ctx.panels.open("pier.test.panel", { context: nextContext });
+
+    expect(
+      usePanelDescriptorStore.getState().descriptors["pier.test.panel"]?.context
+    ).toEqual(nextContext);
   });
 
   it("open activates an existing panel instead of creating a duplicate", () => {

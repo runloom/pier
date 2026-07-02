@@ -69,6 +69,11 @@ export const worktreeRemoveRequestSchema = z.object({
 });
 export type WorktreeRemoveRequest = z.infer<typeof worktreeRemoveRequestSchema>;
 
+export const worktreePruneRequestSchema = z.object({
+  path: z.string().min(1),
+});
+export type WorktreePruneRequest = z.infer<typeof worktreePruneRequestSchema>;
+
 export const worktreeListResultSchema = z.discriminatedUnion("status", [
   z.object({
     currentPath: z.string().min(1).optional(),
