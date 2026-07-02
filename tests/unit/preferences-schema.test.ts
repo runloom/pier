@@ -241,3 +241,20 @@ describe("projectPreferencesSchema — agent preferences", () => {
     ).toThrow();
   });
 });
+
+describe("projectPreferencesSchema — git autofetch preferences", () => {
+  it("空对象解析出默认值：开启、5 分钟", () => {
+    const prefs = projectPreferencesSchema.parse({});
+    expect(prefs.gitAutoFetchEnabled).toBe(true);
+    expect(prefs.gitAutoFetchIntervalMinutes).toBe(5);
+  });
+
+  it("间隔下限 1 上限 120", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ gitAutoFetchIntervalMinutes: 0 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ gitAutoFetchIntervalMinutes: 121 })
+    ).toThrow();
+  });
+});

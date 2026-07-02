@@ -50,6 +50,28 @@ describe("terminalStatusItemRegistry", () => {
     );
   });
 
+  it("状态项容器允许收缩，内容溢出时才由内部 truncate 截断", () => {
+    terminalStatusItemRegistry.register({
+      id: "test.item",
+      order: 10,
+      render: () => <span>Item</span>,
+    });
+
+    render(
+      <TerminalStatusBar
+        context={context}
+        cwd={context.cwd ?? null}
+        panelId="terminal-1"
+        title={null}
+      />
+    );
+
+    const bar = screen.getByTestId("terminal-status-bar");
+    const wrapper = bar.firstElementChild as HTMLElement;
+    expect(wrapper.className).toContain("min-w-0");
+    expect(wrapper.className).not.toContain("shrink-0");
+  });
+
   it("dispose 后移除状态项", () => {
     const dispose = terminalStatusItemRegistry.register({
       id: "test.item",

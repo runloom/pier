@@ -133,7 +133,10 @@ function createPierAppCore(): PierAppCore {
       return {
         git,
         gitWatch: createGitWatchService({
-          getStatus: (gitRoot: string) => git.getStatus(gitRoot),
+          getStatus: (gitRoot, prefetched) =>
+            git.getStatus(gitRoot, prefetched),
+          // poll 仅在有窗口聚焦时执行；后台错过的 poll 由聚焦补课 pulse 弥补（index.ts）
+          isPollActive: () => windowManager.getFocused() !== null,
         }),
       };
     })(),

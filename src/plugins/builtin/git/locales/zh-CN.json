@@ -110,6 +110,7 @@
     "ui.statusOpenTooltip": "点击切换工作树",
     "ui.detachedShort": "DETACHED",
     "ui.upstreamGone": "远端已删",
+    "ui.mergedIntoDefault": "已合并",
     "ui.noUpstream": "无 upstream",
     "ui.merging": "MERGING",
     "ui.rebasing": "REBASING",

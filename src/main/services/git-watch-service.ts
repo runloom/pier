@@ -1,13 +1,17 @@
-import { createHash } from "node:crypto";
 import { type FSWatcher, watch as fsWatchNative } from "node:fs";
-import { access, readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type {
   GitChangeEvent,
   GitChangeKind,
   GitStatus,
 } from "../../shared/contracts/git.ts";
-import { execGit } from "./git-exec.ts";
+import {
+  defaultHeadSignature,
+  defaultRefsSignature,
+  defaultRepoStateSignature,
+  defaultWorktreeSignature,
+  type RawWorktreeSnapshot,
+  takeRawWorktreeSnapshot,
+} from "./git-watch-signatures.ts";
 
 const DEFAULT_DEBOUNCE_MS = 400;
 /**
@@ -28,13 +32,15 @@ export type FsWatchFn = (
 export interface CreateGitWatchServiceOptions {
   /** sha256(HEAD oid + symbolic-ref HEAD)。注入便于测试。 */
   computeHeadSignature?: (gitRoot: string) => Promise<string>;
+  /** refs 签名：refs/heads + refs/remotes + refs/stash 的 refname+oid+upstream+symref。注入便于测试。 */
+  computeRefsSignature?: (gitRoot: string) => Promise<string>;
   /**
    * `.git/*_HEAD` 与 rebase 步进的存在性/内容签名。变化 → 归入 worktree changeKind。
    * 默认实现读 gitDir 下 MERGE_HEAD / CHERRY_PICK_HEAD / REVERT_HEAD / BISECT_START /
    * rebase-merge/msgnum / rebase-apply/next。gitDir 通过 `git rev-parse` 解析并缓存。
    */
   computeRepoStateSignature?: (gitRoot: string) => Promise<string>;
-  /** sha256(git status --porcelain=v2 -z)。注入便于测试。 */
+  /** sha256(git status --porcelain=v2 --branch -z + unstaged/staged numstat)。注入便于测试。 */
   computeWorktreeSignature?: (gitRoot: string) => Promise<string>;
   debounceMs?: number;
   /** fs.watch 替身。默认尝试 recursive,失败 fallback 到 .git 目录。 */
@@ -42,15 +48,28 @@ export interface CreateGitWatchServiceOptions {
   /**
    * 获取完整 GitStatus。变化触发时一并算出随广播下发，
    * 让多个 renderer 订阅者共享一份 snapshot，免各自 IPC refetch + 消除竞态。
+   * 第二参 prefetched：本轮签名计算已拿到的原始输出，getStatus 复用后可跳过重复 spawn（A7）。
    */
-  getStatus?: (gitRoot: string) => Promise<GitStatus>;
+  getStatus?: (
+    gitRoot: string,
+    prefetched?: RawWorktreeSnapshot
+  ) => Promise<GitStatus>;
+  /**
+   * poll timer 门控（A5）：返回 false 时 poll tick 跳过 refresh（fs 事件/pulse 不受影响）。
+   * 装配处注入"窗口是否聚焦"，避免后台无谓轮询；聚焦补课由 index.ts 的 pulse 完成。
+   */
+  isPollActive?: () => boolean;
   maxWaitMs?: number;
   pollMs?: number;
 }
 
 export interface GitWatchService {
+  /** 有订阅者的 gitRoot 列表(autofetch 用作活跃仓库注册表)。 */
+  activeRoots(): string[];
   /** 主动关闭所有 watcher 和 poll timer。 */
   dispose(): Promise<void>;
+  /** 立即重算签名走既有广播(autofetch fetch 完成后调用,免等 poll)。 */
+  pulse(gitRoot: string): void;
   /**
    * 订阅 gitRoot 的 git 变化。返回 unsubscribe 函数。
    * 同一 gitRoot 多个 listener 共用一个底层 fs watcher(引用计数)。
@@ -74,102 +93,14 @@ interface WatchEntry {
   pollTimer: NodeJS.Timeout;
   /** watcher recreate 冷却截止时刻（ms epoch）。 */
   recreateCoolingUntil: number;
+  /** refresh 正在执行中（A6：每 root 串行化）。 */
+  refreshing: boolean;
+  refsSig: string;
   repoStateSig: string;
+  /** refresh 执行期间又被请求 → 结束后合并成一轮 trailing refresh（A6）。 */
+  rerunRequested: boolean;
   watcher: FSWatcher;
   worktreeSig: string;
-}
-
-async function defaultWorktreeSignature(gitRoot: string): Promise<string> {
-  try {
-    const output = await execGit(["status", "--porcelain=v2", "-z"], {
-      cwd: gitRoot,
-    });
-    return createHash("sha256").update(output).digest("hex");
-  } catch {
-    return "";
-  }
-}
-
-async function defaultHeadSignature(gitRoot: string): Promise<string> {
-  let head = "";
-  let ref = "";
-  try {
-    head = await execGit(["rev-parse", "HEAD"], { cwd: gitRoot });
-  } catch {
-    // 空仓库无 HEAD
-  }
-  try {
-    ref = await execGit(["symbolic-ref", "-q", "HEAD"], { cwd: gitRoot });
-  } catch {
-    // detached HEAD
-  }
-  return createHash("sha256").update(`${head}\n${ref}`).digest("hex");
-}
-
-async function fileExistsMark(path: string, mark: string): Promise<string> {
-  try {
-    await access(path);
-    return mark;
-  } catch {
-    return "";
-  }
-}
-
-async function readFileTrim(path: string): Promise<string> {
-  try {
-    return (await readFile(path, "utf8")).trim();
-  } catch {
-    return "";
-  }
-}
-
-/**
- * gitDir 解析缓存。gitDir 在 worktree 生命周期内稳定，缓存一次即可。
- * 缓存在模块作用域是有意的：同一 gitRoot 可能被多个 WatchService 实例监听。
- */
-const gitDirCache = new Map<string, string>();
-
-async function resolveGitDir(gitRoot: string): Promise<string | null> {
-  const cached = gitDirCache.get(gitRoot);
-  if (cached !== undefined) {
-    return cached;
-  }
-  try {
-    const out = await execGit(
-      ["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
-      { cwd: gitRoot }
-    );
-    const gitDir = out.trim();
-    if (gitDir.length > 0) {
-      gitDirCache.set(gitRoot, gitDir);
-      return gitDir;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function defaultRepoStateSignature(gitRoot: string): Promise<string> {
-  const gitDir = await resolveGitDir(gitRoot);
-  if (gitDir === null) {
-    return "";
-  }
-  const [merge, cherry, revert, bisect, rebaseMergeStep, rebaseApply] =
-    await Promise.all([
-      fileExistsMark(join(gitDir, "MERGE_HEAD"), "M"),
-      fileExistsMark(join(gitDir, "CHERRY_PICK_HEAD"), "C"),
-      fileExistsMark(join(gitDir, "REVERT_HEAD"), "R"),
-      fileExistsMark(join(gitDir, "BISECT_START"), "B"),
-      readFileTrim(join(gitDir, "rebase-merge", "msgnum")),
-      fileExistsMark(join(gitDir, "rebase-apply"), "A"),
-    ]);
-  // 用 hash 保签名短小；rebase 步进（msgnum 内容）折进 hash 让每步都触发广播
-  return createHash("sha256")
-    .update(
-      `${merge}|${cherry}|${revert}|${bisect}|${rebaseMergeStep}|${rebaseApply}`
-    )
-    .digest("hex");
 }
 
 function defaultFsWatch(path: string): FSWatcher {
@@ -183,7 +114,8 @@ function defaultFsWatch(path: string): FSWatcher {
 
 function deriveChangeKind(
   worktreeChanged: boolean,
-  headChanged: boolean
+  headChanged: boolean,
+  refsChanged: boolean
 ): GitChangeKind | null {
   if (worktreeChanged && headChanged) {
     return "both";
@@ -194,67 +126,115 @@ function deriveChangeKind(
   if (headChanged) {
     return "head";
   }
+  if (refsChanged) {
+    return "refs";
+  }
   return null;
 }
 
 /**
  * git 变更监听服务。
  * 设计:
- * - fs.watch 触发 → debounce(min(400ms, maxWait-elapsed)) → 重算三签名 → 比对 → 通知 listeners
- *   - 三签名：worktree（status hash）、head（HEAD oid + symbolic-ref）、repoState（.git/*_HEAD + rebase 步）
- *   - worktree 或 repoState 变化 → changeKind 含 "worktree"
+ * - fs.watch 触发 → debounce(min(400ms, maxWait-elapsed)) → 重算四签名 → 比对 → 通知 listeners
+ *   - 四签名：worktree（status + numstat hash）、head（HEAD oid + symbolic-ref）、
+ *     repoState（.git/*_HEAD + rebase 步）、refs（refs/heads+remotes+stash 的 refname+oid+upstream）
+ *   - worktree 或 repoState 变化 → changeKind 含 "worktree"；仅 refs 变化 → changeKind "refs"
  * - Max-wait debounce：burst 内首事件后最多 maxWait 一定 refresh；burst 结束后 debounce 再补一次
  * - Broadcast 携带 status snapshot：getStatus 注入时，变化触发一并算完整 GitStatus 下发
  * - 5s 兜底轮询防止 watcher 漏事件；watcher error 走 5s 冷却重建
  * - 引用计数:多个 listener 共用同一 fs watcher
  * - 签名 hash 化避免大输出常驻内存
+ * - pulse(gitRoot)/activeRoots()：供 autofetch 等外部驱动方在 fetch 完成后立即触发重算、
+ *   注册活跃仓库列表，无需等待 5s poll
  */
 export function createGitWatchService({
   computeWorktreeSignature = defaultWorktreeSignature,
   computeHeadSignature = defaultHeadSignature,
   computeRepoStateSignature = defaultRepoStateSignature,
+  computeRefsSignature = defaultRefsSignature,
   fsWatch = defaultFsWatch,
   getStatus,
+  isPollActive = () => true,
   debounceMs = DEFAULT_DEBOUNCE_MS,
   maxWaitMs = DEFAULT_MAX_WAIT_MS,
   pollMs = DEFAULT_POLL_MS,
 }: CreateGitWatchServiceOptions = {}): GitWatchService {
   const entries = new Map<string, WatchEntry>();
 
+  /**
+   * 每 root 串行化（A6）：若正在 refresh，标记 rerunRequested 后返回；
+   * 执行体结束若被重复请求，立即合并成一轮 trailing refresh。
+   * 消除 pulse/poll/debounce 并发导致的乱序广播。
+   */
   async function refresh(gitRoot: string, force: boolean): Promise<void> {
     const entry = entries.get(gitRoot);
     if (!entry) {
       return;
     }
-    const [nextWorktree, nextHead, nextRepoState] = await Promise.all([
-      computeWorktreeSignature(gitRoot),
-      computeHeadSignature(gitRoot),
-      computeRepoStateSignature(gitRoot),
-    ]);
+    if (entry.refreshing) {
+      entry.rerunRequested = true;
+      return;
+    }
+    entry.refreshing = true;
+    try {
+      await runRefresh(entry, gitRoot, force);
+    } finally {
+      entry.refreshing = false;
+      if (entry.rerunRequested) {
+        entry.rerunRequested = false;
+        // trailing 合并：立即再跑一轮（非 force）
+        refresh(gitRoot, false).catch(() => undefined);
+      }
+    }
+  }
+
+  async function runRefresh(
+    entry: WatchEntry,
+    gitRoot: string,
+    force: boolean
+  ): Promise<void> {
+    const [nextWorktree, nextHead, nextRepoState, nextRefs] = await Promise.all(
+      [
+        computeWorktreeSignature(gitRoot),
+        computeHeadSignature(gitRoot),
+        computeRepoStateSignature(gitRoot),
+        computeRefsSignature(gitRoot),
+      ]
+    );
     const worktreeChanged = nextWorktree !== entry.worktreeSig;
     const headChanged = nextHead !== entry.headSig;
     const repoStateChanged = nextRepoState !== entry.repoStateSig;
+    const refsChanged = nextRefs !== entry.refsSig;
     entry.worktreeSig = nextWorktree;
     entry.headSig = nextHead;
     entry.repoStateSig = nextRepoState;
+    entry.refsSig = nextRefs;
     if (force) {
+      // baseline：签名已存基线，丢弃本轮采到的原始快照（无广播即无消费者）
+      takeRawWorktreeSnapshot(gitRoot);
       return;
     }
     const changeKind = deriveChangeKind(
       worktreeChanged || repoStateChanged,
-      headChanged
+      headChanged,
+      refsChanged
     );
     if (!changeKind) {
+      takeRawWorktreeSnapshot(gitRoot);
       return;
     }
     // 有变化 → 一并算 status 随广播下发（多订阅者共享，免 renderer refetch）
     let status: GitStatus | undefined;
     if (getStatus) {
+      // 本轮签名计算已拿到的原始输出（默认路径填充）复用给 getStatus，免重复 spawn（A7）
+      const prefetched = takeRawWorktreeSnapshot(gitRoot);
       try {
-        status = await getStatus(gitRoot);
+        status = await getStatus(gitRoot, prefetched);
       } catch {
         // getStatus 失败不阻塞广播；renderer 接到不带 status 的广播会走 getStatus IPC fallback
       }
+    } else {
+      takeRawWorktreeSnapshot(gitRoot);
     }
     for (const listener of entry.listeners) {
       listener(
@@ -334,6 +314,10 @@ export function createGitWatchService({
         if (!target?.baselineReady) {
           return;
         }
+        // A5：非聚焦时 poll 不 refresh（fs 事件/pulse 不受门控影响）
+        if (!isPollActive()) {
+          return;
+        }
         refresh(gitRoot, false).catch(() => undefined);
       }, pollMs);
       entry = {
@@ -344,7 +328,10 @@ export function createGitWatchService({
         listeners: new Set(),
         pollTimer,
         recreateCoolingUntil: 0,
+        refsSig: "",
+        refreshing: false,
         repoStateSig: "",
+        rerunRequested: false,
         watcher,
         worktreeSig: "",
       };
@@ -382,5 +369,17 @@ export function createGitWatchService({
     return Promise.resolve();
   }
 
-  return { dispose, watch };
+  function activeRoots(): string[] {
+    return Array.from(entries.keys());
+  }
+
+  function pulse(gitRoot: string): void {
+    const entry = entries.get(gitRoot);
+    if (!entry?.baselineReady) {
+      return;
+    }
+    refresh(gitRoot, false).catch(() => undefined);
+  }
+
+  return { activeRoots, dispose, pulse, watch };
 }

@@ -145,6 +145,8 @@ function cliClientServices(): PierCoreServices {
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        gitAutoFetchEnabled: true,
+        gitAutoFetchIntervalMinutes: 5,
       }),
       update: async (patch) => ({
         language: "system",
@@ -165,6 +167,8 @@ function cliClientServices(): PierCoreServices {
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        gitAutoFetchEnabled: patch.gitAutoFetchEnabled ?? true,
+        gitAutoFetchIntervalMinutes: patch.gitAutoFetchIntervalMinutes ?? 5,
       }),
     },
     processEnvironment: {
