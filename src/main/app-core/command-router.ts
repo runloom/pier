@@ -9,8 +9,10 @@ import {
   type PanelContext,
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
+import type { WorktreeCreateResult } from "@shared/contracts/worktree.ts";
 import { GitExecError } from "../services/git-exec.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
+import { copyWorktreeIncludes } from "../services/worktree-bootstrap.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
@@ -132,8 +134,11 @@ async function executeWorktreeCommand(
       return success(requestId, await services.worktrees.check(command));
     case "worktree.list":
       return success(requestId, await services.worktrees.list(command));
-    case "worktree.create":
-      return success(requestId, await services.worktrees.create(command));
+    case "worktree.create": {
+      const created = await services.worktrees.create(command);
+      const copiedFiles = await copyCreateIncludes(created, services);
+      return success(requestId, { ...created, copiedFiles });
+    }
     case "worktree.open":
       return await executeWorktreeOpenCommand(requestId, command, services);
     case "worktree.remove":
@@ -142,6 +147,35 @@ async function executeWorktreeCommand(
       return success(requestId, await services.worktrees.prune(command));
     default:
       return null;
+  }
+}
+
+async function copyCreateIncludes(
+  result: WorktreeCreateResult,
+  services: PierCoreServices
+): Promise<string[]> {
+  const mainPath = result.worktrees.find((item) => item.isMain)?.path;
+  if (!mainPath) {
+    return [];
+  }
+  const preferences = await services.preferences.read();
+  if (preferences.worktreeCopyPatterns.length === 0) {
+    return [];
+  }
+  try {
+    const copyResult = await copyWorktreeIncludes({
+      mainPath,
+      patterns: preferences.worktreeCopyPatterns,
+      targetPath: result.targetPath,
+    });
+    return copyResult.copied;
+  } catch (err) {
+    // copy 失败不应让 create 整体失败:worktree 已建好,只是准备不完整。
+    console.warn(
+      "[command-router] worktree copy includes failed:",
+      err instanceof Error ? err.message : err
+    );
+    return [];
   }
 }
 

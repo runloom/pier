@@ -107,6 +107,7 @@ export const worktreeCheckResultSchema = z.discriminatedUnion("status", [
 export type WorktreeCheckResult = z.infer<typeof worktreeCheckResultSchema>;
 
 export const worktreeCreateResultSchema = z.object({
+  copiedFiles: z.array(z.string()).optional(),
   created: worktreeItemSchema,
   targetPath: z.string().min(1),
   worktrees: z.array(worktreeItemSchema),
