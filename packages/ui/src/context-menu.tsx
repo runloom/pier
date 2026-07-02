@@ -65,7 +65,7 @@ function ContextMenuContent({
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
 }) {
-  const overlayRef = useTerminalOverlay({ focus: true });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <ContextMenuPrimitive.Portal>
@@ -133,7 +133,7 @@ function ContextMenuSubContent({
   className,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
-  const overlayRef = useTerminalOverlay({ focus: true });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <ContextMenuPrimitive.SubContent

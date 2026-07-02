@@ -323,7 +323,7 @@ async function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
     focusTerminalPanel(result.panelId);
   }
 }
-async function openRunTaskQuickPick() {
+export async function openRunTaskQuickPick() {
   const projectRoot = activeProjectRoot();
   const title = i18next.t("commandPalette.action.runTask");
   const placeholder = i18next.t("commandPalette.placeholder.runTask");

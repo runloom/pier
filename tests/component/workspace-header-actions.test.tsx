@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import i18next from "i18next";
@@ -16,11 +17,16 @@ import {
 } from "@/components/workspace/workspace-header-actions.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
+import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
+import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 let applyInputRouting: ReturnType<typeof vi.fn>;
+let detectAgents: ReturnType<typeof vi.fn>;
 let disposePanelActions: (() => void) | null = null;
+let prepareAgentLaunch: ReturnType<typeof vi.fn>;
 let originalHasPointerCapture:
   | typeof HTMLElement.prototype.hasPointerCapture
   | undefined;
@@ -95,6 +101,17 @@ function createProps(
   } as unknown as IDockviewHeaderActionsProps;
 }
 
+function openAddPanelMenu(): HTMLElement {
+  const trigger = screen.getByRole("button", { name: "Add Panel" });
+  expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+  fireEvent.pointerDown(trigger, {
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  });
+  return trigger;
+}
+
 beforeAll(async () => {
   await initI18n();
 });
@@ -103,6 +120,8 @@ beforeEach(async () => {
   await i18next.changeLanguage("en");
   disposePanelActions = registerPanelActions();
   applyInputRouting = vi.fn();
+  detectAgents = vi.fn(async () => ({ detectedIds: [] as AgentKind[] }));
+  prepareAgentLaunch = vi.fn(async () => ({ launchId: null as string | null }));
   originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
   originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
   originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
@@ -136,6 +155,10 @@ beforeEach(async () => {
       terminal: {
         applyInputRouting,
       },
+      agents: {
+        detect: detectAgents,
+        prepareLaunch: prepareAgentLaunch,
+      },
       onWindowLayoutPulse: vi.fn(() => vi.fn()),
     },
   });
@@ -148,6 +171,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
   setDockviewTabRevealRoot(null);
   useWorkspaceStore.getState().setApi(null);
+  useAgentDetectStore.setState({
+    detectedIds: [],
+    hasDetected: false,
+    isDetecting: false,
+    isRefreshing: false,
+  });
+  useAgentPreferencesStore.setState({
+    defaultAgentId: null,
+    disabledAgentIds: [],
+  });
+  useCommandPaletteController.setState({
+    mode: "commands",
+    open: false,
+    quickPick: null,
+    requestId: 0,
+    stack: [],
+  });
   if (originalHasPointerCapture) {
     HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
   } else {
@@ -399,7 +439,7 @@ describe("WorkspaceHeaderActions", () => {
     header.remove();
   });
 
-  it("pushes terminal overlay while the select list is open so options receive pointer events", async () => {
+  it("shows overflow options and activates the selected hidden tab", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");
     const visibleTab = document.createElement("div");
@@ -444,17 +484,6 @@ describe("WorkspaceHeaderActions", () => {
       pointerType: "mouse",
     });
 
-    await waitFor(() => {
-      expect(applyInputRouting).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          basePanel: { kind: "web" },
-          webOverlayRects: expect.arrayContaining([
-            expect.objectContaining({ id: "panel-overflow" }),
-          ]),
-          webRequestCount: 1,
-        })
-      );
-    });
     const item = await screen.findByRole("option", {
       name: "Terminal 2",
     });
@@ -466,13 +495,6 @@ describe("WorkspaceHeaderActions", () => {
     fireEvent.click(item);
 
     expect(overflowPanel.api.setActive).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(applyInputRouting).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          webOverlayRects: [],
-        })
-      );
-    });
 
     header.remove();
   });
@@ -597,7 +619,7 @@ describe("WorkspaceHeaderActions", () => {
     header.remove();
   });
 
-  it("reveals a terminal tab added from the header new-tab action", () => {
+  it("reveals a terminal tab added from the header add-panel menu", async () => {
     vi.spyOn(Date, "now").mockReturnValue(123);
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");
@@ -630,7 +652,10 @@ describe("WorkspaceHeaderActions", () => {
       container: actionsContainer,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "New Tab" }));
+    openAddPanelMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "New Terminal" })
+    );
 
     expect(props.containerApi.addPanel).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -645,5 +670,70 @@ describe("WorkspaceHeaderActions", () => {
     expect(tabsContainer.scrollLeft).toBe(88);
 
     header.remove();
+  });
+
+  it("opens the task quick pick from the header add-panel menu", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New Task" }));
+
+    expect(useCommandPaletteController.getState()).toMatchObject({
+      mode: "quick-pick",
+      open: true,
+      quickPick: {
+        items: [
+          {
+            disabled: true,
+            id: "task-no-context",
+            label: "No active project",
+          },
+        ],
+      },
+    });
+  });
+
+  it("launches an agent terminal in the clicked header group", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(456);
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    const originalGroup = props.group;
+    prepareAgentLaunch.mockResolvedValueOnce({ launchId: "launch-agent" });
+    useAgentDetectStore.setState({
+      detectedIds: ["claude"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+    useAgentPreferencesStore.setState({
+      defaultAgentId: null,
+      disabledAgentIds: [],
+    });
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    (props.containerApi as { activeGroup: unknown }).activeGroup = {
+      id: "other-group",
+    };
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Claude" }));
+
+    await waitFor(() => {
+      expect(prepareAgentLaunch).toHaveBeenCalledWith("claude");
+      expect(props.containerApi.addPanel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          component: "terminal",
+          id: "terminal-456",
+          params: { launchId: "launch-agent" },
+          position: {
+            direction: "within",
+            referenceGroup: originalGroup,
+          },
+        })
+      );
+    });
   });
 });

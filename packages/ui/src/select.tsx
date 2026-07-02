@@ -77,7 +77,7 @@ function SelectContent({
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
-  const overlayRef = useTerminalOverlay({ focus: true });
+  const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <SelectPrimitive.Portal>

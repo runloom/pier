@@ -3,6 +3,7 @@ import { contextMenu } from "./context-menu.ts";
 import { dialog } from "./dialog.ts";
 import { settings } from "./settings.ts";
 import { terminal } from "./terminal.ts";
+import { workspace } from "./workspace.ts";
 
 export const en = {
   commandPalette,
@@ -10,4 +11,5 @@ export const en = {
   dialog,
   settings,
   terminal,
+  workspace,
 } as const;

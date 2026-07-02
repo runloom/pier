@@ -4,7 +4,10 @@ import type {
   TerminalKeyboardFocusTarget,
 } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
-import { sameKeyboardFocusTarget as sameBasePanel } from "@shared/terminal-keyboard-target.ts";
+import {
+  computeEffectiveKeyboardTarget,
+  sameKeyboardFocusTarget as sameBasePanel,
+} from "@shared/terminal-keyboard-target.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
@@ -20,12 +23,29 @@ const webRequestIds = new Set<string>();
 let basePanel: TerminalKeyboardFocusTarget = { kind: "web" };
 let rendererSequence = 0;
 let lastSnapshot: TerminalInputRoutingSnapshot | null = null;
+let lastEffectiveKeyboardKind: TerminalKeyboardFocusTarget["kind"] = "web";
+let webFocusHandOffArmedUntil = 0;
+
+// effective terminal→web 翻转后, main 会调 webContents.focus() 做 first responder
+// 交接 (terminal NSView → Chromium view)。该交接会给 renderer 派发一对瞬时
+// window blur→focus (实测间隔 1-5ms, 落在 pointerdown 后 ~30-60ms)。250ms 覆盖
+// IPC 往返 + native 交接的最慢路径, 又远短于任何两次用户操作的间隔。
+const WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS = 250;
 
 function frameKey(frame: TerminalFrame): string {
   return `${frame.x},${frame.y},${frame.width},${frame.height}`;
 }
 
 function applyTerminalInputRouting(): void {
+  const nextEffectiveKind = computeEffectiveKeyboardTarget(
+    basePanel,
+    webRequestIds.size
+  ).kind;
+  if (lastEffectiveKeyboardKind === "terminal" && nextEffectiveKind === "web") {
+    webFocusHandOffArmedUntil =
+      performance.now() + WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS;
+  }
+  lastEffectiveKeyboardKind = nextEffectiveKind;
   rendererSequence += 1;
   const snapshot: TerminalInputRoutingSnapshot = {
     basePanel,
@@ -213,6 +233,71 @@ export function registerTerminalFullscreenWebOverlay(
   };
 }
 
+// ---------------------------------------------------------------------------
+// 全局点击 → 焦点路由（事件路由层）
+//
+// Pier 架构下终端 NSView 常持有 first responder，用户点击任何 web 元素时
+// Chromium view 不会自动接管键盘焦点（AppKit FR 不动，renderer 只拿到
+// widget 焦点），必须由 main 调 win.webContents.focus() 完成交接。
+//
+// 焦点意图在事件路由层由 capture 阶段 pointerdown 统一触发：任何落在 web
+// 上的点击都走同一入口，各 Radix 组件只负责几何注册 (useTerminalOverlay
+// focus: false，勿再传 true——挂载期请求焦点重复且时序更晚)。终端激活时
+// activateTerminalInputRouting 会 clear webRequestIds，自然释放此请求。
+//
+// 注意"第一次点击闪关"的真实根因不在此入口的早晚：webContents.focus() 做
+// FR 交接时 renderer 必然收到一对瞬时 window blur→focus（实测点击后
+// ~30-60ms，晚于 Radix 同步打开），而 Radix Select/Menu 打开时监听 window
+// blur 自关。靠 installTerminalInputRoutingBlurSuppressor 消费该 blur 解决，
+// 见其 doc comment。
+// ---------------------------------------------------------------------------
+
+let blurSuppressorInstalled = false;
+
+/**
+ * 键盘交接瞬时 blur 抑制器。terminal→web 交接期间 (见
+ * WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS 注释) 到达的第一个 window blur 是
+ * webContents.focus() 的内部产物, 不代表用户离开窗口; 但 Radix Select / Menu
+ * (dropdown/context/menubar) 打开时都监听 window blur 自关, 造成"第一次点击
+ * 菜单闪现即消失"。这里消费掉这一个 blur (stopImmediatePropagation), 让它
+ * 不到达 Radix。必须在 React root render 之前安装, 保证监听器排在所有 Radix
+ * 组件之前 (window 目标的 blur 按注册顺序派发)。
+ *
+ * 用户真点终端关菜单的路径不受影响: 那条链路 effective 翻向 terminal, 不武装
+ * 抑制窗口, blur 正常放行。
+ */
+export function installTerminalInputRoutingBlurSuppressor(): void {
+  if (blurSuppressorInstalled) {
+    return;
+  }
+  blurSuppressorInstalled = true;
+  window.addEventListener("blur", (event) => {
+    if (performance.now() >= webFocusHandOffArmedUntil) {
+      return;
+    }
+    webFocusHandOffArmedUntil = 0;
+    event.stopImmediatePropagation();
+  });
+}
+
+let pointerDownFocusListenerInstalled = false;
+
+export function installTerminalInputRoutingPointerDownListener(): void {
+  if (pointerDownFocusListenerInstalled) {
+    return;
+  }
+  pointerDownFocusListenerInstalled = true;
+  document.addEventListener(
+    "pointerdown",
+    () => {
+      // 幂等：同 id 再次调用不重复 add，也不重复触发 IPC。
+      // 只在真正首次 add 时下发 snapshot，主进程再按 previousTargetKey 去重。
+      requestTerminalWebFocus("pier.click");
+    },
+    { capture: true }
+  );
+}
+
 const TAB_DRAG_FALLBACK_MS = 5000;
 const DRAG_WATCHER_CLEANUP_KEY = "__pierTerminalInputRoutingDragCleanup__";
 
@@ -366,5 +451,7 @@ export function resetTerminalInputRoutingForTests(): void {
   basePanel = { kind: "web" };
   rendererSequence = 0;
   lastSnapshot = null;
+  lastEffectiveKeyboardKind = "web";
+  webFocusHandOffArmedUntil = 0;
   dragWatcherInstalled = false;
 }

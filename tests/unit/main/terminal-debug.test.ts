@@ -93,10 +93,14 @@ describe("terminal native debug IPC", () => {
       },
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
-      archiveTerminalPanelSession: vi.fn(async () => undefined),
+      flushTerminalSessionState: vi.fn(async () => undefined),
+      patchTerminalPanelTab: vi.fn(async () => undefined),
+      patchTerminalPanelTaskStatus: vi.fn(async () => undefined),
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
-      updateTerminalPanelCwd: vi.fn(async () => undefined),
+      updateTerminalPanelContext: vi.fn(async () => undefined),
+      updateTerminalPanelTab: vi.fn(async () => undefined),
+      updateTerminalPanelTask: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/windows/window-identity.ts", () => ({

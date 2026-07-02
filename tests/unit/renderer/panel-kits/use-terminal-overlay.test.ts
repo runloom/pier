@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getLastTerminalInputRoutingSnapshot,
   registerTerminalElementWebOverlay,
-  requestTerminalWebFocus,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing.store.ts";
 
@@ -52,7 +51,6 @@ function snapshot() {
 
 const registry = {
   registerElement: registerTerminalElementWebOverlay,
-  requestFocus: requestTerminalWebFocus,
 };
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -88,27 +86,8 @@ describe("useTerminalOverlay", () => {
     vi.unstubAllGlobals();
   });
 
-  it("registers geometry and a web focus request while attached (focus=true)", () => {
-    const { result } = renderHook(() => useTerminalOverlay({ focus: true }), {
-      wrapper,
-    });
-    const el = makeSizedElement();
-
-    result.current(el);
-
-    expect(snapshot()?.webOverlayRects).toHaveLength(1);
-    expect(snapshot()?.webRequestCount).toBe(1);
-
-    result.current(null);
-
-    expect(snapshot()?.webOverlayRects).toHaveLength(0);
-    expect(snapshot()?.webRequestCount).toBe(0);
-  });
-
-  it("registers geometry only, no focus request, when focus=false", () => {
-    const { result } = renderHook(() => useTerminalOverlay({ focus: false }), {
-      wrapper,
-    });
+  it("registers geometry only — never a web focus request", () => {
+    const { result } = renderHook(() => useTerminalOverlay(), { wrapper });
     const el = makeSizedElement();
 
     result.current(el);
@@ -123,21 +102,18 @@ describe("useTerminalOverlay", () => {
   });
 
   it("re-attaching to a new element disposes the previous registration", () => {
-    const { result } = renderHook(() => useTerminalOverlay({ focus: true }), {
-      wrapper,
-    });
+    const { result } = renderHook(() => useTerminalOverlay(), { wrapper });
 
     result.current(makeSizedElement());
     result.current(makeSizedElement());
 
-    // 旧注册被释放，只保留一个几何矩形与一个焦点请求。
+    // 旧注册被释放，只保留一个几何矩形。
     expect(snapshot()?.webOverlayRects).toHaveLength(1);
-    expect(snapshot()?.webRequestCount).toBe(1);
   });
 
   it("degrades to noop without a Provider — no throw, store state unchanged", () => {
     // 不包 Provider，使用默认 noopRegistry。
-    const { result } = renderHook(() => useTerminalOverlay({ focus: true }));
+    const { result } = renderHook(() => useTerminalOverlay());
 
     // 不应抛错，也不应写入 terminal-input-routing store（snapshot 保持 null）。
     expect(() => result.current(makeSizedElement())).not.toThrow();

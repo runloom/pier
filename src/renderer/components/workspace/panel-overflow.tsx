@@ -17,10 +17,6 @@ import {
   useState,
 } from "react";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
-import {
-  registerTerminalFullscreenWebOverlay,
-  requestTerminalWebFocus,
-} from "@/stores/terminal-input-routing.store.ts";
 import { panelIconOf, panelKindOf } from "./panel-registry.ts";
 
 const CLIP_EPSILON_PX = 1;
@@ -223,18 +219,6 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
     },
     [props.panels, rootRef]
   );
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const route = registerTerminalFullscreenWebOverlay("panel-overflow");
-    const releaseWebFocus = requestTerminalWebFocus("panel-overflow");
-    return () => {
-      releaseWebFocus();
-      route.dispose();
-    };
-  }, [open]);
 
   const hasOverflowPanels = overflowPanels.length > 0;
 
