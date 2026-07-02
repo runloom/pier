@@ -363,10 +363,16 @@ const rendererCommandApi: PierRendererCommandAPI = {
 };
 
 const commandPaletteMruApi: PierCommandPaletteMruAPI = {
-  read: () => ipcRenderer.invoke("pier:command-palette-mru:read"),
-  recordUse: (actionId) =>
-    ipcRenderer.send("pier:command-palette-mru:record", actionId),
-  clear: () => ipcRenderer.invoke("pier:command-palette-mru:clear"),
+  read: () => invokePierCommand<MruState>({ type: "commandPaletteMru.read" }),
+  recordUse: (actionId) => {
+    invokePierCommand<null>({
+      actionId,
+      type: "commandPaletteMru.record",
+    }).catch((err) => {
+      console.error("[command-palette-mru] record failed:", err);
+    });
+  },
+  clear: () => invokePierCommand<MruState>({ type: "commandPaletteMru.clear" }),
   onChange: (handler) => {
     const listener = (_event: unknown, state: MruState) => {
       handler(state);

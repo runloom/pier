@@ -19,7 +19,6 @@ import {
 } from "./ipc/agent-session.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
-import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerNotificationIpc } from "./ipc/notification.ts";
@@ -273,7 +272,6 @@ app.whenReady().then(async () => {
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerNotificationIpc(ipcMain);
-  registerCommandPaletteMruIpc(ipcMain);
   registerGitWatchIpc();
   setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
     if (typeof exitCode === "number") {
