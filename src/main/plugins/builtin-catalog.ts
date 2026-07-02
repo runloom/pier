@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MainPluginModule } from "@plugins/api/main.ts";
+import { filesMainPlugin } from "@plugins/builtin/files/main/index.ts";
+import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import { GIT_PLUGIN_LOCALES } from "@plugins/builtin/git/locales/index.ts";
 import { gitMainPlugin } from "@plugins/builtin/git/main/index.ts";
 import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
@@ -15,23 +17,36 @@ export type BuiltinPluginSource = Extract<
   main: MainPluginModule;
 };
 
-function pluginPackageBaseDir(): string {
-  const url = new URL("../../plugins/builtin/git/", import.meta.url);
+function pluginPackageBaseDir(pluginId: "files" | "git"): string {
+  const urlByPlugin = {
+    files: new URL("../../plugins/builtin/files/", import.meta.url),
+    git: new URL("../../plugins/builtin/git/", import.meta.url),
+  } satisfies Record<typeof pluginId, URL>;
+  const url = urlByPlugin[pluginId];
   if (url.protocol === "file:") {
     return fileURLToPath(url);
   }
-  return resolve(process.cwd(), "src/plugins/builtin/git");
+  return resolve(process.cwd(), `src/plugins/builtin/${pluginId}`);
 }
 
 export const BUILTIN_PLUGIN_SOURCES = [
   {
-    baseDir: pluginPackageBaseDir(),
+    baseDir: pluginPackageBaseDir("git"),
     defaultEnabled: true,
     id: GIT_PLUGIN_MANIFEST.id,
     kind: "builtin",
     locales: GIT_PLUGIN_LOCALES,
     main: gitMainPlugin,
     manifest: GIT_PLUGIN_MANIFEST,
+  },
+  {
+    baseDir: pluginPackageBaseDir("files"),
+    defaultEnabled: true,
+    id: FILES_PLUGIN_MANIFEST.id,
+    kind: "builtin",
+    locales: {},
+    main: filesMainPlugin,
+    manifest: FILES_PLUGIN_MANIFEST,
   },
 ] satisfies readonly BuiltinPluginSource[];
 

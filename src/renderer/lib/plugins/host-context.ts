@@ -7,7 +7,9 @@ import type {
   RendererPluginQuickPickItem,
   RendererPluginQuickPickSection,
 } from "@plugins/api/renderer.ts";
+import type { FileListRequest } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import { toast } from "sonner";
@@ -33,6 +35,7 @@ import {
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
+import { createPluginGitContext } from "./host-git-context.ts";
 import {
   getPluginPanelRegistrations,
   registerPluginPanel,
@@ -166,6 +169,18 @@ function assertDeclaredContribution(
   }
 }
 
+function assertPluginCapability(
+  entry: PluginRegistryEntry | undefined,
+  capability: PierCapability
+): void {
+  if (!entry || entry.effectivePermissions.includes(capability)) {
+    return;
+  }
+  throw new Error(
+    `plugin capability not granted: ${entry.manifest.id}:${capability}`
+  );
+}
+
 function adaptQuickPickItem(item: RendererPluginQuickPickItem): QuickPickItem {
   return {
     id: item.id,
@@ -253,6 +268,19 @@ function pluginPanelDescriptor(
   };
 }
 
+function normalizeFileListRequest(
+  requestOrRoot: FileListRequest | string,
+  options?: { path?: string }
+): FileListRequest {
+  if (typeof requestOrRoot !== "string") {
+    return requestOrRoot;
+  }
+  return {
+    path: options?.path ?? "",
+    root: requestOrRoot,
+  };
+}
+
 function openPluginPanel(
   panelId: string,
   options: { context?: PanelContext } = {}
@@ -270,18 +298,23 @@ function openPluginPanel(
     panelId,
     pluginPanelDescriptor(panelId, registration, context)
   );
+  const params = {
+    ...(registration?.getParams?.() ?? {}),
+    ...(context ? { context } : {}),
+  };
+  const hasParams = Object.keys(params).length > 0;
   const existing = api.panels.find((panel) => panel.id === panelId);
   if (existing) {
+    existing.api.updateParameters(params);
     activateWorkspacePanel(api, existing.id, { reveal: "always" });
     return;
   }
-  const params = registration?.getParams?.();
   api.addPanel({
     id: panelId,
     component: panelId,
     title: resolveRegistrationTitle(registration, panelId),
     position: { direction: "right" },
-    ...(params ? { params } : {}),
+    ...(hasParams ? { params } : {}),
   });
   scheduleRevealDockviewTabByPanelId(panelId);
 }
@@ -364,6 +397,34 @@ export function createRendererPluginContext(
         return terminalStatusItemRegistry.register(item);
       },
     },
+    files: {
+      list: (requestOrRoot, options) => {
+        assertPluginCapability(entry, "file:read");
+        return window.pier.files.list(
+          normalizeFileListRequest(requestOrRoot, options)
+        );
+      },
+      move: (request) => {
+        assertPluginCapability(entry, "file:write");
+        return window.pier.files.move(request);
+      },
+      readText: (request) => {
+        assertPluginCapability(entry, "file:read");
+        return window.pier.files.readText(request);
+      },
+      rename: (request) => {
+        assertPluginCapability(entry, "file:write");
+        return window.pier.files.rename(request);
+      },
+      trash: (request) => {
+        assertPluginCapability(entry, "file:write");
+        return window.pier.files.trash(request);
+      },
+      writeText: (request) => {
+        assertPluginCapability(entry, "file:write");
+        return window.pier.files.writeText(request);
+      },
+    },
     worktrees: {
       check: (request) => window.pier.worktrees.check(request),
       create: (request) => window.pier.worktrees.create(request),
@@ -372,23 +433,6 @@ export function createRendererPluginContext(
       prune: (request) => window.pier.worktrees.prune(request),
       remove: (request) => window.pier.worktrees.remove(request),
     },
-    git: {
-      abortMerge: (cwd) => window.pier.git.abortMerge(cwd),
-      abortRebase: (cwd) => window.pier.git.abortRebase(cwd),
-      continueRebase: (cwd) => window.pier.git.continueRebase(cwd),
-      getStatus: (cwd) => window.pier.git.getStatus(cwd),
-      getRepoInfo: (cwd) => window.pier.git.getRepoInfo(cwd),
-      listBranches: (cwd, options) =>
-        window.pier.git.listBranches(cwd, options),
-      searchBranches: (cwd, options) =>
-        window.pier.git.searchBranches(cwd, options),
-      listStashes: (cwd) => window.pier.git.listStashes(cwd),
-      merge: (cwd, branch) => window.pier.git.merge(cwd, branch),
-      popStash: (cwd, index) => window.pier.git.popStash(cwd, index),
-      rebase: (cwd, branch) => window.pier.git.rebase(cwd, branch),
-      stash: (cwd, options) => window.pier.git.stash(cwd, options),
-      undoLastCommit: (cwd) => window.pier.git.undoLastCommit(cwd),
-      watch: (gitRoot, listener) => window.pier.git.watch(gitRoot, listener),
-    },
+    git: createPluginGitContext(entry, assertPluginCapability),
   };
 }

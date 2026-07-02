@@ -6,6 +6,7 @@ import {
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
@@ -104,6 +105,7 @@ function createPierAppCore(): PierAppCore {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
+    files: createFileService(),
     preferences: createPreferencesService({ eventBus }),
     secrets: createSecretsStore(),
     processEnvironment: createProcessEnvironmentService(),

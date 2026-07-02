@@ -33,6 +33,7 @@ export const pierCapabilitySchema = z.enum([
   "git:read",
   "git:write",
   "file:read",
+  "file:write",
   "transcript:read",
   "profile:read",
   "secret:read",
@@ -80,6 +81,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     // 与 worktree:write 同等待遇:主体提供能力,二次确认由插件 UI 负责
     "git:read",
     "git:write",
+    "file:read",
+    "file:write",
   ],
   "cli-local": [
     "app:read",

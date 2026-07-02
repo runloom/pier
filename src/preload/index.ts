@@ -44,7 +44,8 @@ import type {
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
-import { gitApi } from "./git-api.ts";
+import { filesApi, type PierFilesAPI } from "./file-api.ts";
+import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
 export interface WindowInfo {
@@ -115,6 +116,7 @@ export interface PierPluginsAPI {
   list: () => Promise<PluginRegistryListResult>;
 }
 
+export type { PierFilesAPI } from "./file-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
 export type { PierWorktreesAPI } from "./worktree-api.ts";
 
@@ -174,9 +176,10 @@ export interface PierWindowAPI {
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<WindowCreateResult>;
+  files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
   getWindowContext: () => Promise<WindowContext>;
-  git: import("./git-api.ts").PierGitAPI;
+  git: PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
@@ -437,6 +440,7 @@ const api: PierWindowAPI = {
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:focus", windowId),
+  files: filesApi,
   getWindowContext: () => ipcRenderer.invoke("pier://window:context"),
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),

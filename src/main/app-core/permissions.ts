@@ -46,6 +46,12 @@ const REQUIRED_CAPABILITIES_BY_COMMAND: Record<
   "workspace.layout.clear": ["workspace:write"],
   "workspace.layout.read": ["workspace:read"],
   "workspace.layout.save": ["workspace:write"],
+  "file.list": ["file:read"],
+  "file.readText": ["file:read"],
+  "file.writeText": ["file:write"],
+  "file.rename": ["file:write"],
+  "file.move": ["file:write"],
+  "file.trash": ["file:write"],
   // Git 读写分开授权:读命令 git:read, 写命令 git:write。
   "git.getCommit": ["git:read"],
   "git.getCommitPatch": ["git:read"],

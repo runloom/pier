@@ -46,7 +46,7 @@
   "dependencies": {
     "@leeoniya/ufuzzy": "1.0.19",
     "@pier/ui": "workspace:*",
-    "@pierre/theme": "^1.0.3",
+    "@pierre/theme": "^1.1.0",
     "@shikijs/themes": "^4.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
@@ -103,7 +103,10 @@
       "electron",
       "electron-winstaller",
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {
+      "@pierre/trees@1.0.0-beta.5": "patches/@pierre__trees@1.0.0-beta.5.patch"
+    }
   },
   "$pin-policy": "exact pin 到 install 当日 latest stable; 不用 latest 字面; 升级走 plan unlock"
 }

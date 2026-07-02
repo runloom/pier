@@ -1,5 +1,13 @@
 import { z } from "zod";
 import {
+  fileListRequestSchema,
+  fileMoveRequestSchema,
+  fileReadTextRequestSchema,
+  fileRenameRequestSchema,
+  fileTrashRequestSchema,
+  fileWriteTextRequestSchema,
+} from "./file.ts";
+import {
   getFileContentOptionsSchema,
   gitCommitOptionsSchema,
   gitCreateBranchOptionsSchema,
@@ -177,6 +185,24 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.disable"),
+  }),
+  fileListRequestSchema.extend({
+    type: z.literal("file.list"),
+  }),
+  fileReadTextRequestSchema.extend({
+    type: z.literal("file.readText"),
+  }),
+  fileWriteTextRequestSchema.extend({
+    type: z.literal("file.writeText"),
+  }),
+  fileRenameRequestSchema.extend({
+    type: z.literal("file.rename"),
+  }),
+  fileMoveRequestSchema.extend({
+    type: z.literal("file.move"),
+  }),
+  fileTrashRequestSchema.extend({
+    type: z.literal("file.trash"),
   }),
   // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),

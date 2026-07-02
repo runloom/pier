@@ -9,6 +9,7 @@ import {
   type PanelContext,
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
+import { FileServiceError } from "../services/file-service.ts";
 import { GitExecError } from "../services/git-exec.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
@@ -18,6 +19,7 @@ import {
   commandSuccess as success,
 } from "./command-results.ts";
 import type { PierCoreServices } from "./command-router-services.ts";
+import { executeFileCommand } from "./file-commands.ts";
 import { executeGitCommand } from "./git-commands.ts";
 import {
   executePanelFocusCommand,
@@ -341,6 +343,36 @@ async function executeTerminalCommand(
   }
 }
 
+async function executeCommandByDomain(
+  requestId: string,
+  command: PierCommand,
+  clients: PierClientRegistry,
+  services: PierCoreServices,
+  context: CommandExecutionContext
+): Promise<PierCommandResult | null> {
+  const executors = [
+    (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeFileCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeRunCommand(requestId, cmd, services, context),
+    (cmd: PierCommand) =>
+      executeTerminalCommand(requestId, cmd, services, context),
+    (cmd: PierCommand) =>
+      executeAppStateCommand(requestId, cmd, clients, services),
+    (cmd: PierCommand) =>
+      executeWindowWorkspaceCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
+  ];
+  for (const executor of executors) {
+    const result = await executor(command);
+    if (result) {
+      return result;
+    }
+  }
+  return null;
+}
+
 async function executeKnownCommand(
   requestId: string,
   command: PierCommand,
@@ -349,25 +381,15 @@ async function executeKnownCommand(
   context: CommandExecutionContext = {}
 ): Promise<PierCommandResult> {
   try {
-    const executors = [
-      (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
-      (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
-      (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
-      (cmd: PierCommand) =>
-        executeRunCommand(requestId, cmd, services, context),
-      (cmd: PierCommand) =>
-        executeTerminalCommand(requestId, cmd, services, context),
-      (cmd: PierCommand) =>
-        executeAppStateCommand(requestId, cmd, clients, services),
-      (cmd: PierCommand) =>
-        executeWindowWorkspaceCommand(requestId, cmd, services),
-      (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
-    ];
-    for (const executor of executors) {
-      const result = await executor(command);
-      if (result) {
-        return result;
-      }
+    const result = await executeCommandByDomain(
+      requestId,
+      command,
+      clients,
+      services,
+      context
+    );
+    if (result) {
+      return result;
     }
     return failure(
       requestId,
@@ -377,6 +399,9 @@ async function executeKnownCommand(
   } catch (err) {
     if (err instanceof WorktreeServiceError) {
       return failure(requestId, err.reason, err.message);
+    }
+    if (err instanceof FileServiceError) {
+      return failure(requestId, "invalid_command", err.message);
     }
     if (err instanceof PluginServiceError) {
       const code =
