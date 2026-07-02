@@ -26,61 +26,88 @@ export interface CreatePreferencesServiceArgs {
   ) => Promise<ProjectPreferences>;
 }
 
+function stripUndefinedPatchFirstHalf(
+  patch: ProjectPreferencesPatch,
+  result: Partial<ProjectPreferences>
+): void {
+  if (patch.agentCommandOverrides !== undefined) {
+    result.agentCommandOverrides = patch.agentCommandOverrides;
+  }
+  if (patch.agentDefaultArgs !== undefined) {
+    result.agentDefaultArgs = patch.agentDefaultArgs;
+  }
+  if (patch.agentDefaultEnv !== undefined) {
+    result.agentDefaultEnv = patch.agentDefaultEnv;
+  }
+  if (patch.defaultAgentId !== undefined) {
+    result.defaultAgentId = patch.defaultAgentId;
+  }
+  if (patch.disabledAgentIds !== undefined) {
+    result.disabledAgentIds = patch.disabledAgentIds;
+  }
+  if (patch.language !== undefined) {
+    result.language = patch.language;
+  }
+  if (patch.monoFontFamily !== undefined) {
+    result.monoFontFamily = patch.monoFontFamily;
+  }
+  if (patch.monoFontSize !== undefined) {
+    result.monoFontSize = patch.monoFontSize;
+  }
+  if (patch.stylePresetId !== undefined) {
+    result.stylePresetId = patch.stylePresetId;
+  }
+  if (patch.terminalCursorBlink !== undefined) {
+    result.terminalCursorBlink = patch.terminalCursorBlink;
+  }
+}
+
+function stripUndefinedPatchSecondHalf(
+  patch: ProjectPreferencesPatch,
+  result: Partial<ProjectPreferences>
+): void {
+  if (patch.terminalCursorStyle !== undefined) {
+    result.terminalCursorStyle = patch.terminalCursorStyle;
+  }
+  if (patch.terminalNewCwdPolicy !== undefined) {
+    result.terminalNewCwdPolicy = patch.terminalNewCwdPolicy;
+  }
+  if (patch.terminalPasteProtection !== undefined) {
+    result.terminalPasteProtection = patch.terminalPasteProtection;
+  }
+  if (patch.terminalScrollbackMb !== undefined) {
+    result.terminalScrollbackMb = patch.terminalScrollbackMb;
+  }
+  if (patch.theme !== undefined) {
+    result.theme = patch.theme;
+  }
+  if (patch.uiFontFamily !== undefined) {
+    result.uiFontFamily = patch.uiFontFamily;
+  }
+  if (patch.userKeymap !== undefined) {
+    result.userKeymap = patch.userKeymap;
+  }
+  if (patch.windowZoomLevel !== undefined) {
+    result.windowZoomLevel = patch.windowZoomLevel;
+  }
+  if (patch.worktreeBranchPrefix !== undefined) {
+    result.worktreeBranchPrefix = patch.worktreeBranchPrefix;
+  }
+  if (patch.worktreeCopyPatterns !== undefined) {
+    result.worktreeCopyPatterns = patch.worktreeCopyPatterns;
+  }
+  if (patch.worktreeSetupCommand !== undefined) {
+    result.worktreeSetupCommand = patch.worktreeSetupCommand;
+  }
+}
+
 function stripUndefinedPatch(
   patch: ProjectPreferencesPatch
 ): Partial<ProjectPreferences> {
-  return {
-    ...(patch.agentCommandOverrides !== undefined && {
-      agentCommandOverrides: patch.agentCommandOverrides,
-    }),
-    ...(patch.agentDefaultArgs !== undefined && {
-      agentDefaultArgs: patch.agentDefaultArgs,
-    }),
-    ...(patch.agentDefaultEnv !== undefined && {
-      agentDefaultEnv: patch.agentDefaultEnv,
-    }),
-    ...(patch.defaultAgentId !== undefined && {
-      defaultAgentId: patch.defaultAgentId,
-    }),
-    ...(patch.disabledAgentIds !== undefined && {
-      disabledAgentIds: patch.disabledAgentIds,
-    }),
-    ...(patch.language !== undefined && { language: patch.language }),
-    ...(patch.monoFontFamily !== undefined && {
-      monoFontFamily: patch.monoFontFamily,
-    }),
-    ...(patch.monoFontSize !== undefined && {
-      monoFontSize: patch.monoFontSize,
-    }),
-    ...(patch.stylePresetId !== undefined && {
-      stylePresetId: patch.stylePresetId,
-    }),
-    ...(patch.terminalCursorBlink !== undefined && {
-      terminalCursorBlink: patch.terminalCursorBlink,
-    }),
-    ...(patch.terminalCursorStyle !== undefined && {
-      terminalCursorStyle: patch.terminalCursorStyle,
-    }),
-    ...(patch.terminalNewCwdPolicy !== undefined && {
-      terminalNewCwdPolicy: patch.terminalNewCwdPolicy,
-    }),
-    ...(patch.terminalPasteProtection !== undefined && {
-      terminalPasteProtection: patch.terminalPasteProtection,
-    }),
-    ...(patch.terminalScrollbackMb !== undefined && {
-      terminalScrollbackMb: patch.terminalScrollbackMb,
-    }),
-    ...(patch.theme !== undefined && { theme: patch.theme }),
-    ...(patch.uiFontFamily !== undefined && {
-      uiFontFamily: patch.uiFontFamily,
-    }),
-    ...(patch.userKeymap !== undefined && {
-      userKeymap: patch.userKeymap,
-    }),
-    ...(patch.windowZoomLevel !== undefined && {
-      windowZoomLevel: patch.windowZoomLevel,
-    }),
-  };
+  const result: Partial<ProjectPreferences> = {};
+  stripUndefinedPatchFirstHalf(patch, result);
+  stripUndefinedPatchSecondHalf(patch, result);
+  return result;
 }
 
 export function createPreferencesService({
