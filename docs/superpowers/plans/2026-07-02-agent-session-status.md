@@ -2877,3 +2877,150 @@ git commit -m "chore(agent-status): lint fixes after full check"
 - **hook 命令依赖 curl**：macOS 自带，AGENTS.md 声明 ghostty requires macOS，可依赖。
 - **多 agent 支持**：v1 只装 Claude Code hook；codex/gemini 等靠标题兜底。hook 事件契约的 `agent` 字段已支持全目录 33 种，后续按 agent 加装即可。
 - **reconcile 孤儿路径**：C 方案 reload 零销毁下 `reconcileTerminals` 清掉的孤儿 surface 也会触发 processClosed 回调（Swift close 路径统一），agent 会话随之清理；若实现中发现该路径不触发回调，在 reconcile handler 补调 `panelClosed`。
+
+---
+
+## 第二阶段：全 agent 目录 hook 集成（2026-07-02 追加）
+
+**背景**：v1 仅 Claude 有 hook 集成, 其余 agent 靠标题启发式（多数 agent 不设标题字形→不准）。经 orca（14 config 安装器+4 插件型）与 loomdesk（20 注册集成+4 未注册模块）逐 agent 规格提取对照, 确定移植方案。
+
+**架构决策**：
+- 保留 loomdesk 的「安装时映射」模式——hook 命令直接携带 pier 规范事件名, loopback/聚合器零改动（orca 的服务端逐 agent normalizer 3400 行方案弃用）。
+- 框架（主会话实现）：`integrations/types.ts`（AgentHookIntegration 契约, full/coarse 两档）+ `shared.ts`（pierHookCommand 泛化 agentId、嵌套 schema 工厂、文本块原语、JSON IO 纪律）+ `registry.ts`（installAll/uninstallAll, detect 门控, 逐集成故障隔离）。claude 重构为第一个集成（行为不变）。
+- **适配器并行实现**（用户提议的正确拆法）：每 agent 一个独立文件 + 独立测试, 子代理并行, 注册表由主会话统一挂载, 零文件冲突。
+
+**Wave 1（14 agents, 4 并行子代理）**：
+- Claude-schema 族：openclaude, devin(JSONC+无matcher+claude双报注明), droid(~/.factory, 弃SubagentStop), command-code(matcher=".*", coarse), grok(专用文件), qwen-code(Error 非 StopFailure)
+- 自有 schema：cursor(顶层command+version, 事件最全), copilot(bash/timeoutSec, disableAllHooks守卫), crush(扁平字符串映射, coarse, 不占用户键)
+- Google+Codex：gemini(timeout毫秒陷阱, 无权限hook), antigravity(loomdesk 路径, 禁装PreToolUse——会阻塞权限决策), codex(fork hooks.json, 无SessionEnd, 上游忽略无害)
+- TOML/YAML：kimi(双路径探测 ~/.kimi-code|~/.kimi, [[hooks]]标记块), goose(YAML块, 已有用户hooks:键跳过, coarse)
+
+**Wave 2（已完成）**：插件载体 6 家——amp（TS 插件入 amp 插件目录, tool.call 返回 allow 不阻塞）、opencode（JS 插件放 ~/.pier/plugins + config plugin 数组注册）、mimo-code（opencode 系 fork, 插件目录自动加载免注册）、omp/pi（整文件 TS 扩展, 无顶层 import 防 electron-vite shim 陷阱）、hermes（Python 插件目录 + config.yaml enabled 注册, YAML 窄失败语义）。全部内嵌 JS fetch/Python urllib 直接 POST loopback（读 PIER_* env, 缺失静默, 1.5s 超时吞异常）；marker 归属、非托管文件绝不覆盖、卸载删托管物+清注册。cline 缓做（符号链接载体无法传参）。
+
+**收口结果**：registry 挂 21 集成；180 测试文件 / 1459 用例全绿, check exit 0；真机验证——启动对齐自动为本机 14 家已检测 agent 写入 hook（claude/openclaude/devin/droid/command-code/grok/cursor/copilot/gemini/codex/kimi + amp/opencode/hermes 插件）, 未装的 6 家被 detect() 正确跳过。
+
+**无机制（标题/进程兜底, 文档化）**：aider, ante, kilo, kiro, aug, autohand, codebuff, continue, mistral-vibe, rovo, openclaw——两参考项目也仅进程名探测。
+
+**已知取舍**：devin 默认导入 ~/.claude hooks 存在双报（聚合器同 key 幂等, 接受）；catalog statusSupport 字段暂缓（无消费方, 待进程名识别特性一起做）。
+
+### 官方来源核查波（2026-07-02, 6 组并行核查全目录）
+
+逐 agent 对照官方文档/源码仓库（拒绝二手来源）的裁决与动作：
+
+**官方确认正确（9）**：claude, openclaude（Gitlawb fork 源码逐项核）, devin（PostCompaction 为官方真名; matcher-as-regex 获官方原文）, gemini（timeout 毫秒单位获官方 reference 原文确认）, cursor（14 事件全真; 另有 preCompact 等可加）, copilot（bash/timeoutSec/disableAllHooks 全实; notification/preCompact 可加）, amp（PluginEventMap 逐名核）, pi（extensions 文档逐名核）, hermes（NousResearch hermes-agent 源码级核）。
+
+**修正波（并行执行中）**：droid（官方路径 ~/.factory/hooks.json, PermissionRequest 系杜撰删除）；antigravity（真路径 ~/.gemini/config/hooks.json, 真事件 PreInvocation/PostInvocation/PreToolUse/PostToolUse/Stop, PreToolUse 阻塞事故 cmux#4768 实证→仅用 PostToolUse 观测）；crush（官方仅 PreToolUse 一个事件, crush.json 对象数组 schema）；kimi（真机制为 ~/.config/kimi/hooks/*/HOOK.md 文件制, kebab-case 触发器, dogfooding 阶段标注; 附旧 TOML 死配置遗留清理）；goose（真机制为 ~/.agents/plugins/ Open Plugins 插件包, PascalCase 11 事件, 升 full; 附 config.yaml 遗留清理）；qwen-code（Error→StopFailure, loomdesk 搞反）；codex（上游已原生支持 hooks, 注释纠偏+trust 审查 UX 注明）；command-code（注释纠偏+补 SessionStart）；grok（路径获官方 llms.txt 确认, 事件表标注 best-effort——xAI 刻意只发 in-app 文档）；opencode（prompt.submit/permission.updated 两处以 SDK 生成类型为准）；mimo-code（prompt.submit）。
+
+**原"不可支持"翻案, 新增集成（并行执行中）**：aug/Auggie（官方 hooks, Claude 式）, autohand（官方 hooks 文档自带 curl POST 示例）, mistral-vibe（实验性 hooks.toml, 需用户开 enable_experimental_hooks）, kiro（~/.kiro/agents/*.json hooks 字段, stdin JSON）, cline（官方文件制 hooks 传 stdin JSON——loomdesk 符号链接 hack 不必要）, kilo（TS 插件事件总线 + 进程内 fetch）, aider（唯一 notifications_command 粗信号→可靠 Stop, 与标题启发式互补）。
+
+**确认不可支持（终态定案）**：codebuff——结构化事件流仅存在于 SDK print-mode（非交互 CLI 不可挂钩）, 若未来 Pier 增加 SDK 驱动的 headless 面板类型可再启用；continue——无任何机制且项目已归档（被 Cursor 收购停维护）；openclaw——品类错配（编排守护进程, 非 PTY coding agent, 建议目录重新归类）。
+
+**缓做（记录待办）**：rovo——官方 eventHooks 真实存在（Atlassian 博客+第三方 Peon Ping 先例）但 schema 未公开, 需本机 /hooks 实证 spike 后接入；ante——事件流仅存在于 `ante serve` 守护模式, 与 PTY hook 传输模型不匹配, 需 daemon-bridge 架构（M 级)。
+
+
+### 启动即亮图标（2026-07-02, 用户反馈「图标要对话后才变」）
+
+实证：expect 伪 TTY 无头拉起真实 claude + 捕获服务器——`SessionStart` hook 在交互式启动时确实会发, 但 hook 执行存在 ~2s 延迟；而 claude 启动瞬间（毫秒级）就设置了标题 `✳ Claude Code`, 此前被「idle 标题不建会话」防误报规则丢弃。
+
+修复：**标题身份识别**（orca agent-name-token-match 思路）——`detectAgentIdFromTitle` 从目录派生 token 匹配器（id/label/launchCmd 首词, 词边界正则防 claudette/my-aiderish/路径误报, 模块级预编译）；聚合器放行「带身份的 idle 标题」建会话并补全缺失 agentId（不覆盖 hook 已确认身份）。收益：图标亚秒级点亮（快于 hook 2s）；无 hook 机制的 agent（aider 等）从通用 Bot 图标升级为真实品牌图标。无身份 idle 标题仍不建会话（防误报不回退）。聚合器随之二次拆分（entry 工厂与回合记账迁至 model 模块, 455 行 < 500 硬限）。
+
+### 启动身份三层化：launcher 先验 + 插件载入即发（2026-07-02, 用户反馈「运行 opencode 后图标没变」）
+
+用户追问「业界如何做启动即换图标」——答案是**客户端先验身份**：orca 在 launcher 生成 launchToken 时就知道要启动哪个 agent（不等 agent 自己上报）；loomdesk 解析启动命令行做同样的事。据此把启动身份收敛为三层, 各层独立生效、按到达先后互补：
+
+1. **launcher 先验（0ms, 最快）**：`prepareLaunch` 注册 `{agentId, command}` → `resolveCreateTerminalLaunch` 透传 `launchAgentId` → PTY 创建成功即调 `agentSessionService.agentLaunched(windowId, panelId, agentId)`（清冷却、建/显 entry, source="launch"）。从 Pier 的 agent launcher 启动的面板, 图标在进程 spawn 的同一 tick 点亮。
+2. **标题身份（亚秒级）**：`detectAgentIdFromTitle`, 覆盖用户手敲命令启动的场景（见上节）。
+3. **agent 侧信号（1-2s, 语义最准）**：hooks / 插件载入即发 SessionStart。
+
+**opencode 发现目录改写**：实证发现 config `plugin` 数组的绝对路径注册在当前 opencode 版本**不生效**（官方文档也只承诺自动发现目录）——这就是「运行 opencode 图标不变」的根因。改为部署 `pier-agent-status.js` 到 `<configRoot>/plugins/` 自动发现目录, 完全不碰 config `plugin` 数组；旧布局（config 注册 + ~/.pier/plugins/opencode-agent-status.js）作遗留清理。**踩坑记录**：遗留清理匹配器最初按裸文件名 `opencode-agent-status.js` 匹配, 会误删 loomdesk 的同名注册条目（loomdesk 部署在 ~/.loomdesk/plugins/ 同文件名）——收窄为只认 `.pier/plugins/` 路径前缀。真机验证：启动对齐后 config 中 Pier 旧条目已清、loomdesk 条目保留；expect 伪 TTY 拉起真实 opencode, 捕获服务器收到**恰好一条** SessionStart（旧双注册时代发两条）。
+
+**载入即发波**：7 家插件载体（opencode/mimo-code/kilo/amp/omp/pi/hermes）的插件 factory 体在返回事件订阅表之前 `await emitPierEvent("SessionStart")`——插件加载时点 = agent 进程启动时点, 无需等首个会话/消息。聚合器侧 SessionStart 属 `SESSION_CREATING_EVENTS` 且豁免所有冷却, 语义现成。
+
+### kimi 实证翻案：TOML [[hooks]] 才是真机制（2026-07-02, 用户反馈「kimi 运行时没状态」）
+
+上一波「官方核查修正波」把 kimi 从 config.toml TOML 方案改成 `~/.config/agents/hooks/<name>/HOOK.md` 文件制协议——这是**错的**。当时的依据是 kimi-cli PR#1131 "AgentHooks for dogfooding"（agenthooks/docs/en/SPECIFICATION.md 全文引用）——但那个 PR 最终**被关闭未合并**（state=closed, merged=false）。kimi-cli main 分支上另有一版**完全不同**的 hook 系统落地了：`src/kimi_cli/hooks/config.py` 定义 `HookDef(event, command, matcher, timeout)`，`docs/en/configuration/config-files.md#hooks` 官方文档原文示范：
+
+```toml
+[[hooks]]
+event = "PreToolUse"
+matcher = "Shell"
+command = ".kimi/hooks/safety-check.sh"
+timeout = 10
+```
+
+- 载体：`~/.kimi/config.toml`（或 `$KIMI_SHARE_DIR/config.toml`），顶层 `[[hooks]]` 数组表
+- 事件名：**Claude 式 CamelCase**——SessionStart/SessionEnd/UserPromptSubmit/PreToolUse/PostToolUse/PostToolUseFailure/Stop/StopFailure/SubagentStart/SubagentStop/PreCompact/PostCompact/Notification（13 种）
+- timeout：**秒**制（1-600, 默认 30），与我之前误信 PR#1131 的毫秒制截然不同
+- payload：hook 进程从 **stdin 读取 JSON**（Claude 式）——我们只做旁路 POST 上报，不消费
+
+**回滚 + 遗留清理**：kimi.ts 改回 TOML `[[hooks]]` 方案（结构与我最初实现类似, 但事件名换成 Claude 式而非 kebab-case）；install/uninstall 内均检查并清理上一波误写入 `~/.config/agents/hooks/pier-<trigger>/HOOK.md` 的死目录（marker 检查后再删）。真机验证：Pier 启动对齐后 `~/.kimi/config.toml` 出现完整 pier marker 块 12 条 `[[hooks]]`；旧 `~/.config/agents/hooks/pier-*` 目录被清理干净；expect 伪 TTY 拉起真实 kimi，捕获服务器收到 **SessionStart**（启动瞬间）+ **SessionEnd**（退出瞬间），签名与 payload 结构正确。
+
+**教训**：核查 PR 别只看 body 描述, 必须验 merged=true 且 main 分支代码存在——PR#1131 是 "for dogfooding purposes" 的探索性 PR，被 kimi 团队自己关闭后另起炉灶做了 Claude-兼容方案。以后碰上「官方文档引用不到」的仓库需 `gh api pulls/N --jq '.merged'` 强验合并态。
+
+### 第二轮全面核查:6 组并行 Explore + 主会话真官方源验证(2026-07-02, 用户「再整体排查其他 agent」)
+
+kimi 翻案暴露出上一波「官方核查修正波」深度不够,发 6 组并行 Explore 子代理按类别分工核查 28 家已接入 + 3 家延迟。每组严格按 **PR merged=true / main 分支源码存在 / 事件枚举源码级验证 / timeout 单位 / payload 交付** 五点复核。子代理报告回来后主会话对**有分歧/需再深查**的项目自查:cursor(子代理找错组织名 cursor-ai 不存在——实际是 cursor)、devin(PostCompaction 疑似杜撰)、codex compact/subagent、mimo-code/kilo permission、aug PromptSubmit、gemini/antigravity timeout 单位、kimi Notification。
+
+**主会话官方源级裁决**:
+- **cursor**:cursor.com/docs/cli/changelog 官方 changelog 逐条命中(session/prompt/tool/shell/mcp/agent/subagent/stop/precompact 全在),config path `~/.cursor/hooks.json` + schema `{version:1, hooks:{eventName:[{command}]}}` 与 superagent-ai/superagent 官方样例逐字对齐——**OK**。
+- **devin**:docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks 官方文档确认 8 事件全集含 **PostCompaction**——**OK**,子代理误报。
+- **codex**:openai/codex main 分支 `codex-rs/hooks/src/events/mod.rs` 源码级枚举 7 模块 = 8 事件(SessionStart/UserPromptSubmit/PreToolUse/PostToolUse/PermissionRequest/Stop/PreCompact/PostCompact),**pier 装的 SubagentStart/SubagentStop 属杜撰死条目**(codex 通过 hook payload 里 `SubagentCommandInputFields` 字段透传 sub-agent 上下文,而非独立事件类型)——已删;PreCompact/PostCompact 官方源级支持但 pier 缺装——已补,均映射 processing。
+- **mimo-code**:XiaomiMiMo/MiMo-Code main 分支 `packages/sdk/js/src/gen/types.gen.ts` 源码级确认 `EventPermissionUpdated`/`EventPermissionReplied`——pier 之前用 `permission.asked`(mimo app 层名字,plugin 收不到),已改为 `permission.updated`。
+- **kilo**:注释里已明确 kilo 官方就是 `permission.asked`(与 opencode/mimo SDK 不同名字空间),**OK**。
+- **aug**:augmentcode/auggie CHANGELOG.md 官方原文 "Added PromptSubmit hooks and support for updating input from PreToolUse hooks",**pier 缺装 UserPromptSubmit**——已补;CHANGELOG 里 "PreToolUse/PostToolUse hooks now run during sub-agent sessions" 表明 Subagent 是既有事件在子上下文复用而非独立事件,不装。
+- **gemini**:google-gemini/gemini-cli main 分支 `docs/hooks/index.md` 官方原文 "timeout number Execution timeout in milliseconds (default: 60000)" 确认毫秒制,pier 现值 10000ms **OK**。
+- **antigravity**:继承 Gemini 毫秒制,pier 未显式覆盖导致工厂默认秒制 5 变成 5ms 立即超时——**已补** `timeoutSeconds: 5000`(=5s)。
+- **kimi**:MoonshotAI/kimi-cli main 分支 `src/kimi_cli/hooks/events.py` 有 Notification 事件,但源码触发点在 llm 通知场景(idle/auth_success 之类),与状态语义无关——**刻意不装**(与 claude 同理),注释补明确。
+- **kiro**:子代理 hallucination 报告的 kirodotai/kirodotdev 拼写坑——kiro.ts 实际只引用 kiro.dev 域名不涉及 GitHub 组织,无实动作。
+- **grok**:官方 hooks schema 未公开,置信度低,**保持现状 + TODO**(装了官方也不吐 schema 无法源级验证)。
+- **copilot**:官方 CLI 闭源,pier 实现基于公开 install/文档描述——**保持现状,可选真机验**。
+- **openclaude/droid/command-code/qwen-code/crush/hermes/omp/pi/goose/aider/mistral-vibe/cline/claude**:**全部 OK**,官方源码/文档对齐。
+- **amp**:`tool.call` 返回 `{action:"allow"}` 是否阻塞需真机 spike——不影响当前状态语义(1.5s 超时兜底 fire-and-forget),**保持**。
+- **rovo/ante/codebuff**:保持既有延迟/不可支持裁决。
+
+**最终修 5 处**:mimo-code permission 名 / antigravity timeoutSeconds / aug 补 UserPromptSubmit / codex 删 Subagent 补 Compact / kimi 补注释。测试同步更新:mimo-code / aug / codex 三处 assertion 对齐;1614/1614 + check 0。
+
+**教训沉淀**:官方源判定必须走三步——(1) `gh api pulls/N --jq '.merged'` 验合并态;(2) main 分支下枚举文件源码级 grep;(3) 官方 docs 站或 changelog 二次交叉。仅凭 body 描述、单一二手报告、想当然从家族 fork 搬事件名(codex 抄 claude 的 SubagentStart)都会踩坑。
+
+### 遗留清理副 bug: 事件表更迭时 pier 旧条目残留(2026-07-02)
+
+修 codex 事件表时(删 SubagentStart/SubagentStop 补 PreCompact/PostCompact)本机 config 复查发现 pier 上一版装的 SubagentStart/SubagentStop 条目没被清除。根因:`withPierNestedHooks` 只处理当前 spec 内的事件,**不会扫废弃事件**下的历史 pier 条目——蒸个 spec 事件表长期不变时无害, 但一旦事件表更迭(如本次 codex)就会留下永久性死条目。
+
+**修复**:`createNestedJsonIntegration` 的 install 改为 `withPierNestedHooks(withoutPierNestedHooks(s), spec)`——先剔全部 pier 条目再按当前 spec 写入。同步更新 `installClaudeHooks / installCodexHooks / installGeminiHooks` 兼容导出使其行为一致(测试路径也走 compose)。回归测试:codex 装载一个含"pier 遗留 SubagentStart 条目 + 用户其他非 pier 条目"的 config → 装载后 pier 条目被清、用户条目保留、SubagentStop 全 pier 条目 → 键被删除、当前 spec 全部 8 事件正常写入。
+
+**真机验证**:pier 重启后 `~/.codex/hooks.json` 的 SubagentStart/SubagentStop 键剩下的都是 loomdesk 的非 pier 条目(用户其他工具),pier 装过的部分已扫掉;当前 spec 事件(SessionStart/UserPromptSubmit/PreToolUse/PostToolUse/PermissionRequest/**PreCompact**/**PostCompact**/Stop)全部就位。1615/1615 全绿。
+
+### droid 图标不亮:标题识别 gate 太保守放宽(2026-07-02, 用户反馈)
+
+**根因**:droid 启动即通过 OSC 0 设标题 `⛬ Droid` (`⛬` = U+26EC),但:
+1. **hook 路径失效**:droid 的 hooks 需要在 CLI 内交互授权(类似 codex `/hooks` 信任),非交互 spawn 时 hook 不触发——真机 expect 拉起 15s 无任何 hook 事件到达捕获服务器,但 `~/.factory/hooks.json` 配置内容已由 Pier 启动对齐正确写入。
+2. **标题识别路径失效**:`⛬` 不在 `detectAgentStatusFromTitle` 已知的状态 glyph 表(Gemini prefix/braille spinner/Claude ✳/idle/working 关键字)内, 返回 null,`ingestTitle` 直接 return, 压根走不到品牌 token 识别。
+3. **launcher 先验路径**:未测试(用户是从终端手敲 `droid` 而非 Pier launcher 按钮启动)。
+
+**修复**:放宽 `ingestTitle` 的 early-return 门控——**只要有状态 glyph 或有身份 token 之一成立就进入通道**;两者都无(普通 shell `~/foo$`)才 return。缺状态时 status 补默认 ready(与 acquireTitleEntry 的「有身份就建」语义一致)。
+
+影响面:droid / 其他用不常见 glyph 的 agent (aider/mistral-vibe 等启动标题里没有 pier 已识别的 spinner/prefix, 但有品牌 token 的都能受益)启动即点亮图标; 普通 shell 因 tokenBoundaryRe 词边界严格(`\w-` 阻断)不会误触。
+
+回归测试新增:`ingestTitle("⛬ Droid")` → status=ready, agentId=droid, source=title。1616/1616 全绿, check 0, 重启后 droid 启动即变图标(hook 仍需 droid 内交互授权才能推动状态细化)。
+
+### droid 图标/状态/退出三合一修复(2026-07-02, 用户反馈「运行图标不变→退出不还原→思考中状态没变」)
+
+**问题 1:进入 droid 图标不变**
+- 根因:droid 启动即通过 OSC 0 设标题 `⛬ Droid`, `⛬`(U+26EC) 不在 pier 的状态 glyph 表, `detectAgentStatusFromTitle` 返回 null, `ingestTitle` 直接 return 走不到品牌 token 识别。
+- 修复:`ingestTitle` 门控放宽——**有状态 glyph 或有身份 token 之一成立就进入通道**, 缺状态时 status 补 ready(见前文回归测试 `⛬ Droid → status:ready agentId:droid`)。
+
+**问题 2:退出 droid 图标不还原**
+- 根因:droid 退出后 shell 标题 `sheep@Mac:~/pier %` 状态/身份都 null, 前修方案在两者都 null 时 return, 遗留 title-source entry 永不清。ghostty shell integration OSC 133 也没触发 `commandFinished`(见诊断日志)。
+- 修复:新增 `titleLooksLikeAgentContext(title)` 判定(状态 glyph 前缀集含 ⛬ / claude ✳ / gemini 四款 + braille spinner + 品牌 token)。`ingestTitle` 在两者都 null 且 existing 是 title-source 时, 若新标题不像 agent 上下文即视为"退回 shell", closeEntry 清理。droid 中途的过渡标题 `⛬ 新会话` 因 ⛬ 前缀命中 titleLooksLikeAgentContext 而不误清。抽 helper `handleTitleWithoutSignals` 降复杂度。
+
+**问题 3:输入中"思考中"状态不亮**
+- 根因(实证诊断链):
+  1. 加 hook server 请求日志: 手动 curl 到达 pier(证明 server 工作)——droid 触发的 hook 从未到达
+  2. 加 env 传递验证: `echo $PIER_AGENT_HOOK_PORT` 打印 50329(证明 env 正确注入 shell)
+  3. 加 droid hook 命令诊断 wrapper: 文件从未生成(证明 droid 没执行 pier 的 hook)
+  4. 定位 droid 实际读取的 hooks 配置: **`~/.factory/settings.json` 的 `hooks` 字段**——本机 loomdesk/superset/orca 都装那里, droid TUI 里显示的 "Hooks · N 个钩子" 全部来自 settings.json;pier 装到 hooks.json **被 droid 完全忽略**
+- 修复:**翻案**上一波「官方核查修正」的路径决策——droid.ts 从 `~/.factory/hooks.json` 改回 `~/.factory/settings.json`(nested claude-schema, 与 loomdesk/superset/orca 共存, 每个事件下 pier 是其中一条 hook)。旧路径 hooks.json 作为遗留清理。docs.factory.ai 字面表述可能是新增位置或文档滞后, 但实证 settings.json 才是 droid 实际读取路径。
+
+**教训进一步深化**:官方 doc 与实证不一致时以实证为准。**核查 hook 集成绝对必须的一步是"真机 expect 拉起 agent + 捕获服务器"**——只有到达 pier 的 hook 才算工作。仅凭文档路径断言(不管来源多"官方")都可能错。
+
+**质量门禁**:1616/1616 全绿, `pnpm check` 通过, 真机验证三路径全רOK(进入变图标、输入变"思考中"、退出还原)。文件行数收紧:aggregator 从 512 缩到 498 行(< 500 硬帽)。
