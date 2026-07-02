@@ -1,4 +1,7 @@
 export const terminal = {
+  statusBar: {
+    manage: "Manage Status Bar…",
+  },
   search: {
     close: "Close search",
     label: "Find in terminal",

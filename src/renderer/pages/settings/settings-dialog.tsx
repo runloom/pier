@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -22,10 +22,7 @@ import { AppearanceSection } from "@/pages/settings/components/appearance-sectio
 import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
-import {
-  NAV_ITEMS,
-  type SettingsSectionId,
-} from "@/pages/settings/data/appearance-nav.ts";
+import { NAV_ITEMS } from "@/pages/settings/data/appearance-nav.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import {
   registerTerminalFullscreenWebOverlay,
@@ -41,8 +38,8 @@ export function SettingsDialog() {
   const t = useT();
   const open = useSettingsDialogStore((s) => s.isOpen);
   const onOpenChange = useSettingsDialogStore((s) => s.setOpen);
-  const [activeSection, setActiveSection] =
-    useState<SettingsSectionId>("appearance");
+  const activeSection = useSettingsDialogStore((s) => s.activeSection);
+  const setActiveSection = useSettingsDialogStore((s) => s.setActiveSection);
 
   useEffect(() => {
     if (!open) {

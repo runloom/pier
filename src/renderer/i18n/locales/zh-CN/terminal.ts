@@ -1,4 +1,7 @@
 export const terminal = {
+  statusBar: {
+    manage: "管理状态栏…",
+  },
   search: {
     close: "关闭查找",
     label: "在终端中查找",

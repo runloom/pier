@@ -6,6 +6,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { Notifier } from "@/lib/util/notifier.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
+import { openTerminalStatusBarContextMenu } from "./terminal-status-bar-menu.ts";
 import {
   declaredTerminalStatusItemsById,
   mergeTerminalStatusItems,
@@ -119,10 +120,19 @@ export function TerminalStatusBar({
   if (visible.left.length + visible.right.length === 0) {
     return null;
   }
+  // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
+  // onContextMenu div 有 role — role="menubar" 是 biome 可接受的交互 role 中
+  // 语义最贴近的(横向状态项容器, 右键唤起菜单, 类比系统菜单栏).
   return (
     <div
       className="absolute inset-x-0 bottom-0 flex h-7 items-center gap-1 px-1.5 leading-none"
       data-testid="terminal-status-bar"
+      onContextMenu={(event) => {
+        openTerminalStatusBarContextMenu(event).catch((err: unknown) => {
+          console.error("[terminal-status-bar] context menu failed:", err);
+        });
+      }}
+      role="menubar"
     >
       {renderStatusGroup(visible.left, statusContext)}
       <div

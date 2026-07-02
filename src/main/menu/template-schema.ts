@@ -34,6 +34,14 @@ const actionSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
+const checkboxSchema = z.object({
+  type: z.literal("checkbox"),
+  id: idSchema,
+  label: labelSchema,
+  checked: z.boolean(),
+  enabled: z.boolean().optional(),
+});
+
 /**
  * 递归 submenu — 深度限制走显式递归层数. zod recursive lazy 不能直接限深, 用工厂函数
  * 按层 build (depth=0 为叶子层, 不允许再 submenu).
@@ -44,6 +52,7 @@ function makeItemSchema(depth: number): z.ZodType<MenuItem> {
       separatorSchema,
       roleSchema,
       actionSchema,
+      checkboxSchema,
     ]) as z.ZodType<MenuItem>;
   }
   const submenuSchema = z.object({
@@ -58,6 +67,7 @@ function makeItemSchema(depth: number): z.ZodType<MenuItem> {
     separatorSchema,
     roleSchema,
     actionSchema,
+    checkboxSchema,
     submenuSchema,
   ]) as z.ZodType<MenuItem>;
 }

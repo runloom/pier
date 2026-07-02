@@ -46,6 +46,16 @@ export interface MenuItemAction {
   type: "action";
 }
 
+export interface MenuItemCheckbox {
+  /** 当前勾选态(菜单是一次性快照,点击后由调用方落库并重开). */
+  checked: boolean;
+  enabled?: boolean;
+  /** popup resolve 回传此 id,由调用方自行 dispatch(不必经 actionRegistry). */
+  id: string;
+  label: string;
+  type: "checkbox";
+}
+
 export interface MenuItemSubmenu {
   enabled?: boolean;
   label: string;
@@ -57,6 +67,7 @@ export type MenuItem =
   | MenuItemSeparator
   | MenuItemRole
   | MenuItemAction
+  | MenuItemCheckbox
   | MenuItemSubmenu;
 
 export type MenuTemplate = readonly MenuItem[];
