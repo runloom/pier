@@ -192,7 +192,27 @@
     "ui.gitUndoCommitSuccess": "Last commit undone (changes preserved as staged)",
     "ui.gitUndoCommitNothing": "No commits to undo",
     "ui.title": "Worktrees",
-    "ui.unsupported": "Current directory does not support Git worktrees"
+    "ui.unsupported": "Current directory does not support Git worktrees",
+    "ui.worktreeCreate.autoBadge": "Auto",
+    "ui.worktreeCreate.baseHead": "Current HEAD",
+    "ui.worktreeCreate.baseLabel": "Base",
+    "ui.worktreeCreate.branchLabel": "Branch",
+    "ui.worktreeCreate.cancelHint": "Cancel",
+    "ui.worktreeCreate.createAndStartHint": "Create and start",
+    "ui.worktreeCreate.createOnlyHint": "Create only",
+    "ui.worktreeCreate.creating": "Creating…",
+    "ui.worktreeCreate.description": "Create an isolated worktree for a task",
+    "ui.worktreeCreate.emptyHint": "Empty input creates an auto codename",
+    "ui.worktreeCreate.inputPlaceholder": "Describe the task, or type a branch name",
+    "ui.worktreeCreate.launchFailed": "Terminal launch failed: {{message}}",
+    "ui.worktreeCreate.locationLabel": "Location",
+    "ui.worktreeCreate.openFailed": "Couldn't open worktree creation: {{message}}",
+    "ui.worktreeCreate.prepareCopy": "Copy {{count}} ignored file patterns",
+    "ui.worktreeCreate.prepareLabel": "Prepare",
+    "ui.worktreeCreate.prepareNone": "No prepare steps configured",
+    "ui.worktreeCreate.prepareSetup": "Run setup command",
+    "ui.worktreeCreate.title": "New worktree",
+    "ui.worktreeCreate.unavailable": "Worktrees are unavailable: {{message}}"
   },
   "panels": {
     "pier.git.changes": {

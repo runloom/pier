@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { WorktreeItem } from "@shared/contracts/worktree.ts";
 import { BrushCleaning, GitBranch, Trash2 } from "lucide-react";
+import { openWorktreeCreateOverlay } from "./worktree-create-overlay.tsx";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 
@@ -145,13 +146,48 @@ function registerWorktreeCreateAction(
       return target.enabled ? null : target.reason;
     },
     enabled: () => activeWorktreeTarget(context).enabled,
-    handler: () => {
+    handler: async () => {
       const target = activeWorktreeTarget(context);
       if (!target.enabled) {
         openUnavailablePick(context, target.reason);
         return;
       }
-      context.worktrees.openCreatePanel({ path: target.path });
+      try {
+        const listResult = await context.worktrees.list({ path: target.path });
+        if (listResult.status !== "available") {
+          context.notifications.error(
+            pluginText(
+              context,
+              "worktreeCreate.unavailable",
+              "Worktrees are unavailable: {{message}}",
+              { message: listResult.reason }
+            )
+          );
+          return;
+        }
+        const [branches, defaults] = await Promise.all([
+          context.git.listBranches(listResult.mainPath, { kind: "all" }),
+          context.worktrees.creationDefaults(),
+        ]);
+        openWorktreeCreateOverlay(context, {
+          branches,
+          defaults,
+          existingBranches: branches.map((ref) => ref.name),
+          existingNames: listResult.worktrees.map((item) =>
+            basename(item.path)
+          ),
+          mainPath: listResult.mainPath,
+        });
+      } catch (err) {
+        context.notifications.error(
+          pluginText(
+            context,
+            "worktreeCreate.openFailed",
+            "Couldn't open worktree creation: {{message}}",
+            { message: errorMessage(err) }
+          )
+        );
+      }
     },
     id: "pier.worktree.create",
     metadata: {

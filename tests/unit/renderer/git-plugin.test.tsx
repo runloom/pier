@@ -32,6 +32,7 @@ import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-statu
 import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { usePluginOverlayStore } from "@/stores/plugin-overlay.store.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
   resetTerminalInputRoutingForTests,
@@ -448,6 +449,11 @@ describe("git builtin plugin", () => {
             targetPath: "/Users/xyz/ABC/pier/.worktrees/new-worktree",
             worktrees: [],
           })),
+          creationDefaults: vi.fn(async () => ({
+            branchPrefix: "wt/",
+            copyPatterns: [],
+            setupCommand: "",
+          })),
           list: vi.fn(async () => ({
             currentPath: "/Users/xyz/ABC/pier",
             mainPath: "/Users/xyz/ABC/pier",
@@ -509,6 +515,7 @@ describe("git builtin plugin", () => {
             ],
           })),
           open: vi.fn(async () => ({ context, panelId: "terminal-worktree" })),
+          openTerminal: vi.fn(async () => null),
           prune: vi.fn(async () => ({
             currentPath: "/Users/xyz/ABC/pier",
             mainPath: "/Users/xyz/ABC/pier",
@@ -613,6 +620,7 @@ describe("git builtin plugin", () => {
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useWorkspaceStore.setState({ api: null });
     useWorktreeCreateStore.setState({ session: null });
+    usePluginOverlayStore.setState({ current: null });
     resetTerminalInputRoutingForTests();
     useKeybindingScope.setState({
       activePanelComponent: null,
@@ -862,16 +870,25 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("Worktree 创建命令打开创建面板", async () => {
+  it("Worktree 创建命令打开创建面板 overlay", async () => {
     dispose = activateWorktreePlugin();
 
     await actionRegistry.get("pier.worktree.create")?.handler();
     await vi.waitFor(() => {
-      expect(useWorktreeCreateStore.getState().session).not.toBeNull();
+      expect(usePluginOverlayStore.getState().current).not.toBeNull();
     });
 
     expect(window.pier.worktrees.list).toHaveBeenCalledWith({
       path: "/Users/xyz/ABC/pier",
+    });
+    expect(window.pier.worktrees.creationDefaults).toHaveBeenCalled();
+    expect(window.pier.git.listBranches).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      { kind: "all" }
+    );
+    expect(usePluginOverlayStore.getState().current).toMatchObject({
+      id: "worktree-create",
+      pluginId: GIT_PLUGIN_ID,
     });
   });
 
