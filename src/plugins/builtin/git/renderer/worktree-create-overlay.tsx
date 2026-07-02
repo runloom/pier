@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
-import { Field, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import {
   Select,
@@ -258,7 +258,7 @@ function WorktreeCreateOverlay({
             </div>
           </Field>
 
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          {error ? <FieldError>{error}</FieldError> : null}
         </FieldGroup>
 
         <DialogFooter>
