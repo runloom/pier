@@ -826,6 +826,70 @@ describe("WorkspaceHeaderActions", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it("subscriptions to active panel context re-render component on context change", async () => {
+    // This test verifies that the component's subscription to descriptor context
+    // (not just activeId) allows the New Worktree menu item's disabled state to update
+    // when the active panel's context changes (e.g., user cd-ing to different directory).
+    const enabledStates: boolean[] = [];
+    const handler = vi.fn();
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => {
+        const state = usePanelDescriptorStore.getState();
+        const descriptor = state.activeId
+          ? state.descriptors[state.activeId]
+          : null;
+        const isEnabled = descriptor?.context?.cwd === "/repo";
+        enabledStates.push(isEnabled);
+        return isEnabled;
+      },
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    usePanelDescriptorStore.setState({
+      activeId: "panel-1",
+      descriptors: {
+        "panel-1": {
+          display: { short: "Panel" },
+          context: { contextId: "ctx-1", updatedAt: 0, cwd: "/repo" },
+        },
+      },
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    // First menu open - enabled() should be called
+    const initialCallCount = enabledStates.length;
+    openAddPanelMenu();
+    await screen.findByRole("menuitem", { name: "New Worktree" });
+
+    // Update store: replace context object (same activeId but different cwd)
+    // This simulates user cd-ing to a different directory in the active terminal
+    act(() => {
+      const state = usePanelDescriptorStore.getState();
+      usePanelDescriptorStore.setState({
+        descriptors: {
+          ...state.descriptors,
+          "panel-1": {
+            display: { short: "Panel" },
+            context: { contextId: "ctx-1", updatedAt: 1, cwd: "/different" },
+          },
+        },
+      });
+    });
+
+    // After store update, component should have re-rendered and enabled()
+    // should have been called again with the new context
+    expect(enabledStates.length).toBeGreaterThan(initialCallCount);
+    // Verify that enabled() observed both true and false states
+    expect(enabledStates).toContain(true);
+    expect(enabledStates).toContain(false);
+  });
+
   it("launches an agent terminal in the clicked header group", async () => {
     vi.spyOn(Date, "now").mockReturnValue(456);
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);

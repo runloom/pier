@@ -40,8 +40,10 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
   const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
-  // 订阅 active panel 变化以便 New Worktree 菜单项 disabled 状态跟随 (值不使用,纯粹为重渲注册订阅)。
-  usePanelDescriptorStore((s) => s.activeId);
+  // 订阅 active panel descriptor 变化以便 New Worktree 菜单项 disabled 状态跟随 (值不使用,纯粹为重渲注册订阅)。
+  usePanelDescriptorStore((s) =>
+    s.activeId ? s.descriptors[s.activeId] : undefined
+  );
   // 订阅 actionRegistry 版本变化:插件卸载/重装会替换 action, enabled()/handler 引用随之变化。
   useSyncExternalStore(
     (cb) => actionRegistry.subscribe(cb),
