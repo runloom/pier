@@ -24,6 +24,9 @@ const basePreferences: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  worktreeBranchPrefix: "wt/",
+  worktreeCopyPatterns: [".env*", "*.local", ".claude/settings.local.json"],
+  worktreeSetupCommand: "",
 };
 
 describe("createPreferencesService", () => {

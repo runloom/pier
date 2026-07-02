@@ -172,6 +172,13 @@ function services(
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        worktreeBranchPrefix: "wt/",
+        worktreeCopyPatterns: [
+          ".env*",
+          "*.local",
+          ".claude/settings.local.json",
+        ],
+        worktreeSetupCommand: "",
       }),
       update: async (patch) => ({
         language: "system",
@@ -192,6 +199,13 @@ function services(
         agentDefaultArgs: {},
         agentDefaultEnv: {},
         agentCommandOverrides: {},
+        worktreeBranchPrefix: patch.worktreeBranchPrefix ?? "wt/",
+        worktreeCopyPatterns: patch.worktreeCopyPatterns ?? [
+          ".env*",
+          "*.local",
+          ".claude/settings.local.json",
+        ],
+        worktreeSetupCommand: patch.worktreeSetupCommand ?? "",
       }),
     },
     processEnvironment: {

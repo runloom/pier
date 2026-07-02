@@ -40,6 +40,9 @@ const DEFAULTS: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  worktreeBranchPrefix: "wt/",
+  worktreeCopyPatterns: [".env*", "*.local", ".claude/settings.local.json"],
+  worktreeSetupCommand: "",
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;
