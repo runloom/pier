@@ -23,6 +23,7 @@ import type {
   PluginSourceKind,
 } from "@shared/contracts/plugin.ts";
 import { describe, expect, it, vi } from "vitest";
+import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 const now = 1_772_000_000_000;
 
@@ -153,46 +154,9 @@ function services(
       flush: async () => undefined,
     },
     preferences: {
-      read: async () => ({
-        language: "system",
-        monoFontFamily: "",
-        monoFontSize: 13,
-        stylePresetId: "pierre",
-        terminalCursorBlink: true,
-        terminalCursorStyle: "block",
-        terminalNewCwdPolicy: "activeTerminal",
-        terminalPasteProtection: true,
-        terminalScrollbackMb: 64,
-        theme: "system",
-        uiFontFamily: "",
-        userKeymap: [],
-        windowZoomLevel: 0,
-        defaultAgentId: null,
-        disabledAgentIds: [],
-        agentDefaultArgs: {},
-        agentDefaultEnv: {},
-        agentCommandOverrides: {},
-      }),
-      update: async (patch) => ({
-        language: "system",
-        monoFontFamily: "",
-        monoFontSize: 13,
-        stylePresetId: "pierre",
-        terminalCursorBlink: true,
-        terminalCursorStyle: "block",
-        terminalNewCwdPolicy: "activeTerminal",
-        terminalPasteProtection: true,
-        terminalScrollbackMb: 64,
-        theme: patch.theme ?? "system",
-        uiFontFamily: "",
-        userKeymap: patch.userKeymap ?? [],
-        windowZoomLevel: patch.windowZoomLevel ?? 0,
-        defaultAgentId: null,
-        disabledAgentIds: [],
-        agentDefaultArgs: {},
-        agentDefaultEnv: {},
-        agentCommandOverrides: {},
-      }),
+      read: async () => makeFakePreferences({ agentStatusHooks: false }),
+      update: async (patch) =>
+        makeFakePreferences({ agentStatusHooks: false, ...patch }),
     },
     processEnvironment: {
       resolve: resolveEnvironment,
@@ -766,26 +730,10 @@ describe("createCommandRouter", () => {
     const fakeServices = services([], undefined, terminalLaunches);
     Object.assign(fakeServices, {
       preferences: {
-        read: async () => ({
-          language: "system",
-          monoFontFamily: "",
-          monoFontSize: 13,
-          stylePresetId: "pierre",
-          terminalCursorBlink: true,
-          terminalCursorStyle: "block",
-          terminalNewCwdPolicy: "activeTerminal",
-          terminalPasteProtection: true,
-          terminalScrollbackMb: 64,
-          theme: "system",
-          uiFontFamily: "",
-          userKeymap: [],
-          windowZoomLevel: 0,
-          defaultAgentId: null,
-          disabledAgentIds: [],
-          agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
-          agentDefaultEnv: {},
-          agentCommandOverrides: {},
-        }),
+        read: async () =>
+          makeFakePreferences({
+            agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+          }),
       },
     });
     const router = createCommandRouter({
@@ -826,26 +774,10 @@ describe("createCommandRouter", () => {
     const fakeServices = services([], undefined, terminalLaunches);
     Object.assign(fakeServices, {
       preferences: {
-        read: async () => ({
-          language: "system",
-          monoFontFamily: "",
-          monoFontSize: 13,
-          stylePresetId: "pierre",
-          terminalCursorBlink: true,
-          terminalCursorStyle: "block",
-          terminalNewCwdPolicy: "activeTerminal",
-          terminalPasteProtection: true,
-          terminalScrollbackMb: 64,
-          theme: "system",
-          uiFontFamily: "",
-          userKeymap: [],
-          windowZoomLevel: 0,
-          defaultAgentId: null,
-          disabledAgentIds: [],
-          agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
-          agentDefaultEnv: {},
-          agentCommandOverrides: {},
-        }),
+        read: async () =>
+          makeFakePreferences({
+            agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+          }),
       },
     });
     const router = createCommandRouter({

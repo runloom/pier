@@ -903,3 +903,73 @@ body {
 .dv-tab .dv-default-tab .dv-default-tab-action:hover {
   border-radius: 12px;
 }
+
+/*
+ * Agent 状态 shimmer —— loomdesk/OMP classic 扫带的逐字符移植。
+ * 组件（agent-shimmer-text.tsx）以 rAF 更新每字符 data-shimmer-tier，
+ * CSS 只负责 tier → 颜色/字重映射。高档色来自内联 --pier-agent-status-color
+ * （状态色变量, running 长跑时被覆盖为 amber/destructive）。
+ * Pier 默认 dark（:root），.light 切换——与 loomdesk 的 .dark 方向相反,
+ * 故固定灰阶写在基础层, color-mix 写在 .light 覆盖层。
+ */
+[data-agent-status-text][data-agent-status-kind="running"] {
+  --shimmer-low: #5f6673;
+  --shimmer-mid: #777d88;
+  --shimmer-high: var(--pier-agent-status-color, var(--primary));
+
+  color: var(--shimmer-low);
+}
+
+.light [data-agent-status-text][data-agent-status-kind="running"] {
+  --shimmer-low: color-mix(in oklch, var(--foreground) 55%, transparent);
+  --shimmer-mid: color-mix(in oklch, var(--foreground) 75%, transparent);
+}
+
+/*
+ * 宽度稳定：高档字重 700 会加宽字符 advance，扫带经过时整体宽度"呼吸"。
+ * 用 inline-grid 叠一个隐藏的粗体 ghost 钉住单元格宽度（loomdesk 同款）。
+ */
+[data-agent-status-text][data-agent-status-kind="running"] [data-shimmer-char] {
+  display: inline-grid;
+  grid-template-areas: "stack";
+  justify-items: center;
+}
+
+[data-agent-status-text][data-agent-status-kind="running"]
+  [data-shimmer-char]::before {
+  content: attr(data-char);
+  grid-area: stack;
+  font-weight: 700;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+[data-agent-status-text][data-agent-status-kind="running"]
+  [data-shimmer-glyph] {
+  grid-area: stack;
+  font-weight: 400;
+  color: var(--shimmer-low);
+}
+
+[data-agent-status-text][data-agent-status-kind="running"]
+  [data-shimmer-tier="mid"]
+  > [data-shimmer-glyph] {
+  color: var(--shimmer-mid);
+}
+
+[data-agent-status-text][data-agent-status-kind="running"]
+  [data-shimmer-tier="high"]
+  > [data-shimmer-glyph] {
+  color: var(--shimmer-high);
+  font-weight: 700;
+}
+
+@media (forced-colors: active) {
+  [data-agent-status-text][data-agent-status-kind="running"],
+  [data-agent-status-text][data-agent-status-kind="running"]
+    [data-shimmer-char] {
+    color: currentcolor;
+    font-weight: inherit;
+  }
+}

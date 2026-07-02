@@ -192,7 +192,9 @@ function adaptQuickPickItem(item: RendererPluginQuickPickItem): QuickPickItem {
     ...(item.description ? { description: item.description } : {}),
     ...(item.detail ? { detail: item.detail } : {}),
     ...(item.disabled == null ? {} : { disabled: item.disabled }),
+    ...(item.icon ? { icon: item.icon } : {}),
     ...(item.searchTerms ? { searchTerms: item.searchTerms } : {}),
+    ...(item.variant ? { variant: item.variant } : {}),
   };
 }
 

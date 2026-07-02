@@ -23,6 +23,12 @@ export const gitBranchInfoSchema = z.object({
   upstream: z.string().nullable(),
   /** upstream 已配置但对端 ref 已删（`for-each-ref upstream:track` 含 `[gone]`）。 */
   upstreamGone: z.boolean(),
+  /**
+   * HEAD 是否已是默认分支 remote-tracking ref 的祖先（merge-base --is-ancestor）。
+   * null = 不适用：detached / 无 origin/HEAD / 当前就在默认分支。
+   * squash merge 检测不到（commit 被重写），是已知限制。
+   */
+  mergedIntoDefault: z.boolean().nullable(),
 });
 export type GitBranchInfo = z.infer<typeof gitBranchInfoSchema>;
 
@@ -338,8 +344,12 @@ export const gitUndoCommitResultSchema = z.discriminatedUnion("kind", [
 ]);
 export type GitUndoCommitResult = z.infer<typeof gitUndoCommitResultSchema>;
 
-/** 变更监听广播事件。changeKind 区分工作区/HEAD/二者同时变化。 */
-export const gitChangeKindSchema = z.enum(["worktree", "head", "both"]);
+/**
+ * 变更监听广播事件。changeKind 区分工作区/HEAD/纯 ref/组合变化。
+ * "refs" 仅在 refs 是唯一变化类别时上报（fetch/push/prune/stash 等纯 ref 操作）；
+ * 与 worktree/head 同时变化时沿用原有三值。
+ */
+export const gitChangeKindSchema = z.enum(["worktree", "head", "both", "refs"]);
 export const gitChangeEventSchema = z.object({
   changeKind: gitChangeKindSchema,
   gitRoot: z.string(),

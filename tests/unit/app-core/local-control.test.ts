@@ -24,6 +24,7 @@ import {
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it } from "vitest";
+import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 const tempDirs: string[] = [];
 const WINDOWS_NAMED_PIPE_PATTERN = /^\\\\\.\\pipe\\pier-control-[a-f0-9]{16}$/;
@@ -126,46 +127,9 @@ function cliClientServices(): PierCoreServices {
       setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
     preferences: {
-      read: async () => ({
-        language: "system",
-        monoFontFamily: "",
-        monoFontSize: 13,
-        stylePresetId: "pierre",
-        terminalCursorBlink: true,
-        terminalCursorStyle: "block",
-        terminalNewCwdPolicy: "activeTerminal",
-        terminalPasteProtection: true,
-        terminalScrollbackMb: 64,
-        theme: "system",
-        uiFontFamily: "",
-        userKeymap: [],
-        windowZoomLevel: 0,
-        defaultAgentId: null,
-        disabledAgentIds: [],
-        agentDefaultArgs: {},
-        agentDefaultEnv: {},
-        agentCommandOverrides: {},
-      }),
-      update: async (patch) => ({
-        language: "system",
-        monoFontFamily: "",
-        monoFontSize: 13,
-        stylePresetId: "pierre",
-        terminalCursorBlink: true,
-        terminalCursorStyle: "block",
-        terminalNewCwdPolicy: "activeTerminal",
-        terminalPasteProtection: true,
-        terminalScrollbackMb: 64,
-        theme: patch.theme ?? "system",
-        uiFontFamily: "",
-        userKeymap: patch.userKeymap ?? [],
-        windowZoomLevel: patch.windowZoomLevel ?? 0,
-        defaultAgentId: null,
-        disabledAgentIds: [],
-        agentDefaultArgs: {},
-        agentDefaultEnv: {},
-        agentCommandOverrides: {},
-      }),
+      read: async () => makeFakePreferences({ agentStatusHooks: false }),
+      update: async (patch) =>
+        makeFakePreferences({ agentStatusHooks: false, ...patch }),
     },
     processEnvironment: {
       resolve: async (request) => ({

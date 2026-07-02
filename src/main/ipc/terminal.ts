@@ -18,9 +18,11 @@ import {
   findAppWindowByWebContents,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
+import { agentSessionService } from "./agent-session.ts";
 import {
   consumeCreateLaunch,
   resolveCreateTerminalLaunch,
+  withPanelStatusEnv,
 } from "./terminal-create-launch.ts";
 import { handleTerminalCwdChange } from "./terminal-cwd-forwarding.ts";
 import {
@@ -173,10 +175,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const { context, nativeLaunch, task } = resolveCreateTerminalLaunch(
-          args,
-          saved
-        );
+        const { context, launchAgentId, nativeLaunch, task } =
+          resolveCreateTerminalLaunch(args, saved);
         // Task identity is persisted before native launch so immediate command-finished
         // callbacks can be gated to the task panel instead of repainting plain terminals.
         await persistInitialTerminalTask(sessionScope, args.panelId, task);
@@ -186,15 +186,29 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           x: args.frame.x,
           y: args.frame.y,
         });
+        const hookEnv = await agentSessionService.hookEnv();
         const ok = addon.createTerminal(
           handle,
           scopePanelId(win, args.panelId),
           args.frame,
           args.font.family,
           args.font.size,
-          nativeLaunch
+          withPanelStatusEnv(
+            nativeLaunch,
+            args.panelId,
+            String(win.id),
+            hookEnv
+          )
         );
         if (ok) {
+          if (launchAgentId) {
+            // launcher 先验身份：图标/状态即刻点亮, 不等 agent 侧信号。
+            agentSessionService.agentLaunched(
+              String(win.id),
+              args.panelId,
+              launchAgentId
+            );
+          }
           consumeCreateLaunch(args);
           await persistInitialTerminalContext(
             sessionScope,
@@ -330,6 +344,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       const windowId = findInternalWindowId(win) ?? undefined;
       const sessionScope = terminalSessionScopeFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
+      // relaunch 也走清理+5s 冷却；launcher 立刻重启 agent 时首个 SessionStart
+      // 可能被吸收，下个事件自愈，属接受行为。
+      agentSessionService.panelClosed(String(win.id), panelId);
       if (options?.reason === "relaunch") {
         taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
       } else {
@@ -371,6 +388,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     recordRendererTerminalRoute(win, "reconcile", null, {
       count: activeIds.length,
     });
+    agentSessionService.retainPanels(String(win.id), activeIds);
     try {
       addon.reconcileTerminals(
         win.getNativeWindowHandle(),

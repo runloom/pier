@@ -14,6 +14,17 @@ import type {
 } from "../../shared/contracts/git.ts";
 
 /**
+ * 拆分 `git rev-parse` 多行输出为非空、去首尾空白的行数组。
+ * `rev-parse` 按参数顺序逐行输出路径，调用方按位置取值。
+ */
+export function splitNonEmptyLines(output: string): string[] {
+  return output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/**
  * `parseGitStatus` 输出的中间形态：只含 `git status --porcelain=v2` 能直接解析出的信息。
  * `upstreamGone / counts / delta / repoState / stashCount` 由 service 端合成到最终 GitStatus。
  */

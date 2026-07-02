@@ -141,6 +141,7 @@ function makeStatus(files: GitStatus["files"]): GitStatus {
       behind: 0,
       branch: "main",
       oid: "abc123",
+      mergedIntoDefault: null,
       upstream: null,
       upstreamGone: false,
     },
