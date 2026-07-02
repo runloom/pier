@@ -28,6 +28,7 @@ import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
+import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
@@ -87,6 +88,7 @@ async function bootstrap() {
   registerCommandPaletteMruAction();
   registerTerminalDebugActions();
   registerTerminalActions();
+  await initPluginSettingsStore();
   await bootstrapBuiltinPlugins();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
   await initKeybindingPreferences();
