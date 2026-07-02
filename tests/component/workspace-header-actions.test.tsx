@@ -826,6 +826,33 @@ describe("WorkspaceHeaderActions", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it("catches handler rejections and logs errors when the worktree action throws", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error");
+    const handler = vi.fn().mockRejectedValue(new Error("boom"));
+    disposeWorktreeCreateAction = actionRegistry.register({
+      category: "Worktree",
+      enabled: () => true,
+      handler,
+      id: "pier.worktree.create",
+      surfaces: ["command-palette"],
+      title: () => "Create Worktree",
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+
+    openAddPanelMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "New Worktree" })
+    );
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+    expect(consoleErrorSpy.mock.calls[0]?.[1]?.message).toBe("boom");
+  });
+
   it("subscriptions to active panel context re-render component on context change", async () => {
     // This test verifies that the component's subscription to descriptor context
     // (not just activeId) allows the New Worktree menu item's disabled state to update
