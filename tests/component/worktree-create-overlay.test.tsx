@@ -25,6 +25,8 @@ import {
 
 const NEW_WORKTREE_LABEL = "Task or branch";
 const BRANCH_LABEL = "Branch";
+const CREATE_AND_START_LABEL = "Create and start";
+const CREATE_ONLY_LABEL = "Create only";
 
 function interpolate(
   template: string | undefined,
@@ -259,7 +261,7 @@ describe("WorktreeCreateOverlay", () => {
     expect(screen.getByText(".worktrees/fix-focus-bug")).toBeInTheDocument();
   });
 
-  it("Enter 提交:create 携带派生 branch/name/path,成功后以 runSetup:true 打开终端", async () => {
+  it("点击 Create and start:create 携带派生 branch/name/path,成功后以 runSetup:true 打开终端", async () => {
     render(<PluginOverlayHost />);
     act(() => {
       openWorktreeCreateOverlay(context, overlayData());
@@ -267,7 +269,9 @@ describe("WorktreeCreateOverlay", () => {
 
     const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
     fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(
+      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
+    );
 
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
@@ -287,7 +291,7 @@ describe("WorktreeCreateOverlay", () => {
     );
   });
 
-  it("Shift+Enter 提交:create 之后不打开终端", async () => {
+  it("点击 Create only:create 之后不打开终端", async () => {
     render(<PluginOverlayHost />);
     act(() => {
       openWorktreeCreateOverlay(context, overlayData());
@@ -295,7 +299,7 @@ describe("WorktreeCreateOverlay", () => {
 
     const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
     fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: CREATE_ONLY_LABEL }));
 
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
@@ -327,7 +331,7 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("combobox"));
     fireEvent.click(await screen.findByRole("option", { name: "develop" }));
 
-    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: CREATE_ONLY_LABEL }));
 
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
@@ -348,7 +352,9 @@ describe("WorktreeCreateOverlay", () => {
 
     const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
     fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(
+      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
+    );
 
     expect(
       await screen.findByText("invalid worktree branch")
@@ -371,7 +377,9 @@ describe("WorktreeCreateOverlay", () => {
 
     const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
     fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(
+      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
+    );
 
     await vi.waitFor(() => {
       expect(notificationsErrorMock).toHaveBeenCalledWith(
@@ -418,7 +426,9 @@ describe("WorktreeCreateOverlay", () => {
 
     const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
     fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(
+      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
+    );
 
     await vi.waitFor(() => {
       expect(
