@@ -1,5 +1,7 @@
 import { join } from "node:path";
 import {
+  DEFAULT_GIT_AUTO_FETCH_ENABLED,
+  DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
   DEFAULT_TERMINAL_CURSOR_BLINK,
   DEFAULT_TERMINAL_CURSOR_STYLE,
   DEFAULT_TERMINAL_NEW_CWD_POLICY,
@@ -40,6 +42,9 @@ const DEFAULTS: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  agentStatusHooks: true,
+  gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,
+  gitAutoFetchIntervalMinutes: DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;

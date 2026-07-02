@@ -11,6 +11,8 @@ const VARIABLE_RE = /\$\{([^}]+)\}/g;
 
 const TASK_SOURCE_LABELS: Record<TaskSource, string> = {
   cargo: "Cargo",
+  composer: "Composer",
+  deno: "Deno",
   history: "Recently Run",
   just: "Justfile",
   make: "Makefile",

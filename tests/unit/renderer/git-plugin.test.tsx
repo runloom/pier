@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -14,7 +15,9 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
+import type { IDockviewPanelProps } from "dockview-react";
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
@@ -51,6 +54,26 @@ vi.mock("sonner", () => ({
 }));
 
 const now = 1_772_000_000_000;
+const FILES_PLUGIN_ID = "pier.files";
+const FILES_PANEL_ID = "pier.files.explorer";
+const APP_TSX_TREEITEM_PATTERN = /App\.tsx/;
+const SRC_PERMISSION_LOAD_ERROR_PATTERN =
+  /Permission denied loading src|error/i;
+
+function getPierFileTree(container: HTMLElement): HTMLElement {
+  const host = container.querySelector(
+    'file-tree-container[data-slot="pier-file-tree"]'
+  );
+
+  expect(host).toBeInstanceOf(HTMLElement);
+  const tree = (host as HTMLElement).shadowRoot?.querySelector('[role="tree"]');
+
+  expect(tree).toBeInstanceOf(HTMLElement);
+  return tree as HTMLElement;
+}
+
+/** 分支名不应再带 max-w-[...] 固定宽度上限（只在容器溢出时 truncate）。 */
+const FIXED_MAX_WIDTH_CLASS_RE = /max-w-\[/;
 
 const context: PanelContext = {
   branch: "main",
@@ -374,6 +397,76 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     },
   };
 }
+function filesPluginEntry(enabled: boolean): PluginRegistryEntry {
+  return {
+    effectivePermissions: ["file:read", "panel:register"],
+    enabled,
+    manifest: {
+      apiVersion: 1,
+      commands: [],
+      engines: { pier: ">=0.1.0" },
+      id: FILES_PLUGIN_ID,
+      name: "Files",
+      panels: [
+        {
+          component: FILES_PANEL_ID,
+          id: FILES_PANEL_ID,
+          permissions: ["file:read"],
+          title: "Files",
+        },
+      ],
+      permissions: ["file:read", "panel:register"],
+      source: { kind: "builtin" },
+      terminalStatusItems: [],
+      version: "1.0.0",
+    },
+    runtime: {
+      canToggle: true,
+      enabled,
+      kind: "builtin",
+    },
+  };
+}
+
+function makeFilesPanelProps(
+  params: Record<string, unknown>
+): IDockviewPanelProps<Record<string, unknown>> {
+  return {
+    api: { id: FILES_PANEL_ID, setTitle: vi.fn() },
+    containerApi: {},
+    params,
+  } as unknown as IDockviewPanelProps<Record<string, unknown>>;
+}
+
+function renderFilesExplorerPanel(
+  list: RendererPluginContext["files"]["list"]
+) {
+  const filesModule = BUILTIN_RENDERER_PLUGIN_MODULES.find(
+    (plugin) => plugin.id === FILES_PLUGIN_ID
+  );
+  expect(filesModule).toBeDefined();
+  if (!filesModule) {
+    throw new Error("expected Files renderer plugin module in builtin catalog");
+  }
+
+  const baseFilesContext = createRendererPluginContext(filesPluginEntry(true));
+  const filesContext: RendererPluginContext = {
+    ...baseFilesContext,
+    files: { ...baseFilesContext.files, list },
+  };
+  const disposeFiles = filesModule.activate(filesContext);
+  const registration = getPluginPanelRegistrations().get(FILES_PANEL_ID);
+  const FilesPanel = registration?.component;
+  if (!FilesPanel) {
+    disposeFiles();
+    throw new Error("expected Files explorer panel registration");
+  }
+
+  return {
+    ...render(<FilesPanel {...makeFilesPanelProps({ context })} />),
+    disposeFiles,
+  };
+}
 
 describe("git builtin plugin", () => {
   let dispose: (() => void) | null = null;
@@ -545,6 +638,7 @@ describe("git builtin plugin", () => {
               ahead: 0,
               behind: 0,
               branch: "main",
+              mergedIntoDefault: null,
               oid: "abc123",
               upstream: null,
               upstreamGone: false,
@@ -788,15 +882,16 @@ describe("git builtin plugin", () => {
     const prunable = quickPick?.sections
       ?.flatMap((section) => section.items)
       .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-stale");
+    // 标题直接用分支名, "主工作树" 语义只由 badge 表达, 不再重复放 description。
     expect(main).toMatchObject({
       badges: expect.arrayContaining([
         expect.objectContaining({ label: "main" }),
       ]),
       checked: true,
-      description: "main",
       detail: "/Users/xyz/ABC/pier",
       label: "main",
     });
+    expect(main?.description).toBeUndefined();
     expect(linked).toMatchObject({
       detail: "/Users/xyz/ABC/pier-feature",
       label: "feature/worktree",
@@ -1476,6 +1571,163 @@ describe("git builtin plugin", () => {
     });
   });
 
+  it("upstream 已 gone 时展示带文字的红色胶囊", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/gone-branch",
+        oid: "abc123",
+        upstream: "origin/feature/gone-branch",
+        upstreamGone: true,
+        mergedIntoDefault: null,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/gone-branch" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const pill = await screen.findByTestId("upstream-gone-pill");
+    expect(pill).toHaveTextContent("upstream gone");
+  });
+
+  it("分支已合入默认分支时展示 merged 胶囊，可与 gone 胶囊共存", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/done",
+        mergedIntoDefault: true,
+        oid: "abc123",
+        upstream: "origin/feature/done",
+        upstreamGone: true,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/done" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const merged = await screen.findByTestId("merged-pill");
+    expect(merged).toHaveTextContent("merged");
+    expect(screen.getByTestId("upstream-gone-pill")).toBeInTheDocument();
+  });
+
+  it("DETACHED 胶囊使用 text-foreground（neutral 风格），与 muted 计数区分", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: null,
+        mergedIntoDefault: null,
+        oid: "abc1234def",
+        upstream: null,
+        upstreamGone: false,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    const { branch: _omitted, ...contextWithoutBranch } = context;
+    render(
+      statusItem.render({
+        context: contextWithoutBranch,
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const pill = await screen.findByText("DETACHED");
+    expect(pill.className).toContain("text-foreground");
+  });
+
+  it("分支名不设固定宽度上限，仅靠 truncate 在溢出时截断", async () => {
+    const longBranch =
+      "Ysheep666/GIT-能力增强-一个足够长的分支名不该在空间够用时被截断";
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: longBranch,
+        oid: "abc123",
+        upstream: null,
+        upstreamGone: false,
+        mergedIntoDefault: null,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: longBranch },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const label = await screen.findByText(longBranch);
+    expect(label.className).toContain("truncate");
+    expect(label.className).not.toMatch(FIXED_MAX_WIDTH_CLASS_RE);
+  });
+
   it("终端状态栏在非 Git context 下不渲染 worktree 入口", () => {
     dispose = activateWorktreePlugin();
     const statusItem = terminalStatusItemRegistry
@@ -1540,6 +1792,207 @@ describe("git builtin plugin", () => {
       BUILTIN_RENDERER_PLUGIN_MODULES.map((plugin) => plugin.id)
     ).toContain(GIT_PLUGIN_ID);
     expect(gitRendererPlugin.id).toBe(GIT_PLUGIN_ID);
+  });
+
+  it("renderer builtin catalog registers the Files explorer web panel and renders root entries", async () => {
+    const filesModule = BUILTIN_RENDERER_PLUGIN_MODULES.find(
+      (plugin) => plugin.id === FILES_PLUGIN_ID
+    );
+    expect(filesModule).toBeDefined();
+    if (!filesModule) {
+      throw new Error(
+        "expected Files renderer plugin module in builtin catalog"
+      );
+    }
+    const projectRoot =
+      context.projectRoot ??
+      context.worktreeRoot ??
+      context.gitRoot ??
+      context.cwd ??
+      "/Users/xyz/ABC/pier";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(() =>
+      Promise.resolve([
+        {
+          kind: "directory" as const,
+          name: "src",
+          path: "src",
+          root: projectRoot,
+        },
+        {
+          kind: "file" as const,
+          name: "package.json",
+          path: "package.json",
+          root: projectRoot,
+        },
+      ])
+    );
+    const baseFilesContext = createRendererPluginContext(
+      filesPluginEntry(true)
+    );
+    const filesContext: RendererPluginContext = {
+      ...baseFilesContext,
+      files: { ...baseFilesContext.files, list },
+    };
+    const disposeFiles = filesModule.activate(filesContext);
+    try {
+      const registration = getPluginPanelRegistrations().get(FILES_PANEL_ID);
+      expect(registration).toMatchObject({
+        id: FILES_PANEL_ID,
+        kind: "web",
+      });
+      const FilesPanel = registration?.component;
+      if (!FilesPanel) {
+        throw new Error("expected Files explorer panel registration");
+      }
+
+      const { container } = render(
+        <FilesPanel {...makeFilesPanelProps({ context })} />
+      );
+
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith("/Users/xyz/ABC/pier", { path: "" });
+      });
+      const treeElement = getPierFileTree(container);
+      expect(treeElement).toBeVisible();
+      const filesTreeHost = container.querySelector(
+        'file-tree-container[aria-label="Files"]'
+      );
+      expect(filesTreeHost).toBeInstanceOf(HTMLElement);
+      expect(filesTreeHost).toHaveClass("min-h-0", "flex-1", "w-full");
+      expect(
+        (filesTreeHost as HTMLElement).shadowRoot?.querySelector(
+          '[data-file-tree-virtualized-scroll="true"]'
+        )
+      ).toBeInstanceOf(HTMLElement);
+      expect(filesTreeHost).not.toHaveClass("overflow-auto");
+      const tree = within(treeElement);
+      expect(tree.getByRole("treeitem", { name: "src" })).toBeVisible();
+      expect(
+        tree.getByRole("treeitem", { name: "package.json" })
+      ).toBeVisible();
+    } finally {
+      disposeFiles();
+    }
+  });
+
+  it("Files explorer lazily loads expanded directory children from the host files API", async () => {
+    const projectRoot =
+      context.projectRoot ??
+      context.worktreeRoot ??
+      context.gitRoot ??
+      context.cwd ??
+      "/Users/xyz/ABC/pier";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      (_root, options) => {
+        if (options?.path === "") {
+          return Promise.resolve([
+            {
+              kind: "directory",
+              path: "src",
+              root: projectRoot,
+            },
+          ]);
+        }
+        if (options?.path === "src") {
+          return Promise.resolve([
+            {
+              kind: "file",
+              path: "src/App.tsx",
+              root: projectRoot,
+            },
+          ]);
+        }
+        return Promise.reject(
+          new Error(`unexpected list path ${options?.path ?? "<missing>"}`)
+        );
+      }
+    );
+    const { container, disposeFiles } = renderFilesExplorerPanel(list);
+
+    try {
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, { path: "" });
+      });
+      const tree = within(getPierFileTree(container));
+      const srcRow = tree.getByRole("treeitem", { name: "src" });
+
+      fireEvent.click(srcRow);
+
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, { path: "src" });
+      });
+      expect(
+        await tree.findByRole("treeitem", { name: APP_TSX_TREEITEM_PATTERN })
+      ).toBeVisible();
+    } finally {
+      disposeFiles();
+    }
+  });
+
+  it("Files explorer renders an explicit empty state for an empty project root", async () => {
+    const projectRoot =
+      context.projectRoot ??
+      context.worktreeRoot ??
+      context.gitRoot ??
+      context.cwd ??
+      "/Users/xyz/ABC/pier";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(() =>
+      Promise.resolve([])
+    );
+    const { disposeFiles } = renderFilesExplorerPanel(list);
+
+    try {
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, { path: "" });
+      });
+      expect(await screen.findByText("No files found")).toBeVisible();
+    } finally {
+      disposeFiles();
+    }
+  });
+
+  it("Files explorer shows a directory-scoped error when lazy child loading fails", async () => {
+    const projectRoot =
+      context.projectRoot ??
+      context.worktreeRoot ??
+      context.gitRoot ??
+      context.cwd ??
+      "/Users/xyz/ABC/pier";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      (_root, options) => {
+        if (options?.path === "") {
+          return Promise.resolve([
+            {
+              kind: "directory",
+              path: "src",
+              root: projectRoot,
+            },
+          ]);
+        }
+        return Promise.reject(new Error("Permission denied loading src"));
+      }
+    );
+    const { container, disposeFiles } = renderFilesExplorerPanel(list);
+
+    try {
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, { path: "" });
+      });
+      const treeElement = getPierFileTree(container);
+      const tree = within(treeElement);
+      const srcRow = tree.getByRole("treeitem", { name: "src" });
+
+      fireEvent.click(srcRow);
+
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, { path: "src" });
+      });
+      expect(
+        await within(srcRow).findByText(SRC_PERMISSION_LOAD_ERROR_PATTERN)
+      ).toBeVisible();
+    } finally {
+      disposeFiles();
+    }
   });
 
   it("worktree renderer 插件只通过 plugin host API 访问宿主能力", async () => {

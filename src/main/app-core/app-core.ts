@@ -9,6 +9,7 @@ import {
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
@@ -148,6 +149,7 @@ function createPierAppCore(): PierAppCore {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
+    files: createFileService(),
     preferences: createPreferencesService({ eventBus }),
     secrets: createSecretsStore(),
     processEnvironment: createProcessEnvironmentService(),
@@ -202,7 +204,10 @@ function createPierAppCore(): PierAppCore {
       return {
         git,
         gitWatch: createGitWatchService({
-          getStatus: (gitRoot: string) => git.getStatus(gitRoot),
+          getStatus: (gitRoot, prefetched) =>
+            git.getStatus(gitRoot, prefetched),
+          // poll 仅在有窗口聚焦时执行；后台错过的 poll 由聚焦补课 pulse 弥补（index.ts）
+          isPollActive: () => windowManager.getFocused() !== null,
         }),
       };
     })(),

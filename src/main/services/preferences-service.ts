@@ -26,61 +26,42 @@ export interface CreatePreferencesServiceArgs {
   ) => Promise<ProjectPreferences>;
 }
 
+/** 白名单键——patch 里 undefined 的字段不下传 (zod 会替代为默认值)。 */
+const PATCHABLE_KEYS = [
+  "agentCommandOverrides",
+  "agentDefaultArgs",
+  "agentDefaultEnv",
+  "agentStatusHooks",
+  "defaultAgentId",
+  "disabledAgentIds",
+  "gitAutoFetchEnabled",
+  "gitAutoFetchIntervalMinutes",
+  "language",
+  "monoFontFamily",
+  "monoFontSize",
+  "stylePresetId",
+  "terminalCursorBlink",
+  "terminalCursorStyle",
+  "terminalNewCwdPolicy",
+  "terminalPasteProtection",
+  "terminalScrollbackMb",
+  "theme",
+  "uiFontFamily",
+  "userKeymap",
+  "windowZoomLevel",
+] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
+
 function stripUndefinedPatch(
   patch: ProjectPreferencesPatch
 ): Partial<ProjectPreferences> {
-  return {
-    ...(patch.agentCommandOverrides !== undefined && {
-      agentCommandOverrides: patch.agentCommandOverrides,
-    }),
-    ...(patch.agentDefaultArgs !== undefined && {
-      agentDefaultArgs: patch.agentDefaultArgs,
-    }),
-    ...(patch.agentDefaultEnv !== undefined && {
-      agentDefaultEnv: patch.agentDefaultEnv,
-    }),
-    ...(patch.defaultAgentId !== undefined && {
-      defaultAgentId: patch.defaultAgentId,
-    }),
-    ...(patch.disabledAgentIds !== undefined && {
-      disabledAgentIds: patch.disabledAgentIds,
-    }),
-    ...(patch.language !== undefined && { language: patch.language }),
-    ...(patch.monoFontFamily !== undefined && {
-      monoFontFamily: patch.monoFontFamily,
-    }),
-    ...(patch.monoFontSize !== undefined && {
-      monoFontSize: patch.monoFontSize,
-    }),
-    ...(patch.stylePresetId !== undefined && {
-      stylePresetId: patch.stylePresetId,
-    }),
-    ...(patch.terminalCursorBlink !== undefined && {
-      terminalCursorBlink: patch.terminalCursorBlink,
-    }),
-    ...(patch.terminalCursorStyle !== undefined && {
-      terminalCursorStyle: patch.terminalCursorStyle,
-    }),
-    ...(patch.terminalNewCwdPolicy !== undefined && {
-      terminalNewCwdPolicy: patch.terminalNewCwdPolicy,
-    }),
-    ...(patch.terminalPasteProtection !== undefined && {
-      terminalPasteProtection: patch.terminalPasteProtection,
-    }),
-    ...(patch.terminalScrollbackMb !== undefined && {
-      terminalScrollbackMb: patch.terminalScrollbackMb,
-    }),
-    ...(patch.theme !== undefined && { theme: patch.theme }),
-    ...(patch.uiFontFamily !== undefined && {
-      uiFontFamily: patch.uiFontFamily,
-    }),
-    ...(patch.userKeymap !== undefined && {
-      userKeymap: patch.userKeymap,
-    }),
-    ...(patch.windowZoomLevel !== undefined && {
-      windowZoomLevel: patch.windowZoomLevel,
-    }),
-  };
+  const out: Partial<ProjectPreferences> = {};
+  for (const key of PATCHABLE_KEYS) {
+    const value = patch[key];
+    if (value !== undefined) {
+      (out as Record<string, unknown>)[key] = value;
+    }
+  }
+  return out;
 }
 
 export function createPreferencesService({

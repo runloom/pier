@@ -30,7 +30,7 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
       if (!command) {
         return { launchId: null };
       }
-      const launchId = terminalLaunchRegistry.register({ command });
+      const launchId = terminalLaunchRegistry.register({ agentId, command });
       return { launchId };
     }
   );

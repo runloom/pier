@@ -351,6 +351,66 @@ describe("createGitService", () => {
     expect(status.repoState).toEqual({ kind: "clean" });
   });
 
+  // A7: 传 prefetched 时跳过 status 与两条 numstat spawn，结果与不传等价
+  it("getStatus 传 prefetched 时不再 spawn status/numstat，结果与不传等价", async () => {
+    const statusOut = `${[
+      "# branch.head main",
+      "# branch.upstream origin/main",
+      "1 .M N... 100644 100644 100644 a b src/foo.ts",
+    ].join("\0")}\0`;
+    const unstagedNumstat = "3\t1\tb.ts\0";
+    const stagedNumstat = "5\t2\ta.ts\0";
+    const makeExec =
+      (record: Array<readonly string[]>) =>
+      (args: readonly string[]): Promise<string> => {
+        record.push(args);
+        if (args[0] === "status") {
+          return Promise.resolve(statusOut);
+        }
+        if (args[0] === "diff") {
+          return Promise.resolve(
+            args.includes("--cached") ? stagedNumstat : unstagedNumstat
+          );
+        }
+        if (args[0] === "rev-list") {
+          return Promise.resolve("2\n");
+        }
+        if (args[0] === "rev-parse") {
+          return Promise.resolve("/tmp/nonexistent-gitdir\n");
+        }
+        if (args[0] === "for-each-ref") {
+          return Promise.resolve("[ahead 1]\n");
+        }
+        return Promise.resolve("");
+      };
+
+    const plainCalls: Array<readonly string[]> = [];
+    const plainService = createGitService({ execGit: makeExec(plainCalls) });
+    const plain = await plainService.getStatus("/repo");
+
+    const prefetchedCalls: Array<readonly string[]> = [];
+    const prefetchedService = createGitService({
+      execGit: makeExec(prefetchedCalls),
+    });
+    const prefetched = await prefetchedService.getStatus("/repo", {
+      stagedNumstat,
+      statusOut,
+      unstagedNumstat,
+    });
+
+    // 等价
+    expect(prefetched).toEqual(plain);
+    // 预取路径不再调 status
+    expect(prefetchedCalls.some((a) => a[0] === "status")).toBe(false);
+    // 预取路径不再调 numstat（diff --numstat）
+    expect(
+      prefetchedCalls.some((a) => a[0] === "diff" && a.includes("--numstat"))
+    ).toBe(false);
+    // 其余命令照跑
+    expect(prefetchedCalls.some((a) => a[0] === "rev-list")).toBe(true);
+    expect(prefetchedCalls.some((a) => a[0] === "for-each-ref")).toBe(true);
+  });
+
   // C3: 默认带 --no-color + --no-ext-diff（防用户配 diff.external 覆盖输出）
   it("getDiffText 默认带 --no-color --no-ext-diff 并原样返回文本", async () => {
     const calls: Array<readonly string[]> = [];

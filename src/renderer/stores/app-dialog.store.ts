@@ -4,6 +4,7 @@
  * 渲染与 blocking overlay 生命周期由 components/common/app-dialog-host.tsx 承担。
  */
 import { create } from "zustand";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 
 export interface AppAlertOptions {
   body?: string;
@@ -36,6 +37,9 @@ function openAppDialog(
   kind: AppDialogRequest["kind"],
   options: AppConfirmOptions
 ): Promise<boolean> {
+  // 模态弹窗与命令面板不叠放: 弹窗出现时先关面板 (close 幂等,
+  // 未 accept 的 quick-pick 由面板 dismiss effect 兜底调 onDismiss)。
+  useCommandPaletteController.getState().close();
   useAppDialogStore.getState().current?.resolve(false);
   return new Promise((resolvePromise) => {
     const request: AppDialogRequest = {

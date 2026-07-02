@@ -291,6 +291,95 @@ describe("CommandPalette quick pick rows", () => {
     expect(screen.queryByText("pier")).not.toBeInTheDocument();
   });
 
+  it("moves highlight and preview to the first visible item when the selected item is filtered out", async () => {
+    const onChangeSelection = vi.fn();
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Probe",
+        placeholder: "Search probe",
+        items: [
+          { checked: true, id: "alpha", label: "alpha" },
+          { id: "bravo", label: "bravo" },
+        ],
+        onAccept: vi.fn(),
+        onChangeSelection,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("alpha")).toBeVisible();
+    });
+    expect(screen.getByText("alpha").closest("[cmdk-item]")).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    // 查询把当前高亮的 checked 项过滤掉: 高亮应转移到第一个可见项并触发 preview。
+    fireEvent.change(screen.getByPlaceholderText("Search probe"), {
+      target: { value: "bravo" },
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("alpha")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("bravo").closest("[cmdk-item]")).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await waitFor(() => {
+      expect(onChangeSelection).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "bravo" })
+      );
+    });
+  });
+
+  it("hides section headings whose items are all filtered out", async () => {
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        title: "Run Task",
+        placeholder: "Search tasks",
+        sections: [
+          {
+            heading: "package.json",
+            id: "package-script",
+            items: [{ id: "task:dev", label: "dev" }],
+          },
+          {
+            heading: "Makefile",
+            id: "make",
+            items: [{ id: "task:build", label: "build" }],
+          },
+        ],
+        onAccept: vi.fn(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("package.json")).toBeVisible();
+    });
+
+    // 只匹配 Makefile 分组: package.json 组标题必须整组消失。
+    fireEvent.change(screen.getByPlaceholderText("Search tasks"), {
+      target: { value: "build" },
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("package.json")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Makefile")).toBeVisible();
+
+    // 全部不匹配: 所有组标题消失, 只剩空态文案。
+    fireEvent.change(screen.getByPlaceholderText("Search tasks"), {
+      target: { value: "devss" },
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Makefile")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("package.json")).not.toBeInTheDocument();
+  });
+
   it("filters quick-pick items without reordering matches", async () => {
     render(<CommandPalette />);
 

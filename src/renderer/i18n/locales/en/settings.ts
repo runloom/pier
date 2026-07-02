@@ -257,5 +257,10 @@ export const settings = {
       args: "Launch args",
       argsDesc: "Args appended to the launch command",
     },
+    statusHooks: {
+      label: "Agent status awareness",
+      description:
+        "Panels show live Claude Code running/waiting state via status hooks in ~/.claude/settings.json. Turn off to remove Pier-managed hooks and stop reinstalling them",
+    },
   },
 } as const;

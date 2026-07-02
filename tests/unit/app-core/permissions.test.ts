@@ -1,4 +1,5 @@
 import { authorizeCommand } from "@main/app-core/permissions.ts";
+import type { PierCommand } from "@shared/contracts/commands.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
   type PierClient,
@@ -228,5 +229,60 @@ describe("authorizeCommand", () => {
       ok: false,
       reason: "missing capability: preferences:write",
     });
+  });
+
+  it("requires file:read for file list and read commands", () => {
+    const readClient = client("cli-local", ["file:read"]);
+    const noFileReadClient = client("cli-local", []);
+
+    const commands = [
+      { path: "src", root: "/repo", type: "file.list" },
+      { path: "src/index.ts", root: "/repo", type: "file.readText" },
+    ] satisfies PierCommand[];
+
+    for (const command of commands) {
+      expect(authorizeCommand(command, readClient)).toEqual({ ok: true });
+      expect(authorizeCommand(command, noFileReadClient)).toEqual({
+        ok: false,
+        reason: "missing capability: file:read",
+      });
+    }
+  });
+
+  it("requires file:write for file mutation commands", () => {
+    expect(pierCapabilitySchema.parse("file:write")).toBe("file:write");
+
+    const writeClient = client("desktop-renderer", ["file:write"]);
+    const readOnlyClient = client("desktop-renderer", ["file:read"]);
+
+    const commands = [
+      {
+        contents: "export const value = 1;\n",
+        path: "src/index.ts",
+        root: "/repo",
+        type: "file.writeText",
+      },
+      {
+        newPath: "src/main.ts",
+        path: "src/index.ts",
+        root: "/repo",
+        type: "file.rename",
+      },
+      {
+        newPath: "packages/app/src/index.ts",
+        path: "src/index.ts",
+        root: "/repo",
+        type: "file.move",
+      },
+      { path: "src/index.ts", root: "/repo", type: "file.trash" },
+    ] satisfies PierCommand[];
+
+    for (const command of commands) {
+      expect(authorizeCommand(command, writeClient)).toEqual({ ok: true });
+      expect(authorizeCommand(command, readOnlyClient)).toEqual({
+        ok: false,
+        reason: "missing capability: file:write",
+      });
+    }
   });
 });

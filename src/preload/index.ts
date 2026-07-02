@@ -39,7 +39,12 @@ import type {
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
-import { gitApi } from "./git-api.ts";
+import {
+  agentSessionsApi,
+  type PierAgentSessionsAPI,
+} from "./agent-session-api.ts";
+import { filesApi, type PierFilesAPI } from "./file-api.ts";
+import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
 import { pluginSettingsApi } from "./plugin-settings-api.ts";
 import {
@@ -121,6 +126,7 @@ export interface PierPluginsAPI {
   onChanged: (cb: (snapshot: PluginRegistryListResult) => void) => () => void;
 }
 
+export type { PierFilesAPI } from "./file-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
 export type { PierTerminalStatusBarPrefsAPI } from "./terminal-status-bar-api.ts";
@@ -176,15 +182,17 @@ export interface PierTasksAPI {
 }
 
 export interface PierWindowAPI {
+  agentSessions: PierAgentSessionsAPI;
   agents: PierAgentsAPI;
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<WindowCreateResult>;
+  files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
   getWindowContext: () => Promise<WindowContext>;
-  git: import("./git-api.ts").PierGitAPI;
+  git: PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
@@ -425,6 +433,7 @@ const tasksApi: PierTasksAPI = {
 
 const api: PierWindowAPI = {
   agents: agentsApi,
+  agentSessions: agentSessionsApi,
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:close", windowId),
@@ -433,6 +442,7 @@ const api: PierWindowAPI = {
   createWindow: () => ipcRenderer.invoke("pier://window:create"),
   focusWindow: (windowId) =>
     ipcRenderer.invoke("pier://window:focus", windowId),
+  files: filesApi,
   getWindowContext: () => ipcRenderer.invoke("pier://window:context"),
   keybinding: keybindingApi,
   listWindows: () => ipcRenderer.invoke("pier://window:list"),

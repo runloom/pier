@@ -1,0 +1,17 @@
+diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
+index 3d02080ad553347e7fe95e261c993b607b4134c2..1b7a2af82f39eb4998198f9c3ddcdbb942ff7f6e 100644
+--- a/dist/render/FileTreeView.js
++++ b/dist/render/FileTreeView.js
+@@ -1692,7 +1692,11 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 			setActiveItemPath((previousPath) => previousPath === actionTargetPath ? previousPath : actionTargetPath);
+ 			setLastContextMenuInteraction("focus");
+ 		}
+-		if (shouldToggleDirectory) controller.toggleMountedDirectoryFromInput(actionTargetPath);
++		if (shouldToggleDirectory) {
++			controller.toggleMountedDirectoryFromInput(actionTargetPath);
++			const toggledItem = controller.getItem(actionTargetPath);
++			if (clickedElement != null && toggledItem?.isDirectory() === true) clickedElement.setAttribute("aria-expanded", String(toggledItem.isExpanded()));
++		}
+ 		if (plan.closeSearch) controller.closeSearch();
+ 		if (plan.revealCanonical) revealCanonicalRowAtStickyOffset(actionTargetPath, { targetOffset: "sticky-parents" });
+ 	}, [

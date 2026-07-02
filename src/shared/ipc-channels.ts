@@ -47,6 +47,8 @@ export const PIER_BROADCAST = {
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
   // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
+  // agent 会话状态全量快照广播 (main → 所有 renderer, payload AgentSessionsBroadcast).
+  AGENT_SESSIONS_CHANGED: "pier://agent-session:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];
