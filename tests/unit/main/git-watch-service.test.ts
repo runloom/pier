@@ -1,5 +1,12 @@
 import { EventEmitter } from "node:events";
-import { createGitWatchService } from "@main/services/git-watch-service.ts";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execGit } from "@main/services/git-exec.ts";
+import {
+  createGitWatchService,
+  defaultWorktreeSignature,
+} from "@main/services/git-watch-service.ts";
 import type { GitChangeEvent, GitStatus } from "@shared/contracts/git.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +46,8 @@ class FakeWatcher extends EventEmitter {
 interface Recorder {
   headSig: string;
   headSigCalls: number;
+  refsSig: string;
+  refsSigCalls: number;
   repoStateSig: string;
   repoStateSigCalls: number;
   worktreeSig: string;
@@ -49,6 +58,8 @@ function makeRecorder(): Recorder {
   return {
     headSig: "h0",
     headSigCalls: 0,
+    refsSig: "f0",
+    refsSigCalls: 0,
     repoStateSig: "r0",
     repoStateSigCalls: 0,
     worktreeSig: "w0",
@@ -61,6 +72,10 @@ function bindRecorder(rec: Recorder) {
     computeHeadSignature: () => {
       rec.headSigCalls += 1;
       return Promise.resolve(rec.headSig);
+    },
+    computeRefsSignature: () => {
+      rec.refsSigCalls += 1;
+      return Promise.resolve(rec.refsSig);
     },
     computeRepoStateSignature: () => {
       rec.repoStateSigCalls += 1;
@@ -399,5 +414,201 @@ describe("createGitWatchService", () => {
 
     expect(events).toEqual([{ changeKind: "worktree", gitRoot: "/repo" }]);
     await service.dispose();
+  });
+
+  // Task 2: refs 签名独立追踪，仅在唯一变化类别时上报 changeKind="refs"
+  it("refs 签名单独变化时广播 changeKind refs", async () => {
+    const fakeWatcher = new FakeWatcher();
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => fakeWatcher,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (e) => events.push(e));
+    await vi.runOnlyPendingTimersAsync();
+
+    rec.refsSig = "f1";
+    fakeWatcher.emit("change");
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(events).toEqual([{ changeKind: "refs", gitRoot: "/repo" }]);
+    await service.dispose();
+  });
+
+  it("refs 与 worktree 同时变化时 changeKind 仍为 worktree（refs 不覆盖既有语义）", async () => {
+    const fakeWatcher = new FakeWatcher();
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => fakeWatcher,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (e) => events.push(e));
+    await vi.runOnlyPendingTimersAsync();
+
+    rec.refsSig = "f1";
+    rec.worktreeSig = "w1";
+    fakeWatcher.emit("change");
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(events).toEqual([{ changeKind: "worktree", gitRoot: "/repo" }]);
+    await service.dispose();
+  });
+
+  it("pulse(gitRoot) 立即触发重算并广播,无需等待 poll", async () => {
+    const fakeWatcher = new FakeWatcher();
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => fakeWatcher,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (e) => events.push(e));
+    await vi.runOnlyPendingTimersAsync();
+
+    rec.refsSig = "f1";
+    service.pulse("/repo");
+    await vi.waitFor(() => {
+      expect(events).toEqual([{ changeKind: "refs", gitRoot: "/repo" }]);
+    });
+
+    await service.dispose();
+  });
+
+  it("pulse 对 baseline 未完成的 gitRoot 是 no-op", async () => {
+    const fakeWatcher = new FakeWatcher();
+    let resolveBaseline: () => void = () => undefined;
+    const baselineGate = new Promise<void>((res) => {
+      resolveBaseline = res;
+    });
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      computeHeadSignature: async () => {
+        await baselineGate;
+        return rec.headSig;
+      },
+      computeRefsSignature: async () => {
+        await baselineGate;
+        return rec.refsSig;
+      },
+      computeRepoStateSignature: async () => {
+        await baselineGate;
+        return rec.repoStateSig;
+      },
+      computeWorktreeSignature: async () => {
+        await baselineGate;
+        return rec.worktreeSig;
+      },
+      fsWatch: () => fakeWatcher,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (e) => events.push(e));
+
+    // baseline 未完成时 pulse 不应触发重算/广播
+    service.pulse("/repo");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(events).toEqual([]);
+
+    resolveBaseline();
+    await vi.runOnlyPendingTimersAsync();
+    expect(events).toEqual([]);
+    await service.dispose();
+  });
+
+  it("activeRoots 返回有订阅者的 gitRoot", async () => {
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => new FakeWatcher(),
+    });
+    const unsubscribe = service.watch("/repo", () => undefined);
+    expect(service.activeRoots()).toEqual(["/repo"]);
+    unsubscribe();
+    expect(service.activeRoots()).toEqual([]);
+    await service.dispose();
+  });
+
+  it("activeRoots 聚合多个 gitRoot,退订后移除对应项", async () => {
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => new FakeWatcher(),
+    });
+    const unsubA = service.watch("/repo-a", () => undefined);
+    const unsubB = service.watch("/repo-b", () => undefined);
+    expect(service.activeRoots().sort()).toEqual(["/repo-a", "/repo-b"]);
+    unsubA();
+    expect(service.activeRoots()).toEqual(["/repo-b"]);
+    unsubB();
+    expect(service.activeRoots()).toEqual([]);
+    await service.dispose();
+  });
+
+  // Task 2 spec 缺口③:已 modify 文件继续编辑时,porcelain v2 输出不变但 numstat 变化
+  it("worktree 签名折进 numstat,已修改文件继续编辑时签名变化", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-worktree-sig-"));
+    try {
+      await execGit(["init", "-q", "-b", "main"], { cwd: dir });
+      await execGit(["config", "user.email", "test@pier.local"], {
+        cwd: dir,
+      });
+      await execGit(["config", "user.name", "Pier Test"], { cwd: dir });
+      const filePath = join(dir, "a.txt");
+      await writeFile(filePath, "line1\n");
+      await execGit(["add", "a.txt"], { cwd: dir });
+      await execGit(["commit", "-q", "-m", "init"], { cwd: dir });
+
+      await writeFile(filePath, "line1\nline2\n");
+      const sigAfterFirstEdit = await defaultWorktreeSignature(dir);
+
+      await writeFile(filePath, "line1\nline2\nline3\n");
+      const sigAfterSecondEdit = await defaultWorktreeSignature(dir);
+
+      expect(sigAfterSecondEdit).not.toBe(sigAfterFirstEdit);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("createGitWatchService — 真实仓库 refs 验证", () => {
+  it("defaultRefsSignature 对 fetch/prune 类 ref 变化敏感（真实仓库）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-refs-sig-"));
+    try {
+      await execGit(["init", "-q", "-b", "main"], { cwd: dir });
+      await execGit(["config", "user.email", "test@pier.local"], {
+        cwd: dir,
+      });
+      await execGit(["config", "user.name", "Pier Test"], { cwd: dir });
+      await execGit(["commit", "-q", "--allow-empty", "-m", "init"], {
+        cwd: dir,
+      });
+      const computeWorktreeSignature = vi.fn(async () => "w");
+      const service = createGitWatchService({
+        computeHeadSignature: async () => "h",
+        computeRepoStateSignature: async () => "s",
+        computeWorktreeSignature,
+        fsWatch: () => new FakeWatcher(),
+        pollMs: 60_000,
+      });
+      const listener = vi.fn();
+      const unsubscribe = service.watch(dir, listener);
+      // baseline(首次 force refresh)完成后,制造一次纯 ref 变化:新建分支(refs/heads 多一条)
+      await vi.waitFor(() => {
+        expect(computeWorktreeSignature).toHaveBeenCalledTimes(1);
+      });
+      await execGit(["branch", "feature/x"], { cwd: dir });
+      service.pulse(dir);
+      await vi.waitFor(() => {
+        expect(listener).toHaveBeenCalledWith(
+          expect.objectContaining({ changeKind: "refs" })
+        );
+      });
+      unsubscribe();
+      await service.dispose();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
