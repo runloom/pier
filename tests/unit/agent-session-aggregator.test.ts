@@ -133,10 +133,10 @@ describe("AgentSessionAggregator", () => {
     agg.dispose();
   });
 
-  it("标题信号不为普通 shell 建会话", () => {
+  it("标题信号不为普通 shell 建会话（无身份 idle 标题）", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestTitle("1", "p1", "~/dev/pier");
-    agg.ingestTitle("1", "p1", "✳ claude idle"); // idle 且无既有 entry
+    agg.ingestTitle("1", "p1", "✳ tidy up the docs"); // idle 且无 agent 身份
     expect(agg.snapshot().sessions).toHaveLength(0);
     agg.dispose();
   });
@@ -256,6 +256,79 @@ describe("AgentSessionAggregator", () => {
     const s2 = agg.snapshot().sessions[0];
     expect(s2?.status).toBe("tool");
     expect(s2?.subagentCount).toBe(0);
+    agg.dispose();
+  });
+
+  it("agentLaunched（launcher 客户端先验身份）立即建可见 ready 会话", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.agentLaunched("1", "p1", "opencode");
+    const s = agg.snapshot().sessions[0];
+    expect(s?.status).toBe("ready");
+    expect(s?.agentId).toBe("opencode");
+    expect(s?.source).toBe("launch");
+    agg.dispose();
+  });
+
+  it("agentLaunched 豁免关闭冷却（relaunch 后立即重建）", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.ingestHookEvent(hookEvent("PromptSubmit"));
+    agg.panelClosed("1", "p1"); // 5s 冷却
+    agg.agentLaunched("1", "p1", "claude");
+    expect(agg.snapshot().sessions).toHaveLength(1);
+    // 且冷却已清: 紧随的 hook 事件不被吞
+    agg.ingestHookEvent(hookEvent("PromptSubmit"));
+    expect(agg.snapshot().sessions[0]?.status).toBe("processing");
+    agg.dispose();
+  });
+
+  it("launch 会话被后续 hook 无缝接管（不被抑制规则挡）", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.agentLaunched("1", "p1", "claude");
+    agg.ingestHookEvent(hookEvent("PromptSubmit"));
+    const s = agg.snapshot().sessions[0];
+    expect(s?.status).toBe("processing");
+    expect(s?.source).toBe("hook");
+    agg.dispose();
+  });
+
+  it("带 agent 身份的 idle 标题建会话（启动即亮图标, 早于 hook 2s 延迟）", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.ingestTitle("1", "p1", "✳ Claude Code");
+    const s = agg.snapshot().sessions[0];
+    expect(s?.status).toBe("ready");
+    expect(s?.agentId).toBe("claude");
+    agg.dispose();
+  });
+
+  it("无身份的 idle 标题仍不建会话（普通 shell 防误报不回退）", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.ingestTitle("1", "p1", "✳ done reviewing");
+    expect(agg.snapshot().sessions).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("标题无状态 glyph 但有身份 token 时按 ready 建会话 (droid/aider 等无 spinner 的 agent)", () => {
+    const agg = createAgentSessionAggregator({ now });
+    // droid 启动即设标题 `⛬ Droid`,`⛬` 不在 status glyph 表内, 只有品牌 token "Droid"
+    agg.ingestTitle("1", "p1", "⛬ Droid");
+    const s = agg.snapshot().sessions[0];
+    expect(s?.status).toBe("ready");
+    expect(s?.agentId).toBe("droid");
+    expect(s?.source).toBe("title");
+    agg.dispose();
+  });
+
+  it("标题身份补全既有无身份会话的 agentId, 不覆盖 hook 已设身份", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.ingestTitle("1", "p1", "aider working"); // working+身份 → 建会话
+    expect(agg.snapshot().sessions[0]?.agentId).toBe("aider");
+    // hook 身份优先: 先 hook 后过期标题不改 agentId
+    agg.ingestHookEvent(hookEvent("PromptSubmit", "p2"));
+    advance(30 * 60 * 1000 + 1); // hook 过期让标题接管
+    agg.ingestTitle("1", "p2", "gemini working");
+    expect(
+      agg.snapshot().sessions.find((x) => x.panelId === "p2")?.agentId
+    ).toBe("claude");
     agg.dispose();
   });
 

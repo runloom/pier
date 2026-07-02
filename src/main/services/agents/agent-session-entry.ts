@@ -1,4 +1,8 @@
-import type { AgentSessionSnapshot } from "@shared/contracts/agent-session.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
+import type {
+  AgentHookEvent,
+  AgentSessionSnapshot,
+} from "@shared/contracts/agent-session.ts";
 
 /**
  * agent 会话聚合器的模型层：常量、Entry 结构、key 规则与逐 entry 定时器
@@ -93,4 +97,108 @@ export function clearAllTimers(entry: Entry): void {
   clearHookTtlTimer(entry);
   clearTitleDecayTimer(entry);
   clearVisibilityTimer(entry);
+}
+
+/** hook 事件创建的 entry 字面量（不含定时器武装——那需要聚合器闭包）。 */
+export function newHookEntry(event: AgentHookEvent, at: number): Entry {
+  return {
+    // SessionStart 独享消抖隐藏：其余创建事件意味着已有真实活动。
+    hidden: event.event === "SessionStart",
+    hookTtlTimer: null,
+    lastHookAt: at,
+    snapshot: {
+      agentId: event.agent,
+      panelId: event.panelId,
+      source: "hook",
+      stateStartedAt: at,
+      status: "ready",
+      subagentCount: 0,
+      updatedAt: at,
+      windowId: event.windowId,
+    },
+    titleDecayTimer: null,
+    turnEnded: false,
+    visibilityTimer: null,
+  };
+}
+
+/** 标题信号创建的 entry 字面量（创建即可见, agentId 由调用方按身份补全）。 */
+export function newTitleEntry(
+  windowId: string,
+  panelId: string,
+  at: number
+): Entry {
+  return {
+    hidden: false,
+    hookTtlTimer: null,
+    lastHookAt: 0,
+    snapshot: {
+      panelId,
+      source: "title",
+      stateStartedAt: at,
+      status: "ready",
+      subagentCount: 0,
+      updatedAt: at,
+      windowId,
+    },
+    titleDecayTimer: null,
+    turnEnded: false,
+    visibilityTimer: null,
+  };
+}
+
+/**
+ * 回合边界/重置/吸收 + 子代理计数记账。返回 false 表示事件应被吸收丢弃。
+ * PermissionRequest 豁免吸收：权限弹窗本身就是回合复活的证据, 吞掉它会让
+ * 用户在 agent 实际阻塞等确认时看到 ready——功能最核心的信号不可吞。
+ */
+export function applyTurnBookkeeping(entry: Entry, eventName: string): boolean {
+  if (TURN_BOUNDARY_EVENTS.has(eventName)) {
+    entry.turnEnded = true;
+    entry.snapshot.subagentCount = 0;
+  } else if (TURN_RESET_EVENTS.has(eventName)) {
+    entry.turnEnded = false;
+    entry.snapshot.subagentCount = 0;
+  } else if (eventName === "PermissionRequest") {
+    entry.turnEnded = false;
+  } else if (entry.turnEnded) {
+    // 回合已结束, 吸收迟到事件（防止旧回合尾巴打错状态）。
+    return false;
+  }
+  if (eventName === "SubagentStart") {
+    entry.snapshot.subagentCount += 1;
+  } else if (eventName === "SubagentStop") {
+    entry.snapshot.subagentCount = Math.max(
+      0,
+      entry.snapshot.subagentCount - 1
+    );
+  }
+  return true;
+}
+
+/** launcher 客户端先验身份创建的 entry（orca launchToken 模式）：创建即可见。 */
+export function newLaunchEntry(
+  windowId: string,
+  panelId: string,
+  agentId: AgentKind,
+  at: number
+): Entry {
+  return {
+    hidden: false,
+    hookTtlTimer: null,
+    lastHookAt: 0,
+    snapshot: {
+      agentId,
+      panelId,
+      source: "launch",
+      stateStartedAt: at,
+      status: "ready",
+      subagentCount: 0,
+      updatedAt: at,
+      windowId,
+    },
+    titleDecayTimer: null,
+    turnEnded: false,
+    visibilityTimer: null,
+  };
 }

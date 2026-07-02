@@ -175,10 +175,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
-        const { context, nativeLaunch, task } = resolveCreateTerminalLaunch(
-          args,
-          saved
-        );
+        const { context, launchAgentId, nativeLaunch, task } =
+          resolveCreateTerminalLaunch(args, saved);
         // Task identity is persisted before native launch so immediate command-finished
         // callbacks can be gated to the task panel instead of repainting plain terminals.
         await persistInitialTerminalTask(sessionScope, args.panelId, task);
@@ -203,6 +201,14 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           )
         );
         if (ok) {
+          if (launchAgentId) {
+            // launcher 先验身份：图标/状态即刻点亮, 不等 agent 侧信号。
+            agentSessionService.agentLaunched(
+              String(win.id),
+              args.panelId,
+              launchAgentId
+            );
+          }
           consumeCreateLaunch(args);
           await persistInitialTerminalContext(
             sessionScope,

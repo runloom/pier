@@ -68,6 +68,7 @@ describe("pier:agents:prepareLaunch", () => {
     expect(result.launchId).toBe("launch-abc");
     expect(registerSpy).toHaveBeenCalledTimes(1);
     expect(registerSpy).toHaveBeenCalledWith({
+      agentId: "claude",
       command: expect.stringContaining("claude"),
     });
   });

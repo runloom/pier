@@ -77,6 +77,8 @@ export function resolveCreateTerminalLaunch(
   saved: TerminalPanelSession | null
 ): {
   context: CreateTerminalArgs["context"];
+  /** launcher 启动的 agent 身份（+按钮/命令面板）——用于会话即时点亮。 */
+  launchAgentId?: import("@shared/contracts/agent.ts").AgentKind | undefined;
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined;
   task?: TaskPanelMetadata | undefined;
 } {
@@ -100,6 +102,7 @@ export function resolveCreateTerminalLaunch(
   }
   return {
     context,
+    ...(launch?.agentId ? { launchAgentId: launch.agentId } : {}),
     nativeLaunch: nativeLaunchOptions(launch, cwd, {
       restoredSession: Boolean(saved && !explicitCreate),
     }),

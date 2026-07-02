@@ -1,7 +1,10 @@
 import {
+  detectAgentIdFromTitle,
   detectAgentStatusFromTitle,
   runtimeStatusForTitleStatus,
+  titleLooksLikeAgentContext,
 } from "@shared/agent-title-status.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   type AgentHookEvent,
   type AgentRuntimeStatus,
@@ -9,6 +12,7 @@ import {
   runtimeStatusForHookEvent,
 } from "@shared/contracts/agent-session.ts";
 import {
+  applyTurnBookkeeping,
   CLOSE_COOLDOWN_MS,
   clearAllTimers,
   clearHookTtlTimer,
@@ -17,6 +21,9 @@ import {
   EMIT_DEBOUNCE_MS,
   type Entry,
   HOOK_FRESH_TTL_MS,
+  newHookEntry,
+  newLaunchEntry,
+  newTitleEntry,
   SESSION_CREATING_EVENTS,
   SESSION_END_COOLDOWN_MS,
   STALE_WORKING_TITLE_MS,
@@ -24,22 +31,21 @@ import {
   SUSPENDED_JOB_EXIT_CODES,
   sessionKey,
   TITLE_WAITING_TTL_MS,
-  TURN_BOUNDARY_EVENTS,
-  TURN_RESET_EVENTS,
   VISIBILITY_DEBOUNCE_MS,
 } from "./agent-session-entry.ts";
 
 export interface AgentSessionAggregator {
   /**
-   * 前台命令退出（ghostty shell integration command_finished）：该面板若有
-   * agent 会话说明 agent CLI 已退出——覆盖崩溃/kill 等无 SessionEnd 的路径,
-   * 亦兜底标题启发式会话。按 panelClosed 同款清理 + 5s 冷却吸收迟到 hook。
-   * 无会话面板 no-op（普通 shell 命令不受影响）。
-   * 已知限制：Ctrl+Z 悬挂同样触发 command_finished, 会话短暂消失, fg 后
-   * 由后续 hook 事件自愈（见计划文档已知风险）。
+   * launcher 客户端先验身份:无需 agent 侧信号即刻建可见 ready 会话
+   * (orca launchToken 模式)。豁免关闭冷却; 后续 hook/标题信号无缝接管。
    */
-  /** exitCode 为悬挂家族（128+SIGSTOP/SIGTSTP, darwin/linux: 145-148）时
-   * 视为 Ctrl+Z 暂停而非退出, 不清理——fg 恢复后 hook 事件无缝续接。 */
+  agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
+  /**
+   * 前台命令退出(ghostty shell integration command_finished):该面板若有
+   * agent 会话说明 agent CLI 已退出——覆盖崩溃/kill 等无 SessionEnd 的路径。
+   * 按 panelClosed 同款清理 + 5s 冷却吸收迟到 hook。Ctrl+Z 悬挂 (145-148)
+   * 不清理, fg 恢复后 hook 无缝续接。
+   */
   commandFinished(windowId: string, panelId: string, exitCode?: number): void;
   dispose(): void;
   ingestHookEvent(event: AgentHookEvent): void;
@@ -115,11 +121,7 @@ export function createAgentSessionAggregator(
     }, HOOK_FRESH_TTL_MS);
   }
 
-  /**
-   * 标题源衰减：working 3s 无新标题 → ready（orca 过期标题清理）；
-   * waiting 30min 无更新 → ready（防永久卡死）。独立槽位——不与 hook TTL
-   * 互相 clobber（单槽位曾导致一条杂散 hook 把 3s 快衰减顶成 30min）。
-   */
+  /** 标题源衰减:working 3s / waiting 30min → ready。独立槽位不与 hook TTL 互相 clobber。 */
   function armTitleDecayTimer(
     key: string,
     entry: Entry,
@@ -192,25 +194,7 @@ export function createAgentSessionAggregator(
     event: AgentHookEvent,
     at: number
   ): Entry {
-    const entry: Entry = {
-      // SessionStart 独享消抖隐藏：其余创建事件意味着已有真实活动。
-      hidden: event.event === "SessionStart",
-      hookTtlTimer: null,
-      lastHookAt: at,
-      snapshot: {
-        agentId: event.agent,
-        panelId: event.panelId,
-        source: "hook",
-        stateStartedAt: at,
-        status: "ready",
-        subagentCount: 0,
-        updatedAt: at,
-        windowId: event.windowId,
-      },
-      titleDecayTimer: null,
-      turnEnded: false,
-      visibilityTimer: null,
-    };
+    const entry = newHookEntry(event, at);
     entries.set(key, entry);
     if (entry.hidden) {
       entry.visibilityTimer = setTimeout(() => {
@@ -235,40 +219,7 @@ export function createAgentSessionAggregator(
     }
   }
 
-  /**
-   * 回合边界/重置/吸收 + 子代理计数记账。返回 false 表示事件应被吸收丢弃。
-   * PermissionRequest 豁免吸收：权限弹窗本身就是回合复活的证据, 吞掉它会让
-   * 用户在 agent 实际阻塞等确认时看到 ready——功能最核心的信号不可吞。
-   */
-  function applyTurnBookkeeping(entry: Entry, eventName: string): boolean {
-    if (TURN_BOUNDARY_EVENTS.has(eventName)) {
-      entry.turnEnded = true;
-      entry.snapshot.subagentCount = 0;
-    } else if (TURN_RESET_EVENTS.has(eventName)) {
-      entry.turnEnded = false;
-      entry.snapshot.subagentCount = 0;
-    } else if (eventName === "PermissionRequest") {
-      entry.turnEnded = false;
-    } else if (entry.turnEnded) {
-      // 回合已结束, 吸收迟到事件（防止旧回合尾巴打错状态）。
-      return false;
-    }
-    if (eventName === "SubagentStart") {
-      entry.snapshot.subagentCount += 1;
-    } else if (eventName === "SubagentStop") {
-      entry.snapshot.subagentCount = Math.max(
-        0,
-        entry.snapshot.subagentCount - 1
-      );
-    }
-    return true;
-  }
-
-  /**
-   * 生命周期前置处理：SessionStart 豁免一切冷却（SessionEnd 短冷却、
-   * relaunch/panelClosed 5s 冷却都不应吞掉紧随其后的重启）；SessionEnd
-   * 整会话移除 + 短冷却拦乱序迟到 curl。返回 true 表示事件已被消化。
-   */
+  /** SessionStart 豁免冷却; SessionEnd 移除 + 短冷却拦迟到 curl。已消化返 true。 */
   function handleLifecycleEvent(key: string, eventName: string): boolean {
     if (eventName === "SessionStart") {
       cooldownUntil.delete(key);
@@ -307,7 +258,81 @@ export function createAgentSessionAggregator(
     return createHookEntry(key, event, at);
   }
 
+  /**
+   * ingestTitle 分支:标题既无状态 glyph 又无身份 token 时的处理——
+   * 若 existing 是 title-source 且新标题也不像 agent 上下文(纯 shell 提示符),
+   * 视为用户已从 agent 退回 shell, 清 entry 让图标还原。hook-source 或有 agent
+   * 上下文的过渡标题(如 droid `⛬ 新会话` 保留 ⛬ 前缀)不受影响。
+   */
+  function handleTitleWithoutSignals(
+    key: string,
+    existing: Entry | undefined,
+    title: string
+  ): void {
+    if (
+      !(existing && existing.snapshot.source === "title") ||
+      titleLooksLikeAgentContext(title)
+    ) {
+      return;
+    }
+    if (closeEntry(key)) {
+      scheduleEmit();
+    }
+  }
+
+  /** 取得/创建 title entry。无身份 idle 标题不建（普通 shell 防误报）。 */
+  function acquireTitleEntry(
+    key: string,
+    windowId: string,
+    panelId: string,
+    status: AgentRuntimeStatus,
+    titleAgentId: string | null
+  ): Entry | null {
+    const existing = entries.get(key);
+    if (existing) {
+      return existing;
+    }
+    if (status === "ready" && titleAgentId === null) {
+      return null;
+    }
+    const entry = newTitleEntry(windowId, panelId, now());
+    entries.set(key, entry);
+    return entry;
+  }
+
+  /** 按标题状态武装/清除衰减定时器（working 3s / waiting 30min）。 */
+  function armTitleDecayForStatus(
+    key: string,
+    entry: Entry,
+    status: AgentRuntimeStatus
+  ): void {
+    if (status === "processing") {
+      armTitleDecayTimer(key, entry, STALE_WORKING_TITLE_MS, "processing");
+    } else if (status === "waiting") {
+      armTitleDecayTimer(key, entry, TITLE_WAITING_TTL_MS, "waiting");
+    } else {
+      clearTitleDecayTimer(entry);
+    }
+  }
+
   return {
+    agentLaunched(windowId, panelId, agentId) {
+      if (disposed) {
+        return;
+      }
+      const key = sessionKey(windowId, panelId);
+      // 显式启动 = 新生命周期, 清一切冷却（与 SessionStart 豁免同语义）。
+      cooldownUntil.delete(key);
+      const existing = entries.get(key);
+      if (existing) {
+        revealEntry(existing);
+        existing.snapshot.agentId = agentId;
+      } else {
+        entries.set(key, newLaunchEntry(windowId, panelId, agentId, now()));
+      }
+      scheduleEmit();
+    },
+
     ingestHookEvent(event) {
       if (disposed) {
         return;
@@ -352,47 +377,40 @@ export function createAgentSessionAggregator(
         return;
       }
       const titleStatus = detectAgentStatusFromTitle(title);
-      if (titleStatus === null) {
+      const titleAgentId = detectAgentIdFromTitle(title);
+      // 决定进入通道：
+      // (a) 标题有可识别状态 glyph → 走原路径, 状态即 titleStatus。
+      // (b) 标题无状态 glyph 但有 agent 身份 token(如 droid 的 "⛬ Droid",
+      //     只有目录派生的品牌 token 命中, 没有 idle/working 信号)→ 视为
+      //     ready, 用「有身份」补齐入口, 让图标至少能点亮。
+      // (c) 都无 → 转 handleTitleWithoutSignals 判断是否为「退回 shell」。
+      if (titleStatus === null && titleAgentId === null) {
+        handleTitleWithoutSignals(key, existing, title);
         return;
       }
-      const status = runtimeStatusForTitleStatus(titleStatus);
-      let entry = existing;
+      const status =
+        titleStatus === null
+          ? "ready"
+          : runtimeStatusForTitleStatus(titleStatus);
+      const entry = acquireTitleEntry(
+        key,
+        windowId,
+        panelId,
+        status,
+        titleAgentId
+      );
       if (!entry) {
-        if (status === "ready") {
-          // 不为普通 shell / 空闲标题建会话, 避免全体终端都出现 agent 状态。
-          return;
-        }
-        const at = now();
-        entry = {
-          hidden: false,
-          hookTtlTimer: null,
-          lastHookAt: 0,
-          snapshot: {
-            panelId,
-            source: "title",
-            stateStartedAt: at,
-            status: "ready",
-            subagentCount: 0,
-            updatedAt: at,
-            windowId,
-          },
-          titleDecayTimer: null,
-          turnEnded: false,
-          visibilityTimer: null,
-        };
-        entries.set(key, entry);
+        return;
       }
       revealEntry(entry);
       entry.snapshot.source = "title";
+      if (titleAgentId !== null && entry.snapshot.agentId === undefined) {
+        // 只补全缺失身份, 不覆盖 hook 已确认的 agentId。
+        entry.snapshot.agentId = titleAgentId;
+      }
       clearHookTtlTimer(entry);
       setStatus(entry, status);
-      if (status === "processing") {
-        armTitleDecayTimer(key, entry, STALE_WORKING_TITLE_MS, "processing");
-      } else if (status === "waiting") {
-        armTitleDecayTimer(key, entry, TITLE_WAITING_TTL_MS, "waiting");
-      } else {
-        clearTitleDecayTimer(entry);
-      }
+      armTitleDecayForStatus(key, entry, status);
       scheduleEmit();
     },
 

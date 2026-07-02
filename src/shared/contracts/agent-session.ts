@@ -29,7 +29,7 @@ export const agentHookEventSchema = z
   .strict();
 export type AgentHookEvent = z.infer<typeof agentHookEventSchema>;
 
-export const agentSessionSourceSchema = z.enum(["hook", "title"]);
+export const agentSessionSourceSchema = z.enum(["hook", "launch", "title"]);
 export type AgentSessionSource = z.infer<typeof agentSessionSourceSchema>;
 
 export const agentSessionSnapshotSchema = z.object({
