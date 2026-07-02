@@ -29,9 +29,17 @@ export type PluginLocalizedContribution = z.infer<
   typeof pluginLocalizedContributionSchema
 >;
 
+export const pluginLocalizedCommandContributionSchema =
+  pluginLocalizedContributionSchema.extend({
+    category: z.string().min(1).optional(),
+  });
+export type PluginLocalizedCommandContribution = z.infer<
+  typeof pluginLocalizedCommandContributionSchema
+>;
+
 export const pluginLocaleMessagesSchema = z.object({
   commands: z
-    .record(z.string().min(1), pluginLocalizedContributionSchema)
+    .record(z.string().min(1), pluginLocalizedCommandContributionSchema)
     .optional(),
   description: z.string().min(1).optional(),
   messages: z.record(z.string().min(1), z.string().min(1)).optional(),

@@ -17,6 +17,11 @@ export interface PluginContributionDisplayText {
   title: string;
 }
 
+export interface PluginCommandDisplayText
+  extends PluginContributionDisplayText {
+  category?: string;
+}
+
 export type PluginMessageValues = Record<string, number | string>;
 
 function unique(values: string[]): string[] {
@@ -137,7 +142,13 @@ export function resolvePluginCommandDisplay(
   manifest: PluginManifest,
   command: PluginCommandContribution,
   locale: string
-): PluginContributionDisplayText {
+): PluginCommandDisplayText {
+  const category =
+    resolveFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.commands?.[command.id]?.category
+    ) ?? command.category;
   const description =
     resolveFromLocales(
       manifest,
@@ -151,6 +162,7 @@ export function resolvePluginCommandDisplay(
         locale,
         (messages) => messages.commands?.[command.id]?.title
       ) ?? command.title,
+    ...(category ? { category } : {}),
     ...(description ? { description } : {}),
   };
 }
