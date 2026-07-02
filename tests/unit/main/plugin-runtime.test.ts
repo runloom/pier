@@ -82,4 +82,31 @@ describe("createMainPluginHostApi", () => {
 
     expect(runtime.dispose).toHaveBeenCalledTimes(1);
   });
+
+  it("notifies onRegistryChanged with the latest snapshot after refresh and setEnabled", async () => {
+    const runtime = {
+      refresh: vi.fn(),
+    };
+    const plugin = entry("sample.plugin", true);
+    const listResult = { diagnostics: [], entries: [plugin] };
+    const plugins = {
+      inspect: vi.fn(async () => plugin),
+      list: vi.fn(async () => listResult),
+      setEnabled: vi.fn(async () => plugin),
+    };
+    const onRegistryChanged = vi.fn();
+
+    const host = createMainPluginHostApi({
+      onRegistryChanged,
+      plugins,
+      runtime,
+    });
+
+    await host.refresh();
+    expect(onRegistryChanged).toHaveBeenCalledTimes(1);
+    expect(onRegistryChanged).toHaveBeenCalledWith(listResult);
+
+    await host.plugins.setEnabled("sample.plugin", false);
+    expect(onRegistryChanged).toHaveBeenCalledTimes(2);
+  });
 });

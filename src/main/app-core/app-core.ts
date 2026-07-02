@@ -1,5 +1,7 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
+import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app } from "electron";
 import {
   createMainPluginHostApi,
@@ -46,6 +48,16 @@ function broadcastMruState(state: MruState): void {
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
       win.webContents.send("pier:command-palette-mru:changed", state);
+    }
+  }
+}
+
+function broadcastPluginRegistryChanged(
+  result: PluginRegistryListResult
+): void {
+  for (const win of windowManager.getAll()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(PIER_BROADCAST.PLUGINS_CHANGED, result);
     }
   }
 }
@@ -98,6 +110,7 @@ function createPierAppCore(): PierAppCore {
     host: { send: sendRendererCommand },
   });
   const pluginHost = createMainPluginHostApi({
+    onRegistryChanged: broadcastPluginRegistryChanged,
     plugins: createPluginService({ sources: createDefaultPluginSources }),
   });
   const services: PierCoreServices = {
