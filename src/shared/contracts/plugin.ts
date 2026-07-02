@@ -106,30 +106,123 @@ export type PluginTerminalStatusItemContribution = z.infer<
   typeof pluginTerminalStatusItemContributionSchema
 >;
 
-export const pluginManifestSchema = z.object({
-  apiVersion: z.literal(1),
-  commands: z.array(pluginCommandContributionSchema).default([]),
-  description: z.string().min(1).optional(),
-  engines: z.object({
-    pier: z.string().min(1),
-  }),
-  homepage: z.string().min(1).optional(),
-  id: z.string().min(1),
-  localization: pluginLocalizationSchema.optional(),
-  locales: z
-    .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
-    .optional(),
-  name: z.string().min(1),
-  panels: z.array(pluginPanelContributionSchema).default([]),
-  permissions: z.array(pierCapabilitySchema).default([]),
-  publisher: z.string().min(1).optional(),
-  repository: z.string().min(1).optional(),
-  source: pluginSourceSchema,
-  terminalStatusItems: z
-    .array(pluginTerminalStatusItemContributionSchema)
-    .default([]),
-  version: z.string().min(1),
+export const pluginConfigurationPropertySchema = z
+  .object({
+    default: z.union([z.string(), z.number(), z.boolean()]),
+    description: z.string().min(1).optional(),
+    enum: z.array(z.string().min(1)).min(1).optional(),
+    enumDescriptions: z.array(z.string().min(1)).optional(),
+    maximum: z.number().optional(),
+    minimum: z.number().optional(),
+    order: z.number().optional(),
+    type: z.enum(["string", "number", "boolean"]),
+  })
+  .superRefine((property, ctx) => {
+    if (typeof property.default !== property.type) {
+      ctx.addIssue({
+        code: "custom",
+        message: `default must match type "${property.type}"`,
+        path: ["default"],
+      });
+    }
+    if (property.enum && property.type !== "string") {
+      ctx.addIssue({
+        code: "custom",
+        message: 'enum is only allowed with type "string"',
+        path: ["enum"],
+      });
+    }
+    if (
+      property.enum &&
+      typeof property.default === "string" &&
+      !property.enum.includes(property.default)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "default must be a member of enum",
+        path: ["default"],
+      });
+    }
+    if (property.enumDescriptions && !property.enum) {
+      ctx.addIssue({
+        code: "custom",
+        message: "enumDescriptions requires enum",
+        path: ["enumDescriptions"],
+      });
+    }
+    if (
+      property.enumDescriptions &&
+      property.enum &&
+      property.enumDescriptions.length !== property.enum.length
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "enumDescriptions must have the same length as enum",
+        path: ["enumDescriptions"],
+      });
+    }
+    if (
+      (property.minimum !== undefined || property.maximum !== undefined) &&
+      property.type !== "number"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: 'minimum/maximum are only allowed with type "number"',
+        path: ["minimum"],
+      });
+    }
+  });
+export type PluginConfigurationProperty = z.infer<
+  typeof pluginConfigurationPropertySchema
+>;
+
+export const pluginConfigurationSchema = z.object({
+  properties: z.record(z.string().min(1), pluginConfigurationPropertySchema),
+  title: z.string().min(1).optional(),
 });
+export type PluginConfiguration = z.infer<typeof pluginConfigurationSchema>;
+
+export const pluginManifestSchema = z
+  .object({
+    apiVersion: z.literal(1),
+    commands: z.array(pluginCommandContributionSchema).default([]),
+    configuration: pluginConfigurationSchema.optional(),
+    description: z.string().min(1).optional(),
+    engines: z.object({
+      pier: z.string().min(1),
+    }),
+    homepage: z.string().min(1).optional(),
+    id: z.string().min(1),
+    localization: pluginLocalizationSchema.optional(),
+    locales: z
+      .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
+      .optional(),
+    name: z.string().min(1),
+    panels: z.array(pluginPanelContributionSchema).default([]),
+    permissions: z.array(pierCapabilitySchema).default([]),
+    publisher: z.string().min(1).optional(),
+    repository: z.string().min(1).optional(),
+    source: pluginSourceSchema,
+    terminalStatusItems: z
+      .array(pluginTerminalStatusItemContributionSchema)
+      .default([]),
+    version: z.string().min(1),
+  })
+  .superRefine((manifest, ctx) => {
+    if (!manifest.configuration) {
+      return;
+    }
+    const prefix = `${manifest.id}.`;
+    for (const key of Object.keys(manifest.configuration.properties)) {
+      if (!(key.startsWith(prefix) && key.length > prefix.length)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `configuration key must start with "${prefix}": ${key}`,
+          path: ["configuration", "properties", key],
+        });
+      }
+    }
+  });
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
 
 export const pluginRuntimeStateSchema = z.object({
