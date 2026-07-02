@@ -112,3 +112,26 @@ export function consumeCreateLaunch(args: CreateTerminalArgs): void {
     terminalLaunchRegistry.consume(args.launchId);
   }
 }
+
+/**
+ * 每个终端 PTY 注入面板级状态环境变量：PIER_WINDOW_ID + PIER_PANEL_ID 精确
+ * 路由 agent hook 事件到「窗口+面板」（panelId 跨窗口不唯一, 见
+ * terminal-panel-id.ts；无论 launcher 启动还是用户手敲 claude, shell 子进程
+ * 都继承），PIER_AGENT_HOOK_PORT/TOKEN 指向本次运行的 loopback 服务器。
+ */
+export function withPanelStatusEnv(
+  nativeLaunch: ResolvedTerminalLaunchOptions | undefined,
+  panelId: string,
+  windowId: string,
+  hookEnv: Record<string, string>
+): ResolvedTerminalLaunchOptions {
+  return {
+    ...(nativeLaunch ?? {}),
+    env: {
+      ...(nativeLaunch?.env ?? {}),
+      ...hookEnv,
+      PIER_PANEL_ID: panelId,
+      PIER_WINDOW_ID: windowId,
+    },
+  };
+}

@@ -40,6 +40,8 @@ export const PIER_BROADCAST = {
   // renderer 下发的 presentation 已被 native 同步应用 (main → renderer,
   // payload { rendererSequence })，用于 resize 撤占位的精确握手。
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
+  // agent 会话状态全量快照广播 (main → 所有 renderer, payload AgentSessionsBroadcast).
+  AGENT_SESSIONS_CHANGED: "pier://agent-session:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

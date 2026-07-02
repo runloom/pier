@@ -13,6 +13,10 @@ import {
   registerAssetScheme,
 } from "./fonts/asset-protocol.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
+import {
+  closeAgentHookServer,
+  registerAgentSessionIpc,
+} from "./ipc/agent-session.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
@@ -226,6 +230,7 @@ app.whenReady().then(async () => {
   registerCommandIpc(ipcMain);
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
+  registerAgentSessionIpc(ipcMain);
   registerPreferencesIpc(ipcMain);
   registerSecretsIpc(ipcMain, appCore.services.secrets);
   registerRendererCommandIpc(ipcMain);
@@ -295,6 +300,12 @@ app.on("before-quit", (event) => {
     event.preventDefault();
     didFlushBeforeQuit = true;
     Promise.all([
+      closeAgentHookServer().catch((error) => {
+        console.error(
+          "[agent-session] failed to close hook server before quit:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }),
       appCore.services.window.flushOpenWindows().catch((error) => {
         console.error(
           "[window] failed to flush windows before quit:",

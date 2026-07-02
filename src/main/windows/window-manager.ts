@@ -24,6 +24,7 @@ import {
   WebContentsView,
 } from "electron";
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
+import { agentSessionService } from "../ipc/agent-session.ts";
 import { getTerminalAddon } from "../ipc/terminal.ts";
 import {
   blurActivePanelFocus,
@@ -343,6 +344,10 @@ class WindowManager {
     window.host.on("closed", () => {
       clearTerminalPresentationWindowById(electronWindowId);
       clearTerminalFocusWindowById(electronWindowId);
+      // 整窗关闭绕过 renderer 逐 panel 关闭 IPC——在此兜底清理 agent 会话,
+      // 否则条目永久残留（幽灵 TitleBar 计数）。BaseWindow 不触发
+      // app "browser-window-created"/BrowserWindow 事件, 只能挂在这里。
+      agentSessionService.windowClosed(String(electronWindowId));
       cleanupShowWait();
       if (window.appView && !window.webContents.isDestroyed()) {
         window.webContents.close();

@@ -268,7 +268,12 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       expect.any(Object),
       "Menlo",
       13,
-      undefined
+      {
+        env: {
+          PIER_PANEL_ID: "terminal-1",
+          PIER_WINDOW_ID: "1",
+        },
+      }
     );
     expect(fakeAddon.createTerminal).toHaveBeenNthCalledWith(
       2,
@@ -277,7 +282,12 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       expect.any(Object),
       "Menlo",
       13,
-      undefined
+      {
+        env: {
+          PIER_PANEL_ID: "terminal-1",
+          PIER_WINDOW_ID: "2",
+        },
+      }
     );
   });
 
@@ -340,7 +350,12 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       expect.any(Object),
       "Menlo",
       13,
-      undefined
+      {
+        env: {
+          PIER_PANEL_ID: "panel-a",
+          PIER_WINDOW_ID: "7",
+        },
+      }
     );
   });
 
@@ -378,6 +393,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
         cwd: "/tmp/pier",
         env: {
           PIER_MODE: "dev",
+          PIER_PANEL_ID: "panel-a",
+          PIER_WINDOW_ID: "7",
         },
       }
     );
