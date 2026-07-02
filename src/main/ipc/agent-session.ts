@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentSessionSnapshot,
   AgentSessionsBroadcast,
@@ -10,9 +11,9 @@ import {
 } from "../services/agents/agent-hook-server.ts";
 import { createAgentSessionAggregator } from "../services/agents/agent-session-aggregator.ts";
 import {
-  installClaudeHooks,
-  uninstallClaudeHooks,
-} from "../services/agents/claude-hook-installer.ts";
+  installAllAgentHooks,
+  uninstallAllAgentHooks,
+} from "../services/agents/integrations/registry.ts";
 import { readPreferences } from "../state/preferences.ts";
 import { findAppWindowByWebContents } from "../windows/window-identity.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
@@ -65,6 +66,9 @@ function handleBroadcast(b: AgentSessionsBroadcast): void {
 }
 
 export const agentSessionService = {
+  agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void {
+    aggregator.agentLaunched(windowId, panelId, agentId);
+  },
   /**
    * PTY 注入用环境变量。await 服务器就绪后返回, 消除首批终端拿到空 env 的
    * race；启动失败 resolve {}（功能退化为标题兜底）。
@@ -137,7 +141,7 @@ export function registerAgentSessionIpc(ipcMain: IpcMain): void {
   // 关闭态必须主动卸载, 防止旧版本/外部同步写回的 hook 静默复活（orca 同款语义）。
   readPreferences()
     .then((prefs) =>
-      prefs.agentStatusHooks ? installClaudeHooks() : uninstallClaudeHooks()
+      prefs.agentStatusHooks ? installAllAgentHooks() : uninstallAllAgentHooks()
     )
     .catch((err) => {
       console.error("[agent-session] startup hook install failed:", err);

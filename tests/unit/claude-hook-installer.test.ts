@@ -7,7 +7,7 @@ import {
   uninstallClaudeHooks,
   withoutPierClaudeHooks,
   withPierClaudeHooks,
-} from "../../src/main/services/agents/claude-hook-installer.ts";
+} from "../../src/main/services/agents/integrations/claude.ts";
 
 const MARK = "PIER_AGENT_HOOK_PORT";
 
