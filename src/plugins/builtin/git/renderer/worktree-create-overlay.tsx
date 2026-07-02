@@ -200,10 +200,10 @@ function WorktreeCreateOverlay({
                   </InputGroupText>
                 </InputGroupAddon>
               ) : null}
-              <InputGroupAddon align="block-end">
-                <InputGroupText>{`.worktrees/${derived.name}`}</InputGroupText>
-              </InputGroupAddon>
             </InputGroup>
+            <FieldDescription className="font-mono">
+              {`.worktrees/${derived.name}`}
+            </FieldDescription>
           </Field>
 
           <Field>
