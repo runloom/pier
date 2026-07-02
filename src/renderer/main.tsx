@@ -29,6 +29,7 @@ import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
+import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
 
@@ -60,6 +61,7 @@ async function bootstrap() {
       initZoom(),
       initTerminalPreferences(),
       initAgentPreferences(),
+      initTerminalStatusBarPrefs(),
     ]);
   } catch (err) {
     console.error("[pier] theme/locale init failed:", err);
