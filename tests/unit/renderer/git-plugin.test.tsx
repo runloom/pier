@@ -548,6 +548,7 @@ describe("git builtin plugin", () => {
               ahead: 0,
               behind: 0,
               branch: "main",
+              mergedIntoDefault: null,
               oid: "abc123",
               upstream: null,
               upstreamGone: false,
