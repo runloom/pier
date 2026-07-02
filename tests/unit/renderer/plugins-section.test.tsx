@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 function entry(id: string, enabled: boolean): PluginRegistryEntry {
   return {
@@ -63,6 +64,7 @@ describe("PluginsSection", () => {
     cleanup();
     vi.restoreAllMocks();
     usePluginRegistryStore.setState(INITIAL_STORE_STATE);
+    useSettingsDialogStore.setState({ activeSection: "appearance" });
   });
 
   it("store 未初始化时渲染 loading 骨架", () => {
@@ -113,5 +115,42 @@ describe("PluginsSection", () => {
     await waitFor(() => {
       expect(usePluginRegistryStore.getState().plugins[0]?.enabled).toBe(false);
     });
+  });
+
+  it("声明 configuration 的插件行渲染 Settings 内链, 点击跳转到插件 section", () => {
+    const withConfiguration: PluginRegistryEntry = {
+      ...entry("pier.git", true),
+      manifest: {
+        ...entry("pier.git", true).manifest,
+        configuration: {
+          properties: {
+            "pier.git.example": { default: true, type: "boolean" },
+          },
+        },
+      },
+    };
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [withConfiguration],
+    });
+    render(<PluginsSection />);
+
+    fireEvent.click(screen.getByTestId("plugin-settings-link-pier.git"));
+
+    expect(useSettingsDialogStore.getState().activeSection).toBe(
+      "plugin:pier.git"
+    );
+  });
+
+  it("未声明 configuration 的插件行不渲染 Settings 内链", () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.git", true)],
+    });
+    render(<PluginsSection />);
+
+    expect(
+      screen.queryByTestId("plugin-settings-link-pier.git")
+    ).not.toBeInTheDocument();
   });
 });

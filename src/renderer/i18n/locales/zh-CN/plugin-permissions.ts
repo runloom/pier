@@ -4,6 +4,7 @@ export const pluginPermissions = {
   "evidence:write": "写入证据记录",
   "file:read": "读取文件",
   "git:read": "读取 Git 状态",
+  "git:write": "写入 Git 状态",
   network: "访问网络",
   "panel:control": "控制面板",
   "panel:open": "打开面板",

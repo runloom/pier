@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import i18next from "i18next";
 import {
@@ -112,7 +113,7 @@ describe("Settings plugins section", () => {
     usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
   });
 
-  it("默认列表只展示插件摘要，详情展开后展示诊断信息", async () => {
+  it("插件列表始终以摘要行展示：名称/状态/来源/计数摘要，不含底层 ID、命令表或权限明细", async () => {
     const enabledWorktree = pluginEntry({
       enabled: true,
       id: "pier.worktree",
@@ -164,27 +165,27 @@ describe("Settings plugins section", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Plugins" }));
 
     expect(await screen.findByText("Worktree")).toBeVisible();
-    expect(screen.getByText("Built-in")).toBeVisible();
+    // builtin 插件不展示 Source badge(方向 D:只有唯一 source 时展示徽章无信息量)。
+    expect(screen.queryByText("Built-in")).not.toBeInTheDocument();
     expect(screen.getByText("Local Example")).toBeVisible();
+    // non-builtin(local)插件展示 Source badge。
+    expect(screen.getByText("Local")).toBeVisible();
     expect(screen.getByText("Manifest preview")).toBeVisible();
     expect(screen.queryByText("pier.worktree")).not.toBeInTheDocument();
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
     expect(screen.queryByText("plugin:read")).not.toBeInTheDocument();
-    expect(screen.queryByText("Panels")).not.toBeInTheDocument();
-    expect(screen.queryByText("None")).not.toBeInTheDocument();
+    expect(screen.queryByText("Read plugin manifests")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Read Git worktree information")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show Worktree details" })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Show Worktree details" })
-    );
-
-    expect(screen.getByText("Plugin ID")).toBeVisible();
-    expect(screen.getByText("pier.worktree")).toBeVisible();
-    expect(screen.getByText("Commands")).toBeVisible();
-    expect(screen.getByText("pier.worktree.list")).toBeVisible();
-    expect(screen.getByText("Terminal status items")).toBeVisible();
-    expect(screen.getByText("pier.worktree.status")).toBeVisible();
-    expect(screen.getByText("Read plugin manifests")).toBeVisible();
-    expect(screen.getByText("Read Git worktree information")).toBeVisible();
+    // 计数摘要行(图标+文案)直接可见, 不需要展开任何详情。
+    const worktreeRow = within(screen.getByTestId("plugin-row-pier.worktree"));
+    expect(worktreeRow.getByText("1 command")).toBeVisible();
+    expect(worktreeRow.getByText("1 terminal status item")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Disable Worktree" }));
 
@@ -304,11 +305,15 @@ describe("Settings plugins section", () => {
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "停用工作树" })).toBeVisible();
     expect(screen.getByText("仅清单预览")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "显示工作树详情" })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "显示工作树详情" }));
-
-    expect(screen.getByText("工作树列表")).toBeVisible();
-    expect(screen.getByText("工作树状态")).toBeVisible();
-    expect(screen.getByText("读取 Git 工作树信息")).toBeVisible();
+    // 命令/状态项标题不再单独展示, 只展示 i18n 计数摘要。
+    expect(screen.queryByText("工作树列表")).not.toBeInTheDocument();
+    expect(screen.queryByText("工作树状态")).not.toBeInTheDocument();
+    const worktreeRow = within(screen.getByTestId("plugin-row-pier.worktree"));
+    expect(worktreeRow.getByText("1 个命令")).toBeVisible();
+    expect(worktreeRow.getByText("1 个终端状态项")).toBeVisible();
   });
 });

@@ -9,11 +9,6 @@ import {
   CardTitle,
 } from "@pier/ui/card.tsx";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@pier/ui/collapsible.tsx";
-import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -21,7 +16,6 @@ import {
 } from "@pier/ui/empty.tsx";
 import {
   Item,
-  ItemActions,
   ItemContent,
   ItemDescription,
   ItemGroup,
@@ -29,20 +23,26 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import {
+  GIT_PLUGIN_ID,
+  type PluginRegistryEntry,
+} from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Activity,
+  ArrowRight,
+  Command,
+  GitBranch,
+  type LucideIcon,
+  PanelsTopLeft,
+  Puzzle,
+} from "lucide-react";
 import { Fragment, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
+import { pluginSectionId } from "@/pages/settings/data/appearance-nav.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
-import {
-  commandContributionRows,
-  contributionSummary,
-  PluginDetails,
-  panelContributionRows,
-  terminalStatusContributionRows,
-} from "./plugin-details.tsx";
+import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 function PluginsLoadingState() {
   const t = useT();
@@ -79,6 +79,66 @@ function PluginsEmptyState() {
   );
 }
 
+/**
+ * 当前所有插件均为 builtin source(schema 已支持 local/git/registry, 但尚无实例)。
+ * 没有 manifest.icon 字段可读 —— builtin git 特判为 GitBranch, 其余 lucide Puzzle
+ * 兜底。出现非 builtin source 时再按 3-tabs 详情页方案扩展(spec 变更记录 2026-07-03)。
+ */
+function pluginRowIcon(entry: PluginRegistryEntry): LucideIcon {
+  return entry.manifest.id === GIT_PLUGIN_ID ? GitBranch : Puzzle;
+}
+
+interface ContributionCountItem {
+  Icon: LucideIcon;
+  id: string;
+  label: string;
+}
+
+/** 只保留非零的贡献点计数, 每项配一个 lucide 图标。 */
+function contributionCountItems(
+  entry: PluginRegistryEntry,
+  t: ReturnType<typeof useT>
+): ContributionCountItem[] {
+  const counts: {
+    Icon: LucideIcon;
+    count: number;
+    id: string;
+    pluralKey: string;
+    singularKey: string;
+  }[] = [
+    {
+      Icon: Command,
+      count: entry.manifest.commands.length,
+      id: "commands",
+      pluralKey: "settings.plugins.contributionSummary.commands",
+      singularKey: "settings.plugins.contributionSummary.command",
+    },
+    {
+      Icon: PanelsTopLeft,
+      count: entry.manifest.panels.length,
+      id: "panels",
+      pluralKey: "settings.plugins.contributionSummary.panels",
+      singularKey: "settings.plugins.contributionSummary.panel",
+    },
+    {
+      Icon: Activity,
+      count: entry.manifest.terminalStatusItems.length,
+      id: "terminalStatusItems",
+      pluralKey: "settings.plugins.contributionSummary.terminalStatusItems",
+      singularKey: "settings.plugins.contributionSummary.terminalStatusItem",
+    },
+  ];
+  return counts
+    .filter((item) => item.count > 0)
+    .map((item) => ({
+      Icon: item.Icon,
+      id: item.id,
+      label: t(item.count === 1 ? item.singularKey : item.pluralKey, {
+        count: item.count,
+      }),
+    }));
+}
+
 function PluginRow({
   entry,
   onToggle,
@@ -89,15 +149,9 @@ function PluginRow({
   pending: boolean;
 }) {
   const t = useT();
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const canToggle = entry.runtime.canToggle;
-  const commandContributions = commandContributionRows(entry, i18next.language);
-  const panelContributions = panelContributionRows(entry, i18next.language);
-  const terminalStatusContributions = terminalStatusContributionRows(
-    entry,
-    i18next.language
-  );
   const display = resolvePluginDisplay(entry, i18next.language);
+  const RowIcon = pluginRowIcon(entry);
   const actionKey = entry.enabled ? "disable" : "enable";
   const actionLabel = t(`settings.plugins.action.${actionKey}`);
   const actionAriaLabel = t(`settings.plugins.action.${actionKey}Plugin`, {
@@ -109,52 +163,74 @@ function PluginRow({
       : t(
           `settings.plugins.status.${entry.runtime.enabled ? "enabled" : "disabled"}`
         );
+  const isBuiltin = entry.manifest.source.kind === "builtin";
   const sourceLabel = t(
     `settings.plugins.source.${entry.manifest.source.kind}`
   );
-  const detailsLabel = detailsOpen
-    ? t("settings.plugins.details.hide")
-    : t("settings.plugins.details.show");
-  const detailsAriaLabel = detailsOpen
-    ? t("settings.plugins.details.hidePlugin", { name: display.name })
-    : t("settings.plugins.details.showPlugin", { name: display.name });
+  const metaText = `v${entry.manifest.version} · ${entry.manifest.publisher ?? "—"}`;
+  const countItems = contributionCountItems(entry, t);
+  const hasConfiguration = Boolean(entry.manifest.configuration);
 
   return (
-    <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
-      <Item
-        className="rounded-none border-0 px-(--card-spacing)"
-        data-testid={`plugin-row-${entry.manifest.id}`}
-        role="listitem"
-      >
-        <ItemContent className="min-w-0">
-          <ItemTitle className="max-w-full">
+    <Item
+      className="rounded-none border-0 px-(--card-spacing)"
+      data-testid={`plugin-row-${entry.manifest.id}`}
+      role="listitem"
+    >
+      <ItemContent className="min-w-0 gap-1.5">
+        <div className="flex w-full items-center justify-between gap-2">
+          <ItemTitle className="min-w-0">
+            <RowIcon
+              aria-hidden
+              className="size-4 shrink-0 text-muted-foreground"
+            />
             <span className="truncate">{display.name}</span>
             <Badge variant={entry.runtime.enabled ? "secondary" : "outline"}>
               {statusLabel}
             </Badge>
-            <Badge variant="outline">{sourceLabel}</Badge>
+            {isBuiltin ? null : <Badge variant="outline">{sourceLabel}</Badge>}
           </ItemTitle>
+          <span className="shrink-0 text-muted-foreground text-xs">
+            {metaText}
+          </span>
+        </div>
+        {display.description ? (
           <ItemDescription className="text-xs">
-            {display.description ?? contributionSummary(entry, t)}
+            {display.description}
           </ItemDescription>
-          {display.description ? (
-            <ItemDescription className="text-xs">
-              {contributionSummary(entry, t)}
-            </ItemDescription>
-          ) : null}
-        </ItemContent>
-        <ItemActions>
-          <CollapsibleTrigger asChild>
-            <Button
-              aria-label={detailsAriaLabel}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              {detailsOpen ? <ChevronDown /> : <ChevronRight />}
-              {detailsLabel}
-            </Button>
-          </CollapsibleTrigger>
+        ) : null}
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+            {countItems.length > 0 ? (
+              countItems.map(({ Icon, id, label }) => (
+                <span className="inline-flex items-center gap-1" key={id}>
+                  <Icon aria-hidden className="size-3.5" />
+                  {label}
+                </span>
+              ))
+            ) : (
+              <span>{t("settings.plugins.contributionSummary.none")}</span>
+            )}
+            {hasConfiguration ? (
+              <Button
+                aria-label={t("settings.plugins.openSettingsPlugin", {
+                  name: display.name,
+                })}
+                data-testid={`plugin-settings-link-${entry.manifest.id}`}
+                onClick={() =>
+                  useSettingsDialogStore
+                    .getState()
+                    .openSection(pluginSectionId(entry.manifest.id))
+                }
+                size="xs"
+                type="button"
+                variant="link"
+              >
+                {t("settings.plugins.openSettings")}
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+            ) : null}
+          </div>
           {canToggle ? (
             <Button
               aria-label={actionAriaLabel}
@@ -167,20 +243,9 @@ function PluginRow({
               {actionLabel}
             </Button>
           ) : null}
-        </ItemActions>
-
-        {detailsOpen ? (
-          <CollapsibleContent asChild forceMount>
-            <PluginDetails
-              commandContributions={commandContributions}
-              entry={entry}
-              panelContributions={panelContributions}
-              terminalStatusContributions={terminalStatusContributions}
-            />
-          </CollapsibleContent>
-        ) : null}
-      </Item>
-    </Collapsible>
+        </div>
+      </ItemContent>
+    </Item>
   );
 }
 

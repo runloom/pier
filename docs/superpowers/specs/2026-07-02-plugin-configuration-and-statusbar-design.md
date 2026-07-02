@@ -3,6 +3,14 @@
 日期：2026-07-02
 状态：已修订（吸收干净视角评审：2 blocker / 5 major / 11 minor）
 
+## 变更记录
+
+### 2026-07-03 — §3.1 取舍反悔：删除详情展开区
+
+调研 7 家（VSCode/JetBrains/Chrome/Obsidian/Raycast/Zed/Neovim）后确认：Pier 当前所有插件均为 `builtin` source，详情页的每一区块对内置插件都是冗余（命令走 Command Palette；设置有 Sidebar 独立入口；面板/状态项本身可见；权限对一方代码无信任门禁需求；元数据全为 Pier v1.0.0 无信息量）。§3.1 的“保留行内 Collapsible 展开”在这种信息量下被证伪。
+
+新决策：Plugins 列表页每行以一行摘要（图标+名字+状态+计数+设置内链）呈现，不做展开区；未来出现非 builtin source 时再按 VSCode/JetBrains 3-tabs 方案实现独立详情页。
+
 ## 1. 背景与目标
 
 当前插件详情页（`src/renderer/pages/settings/components/plugin-details.tsx`）用 badge flex-wrap 铺排贡献点，pier.git 的 13 个命令挤成难以扫读的瀑布；插件系统没有设置项（configuration）贡献点；终端状态栏项只有运行时注册对象上的数字 `order`，无左右分组、无用户级显隐与排序。
