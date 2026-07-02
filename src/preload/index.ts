@@ -113,6 +113,11 @@ export interface PierPluginsAPI {
   enable: (id: string) => Promise<PluginRegistryEntry>;
   inspect: (id: string) => Promise<PluginRegistryEntry>;
   list: () => Promise<PluginRegistryListResult>;
+  /**
+   * 订阅插件 registry 变更 — main 在 setEnabled / registry refresh 后
+   * 广播最新快照给所有 BrowserWindow, 包括发起变更的窗口.
+   */
+  onChanged: (cb: (snapshot: PluginRegistryListResult) => void) => () => void;
 }
 
 export type { PierGitAPI } from "./git-api.ts";
@@ -382,6 +387,7 @@ const pluginsApi: PierPluginsAPI = {
     invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.enable" }),
   disable: (id) =>
     invokePierCommand<PluginRegistryEntry>({ id, type: "plugin.disable" }),
+  onChanged: (cb) => subscribeIpc(PIER_BROADCAST.PLUGINS_CHANGED, cb),
 };
 
 // gitApi 实现在独立文件 ./git-api.ts(避免 preload/index.ts 超 500 行硬上限)。
