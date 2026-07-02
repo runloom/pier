@@ -21,6 +21,7 @@ import {
   terminalLaunchEnvKeySchema,
   terminalLaunchOptionsSchema,
 } from "./terminal-launch.ts";
+import { terminalStatusBarItemOverrideSchema } from "./terminal-status-bar.ts";
 import {
   type WorktreeOperationErrorReason,
   worktreeCheckRequestSchema,
@@ -177,6 +178,16 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.disable"),
+  }),
+  z.object({ type: z.literal("terminalStatusBar.prefs.getAll") }),
+  z.object({
+    itemId: z.string().min(1),
+    override: terminalStatusBarItemOverrideSchema,
+    type: z.literal("terminalStatusBar.prefs.setItemOverride"),
+  }),
+  z.object({
+    itemId: z.string().min(1),
+    type: z.literal("terminalStatusBar.prefs.resetItem"),
   }),
   // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),

@@ -210,6 +210,11 @@ function cliClientServices(): PierCoreServices {
       resolve: async () => null,
       upsert: async (_profileId, profile) => profile,
     },
+    terminalStatusBarPrefs: {
+      getAll: () => Promise.resolve({ items: {}, version: 1 }),
+      resetItem: () => Promise.resolve({ items: {}, version: 1 }),
+      setItemOverride: () => Promise.resolve({ items: {}, version: 1 }),
+    },
     window: {
       close: () => undefined,
       create: async () => ({ recordId: "record-main", windowId: "main" }),

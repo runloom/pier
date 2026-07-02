@@ -227,6 +227,21 @@ async function executeAppStateCommand(
         requestId,
         await services.preferences.update(command.patch)
       );
+    case "terminalStatusBar.prefs.getAll":
+      return success(requestId, await services.terminalStatusBarPrefs.getAll());
+    case "terminalStatusBar.prefs.resetItem":
+      return success(
+        requestId,
+        await services.terminalStatusBarPrefs.resetItem(command.itemId)
+      );
+    case "terminalStatusBar.prefs.setItemOverride":
+      return success(
+        requestId,
+        await services.terminalStatusBarPrefs.setItemOverride(
+          command.itemId,
+          command.override
+        )
+      );
     default:
       return null;
   }

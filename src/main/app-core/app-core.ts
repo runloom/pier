@@ -1,6 +1,7 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
+import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app } from "electron";
 import {
@@ -23,6 +24,11 @@ import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
 import { createSecretsStore } from "../state/secrets-store.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
+import {
+  readTerminalStatusBarPrefs,
+  resetTerminalStatusBarItem,
+  setTerminalStatusBarItemOverride,
+} from "../state/terminal-status-bar-prefs.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import {
@@ -48,6 +54,17 @@ function broadcastMruState(state: MruState): void {
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
       win.webContents.send("pier:command-palette-mru:changed", state);
+    }
+  }
+}
+
+function broadcastTerminalStatusBarPrefs(prefs: TerminalStatusBarPrefs): void {
+  for (const win of windowManager.getAll()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(
+        PIER_BROADCAST.TERMINAL_STATUS_BAR_PREFS_CHANGED,
+        prefs
+      );
     }
   }
 }
@@ -125,6 +142,19 @@ function createPierAppCore(): PierAppCore {
     rendererCommand,
     tasks: createTaskService(),
     terminalProfiles: createTerminalProfileService(),
+    terminalStatusBarPrefs: {
+      getAll: () => readTerminalStatusBarPrefs(),
+      resetItem: async (itemId) => {
+        const next = await resetTerminalStatusBarItem(itemId);
+        broadcastTerminalStatusBarPrefs(next);
+        return next;
+      },
+      setItemOverride: async (itemId, override) => {
+        const next = await setTerminalStatusBarItemOverride(itemId, override);
+        broadcastTerminalStatusBarPrefs(next);
+        return next;
+      },
+    },
     terminalLaunches: terminalLaunchRegistry,
     window: createWindowService({
       flushRendererLayout: async (windowId) => {

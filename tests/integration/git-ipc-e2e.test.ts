@@ -69,6 +69,7 @@ function makeServices(): PierCoreServices {
     tasks: trap as never,
     terminalLaunches: trap as never,
     terminalProfiles: trap as never,
+    terminalStatusBarPrefs: trap as never,
     window: trap as never,
     workspace: trap as never,
     worktrees: createWorktreeService(),
