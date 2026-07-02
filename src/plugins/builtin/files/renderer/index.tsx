@@ -239,7 +239,7 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
 
       return (
         <PierFileTree
-          className="min-h-0 w-full flex-1 overflow-auto"
+          className="min-h-0 w-full flex-1"
           directoryStates={directoryStatesByPath}
           items={items}
           label="Files"

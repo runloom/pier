@@ -1872,9 +1872,17 @@ describe("git builtin plugin", () => {
       });
       const treeElement = getPierFileTree(container);
       expect(treeElement).toBeVisible();
+      const filesTreeHost = container.querySelector(
+        'file-tree-container[aria-label="Files"]'
+      );
+      expect(filesTreeHost).toBeInstanceOf(HTMLElement);
+      expect(filesTreeHost).toHaveClass("min-h-0", "flex-1", "w-full");
       expect(
-        container.querySelector('file-tree-container[aria-label="Files"]')
+        (filesTreeHost as HTMLElement).shadowRoot?.querySelector(
+          '[data-file-tree-virtualized-scroll="true"]'
+        )
       ).toBeInstanceOf(HTMLElement);
+      expect(filesTreeHost).not.toHaveClass("overflow-auto");
       const tree = within(treeElement);
       expect(tree.getByRole("treeitem", { name: "src" })).toBeVisible();
       expect(
