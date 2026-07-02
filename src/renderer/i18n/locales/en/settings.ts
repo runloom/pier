@@ -155,6 +155,14 @@ export const settings = {
     pluginId: "Plugin ID",
     version: "Version",
     publisher: "Publisher",
+    homepage: "Homepage",
+    repository: "Repository",
+    table: {
+      category: "Category",
+      description: "Description",
+      id: "ID",
+      title: "Title",
+    },
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",

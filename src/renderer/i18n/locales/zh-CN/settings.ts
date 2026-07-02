@@ -152,6 +152,14 @@ export const settings = {
     pluginId: "插件 ID",
     version: "版本",
     publisher: "发布者",
+    homepage: "主页",
+    repository: "仓库",
+    table: {
+      category: "分类",
+      description: "描述",
+      id: "ID",
+      title: "标题",
+    },
     contributionSummary: {
       command: "{{count}} 个命令",
       commands: "{{count}} 个命令",
