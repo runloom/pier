@@ -194,6 +194,41 @@ describe("registerCommandIpc", () => {
     );
   });
 
+  it("允许 renderer facade 调用 worktree.creationDefaults 和 worktree.openTerminal", async () => {
+    const { registerCommandIpc } = await import("@main/ipc/command.ts");
+    const handlers = new Map<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >();
+    const ipcMain = {
+      handle: vi.fn(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, (...args) => Promise.resolve(handler(...args)));
+        }
+      ),
+    };
+
+    registerCommandIpc(ipcMain as never);
+
+    const handler = handlers.get(PIER.COMMAND_EXECUTE);
+    if (!handler) {
+      throw new Error("expected command handler");
+    }
+
+    await expect(
+      handler(
+        { sender: { id: "web-contents" } },
+        { type: "worktree.creationDefaults" }
+      )
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      handler(
+        { sender: { id: "web-contents" } },
+        { path: "/repo", runSetup: false, type: "worktree.openTerminal" }
+      )
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it("拒绝 renderer 侧任意 command 直通", async () => {
     const { registerCommandIpc } = await import("@main/ipc/command.ts");
     const handlers = new Map<
