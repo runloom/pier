@@ -31,6 +31,7 @@ export interface ParsedGitStatus {
 const BRANCH_AB_RE = /^\+(\d+) -(\d+)$/;
 const DIFF_HEADER_RE = /^diff --git a\/(.+) b\/(.+)$/;
 const HUNK_HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+const REMOTE_HEAD_RE = /\/HEAD$/;
 
 function applyBranchHeader(
   branch: ParsedGitStatus["branch"],
@@ -361,6 +362,9 @@ export function parseGitBranchRefs(output: string): GitBranchRef[] {
       name = refname.slice("refs/heads/".length);
     } else if (refname.startsWith("refs/remotes/")) {
       kind = "remote";
+      if (REMOTE_HEAD_RE.test(refname)) {
+        continue;
+      }
       name = refname.slice("refs/remotes/".length);
     } else {
       continue;

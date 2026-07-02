@@ -6,6 +6,7 @@ const fuzzy = new uFuzzy({
   interRgt: 0,
   unicode: true,
 });
+const SEARCH_SEPARATOR_RE = /[\s:：._/-]+/g;
 
 interface RankSearchDocumentsOptions {
   frecencyMap?: ReadonlyMap<string, number>;
@@ -14,6 +15,7 @@ interface RankSearchDocumentsOptions {
 interface RankedCandidate<TPayload> {
   document: SearchDocument<TPayload>;
   rank: SearchRank;
+  sourceIndex: number;
 }
 
 export function rankSearchDocuments<TPayload>(
@@ -41,7 +43,7 @@ export function rankSearchDocuments<TPayload>(
       options.frecencyMap?.get(document.id) ?? 0
     );
     if (rank) {
-      candidates.push({ document, rank });
+      candidates.push({ document, rank, sourceIndex: index });
     }
   }
 
@@ -78,6 +80,7 @@ function rankDocument<TPayload>(
   frecency: number
 ): SearchRank | null {
   const visibleTexts = [
+    `${document.category} ${document.title}`,
     document.title,
     ...document.aliases,
     document.category,
@@ -97,7 +100,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: 0,
-      tier: 3,
+      tier: 4,
     };
   }
 
@@ -107,7 +110,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: 0,
-      tier: 4,
+      tier: 5,
     };
   }
   const stableIdIndex = stableId.indexOf(normalizedQuery);
@@ -116,7 +119,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: stableIdIndex,
-      tier: 5,
+      tier: 6,
     };
   }
 
@@ -162,7 +165,51 @@ function visibleTextRank(
   if (matchIndex >= 0) {
     return { matchIndex, tier: 2 };
   }
+  const compactRank = compactTextRank(normalizedText, normalizedQuery);
+  if (compactRank) {
+    return compactRank;
+  }
+  const initialsRank = initialsTextRank(normalizedText, normalizedQuery);
+  if (initialsRank) {
+    return initialsRank;
+  }
   return null;
+}
+
+function compactTextRank(
+  normalizedText: string,
+  normalizedQuery: string
+): Pick<SearchRank, "matchIndex" | "tier"> | null {
+  const compactText = compact(normalizedText);
+  const compactQuery = compact(normalizedQuery);
+  if (!(compactText && compactQuery)) {
+    return null;
+  }
+  if (compactText === compactQuery || compactText.startsWith(compactQuery)) {
+    return { matchIndex: 0, tier: 3 };
+  }
+  const matchIndex = compactText.indexOf(compactQuery);
+  return matchIndex >= 0 ? { matchIndex, tier: 3 } : null;
+}
+
+function initialsTextRank(
+  normalizedText: string,
+  normalizedQuery: string
+): Pick<SearchRank, "matchIndex" | "tier"> | null {
+  const initials = normalizedText
+    .split(SEARCH_SEPARATOR_RE)
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join("");
+  const compactQuery = compact(normalizedQuery);
+  if (!(initials && compactQuery)) {
+    return null;
+  }
+  if (initials === compactQuery || initials.startsWith(compactQuery)) {
+    return { matchIndex: 0, tier: 3 };
+  }
+  const matchIndex = initials.indexOf(compactQuery);
+  return matchIndex >= 0 ? { matchIndex, tier: 3 } : null;
 }
 
 function compareRankedCandidates<TPayload>(
@@ -181,7 +228,7 @@ function compareRankedCandidates<TPayload>(
   if (a.rank.fuzzyOrder !== b.rank.fuzzyOrder) {
     return a.rank.fuzzyOrder - b.rank.fuzzyOrder;
   }
-  return a.document.title.localeCompare(b.document.title);
+  return a.sourceIndex - b.sourceIndex;
 }
 
 function searchableTextForFuzzy<TPayload>(
@@ -199,4 +246,8 @@ function searchableTextForFuzzy<TPayload>(
 
 function normalize(value: string): string {
   return uFuzzy.latinize(value).trim().toLowerCase();
+}
+
+function compact(value: string): string {
+  return value.replace(SEARCH_SEPARATOR_RE, "");
 }

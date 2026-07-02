@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
 import i18next from "i18next";
 import { beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -11,6 +14,15 @@ import {
   rankActionSearchDocuments,
 } from "@/lib/search/action-search.ts";
 import type { SearchDocument } from "@/lib/search/types.ts";
+
+interface GitLocaleCommand {
+  aliases?: string[];
+  title?: string;
+}
+
+interface GitLocaleMessages {
+  commands?: Record<string, GitLocaleCommand>;
+}
 
 const action = (
   id: string,
@@ -44,6 +56,17 @@ const runtime: ActionContributionRuntime = {
   t: (key) => i18next.t(key),
 };
 
+const LOOMDESK_GIT_ACTION_IDS = [
+  "pier.git.merge",
+  "pier.git.mergeAbort",
+  "pier.git.stash",
+  "pier.git.stashPop",
+  "pier.git.rebase",
+  "pier.git.rebaseAbort",
+  "pier.git.rebaseContinue",
+  "pier.git.undoLastCommit",
+] as const;
+
 function contributedActionIdsFor(query: string): string[] {
   const documents = ALL_ACTION_CONTRIBUTIONS.map((contribution) =>
     buildActionSearchDocument(
@@ -55,9 +78,48 @@ function contributedActionIdsFor(query: string): string[] {
   );
 }
 
+async function readGitLocale(
+  locale: "en" | "zh-CN"
+): Promise<GitLocaleMessages> {
+  const raw = await readFile(
+    join(process.cwd(), "src/plugins/builtin/git/locales", `${locale}.json`),
+    "utf8"
+  );
+  return JSON.parse(raw) as GitLocaleMessages;
+}
+
+async function buildGitCommandSearchDocuments(): Promise<
+  SearchDocument<Action>[]
+> {
+  const [en, zhCN] = await Promise.all([
+    readGitLocale("en"),
+    readGitLocale("zh-CN"),
+  ]);
+  const locales = [en, zhCN];
+  const ids = new Set<string>(LOOMDESK_GIT_ACTION_IDS);
+
+  return GIT_PLUGIN_MANIFEST.commands
+    .filter((command) => ids.has(command.id))
+    .map((command) =>
+      buildActionSearchDocument(
+        action(
+          command.id,
+          en.commands?.[command.id]?.title ?? command.title,
+          locales.flatMap(
+            (locale) => locale.commands?.[command.id]?.aliases ?? []
+          )
+        ),
+        { categoryLabel: "Git" }
+      )
+    );
+}
+
 describe("action search", () => {
+  let gitCommandDocs: SearchDocument<Action>[] = [];
+
   beforeAll(async () => {
     await initI18n();
+    gitCommandDocs = await buildGitCommandSearchDocuments();
   });
 
   it.each([
@@ -122,6 +184,71 @@ describe("action search", () => {
 
     expect(result?.document.id).toBe("pier.panel.equalizeSplits");
     expect(result?.document.disabled).toBe(true);
+  });
+
+  it("uses contribution order as the final tie-breaker like LoomDesk", () => {
+    const docs: SearchDocument<Action>[] = [
+      buildActionSearchDocument(action("pier.panel.zebra", "Balance")),
+      buildActionSearchDocument(action("pier.panel.alpha", "Balance")),
+    ];
+
+    expect(
+      rankActionSearchDocuments(docs, "balance").map(
+        (result) => result.document.id
+      )
+    ).toEqual(["pier.panel.zebra", "pier.panel.alpha"]);
+  });
+
+  it.each([
+    "merge",
+    "git:merge",
+    "git merge",
+    "gitm",
+    "gm",
+    "合并",
+    "分支",
+  ])("matches Git merge action like loomdesk: %s", (query) => {
+    const docs = [
+      buildActionSearchDocument(
+        action("pier.git.merge", "Merge Branch...", [
+          "git merge",
+          "merge branch",
+          "合并",
+          "分支",
+        ]),
+        { categoryLabel: "Git" }
+      ),
+      buildActionSearchDocument(action("pier.git.stash", "Stash"), {
+        categoryLabel: "Git",
+      }),
+    ];
+
+    expect(rankActionSearchDocuments(docs, query)[0]?.document.id).toBe(
+      "pier.git.merge"
+    );
+  });
+
+  it.each([
+    ["git merge", "pier.git.merge"],
+    ["合并分支", "pier.git.merge"],
+    ["git merge abort", "pier.git.mergeAbort"],
+    ["中止合并", "pier.git.mergeAbort"],
+    ["git stash", "pier.git.stash"],
+    ["暂存更改", "pier.git.stash"],
+    ["git stash apply", "pier.git.stashPop"],
+    ["恢复", "pier.git.stashPop"],
+    ["git rebase", "pier.git.rebase"],
+    ["变基到分支", "pier.git.rebase"],
+    ["git rebase abort", "pier.git.rebaseAbort"],
+    ["中止变基", "pier.git.rebaseAbort"],
+    ["git rebase continue", "pier.git.rebaseContinue"],
+    ["继续变基", "pier.git.rebaseContinue"],
+    ["git reset", "pier.git.undoLastCommit"],
+    ["回退", "pier.git.undoLastCommit"],
+  ])("matches every LoomDesk Git command keyword: %s", (query, expectedId) => {
+    expect(
+      rankActionSearchDocuments(gitCommandDocs, query)[0]?.document.id
+    ).toBe(expectedId);
   });
 
   it("does not include legacy metadata keywords in search documents", () => {

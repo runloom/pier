@@ -64,6 +64,11 @@ export async function executeGitCommand(
         requestId,
         await services.git.listBranches(command.cwd, command.options)
       );
+    case "git.searchBranches":
+      return success(
+        requestId,
+        await services.git.searchBranches(command.cwd, command.options)
+      );
     case "git.listTags":
       return success(requestId, await services.git.listTags(command.cwd));
     case "git.resolveRef":
@@ -113,6 +118,41 @@ export async function executeGitCommand(
     case "git.checkoutBranch":
       await services.git.checkoutBranch(command.cwd, command.name);
       return success(requestId, true);
+    case "git.merge":
+      return success(
+        requestId,
+        await services.git.merge(command.cwd, command.branch)
+      );
+    case "git.mergeAbort":
+      return success(requestId, await services.git.abortMerge(command.cwd));
+    case "git.stash":
+      return success(
+        requestId,
+        await services.git.stash(command.cwd, {
+          ...(command.includeUntracked !== undefined && {
+            includeUntracked: command.includeUntracked,
+          }),
+          ...(command.message !== undefined && { message: command.message }),
+        })
+      );
+    case "git.stashPop":
+      return success(
+        requestId,
+        await services.git.popStash(command.cwd, command.index)
+      );
+    case "git.stashList":
+      return success(requestId, await services.git.listStashes(command.cwd));
+    case "git.rebase":
+      return success(
+        requestId,
+        await services.git.rebase(command.cwd, command.branch)
+      );
+    case "git.rebaseAbort":
+      return success(requestId, await services.git.abortRebase(command.cwd));
+    case "git.rebaseContinue":
+      return success(requestId, await services.git.continueRebase(command.cwd));
+    case "git.undoLastCommit":
+      return success(requestId, await services.git.undoLastCommit(command.cwd));
     default:
       return null;
   }

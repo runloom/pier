@@ -133,6 +133,32 @@ export const gitBranchRefSchema = z.object({
 });
 export type GitBranchRef = z.infer<typeof gitBranchRefSchema>;
 
+export const gitDiffBranchOptionSchema = z.object({
+  aheadFromCurrent: z.number().int().nonnegative().nullable(),
+  authorName: z.string().nullable(),
+  behindFromCurrent: z.number().int().nonnegative().nullable(),
+  commit: z.string().nullable(),
+  committerDate: z.string().nullable(),
+  current: z.boolean(),
+  id: z.string(),
+  kind: z.enum(["local", "remote"]),
+  label: z.string(),
+  name: z.string(),
+  pinReason: z.enum(["default"]).nullable(),
+  refName: z.string(),
+  subject: z.string().nullable(),
+});
+export type GitDiffBranchOption = z.infer<typeof gitDiffBranchOptionSchema>;
+
+export const gitDiffBranchesResultSchema = z.object({
+  currentBranch: z.string().nullable(),
+  durationMs: z.number().nonnegative(),
+  items: z.array(gitDiffBranchOptionSchema),
+  message: z.string().nullable(),
+  status: z.enum(["ok", "timeout", "error"]),
+});
+export type GitDiffBranchesResult = z.infer<typeof gitDiffBranchesResultSchema>;
+
 /** unified diff 中单行：context/add/del 三种 kind 之一。 */
 export const gitDiffLineSchema = z.object({
   kind: z.enum(["context", "add", "del"]),
@@ -186,6 +212,12 @@ export const listBranchesOptionsSchema = z.object({
   kind: z.enum(["all", "local", "remote"]),
 });
 
+export const gitDiffSearchBranchesOptionsSchema = z.object({
+  currentBranch: z.string().nullable().optional(),
+  limit: z.number().int().min(1).max(1000).optional(),
+  query: z.string().max(512).optional(),
+});
+
 export const getFileContentOptionsSchema = z.object({
   path: z.string(),
   ref: z.string().optional(),
@@ -211,6 +243,100 @@ export const gitDeleteBranchOptionsSchema = z.object({
   force: z.boolean().optional(),
   name: z.string().min(1),
 });
+
+export const gitMergeOptionsSchema = z.object({
+  branch: z.string().min(1),
+});
+
+const gitUnavailableResultSchema = z.object({
+  kind: z.literal("unavailable"),
+  message: z.string().nullable(),
+});
+
+export const gitMergeResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok"), message: z.string() }),
+  z.object({ kind: z.literal("already_up_to_date") }),
+  z.object({ conflictCount: z.number(), kind: z.literal("conflict") }),
+  gitUnavailableResultSchema,
+]);
+export type GitMergeResult = z.infer<typeof gitMergeResultSchema>;
+
+export const gitMergeAbortResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitMergeAbortResult = z.infer<typeof gitMergeAbortResultSchema>;
+
+export const gitStashOptionsSchema = z.object({
+  includeUntracked: z.boolean().optional(),
+  message: z.string().optional(),
+});
+
+export const gitStashResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  z.object({ kind: z.literal("nothing_to_stash") }),
+  gitUnavailableResultSchema,
+]);
+export type GitStashResult = z.infer<typeof gitStashResultSchema>;
+
+export const gitStashEntrySchema = z.object({
+  date: z.string(),
+  hash: z.string(),
+  index: z.number().int().min(0),
+  message: z.string(),
+});
+export type GitStashEntry = z.infer<typeof gitStashEntrySchema>;
+
+export const gitStashListResultSchema = z.discriminatedUnion("kind", [
+  z.object({ entries: z.array(gitStashEntrySchema), kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitStashListResult = z.infer<typeof gitStashListResultSchema>;
+
+export const gitStashPopOptionsSchema = z.object({
+  index: z.number().int().min(0).optional(),
+});
+
+export const gitStashPopResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  z.object({ kind: z.literal("conflict") }),
+  gitUnavailableResultSchema,
+]);
+export type GitStashPopResult = z.infer<typeof gitStashPopResultSchema>;
+
+export const gitRebaseOptionsSchema = z.object({
+  branch: z.string().min(1),
+});
+
+export const gitRebaseResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok"), message: z.string() }),
+  z.object({ kind: z.literal("already_up_to_date") }),
+  z.object({ kind: z.literal("conflict"), message: z.string() }),
+  gitUnavailableResultSchema,
+]);
+export type GitRebaseResult = z.infer<typeof gitRebaseResultSchema>;
+
+export const gitRebaseAbortResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitRebaseAbortResult = z.infer<typeof gitRebaseAbortResultSchema>;
+
+export const gitRebaseContinueResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok"), message: z.string() }),
+  z.object({ kind: z.literal("conflict"), message: z.string() }),
+  gitUnavailableResultSchema,
+]);
+export type GitRebaseContinueResult = z.infer<
+  typeof gitRebaseContinueResultSchema
+>;
+
+export const gitUndoCommitResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  z.object({ kind: z.literal("nothing_to_undo") }),
+  gitUnavailableResultSchema,
+]);
+export type GitUndoCommitResult = z.infer<typeof gitUndoCommitResultSchema>;
 
 /** 变更监听广播事件。changeKind 区分工作区/HEAD/二者同时变化。 */
 export const gitChangeKindSchema = z.enum(["worktree", "head", "both"]);

@@ -152,6 +152,48 @@ describe("registerCommandIpc", () => {
     ).resolves.toMatchObject({ ok: true });
   });
 
+  it("允许 renderer facade 调用 git.searchBranches", async () => {
+    const { registerCommandIpc } = await import("@main/ipc/command.ts");
+    const handlers = new Map<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >();
+    const ipcMain = {
+      handle: vi.fn(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, (...args) => Promise.resolve(handler(...args)));
+        }
+      ),
+    };
+
+    registerCommandIpc(ipcMain as never);
+
+    const handler = handlers.get(PIER.COMMAND_EXECUTE);
+    if (!handler) {
+      throw new Error("expected command handler");
+    }
+
+    await expect(
+      handler(
+        { sender: { id: "web-contents" } },
+        {
+          cwd: "/repo",
+          options: { limit: 50, query: "" },
+          type: "git.searchBranches",
+        }
+      )
+    ).resolves.toMatchObject({ ok: true });
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: {
+          cwd: "/repo",
+          options: { limit: 50, query: "" },
+          type: "git.searchBranches",
+        },
+      })
+    );
+  });
+
   it("拒绝 renderer 侧任意 command 直通", async () => {
     const { registerCommandIpc } = await import("@main/ipc/command.ts");
     const handlers = new Map<

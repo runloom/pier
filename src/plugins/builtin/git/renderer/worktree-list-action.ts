@@ -8,7 +8,8 @@ import type {
   WorktreeItem,
   WorktreeListResult,
 } from "@shared/contracts/worktree.ts";
-import { GitBranch, GitFork, Trash2 } from "lucide-react";
+import { GitFork } from "lucide-react";
+import { registerWorktreeOperationActions } from "./worktree-operation-actions.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 
@@ -35,22 +36,6 @@ function unsupportedReason(context: RendererPluginContext): string {
     context,
     "unsupported",
     "Current directory does not support Git worktrees"
-  );
-}
-
-function createDisabledReason(context: RendererPluginContext): string {
-  return pluginText(
-    context,
-    "createUnavailable",
-    "Worktree creation is not available yet"
-  );
-}
-
-function deleteDisabledReason(context: RendererPluginContext): string {
-  return pluginText(
-    context,
-    "deleteUnavailable",
-    "Worktree deletion is not available yet"
   );
 }
 
@@ -214,7 +199,22 @@ export async function openWorktreeListQuickPick(
       if (!worktree) {
         return;
       }
-      await context.worktrees.open({ path: worktree.path });
+      if (result.status !== "available") {
+        return;
+      }
+      try {
+        await context.worktrees.open({ path: worktree.path });
+      } catch (err) {
+        // 面板只把 onAccept 的 rejection 记到 console,必须自己给用户反馈。
+        context.notifications.error(
+          pluginText(
+            context,
+            "worktreeOperationFailed",
+            "Worktree operation failed"
+          ),
+          { description: err instanceof Error ? err.message : String(err) }
+        );
+      }
     },
     placeholder: pluginText(
       context,
@@ -229,7 +229,7 @@ function registerWorktreeListAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "Worktree",
     disabledReason: () => {
       const target = activeWorktreeTarget(context);
       return target.enabled ? null : target.reason;
@@ -253,49 +253,7 @@ function registerWorktreeListAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      context.i18n.commandTitle("pier.worktree.list", "Worktree: List"),
-  });
-}
-
-function registerDisabledWorktreeCreateAction(
-  context: RendererPluginContext
-): () => void {
-  return context.actions.register({
-    category: "Git",
-    disabledReason: () => createDisabledReason(context),
-    enabled: () => false,
-    handler: () => undefined,
-    id: "pier.worktree.create",
-    metadata: {
-      categoryKey: "git",
-      group: "1_worktree",
-      iconComponent: GitBranch,
-      sortOrder: 2,
-    },
-    surfaces: ["command-palette"],
-    title: () =>
-      context.i18n.commandTitle("pier.worktree.create", "Worktree: Create"),
-  });
-}
-
-function registerDisabledWorktreeDeleteAction(
-  context: RendererPluginContext
-): () => void {
-  return context.actions.register({
-    category: "Git",
-    disabledReason: () => deleteDisabledReason(context),
-    enabled: () => false,
-    handler: () => undefined,
-    id: "pier.worktree.delete",
-    metadata: {
-      categoryKey: "git",
-      group: "1_worktree",
-      iconComponent: Trash2,
-      sortOrder: 3,
-    },
-    surfaces: ["command-palette"],
-    title: () =>
-      context.i18n.commandTitle("pier.worktree.delete", "Worktree: Delete..."),
+      context.i18n.commandTitle("pier.worktree.list", "List Worktrees"),
   });
 }
 
@@ -304,8 +262,7 @@ export function registerWorktreeActions(
 ): () => void {
   const disposers = [
     registerWorktreeListAction(context),
-    registerDisabledWorktreeCreateAction(context),
-    registerDisabledWorktreeDeleteAction(context),
+    registerWorktreeOperationActions(context),
   ];
   return () => {
     for (const dispose of disposers) {

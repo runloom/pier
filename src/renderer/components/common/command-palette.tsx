@@ -39,11 +39,10 @@ import {
 } from "@/lib/command-palette/action-search.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
+import { quickPickResults } from "@/lib/command-palette/quick-pick-search.ts";
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
-import { rankSearchDocuments } from "@/lib/search/ranker.ts";
-import type { SearchDocument } from "@/lib/search/types.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import {
@@ -74,43 +73,6 @@ function isQuickPickItemSelectable(
   item: QuickPickItem
 ): boolean {
   return quickPick.loading !== true && item.disabled !== true;
-}
-
-function quickPickDocument(
-  item: QuickPickItem,
-  sectionHeading?: string
-): SearchDocument<QuickPickItem> {
-  return {
-    aliases: [
-      ...(item.aliases ?? []),
-      ...(item.searchTerms ?? []),
-      ...(sectionHeading ? [sectionHeading] : []),
-    ],
-    category: sectionHeading ?? "",
-    disabled: item.disabled === true,
-    id: item.id,
-    kind: "quick-pick",
-    payload: item,
-    source: "quick-pick",
-    stableId: item.id,
-    title: item.label,
-    ...(item.detail ? { shortcutLabel: item.detail } : {}),
-  };
-}
-
-function quickPickResults(
-  items: readonly QuickPickItem[],
-  query: string,
-  sectionHeading?: string
-): readonly QuickPickItem[] {
-  const normalizedQuery = query.trim();
-  if (!normalizedQuery) {
-    return items;
-  }
-  return rankSearchDocuments(
-    items.map((item) => quickPickDocument(item, sectionHeading)),
-    normalizedQuery
-  ).map((result) => result.document.payload);
 }
 
 /**
@@ -430,27 +392,10 @@ function QuickPickView({
 }): ReactNode {
   const renderItem = (item: QuickPickItem) => {
     const disabled = !isQuickPickItemSelectable(quickPick, item);
-    return (
-      <CommandItem
-        aria-current={item.checked === true ? "true" : undefined}
-        className="items-start gap-3 py-2"
-        data-checked={item.checked === true}
-        data-disabled={disabled}
-        disabled={disabled}
-        key={item.id}
-        onSelect={() => {
-          if (disabled) {
-            return;
-          }
-          onAccept(item).catch((err) => {
-            console.error(
-              `[command-palette] quick-pick onAccept ${item.id} rejected:`,
-              err
-            );
-          });
-        }}
-        value={item.id}
-      >
+    const content = quickPick.renderItem ? (
+      quickPick.renderItem(item)
+    ) : (
+      <>
         <span className="min-w-0 flex-1 self-center">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="truncate">{item.label}</span>
@@ -475,6 +420,34 @@ function QuickPickView({
             {item.description}
           </span>
         ) : null}
+      </>
+    );
+    return (
+      <CommandItem
+        aria-current={item.checked === true ? "true" : undefined}
+        className={
+          quickPick.renderItem
+            ? "items-center gap-2 py-2"
+            : "items-start gap-3 py-2"
+        }
+        data-checked={item.checked === true}
+        data-disabled={disabled}
+        disabled={disabled}
+        key={item.id}
+        onSelect={() => {
+          if (disabled) {
+            return;
+          }
+          onAccept(item).catch((err) => {
+            console.error(
+              `[command-palette] quick-pick onAccept ${item.id} rejected:`,
+              err
+            );
+          });
+        }}
+        value={item.id}
+      >
+        {content}
       </CommandItem>
     );
   };

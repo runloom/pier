@@ -7,10 +7,16 @@ import type {
   RendererPluginQuickPickItem,
   RendererPluginQuickPickSection,
 } from "@plugins/api/renderer.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
+import { toast } from "sonner";
 import { terminalStatusItemRegistry } from "../../panel-kits/terminal/terminal-status-bar.tsx";
-import { usePanelDescriptorStore } from "../../stores/panel-descriptor.store.ts";
+import { showAppAlert, showAppConfirm } from "../../stores/app-dialog.store.ts";
+import {
+  type PanelDescriptor,
+  usePanelDescriptorStore,
+} from "../../stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
@@ -167,6 +173,7 @@ function adaptQuickPickItem(item: RendererPluginQuickPickItem): QuickPickItem {
     ...(item.aliases ? { aliases: item.aliases } : {}),
     ...(item.badges ? { badges: item.badges } : {}),
     ...(item.checked == null ? {} : { checked: item.checked }),
+    ...("data" in item ? { data: item.data } : {}),
     ...(item.description ? { description: item.description } : {}),
     ...(item.detail ? { detail: item.detail } : {}),
     ...(item.disabled == null ? {} : { disabled: item.disabled }),
@@ -211,6 +218,12 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
       : {}),
     ...(quickPick.onDismiss ? { onDismiss: quickPick.onDismiss } : {}),
     ...(quickPick.placeholder ? { placeholder: quickPick.placeholder } : {}),
+    ...(quickPick.renderItem
+      ? {
+          renderItem: (item: QuickPickItem) =>
+            quickPick.renderItem?.(pluginItemFor(item)),
+        }
+      : {}),
     ...(quickPick.sections
       ? { sections: quickPick.sections.map(adaptQuickPickSection) }
       : {}),
@@ -229,17 +242,39 @@ function resolveRegistrationTitle(
   return title ?? fallback;
 }
 
-function openPluginPanel(panelId: string): void {
+function pluginPanelDescriptor(
+  panelId: string,
+  registration: PluginPanelRegistration | undefined,
+  context: PanelContext | undefined
+): PanelDescriptor {
+  return {
+    ...(context ? { context } : {}),
+    display: { short: resolveRegistrationTitle(registration, panelId) },
+  };
+}
+
+function openPluginPanel(
+  panelId: string,
+  options: { context?: PanelContext } = {}
+): void {
   const api = useWorkspaceStore.getState().api;
   if (!api) {
     return;
   }
+  const registration = getPluginPanelRegistrations().get(panelId);
+  const descriptorStore = usePanelDescriptorStore.getState();
+  // 无来源 context 时保留 panel 已存的 context,避免重开时被抹掉。
+  const context =
+    options.context ?? descriptorStore.descriptors[panelId]?.context;
+  descriptorStore.upsert(
+    panelId,
+    pluginPanelDescriptor(panelId, registration, context)
+  );
   const existing = api.panels.find((panel) => panel.id === panelId);
   if (existing) {
     activateWorkspacePanel(api, existing.id, { reveal: "always" });
     return;
   }
-  const registration = getPluginPanelRegistrations().get(panelId);
   const params = registration?.getParams?.();
   api.addPanel({
     id: panelId,
@@ -249,6 +284,13 @@ function openPluginPanel(panelId: string): void {
     ...(params ? { params } : {}),
   });
   scheduleRevealDockviewTabByPanelId(panelId);
+}
+
+function toastNotificationOptions(options?: {
+  description?: string;
+}): { description: string } | undefined {
+  const description = options?.description?.trim();
+  return description ? { description } : undefined;
 }
 
 export function createRendererPluginContext(
@@ -267,7 +309,37 @@ export function createRendererPluginContext(
           .getState()
           .openQuickPick(adaptQuickPick(quickPick)),
     },
+    dialogs: {
+      alert: (options) => showAppAlert(options),
+      confirm: (options) => showAppConfirm(options),
+    },
     i18n: createPluginI18n(entry),
+    notifications: {
+      error: (message, options) => {
+        toast.error(message, toastNotificationOptions(options));
+      },
+      info: (message, options) => {
+        toast.info(message, toastNotificationOptions(options));
+      },
+      loading: (message) => {
+        const id = toast.loading(message);
+        return {
+          dismiss: () => {
+            toast.dismiss(id);
+          },
+          info: (update) => {
+            toast.info(update, { id });
+          },
+          success: (update) => {
+            toast.success(update, { id });
+          },
+        };
+      },
+      success: (message, options) => {
+        toast.success(message, toastNotificationOptions(options));
+      },
+      system: (options) => window.pier.notifications.system(options),
+    },
     panels: {
       getActiveContext: () => {
         const state = usePanelDescriptorStore.getState();
@@ -275,11 +347,11 @@ export function createRendererPluginContext(
           ? (state.descriptors[state.activeId]?.context ?? null)
           : null;
       },
-      open: (panelId) => {
+      open: (panelId, options) => {
         // 与 register 对称:必须在自己 manifest 声明的 panel 才能打开,
         // 防止 A 插件越权打开 B 插件的 panel。
         assertDeclaredContribution(entry, "panel", panelId);
-        openPluginPanel(panelId);
+        openPluginPanel(panelId, options);
       },
       register: (registration: PluginPanelRegistration) => {
         assertDeclaredContribution(entry, "panel", registration.id);
@@ -294,12 +366,28 @@ export function createRendererPluginContext(
     },
     worktrees: {
       check: (request) => window.pier.worktrees.check(request),
+      create: (request) => window.pier.worktrees.create(request),
       list: (request) => window.pier.worktrees.list(request),
       open: (request) => window.pier.worktrees.open(request),
+      prune: (request) => window.pier.worktrees.prune(request),
+      remove: (request) => window.pier.worktrees.remove(request),
     },
     git: {
+      abortMerge: (cwd) => window.pier.git.abortMerge(cwd),
+      abortRebase: (cwd) => window.pier.git.abortRebase(cwd),
+      continueRebase: (cwd) => window.pier.git.continueRebase(cwd),
       getStatus: (cwd) => window.pier.git.getStatus(cwd),
       getRepoInfo: (cwd) => window.pier.git.getRepoInfo(cwd),
+      listBranches: (cwd, options) =>
+        window.pier.git.listBranches(cwd, options),
+      searchBranches: (cwd, options) =>
+        window.pier.git.searchBranches(cwd, options),
+      listStashes: (cwd) => window.pier.git.listStashes(cwd),
+      merge: (cwd, branch) => window.pier.git.merge(cwd, branch),
+      popStash: (cwd, index) => window.pier.git.popStash(cwd, index),
+      rebase: (cwd, branch) => window.pier.git.rebase(cwd, branch),
+      stash: (cwd, options) => window.pier.git.stash(cwd, options),
+      undoLastCommit: (cwd) => window.pier.git.undoLastCommit(cwd),
       watch: (gitRoot, listener) => window.pier.git.watch(gitRoot, listener),
     },
   };

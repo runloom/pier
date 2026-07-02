@@ -157,7 +157,11 @@ describe("bin/pier.mjs", () => {
     ]);
     expect(JSON.parse(open.stdout)).toMatchObject({
       envelope: {
-        command: { focus: false, path: resolve("."), type: "worktree.open" },
+        command: {
+          focus: false,
+          path: resolve("."),
+          type: "worktree.open",
+        },
       },
       json: true,
     });

@@ -7,10 +7,20 @@ import type {
   GitBranchRef,
   GitChangeEvent,
   GitCommit,
+  GitDiffBranchesResult,
   GitDiffPatch,
   GitDiffSummary,
+  GitMergeAbortResult,
+  GitMergeResult,
+  GitRebaseAbortResult,
+  GitRebaseContinueResult,
+  GitRebaseResult,
   GitRepoInfo,
+  GitStashListResult,
+  GitStashPopResult,
+  GitStashResult,
   GitStatus,
+  GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
@@ -41,6 +51,12 @@ export interface GitListBranchesOptionsValue {
   kind: "all" | "local" | "remote";
 }
 
+export interface GitDiffSearchBranchesOptionsValue {
+  currentBranch?: null | string;
+  limit?: number;
+  query?: string;
+}
+
 export interface GitCommitOptionsValue {
   allowEmpty?: boolean;
   message: string;
@@ -57,9 +73,17 @@ export interface GitDeleteBranchOptionsValue {
   name: string;
 }
 
+export interface GitStashOptionsValue {
+  includeUntracked?: boolean;
+  message?: string;
+}
+
 export interface PierGitAPI {
+  abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
+  abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
   checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
   commit: (cwd: string, options: GitCommitOptionsValue) => Promise<boolean>;
+  continueRebase: (cwd: string) => Promise<GitRebaseContinueResult>;
   createBranch: (
     cwd: string,
     options: GitCreateBranchOptionsValue
@@ -93,10 +117,23 @@ export interface PierGitAPI {
     cwd: string,
     options: GitListBranchesOptionsValue
   ) => Promise<GitBranchRef[]>;
+  listStashes: (cwd: string) => Promise<GitStashListResult>;
   listTags: (cwd: string) => Promise<string[]>;
+  merge: (cwd: string, branch: string) => Promise<GitMergeResult>;
+  popStash: (cwd: string, index?: number) => Promise<GitStashPopResult>;
+  rebase: (cwd: string, branch: string) => Promise<GitRebaseResult>;
   resolveRef: (cwd: string, ref: string) => Promise<string>;
+  searchBranches: (
+    cwd: string,
+    options?: GitDiffSearchBranchesOptionsValue
+  ) => Promise<GitDiffBranchesResult>;
   // 写(git:write;默认 desktop-renderer 已给,与 worktree:write 同等待遇;二次确认由插件 UI 负责)
   stage: (cwd: string, paths: string[]) => Promise<boolean>;
+  stash: (
+    cwd: string,
+    options?: GitStashOptionsValue
+  ) => Promise<GitStashResult>;
+  undoLastCommit: (cwd: string) => Promise<GitUndoCommitResult>;
   unstage: (cwd: string, paths: string[]) => Promise<boolean>;
   validateBranchName: (cwd: string, name: string) => Promise<boolean>;
   /** 订阅 gitRoot 的 git 变化。返回 unsubscribe。多次 watch 同一 gitRoot 各自独立。 */
@@ -172,6 +209,12 @@ export const gitApi: PierGitAPI = {
       options,
       type: "git.listBranches",
     }),
+  searchBranches: (cwd, options) =>
+    invokePierCommand<GitDiffBranchesResult>({
+      cwd,
+      ...(options !== undefined && { options }),
+      type: "git.searchBranches",
+    }),
   listTags: (cwd) => invokePierCommand<string[]>({ cwd, type: "git.listTags" }),
   resolveRef: (cwd, ref) =>
     invokePierCommand<string>({ cwd, ref, type: "git.resolveRef" }),
@@ -211,6 +254,55 @@ export const gitApi: PierGitAPI = {
     }),
   checkoutBranch: (cwd, name) =>
     invokePierCommand<boolean>({ cwd, name, type: "git.checkoutBranch" }),
+  merge: (cwd, branch) =>
+    invokePierCommand<GitMergeResult>({
+      branch,
+      cwd,
+      type: "git.merge",
+    }),
+  abortMerge: (cwd) =>
+    invokePierCommand<GitMergeAbortResult>({
+      cwd,
+      type: "git.mergeAbort",
+    }),
+  stash: (cwd, options = {}) =>
+    invokePierCommand<GitStashResult>({
+      ...(options.includeUntracked !== undefined && {
+        includeUntracked: options.includeUntracked,
+      }),
+      ...(options.message !== undefined && { message: options.message }),
+      cwd,
+      type: "git.stash",
+    }),
+  popStash: (cwd, index) =>
+    invokePierCommand<GitStashPopResult>({
+      ...(index !== undefined && { index }),
+      cwd,
+      type: "git.stashPop",
+    }),
+  listStashes: (cwd) =>
+    invokePierCommand<GitStashListResult>({ cwd, type: "git.stashList" }),
+  rebase: (cwd, branch) =>
+    invokePierCommand<GitRebaseResult>({
+      branch,
+      cwd,
+      type: "git.rebase",
+    }),
+  abortRebase: (cwd) =>
+    invokePierCommand<GitRebaseAbortResult>({
+      cwd,
+      type: "git.rebaseAbort",
+    }),
+  continueRebase: (cwd) =>
+    invokePierCommand<GitRebaseContinueResult>({
+      cwd,
+      type: "git.rebaseContinue",
+    }),
+  undoLastCommit: (cwd) =>
+    invokePierCommand<GitUndoCommitResult>({
+      cwd,
+      type: "git.undoLastCommit",
+    }),
   watch: (gitRoot, listener) => {
     const filtered = (_event: unknown, payload: GitChangeEvent): void => {
       if (payload.gitRoot === gitRoot) {

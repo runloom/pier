@@ -2,6 +2,19 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+const toastMocks = vi.hoisted(() => ({
+  dismiss: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(() => "toast-1"),
+  success: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: toastMocks,
+}));
+
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
@@ -260,25 +273,121 @@ describe("createRendererPluginContext", () => {
       status: "available" as const,
       worktrees: [],
     }));
+    const create = vi.fn(async () => ({
+      created: {
+        bare: false,
+        branch: "feature/new",
+        detached: false,
+        head: "abc123",
+        isCurrent: false,
+        isMain: false,
+        locked: false,
+        lockedReason: null,
+        path: "/repo/.worktrees/new",
+        prunable: false,
+        prunableReason: null,
+      },
+      targetPath: "/repo/.worktrees/new",
+      worktrees: [],
+    }));
     const open = vi.fn(async () => ({
       panelId: "terminal-worktree",
+    }));
+    const prune = vi.fn(async () => ({
+      mainPath: "/repo",
+      path: "/repo",
+      status: "available" as const,
+      worktrees: [],
+    }));
+    const remove = vi.fn(async () => ({
+      removedPath: "/repo/.worktrees/new",
+      worktrees: [],
     }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        worktrees: { check, list, open },
+        worktrees: { check, create, list, open, prune, remove },
       },
     });
 
     const context = createRendererPluginContext();
 
     await context.worktrees.check({ path: "/repo" });
+    await context.worktrees.create({
+      branch: "feature/new",
+      name: "new",
+      path: "/repo",
+    });
     await context.worktrees.list({ path: "/repo" });
     await context.worktrees.open({ path: "/repo" });
+    await context.worktrees.prune({ path: "/repo" });
+    await context.worktrees.remove({ path: "/repo/.worktrees/new" });
 
     expect(check).toHaveBeenCalledWith({ path: "/repo" });
+    expect(create).toHaveBeenCalledWith({
+      branch: "feature/new",
+      name: "new",
+      path: "/repo",
+    });
     expect(list).toHaveBeenCalledWith({ path: "/repo" });
     expect(open).toHaveBeenCalledWith({ path: "/repo" });
+    expect(prune).toHaveBeenCalledWith({ path: "/repo" });
+    expect(remove).toHaveBeenCalledWith({ path: "/repo/.worktrees/new" });
+  });
+
+  it("delegates plain notifications to the host toast layer", () => {
+    const context = createRendererPluginContext();
+
+    context.notifications.success("Merged", { description: "1 file changed" });
+    context.notifications.info("Nothing to stash");
+    context.notifications.error("No active git panel");
+
+    expect(toastMocks.success).toHaveBeenCalledWith("Merged", {
+      description: "1 file changed",
+    });
+    expect(toastMocks.info).toHaveBeenCalledWith("Nothing to stash", undefined);
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      "No active git panel",
+      undefined
+    );
+  });
+
+  it("delegates system notifications to the preload facade", async () => {
+    const system = vi.fn(async () => ({ shown: true }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { notifications: { system } },
+    });
+
+    const context = createRendererPluginContext();
+
+    await expect(
+      context.notifications.system({ body: "Rebase finished", title: "Pier" })
+    ).resolves.toEqual({ shown: true });
+    expect(system).toHaveBeenCalledWith({
+      body: "Rebase finished",
+      title: "Pier",
+    });
+  });
+
+  it("returns a loading handle that updates and dismisses the same toast", () => {
+    const context = createRendererPluginContext();
+
+    const loading = context.notifications.loading("Rebasing...");
+    expect(toastMocks.loading).toHaveBeenCalledWith("Rebasing...");
+
+    loading.info("Rebase stopped at conflict");
+    expect(toastMocks.info).toHaveBeenCalledWith("Rebase stopped at conflict", {
+      id: "toast-1",
+    });
+
+    loading.success("Rebase finished");
+    expect(toastMocks.success).toHaveBeenCalledWith("Rebase finished", {
+      id: "toast-1",
+    });
+
+    loading.dismiss();
+    expect(toastMocks.dismiss).toHaveBeenCalledWith("toast-1");
   });
 
   it("resolves plugin-owned locale messages through the injected i18n facade", async () => {
