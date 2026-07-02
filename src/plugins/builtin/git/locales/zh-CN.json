@@ -205,6 +205,12 @@
       "title": "Git 变更"
     }
   },
+  "settings": {
+    "pier.git.statusItem.showDirtyIndicator": {
+      "label": "显示变更指示",
+      "description": "在工作树状态项中显示变更文件计数与行数增减。"
+    }
+  },
   "terminalStatusItems": {
     "pier.worktree.status": {
       "description": "在终端面板中显示当前 Git 工作树。",

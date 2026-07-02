@@ -213,6 +213,12 @@
       "title": "Git Changes"
     }
   },
+  "settings": {
+    "pier.git.statusItem.showDirtyIndicator": {
+      "label": "Show dirty indicator",
+      "description": "Show working tree change counts and line delta in the worktree status item."
+    }
+  },
   "terminalStatusItems": {
     "pier.worktree.status": {
       "description": "Shows the current Git worktree in terminal panels.",

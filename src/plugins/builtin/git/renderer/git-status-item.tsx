@@ -88,12 +88,32 @@ function useGitStatus(
   return status;
 }
 
+/** 试点设置消费：经 context.configuration 读生效值并 onDidChange 实时响应。 */
+function useShowDirtyIndicator(pluginContext: RendererPluginContext): boolean {
+  const [value, setValue] = useState<boolean>(() =>
+    pluginContext.configuration.get<boolean>(SHOW_DIRTY_INDICATOR_KEY)
+  );
+  useEffect(
+    () =>
+      pluginContext.configuration.onDidChange((event) => {
+        if (event.affectsConfiguration(SHOW_DIRTY_INDICATOR_KEY)) {
+          setValue(
+            pluginContext.configuration.get<boolean>(SHOW_DIRTY_INDICATOR_KEY)
+          );
+        }
+      }),
+    [pluginContext]
+  );
+  return value;
+}
+
 /**
  * 大规模变更预警阈值。AI burst 场景下一次动百个文件是常态，超过任一阈值都算"值得警惕"。
  * v1 硬编码；如需可调，走 preferences（Phase C）而不是环境变量或 remote config。
  */
 const LARGE_CHANGE_FILE_THRESHOLD = 100;
 const LARGE_CHANGE_LINE_THRESHOLD = 2000;
+const SHOW_DIRTY_INDICATOR_KEY = "pier.git.statusItem.showDirtyIndicator";
 
 interface StatusFlags {
   ahead: number;
@@ -152,12 +172,14 @@ function StatusBody({
   context,
   flags,
   pluginContext,
+  showDirtyIndicator,
   worktreeName,
 }: {
   branch: GitStatus["branch"] | null;
   context: RendererTerminalStatusItemContext["context"];
   flags: StatusFlags;
   pluginContext: RendererPluginContext;
+  showDirtyIndicator: boolean;
   worktreeName: string;
 }): React.ReactElement {
   return (
@@ -195,8 +217,8 @@ function StatusBody({
           />
         </>
       )}
-      {(flags.hasWorkingChanges || flags.hasDelta) && (
-        <>
+      {showDirtyIndicator && (flags.hasWorkingChanges || flags.hasDelta) && (
+        <span className="contents" data-testid="git-dirty-indicator">
           <SdDivider />
           <WorkingTreeCounts
             counts={flags.counts}
@@ -207,7 +229,7 @@ function StatusBody({
             pluginContext={pluginContext}
             show={flags.hasLargeChange}
           />
-        </>
+        </span>
       )}
       {flags.stashCount > 0 && (
         <>
@@ -228,6 +250,7 @@ function WorktreeStatusItem({
 }) {
   const worktreePath = context?.worktreeRoot ?? context?.gitRoot;
   const status = useGitStatus(pluginContext, context?.gitRoot);
+  const showDirtyIndicator = useShowDirtyIndicator(pluginContext);
   if (!worktreePath) {
     return null;
   }
@@ -274,6 +297,7 @@ function WorktreeStatusItem({
         context={context}
         flags={flags}
         pluginContext={pluginContext}
+        showDirtyIndicator={showDirtyIndicator}
         worktreeName={worktreeName}
       />
     </Button>
