@@ -305,6 +305,46 @@ describe("PluginConfigurationSection", () => {
     });
   });
 
+  it("blur 提交后 IPC 未 resolve 时立即 unmount, 不重复提交同值(F10 Critical 回归)", () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    // IPC 永不 resolve, 模拟 blur 触发的 set 调用还在飞行中、store 的 effective
+    // 未及时跟上 —— 此时 unmount cleanup 不应把"刚提交的值"误判成"未提交的草稿"
+    // 而再次调用 onCommit/set。
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        pluginSettings: {
+          getAll: vi.fn(async () => ({ values: {}, version: 1 })),
+          onChanged: vi.fn(() => () => undefined),
+          reset: vi.fn(async (key: string) => ({
+            values: { [key]: undefined },
+            version: 1,
+          })),
+          set: vi.fn(() => new Promise(() => undefined)),
+        },
+      },
+    });
+
+    const { unmount } = render(
+      <PluginConfigurationSection pluginId="pier.demo" />
+    );
+
+    const nameInput = screen.getByDisplayValue("default-name");
+    fireEvent.change(nameInput, { target: { value: "committed-name" } });
+    fireEvent.blur(nameInput);
+    // 同一 tick 内立即 unmount, IPC 尚未 resolve, store.values 未更新, effective 未跟上。
+    unmount();
+
+    expect(window.pier.pluginSettings.set).toHaveBeenCalledTimes(1);
+    expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+      "pier.demo.name",
+      "committed-name"
+    );
+  });
+
   it("string 控件 blur 提交原始值", async () => {
     usePluginRegistryStore.setState({
       initialized: true,

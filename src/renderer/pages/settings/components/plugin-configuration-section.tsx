@@ -112,17 +112,27 @@ function StringSettingRow({
     setDraft(effective);
   }
 
-  // unmount 时若草稿未提交(未 blur/Enter/Escape)则 flush 写入, 避免切走面板时静默丢草稿。
+  // unmount 时若草稿"从未经 onCommit 提交过"则 flush 写入, 避免切走面板时静默丢草稿。
+  // 用 lastCommittedRef(而非 effective)做判据: blur/Enter 提交后 IPC 未 resolve 时
+  // effective(来自 store)还没跟上, 若继续用 draft!==effective 判断会把"刚提交、
+  // store 未同步"误判成"从未提交", 导致 unmount cleanup 对同一个值重复 onCommit
+  // (多一次 IPC 往返 + 一次全窗口广播)。lastCommittedRef 初始化为当前 effective,
+  // 并随 effective 的外部变化(其它窗口广播/reset 等)同步更新 —— 但只在这类外部
+  // 变化时同步, 不能被本地未提交的 draft 变化误清空判定。
   // ref 持最新 draft/effective/onCommit, 因为 cleanup 闭包只在挂载时创建一次。
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const effectiveRef = useRef(effective);
-  effectiveRef.current = effective;
+  const lastCommittedRef = useRef(effective);
   const onCommitRef = useRef(onCommit);
   onCommitRef.current = onCommit;
+  if (effective !== prev) {
+    // effective 的外部变化(非本地 commit 触发)才应同步 lastCommittedRef,
+    // 与上面 prev 的判断复用同一次 effective 变化检测, 避免与本地 commit 写入冲突。
+    lastCommittedRef.current = effective;
+  }
   useEffect(() => {
     return () => {
-      if (draftRef.current !== effectiveRef.current) {
+      if (draftRef.current !== lastCommittedRef.current) {
         // cleanup 里不能 setState, 只发起提交 IPC。
         onCommitRef.current(draftRef.current);
       }
@@ -137,7 +147,11 @@ function StringSettingRow({
       label={label}
       {...(max === undefined ? {} : { max })}
       {...(min === undefined ? {} : { min })}
-      onBlur={(raw) => setDraft(onCommit(raw))}
+      onBlur={(raw) => {
+        const committed = onCommit(raw);
+        lastCommittedRef.current = committed;
+        setDraft(committed);
+      }}
       onChange={setDraft}
       onEscape={() => setDraft(effective)}
       type={type}
