@@ -244,5 +244,10 @@ export const settings = {
       args: "启动参数",
       argsDesc: "追加到启动命令的参数",
     },
+    statusHooks: {
+      label: "Agent 状态感知",
+      description:
+        "面板实时显示 Claude Code 运行/等待状态（经 ~/.claude/settings.json 状态上报 hook）。关闭将移除 Pier 安装的 hook 并停止重装",
+    },
   },
 } as const;

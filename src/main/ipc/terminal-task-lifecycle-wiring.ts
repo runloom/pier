@@ -7,6 +7,7 @@ import {
   findAppWindowByElectronId,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
+import { agentSessionService } from "./agent-session.ts";
 import { recordNativeTerminalRoute } from "./terminal-debug.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
@@ -57,6 +58,10 @@ export function registerTerminalTaskLifecycleForwarding(
       exitCode: normalizedExitCode,
     });
     const rawPanelId = unscopePanelId(panelId);
+    // 前台命令退出 = 该面板运行中的 agent CLI 已退出（若有会话）——清理并还原
+    // tab/状态栏呈现。覆盖崩溃/kill 等无 SessionEnd hook 的路径。
+    // 透传原始 exitCode：悬挂家族(145-148, Ctrl+Z)不视为 agent 退出。
+    agentSessionService.commandFinished(String(id), rawPanelId, exitCode);
     const targetWindow = findAppWindowByElectronId(id);
     if (exitCode >= 0) {
       lifecycle
@@ -91,6 +96,7 @@ export function registerTerminalTaskLifecycleForwarding(
     });
     const rawPanelId = unscopePanelId(panelId);
     const targetWindow = findAppWindowByElectronId(id);
+    agentSessionService.panelClosed(String(id), rawPanelId);
     lifecycle
       .completeFromNativeProcessClose({
         browserWindowId: id,
@@ -126,6 +132,8 @@ export function registerTerminalTaskLifecycleForwarding(
         });
       return;
     }
+
+    agentSessionService.ingestTitle(String(id), rawPanelId, title);
 
     if (targetWindow && !targetWindow.isDestroyed()) {
       const sessionScope = terminalSessionScopeFor(targetWindow);

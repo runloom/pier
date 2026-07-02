@@ -42,6 +42,7 @@ const DEFAULTS: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  agentStatusHooks: true,
   gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,
   gitAutoFetchIntervalMinutes: DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
 };

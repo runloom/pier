@@ -322,7 +322,10 @@ describe("terminal focus restoration", () => {
       { x: 1, y: 2, width: 300, height: 200 },
       "Menlo",
       13,
-      { cwd: "/Users/xyz/ABC/pier" }
+      {
+        cwd: "/Users/xyz/ABC/pier",
+        env: { PIER_PANEL_ID: "terminal-1", PIER_WINDOW_ID: "7" },
+      }
     );
   });
 
@@ -356,7 +359,10 @@ describe("terminal focus restoration", () => {
       { x: 1, y: 2, width: 300, height: 200 },
       "Menlo",
       13,
-      { cwd: "/Users/xyz/ABC/pier" }
+      {
+        cwd: "/Users/xyz/ABC/pier",
+        env: { PIER_PANEL_ID: "terminal-1", PIER_WINDOW_ID: "7" },
+      }
     );
   });
 
@@ -393,7 +399,11 @@ describe("terminal focus restoration", () => {
       {
         command: "pnpm test",
         cwd: "/Users/xyz/ABC/pier",
-        env: { SECRET: "token" },
+        env: {
+          PIER_PANEL_ID: "terminal-1",
+          PIER_WINDOW_ID: "7",
+          SECRET: "token",
+        },
       }
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-rerun");
@@ -422,7 +432,10 @@ describe("terminal focus restoration", () => {
       { x: 1, y: 2, width: 300, height: 200 },
       "Menlo",
       13,
-      { cwd: "/Users/xyz/ABC/pier" }
+      {
+        cwd: "/Users/xyz/ABC/pier",
+        env: { PIER_PANEL_ID: "terminal-1", PIER_WINDOW_ID: "7" },
+      }
     );
   });
 
