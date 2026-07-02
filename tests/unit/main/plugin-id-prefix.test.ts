@@ -20,6 +20,27 @@ function builtinSource(id: string) {
   };
 }
 
+function builtinSourceWithStatusItem(id: string, statusItemId: string) {
+  return {
+    kind: "builtin" as const,
+    manifest: {
+      apiVersion: 1,
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: id,
+      source: { kind: "builtin" },
+      terminalStatusItems: [
+        {
+          id: statusItemId,
+          permissions: [],
+          title: statusItemId,
+        },
+      ],
+      version: "1.0.0",
+    },
+  };
+}
+
 function memoryState(): PluginStateStore {
   let state: PluginRegistryState = { plugins: {}, version: 1 };
   return {
@@ -76,6 +97,42 @@ describe("plugin registry — 插件 id 互为点分前缀拒绝", () => {
     expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
       "pier.git",
       "pier.gitx",
+    ]);
+    expect(result.diagnostics).toHaveLength(0);
+  });
+});
+
+describe("plugin registry — terminalStatusItems id 跨插件唯一性", () => {
+  it("两插件声明同一 status item id，后者被拒并带 invalid_manifest 诊断", async () => {
+    const service = createPluginService({
+      sources: [
+        builtinSourceWithStatusItem("pier.alpha", "shared.status"),
+        builtinSourceWithStatusItem("pier.beta", "shared.status"),
+      ],
+      state: memoryState(),
+    });
+    const result = await service.list();
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.alpha",
+    ]);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("invalid_manifest");
+    expect(result.diagnostics[0]?.message).toContain("shared.status");
+    expect(result.diagnostics[0]?.message).toContain("pier.beta");
+  });
+
+  it("不同插件声明不同 status item id 可以共存", async () => {
+    const service = createPluginService({
+      sources: [
+        builtinSourceWithStatusItem("pier.alpha", "alpha.status"),
+        builtinSourceWithStatusItem("pier.beta", "beta.status"),
+      ],
+      state: memoryState(),
+    });
+    const result = await service.list();
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.alpha",
+      "pier.beta",
     ]);
     expect(result.diagnostics).toHaveLength(0);
   });

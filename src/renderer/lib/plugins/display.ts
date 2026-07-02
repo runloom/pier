@@ -271,12 +271,19 @@ export function resolvePluginSettingDisplay(
       locale,
       (messages) => messages.settings?.[key]?.description
     ) ?? property?.description;
+  const localeEnumDescriptions = resolveArrayFromLocales(
+    manifest,
+    locale,
+    (messages) => messages.settings?.[key]?.enumDescriptions
+  );
+  // locale 侧 enumDescriptions 未与 manifest enum 做等长校验；UI 按下标映射到 enum 值，
+  // 长度不符会导致下标错位（标签指向错误的枚举值）。忽略并回落 manifest，而不是直接采用。
   const enumDescriptions =
-    resolveArrayFromLocales(
-      manifest,
-      locale,
-      (messages) => messages.settings?.[key]?.enumDescriptions
-    ) ?? property?.enumDescriptions;
+    (localeEnumDescriptions &&
+    property?.enum &&
+    localeEnumDescriptions.length !== property.enum.length
+      ? undefined
+      : localeEnumDescriptions) ?? property?.enumDescriptions;
   return {
     label:
       resolveFromLocales(

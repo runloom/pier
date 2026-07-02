@@ -140,6 +140,86 @@ describe("pluginManifestSchema — configuration", () => {
     ).toThrow();
   });
 
+  it("接受 number default 落在 minimum/maximum 边界上（含相等）", () => {
+    expect(() =>
+      pluginManifestSchema.parse(
+        manifestWith(
+          propertiesWith({
+            "pier.sample.limit": {
+              default: 1,
+              maximum: 10,
+              minimum: 1,
+              type: "number",
+            },
+          })
+        )
+      )
+    ).not.toThrow();
+    expect(() =>
+      pluginManifestSchema.parse(
+        manifestWith(
+          propertiesWith({
+            "pier.sample.limit": {
+              default: 10,
+              maximum: 10,
+              minimum: 1,
+              type: "number",
+            },
+          })
+        )
+      )
+    ).not.toThrow();
+  });
+
+  it("拒绝 number default 小于 minimum", () => {
+    expect(() =>
+      pluginManifestSchema.parse(
+        manifestWith(
+          propertiesWith({
+            "pier.sample.limit": {
+              default: 0,
+              minimum: 1,
+              type: "number",
+            },
+          })
+        )
+      )
+    ).toThrow();
+  });
+
+  it("拒绝 number default 大于 maximum", () => {
+    expect(() =>
+      pluginManifestSchema.parse(
+        manifestWith(
+          propertiesWith({
+            "pier.sample.limit": {
+              default: 11,
+              maximum: 10,
+              type: "number",
+            },
+          })
+        )
+      )
+    ).toThrow();
+  });
+
+  it("拒绝 minimum 大于 maximum", () => {
+    expect(() =>
+      pluginManifestSchema.parse(
+        manifestWith(
+          propertiesWith({
+            "pier.sample.limit": {
+              default: 5,
+              maximum: 1,
+              minimum: 10,
+              type: "number",
+            },
+          })
+        )
+      )
+    ).toThrow();
+  });
+
   it("拒绝设置 key 不带 <pluginId>. 前缀（顶层 superRefine）", () => {
     expect(() =>
       pluginManifestSchema.parse(

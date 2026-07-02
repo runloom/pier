@@ -127,6 +127,28 @@ describe("resolvePluginSettingDisplay", () => {
       ).enumDescriptions
     ).toEqual(["Auto (manifest)", "Manual (manifest)"]);
   });
+
+  it("locale enumDescriptions 与 enum 长度不符时忽略并回落 manifest（防止下标错位）", () => {
+    const entry = entryWith({
+      locales: {
+        "zh-CN": {
+          settings: {
+            "pier.git.statusItem.mode": {
+              // 只给一项，长度与 manifest enum(["auto","manual"]) 不符
+              enumDescriptions: ["只有一项"],
+            },
+          },
+        },
+      },
+    });
+    expect(
+      resolvePluginSettingDisplay(
+        entry.manifest,
+        "pier.git.statusItem.mode",
+        "zh-CN"
+      ).enumDescriptions
+    ).toEqual(["Auto (manifest)", "Manual (manifest)"]);
+  });
 });
 
 describe("resolvePluginConfigurationTitle", () => {

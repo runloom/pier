@@ -183,6 +183,41 @@ export const pluginConfigurationPropertySchema = z
         path: ["minimum"],
       });
     }
+    if (
+      property.minimum !== undefined &&
+      property.maximum !== undefined &&
+      property.minimum > property.maximum
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "minimum must not be greater than maximum",
+        path: ["minimum"],
+      });
+    }
+    if (
+      property.type === "number" &&
+      typeof property.default === "number" &&
+      property.minimum !== undefined &&
+      property.default < property.minimum
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "default must be greater than or equal to minimum",
+        path: ["default"],
+      });
+    }
+    if (
+      property.type === "number" &&
+      typeof property.default === "number" &&
+      property.maximum !== undefined &&
+      property.default > property.maximum
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "default must be less than or equal to maximum",
+        path: ["default"],
+      });
+    }
   });
 export type PluginConfigurationProperty = z.infer<
   typeof pluginConfigurationPropertySchema

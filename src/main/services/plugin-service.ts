@@ -119,6 +119,23 @@ export function findPluginIdDotPrefixConflict(
   return null;
 }
 
+export function findTerminalStatusItemIdConflict(
+  acceptedManifests: readonly PluginManifest[],
+  candidate: PluginManifest
+): string | null {
+  const acceptedIds = new Set(
+    acceptedManifests.flatMap((manifest) =>
+      manifest.terminalStatusItems.map((item) => item.id)
+    )
+  );
+  for (const item of candidate.terminalStatusItems) {
+    if (acceptedIds.has(item.id)) {
+      return item.id;
+    }
+  }
+  return null;
+}
+
 function isExecutableSource(source: PluginDiscoverySource): boolean {
   return source.kind === "builtin";
 }
@@ -289,6 +306,18 @@ export function createPluginService({
           diagnostics.push({
             code: "invalid_manifest",
             message: `plugin id must not be a dot-separated prefix of another plugin id ("${conflict}"): ${withLocales.manifest.id}`,
+            source: diagnosticSource(source),
+          });
+          continue;
+        }
+        const statusItemConflict = findTerminalStatusItemIdConflict(
+          manifests.map((item) => item.manifest),
+          withLocales.manifest
+        );
+        if (statusItemConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `terminalStatusItems id must be unique across plugins ("${statusItemConflict}"): ${withLocales.manifest.id}`,
             source: diagnosticSource(source),
           });
           continue;
