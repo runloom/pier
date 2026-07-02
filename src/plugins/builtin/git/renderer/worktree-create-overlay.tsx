@@ -8,7 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import {
   Select,
@@ -188,15 +194,9 @@ function WorktreeCreateOverlay({
                 </Badge>
               ) : null}
             </div>
-          </Field>
-
-          <Field>
-            <FieldLabel>
-              {text("locationLabel", undefined, "Location")}
-            </FieldLabel>
-            <span className="truncate font-mono text-muted-foreground text-sm">
+            <FieldDescription className="font-mono">
               {`.worktrees/${derived.name}`}
-            </span>
+            </FieldDescription>
           </Field>
 
           <Field>
@@ -227,11 +227,9 @@ function WorktreeCreateOverlay({
             </Select>
           </Field>
 
-          <Field>
-            <FieldLabel>
-              {text("prepareLabel", undefined, "Prepare")}
-            </FieldLabel>
-            <div className="flex flex-wrap items-center gap-1.5">
+          {hasPrepare ? (
+            <FieldDescription className="flex flex-wrap items-center gap-1.5">
+              <span>{text("prepareLabel", undefined, "Prepare")}</span>
               {data.defaults.copyPatterns.length > 0 ? (
                 <Badge variant="secondary">
                   {text(
@@ -246,17 +244,8 @@ function WorktreeCreateOverlay({
                   {text("prepareSetup", undefined, "Run setup command")}
                 </Badge>
               ) : null}
-              {hasPrepare ? null : (
-                <span className="text-muted-foreground text-sm">
-                  {text(
-                    "prepareNone",
-                    undefined,
-                    "No prepare steps configured"
-                  )}
-                </span>
-              )}
-            </div>
-          </Field>
+            </FieldDescription>
+          ) : null}
 
           {error ? <FieldError>{error}</FieldError> : null}
         </FieldGroup>
