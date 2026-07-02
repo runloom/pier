@@ -383,6 +383,7 @@ export function createGitService({
           oid: parsed.branch.oid,
           upstream: parsed.branch.upstream,
           upstreamGone,
+          mergedIntoDefault: null,
         },
         counts,
         delta,

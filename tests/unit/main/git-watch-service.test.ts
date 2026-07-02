@@ -12,6 +12,7 @@ function fakeStatus(): GitStatus {
       oid: "abc123",
       upstream: null,
       upstreamGone: false,
+      mergedIntoDefault: null,
     },
     counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
     delta: null,
