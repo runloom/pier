@@ -441,16 +441,17 @@ const api: PierWindowAPI = {
   agentSessions: agentSessionsApi,
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
-    ipcRenderer.invoke("pier://window:close", windowId),
+    invokePierCommand<void>({ type: "window.close", windowId }),
   commandPalette: commandPaletteApi,
   commandPaletteMru: commandPaletteMruApi,
-  createWindow: () => ipcRenderer.invoke("pier://window:create"),
+  createWindow: () =>
+    invokePierCommand<WindowCreateResult>({ type: "window.create" }),
   focusWindow: (windowId) =>
-    ipcRenderer.invoke("pier://window:focus", windowId),
+    invokePierCommand<void>({ type: "window.focus", windowId }),
   files: filesApi,
   getWindowContext: () => ipcRenderer.invoke("pier://window:context"),
   keybinding: keybindingApi,
-  listWindows: () => ipcRenderer.invoke("pier://window:list"),
+  listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   menu: menuApi,
   notifications: notificationsApi,
   onTerminalPresentationApplied: (cb) =>

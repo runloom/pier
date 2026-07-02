@@ -1,19 +1,18 @@
 /**
  * Window IPC handlers — renderer 通过 pier://window:* 调用.
  *
- * 参考 loomdesk 精简: 保留 create/list/focus/close + closeCurrent
- * (closeCurrent 用 sender window, renderer 无需传 windowId).
+ * 保留 context 和 closeCurrent:
+ * - context: 需要 sender window 从 windowManager 查询，无对应 PierCommand
+ * - closeCurrent: 用 sender window，renderer 无需传 windowId，无对应 PierCommand
+ * 已迁至 command router: close/create/focus/list
  */
 
 import { PIER } from "@shared/ipc-channels.ts";
 import type { IpcMain } from "electron";
-import { appCore } from "../app-core/app-core.ts";
 import { findWindowContext } from "../windows/window-identity.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
 export function registerWindowIpc(ipcMain: IpcMain): void {
-  ipcMain.handle(PIER.WINDOW_CREATE, () => appCore.services.window.create());
-
   ipcMain.handle(PIER.WINDOW_CONTEXT, (event) => {
     const win = windowManager.fromWebContents(event.sender);
     if (!win) {
@@ -24,16 +23,6 @@ export function registerWindowIpc(ipcMain: IpcMain): void {
       throw new Error("window context not found");
     }
     return context;
-  });
-
-  ipcMain.handle(PIER.WINDOW_LIST, () => appCore.services.window.list());
-
-  ipcMain.handle(PIER.WINDOW_FOCUS, (_event, windowId: string) => {
-    appCore.services.window.focus(windowId);
-  });
-
-  ipcMain.handle(PIER.WINDOW_CLOSE, (_event, windowId: string) => {
-    appCore.services.window.close(windowId);
   });
 
   ipcMain.handle(PIER.WINDOW_CLOSE_CURRENT, (event) => {
