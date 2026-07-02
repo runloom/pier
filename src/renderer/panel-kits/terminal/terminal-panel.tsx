@@ -28,7 +28,7 @@ import { TerminalSearchBar } from "./terminal-search-bar.tsx";
 import {
   hasVisibleTerminalStatusItems,
   TerminalStatusBar,
-  useTerminalStatusItems,
+  useTerminalStatusBarItems,
 } from "./terminal-status-bar.tsx";
 import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
@@ -163,7 +163,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     windowZoomLevel
   );
   const anchorRef = useRef<HTMLDivElement>(null);
-  const statusItems = useTerminalStatusItems();
+  const statusItems = useTerminalStatusBarItems();
   const [error, setError] = useState<string | null>(null);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);

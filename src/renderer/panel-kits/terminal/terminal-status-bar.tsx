@@ -2,8 +2,15 @@ import type {
   RendererTerminalStatusItem,
   RendererTerminalStatusItemContext,
 } from "@plugins/api/renderer.ts";
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { Notifier } from "@/lib/util/notifier.ts";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
+import {
+  declaredTerminalStatusItemsById,
+  mergeTerminalStatusItems,
+  type TerminalStatusBarGroups,
+} from "./terminal-status-bar-merge.ts";
 
 export type TerminalStatusItemContext = RendererTerminalStatusItemContext;
 export type TerminalStatusItem = RendererTerminalStatusItem;
@@ -49,18 +56,55 @@ export function useTerminalStatusItems(): readonly TerminalStatusItem[] {
   return terminalStatusItemRegistry.list();
 }
 
+/**
+ * 组件层合并管道:registry 注册对象 × plugin-registry.store(manifest 声明,
+ * Phase 0 产物) × terminal-status-bar-prefs.store(用户覆盖)。
+ * plugin registry 未 initialized 时 plugins 为空数组,自然退化为全默认值。
+ */
+export function useTerminalStatusBarItems(): TerminalStatusBarGroups<TerminalStatusItem> {
+  const registered = useTerminalStatusItems();
+  const plugins = usePluginRegistryStore((s) => s.plugins);
+  const prefs = useTerminalStatusBarPrefsStore((s) => s.prefs);
+  return useMemo(
+    () =>
+      mergeTerminalStatusItems(
+        registered,
+        declaredTerminalStatusItemsById(plugins),
+        prefs
+      ),
+    [registered, plugins, prefs]
+  );
+}
+
 export function visibleTerminalStatusItems(
-  items: readonly TerminalStatusItem[],
+  groups: TerminalStatusBarGroups<TerminalStatusItem>,
   context: TerminalStatusItemContext
-): readonly TerminalStatusItem[] {
-  return items.filter((item) => item.isVisible?.(context) ?? true);
+): TerminalStatusBarGroups<TerminalStatusItem> {
+  const isVisible = (item: TerminalStatusItem) =>
+    item.isVisible?.(context) ?? true;
+  return {
+    left: groups.left.filter(isVisible),
+    right: groups.right.filter(isVisible),
+  };
 }
 
 export function hasVisibleTerminalStatusItems(
-  items: readonly TerminalStatusItem[],
+  groups: TerminalStatusBarGroups<TerminalStatusItem>,
   context: TerminalStatusItemContext
 ): boolean {
-  return visibleTerminalStatusItems(items, context).length > 0;
+  const visible = visibleTerminalStatusItems(groups, context);
+  return visible.left.length + visible.right.length > 0;
+}
+
+function renderStatusGroup(
+  items: readonly TerminalStatusItem[],
+  statusContext: TerminalStatusItemContext
+) {
+  return items.map((item) => (
+    <div className="min-w-0 shrink-0" key={item.id}>
+      {item.render(statusContext)}
+    </div>
+  ));
 }
 
 export function TerminalStatusBar({
@@ -69,10 +113,10 @@ export function TerminalStatusBar({
   panelId,
   title,
 }: TerminalStatusItemContext) {
-  const items = useTerminalStatusItems();
+  const groups = useTerminalStatusBarItems();
   const statusContext = { context, cwd, panelId, title };
-  const visibleItems = visibleTerminalStatusItems(items, statusContext);
-  if (visibleItems.length === 0) {
+  const visible = visibleTerminalStatusItems(groups, statusContext);
+  if (visible.left.length + visible.right.length === 0) {
     return null;
   }
   return (
@@ -80,11 +124,12 @@ export function TerminalStatusBar({
       className="absolute inset-x-0 bottom-0 flex h-7 items-center gap-1 px-1.5 leading-none"
       data-testid="terminal-status-bar"
     >
-      {visibleItems.map((item) => (
-        <div className="min-w-0 shrink-0" key={item.id}>
-          {item.render(statusContext)}
-        </div>
-      ))}
+      {renderStatusGroup(visible.left, statusContext)}
+      <div
+        className="min-w-0 flex-1"
+        data-testid="terminal-status-bar-spacer"
+      />
+      {renderStatusGroup(visible.right, statusContext)}
     </div>
   );
 }
