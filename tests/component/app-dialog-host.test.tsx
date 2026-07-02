@@ -10,6 +10,7 @@ import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { initI18n } from "@/i18n/index.ts";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import {
   resetAppDialogForTests,
   showAppAlert,
@@ -138,6 +139,28 @@ describe("AppDialogHost", () => {
     expect(useKeybindingScope.getState().overlayStack).not.toContain(
       "overlay:app-dialog"
     );
+  });
+
+  it("弹窗出现时关闭仍开着的命令面板,不与面板叠放", async () => {
+    render(<AppDialogHost />);
+
+    act(() => {
+      useCommandPaletteController.getState().openPalette();
+    });
+    expect(useCommandPaletteController.getState().open).toBe(true);
+
+    let result: Promise<void> | undefined;
+    act(() => {
+      result = showAppAlert({
+        body: "fatal: no rebase in progress",
+        title: "Git 操作失败",
+      });
+    });
+
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(await screen.findByText("Git 操作失败")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await expect(result).resolves.toBeUndefined();
   });
 
   it("新弹窗替换旧弹窗,旧的按取消 resolve false", async () => {

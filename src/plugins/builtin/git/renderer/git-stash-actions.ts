@@ -8,6 +8,7 @@ import type {
   GitStashResult,
 } from "@shared/contracts/git.ts";
 import { Package } from "lucide-react";
+import { formatRelativeTime } from "./format-relative-time.ts";
 import {
   activeCwdOrMessage,
   commandTitle,
@@ -26,13 +27,15 @@ interface StashItem extends RendererPluginQuickPickItem {
 }
 
 function stashItem(entry: GitStashEntry): StashItem {
+  // message 是主要信息, 放第二行(空间足); 日期作次要信息靠右, 与分支列表的相对时间同位。
   return {
-    detail: entry.date,
+    description: formatRelativeTime(entry.date) || entry.date,
+    icon: Package,
     id: String(entry.index),
     index: entry.index,
     label: `stash@{${entry.index}}`,
     searchTerms: [entry.message, entry.hash],
-    ...(entry.message ? { description: entry.message } : {}),
+    ...(entry.message ? { detail: entry.message } : {}),
   };
 }
 

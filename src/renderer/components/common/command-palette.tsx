@@ -8,14 +8,11 @@
  *     debounced onChangeSelection (preview 去重)。
  */
 
-import { Badge } from "@pier/ui/badge.tsx";
 import {
   Command,
   CommandDialog,
   CommandEmpty,
-  CommandGroup,
   CommandInput,
-  CommandItem,
   CommandList,
 } from "@pier/ui/command.tsx";
 import {
@@ -30,6 +27,11 @@ import {
   CommandsView,
   SearchResultsView,
 } from "@/components/common/command-palette-action-rows.tsx";
+import {
+  isQuickPickItemSelectable,
+  QuickPickView,
+  quickPickItems,
+} from "@/components/common/command-palette-quick-pick-view.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
@@ -39,8 +41,7 @@ import {
 } from "@/lib/command-palette/action-search.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
-import { quickPickResults } from "@/lib/command-palette/quick-pick-search.ts";
-import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
+import type { QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
@@ -59,20 +60,6 @@ function useActions(): readonly Action[] {
     () => 0
   );
   return actionRegistry.list("command-palette");
-}
-
-function quickPickItems(quickPick: QuickPick): readonly QuickPickItem[] {
-  if (quickPick.sections && quickPick.sections.length > 0) {
-    return quickPick.sections.flatMap((section) => section.items);
-  }
-  return quickPick.items ?? [];
-}
-
-function isQuickPickItemSelectable(
-  quickPick: QuickPick,
-  item: QuickPickItem
-): boolean {
-  return quickPick.loading !== true && item.disabled !== true;
 }
 
 /**
@@ -373,100 +360,14 @@ export function CommandPalette() {
           value={query}
         />
         <CommandList className="max-h-[min(60vh,520px)]">
-          <CommandEmpty>{t("commandPalette.empty")}</CommandEmpty>
+          <CommandEmpty>
+            {mode === "quick-pick"
+              ? t("commandPalette.emptyQuickPick")
+              : t("commandPalette.empty")}
+          </CommandEmpty>
           {commandContent ?? actionContent}
         </CommandList>
       </Command>
     </CommandDialog>
-  );
-}
-
-function QuickPickView({
-  quickPick,
-  onAccept,
-  query,
-}: {
-  quickPick: QuickPick;
-  onAccept: (item: QuickPickItem) => Promise<void>;
-  query: string;
-}): ReactNode {
-  const renderItem = (item: QuickPickItem) => {
-    const disabled = !isQuickPickItemSelectable(quickPick, item);
-    const content = quickPick.renderItem ? (
-      quickPick.renderItem(item)
-    ) : (
-      <>
-        <span className="min-w-0 flex-1 self-center">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate">{item.label}</span>
-            {item.badges?.map((badge) => (
-              <Badge
-                className="h-4.5 px-1.5 text-[10px]"
-                key={`${item.id}:${badge.label}`}
-                variant={badge.variant ?? "secondary"}
-              >
-                {badge.label}
-              </Badge>
-            ))}
-          </span>
-          {item.detail ? (
-            <span className="block truncate text-muted-foreground text-xs">
-              {item.detail}
-            </span>
-          ) : null}
-        </span>
-        {item.description ? (
-          <span className="ml-auto min-w-0 max-w-[45%] shrink truncate pt-0.5 text-right text-muted-foreground text-xs">
-            {item.description}
-          </span>
-        ) : null}
-      </>
-    );
-    return (
-      <CommandItem
-        aria-current={item.checked === true ? "true" : undefined}
-        className={
-          quickPick.renderItem
-            ? "items-center gap-2 py-2"
-            : "items-start gap-3 py-2"
-        }
-        data-checked={item.checked === true}
-        data-disabled={disabled}
-        disabled={disabled}
-        key={item.id}
-        onSelect={() => {
-          if (disabled) {
-            return;
-          }
-          onAccept(item).catch((err) => {
-            console.error(
-              `[command-palette] quick-pick onAccept ${item.id} rejected:`,
-              err
-            );
-          });
-        }}
-        value={item.id}
-      >
-        {content}
-      </CommandItem>
-    );
-  };
-
-  return (
-    <div className="mt-2">
-      {quickPick.sections && quickPick.sections.length > 0
-        ? quickPick.sections.map((section) => (
-            <CommandGroup heading={section.heading} key={section.id}>
-              {(quickPick.loading === true
-                ? section.items
-                : quickPickResults(section.items, query, section.heading)
-              ).map(renderItem)}
-            </CommandGroup>
-          ))
-        : (quickPick.loading === true
-            ? (quickPick.items ?? [])
-            : quickPickResults(quickPick.items ?? [], query)
-          ).map(renderItem)}
-    </div>
   );
 }

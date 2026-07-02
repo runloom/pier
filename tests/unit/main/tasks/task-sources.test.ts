@@ -114,4 +114,158 @@ describe("task sources", () => {
       ])
     );
   });
+
+  it("collects deno.json(c) tasks including object-form tasks", async () => {
+    await writeFile(
+      join(projectRoot, "deno.jsonc"),
+      `{
+        // jsonc comment
+        "tasks": {
+          "dev": "deno run -A --watch main.ts",
+          "check": { "command": "deno lint", "description": "Lint sources" }
+        }
+      }`
+    );
+
+    const result = await collectTaskCandidates({ homeDir, projectRoot });
+
+    expect(result.errors).toEqual([]);
+    expect(
+      result.tasks
+        .filter((task) => task.source === "deno")
+        .map((task) => [task.label, task.commandSpec, task.description])
+    ).toEqual([
+      [
+        "dev",
+        { command: "deno task dev", kind: "shell" },
+        "deno run -A --watch main.ts",
+      ],
+      ["check", { command: "deno task check", kind: "shell" }, "Lint sources"],
+    ]);
+  });
+
+  it("collects composer scripts and skips lifecycle event hooks", async () => {
+    await writeFile(
+      join(projectRoot, "composer.json"),
+      JSON.stringify({
+        scripts: {
+          "post-install-cmd": "php artisan clear",
+          test: ["phpunit", "phpstan analyse"],
+        },
+      })
+    );
+
+    const result = await collectTaskCandidates({ homeDir, projectRoot });
+
+    expect(result.errors).toEqual([]);
+    expect(
+      result.tasks
+        .filter((task) => task.source === "composer")
+        .map((task) => [task.label, task.commandSpec, task.description])
+    ).toEqual([
+      [
+        "test",
+        { command: "composer run-script test", kind: "shell" },
+        "phpunit && phpstan analyse",
+      ],
+    ]);
+  });
+
+  it("collects cargo aliases from .cargo/config.toml", async () => {
+    await writeFile(
+      join(projectRoot, "Cargo.toml"),
+      '[package]\nname = "demo"\n'
+    );
+    await mkdir(join(projectRoot, ".cargo"));
+    await writeFile(
+      join(projectRoot, ".cargo", "config.toml"),
+      '[alias]\nlint = "clippy --all-targets"\n'
+    );
+
+    const result = await collectTaskCandidates({ homeDir, projectRoot });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "cargo")
+        .map((task) => task.label)
+    ).toEqual([
+      "cargo build",
+      "cargo test",
+      "cargo check",
+      "cargo run",
+      "cargo lint",
+    ]);
+  });
+
+  it("keeps Taskfile parsing inside the tasks block and supports 4-space indent + namespaced names", async () => {
+    await writeFile(
+      join(projectRoot, "Taskfile.yml"),
+      [
+        "version: '3'",
+        "tasks:",
+        "    build:",
+        "        cmds:",
+        "            - go build",
+        "    docs:publish:",
+        "        cmds:",
+        "            - mkdocs deploy",
+        "vars:",
+        "  GREETING: hello",
+        "",
+      ].join("\n")
+    );
+
+    const result = await collectTaskCandidates({ homeDir, projectRoot });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "taskfile")
+        .map((task) => task.label)
+    ).toEqual(["build", "docs:publish"]);
+  });
+
+  it("excludes just assignments and [private] recipes", async () => {
+    await writeFile(
+      join(projectRoot, "Justfile"),
+      [
+        'set shell := ["bash", "-c"]',
+        "alias b := build",
+        "",
+        "build:",
+        "    cargo build",
+        "",
+        "[private]",
+        "hidden-task:",
+        "    echo hidden",
+        "",
+        "_helper:",
+        "    echo helper",
+        "",
+      ].join("\n")
+    );
+
+    const result = await collectTaskCandidates({ homeDir, projectRoot });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "just")
+        .map((task) => task.label)
+    ).toEqual(["build"]);
+  });
+
+  it("collects quoted mise task section names", async () => {
+    await writeFile(
+      join(projectRoot, ".mise.toml"),
+      '[tasks."docs:build"]\nrun = "mkdocs build"\n\n[tasks.dev]\nrun = "pnpm dev"\n'
+    );
+
+    const result = await collectTaskCandidates({ homeDir, projectRoot });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "mise")
+        .map((task) => task.label)
+        .sort()
+    ).toEqual(["dev", "docs:build"]);
+  });
 });
