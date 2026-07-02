@@ -64,14 +64,12 @@ function IconNum({
  * 信息级 / 需注意级走内联图标，见 UpstreamPill。
  */
 const PILL_BASE =
-  "inline-flex items-center gap-0.5 whitespace-nowrap rounded border px-1.5 py-0 text-[10px] leading-4";
+  "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0 text-[10px] leading-4";
 const PILL_VARIANT = {
-  progress: "border-status-info-border bg-status-info-bg text-status-info-fg",
-  danger:
-    "border-status-danger-border bg-status-danger-bg text-status-danger-fg",
-  neutral: "bg-muted text-muted-foreground border-border",
-  success:
-    "border-status-success-border bg-status-success-bg text-status-success-fg",
+  progress: "text-status-info-fg",
+  danger: "text-status-danger-fg",
+  neutral: "text-muted-foreground",
+  success: "text-status-success-fg",
 } as const;
 
 function Pill({
