@@ -23,7 +23,6 @@ import { registerCommandPaletteMruIpc } from "./ipc/command-palette-mru.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerNotificationIpc } from "./ipc/notification.ts";
-import { registerPreferencesIpc } from "./ipc/preferences.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerSecretsIpc } from "./ipc/secrets.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
@@ -267,7 +266,6 @@ app.whenReady().then(async () => {
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
   registerAgentSessionIpc(ipcMain);
-  registerPreferencesIpc(ipcMain);
   registerSecretsIpc(ipcMain, appCore.services.secrets);
   registerRendererCommandIpc(ipcMain);
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.

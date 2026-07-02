@@ -17,8 +17,7 @@ export type AuthorizationResult = { ok: true } | { ok: false; reason: string };
  * worktree.creationDefaults/openTerminal 时白名单遗漏,面板打开即报
  * "unsupported renderer command")。
  *
- * rendererFacade=false 的命令并非 renderer 不可调用,而是有专用 IPC 通道
- * (如 preferences.read → "pier:preferences:read"),不通过通用通道。
+ * rendererFacade=false 的命令并非 renderer 不可调用,而是有专用 IPC 通道,不通过通用通道。
  */
 export interface CommandMetadata {
   readonly capabilities: readonly PierCapability[];

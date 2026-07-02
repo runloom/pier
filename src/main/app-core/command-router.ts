@@ -7,6 +7,7 @@ import {
   type PanelContext,
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
+import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
 import { FileServiceError } from "../services/file-service.ts";
 import { GitExecError } from "../services/git-exec.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
@@ -161,11 +162,17 @@ async function executeAppStateCommand(
       return success(requestId, null);
     case "preferences.read":
       return success(requestId, await services.preferences.read());
-    case "preferences.update":
-      return success(
-        requestId,
-        await services.preferences.update(command.patch)
-      );
+    case "preferences.update": {
+      const merged = await services.preferences.update(command.patch);
+      if (command.patch.agentStatusHooks !== undefined) {
+        applyAgentStatusHooksPreference(merged.agentStatusHooks).catch(
+          (err) => {
+            console.error("[preferences] agent hook install failed:", err);
+          }
+        );
+      }
+      return success(requestId, merged);
+    }
     case "terminalStatusBar.prefs.getAll":
       return success(requestId, await services.terminalStatusBarPrefs.getAll());
     case "terminalStatusBar.prefs.resetItem":

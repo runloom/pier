@@ -246,8 +246,13 @@ const agentsApi: PierAgentsAPI = {
 
 const preferencesApi: PierPreferencesAPI = {
   onChanged: (cb) => subscribeIpc(PIER_BROADCAST.PREFERENCES_CHANGED, cb),
-  read: () => ipcRenderer.invoke("pier:preferences:read"),
-  update: (patch) => ipcRenderer.invoke("pier:preferences:update", patch),
+  read: () =>
+    invokePierCommand<ProjectPreferences>({ type: "preferences.read" }),
+  update: (patch) =>
+    invokePierCommand<ProjectPreferences>({
+      patch,
+      type: "preferences.update",
+    }),
 };
 
 const terminalApi: TerminalAPI = {
