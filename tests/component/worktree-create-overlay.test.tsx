@@ -427,7 +427,7 @@ describe("WorktreeCreateOverlay", () => {
     ).toHaveFocus();
   });
 
-  it("默认 AI 模式:提交先调 suggestBranch,再以未加前缀的派生 branch/name 创建并打开终端", async () => {
+  it("默认 AI 模式:提交先调 suggestBranch,创建并打开终端后关闭 overlay,且不弹成功通知", async () => {
     await openOverlay(context);
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
@@ -454,9 +454,10 @@ describe("WorktreeCreateOverlay", () => {
         runSetup: true,
       });
     });
-    expect(notificationsSuccessMock).toHaveBeenCalledWith(
-      "fix-focus · /repo.worktree/fix-focus"
-    );
+    expect(
+      screen.queryByRole("textbox", { name: TASK_LABEL })
+    ).not.toBeInTheDocument();
+    expect(notificationsSuccessMock).not.toHaveBeenCalled();
   });
 
   it("AI 模式:任务描述为空时提交报错且不调 AI", async () => {

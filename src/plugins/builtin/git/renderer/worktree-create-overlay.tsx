@@ -19,6 +19,7 @@ import { Input } from "@pier/ui/input.tsx";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -201,7 +202,6 @@ function WorktreeCreateOverlay({
         path: data.mainPath,
       });
       closeOverlay();
-      context.notifications.success(`${draft.branch} · ${result.targetPath}`);
       await openWorktreeTerminal(result.targetPath);
     } catch (err) {
       setSubmitError(errorMessage(err));
@@ -348,17 +348,19 @@ function WorktreeCreateOverlay({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={HEAD_SENTINEL}>
-                        {text("baseHead", undefined, "Current HEAD")}
-                      </SelectItem>
-                      {data.branches.map((ref) => (
-                        <SelectItem
-                          key={`${ref.kind}:${ref.name}`}
-                          value={ref.name}
-                        >
-                          {ref.name}
+                      <SelectGroup>
+                        <SelectItem value={HEAD_SENTINEL}>
+                          {text("baseHead", undefined, "Current HEAD")}
                         </SelectItem>
-                      ))}
+                        {data.branches.map((ref) => (
+                          <SelectItem
+                            key={`${ref.kind}:${ref.name}`}
+                            value={ref.name}
+                          >
+                            {ref.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                 )}

@@ -176,7 +176,7 @@ function DialogContent({
             <Button
               className="absolute top-4 right-4 bg-secondary"
               size="icon-sm"
-              variant="ghost"
+              variant="secondary"
             >
               <XIcon />
               <span className="sr-only">Close</span>
