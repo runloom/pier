@@ -50,6 +50,9 @@ export const PIER_BROADCAST = {
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
   // agent 会话状态全量快照广播 (main → 所有 renderer, payload AgentSessionsBroadcast).
   AGENT_SESSIONS_CHANGED: "pier://agent-session:changed",
+  // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
+  // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
+  FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

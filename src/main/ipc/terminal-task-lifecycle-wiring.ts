@@ -9,7 +9,10 @@ import {
   findAppWindowByElectronId,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
-import { agentSessionService } from "./agent-session.ts";
+import {
+  agentSessionService,
+  foregroundActivityService,
+} from "./agent-session.ts";
 import { recordNativeTerminalRoute } from "./terminal-debug.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
@@ -110,6 +113,13 @@ export function registerTerminalTaskLifecycleForwarding(
     if (agentId) {
       agentSessionService.agentLaunched(String(id), rawPanelId, agentId);
     }
+    // 双写 foregroundActivity：null → shell activity, 非空 → 通过 agentLaunched。
+    foregroundActivityService.ingestCommandStarted(
+      rawPanelId,
+      String(id),
+      commandLine,
+      agentId
+    );
   });
 
   addon?.setProcessClosedForwardCallback?.((id, panelId, processAlive) => {

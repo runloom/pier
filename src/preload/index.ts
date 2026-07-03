@@ -41,6 +41,10 @@ import {
 } from "./agent-session-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import { filesApi, type PierFilesAPI } from "./file-api.ts";
+import {
+  foregroundActivityApi,
+  type PierForegroundActivityAPI,
+} from "./foreground-activity-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import {
@@ -207,6 +211,7 @@ export interface PierWindowAPI {
   env: PierEnvAPI;
   files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
+  foregroundActivity: PierForegroundActivityAPI;
   git: PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
@@ -372,6 +377,7 @@ const tasksApi: PierTasksAPI = {
 const api: PierWindowAPI = {
   agents: agentsApi,
   agentSessions: agentSessionsApi,
+  foregroundActivity: foregroundActivityApi,
   ai: aiApi,
   closeWindow: (windowId) =>
     invokePierCommand<void>({ type: "window.close", windowId }),
