@@ -142,17 +142,20 @@ export function registerAgentSessionIpc(ipcMain: IpcMain): void {
     console.error("[agent-session] emit script install failed:", err);
   });
   hookServerPromise = startAgentHookServer((event) =>
-    aggregator.ingestHookEvent(event)
+    aggregator.ingestAgentEvent(event)
   ).catch((err) => {
     console.error("[agent-session] hook server start failed:", err);
     return null;
   });
   // JSONL 尾读（spec §4.4 主路径）：hooks.json 系集成通过 emit 脚本
-  // append 到 events.jsonl，observer 250ms 轮询 → ingestHookEvent。
-  // 与 HTTP /agent-event 并存直到 amp/kilo 等 inline fetch 集成迁移完成。
+  // append 到 events.jsonl，observer 250ms 轮询 → 按 kind 分派到
+  // aggregator 对应 hook。commandStart/commandFinished 目前是 stub
+  // 承接（Commit C 引入 ForegroundActivityAggregator 时接管）。
   jsonlObserver = createJsonlObserver({
     filePath: eventsJsonlPath(app.getPath("userData")),
-    onEvent: (event) => aggregator.ingestHookEvent(event),
+    onAgentEvent: (event) => aggregator.ingestAgentEvent(event),
+    onCommandFinished: (event) => aggregator.ingestCommandFinished(event),
+    onCommandStart: (event) => aggregator.ingestCommandStart(event),
     onError: (err) => {
       console.error("[agent-session] jsonl observer parse failed:", err);
     },

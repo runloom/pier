@@ -1,6 +1,6 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
-  AgentHookEvent,
+  AgentHookEventPayload,
   AgentSessionSnapshot,
 } from "@shared/contracts/agent-session.ts";
 
@@ -86,7 +86,7 @@ export function clearAllTimers(entry: Entry): void {
 }
 
 /** hook 事件创建的 entry 字面量（不含定时器武装——那需要聚合器闭包）。 */
-export function newHookEntry(event: AgentHookEvent, at: number): Entry {
+export function newHookEntry(event: AgentHookEventPayload, at: number): Entry {
   return {
     // SessionStart 独享消抖隐藏：其余创建事件意味着已有真实活动。
     hidden: event.event === "SessionStart",

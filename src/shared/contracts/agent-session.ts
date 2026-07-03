@@ -13,25 +13,62 @@ export const agentRuntimeStatusSchema = z.enum([
 export type AgentRuntimeStatus = z.infer<typeof agentRuntimeStatusSchema>;
 
 /**
- * hook 事件（v1）。两条 producer：
- * - HTTP `/agent-event` （legacy 兼容层：amp/kilo 等 inline fetch 集成）
- * - JSONL 尾读（`agent-events.jsonl`，spec §4.4 主路径）
- * ts/pid 由 JSONL emit 脚本附带；HTTP client 可以省略。
+ * hook 事件（v1）——三 kind discriminated union（spec §4.4）。
+ *
+ * emit 脚本 dispatch：`$1` 位置参数选一 kind, 剩余参数填入对应 payload。
+ * 两条 producer 只写 `agentEvent`（现役 Path B）；`commandStart` / `commandFinished`
+ * kind 是 forward-compat 占位——未来非 ghostty native shell 需要经 JSONL 上报
+ * 命令生命周期时启用。JsonlObserver 按 kind 分派到对应回调, aggregator 独立
+ * 消费。
+ *
+ * 字段顺序（emit 脚本保序）：v → kind → ts → panelId → windowId → pid → payload。
  * panelId 跨窗口不唯一（见 terminal-panel-id.ts），windowId 必带，
  * 二者组成会话 key `${windowId}::${panelId}`。
  */
-export const agentHookEventSchema = z
+const baseHookFields = {
+  v: z.literal(1),
+  ts: z.number().optional(),
+  panelId: z.string().min(1).max(128),
+  windowId: z.string().min(1).max(32),
+  pid: z.number().optional(),
+};
+
+const commandStartEventSchema = z
   .object({
-    v: z.literal(1),
-    agent: agentKindSchema,
-    event: z.string().min(1).max(64),
-    panelId: z.string().min(1).max(128),
-    sessionId: z.string().max(128).optional(),
-    windowId: z.string().min(1).max(32),
-    ts: z.number().optional(),
-    pid: z.number().optional(),
+    kind: z.literal("commandStart"),
+    ...baseHookFields,
+    commandLine: z.string().max(4096),
   })
   .strict();
+export type CommandStartHookEvent = z.infer<typeof commandStartEventSchema>;
+
+const commandFinishedEventSchema = z
+  .object({
+    kind: z.literal("commandFinished"),
+    ...baseHookFields,
+    exitCode: z.number().int(),
+  })
+  .strict();
+export type CommandFinishedHookEvent = z.infer<
+  typeof commandFinishedEventSchema
+>;
+
+const agentEventPayloadSchema = z
+  .object({
+    kind: z.literal("agentEvent"),
+    ...baseHookFields,
+    agent: agentKindSchema,
+    event: z.string().min(1).max(64),
+    sessionId: z.string().max(128).optional(),
+  })
+  .strict();
+export type AgentHookEventPayload = z.infer<typeof agentEventPayloadSchema>;
+
+export const agentHookEventSchema = z.discriminatedUnion("kind", [
+  commandStartEventSchema,
+  commandFinishedEventSchema,
+  agentEventPayloadSchema,
+]);
 export type AgentHookEvent = z.infer<typeof agentHookEventSchema>;
 
 export const agentSessionSourceSchema = z.enum(["hook", "launch"]);

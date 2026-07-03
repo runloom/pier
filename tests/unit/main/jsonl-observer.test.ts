@@ -2,14 +2,15 @@ import { appendFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentHookEvent } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJsonlObserver } from "../../../src/main/services/foreground-activity/jsonl-observer.ts";
 
-/** 合法 JSONL 行（agentHookEventSchema 需要这些字段）。 */
+/** 合法 JSONL 行（agentHookEventSchema agentEvent 分支要求这些字段）。 */
 function eventLine(n: number): string {
   return JSON.stringify({
     v: 1,
+    kind: "agentEvent",
     agent: "claude",
     event: `evt-${n}`,
     panelId: "panel-1",
@@ -40,12 +41,18 @@ describe("jsonl-observer", () => {
     const initial = `${[0, 1, 2].map((n) => eventLine(n)).join("\n")}\n`;
     writeFileSync(jsonlPath, initial);
 
-    const received: AgentHookEvent[] = [];
+    const received: AgentHookEventPayload[] = [];
     const observer = createJsonlObserver({
       filePath: jsonlPath,
-      onEvent(event) {
+      onAgentEvent(event) {
         received.push(event);
         // (无需 Promise signal, 手动 pollNow 已保证同步)
+      },
+      onCommandFinished() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onCommandStart() {
+        // 未消费——本 case 只测 agentEvent 路径。
       },
     });
 
@@ -68,6 +75,7 @@ describe("jsonl-observer", () => {
       lines.push(
         JSON.stringify({
           v: 1,
+          kind: "agentEvent",
           agent: "claude",
           event: `evt-${String(i).padStart(6, "0")}`,
           panelId: "panel-1",
@@ -79,8 +87,14 @@ describe("jsonl-observer", () => {
     writeFileSync(jsonlPath, `${lines.join("\n")}\n`);
     const observer = createJsonlObserver({
       filePath: jsonlPath,
-      onEvent() {
+      onAgentEvent() {
         // rotate 后不该有历史事件回放
+      },
+      onCommandFinished() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onCommandStart() {
+        // 未消费——本 case 只测 agentEvent 路径。
       },
       onError() {
         // 忽略（rotate 期间可能有瞬态错误）
@@ -115,28 +129,24 @@ describe("jsonl-observer", () => {
     const offsetValue = Buffer.byteLength(first3);
     writeFileSync(offsetPath, String(offsetValue));
 
-    const received: AgentHookEvent[] = [];
-    const { promise: donePromise, resolve: done } =
-      Promise.withResolvers<void>();
-
-    // 先创建 observer（从 offset 文件恢复位置），再追加触发 watchFile
+    const received: AgentHookEventPayload[] = [];
     const observer = createJsonlObserver({
       filePath: jsonlPath,
-      onEvent(event) {
+      onAgentEvent(event) {
         received.push(event);
-        // 期望收到 evt-3, evt-4, evt-5（从 offset 位置开始的所有内容）
-        if (received.length === 3) {
-          done();
-        }
+      },
+      onCommandFinished() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onCommandStart() {
+        // 未消费——本 case 只测 agentEvent 路径。
       },
     });
 
-    // 追加 1 行触发 watchFile stat 变化
+    // 追加 1 行，显式调用 pollNow 触发一次尾读——避免依赖 watchFile 的
+    // 250ms poll 在 vitest 并行环境下的抖动（曾偶发 15s+ 超时）。
     appendFileSync(jsonlPath, `${eventLine(5)}\n`);
-
-    // watchFile 250ms 轮询在 vitest 并行环境下偶发慢 5s+ (I/O 拥塞 / 全局
-    // pool 抢占); 加大到 15s 让 poll 至少推进 40 轮。
-    await withTimeout(donePromise, 15_000);
+    await observer.pollNow();
 
     expect(received).toHaveLength(3);
     expect(received[0]?.event).toBe("evt-3");
@@ -146,20 +156,3 @@ describe("jsonl-observer", () => {
     observer.dispose();
   }, 20_000);
 });
-
-/** 带超时的 promise 等待（集成测试中等待 FS 事件需要）。 */
-function withTimeout(p: Promise<void>, ms: number): Promise<void> {
-  const { promise, resolve, reject } = Promise.withResolvers<void>();
-  const timer = setTimeout(
-    () => reject(new Error(`Timed out after ${ms}ms`)),
-    ms
-  );
-  p.then(() => {
-    clearTimeout(timer);
-    resolve();
-  }).catch((err) => {
-    clearTimeout(timer);
-    reject(err);
-  });
-  return promise;
-}

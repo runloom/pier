@@ -1,8 +1,10 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
-  type AgentHookEvent,
+  type AgentHookEventPayload,
   type AgentRuntimeStatus,
   type AgentSessionsBroadcast,
+  type CommandFinishedHookEvent,
+  type CommandStartHookEvent,
   runtimeStatusForHookEvent,
 } from "@shared/contracts/agent-session.ts";
 import {
@@ -38,7 +40,18 @@ export interface AgentSessionAggregator {
    */
   commandFinished(panelId: string, exitCode?: number): void;
   dispose(): void;
-  ingestHookEvent(event: AgentHookEvent): void;
+  /**
+   * agentEvent kind 事件（JSONL Path B 主入口）。
+   */
+  ingestAgentEvent(event: AgentHookEventPayload): void;
+  /** commandFinished kind stub——同 ingestCommandStart 的 stub 语义。 */
+  ingestCommandFinished(event: CommandFinishedHookEvent): void;
+  /**
+   * commandStart kind stub——本 aggregator 只消费 agentEvent。
+   * discriminated union 完整由 stub 承接；Commit C 引入 ForegroundActivityAggregator
+   * 时会给出真身，在此保留仅为让 JsonlObserver 三 kind 分派编译通过。
+   */
+  ingestCommandStart(event: CommandStartHookEvent): void;
   onChange(cb: (b: AgentSessionsBroadcast) => void): () => void;
   panelClosed(panelId: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的会话按 panelClosed 处理。 */
@@ -135,7 +148,7 @@ export function createAgentSessionAggregator(
 
   function createHookEntry(
     key: string,
-    event: AgentHookEvent,
+    event: AgentHookEventPayload,
     at: number
   ): Entry {
     const entry = newHookEntry(event, at);
@@ -186,7 +199,7 @@ export function createAgentSessionAggregator(
   /** 取得/创建 hook entry。幽灵门控：终结类迟到事件不得凭空造条目。 */
   function acquireHookEntry(
     key: string,
-    event: AgentHookEvent,
+    event: AgentHookEventPayload,
     at: number
   ): Entry | null {
     const existing = entries.get(key);
@@ -220,7 +233,16 @@ export function createAgentSessionAggregator(
       scheduleEmit();
     },
 
-    ingestHookEvent(event) {
+    ingestCommandStart(_event) {
+      // 现役 aggregator 只消费 agentEvent；commandStart 由 Commit C 的
+      // ForegroundActivityAggregator 接管，此处保留 stub 让 JsonlObserver
+      // 三 kind 分派与 discriminated union 完整。
+    },
+    ingestCommandFinished(_event) {
+      // 同 ingestCommandStart 的 stub 语义。
+    },
+
+    ingestAgentEvent(event) {
       if (disposed) {
         return;
       }

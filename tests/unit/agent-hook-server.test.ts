@@ -1,5 +1,5 @@
 import { connect } from "node:net";
-import type { AgentHookEvent } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type AgentHookServer,
@@ -33,8 +33,18 @@ describe("agent-hook-server", () => {
     return res.status;
   }
 
-  const valid: AgentHookEvent = {
+  /** HTTP client body 不含 kind（老 body 结构，Commit B 里整个删）。 */
+  const httpBody = {
     v: 1,
+    agent: "claude",
+    event: "PromptSubmit",
+    panelId: "p1",
+    windowId: "1",
+  };
+  /** 服务端补 kind="agentEvent" 后 aggregator 收到的 payload。 */
+  const expectedPayload: AgentHookEventPayload = {
+    v: 1,
+    kind: "agentEvent",
     agent: "claude",
     event: "PromptSubmit",
     panelId: "p1",
@@ -45,15 +55,15 @@ describe("agent-hook-server", () => {
     const onEvent = vi.fn();
     server = await startAgentHookServer(onEvent);
     expect(server.port).toBeGreaterThan(0);
-    const status = await post(server, valid);
+    const status = await post(server, httpBody);
     expect(status).toBe(204);
-    expect(onEvent).toHaveBeenCalledWith(valid);
+    expect(onEvent).toHaveBeenCalledWith(expectedPayload);
   });
 
   it("错误 token → 401 且不回调", async () => {
     const onEvent = vi.fn();
     server = await startAgentHookServer(onEvent);
-    expect(await post(server, valid, { token: "wrong" })).toBe(401);
+    expect(await post(server, httpBody, { token: "wrong" })).toBe(401);
     expect(onEvent).not.toHaveBeenCalled();
   });
 
@@ -66,7 +76,7 @@ describe("agent-hook-server", () => {
 
   it("非 /agent-event 路径 → 404", async () => {
     server = await startAgentHookServer(vi.fn());
-    expect(await post(server, valid, { path: "/other" })).toBe(404);
+    expect(await post(server, httpBody, { path: "/other" })).toBe(404);
   });
 
   it("客户端中途断开不致崩溃", async () => {
@@ -101,8 +111,8 @@ describe("agent-hook-server", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     // 服务器仍存活：随后一个合法请求应正常处理。
-    const status = await post(server, valid);
+    const status = await post(server, httpBody);
     expect(status).toBe(204);
-    expect(onEvent).toHaveBeenCalledWith(valid);
+    expect(onEvent).toHaveBeenCalledWith(expectedPayload);
   });
 });

@@ -9,12 +9,16 @@ import {
 } from "../../src/main/services/agents/integrations/shared.ts";
 
 describe("pierHookCommand（JSONL emit 脚本格式）", () => {
-  it("命令引用 emit 脚本路径并携带 agentId 和 pierEvent", () => {
+  it("命令引用 emit 脚本路径并携带 agentEvent kind + agentId + pierEvent", () => {
     const cmd = pierHookCommand("codex", "PromptSubmit");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: 断言 shell 命令里的 ${PIER_AGENT_HOOKS_DIR} 变量引用形式，本就该是字面量
     expect(cmd).toContain("${PIER_AGENT_HOOKS_DIR}/emit");
+    // emit 脚本 kind dispatch：第一个位置参数固定为 agentEvent
+    expect(cmd).toContain('"agentEvent"');
     expect(cmd).toContain('"codex"');
     expect(cmd).toContain('"PromptSubmit"');
+    // 首参 agentEvent 出现在 agentId 之前
+    expect(cmd.indexOf('"agentEvent"')).toBeLessThan(cmd.indexOf('"codex"'));
     expect(cmd.endsWith("|| true")).toBe(true);
   });
 

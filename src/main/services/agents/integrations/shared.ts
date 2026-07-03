@@ -21,11 +21,14 @@ const LEGACY_HOOK_MARK = "PIER_AGENT_HOOK_PORT";
  * PTY 注入 PIER_AGENT_HOOKS_DIR 环境变量，Pier 外启动的 agent 因变量
  * 缺失直接短路（emit 脚本内部 guard）。
  * 尾部 `|| true` 保证 hook 永远 exit 0，不干扰 agent 本体。
+ *
+ * 第一个位置参数固定 `agentEvent`（emit 脚本 kind dispatch），随后是
+ * agent id 与 pier 事件名——见 EMIT_SCRIPT 三 kind 契约。
  */
 export function pierHookCommand(agentId: AgentKind, pierEvent: string): string {
   return (
     `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
-    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "${agentId}" "${pierEvent}" || true`
+    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEvent" "${agentId}" "${pierEvent}" || true`
   );
 }
 

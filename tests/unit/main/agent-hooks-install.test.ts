@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,25 +38,120 @@ describe("installAgentHooksEmitScript", () => {
     expect(st.isFile()).toBe(true);
   });
 
-  it("emit 内容包含关键 printf 和 JSONL 格式", async () => {
+  it("emit 内容包含三 kind case 分支", async () => {
     const dir = await makeTempDir();
     await installAgentHooksEmitScript(dir);
     const content = await readFile(emitScriptPath(dir), "utf8");
     // shebang
     expect(content.startsWith("#!/bin/sh\n")).toBe(true);
-    // PIER_PANEL_ID guard（非 Pier 启动直接退出）
+    // PIER_PANEL_ID / PIER_WINDOW_ID guard（非 Pier 启动直接退出）
     expect(content).toContain('[ -z "$PIER_PANEL_ID" ] && exit 0');
-    // JSONL printf 模板
-    expect(content).toContain("printf ");
+    expect(content).toContain('[ -z "$PIER_WINDOW_ID" ] && exit 0');
+    // 三 kind dispatch
+    expect(content).toContain('case "$1" in');
+    expect(content).toContain("commandStart)");
+    expect(content).toContain("commandFinished)");
+    expect(content).toContain("agentEvent)");
+    // JSONL printf 模板（保序字段）
     expect(content).toContain('"v":1');
-    expect(content).toContain('"agent"');
-    expect(content).toContain('"event"');
-    expect(content).toContain('"panelId"');
+    expect(content).toContain('"kind":"commandStart"');
+    expect(content).toContain('"kind":"commandFinished"');
+    expect(content).toContain('"kind":"agentEvent"');
     // macOS date fallback
     expect(content).toContain("date +%s%N");
     expect(content).toContain("date +%s000000000");
     // append 模式
     expect(content).toContain(">> ");
+  });
+
+  it("agentEvent kind spawn 写出合法 JSONL 行", async () => {
+    const dir = await makeTempDir();
+    await installAgentHooksEmitScript(dir);
+    const logPath = join(dir, "events.jsonl");
+    const r = spawnSync(
+      "/bin/sh",
+      [emitScriptPath(dir), "agentEvent", "claude", "Stop"],
+      {
+        env: {
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+          PIER_AGENT_EVENT_LOG: logPath,
+        },
+      }
+    );
+    expect(r.status).toBe(0);
+    const content = await readFile(logPath, "utf8");
+    const parsed = JSON.parse(content.trim());
+    expect(parsed.v).toBe(1);
+    expect(parsed.kind).toBe("agentEvent");
+    expect(parsed.agent).toBe("claude");
+    expect(parsed.event).toBe("Stop");
+    expect(parsed.panelId).toBe("p1");
+    expect(parsed.windowId).toBe("w1");
+    expect(typeof parsed.pid).toBe("number");
+  });
+
+  it("commandStart kind spawn 写出合法 JSONL + 命令行转义", async () => {
+    const dir = await makeTempDir();
+    await installAgentHooksEmitScript(dir);
+    const logPath = join(dir, "events.jsonl");
+    const r = spawnSync(
+      "/bin/sh",
+      [emitScriptPath(dir), "commandStart", 'ls "foo" \\bar'],
+      {
+        env: {
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+          PIER_AGENT_EVENT_LOG: logPath,
+        },
+      }
+    );
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse((await readFile(logPath, "utf8")).trim());
+    expect(parsed.kind).toBe("commandStart");
+    // 反斜杠双转义 + 双引号转义 → JSON 解析回原文
+    expect(parsed.commandLine).toBe('ls "foo" \\bar');
+  });
+
+  it("commandFinished kind spawn 写出合法 JSONL + exit code", async () => {
+    const dir = await makeTempDir();
+    await installAgentHooksEmitScript(dir);
+    const logPath = join(dir, "events.jsonl");
+    const r = spawnSync(
+      "/bin/sh",
+      [emitScriptPath(dir), "commandFinished", "137"],
+      {
+        env: {
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+          PIER_AGENT_EVENT_LOG: logPath,
+        },
+      }
+    );
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse((await readFile(logPath, "utf8")).trim());
+    expect(parsed.kind).toBe("commandFinished");
+    expect(parsed.exitCode).toBe(137);
+  });
+
+  it("未知 kind → 静默 no-op（无日志行写入）", async () => {
+    const dir = await makeTempDir();
+    await installAgentHooksEmitScript(dir);
+    const logPath = join(dir, "events.jsonl");
+    const r = spawnSync("/bin/sh", [emitScriptPath(dir), "bogusKind", "x"], {
+      env: {
+        PIER_PANEL_ID: "p1",
+        PIER_WINDOW_ID: "w1",
+        PIER_AGENT_EVENT_LOG: logPath,
+      },
+    });
+    expect(r.status).toBe(0);
+    // 文件不存在或为空（case 无匹配 → 无 append）
+    const exists = await stat(logPath).then(
+      (s) => s.size > 0,
+      () => false
+    );
+    expect(exists).toBe(false);
   });
 
   it("幂等：重复安装覆盖写入不抛错", async () => {

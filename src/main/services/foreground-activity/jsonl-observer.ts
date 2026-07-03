@@ -7,8 +7,10 @@ import {
 } from "node:fs";
 import { open, readFile, stat, writeFile } from "node:fs/promises";
 import {
-  type AgentHookEvent,
+  type AgentHookEventPayload,
   agentHookEventSchema,
+  type CommandFinishedHookEvent,
+  type CommandStartHookEvent,
 } from "@shared/contracts/agent-session.ts";
 
 /** rotate 阈值：10MB。 */
@@ -33,10 +35,14 @@ export interface JsonlObserver {
 export interface JsonlObserverOpts {
   /** events.jsonl 绝对路径。 */
   filePath: string;
+  /** agentEvent kind 行的回调（现役 Path B）。 */
+  onAgentEvent: (event: AgentHookEventPayload) => void;
+  /** commandFinished kind 行的回调（emit 脚本 `commandFinished` dispatch）。 */
+  onCommandFinished: (event: CommandFinishedHookEvent) => void;
+  /** commandStart kind 行的回调（emit 脚本 `commandStart` dispatch）。 */
+  onCommandStart: (event: CommandStartHookEvent) => void;
   /** 错误回调（解析失败等）——静默降级，不中断监听。 */
   onError?: (err: unknown) => void;
-  /** 每行合法事件的回调。 */
-  onEvent: (event: AgentHookEvent) => void;
 }
 
 /** offset 持久化文件后缀。 */
@@ -51,7 +57,8 @@ const OFFSET_SUFFIX = ".offset";
  * - rotate：文件 >10MB → 读 tail 1000 行 → 重写 → offset 重置
  */
 export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
-  const { filePath, onEvent, onError } = opts;
+  const { filePath, onCommandStart, onCommandFinished, onAgentEvent, onError } =
+    opts;
   const offsetPath = filePath + OFFSET_SUFFIX;
   let offset = loadOffset(filePath, offsetPath);
   let processing = false;
@@ -88,10 +95,26 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     try {
       const parsed = JSON.parse(trimmed);
       const result = agentHookEventSchema.safeParse(parsed);
-      if (result.success) {
-        onEvent(result.data);
-      } else {
+      if (!result.success) {
         onError?.(result.error);
+        return;
+      }
+      const event = result.data;
+      switch (event.kind) {
+        case "commandStart":
+          onCommandStart(event);
+          break;
+        case "commandFinished":
+          onCommandFinished(event);
+          break;
+        case "agentEvent":
+          onAgentEvent(event);
+          break;
+        default: {
+          // discriminated union exhaustiveness——schema 已收敛，defensive branch。
+          const _exhaustive: never = event;
+          throw new Error(`unreachable kind: ${String(_exhaustive)}`);
+        }
       }
     } catch (err) {
       onError?.(err);

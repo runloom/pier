@@ -5,7 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import {
-  type AgentHookEvent,
+  type AgentHookEventPayload,
   agentHookEventSchema,
 } from "@shared/contracts/agent-session.ts";
 
@@ -50,7 +50,7 @@ function readBody(
 function handleAgentEvent(
   body: Buffer,
   res: ServerResponse,
-  onEvent: (event: AgentHookEvent) => void
+  onEvent: (event: AgentHookEventPayload) => void
 ): void {
   let parsedJson: unknown;
   try {
@@ -60,8 +60,19 @@ function handleAgentEvent(
     res.end();
     return;
   }
+  // HTTP client 仍写老 body（无 kind 字段）——服务端补上 kind="agentEvent"
+  // 令其能命中 discriminated union 的 agentEvent 分支。Commit B 里 HTTP
+  // 通路整个删掉时此段一并消失；本 commit 仅为 Path B 三 kind 落地后
+  // HTTP client 与 server 的一次性桥接。
+  if (
+    parsedJson &&
+    typeof parsedJson === "object" &&
+    !Array.isArray(parsedJson)
+  ) {
+    (parsedJson as Record<string, unknown>).kind = "agentEvent";
+  }
   const parsed = agentHookEventSchema.safeParse(parsedJson);
-  if (!parsed.success) {
+  if (!parsed.success || parsed.data.kind !== "agentEvent") {
     res.statusCode = 400;
     res.end();
     return;
@@ -82,7 +93,7 @@ function handleAgentEvent(
  * windowId/panelId 为调用方自报——伪造仅影响 UI 展示，不涉及权限越界。
  */
 export function startAgentHookServer(
-  onEvent: (event: AgentHookEvent) => void
+  onEvent: (event: AgentHookEventPayload) => void
 ): Promise<AgentHookServer> {
   const token = randomUUID();
   const server = createServer((req, res) => {
