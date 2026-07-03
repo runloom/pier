@@ -40,7 +40,9 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Shift+Enter",
   "Mod+Shift+Equal",
   "Mod+Shift+KeyD",
+  "Mod+Shift+KeyN",
   "Mod+Shift+KeyP",
+  "Mod+Shift+KeyT",
 ];
 
 describe("DEFAULT_KEYMAP", () => {
@@ -163,6 +165,19 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.terminal.search",
       keys: "Mod+KeyF",
+      scope: "global",
+    });
+  });
+
+  it("contains run task and worktree create shortcuts", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.run.task",
+      keys: "Mod+Shift+KeyT",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.worktree.create",
+      keys: "Mod+Shift+KeyN",
       scope: "global",
     });
   });

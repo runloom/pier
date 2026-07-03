@@ -116,7 +116,9 @@ final class EventRouterView: NSView {
         "Mod+Shift+Enter",
         "Mod+Shift+Equal",
         "Mod+Shift+KeyD",
+        "Mod+Shift+KeyN",
         "Mod+Shift+KeyP",
+        "Mod+Shift+KeyT",
     ]
 
     static func setTerminalAppShortcutKeys(_ keys: Set<String>) {
