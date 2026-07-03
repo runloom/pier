@@ -376,7 +376,9 @@ export function LineDelta({
         <span className="sr-only"> {insertionsLabel},</span>
       </span>
       <span className="font-medium text-destructive">
-        -{delta.deletions}
+        {/* U+2212 数学减号: 与 + 同轴同宽, hyphen-minus 会低半格造成视觉错位 */}
+        {"\u2212"}
+        {delta.deletions}
         <span className="sr-only"> {deletionsLabel},</span>
       </span>
     </span>

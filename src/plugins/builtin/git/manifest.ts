@@ -15,7 +15,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     {
       category: "Worktree",
       id: "pier.worktree.create",
-      permissions: ["worktree:read", "worktree:write"],
+      permissions: ["worktree:read", "worktree:write", "ai:invoke"],
       title: "Create Worktree",
     },
     {
@@ -124,6 +124,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     "panel:open",
     "git:read",
     "git:write",
+    "ai:invoke",
   ],
   publisher: "Pier",
   repository: "https://github.com/runloom/pier",
