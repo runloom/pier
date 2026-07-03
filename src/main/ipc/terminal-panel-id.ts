@@ -6,13 +6,13 @@ import type { AppWindow } from "../windows/app-window.ts";
  */
 const PANEL_ID_SEPARATOR = "::";
 
-export function scopePanelId(win: AppWindow, panelId: string): string {
+export function toNativePanelKey(win: AppWindow, panelId: string): string {
   return `${win.id}${PANEL_ID_SEPARATOR}${panelId}`;
 }
 
-export function unscopePanelId(scopedId: string): string {
-  const idx = scopedId.indexOf(PANEL_ID_SEPARATOR);
+export function fromNativePanelKey(nativeKey: string): string {
+  const idx = nativeKey.indexOf(PANEL_ID_SEPARATOR);
   return idx === -1
-    ? scopedId
-    : scopedId.slice(idx + PANEL_ID_SEPARATOR.length);
+    ? nativeKey
+    : nativeKey.slice(idx + PANEL_ID_SEPARATOR.length);
 }

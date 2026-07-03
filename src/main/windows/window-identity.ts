@@ -38,10 +38,6 @@ export function findWindowContext(window: AppWindow): WindowContext | null {
   return appWindowContexts.get(window) ?? null;
 }
 
-export function findWindowSessionId(window: AppWindow): string | null {
-  return findWindowContext(window)?.sessionId ?? null;
-}
-
 export function findAppWindowByElectronId(id: number): AppWindow | null {
   return appWindowsByElectronId.get(id) ?? null;
 }

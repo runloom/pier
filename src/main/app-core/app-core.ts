@@ -58,7 +58,7 @@ export interface PierAppCore {
 function broadcastMruState(state: MruState): void {
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
-      win.webContents.send("pier:command-palette-mru:changed", state);
+      win.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_MRU_CHANGED, state);
     }
   }
 }

@@ -82,13 +82,23 @@ describe("terminal close IPC reason semantics", () => {
       }),
     };
 
-    vi.doMock("electron", () => ({}));
-    vi.doMock("node:module", () => ({
-      createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
-      default: {
-        createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
-      },
+    vi.doMock("electron", () => ({
+      app: { getPath: vi.fn((k: string) => `/tmp/pier-test-${k}`) },
     }));
+    vi.doMock("node:module", () => {
+      // fake require 带 .resolve —— loadNativeAddon 会先 resolve 拿绝对路径
+      // 再 require(addonPath)，两步都需要工作。
+      const fakeRequire = Object.assign(
+        vi.fn(() => fakeAddon),
+        {
+          resolve: vi.fn((p: string) => p),
+        }
+      );
+      return {
+        createRequire: vi.fn(() => fakeRequire),
+        default: { createRequire: vi.fn(() => fakeRequire) },
+      };
+    });
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       patchTerminalPanelTab: vi.fn(async () => true),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
@@ -126,7 +136,6 @@ describe("terminal close IPC reason semantics", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => "window-main"),
-      findWindowSessionId: vi.fn(() => "session-main"),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -165,7 +174,7 @@ describe("terminal close IPC reason semantics", () => {
 
     expect(fakeAddon.closeTerminal).toHaveBeenLastCalledWith("7::terminal-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenLastCalledWith(
-      "session-main",
+      "window-main",
       "terminal-1"
     );
     expect(taskPanelClosed).not.toHaveBeenCalled();
@@ -191,7 +200,7 @@ describe("terminal close IPC reason semantics", () => {
 
     expect(fakeAddon.closeTerminal).toHaveBeenLastCalledWith("7::terminal-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenLastCalledWith(
-      "session-main",
+      "window-main",
       "terminal-1"
     );
     expect(taskPanelClosed).not.toHaveBeenCalled();

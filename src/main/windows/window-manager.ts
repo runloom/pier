@@ -190,7 +190,6 @@ class WindowManager {
     rememberAppWindow(window, {
       mode,
       recordId: opts.recordId ?? id,
-      sessionId: opts.recordId ?? id,
       windowId: id,
     });
 
