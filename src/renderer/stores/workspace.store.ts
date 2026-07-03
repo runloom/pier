@@ -8,7 +8,7 @@ import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import { focusWorkspaceGroup } from "@/stores/workspace-focus-group.ts";
 import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
@@ -132,7 +132,7 @@ function panelsInSameGroup(
 }
 
 async function clearCurrentWindowLayout(): Promise<void> {
-  const context = await window.pier.getWindowContext();
+  const context = await window.pier.window.getContext();
   await window.pier.workspace.clearLayout(context.recordId);
 }
 
@@ -142,7 +142,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setApi: (api) => set({ api, hasMaximizedGroup: false }),
   setHasMaximizedGroup: (hasMaximizedGroup) => set({ hasMaximizedGroup }),
   syncTabShortcutHints: () => {
-    useTabShortcutHintsStore
+    useTerminalStore
       .getState()
       .setActiveGroupPanels(get().api?.activeGroup?.panels ?? []);
   },

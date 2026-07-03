@@ -1,7 +1,7 @@
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import { AppShell } from "@/components/common/app-shell.tsx";
-import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing.store.ts";
+import { registerTerminalElementWebOverlay } from "@/stores/terminal.store.ts";
 
 const terminalOverlayRegistry = {
   registerElement: registerTerminalElementWebOverlay,

@@ -5,7 +5,7 @@ import {
   installTerminalInputRoutingBlurSuppressor,
   installTerminalInputRoutingDragWatcher,
   installTerminalInputRoutingPointerDownListener,
-} from "@/stores/terminal-input-routing.store.ts";
+} from "@/stores/terminal.store.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { initI18n } from "./i18n/index.ts";

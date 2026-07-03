@@ -35,7 +35,7 @@ const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
 
 const RECONCILE_CALL_RE =
   /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\)/;
-const READS_WINDOW_CONTEXT_RE = /window\.pier\.getWindowContext\(\)/;
+const READS_WINDOW_CONTEXT_RE = /window\.pier\.window\.getContext\(\)/;
 const SAVES_LAYOUT_BY_WINDOW_RECORD_RE =
   /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
 const LOADS_LAYOUT_BY_WINDOW_RECORD_RE =
@@ -47,7 +47,7 @@ const FLUSH_SAVES_CURRENT_LAYOUT_RE =
   /window\.pier\.workspace[\s\S]{0,80}?\.saveLayout\(\s*event\.api\.toJSON\(\),\s*windowContext\.recordId\s*\)/;
 const WRITABLE_MAIN_FALLBACK_RE = /recordId: "main"/;
 const WINDOW_CONTEXT_PROMISE_RE =
-  /const windowContextPromise = window\.pier\.getWindowContext\(\)/;
+  /const windowContextPromise = window\.pier\.window\.getContext\(\)/;
 const AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE =
   /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
 const FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE =
@@ -57,9 +57,9 @@ const READY_TO_SHOW_AFTER_LAYOUT_RE =
 const READY_TO_SHOW_WHEN_USER_TOUCHED_RE =
   /if \(userTouched\) \{[\s\S]{0,120}?notifyReadyToShow\(\);[\s\S]{0,80}?return;/;
 const READY_TO_SHOW_USES_HIDDEN_WINDOW_SAFE_TIMER_RE =
-  /setTimeout\(\(\) => \{[\s\S]{0,80}?window\.pier\.readyToShow\(\);[\s\S]{0,40}?\}, 0\)/;
+  /setTimeout\(\(\) => \{[\s\S]{0,80}?window\.pier\.window\.readyToShow\(\);[\s\S]{0,40}?\}, 0\)/;
 const READY_TO_SHOW_DOES_NOT_WAIT_FOR_RAF_RE =
-  /requestAnimationFrame\([\s\S]{0,160}?window\.pier\.readyToShow\(\)/;
+  /requestAnimationFrame\([\s\S]{0,160}?window\.pier\.window\.readyToShow\(\)/;
 
 describe("workspace-host invariants (#17 #19)", () => {
   it("declares userTouched flag and uses it to gate fromJSON (防 user 操作被 saved layout 覆盖)", () => {

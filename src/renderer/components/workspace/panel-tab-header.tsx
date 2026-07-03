@@ -38,7 +38,7 @@ import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
+import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
 import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
 
 export const PANEL_TAB_TOOLTIP_DELAY_MS = 1000;

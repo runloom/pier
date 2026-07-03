@@ -20,8 +20,8 @@ import {
   useFontStore,
 } from "@/stores/font.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import { useTerminalResizeStore } from "@/stores/terminal.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
-import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import { TerminalSearchBar } from "./terminal-search-bar.tsx";

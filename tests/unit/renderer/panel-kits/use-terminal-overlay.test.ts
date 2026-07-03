@@ -10,7 +10,7 @@ import {
   getLastTerminalInputRoutingSnapshot,
   registerTerminalElementWebOverlay,
   resetTerminalInputRoutingForTests,
-} from "@/stores/terminal-input-routing.store.ts";
+} from "@/stores/terminal.store.ts";
 
 class ResizeObserverMock {
   disconnect(): void {

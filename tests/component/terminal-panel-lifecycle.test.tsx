@@ -26,12 +26,10 @@ import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
   resetTerminalInputRoutingForTests,
-  setTerminalBasePanel,
-} from "@/stores/terminal-input-routing.store.ts";
-import {
   resetTerminalOverlayFocusForTests,
-  useTerminalOverlayFocus,
-} from "@/stores/terminal-overlay-focus.store.ts";
+  setTerminalBasePanel,
+  useTerminalStore,
+} from "@/stores/terminal.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 interface TerminalRelaunchRequest {
@@ -1616,7 +1614,7 @@ describe("TerminalPanel lifecycle", () => {
     // 模拟终端焦点意图（onFocusRequest 处理器走的同一组 store API）：
     // 让出键盘 + 把 basePanel 置为 terminal。
     act(() => {
-      useTerminalOverlayFocus.getState().yieldToTerminal();
+      useTerminalStore.getState().yieldToTerminal();
       setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
     });
 

@@ -8,9 +8,14 @@ import {
   computeEffectiveKeyboardTarget,
   sameKeyboardFocusTarget as sameBasePanel,
 } from "@shared/terminal-keyboard-target.ts";
+import { create } from "zustand";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
-import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
+import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-viewport.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+
+// ===========================================================================
+// slice.inputRouting — 模块级变量 + rAF coalesce（高频路径保留原设计）
+// ===========================================================================
 
 interface WebOverlayRegistration {
   dispose(): void;
@@ -164,7 +169,7 @@ export function registerTerminalElementWebOverlay(
   resizeObserver.observe(element);
   window.addEventListener("resize", flushTrailing);
   const disposePulse =
-    window.pier?.onWindowLayoutPulse?.((_pulse: WindowLayoutPulse) => {
+    window.pier?.window?.onLayoutPulse?.((_pulse: WindowLayoutPulse) => {
       flushTrailing();
     }) ?? null;
   flushTrailing();
@@ -216,7 +221,7 @@ export function registerTerminalFullscreenWebOverlay(
 
   window.addEventListener("resize", flushTrailing);
   const disposePulse =
-    window.pier?.onWindowLayoutPulse?.(onWindowLayoutPulse) ?? null;
+    window.pier?.window?.onLayoutPulse?.(onWindowLayoutPulse) ?? null;
   flushTrailing();
 
   return {
@@ -454,4 +459,166 @@ export function resetTerminalInputRoutingForTests(): void {
   lastEffectiveKeyboardKind = "web";
   webFocusHandOffArmedUntil = 0;
   dragWatcherInstalled = false;
+}
+
+// ===========================================================================
+// slice.overlayFocus — zustand
+// ===========================================================================
+
+interface TerminalOverlayFocusSlice {
+  activateOverlay(id: string): void;
+  activeOverlayId: string | null;
+  deactivateOverlay(id: string): void;
+  yieldToTerminal(): void;
+}
+
+// ===========================================================================
+// slice.resize — zustand
+// ===========================================================================
+
+interface TerminalResizeSlice {
+  /**
+   * reconciler 最近一次下发给 native 的 presentation snapshot 的 rendererSequence。
+   * coordinator 用它与 native 的「就位」ack 对比，精确判断 resize 撤占位时机。
+   */
+  lastDownlinkSequence: number;
+  /**
+   * web 占位是否显示。resize 期间为 true，用终端背景色占位顶替 native 终端区域，
+   * resize 结束、native 应用最终几何的 ack 到达后转回 false。terminal-panel 读取。
+   */
+  placeholderVisible: boolean;
+  /**
+   * 是否强制隐藏所有 native 终端（presentation visible=false + frame=null）。resize
+   * 期间为 true，让 native 终端隐身、由 web 占位顶替。reconciler 读取此字段。
+   *
+   * 与 placeholderVisible 分开：resize 结束先把它转 false（终端在占位之后恢复最终位置），
+   * 再等 native 就位 ack 撤占位，避免接缝闪烁。
+   */
+  suppressTerminals: boolean;
+}
+
+// ===========================================================================
+// slice.shortcutHints — zustand
+// ===========================================================================
+
+interface PanelLike {
+  id: string;
+}
+
+interface TabShortcutHintsSlice {
+  activeGroupTabHints: Record<string, number>;
+  commandKeyDown: boolean;
+  resetShortcutHints: () => void;
+  setActiveGroupPanels: (panels: readonly PanelLike[]) => void;
+  setCommandKeyDown: (commandKeyDown: boolean) => void;
+}
+
+function tabHintsForPanels(
+  panels: readonly PanelLike[]
+): Record<string, number> {
+  return Object.fromEntries(
+    panels.slice(0, 9).map((panel, index) => [panel.id, index + 1])
+  );
+}
+
+// ===========================================================================
+// 合并 store
+// ===========================================================================
+
+type TerminalStoreState = TerminalOverlayFocusSlice &
+  TerminalResizeSlice &
+  TabShortcutHintsSlice;
+
+/**
+ * 单一 web 焦点请求的释放句柄。共存型浮层（如终端搜索）任一时刻只有一个能持有
+ * 键盘，激活动作由显式意图驱动（打开、用户点回输入框），终端焦点意图让出键盘但
+ * 不关闭浮层。绝不由 DOM focus/blur 事件回写。
+ */
+let overlayFocusRelease: (() => void) | null = null;
+
+export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
+  // --- overlayFocus ---
+  activeOverlayId: null,
+  activateOverlay(id) {
+    if (get().activeOverlayId === id) {
+      return;
+    }
+    overlayFocusRelease?.();
+    overlayFocusRelease = requestTerminalWebFocus(id);
+    set({ activeOverlayId: id });
+  },
+  deactivateOverlay(id) {
+    if (get().activeOverlayId !== id) {
+      return;
+    }
+    overlayFocusRelease?.();
+    overlayFocusRelease = null;
+    set({ activeOverlayId: null });
+  },
+  yieldToTerminal() {
+    if (get().activeOverlayId === null) {
+      return;
+    }
+    overlayFocusRelease?.();
+    overlayFocusRelease = null;
+    set({ activeOverlayId: null });
+  },
+
+  // --- resize ---
+  lastDownlinkSequence: 0,
+  placeholderVisible: false,
+  suppressTerminals: false,
+
+  // --- shortcutHints ---
+  activeGroupTabHints: {},
+  commandKeyDown: false,
+  resetShortcutHints: () =>
+    set({ activeGroupTabHints: {}, commandKeyDown: false }),
+  setActiveGroupPanels: (panels) =>
+    set({ activeGroupTabHints: tabHintsForPanels(panels) }),
+  setCommandKeyDown: (commandKeyDown) => set({ commandKeyDown }),
+}));
+
+// ===========================================================================
+// selector hooks（保留旧接口名称，调用方可直接替换 import 路径）
+// ===========================================================================
+
+export function useTerminalOverlayFocus<T>(
+  selector: (state: TerminalOverlayFocusSlice) => T
+): T {
+  return useTerminalStore(selector);
+}
+
+export function useTerminalResizeStore<T>(
+  selector: (state: TerminalResizeSlice) => T
+): T {
+  return useTerminalStore(selector);
+}
+
+export function useTabShortcutHintsStore<T>(
+  selector: (state: TabShortcutHintsSlice) => T
+): T {
+  return useTerminalStore(selector);
+}
+
+// ===========================================================================
+// test reset
+// ===========================================================================
+
+export function resetTerminalOverlayFocusForTests(): void {
+  overlayFocusRelease?.();
+  overlayFocusRelease = null;
+  useTerminalStore.setState({ activeOverlayId: null });
+}
+
+export function resetTerminalStoreForTests(): void {
+  resetTerminalInputRoutingForTests();
+  resetTerminalOverlayFocusForTests();
+  useTerminalStore.setState({
+    lastDownlinkSequence: 0,
+    placeholderVisible: false,
+    suppressTerminals: false,
+    activeGroupTabHints: {},
+    commandKeyDown: false,
+  });
 }
