@@ -46,7 +46,7 @@ describe("withPierGooseHooks / withoutPierGooseHooks", () => {
     }
   });
 
-  it("command 含正确 agent id + pierEvent + PIER_AGENT_HOOK_PORT", () => {
+  it("command 含正确 agent id + pierEvent + PIER_AGENT_HOOKS_DIR mark", () => {
     const next = withPierGooseHooks({});
     const hooks = next.hooks as Record<
       string,

@@ -24,7 +24,7 @@ describe("buildAiderNotificationsBlock / withPierAiderNotifications", () => {
     expect(block).not.toContain("notifications_command");
   });
 
-  it("command 含正确 agent id + Stop 事件 + PIER_AGENT_HOOK_PORT", () => {
+  it("command 含正确 agent id + Stop 事件 + PIER_AGENT_HOOKS_DIR mark", () => {
     const block = buildAiderNotificationsBlock();
     expect(block).toContain('"aider"');
     expect(block).toContain(MARK);

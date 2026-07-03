@@ -13,7 +13,7 @@ const MARKER = "pier-agent-status:v1 (managed by Pier)";
 /**
  * pi 事件 → pier 事件名（loomdesk pi.ts eventStatusMap 对齐, capability
  * "coarse"——pi 无工具/权限粒度, 仅回合级 session/prompt/run/stop 边界）。
- * agent_start → "processing"（pier runtimeStatusForHookEvent 承认的规范
+ * agent_start → "processing"（pier activityStatusForHookEvent 承认的规范
  * 事件名, 非 loomdesk 内部态名 "running"）。
  */
 const PI_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [

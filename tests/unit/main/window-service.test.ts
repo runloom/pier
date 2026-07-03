@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => {
     flushTerminalSessionState: vi.fn(async () => undefined),
     flushTerminalStatusBarPrefs: vi.fn(async () => undefined),
     flushWindowRecordState: vi.fn(async () => undefined),
+    flushPanelContextState: vi.fn(async () => undefined),
+    flushProjectStore: vi.fn(async () => undefined),
     focus: vi.fn(),
     getCloseCallback: () => closeCallback,
     getFocusCallback: () => focusCallback,
@@ -92,6 +94,14 @@ vi.mock("@main/state/plugin-settings.ts", () => ({
 
 vi.mock("@main/state/terminal-status-bar-prefs.ts", () => ({
   flushTerminalStatusBarPrefs: mocks.flushTerminalStatusBarPrefs,
+}));
+
+vi.mock("@main/state/project-store.ts", () => ({
+  flushProjectStore: mocks.flushProjectStore,
+}));
+
+vi.mock("@main/state/panel-context-state.ts", () => ({
+  flushPanelContextState: mocks.flushPanelContextState,
 }));
 
 vi.mock("@main/windows/window-manager.ts", () => ({

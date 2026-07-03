@@ -46,7 +46,6 @@ export function createForegroundActivityAggregator(
   const entries = new Map<string, ActivityEntry>();
   /** key → 冷却截止时刻。 */
   const cooldownUntil = new Map<string, number>();
-  const ignoredNativeUserClosePanels = new Set<string>();
   const listeners = new Set<(b: ForegroundActivityBroadcast) => void>();
   let emitTimer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
@@ -391,14 +390,7 @@ export function createForegroundActivityAggregator(
       pruneExpiredCooldowns();
     },
 
-    ignoreNextNativeUserClose(panelId) {
-      ignoredNativeUserClosePanels.add(panelId);
-    },
-    consumeIgnoreNativeUserClose(panelId) {
-      return ignoredNativeUserClosePanels.delete(panelId);
-    },
     resetPanel(panelId) {
-      ignoredNativeUserClosePanels.delete(panelId);
       cooldownUntil.delete(panelId);
     },
 
@@ -431,7 +423,6 @@ export function createForegroundActivityAggregator(
       }
       entries.clear();
       listeners.clear();
-      ignoredNativeUserClosePanels.clear();
     },
   };
   return api;

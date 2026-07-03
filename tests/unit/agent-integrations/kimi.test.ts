@@ -55,7 +55,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     expect(next).toContain("command =");
   });
 
-  it("command 字面量携带 agent id + pierEvent + PIER_AGENT_HOOK_PORT", () => {
+  it("command 字面量携带 agent id + pierEvent + PIER_AGENT_HOOKS_DIR mark", () => {
     const next = withPierKimiHooks("");
     expect(next).toContain(MARK);
     // 解析 TOML 单行 command 字符串, 把 shell 命令还原成明文再断言事件负载。

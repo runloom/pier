@@ -13,12 +13,12 @@ import {
   registerAssetScheme,
 } from "./fonts/asset-protocol.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
-import {
-  closeAgentSessionResources,
-  registerAgentSessionIpc,
-} from "./ipc/agent-session.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
+import {
+  closeForegroundActivityResources,
+  registerForegroundActivityIpc,
+} from "./ipc/foreground-activity.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerNotificationIpc } from "./ipc/notification.ts";
@@ -264,7 +264,7 @@ app.whenReady().then(async () => {
   registerCommandIpc(ipcMain);
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
-  registerAgentSessionIpc(ipcMain);
+  registerForegroundActivityIpc(ipcMain);
   registerProjectIpc(ipcMain);
   registerSecretsIpc(ipcMain, appCore.services.secrets);
   registerRendererCommandIpc(ipcMain);
@@ -333,7 +333,7 @@ app.on("before-quit", (event) => {
     didFlushBeforeQuit = true;
     // JSONL observer dispose 是同步操作, 抽出 Promise.all 避免无谓的 Promise 包装。
     try {
-      closeAgentSessionResources();
+      closeForegroundActivityResources();
     } catch (error) {
       console.error(
         "[agent-session] failed to close resources before quit:",

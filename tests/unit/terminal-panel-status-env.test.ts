@@ -3,15 +3,15 @@ import { withPanelStatusEnv } from "../../src/main/ipc/terminal-create-launch.ts
 
 describe("withPanelStatusEnv", () => {
   const hookEnv = {
-    PIER_AGENT_HOOK_PORT: "12345",
-    PIER_AGENT_HOOK_TOKEN: "tok",
+    PIER_AGENT_EVENT_LOG: "/tmp/pier-agent-events.jsonl",
+    PIER_AGENT_HOOKS_DIR: "/tmp/pier-hooks",
   };
 
   it("无 launch 的普通终端也注入 PIER_WINDOW_ID + PIER_PANEL_ID + hook env", () => {
     const out = withPanelStatusEnv(undefined, "panel-1", "7", hookEnv);
     expect(out.env).toEqual({
-      PIER_AGENT_HOOK_PORT: "12345",
-      PIER_AGENT_HOOK_TOKEN: "tok",
+      PIER_AGENT_EVENT_LOG: "/tmp/pier-agent-events.jsonl",
+      PIER_AGENT_HOOKS_DIR: "/tmp/pier-hooks",
       PIER_PANEL_ID: "panel-1",
       PIER_WINDOW_ID: "7",
     });
@@ -31,7 +31,7 @@ describe("withPanelStatusEnv", () => {
     expect(out.env?.PIER_WINDOW_ID).toBe("7");
   });
 
-  it("hook 服务器启动失败(hookEnv 空)时仍注入路由变量", () => {
+  it("hookEnv 空时仍注入路由变量（无异常回退）", () => {
     const out = withPanelStatusEnv(undefined, "panel-3", "7", {});
     expect(out.env).toEqual({ PIER_PANEL_ID: "panel-3", PIER_WINDOW_ID: "7" });
   });

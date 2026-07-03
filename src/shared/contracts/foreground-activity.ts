@@ -106,11 +106,8 @@ export type ForegroundActivityBroadcast = z.infer<
 >;
 
 /**
- * hook 事件名 → agent activity status。null = 未知事件，调用方应忽略。
- *
- * **同步维护提醒**：与 `src/shared/contracts/agent-session.ts` 的
- * `runtimeStatusForHookEvent` 逻辑相同。老 aggregator 删除前 (plan §C.4)
- * 两处必须同步——修一处务必修另一处，否则 broadcast 状态漂移。
+ * hook 事件名 → activity status。null = 未知事件，调用方应忽略。
+ * 单源真理表：foreground-activity 的唯一权威映射。
  */
 export function activityStatusForHookEvent(
   event: string

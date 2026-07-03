@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 function deps(): TerminalTaskLifecycleDeps {
   return {
     completePanel: vi.fn(async () => ({ updated: true })),
-    forwardTabPatch: vi.fn(),
     markPanelClosed: vi.fn(),
     now: () => 1_772_000_001_000,
     patchTab: vi.fn(async () => undefined),
@@ -52,13 +51,6 @@ describe("terminal task lifecycle", () => {
         status: "succeeded",
       }
     );
-    expect(d.forwardTabPatch).toHaveBeenCalledWith(42, "terminal-1", {
-      state: {
-        colorToken: "success",
-        label: "Succeeded",
-        status: "succeeded",
-      },
-    });
   });
 
   it("completes from task-exit title markers without waiting for terminal close", async () => {
@@ -110,7 +102,6 @@ describe("terminal task lifecycle", () => {
 
     expect(d.completePanel).toHaveBeenCalledTimes(1);
     expect(d.patchTaskStatus).toHaveBeenCalledTimes(1);
-    expect(d.forwardTabPatch).toHaveBeenCalledTimes(1);
   });
 
   it("keeps task-exit title hints over later unknown shell integration codes", async () => {
@@ -210,13 +201,6 @@ describe("terminal task lifecycle", () => {
         status: "failed",
       })
     );
-    expect(d.forwardTabPatch).toHaveBeenCalledWith(42, "terminal-1", {
-      state: {
-        colorToken: "destructive",
-        label: "Failed",
-        status: "failed",
-      },
-    });
   });
 
   it("marks process-alive native closes as user cancellation", async () => {
@@ -258,7 +242,6 @@ describe("terminal task lifecycle", () => {
       windowId: "window-main",
     });
 
-    expect(d.forwardTabPatch).not.toHaveBeenCalled();
     expect(d.patchTab).not.toHaveBeenCalled();
     expect(d.completePanel).not.toHaveBeenCalled();
     expect(d.markPanelClosed).not.toHaveBeenCalled();
@@ -283,7 +266,6 @@ describe("terminal task lifecycle", () => {
 
     expect(d.completePanel).toHaveBeenCalledTimes(1);
     expect(d.patchTaskStatus).toHaveBeenCalledTimes(1);
-    expect(d.forwardTabPatch).toHaveBeenCalledTimes(1);
   });
 
   it("resets lifecycle memory when a panel id is reused", async () => {
@@ -308,6 +290,5 @@ describe("terminal task lifecycle", () => {
 
     expect(d.completePanel).toHaveBeenCalledTimes(2);
     expect(d.patchTaskStatus).toHaveBeenCalledTimes(2);
-    expect(d.forwardTabPatch).toHaveBeenCalledTimes(2);
   });
 });

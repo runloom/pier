@@ -18,7 +18,7 @@ import {
   findAppWindowByWebContents,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
-import { agentSessionService } from "./agent-session.ts";
+import { foregroundActivityService } from "./foreground-activity.ts";
 import {
   consumeCreateLaunch,
   resolveCreateTerminalLaunch,
@@ -186,7 +186,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           x: args.frame.x,
           y: args.frame.y,
         });
-        const hookEnv = agentSessionService.hookEnv();
+        const hookEnv = foregroundActivityService.hookEnv();
         const ok = addon.createTerminal(
           handle,
           toNativePanelKey(win, args.panelId),
@@ -203,7 +203,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         if (ok) {
           if (launchAgentId) {
             // launcher 先验身份：图标/状态即刻点亮, 不等 agent 侧信号。
-            agentSessionService.agentLaunched(
+            foregroundActivityService.agentLaunched(
               String(win.id),
               args.panelId,
               launchAgentId
@@ -343,7 +343,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       recordRendererTerminalRoute(win, "close", panelId);
       // relaunch 也走清理+5s 冷却；launcher 立刻重启 agent 时首个 SessionStart
       // 可能被吸收，下个事件自愈，属接受行为。
-      agentSessionService.panelClosed(panelId);
+      foregroundActivityService.panelClosed(panelId);
       if (options?.reason === "relaunch") {
         taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
       } else {
@@ -385,7 +385,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     recordRendererTerminalRoute(win, "reconcile", null, {
       count: activeIds.length,
     });
-    agentSessionService.retainPanels(String(win.id), activeIds);
+    foregroundActivityService.retainPanels(String(win.id), activeIds);
     try {
       addon.reconcileTerminals(
         win.getNativeWindowHandle(),

@@ -74,7 +74,7 @@ function handleBroadcast(b: ForegroundActivityBroadcast): void {
  * 语义已完全迁到 ForegroundActivityAggregator。所有方法直接转发到
  * unified aggregator——不再存在双写。
  */
-export const agentSessionService = {
+export const foregroundActivityService = {
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void {
     foregroundActivityAggregator.agentLaunched(windowId, panelId, agentId);
   },
@@ -140,12 +140,12 @@ export const agentSessionService = {
 };
 
 /** app 退出时释放 JSONL observer 等副资源。 */
-export function closeAgentSessionResources(): void {
+export function closeForegroundActivityResources(): void {
   jsonlObserver?.dispose();
   jsonlObserver = null;
 }
 
-export function registerAgentSessionIpc(ipcMain: IpcMain): void {
+export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   foregroundActivityAggregator.onChange(handleBroadcast);
   // emit 脚本安装（一次性）——fire-and-forget，失败仅告警。
   installAgentHooksEmitScript(app.getPath("userData")).catch((err) => {
@@ -174,7 +174,7 @@ export function registerAgentSessionIpc(ipcMain: IpcMain): void {
       // 调用方泄露其他窗口的会话数据。
       return { activities: [], ts: foregroundActivityAggregator.snapshot().ts };
     }
-    return agentSessionService.snapshot(String(win.id));
+    return foregroundActivityService.snapshot(String(win.id));
   });
 
   // 启动时按偏好双向对齐 hook 安装状态（幂等）：开→装, 关→卸。

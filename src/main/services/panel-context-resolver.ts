@@ -9,7 +9,9 @@ import type {
 import { upsertProjectFromPath } from "../state/project-store.ts";
 import { execGit } from "./git-exec.ts";
 
-let upsertWarned = false;
+/** Warn 时间戳；30s 窗口内相同错误只 log 一次，避免磁盘故障时 log flood。 */
+let lastUpsertWarnAt = 0;
+const UPSERT_WARN_THROTTLE_MS = 30_000;
 
 export interface ResolvePanelContextOptions {
   execGit?: (
@@ -132,8 +134,9 @@ export async function resolvePanelContextForPath(
     : undefined;
   const project = await upsertProjectFromPath(projectRoot, now).catch(
     (err: unknown) => {
-      if (!upsertWarned) {
-        upsertWarned = true;
+      const nowMs = now();
+      if (nowMs - lastUpsertWarnAt >= UPSERT_WARN_THROTTLE_MS) {
+        lastUpsertWarnAt = nowMs;
         console.warn(
           "[panel-context] upsertProjectFromPath failed:",
           err instanceof Error ? err.message : String(err)

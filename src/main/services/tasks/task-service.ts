@@ -104,7 +104,7 @@ export interface CreateTaskServiceOptions {
   homeDir?: string;
   now?: () => number;
   /**
-   * 任务生命周期广播 hook——上层（app-core 层）注入 agentSessionService 的
+   * 任务生命周期广播 hook——上层（app-core 层）注入 foregroundActivityService 的
    * taskLaunched / taskFinished, 让前台活动聚合器收到 task activity。
    * 未注入时 task 生命周期不产生 activity broadcast (test 场景可省)。
    */
@@ -361,11 +361,15 @@ export function createTaskService({
         forgetSnapshotTasks(result);
       }
       for (const node of Object.values(result?.nodes ?? {})) {
-        if (node.panelId) {
-          forgetRunningPanel(node.panelId, node.windowId);
-          onTaskActivity?.onFinished(node.panelId, {
-            status: "cancelled",
-          });
+        if (!node.panelId) {
+          continue;
+        }
+        forgetRunningPanel(node.panelId, node.windowId);
+        // 只对本次 cancel 才真正翻状态的节点 fire onFinished（cancelRun 内 coordinator
+        // 只把 pending/running 改为 cancelled；succeeded/failed 节点保留原状态）。
+        // 无过滤会把已 success 的 activity 在 5s linger 内闪回 cancelled。
+        if (node.status === "cancelled") {
+          onTaskActivity?.onFinished(node.panelId, { status: "cancelled" });
         }
       }
       return result;

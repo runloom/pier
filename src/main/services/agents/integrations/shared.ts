@@ -115,7 +115,7 @@ export interface NestedHookEventSpec {
   matcher?: string;
   /** 该 agent 的原生事件名。 */
   nativeEvent: string;
-  /** 安装时写入命令的 pier 规范事件名（runtimeStatusForHookEvent 词汇）。 */
+  /** 安装时写入命令的 pier 规范事件名（activityStatusForHookEvent 词汇）。 */
   pierEvent: string;
 }
 

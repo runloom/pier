@@ -17,11 +17,8 @@ export interface ForegroundActivityAggregator {
    * 无缝接管。
    */
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
-  consumeIgnoreNativeUserClose(panelId: string): boolean;
   dispose(): void;
 
-  /** launcher/panel 侧的防误关 shim（迁移自老 terminal-task-lifecycle）。 */
-  ignoreNextNativeUserClose(panelId: string): void;
   /** Path B 三 kind: agentEvent（真身，聚合器消费驱动 agent activity）。 */
   ingestAgentEvent(event: AgentHookEventPayload): void;
   /** 前台命令退出：panel 内活动清理 + 5s 冷却。Ctrl+Z 悬挂（145-148）保留活动。 */
@@ -47,9 +44,8 @@ export interface ForegroundActivityAggregator {
   /** panel 关闭 → 清 activity + 冷却拦迟到 hook。 */
   panelClosed(panelId: string): void;
   /**
-   * launcher/panel 侧的 shim：清 `ignoredNativeUserClosePanels` 标记 + 清
-   * 该 panel 的冷却记录。**不动 entry 本体**——activity 生命周期由
-   * panelClosed / retainPanels 管。命名易歧义, 见 JSDoc。
+   * 该 panel 的冷却记录清除。**不动 entry 本体**——activity 生命周期由
+   * panelClosed / retainPanels 管。
    */
   resetPanel(panelId: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的活动按 panelClosed 处理。 */

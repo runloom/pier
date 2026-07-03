@@ -179,12 +179,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     (e) => e.title,
     activeLaunch.sequence
   );
-  const tabPatch = usePanelEventState(
-    window.pier.terminal.onTabChromePatch,
-    panelId,
-    (e) => e.tab,
-    activeLaunch.sequence
-  );
 
   const sessionLoaded = savedSession !== undefined;
   const restoredTaskResult = restoredTaskResultFromSession(savedSession?.task);
@@ -194,13 +188,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   // agent 会话呈现 overlay 叠在最外层：icon/title 换 agent 的, 会话消失自动回退。
+  // Task exit chrome overlay 由 activity 单源提供（foreground-activity 广播），
+  // 老 TERMINAL_TAB_CHROME_PATCHED 通路已下线。3 层：base → restore-patch → activity。
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
-      mergeTabChrome(
-        savedSession?.tab ?? activeLaunch.tab,
-        restoredTaskTabPatch(savedSession?.task)
-      ),
-      tabPatch
+      savedSession?.tab ?? activeLaunch.tab,
+      restoredTaskTabPatch(savedSession?.task)
     ),
     activityTabChromeOverlay(activity)
   );

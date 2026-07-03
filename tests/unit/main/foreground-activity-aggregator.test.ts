@@ -279,15 +279,6 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("ignoreNextNativeUserClose / consume shim", () => {
-    const agg = createForegroundActivityAggregator({ now });
-    agg.ignoreNextNativeUserClose("p1");
-    expect(agg.consumeIgnoreNativeUserClose("p1")).toBe(true);
-    // 二次 consume 已消耗
-    expect(agg.consumeIgnoreNativeUserClose("p1")).toBe(false);
-    agg.dispose();
-  });
-
   it("SubagentStart / SubagentStop 只计数, 不改父状态", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));

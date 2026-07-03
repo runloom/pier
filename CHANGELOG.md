@@ -105,3 +105,34 @@
 - ✅ `panel-context-state.ts:keyForContext` 清 legacy `projectRoot` fallback 一层
 - ✅ `PanelContext.projectRoot` 删（→ `projectId + projectRootPath`）
 - ✅ `panel-context-resolver` 输出改产 `projectRootPath`；`upsertProjectFromPath` 兜底 catch 保留（Electron `app.getPath` 不可用时 project 保持 null，`projectRootPath` 从 gitRoot/cwd 派生）
+
+### Cleanup (double-write collapse)
+
+双写与 pragmatic 收敛清理，达 GREEN 终态：
+
+- ✅ **删 `TERMINAL_TAB_CHROME_PATCHED` 广播**：main→renderer task exit chrome 通路统一走 `FOREGROUND_ACTIVITY_CHANGED` + `activityTabChromeOverlay`。删 `TerminalTabChromePatchEvent` contract、`onTabChromePatch` preload、`forwardTabPatch` wiring 依赖、renderer `mergeTabChrome` 4 层缩到 3 层（base → restore-patch → activity）。
+- ✅ **删 `foreground-activity` aggregator 中孤儿 `ignoredNativeUserClosePanels` Set + `ignoreNextNativeUserClose` / `consumeIgnoreNativeUserClose` API**：该状态实际由 `terminal-task-lifecycle` 维护并消费（`terminal.ts` 唯一 caller）；aggregator 侧的副本 0 caller，双源同义 collapse 到单源。
+- ✅ **`src/main/ipc/agent-session.ts` 改名 `foreground-activity.ts`**；`agentSessionService` → `foregroundActivityService`，`registerAgentSessionIpc` → `registerForegroundActivityIpc`，`closeAgentSessionResources` → `closeForegroundActivityResources`。5 处 callsite 全更名。共享契约 `src/shared/contracts/agent-session.ts` 保留（仍承担 `agentHookEventSchema` + `agentTabIconId` icon 工具函数）。
+- ✅ **`terminal-task-lifecycle.ts` 职责 JSDoc 清晰化**：native shell 回调协调器（exit hint 排序 / dedupe / ignore-close / 持久化 patchTab+patchTaskStatus）。broadcast 责任明确外包给 `foregroundActivityService.taskFinished` → aggregator 单源。
+- ✅ **删陈旧 sync 维护提醒**：`foreground-activity.ts:111-113` 老 `runtimeStatusForHookEvent` 与 `agent-session.ts` 同步注释（引用的函数已删）。`pi.ts:16` / `shared.ts:118` 相同注释同步更新为当前 `activityStatusForHookEvent`。
+
+### Fixed
+
+- **`task-service.cancelRun` 覆盖已 success activity → cancelled 的回归 bug**：
+  `taskRuns.cancel` 只把 pending/running 节点改状态，但 task-service 遍历 fire
+  `onTaskActivity.onFinished({ status: "cancelled" })` 时不看 `node.status`。
+  多 task DAG 部分完成后 restart 会让已 succeeded 的 tab 在 5s linger 内闪回
+  cancelled。修：filter 只对 `node.status === "cancelled"` 才 fire。
+- **App quit 500ms debounce 窗口内 mutate 丢失**：`flushProjectStore` +
+  `flushPanelContextState` 从未在 `before-quit` 调用。加入
+  `window-service.flushOpenWindows` / `flushWindowBeforeClose` batch，与已有
+  flush 队列同步落盘。
+- **`upsertProjectFromPath` 失败日志 flood**：`upsertWarned` 一次性 flag 换成
+  30s throttle 窗口，磁盘故障时不再首次 warn 后完全静默。
+
+### Removed
+
+- `PIER_BROADCAST.TERMINAL_TAB_CHROME_PATCHED` channel。
+- `TerminalAPI.onTabChromePatch` preload API。
+- `TerminalTabChromePatchEvent` contract type。
+- `ForegroundActivityAggregator.ignoreNextNativeUserClose` / `consumeIgnoreNativeUserClose` API + 内部 `ignoredNativeUserClosePanels` Set（迁移到 `terminal-task-lifecycle` 单源）。

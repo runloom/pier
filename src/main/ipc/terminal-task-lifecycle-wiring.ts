@@ -9,7 +9,7 @@ import {
   findAppWindowByElectronId,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
-import { agentSessionService } from "./agent-session.ts";
+import { foregroundActivityService } from "./foreground-activity.ts";
 import { recordNativeTerminalRoute } from "./terminal-debug.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
@@ -34,14 +34,6 @@ export function registerTerminalTaskLifecycleForwarding(
       terminalPanelClosed.notifyTerminalPanelExit(panelId, exitCode, windowId);
       return Promise.resolve(null);
     },
-    forwardTabPatch: (browserWindowId, panelId, tab) => {
-      forwardToWindow(
-        browserWindowId,
-        PIER_BROADCAST.TERMINAL_TAB_CHROME_PATCHED,
-        { panelId, tab },
-        "pier-task-tab-patch"
-      );
-    },
     markPanelClosed: (panelId, windowId) => {
       terminalPanelClosed.notifyTerminalPanelClosed(panelId, windowId);
     },
@@ -63,7 +55,7 @@ export function registerTerminalTaskLifecycleForwarding(
     // 前台命令退出 = 该面板运行中的 agent CLI 已退出（若有会话）——清理并还原
     // tab/状态栏呈现。覆盖崩溃/kill 等无 SessionEnd hook 的路径。
     // 透传原始 exitCode：悬挂家族(145-148, Ctrl+Z)不视为 agent 退出。
-    agentSessionService.commandFinished(rawPanelId, exitCode);
+    foregroundActivityService.commandFinished(rawPanelId, exitCode);
     const targetWindow = findAppWindowByElectronId(id);
     if (exitCode >= 0) {
       lifecycle
@@ -108,7 +100,7 @@ export function registerTerminalTaskLifecycleForwarding(
     // 会变 NaN。HTTP `PIER_WINDOW_ID = String(win.id)` 已经是同一约定。
     const agentId = matchAgentCommand(commandLine);
     // unified aggregator: null → shell activity, 非空 → agentLaunched 路径。
-    agentSessionService.ingestCommandStarted(
+    foregroundActivityService.ingestCommandStarted(
       rawPanelId,
       String(id),
       commandLine,
@@ -122,7 +114,7 @@ export function registerTerminalTaskLifecycleForwarding(
     });
     const rawPanelId = fromNativePanelKey(panelId);
     const targetWindow = findAppWindowByElectronId(id);
-    agentSessionService.panelClosed(rawPanelId);
+    foregroundActivityService.panelClosed(rawPanelId);
     lifecycle
       .completeFromNativeProcessClose({
         browserWindowId: id,
