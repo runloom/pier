@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentHookEvent } from "@shared/contracts/agent-session.ts";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJsonlObserver } from "../../../src/main/services/foreground-activity/jsonl-observer.ts";
 
 /** 合法 JSONL 行（agentHookEventSchema 需要这些字段）。 */
@@ -23,6 +23,9 @@ describe("jsonl-observer", () => {
   let offsetPath: string;
 
   beforeEach(async () => {
+    // 别的 test 文件用 vi.useFakeTimers() 可能泄漏；observer 依赖 fs.watchFile
+    // 250ms 真实轮询触发，fake timers 下 poll 不推进 -> 5s 卡超时。显式恢复。
+    vi.useRealTimers();
     baseDir = await mkdtemp(join(tmpdir(), "pier-jsonl-obs-"));
     jsonlPath = join(baseDir, "events.jsonl");
     offsetPath = `${jsonlPath}.offset`;
