@@ -269,7 +269,7 @@ export function commandExecutableText(commandLine: string): string | null {
 
 const TOKEN_ESCAPE_RE = /[.*+?^${}()|[\]\\]/g;
 
-/** 词元边界（与标题匹配同规则）：只对短小的可执行体文本跑，误报面极小。 */
+/** 词元边界：只对短小的可执行体文本跑，误报面极小。 */
 function tokenBoundaryRe(token: string): RegExp {
   const escaped = token.replace(TOKEN_ESCAPE_RE, "\\$&");
   return new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, "i");

@@ -13,7 +13,10 @@ export const agentRuntimeStatusSchema = z.enum([
 export type AgentRuntimeStatus = z.infer<typeof agentRuntimeStatusSchema>;
 
 /**
- * hook 脚本 POST 到 loopback 服务器的事件体（v1）。
+ * hook 事件（v1）。两条 producer：
+ * - HTTP `/agent-event` （legacy 兼容层：amp/kilo 等 inline fetch 集成）
+ * - JSONL 尾读（`agent-events.jsonl`，spec §4.4 主路径）
+ * ts/pid 由 JSONL emit 脚本附带；HTTP client 可以省略。
  * panelId 跨窗口不唯一（见 terminal-panel-id.ts），windowId 必带，
  * 二者组成会话 key `${windowId}::${panelId}`。
  */
@@ -25,29 +28,14 @@ export const agentHookEventSchema = z
     panelId: z.string().min(1).max(128),
     sessionId: z.string().max(128).optional(),
     windowId: z.string().min(1).max(32),
+    ts: z.number().optional(),
+    pid: z.number().optional(),
   })
   .strict();
 export type AgentHookEvent = z.infer<typeof agentHookEventSchema>;
 
-export const agentSessionSourceSchema = z.enum(["hook", "launch", "title"]);
+export const agentSessionSourceSchema = z.enum(["hook", "launch"]);
 export type AgentSessionSource = z.infer<typeof agentSessionSourceSchema>;
-
-/**
- * shell preexec 上报的前台命令开始事件（loomdesk OSC 633;E 的 loopback 版）。
- * 命令行匹配到 agent 时走 launch 先验身份管线；panelId/windowId 语义同
- * agentHookEventSchema。上限 4096 与 loomdesk MAX_COMMAND_LINE 对齐。
- */
-export const terminalCommandStartSchema = z
-  .object({
-    v: z.literal(1),
-    commandLine: z.string().min(1).max(4096),
-    panelId: z.string().min(1).max(128),
-    windowId: z.string().min(1).max(32),
-  })
-  .strict();
-export type TerminalCommandStartEvent = z.infer<
-  typeof terminalCommandStartSchema
->;
 
 export const agentSessionSnapshotSchema = z.object({
   agentId: agentKindSchema.optional(),

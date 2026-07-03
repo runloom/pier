@@ -98,7 +98,7 @@ export function terminalPanelDescriptor(args: {
  * agent 会话的 tab 呈现 overlay：状态点 + icon + title 全部由 renderer store
  * 单源驱动（纯呈现层, 不进 tab-chrome-patch 持久化管线）——reload 后经
  * snapshot pull 自动恢复, 会话消失即自动回退, 无 main/renderer 生命周期
- * 不同步问题。agentId 可来自 hook/launch/命令上报/起始锚定的 agent 标题;
+ * 不同步问题。agentId 来自 hook 事件或 native 命令行匹配（L1 shell integration）；
  * 无身份会话只带状态点不换 icon/title。
  */
 export function agentTabChromeOverlay(

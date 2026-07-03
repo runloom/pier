@@ -1,9 +1,3 @@
-import {
-  detectAgentIdFromTitle,
-  detectAgentStatusFromTitle,
-  runtimeStatusForTitleStatus,
-  titleLooksLikeAgentContext,
-} from "@shared/agent-title-status.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   type AgentHookEvent,
@@ -15,15 +9,11 @@ import {
   applyTurnBookkeeping,
   CLOSE_COOLDOWN_MS,
   clearAllTimers,
-  clearHookTtlTimer,
-  clearTitleDecayTimer,
   clearVisibilityTimer,
   EMIT_DEBOUNCE_MS,
   type Entry,
-  HOOK_FRESH_TTL_MS,
   newHookEntry,
   newLaunchEntry,
-  newTitleEntry,
   SESSION_CREATING_EVENTS,
   SESSION_END_COOLDOWN_MS,
   SUBAGENT_EVENTS,
@@ -31,18 +21,13 @@ import {
   sessionKey,
   VISIBILITY_DEBOUNCE_MS,
 } from "./agent-session-entry.ts";
-import {
-  armHookTtlTimer,
-  armTitleDecayForStatus,
-  type TimerCtx,
-} from "./agent-session-timers.ts";
+import { armHookTtlTimer, type TimerCtx } from "./agent-session-timers.ts";
 
 export interface AgentSessionAggregator {
   /**
    * 先验身份:无需 agent 侧信号即刻建可见 ready 会话。两个调用方——
-   * launcher 客户端 (orca launchToken 模式) 与 shell preexec 命令上报
-   * (命令行可执行体命中 agent 词元)。豁免关闭冷却; 后续 hook/标题信号
-   * 无缝接管。
+   * launcher 客户端 (orca launchToken 模式) 与 native OSC 133 C 命令行匹配
+   * (matchAgentCommand 词元命中)。豁免关闭冷却; 后续 hook 事件无缝接管。
    */
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
   /**
@@ -51,12 +36,11 @@ export interface AgentSessionAggregator {
    * 按 panelClosed 同款清理 + 5s 冷却吸收迟到 hook。Ctrl+Z 悬挂 (145-148)
    * 不清理, fg 恢复后 hook 无缝续接。
    */
-  commandFinished(windowId: string, panelId: string, exitCode?: number): void;
+  commandFinished(panelId: string, exitCode?: number): void;
   dispose(): void;
   ingestHookEvent(event: AgentHookEvent): void;
-  ingestTitle(windowId: string, panelId: string, title: string): void;
   onChange(cb: (b: AgentSessionsBroadcast) => void): () => void;
-  panelClosed(windowId: string, panelId: string): void;
+  panelClosed(panelId: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的会话按 panelClosed 处理。 */
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;
   snapshot(): AgentSessionsBroadcast;
@@ -123,16 +107,6 @@ export function createAgentSessionAggregator(
     }
     return true;
   }
-
-  function hookIsFresh(entry: Entry): boolean {
-    // 以最近一次真实 hook 事件计龄, 而非 updatedAt——衰减回调会为 UI 刷新
-    // updatedAt, 若据其判断, hook 抑制窗口会被衰减本身无限续期。
-    return (
-      entry.snapshot.source === "hook" &&
-      now() - entry.lastHookAt <= HOOK_FRESH_TTL_MS
-    );
-  }
-
   /** 仅移除 entry + 定时器, 不写冷却。 */
   function deleteEntry(key: string): boolean {
     const entry = entries.get(key);
@@ -228,54 +202,12 @@ export function createAgentSessionAggregator(
     return createHookEntry(key, event, at);
   }
 
-  /**
-   * ingestTitle 分支:标题既无状态 glyph 又无身份 token 时的处理——
-   * 若 existing 是 title-source 且新标题也不像 agent 上下文(纯 shell 提示符),
-   * 视为用户已从 agent 退回 shell, 清 entry 让图标还原。hook-source 或有 agent
-   * 上下文的过渡标题(如 droid `⛬ 新会话` 保留 ⛬ 前缀)不受影响。
-   */
-  function handleTitleWithoutSignals(
-    key: string,
-    existing: Entry | undefined,
-    title: string
-  ): void {
-    if (
-      !(existing && existing.snapshot.source === "title") ||
-      titleLooksLikeAgentContext(title)
-    ) {
-      return;
-    }
-    if (closeEntry(key)) {
-      scheduleEmit();
-    }
-  }
-
-  /** 取得/创建 title entry。无身份 idle 标题不建（普通 shell 防误报）。 */
-  function acquireTitleEntry(
-    key: string,
-    windowId: string,
-    panelId: string,
-    status: AgentRuntimeStatus,
-    titleAgentId: string | null
-  ): Entry | null {
-    const existing = entries.get(key);
-    if (existing) {
-      return existing;
-    }
-    if (status === "ready" && titleAgentId === null) {
-      return null;
-    }
-    const entry = newTitleEntry(windowId, panelId, now());
-    entries.set(key, entry);
-    return entry;
-  }
-
   return {
     agentLaunched(windowId, panelId, agentId) {
       if (disposed) {
         return;
       }
-      const key = sessionKey(windowId, panelId);
+      const key = sessionKey(panelId);
       // 显式启动 = 新生命周期, 清一切冷却（与 SessionStart 豁免同语义）。
       cooldownUntil.delete(key);
       const existing = entries.get(key);
@@ -292,7 +224,7 @@ export function createAgentSessionAggregator(
       if (disposed) {
         return;
       }
-      const key = sessionKey(event.windowId, event.panelId);
+      const key = sessionKey(event.panelId);
       if (handleLifecycleEvent(key, event.event)) {
         return;
       }
@@ -306,11 +238,8 @@ export function createAgentSessionAggregator(
         return;
       }
 
-      entry.lastHookAt = at;
       entry.snapshot.agentId = event.agent;
       entry.snapshot.source = "hook";
-      // hook 接管后标题衰减不再适用（guard 也会 no-op, 清掉纯为整洁）。
-      clearTitleDecayTimer(entry);
       if (SUBAGENT_EVENTS.has(event.event)) {
         // 纯计数：父状态由真实的工具/推理事件驱动。
         entry.snapshot.updatedAt = at;
@@ -320,63 +249,12 @@ export function createAgentSessionAggregator(
       armHookTtlTimer(key, entry, timerCtx);
       scheduleEmit();
     },
-
-    ingestTitle(windowId, panelId, title) {
-      const key = sessionKey(windowId, panelId);
-      if (disposed || isInCloseCooldown(key)) {
-        return;
-      }
-      const existing = entries.get(key);
-      if (existing && hookIsFresh(existing)) {
-        // hook 优先：显式信号新鲜时抑制标题启发式（orca 抑制规则）。
-        return;
-      }
-      const titleStatus = detectAgentStatusFromTitle(title);
-      const titleAgentId = detectAgentIdFromTitle(title);
-      // 决定进入通道：
-      // (a) 标题有可识别状态 glyph → 走原路径, 状态即 titleStatus。
-      // (b) 标题无状态 glyph 但有 agent 身份 token(如 droid 的 "⛬ Droid")
-      //     → 视为 ready, 用「有身份」补齐入口, 让图标至少能点亮。
-      //     detectAgentIdFromTitle 自带两道误报防御: prompt OSC 形态
-      //     (cwd/user@host 回显)直接 null + 品牌词必须锚定标题开头——
-      //     worktree 路径/分支名里的 codex/claude 字样不会点亮图标。
-      // (c) 都无 → 转 handleTitleWithoutSignals 判断是否为「退回 shell」。
-      if (titleStatus === null && titleAgentId === null) {
-        handleTitleWithoutSignals(key, existing, title);
-        return;
-      }
-      const status =
-        titleStatus === null
-          ? "ready"
-          : runtimeStatusForTitleStatus(titleStatus);
-      const entry = acquireTitleEntry(
-        key,
-        windowId,
-        panelId,
-        status,
-        titleAgentId
-      );
-      if (!entry) {
-        return;
-      }
-      revealEntry(entry);
-      entry.snapshot.source = "title";
-      if (titleAgentId !== null && entry.snapshot.agentId === undefined) {
-        // 只补全缺失身份, 不覆盖 hook 已确认的 agentId。
-        entry.snapshot.agentId = titleAgentId;
-      }
-      clearHookTtlTimer(entry);
-      setStatus(entry, status);
-      armTitleDecayForStatus(key, entry, status, timerCtx);
-      scheduleEmit();
-    },
-
-    commandFinished(windowId, panelId, exitCode) {
+    commandFinished(panelId, exitCode) {
       if (exitCode !== undefined && SUSPENDED_JOB_EXIT_CODES.has(exitCode)) {
         // Ctrl+Z 悬挂：shell 返回提示符但 agent 进程仍存活（SIGCONT 可恢复）。
         return;
       }
-      const key = sessionKey(windowId, panelId);
+      const key = sessionKey(panelId);
       if (disposed || !entries.has(key)) {
         return;
       }
@@ -386,8 +264,8 @@ export function createAgentSessionAggregator(
       pruneExpiredCooldowns();
     },
 
-    panelClosed(windowId, panelId) {
-      const key = sessionKey(windowId, panelId);
+    panelClosed(panelId) {
+      const key = sessionKey(panelId);
       if (closeEntry(key)) {
         scheduleEmit();
       }
@@ -396,10 +274,9 @@ export function createAgentSessionAggregator(
     },
 
     windowClosed(windowId) {
-      const prefix = `${windowId}::`;
       let anyRemoved = false;
-      for (const key of [...entries.keys()]) {
-        if (key.startsWith(prefix) && closeEntry(key)) {
+      for (const [key, entry] of [...entries.entries()]) {
+        if (entry.snapshot.windowId === windowId && closeEntry(key)) {
           anyRemoved = true;
         }
       }
@@ -411,10 +288,9 @@ export function createAgentSessionAggregator(
 
     retainPanels(windowId, activePanelIds) {
       const active = new Set(activePanelIds);
-      const prefix = `${windowId}::`;
       let anyRemoved = false;
       for (const [key, entry] of entries) {
-        if (!key.startsWith(prefix)) {
+        if (entry.snapshot.windowId !== windowId) {
           continue;
         }
         if (active.has(entry.snapshot.panelId)) {

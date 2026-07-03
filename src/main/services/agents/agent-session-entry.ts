@@ -18,9 +18,6 @@ export const CLOSE_COOLDOWN_MS = 5000;
  */
 export const SESSION_END_COOLDOWN_MS = 1500;
 export const HOOK_FRESH_TTL_MS = 30 * 60 * 1000;
-export const STALE_WORKING_TITLE_MS = 3000;
-/** 标题源 waiting 的衰减上限（与 hook TTL 对称）——否则可永久卡死。 */
-export const TITLE_WAITING_TTL_MS = HOOK_FRESH_TTL_MS;
 /**
  * 可见性消抖（loomdesk starting-phase 250ms）：SessionStart 创建的会话先隐藏,
  * 防 `claude --version` 这类瞬时命令让状态条闪现闪没；任何后续事件立即揭示。
@@ -59,30 +56,20 @@ export interface Entry {
   /** SessionStart 创建后的消抖隐藏期内为 true——不进 snapshot/broadcast。 */
   hidden: boolean;
   hookTtlTimer: ReturnType<typeof setTimeout> | null;
-  /** 最近一次真实 hook 事件时刻（衰减回调不刷新它；hookIsFresh 的依据）。 */
-  lastHookAt: number;
   snapshot: AgentSessionSnapshot;
-  titleDecayTimer: ReturnType<typeof setTimeout> | null;
   turnEnded: boolean;
   visibilityTimer: ReturnType<typeof setTimeout> | null;
 }
 
-/** panelId 跨窗口不唯一（terminal-panel-id.ts），会话 key 必须带 window scope。 */
-export function sessionKey(windowId: string, panelId: string): string {
-  return `${windowId}::${panelId}`;
+/** 会话 key = panelId 单键（Identity 终态 §1.3）。保留函数签名兼容，方便未来删除。 */
+export function sessionKey(panelId: string): string {
+  return panelId;
 }
 
 export function clearHookTtlTimer(entry: Entry): void {
   if (entry.hookTtlTimer) {
     clearTimeout(entry.hookTtlTimer);
     entry.hookTtlTimer = null;
-  }
-}
-
-export function clearTitleDecayTimer(entry: Entry): void {
-  if (entry.titleDecayTimer) {
-    clearTimeout(entry.titleDecayTimer);
-    entry.titleDecayTimer = null;
   }
 }
 
@@ -95,7 +82,6 @@ export function clearVisibilityTimer(entry: Entry): void {
 
 export function clearAllTimers(entry: Entry): void {
   clearHookTtlTimer(entry);
-  clearTitleDecayTimer(entry);
   clearVisibilityTimer(entry);
 }
 
@@ -105,7 +91,6 @@ export function newHookEntry(event: AgentHookEvent, at: number): Entry {
     // SessionStart 独享消抖隐藏：其余创建事件意味着已有真实活动。
     hidden: event.event === "SessionStart",
     hookTtlTimer: null,
-    lastHookAt: at,
     snapshot: {
       agentId: event.agent,
       panelId: event.panelId,
@@ -116,32 +101,6 @@ export function newHookEntry(event: AgentHookEvent, at: number): Entry {
       updatedAt: at,
       windowId: event.windowId,
     },
-    titleDecayTimer: null,
-    turnEnded: false,
-    visibilityTimer: null,
-  };
-}
-
-/** 标题信号创建的 entry 字面量（创建即可见, agentId 由调用方按身份补全）。 */
-export function newTitleEntry(
-  windowId: string,
-  panelId: string,
-  at: number
-): Entry {
-  return {
-    hidden: false,
-    hookTtlTimer: null,
-    lastHookAt: 0,
-    snapshot: {
-      panelId,
-      source: "title",
-      stateStartedAt: at,
-      status: "ready",
-      subagentCount: 0,
-      updatedAt: at,
-      windowId,
-    },
-    titleDecayTimer: null,
     turnEnded: false,
     visibilityTimer: null,
   };
@@ -186,7 +145,6 @@ export function newLaunchEntry(
   return {
     hidden: false,
     hookTtlTimer: null,
-    lastHookAt: 0,
     snapshot: {
       agentId,
       panelId,
@@ -197,7 +155,6 @@ export function newLaunchEntry(
       updatedAt: at,
       windowId,
     },
-    titleDecayTimer: null,
     turnEnded: false,
     visibilityTimer: null,
   };

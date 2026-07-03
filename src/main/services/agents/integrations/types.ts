@@ -1,10 +1,10 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 
 /**
- * agent hook 集成能力档位（对齐 loomdesk HookCapability / 目录 statusSupport）：
+ * agent hook 集成能力档位：
  * - full：完整生命周期事件（prompt/tool/permission/stop）
  * - coarse：粗粒度（仅回合级或工具级少数事件）
- * - none：无 hook 机制, 仅标题/进程兜底（此类不注册集成模块）
+ * - none：无 hook 机制，仅 L1 shell integration 命令行检测兜底（此类不注册集成模块）
  */
 export type AgentHookCapability = "coarse" | "full";
 

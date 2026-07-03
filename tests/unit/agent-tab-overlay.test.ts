@@ -42,12 +42,4 @@ describe("agentTabChromeOverlay", () => {
   it("无会话 → null（tab 呈现回退到 cwd/默认）", () => {
     expect(agentTabChromeOverlay(undefined)).toBeNull();
   });
-
-  it("标题启发式会话（无 agentId）→ 只带状态点, 不换 icon/title", () => {
-    const s = session({ source: "title" });
-    s.agentId = undefined;
-    expect(agentTabChromeOverlay(s)).toEqual({
-      state: { status: "running" },
-    });
-  });
 });

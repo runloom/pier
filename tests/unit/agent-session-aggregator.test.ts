@@ -88,7 +88,7 @@ describe("AgentSessionAggregator", () => {
   it("panelClosed 删除会话并 5s 冷却孤儿事件", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestHookEvent(hookEvent("PromptSubmit"));
-    agg.panelClosed("1", "p1");
+    agg.panelClosed("p1");
     expect(agg.snapshot().sessions).toHaveLength(0);
     agg.ingestHookEvent(hookEvent("ToolStart")); // 冷却期内, 丢弃
     expect(agg.snapshot().sessions).toHaveLength(0);
@@ -98,33 +98,19 @@ describe("AgentSessionAggregator", () => {
     agg.dispose();
   });
 
-  it("跨窗口同名 panelId 互不串扰", () => {
+  it("不同 panelId 互不串扰（panelId 单键隔离）", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestHookEvent(hookEvent("PromptSubmit", "p1", "1"));
-    agg.ingestHookEvent(hookEvent("PermissionRequest", "p1", "2"));
+    agg.ingestHookEvent(hookEvent("PermissionRequest", "p2", "2"));
     const sessions = agg.snapshot().sessions;
     expect(sessions).toHaveLength(2);
-    expect(sessions.find((s) => s.windowId === "1")?.status).toBe("processing");
-    expect(sessions.find((s) => s.windowId === "2")?.status).toBe("waiting");
-    agg.panelClosed("1", "p1"); // 只清窗口 1 的
+    expect(sessions.find((s) => s.panelId === "p1")?.status).toBe("processing");
+    expect(sessions.find((s) => s.panelId === "p2")?.status).toBe("waiting");
+    agg.panelClosed("p1");
     expect(agg.snapshot().sessions).toHaveLength(1);
-    expect(agg.snapshot().sessions[0]?.windowId).toBe("2");
+    expect(agg.snapshot().sessions[0]?.panelId).toBe("p2");
     agg.dispose();
   });
-
-  it("hook 新鲜时抑制标题信号；过期后标题接管", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestHookEvent(hookEvent("PromptSubmit")); // hook source
-    agg.ingestTitle("1", "p1", "✳ done summarizing"); // 应被抑制
-    expect(agg.snapshot().sessions[0]?.status).toBe("processing");
-    advance(30 * 60 * 1000 + 1); // 超过 30min TTL
-    agg.ingestTitle("1", "p1", "claude working");
-    const s = agg.snapshot().sessions[0];
-    expect(s?.status).toBe("processing");
-    expect(s?.source).toBe("title");
-    agg.dispose();
-  });
-
   it("hook 30min 静默后 processing 衰减为 ready", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestHookEvent(hookEvent("PromptSubmit"));
@@ -132,28 +118,10 @@ describe("AgentSessionAggregator", () => {
     expect(agg.snapshot().sessions[0]?.status).toBe("ready");
     agg.dispose();
   });
-
-  it("标题信号不为普通 shell 建会话（无身份 idle 标题）", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "~/dev/pier");
-    agg.ingestTitle("1", "p1", "✳ tidy up the docs"); // idle 且无 agent 身份
-    expect(agg.snapshot().sessions).toHaveLength(0);
-    agg.dispose();
-  });
-
-  it("title 源 working 3s 无新标题自动归位 ready", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "claude working");
-    expect(agg.snapshot().sessions[0]?.status).toBe("processing");
-    advance(3001);
-    expect(agg.snapshot().sessions[0]?.status).toBe("ready");
-    agg.dispose();
-  });
-
   it("windowClosed 清空该窗口并保留其他窗口", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestHookEvent(hookEvent("PromptSubmit", "p1", "1"));
-    agg.ingestHookEvent(hookEvent("PromptSubmit", "p1", "2"));
+    agg.ingestHookEvent(hookEvent("PromptSubmit", "p2", "2"));
     expect(agg.snapshot().sessions).toHaveLength(2);
 
     agg.windowClosed("1");
@@ -272,7 +240,7 @@ describe("AgentSessionAggregator", () => {
   it("agentLaunched 豁免关闭冷却（relaunch 后立即重建）", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestHookEvent(hookEvent("PromptSubmit"));
-    agg.panelClosed("1", "p1"); // 5s 冷却
+    agg.panelClosed("p1"); // 5s 冷却
     agg.agentLaunched("1", "p1", "claude");
     expect(agg.snapshot().sessions).toHaveLength(1);
     // 且冷却已清: 紧随的 hook 事件不被吞
@@ -290,80 +258,10 @@ describe("AgentSessionAggregator", () => {
     expect(s?.source).toBe("hook");
     agg.dispose();
   });
-
-  it("带 agent 身份的 idle 标题建会话（启动即亮图标, 早于 hook 2s 延迟）", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "✳ Claude Code");
-    const s = agg.snapshot().sessions[0];
-    expect(s?.status).toBe("ready");
-    expect(s?.agentId).toBe("claude");
-    agg.dispose();
-  });
-
-  it("无身份的 idle 标题仍不建会话（普通 shell 防误报不回退）", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "✳ done reviewing");
-    expect(agg.snapshot().sessions).toHaveLength(0);
-    agg.dispose();
-  });
-
-  it("标题无状态 glyph 但有身份 token 时按 ready 建会话 (droid/aider 等无 spinner 的 agent)", () => {
-    const agg = createAgentSessionAggregator({ now });
-    // droid 启动即设标题 `⛬ Droid`,`⛬` 不在 status glyph 表内, 只有品牌 token "Droid"
-    agg.ingestTitle("1", "p1", "⛬ Droid");
-    const s = agg.snapshot().sessions[0];
-    expect(s?.status).toBe("ready");
-    expect(s?.agentId).toBe("droid");
-    expect(s?.source).toBe("title");
-    agg.dispose();
-  });
-
-  it("worktree cwd 标题含品牌词不建会话（打开 codex 分支 worktree 不点亮图标）", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "~/ABC/pier/.worktrees/codex");
-    agg.ingestTitle("1", "p1", "~/dev/codex/fix-login");
-    agg.ingestTitle("1", "p1", "pier (codex/fix-login)");
-    expect(agg.snapshot().sessions).toHaveLength(0);
-    agg.dispose();
-  });
-
-  it("prompt cwd 标题清理 title-source 会话（agent 退回 shell 图标还原）", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "codex working");
-    expect(agg.snapshot().sessions).toHaveLength(1);
-    // agent 退出, zsh precmd 写回 cwd 标题（即便路径里带品牌词也算退回 shell）
-    agg.ingestTitle("1", "p1", "~/ABC/pier/.worktrees/codex");
-    expect(agg.snapshot().sessions).toHaveLength(0);
-    agg.dispose();
-  });
-
-  it("标题身份补全既有无身份会话的 agentId, 不覆盖 hook 已设身份", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "aider working"); // working+身份 → 建会话
-    expect(agg.snapshot().sessions[0]?.agentId).toBe("aider");
-    // hook 身份优先: 先 hook 后过期标题不改 agentId
-    agg.ingestHookEvent(hookEvent("PromptSubmit", "p2"));
-    advance(30 * 60 * 1000 + 1); // hook 过期让标题接管
-    agg.ingestTitle("1", "p2", "gemini working");
-    expect(
-      agg.snapshot().sessions.find((x) => x.panelId === "p2")?.agentId
-    ).toBe("claude");
-    agg.dispose();
-  });
-
-  it("标题源 waiting 30min 无更新衰减为 ready（防永久卡死）", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "✋ approve tool?");
-    expect(agg.snapshot().sessions[0]?.status).toBe("waiting");
-    advance(30 * 60 * 1000 + 1);
-    expect(agg.snapshot().sessions[0]?.status).toBe("ready");
-    agg.dispose();
-  });
-
   it("commandFinished 清理该面板会话并 5s 冷却吸收迟到 hook（崩溃/kill 兜底）", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestHookEvent(hookEvent("PromptSubmit"));
-    agg.commandFinished("1", "p1");
+    agg.commandFinished("p1");
     expect(agg.snapshot().sessions).toHaveLength(0);
     agg.ingestHookEvent(hookEvent("Stop")); // 迟到 hook, 冷却期内丢弃
     expect(agg.snapshot().sessions).toHaveLength(0);
@@ -378,10 +276,10 @@ describe("AgentSessionAggregator", () => {
     agg.ingestHookEvent(hookEvent("PromptSubmit"));
     // macOS SIGTSTP=18 → 146; 兼容 SIGSTOP/Linux 家族 145-148
     for (const code of [145, 146, 147, 148]) {
-      agg.commandFinished("1", "p1", code);
+      agg.commandFinished("p1", code);
       expect(agg.snapshot().sessions).toHaveLength(1);
     }
-    agg.commandFinished("1", "p1", 0); // 真实退出
+    agg.commandFinished("p1", 0); // 真实退出
     expect(agg.snapshot().sessions).toHaveLength(0);
     agg.dispose();
   });
@@ -398,22 +296,12 @@ describe("AgentSessionAggregator", () => {
     const agg = createAgentSessionAggregator({ now });
     const cb = vi.fn();
     agg.onChange(cb);
-    agg.commandFinished("1", "p1");
+    agg.commandFinished("p1");
     advance(200);
     expect(cb).not.toHaveBeenCalled();
     expect(agg.snapshot().sessions).toHaveLength(0);
     agg.dispose();
   });
-
-  it("commandFinished 同样兜底标题启发式会话（无 hook 的 agent 退出）", () => {
-    const agg = createAgentSessionAggregator({ now });
-    agg.ingestTitle("1", "p1", "codex working");
-    expect(agg.snapshot().sessions).toHaveLength(1);
-    agg.commandFinished("1", "p1");
-    expect(agg.snapshot().sessions).toHaveLength(0);
-    agg.dispose();
-  });
-
   it("onChange 在变更后防抖触发一次", () => {
     const agg = createAgentSessionAggregator({ now });
     const cb = vi.fn();
