@@ -26,13 +26,16 @@ import {
   newTitleEntry,
   SESSION_CREATING_EVENTS,
   SESSION_END_COOLDOWN_MS,
-  STALE_WORKING_TITLE_MS,
   SUBAGENT_EVENTS,
   SUSPENDED_JOB_EXIT_CODES,
   sessionKey,
-  TITLE_WAITING_TTL_MS,
   VISIBILITY_DEBOUNCE_MS,
 } from "./agent-session-entry.ts";
+import {
+  armHookTtlTimer,
+  armTitleDecayForStatus,
+  type TimerCtx,
+} from "./agent-session-timers.ts";
 
 export interface AgentSessionAggregator {
   /**
@@ -107,42 +110,7 @@ export function createAgentSessionAggregator(
     entry.snapshot.updatedAt = at;
   }
 
-  /** hook 静默 30min：processing/tool/waiting/error → ready（orca 衰减）。 */
-  function armHookTtlTimer(key: string, entry: Entry): void {
-    clearHookTtlTimer(entry);
-    entry.hookTtlTimer = setTimeout(() => {
-      const current = entries.get(key);
-      if (current?.snapshot.source !== "hook") {
-        return;
-      }
-      current.hookTtlTimer = null;
-      if (current.snapshot.status !== "ready") {
-        setStatus(current, "ready");
-        scheduleEmit();
-      }
-    }, HOOK_FRESH_TTL_MS);
-  }
-
-  /** 标题源衰减:working 3s / waiting 30min → ready。独立槽位不与 hook TTL 互相 clobber。 */
-  function armTitleDecayTimer(
-    key: string,
-    entry: Entry,
-    ms: number,
-    guardStatus: AgentRuntimeStatus
-  ): void {
-    clearTitleDecayTimer(entry);
-    entry.titleDecayTimer = setTimeout(() => {
-      const current = entries.get(key);
-      if (current?.snapshot.source !== "title") {
-        return;
-      }
-      current.titleDecayTimer = null;
-      if (current.snapshot.status === guardStatus) {
-        setStatus(current, "ready");
-        scheduleEmit();
-      }
-    }, ms);
-  }
+  const timerCtx: TimerCtx = { entries, scheduleEmit, setStatus };
 
   function isInCloseCooldown(key: string): boolean {
     const until = cooldownUntil.get(key);
@@ -302,21 +270,6 @@ export function createAgentSessionAggregator(
     return entry;
   }
 
-  /** 按标题状态武装/清除衰减定时器（working 3s / waiting 30min）。 */
-  function armTitleDecayForStatus(
-    key: string,
-    entry: Entry,
-    status: AgentRuntimeStatus
-  ): void {
-    if (status === "processing") {
-      armTitleDecayTimer(key, entry, STALE_WORKING_TITLE_MS, "processing");
-    } else if (status === "waiting") {
-      armTitleDecayTimer(key, entry, TITLE_WAITING_TTL_MS, "waiting");
-    } else {
-      clearTitleDecayTimer(entry);
-    }
-  }
-
   return {
     agentLaunched(windowId, panelId, agentId) {
       if (disposed) {
@@ -364,7 +317,7 @@ export function createAgentSessionAggregator(
       } else {
         setStatus(entry, status);
       }
-      armHookTtlTimer(key, entry);
+      armHookTtlTimer(key, entry, timerCtx);
       scheduleEmit();
     },
 
@@ -414,7 +367,7 @@ export function createAgentSessionAggregator(
       }
       clearHookTtlTimer(entry);
       setStatus(entry, status);
-      armTitleDecayForStatus(key, entry, status);
+      armTitleDecayForStatus(key, entry, status, timerCtx);
       scheduleEmit();
     },
 
