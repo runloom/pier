@@ -56,6 +56,13 @@ export const worktreeCreateRequestSchema = z.object({
   name: z.string().min(1),
   path: z.string().min(1),
 });
+
+export const worktreeCreationDefaultsRequestSchema = z.object({
+  path: z.string().min(1),
+});
+export type WorktreeCreationDefaultsRequest = z.infer<
+  typeof worktreeCreationDefaultsRequestSchema
+>;
 export type WorktreeCreateRequest = z.infer<typeof worktreeCreateRequestSchema>;
 
 export const worktreeOpenRequestSchema = z.object({
@@ -121,8 +128,8 @@ export const worktreeRemoveResultSchema = z.object({
 export type WorktreeRemoveResult = z.infer<typeof worktreeRemoveResultSchema>;
 
 export const worktreeCreationDefaultsSchema = z.object({
-  branchPrefix: z.string(),
   copyPatterns: z.array(z.string()),
+  rootPath: z.string().min(1),
   setupCommand: z.string(),
 });
 export type WorktreeCreationDefaults = z.infer<

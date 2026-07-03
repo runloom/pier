@@ -233,7 +233,7 @@ describe("registerCommandIpc", () => {
     await expect(
       handler(
         { sender: { id: "web-contents" } },
-        { type: "worktree.creationDefaults" }
+        { path: "/repo", type: "worktree.creationDefaults" }
       )
     ).resolves.toMatchObject({ ok: true });
     await expect(

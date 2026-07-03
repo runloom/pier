@@ -78,7 +78,6 @@ export interface WorktreeCreationDraft {
 }
 
 export interface DeriveWorktreeCreationArgs {
-  branchPrefix: string;
   existingBranches: readonly string[];
   existingNames: readonly string[];
   input: string;
@@ -145,25 +144,17 @@ function draftFrom(
       ? branchBase
       : dedupe(branchBase, (candidate) => branchSet.has(candidate));
   const nameBase = sanitizeWorktreeName(branch) || "worktree";
-  const prefixName = sanitizeWorktreeName(args.branchPrefix);
-  const stripped =
-    prefixName && nameBase.startsWith(`${prefixName}-`)
-      ? nameBase.slice(prefixName.length + 1)
-      : nameBase;
-  const name = dedupe(stripped || "worktree", (candidate) =>
-    nameSet.has(candidate)
-  );
+  const name = dedupe(nameBase, (candidate) => nameSet.has(candidate));
   return { branch, name, source };
 }
 
 export interface DeriveFromSlugArgs {
-  branchPrefix: string;
   existingBranches: readonly string[];
   existingNames: readonly string[];
 }
 
 /**
- * 用 AI 生成的英文 slug 派生 branch/name(套 prefix + 去重)。
+ * 用 AI 生成的英文 slug 派生 branch/name(规整 + 去重)。
  * slug 规整后为空(如全非法字符)时返回 null,调用方自行降级。
  */
 export function deriveWorktreeCreationFromSlug(
@@ -174,7 +165,7 @@ export function deriveWorktreeCreationFromSlug(
   if (!cleaned) {
     return null;
   }
-  return draftFrom(`${args.branchPrefix}${cleaned}`, "description", {
+  return draftFrom(cleaned, "description", {
     ...args,
     input: slug,
   });
@@ -187,11 +178,7 @@ export function deriveWorktreeCreation(
   const random = args.random ?? Math.random;
 
   if (input.length === 0) {
-    return draftFrom(
-      `${args.branchPrefix}${codename(random)}`,
-      "codename",
-      args
-    );
+    return draftFrom(codename(random), "codename", args);
   }
   if (args.existingBranches.includes(input)) {
     return draftFrom(input, "existing-branch", args);
@@ -201,11 +188,7 @@ export function deriveWorktreeCreation(
   }
   const slug = slugifyDescription(input);
   if (!slug) {
-    return draftFrom(
-      `${args.branchPrefix}${codename(random)}`,
-      "codename",
-      args
-    );
+    return draftFrom(codename(random), "codename", args);
   }
-  return draftFrom(`${args.branchPrefix}${slug}`, "description", args);
+  return draftFrom(slug, "description", args);
 }

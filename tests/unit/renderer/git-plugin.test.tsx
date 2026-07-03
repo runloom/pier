@@ -534,16 +534,16 @@ describe("git builtin plugin", () => {
               isMain: false,
               locked: false,
               lockedReason: null,
-              path: "/Users/xyz/ABC/pier/.worktrees/new-worktree",
+              path: "/Users/xyz/ABC/pier.worktree/new-worktree",
               prunable: false,
               prunableReason: null,
             },
-            targetPath: "/Users/xyz/ABC/pier/.worktrees/new-worktree",
+            targetPath: "/Users/xyz/ABC/pier.worktree/new-worktree",
             worktrees: [],
           })),
           creationDefaults: vi.fn(async () => ({
-            branchPrefix: "wt/",
             copyPatterns: [],
+            rootPath: "/Users/xyz/ABC/pier.worktree",
             setupCommand: "",
           })),
           list: vi.fn(async () => ({
@@ -692,7 +692,6 @@ describe("git builtin plugin", () => {
         },
         preferences: {
           read: vi.fn(async () => ({
-            worktreeBranchPrefix: "wt/",
             worktreeCopyPatterns: [],
             worktreeSetupCommand: "",
           })),
@@ -970,7 +969,9 @@ describe("git builtin plugin", () => {
     expect(window.pier.worktrees.list).toHaveBeenCalledWith({
       path: "/Users/xyz/ABC/pier",
     });
-    expect(window.pier.worktrees.creationDefaults).toHaveBeenCalled();
+    expect(window.pier.worktrees.creationDefaults).toHaveBeenCalledWith({
+      path: "/Users/xyz/ABC/pier",
+    });
     expect(window.pier.git.listBranches).toHaveBeenCalledWith(
       "/Users/xyz/ABC/pier",
       { kind: "all" }

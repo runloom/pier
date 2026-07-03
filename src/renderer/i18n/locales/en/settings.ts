@@ -65,6 +65,10 @@ export const settings = {
     terminalNewCwdPolicy: "New Terminal Directory",
     terminalNewCwdPolicyDesc:
       "Choose which directory new or split terminals use",
+    worktreeRootPath: "Worktree Directory",
+    worktreeRootPathDesc:
+      "Leave empty to use a {project}.worktree directory next to the main project.",
+    worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
     defaultAgent: "Default Agent",
     defaultAgentDesc: "CLI launched by the New Agent action",
     agentPermissionMode: "Permission Mode",

@@ -6,8 +6,9 @@ import {
 } from "@shared/worktree-naming.ts";
 import { describe, expect, it } from "vitest";
 
+const LEGACY_PREFIX_PATTERN = /^wt\//;
+
 const BASE_ARGS = {
-  branchPrefix: "wt/",
   existingBranches: [] as readonly string[],
   existingNames: [] as readonly string[],
 };
@@ -38,13 +39,13 @@ describe("sanitizeWorktreeName", () => {
 });
 
 describe("deriveWorktreeCreation", () => {
-  it("任务描述 → wt/ 前缀 slug 分支,name 与分支后缀一致", () => {
+  it("任务描述 → 未加前缀的 slug 分支,name 与分支一致", () => {
     const draft = deriveWorktreeCreation({
       ...BASE_ARGS,
       input: "Fix the terminal focus bug",
     });
     expect(draft).toEqual({
-      branch: "wt/fix-terminal-focus-bug",
+      branch: "fix-terminal-focus-bug",
       name: "fix-terminal-focus-bug",
       source: "description",
     });
@@ -72,43 +73,46 @@ describe("deriveWorktreeCreation", () => {
     expect(draft.branch).toBe("feat/panel-drag");
   });
 
-  it("与已有分支/worktree 重名时追加 -2", () => {
+  it("与已有分支/worktree 重名时追加 -2,不在去重前套前缀", () => {
     const draft = deriveWorktreeCreation({
       ...BASE_ARGS,
-      existingBranches: ["wt/fix-focus"],
+      existingBranches: ["fix-focus"],
       existingNames: ["fix-focus"],
       input: "fix focus",
     });
-    expect(draft.branch).toBe("wt/fix-focus-2");
+    expect(draft.branch).toBe("fix-focus-2");
     expect(draft.name).toBe("fix-focus-2");
   });
 
-  it("空输入 → 确定性 random 下产出 codename", () => {
+  it("空输入 → 确定性 random 下产出未加前缀的 codename", () => {
     const draft = deriveWorktreeCreation({
       ...BASE_ARGS,
       input: "",
       random: () => 0,
     });
-    expect(draft.source).toBe("codename");
-    expect(draft.branch.startsWith("wt/")).toBe(true);
-    expect(draft.name.length).toBeGreaterThan(0);
+    expect(draft).toEqual({
+      branch: "amber-anchor",
+      name: "amber-anchor",
+      source: "codename",
+    });
   });
 
-  it("纯 CJK 描述 → codename 兜底", () => {
+  it("纯 CJK 描述 → 未加前缀的 codename 兜底", () => {
     const draft = deriveWorktreeCreation({
       ...BASE_ARGS,
       input: "修复终端焦点丢失",
       random: () => 0.5,
     });
     expect(draft.source).toBe("codename");
+    expect(draft.branch).not.toMatch(LEGACY_PREFIX_PATTERN);
   });
 });
 
 describe("deriveWorktreeCreationFromSlug", () => {
-  it("AI slug 套 prefix 并派生目录名", () => {
+  it("AI slug 直接派生未加前缀的 branch/name", () => {
     const draft = deriveWorktreeCreationFromSlug("fix-dialog-ui", BASE_ARGS);
     expect(draft).not.toBeNull();
-    expect(draft?.branch).toBe("wt/fix-dialog-ui");
+    expect(draft?.branch).toBe("fix-dialog-ui");
     expect(draft?.name).toBe("fix-dialog-ui");
     expect(draft?.source).toBe("description");
   });
@@ -116,16 +120,16 @@ describe("deriveWorktreeCreationFromSlug", () => {
   it("与已有分支/worktree 重名时追加 -2", () => {
     const draft = deriveWorktreeCreationFromSlug("fix-focus", {
       ...BASE_ARGS,
-      existingBranches: ["wt/fix-focus"],
+      existingBranches: ["fix-focus"],
       existingNames: ["fix-focus"],
     });
-    expect(draft?.branch).toBe("wt/fix-focus-2");
+    expect(draft?.branch).toBe("fix-focus-2");
     expect(draft?.name).toBe("fix-focus-2");
   });
 
   it("slug 大小写与首尾符号被规整;全非法字符返回 null", () => {
     const draft = deriveWorktreeCreationFromSlug("-Fix-Dialog-", BASE_ARGS);
-    expect(draft?.branch).toBe("wt/fix-dialog");
+    expect(draft?.branch).toBe("fix-dialog");
     expect(deriveWorktreeCreationFromSlug("!!!", BASE_ARGS)).toBeNull();
   });
 });

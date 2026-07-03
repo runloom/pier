@@ -10,6 +10,11 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const execFileAsync = promisify(execFile);
+type WorktreeServiceOptionsWithPreferences = NonNullable<
+  Parameters<typeof createWorktreeService>[0]
+> & {
+  readPreferences: () => Promise<{ worktreeRootPath: string }>;
+};
 const tempDirs: string[] = [];
 
 async function makeTempDir(prefix: string): Promise<string> {
@@ -196,9 +201,10 @@ describe("createWorktreeService", () => {
     });
   });
 
-  it("create 使用 main worktree 的 .worktrees 目录构造 git 参数", async () => {
+  it("create 默认使用 main worktree 的 sibling .worktree 目录构造 git 参数", async () => {
     const calls: Array<{ args: readonly string[]; cwd: string }> = [];
-    let created = false;
+    const mkdirCalls: string[] = [];
+    let createdPath: string | null = null;
     const service = createWorktreeService({
       execGit: (args, cwd) => {
         calls.push({ args, cwd });
@@ -206,13 +212,13 @@ describe("createWorktreeService", () => {
           return Promise.resolve("/repo\n");
         }
         if (args[0] === "worktree" && args[1] === "list") {
-          const output = created
+          const output = createdPath
             ? [
                 "worktree /repo",
                 "HEAD abc123",
                 "branch refs/heads/main",
                 "",
-                "worktree /repo/.worktrees/feature-a",
+                `worktree ${createdPath}`,
                 "HEAD def456",
                 "branch refs/heads/feature/a",
                 "",
@@ -221,38 +227,106 @@ describe("createWorktreeService", () => {
           return Promise.resolve(output.join("\0"));
         }
         if (args[0] === "worktree" && args[1] === "add") {
-          created = true;
+          createdPath = String(args[4]);
           return Promise.resolve("");
         }
         return Promise.resolve("");
       },
-      mkdir: () => Promise.resolve(undefined),
+      mkdir: (path) => {
+        mkdirCalls.push(path);
+        return Promise.resolve(undefined);
+      },
       realpath: (path) => Promise.resolve(path),
     });
 
-    await expect(
-      service.create({
-        base: "origin/main",
-        branch: "feature/a",
-        name: "feature-a",
-        path: "/repo",
-      })
-    ).resolves.toMatchObject({
-      created: {
-        branch: "feature/a",
-        path: "/repo/.worktrees/feature-a",
-      },
-      targetPath: "/repo/.worktrees/feature-a",
+    const result = await service.create({
+      base: "origin/main",
+      branch: "feature/a",
+      name: "feature-a",
+      path: "/repo",
     });
 
+    expect(result).toMatchObject({
+      created: {
+        branch: "feature/a",
+        path: "/repo.worktree/feature-a",
+      },
+      targetPath: "/repo.worktree/feature-a",
+    });
+    expect(mkdirCalls).toEqual(["/repo.worktree"]);
     expect(calls).toContainEqual({
       args: [
         "worktree",
         "add",
         "-b",
         "feature/a",
-        "/repo/.worktrees/feature-a",
+        "/repo.worktree/feature-a",
         "origin/main",
+      ],
+      cwd: "/repo",
+    });
+  });
+
+  it("create 使用配置的绝对 worktree 根目录构造 git 参数", async () => {
+    const calls: Array<{ args: readonly string[]; cwd: string }> = [];
+    const mkdirCalls: string[] = [];
+    let createdPath: string | null = null;
+    const service = createWorktreeService({
+      execGit: (args, cwd) => {
+        calls.push({ args, cwd });
+        if (args[0] === "rev-parse" && args.includes("--show-toplevel")) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "worktree" && args[1] === "list") {
+          const output = createdPath
+            ? [
+                "worktree /repo",
+                "HEAD abc123",
+                "branch refs/heads/main",
+                "",
+                `worktree ${createdPath}`,
+                "HEAD def456",
+                "branch refs/heads/feature/a",
+                "",
+              ]
+            : ["worktree /repo", "HEAD abc123", "branch refs/heads/main", ""];
+          return Promise.resolve(output.join("\0"));
+        }
+        if (args[0] === "worktree" && args[1] === "add") {
+          createdPath = String(args[4]);
+          return Promise.resolve("");
+        }
+        return Promise.resolve("");
+      },
+      mkdir: (path) => {
+        mkdirCalls.push(path);
+        return Promise.resolve(undefined);
+      },
+      readPreferences: async () => ({ worktreeRootPath: "/custom/worktrees" }),
+      realpath: (path) => Promise.resolve(path),
+    } satisfies WorktreeServiceOptionsWithPreferences);
+
+    const result = await service.create({
+      branch: "feature/a",
+      name: "feature-a",
+      path: "/repo",
+    });
+
+    expect(result).toMatchObject({
+      created: {
+        branch: "feature/a",
+        path: "/custom/worktrees/feature-a",
+      },
+      targetPath: "/custom/worktrees/feature-a",
+    });
+    expect(mkdirCalls).toEqual(["/custom/worktrees"]);
+    expect(calls).toContainEqual({
+      args: [
+        "worktree",
+        "add",
+        "-b",
+        "feature/a",
+        "/custom/worktrees/feature-a",
       ],
       cwd: "/repo",
     });
@@ -351,6 +425,59 @@ describe("createWorktreeService", () => {
     });
   });
 
+  it("remove 使用 git worktree remove 安全移除默认 sibling .worktree 根下的 linked worktree", async () => {
+    const repo = await initRepo();
+    const linkedRoot = `${repo}.worktree`;
+    tempDirs.push(linkedRoot);
+    const linked = join(linkedRoot, "feature-a");
+    await git(repo, ["worktree", "add", "-b", "feature-a", linked]);
+    const realRepo = await realpath(repo);
+    const realLinked = await realpath(linked);
+    const service = createWorktreeService();
+
+    const result = await service.remove({
+      currentPath: repo,
+      path: linked,
+    });
+
+    expect(result).toMatchObject({
+      removedPath: realLinked,
+      worktrees: [
+        {
+          isMain: true,
+          path: realRepo,
+        },
+      ],
+    });
+  });
+
+  it("remove 使用 git worktree remove 安全移除配置的绝对 worktree 根下的 linked worktree", async () => {
+    const repo = await initRepo();
+    const linkedRoot = await makeTempDir("pier-worktree-configured-");
+    const linked = join(linkedRoot, "feature-a");
+    await git(repo, ["worktree", "add", "-b", "feature-a", linked]);
+    const realRepo = await realpath(repo);
+    const realLinked = await realpath(linked);
+    const service = createWorktreeService({
+      readPreferences: async () => ({ worktreeRootPath: linkedRoot }),
+    } satisfies WorktreeServiceOptionsWithPreferences);
+
+    const result = await service.remove({
+      currentPath: repo,
+      path: linked,
+    });
+
+    expect(result).toMatchObject({
+      removedPath: realLinked,
+      worktrees: [
+        {
+          isMain: true,
+          path: realRepo,
+        },
+      ],
+    });
+  });
+
   it("remove 拒绝移除 main worktree", async () => {
     const repo = await initRepo();
     const service = createWorktreeService();
@@ -379,25 +506,25 @@ describe("createWorktreeService", () => {
   // C5: 写操作（worktree add/remove）应传 60s 超时，避免大仓库继承 git-exec 默认 10s 失败
   it("create 给 worktree add 传 timeoutMs: 60_000", async () => {
     const addCallOptions: Array<{ timeoutMs?: number } | undefined> = [];
-    let created = false;
+    let createdPath: string | null = null;
     const service = createWorktreeService({
       execGit: (args, cwd, options) => {
         if (args[0] === "worktree" && args[1] === "add") {
           addCallOptions.push(options);
-          created = true;
+          createdPath = String(args[4]);
           return Promise.resolve("");
         }
         if (args[0] === "rev-parse" && args.includes("--show-toplevel")) {
           return Promise.resolve(`${cwd}\n`);
         }
         if (args[0] === "worktree" && args[1] === "list") {
-          const output = created
+          const output = createdPath
             ? [
                 "worktree /repo",
                 "HEAD abc123",
                 "branch refs/heads/main",
                 "",
-                "worktree /repo/.worktrees/feature-a",
+                `worktree ${createdPath}`,
                 "HEAD def456",
                 "branch refs/heads/feature/a",
                 "",

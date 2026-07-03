@@ -162,7 +162,7 @@ function registerWorktreeCreateAction(
         }
         const [branches, defaults] = await Promise.all([
           context.git.listBranches(listResult.mainPath, { kind: "all" }),
-          context.worktrees.creationDefaults(),
+          context.worktrees.creationDefaults({ path: listResult.mainPath }),
         ]);
         openWorktreeCreateOverlay(context, {
           branches,

@@ -39,13 +39,13 @@ import {
   type WorktreeOperationErrorReason,
   worktreeCheckRequestSchema,
   worktreeCreateRequestSchema,
+  worktreeCreationDefaultsRequestSchema,
   worktreeListRequestSchema,
   worktreeOpenRequestSchema,
   worktreeOpenTerminalRequestSchema,
   worktreePruneRequestSchema,
   worktreeRemoveRequestSchema,
 } from "./worktree.ts";
-
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
 
@@ -171,7 +171,9 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   worktreeCreateRequestSchema.extend({
     type: z.literal("worktree.create"),
   }),
-  z.object({ type: z.literal("worktree.creationDefaults") }),
+  worktreeCreationDefaultsRequestSchema.extend({
+    type: z.literal("worktree.creationDefaults"),
+  }),
   worktreeOpenRequestSchema.extend({
     focus: z.boolean().optional(),
     placement: pierCommandPlacementSchema.optional(),

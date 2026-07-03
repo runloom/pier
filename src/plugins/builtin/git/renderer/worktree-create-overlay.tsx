@@ -49,6 +49,8 @@ import {
 
 export type { WorktreeCreateOverlayData } from "./worktree-create-form.tsx";
 
+const TRAILING_PATH_SEPARATOR_RE = /[\\/]+$/;
+
 interface WorktreeCreateOverlayProps {
   close: () => void;
   context: RendererPluginContext;
@@ -57,6 +59,25 @@ interface WorktreeCreateOverlayProps {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function focusActiveModeInput(mode: CreateMode): void {
+  const target = document.getElementById(
+    mode === "ai" ? "worktree-create-task" : "worktree-create-branch"
+  );
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+  ) {
+    target.focus({ preventScroll: true });
+  }
+}
+
+function worktreeChildPath(rootPath: string, name: string): string {
+  const trimmedRoot = rootPath.replace(TRAILING_PATH_SEPARATOR_RE, "");
+  const separator =
+    trimmedRoot.includes("\\") && !trimmedRoot.includes("/") ? "\\" : "/";
+  return `${trimmedRoot}${separator}${name}`;
 }
 
 function WorktreeCreateOverlay({
@@ -91,6 +112,10 @@ function WorktreeCreateOverlay({
   const branchValue = form.watch("branch");
 
   useEffect(() => {
+    focusActiveModeInput(mode);
+  }, [mode]);
+
+  useEffect(() => {
     let disposed = false;
     context.ai
       .status()
@@ -120,7 +145,6 @@ function WorktreeCreateOverlay({
       return null;
     }
     return deriveWorktreeCreation({
-      branchPrefix: data.defaults.branchPrefix,
       existingBranches: data.existingBranches,
       existingNames: data.existingNames,
       input: branch,
@@ -197,14 +221,19 @@ function WorktreeCreateOverlay({
       }}
       open
     >
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          focusActiveModeInput(mode);
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>{text("title", undefined, "New worktree")}</DialogTitle>
+          <DialogTitle>{text("title", undefined, "New Worktree")}</DialogTitle>
           <DialogDescription>
             {text(
               "description",
               undefined,
-              "Create an isolated worktree for a task"
+              "Create an isolated worktree for this task"
             )}
           </DialogDescription>
         </DialogHeader>
@@ -224,10 +253,10 @@ function WorktreeCreateOverlay({
             >
               <TabsList className="w-full">
                 <TabsTrigger disabled={busy} value="ai">
-                  {text("modeAi", undefined, "AI auto")}
+                  {text("modeAi", undefined, "Smart generation")}
                 </TabsTrigger>
                 <TabsTrigger disabled={busy} value="custom">
-                  {text("modeCustom", undefined, "Custom")}
+                  {text("modeCustom", undefined, "Manual naming")}
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -238,7 +267,6 @@ function WorktreeCreateOverlay({
                   {text("taskLabel", undefined, "Task")}
                 </FieldLabel>
                 <Textarea
-                  autoFocus
                   disabled={busy}
                   id="worktree-create-task"
                   onKeyDown={(event) => {
@@ -252,7 +280,7 @@ function WorktreeCreateOverlay({
                   placeholder={text(
                     "taskPlaceholder",
                     undefined,
-                    "Describe the task; AI will name the branch"
+                    "Example: fix the settings divider alignment"
                   )}
                   rows={3}
                   {...form.register("text")}
@@ -263,7 +291,7 @@ function WorktreeCreateOverlay({
                 <AiFieldDescription
                   agentLabel={aiStatus?.label ?? ""}
                   aiConfigured={aiConfigured}
-                  branchPrefix={data.defaults.branchPrefix}
+                  rootPath={data.defaults.rootPath}
                   statusLoading={aiStatus === null}
                   text={text}
                 />
@@ -274,7 +302,6 @@ function WorktreeCreateOverlay({
                   {text("branchLabel", undefined, "Branch")}
                 </FieldLabel>
                 <Input
-                  autoFocus
                   className="font-mono"
                   disabled={busy}
                   id="worktree-create-branch"
@@ -292,7 +319,10 @@ function WorktreeCreateOverlay({
                 ) : null}
                 {customDraft ? (
                   <FieldDescription className="font-mono">
-                    {`.worktrees/${customDraft.name}`}
+                    {worktreeChildPath(
+                      data.defaults.rootPath,
+                      customDraft.name
+                    )}
                   </FieldDescription>
                 ) : null}
               </Field>

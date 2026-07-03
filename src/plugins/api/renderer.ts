@@ -41,6 +41,7 @@ import type {
   WorktreeCreateRequest,
   WorktreeCreateResult,
   WorktreeCreationDefaults,
+  WorktreeCreationDefaultsRequest,
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
@@ -326,7 +327,9 @@ export interface RendererPluginContext {
   worktrees: {
     check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
     create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
-    creationDefaults(): Promise<WorktreeCreationDefaults>;
+    creationDefaults(
+      request: WorktreeCreationDefaultsRequest
+    ): Promise<WorktreeCreationDefaults>;
     list(request: WorktreeListRequest): Promise<WorktreeListResult>;
     open(request: WorktreeOpenRequest): Promise<unknown>;
     openTerminal(request: WorktreeOpenTerminalRequest): Promise<unknown>;

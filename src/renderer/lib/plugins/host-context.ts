@@ -485,7 +485,8 @@ export function createRendererPluginContext(
     worktrees: {
       check: (request) => window.pier.worktrees.check(request),
       create: (request) => window.pier.worktrees.create(request),
-      creationDefaults: () => window.pier.worktrees.creationDefaults(),
+      creationDefaults: (request) =>
+        window.pier.worktrees.creationDefaults(request),
       list: (request) => window.pier.worktrees.list(request),
       open: (request) => window.pier.worktrees.open(request),
       openTerminal: (request) => window.pier.worktrees.openTerminal(request),

@@ -183,7 +183,6 @@ beforeEach(async () => {
       },
       preferences: {
         read: vi.fn(async () => ({
-          worktreeBranchPrefix: "wt/",
           worktreeCopyPatterns: [],
           worktreeSetupCommand: "",
         })),

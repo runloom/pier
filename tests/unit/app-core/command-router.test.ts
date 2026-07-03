@@ -345,6 +345,7 @@ function services(
         removedPath: args.path,
         worktrees: [],
       }),
+      resolveRootPath: async () => "/repo.worktree",
     },
     git: createGitService(),
     gitWatch: createGitWatchService(),
@@ -2191,6 +2192,35 @@ describe("createCommandRouter", () => {
       ok: true,
       requestId: "req-worktree-create",
     });
+  });
+
+  it("worktree.creationDefaults omits the removed branchPrefix even if legacy preferences contain one", async () => {
+    const fakeServices = services();
+    fakeServices.preferences.read = async () =>
+      ({
+        ...makeFakePreferences({ agentStatusHooks: false }),
+        worktreeBranchPrefix: "legacy/",
+      }) as never;
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const result = await router.execute({
+      clientId: "desktop-1",
+      command: { path: "/repo", type: "worktree.creationDefaults" },
+      protocolVersion: 1,
+      requestId: "req-worktree-defaults",
+    });
+
+    expect(result).toMatchObject({
+      data: {
+        rootPath: "/repo.worktree",
+      },
+      ok: true,
+      requestId: "req-worktree-defaults",
+    });
+    expect(result.ok ? result.data : null).not.toHaveProperty("branchPrefix");
   });
 
   it("worktree.open 复用 panel.open 的 context 解析和 renderer 命令", async () => {

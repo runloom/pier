@@ -1,4 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { GIT_PLUGIN_LOCALES } from "@plugins/builtin/git/locales/index.ts";
 import {
   openWorktreeCreateOverlay,
   type WorktreeCreateOverlayData,
@@ -30,10 +31,16 @@ import {
 
 const TASK_LABEL = "Task";
 const BRANCH_LABEL = "Branch";
-const CONFIRM_LABEL = "Confirm";
+const CONFIRM_LABEL = "Create";
 const CANCEL_LABEL = "Cancel";
-const CUSTOM_TAB = "Custom";
-const AI_TAB = "AI auto";
+const CUSTOM_TAB = "Manual naming";
+const AI_TAB = "Smart generation";
+
+const ZH_AI_TAB = "智能生成";
+const EN_GENERATING_LABEL = "Generating…";
+const ZH_TASK_LABEL = "任务描述";
+const ZH_CONFIRM_LABEL = "创建";
+const ZH_GENERATING_LABEL = "智能生成中…";
 
 function interpolate(
   template: string | undefined,
@@ -90,9 +97,9 @@ function createResultFor(name: string, branch: string): WorktreeCreateResult {
       branch,
       isCurrent: false,
       isMain: false,
-      path: `/repo/.worktrees/${name}`,
+      path: `/repo.worktree/${name}`,
     }),
-    targetPath: `/repo/.worktrees/${name}`,
+    targetPath: `/repo.worktree/${name}`,
     worktrees: [],
   };
 }
@@ -101,9 +108,9 @@ function overlayData(
   overrides: Partial<WorktreeCreateOverlayData> = {}
 ): WorktreeCreateOverlayData {
   const defaults: WorktreeCreationDefaults = {
-    branchPrefix: "wt/",
     copyPatterns: [".env*"],
     setupCommand: "pnpm setup:worktree",
+    rootPath: "/repo.worktree",
   };
   return {
     branches: [branchRef({ name: "main" })],
@@ -113,6 +120,16 @@ function overlayData(
     mainPath: "/repo",
     ...overrides,
   };
+}
+function deferBranchSuggestion(): {
+  promise: Promise<AiSuggestBranchResult>;
+  resolve: (value: AiSuggestBranchResult) => void;
+} {
+  let resolve!: (value: AiSuggestBranchResult) => void;
+  const promise = new Promise<AiSuggestBranchResult>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }
 
 const createMock =
@@ -131,6 +148,26 @@ const tMock = vi.fn(
     fallback: string | undefined
   ) => interpolate(fallback, values)
 );
+
+type GitPluginLocale = keyof typeof GIT_PLUGIN_LOCALES;
+
+function createLocalizedContext(
+  locale: GitPluginLocale
+): RendererPluginContext {
+  const localized = createMockContext();
+  localized.i18n.language = () => locale;
+  localized.i18n.t = (
+    key: string,
+    values: Record<string, number | string> | undefined,
+    fallback: string | undefined
+  ) => {
+    const message = (
+      GIT_PLUGIN_LOCALES[locale].messages as Record<string, string>
+    )[key];
+    return interpolate(message ?? fallback, values);
+  };
+  return localized;
+}
 
 function createMockContext(): RendererPluginContext {
   return {
@@ -264,7 +301,7 @@ describe("WorktreeCreateOverlay", () => {
   beforeEach(() => {
     installSelectPolyfills();
     vi.clearAllMocks();
-    createMock.mockResolvedValue(createResultFor("fix-focus", "wt/fix-focus"));
+    createMock.mockResolvedValue(createResultFor("fix-focus", "fix-focus"));
     openTerminalMock.mockResolvedValue(null);
     aiStatusMock.mockResolvedValue({
       agent: "claude",
@@ -294,12 +331,110 @@ describe("WorktreeCreateOverlay", () => {
     });
   });
 
-  it("默认 AI 模式:提交先调 suggestBranch,再以派生 branch/name 创建并打开终端", async () => {
+  it("zh-CN locale labels the AI naming tab as 智能生成", async () => {
+    context = createLocalizedContext("zh-CN");
+
+    await openOverlay(context);
+
+    expect(screen.getByRole("tab", { name: ZH_AI_TAB })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "AI 命名" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("en locale labels the AI mode tab as Smart generation", async () => {
+    context = createLocalizedContext("en");
+
+    await openOverlay(context);
+
+    expect(screen.getByRole("tab", { name: AI_TAB })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "AI naming" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("en locale shows Generating… while branch suggestion is pending", async () => {
+    context = createLocalizedContext("en");
+    const suggestion = deferBranchSuggestion();
+    suggestBranchMock.mockReturnValueOnce(suggestion.promise);
+
+    await openOverlay(context);
+
+    fireEvent.change(screen.getByRole("textbox", { name: TASK_LABEL }), {
+      target: { value: "fix terminal focus" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    expect(
+      await screen.findByRole("button", { name: EN_GENERATING_LABEL })
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      suggestion.resolve({ slug: "fix-focus", status: "ok" });
+      await suggestion.promise;
+    });
+    await vi.waitFor(() => {
+      expect(createMock).toHaveBeenCalledWith({
+        branch: "fix-focus",
+        name: "fix-focus",
+        path: "/repo",
+      });
+    });
+  });
+
+  it("zh-CN locale shows 智能生成中… while branch suggestion is pending", async () => {
+    context = createLocalizedContext("zh-CN");
+    const suggestion = deferBranchSuggestion();
+    suggestBranchMock.mockReturnValueOnce(suggestion.promise);
+
+    await openOverlay(context);
+
+    fireEvent.change(screen.getByRole("textbox", { name: ZH_TASK_LABEL }), {
+      target: { value: "修复终端焦点问题" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: ZH_CONFIRM_LABEL }));
+
+    expect(
+      await screen.findByRole("button", { name: ZH_GENERATING_LABEL })
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      suggestion.resolve({ slug: "fix-focus", status: "ok" });
+      await suggestion.promise;
+    });
+    await vi.waitFor(() => {
+      expect(createMock).toHaveBeenCalledWith({
+        branch: "fix-focus",
+        name: "fix-focus",
+        path: "/repo",
+      });
+    });
+  });
+
+  it("默认 AI 模式打开时自动聚焦任务描述输入框", async () => {
+    await openOverlay(context);
+
+    expect(screen.getByRole("textbox", { name: TASK_LABEL })).toHaveFocus();
+  });
+
+  it("切到自定义模式后自动聚焦分支输入框", async () => {
+    await openOverlay(context);
+
+    clickTab(CUSTOM_TAB);
+
+    expect(
+      await screen.findByRole("textbox", { name: BRANCH_LABEL })
+    ).toHaveFocus();
+  });
+
+  it("默认 AI 模式:提交先调 suggestBranch,再以未加前缀的派生 branch/name 创建并打开终端", async () => {
     await openOverlay(context);
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
-    fireEvent.change(task, { target: { value: "修复终端焦点问题" } });
-    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+    await act(() => {
+      fireEvent.change(task, { target: { value: "修复终端焦点问题" } });
+      fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+    });
 
     await vi.waitFor(() => {
       expect(suggestBranchMock).toHaveBeenCalledWith({
@@ -308,19 +443,19 @@ describe("WorktreeCreateOverlay", () => {
     });
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
-        branch: "wt/fix-focus",
+        branch: "fix-focus",
         name: "fix-focus",
         path: "/repo",
       });
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
-        path: "/repo/.worktrees/fix-focus",
+        path: "/repo.worktree/fix-focus",
         runSetup: true,
       });
     });
     expect(notificationsSuccessMock).toHaveBeenCalledWith(
-      "wt/fix-focus · /repo/.worktrees/fix-focus"
+      "fix-focus · /repo.worktree/fix-focus"
     );
   });
 
@@ -349,7 +484,7 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     expect(
-      await screen.findByText("AI generation failed: boom")
+      await screen.findByText("Agent invocation failed: boom")
     ).toBeInTheDocument();
     expect(createMock).not.toHaveBeenCalled();
     expect(
@@ -381,7 +516,7 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.change(branch, { target: { value: "feature/fix-dialog" } });
 
     expect(
-      await screen.findByText(".worktrees/feature-fix-dialog")
+      await screen.findByText("/repo.worktree/feature-fix-dialog")
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
@@ -395,7 +530,7 @@ describe("WorktreeCreateOverlay", () => {
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
-        path: "/repo/.worktrees/fix-dialog",
+        path: "/repo.worktree/fix-dialog",
         runSetup: true,
       });
     });
@@ -529,11 +664,11 @@ describe("WorktreeCreateOverlay", () => {
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
     fireEvent.change(task, { target: { value: "fix focus" } });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
-    await screen.findByText("AI generation failed: boom");
+    await screen.findByText("Agent invocation failed: boom");
 
     await switchToCustom();
     expect(
-      screen.queryByText("AI generation failed: boom")
+      screen.queryByText("Agent invocation failed: boom")
     ).not.toBeInTheDocument();
 
     clickTab(AI_TAB);

@@ -114,7 +114,7 @@ export type ResolveDraftResult =
   | { draft: WorktreeCreationDraft }
   | { error: string };
 
-/** custom 模式同步派生;ai 模式先调 AI 生成 slug 再套 prefix/去重。 */
+/** custom 模式同步派生;ai 模式先调 AI 生成 slug 再规整/去重。 */
 export async function resolveSubmitDraft({
   data,
   suggestBranch,
@@ -122,7 +122,6 @@ export async function resolveSubmitDraft({
   values,
 }: ResolveDraftArgs): Promise<ResolveDraftResult> {
   const shared = {
-    branchPrefix: data.defaults.branchPrefix,
     existingBranches: data.existingBranches,
     existingNames: data.existingNames,
   };
@@ -137,7 +136,7 @@ export async function resolveSubmitDraft({
       error: text(
         `generateFailed.${suggestion.reason}`,
         { message: suggestion.message },
-        "AI generation failed: {{message}}"
+        "Agent invocation failed: {{message}}"
       ),
     };
   }
@@ -157,13 +156,13 @@ export async function resolveSubmitDraft({
 export function AiFieldDescription({
   agentLabel,
   aiConfigured,
-  branchPrefix,
+  rootPath,
   statusLoading,
   text,
 }: {
   agentLabel: string;
   aiConfigured: boolean;
-  branchPrefix: string;
+  rootPath: string;
   statusLoading: boolean;
   text: TextFn;
 }) {
@@ -172,8 +171,8 @@ export function AiFieldDescription({
       <FieldDescription>
         {text(
           "taskHint",
-          { agent: agentLabel, prefix: branchPrefix },
-          "{{agent}} names the branch with prefix {{prefix}}; the worktree lives under .worktrees/"
+          { agent: agentLabel, root: rootPath },
+          "Default agent ({{agent}}) will generate a branch name from the task description and create an isolated worktree under {{root}}."
         )}
       </FieldDescription>
     );
@@ -185,7 +184,7 @@ export function AiFieldDescription({
         : text(
             "aiUnconfigured",
             undefined,
-            "No usable CLI agent detected (e.g. claude / codex / gemini). Install one or enable it in Settings → Agents, or switch to Custom."
+            "No command-line agent is available for naming. Install or enable one, or switch to manual naming."
           )}
     </FieldDescription>
   );
@@ -205,13 +204,13 @@ export function PrepareBadges({
   }
   return (
     <FieldDescription className="flex flex-wrap items-center gap-1.5">
-      <span>{text("prepareLabel", undefined, "Prepare")}</span>
+      <span>{text("prepareLabel", undefined, "Before creating")}</span>
       {hasCopy ? (
         <Badge variant="secondary">
           {text(
             "prepareCopy",
             { count: defaults.copyPatterns.length },
-            "Copy {{count}} ignored file patterns"
+            "Copy {{count}} ignored file entries"
           )}
         </Badge>
       ) : null}
@@ -228,7 +227,7 @@ export function confirmButtonContent(phase: SubmitPhase, text: TextFn) {
   if (phase === "generating") {
     return (
       <>
-        <Spinner />
+        <Spinner aria-hidden="true" />
         {text("aiGenerating", undefined, "Generating…")}
       </>
     );
@@ -236,10 +235,10 @@ export function confirmButtonContent(phase: SubmitPhase, text: TextFn) {
   if (phase === "creating") {
     return (
       <>
-        <Spinner />
+        <Spinner aria-hidden="true" />
         {text("creating", undefined, "Creating…")}
       </>
     );
   }
-  return text("confirm", undefined, "Confirm");
+  return text("confirm", undefined, "Create");
 }
