@@ -197,8 +197,8 @@ describe("droidIntegration", () => {
   });
 });
 
-describe("droid 遗留清理(上一波误装 hooks.json, 现改回 settings.json)", () => {
-  it("install 顺带清除旧 hooks.json 的 pier 条目并保留用户其他内容", async () => {
+describe("droid 遗留 HTTP hooks 处理（LEGACY_HOOK_MARK 删除后不再自动清理）", () => {
+  it("install 保留旧 hooks.json 的 HTTP-format 条目为用户配置, settings.json 正常写入新 JSONL 条目", async () => {
     const home = await mkdtemp(join(tmpdir(), "pier-droid-legacy-"));
     const prevHome = process.env.HOME;
     process.env.HOME = home;
@@ -226,12 +226,13 @@ describe("droid 遗留清理(上一波误装 hooks.json, 现改回 settings.json
         "utf8"
       );
       await droidIntegration.install();
+      // LEGACY_HOOK_MARK 删除后，旧 HTTP 条目已无法被识别为 pier-managed，
+      // 因此保持原样——作为用户配置对待。这是干净 cutover 的一次性代价。
       const cleaned = JSON.parse(
         await readFile(join(factoryDir, "hooks.json"), "utf8")
       );
-      expect(JSON.stringify(cleaned)).not.toContain("PIER_AGENT_HOOK_PORT");
-      expect(cleaned.hooks.Stop).toHaveLength(1);
-      // 新路径 (settings.json) 正常写入
+      expect(JSON.stringify(cleaned)).toContain("PIER_AGENT_HOOK_PORT");
+      // 新路径 (settings.json) 正常写入 JSONL 通路条目
       const fresh = JSON.parse(
         await readFile(join(factoryDir, "settings.json"), "utf8")
       );

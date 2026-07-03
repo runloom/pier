@@ -11,12 +11,6 @@ import type { AgentHookCapability, AgentHookIntegration } from "./types.ts";
 export const PIER_AGENT_HOOKS_DIR_MARK = "PIER_AGENT_HOOKS_DIR";
 
 /**
- * 旧格式识别标记（HTTP curl 方式）。保留用于 isPierHookCommand 兼容
- * 卸载旧条目，Wave 2 删除。
- */
-const LEGACY_HOOK_MARK = "PIER_AGENT_HOOK_PORT";
-
-/**
  * 生成静态 hook 命令（spec §4.4）：通过 emit 脚本写 JSONL，取代旧版 curl。
  * PTY 注入 PIER_AGENT_HOOKS_DIR 环境变量，Pier 外启动的 agent 因变量
  * 缺失直接短路（emit 脚本内部 guard）。
@@ -33,15 +27,12 @@ export function pierHookCommand(agentId: AgentKind, pierEvent: string): string {
 }
 
 /**
- * 识别 pier hook 命令——同时兼容新旧两种格式。
- * 新安装使用 PIER_AGENT_HOOKS_DIR，旧安装使用 PIER_AGENT_HOOK_PORT；
- * 卸载时必须两种都能识别，否则旧条目残留。
+ * 识别 pier hook 命令。判据仅依赖 PIER_AGENT_HOOKS_DIR marker——HTTP
+ * 通路整个删除后, 新旧格式收敛为单一 marker。
  */
 export function isPierHookCommand(command: unknown): boolean {
   return (
-    typeof command === "string" &&
-    (command.includes(PIER_AGENT_HOOKS_DIR_MARK) ||
-      command.includes(LEGACY_HOOK_MARK))
+    typeof command === "string" && command.includes(PIER_AGENT_HOOKS_DIR_MARK)
   );
 }
 

@@ -14,7 +14,7 @@ import {
 } from "./fonts/asset-protocol.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import {
-  closeAgentHookServer,
+  closeAgentSessionResources,
   registerAgentSessionIpc,
 } from "./ipc/agent-session.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
@@ -330,12 +330,14 @@ app.on("before-quit", (event) => {
     event.preventDefault();
     didFlushBeforeQuit = true;
     Promise.all([
-      closeAgentHookServer().catch((error) => {
-        console.error(
-          "[agent-session] failed to close hook server before quit:",
-          error instanceof Error ? error.message : String(error)
-        );
-      }),
+      Promise.resolve()
+        .then(() => closeAgentSessionResources())
+        .catch((error) => {
+          console.error(
+            "[agent-session] failed to close resources before quit:",
+            error instanceof Error ? error.message : String(error)
+          );
+        }),
       appCore.services.window.flushOpenWindows().catch((error) => {
         console.error(
           "[window] failed to flush windows before quit:",

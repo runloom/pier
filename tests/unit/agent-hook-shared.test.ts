@@ -27,10 +27,10 @@ describe("pierHookCommand（JSONL emit 脚本格式）", () => {
     expect(isPierHookCommand(cmd)).toBe(true);
   });
 
-  it("isPierHookCommand 兼容旧 curl 格式", () => {
+  it("isPierHookCommand 拒绝老 HTTP curl 格式（LEGACY marker 已删）", () => {
     const oldCmd =
       '[ -n "$PIER_AGENT_HOOK_PORT" ] && curl -fsS http://127.0.0.1:$PIER_AGENT_HOOK_PORT/agent-event || true';
-    expect(isPierHookCommand(oldCmd)).toBe(true);
+    expect(isPierHookCommand(oldCmd)).toBe(false);
   });
 
   it("isPierHookCommand 排除无关命令", () => {

@@ -186,7 +186,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           x: args.frame.x,
           y: args.frame.y,
         });
-        const hookEnv = await agentSessionService.hookEnv();
+        const hookEnv = agentSessionService.hookEnv();
         const ok = addon.createTerminal(
           handle,
           toNativePanelKey(win, args.panelId),

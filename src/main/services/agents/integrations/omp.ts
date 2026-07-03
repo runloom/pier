@@ -53,41 +53,37 @@ export function ompDetect(): boolean {
  * 整文件 TS 扩展源码。刻意不写顶层 import 声明：electron-vite 打包 main 时
  * 会扫描模板字面量, 若嵌入源码内含顶层 `import ...` 语句, 可能被误判为
  * 真实模块引用, 注入非法 CJS __dirname shim 到 ESM 产物（loomdesk 踩过的坑,
- * 见 omp.ts/pi.ts 头部注释）。emit 改用运行时 require（CJS 环境执行,
- * omp/pi 扩展跑在各自宿主进程, 非 electron 渲染/主进程沙箱）+ 全局 fetch
- * （Node 18+/omp 宿主环境内置, 避免再引入 node:http 顶层依赖字符串）。
- * 四个 PIER_ 环境变量缺任一即静默 no-op——非 Pier 启动的 agent 不受影响。
+ * 见 omp.ts/pi.ts 头部注释）。emit 用运行时 require 拿到 fs.promises
+ * （CJS 宿主执行, omp/pi 扩展跑在各自宿主进程, 非 electron 渲染/主进程沙箱）
+ * 直写 JSONL, 三 PIER_ 环境变量任一缺失即静默 no-op——非 Pier 启动的
+ * agent 不受影响。
  */
 export function buildOmpExtensionSource(): string {
   return `// pier-agent-status:v1 (managed by Pier). Safe to leave in place.
 // ${MARKER}
 // Deliberately no top-level import declarations: electron-vite scans
 // template literals in main's bundle and can otherwise inject an invalid
-// CommonJS shim into the ESM output. Use runtime require + global fetch.
+// CommonJS shim into the ESM output. Use runtime require here.
+// (Exception to ts-no-dynamic-import: generated file for a foreign host.)
 
 function pierEmit(event) {
-	const port = process.env.PIER_AGENT_HOOK_PORT;
-	const token = process.env.PIER_AGENT_HOOK_TOKEN;
+	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
-	if (!port || !token || !panelId || !windowId) return;
-	const body = JSON.stringify({
+	if (!log || !panelId || !windowId) return;
+	const line = JSON.stringify({
 		v: 1,
-		agent: "omp",
-		event,
+		kind: "agentEvent",
+		ts: Date.now() * 1_000_000,
 		panelId,
 		windowId,
-	});
+		pid: process.pid,
+		agent: "omp",
+		event,
+	}) + "\\n";
 	try {
-		fetch("http://127.0.0.1:" + port + "/agent-event", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: "Bearer " + token,
-			},
-			body,
-			signal: AbortSignal.timeout(1500),
-		}).catch(() => {});
+		const { appendFile } = require("node:fs/promises");
+		appendFile(log, line).catch(() => {});
 	} catch {
 		// best-effort, never throw into the agent's own event loop
 	}

@@ -12,7 +12,7 @@ import {
   uninstallAmpHooks,
 } from "../../../src/main/services/agents/integrations/amp.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_EVENT_LOG";
 
 describe("buildAmpPluginSource", () => {
   const source = buildAmpPluginSource();
@@ -22,31 +22,39 @@ describe("buildAmpPluginSource", () => {
     expect(source).toContain("managed by Pier");
   });
 
-  it("POST 目标为 /agent-event, 携带 Authorization Bearer 头", () => {
-    expect(source).toContain("/agent-event");
-    expect(source).toContain("Authorization");
-    expect(source).toContain("Bearer");
+  it("直写 JSONL（appendFile 通路，无 HTTP fetch）", () => {
+    expect(source).toContain('import { appendFile } from "node:fs/promises"');
+    expect(source).toContain("await appendFile(log, line)");
+    expect(source).not.toContain("/agent-event");
+    expect(source).not.toContain("Authorization");
+    expect(source).not.toContain("fetch(");
   });
 
-  it("env 守卫覆盖全部四个必需变量（PORT/TOKEN/PANEL_ID/WINDOW_ID）", () => {
+  it("env 守卫覆盖三个必需变量（LOG/PANEL_ID/WINDOW_ID）", () => {
     expect(source).toContain(`process.env.${MARK}`);
-    expect(source).toContain("process.env.PIER_AGENT_HOOK_TOKEN");
     expect(source).toContain("process.env.PIER_PANEL_ID");
     expect(source).toContain("process.env.PIER_WINDOW_ID");
+    // HTTP-era 变量已删
+    expect(source).not.toContain("PIER_AGENT_HOOK_PORT");
+    expect(source).not.toContain("PIER_AGENT_HOOK_TOKEN");
   });
 
-  it("fire-and-forget：1.5s 超时 + 吞异常", () => {
-    expect(source).toContain("1500");
+  it("最佳 effort：try/catch 吞异常, 不干扰 amp 本体", () => {
     expect(source).toContain("catch");
-    expect(source).toContain("AbortController");
+    // AbortController / 1500ms 超时属于 HTTP 时代, 已删
+    expect(source).not.toContain("AbortController");
+    expect(source).not.toContain("1500");
   });
 
-  it("body 五字段 schema：v/agent/event/panelId/windowId", () => {
+  it("JSONL 行字段：v/kind/agent/event/panelId/windowId/pid/ts", () => {
     expect(source).toContain("v: 1");
+    expect(source).toContain('kind: "agentEvent"');
     expect(source).toContain('agent: "amp"');
     expect(source).toContain("event: pierEvent");
     expect(source).toContain("panelId,");
     expect(source).toContain("windowId,");
+    expect(source).toContain("pid: process.pid");
+    expect(source).toContain("ts: Date.now() * 1_000_000");
   });
 
   it("事件映射齐全：session.start/agent.start/tool.call/tool.result/agent.end", () => {

@@ -48,15 +48,21 @@ describe("buildHermesPluginManifest", () => {
 });
 
 describe("buildHermesPluginInit", () => {
-  it("含 marker + urllib.request + timeout=1.5 + os.environ 四变量守卫", () => {
+  it("含 marker + open(..., 'a') append + os.environ 三变量守卫", () => {
     const init = buildHermesPluginInit();
     expect(init).toContain(HERMES_MARKER);
-    expect(init).toContain("import urllib.request");
-    expect(init).toContain("timeout=1.5");
-    expect(init).toContain('os.environ.get("PIER_AGENT_HOOK_PORT"');
-    expect(init).toContain('os.environ.get("PIER_AGENT_HOOK_TOKEN"');
+    // 直写 JSONL 通路——HTTP urllib 时代已删
+    expect(init).toContain('open(log, "a"');
+    expect(init).not.toContain("import urllib");
+    expect(init).not.toContain("urllib.request");
+    expect(init).not.toContain("timeout=1.5");
+    // JSONL 通路三个环境变量
+    expect(init).toContain('os.environ.get("PIER_AGENT_EVENT_LOG"');
     expect(init).toContain('os.environ.get("PIER_PANEL_ID"');
     expect(init).toContain('os.environ.get("PIER_WINDOW_ID"');
+    // HTTP 时代变量已删
+    expect(init).not.toContain("PIER_AGENT_HOOK_PORT");
+    expect(init).not.toContain("PIER_AGENT_HOOK_TOKEN");
   });
 
   it("except 吞异常（no raise, best-effort）", () => {

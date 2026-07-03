@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_EVENT_LOG";
 
 let homeDir: string;
 
@@ -38,39 +38,45 @@ describe("buildKiloPluginSource", () => {
     expect(source).toContain("const server = async () => {");
   });
 
-  it("POST 目标为 /agent-event, 携带 Authorization Bearer 头", async () => {
+  it("直写 JSONL（appendFile 通路，无 HTTP fetch）", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
-    expect(source).toContain("/agent-event");
-    expect(source).toContain("Authorization");
-    expect(source).toContain("Bearer");
+    expect(source).toContain('import { appendFile } from "node:fs/promises"');
+    expect(source).toContain("await appendFile(log, line)");
+    expect(source).not.toContain("/agent-event");
+    expect(source).not.toContain("Authorization");
+    expect(source).not.toContain("fetch(");
   });
 
-  it("env 守卫覆盖全部四个必需变量（PORT/TOKEN/PANEL_ID/WINDOW_ID）", async () => {
+  it("env 守卫覆盖三个必需变量（LOG/PANEL_ID/WINDOW_ID）", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
     expect(source).toContain(`process.env.${MARK}`);
-    expect(source).toContain("process.env.PIER_AGENT_HOOK_TOKEN");
     expect(source).toContain("process.env.PIER_PANEL_ID");
     expect(source).toContain("process.env.PIER_WINDOW_ID");
+    expect(source).not.toContain("PIER_AGENT_HOOK_PORT");
+    expect(source).not.toContain("PIER_AGENT_HOOK_TOKEN");
   });
 
-  it("fire-and-forget：1.5s 超时 + 吞异常", async () => {
+  it("最佳 effort：try/catch 吞异常, 不干扰 agent 本体", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
-    expect(source).toContain("1500");
     expect(source).toContain("catch");
-    expect(source).toContain("AbortController");
+    expect(source).not.toContain("AbortController");
+    expect(source).not.toContain("1500");
   });
 
-  it("body 五字段 schema：v/agent/event/panelId/windowId", async () => {
+  it("JSONL 行字段：v/kind/agent/event/panelId/windowId/pid/ts", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
     expect(source).toContain("v: 1");
+    expect(source).toContain('kind: "agentEvent"');
     expect(source).toContain('agent: "kilo"');
     expect(source).toContain("event: pierEvent");
     expect(source).toContain("panelId,");
     expect(source).toContain("windowId,");
+    expect(source).toContain("pid: process.pid");
+    expect(source).toContain("ts: Date.now() * 1_000_000");
   });
 
   it("事件映射齐全：session.created/idle/error/deleted, permission.asked/replied（非 permission.updated）, tool.execute", async () => {

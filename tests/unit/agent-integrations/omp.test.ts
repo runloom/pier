@@ -23,16 +23,23 @@ const NATIVE_EVENTS = [
 ];
 
 describe("buildOmpExtensionSource", () => {
-  it("含 marker、四个 PIER_ 环境变量守卫、无顶层 import 声明", () => {
+  it("含 marker、三个 PIER_ 环境变量守卫、无顶层 import 声明", () => {
     const src = buildOmpExtensionSource();
     expect(src).toContain(OMP_MARKER);
-    expect(src).toContain("PIER_AGENT_HOOK_PORT");
-    expect(src).toContain("PIER_AGENT_HOOK_TOKEN");
+    // JSONL 通路的三个环境变量（HTTP 时代 PORT/TOKEN 已删）
+    expect(src).toContain("PIER_AGENT_EVENT_LOG");
     expect(src).toContain("PIER_PANEL_ID");
     expect(src).toContain("PIER_WINDOW_ID");
+    expect(src).not.toContain("PIER_AGENT_HOOK_PORT");
+    expect(src).not.toContain("PIER_AGENT_HOOK_TOKEN");
     for (const line of src.split("\n")) {
       expect(line.trimStart().startsWith("import ")).toBe(false);
     }
+    // 运行时 require 拿到 fs.promises（electron-vite 模板扫描陷阱豁免）
+    expect(src).toContain('require("node:fs/promises")');
+    // HTTP 通路已删
+    expect(src).not.toContain("fetch(");
+    expect(src).not.toContain("/agent-event");
   });
 
   it("事件表齐全：全部 6 个原生事件均注册且映射到正确 pier 事件", () => {
