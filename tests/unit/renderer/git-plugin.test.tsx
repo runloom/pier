@@ -82,7 +82,7 @@ const context: PanelContext = {
   cwd: "/Users/xyz/ABC/pier",
   gitRoot: "/Users/xyz/ABC/pier",
   openedPath: "/Users/xyz/ABC/pier",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectRootPath: "/Users/xyz/ABC/pier",
   source: "panel",
   updatedAt: now,
   worktreeKey: "/Users/xyz/ABC/pier",
@@ -1572,7 +1572,7 @@ describe("git builtin plugin", () => {
           branch: "feature/worktree",
           cwd: "/Users/xyz/ABC/pier-feature/src",
           gitRoot: "/Users/xyz/ABC/pier-feature",
-          projectRoot: "/Users/xyz/ABC/pier-feature",
+          projectRootPath: "/Users/xyz/ABC/pier-feature",
           worktreeRoot: "/Users/xyz/ABC/pier-feature",
         },
         cwd: "/Users/xyz/ABC/pier-feature/src",
@@ -1828,7 +1828,7 @@ describe("git builtin plugin", () => {
       );
     }
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
@@ -1900,7 +1900,7 @@ describe("git builtin plugin", () => {
 
   it("Files explorer lazily loads expanded directory children from the host files API", async () => {
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
@@ -1954,7 +1954,7 @@ describe("git builtin plugin", () => {
 
   it("Files explorer renders an explicit empty state for an empty project root", async () => {
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
@@ -1976,7 +1976,7 @@ describe("git builtin plugin", () => {
 
   it("Files explorer shows a directory-scoped error when lazy child loading fails", async () => {
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??

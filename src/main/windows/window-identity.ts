@@ -47,3 +47,8 @@ export function findAppWindowByWebContents(
 ): AppWindow | null {
   return appWindowsByWebContents.get(webContents) ?? null;
 }
+
+/** 枚举当前活跃 AppWindow 的 electronId——广播通道给所有窗口发全量快照时用。 */
+export function listAppWindowIds(): readonly number[] {
+  return [...appWindowsByElectronId.keys()];
+}

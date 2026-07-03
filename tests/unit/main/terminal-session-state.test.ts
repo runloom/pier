@@ -5,6 +5,7 @@ import type * as TerminalSessionStateModule from "@main/state/terminal-session-s
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TEST_PROJECT_ID } from "../../support/project-fixtures.ts";
 
 function taskMetadata(
   overrides: Partial<TaskPanelMetadata> = {}
@@ -12,7 +13,8 @@ function taskMetadata(
   return {
     cwd: "/Users/xyz/ABC/pier",
     label: "test",
-    projectRoot: "/Users/xyz/ABC/pier",
+    projectId: TEST_PROJECT_ID,
+    projectRootPath: "/Users/xyz/ABC/pier",
     rawCommand: "pnpm test",
     runId: "run-1",
     source: "package-script",
@@ -28,7 +30,8 @@ function context(root: string, updatedAt = 1_772_000_000_000): PanelContext {
     contextId: `ctx:${root}`,
     cwd: root,
     openedPath: root,
-    projectRoot: root,
+    projectId: TEST_PROJECT_ID,
+    projectRootPath: root,
     source: "panel",
     updatedAt,
     worktreeKey: root,

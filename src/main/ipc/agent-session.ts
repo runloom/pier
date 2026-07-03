@@ -108,6 +108,22 @@ export const agentSessionService = {
       matchedAgent
     );
   },
+  taskLaunched(
+    panelId: string,
+    windowId: string,
+    task: { taskId: string; label: string }
+  ): void {
+    foregroundActivityAggregator.taskLaunched(panelId, windowId, task);
+  },
+  taskFinished(
+    panelId: string,
+    args: {
+      status: "success" | "failure" | "cancelled";
+      exitCode?: number;
+    }
+  ): void {
+    foregroundActivityAggregator.taskFinished(panelId, args);
+  },
   panelClosed(panelId: string): void {
     foregroundActivityAggregator.panelClosed(panelId);
   },

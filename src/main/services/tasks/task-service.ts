@@ -41,13 +41,15 @@ import {
 
 export interface TaskSpawnRequest {
   inputs?: Record<string, string> | undefined;
-  projectRoot: string;
+  projectId: string;
+  projectRootPath: string;
   taskId: string;
 }
 
 export interface TaskStartedRecord {
   panelId: string;
-  projectRoot: string;
+  projectId: string;
+  projectRootPath: string;
   taskId: string;
   windowId?: string | undefined;
 }
@@ -59,7 +61,10 @@ export interface TaskService {
     exitCode: number,
     windowId?: string | undefined
   ): Promise<TaskRunSnapshot | null>;
-  list(args: { projectRoot: string }): Promise<TaskListResult>;
+  list(args: {
+    projectId: string;
+    projectRootPath: string;
+  }): Promise<TaskListResult>;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
   prepareSpawn(args: TaskSpawnRequest): Promise<TaskSpawnPreparation>;
   recentTasks(): readonly TaskRecentEntry[];
@@ -71,22 +76,46 @@ export interface TaskService {
       launch: TaskLaunchPlan,
       runId: string
     ): Promise<TaskRunTerminalOpenResult>;
-    projectRoot: string;
+    projectId: string;
+    projectRootPath: string;
     rootTaskId: string;
   }): Promise<TaskRunCoordinatorStartResult>;
   statusRun(runId: string): TaskRunSnapshot | null;
 }
 
+export interface TaskActivityCallbacks {
+  /** panel 上任务收到终结事件（exit code / cancel / kill）。 */
+  onFinished(
+    panelId: string,
+    args: {
+      status: "success" | "failure" | "cancelled";
+      exitCode?: number;
+    }
+  ): void;
+  /** panel 上任务真正开始（terminal opened, launch spec 已提交给 shell）。 */
+  onLaunched(
+    panelId: string,
+    windowId: string | undefined,
+    task: { taskId: string; label: string }
+  ): void;
+}
+
 export interface CreateTaskServiceOptions {
   homeDir?: string;
   now?: () => number;
+  /**
+   * 任务生命周期广播 hook——上层（app-core 层）注入 agentSessionService 的
+   * taskLaunched / taskFinished, 让前台活动聚合器收到 task activity。
+   * 未注入时 task 生命周期不产生 activity broadcast (test 场景可省)。
+   */
+  onTaskActivity?: TaskActivityCallbacks;
   readRecentState?: () => Promise<TaskRecentState>;
   recentLimit?: number;
   writeRecentState?: (state: TaskRecentState) => Promise<void>;
 }
 
-function runKey(projectRoot: string, taskId: string): string {
-  return `${projectRoot}\0${taskId}`;
+function runKey(projectId: string, taskId: string): string {
+  return `${projectId}\0${taskId}`;
 }
 
 function panelRefKey(panelId: string, windowId?: string | undefined): string {
@@ -96,6 +125,7 @@ function panelRefKey(panelId: string, windowId?: string | undefined): string {
 export function createTaskService({
   homeDir,
   now = () => Date.now(),
+  onTaskActivity,
   readRecentState = readTaskRecentStateDefault,
   recentLimit = 20,
   writeRecentState = writeTaskRecentStateDefault,
@@ -129,9 +159,10 @@ export function createTaskService({
     await recentLoadPromise;
   }
 
-  const collect = async (projectRoot: string) => {
+  const collect = async (projectId: string, projectRoot: string) => {
     await ensureRecentLoaded();
     const result = await collectTaskCandidates({
+      projectId,
       projectRoot,
       recentTasks,
       ...(homeDir ? { homeDir } : {}),
@@ -195,15 +226,17 @@ export function createTaskService({
 
   function recordStartedRun({
     panelId,
-    projectRoot,
+    projectId,
+    projectRootPath,
     taskId,
     windowId,
   }: TaskStartedRecord): void {
-    const key = runKey(projectRoot, taskId);
+    const key = runKey(projectId, taskId);
     runningByKey.set(key, {
       kind: "panel",
       panelId,
-      projectRoot,
+      projectId,
+      projectRootPath,
       startedAt: now(),
       taskId,
       ...(windowId ? { windowId } : {}),
@@ -213,17 +246,20 @@ export function createTaskService({
   }
 
   function recordCoordinatorRun({
-    projectRoot,
+    projectId,
+    projectRootPath,
     rootTaskId,
     runId,
   }: {
-    projectRoot: string;
+    projectId: string;
+    projectRootPath: string;
     rootTaskId: string;
     runId: string;
   }): void {
-    runningByKey.set(runKey(projectRoot, rootTaskId), {
+    runningByKey.set(runKey(projectId, rootTaskId), {
       kind: "coordinator",
-      projectRoot,
+      projectId,
+      projectRootPath,
       runId,
       startedAt: now(),
       taskId: rootTaskId,
@@ -232,16 +268,16 @@ export function createTaskService({
 
   function forgetSnapshotTasks(snapshot: TaskRunSnapshot): void {
     for (const node of Object.values(snapshot.nodes)) {
-      runningByKey.delete(runKey(snapshot.projectRoot, node.taskId));
+      runningByKey.delete(runKey(snapshot.projectId, node.taskId));
     }
   }
 
   function restartPreparation(
-    projectRoot: string,
+    projectId: string,
     taskId: string,
     launches: readonly TaskLaunchPlan[]
   ): RestartPreparation {
-    const key = runKey(projectRoot, taskId);
+    const key = runKey(projectId, taskId);
     return buildRestartPreparation({
       deleteRunning: (runningKey) => {
         runningByKey.delete(runningKey);
@@ -250,7 +286,7 @@ export function createTaskService({
       launches,
       reusablePanelsForLaunches: (nextLaunches) =>
         dedicatedPanels.reusablePanelsForLaunches(nextLaunches, (launch) =>
-          runKey(projectRoot, launch.taskId)
+          runKey(projectId, launch.taskId)
         ),
       running: runningByKey.get(key),
       statusRun: (runId) => taskRuns.status(runId),
@@ -262,11 +298,16 @@ export function createTaskService({
     task: TaskCandidate,
     tasks: TaskListResult["tasks"],
     inputs: Record<string, string>,
-    projectRoot: string
+    projectId: string,
+    projectRootPath: string
   ): TaskSpawnPreparation {
     try {
       return {
-        launches: buildTaskLaunches(task, { inputs, projectRoot }, tasks),
+        launches: buildTaskLaunches(
+          task,
+          { inputs, projectId, projectRootPath },
+          tasks
+        ),
         status: "ready",
       };
     } catch (error) {
@@ -322,6 +363,9 @@ export function createTaskService({
       for (const node of Object.values(result?.nodes ?? {})) {
         if (node.panelId) {
           forgetRunningPanel(node.panelId, node.windowId);
+          onTaskActivity?.onFinished(node.panelId, {
+            status: "cancelled",
+          });
         }
       }
       return result;
@@ -332,16 +376,22 @@ export function createTaskService({
       if (result && isTerminalRunStatus(result.status)) {
         forgetSnapshotTasks(result);
       }
+      if (result) {
+        onTaskActivity?.onFinished(panelId, {
+          status: exitCode === 0 ? "success" : "failure",
+          exitCode,
+        });
+      }
       return result;
     },
-    async list({ projectRoot }) {
-      return await collect(projectRoot);
+    async list({ projectId, projectRootPath }) {
+      return await collect(projectId, projectRootPath);
     },
     markPanelClosed(panelId, windowId) {
       markPanelActuallyClosed(panelId, windowId);
     },
-    async prepareSpawn({ projectRoot, taskId, inputs = {} }) {
-      const list = await collect(projectRoot);
+    async prepareSpawn({ projectId, projectRootPath, taskId, inputs = {} }) {
+      const list = await collect(projectId, projectRootPath);
       const task = list.tasks.find((candidate) => candidate.id === taskId);
       if (!task) {
         return {
@@ -366,7 +416,8 @@ export function createTaskService({
         task,
         list.tasks,
         inputs,
-        projectRoot
+        projectId,
+        projectRootPath
       );
       if (
         preparation.status !== "ready" ||
@@ -376,34 +427,57 @@ export function createTaskService({
       }
       return {
         ...preparation,
-        ...restartPreparation(projectRoot, task.id, preparation.launches),
+        ...restartPreparation(projectId, task.id, preparation.launches),
       };
     },
     recentTasks: () => recentTasks,
     async recordRecent(launch) {
       await recordRecentLaunch(launch);
     },
-    recordStarted({ panelId, projectRoot, taskId, windowId }) {
-      recordStartedRun({ panelId, projectRoot, taskId, windowId });
+    recordStarted({ panelId, projectId, projectRootPath, taskId, windowId }) {
+      recordStartedRun({
+        panelId,
+        projectId,
+        projectRootPath,
+        taskId,
+        windowId,
+      });
     },
-    async startRun({ launches, openTerminal, projectRoot, rootTaskId }) {
+    async startRun({
+      launches,
+      openTerminal,
+      projectId,
+      projectRootPath,
+      rootTaskId,
+    }) {
       const result = await taskRuns.start({
         launches,
         openTerminal: async (launch, runId) => {
           const opened = await openTerminal(launch, runId);
           recordStartedRun({
             panelId: opened.panelId,
-            projectRoot: launch.projectRoot,
+            projectId: launch.projectId,
+            projectRootPath: launch.projectRootPath,
             taskId: launch.taskId,
             windowId: opened.windowId,
           });
           await recordRecentLaunch(launch);
+          onTaskActivity?.onLaunched(opened.panelId, opened.windowId, {
+            taskId: launch.taskId,
+            label: launch.label,
+          });
           return opened;
         },
-        projectRoot,
+        projectId,
+        projectRootPath,
         rootTaskId,
       });
-      recordCoordinatorRun({ projectRoot, rootTaskId, runId: result.runId });
+      recordCoordinatorRun({
+        projectId,
+        projectRootPath,
+        rootTaskId,
+        runId: result.runId,
+      });
       return result;
     },
     statusRun(runId) {

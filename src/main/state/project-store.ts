@@ -25,6 +25,23 @@ const projectStateSchema = z
 type ProjectState = z.infer<typeof projectStateSchema>;
 const DEFAULTS: ProjectState = { projects: [], version: 1 };
 
+/**
+ * 项目变更监听器（IPC 层订阅——store 每次 mutate 后触发广播）。
+ * upsertProjectFromPath 完成后调 notifyProjectChange 通知所有订阅方。
+ */
+type ProjectChangeListener = (projects: readonly Project[]) => void;
+const projectChangeListeners = new Set<ProjectChangeListener>();
+export function onProjectChange(listener: ProjectChangeListener): () => void {
+  projectChangeListeners.add(listener);
+  return () => {
+    projectChangeListeners.delete(listener);
+  };
+}
+function notifyProjectChange(projects: readonly Project[]): void {
+  for (const listener of projectChangeListeners) {
+    listener(projects);
+  }
+}
 let store: DebouncedJsonStore<ProjectState> | undefined;
 
 function getStore(): DebouncedJsonStore<ProjectState> {
@@ -138,6 +155,7 @@ async function doUpsert(rootPath: string, now: () => number): Promise<Project> {
       ...next,
       projects: next.projects.map((p) => (p.id === existing.id ? touched : p)),
     }));
+    notifyProjectChange(structuredClone(s.get().projects));
     return touched;
   }
   const project: Project = {
@@ -163,6 +181,7 @@ async function doUpsert(rootPath: string, now: () => number): Promise<Project> {
     }
     return { ...next, projects: [...next.projects, project] };
   });
+  notifyProjectChange(structuredClone(s.get().projects));
   return committed;
 }
 

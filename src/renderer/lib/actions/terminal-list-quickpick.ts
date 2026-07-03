@@ -91,7 +91,7 @@ function buildTerminalPanelSections(openPanels: WorkspacePanelSnapshot[]): {
       searchTerms: [
         panel.id,
         panel.context?.cwd,
-        panel.context?.projectRoot,
+        panel.context?.projectRootPath,
         panel.context?.gitRoot,
         panel.context?.branch,
         section.heading,

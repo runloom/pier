@@ -24,7 +24,12 @@ import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
-function activeProjectRoot(): string | null {
+interface ProjectContext {
+  projectId: string;
+  projectRootPath: string;
+}
+
+function activeProjectContext(): ProjectContext | null {
   const api = useWorkspaceStore.getState().api;
   const activePanelId = api?.activePanel?.id;
   if (!activePanelId) {
@@ -32,7 +37,13 @@ function activeProjectRoot(): string | null {
   }
   const descriptor =
     usePanelDescriptorStore.getState().descriptors[activePanelId];
-  return descriptor?.context?.projectRoot ?? descriptor?.context?.cwd ?? null;
+  const projectId = descriptor?.context?.projectId;
+  const projectRootPath =
+    descriptor?.context?.projectRootPath ?? descriptor?.context?.cwd;
+  if (!(projectId && projectRootPath)) {
+    return null;
+  }
+  return { projectId, projectRootPath };
 }
 
 function taskSourceLabel(source: TaskSource): string {
@@ -179,14 +190,15 @@ async function collectTaskInputs(
 
 async function spawnTask(args: {
   inputs?: Record<string, string>;
-  projectRoot: string;
+  project: ProjectContext;
   taskId: string;
 }): Promise<TaskSpawnResult> {
   return await window.pier.tasks.spawn({
     focus: true,
     ...(args.inputs ? { inputs: args.inputs } : {}),
     placement: "active-tab",
-    projectRoot: args.projectRoot,
+    projectId: args.project.projectId,
+    projectRootPath: args.project.projectRootPath,
     taskId: args.taskId,
   });
 }
@@ -206,16 +218,16 @@ function focusTerminalPanel(panelId: string): void {
   }
 }
 async function spawnTaskWithInputFlow(
-  projectRoot: string,
+  project: ProjectContext,
   taskId: string
 ): Promise<void> {
-  let result = await spawnTask({ projectRoot, taskId });
+  let result = await spawnTask({ project, taskId });
   if (result.status === "requires-input") {
     const inputs = await collectTaskInputs(result.inputs);
     if (!inputs) {
       return;
     }
-    result = await spawnTask({ inputs, projectRoot, taskId });
+    result = await spawnTask({ inputs, project, taskId });
   }
   if (result.status === "unsupported") {
     console.error("[run-actions] task unsupported:", result.message);
@@ -226,8 +238,8 @@ async function spawnTaskWithInputFlow(
   }
 }
 
-function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
-  return spawnTaskWithInputFlow(projectRoot, item.id);
+function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
+  return spawnTaskWithInputFlow(project, item.id);
 }
 
 /**
@@ -240,13 +252,16 @@ async function rerunActiveTaskPanel(): Promise<void> {
   if (!task) {
     return;
   }
-  await spawnTaskWithInputFlow(task.projectRoot, task.taskId);
+  await spawnTaskWithInputFlow(
+    { projectId: task.projectId, projectRootPath: task.projectRootPath },
+    task.taskId
+  );
 }
 export async function openRunTaskQuickPick() {
-  const projectRoot = activeProjectRoot();
+  const project = activeProjectContext();
   const title = i18next.t("commandPalette.action.runTask");
   const placeholder = i18next.t("commandPalette.placeholder.runTask");
-  if (!projectRoot) {
+  if (!project) {
     useCommandPaletteController.getState().openQuickPick({
       title,
       placeholder,
@@ -296,7 +311,10 @@ export async function openRunTaskQuickPick() {
     return;
   }
   try {
-    const result = await window.pier.tasks.list({ projectRoot });
+    const result = await window.pier.tasks.list({
+      projectId: project.projectId,
+      projectRootPath: project.projectRootPath,
+    });
     if (!shouldReplaceLoadingPick()) {
       return;
     }
@@ -316,7 +334,7 @@ export async function openRunTaskQuickPick() {
               },
             ],
           }),
-      onAccept: (item) => handleTaskAccept(projectRoot, item),
+      onAccept: (item) => handleTaskAccept(project, item),
     });
   } catch (error) {
     if (!shouldReplaceLoadingPick()) {

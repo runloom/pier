@@ -4,6 +4,7 @@ import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-cha
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app } from "electron";
+import { agentSessionService } from "../ipc/agent-session.ts";
 import {
   createMainPluginHostApi,
   type MainPluginHostApi,
@@ -167,7 +168,16 @@ function createPierAppCore(): PierAppCore {
     pluginSettings,
     panelContexts: createPanelContextService(),
     rendererCommand,
-    tasks: createTaskService(),
+    tasks: createTaskService({
+      onTaskActivity: {
+        onLaunched: (panelId, windowId, task) => {
+          agentSessionService.taskLaunched(panelId, windowId ?? "", task);
+        },
+        onFinished: (panelId, args) => {
+          agentSessionService.taskFinished(panelId, args);
+        },
+      },
+    }),
     terminalProfiles: createTerminalProfileService(),
     terminalStatusBarPrefs: {
       applyOverrides: async (patches) => {

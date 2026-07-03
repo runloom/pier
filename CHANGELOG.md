@@ -95,13 +95,13 @@
 
 `agentTabIconId` / `agentKindFromTabIconId` 保留在 `agent-session.ts` 契约（agent 图标命名工具，非 aggregator state）。
 
-### Still deferred
+### Final migration (all done)
 
-仅剩 `Project` 与 task 层的最后一里迁移，plan `local://finalize-double-source-plan.md` §D.6-D.7 与 §C.7-C.9：
+`Project` + task 层最后一里 6 项迁移全部完成，双源架构收? complete：
 
-- `task-run-coordinator` / `run-commands.ts` / task/run 契约从 `projectRoot: string` 迁到 `projectId + projectRootPath`（60+ callsite）
-- Task 生命周期 wire：`terminal-task-lifecycle-wiring` 里的 `taskExitCode` 分支调 `agentSessionService.taskFinished`；`task-run-coordinator.start` 调 `taskLaunched`——目前 aggregator 已实现 API + 29 case tests 全绿, 只差 wire。
-- `pier://project:list` / `pier://project:get` / `pier://project:changed` renderer IPC + preload API
-- `panel-context-state.ts:keyForContext` 清 `projectRoot` fallback 层
-
-以上是可 rollback 的独立后续 commit；当前 commit 已完成 A/B/C 的 contract 单源切换 + D 的 Project 基础设施。
+- ✅ task/run 契约 `projectRoot: string` 迁到 `projectId: uuid + projectRootPath: string`（TaskListResult / TaskLaunchPlan / TaskPanelMetadata / TaskRunSnapshot + PierCommand run.list/run.spawn + PierTasksAPI + PanelContext + 60+ callsite）
+- ✅ Task 生命周期 wire：`task-service.startRun` / `completePanel` / `cancelRun` 走 `onTaskActivity` 回调转发 `agentSessionService.taskLaunched` / `taskFinished` → `ForegroundActivityAggregator`
+- ✅ Project registry renderer 面：新 `pier://project:list` / `pier://project:get` / `pier://project:changed` IPC + `PierProjectAPI` preload + `useProjectStore` + `ProjectBridge`
+- ✅ `panel-context-state.ts:keyForContext` 清 legacy `projectRoot` fallback 一层
+- ✅ `PanelContext.projectRoot` 删（→ `projectId + projectRootPath`）
+- ✅ `panel-context-resolver` 输出改产 `projectRootPath`；`upsertProjectFromPath` 兜底 catch 保留（Electron `app.getPath` 不可用时 project 保持 null，`projectRootPath` 从 gitRoot/cwd 派生）

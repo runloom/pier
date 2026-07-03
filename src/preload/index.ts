@@ -47,6 +47,7 @@ import {
   type PierPluginSettingsAPI,
   pluginSettingsApi,
 } from "./plugin-settings-api.ts";
+import { type PierProjectAPI, projectApi } from "./project-api.ts";
 import { terminalApi } from "./terminal-api.ts";
 import {
   type PierTerminalStatusBarPrefsAPI,
@@ -167,7 +168,10 @@ export interface PierSettingsAPI {
 
 export interface PierTasksAPI {
   cancel: (args: { runId: string }) => Promise<TaskRunSnapshot>;
-  list: (args: { projectRoot: string }) => Promise<TaskListResult>;
+  list: (args: {
+    projectId: string;
+    projectRootPath: string;
+  }) => Promise<TaskListResult>;
   spawn: (args: {
     focus?: boolean;
     inputs?: Record<string, string>;
@@ -177,7 +181,8 @@ export interface PierTasksAPI {
       | "split-below"
       | "split-left"
       | "split-above";
-    projectRoot: string;
+    projectId: string;
+    projectRootPath: string;
     taskId: string;
   }) => Promise<TaskSpawnResult>;
   status: (args: { runId: string }) => Promise<TaskRunSnapshot>;
@@ -215,6 +220,7 @@ export interface PierWindowAPI {
   pluginSettings: PierPluginSettingsAPI;
   plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
+  project: PierProjectAPI;
   rendererCommand: PierRendererCommandAPI;
   secrets: PierSecretsAPI;
   settings: PierSettingsAPI;
@@ -350,7 +356,8 @@ const tasksApi: PierTasksAPI = {
     }),
   list: (args) =>
     invokePierCommand<TaskListResult>({
-      projectRoot: args.projectRoot,
+      projectId: args.projectId,
+      projectRootPath: args.projectRootPath,
       type: "run.list",
     }),
   spawn: (args) =>
@@ -358,7 +365,8 @@ const tasksApi: PierTasksAPI = {
       ...(args.focus === undefined ? {} : { focus: args.focus }),
       ...(args.inputs ? { inputs: args.inputs } : {}),
       ...(args.placement ? { placement: args.placement } : {}),
-      projectRoot: args.projectRoot,
+      projectId: args.projectId,
+      projectRootPath: args.projectRootPath,
       taskId: args.taskId,
       type: "run.spawn",
     }),
@@ -372,6 +380,7 @@ const tasksApi: PierTasksAPI = {
 const api: PierWindowAPI = {
   agents: agentsApi,
   foregroundActivity: foregroundActivityApi,
+  project: projectApi,
   ai: aiApi,
   closeWindow: (windowId) =>
     invokePierCommand<void>({ type: "window.close", windowId }),

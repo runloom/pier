@@ -86,7 +86,7 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
   ) {
     const panelContext = props.params?.context;
     const root =
-      panelContext?.projectRoot ??
+      panelContext?.projectRootPath ??
       panelContext?.worktreeRoot ??
       panelContext?.gitRoot ??
       panelContext?.cwd ??

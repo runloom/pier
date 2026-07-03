@@ -10,6 +10,7 @@ import { terminalLaunchRegistry } from "@main/state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "@main/state/terminal-session-state.ts";
 import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import { describe, expect, it } from "vitest";
+import { TEST_PROJECT_ID } from "../../support/project-fixtures.ts";
 
 function createArgs(
   overrides: Partial<CreateTerminalArgs> = {}
@@ -47,7 +48,8 @@ describe("terminal create launch options", () => {
         context: {
           contextId: "ctx:/tmp/pier",
           cwd: "/tmp/pier",
-          projectRoot: "/tmp/pier",
+          projectId: TEST_PROJECT_ID,
+          projectRootPath: "/tmp/pier",
           source: "panel",
           updatedAt: 1_772_000_000_000,
         },
@@ -56,7 +58,8 @@ describe("terminal create launch options", () => {
           exitCode: 0,
           finishedAt: 1_772_000_001_000,
           label: "test",
-          projectRoot: "/tmp/pier",
+          projectId: TEST_PROJECT_ID,
+          projectRootPath: "/tmp/pier",
           rawCommand: "pnpm test",
           runId: "run-1",
           source: "package-script",
@@ -88,14 +91,16 @@ describe("terminal create launch options", () => {
         context: {
           contextId: "ctx:/tmp/pier",
           cwd: "/tmp/pier",
-          projectRoot: "/tmp/pier",
+          projectId: TEST_PROJECT_ID,
+          projectRootPath: "/tmp/pier",
           source: "panel",
           updatedAt: 1_772_000_000_000,
         },
         task: {
           cwd: "/tmp/pier",
           label: "dev",
-          projectRoot: "/tmp/pier",
+          projectId: TEST_PROJECT_ID,
+          projectRootPath: "/tmp/pier",
           rawCommand: "bun run dev",
           runId: "run-1",
           source: "package-script",
@@ -125,7 +130,8 @@ describe("terminal create launch options", () => {
           task: {
             cwd: "/tmp/pier",
             label: `x'; touch ${markerPath}; #`,
-            projectRoot: "/tmp/pier",
+            projectId: TEST_PROJECT_ID,
+            projectRootPath: "/tmp/pier",
             rawCommand: `$(touch ${markerPath})`,
             runId: "run-1",
             source: "history",
@@ -163,7 +169,8 @@ describe("terminal create launch options", () => {
     const relaunchTask = {
       cwd: "/tmp/pier",
       label: "lint",
-      projectRoot: "/tmp/pier",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/tmp/pier",
       rawCommand: "pnpm lint",
       runId: "run-2",
       source: "package-script",
@@ -175,7 +182,8 @@ describe("terminal create launch options", () => {
       task: {
         cwd: "/tmp/pier",
         label: "dev",
-        projectRoot: "/tmp/pier",
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: "/tmp/pier",
         rawCommand: "pnpm dev",
         runId: "run-1",
         source: "package-script",
@@ -208,14 +216,16 @@ describe("terminal create launch options", () => {
     const savedContext = {
       contextId: "ctx:/tmp/saved",
       cwd: "/tmp/saved",
-      projectRoot: "/tmp/saved",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/tmp/saved",
       source: "panel",
       updatedAt: 1_772_000_003_000,
     } as const;
     const argsContext = {
       contextId: "ctx:/tmp/args",
       cwd: "/tmp/args",
-      projectRoot: "/tmp/args",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/tmp/args",
       source: "panel",
       updatedAt: 1_772_000_004_000,
     } as const;
@@ -224,7 +234,8 @@ describe("terminal create launch options", () => {
       exitCode: 0,
       finishedAt: 1_772_000_005_000,
       label: "saved:test",
-      projectRoot: "/tmp/saved",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/tmp/saved",
       rawCommand: "pnpm saved:test",
       runId: "run-saved",
       source: "package-script",
@@ -237,7 +248,8 @@ describe("terminal create launch options", () => {
       exitCode: 1,
       finishedAt: 1_772_000_006_000,
       label: "args:test",
-      projectRoot: "/tmp/args",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/tmp/args",
       rawCommand: "pnpm args:test",
       runId: "run-args",
       source: "package-script",

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectTaskCandidates } from "@main/services/tasks/task-sources.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 describe("task sources", () => {
   let projectRoot = "";
@@ -80,6 +81,7 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
+      projectId: TEST_PROJECT_ID,
       projectRoot,
       recentTasks: [
         {
@@ -127,7 +129,11 @@ describe("task sources", () => {
       }`
     );
 
-    const result = await collectTaskCandidates({ homeDir, projectRoot });
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectId: TEST_PROJECT_ID,
+      projectRoot,
+    });
 
     expect(result.errors).toEqual([]);
     expect(
@@ -155,7 +161,11 @@ describe("task sources", () => {
       })
     );
 
-    const result = await collectTaskCandidates({ homeDir, projectRoot });
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectId: TEST_PROJECT_ID,
+      projectRoot,
+    });
 
     expect(result.errors).toEqual([]);
     expect(
@@ -182,7 +192,11 @@ describe("task sources", () => {
       '[alias]\nlint = "clippy --all-targets"\n'
     );
 
-    const result = await collectTaskCandidates({ homeDir, projectRoot });
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectId: TEST_PROJECT_ID,
+      projectRoot,
+    });
 
     expect(
       result.tasks
@@ -215,7 +229,11 @@ describe("task sources", () => {
       ].join("\n")
     );
 
-    const result = await collectTaskCandidates({ homeDir, projectRoot });
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectId: TEST_PROJECT_ID,
+      projectRoot,
+    });
 
     expect(
       result.tasks
@@ -244,7 +262,11 @@ describe("task sources", () => {
       ].join("\n")
     );
 
-    const result = await collectTaskCandidates({ homeDir, projectRoot });
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectId: TEST_PROJECT_ID,
+      projectRoot,
+    });
 
     expect(
       result.tasks
@@ -259,7 +281,11 @@ describe("task sources", () => {
       '[tasks."docs:build"]\nrun = "mkdocs build"\n\n[tasks.dev]\nrun = "pnpm dev"\n'
     );
 
-    const result = await collectTaskCandidates({ homeDir, projectRoot });
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectId: TEST_PROJECT_ID,
+      projectRoot,
+    });
 
     expect(
       result.tasks

@@ -77,7 +77,7 @@ describe("resolvePanelContextForPath — Project 集成", () => {
     expect(ctx.projectId).toMatch(UUID_RE);
     expect(ctx.projectRootPath).toBe(repo);
     // 老字段仍存在 (backward-compat 期)
-    expect(ctx.projectRoot).toBe(repo);
+    expect(ctx.projectRootPath).toBe(repo);
   });
 
   it("resolver 与 project-store 双向一致：projectId ↔ project-store.readProjectById", async () => {
@@ -118,7 +118,7 @@ describe("resolvePanelContextForPath — Project 集成", () => {
     cleanupDirs.push(plain);
     await mkdir(join(plain, "src"));
     const ctx = await resolvePanelContextForPath(plain);
-    expect(ctx.projectRoot).toBe(plain);
+    expect(ctx.projectRootPath).toBe(plain);
     expect(ctx.projectRootPath).toBe(plain);
     expect(ctx.projectId).toMatch(UUID_RE);
   });

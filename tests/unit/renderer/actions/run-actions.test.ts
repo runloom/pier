@@ -11,13 +11,15 @@ import { registerRunActions } from "@/lib/actions/run-actions.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 function context(path: string): PanelContext {
   return {
     contextId: `ctx:${path}`,
     cwd: path,
     openedPath: path,
-    projectRoot: path,
+    projectId: TEST_PROJECT_ID,
+    projectRootPath: path,
     source: "panel",
     updatedAt: 1_772_000_000_000,
     worktreeKey: path,
@@ -40,7 +42,8 @@ function taskPanel(id: string, projectRoot = "/Users/xyz/ABC/pier") {
       task: {
         cwd: projectRoot,
         label: "test",
-        projectRoot,
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
         rawCommand: "pnpm run test",
         runId: "run-1",
         source: "package-script",
@@ -96,7 +99,8 @@ function installWorkspaceApi() {
 function taskList(projectRoot = "/Users/xyz/ABC/pier"): TaskListResult {
   return {
     errors: [],
-    projectRoot,
+    projectId: TEST_PROJECT_ID,
+    projectRootPath: projectRoot,
     tasks: [
       {
         commandSpec: { command: "pnpm run test", kind: "shell" },
@@ -267,7 +271,8 @@ describe("run actions", () => {
     await nextMacrotask();
 
     expect(window.pier.tasks.list).toHaveBeenCalledWith({
-      projectRoot: "/Users/xyz/ABC/pier",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/Users/xyz/ABC/pier",
     });
 
     await run;
@@ -343,7 +348,8 @@ describe("run actions", () => {
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: true,
       placement: "active-tab",
-      projectRoot: "/Users/xyz/ABC/pier",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
   });
@@ -386,7 +392,8 @@ describe("run actions", () => {
       focus: true,
       inputs: { pkg: "renderer" },
       placement: "active-tab",
-      projectRoot: "/Users/xyz/ABC/pier",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
   });
@@ -400,7 +407,8 @@ describe("run actions", () => {
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: true,
       placement: "active-tab",
-      projectRoot: "/Users/xyz/ABC/pier",
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
   });

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 const TASK_VAR_PREFIX = "$";
 const INPUT_PKG_VAR = `${TASK_VAR_PREFIX}{input:pkg}`;
@@ -57,13 +58,17 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const task = listed.tasks.find(
       (candidate) => candidate.label === "test package"
     );
 
     const plan = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: task?.id ?? "",
     });
 
@@ -119,11 +124,15 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
 
     const plan = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: task?.id ?? "",
     });
 
@@ -191,14 +200,18 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const task = listed.tasks.find(
       (candidate) =>
         candidate.source === "vscode" && candidate.label === "verify"
     );
 
     const plan = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: task?.id ?? "",
     });
 
@@ -238,11 +251,18 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: task?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: task?.id ?? "",
+      })
     ).resolves.toEqual({
       message: "任务 verify 依赖不存在: missing",
       status: "unsupported",
@@ -276,11 +296,18 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const task = listed.tasks.find((candidate) => candidate.label === "a");
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: task?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: task?.id ?? "",
+      })
     ).resolves.toEqual({
       message: "任务依赖存在循环: a -> b -> a",
       status: "unsupported",
@@ -318,11 +345,18 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: task?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: task?.id ?? "",
+      })
     ).resolves.toEqual({
       message: "任务标签重复: vscode lint",
       status: "unsupported",
@@ -347,22 +381,31 @@ describe("task execution planning", () => {
       ])
     );
     const service = createTaskService({ homeDir });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
     const test = listed.tasks.find((candidate) => candidate.label === "test");
     service.recordStarted({
       panelId: "terminal-dev",
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
     });
     service.recordStarted({
       panelId: "terminal-test",
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: test?.id ?? "",
     });
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: dev?.id ?? "",
+      })
     ).resolves.toMatchObject({
       reusablePanels: {
         [dev?.id ?? ""]: { panelId: "terminal-dev" },
@@ -370,7 +413,8 @@ describe("task execution planning", () => {
       status: "ready",
     });
     const concurrentPreparation = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: test?.id ?? "",
     });
     expect(concurrentPreparation).toMatchObject({ status: "ready" });
@@ -390,19 +434,27 @@ describe("task execution planning", () => {
       ])
     );
     const service = createTaskService({ homeDir });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
 
     service.recordStarted({
       panelId: "terminal-dev",
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
       windowId: "main",
     });
     await service.completePanel("terminal-dev", 0, "main");
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: dev?.id ?? "",
+      })
     ).resolves.toMatchObject({
       reusablePanels: {
         [dev?.id ?? ""]: { panelId: "terminal-dev", windowId: "main" },
@@ -424,17 +476,25 @@ describe("task execution planning", () => {
       ])
     );
     const service = createTaskService({ homeDir });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
 
     service.recordStarted({
       panelId: "terminal-dev",
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
       windowId: "main",
     });
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: dev?.id ?? "",
+      })
     ).resolves.toMatchObject({
       reusablePanels: {
         [dev?.id ?? ""]: { panelId: "terminal-dev", windowId: "main" },
@@ -445,7 +505,11 @@ describe("task execution planning", () => {
     await service.completePanel("terminal-dev", 0, "main");
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: dev?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: dev?.id ?? "",
+      })
     ).resolves.toMatchObject({
       reusablePanels: {
         [dev?.id ?? ""]: { panelId: "terminal-dev", windowId: "main" },
@@ -467,19 +531,24 @@ describe("task execution planning", () => {
       ])
     );
     const service = createTaskService({ homeDir });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
 
     service.recordStarted({
       panelId: "terminal-dev",
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
       windowId: "main",
     });
     service.markPanelClosed("terminal-dev", "main");
 
     const preparation = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
     });
     expect(preparation).toMatchObject({ status: "ready" });
@@ -513,12 +582,16 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const verify = listed.tasks.find(
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
     if (plan.status !== "ready") {
@@ -532,7 +605,8 @@ describe("task execution planning", () => {
           panelId: `panel-${launchPlan.taskId}`,
           windowId: "main",
         }),
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       rootTaskId: verify?.id ?? "",
     });
     const lint = plan.launches[0];
@@ -541,7 +615,11 @@ describe("task execution planning", () => {
     }
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: verify?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: verify?.id ?? "",
+      })
     ).resolves.toMatchObject({
       restartRunId: run.runId,
       reusablePanels: {
@@ -586,12 +664,16 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const verify = listed.tasks.find(
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
     if (plan.status !== "ready") {
@@ -605,7 +687,8 @@ describe("task execution planning", () => {
           panelId: `panel-${launchPlan.label}`,
           windowId: "main",
         }),
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       rootTaskId: verify?.id ?? "",
     });
     await service.completePanel("panel-client", 0, "main");
@@ -624,7 +707,11 @@ describe("task execution planning", () => {
     );
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: verify?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: verify?.id ?? "",
+      })
     ).resolves.toMatchObject({
       restartRunId: run.runId,
       reusablePanels,
@@ -664,7 +751,10 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const client = listed.tasks.find(
       (candidate) => candidate.label === "client"
     );
@@ -672,7 +762,8 @@ describe("task execution planning", () => {
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
     if (plan.status !== "ready") {
@@ -691,13 +782,18 @@ describe("task execution planning", () => {
             windowId: "main",
           });
         },
-        projectRoot,
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
         rootTaskId: verify?.id ?? "",
       })
     ).rejects.toThrow("terminal unavailable");
 
     await expect(
-      service.prepareSpawn({ projectRoot, taskId: client?.id ?? "" })
+      service.prepareSpawn({
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: projectRoot,
+        taskId: client?.id ?? "",
+      })
     ).resolves.toMatchObject({
       reusablePanels: {
         [client?.id ?? ""]: {
@@ -711,7 +807,8 @@ describe("task execution planning", () => {
     service.markPanelClosed(`panel-${client?.id ?? ""}`, "main");
 
     const preparation = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: client?.id ?? "",
     });
     expect(preparation).toMatchObject({ status: "ready" });
@@ -745,12 +842,16 @@ describe("task execution planning", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
     const verify = listed.tasks.find(
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
     if (plan.status !== "ready") {
@@ -767,7 +868,8 @@ describe("task execution planning", () => {
           windowId: "main",
         });
       },
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       rootTaskId: verify?.id ?? "",
     });
 
@@ -802,7 +904,8 @@ describe("task execution planning", () => {
       focus: true,
       label: "check",
       presentation: {},
-      projectRoot,
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
       rawCommand: "pnpm check",
       source: "package-script",
       tab: { title: "check" },
@@ -825,7 +928,9 @@ describe("task execution planning", () => {
         version: 1,
       },
     ]);
-    await expect(service.list({ projectRoot })).resolves.toMatchObject({
+    await expect(
+      service.list({ projectId: TEST_PROJECT_ID, projectRootPath: projectRoot })
+    ).resolves.toMatchObject({
       tasks: expect.arrayContaining([
         expect.objectContaining({
           commandSpec: { command: "pnpm check", kind: "shell" },
@@ -878,7 +983,10 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
 
-    const listed = await service.list({ projectRoot });
+    const listed = await service.list({
+      projectId: TEST_PROJECT_ID,
+      projectRootPath: projectRoot,
+    });
 
     expect(
       listed.tasks

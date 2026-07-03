@@ -8,7 +8,7 @@ const context: PanelContext = {
   contextId: "ctx-pier",
   cwd: "/Users/x/ABC/pier",
   openedPath: "/Users/x/ABC/pier",
-  projectRoot: "/Users/x/ABC/pier",
+  projectRootPath: "/Users/x/ABC/pier",
   source: "panel",
   updatedAt: 1_772_000_000_000,
   worktreeKey: "/Users/x/ABC/pier",

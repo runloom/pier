@@ -147,7 +147,6 @@ export async function resolvePanelContextForPath(
     contextId: contextIdFor(worktreeKey),
     cwd,
     openedPath,
-    projectRoot,
     source,
     updatedAt: now(),
     worktreeKey,
@@ -157,7 +156,7 @@ export async function resolvePanelContextForPath(
     ...(head ? { head } : {}),
     ...(project
       ? { projectId: project.id, projectRootPath: project.rootPath }
-      : {}),
+      : { projectRootPath: projectRoot }),
     ...(worktreeRoot ? { worktreeRoot } : {}),
     ...(worktreeSupported == null ? {} : { worktreeSupported }),
   };

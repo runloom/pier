@@ -33,6 +33,7 @@ import {
   setTerminalBasePanel,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+import { TEST_PROJECT_ID } from "../support/project-fixtures.ts";
 
 interface TerminalRelaunchRequest {
   context?: PanelContext | undefined;
@@ -155,7 +156,8 @@ const completedTaskTab: PanelTabChrome = {
 const taskMetadata: TaskPanelMetadata = {
   cwd: "/Users/xyz/ABC/pier",
   label: "test",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectId: TEST_PROJECT_ID,
+  projectRootPath: "/Users/xyz/ABC/pier",
   rawCommand: "pnpm run test",
   runId: "run-1",
   source: "package-script",
@@ -259,7 +261,8 @@ const context: PanelContext = {
   contextId: "ctx-pier",
   cwd: "/Users/xyz/ABC/pier",
   openedPath: "/Users/xyz/ABC/pier",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectId: TEST_PROJECT_ID,
+  projectRootPath: "/Users/xyz/ABC/pier",
   source: "command",
   updatedAt: 1_772_000_000_000,
   worktreeKey: "/Users/xyz/ABC/pier",
@@ -1279,7 +1282,8 @@ describe("TerminalPanel lifecycle", () => {
         contextId: "ctx-current-work",
         cwd: "/Users/xyz/ABC/current-work",
         openedPath: "/Users/xyz/ABC/current-work",
-        projectRoot: "/Users/xyz/ABC/current-work",
+        projectId: TEST_PROJECT_ID,
+        projectRootPath: "/Users/xyz/ABC/current-work",
         worktreeKey: "/Users/xyz/ABC/current-work",
       },
       title: "Claude Code",

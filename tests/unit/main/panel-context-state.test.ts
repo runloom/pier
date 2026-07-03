@@ -14,7 +14,7 @@ function context(
     contextId: id,
     cwd: root,
     openedPath: root,
-    projectRoot: root,
+    projectRootPath: root,
     source: "panel",
     updatedAt,
     worktreeKey: root,

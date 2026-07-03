@@ -102,13 +102,19 @@ describe("registerCommandIpc", () => {
 
     await handler(
       { sender: { id: "web-contents" } },
-      { projectRoot: "/repo", taskId: "package-script:test", type: "run.spawn" }
+      {
+        projectId: "11111111-1111-4111-8111-111111111111",
+        projectRootPath: "/repo",
+        taskId: "package-script:test",
+        type: "run.spawn",
+      }
     );
 
     expect(executeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         command: {
-          projectRoot: "/repo",
+          projectId: "11111111-1111-4111-8111-111111111111",
+          projectRootPath: "/repo",
           taskId: "package-script:test",
           type: "run.spawn",
           windowId: "main",

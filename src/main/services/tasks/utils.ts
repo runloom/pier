@@ -81,8 +81,8 @@ export async function packageManagerFor(projectRoot: string): Promise<string> {
   return "npm";
 }
 
-export function projectBasename(projectRoot: string): string {
-  return basename(projectRoot) || projectRoot;
+export function projectBasename(projectRootPath: string): string {
+  return basename(projectRootPath) || projectRootPath;
 }
 
 export function sourceHeading(source: string): string {
