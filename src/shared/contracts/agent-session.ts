@@ -32,6 +32,23 @@ export type AgentHookEvent = z.infer<typeof agentHookEventSchema>;
 export const agentSessionSourceSchema = z.enum(["hook", "launch", "title"]);
 export type AgentSessionSource = z.infer<typeof agentSessionSourceSchema>;
 
+/**
+ * shell preexec 上报的前台命令开始事件（loomdesk OSC 633;E 的 loopback 版）。
+ * 命令行匹配到 agent 时走 launch 先验身份管线；panelId/windowId 语义同
+ * agentHookEventSchema。上限 4096 与 loomdesk MAX_COMMAND_LINE 对齐。
+ */
+export const terminalCommandStartSchema = z
+  .object({
+    v: z.literal(1),
+    commandLine: z.string().min(1).max(4096),
+    panelId: z.string().min(1).max(128),
+    windowId: z.string().min(1).max(32),
+  })
+  .strict();
+export type TerminalCommandStartEvent = z.infer<
+  typeof terminalCommandStartSchema
+>;
+
 export const agentSessionSnapshotSchema = z.object({
   agentId: agentKindSchema.optional(),
   panelId: z.string().min(1),

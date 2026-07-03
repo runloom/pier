@@ -1,4 +1,7 @@
-import { resolveAgentCommand } from "@main/services/agents/agent-launch.ts";
+import {
+  resolveAgentCommand,
+  resolveOneShotInvocation,
+} from "@main/services/agents/agent-launch.ts";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentCatalogEntry, AgentKind } from "@shared/contracts/agent.ts";
 import { describe, expect, it, vi } from "vitest";
@@ -72,5 +75,42 @@ describe("resolveAgentCommand", () => {
         agentDefaultArgs: { kiro: "--trust-all-tools" },
       })
     ).toBe("kiro-cli chat --tui --trust-all-tools");
+  });
+});
+
+describe("resolveOneShotInvocation", () => {
+  it("复用 launchCmd/defaultArgs,再 append catalog oneShotArgs", () => {
+    const result = resolveOneShotInvocation({
+      agentId: "claude",
+      agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+      prompt: "hello",
+    });
+    expect(result).toEqual({
+      binary: "claude",
+      args: ["--dangerously-skip-permissions", "-p", "hello"],
+    });
+  });
+
+  it("binary 覆盖与 defaultArgs 一并参与分词", () => {
+    const result = resolveOneShotInvocation({
+      agentId: "claude",
+      override: "/opt/bin/claude --model haiku",
+      agentDefaultArgs: {},
+      prompt: "hello",
+    });
+    expect(result).toEqual({
+      binary: "/opt/bin/claude",
+      args: ["--model", "haiku", "-p", "hello"],
+    });
+  });
+
+  it("无 oneShotArgs 的 agent 返回 null", () => {
+    expect(
+      resolveOneShotInvocation({
+        agentId: "aider",
+        agentDefaultArgs: {},
+        prompt: "hello",
+      })
+    ).toBeNull();
   });
 });

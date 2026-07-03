@@ -82,6 +82,32 @@ export function runtimeStatusForTitleStatus(
   }
 }
 
+/**
+ * shell 自动写的 prompt OSC 形态（loomdesk agent-detect 反向过滤器移植,
+ * 去 Windows 盘符两条——终端始终在 macOS）。这类标题只是 cwd/host 回显,
+ * 不携带任何 agent 信号：ghostty zsh integration 的 cwd 标题（`~/...`、
+ * `/...`）、oh-my-zsh 的 `user@host:~/path` 都在此列。路径里含 agent
+ * 字面字符串（`.worktrees/codex/...`）也不得当身份。
+ */
+const PROMPT_OSC_SIGNALS: readonly RegExp[] = [
+  // `@host:[~/]` — user@host:cwd 形态的 `@host:` 段。冒号后必须是 path
+  // marker, 避免误伤含 SSH-style remote 的主动 OSC (`Cloning git@github.com:org/repo`)。
+  /@[^\s@]+:[~/]/,
+  // `:~/` 或 `:~` 结尾 — host:home 形态。
+  /:~(?:\/|$)/,
+  // `:/X` 字母开头绝对路径 — host:/Users 等。
+  /:\/[A-Za-z]/,
+  // path-like 起始 — `/` 或 `~/` 开头视为 cwd 标题。
+  /^\//,
+  /^~\//,
+];
+
+/** 标题是否是 shell 自动 prompt OSC（cwd/user@host 回显, 非主动 title）。 */
+export function looksLikePromptOsc(title: string): boolean {
+  const t = title.trim();
+  return PROMPT_OSC_SIGNALS.some((signal) => signal.test(t));
+}
+
 const TOKEN_ESCAPE_RE = /[.*+?^${}()|[\]\\]/g;
 
 function tokenBoundaryRe(token: string): RegExp {
@@ -111,12 +137,6 @@ const AGENT_TITLE_MATCHERS: readonly AgentTitleMatcher[] = AGENT_CATALOG.map(
 );
 
 /**
- * 从终端标题识别 agent 身份（orca agent-name-token-match 思路）：
- * 让「✳ Claude Code」这类启动标题在 hook（有 ~2s 执行延迟）之前就点亮
- * 图标, 也让无 hook 机制的 agent（aider 等）显示真实图标而非通用 Bot。
- * 调用方应只在标题已带状态信号（glyph/关键词）时使用, 见聚合器 ingestTitle。
- */
-/**
  * 标题看起来仍处于 agent 上下文?——用于聚合器判断 title-source 会话
  * 是否已被用户"退回 shell"。规则:含品牌 token / 状态 glyph 前缀 / braille
  * spinner / droid 的 ⛬ 会话前缀之一即为 true。纯 shell 提示符
@@ -139,10 +159,34 @@ export function titleLooksLikeAgentContext(title: string): boolean {
   return detectAgentIdFromTitle(title) !== null;
 }
 
+/** 去掉标题起始的 glyph 前缀 / braille spinner / 空白, 得到身份锚定的正文。 */
+const LEADING_SIGNAL_RE = new RegExp(
+  `^(?:[⠀-⣿\\s]|${AGENT_CONTEXT_PREFIXES.join("|")})+`
+);
+
+/**
+ * 从终端标题识别 agent 身份（orca agent-name-token-match 思路）：
+ * 让「✳ Claude Code」这类启动标题在 hook（有 ~2s 执行延迟）之前就点亮
+ * 图标, 也让无 hook 机制的 agent（aider / droid 等）显示真实图标。
+ *
+ * 两道误报防御（cwd 路径/分支名里的品牌词不得点亮图标）：
+ * 1. prompt OSC 形态（`~/...` / `/...` / `user@host:cwd`）直接判 null——
+ *    ghostty prompt 标题就是 cwd, `.worktrees/codex/x` 会携带品牌词。
+ * 2. 品牌 token 必须锚定在标题开头（允许 glyph/spinner 前缀）——agent 的
+ *    启动标题品牌名都在开头, `pier (codex/fix-login)` 这类分支名标题不算。
+ */
 export function detectAgentIdFromTitle(title: string): AgentKind | null {
+  const t = title.trim();
+  if (t.length === 0 || looksLikePromptOsc(t)) {
+    return null;
+  }
+  const anchored = t.replace(LEADING_SIGNAL_RE, "");
   for (const matcher of AGENT_TITLE_MATCHERS) {
-    if (matcher.tokens.some((re) => re.test(title))) {
-      return matcher.id;
+    for (const re of matcher.tokens) {
+      const match = anchored.match(re);
+      if (match?.index === 0) {
+        return matcher.id;
+      }
     }
   }
   return null;

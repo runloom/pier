@@ -1,10 +1,11 @@
+import { matchAgentCommand } from "@shared/agent-command-detection.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentSessionSnapshot,
   AgentSessionsBroadcast,
 } from "@shared/contracts/agent-session.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
-import type { IpcMain } from "electron";
+import { app, type IpcMain } from "electron";
 import {
   type AgentHookServer,
   startAgentHookServer,
@@ -14,6 +15,10 @@ import {
   installAllAgentHooks,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
+import {
+  installShellCommandIntegration,
+  shellCommandIntegrationEnv,
+} from "../services/agents/shell-command-integration.ts";
 import { readPreferences } from "../state/preferences.ts";
 import { findAppWindowByWebContents } from "../windows/window-identity.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
@@ -22,6 +27,7 @@ const aggregator = createAgentSessionAggregator();
 /** 上次广播覆盖过的窗口——会话清空时也要给这些窗口发空快照清 store。 */
 const lastBroadcastWindowIds = new Set<string>();
 let hookServerPromise: Promise<AgentHookServer | null> | null = null;
+let shellIntegrationPromise: Promise<boolean> | null = null;
 
 /**
  * 按 windowId 定向发送快照。Pier 窗口是 BaseWindow+WebContentsView（见
@@ -72,16 +78,25 @@ export const agentSessionService = {
   /**
    * PTY 注入用环境变量。await 服务器就绪后返回, 消除首批终端拿到空 env 的
    * race；启动失败 resolve {}（功能退化为标题兜底）。
+   * agentStatusHooks 开启且 wrapper 就绪时附带 ZDOTDIR 注入（zsh 命令上报）。
    */
   async hookEnv(): Promise<Record<string, string>> {
     const server = await (hookServerPromise ?? Promise.resolve(null));
     if (!server) {
       return {};
     }
-    return {
+    const env: Record<string, string> = {
       PIER_AGENT_HOOK_PORT: String(server.port),
       PIER_AGENT_HOOK_TOKEN: server.token,
     };
+    const [prefs, integrationReady] = await Promise.all([
+      readPreferences().catch(() => null),
+      shellIntegrationPromise ?? Promise.resolve(false),
+    ]);
+    if (prefs?.agentStatusHooks && integrationReady) {
+      Object.assign(env, shellCommandIntegrationEnv(app.getPath("userData")));
+    }
+    return env;
   },
   ingestTitle(windowId: string, panelId: string, title: string): void {
     aggregator.ingestTitle(windowId, panelId, title);
@@ -120,12 +135,28 @@ export async function closeAgentHookServer(): Promise<void> {
 
 export function registerAgentSessionIpc(ipcMain: IpcMain): void {
   aggregator.onChange(handleBroadcast);
-  hookServerPromise = startAgentHookServer((event) =>
-    aggregator.ingestHookEvent(event)
+  hookServerPromise = startAgentHookServer(
+    (event) => aggregator.ingestHookEvent(event),
+    (event) => {
+      // 命令行先验身份（loomdesk pty_command 源对位）：可执行体词元命中
+      // 才点亮; 非 agent 命令 no-op。清理仍由 command_finished 驱动。
+      const agentId = matchAgentCommand(event.commandLine);
+      if (agentId) {
+        aggregator.agentLaunched(event.windowId, event.panelId, agentId);
+      }
+    }
   ).catch((err) => {
     console.error("[agent-session] hook server start failed:", err);
     return null;
   });
+  shellIntegrationPromise = installShellCommandIntegration(
+    app.getPath("userData")
+  )
+    .then(() => true)
+    .catch((err) => {
+      console.error("[agent-session] shell integration install failed:", err);
+      return false;
+    });
   ipcMain.handle("pier:agent-session:snapshot", (event) => {
     // 同上：BaseWindow 架构下不可用 BrowserWindow.fromWebContents。
     const win = findAppWindowByWebContents(event.sender);

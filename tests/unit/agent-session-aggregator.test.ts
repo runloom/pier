@@ -318,6 +318,25 @@ describe("AgentSessionAggregator", () => {
     agg.dispose();
   });
 
+  it("worktree cwd 标题含品牌词不建会话（打开 codex 分支 worktree 不点亮图标）", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.ingestTitle("1", "p1", "~/ABC/pier/.worktrees/codex");
+    agg.ingestTitle("1", "p1", "~/dev/codex/fix-login");
+    agg.ingestTitle("1", "p1", "pier (codex/fix-login)");
+    expect(agg.snapshot().sessions).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("prompt cwd 标题清理 title-source 会话（agent 退回 shell 图标还原）", () => {
+    const agg = createAgentSessionAggregator({ now });
+    agg.ingestTitle("1", "p1", "codex working");
+    expect(agg.snapshot().sessions).toHaveLength(1);
+    // agent 退出, zsh precmd 写回 cwd 标题（即便路径里带品牌词也算退回 shell）
+    agg.ingestTitle("1", "p1", "~/ABC/pier/.worktrees/codex");
+    expect(agg.snapshot().sessions).toHaveLength(0);
+    agg.dispose();
+  });
+
   it("标题身份补全既有无身份会话的 agentId, 不覆盖 hook 已设身份", () => {
     const agg = createAgentSessionAggregator({ now });
     agg.ingestTitle("1", "p1", "aider working"); // working+身份 → 建会话

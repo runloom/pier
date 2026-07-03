@@ -1,6 +1,7 @@
 import {
   detectAgentIdFromTitle,
   detectAgentStatusFromTitle,
+  looksLikePromptOsc,
   runtimeStatusForTitleStatus,
 } from "@shared/agent-title-status.ts";
 import { describe, expect, it } from "vitest";
@@ -66,5 +67,46 @@ describe("detectAgentIdFromTitle (标题身份识别, 启动即亮图标)", () =
   it("词边界防误报：路径/复合词不匹配", () => {
     expect(detectAgentIdFromTitle("✳ ~/dev/claudette-app")).toBeNull();
     expect(detectAgentIdFromTitle("✳ my-aiderish thing")).toBeNull();
+  });
+
+  it.each([
+    "~/ABC/pier/.worktrees/codex", // worktree cwd 标题（原始误报场景）
+    "~/dev/codex/fix-login", // 路径段含品牌词
+    "/Users/x/codex", // 绝对路径
+    "xyz@host:~/codex", // user@host:cwd prompt OSC
+    "pier (codex/fix-login)", // zsh 主题带分支名, 品牌词不在开头
+    "review claude output", // 品牌词在句中
+  ])("路径/分支/句中品牌词不点亮身份: %s → null", (title) => {
+    expect(detectAgentIdFromTitle(title)).toBeNull();
+  });
+
+  it("裸品牌词在开头仍识别（agent 自报标题）", () => {
+    expect(detectAgentIdFromTitle("codex")).toBe("codex");
+    expect(detectAgentIdFromTitle("⛬ Droid")).toBe("droid");
+    expect(detectAgentIdFromTitle("Claude Code — ~/dev/pier")).toBe("claude");
+  });
+});
+
+describe("looksLikePromptOsc (shell 自动 prompt OSC 形态)", () => {
+  it.each([
+    "~/ABC/pier/.worktrees/codex",
+    "/private/tmp/scratch",
+    "xyz@host:~/repo",
+    "xyz@mbp.local:/Users/xyz",
+    "host:/Users/foo",
+    "user@host:~",
+  ])("prompt OSC → true: %s", (title) => {
+    expect(looksLikePromptOsc(title)).toBe(true);
+  });
+
+  it.each([
+    "✳ Claude Code",
+    "⛬ Droid",
+    "codex",
+    "vim main.ts",
+    "Cloning git@github.com:org/repo", // SSH-style 主动 OSC 不误伤
+    "",
+  ])("主动/普通标题 → false: %s", (title) => {
+    expect(looksLikePromptOsc(title)).toBe(false);
   });
 });

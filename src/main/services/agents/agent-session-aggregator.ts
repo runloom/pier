@@ -36,8 +36,10 @@ import {
 
 export interface AgentSessionAggregator {
   /**
-   * launcher 客户端先验身份:无需 agent 侧信号即刻建可见 ready 会话
-   * (orca launchToken 模式)。豁免关闭冷却; 后续 hook/标题信号无缝接管。
+   * 先验身份:无需 agent 侧信号即刻建可见 ready 会话。两个调用方——
+   * launcher 客户端 (orca launchToken 模式) 与 shell preexec 命令上报
+   * (命令行可执行体命中 agent 词元)。豁免关闭冷却; 后续 hook/标题信号
+   * 无缝接管。
    */
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
   /**
@@ -380,9 +382,11 @@ export function createAgentSessionAggregator(
       const titleAgentId = detectAgentIdFromTitle(title);
       // 决定进入通道：
       // (a) 标题有可识别状态 glyph → 走原路径, 状态即 titleStatus。
-      // (b) 标题无状态 glyph 但有 agent 身份 token(如 droid 的 "⛬ Droid",
-      //     只有目录派生的品牌 token 命中, 没有 idle/working 信号)→ 视为
-      //     ready, 用「有身份」补齐入口, 让图标至少能点亮。
+      // (b) 标题无状态 glyph 但有 agent 身份 token(如 droid 的 "⛬ Droid")
+      //     → 视为 ready, 用「有身份」补齐入口, 让图标至少能点亮。
+      //     detectAgentIdFromTitle 自带两道误报防御: prompt OSC 形态
+      //     (cwd/user@host 回显)直接 null + 品牌词必须锚定标题开头——
+      //     worktree 路径/分支名里的 codex/claude 字样不会点亮图标。
       // (c) 都无 → 转 handleTitleWithoutSignals 判断是否为「退回 shell」。
       if (titleStatus === null && titleAgentId === null) {
         handleTitleWithoutSignals(key, existing, title);

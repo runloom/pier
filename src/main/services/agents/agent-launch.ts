@@ -1,5 +1,6 @@
 import { platform } from "node:os";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import { splitShellCommandWords } from "@shared/agent-command-detection.ts";
 import type { AgentDefaultArgs, AgentKind } from "@shared/contracts/agent.ts";
 
 export interface ResolveAgentCommandArgs {
@@ -8,6 +9,18 @@ export interface ResolveAgentCommandArgs {
   agentId: AgentKind;
   /** terminal-profile 里的 binary 覆盖（可选）。 */
   override?: string | undefined;
+}
+
+export interface ResolveOneShotInvocationArgs {
+  agentDefaultArgs: AgentDefaultArgs;
+  agentId: AgentKind;
+  override?: string | undefined;
+  prompt: string;
+}
+
+export interface ResolvedOneShotInvocation {
+  args: string[];
+  binary: string;
 }
 
 /**
@@ -29,4 +42,30 @@ export function resolveAgentCommand({
     entry.launchCmd;
   const args = agentDefaultArgs[agentId]?.trim() ?? "";
   return args ? `${base} ${args}` : base;
+}
+
+/** one-shot 复用 launchCmd/override/defaultArgs,再 append catalog.oneShotArgs。 */
+export function resolveOneShotInvocation({
+  agentId,
+  override,
+  agentDefaultArgs,
+  prompt,
+}: ResolveOneShotInvocationArgs): ResolvedOneShotInvocation | null {
+  const entry = getAgentCatalogEntry(agentId);
+  if (!entry?.oneShotArgs) {
+    return null;
+  }
+  const command = resolveAgentCommand({ agentId, override, agentDefaultArgs });
+  if (!command) {
+    return null;
+  }
+  const words = splitShellCommandWords(command, 32);
+  const binary = words[0];
+  if (!binary) {
+    return null;
+  }
+  return {
+    binary,
+    args: [...words.slice(1), ...entry.oneShotArgs(prompt)],
+  };
 }
