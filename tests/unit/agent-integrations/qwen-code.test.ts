@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -82,22 +82,18 @@ describe("qwenCodeIntegration", () => {
 
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
-      expect(cmd).toContain('\\"agent\\":\\"qwen-code\\"');
+      expect(cmd).toContain('"qwen-code"');
     }
 
-    expect(typedHooks.StopFailure?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"error\\"'
-    );
+    expect(typedHooks.StopFailure?.[0]?.hooks[0]?.command).toContain('"error"');
     expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolStart\\"'
+      '"ToolStart"'
     );
     expect(typedHooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolComplete\\"'
+      '"ToolComplete"'
     );
     expect(typedHooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"PromptSubmit\\"'
+      '"PromptSubmit"'
     );
   });
 

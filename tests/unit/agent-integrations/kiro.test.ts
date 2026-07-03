@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 let homeDir: string;
 
@@ -89,20 +89,12 @@ describe("withPierKiroHooks / withoutPierKiroHooks (纯函数)", () => {
     const stopCmd = hooks.stop?.[0]?.command ?? "";
     expect(stopCmd.startsWith("cat >/dev/null 2>&1; ")).toBe(true);
     expect(stopCmd).toContain(MARK);
-    expect(stopCmd).toContain('\\"agent\\":\\"kiro\\"');
-    expect(stopCmd).toContain('\\"event\\":\\"Stop\\"');
-    expect(hooks.agentSpawn?.[0]?.command).toContain(
-      '\\"event\\":\\"SessionStart\\"'
-    );
-    expect(hooks.userPromptSubmit?.[0]?.command).toContain(
-      '\\"event\\":\\"PromptSubmit\\"'
-    );
-    expect(hooks.preToolUse?.[0]?.command).toContain(
-      '\\"event\\":\\"ToolStart\\"'
-    );
-    expect(hooks.postToolUse?.[0]?.command).toContain(
-      '\\"event\\":\\"ToolComplete\\"'
-    );
+    expect(stopCmd).toContain('"kiro"');
+    expect(stopCmd).toContain('"Stop"');
+    expect(hooks.agentSpawn?.[0]?.command).toContain('"SessionStart"');
+    expect(hooks.userPromptSubmit?.[0]?.command).toContain('"PromptSubmit"');
+    expect(hooks.preToolUse?.[0]?.command).toContain('"ToolStart"');
+    expect(hooks.postToolUse?.[0]?.command).toContain('"ToolComplete"');
   });
 
   it("幂等：重复注入不产生重复条目", async () => {

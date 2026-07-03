@@ -13,7 +13,7 @@ import {
   withPierKimiHooks,
 } from "../../../src/main/services/agents/integrations/kimi.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 const COMMAND_LINE_RE = /^command = (".*")$/;
 const SESSION_START_HOOK_RE =
   /event = "SessionStart"[^[]*command = ".*SessionStart/;
@@ -66,7 +66,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
       }
       const shellCommand = JSON.parse(commandMatch[1]) as string;
       expect(shellCommand).toContain(MARK);
-      expect(shellCommand).toContain('\\"agent\\":\\"kimi\\"');
+      expect(shellCommand).toContain('"kimi"');
     }
     // 至少一条 command 含 SessionStart / UserPromptSubmit。
     expect(next).toMatch(SESSION_START_HOOK_RE);

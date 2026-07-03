@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 const NATIVE_TYPES = ["before_tool", "after_tool", "post_agent_turn"];
 
 let homeDir: string;
@@ -45,14 +45,15 @@ describe("buildVibeHookBlock / withPierVibeHooks", () => {
     expect(block).toContain("timeout = 10.0");
   });
 
-  it("command 字面量含正确 agent id + pierEvent + PIER_AGENT_HOOK_PORT", async () => {
+  it("command 字面量含正确 agent id + pierEvent + emit 脚本引用", async () => {
     const { buildVibeHookBlock } = await loadModule();
     const block = buildVibeHookBlock();
-    expect(block).toContain('\\\\\\"agent\\\\\\":\\\\\\"mistral-vibe\\\\\\"');
+    // TOML 双引号字面量里 shell 命令的 " 会被转义成 \" — 断言 emit 脚本引用 + agent + event
     expect(block).toContain(MARK);
-    expect(block).toContain('\\\\\\"event\\\\\\":\\\\\\"ToolStart\\\\\\"');
-    expect(block).toContain('\\\\\\"event\\\\\\":\\\\\\"ToolComplete\\\\\\"');
-    expect(block).toContain('\\\\\\"event\\\\\\":\\\\\\"Stop\\\\\\"');
+    expect(block).toContain('\\"mistral-vibe\\"');
+    expect(block).toContain('\\"ToolStart\\"');
+    expect(block).toContain('\\"ToolComplete\\"');
+    expect(block).toContain('\\"Stop\\"');
   });
 
   it("TOML 转义正确性：command 字面量是合法带引号转义的 TOML 字符串", async () => {
@@ -63,9 +64,9 @@ describe("buildVibeHookBlock / withPierVibeHooks", () => {
       .find((l) => l.startsWith("command = "));
     expect(commandLine).toBeDefined();
     const literal = (commandLine as string).slice("command = ".length);
-    const parsed = JSON.parse(literal);
+    const parsed = JSON.parse(literal); // TOML 双引号字面量 == JSON 字符串
     expect(parsed).toContain(MARK);
-    expect(parsed).toContain('\\"v\\"');
+    expect(parsed).toContain("mistral-vibe");
   });
 
   it("幂等：重复安装字节不变", async () => {

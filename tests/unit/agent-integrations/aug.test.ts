@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -98,25 +98,21 @@ describe("augIntegration", () => {
 
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
-      expect(cmd).toContain('\\"agent\\":\\"aug\\"');
+      expect(cmd).toContain('"aug"');
     }
     // pierEvent 名称核验
-    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"Stop\\"'
-    );
+    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain('"Stop"');
     expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolStart\\"'
+      '"ToolStart"'
     );
     expect(typedHooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolComplete\\"'
+      '"ToolComplete"'
     );
     expect(typedHooks.SessionStart?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"SessionStart\\"'
+      '"SessionStart"'
     );
     expect(typedHooks.SessionEnd?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"SessionEnd\\"'
+      '"SessionEnd"'
     );
     // timeout 单位是毫秒（官方 schema），非 droid/claude 家族的秒
     expect(typedHooks.Stop?.[0]?.hooks[0]?.timeout).toBe(5000);

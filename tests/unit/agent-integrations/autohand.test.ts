@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 interface AutohandEntry {
   command: string;
@@ -90,33 +90,19 @@ describe("autohandIntegration", () => {
 
     for (const entry of entries) {
       expect(entry.command).toContain(MARK);
-      expect(entry.command).toContain("$PIER_PANEL_ID");
-      expect(entry.command).toContain("$PIER_WINDOW_ID");
-      expect(entry.command).toContain('\\"agent\\":\\"autohand\\"');
+      expect(entry.command).toContain('"autohand"');
     }
     // pierEvent 名称核验
-    expect(byEvent.get("session-start")?.command).toContain(
-      '\\"event\\":\\"SessionStart\\"'
-    );
-    expect(byEvent.get("session-end")?.command).toContain(
-      '\\"event\\":\\"SessionEnd\\"'
-    );
-    expect(byEvent.get("session-error")?.command).toContain(
-      '\\"event\\":\\"error\\"'
-    );
-    expect(byEvent.get("pre-prompt")?.command).toContain(
-      '\\"event\\":\\"PromptSubmit\\"'
-    );
-    expect(byEvent.get("stop")?.command).toContain('\\"event\\":\\"Stop\\"');
+    expect(byEvent.get("session-start")?.command).toContain('"SessionStart"');
+    expect(byEvent.get("session-end")?.command).toContain('"SessionEnd"');
+    expect(byEvent.get("session-error")?.command).toContain('"error"');
+    expect(byEvent.get("pre-prompt")?.command).toContain('"PromptSubmit"');
+    expect(byEvent.get("stop")?.command).toContain('"Stop"');
     expect(byEvent.get("permission-request")?.command).toContain(
-      '\\"event\\":\\"PermissionRequest\\"'
+      '"PermissionRequest"'
     );
-    expect(byEvent.get("pre-tool")?.command).toContain(
-      '\\"event\\":\\"ToolStart\\"'
-    );
-    expect(byEvent.get("post-tool")?.command).toContain(
-      '\\"event\\":\\"ToolComplete\\"'
-    );
+    expect(byEvent.get("pre-tool")?.command).toContain('"ToolStart"');
+    expect(byEvent.get("post-tool")?.command).toContain('"ToolComplete"');
   });
 
   it("幂等：重复安装不产生重复条目", async () => {

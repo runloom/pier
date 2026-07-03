@@ -14,7 +14,7 @@ import {
   withPierAiderNotifications,
 } from "../../../src/main/services/agents/integrations/aider.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 describe("buildAiderNotificationsBlock / withPierAiderNotifications", () => {
   it("生成 notifications: true + notifications-command 两行（连字符键名）", () => {
@@ -26,9 +26,9 @@ describe("buildAiderNotificationsBlock / withPierAiderNotifications", () => {
 
   it("command 含正确 agent id + Stop 事件 + PIER_AGENT_HOOK_PORT", () => {
     const block = buildAiderNotificationsBlock();
-    expect(block).toContain('\\"agent\\":\\"aider\\"');
+    expect(block).toContain('"aider"');
     expect(block).toContain(MARK);
-    expect(block).toContain('\\"event\\":\\"Stop\\"');
+    expect(block).toContain('"Stop"');
   });
 
   it("使用单引号 YAML 字面量承载 command", () => {

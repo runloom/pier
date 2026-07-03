@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { droidIntegration } from "../../../src/main/services/agents/integrations/droid.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -97,31 +97,27 @@ describe("droidIntegration", () => {
 
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
-      expect(cmd).toContain('\\"agent\\":\\"droid\\"');
+      expect(cmd).toContain('"droid"');
     }
     // pierEvent 名称核验
-    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"Stop\\"'
-    );
+    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain('"Stop"');
     expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolStart\\"'
+      '"ToolStart"'
     );
     expect(typedHooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolComplete\\"'
+      '"ToolComplete"'
     );
     expect(typedHooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"PromptSubmit\\"'
+      '"PromptSubmit"'
     );
     expect(typedHooks.SessionStart?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"SessionStart\\"'
+      '"SessionStart"'
     );
     expect(typedHooks.SessionEnd?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"SessionEnd\\"'
+      '"SessionEnd"'
     );
     expect(typedHooks.PreCompact?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"processing\\"'
+      '"processing"'
     );
   });
 
@@ -239,7 +235,7 @@ describe("droid 遗留清理(上一波误装 hooks.json, 现改回 settings.json
       const fresh = JSON.parse(
         await readFile(join(factoryDir, "settings.json"), "utf8")
       );
-      expect(JSON.stringify(fresh)).toContain("PIER_AGENT_HOOK_PORT");
+      expect(JSON.stringify(fresh)).toContain(MARK);
     } finally {
       process.env.HOME = prevHome;
     }

@@ -9,7 +9,7 @@ import {
   withPierCrushHooks,
 } from "../../../src/main/services/agents/integrations/crush.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 interface CrushHookEntry {
   command: string;
@@ -25,8 +25,6 @@ describe("withPierCrushHooks", () => {
     const preToolUse = hooks.PreToolUse ?? [];
     expect(preToolUse).toHaveLength(1);
     expect(preToolUse[0]?.command).toContain(MARK);
-    expect(preToolUse[0]?.command).toContain("$PIER_PANEL_ID");
-    expect(preToolUse[0]?.command).toContain("$PIER_WINDOW_ID");
   });
 
   it("schema 形状：PreToolUse 是对象数组，条目无 type 字段、无内层 hooks 包装", () => {

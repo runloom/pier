@@ -9,7 +9,7 @@ import {
   withPierCursorHooks,
 } from "../../../src/main/services/agents/integrations/cursor.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 const ALL_EVENTS = [
   "sessionStart",
@@ -47,8 +47,6 @@ describe("withPierCursorHooks", () => {
     }
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
     }
   });
 
