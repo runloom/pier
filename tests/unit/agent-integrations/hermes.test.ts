@@ -20,7 +20,7 @@ import {
   withoutHermesPluginEnabled,
 } from "../../../src/main/services/agents/integrations/hermes.ts";
 
-const EXCEPT_PASS_RE = /except[^\n]*:\s*\n\s*pass/;
+const EXCEPT_PASS_RE = /except[^\n]*:\s*(?:\n\s*#[^\n]*)*\s*\n\s*pass/;
 
 const NATIVE_EVENTS = [
   "on_session_start",
@@ -65,9 +65,11 @@ describe("buildHermesPluginInit", () => {
     expect(init).not.toContain("PIER_AGENT_HOOK_TOKEN");
   });
 
-  it("except 吞异常（no raise, best-effort）", () => {
+  it("except 只捕 OSError（不宽泛 Exception, 保 hermes 内部 bug 可见）", () => {
     const init = buildHermesPluginInit();
     expect(init).toMatch(EXCEPT_PASS_RE);
+    expect(init).toContain("except OSError:");
+    expect(init).not.toContain("except Exception:");
   });
 
   it("Python 语法关键结构：register(ctx) 遍历 EVENTS 并注册 hook", () => {

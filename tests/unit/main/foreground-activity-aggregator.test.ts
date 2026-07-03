@@ -314,4 +314,110 @@ describe("ForegroundActivityAggregator", () => {
     expect(agg.snapshot("2").activities).toHaveLength(1);
     agg.dispose();
   });
+
+  it("回归: 迟到 ToolComplete 不销毁已有 shell activity (acquireHookAgentEntry 顺序)", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    // shell activity 先存在
+    agg.ingestCommandStarted("p1", "1", "ls", null);
+    expect(agg.snapshot().activities[0]?.kind).toBe("shell");
+    // 迟到的 ToolComplete (非 SESSION_CREATING) 不应销毁 shell
+    agg.ingestAgentEvent(hookEvent("ToolComplete"));
+    const snap = agg.snapshot();
+    expect(snap.activities).toHaveLength(1);
+    expect(snap.activities[0]?.kind).toBe("shell");
+    agg.dispose();
+  });
+
+  it("回归: 迟到 Stop 不销毁 task activity", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("p1", "1", { taskId: "t1", label: "npm build" });
+    agg.ingestAgentEvent(hookEvent("Stop"));
+    const snap = agg.snapshot();
+    expect(snap.activities).toHaveLength(1);
+    expect(snap.activities[0]?.kind).toBe("task");
+    agg.dispose();
+  });
+
+  it("回归: agentLaunched 清 hookTtlTimer (relaunch 后 30min 不再触发衰减)", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    // 建立 hook agent activity + tool status → TTL timer armed
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(hookEvent("ToolStart"));
+    let a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.status).toBe("tool");
+    // agentLaunched 覆盖 → status 保持 tool (agent kind, 只更新 agentId + 清 TTL)
+    agg.agentLaunched("1", "p1", "codex");
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.agentId).toBe("codex");
+    expect(a.status).toBe("tool");
+    // 30min 后不应回落 ready (老 TTL 已清)
+    advance(30 * 60 * 1000 + 100);
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("回归: taskFinished 双次调用 linger 幂等 (第二次不重置 timer)", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
+    agg.taskFinished("p1", { status: "success", exitCode: 0 });
+    // linger 已启动, 3s 后二次 taskFinished
+    advance(3000);
+    agg.taskFinished("p1", { status: "failure", exitCode: 1 });
+    // 从第一次调用起再 2001ms (总 5001ms) → 首次 linger 到期 → activity 应清
+    advance(2001);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("回归: shell 冷却期内新命令被拦截 (panelClosed 后 5s 内 ingestCommandStarted)", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestCommandStarted("p1", "1", "ls", null);
+    agg.panelClosed("p1");
+    expect(agg.snapshot().activities).toHaveLength(0);
+    // 冷却期内新 shell 命令被拦
+    agg.ingestCommandStarted("p1", "1", "pwd", null);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    advance(5001);
+    agg.ingestCommandStarted("p1", "1", "ps", null);
+    expect(agg.snapshot().activities).toHaveLength(1);
+    expect(agg.snapshot().activities[0]?.kind).toBe("shell");
+    agg.dispose();
+  });
+
+  it("回归: windowClosed 清 taskLingerTimer (无残留 timer)", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
+    agg.taskFinished("p1", { status: "success", exitCode: 0 });
+    agg.windowClosed("1");
+    expect(agg.snapshot().activities).toHaveLength(0);
+    // linger timer 应已清; advance 后不应有幽灵 emit / 状态复活
+    advance(6000);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("回归: commandStart/Finished hook stub 无副作用 no-op (保 discriminated union)", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.agentLaunched("1", "p1", "codex");
+    expect(agg.snapshot().activities).toHaveLength(1);
+    // stub 通道不应改变 activity 状态
+    agg.ingestCommandStartHook({
+      v: 1,
+      kind: "commandStart",
+      panelId: "p1",
+      windowId: "1",
+      commandLine: "test",
+    });
+    agg.ingestCommandFinishedHook({
+      v: 1,
+      kind: "commandFinished",
+      panelId: "p1",
+      windowId: "1",
+      exitCode: 0,
+    });
+    expect(agg.snapshot().activities).toHaveLength(1);
+    expect(agg.snapshot().activities[0]?.kind).toBe("agent");
+    agg.dispose();
+  });
 });

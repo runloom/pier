@@ -88,6 +88,11 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
   }
 
   function processLine(line: string): void {
+    // 已 dispose 后剩余行不派发（defense-in-depth: onFileChange/pollNow 也各有
+    // disposed 门禁, 但 processChanges 分批读时 dispose 可能夹在两批之间）。
+    if (disposed) {
+      return;
+    }
     const trimmed = line.trim();
     if (!trimmed) {
       return;

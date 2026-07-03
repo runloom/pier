@@ -13,12 +13,12 @@ import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
-import { useAgentSessionStore } from "@/stores/agent-session.store.ts";
 import {
   computeMonoFontFamily,
   computeMonoFontFamilyList,
   useFontStore,
 } from "@/stores/font.store.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
@@ -32,7 +32,7 @@ import {
 } from "./terminal-status-bar.tsx";
 import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
-  agentTabChromeOverlay,
+  activityTabChromeOverlay,
   mergeTabChrome,
   tabChromeFromParams,
   terminalPanelDescriptor,
@@ -192,7 +192,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
-  const agentSession = useAgentSessionStore((s) => s.sessions[panelId]);
+  const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   // agent 会话呈现 overlay 叠在最外层：icon/title 换 agent 的, 会话消失自动回退。
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
@@ -202,7 +202,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       ),
       tabPatch
     ),
-    agentTabChromeOverlay(agentSession)
+    activityTabChromeOverlay(activity)
   );
   const statusContext = {
     context: effectiveContext,

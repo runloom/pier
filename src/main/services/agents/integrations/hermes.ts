@@ -116,8 +116,9 @@ def _pier_emit(pier_event: str) -> None:
         with open(log, "a", encoding="utf-8") as fp:
             fp.write(line)
     except OSError:
-        pass
-    except Exception:
+        # 磁盘满 / 权限 / broken pipe 等文件 IO 失败——静默降级不干扰
+        # hermes 本体。不宽泛 catch Exception, 否则会掩盖 os.getpid /
+        # json.dumps 等内部 bug (review Commit B P1#2)。
         pass
 
 

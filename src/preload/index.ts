@@ -35,10 +35,6 @@ import type {
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
-import {
-  agentSessionsApi,
-  type PierAgentSessionsAPI,
-} from "./agent-session-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import { filesApi, type PierFilesAPI } from "./file-api.ts";
 import {
@@ -201,7 +197,6 @@ export interface PierEnvAPI {
 }
 
 export interface PierWindowAPI {
-  agentSessions: PierAgentSessionsAPI;
   agents: PierAgentsAPI;
   ai: PierAiAPI;
   closeWindow: (windowId: string) => Promise<void>;
@@ -376,7 +371,6 @@ const tasksApi: PierTasksAPI = {
 
 const api: PierWindowAPI = {
   agents: agentsApi,
-  agentSessions: agentSessionsApi,
   foregroundActivity: foregroundActivityApi,
   ai: aiApi,
   closeWindow: (windowId) =>

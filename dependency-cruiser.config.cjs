@@ -67,6 +67,23 @@ module.exports = {
       to: { path: "^src" },
     },
     {
+      name: "foreground-activity-narrow-imports",
+      severity: "error",
+      comment:
+        "foreground-activity 模块只应依赖 shared 契约与 node builtin; 不依赖 services/agents 或 ipc 层, 保 activity 广播路径独立",
+      from: { path: "^src/main/services/foreground-activity" },
+      to: {
+        pathNot: [
+          "^src/main/services/foreground-activity",
+          "^src/shared",
+          "^node:",
+          "node_modules",
+          // depcruise 解析 node builtin 为裸名 (fs, path, crypto, ...); 允许它们
+          "^(assert|buffer|crypto|events|fs|http|https|net|os|path|stream|url|util|zlib)(/|$)",
+        ],
+      },
+    },
+    {
       name: "no-circular",
       severity: "error",
       comment: "严禁循环依赖",

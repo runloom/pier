@@ -46,6 +46,11 @@ export interface ForegroundActivityAggregator {
 
   /** panel 关闭 → 清 activity + 冷却拦迟到 hook。 */
   panelClosed(panelId: string): void;
+  /**
+   * launcher/panel 侧的 shim：清 `ignoredNativeUserClosePanels` 标记 + 清
+   * 该 panel 的冷却记录。**不动 entry 本体**——activity 生命周期由
+   * panelClosed / retainPanels 管。命名易歧义, 见 JSDoc。
+   */
   resetPanel(panelId: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的活动按 panelClosed 处理。 */
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;

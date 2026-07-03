@@ -25,17 +25,18 @@ describe("buildPiExtensionSource", () => {
   it("含 marker、三个 PIER_ 环境变量守卫、无顶层 import 声明", () => {
     const src = buildPiExtensionSource();
     expect(src).toContain(PI_MARKER);
-    // JSONL 通路的三个环境变量（HTTP 时代 PORT/TOKEN 已删）
     expect(src).toContain("PIER_AGENT_EVENT_LOG");
     expect(src).toContain("PIER_PANEL_ID");
     expect(src).toContain("PIER_WINDOW_ID");
     expect(src).not.toContain("PIER_AGENT_HOOK_PORT");
     expect(src).not.toContain("PIER_AGENT_HOOK_TOKEN");
+    // 无顶层 ImportDeclaration；await import() 是 CallExpression 允许在函数体内。
     for (const line of src.split("\n")) {
       expect(line.trimStart().startsWith("import ")).toBe(false);
     }
-    // 运行时 require 拿到 fs.promises（electron-vite 模板扫描陷阱豁免）
-    expect(src).toContain('require("node:fs/promises")');
+    // 运行时动态 import 拿到 fs.promises（ESM/CJS 兼容）
+    expect(src).toContain('await import("node:fs/promises")');
+    expect(src).not.toContain('require("node:fs/promises")');
     // HTTP 通路已删
     expect(src).not.toContain("fetch(");
     expect(src).not.toContain("/agent-event");

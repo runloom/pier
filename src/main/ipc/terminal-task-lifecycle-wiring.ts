@@ -9,10 +9,7 @@ import {
   findAppWindowByElectronId,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
-import {
-  agentSessionService,
-  foregroundActivityService,
-} from "./agent-session.ts";
+import { agentSessionService } from "./agent-session.ts";
 import { recordNativeTerminalRoute } from "./terminal-debug.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
@@ -110,11 +107,8 @@ export function registerTerminalTaskLifecycleForwarding(
     // 广播时对 session.windowId 做 Number()，然后交给 forwardToWindow；UUID
     // 会变 NaN。HTTP `PIER_WINDOW_ID = String(win.id)` 已经是同一约定。
     const agentId = matchAgentCommand(commandLine);
-    if (agentId) {
-      agentSessionService.agentLaunched(String(id), rawPanelId, agentId);
-    }
-    // 双写 foregroundActivity：null → shell activity, 非空 → 通过 agentLaunched。
-    foregroundActivityService.ingestCommandStarted(
+    // unified aggregator: null → shell activity, 非空 → agentLaunched 路径。
+    agentSessionService.ingestCommandStarted(
       rawPanelId,
       String(id),
       commandLine,

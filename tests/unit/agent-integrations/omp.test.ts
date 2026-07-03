@@ -32,11 +32,14 @@ describe("buildOmpExtensionSource", () => {
     expect(src).toContain("PIER_WINDOW_ID");
     expect(src).not.toContain("PIER_AGENT_HOOK_PORT");
     expect(src).not.toContain("PIER_AGENT_HOOK_TOKEN");
+    // 无顶层 ImportDeclaration（electron-vite 模板字面量扫描陷阱豁免）；
+    // await import() 是 CallExpression, 允许在函数体内。
     for (const line of src.split("\n")) {
       expect(line.trimStart().startsWith("import ")).toBe(false);
     }
-    // 运行时 require 拿到 fs.promises（electron-vite 模板扫描陷阱豁免）
-    expect(src).toContain('require("node:fs/promises")');
+    // 运行时动态 import 拿到 fs.promises（ESM/CJS 兼容, 无 require ReferenceError）
+    expect(src).toContain('await import("node:fs/promises")');
+    expect(src).not.toContain('require("node:fs/promises")');
     // HTTP 通路已删
     expect(src).not.toContain("fetch(");
     expect(src).not.toContain("/agent-event");

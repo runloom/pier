@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { agentKindSchema } from "./agent.ts";
-
+import type { PanelTabStatus } from "./panel.ts";
 /**
  * ForegroundActivity — 前台面板活动的统一模型（unified aggregator 契约）。
  *
@@ -105,7 +105,13 @@ export type ForegroundActivityBroadcast = z.infer<
   typeof foregroundActivityBroadcastSchema
 >;
 
-/** hook 事件名 → agent activity status。null = 未知事件，调用方应忽略。 */
+/**
+ * hook 事件名 → agent activity status。null = 未知事件，调用方应忽略。
+ *
+ * **同步维护提醒**：与 `src/shared/contracts/agent-session.ts` 的
+ * `runtimeStatusForHookEvent` 逻辑相同。老 aggregator 删除前 (plan §C.4)
+ * 两处必须同步——修一处务必修另一处，否则 broadcast 状态漂移。
+ */
 export function activityStatusForHookEvent(
   event: string
 ): ActivityStatus | null {
@@ -129,5 +135,22 @@ export function activityStatusForHookEvent(
       return "processing";
     default:
       return null;
+  }
+}
+
+/** activity status → tab 指示器状态。ready 映射 idle = tab 无指示器。 */
+export function tabStatusForActivityStatus(
+  status: ActivityStatus
+): PanelTabStatus {
+  switch (status) {
+    case "processing":
+    case "tool":
+      return "running";
+    case "waiting":
+      return "waiting";
+    case "error":
+      return "failed";
+    default:
+      return "idle";
   }
 }

@@ -2,9 +2,11 @@ import {
   agentHookEventSchema,
   agentKindFromTabIconId,
   agentTabIconId,
-  runtimeStatusForHookEvent,
-  tabStatusForAgentStatus,
 } from "@shared/contracts/agent-session.ts";
+import {
+  activityStatusForHookEvent,
+  tabStatusForActivityStatus,
+} from "@shared/contracts/foreground-activity.ts";
 import { describe, expect, it } from "vitest";
 
 describe("agentHookEventSchema", () => {
@@ -99,7 +101,7 @@ describe("agentHookEventSchema", () => {
   });
 });
 
-describe("runtimeStatusForHookEvent", () => {
+describe("activityStatusForHookEvent", () => {
   it.each([
     ["PermissionRequest", "waiting"],
     ["ToolStart", "tool"],
@@ -112,15 +114,15 @@ describe("runtimeStatusForHookEvent", () => {
     ["SubagentStart", "processing"],
     ["SubagentStop", "processing"],
   ] as const)("%s → %s", (event, status) => {
-    expect(runtimeStatusForHookEvent(event)).toBe(status);
+    expect(activityStatusForHookEvent(event)).toBe(status);
   });
 
   it("未知事件 → null", () => {
-    expect(runtimeStatusForHookEvent("SomethingElse")).toBeNull();
+    expect(activityStatusForHookEvent("SomethingElse")).toBeNull();
   });
 });
 
-describe("tabStatusForAgentStatus", () => {
+describe("tabStatusForActivityStatus", () => {
   it.each([
     ["processing", "running"],
     ["tool", "running"],
@@ -128,7 +130,7 @@ describe("tabStatusForAgentStatus", () => {
     ["error", "failed"],
     ["ready", "idle"],
   ] as const)("%s → %s", (status, tab) => {
-    expect(tabStatusForAgentStatus(status)).toBe(tab);
+    expect(tabStatusForActivityStatus(status)).toBe(tab);
   });
 });
 

@@ -9,6 +9,8 @@ import type {
 import { upsertProjectFromPath } from "../state/project-store.ts";
 import { execGit } from "./git-exec.ts";
 
+let upsertWarned = false;
+
 export interface ResolvePanelContextOptions {
   execGit?: (
     args: readonly string[],
@@ -129,7 +131,16 @@ export async function resolvePanelContextForPath(
     ? await supportsGitWorktree(cwd, execGit)
     : undefined;
   const project = await upsertProjectFromPath(projectRoot, now).catch(
-    () => null
+    (err: unknown) => {
+      if (!upsertWarned) {
+        upsertWarned = true;
+        console.warn(
+          "[panel-context] upsertProjectFromPath failed:",
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+      return null;
+    }
   );
 
   return {

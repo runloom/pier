@@ -11,7 +11,7 @@ import {
   armHookTtlTimer,
   CLOSE_COOLDOWN_MS,
   clearAllTimers,
-  clearTaskLingerTimer,
+  clearHookTtlTimer,
   clearVisibilityTimer,
   EMIT_DEBOUNCE_MS,
   newHookAgentEntry,
@@ -57,7 +57,9 @@ export function createForegroundActivityAggregator(
     const activities: ForegroundActivity[] = [];
     for (const entry of entries.values()) {
       if (!entry.hidden) {
-        activities.push(entry.activity);
+        // 浅拷贝防外部 mutate 污染内部 activity 引用
+        // (IPC serialize 会 structuredClone, 但同进程内 listener 直接消费引用)。
+        activities.push({ ...entry.activity });
       }
     }
     return { activities, ts: broadcastSeq };
@@ -176,18 +178,21 @@ export function createForegroundActivityAggregator(
     at: number
   ): ActivityEntry | null {
     const existing = entries.get(key);
-    if (existing) {
-      if (existing.activity.kind === "agent") {
-        if (event.event !== "SessionStart") {
-          revealEntry(existing);
-        }
-        return existing;
+    if (existing?.activity.kind === "agent") {
+      if (event.event !== "SessionStart") {
+        revealEntry(existing);
       }
-      clearAllTimers(existing);
-      entries.delete(key);
+      return existing;
     }
+    // existing 是 task/shell/idle — 只有 SESSION_CREATING 事件才允许覆盖为
+    // agent activity。迟到的终结事件 (Stop/ToolComplete/SubagentStop/error)
+    // 不能凭空销毁用户显式建立的 task/shell 活动 (review Commit C P1#1)。
     if (!SESSION_CREATING_EVENTS.has(event.event)) {
       return null;
+    }
+    if (existing) {
+      clearAllTimers(existing);
+      entries.delete(key);
     }
     return createHookAgentEntry(key, event, at);
   }
@@ -202,6 +207,9 @@ export function createForegroundActivityAggregator(
       const existing = entries.get(key);
       if (existing && existing.activity.kind === "agent") {
         revealEntry(existing);
+        // hook 侧的 TTL timer 无效了（launch 是新生命周期）——清掉
+        // 防止 30min 后回落 ready 的 callback 意外触发。
+        clearHookTtlTimer(existing);
         existing.activity = {
           ...existing.activity,
           agentId,
@@ -325,17 +333,20 @@ export function createForegroundActivityAggregator(
         ...(args.exitCode === undefined ? {} : { exitCode: args.exitCode }),
       };
       entry.activity = nextActivity;
-      clearTaskLingerTimer(entry);
-      entry.taskLingerTimer = setTimeout(() => {
-        const current = entries.get(key);
-        if (current?.activity.kind !== "task") {
-          return;
-        }
-        current.taskLingerTimer = null;
-        if (closeEntry(key, TASK_EXIT_LINGER_MS)) {
-          scheduleEmit();
-        }
-      }, TASK_EXIT_LINGER_MS);
+      // 幂等：linger timer 一旦启动就不重置——防止 native 层多次上报
+      // taskExit 导致 linger 无限延长, 用户看不到 activity 消失。
+      if (!entry.taskLingerTimer) {
+        entry.taskLingerTimer = setTimeout(() => {
+          const current = entries.get(key);
+          if (current?.activity.kind !== "task") {
+            return;
+          }
+          current.taskLingerTimer = null;
+          if (closeEntry(key, TASK_EXIT_LINGER_MS)) {
+            scheduleEmit();
+          }
+        }, TASK_EXIT_LINGER_MS);
+      }
       scheduleEmit();
     },
 

@@ -63,10 +63,12 @@ export function buildOmpExtensionSource(): string {
 // ${MARKER}
 // Deliberately no top-level import declarations: electron-vite scans
 // template literals in main's bundle and can otherwise inject an invalid
-// CommonJS shim into the ESM output. Use runtime require here.
+// CommonJS shim into the ESM output. \`await import()\` inside function
+// body is a CallExpression, not ImportDeclaration, so vite AST scan
+// doesn't fire; works in both CJS (Node <20) and ESM (Node 20+) hosts.
 // (Exception to ts-no-dynamic-import: generated file for a foreign host.)
 
-function pierEmit(event) {
+async function pierEmit(event) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
@@ -82,8 +84,8 @@ function pierEmit(event) {
 		event,
 	}) + "\\n";
 	try {
-		const { appendFile } = require("node:fs/promises");
-		appendFile(log, line).catch(() => {});
+		const { appendFile } = await import("node:fs/promises");
+		await appendFile(log, line);
 	} catch {
 		// best-effort, never throw into the agent's own event loop
 	}

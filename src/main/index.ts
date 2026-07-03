@@ -329,15 +329,16 @@ app.on("before-quit", (event) => {
   if (!didFlushBeforeQuit) {
     event.preventDefault();
     didFlushBeforeQuit = true;
+    // JSONL observer dispose 是同步操作, 抽出 Promise.all 避免无谓的 Promise 包装。
+    try {
+      closeAgentSessionResources();
+    } catch (error) {
+      console.error(
+        "[agent-session] failed to close resources before quit:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
     Promise.all([
-      Promise.resolve()
-        .then(() => closeAgentSessionResources())
-        .catch((error) => {
-          console.error(
-            "[agent-session] failed to close resources before quit:",
-            error instanceof Error ? error.message : String(error)
-          );
-        }),
       appCore.services.window.flushOpenWindows().catch((error) => {
         console.error(
           "[window] failed to flush windows before quit:",

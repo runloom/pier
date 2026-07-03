@@ -1,4 +1,4 @@
-import type { AgentRuntimeStatus } from "@shared/contracts/agent-session.ts";
+import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 
 /**
  * Agent 状态栏 item 的视觉纯逻辑（对齐 loomdesk 终端状态栏 activity item）：
@@ -32,9 +32,7 @@ export type AgentStatusTextKey =
   | "terminal.agentStatus.waiting";
 
 /** 状态 → i18n 文案 key。五态齐备——loomdesk 的 ready 同样可见（"等待输入"）。 */
-export function agentStatusTextKey(
-  status: AgentRuntimeStatus
-): AgentStatusTextKey {
+export function agentStatusTextKey(status: ActivityStatus): AgentStatusTextKey {
   switch (status) {
     case "processing":
       return "terminal.agentStatus.processing";
@@ -50,7 +48,7 @@ export function agentStatusTextKey(
 }
 
 /** shimmer 仅活跃推进态（loomdesk SHIMMERING_AGENT_STATUSES = processing/tool）。 */
-export function shouldShimmer(status: AgentRuntimeStatus): boolean {
+export function shouldShimmer(status: ActivityStatus): boolean {
   return status === "processing" || status === "tool";
 }
 
@@ -59,7 +57,7 @@ export function shouldShimmer(status: AgentRuntimeStatus): boolean {
  * 长跑覆盖只对 running（processing/tool）生效, 消费点是 shimmer 高档色。
  */
 export function statusColorVar(
-  status: AgentRuntimeStatus,
+  status: ActivityStatus,
   level: LongRunLevel
 ): string {
   if (shouldShimmer(status)) {

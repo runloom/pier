@@ -120,7 +120,8 @@ export function consumeCreateLaunch(args: CreateTerminalArgs): void {
  * 每个终端 PTY 注入面板级状态环境变量：PIER_WINDOW_ID + PIER_PANEL_ID 精确
  * 路由 agent hook 事件到「窗口+面板」（panelId 跨窗口不唯一, 见
  * terminal-panel-id.ts；无论 launcher 启动还是用户手敲 claude, shell 子进程
- * 都继承），PIER_AGENT_HOOK_PORT/TOKEN 指向本次运行的 loopback 服务器。
+ * 都继承），PIER_AGENT_HOOKS_DIR + PIER_AGENT_EVENT_LOG 指向 JSONL 通路资源
+ * (emit 脚本目录 + events.jsonl 路径, 见 agent-hooks-install.ts)。
  */
 export function withPanelStatusEnv(
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined,

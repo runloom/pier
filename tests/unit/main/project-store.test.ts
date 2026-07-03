@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -113,7 +113,7 @@ describe("project-store", () => {
     }
   });
 
-  it("持久化：upsert → flush → 新单例读回一致", async () => {
+  it("持久化：upsert → flush → 磁盘 JSON 结构正确 + fresh singleton hydrate 一致", async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-project-persist-"));
     try {
       await writeFile(
@@ -122,13 +122,29 @@ describe("project-store", () => {
       );
       const first = await upsertProjectFromPath(root, () => 42);
       await flushProjectStore();
-      // 重置单例, 强制从磁盘重读
-      const previous = { ...first };
-      await _resetProjectStoreForTests();
-      // 但是要保留 userDataPath 让单例读同一磁盘位置——重置后
-      // reset 会删除磁盘, 所以这个测试模拟"应用重启无数据丢失"需要另一种做法：
-      // 此处只验证 first upsert 落盘一致（重启保留由 versioned-store 覆盖测试）。
-      expect(previous.name).toBe("persisted");
+      // 直接读磁盘验证落盘结构 (project-state.json)
+      const rawDisk = await readFile(
+        join(tempDir, "project-state.json"),
+        "utf8"
+      );
+      const parsed = JSON.parse(rawDisk);
+      expect(parsed.version).toBe(1);
+      expect(parsed.projects).toHaveLength(1);
+      expect(parsed.projects[0].id).toBe(first.id);
+      expect(parsed.projects[0].name).toBe("persisted");
+      expect(parsed.projects[0].rootPath).toBe(root);
+      // fresh module import → 新单例 → init() 从同一磁盘位置 hydrate
+      // vi.resetModules 让 import 得到全新 module state (含全新 singleton)
+      vi.resetModules();
+      const fresh = await import("@main/state/project-store.ts");
+      const rehydrated = await fresh.readProjectByRootPath(root);
+      expect(rehydrated?.id).toBe(first.id);
+      expect(rehydrated?.name).toBe("persisted");
+      expect(rehydrated?.rootPath).toBe(root);
+      // 全量 list 也一致
+      const list = await fresh.listProjects();
+      expect(list).toHaveLength(1);
+      expect(list[0]?.id).toBe(first.id);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -155,6 +171,89 @@ describe("project-store", () => {
       expect(pb.name).toBe("beta");
     } finally {
       await rm(parent, { force: true, recursive: true });
+    }
+  });
+
+  it("Cargo [[bin]] name 在 [package] 之前 → 取 [package].name（非 [[bin]].name）", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-project-cargo-bin-"));
+    try {
+      await writeFile(
+        join(root, "Cargo.toml"),
+        [
+          "[[bin]]",
+          'name = "my-bin"',
+          'path = "src/bin/main.rs"',
+          "",
+          "[package]",
+          'name = "the-real-crate"',
+          'version = "0.1.0"',
+          "",
+        ].join("\n")
+      );
+      const p = await upsertProjectFromPath(root);
+      expect(p.name).toBe("the-real-crate");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("Cargo workspace-only（无 [package] section）→ 走 basename 兜底", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-project-cargo-ws-"));
+    try {
+      await writeFile(
+        join(root, "Cargo.toml"),
+        '[workspace]\nresolver = "2"\nmembers = ["crates/*"]\n'
+      );
+      const p = await upsertProjectFromPath(root);
+      expect(p.name.startsWith("pier-project-cargo-ws-")).toBe(true);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("package.json 里 name 非 string / null → 走后续 fallback", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-project-pkgnull-"));
+    try {
+      await writeFile(
+        join(root, "package.json"),
+        JSON.stringify({ name: null, version: "1" })
+      );
+      const p = await upsertProjectFromPath(root);
+      // package.json name 无效 → basename 兜底
+      expect(p.name.startsWith("pier-project-pkgnull-")).toBe(true);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("package.json 半损坏 JSON → tryJsonName catch → 走后续 fallback", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-project-pkgcorrupt-"));
+    try {
+      await writeFile(join(root, "package.json"), '{"name": "half');
+      const p = await upsertProjectFromPath(root);
+      expect(p.name.startsWith("pier-project-pkgcorrupt-")).toBe(true);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("并发 upsert 同一 rootPath → 单条记录, 稳定 id (in-flight dedupe)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-project-race-"));
+    try {
+      await writeFile(
+        join(root, "package.json"),
+        JSON.stringify({ name: "raced" })
+      );
+      // 并发 10 次
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () => upsertProjectFromPath(root))
+      );
+      const ids = new Set(results.map((p) => p.id));
+      expect(ids.size).toBe(1);
+      const list = await listProjects();
+      expect(list.filter((p) => p.rootPath === root)).toHaveLength(1);
+    } finally {
+      await rm(root, { force: true, recursive: true });
     }
   });
 });
