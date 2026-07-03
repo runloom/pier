@@ -44,6 +44,7 @@
     "postinstall": "node ./scripts/ensure-electron.mjs"
   },
   "dependencies": {
+    "@hookform/resolvers": "5.4.0",
     "@leeoniya/ufuzzy": "1.0.19",
     "@pier/ui": "workspace:*",
     "@pierre/theme": "^1.1.0",
@@ -59,6 +60,7 @@
     "radix-ui": "^1.6.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-hook-form": "7.80.0",
     "react-resizable-panels": "^4.11.2",
     "recharts": "^3.8.1",
     "sonner": "2.0.7",
@@ -95,18 +97,6 @@
     "ultracite": "7.8.3",
     "vite": "8.0.16",
     "vitest": "4.1.8"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@biomejs/biome",
-      "@swc/core",
-      "electron",
-      "electron-winstaller",
-      "esbuild"
-    ],
-    "patchedDependencies": {
-      "@pierre/trees@1.0.0-beta.5": "patches/@pierre__trees@1.0.0-beta.5.patch"
-    }
   },
   "$pin-policy": "exact pin 到 install 当日 latest stable; 不用 latest 字面; 升级走 plan unlock"
 }

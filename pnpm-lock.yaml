@@ -4,10 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@pierre/trees@1.0.0-beta.5': 0f316ff752770e4607d35ac65884fb14ec00f0f932978a2f4029794ebffdd885
+
 importers:
 
   .:
     dependencies:
+      '@hookform/resolvers':
+        specifier: 5.4.0
+        version: 5.4.0(react-hook-form@7.80.0(react@19.2.7))
       '@leeoniya/ufuzzy':
         specifier: 1.0.19
         version: 1.0.19
@@ -53,6 +59,9 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      react-hook-form:
+        specifier: 7.80.0
+        version: 7.80.0(react@19.2.7)
       react-resizable-panels:
         specifier: ^4.11.2
         version: 4.11.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -161,7 +170,7 @@ importers:
     dependencies:
       '@pierre/trees':
         specifier: 1.0.0-beta.5
-        version: 1.0.0-beta.5(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.0.0-beta.5(patch_hash=0f316ff752770e4607d35ac65884fb14ec00f0f932978a2f4029794ebffdd885)(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -715,6 +724,11 @@ packages:
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
+
+  '@hookform/resolvers@5.4.0':
+    resolution: {integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==}
+    peerDependencies:
+      react-hook-form: ^7.55.0
 
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
@@ -3837,6 +3851,12 @@ packages:
     peerDependencies:
       react: ^19.2.7
 
+  react-hook-form@7.80.0:
+    resolution: {integrity: sha512-4P+fk6oXsxY+6xSj7Euhc2sumQD8zQqCuVHoJwoyp9EchP+IUW9OESB7uHFJOKsIBQ4MQqYE84INJFqUCYNoOg==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18 || ^19
+
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
 
@@ -5198,6 +5218,11 @@ snapshots:
     dependencies:
       hono: 4.12.26
 
+  '@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7))':
+    dependencies:
+      '@standard-schema/utils': 0.3.0
+      react-hook-form: 7.80.0(react@19.2.7)
+
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
       minipass: 7.1.3
@@ -5314,7 +5339,7 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@pierre/trees@1.0.0-beta.5(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@pierre/trees@1.0.0-beta.5(patch_hash=0f316ff752770e4607d35ac65884fb14ec00f0f932978a2f4029794ebffdd885)(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@pierre/theming': 0.0.2(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       preact: 11.0.0-beta.0
@@ -8376,6 +8401,10 @@ snapshots:
     dependencies:
       react: 19.2.7
       scheduler: 0.27.0
+
+  react-hook-form@7.80.0(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   react-is@17.0.2: {}
 
