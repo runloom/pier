@@ -15,7 +15,7 @@ import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import {
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
-} from "@/stores/terminal.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 
 const APP_DIALOG_OVERLAY_ID = "app-dialog";
 

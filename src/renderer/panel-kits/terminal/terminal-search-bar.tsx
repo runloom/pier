@@ -5,10 +5,10 @@ import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import {
-  registerTerminalElementWebOverlay,
   useTerminalOverlayFocus,
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
+import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing-slice.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;

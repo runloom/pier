@@ -29,11 +29,11 @@ import {
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   activateTerminalInputRouting,
   setTerminalBasePanel,
-  useTerminalStore,
-} from "@/stores/terminal.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";

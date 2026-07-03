@@ -7,7 +7,7 @@ import {
   requestTerminalWebFocus,
   resetTerminalInputRoutingForTests,
   setTerminalBasePanel,
-} from "@/stores/terminal.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 
 describe("terminal input routing store", () => {
   let applyInputRouting: ReturnType<typeof vi.fn>;

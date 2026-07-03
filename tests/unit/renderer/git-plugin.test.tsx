@@ -39,7 +39,7 @@ import { usePluginOverlayStore } from "@/stores/plugin-overlay.store.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
   resetTerminalInputRoutingForTests,
-} from "@/stores/terminal.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const toastMocks = vi.hoisted(() => ({

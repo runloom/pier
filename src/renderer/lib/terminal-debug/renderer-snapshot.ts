@@ -6,7 +6,7 @@ import {
 import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/terminal-lifecycle-debug.ts";
 import { getLastTerminalPresentationSnapshot } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-viewport.ts";
-import { getLastTerminalInputRoutingSnapshot } from "@/stores/terminal.store.ts";
+import { getLastTerminalInputRoutingSnapshot } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {

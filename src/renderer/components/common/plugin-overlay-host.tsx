@@ -7,7 +7,7 @@ import {
 import {
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
-} from "@/stores/terminal.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 
 export function PluginOverlayHost() {
   const current = usePluginOverlayStore((state) => state.current);

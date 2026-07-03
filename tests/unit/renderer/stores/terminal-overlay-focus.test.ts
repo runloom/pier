@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  getLastTerminalInputRoutingSnapshot,
-  resetTerminalInputRoutingForTests,
   resetTerminalOverlayFocusForTests,
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
+import {
+  getLastTerminalInputRoutingSnapshot,
+  resetTerminalInputRoutingForTests,
+} from "@/stores/terminal-input-routing-slice.ts";
 
 function webRequestCount(): number | undefined {
   return getLastTerminalInputRoutingSnapshot()?.webRequestCount;

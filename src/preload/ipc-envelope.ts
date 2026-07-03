@@ -28,3 +28,21 @@ export async function invokePierCommand<T>(command: PierCommand): Promise<T> {
   error.code = result.error.code;
   throw error;
 }
+
+/**
+ * IPC 广播订阅助手。renderer 侧只关心 payload，callback 不看 event 元数据；
+ * 统一封装避免每个 API 文件重复 `on(channel, (_e, p) => cb(p))` + `off` 解绑
+ * 样板。返回 disposer.
+ */
+export function subscribeIpc<P>(
+  channel: string,
+  cb: (payload: P) => void
+): () => void {
+  const listener = (_event: unknown, payload: P): void => {
+    cb(payload);
+  };
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.off(channel, listener);
+  };
+}

@@ -27,11 +27,7 @@ import type {
   TaskRunSnapshot,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
-import type {
-  TerminalAPI,
-  TerminalDebugRendererSnapshotRequest,
-  TerminalDebugRendererSnapshotResult,
-} from "@shared/contracts/terminal.ts";
+import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type {
   WindowContext,
   WindowCreateResult,
@@ -46,11 +42,12 @@ import {
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import { filesApi, type PierFilesAPI } from "./file-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
-import { invokePierCommand } from "./ipc-envelope.ts";
+import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import {
   type PierPluginSettingsAPI,
   pluginSettingsApi,
 } from "./plugin-settings-api.ts";
+import { terminalApi } from "./terminal-api.ts";
 import {
   type PierTerminalStatusBarPrefsAPI,
   terminalStatusBarPrefsApi,
@@ -230,26 +227,6 @@ export interface PierWindowAPI {
   worktrees: PierWorktreesAPI;
 }
 
-/**
- * 订阅 main → renderer IPC 事件, 返回 dispose 函数.
- *
- * 所有 forward 类 API (keybinding.onForward / terminal.onCwdChange /
- * onTitleChange / onContextMenuRequest / preferences.onChanged) 共用此模板.
- * 加新订阅:一行 (channel, cb).
- */
-function subscribeIpc<P>(
-  channel: string,
-  cb: (payload: P) => void
-): () => void {
-  const listener = (_event: unknown, payload: P): void => {
-    cb(payload);
-  };
-  ipcRenderer.on(channel, listener);
-  return () => {
-    ipcRenderer.off(channel, listener);
-  };
-}
-
 const agentsApi: PierAgentsAPI = {
   detect: () => ipcRenderer.invoke("pier:agents:detect"),
   prepareLaunch: (agentId: AgentKind) =>
@@ -266,82 +243,6 @@ const preferencesApi: PierPreferencesAPI = {
       patch,
       type: "preferences.update",
     }),
-};
-
-const terminalApi: TerminalAPI = {
-  applyInputRouting: (snapshot) =>
-    ipcRenderer.send("pier:terminal:apply-input-routing", snapshot),
-  applyPresentation: (snapshot) =>
-    ipcRenderer.send("pier:terminal:apply-presentation", snapshot),
-  applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
-  close: (panelId, options) =>
-    ipcRenderer
-      .invoke("pier:terminal:close", panelId, options)
-      .then(() => undefined),
-  create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
-  debugSnapshot: (args) =>
-    ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
-  endSearch: (panelId) =>
-    ipcRenderer.invoke("pier:terminal:end-search", panelId),
-  hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
-  navigateSearch: (panelId, direction) =>
-    ipcRenderer.invoke("pier:terminal:navigate-search", panelId, direction),
-  reconcile: (activeIds) =>
-    ipcRenderer.send("pier:terminal:reconcile", activeIds),
-  onContextMenuRequest: (cb) =>
-    subscribeIpc("pier:terminal:request-context-menu", cb),
-  onCwdChange: (cb) => subscribeIpc(PIER_BROADCAST.TERMINAL_CWD_CHANGED, cb),
-  onDebugRendererSnapshotRequest: (cb) => {
-    const listener = async (
-      _event: unknown,
-      req: TerminalDebugRendererSnapshotRequest
-    ) => {
-      const result: TerminalDebugRendererSnapshotResult = {
-        ok: false,
-        requestId: req.requestId,
-      };
-      try {
-        result.renderer = await cb(req);
-        result.ok = true;
-      } catch (err) {
-        result.error = err instanceof Error ? err.message : String(err);
-      }
-      ipcRenderer.send("pier:terminal-debug:renderer-snapshot-result", result);
-    };
-    ipcRenderer.on("pier:terminal-debug:collect-renderer-snapshot", listener);
-    return () => {
-      ipcRenderer.off(
-        "pier:terminal-debug:collect-renderer-snapshot",
-        listener
-      );
-    };
-  },
-  onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
-  onSearchOpenRequest: (cb) =>
-    subscribeIpc(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST, cb),
-  onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),
-  onTabChromePatch: (cb) =>
-    subscribeIpc(PIER_BROADCAST.TERMINAL_TAB_CHROME_PATCHED, cb),
-  onTitleChange: (cb) =>
-    subscribeIpc(PIER_BROADCAST.TERMINAL_TITLE_CHANGED, cb),
-  openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
-  performOperation: (panelId, operation) =>
-    ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
-  readSession: (panelId) =>
-    ipcRenderer.invoke("pier:terminal:read-session", panelId),
-  search: (panelId, query) =>
-    ipcRenderer.invoke("pier:terminal:search", panelId, query),
-  setAppShortcutKeys: (keys) =>
-    ipcRenderer.send("pier:terminal:set-app-shortcut-keys", keys),
-  setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),
-  setFont: (panelId, font) =>
-    ipcRenderer.send("pier:terminal:set-font", panelId, font),
-  setFrame: (panelId, frame) =>
-    ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
-  setup: () => ipcRenderer.invoke("pier:terminal:setup"),
-  show: (panelId) => ipcRenderer.send("pier:terminal:show", panelId),
-  onPresentationApplied: (cb) =>
-    subscribeIpc(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, cb),
 };
 
 const notificationsApi: PierNotificationsAPI = {

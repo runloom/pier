@@ -49,7 +49,7 @@ import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import {
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
-} from "@/stores/terminal.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 
 function useActions(): readonly Action[] {
   // version 变 → snapshot 变 → useSyncExternalStore 通知 React 重渲,

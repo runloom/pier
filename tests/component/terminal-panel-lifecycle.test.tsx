@@ -25,11 +25,13 @@ import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-statu
 import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
-  resetTerminalInputRoutingForTests,
   resetTerminalOverlayFocusForTests,
-  setTerminalBasePanel,
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
+import {
+  resetTerminalInputRoutingForTests,
+  setTerminalBasePanel,
+} from "@/stores/terminal-input-routing-slice.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 interface TerminalRelaunchRequest {
