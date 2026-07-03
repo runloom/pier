@@ -22,6 +22,7 @@
     "format:check": "ultracite check",
     "depcruise": "depcruise --config dependency-cruiser.config.cjs src packages",
     "check:file-size": "bash scripts/check-file-size.sh",
+    "build:libghostty": "bash scripts/build-libghostty.sh",
     "build:native": "cd native && bash build.sh",
     "build:icons": "node ./scripts/build-app-icons.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size",

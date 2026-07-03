@@ -2,6 +2,27 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Guard: GhosttyKit.xcframework 由 scripts/build-libghostty.sh 现地构建，
+# 不入 git；缺失时明确报错并给出重建指令。避免 swift build 报难懂的
+# "no such module 'libghostty'" 让人以为环境坏了。
+if [ ! -d Vendor/libghostty-spm/GhosttyKit.xcframework ]; then
+  cat >&2 <<'EOF'
+ERROR: native/Vendor/libghostty-spm/GhosttyKit.xcframework 不存在。
+
+首次 clone / 新电脑上第一次构建需要先跑：
+
+    pnpm build:libghostty
+
+该命令会拉 ghostty 上游 + Lakr233 patches + pier 独有 patch，本地构建
+universal (arm64 + x86_64) fat archive。首次约 3-5 分钟；后续增量 60-90s。
+
+依赖：
+  - brew install zig@0.15
+  - xcode-select --install
+EOF
+  exit 1
+fi
+
 echo "=== [1/3] SPM resolve + Swift build ==="
 swift package resolve
 swift build -c release --product GhosttyBridge

@@ -59,3 +59,11 @@ playwright-report/
 
 # cursor
 .cursor/
+
+# libghostty 本地构建缓存（scripts/build-libghostty.sh 拉取）
+/.ghostty-src/
+/.libghostty-spm-src/
+/.libghostty-build-tmp/
+
+# GhosttyKit.xcframework 由 scripts/build-libghostty.sh 现地构建，不入库
+/native/Vendor/libghostty-spm/GhosttyKit.xcframework/
