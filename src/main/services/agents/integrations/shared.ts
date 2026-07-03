@@ -4,28 +4,42 @@ import { delimiter, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookCapability, AgentHookIntegration } from "./types.ts";
 
-/** pier hook 命令的识别标记（命令文本必然包含该环境变量名）。 */
-export const PIER_HOOK_MARK = "PIER_AGENT_HOOK_PORT";
+/**
+ * pier hook 命令的识别标记（新格式——JSONL emit 脚本方式）。
+ * hooks.json command 模板引用此环境变量名。
+ */
+export const PIER_AGENT_HOOKS_DIR_MARK = "PIER_AGENT_HOOKS_DIR";
 
 /**
- * 生成静态 hook 命令：端口/token/panelId/windowId 运行时从环境变量读
- * （PTY 注入, shell 子进程继承），Pier 外启动的 agent 因变量缺失直接短路。
- * 事件名在安装时即为 pier 规范事件（loomdesk 模式）——接收端 agent 无关。
- * 尾部 `|| true` 保证 hook 永远 exit 0, 不干扰 agent 本体。
+ * 旧格式识别标记（HTTP curl 方式）。保留用于 isPierHookCommand 兼容
+ * 卸载旧条目，Wave 2 删除。
+ */
+const LEGACY_HOOK_MARK = "PIER_AGENT_HOOK_PORT";
+
+/**
+ * 生成静态 hook 命令（spec §4.4）：通过 emit 脚本写 JSONL，取代旧版 curl。
+ * PTY 注入 PIER_AGENT_HOOKS_DIR 环境变量，Pier 外启动的 agent 因变量
+ * 缺失直接短路（emit 脚本内部 guard）。
+ * 尾部 `|| true` 保证 hook 永远 exit 0，不干扰 agent 本体。
  */
 export function pierHookCommand(agentId: AgentKind, pierEvent: string): string {
-  const payload = `{\\"v\\":1,\\"agent\\":\\"${agentId}\\",\\"event\\":\\"${pierEvent}\\",\\"panelId\\":\\"$PIER_PANEL_ID\\",\\"windowId\\":\\"$PIER_WINDOW_ID\\"}`;
   return (
-    `[ -n "$${PIER_HOOK_MARK}" ] && [ -n "$PIER_PANEL_ID" ] && [ -n "$PIER_WINDOW_ID" ] && ` +
-    `curl -fsS -m 2 -X POST "http://127.0.0.1:$${PIER_HOOK_MARK}/agent-event" ` +
-    `-H "Authorization: Bearer $PIER_AGENT_HOOK_TOKEN" ` +
-    `-H "Content-Type: application/json" ` +
-    `-d "${payload}" >/dev/null 2>&1 || true`
+    `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
+    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "${agentId}" "${pierEvent}" || true`
   );
 }
 
+/**
+ * 识别 pier hook 命令——同时兼容新旧两种格式。
+ * 新安装使用 PIER_AGENT_HOOKS_DIR，旧安装使用 PIER_AGENT_HOOK_PORT；
+ * 卸载时必须两种都能识别，否则旧条目残留。
+ */
 export function isPierHookCommand(command: unknown): boolean {
-  return typeof command === "string" && command.includes(PIER_HOOK_MARK);
+  return (
+    typeof command === "string" &&
+    (command.includes(PIER_AGENT_HOOKS_DIR_MARK) ||
+      command.includes(LEGACY_HOOK_MARK))
+  );
 }
 
 /**

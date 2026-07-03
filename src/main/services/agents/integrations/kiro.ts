@@ -6,7 +6,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  PIER_HOOK_MARK,
+  PIER_AGENT_HOOKS_DIR_MARK,
   pierHookCommand,
   transformJsonConfig,
 } from "./shared.ts";
@@ -183,4 +183,4 @@ export const kiroIntegration: AgentHookIntegration = {
 };
 
 /** marker 常量导出（测试断言用）。 */
-export const KIRO_HOOK_MARK = PIER_HOOK_MARK;
+export const KIRO_HOOK_MARK = PIER_AGENT_HOOKS_DIR_MARK;
