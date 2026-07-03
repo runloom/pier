@@ -7,10 +7,11 @@ import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS } from "@/lib/actions/panel-actions.ts";
 import { PANEL_LAYOUT_ACTION_CONTRIBUTIONS } from "@/lib/actions/panel-layout-contributions.ts";
 
-function runtime(groupCount: number) {
+function runtime(groupCount: number, activeIsTaskPanel = false) {
   return {
     getContext: () => ({
       terminal: {
+        activeIsTaskPanel,
         hasActivePanel: true,
       },
       workspace: {
@@ -110,6 +111,48 @@ describe("action contributions", () => {
     expect(
       evaluateActionWhen("terminal.hasActivePanel", runtime(1).getContext())
     ).toBe(true);
+  });
+
+  it("evaluates negated boolean conditions", () => {
+    expect(
+      evaluateActionWhen(
+        "!terminal.activeIsTaskPanel",
+        runtime(1, false).getContext()
+      )
+    ).toBe(true);
+    expect(
+      evaluateActionWhen(
+        "!terminal.activeIsTaskPanel",
+        runtime(1, true).getContext()
+      )
+    ).toBe(false);
+    expect(
+      evaluateActionWhen("!workspace.hasApi", runtime(1).getContext())
+    ).toBe(false);
+  });
+
+  it("maps menuHiddenWhen to metadata.menuHidden", () => {
+    const contribution: ActionContribution = {
+      categoryKey: "run",
+      handler: () => undefined,
+      id: "pier.test.menuHidden",
+      menuHiddenWhen: "terminal.activeIsTaskPanel",
+      surfaces: ["terminal/content"],
+      titleKey: "contextMenu.action.rerunTask",
+    };
+
+    expect(
+      createActionFromContribution(
+        contribution,
+        runtime(1, true)
+      ).metadata?.menuHidden?.()
+    ).toBe(true);
+    expect(
+      createActionFromContribution(
+        contribution,
+        runtime(1, false)
+      ).metadata?.menuHidden?.()
+    ).toBe(false);
   });
 
   it("declares numbered tab focus actions as parameterized contributions", () => {

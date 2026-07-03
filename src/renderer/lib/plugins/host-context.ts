@@ -46,6 +46,7 @@ import {
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
+import { createPluginAiContext } from "./host-ai-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 import {
@@ -492,5 +493,6 @@ export function createRendererPluginContext(
       remove: (request) => window.pier.worktrees.remove(request),
     },
     git: createPluginGitContext(entry, assertPluginCapability),
+    ai: createPluginAiContext(entry, assertPluginCapability),
   };
 }

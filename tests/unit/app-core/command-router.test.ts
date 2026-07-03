@@ -141,6 +141,14 @@ function services(
   let recentContexts: PanelContext[] = [];
 
   return {
+    ai: {
+      status: async () => ({ agent: null, configured: false, label: "" }),
+      suggestBranch: async () => ({
+        message: "not configured",
+        reason: "not_configured",
+        status: "unavailable",
+      }),
+    },
     commandPaletteMru: {
       clear: async () => ({ entries: [], version: 1 }),
       read: async () => ({ entries: [], version: 1 }),

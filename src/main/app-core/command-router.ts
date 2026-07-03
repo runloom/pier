@@ -13,6 +13,7 @@ import { GitExecError } from "../services/git-exec.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
 import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
+import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
   commandFailure as failure,
@@ -346,6 +347,7 @@ async function executeCommandByDomain(
 ): Promise<PierCommandResult | null> {
   const executors = [
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeFileCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),

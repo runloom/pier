@@ -43,6 +43,7 @@ import {
   agentSessionsApi,
   type PierAgentSessionsAPI,
 } from "./agent-session-api.ts";
+import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import { filesApi, type PierFilesAPI } from "./file-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
@@ -126,6 +127,7 @@ export interface PierPluginsAPI {
   onChanged: (cb: (snapshot: PluginRegistryListResult) => void) => () => void;
 }
 
+export type { PierAiAPI } from "./ai-api.ts";
 export type { PierFilesAPI } from "./file-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
@@ -184,6 +186,7 @@ export interface PierTasksAPI {
 export interface PierWindowAPI {
   agentSessions: PierAgentSessionsAPI;
   agents: PierAgentsAPI;
+  ai: PierAiAPI;
   closeCurrentWindow: () => Promise<void>;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
@@ -454,6 +457,7 @@ const tasksApi: PierTasksAPI = {
 const api: PierWindowAPI = {
   agents: agentsApi,
   agentSessions: agentSessionsApi,
+  ai: aiApi,
   closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
   closeWindow: (windowId) =>
     invokePierCommand<void>({ type: "window.close", windowId }),

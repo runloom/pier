@@ -20,7 +20,10 @@ const CATEGORY_BY_KEY: Record<ActionCategoryKey, string> = {
 };
 
 const BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel", "hasApi"]);
-const TERMINAL_BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel"]);
+const TERMINAL_BOOLEAN_WHEN_FIELDS = new Set([
+  "activeIsTaskPanel",
+  "hasActivePanel",
+]);
 const NUMBER_WHEN_FIELDS = new Set([
   "activeGroupPanelCount",
   "groupCount",
@@ -30,6 +33,7 @@ const BOOLEAN_CLAUSE_RE = /^workspace\.([A-Za-z]+)$/;
 const TERMINAL_BOOLEAN_CLAUSE_RE = /^terminal\.([A-Za-z]+)$/;
 const NUMBER_CLAUSE_RE = /^workspace\.([A-Za-z]+)\s*>\s*(\d+)$/;
 const WHEN_CONJUNCTION_RE = /\s*&&\s*/;
+const NEGATION_PREFIX_RE = /^!\s*/;
 
 export function evaluateActionWhen(
   expression: string | undefined,
@@ -47,6 +51,12 @@ function evaluateActionWhenClause(
   clause: string,
   context: ActionWhenContext
 ): boolean {
+  if (NEGATION_PREFIX_RE.test(clause)) {
+    return !evaluateActionWhenClause(
+      clause.replace(NEGATION_PREFIX_RE, ""),
+      context
+    );
+  }
   const booleanMatch = BOOLEAN_CLAUSE_RE.exec(clause);
   if (booleanMatch) {
     const field = booleanMatch[1];
@@ -80,6 +90,8 @@ function booleanTerminalValue(
   context: ActionWhenContext
 ): boolean {
   switch (field) {
+    case "activeIsTaskPanel":
+      return context.terminal.activeIsTaskPanel;
     case "hasActivePanel":
       return context.terminal.hasActivePanel;
     default:
@@ -158,6 +170,11 @@ function createMetadata(
   }
   if (contribution.iconComponent) {
     metadata.iconComponent = contribution.iconComponent;
+  }
+  const menuHiddenWhen = contribution.menuHiddenWhen;
+  if (menuHiddenWhen) {
+    metadata.menuHidden = () =>
+      evaluateActionWhen(menuHiddenWhen, runtime.getContext());
   }
   if (contribution.shortcutSourceId) {
     metadata.shortcutSourceId = contribution.shortcutSourceId;

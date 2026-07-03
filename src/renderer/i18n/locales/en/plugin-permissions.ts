@@ -1,4 +1,5 @@
 export const pluginPermissions = {
+  "ai:invoke": "Invoke the AI service",
   "app:read": "Read app status",
   "command:register": "Register commands",
   "evidence:write": "Write evidence records",

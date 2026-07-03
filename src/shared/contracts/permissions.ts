@@ -39,6 +39,7 @@ export const pierCapabilitySchema = z.enum([
   "secret:read",
   "evidence:write",
   "network",
+  "ai:invoke",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;
@@ -83,6 +84,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "git:write",
     "file:read",
     "file:write",
+    "ai:invoke",
   ],
   "cli-local": [
     "app:read",

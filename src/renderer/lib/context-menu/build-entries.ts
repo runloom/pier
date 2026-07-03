@@ -136,7 +136,10 @@ function buildBucketItems(bucket: readonly Action[]): MenuItem[] {
 }
 
 export function buildMenuEntries(surface: string): MenuTemplate {
-  const actions = actionRegistry.list(surface);
+  // menuHidden = 整行移除 (如任务面板隐藏"新建终端"); enabled=false 仅置灰。
+  const actions = actionRegistry
+    .list(surface)
+    .filter((a) => a.metadata?.menuHidden?.() !== true);
   if (actions.length === 0) {
     return [];
   }

@@ -42,6 +42,7 @@ const action = (
 const runtime: ActionContributionRuntime = {
   getContext: () => ({
     terminal: {
+      activeIsTaskPanel: false,
       hasActivePanel: true,
     },
     workspace: {

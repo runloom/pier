@@ -33,6 +33,36 @@ function panel(id: string, component = "terminal") {
   };
 }
 
+function taskPanel(id: string, projectRoot = "/Users/xyz/ABC/pier") {
+  return {
+    ...panel(id),
+    params: {
+      task: {
+        cwd: projectRoot,
+        label: "test",
+        projectRoot,
+        rawCommand: "pnpm run test",
+        runId: "run-1",
+        source: "package-script",
+        startedAt: 1_772_000_000_000,
+        status: "running",
+        taskId: "package-script:test",
+      },
+    },
+  };
+}
+
+function installTaskPanelApi() {
+  const taskCurrent = taskPanel("terminal-task");
+  const api = {
+    activePanel: taskCurrent,
+    groups: [{ panels: [taskCurrent] }],
+    panels: [taskCurrent],
+  };
+  useWorkspaceStore.getState().setApi(api as unknown as DockviewApi);
+  return { api, taskCurrent };
+}
+
 function installWorkspaceApi() {
   const terminalCurrent = panel("terminal-current");
   const terminalOther = panel("terminal-other");
@@ -359,6 +389,32 @@ describe("run actions", () => {
       projectRoot: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
+  });
+
+  it("reruns the active task panel through the task bridge", async () => {
+    installTaskPanelApi();
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.rerunTask")?.handler();
+
+    expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
+      focus: true,
+      placement: "active-tab",
+      projectRoot: "/Users/xyz/ABC/pier",
+      taskId: "package-script:test",
+    });
+  });
+
+  it("does not rerun when the active panel is not a task panel", async () => {
+    installWorkspaceApi();
+    disposeRunActions = registerRunActions();
+
+    const action = actionRegistry.get("pier.run.rerunTask");
+    expect(action?.enabled?.()).toBe(false);
+
+    await action?.handler();
+
+    expect(window.pier.tasks.spawn).not.toHaveBeenCalled();
   });
 
   it("focuses an existing terminal from the terminal list", async () => {

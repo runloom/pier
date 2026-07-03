@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aiSuggestBranchRequestSchema } from "./ai.ts";
 import {
   fileListRequestSchema,
   fileMoveRequestSchema,
@@ -370,6 +371,11 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({
     cwd: z.string().min(1),
     type: z.literal("git.undoLastCommit"),
+  }),
+  // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
+  z.object({ type: z.literal("ai.status") }),
+  aiSuggestBranchRequestSchema.extend({
+    type: z.literal("ai.suggestBranch"),
   }),
 ]);
 

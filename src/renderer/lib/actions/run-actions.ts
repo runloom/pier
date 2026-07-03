@@ -6,13 +6,16 @@ import type {
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
-import { List, Play, SquareTerminal } from "lucide-react";
+import { List, Play, RotateCcw, SquareTerminal } from "lucide-react";
 import { panelKindOf } from "@/components/workspace/panel-registry.ts";
 import type { WorkspacePanelSnapshot } from "@/components/workspace/workspace-panel-snapshots.ts";
 import { buildWorkspacePanelSnapshots } from "@/components/workspace/workspace-panel-snapshots.ts";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
-import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
+import {
+  activeTaskPanelMetadata,
+  rendererActionContributionRuntime,
+} from "@/lib/actions/renderer-action-runtime.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type {
   QuickPickItem,
@@ -308,14 +311,17 @@ function focusTerminalPanel(panelId: string): void {
     console.error("[run-actions] focus task terminal failed:", result.message);
   }
 }
-async function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
-  let result = await spawnTask({ projectRoot, taskId: item.id });
+async function spawnTaskWithInputFlow(
+  projectRoot: string,
+  taskId: string
+): Promise<void> {
+  let result = await spawnTask({ projectRoot, taskId });
   if (result.status === "requires-input") {
     const inputs = await collectTaskInputs(result.inputs);
     if (!inputs) {
       return;
     }
-    result = await spawnTask({ inputs, projectRoot, taskId: item.id });
+    result = await spawnTask({ inputs, projectRoot, taskId });
   }
   if (result.status === "unsupported") {
     console.error("[run-actions] task unsupported:", result.message);
@@ -324,6 +330,23 @@ async function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
   if (result.status === "already-running") {
     focusTerminalPanel(result.panelId);
   }
+}
+
+function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
+  return spawnTaskWithInputFlow(projectRoot, item.id);
+}
+
+/**
+ * 任务面板右键"重新运行": 复用 Run Task 的 spawn 流程。main 侧 prepareSpawn
+ * 会走 restart 路径 — 运行中的任务先取消再在原 panel 重启, 已结束的任务
+ * 直接复用原 panel relaunch。
+ */
+async function rerunActiveTaskPanel(): Promise<void> {
+  const task = activeTaskPanelMetadata();
+  if (!task) {
+    return;
+  }
+  await spawnTaskWithInputFlow(task.projectRoot, task.taskId);
 }
 export async function openRunTaskQuickPick() {
   const projectRoot = activeProjectRoot();
@@ -472,6 +495,19 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     sortOrder: 0,
     surfaces: ["command-palette"],
     titleKey: "commandPalette.action.runTask",
+  },
+  {
+    categoryKey: "run",
+    // 与 pier.panel.newTerminal 同组同位: 任务面板上二者互斥换位。
+    group: "1_new",
+    handler: rerunActiveTaskPanel,
+    iconComponent: RotateCcw,
+    id: "pier.run.rerunTask",
+    menuHiddenWhen: "!terminal.activeIsTaskPanel",
+    sortOrder: 1,
+    surfaces: ["dockview-tab", "terminal/content"],
+    titleKey: "contextMenu.action.rerunTask",
+    when: "terminal.activeIsTaskPanel",
   },
   {
     categoryKey: "run",

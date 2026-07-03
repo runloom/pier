@@ -8,6 +8,8 @@ import {
   createMainPluginHostApi,
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
+import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
+import { createAiService } from "../services/ai/ai-service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
@@ -145,13 +147,21 @@ function createPierAppCore(): PierAppCore {
     plugins: basePlugins,
     settings: pluginSettings,
   });
+  const preferences = createPreferencesService({ eventBus });
+  const secrets = createSecretsStore();
+  // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
+  const agentDetection = createAgentDetectionService();
   const services: PierCoreServices = {
+    ai: createAiService({
+      detectAgents: async () => (await agentDetection.detect()).detectedIds,
+      readPreferences: () => preferences.read(),
+    }),
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
     files: createFileService(),
-    preferences: createPreferencesService({ eventBus }),
-    secrets: createSecretsStore(),
+    preferences,
+    secrets,
     processEnvironment: createProcessEnvironmentService(),
     plugins: pluginHost.plugins,
     pluginSettings,

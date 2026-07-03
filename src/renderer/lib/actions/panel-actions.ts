@@ -24,6 +24,8 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     },
     iconComponent: Plus,
     id: "pier.panel.newTerminal",
+    // 任务面板右键不给"新建终端", 由 pier.run.rerunTask 顶替同一位置。
+    menuHiddenWhen: "terminal.activeIsTaskPanel",
     sortOrder: 1,
     surfaces: ["dockview-tab", "terminal/content", "command-palette"],
     titleKey: "contextMenu.action.newTerminal",

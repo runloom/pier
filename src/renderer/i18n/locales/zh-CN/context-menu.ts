@@ -14,6 +14,7 @@ export const contextMenu = {
     find: "查找",
     newTerminal: "新建终端",
     paste: "粘贴",
+    rerunTask: "重新运行",
     selectAll: "全选",
     splitDown: "向下拆分",
     splitLeft: "向左拆分",
