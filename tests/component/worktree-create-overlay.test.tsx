@@ -3,6 +3,11 @@ import {
   openWorktreeCreateOverlay,
   type WorktreeCreateOverlayData,
 } from "@plugins/builtin/git/renderer/worktree-create-overlay.tsx";
+import type {
+  AiStatusResult,
+  AiSuggestBranchRequest,
+  AiSuggestBranchResult,
+} from "@shared/contracts/ai.ts";
 import type { GitBranchRef } from "@shared/contracts/git.ts";
 import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
 import type {
@@ -23,10 +28,12 @@ import {
   openPluginOverlay,
 } from "@/stores/plugin-overlay.store.ts";
 
-const NEW_WORKTREE_LABEL = "Task or branch";
+const TASK_LABEL = "Task";
 const BRANCH_LABEL = "Branch";
-const CREATE_AND_START_LABEL = "Create and start";
-const CREATE_ONLY_LABEL = "Create only";
+const CONFIRM_LABEL = "Confirm";
+const CANCEL_LABEL = "Cancel";
+const CUSTOM_TAB = "Custom";
+const AI_TAB = "AI auto";
 
 function interpolate(
   template: string | undefined,
@@ -76,16 +83,16 @@ function branchRef(overrides: Partial<GitBranchRef> = {}): GitBranchRef {
   };
 }
 
-function defaultCreateResult(): WorktreeCreateResult {
+function createResultFor(name: string, branch: string): WorktreeCreateResult {
   return {
     copiedFiles: [],
     created: worktreeItem({
-      branch: "wt/fix-focus",
+      branch,
       isCurrent: false,
       isMain: false,
-      path: "/repo/.worktrees/fix-focus",
+      path: `/repo/.worktrees/${name}`,
     }),
-    targetPath: "/repo/.worktrees/fix-focus",
+    targetPath: `/repo/.worktrees/${name}`,
     worktrees: [],
   };
 }
@@ -112,6 +119,9 @@ const createMock =
   vi.fn<(request: WorktreeCreateRequest) => Promise<WorktreeCreateResult>>();
 const openTerminalMock =
   vi.fn<(request: WorktreeOpenTerminalRequest) => Promise<unknown>>();
+const aiStatusMock = vi.fn<() => Promise<AiStatusResult>>();
+const suggestBranchMock =
+  vi.fn<(request: AiSuggestBranchRequest) => Promise<AiSuggestBranchResult>>();
 const notificationsSuccessMock = vi.fn();
 const notificationsErrorMock = vi.fn();
 const tMock = vi.fn(
@@ -125,6 +135,10 @@ const tMock = vi.fn(
 function createMockContext(): RendererPluginContext {
   return {
     actions: { register: unimplemented("actions.register") },
+    ai: {
+      status: aiStatusMock,
+      suggestBranch: suggestBranchMock,
+    },
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
     },
@@ -218,14 +232,46 @@ function installSelectPolyfills(): void {
   }
 }
 
+async function openOverlay(
+  context: RendererPluginContext,
+  data = overlayData()
+): Promise<void> {
+  render(<PluginOverlayHost />);
+  act(() => {
+    openWorktreeCreateOverlay(context, data);
+  });
+  // 等 ai.status 解析,避免模式自动切换与断言竞争
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+function clickTab(name: string): void {
+  // Radix Tabs 在 mousedown 时切换选中,click 事件本身不触发
+  const tab = screen.getByRole("tab", { name });
+  fireEvent.mouseDown(tab, { button: 0 });
+  fireEvent.click(tab);
+}
+
+async function switchToCustom(): Promise<void> {
+  clickTab(CUSTOM_TAB);
+  await screen.findByRole("textbox", { name: BRANCH_LABEL });
+}
+
 describe("WorktreeCreateOverlay", () => {
   let context: RendererPluginContext;
 
   beforeEach(() => {
     installSelectPolyfills();
     vi.clearAllMocks();
-    createMock.mockResolvedValue(defaultCreateResult());
+    createMock.mockResolvedValue(createResultFor("fix-focus", "wt/fix-focus"));
     openTerminalMock.mockResolvedValue(null);
+    aiStatusMock.mockResolvedValue({
+      agent: "claude",
+      configured: true,
+      label: "Claude",
+    });
+    suggestBranchMock.mockResolvedValue({ slug: "fix-focus", status: "ok" });
     context = createMockContext();
     useKeybindingScope.setState({
       activePanelComponent: null,
@@ -248,31 +294,18 @@ describe("WorktreeCreateOverlay", () => {
     });
   });
 
-  it("输入描述后实时推导分支与位置展示", () => {
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(context, overlayData());
+  it("默认 AI 模式:提交先调 suggestBranch,再以派生 branch/name 创建并打开终端", async () => {
+    await openOverlay(context);
+
+    const task = screen.getByRole("textbox", { name: TASK_LABEL });
+    fireEvent.change(task, { target: { value: "修复终端焦点问题" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(suggestBranchMock).toHaveBeenCalledWith({
+        text: "修复终端焦点问题",
+      });
     });
-
-    const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
-    fireEvent.change(input, { target: { value: "fix focus bug" } });
-
-    expect(screen.getByDisplayValue("wt/fix-focus-bug")).toBeInTheDocument();
-    expect(screen.getByText(".worktrees/fix-focus-bug")).toBeInTheDocument();
-  });
-
-  it("点击 Create and start:create 携带派生 branch/name/path,成功后以 runSetup:true 打开终端", async () => {
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(context, overlayData());
-    });
-
-    const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
-    fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.click(
-      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
-    );
-
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
         branch: "wt/fix-focus",
@@ -291,95 +324,171 @@ describe("WorktreeCreateOverlay", () => {
     );
   });
 
-  it("点击 Create only:create 之后不打开终端", async () => {
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(context, overlayData());
-    });
+  it("AI 模式:任务描述为空时提交报错且不调 AI", async () => {
+    await openOverlay(context);
 
-    const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
-    fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.click(screen.getByRole("button", { name: CREATE_ONLY_LABEL }));
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    expect(
+      await screen.findByText("Enter a task description")
+    ).toBeInTheDocument();
+    expect(suggestBranchMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("AI 生成失败:错误文案渲染、overlay 保留、不创建", async () => {
+    suggestBranchMock.mockResolvedValueOnce({
+      message: "boom",
+      reason: "request_failed",
+      status: "unavailable",
+    });
+    await openOverlay(context);
+
+    const task = screen.getByRole("textbox", { name: TASK_LABEL });
+    fireEvent.change(task, { target: { value: "fix focus" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    expect(
+      await screen.findByText("AI generation failed: boom")
+    ).toBeInTheDocument();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("textbox", { name: TASK_LABEL })
+    ).toBeInTheDocument();
+  });
+
+  it("AI 未配置:自动切到自定义模式", async () => {
+    aiStatusMock.mockResolvedValueOnce({
+      agent: null,
+      configured: false,
+      label: "",
+    });
+    await openOverlay(context);
+
+    expect(
+      await screen.findByRole("textbox", { name: BRANCH_LABEL })
+    ).toBeInTheDocument();
+  });
+
+  it("自定义模式:输入分支名实时展示目录预览,提交创建并打开终端", async () => {
+    createMock.mockResolvedValue(
+      createResultFor("fix-dialog", "feature/fix-dialog")
+    );
+    await openOverlay(context);
+    await switchToCustom();
+
+    const branch = screen.getByRole("textbox", { name: BRANCH_LABEL });
+    fireEvent.change(branch, { target: { value: "feature/fix-dialog" } });
+
+    expect(
+      await screen.findByText(".worktrees/feature-fix-dialog")
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
-        branch: "wt/fix-focus",
-        name: "fix-focus",
+        branch: "feature/fix-dialog",
+        name: "feature-fix-dialog",
         path: "/repo",
       });
     });
-    expect(openTerminalMock).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(openTerminalMock).toHaveBeenCalledWith({
+        path: "/repo/.worktrees/fix-dialog",
+        runSetup: true,
+      });
+    });
+    expect(suggestBranchMock).not.toHaveBeenCalled();
+  });
+
+  it("自定义模式:非法字符与已存在分支被校验拦截", async () => {
+    await openOverlay(context);
+    await switchToCustom();
+
+    const branch = screen.getByRole("textbox", { name: BRANCH_LABEL });
+    fireEvent.change(branch, { target: { value: "bad branch!" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+    expect(
+      await screen.findByText(
+        "Branch names may only contain letters, digits and . _ / -"
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.change(branch, { target: { value: "main" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+    expect(
+      await screen.findByText("Branch already exists")
+    ).toBeInTheDocument();
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   it("选中 base 分支后 create 载荷携带 base", async () => {
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(
-        context,
-        overlayData({
-          branches: [
-            branchRef({ name: "main" }),
-            branchRef({ name: "develop" }),
-          ],
-        })
-      );
-    });
+    await openOverlay(
+      context,
+      overlayData({
+        branches: [branchRef({ name: "main" }), branchRef({ name: "develop" })],
+      })
+    );
+    await switchToCustom();
 
-    const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
-    fireEvent.change(input, { target: { value: "fix focus" } });
+    const branch = screen.getByRole("textbox", { name: BRANCH_LABEL });
+    fireEvent.change(branch, { target: { value: "feature/x" } });
 
     fireEvent.click(screen.getByRole("combobox"));
     fireEvent.click(await screen.findByRole("option", { name: "develop" }));
 
-    fireEvent.click(screen.getByRole("button", { name: CREATE_ONLY_LABEL }));
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
         base: "develop",
-        branch: "wt/fix-focus",
-        name: "fix-focus",
+        branch: "feature/x",
+        name: "feature-x",
         path: "/repo",
       });
     });
   });
 
+  it("取消按钮关闭 overlay 且不创建", async () => {
+    await openOverlay(context);
+
+    fireEvent.click(screen.getByRole("button", { name: CANCEL_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(
+        screen.queryByRole("textbox", { name: TASK_LABEL })
+      ).not.toBeInTheDocument();
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   it("create 被拒绝:overlay 保留、错误文案渲染", async () => {
     createMock.mockRejectedValueOnce(new Error("invalid worktree branch"));
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(context, overlayData());
-    });
+    await openOverlay(context);
+    await switchToCustom();
 
-    const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
-    fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.click(
-      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
-    );
+    const branch = screen.getByRole("textbox", { name: BRANCH_LABEL });
+    fireEvent.change(branch, { target: { value: "feature/x" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     expect(
       await screen.findByText("invalid worktree branch")
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL })
+      screen.getByRole("textbox", { name: BRANCH_LABEL })
     ).not.toBeDisabled();
     expect(openTerminalMock).not.toHaveBeenCalled();
   });
 
   it("openTerminal 被拒绝:notifications.error 被调、overlay 已关闭、不抛出", async () => {
     openTerminalMock.mockRejectedValueOnce(new Error("spawn failed"));
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(context, overlayData());
-    });
+    await openOverlay(context);
+    await switchToCustom();
 
-    const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
-    fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.click(
-      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
-    );
+    const branch = screen.getByRole("textbox", { name: BRANCH_LABEL });
+    fireEvent.change(branch, { target: { value: "feature/x" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
       expect(notificationsErrorMock).toHaveBeenCalledWith(
@@ -387,18 +496,15 @@ describe("WorktreeCreateOverlay", () => {
       );
     });
     expect(
-      screen.queryByRole("textbox", { name: NEW_WORKTREE_LABEL })
+      screen.queryByRole("textbox", { name: BRANCH_LABEL })
     ).not.toBeInTheDocument();
   });
 
   it("esc 关闭:overlay 卸载", async () => {
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(context, overlayData());
-    });
+    await openOverlay(context);
 
     expect(
-      screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL })
+      screen.getByRole("textbox", { name: TASK_LABEL })
     ).toBeInTheDocument();
 
     act(() => {
@@ -407,39 +513,32 @@ describe("WorktreeCreateOverlay", () => {
 
     await vi.waitFor(() => {
       expect(
-        screen.queryByRole("textbox", { name: NEW_WORKTREE_LABEL })
+        screen.queryByRole("textbox", { name: TASK_LABEL })
       ).not.toBeInTheDocument();
     });
   });
 
-  it("creating 态下输入被禁用", async () => {
-    let resolveCreate: ((value: WorktreeCreateResult) => void) | undefined;
-    createMock.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveCreate = resolve;
-      })
-    );
-    render(<PluginOverlayHost />);
-    act(() => {
-      openWorktreeCreateOverlay(context, overlayData());
+  it("切换标签会清空上一次的提交错误", async () => {
+    suggestBranchMock.mockResolvedValueOnce({
+      message: "boom",
+      reason: "request_failed",
+      status: "unavailable",
     });
+    await openOverlay(context);
 
-    const input = screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL });
-    fireEvent.change(input, { target: { value: "fix focus" } });
-    fireEvent.click(
-      screen.getByRole("button", { name: CREATE_AND_START_LABEL })
-    );
+    const task = screen.getByRole("textbox", { name: TASK_LABEL });
+    fireEvent.change(task, { target: { value: "fix focus" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+    await screen.findByText("AI generation failed: boom");
 
-    await vi.waitFor(() => {
-      expect(
-        screen.getByRole("textbox", { name: NEW_WORKTREE_LABEL })
-      ).toBeDisabled();
-    });
-    expect(screen.getByRole("textbox", { name: BRANCH_LABEL })).toBeDisabled();
+    await switchToCustom();
+    expect(
+      screen.queryByText("AI generation failed: boom")
+    ).not.toBeInTheDocument();
 
-    await act(async () => {
-      resolveCreate?.(defaultCreateResult());
-      await Promise.resolve();
-    });
+    clickTab(AI_TAB);
+    expect(
+      await screen.findByRole("textbox", { name: TASK_LABEL })
+    ).toBeInTheDocument();
   });
 });

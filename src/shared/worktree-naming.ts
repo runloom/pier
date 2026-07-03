@@ -156,6 +156,30 @@ function draftFrom(
   return { branch, name, source };
 }
 
+export interface DeriveFromSlugArgs {
+  branchPrefix: string;
+  existingBranches: readonly string[];
+  existingNames: readonly string[];
+}
+
+/**
+ * 用 AI 生成的英文 slug 派生 branch/name(套 prefix + 去重)。
+ * slug 规整后为空(如全非法字符)时返回 null,调用方自行降级。
+ */
+export function deriveWorktreeCreationFromSlug(
+  slug: string,
+  args: DeriveFromSlugArgs
+): WorktreeCreationDraft | null {
+  const cleaned = sanitizeWorktreeName(slug.toLowerCase());
+  if (!cleaned) {
+    return null;
+  }
+  return draftFrom(`${args.branchPrefix}${cleaned}`, "description", {
+    ...args,
+    input: slug,
+  });
+}
+
 export function deriveWorktreeCreation(
   args: DeriveWorktreeCreationArgs
 ): WorktreeCreationDraft {

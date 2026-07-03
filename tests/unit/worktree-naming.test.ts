@@ -1,5 +1,6 @@
 import {
   deriveWorktreeCreation,
+  deriveWorktreeCreationFromSlug,
   sanitizeWorktreeName,
   slugifyDescription,
 } from "@shared/worktree-naming.ts";
@@ -100,5 +101,31 @@ describe("deriveWorktreeCreation", () => {
       random: () => 0.5,
     });
     expect(draft.source).toBe("codename");
+  });
+});
+
+describe("deriveWorktreeCreationFromSlug", () => {
+  it("AI slug 套 prefix 并派生目录名", () => {
+    const draft = deriveWorktreeCreationFromSlug("fix-dialog-ui", BASE_ARGS);
+    expect(draft).not.toBeNull();
+    expect(draft?.branch).toBe("wt/fix-dialog-ui");
+    expect(draft?.name).toBe("fix-dialog-ui");
+    expect(draft?.source).toBe("description");
+  });
+
+  it("与已有分支/worktree 重名时追加 -2", () => {
+    const draft = deriveWorktreeCreationFromSlug("fix-focus", {
+      ...BASE_ARGS,
+      existingBranches: ["wt/fix-focus"],
+      existingNames: ["fix-focus"],
+    });
+    expect(draft?.branch).toBe("wt/fix-focus-2");
+    expect(draft?.name).toBe("fix-focus-2");
+  });
+
+  it("slug 大小写与首尾符号被规整;全非法字符返回 null", () => {
+    const draft = deriveWorktreeCreationFromSlug("-Fix-Dialog-", BASE_ARGS);
+    expect(draft?.branch).toBe("wt/fix-dialog");
+    expect(deriveWorktreeCreationFromSlug("!!!", BASE_ARGS)).toBeNull();
   });
 });

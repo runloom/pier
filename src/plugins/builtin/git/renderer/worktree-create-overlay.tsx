@@ -1,4 +1,4 @@
-import { Badge } from "@pier/ui/badge.tsx";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Dialog,
@@ -17,37 +17,37 @@ import {
 } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-  InputGroupText,
-} from "@pier/ui/input-group.tsx";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@pier/ui/select.tsx";
+import { Tabs, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
+import { Textarea } from "@pier/ui/textarea.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { GitBranchRef } from "@shared/contracts/git.ts";
-import type { WorktreeCreationDefaults } from "@shared/contracts/worktree.ts";
+import type { AiStatusResult } from "@shared/contracts/ai.ts";
 import type { WorktreeCreationDraft } from "@shared/worktree-naming.ts";
 import {
   deriveWorktreeCreation,
   sanitizeWorktreeName,
 } from "@shared/worktree-naming.ts";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import {
+  AiFieldDescription,
+  buildFormSchema,
+  type CreateMode,
+  confirmButtonContent,
+  type FormValues,
+  HEAD_SENTINEL,
+  PrepareBadges,
+  resolveSubmitDraft,
+  type SubmitPhase,
+  type WorktreeCreateOverlayData,
+} from "./worktree-create-form.tsx";
 
-const HEAD_SENTINEL = "__head__";
-
-export interface WorktreeCreateOverlayData {
-  branches: readonly GitBranchRef[];
-  defaults: WorktreeCreationDefaults;
-  existingBranches: readonly string[];
-  existingNames: readonly string[];
-  mainPath: string;
-}
+export type { WorktreeCreateOverlayData } from "./worktree-create-form.tsx";
 
 interface WorktreeCreateOverlayProps {
   close: () => void;
@@ -64,82 +64,135 @@ function WorktreeCreateOverlay({
   context,
   data,
 }: WorktreeCreateOverlayProps) {
-  const [input, setInput] = useState("");
-  const [branch, setBranch] = useState("");
-  const [branchEdited, setBranchEdited] = useState(false);
-  const [baseBranch, setBaseBranch] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [phase, setPhase] = useState<SubmitPhase>("idle");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatusResult | null>(null);
+  const closedRef = useRef(false);
 
-  const text = (
-    key: string,
-    values: Record<string, number | string> | undefined,
-    fallback: string
-  ): string => context.i18n.t(`ui.worktreeCreate.${key}`, values, fallback);
+  const text = useCallback(
+    (
+      key: string,
+      values: Record<string, number | string> | undefined,
+      fallback: string
+    ): string => context.i18n.t(`ui.worktreeCreate.${key}`, values, fallback),
+    [context.i18n]
+  );
 
-  const derived = useMemo<WorktreeCreationDraft>(() => {
-    if (branchEdited) {
-      return {
-        branch,
-        name: sanitizeWorktreeName(branch) || "worktree",
-        source: "branch",
-      };
+  const schema = useMemo(
+    () => buildFormSchema(data.existingBranches, text),
+    [data.existingBranches, text]
+  );
+
+  const form = useForm<FormValues>({
+    defaultValues: { base: HEAD_SENTINEL, branch: "", mode: "ai", text: "" },
+    resolver: zodResolver(schema),
+  });
+  const mode = form.watch("mode");
+  const branchValue = form.watch("branch");
+
+  useEffect(() => {
+    let disposed = false;
+    context.ai
+      .status()
+      .then((status) => {
+        if (disposed) {
+          return;
+        }
+        setAiStatus(status);
+        if (!status.configured) {
+          form.setValue("mode", "custom");
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          setAiStatus({ agent: null, configured: false, label: "" });
+          form.setValue("mode", "custom");
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [context.ai, form]);
+
+  const customDraft = useMemo<WorktreeCreationDraft | null>(() => {
+    const branch = branchValue.trim();
+    if (!(branch && sanitizeWorktreeName(branch))) {
+      return null;
     }
     return deriveWorktreeCreation({
       branchPrefix: data.defaults.branchPrefix,
       existingBranches: data.existingBranches,
       existingNames: data.existingNames,
-      input,
+      input: branch,
     });
-  }, [branch, branchEdited, input, data]);
+  }, [branchValue, data]);
 
-  const showAutoBadge = derived.source !== "branch" && !branchEdited;
-  const hasPrepare =
-    data.defaults.copyPatterns.length > 0 ||
-    data.defaults.setupCommand.trim() !== "";
+  const aiConfigured = aiStatus?.configured === true;
 
-  async function submit(start: boolean): Promise<void> {
-    if (creating) {
-      return;
-    }
-    setError(null);
-    setCreating(true);
+  function closeOverlay(): void {
+    closedRef.current = true;
+    close();
+  }
+
+  async function openWorktreeTerminal(targetPath: string): Promise<void> {
     try {
-      const result = await context.worktrees.create({
-        ...(baseBranch ? { base: baseBranch } : {}),
-        branch: derived.branch,
-        name: derived.name,
-        path: data.mainPath,
+      await context.worktrees.openTerminal({
+        path: targetPath,
+        runSetup: true,
       });
-      close();
-      context.notifications.success(`${derived.branch} · ${result.targetPath}`);
-      if (start) {
-        try {
-          await context.worktrees.openTerminal({
-            path: result.targetPath,
-            runSetup: true,
-          });
-        } catch (err) {
-          context.notifications.error(
-            text(
-              "launchFailed",
-              { message: errorMessage(err) },
-              "Terminal launch failed: {{message}}"
-            )
-          );
-        }
-      }
     } catch (err) {
-      setError(errorMessage(err));
-      setCreating(false);
+      context.notifications.error(
+        text(
+          "launchFailed",
+          { message: errorMessage(err) },
+          "Terminal launch failed: {{message}}"
+        )
+      );
     }
   }
+
+  async function onSubmit(values: FormValues): Promise<void> {
+    setSubmitError(null);
+    try {
+      if (values.mode === "ai") {
+        setPhase("generating");
+      }
+      const resolved = await resolveSubmitDraft({
+        data,
+        suggestBranch: context.ai.suggestBranch,
+        text,
+        values,
+      });
+      if ("error" in resolved || closedRef.current) {
+        setSubmitError("error" in resolved ? resolved.error : null);
+        setPhase("idle");
+        return;
+      }
+      setPhase("creating");
+      const { draft } = resolved;
+      const result = await context.worktrees.create({
+        ...(values.base === HEAD_SENTINEL ? {} : { base: values.base }),
+        branch: draft.branch,
+        name: draft.name,
+        path: data.mainPath,
+      });
+      closeOverlay();
+      context.notifications.success(`${draft.branch} · ${result.targetPath}`);
+      await openWorktreeTerminal(result.targetPath);
+    } catch (err) {
+      setSubmitError(errorMessage(err));
+      setPhase("idle");
+    }
+  }
+
+  const busy = phase !== "idle";
+  const confirmDisabled = busy || (mode === "ai" && !aiConfigured);
 
   return (
     <Dialog
       onOpenChange={(open) => {
         if (!open) {
-          close();
+          closeOverlay();
         }
       }}
       open
@@ -156,127 +209,151 @@ function WorktreeCreateOverlay({
           </DialogDescription>
         </DialogHeader>
 
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="worktree-create-input">
-              {text("inputLabel", undefined, "Task or branch")}
-            </FieldLabel>
-            <Input
-              autoFocus
-              disabled={creating}
-              id="worktree-create-input"
-              onChange={(event) => {
-                setInput(event.target.value);
-                setError(null);
-              }}
-              placeholder={text(
-                "inputPlaceholder",
-                undefined,
-                "Describe the task, or type a branch name"
-              )}
-              value={input}
-            />
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor="worktree-create-branch">
-              {text("branchLabel", undefined, "Branch")}
-            </FieldLabel>
-            <InputGroup className="font-mono">
-              <InputGroupInput
-                disabled={creating}
-                id="worktree-create-branch"
-                onChange={(event) => {
-                  setBranch(event.target.value);
-                  setBranchEdited(true);
-                  setError(null);
-                }}
-                value={derived.branch}
-              />
-              {showAutoBadge ? (
-                <InputGroupAddon align="inline-end">
-                  <InputGroupText>
-                    {text("autoBadge", undefined, "Auto")}
-                  </InputGroupText>
-                </InputGroupAddon>
-              ) : null}
-            </InputGroup>
-            <FieldDescription className="font-mono">
-              {`.worktrees/${derived.name}`}
-            </FieldDescription>
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor="worktree-create-base">
-              {text("baseLabel", undefined, "Base")}
-            </FieldLabel>
-            <Select
-              disabled={creating}
+        <form
+          className="flex flex-col gap-6"
+          onSubmit={form.handleSubmit(onSubmit)}
+        >
+          <FieldGroup className="gap-4">
+            <Tabs
               onValueChange={(value) => {
-                setBaseBranch(value === HEAD_SENTINEL ? null : value);
-                setError(null);
+                form.setValue("mode", value as CreateMode);
+                form.clearErrors();
+                setSubmitError(null);
               }}
-              value={baseBranch ?? HEAD_SENTINEL}
+              value={mode}
             >
-              <SelectTrigger className="font-mono" id="worktree-create-base">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={HEAD_SENTINEL}>
-                  {text("baseHead", undefined, "Current HEAD")}
-                </SelectItem>
-                {data.branches.map((ref) => (
-                  <SelectItem key={`${ref.kind}:${ref.name}`} value={ref.name}>
-                    {ref.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+              <TabsList className="w-full">
+                <TabsTrigger disabled={busy} value="ai">
+                  {text("modeAi", undefined, "AI auto")}
+                </TabsTrigger>
+                <TabsTrigger disabled={busy} value="custom">
+                  {text("modeCustom", undefined, "Custom")}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-          {hasPrepare ? (
-            <FieldDescription className="flex flex-wrap items-center gap-1.5">
-              <span>{text("prepareLabel", undefined, "Prepare")}</span>
-              {data.defaults.copyPatterns.length > 0 ? (
-                <Badge variant="secondary">
-                  {text(
-                    "prepareCopy",
-                    { count: data.defaults.copyPatterns.length },
-                    "Copy {{count}} ignored file patterns"
+            {mode === "ai" ? (
+              <Field data-invalid={Boolean(form.formState.errors.text)}>
+                <FieldLabel htmlFor="worktree-create-task">
+                  {text("taskLabel", undefined, "Task")}
+                </FieldLabel>
+                <Textarea
+                  autoFocus
+                  disabled={busy}
+                  id="worktree-create-task"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      form
+                        .handleSubmit(onSubmit)()
+                        .catch(() => undefined);
+                    }
+                  }}
+                  placeholder={text(
+                    "taskPlaceholder",
+                    undefined,
+                    "Describe the task; AI will name the branch"
                   )}
-                </Badge>
-              ) : null}
-              {data.defaults.setupCommand.trim() ? (
-                <Badge variant="secondary">
-                  {text("prepareSetup", undefined, "Run setup command")}
-                </Badge>
-              ) : null}
-            </FieldDescription>
-          ) : null}
+                  rows={3}
+                  {...form.register("text")}
+                />
+                {form.formState.errors.text ? (
+                  <FieldError>{form.formState.errors.text.message}</FieldError>
+                ) : null}
+                <AiFieldDescription
+                  agentLabel={aiStatus?.label ?? ""}
+                  aiConfigured={aiConfigured}
+                  branchPrefix={data.defaults.branchPrefix}
+                  statusLoading={aiStatus === null}
+                  text={text}
+                />
+              </Field>
+            ) : (
+              <Field data-invalid={Boolean(form.formState.errors.branch)}>
+                <FieldLabel htmlFor="worktree-create-branch">
+                  {text("branchLabel", undefined, "Branch")}
+                </FieldLabel>
+                <Input
+                  autoFocus
+                  className="font-mono"
+                  disabled={busy}
+                  id="worktree-create-branch"
+                  placeholder={text(
+                    "branchPlaceholder",
+                    undefined,
+                    "feature/fix-dialog"
+                  )}
+                  {...form.register("branch")}
+                />
+                {form.formState.errors.branch ? (
+                  <FieldError>
+                    {form.formState.errors.branch.message}
+                  </FieldError>
+                ) : null}
+                {customDraft ? (
+                  <FieldDescription className="font-mono">
+                    {`.worktrees/${customDraft.name}`}
+                  </FieldDescription>
+                ) : null}
+              </Field>
+            )}
 
-          {error ? <FieldError>{error}</FieldError> : null}
-        </FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="worktree-create-base">
+                {text("baseLabel", undefined, "Base")}
+              </FieldLabel>
+              <Controller
+                control={form.control}
+                name="base"
+                render={({ field }) => (
+                  <Select
+                    disabled={busy}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                  >
+                    <SelectTrigger
+                      className="font-mono"
+                      id="worktree-create-base"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={HEAD_SENTINEL}>
+                        {text("baseHead", undefined, "Current HEAD")}
+                      </SelectItem>
+                      {data.branches.map((ref) => (
+                        <SelectItem
+                          key={`${ref.kind}:${ref.name}`}
+                          value={ref.name}
+                        >
+                          {ref.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </Field>
 
-        <DialogFooter>
-          <Button
-            disabled={creating}
-            onClick={() => submit(false).catch(() => undefined)}
-            type="button"
-            variant="secondary"
-          >
-            {text("createOnlyHint", undefined, "Create only")}
-          </Button>
-          <Button
-            disabled={creating}
-            onClick={() => submit(true).catch(() => undefined)}
-            type="button"
-            variant="default"
-          >
-            {creating
-              ? text("creating", undefined, "Creating…")
-              : text("createAndStartHint", undefined, "Create and start")}
-          </Button>
-        </DialogFooter>
+            <PrepareBadges defaults={data.defaults} text={text} />
+
+            {submitError ? <FieldError>{submitError}</FieldError> : null}
+          </FieldGroup>
+
+          <DialogFooter>
+            <Button
+              disabled={phase === "creating"}
+              onClick={closeOverlay}
+              type="button"
+              variant="secondary"
+            >
+              {context.i18n.t("ui.cancel", undefined, "Cancel")}
+            </Button>
+            <Button disabled={confirmDisabled} type="submit" variant="default">
+              {confirmButtonContent(phase, text)}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
