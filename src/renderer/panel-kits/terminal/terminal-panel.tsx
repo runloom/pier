@@ -3,10 +3,7 @@ import {
   type PanelTabChrome,
   panelContextSchema,
 } from "@shared/contracts/panel.ts";
-import {
-  type TaskPanelMetadata,
-  taskPanelMetadataSchema,
-} from "@shared/contracts/tasks.ts";
+import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
@@ -15,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
 import { useAgentSessionStore } from "@/stores/agent-session.store.ts";
 import {
   computeMonoFontFamily,
@@ -58,14 +56,6 @@ function launchIdFromParams(params: unknown): string | undefined {
   return typeof launchId === "string" && launchId.length > 0
     ? launchId
     : undefined;
-}
-
-function taskFromParams(params: unknown): TaskPanelMetadata | undefined {
-  if (!params || typeof params !== "object" || !("task" in params)) {
-    return;
-  }
-  const parsed = taskPanelMetadataSchema.safeParse(params.task);
-  return parsed.success ? parsed.data : undefined;
 }
 
 interface ActiveTerminalLaunch {
@@ -151,7 +141,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       launchId: launchIdFromParams(props.params),
       sequence: 0,
       tab: tabChromeFromParams(props.params),
-      task: taskFromParams(props.params),
+      task: taskPanelMetadataFromParams(props.params),
     })
   );
   const relaunchRequest = useTerminalRelaunchRequest(panelId);
