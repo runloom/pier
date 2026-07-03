@@ -6,6 +6,7 @@ import type {
   PanelContext,
   PanelContextSource,
 } from "@shared/contracts/panel.ts";
+import { upsertProjectFromPath } from "../state/project-store.ts";
 import { execGit } from "./git-exec.ts";
 
 export interface ResolvePanelContextOptions {
@@ -127,6 +128,9 @@ export async function resolvePanelContextForPath(
   const worktreeSupported = gitRoot
     ? await supportsGitWorktree(cwd, execGit)
     : undefined;
+  const project = await upsertProjectFromPath(projectRoot, now).catch(
+    () => null
+  );
 
   return {
     contextId: contextIdFor(worktreeKey),
@@ -140,6 +144,9 @@ export async function resolvePanelContextForPath(
     ...(gitCommonDir ? { gitCommonDir } : {}),
     ...(gitRoot ? { gitRoot } : {}),
     ...(head ? { head } : {}),
+    ...(project
+      ? { projectId: project.id, projectRootPath: project.rootPath }
+      : {}),
     ...(worktreeRoot ? { worktreeRoot } : {}),
     ...(worktreeSupported == null ? {} : { worktreeSupported }),
   };

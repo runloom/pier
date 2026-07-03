@@ -27,6 +27,10 @@ export const panelContextSchema = z.object({
   head: z.string().min(1).optional(),
   openedPath: z.string().min(1).optional(),
   projectRoot: z.string().min(1).optional(),
+  /** canonical Project 引用（project-store 的稳定 uuid）。渐进迁移期间可选。 */
+  projectId: z.string().uuid().optional(),
+  /** Project.rootPath 冗余镜像，供 UI 便利读取（避免额外 IPC round-trip）。 */
+  projectRootPath: z.string().min(1).optional(),
   source: panelContextSourceSchema.optional(),
   updatedAt: z.number().int().nonnegative(),
   worktreeKey: z.string().min(1).optional(),
