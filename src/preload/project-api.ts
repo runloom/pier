@@ -5,17 +5,14 @@ import { ipcRenderer } from "electron";
 /**
  * Renderer 侧访问 Project registry 的 API。
  * - `list()`: 全量快照（一次性 hydrate 用）
- * - `get(id)`: 按 id 拉单条
- * - `onChanged(cb)`: 订阅 upsert/rename/delete 变更广播
+ * - `onChanged(cb)`: 订阅 upsert/rename/delete 变更广播（增量替换）
  */
 export interface PierProjectAPI {
-  get: (id: string) => Promise<Project | null>;
   list: () => Promise<readonly Project[]>;
   onChanged: (cb: (projects: readonly Project[]) => void) => () => void;
 }
 
 export const projectApi: PierProjectAPI = {
-  get: (id) => ipcRenderer.invoke(PIER.PROJECT_GET, id),
   list: () => ipcRenderer.invoke(PIER.PROJECT_LIST),
   onChanged: (cb) => {
     const listener = (_event: unknown, payload: readonly Project[]): void => {

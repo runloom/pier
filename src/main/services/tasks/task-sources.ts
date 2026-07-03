@@ -29,8 +29,8 @@ import { vscodeSource } from "./vscode-source.ts";
 export interface CollectTaskCandidatesOptions {
   homeDir?: string;
   projectId: string;
-  /** filesystem path of the project root (was `projectRoot`). */
-  projectRoot: string;
+  /** filesystem path of the project root（与契约层 `TaskListResult.projectRootPath` 同源）。 */
+  projectRootPath: string;
   recentTasks?: readonly TaskRecentEntry[];
 }
 
@@ -53,9 +53,11 @@ const JUST_PRIVATE_ATTR_RE = /^\[[^\]]*private[^\]]*\]$/;
 const JUST_RECIPE_RE = /^([A-Za-z0-9_.-]+)(?:\s+[^:=]+)?\s*:(?!=)/;
 
 async function packageScriptSource({
-  projectRoot,
+  projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
-  const packageJson = await readTextIfExists(join(projectRoot, "package.json"));
+  const packageJson = await readTextIfExists(
+    join(projectRootPath, "package.json")
+  );
   if (!packageJson) {
     return [];
   }
@@ -64,7 +66,7 @@ async function packageScriptSource({
   if (!scripts) {
     return [];
   }
-  const manager = await packageManagerFor(projectRoot);
+  const manager = await packageManagerFor(projectRootPath);
   return Object.entries(scripts)
     .filter((entry): entry is [string, string] => typeof entry[1] === "string")
     .map(([name, script]) =>
@@ -73,7 +75,7 @@ async function packageScriptSource({
           command: commandWithArgs(manager, ["run", name]),
           kind: "shell",
         },
-        cwd: projectRoot,
+        cwd: projectRootPath,
         description: script,
         idParts: ["package-script", name],
         label: name,
@@ -85,7 +87,7 @@ async function packageScriptSource({
 
 function zedTaskFromRecord(
   record: Record<string, unknown>,
-  projectRoot: string,
+  projectRootPath: string,
   sourceKey: string
 ): TaskCandidate | null {
   const label = asString(record.label);
@@ -94,7 +96,7 @@ function zedTaskFromRecord(
     return null;
   }
   const args = asStringArray(record.args);
-  const cwd = asString(record.cwd) ?? projectRoot;
+  const cwd = asString(record.cwd) ?? projectRootPath;
   const reveal = asString(record.reveal);
   const hide = record.hide === true;
   const allowConcurrent = record.allow_concurrent_runs === true;
@@ -123,7 +125,7 @@ function zedTaskFromRecord(
 
 async function zedFileTasks(
   filePath: string,
-  projectRoot: string,
+  projectRootPath: string,
   sourceKey: string
 ): Promise<TaskCandidate[]> {
   const text = await readTextIfExists(filePath);
@@ -138,7 +140,7 @@ async function zedFileTasks(
   return list.flatMap((item) => {
     const record = asRecord(item);
     const task = record
-      ? zedTaskFromRecord(record, projectRoot, sourceKey)
+      ? zedTaskFromRecord(record, projectRootPath, sourceKey)
       : null;
     return task ? [task] : [];
   });
@@ -149,28 +151,28 @@ async function zedSource(
 ): Promise<TaskCandidate[]> {
   const home = options.homeDir ?? homedir();
   const projectTasks = await zedFileTasks(
-    join(options.projectRoot, ".zed", "tasks.json"),
-    options.projectRoot,
+    join(options.projectRootPath, ".zed", "tasks.json"),
+    options.projectRootPath,
     "project"
   );
   const globalTasks = await zedFileTasks(
     join(home, ".config", "zed", "tasks.json"),
-    options.projectRoot,
+    options.projectRootPath,
     "global"
   );
   return [...projectTasks, ...globalTasks];
 }
 
 async function cargoSource({
-  projectRoot,
+  projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
-  if (!(await pathExists(join(projectRoot, "Cargo.toml")))) {
+  if (!(await pathExists(join(projectRootPath, "Cargo.toml")))) {
     return [];
   }
   const builtin = ["build", "test", "check", "run"].map((name) =>
     candidate({
       commandSpec: { command: `cargo ${name}`, kind: "shell" },
-      cwd: projectRoot,
+      cwd: projectRootPath,
       idParts: ["cargo", name],
       label: `cargo ${name}`,
       source: "cargo",
@@ -179,13 +181,13 @@ async function cargoSource({
   );
   // .cargo/config.toml 的 [alias] 自定义子命令 (cargo <alias>)。
   const config =
-    (await readTextIfExists(join(projectRoot, ".cargo", "config.toml"))) ??
-    (await readTextIfExists(join(projectRoot, ".cargo", "config")));
+    (await readTextIfExists(join(projectRootPath, ".cargo", "config.toml"))) ??
+    (await readTextIfExists(join(projectRootPath, ".cargo", "config")));
   const aliases = config ? tomlSectionEntries(config, "alias") : {};
   const aliasTasks = Object.entries(aliases).map(([name, expansion]) =>
     candidate({
       commandSpec: { command: `cargo ${name}`, kind: "shell" },
-      cwd: projectRoot,
+      cwd: projectRootPath,
       description: `cargo ${expansion}`,
       idParts: ["cargo", "alias", name],
       label: `cargo ${name}`,
@@ -197,12 +199,12 @@ async function cargoSource({
 }
 
 async function makeSource({
-  projectRoot,
+  projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   const names = ["Makefile", "makefile", "GNUmakefile"];
   const file = (
     await Promise.all(
-      names.map((name) => readTextIfExists(join(projectRoot, name)))
+      names.map((name) => readTextIfExists(join(projectRootPath, name)))
     )
   ).find((text): text is string => typeof text === "string");
   if (!file) {
@@ -217,7 +219,7 @@ async function makeSource({
   return [...new Set(targets)].map((name) =>
     candidate({
       commandSpec: { command: commandWithArgs("make", [name]), kind: "shell" },
-      cwd: projectRoot,
+      cwd: projectRootPath,
       idParts: ["make", name],
       label: name,
       source: "make",
@@ -251,9 +253,9 @@ function tomlSectionEntries(
 }
 
 async function pyprojectSource({
-  projectRoot,
+  projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
-  const text = await readTextIfExists(join(projectRoot, "pyproject.toml"));
+  const text = await readTextIfExists(join(projectRootPath, "pyproject.toml"));
   if (!text) {
     return [];
   }
@@ -265,7 +267,7 @@ async function pyprojectSource({
   return Object.entries(scripts).map(([name, target]) =>
     candidate({
       commandSpec: { command: name, kind: "shell" },
-      cwd: projectRoot,
+      cwd: projectRootPath,
       description: target,
       idParts: ["pyproject", name],
       label: name,
@@ -276,11 +278,11 @@ async function pyprojectSource({
 }
 
 async function miseSource({
-  projectRoot,
+  projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   const text =
-    (await readTextIfExists(join(projectRoot, ".mise.toml"))) ??
-    (await readTextIfExists(join(projectRoot, "mise.toml")));
+    (await readTextIfExists(join(projectRootPath, ".mise.toml"))) ??
+    (await readTextIfExists(join(projectRootPath, "mise.toml")));
   if (!text) {
     return [];
   }
@@ -298,7 +300,7 @@ async function miseSource({
           command: commandWithArgs("mise", ["run", name]),
           kind: "shell",
         },
-        cwd: projectRoot,
+        cwd: projectRootPath,
         idParts: ["mise", name],
         label: name,
         source: "mise",
@@ -307,11 +309,11 @@ async function miseSource({
 }
 
 async function justSource({
-  projectRoot,
+  projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   const text =
-    (await readTextIfExists(join(projectRoot, "Justfile"))) ??
-    (await readTextIfExists(join(projectRoot, "justfile")));
+    (await readTextIfExists(join(projectRootPath, "Justfile"))) ??
+    (await readTextIfExists(join(projectRootPath, "justfile")));
   if (!text) {
     return [];
   }
@@ -346,7 +348,7 @@ async function justSource({
           command: commandWithArgs("just", [name]),
           kind: "shell",
         },
-        cwd: projectRoot,
+        cwd: projectRootPath,
         idParts: ["just", name],
         label: name,
         source: "just",
@@ -391,18 +393,18 @@ function taskfileNames(text: string): string[] {
 }
 
 async function taskfileSource({
-  projectRoot,
+  projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   const text =
-    (await readTextIfExists(join(projectRoot, "Taskfile.yml"))) ??
-    (await readTextIfExists(join(projectRoot, "Taskfile.yaml")));
+    (await readTextIfExists(join(projectRootPath, "Taskfile.yml"))) ??
+    (await readTextIfExists(join(projectRootPath, "Taskfile.yaml")));
   if (!text) {
     return [];
   }
   return taskfileNames(text).map((name) =>
     candidate({
       commandSpec: { command: commandWithArgs("task", [name]), kind: "shell" },
-      cwd: projectRoot,
+      cwd: projectRootPath,
       idParts: ["taskfile", name],
       label: name,
       source: "taskfile",
@@ -411,11 +413,11 @@ async function taskfileSource({
 }
 
 function historySource({
-  projectRoot,
+  projectRootPath,
   recentTasks = [],
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   const tasks = recentTasks
-    .filter((entry) => entry.cwd === projectRoot)
+    .filter((entry) => entry.cwd === projectRootPath)
     .map((entry) =>
       candidate({
         commandSpec: { command: entry.command, kind: "shell" },
@@ -469,7 +471,7 @@ export async function collectTaskCandidates(
   return {
     errors: results.flatMap((result) => (result.error ? [result.error] : [])),
     projectId: options.projectId,
-    projectRootPath: options.projectRoot,
+    projectRootPath: options.projectRootPath,
     tasks: results.flatMap((result) => result.tasks),
   };
 }

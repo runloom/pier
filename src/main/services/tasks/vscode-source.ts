@@ -15,7 +15,7 @@ import {
 } from "./utils.ts";
 
 export interface VscodeSourceOptions {
-  projectRoot: string;
+  projectRootPath: string;
 }
 
 function normalizeDependsOn(value: unknown): string[] | undefined {
@@ -132,7 +132,7 @@ function unsupportedVscodeReason(
 
 function vscodeTaskFromRecord(
   item: unknown,
-  projectRoot: string,
+  projectRootPath: string,
   inputs: readonly TaskInputRequest[]
 ): TaskCandidate | null {
   const record = asRecord(item);
@@ -152,7 +152,7 @@ function vscodeTaskFromRecord(
   const unsupportedReason = unsupportedVscodeReason(commandSpec, type);
   return candidate({
     commandSpec: commandSpec ?? { command: label, kind: "shell" },
-    cwd: asString(options?.cwd) ?? projectRoot,
+    cwd: asString(options?.cwd) ?? projectRootPath,
     ...(dependsOn ? { dependsOn } : {}),
     dependsOrder: record.dependsOrder === "parallel" ? "parallel" : "sequence",
     ...(description ? { description } : {}),
@@ -168,10 +168,10 @@ function vscodeTaskFromRecord(
 }
 
 export async function vscodeSource({
-  projectRoot,
+  projectRootPath,
 }: VscodeSourceOptions): Promise<TaskCandidate[]> {
   const text = await readTextIfExists(
-    join(projectRoot, ".vscode", "tasks.json")
+    join(projectRootPath, ".vscode", "tasks.json")
   );
   if (!text) {
     return [];
@@ -180,7 +180,7 @@ export async function vscodeSource({
   const tasks = Array.isArray(root?.tasks) ? root.tasks : [];
   const inputs = vscodeInputs(root?.inputs);
   return tasks.flatMap((item) => {
-    const task = vscodeTaskFromRecord(item, projectRoot, inputs);
+    const task = vscodeTaskFromRecord(item, projectRootPath, inputs);
     return task ? [task] : [];
   });
 }

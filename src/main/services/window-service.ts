@@ -40,6 +40,34 @@ let didRegisterCloseHandler = false;
 let currentFlushRendererLayout: (windowId: string) => Promise<void> =
   async () => undefined;
 
+/**
+ * 并发 flush 7 个 debounced store。任何一路失败不能吞其他成功——用 allSettled
+ * 保证全部尝试写盘并把 rejection 分别 log，避免旧 Promise.all 语义下靠前 fail
+ * 掩盖后面的成功/失败。
+ */
+async function flushAllStoresSettled(): Promise<void> {
+  const flushes: [string, () => Promise<void>][] = [
+    ["plugin-state", flushPluginState],
+    ["plugin-settings", flushPluginSettings],
+    ["project-store", flushProjectStore],
+    ["panel-context-state", flushPanelContextState],
+    ["terminal-session-state", flushTerminalSessionState],
+    ["terminal-status-bar-prefs", flushTerminalStatusBarPrefs],
+    ["window-record-state", flushWindowRecordState],
+  ];
+  const results = await Promise.allSettled(flushes.map(([, fn]) => fn()));
+  for (const [i, result] of results.entries()) {
+    if (result.status === "rejected") {
+      const label = flushes[i]?.[0] ?? "unknown";
+      const err = result.reason;
+      console.error(
+        `[${label}] flush failed:`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+}
+
 async function flushWindowBeforeClose(windowId: string): Promise<void> {
   try {
     await currentFlushRendererLayout(windowId);
@@ -49,15 +77,7 @@ async function flushWindowBeforeClose(windowId: string): Promise<void> {
       err instanceof Error ? err.message : String(err)
     );
   }
-  await Promise.all([
-    flushPluginState(),
-    flushPluginSettings(),
-    flushProjectStore(),
-    flushPanelContextState(),
-    flushTerminalSessionState(),
-    flushTerminalStatusBarPrefs(),
-    flushWindowRecordState(),
-  ]);
+  await flushAllStoresSettled();
 }
 
 function ensureCloseHandler(): void {
@@ -141,15 +161,7 @@ export function createWindowService(
           );
         }
       }
-      await Promise.all([
-        flushPluginState(),
-        flushPluginSettings(),
-        flushProjectStore(),
-        flushPanelContextState(),
-        flushTerminalSessionState(),
-        flushTerminalStatusBarPrefs(),
-        flushWindowRecordState(),
-      ]);
+      await flushAllStoresSettled();
     },
     flushWindow: flushWindowBeforeClose,
     list: () => windowManager.list(),

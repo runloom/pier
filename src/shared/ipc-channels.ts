@@ -14,7 +14,6 @@ export const PIER = {
   WINDOW_CONTEXT: "pier://window:context",
   // project registry (uuid-keyed, upsert from panel context roots)
   PROJECT_LIST: "pier://project:list",
-  PROJECT_GET: "pier://project:get",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
 } as const;
 

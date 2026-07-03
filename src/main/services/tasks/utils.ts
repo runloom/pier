@@ -65,17 +65,19 @@ export function commandWithArgs(
   return `${command} ${args.map(shellQuote).join(" ")}`;
 }
 
-export async function packageManagerFor(projectRoot: string): Promise<string> {
-  if (await pathExists(join(projectRoot, "bun.lock"))) {
+export async function packageManagerFor(
+  projectRootPath: string
+): Promise<string> {
+  if (await pathExists(join(projectRootPath, "bun.lock"))) {
     return "bun";
   }
-  if (await pathExists(join(projectRoot, "bun.lockb"))) {
+  if (await pathExists(join(projectRootPath, "bun.lockb"))) {
     return "bun";
   }
-  if (await pathExists(join(projectRoot, "pnpm-lock.yaml"))) {
+  if (await pathExists(join(projectRootPath, "pnpm-lock.yaml"))) {
     return "pnpm";
   }
-  if (await pathExists(join(projectRoot, "yarn.lock"))) {
+  if (await pathExists(join(projectRootPath, "yarn.lock"))) {
     return "yarn";
   }
   return "npm";

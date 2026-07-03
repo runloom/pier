@@ -389,11 +389,6 @@ export function createForegroundActivityAggregator(
       }
       pruneExpiredCooldowns();
     },
-
-    resetPanel(panelId) {
-      cooldownUntil.delete(panelId);
-    },
-
     onChange(cb) {
       listeners.add(cb);
       return () => {

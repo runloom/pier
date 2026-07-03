@@ -136,3 +136,21 @@
 - `TerminalAPI.onTabChromePatch` preload API。
 - `TerminalTabChromePatchEvent` contract type。
 - `ForegroundActivityAggregator.ignoreNextNativeUserClose` / `consumeIgnoreNativeUserClose` API + 内部 `ignoredNativeUserClosePanels` Set（迁移到 `terminal-task-lifecycle` 单源）。
+
+### Hygiene (best-practice terminal state)
+
+达"最佳实践终态"的最后一波：
+
+- **删死码**：
+  - `ForegroundActivityAggregator.resetPanel` 全仓 0 caller 3 行删。
+  - `pier://project:get` IPC + `pier.project.get` preload API + `useProjectById` renderer hook — 全套 forward-compat 0-caller trio 删。
+  - `tests/component/terminal-panel-lifecycle.test.tsx` 里针对已删 `TERMINAL_TAB_CHROME_PATCHED` 广播的 stale mock + 相关未用 fixture 删。
+- **回归测试**（覆盖 e40d01d8 的 3 项 bug fix）：
+  - `task-service-activity.test.ts` — `cancelRun` fire onFinished 只对 `node.status === "cancelled"` 生效，守卫已成功任务的 activity 不被闪回 cancelled。
+  - `window-service.test.ts` — flushOpenWindows / flushWindowBeforeClose 断言 `flushProjectStore` + `flushPanelContextState` 也在 flush 队列里。
+  - `panel-context-resolver-upsert-warn.test.ts` — `upsertProjectFromPath` 失败的 30s 时间窗口 throttle（配合新导出的 `_resetUpsertWarnForTests` 测试重置）。
+- **一致性打磨**：
+  - `CollectTaskCandidatesOptions.projectRoot` / `ComposerSourceOptions` / `DenoSourceOptions` / `VscodeSourceOptions` 等所有内部 fs-path 字段全部改名 `projectRootPath`，与契约层 `TaskListResult.projectRootPath` / `TaskLaunchPlan.projectRootPath` 命名对齐；task-sources.ts 内部 destructure 与 utils.packageManagerFor 参数同步改名。
+  - `window-service` flushOpenWindows / flushWindowBeforeClose 从 `Promise.all` 换成 `Promise.allSettled`，抽出 `flushAllStoresSettled` 单点，每一路失败独立 log 不再吞其他成功。
+  - 抽 `task-recent-launcher.ts`（99 行）承接 recent-tasks 记忆 + 排序，`task-service.ts` 从 491 行降到 425 行（距硬帽 500 有 75 行缓冲，下一次 task lifecycle 变更空间充足）。
+- **JSDoc + 陈旧注释**：`foreground-activity.ts` 门面 JSDoc 更新为"前台活动服务门面"（旧文本"agent-session facade 历史命名保留"删）。

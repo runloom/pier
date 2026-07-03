@@ -288,9 +288,6 @@ describe("TerminalPanel lifecycle", () => {
     cb: (event: { panelId: string; title: string }) => void;
   }> = [];
 
-  let tabChromePatchListeners: Array<{
-    cb: (event: { panelId: string; tab: Partial<PanelTabChrome> }) => void;
-  }> = [];
   let searchStateListeners: Array<{
     cb: (event: { panelId: string; selected: number; total: number }) => void;
   }> = [];
@@ -308,7 +305,6 @@ describe("TerminalPanel lifecycle", () => {
       y: 20,
     };
     emitWindowLayoutPulse = null;
-    tabChromePatchListeners = [];
     searchStateListeners = [];
     cwdChangeListeners = [];
     titleChangeListeners = [];
@@ -386,15 +382,6 @@ describe("TerminalPanel lifecycle", () => {
             searchStateListeners.push(listener);
             return () => {
               searchStateListeners = searchStateListeners.filter(
-                (entry) => entry !== listener
-              );
-            };
-          }),
-          onTabChromePatch: vi.fn((cb) => {
-            const listener = { cb };
-            tabChromePatchListeners.push(listener);
-            return () => {
-              tabChromePatchListeners = tabChromePatchListeners.filter(
                 (entry) => entry !== listener
               );
             };
@@ -641,16 +628,6 @@ describe("TerminalPanel lifecycle", () => {
       worktreeKey: "/Users/xyz/ABC/pier/old-run",
       worktreeRoot: "/Users/xyz/ABC/pier/old-run",
     };
-    const firstRunTabPatch: Partial<PanelTabChrome> = {
-      state: {
-        label: "Old run",
-        status: "running",
-      },
-      title: "old runtime tab",
-      tooltip: {
-        title: "old runtime tab",
-      },
-    };
     const relaunchContext: PanelContext = {
       ...context,
       contextId: "ctx-relaunch",
@@ -708,9 +685,6 @@ describe("TerminalPanel lifecycle", () => {
       }
       for (const listener of titleChangeListeners) {
         listener.cb({ panelId: "terminal-1", title: "old runtime title" });
-      }
-      for (const listener of tabChromePatchListeners) {
-        listener.cb({ panelId: "terminal-1", tab: firstRunTabPatch });
       }
     });
 
@@ -786,16 +760,6 @@ describe("TerminalPanel lifecycle", () => {
       worktreeKey: "/Users/xyz/ABC/pier/packages/app/src",
       worktreeRoot: "/Users/xyz/ABC/pier/packages/app/src",
     };
-    const postRelaunchTabPatch: Partial<PanelTabChrome> = {
-      state: {
-        label: "Runtime ready",
-        status: "running",
-      },
-      title: "new runtime tab",
-      tooltip: {
-        title: "new runtime tab",
-      },
-    };
 
     act(() => {
       for (const listener of cwdChangeListeners) {
@@ -803,9 +767,6 @@ describe("TerminalPanel lifecycle", () => {
       }
       for (const listener of titleChangeListeners) {
         listener.cb({ panelId: "terminal-1", title: "new runtime title" });
-      }
-      for (const listener of tabChromePatchListeners) {
-        listener.cb({ panelId: "terminal-1", tab: postRelaunchTabPatch });
       }
     });
 
@@ -1191,48 +1152,6 @@ describe("TerminalPanel lifecycle", () => {
         colorToken: "warning",
         label: "Cancelled",
         status: "cancelled",
-      });
-    });
-  });
-
-  it("merges terminal tab chrome patches without replacing the tab title", async () => {
-    const props = createPanelProps({
-      params: { context, tab: taskTab },
-    });
-
-    render(<TerminalPanel {...props} />);
-
-    await waitFor(() => {
-      expect(props.api.setTitle).toHaveBeenCalledWith("test");
-    });
-    act(() => {
-      for (const listener of tabChromePatchListeners) {
-        const legacyPatch = {
-          panelId: "terminal-1",
-          tab: {
-            state: {
-              busy: false,
-              colorToken: "destructive",
-              label: "Failed 1",
-            },
-          },
-        } as unknown as Parameters<typeof listener.cb>[0];
-        listener.cb(legacyPatch);
-      }
-    });
-
-    await waitFor(() => {
-      expect(
-        usePanelDescriptorStore.getState().descriptors["terminal-1"]
-      ).toMatchObject({
-        tab: {
-          title: "test",
-          state: {
-            colorToken: "destructive",
-            label: "Failed 1",
-            status: "failed",
-          },
-        },
       });
     });
   });

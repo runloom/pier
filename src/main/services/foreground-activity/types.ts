@@ -43,11 +43,6 @@ export interface ForegroundActivityAggregator {
 
   /** panel 关闭 → 清 activity + 冷却拦迟到 hook。 */
   panelClosed(panelId: string): void;
-  /**
-   * 该 panel 的冷却记录清除。**不动 entry 本体**——activity 生命周期由
-   * panelClosed / retainPanels 管。
-   */
-  resetPanel(panelId: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的活动按 panelClosed 处理。 */
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;
 

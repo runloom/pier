@@ -227,6 +227,8 @@ describe("WindowService", () => {
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushTerminalStatusBarPrefs).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
+    expect(mocks.flushProjectStore).toHaveBeenCalled();
+    expect(mocks.flushPanelContextState).toHaveBeenCalled();
   });
 
   it("flushes every live window before Cmd+Q destroys windows", async () => {
@@ -249,6 +251,8 @@ describe("WindowService", () => {
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushTerminalStatusBarPrefs).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
+    expect(mocks.flushProjectStore).toHaveBeenCalled();
+    expect(mocks.flushPanelContextState).toHaveBeenCalled();
   });
 
   it("restores the last user-closed window when the app is activated with no live windows", async () => {

@@ -13,6 +13,11 @@ import { execGit } from "./git-exec.ts";
 let lastUpsertWarnAt = 0;
 const UPSERT_WARN_THROTTLE_MS = 30_000;
 
+/** 测试专用：重置 warn 节流状态，避免连测泄漏。 */
+export function _resetUpsertWarnForTests(): void {
+  lastUpsertWarnAt = 0;
+}
+
 export interface ResolvePanelContextOptions {
   execGit?: (
     args: readonly string[],

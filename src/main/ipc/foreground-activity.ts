@@ -70,9 +70,9 @@ function handleBroadcast(b: ForegroundActivityBroadcast): void {
 }
 
 /**
- * agent-session facade（历史命名保留，方便 native callback 层继续引用）。
- * 语义已完全迁到 ForegroundActivityAggregator。所有方法直接转发到
- * unified aggregator——不再存在双写。
+ * 前台活动服务门面——native callback（terminal.ts / terminal-task-lifecycle-wiring.ts）、
+ * window lifecycle、task lifecycle 通过此对象向 ForegroundActivityAggregator 提交
+ * 事件。方法一对一转发到 aggregator，单源无双写。
  */
 export const foregroundActivityService = {
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void {

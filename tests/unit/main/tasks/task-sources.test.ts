@@ -6,34 +6,37 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 describe("task sources", () => {
-  let projectRoot = "";
+  let projectRootPath = "";
   let homeDir = "";
 
   beforeEach(async () => {
-    projectRoot = await mkdtemp(join(tmpdir(), "pier-task-sources-"));
+    projectRootPath = await mkdtemp(join(tmpdir(), "pier-task-sources-"));
     homeDir = await mkdtemp(join(tmpdir(), "pier-task-home-"));
   });
 
   afterEach(async () => {
-    await rm(projectRoot, { force: true, recursive: true });
+    await rm(projectRootPath, { force: true, recursive: true });
     await rm(homeDir, { force: true, recursive: true });
   });
 
   it("normalizes supported task sources into task candidates", async () => {
-    await mkdir(join(projectRoot, ".vscode"));
-    await mkdir(join(projectRoot, ".zed"));
+    await mkdir(join(projectRootPath, ".vscode"));
+    await mkdir(join(projectRootPath, ".zed"));
     await mkdir(join(homeDir, ".config", "zed"), { recursive: true });
     await writeFile(
-      join(projectRoot, "package.json"),
+      join(projectRootPath, "package.json"),
       JSON.stringify({
         scripts: {
           build: "tsc --noEmit",
         },
       })
     );
-    await writeFile(join(projectRoot, "pnpm-lock.yaml"), "lockfileVersion: 9");
     await writeFile(
-      join(projectRoot, ".vscode", "tasks.json"),
+      join(projectRootPath, "pnpm-lock.yaml"),
+      "lockfileVersion: 9"
+    );
+    await writeFile(
+      join(projectRootPath, ".vscode", "tasks.json"),
       JSON.stringify({
         tasks: [
           {
@@ -46,7 +49,7 @@ describe("task sources", () => {
       })
     );
     await writeFile(
-      join(projectRoot, ".zed", "tasks.json"),
+      join(projectRootPath, ".zed", "tasks.json"),
       JSON.stringify([
         {
           allow_concurrent_runs: true,
@@ -61,32 +64,35 @@ describe("task sources", () => {
       JSON.stringify([{ command: "echo global", label: "global task" }])
     );
     await writeFile(
-      join(projectRoot, "Cargo.toml"),
+      join(projectRootPath, "Cargo.toml"),
       '[package]\nname = "pier_native"\n'
     );
-    await writeFile(join(projectRoot, "Makefile"), "serve:\n\tpython app.py\n");
     await writeFile(
-      join(projectRoot, "pyproject.toml"),
+      join(projectRootPath, "Makefile"),
+      "serve:\n\tpython app.py\n"
+    );
+    await writeFile(
+      join(projectRootPath, "pyproject.toml"),
       '[project.scripts]\npier-tool = "pier.cli:main"\n'
     );
     await writeFile(
-      join(projectRoot, ".mise.toml"),
+      join(projectRootPath, ".mise.toml"),
       '[tasks.dev]\nrun = "pnpm dev"\n'
     );
-    await writeFile(join(projectRoot, "Justfile"), "fmt:\n    pnpm lint\n");
+    await writeFile(join(projectRootPath, "Justfile"), "fmt:\n    pnpm lint\n");
     await writeFile(
-      join(projectRoot, "Taskfile.yml"),
+      join(projectRootPath, "Taskfile.yml"),
       "tasks:\n  clean:\n    cmd: rm -rf out\n"
     );
 
     const result = await collectTaskCandidates({
       homeDir,
       projectId: TEST_PROJECT_ID,
-      projectRoot,
+      projectRootPath,
       recentTasks: [
         {
           command: "pnpm check",
-          cwd: projectRoot,
+          cwd: projectRootPath,
           label: "pnpm check",
           source: "history",
         },
@@ -119,7 +125,7 @@ describe("task sources", () => {
 
   it("collects deno.json(c) tasks including object-form tasks", async () => {
     await writeFile(
-      join(projectRoot, "deno.jsonc"),
+      join(projectRootPath, "deno.jsonc"),
       `{
         // jsonc comment
         "tasks": {
@@ -132,7 +138,7 @@ describe("task sources", () => {
     const result = await collectTaskCandidates({
       homeDir,
       projectId: TEST_PROJECT_ID,
-      projectRoot,
+      projectRootPath,
     });
 
     expect(result.errors).toEqual([]);
@@ -152,7 +158,7 @@ describe("task sources", () => {
 
   it("collects composer scripts and skips lifecycle event hooks", async () => {
     await writeFile(
-      join(projectRoot, "composer.json"),
+      join(projectRootPath, "composer.json"),
       JSON.stringify({
         scripts: {
           "post-install-cmd": "php artisan clear",
@@ -164,7 +170,7 @@ describe("task sources", () => {
     const result = await collectTaskCandidates({
       homeDir,
       projectId: TEST_PROJECT_ID,
-      projectRoot,
+      projectRootPath,
     });
 
     expect(result.errors).toEqual([]);
@@ -183,19 +189,19 @@ describe("task sources", () => {
 
   it("collects cargo aliases from .cargo/config.toml", async () => {
     await writeFile(
-      join(projectRoot, "Cargo.toml"),
+      join(projectRootPath, "Cargo.toml"),
       '[package]\nname = "demo"\n'
     );
-    await mkdir(join(projectRoot, ".cargo"));
+    await mkdir(join(projectRootPath, ".cargo"));
     await writeFile(
-      join(projectRoot, ".cargo", "config.toml"),
+      join(projectRootPath, ".cargo", "config.toml"),
       '[alias]\nlint = "clippy --all-targets"\n'
     );
 
     const result = await collectTaskCandidates({
       homeDir,
       projectId: TEST_PROJECT_ID,
-      projectRoot,
+      projectRootPath,
     });
 
     expect(
@@ -213,7 +219,7 @@ describe("task sources", () => {
 
   it("keeps Taskfile parsing inside the tasks block and supports 4-space indent + namespaced names", async () => {
     await writeFile(
-      join(projectRoot, "Taskfile.yml"),
+      join(projectRootPath, "Taskfile.yml"),
       [
         "version: '3'",
         "tasks:",
@@ -232,7 +238,7 @@ describe("task sources", () => {
     const result = await collectTaskCandidates({
       homeDir,
       projectId: TEST_PROJECT_ID,
-      projectRoot,
+      projectRootPath,
     });
 
     expect(
@@ -244,7 +250,7 @@ describe("task sources", () => {
 
   it("excludes just assignments and [private] recipes", async () => {
     await writeFile(
-      join(projectRoot, "Justfile"),
+      join(projectRootPath, "Justfile"),
       [
         'set shell := ["bash", "-c"]',
         "alias b := build",
@@ -265,7 +271,7 @@ describe("task sources", () => {
     const result = await collectTaskCandidates({
       homeDir,
       projectId: TEST_PROJECT_ID,
-      projectRoot,
+      projectRootPath,
     });
 
     expect(
@@ -277,14 +283,14 @@ describe("task sources", () => {
 
   it("collects quoted mise task section names", async () => {
     await writeFile(
-      join(projectRoot, ".mise.toml"),
+      join(projectRootPath, ".mise.toml"),
       '[tasks."docs:build"]\nrun = "mkdocs build"\n\n[tasks.dev]\nrun = "pnpm dev"\n'
     );
 
     const result = await collectTaskCandidates({
       homeDir,
       projectId: TEST_PROJECT_ID,
-      projectRoot,
+      projectRootPath,
     });
 
     expect(

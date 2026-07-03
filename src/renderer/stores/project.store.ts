@@ -18,8 +18,3 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set({ byId: Object.fromEntries(projects.map((p) => [p.id, p])) });
   },
 }));
-
-/** 按 id 查 project（未加载/未知 id 返回 undefined）。 */
-export function useProjectById(id: string | undefined): Project | undefined {
-  return useProjectStore((s) => (id ? s.byId[id] : undefined));
-}

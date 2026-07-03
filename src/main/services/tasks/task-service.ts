@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import type {
   TaskCandidate,
   TaskLaunchPlan,
@@ -9,20 +8,14 @@ import type {
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
 import {
-  EMPTY_TASK_RECENT_STATE,
-  readTaskRecentState as readTaskRecentStateDefault,
-  writeTaskRecentState as writeTaskRecentStateDefault,
-} from "../../state/task-recent.ts";
-import {
   buildTaskLaunches,
   requiredInputsForTask,
 } from "./task-execution-plan.ts";
 import { createTaskPanelReuseRegistry } from "./task-panel-reuse-registry.ts";
 import {
-  recentCommandKey,
-  recentTaskKey,
-  sortTasksByRecentUse,
-} from "./task-recent-ranking.ts";
+  createTaskRecentLauncher,
+  type TaskRecentLauncher,
+} from "./task-recent-launcher.ts";
 import {
   createTaskRunCoordinator,
   type TaskRunCoordinatorStartResult,
@@ -126,51 +119,29 @@ export function createTaskService({
   homeDir,
   now = () => Date.now(),
   onTaskActivity,
-  readRecentState = readTaskRecentStateDefault,
-  recentLimit = 20,
-  writeRecentState = writeTaskRecentStateDefault,
+  readRecentState,
+  recentLimit,
+  writeRecentState,
 }: CreateTaskServiceOptions = {}): TaskService {
   const runningByKey = new Map<string, RunningTaskInstance>();
   const runningByPanel = new Map<string, Set<string>>();
   const taskRuns = createTaskRunCoordinator({ now });
-  let recentTasks: TaskRecentEntry[] = [];
-  let recentLoaded = false;
-  let recentLoadPromise: Promise<void> | null = null;
+  const recent: TaskRecentLauncher = createTaskRecentLauncher({
+    now,
+    ...(readRecentState ? { readRecentState } : {}),
+    ...(recentLimit == null ? {} : { recentLimit }),
+    ...(writeRecentState ? { writeRecentState } : {}),
+  });
 
-  async function ensureRecentLoaded(): Promise<void> {
-    if (recentLoaded) {
-      return;
-    }
-    if (recentLoadPromise) {
-      return await recentLoadPromise;
-    }
-    recentLoadPromise = readRecentState()
-      .then((state) => {
-        recentTasks = state.entries;
-        recentLoaded = true;
-      })
-      .catch(() => {
-        recentTasks = EMPTY_TASK_RECENT_STATE.entries;
-        recentLoaded = true;
-      })
-      .finally(() => {
-        recentLoadPromise = null;
-      });
-    await recentLoadPromise;
-  }
-
-  const collect = async (projectId: string, projectRoot: string) => {
-    await ensureRecentLoaded();
+  const collect = async (projectId: string, projectRootPath: string) => {
+    await recent.ensureLoaded();
     const result = await collectTaskCandidates({
       projectId,
-      projectRoot,
-      recentTasks,
+      projectRootPath,
+      recentTasks: recent.entries(),
       ...(homeDir ? { homeDir } : {}),
     } satisfies CollectTaskCandidatesOptions);
-    return {
-      ...result,
-      tasks: sortTasksByRecentUse(result.tasks, recentTasks, now()),
-    };
+    return { ...result, tasks: recent.sort(result.tasks) };
   };
 
   function rememberPanelRun(
@@ -317,43 +288,6 @@ export function createTaskService({
       };
     }
   }
-
-  async function recordRecentLaunch(launch: TaskLaunchPlan): Promise<void> {
-    await ensureRecentLoaded();
-    const usedAt = now();
-    const existing = recentTasks.find((recent) =>
-      recent.taskId
-        ? recentTaskKey(recent.cwd, recent.taskId) ===
-          recentTaskKey(launch.cwd, launch.taskId)
-        : recentCommandKey(recent.cwd, recent.command) ===
-          recentCommandKey(launch.cwd, launch.rawCommand ?? launch.command)
-    );
-    const entry: TaskRecentEntry = {
-      command: launch.rawCommand ?? launch.command,
-      cwd: launch.cwd,
-      lastUsedAt: usedAt,
-      label: launch.label || basename(launch.cwd),
-      source: "history",
-      taskId: launch.taskId,
-      useCount: (existing?.useCount ?? 0) + 1,
-    };
-    recentTasks = [
-      entry,
-      ...recentTasks.filter(
-        (recent) =>
-          !(
-            (recent.taskId
-              ? recentTaskKey(recent.cwd, recent.taskId) ===
-                recentTaskKey(entry.cwd, launch.taskId)
-              : false) ||
-            recentCommandKey(recent.cwd, recent.command) ===
-              recentCommandKey(entry.cwd, entry.command)
-          )
-      ),
-    ].slice(0, recentLimit);
-    await writeRecentState({ entries: recentTasks, version: 1 });
-  }
-
   return {
     cancelRun(runId) {
       const result = taskRuns.cancel(runId);
@@ -434,9 +368,9 @@ export function createTaskService({
         ...restartPreparation(projectId, task.id, preparation.launches),
       };
     },
-    recentTasks: () => recentTasks,
+    recentTasks: () => recent.entries(),
     async recordRecent(launch) {
-      await recordRecentLaunch(launch);
+      await recent.recordLaunch(launch);
     },
     recordStarted({ panelId, projectId, projectRootPath, taskId, windowId }) {
       recordStartedRun({
@@ -465,7 +399,7 @@ export function createTaskService({
             taskId: launch.taskId,
             windowId: opened.windowId,
           });
-          await recordRecentLaunch(launch);
+          await recent.recordLaunch(launch);
           onTaskActivity?.onLaunched(opened.panelId, opened.windowId, {
             taskId: launch.taskId,
             label: launch.label,
