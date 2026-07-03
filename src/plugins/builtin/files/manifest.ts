@@ -8,6 +8,14 @@ export const FILES_PLUGIN_MANIFEST = {
   commands: [],
   engines: { pier: ">=0.1.0" },
   id: FILES_PLUGIN_ID,
+  localization: {
+    defaultLocale: "en",
+    files: {
+      en: "locales/en.json",
+      "zh-CN": "locales/zh-CN.json",
+    },
+    locales: ["en", "zh-CN"],
+  },
   name: "Files",
   panels: [
     {

@@ -15,14 +15,15 @@ export const CATEGORY_META: Record<
   string,
   { labelKey: string; order: number }
 > = {
-  View: { order: 0, labelKey: "view" },
-  Workspace: { order: 1, labelKey: "workspace" },
-  Worktree: { order: 2, labelKey: "worktree" },
-  Git: { order: 3, labelKey: "git" },
-  Run: { order: 4, labelKey: "run" },
-  Panel: { order: 5, labelKey: "panel" },
-  Window: { order: 6, labelKey: "window" },
-  Settings: { order: 7, labelKey: "settings" },
+  view: { order: 0, labelKey: "view" },
+  workspace: { order: 1, labelKey: "workspace" },
+  worktree: { order: 2, labelKey: "worktree" },
+  git: { order: 3, labelKey: "git" },
+  run: { order: 4, labelKey: "run" },
+  panel: { order: 5, labelKey: "panel" },
+  window: { order: 6, labelKey: "window" },
+  settings: { order: 7, labelKey: "settings" },
+  file: { order: 8, labelKey: "file" },
 };
 
 export const UNKNOWN_ORDER = Object.keys(CATEGORY_META).length;

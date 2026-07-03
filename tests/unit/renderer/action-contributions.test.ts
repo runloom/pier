@@ -88,7 +88,7 @@ describe("action contributions", () => {
     const action = createActionFromContribution(contribution, runtime(2));
 
     expect(action.id).toBe("pier.panel.equalizeSplits");
-    expect(action.category).toBe("Panel");
+    expect(action.category).toBe("panel");
     expect(action.title()).toBe("commandPalette.action.equalizePanels");
     expect(action.metadata?.aliases?.()).toEqual([
       "平分面板",

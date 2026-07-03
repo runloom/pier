@@ -79,6 +79,8 @@ function toTreeItem(entry: FileEntry): PierFileTreeItem {
 }
 
 function createFilesExplorerPanel(context: RendererPluginContext) {
+  const t = (key: string, fallback?: string) =>
+    context.i18n.t(key, undefined, fallback);
   return function FilesExplorerPanel(
     props: IDockviewPanelProps<FilesExplorerPanelParams>
   ) {
@@ -129,7 +131,12 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
           if (cancelled || rootRef.current !== root) {
             return;
           }
-          setRootError(errorMessage(loadError, "Failed to load files"));
+          setRootError(
+            errorMessage(
+              loadError,
+              t("panel.loadError.fallback", "Failed to load files")
+            )
+          );
           setFileEntriesByPath(new Map());
           setRootLoaded(true);
         });
@@ -192,9 +199,14 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
         return (
           <Empty className="min-h-0 flex-1">
             <EmptyHeader>
-              <EmptyTitle>No project context</EmptyTitle>
+              <EmptyTitle>
+                {t("panel.noProjectContext.title", "No project context")}
+              </EmptyTitle>
               <EmptyDescription>
-                Open a project or worktree to browse files.
+                {t(
+                  "panel.noProjectContext.description",
+                  "Open a project or worktree to browse files."
+                )}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -204,7 +216,9 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
       if (rootError) {
         return (
           <Alert variant="destructive">
-            <AlertTitle>Unable to load files</AlertTitle>
+            <AlertTitle>
+              {t("panel.loadError.title", "Unable to load files")}
+            </AlertTitle>
             <AlertDescription>{rootError}</AlertDescription>
           </Alert>
         );
@@ -213,7 +227,7 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
       if (!rootLoaded) {
         return (
           <div
-            aria-label="Loading files"
+            aria-label={t("panel.loading.label", "Loading files")}
             className="flex min-h-0 flex-1 flex-col gap-2"
             role="status"
           >
@@ -228,9 +242,14 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
         return (
           <Empty className="min-h-0 flex-1">
             <EmptyHeader>
-              <EmptyTitle>No files found</EmptyTitle>
+              <EmptyTitle>
+                {t("panel.empty.title", "No files found")}
+              </EmptyTitle>
               <EmptyDescription>
-                This project root does not contain files to show.
+                {t(
+                  "panel.empty.description",
+                  "This project root does not contain files to show."
+                )}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -242,7 +261,7 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
           className="min-h-0 w-full flex-1"
           directoryStates={directoryStatesByPath}
           items={items}
-          label="Files"
+          label={t("panel.tree.label", "Files")}
           onLoadDirectory={loadDirectory}
         />
       );
@@ -257,7 +276,9 @@ function createFilesExplorerPanel(context: RendererPluginContext) {
 
     return (
       <div className="flex h-full flex-col gap-3 bg-background p-4">
-        <h1 className="font-semibold text-foreground text-sm">Files</h1>
+        <h1 className="font-semibold text-foreground text-sm">
+          {t("panel.title", "Files")}
+        </h1>
         {content}
       </div>
     );
@@ -271,7 +292,7 @@ export const filesRendererPlugin: RendererPluginModule = {
       icon: FolderTree,
       id: FILES_PANEL_ID,
       kind: "web",
-      title: "Files",
+      title: context.i18n.t("panel.title", undefined, "Files"),
     }),
   id: FILES_PLUGIN_ID,
 };

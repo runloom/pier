@@ -23,6 +23,11 @@ const POLL_INTERVAL_MS = 250;
 export interface JsonlObserver {
   /** 停止监听并释放资源。 */
   dispose(): void;
+  /**
+   * 手动触发一次尾读循环（跳过 watchFile 轮询等待，供测试用；
+   * 生产环境依赖 250ms poll 自动触发即可，不必调）。
+   */
+  pollNow(): Promise<void>;
 }
 
 export interface JsonlObserverOpts {
@@ -142,6 +147,18 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     dispose() {
       disposed = true;
       unwatchFile(filePath, onFileChange);
+    },
+    async pollNow() {
+      // 与 watchFile 触发共享同一 processing 闸门，避免并发读同段字节。
+      if (disposed || processing) {
+        return;
+      }
+      processing = true;
+      try {
+        await processChanges();
+      } finally {
+        processing = false;
+      }
     },
   };
 }

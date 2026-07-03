@@ -10,7 +10,7 @@ import { Toaster } from "@/components/primitives/sonner.tsx";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
 
-const IS_MAC = window.pier?.platform === "darwin";
+const IS_MAC = window.pier?.env?.platform === "darwin";
 
 export function AppShell() {
   return (

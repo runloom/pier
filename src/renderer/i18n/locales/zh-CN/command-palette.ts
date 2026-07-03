@@ -15,6 +15,7 @@ export const commandPalette = {
     language: "选择界面语言",
   },
   category: {
+    file: "文件",
     git: "Git",
     view: "视图",
     settings: "设置",
@@ -46,130 +47,6 @@ export const commandPalette = {
     zoomIn: "放大界面",
     zoomOut: "缩小界面",
     resetZoom: "重置界面缩放",
-  },
-  aliases: {
-    pier: {
-      agent: {
-        new: ["新建智能体", "智能体", "xinjian zhili", "zhili"],
-      },
-      commandPalette: {
-        clearRecent: [
-          "清空历史",
-          "清空记录",
-          "重置历史",
-          "命令历史",
-          "qingkong",
-          "lishi",
-        ],
-      },
-      config: {
-        locale: [
-          "语言",
-          "中文",
-          "简体中文",
-          "显示语言",
-          "界面语言",
-          "zh",
-          "jianti",
-          "yuyan",
-        ],
-        stylePreset: ["风格", "配色", "配色方案", "fengge", "peise"],
-        theme: [
-          "主题",
-          "颜色模式",
-          "深色",
-          "浅色",
-          "zhuti",
-          "shense",
-          "qianse",
-        ],
-      },
-      panel: {
-        equalizeSplits: [
-          "平分面板",
-          "均分面板",
-          "平分布局",
-          "均分布局",
-          "pingfen mianban",
-          "junfen mianban",
-          "junfen",
-          "pingfen",
-        ],
-        newTerminal: [
-          "新建终端",
-          "打开终端",
-          "终端",
-          "xinjian zhongduan",
-          "zhongduan",
-        ],
-      },
-      run: {
-        task: ["运行任务", "任务", "运行", "renwu", "yunxing"],
-        terminalList: [
-          "终端列表",
-          "会话列表",
-          "切换终端",
-          "zhongduan liebiao",
-          "huihua",
-        ],
-      },
-      settings: {
-        open: ["设置", "偏好", "首选项", "shezhi", "pianhao"],
-      },
-      terminal: {
-        openDebugWindow: [
-          "终端调试",
-          "原生终端调试",
-          "调试路由",
-          "zhongduan tiaoshi",
-        ],
-      },
-      view: {
-        resetZoom: ["重置缩放", "重置界面缩放", "恢复缩放", "chongzhi suofang"],
-        zoomIn: ["放大", "放大界面", "fangda"],
-        zoomOut: ["缩小", "缩小界面", "suoxiao"],
-      },
-      workspace: {
-        resetLayout: [
-          "重置布局",
-          "恢复布局",
-          "面板布局",
-          "chongzhi buju",
-          "mianban buju",
-        ],
-      },
-    },
-    theme: {
-      dark: ["深色", "深色模式", "shense"],
-      light: ["浅色", "浅色模式", "qianse"],
-      system: ["系统", "跟随系统", "自动", "xitong", "zidong"],
-    },
-    stylePreset: {
-      pierre: ["pierre"],
-      "pierre-soft": ["pierre soft"],
-      catppuccin: ["catppuccin"],
-      everforest: ["everforest"],
-      github: ["github"],
-      "github-default": ["github default"],
-      "github-high-contrast": ["github high contrast", "高对比度"],
-      "gruvbox-hard": ["gruvbox hard"],
-      "gruvbox-medium": ["gruvbox medium"],
-      "gruvbox-soft": ["gruvbox soft"],
-      kanagawa: ["kanagawa"],
-      vscode: ["vscode", "vs code"],
-      material: ["material"],
-      min: ["min"],
-      one: ["one"],
-      "rose-pine": ["rose pine"],
-      slack: ["slack"],
-      solarized: ["solarized"],
-      vitesse: ["vitesse"],
-    },
-    locale: {
-      system: ["系统", "跟随系统", "自动", "xitong", "zidong"],
-      "zh-CN": ["中文", "简体", "简体中文", "zh", "jianti"],
-      en: ["英文", "英语", "yingwen"],
-    },
   },
   run: {
     action: {

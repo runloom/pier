@@ -20,7 +20,7 @@ import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
   resetTerminalInputRoutingForTests,
-} from "@/stores/terminal-input-routing.store.ts";
+} from "@/stores/terminal.store.ts";
 
 describe("AppDialogHost", () => {
   beforeEach(async () => {

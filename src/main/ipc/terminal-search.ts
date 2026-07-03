@@ -7,7 +7,7 @@ import type { AppWindow } from "../windows/app-window.ts";
 import { recordNativeTerminalRoute } from "./terminal-debug.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
-import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
+import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 
 const MAX_TERMINAL_SEARCH_QUERY_LENGTH = 512;
 
@@ -35,7 +35,7 @@ function terminalBindingResult(
   }
   try {
     const ok = opts.addon.performTerminalBindingAction(
-      scopePanelId(opts.win, opts.panelId),
+      toNativePanelKey(opts.win, opts.panelId),
       action
     );
     return ok
@@ -109,7 +109,7 @@ export function registerTerminalSearchIpc(opts: {
     forwardToWindow(
       id,
       "pier:terminal:search-state",
-      { panelId: unscopePanelId(panelId), selected, total },
+      { panelId: fromNativePanelKey(panelId), selected, total },
       "pier-search-forward"
     );
   });

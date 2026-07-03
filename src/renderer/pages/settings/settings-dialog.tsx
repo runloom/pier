@@ -37,7 +37,7 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import {
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
-} from "@/stores/terminal-input-routing.store.ts";
+} from "@/stores/terminal.store.ts";
 
 const SIDEBAR_STYLE: CSSProperties = {
   "--sidebar-width": "10rem",

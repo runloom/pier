@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import type {
   ActionContribution,
   ActionContributionRuntime,
@@ -6,18 +7,10 @@ import type {
 import { actionRegistry } from "./registry.ts";
 import type { Action, ActionCategoryKey, ActionMetadata } from "./types.ts";
 
-const CATEGORY_BY_KEY: Record<ActionCategoryKey, string> = {
-  file: "File",
-  git: "Git",
-  panel: "Panel",
-  run: "Run",
-  settings: "Settings",
-  terminal: "Terminal",
-  view: "View",
-  window: "Window",
-  workspace: "Workspace",
-  worktree: "Worktree",
-};
+/** 用 i18n 解析 category 显示名，key 同时用作 locale 无关的分组键 */
+export function getCategory(key: ActionCategoryKey): string {
+  return i18next.t(`commandPalette.category.${key}`, { defaultValue: key });
+}
 
 const BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel", "hasApi"]);
 const TERMINAL_BOOLEAN_WHEN_FIELDS = new Set([
@@ -138,7 +131,7 @@ export function createActionFromContribution(
     evaluateActionWhen(contribution.when, runtime.getContext());
 
   return {
-    category: CATEGORY_BY_KEY[contribution.categoryKey],
+    category: contribution.categoryKey,
     enabled: isEnabled,
     handler: async () => {
       if (!isEnabled()) {

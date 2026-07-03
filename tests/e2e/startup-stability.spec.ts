@@ -28,7 +28,7 @@ test.describe("Startup stability e2e", () => {
       const secondWindow = await secondWindowPromise;
       await secondWindow.waitForLoadState("domcontentloaded");
       const secondContext = await secondWindow.evaluate(() =>
-        window.pier.getWindowContext()
+        window.pier.window.getContext()
       );
       secondRecordId = secondContext.recordId;
 

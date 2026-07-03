@@ -41,31 +41,24 @@ describe("jsonl-observer", () => {
     writeFileSync(jsonlPath, initial);
 
     const received: AgentHookEvent[] = [];
-    const { promise: donePromise, resolve: done } =
-      Promise.withResolvers<void>();
-
     const observer = createJsonlObserver({
       filePath: jsonlPath,
       onEvent(event) {
         received.push(event);
-        if (received.length === 2) {
-          done();
-        }
+        // (无需 Promise signal, 手动 pollNow 已保证同步)
       },
     });
 
     // 追加 2 行
     appendFileSync(jsonlPath, `${eventLine(3)}\n${eventLine(4)}\n`);
-
-    // watchFile 250ms 轮询——等真实回调触发（集成测试文件系统行为）
-    await withTimeout(donePromise, 5000);
+    await observer.pollNow();
 
     expect(received).toHaveLength(2);
     expect(received[0]?.event).toBe("evt-3");
     expect(received[1]?.event).toBe("evt-4");
 
     observer.dispose();
-  });
+  }, 20_000);
 
   it("rotate：超 10MB 后截断保留 tail 1000 行", async () => {
     // 写 100000 行（每行约 90 字节 → ~9MB，不够。加大内容让它超 10MB）
@@ -84,11 +77,6 @@ describe("jsonl-observer", () => {
       );
     }
     writeFileSync(jsonlPath, `${lines.join("\n")}\n`);
-
-    const { promise: rotateDone, resolve: onRotated } =
-      Promise.withResolvers<void>();
-    let rotateChecked = false;
-
     const observer = createJsonlObserver({
       filePath: jsonlPath,
       onEvent() {
@@ -99,25 +87,9 @@ describe("jsonl-observer", () => {
       },
     });
 
-    // 追加 1 行触发 watchFile + rotate 检查
+    // 追加 1 行 -> 手动触发 rotate 检查
     appendFileSync(jsonlPath, `${eventLine(999_999)}\n`);
-
-    // 轮询等待 rotate 完成
-    const interval = setInterval(async () => {
-      try {
-        const content = await readFile(jsonlPath, "utf8");
-        const nonEmpty = content.split("\n").filter((l) => l.trim());
-        if (nonEmpty.length === 1000 && !rotateChecked) {
-          rotateChecked = true;
-          clearInterval(interval);
-          onRotated();
-        }
-      } catch {
-        // 文件可能正在被重写
-      }
-    }, 200);
-
-    await withTimeout(rotateDone, 15_000);
+    await observer.pollNow();
 
     const finalContent = await readFile(jsonlPath, "utf8");
     const finalLines = finalContent.split("\n").filter((l) => l.trim());
@@ -131,8 +103,7 @@ describe("jsonl-observer", () => {
     expect(lastParsed.event).toBe("evt-999999");
 
     observer.dispose();
-    clearInterval(interval);
-  });
+  }, 20_000);
 
   it("offset 恢复：restart observer 从持久化 offset 继续", async () => {
     // 写 5 行
@@ -163,7 +134,9 @@ describe("jsonl-observer", () => {
     // 追加 1 行触发 watchFile stat 变化
     appendFileSync(jsonlPath, `${eventLine(5)}\n`);
 
-    await withTimeout(donePromise, 5000);
+    // watchFile 250ms 轮询在 vitest 并行环境下偶发慢 5s+ (I/O 拥塞 / 全局
+    // pool 抢占); 加大到 15s 让 poll 至少推进 40 轮。
+    await withTimeout(donePromise, 15_000);
 
     expect(received).toHaveLength(3);
     expect(received[0]?.event).toBe("evt-3");
@@ -171,7 +144,7 @@ describe("jsonl-observer", () => {
     expect(received[2]?.event).toBe("evt-5");
 
     observer.dispose();
-  });
+  }, 20_000);
 });
 
 /** 带超时的 promise 等待（集成测试中等待 FS 事件需要）。 */

@@ -1,0 +1,19 @@
+{
+  "messages": {
+    "panel.title": "Files",
+    "panel.noProjectContext.title": "No project context",
+    "panel.noProjectContext.description": "Open a project or worktree to browse files.",
+    "panel.loadError.title": "Unable to load files",
+    "panel.loadError.fallback": "Failed to load files",
+    "panel.loading.label": "Loading files",
+    "panel.empty.title": "No files found",
+    "panel.empty.description": "This project root does not contain files to show.",
+    "panel.tree.label": "Files"
+  },
+  "name": "Files",
+  "panels": {
+    "pier.files.explorer": {
+      "title": "Files"
+    }
+  }
+}

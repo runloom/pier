@@ -175,7 +175,6 @@ describe.runIf(process.platform === "darwin")(
       expect(win ? findWindowContext(win) : null).toMatchObject({
         mode: "restore",
         recordId: "main",
-        sessionId: "main",
         windowId: "main",
       });
     });
@@ -207,16 +206,14 @@ describe.runIf(process.platform === "darwin")(
       expect(firstContext).toMatchObject({
         mode: "fresh",
         recordId: "record-a",
-        sessionId: "record-a",
         windowId: "w-1",
       });
       expect(secondContext).toMatchObject({
         mode: "fresh",
         recordId: "record-b",
-        sessionId: "record-b",
         windowId: "w-1",
       });
-      expect(secondContext?.sessionId).not.toBe(firstContext?.sessionId);
+      expect(secondContext?.recordId).not.toBe(firstContext?.recordId);
     });
 
     it("maps renderer webContents back to the owning app window", async () => {
