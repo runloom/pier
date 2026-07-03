@@ -121,6 +121,16 @@ final class TerminalCallbackBridge {
                     durationNanos: finished.duration
                 )
 
+        case GHOSTTY_ACTION_COMMAND_STARTED:
+            let started = action.action.command_started
+            let commandLine = started.command_line.map { String(cString: $0) } ?? ""
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=command_started commandLine=\(TerminalDebugLog.describe(commandLine))"
+            )
+            (delegate as? any TerminalSurfaceCommandStartedDelegate)?
+                .terminalDidStartCommand(commandLine: commandLine)
+
         case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
             let payload = action.action.desktop_notification
             let title = payload.title.map { String(cString: $0) } ?? ""

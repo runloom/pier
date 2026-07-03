@@ -101,6 +101,13 @@ public protocol TerminalSurfaceCommandFinishedDelegate: TerminalSurfaceViewDeleg
     func terminalDidFinishCommand(exitCode: Int?, durationNanos: UInt64)
 }
 
+/// Fires when a shell-integration-aware command starts (OSC 133 C or OSC 633 E).
+/// `commandLine` is the empty string when the shell did not report it.
+@MainActor
+public protocol TerminalSurfaceCommandStartedDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidStartCommand(commandLine: String)
+}
+
 /// OSC 9 (iTerm2) / OSC 777 (rxvt-unicode) desktop notification.
 /// Empty title/body surface as empty strings rather than nil.
 @MainActor

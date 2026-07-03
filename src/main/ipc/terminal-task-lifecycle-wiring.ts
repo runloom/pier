@@ -1,3 +1,5 @@
+import { matchAgentCommand } from "@shared/agent-command-detection.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import {
   patchTerminalPanelTab,
   patchTerminalPanelTaskStatus,
@@ -12,9 +14,9 @@ import { recordNativeTerminalRoute } from "./terminal-debug.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { terminalPanelClosed } from "./terminal-panel-closed.ts";
-import { unscopePanelId } from "./terminal-panel-id.ts";
+import { fromNativePanelKey } from "./terminal-panel-id.ts";
 import { createTerminalTaskLifecycle } from "./terminal-task-lifecycle.ts";
-import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
+import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
 export interface RegisteredTerminalTaskLifecycle {
   ignoreNextNativeUserClose(
@@ -35,7 +37,7 @@ export function registerTerminalTaskLifecycleForwarding(
     forwardTabPatch: (browserWindowId, panelId, tab) => {
       forwardToWindow(
         browserWindowId,
-        "pier:terminal:tab-chrome-patch",
+        PIER_BROADCAST.TERMINAL_TAB_CHROME_PATCHED,
         { panelId, tab },
         "pier-task-tab-patch"
       );
@@ -48,7 +50,7 @@ export function registerTerminalTaskLifecycleForwarding(
     patchTaskStatus: patchTerminalPanelTaskStatus,
     sessionScopeForBrowserWindow: (browserWindowId) => {
       const win = findAppWindowByElectronId(browserWindowId);
-      return win && !win.isDestroyed() ? terminalSessionScopeFor(win) : null;
+      return win && !win.isDestroyed() ? windowRecordIdFor(win) : null;
     },
   });
 
@@ -57,11 +59,11 @@ export function registerTerminalTaskLifecycleForwarding(
     recordNativeTerminalRoute(id, "command-finished", panelId, {
       exitCode: normalizedExitCode,
     });
-    const rawPanelId = unscopePanelId(panelId);
+    const rawPanelId = fromNativePanelKey(panelId);
     // 前台命令退出 = 该面板运行中的 agent CLI 已退出（若有会话）——清理并还原
     // tab/状态栏呈现。覆盖崩溃/kill 等无 SessionEnd hook 的路径。
     // 透传原始 exitCode：悬挂家族(145-148, Ctrl+Z)不视为 agent 退出。
-    agentSessionService.commandFinished(String(id), rawPanelId, exitCode);
+    agentSessionService.commandFinished(rawPanelId, exitCode);
     const targetWindow = findAppWindowByElectronId(id);
     if (exitCode >= 0) {
       lifecycle
@@ -90,13 +92,33 @@ export function registerTerminalTaskLifecycleForwarding(
     });
   });
 
+  addon?.setCommandStartedForwardCallback?.((id, panelId, commandLine) => {
+    recordNativeTerminalRoute(id, "command-started", panelId, { commandLine });
+    const rawPanelId = fromNativePanelKey(panelId);
+    const targetWindow = findAppWindowByElectronId(id);
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return;
+    }
+    // ghostty OSC 133 C 命令行文本 → matchAgentCommand 词元识别 → 先验点亮
+    // agent entry。hook 生效前就有 icon 状态，等价 loomdesk 的 L1 shell
+    // integration commandLine 检测。
+    //
+    // windowId 用 electron BrowserWindow.id 字符串（不是内部 UUID）——聚合器
+    // 广播时对 session.windowId 做 Number()，然后交给 forwardToWindow；UUID
+    // 会变 NaN。HTTP `PIER_WINDOW_ID = String(win.id)` 已经是同一约定。
+    const agentId = matchAgentCommand(commandLine);
+    if (agentId) {
+      agentSessionService.agentLaunched(String(id), rawPanelId, agentId);
+    }
+  });
+
   addon?.setProcessClosedForwardCallback?.((id, panelId, processAlive) => {
     recordNativeTerminalRoute(id, "process-closed", panelId, {
       processAlive,
     });
-    const rawPanelId = unscopePanelId(panelId);
+    const rawPanelId = fromNativePanelKey(panelId);
     const targetWindow = findAppWindowByElectronId(id);
-    agentSessionService.panelClosed(String(id), rawPanelId);
+    agentSessionService.panelClosed(rawPanelId);
     lifecycle
       .completeFromNativeProcessClose({
         browserWindowId: id,
@@ -113,7 +135,7 @@ export function registerTerminalTaskLifecycleForwarding(
 
   addon?.setTitleForwardCallback((id, panelId, title) => {
     recordNativeTerminalRoute(id, "title", panelId, { title });
-    const rawPanelId = unscopePanelId(panelId);
+    const rawPanelId = fromNativePanelKey(panelId);
     const targetWindow = findAppWindowByElectronId(id);
     const taskExitCode = terminalPanelClosed.parseTaskExitTitle(title);
     if (taskExitCode !== null) {
@@ -132,18 +154,15 @@ export function registerTerminalTaskLifecycleForwarding(
         });
       return;
     }
-
-    agentSessionService.ingestTitle(String(id), rawPanelId, title);
-
     if (targetWindow && !targetWindow.isDestroyed()) {
-      const sessionScope = terminalSessionScopeFor(targetWindow);
+      const sessionScope = windowRecordIdFor(targetWindow);
       updateTerminalPanelTitle(sessionScope, rawPanelId, title).catch((err) => {
         console.error("[pier-title-persist] failed:", err);
       });
     }
     forwardToWindow(
       id,
-      "pier:terminal:title-change",
+      PIER_BROADCAST.TERMINAL_TITLE_CHANGED,
       { panelId: rawPanelId, title },
       "pier-title-forward"
     );

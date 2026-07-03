@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type {
   TerminalColors,
   TerminalFrame,
@@ -55,6 +56,15 @@ export interface NativeAddon {
           panelId: string,
           exitCode: number,
           durationNanos: number
+        ) => void)
+      | null
+  ): void;
+  setCommandStartedForwardCallback?(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          commandLine: string
         ) => void)
       | null
   ): void;
@@ -141,7 +151,19 @@ export function loadNativeAddon(): {
   }
   try {
     const require = createRequire(import.meta.url);
-    const addon: NativeAddon = require("../../native/build/Release/ghostty_native.node");
+    const addonPath = require.resolve(
+      "../../native/build/Release/ghostty_native.node"
+    );
+    // Ghostty 找 shell-integration 脚本靠 GHOSTTY_RESOURCES_DIR，pier 把脚本
+    // 打在 native/GhosttyResources/ghostty/ 下（zsh/bash/fish/nushell/elvish）。
+    // 必须在 ghostty native 首次 init 前设，否则会 fallback 到禁用集成。
+    const nativeRoot = dirname(dirname(dirname(addonPath)));
+    process.env.GHOSTTY_RESOURCES_DIR ??= join(
+      nativeRoot,
+      "GhosttyResources",
+      "ghostty"
+    );
+    const addon: NativeAddon = require(addonPath);
     return { addon, error: null };
   } catch (e) {
     return {
