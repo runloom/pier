@@ -6,12 +6,16 @@ directories:
   output: dist-builder
   buildResources: build
 
-# Native addon: terminal.ts 用 require("../../native/build/Release/ghostty_native.node")
-# 必须把 .node + 同目录 libGhosttyBridge.dylib 打进包，且 asarUnpack 保留物理路径。
+# Native terminal runtime:
+# - terminal.ts 用 require("../../native/build/Release/ghostty_native.node")
+# - terminal-native-addon.ts 把 GHOSTTY_RESOURCES_DIR 指向
+#   native/GhosttyResources/ghostty
+# 必须把 .node/.dylib 和 Ghostty resources 都打进包，且 asarUnpack 保留物理路径。
 files:
   - out/**/*
   - '!**/*.map'
   - native/build/Release/**
+  - native/GhosttyResources/**
 
 extraResources:
   - from: bin/pier.mjs
@@ -22,6 +26,7 @@ extraResources:
 asar: true
 asarUnpack:
   - native/build/Release/**
+  - native/GhosttyResources/**
 
 mac:
   category: public.app-category.developer-tools
