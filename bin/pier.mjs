@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createConnection } from "node:net";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   hasPierCliOption,
@@ -12,6 +12,8 @@ import {
 } from "./pier-cli-parser.js";
 
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SOCKET_FILENAME = "pier-control.sock";
+const UNIX_SOCKET_PATH_MAX_BYTES = 103;
 
 function shortHash(input) {
   return createHash("sha256").update(input).digest("hex").slice(0, 16);
@@ -37,7 +39,11 @@ function socketPathForUserData(userDataDir) {
   if (process.platform === "win32") {
     return `\\\\.\\pipe\\pier-control-${shortHash(userDataDir)}`;
   }
-  return join(userDataDir, "pier-control.sock");
+  const socketPath = join(userDataDir, SOCKET_FILENAME);
+  if (Buffer.byteLength(socketPath) <= UNIX_SOCKET_PATH_MAX_BYTES) {
+    return socketPath;
+  }
+  return join(tmpdir(), `pier-control-${shortHash(userDataDir)}.sock`);
 }
 
 function readJson(file) {
