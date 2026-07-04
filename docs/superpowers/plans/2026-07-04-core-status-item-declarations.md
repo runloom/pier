@@ -247,19 +247,61 @@ Expected: FAIL(因为 `terminal-status-bar.tsx`、`terminal-status-bar-menu.ts` 
 
 **Files:**
 - Modify: `src/renderer/panel-kits/terminal/terminal-status-bar.tsx:74,114`
-- Modify: `tests/unit/renderer/terminal-status-items.test.tsx`
+- Modify: `tests/unit/renderer/terminal-status-items.test.tsx`(3 处既有 F4 case 断言更新)
 
 **Interfaces:**
 - Consumes: `CORE_TERMINAL_STATUS_ITEMS`(Task 1)、扩展后的 `declaredTerminalStatusItemsById`(Task 2)
-- Produces: 组件层能看到 core 声明;`hasDeclaredTerminalStatusItems` 现在会因 core 声明返回 true
+- Produces: 组件层能看到 core 声明;`hasDeclaredTerminalStatusItems` 现在因 core 声明恒返回 true → 状态栏容器恒挂载(即使无插件启用、无 agent activity 也保留 h-7 高度与右键管理入口)
 
-- [ ] **Step 1: 写失败测试(core 声明存在时容器挂载)**
+**背景 — 语义变化必须理解**:引入 core 声明后,`declaredTerminalStatusItemsById` 永远至少包含 `core.agent-status`,`hasDeclaredTerminalStatusItems` 恒返回 true,`shouldMountTerminalStatusBar` 恒返回 true。这意味着 F4 "零声明项不挂载"分支实际上不再触发。这是 spec §5 明确承认的期望行为(见 spec 里"这是期望行为——用户能通过右键菜单看到'Agent 状态'这一项以决定隐藏与否")。既有测试文件里 3 处断言"容器不挂载"的 case 都要改为断言"容器挂载但内容为空"。
 
-Open `tests/unit/renderer/terminal-status-items.test.tsx`。在 `it("F4:零声明项...")` 测试块之前(约 L156 之前)追加一个 case:
+- [ ] **Step 1: 修改既有 3 处 F4 case 的断言(仍失败)**
 
+Open `tests/unit/renderer/terminal-status-items.test.tsx`。定位到 L126-138、L156-167、L169-181 三个 case,逐一替换。
+
+**替换 1 (L126-138)**——把 case 名和断言改为"承认 core 声明"版本:
+
+原:
 ```ts
-it("F4:仅 core 声明存在(无插件声明)时,容器仍挂载(agent activity 无关)", () => {
-  // 不往 plugin-registry 写任何声明项;core 声明表里恒有 core.agent-status。
+it("hidden 覆盖过滤该项渲染;无插件声明状态项时容器整体不挂载", () => {
+  terminalStatusItemRegistry.register({
+    id: "test.only",
+    render: () => <span>Only</span>,
+  });
+  setPrefs({ "test.only": { hidden: true } });
+
+  renderBar();
+
+  // 本测试从未往 plugin-registry.store 写入声明项,declaredTerminalStatusItemsById
+  // 为空 —— 属于 F4「零声明项」分支,容器整体不挂载(与「有声明但全隐藏」区分)。
+  expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
+});
+```
+
+改为:
+```ts
+it("hidden 覆盖过滤该项渲染;core 声明恒存在使容器恒挂载(内容为空但入口保留)", () => {
+  terminalStatusItemRegistry.register({
+    id: "test.only",
+    render: () => <span>Only</span>,
+  });
+  setPrefs({ "test.only": { hidden: true } });
+
+  renderBar();
+
+  // core 声明表恒含 core.agent-status → hasDeclaredTerminalStatusItems=true → 容器挂载。
+  // test.only 因 hidden 被过滤;本测试未走 registerAgentStatusItem 故 agent-status 也不渲染。
+  const bar = screen.getByTestId("terminal-status-bar");
+  expect(bar).toBeInTheDocument();
+  expect(bar).toHaveTextContent("");
+});
+```
+
+**替换 2 (L156-167)**——把 case 名改为反映 core 声明的新语义:
+
+原:
+```ts
+it("F4:零声明项(无已启用插件声明 terminalStatusItems)时容器整体不挂载", () => {
   usePluginRegistryStore.setState({
     diagnostics: [],
     error: null,
@@ -269,15 +311,68 @@ it("F4:仅 core 声明存在(无插件声明)时,容器仍挂载(agent activity 
 
   renderBar();
 
+  expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
+});
+```
+
+改为:
+```ts
+it("F4:仅 core 声明时容器仍挂载(agent activity 无关)", () => {
+  usePluginRegistryStore.setState({
+    diagnostics: [],
+    error: null,
+    initialized: true,
+    plugins: [],
+  });
+
+  renderBar();
+
+  // 无插件声明,但 core 声明恒含 core.agent-status → 容器挂载。
   const bar = screen.getByTestId("terminal-status-bar");
   expect(bar).toBeInTheDocument();
+});
+```
+
+**替换 3 (L169-181)**——原 case 断言 isVisible=false 时容器不挂载,现在改为断言 isVisible 生效不影响挂载:
+
+原(注意 L179-181 是该 case 的尾部,原完整 case 从 L169 起):
+```ts
+it("isVisible 动态可见性在 hidden 过滤之后仍生效(不影响挂载判定,只影响渲染内容)", () => {
+  terminalStatusItemRegistry.register({
+    id: "test.invisible",
+    isVisible: () => false,
+    render: () => <span>Invisible</span>,
+  });
+
+  renderBar();
+
+  // 同上:未声明任何插件状态项,零声明分支容器不挂载。
+  expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
+});
+```
+
+改为:
+```ts
+it("isVisible 动态可见性在 hidden 过滤之后仍生效(容器因 core 声明挂载,test.invisible 因 isVisible=false 不渲染)", () => {
+  terminalStatusItemRegistry.register({
+    id: "test.invisible",
+    isVisible: () => false,
+    render: () => <span>Invisible</span>,
+  });
+
+  renderBar();
+
+  // core 声明恒存在,容器挂载;test.invisible 被 isVisible 过滤,不出现在 DOM。
+  const bar = screen.getByTestId("terminal-status-bar");
+  expect(bar).toBeInTheDocument();
+  expect(bar).not.toHaveTextContent("Invisible");
 });
 ```
 
 - [ ] **Step 2: 跑测试确认失败**
 
 Run: `pnpm test:unit -- tests/unit/renderer/terminal-status-items.test.tsx`
-Expected: FAIL — 因为 `terminal-status-bar.tsx` 里 `hasDeclaredTerminalStatusItems` 现在还没传 core items,`declaredTerminalStatusItemsById(plugins)` 少参也会 typecheck 或运行时报错。
+Expected: FAIL —— `terminal-status-bar.tsx` 里 `declaredTerminalStatusItemsById(plugins)` 尚未补 `coreItems` 参数,运行时会因 for-of 遍历 undefined 而 throw(或 typecheck 直接失败);断言"容器挂载"因此走不到。
 
 - [ ] **Step 3: 修改 `terminal-status-bar.tsx` 两处调用点**
 
@@ -302,38 +397,12 @@ return declaredTerminalStatusItemsById(plugins, CORE_TERMINAL_STATUS_ITEMS).size
 - [ ] **Step 4: 跑测试确认全绿**
 
 Run: `pnpm test:unit -- tests/unit/renderer/terminal-status-items.test.tsx`
-Expected: PASS,新增 case 通过 + 既有 F4 用例(包括 `无插件声明状态项时容器整体不挂载` 那个仅注册 test.only 的 case)全部通过。
-
-**关于既有 case `hidden 覆盖过滤该项渲染;无插件声明状态项时容器整体不挂载`:** 该测试断言"registry 里只有 test.only 时容器不挂载"。加入 core 声明后 `hasDeclaredTerminalStatusItems` 会因 core.agent-status 返回 true。**这属于行为改变**:需要更新该测试的断言以承认 core 声明的存在。
-
-具体地,原 case 断言 `expect(screen.queryByTestId("terminal-status-bar")).toBeNull()`,改为断言容器仍挂载但内容为空:
-
-```ts
-it("hidden 覆盖过滤该项渲染;无插件声明但存在 core 声明时容器挂载(agent activity 无关)", () => {
-  terminalStatusItemRegistry.register({
-    id: "test.only",
-    render: () => <span>Only</span>,
-  });
-  setPrefs({ "test.only": { hidden: true } });
-
-  renderBar();
-
-  // core 声明表恒有 core.agent-status → hasDeclaredTerminalStatusItems=true → 容器挂载
-  const bar = screen.getByTestId("terminal-status-bar");
-  expect(bar).toBeInTheDocument();
-  // test.only 因 hidden 被过滤;agent-status 未 register(本测试未走 registerAgentStatusItem)
-  expect(bar).toHaveTextContent("");
-});
-```
-
-同理检查 `it("F4:零声明项(无已启用插件声明 terminalStatusItems)时容器整体不挂载", ...)`(L156)——该 case 现在应该改为断言容器**挂载**(因为 core 声明恒存在),或删除该 case(F4 零声明分支现在只对纯 plugin 侧生效)。
-
-**推荐处理**:把 L156 那个 case 改为断言容器挂载,并把测试名改为"F4:仅 core 声明时容器挂载"(与本 Task 新增的 Step 1 case 合并成一个)。删掉 Step 1 新增的 case,复用改名后的既有 case。
+Expected: PASS,3 处改写后的 F4 case + 既有其他 case 全部通过。
 
 - [ ] **Step 5: 再跑一次 typecheck**
 
 Run: `pnpm typecheck`
-Expected: 仍 FAIL(menu 和 settings block 未改),预期。
+Expected: 仍 FAIL(menu 和 settings block 未改),预期,由 Task 4/5 逐一修复。
 
 ---
 
