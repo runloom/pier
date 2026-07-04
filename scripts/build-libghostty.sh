@@ -66,11 +66,20 @@ esac
 
 require_cmd git "系统 git"
 require_cmd xcodebuild "xcode-select --install"
+require_cmd xcrun "xcode-select --install"
 require_cmd lipo "xcode-select --install"
 require_cmd ar "xcode-select --install"
 require_cmd ranlib "xcode-select --install"
+if ! METAL_CHECK_OUTPUT=$(xcrun -sdk macosx metal -v 2>&1 >/dev/null); then
+    echo "[!] 缺依赖：Xcode Metal Toolchain"
+    if [ -n "$METAL_CHECK_OUTPUT" ]; then
+        printf '    %s\n' "$METAL_CHECK_OUTPUT"
+    fi
+    echo "    请运行：xcodebuild -downloadComponent MetalToolchain"
+    exit 1
+fi
 
-echo "[+] 依赖 OK（zig $ZIG_VER, git, xcodebuild, lipo, ar, ranlib）"
+echo "[+] 依赖 OK（zig $ZIG_VER, git, xcodebuild, xcrun metal, lipo, ar, ranlib）"
 
 # --------- 拉源码（幂等）---------
 sync_repo() {
