@@ -10,6 +10,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -104,25 +105,33 @@ describe("TerminalStatusBarBlock", () => {
     useTerminalStatusBarPrefsStore.setState(INITIAL_PREFS_STATE);
   });
 
-  it("无已启用插件声明状态栏项时渲染空态文案", () => {
+  it("无已启用插件声明状态栏项时不渲染空态文案(core 声明恒存在)", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.git", true, [])],
     });
     render(<TerminalStatusBarBlock />);
+    // core 声明表恒含 core.agent-status,列表不再是「空」——空态文案不出现,
+    // 该行渲染但没有任何 plugin 声明的行。
     expect(
-      screen.getByText("Enabled plugins declare no status bar items")
+      screen.queryByText("Enabled plugins declare no status bar items")
+    ).toBeNull();
+    expect(
+      screen.getByTestId("status-bar-row-core.agent-status")
     ).toBeInTheDocument();
   });
 
-  it("禁用插件的状态项不参与展示(空态)", () => {
+  it("禁用插件的状态项不参与展示(仅剩 core 行)", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.git", false, [statusItem("pier.worktree.status")])],
     });
     render(<TerminalStatusBarBlock />);
     expect(
-      screen.getByText("Enabled plugins declare no status bar items")
+      screen.queryByTestId("status-bar-row-pier.worktree.status")
+    ).toBeNull();
+    expect(
+      screen.getByTestId("status-bar-row-core.agent-status")
     ).toBeInTheDocument();
   });
 
@@ -158,7 +167,10 @@ describe("TerminalStatusBarBlock", () => {
     });
     render(<TerminalStatusBarBlock />);
     expect(
-      screen.getByText("Enabled plugins declare no status bar items")
+      screen.queryByTestId("status-bar-row-pier.worktree.status")
+    ).toBeNull();
+    expect(
+      screen.getByTestId("status-bar-row-core.agent-status")
     ).toBeInTheDocument();
   });
 
@@ -179,11 +191,20 @@ describe("TerminalStatusBarBlock", () => {
   it("单项时上移下移按钮均禁用(组首且组尾)(M2: aria-disabled 而非原生 disabled,按钮仍挂载可聚焦)", () => {
     usePluginRegistryStore.setState({
       initialized: true,
-      plugins: [entry("pier.git", true, [statusItem("pier.worktree.status")])],
+      // core.agent-status 恒声明在左组(order -10),把插件项放到右组以保持
+      // 「组内单项」的测试前提不受 core 行影响(core 与本项分属不同组)。
+      plugins: [
+        entry("pier.git", true, [
+          statusItem("pier.worktree.status", { alignment: "right" }),
+        ]),
+      ],
     });
     render(<TerminalStatusBarBlock />);
-    const upButton = screen.getByRole("button", { name: "Move up (outward)" });
-    const downButton = screen.getByRole("button", {
+    const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
+    const upButton = within(pluginRow).getByRole("button", {
+      name: "Move up (outward)",
+    });
+    const downButton = within(pluginRow).getByRole("button", {
       name: "Move down (inward)",
     });
     expect(upButton).toHaveAttribute("aria-disabled", "true");
@@ -208,7 +229,9 @@ describe("TerminalStatusBarBlock", () => {
     });
     render(<TerminalStatusBarBlock />);
 
-    fireEvent.click(screen.getByRole("switch", { name: "Visible" }));
+    // core.agent-status 行也渲染同名开关,限定在插件行容器内查询避免多命中。
+    const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
+    fireEvent.click(within(pluginRow).getByRole("switch", { name: "Visible" }));
 
     await waitFor(() => {
       expect(
@@ -224,8 +247,9 @@ describe("TerminalStatusBarBlock", () => {
     });
     render(<TerminalStatusBarBlock />);
 
+    const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
     fireEvent.click(
-      screen.getByRole("button", { name: "Move to right group" })
+      within(pluginRow).getByRole("button", { name: "Move to right group" })
     );
 
     await waitFor(() => {
@@ -241,7 +265,8 @@ describe("TerminalStatusBarBlock", () => {
       plugins: [entry("pier.git", true, [statusItem("pier.worktree.status")])],
     });
     render(<TerminalStatusBarBlock />);
-    const idleResetButton = screen.getByRole("button", {
+    const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
+    const idleResetButton = within(pluginRow).getByRole("button", {
       name: "Reset to plugin default",
     });
     expect(idleResetButton).toHaveAttribute("aria-disabled", "true");
@@ -258,8 +283,8 @@ describe("TerminalStatusBarBlock", () => {
       });
     });
 
-    expect(screen.getByText("Modified")).toBeInTheDocument();
-    const resetButton = screen.getByRole("button", {
+    expect(within(pluginRow).getByText("Modified")).toBeInTheDocument();
+    const resetButton = within(pluginRow).getByRole("button", {
       name: "Reset to plugin default",
     });
     expect(resetButton).toBe(idleResetButton);
@@ -288,7 +313,8 @@ describe("TerminalStatusBarBlock", () => {
     });
     render(<TerminalStatusBarBlock />);
 
-    const resetButton = screen.getByRole("button", {
+    const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
+    const resetButton = within(pluginRow).getByRole("button", {
       name: "Reset to plugin default",
     });
     resetButton.focus();
@@ -311,7 +337,7 @@ describe("TerminalStatusBarBlock", () => {
     });
 
     expect(
-      screen.getByRole("button", { name: "Reset to plugin default" })
+      within(pluginRow).getByRole("button", { name: "Reset to plugin default" })
     ).toBe(resetButton);
     expect(resetButton).toHaveAttribute("aria-disabled", "true");
     expect(document.activeElement).toBe(resetButton);
@@ -321,17 +347,23 @@ describe("TerminalStatusBarBlock", () => {
   it("上移把组内第二项与第一项交换,按 normalizedGroupOrders 以单次批量 IPC 写差异 order(F8)", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
+      // core.agent-status 恒声明在左组,两个插件项放到右组以隔离 core,
+      // 保持「组内两项互换」测试前提的索引不受 core 行影响。
       plugins: [
-        entry("pier.git", true, [statusItem("a.item"), statusItem("b.item")]),
+        entry("pier.git", true, [
+          statusItem("a.item", { alignment: "right" }),
+          statusItem("b.item", { alignment: "right" }),
+        ]),
       ],
     });
     render(<TerminalStatusBarBlock />);
     // 初始外侧优先序按 id 字典序:a.item(0), b.item(10)
-    const upButtons = screen.getAllByRole("button", {
-      name: "Move up (outward)",
-    });
-    // 第二行(b.item)上移到第一位
-    fireEvent.click(upButtons[1] as HTMLElement);
+    // 直接定位 b.item 行的上移按钮(而非组内绝对下标),不受 core.agent-status
+    // 行(独立左组)插入顺序影响。
+    const bRow = screen.getByTestId("status-bar-row-b.item");
+    fireEvent.click(
+      within(bRow).getByRole("button", { name: "Move up (outward)" })
+    );
 
     await waitFor(() => {
       // F8:moveWithinGroup 改走批量命令 applyOverrides,一次 IPC 携带全部
@@ -363,15 +395,19 @@ describe("TerminalStatusBarBlock", () => {
     });
     usePluginRegistryStore.setState({
       initialized: true,
+      // 同上一个 F8 case:插件项放到右组以隔离 core.agent-status(恒在左组)。
       plugins: [
-        entry("pier.git", true, [statusItem("a.item"), statusItem("b.item")]),
+        entry("pier.git", true, [
+          statusItem("a.item", { alignment: "right" }),
+          statusItem("b.item", { alignment: "right" }),
+        ]),
       ],
     });
     render(<TerminalStatusBarBlock />);
-    const upButtons = screen.getAllByRole("button", {
-      name: "Move up (outward)",
-    });
-    fireEvent.click(upButtons[1] as HTMLElement);
+    const bRow = screen.getByTestId("status-bar-row-b.item");
+    fireEvent.click(
+      within(bRow).getByRole("button", { name: "Move up (outward)" })
+    );
 
     await waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
@@ -402,7 +438,8 @@ describe("TerminalStatusBarBlock", () => {
     });
     render(<TerminalStatusBarBlock />);
 
-    fireEvent.click(screen.getByRole("switch", { name: "Visible" }));
+    const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
+    fireEvent.click(within(pluginRow).getByRole("switch", { name: "Visible" }));
 
     await waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
@@ -412,25 +449,57 @@ describe("TerminalStatusBarBlock", () => {
     });
   });
 
+  it("core 声明源的项出现在设置页管理块(即使无任何插件启用)", () => {
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      error: null,
+      initialized: true,
+      plugins: [],
+    });
+    useTerminalStatusBarPrefsStore.setState({
+      error: null,
+      initialized: true,
+      prefs: { items: {}, version: 1 },
+    });
+
+    render(<TerminalStatusBarBlock />);
+
+    // Core 声明表恒有 core.agent-status,应出现一行
+    expect(
+      screen.getByTestId("status-bar-row-core.agent-status")
+    ).toBeInTheDocument();
+  });
+
   it("组首项上移按钮禁用,组尾项下移按钮禁用(M2: aria-disabled)", () => {
     usePluginRegistryStore.setState({
       initialized: true,
+      // core.agent-status 恒声明在左组,插件项放到右组以隔离出干净的两项组,
+      // 保持「组首/组尾」断言精确指向 a.item/b.item 而非被 core 行稀释。
       plugins: [
-        entry("pier.git", true, [statusItem("a.item"), statusItem("b.item")]),
+        entry("pier.git", true, [
+          statusItem("a.item", { alignment: "right" }),
+          statusItem("b.item", { alignment: "right" }),
+        ]),
       ],
     });
     render(<TerminalStatusBarBlock />);
-    const upButtons = screen.getAllByRole("button", {
-      name: "Move up (outward)",
-    });
-    const downButtons = screen.getAllByRole("button", {
+    // 直接按行(而非组内绝对下标)定位 a.item/b.item 的上下移按钮,不受
+    // core.agent-status 行(独立左组,自身也有一对上下移按钮)混入影响。
+    const aRow = screen.getByTestId("status-bar-row-a.item");
+    const bRow = screen.getByTestId("status-bar-row-b.item");
+    const aUp = within(aRow).getByRole("button", { name: "Move up (outward)" });
+    const aDown = within(aRow).getByRole("button", {
       name: "Move down (inward)",
     });
-    expect(upButtons[0]).toHaveAttribute("aria-disabled", "true");
-    expect(downButtons.at(-1)).toHaveAttribute("aria-disabled", "true");
-    expect(downButtons[0]).toHaveAttribute("aria-disabled", "false");
-    expect(upButtons.at(-1)).toHaveAttribute("aria-disabled", "false");
-    expect(upButtons[0]).not.toBeDisabled();
-    expect(downButtons.at(-1)).not.toBeDisabled();
+    const bUp = within(bRow).getByRole("button", { name: "Move up (outward)" });
+    const bDown = within(bRow).getByRole("button", {
+      name: "Move down (inward)",
+    });
+    expect(aUp).toHaveAttribute("aria-disabled", "true");
+    expect(bDown).toHaveAttribute("aria-disabled", "true");
+    expect(aDown).toHaveAttribute("aria-disabled", "false");
+    expect(bUp).toHaveAttribute("aria-disabled", "false");
+    expect(aUp).not.toBeDisabled();
+    expect(bDown).not.toBeDisabled();
   });
 });
