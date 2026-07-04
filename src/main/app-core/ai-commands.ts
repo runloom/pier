@@ -13,10 +13,13 @@ export async function executeAiCommand(
   switch (command.type) {
     case "ai.status":
       return success(requestId, await services.ai.status());
-    case "ai.suggestBranch":
+    case "ai.generateText":
       return success(
         requestId,
-        await services.ai.suggestBranch({ text: command.text })
+        await services.ai.generateText({
+          prompt: command.prompt,
+          projectRootPath: command.projectRootPath,
+        })
       );
     default:
       return null;

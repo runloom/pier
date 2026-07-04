@@ -21,6 +21,7 @@ import {
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
+import { TextareaRow } from "@/pages/settings/components/rows/textarea-row.tsx";
 import { WorktreeRootPathRow } from "@/pages/settings/components/worktree-section.tsx";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
@@ -98,6 +99,7 @@ function StringSettingRow({
   label,
   max,
   min,
+  multiline = false,
   onCommit,
   type,
 }: {
@@ -107,6 +109,7 @@ function StringSettingRow({
   label: string;
   max?: number | undefined;
   min?: number | undefined;
+  multiline?: boolean;
   /** 返回 clamp/规整后的最终值，供输入框无条件回弹展示。 */
   onCommit: (raw: string) => string;
   type: "number" | "text";
@@ -144,6 +147,26 @@ function StringSettingRow({
       }
     };
   }, []);
+
+  if (multiline) {
+    return (
+      <TextareaRow
+        {...(description === undefined ? {} : { description })}
+        id={id}
+        label={label}
+        onBlur={(raw) => {
+          const committed = onCommit(raw);
+          lastCommittedRef.current = committed;
+          setDraft(committed);
+        }}
+        onChange={setDraft}
+        onEscape={() => setDraft(effective)}
+        rows={7}
+        textareaClassName="min-h-[168px] w-[520px] font-mono text-xs"
+        value={draft}
+      />
+    );
+  }
 
   return (
     <InputRow
@@ -265,6 +288,7 @@ function PluginSettingRow({
         effective={String(effective)}
         id={rowId}
         label={display.label}
+        multiline={property.multiline === true}
         onCommit={(raw) => {
           if (raw !== effective) {
             writeSetting(settingKey, raw, failedText);

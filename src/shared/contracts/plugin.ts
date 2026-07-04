@@ -126,6 +126,7 @@ export const pluginConfigurationPropertySchema = z
     enumDescriptions: z.array(z.string().min(1)).optional(),
     maximum: z.number().optional(),
     minimum: z.number().optional(),
+    multiline: z.boolean().optional(),
     order: z.number().optional(),
     type: z.enum(["string", "number", "boolean"]),
   })
@@ -142,6 +143,13 @@ export const pluginConfigurationPropertySchema = z
         code: "custom",
         message: 'enum is only allowed with type "string"',
         path: ["enum"],
+      });
+    }
+    if (property.multiline && property.type !== "string") {
+      ctx.addIssue({
+        code: "custom",
+        message: 'multiline is only allowed with type "string"',
+        path: ["multiline"],
       });
     }
     if (

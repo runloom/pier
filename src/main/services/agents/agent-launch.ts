@@ -14,6 +14,7 @@ export interface ResolveAgentCommandArgs {
 export interface ResolveOneShotInvocationArgs {
   agentDefaultArgs: AgentDefaultArgs;
   agentId: AgentKind;
+  cwd: string;
   override?: string | undefined;
   prompt: string;
 }
@@ -47,6 +48,7 @@ export function resolveAgentCommand({
 /** one-shot 复用 launchCmd/override/defaultArgs,再 append catalog.oneShotArgs。 */
 export function resolveOneShotInvocation({
   agentId,
+  cwd,
   override,
   agentDefaultArgs,
   prompt,
@@ -66,6 +68,6 @@ export function resolveOneShotInvocation({
   }
   return {
     binary,
-    args: [...words.slice(1), ...entry.oneShotArgs(prompt)],
+    args: [...words.slice(1), ...entry.oneShotArgs(prompt, { cwd })],
   };
 }

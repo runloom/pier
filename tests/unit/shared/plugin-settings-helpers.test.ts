@@ -1,6 +1,7 @@
-import type {
-  PluginConfigurationProperty,
-  PluginRegistryEntry,
+import {
+  type PluginConfigurationProperty,
+  type PluginRegistryEntry,
+  pluginConfigurationPropertySchema,
 } from "@shared/contracts/plugin.ts";
 import { pluginSettingsStateSchema } from "@shared/contracts/plugin-settings.ts";
 import {
@@ -86,6 +87,25 @@ describe("validateConfigurationValue", () => {
     expect(validateConfigurationValue(boolProp, false).ok).toBe(true);
     expect(validateConfigurationValue(enumProp, "manual").ok).toBe(true);
     expect(validateConfigurationValue(numProp, 100).ok).toBe(true);
+  });
+});
+
+describe("pluginConfigurationPropertySchema", () => {
+  it("允许 string multiline,拒绝非 string multiline", () => {
+    expect(
+      pluginConfigurationPropertySchema.parse({
+        default: "",
+        multiline: true,
+        type: "string",
+      }).multiline
+    ).toBe(true);
+    expect(() =>
+      pluginConfigurationPropertySchema.parse({
+        default: true,
+        multiline: true,
+        type: "boolean",
+      })
+    ).toThrow();
   });
 });
 

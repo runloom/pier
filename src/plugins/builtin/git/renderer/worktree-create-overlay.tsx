@@ -43,6 +43,7 @@ import {
   type FormValues,
   HEAD_SENTINEL,
   PrepareBadges,
+  readBranchNamePromptTemplate,
   resolveSubmitDraft,
   type SubmitPhase,
   type WorktreeCreateOverlayData,
@@ -183,8 +184,11 @@ function WorktreeCreateOverlay({
         setPhase("generating");
       }
       const resolved = await resolveSubmitDraft({
+        branchNamePromptTemplate: readBranchNamePromptTemplate(
+          context.configuration
+        ),
         data,
-        suggestBranch: context.ai.suggestBranch,
+        generateText: context.ai.generateText,
         text,
         values,
       });

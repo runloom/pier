@@ -4,19 +4,17 @@ import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import { pickAgent } from "@shared/agent-selection.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
+  AiGenerateTextRequest,
+  AiGenerateTextResult,
   AiStatusResult,
-  AiSuggestBranchRequest,
-  AiSuggestBranchResult,
 } from "@shared/contracts/ai.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { resolveOneShotInvocation } from "../agents/agent-launch.ts";
-import { extractAnswerLine, supportsOneShot } from "./agent-one-shot.ts";
+import { supportsOneShot } from "./agent-one-shot.ts";
 
 export interface AiService {
+  generateText(request: AiGenerateTextRequest): Promise<AiGenerateTextResult>;
   status(): Promise<AiStatusResult>;
-  suggestBranch(
-    request: AiSuggestBranchRequest
-  ): Promise<AiSuggestBranchResult>;
 }
 
 export type AgentRunFailureKind = "run_failed" | "timeout";
@@ -39,60 +37,34 @@ export interface CreateAiServiceOptions {
   runOneShot?: (
     binary: string,
     args: readonly string[],
-    timeoutMs: number
+    options: RunOneShotOptions
   ) => Promise<string>;
   timeoutMs?: number;
+}
+
+export interface RunOneShotOptions {
+  cwd: string;
+  timeoutMs: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 const MAX_STDOUT_BYTES = 4 * 1024 * 1024;
 
-function slugPrompt(text: string): string {
-  return [
-    "Turn this software task description (any language) into a short git branch slug.",
-    "Reply with ONLY the slug on the last line of your output:",
-    "2-5 lowercase English words joined by single hyphens, ASCII letters and digits only,",
-    "no prefix, no quotes, no trailing punctuation, at most 32 characters.",
-    "Summarize the task's intent in English.",
-    `Task: ${text}`,
-  ].join("\n");
+function oneShotCwd(projectRootPath: string | undefined): string {
+  return projectRootPath?.trim() || tmpdir();
 }
 
-const NON_SLUG_CHARS_RE = /[^a-z0-9]+/g;
-const EDGE_DASHES_RE = /^-+|-+$/g;
-const MAX_SLUG_CHARS = 32;
-
-/** 模型输出规整为合法 slug:小写、连字符、ASCII、限长;无效则空串。 */
-export function normalizeSlug(raw: string): string {
-  const collapsed = raw
-    .trim()
-    .toLowerCase()
-    .replace(NON_SLUG_CHARS_RE, "-")
-    .replace(EDGE_DASHES_RE, "");
-  if (!collapsed) {
-    return "";
-  }
-  if (collapsed.length <= MAX_SLUG_CHARS) {
-    return collapsed;
-  }
-  const truncated = collapsed.slice(0, MAX_SLUG_CHARS);
-  const lastDash = truncated.lastIndexOf("-");
-  // 截断落在单词中间时回退到上一个完整单词,避免 "fix-dialo" 这种残词。
-  return lastDash > 0 ? truncated.slice(0, lastDash) : truncated;
-}
-
-function defaultRunOneShot(
+export function defaultRunOneShot(
   binary: string,
   args: readonly string[],
-  timeoutMs: number
+  { cwd, timeoutMs }: RunOneShotOptions
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       binary,
       [...args],
       {
-        // 在临时目录跑,避免 agent 把当前仓库当工作上下文
-        cwd: tmpdir(),
+        cwd,
         env: process.env,
         maxBuffer: MAX_STDOUT_BYTES,
         timeout: timeoutMs,
@@ -113,6 +85,9 @@ function defaultRunOneShot(
         resolve(stdout);
       }
     );
+    // Codex exec treats a piped stdin as extra prompt input and waits for EOF.
+    // One-shot prompts are always passed as argv, so close stdin immediately.
+    child.stdin?.end();
   });
 }
 
@@ -147,15 +122,7 @@ export function createAiService({
   }
 
   return {
-    async status() {
-      const { agent } = await resolveAgent();
-      return {
-        agent,
-        configured: agent !== null,
-        label: agent ? (getAgentCatalogEntry(agent)?.label ?? agent) : "",
-      };
-    },
-    async suggestBranch(request) {
+    async generateText(request) {
       const { agent, preferences } = await resolveAgent();
       if (!agent) {
         return {
@@ -164,11 +131,13 @@ export function createAiService({
           status: "unavailable",
         };
       }
+      const cwd = oneShotCwd(request.projectRootPath);
       const invocation = resolveOneShotInvocation({
         agentId: agent,
+        cwd,
         override: preferences.agentCommandOverrides[agent],
         agentDefaultArgs: preferences.agentDefaultArgs,
-        prompt: slugPrompt(request.text),
+        prompt: request.prompt,
       });
       if (!invocation) {
         return {
@@ -177,13 +146,12 @@ export function createAiService({
           status: "unavailable",
         };
       }
-      let stdout: string;
       try {
-        stdout = await runOneShot(
-          invocation.binary,
-          invocation.args,
-          timeoutMs
-        );
+        const text = await runOneShot(invocation.binary, invocation.args, {
+          cwd,
+          timeoutMs,
+        });
+        return { status: "ok", text };
       } catch (err) {
         if (err instanceof AgentRunError) {
           return {
@@ -198,15 +166,14 @@ export function createAiService({
           status: "unavailable",
         };
       }
-      const slug = normalizeSlug(extractAnswerLine(stdout));
-      if (!slug) {
-        return {
-          message: `agent returned no usable slug: ${stdout.slice(0, 80)}`,
-          reason: "invalid_response",
-          status: "unavailable",
-        };
-      }
-      return { slug, status: "ok" };
+    },
+    async status() {
+      const { agent } = await resolveAgent();
+      return {
+        agent,
+        configured: agent !== null,
+        label: agent ? (getAgentCatalogEntry(agent)?.label ?? agent) : "",
+      };
     },
   };
 }

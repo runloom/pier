@@ -103,6 +103,37 @@ function singleFlagEntry(id: string): PluginRegistryEntry {
   };
 }
 
+function multilineEntry(id: string): PluginRegistryEntry {
+  return {
+    effectivePermissions: [],
+    enabled: true,
+    manifest: {
+      apiVersion: 1,
+      commands: [],
+      configuration: {
+        properties: {
+          [`${id}.prompt`]: {
+            default: "",
+            description: "Prompt template",
+            multiline: true,
+            type: "string",
+          },
+        },
+        title: `${id} Settings`,
+      },
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: `${id}-name`,
+      panels: [],
+      permissions: [],
+      source: { kind: "builtin" },
+      terminalStatusItems: [],
+      version: "1.0.0",
+    },
+    runtime: { canToggle: true, enabled: true, kind: "builtin" },
+  };
+}
+
 // M2: Reset 按钮不再随 modified 卸载, entry("pier.demo") 的 4 行会各挂载一个
 // Reset 按钮。已有测试大多只关心"当前被修改的那一行", 用 aria-disabled=false
 // 唯一定位, 避免 getByRole 因多个同名按钮而报 multiple elements found。
@@ -404,6 +435,27 @@ describe("PluginConfigurationSection", () => {
       expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
         "pier.demo.name",
         "custom-name"
+      );
+    });
+  });
+
+  it("multiline string setting renders textarea and commits on blur", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [multilineEntry("pier.demo")],
+    });
+    render(<PluginConfigurationSection pluginId="pier.demo" />);
+
+    const textarea = screen.getByRole("textbox", { name: "prompt" });
+    fireEvent.change(textarea, {
+      target: { value: "Use feature/* for {{task}}" },
+    });
+    fireEvent.blur(textarea);
+
+    await waitFor(() => {
+      expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+        "pier.demo.prompt",
+        "Use feature/* for {{task}}"
       );
     });
   });

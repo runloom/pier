@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { aiSuggestBranchRequestSchema } from "./ai.ts";
+import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
   fileListRequestSchema,
   fileMoveRequestSchema,
@@ -376,8 +376,8 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
   z.object({ type: z.literal("ai.status") }),
-  aiSuggestBranchRequestSchema.extend({
-    type: z.literal("ai.suggestBranch"),
+  aiGenerateTextRequestSchema.extend({
+    type: z.literal("ai.generateText"),
   }),
 ]);
 

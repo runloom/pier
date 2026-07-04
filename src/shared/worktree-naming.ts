@@ -3,9 +3,12 @@ const SLUG_TOKEN_PATTERN = /[a-z0-9]+/g;
 const MAX_SLUG_LENGTH = 24;
 const SLASH_PATTERN = /\//g;
 const INVALID_CHARS_PATTERN = /[^A-Za-z0-9._-]+/g;
+const INVALID_BRANCH_CANDIDATE_CHARS_PATTERN = /[^A-Za-z0-9._/-]+/g;
 const CONSECUTIVE_DASH_PATTERN = /-+/g;
+const CONSECUTIVE_SLASH_PATTERN = /\/+/g;
 const LEADING_INVALID_PATTERN = /^[-.]+/;
 const TRAILING_INVALID_PATTERN = /[-.]+$/;
+const BACKSLASH_PATTERN = /\\/g;
 
 const STOP_WORDS = new Set([
   "a",
@@ -93,6 +96,19 @@ export function sanitizeWorktreeName(value: string): string {
     .replace(TRAILING_INVALID_PATTERN, "");
 }
 
+export function sanitizeBranchCandidate(value: string): string {
+  return value
+    .trim()
+    .replace(BACKSLASH_PATTERN, "/")
+    .replace(INVALID_BRANCH_CANDIDATE_CHARS_PATTERN, "-")
+    .replace(CONSECUTIVE_DASH_PATTERN, "-")
+    .replace(CONSECUTIVE_SLASH_PATTERN, "/")
+    .split("/")
+    .map((segment) => sanitizeWorktreeName(segment))
+    .filter((segment) => segment.length > 0)
+    .join("/");
+}
+
 export function slugifyDescription(input: string): string | null {
   const tokens = (input.toLowerCase().match(SLUG_TOKEN_PATTERN) ?? []).filter(
     (token) => !STOP_WORDS.has(token)
@@ -161,7 +177,7 @@ export function deriveWorktreeCreationFromSlug(
   slug: string,
   args: DeriveFromSlugArgs
 ): WorktreeCreationDraft | null {
-  const cleaned = sanitizeWorktreeName(slug.toLowerCase());
+  const cleaned = sanitizeBranchCandidate(slug.toLowerCase());
   if (!cleaned) {
     return null;
   }

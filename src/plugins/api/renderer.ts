@@ -1,7 +1,7 @@
 import type {
+  AiGenerateTextRequest,
+  AiGenerateTextResult,
   AiStatusResult,
-  AiSuggestBranchRequest,
-  AiSuggestBranchResult,
 } from "@shared/contracts/ai.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
@@ -183,10 +183,8 @@ export interface RendererPluginContext {
    * 结果用 status 区分,不抛业务异常 —— 未配置/失败时调用方自行降级。
    */
   ai: {
+    generateText(request: AiGenerateTextRequest): Promise<AiGenerateTextResult>;
     status(): Promise<AiStatusResult>;
-    suggestBranch(
-      request: AiSuggestBranchRequest
-    ): Promise<AiSuggestBranchResult>;
   };
   commandPalette: {
     openQuickPick(quickPick: RendererPluginQuickPick): void;

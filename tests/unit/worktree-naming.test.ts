@@ -117,6 +117,15 @@ describe("deriveWorktreeCreationFromSlug", () => {
     expect(draft?.source).toBe("description");
   });
 
+  it("AI 分支候选保留项目规范里的路径前缀,worktree name 仍转换为文件夹安全形式", () => {
+    const draft = deriveWorktreeCreationFromSlug(
+      "feature/fix-dialog-ui",
+      BASE_ARGS
+    );
+    expect(draft?.branch).toBe("feature/fix-dialog-ui");
+    expect(draft?.name).toBe("feature-fix-dialog-ui");
+  });
+
   it("与已有分支/worktree 重名时追加 -2", () => {
     const draft = deriveWorktreeCreationFromSlug("fix-focus", {
       ...BASE_ARGS,

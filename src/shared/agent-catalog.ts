@@ -19,7 +19,16 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "codex",
     iconId: "codex",
     homepageUrl: "https://github.com/openai/codex",
-    oneShotArgs: (prompt) => ["exec", "--skip-git-repo-check", prompt],
+    oneShotArgs: (prompt, { cwd }) => [
+      "exec",
+      "--ephemeral",
+      "--skip-git-repo-check",
+      "-s",
+      "read-only",
+      "--cd",
+      cwd,
+      prompt,
+    ],
   },
   {
     id: "gemini",

@@ -2,6 +2,7 @@ import {
   type PluginManifest,
   GIT_PLUGIN_ID as SHARED_GIT_PLUGIN_ID,
 } from "@shared/contracts/plugin.ts";
+import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "./settings.ts";
 
 export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   apiVersion: 1,
@@ -91,7 +92,16 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
         default: true,
         description:
           "Show working tree change counts and line delta in the worktree status item.",
+        order: 10,
         type: "boolean",
+      },
+      [GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY]: {
+        default: "",
+        description:
+          "Template used by AI worktree creation to generate branch names. Leave empty to use Pier's built-in fallback. Supports {{task}} and {{projectRootPath}}.",
+        multiline: true,
+        order: 20,
+        type: "string",
       },
     },
   },
