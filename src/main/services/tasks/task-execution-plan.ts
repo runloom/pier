@@ -192,7 +192,6 @@ function launchForTask(
     focus: task.presentation?.focus ?? task.presentation?.reveal !== "never",
     label: task.label,
     presentation: task.presentation ?? {},
-    projectId: context.projectId,
     projectRootPath: context.projectRootPath,
     rawCommand,
     source: task.source,
@@ -254,10 +253,9 @@ function expandLaunchOrder(
   return ordered;
 }
 
-/** buildTaskLaunches / resolveVariables 的输入 context (projectId + rootPath). */
+/** buildTaskLaunches / resolveVariables 的输入 context. */
 export interface TaskExecutionContext {
   inputs: Record<string, string>;
-  projectId: string;
   projectRootPath: string;
 }
 

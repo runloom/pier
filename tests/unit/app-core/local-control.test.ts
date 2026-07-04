@@ -116,7 +116,7 @@ function cliClientServices(): PierCoreServices {
         contextId: `ctx:${path}`,
         cwd: path,
         openedPath: path,
-        projectRoot: path,
+        projectRootPath: path,
         source: "command",
         updatedAt: 1_772_000_000_000,
         worktreeKey: path,

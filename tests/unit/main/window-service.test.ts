@@ -24,7 +24,6 @@ const mocks = vi.hoisted(() => {
     flushTerminalStatusBarPrefs: vi.fn(async () => undefined),
     flushWindowRecordState: vi.fn(async () => undefined),
     flushPanelContextState: vi.fn(async () => undefined),
-    flushProjectStore: vi.fn(async () => undefined),
     focus: vi.fn(),
     getCloseCallback: () => closeCallback,
     getFocusCallback: () => focusCallback,
@@ -94,10 +93,6 @@ vi.mock("@main/state/plugin-settings.ts", () => ({
 
 vi.mock("@main/state/terminal-status-bar-prefs.ts", () => ({
   flushTerminalStatusBarPrefs: mocks.flushTerminalStatusBarPrefs,
-}));
-
-vi.mock("@main/state/project-store.ts", () => ({
-  flushProjectStore: mocks.flushProjectStore,
 }));
 
 vi.mock("@main/state/panel-context-state.ts", () => ({
@@ -227,7 +222,6 @@ describe("WindowService", () => {
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushTerminalStatusBarPrefs).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
-    expect(mocks.flushProjectStore).toHaveBeenCalled();
     expect(mocks.flushPanelContextState).toHaveBeenCalled();
   });
 
@@ -251,7 +245,6 @@ describe("WindowService", () => {
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushTerminalStatusBarPrefs).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
-    expect(mocks.flushProjectStore).toHaveBeenCalled();
     expect(mocks.flushPanelContextState).toHaveBeenCalled();
   });
 

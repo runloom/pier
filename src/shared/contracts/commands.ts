@@ -98,7 +98,6 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   z.object({
-    projectId: z.string().uuid(),
     projectRootPath: z.string().min(1),
     type: z.literal("run.list"),
   }),
@@ -106,7 +105,6 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     focus: z.boolean().optional(),
     inputs: z.record(z.string().min(1), z.string()).optional(),
     placement: pierCommandPlacementSchema.optional(),
-    projectId: z.string().uuid(),
     projectRootPath: z.string().min(1),
     taskId: z.string().min(1),
     type: z.literal("run.spawn"),

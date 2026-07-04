@@ -34,14 +34,12 @@ import {
 
 export interface TaskSpawnRequest {
   inputs?: Record<string, string> | undefined;
-  projectId: string;
   projectRootPath: string;
   taskId: string;
 }
 
 export interface TaskStartedRecord {
   panelId: string;
-  projectId: string;
   projectRootPath: string;
   taskId: string;
   windowId?: string | undefined;
@@ -54,10 +52,7 @@ export interface TaskService {
     exitCode: number,
     windowId?: string | undefined
   ): Promise<TaskRunSnapshot | null>;
-  list(args: {
-    projectId: string;
-    projectRootPath: string;
-  }): Promise<TaskListResult>;
+  list(args: { projectRootPath: string }): Promise<TaskListResult>;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
   prepareSpawn(args: TaskSpawnRequest): Promise<TaskSpawnPreparation>;
   recentTasks(): readonly TaskRecentEntry[];
@@ -69,7 +64,6 @@ export interface TaskService {
       launch: TaskLaunchPlan,
       runId: string
     ): Promise<TaskRunTerminalOpenResult>;
-    projectId: string;
     projectRootPath: string;
     rootTaskId: string;
   }): Promise<TaskRunCoordinatorStartResult>;
@@ -107,8 +101,8 @@ export interface CreateTaskServiceOptions {
   writeRecentState?: (state: TaskRecentState) => Promise<void>;
 }
 
-function runKey(projectId: string, taskId: string): string {
-  return `${projectId}\0${taskId}`;
+function runKey(projectRootPath: string, taskId: string): string {
+  return `${projectRootPath}\0${taskId}`;
 }
 
 function panelRefKey(panelId: string, windowId?: string | undefined): string {
@@ -133,10 +127,9 @@ export function createTaskService({
     ...(writeRecentState ? { writeRecentState } : {}),
   });
 
-  const collect = async (projectId: string, projectRootPath: string) => {
+  const collect = async (projectRootPath: string) => {
     await recent.ensureLoaded();
     const result = await collectTaskCandidates({
-      projectId,
       projectRootPath,
       recentTasks: recent.entries(),
       ...(homeDir ? { homeDir } : {}),
@@ -197,16 +190,14 @@ export function createTaskService({
 
   function recordStartedRun({
     panelId,
-    projectId,
     projectRootPath,
     taskId,
     windowId,
   }: TaskStartedRecord): void {
-    const key = runKey(projectId, taskId);
+    const key = runKey(projectRootPath, taskId);
     runningByKey.set(key, {
       kind: "panel",
       panelId,
-      projectId,
       projectRootPath,
       startedAt: now(),
       taskId,
@@ -217,19 +208,16 @@ export function createTaskService({
   }
 
   function recordCoordinatorRun({
-    projectId,
     projectRootPath,
     rootTaskId,
     runId,
   }: {
-    projectId: string;
     projectRootPath: string;
     rootTaskId: string;
     runId: string;
   }): void {
-    runningByKey.set(runKey(projectId, rootTaskId), {
+    runningByKey.set(runKey(projectRootPath, rootTaskId), {
       kind: "coordinator",
-      projectId,
       projectRootPath,
       runId,
       startedAt: now(),
@@ -239,16 +227,16 @@ export function createTaskService({
 
   function forgetSnapshotTasks(snapshot: TaskRunSnapshot): void {
     for (const node of Object.values(snapshot.nodes)) {
-      runningByKey.delete(runKey(snapshot.projectId, node.taskId));
+      runningByKey.delete(runKey(snapshot.projectRootPath, node.taskId));
     }
   }
 
   function restartPreparation(
-    projectId: string,
+    projectRootPath: string,
     taskId: string,
     launches: readonly TaskLaunchPlan[]
   ): RestartPreparation {
-    const key = runKey(projectId, taskId);
+    const key = runKey(projectRootPath, taskId);
     return buildRestartPreparation({
       deleteRunning: (runningKey) => {
         runningByKey.delete(runningKey);
@@ -257,7 +245,7 @@ export function createTaskService({
       launches,
       reusablePanelsForLaunches: (nextLaunches) =>
         dedicatedPanels.reusablePanelsForLaunches(nextLaunches, (launch) =>
-          runKey(projectId, launch.taskId)
+          runKey(projectRootPath, launch.taskId)
         ),
       running: runningByKey.get(key),
       statusRun: (runId) => taskRuns.status(runId),
@@ -269,16 +257,11 @@ export function createTaskService({
     task: TaskCandidate,
     tasks: TaskListResult["tasks"],
     inputs: Record<string, string>,
-    projectId: string,
     projectRootPath: string
   ): TaskSpawnPreparation {
     try {
       return {
-        launches: buildTaskLaunches(
-          task,
-          { inputs, projectId, projectRootPath },
-          tasks
-        ),
+        launches: buildTaskLaunches(task, { inputs, projectRootPath }, tasks),
         status: "ready",
       };
     } catch (error) {
@@ -322,14 +305,14 @@ export function createTaskService({
       }
       return result;
     },
-    async list({ projectId, projectRootPath }) {
-      return await collect(projectId, projectRootPath);
+    async list({ projectRootPath }) {
+      return await collect(projectRootPath);
     },
     markPanelClosed(panelId, windowId) {
       markPanelActuallyClosed(panelId, windowId);
     },
-    async prepareSpawn({ projectId, projectRootPath, taskId, inputs = {} }) {
-      const list = await collect(projectId, projectRootPath);
+    async prepareSpawn({ projectRootPath, taskId, inputs = {} }) {
+      const list = await collect(projectRootPath);
       const task = list.tasks.find((candidate) => candidate.id === taskId);
       if (!task) {
         return {
@@ -354,7 +337,6 @@ export function createTaskService({
         task,
         list.tasks,
         inputs,
-        projectId,
         projectRootPath
       );
       if (
@@ -365,36 +347,28 @@ export function createTaskService({
       }
       return {
         ...preparation,
-        ...restartPreparation(projectId, task.id, preparation.launches),
+        ...restartPreparation(projectRootPath, task.id, preparation.launches),
       };
     },
     recentTasks: () => recent.entries(),
     async recordRecent(launch) {
       await recent.recordLaunch(launch);
     },
-    recordStarted({ panelId, projectId, projectRootPath, taskId, windowId }) {
+    recordStarted({ panelId, projectRootPath, taskId, windowId }) {
       recordStartedRun({
         panelId,
-        projectId,
         projectRootPath,
         taskId,
         windowId,
       });
     },
-    async startRun({
-      launches,
-      openTerminal,
-      projectId,
-      projectRootPath,
-      rootTaskId,
-    }) {
+    async startRun({ launches, openTerminal, projectRootPath, rootTaskId }) {
       const result = await taskRuns.start({
         launches,
         openTerminal: async (launch, runId) => {
           const opened = await openTerminal(launch, runId);
           recordStartedRun({
             panelId: opened.panelId,
-            projectId: launch.projectId,
             projectRootPath: launch.projectRootPath,
             taskId: launch.taskId,
             windowId: opened.windowId,
@@ -406,12 +380,10 @@ export function createTaskService({
           });
           return opened;
         },
-        projectId,
         projectRootPath,
         rootTaskId,
       });
       recordCoordinatorRun({
-        projectId,
         projectRootPath,
         rootTaskId,
         runId: result.runId,

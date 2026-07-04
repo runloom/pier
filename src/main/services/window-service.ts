@@ -6,7 +6,6 @@ import type {
 import { flushPanelContextState } from "../state/panel-context-state.ts";
 import { flushPluginSettings } from "../state/plugin-settings.ts";
 import { flushPluginState } from "../state/plugin-state.ts";
-import { flushProjectStore } from "../state/project-store.ts";
 import { flushTerminalSessionState } from "../state/terminal-session-state.ts";
 import { flushTerminalStatusBarPrefs } from "../state/terminal-status-bar-prefs.ts";
 import {
@@ -41,7 +40,7 @@ let currentFlushRendererLayout: (windowId: string) => Promise<void> =
   async () => undefined;
 
 /**
- * 并发 flush 7 个 debounced store。任何一路失败不能吞其他成功——用 allSettled
+ * 并发 flush 6 个 debounced store。任何一路失败不能吞其他成功——用 allSettled
  * 保证全部尝试写盘并把 rejection 分别 log，避免旧 Promise.all 语义下靠前 fail
  * 掩盖后面的成功/失败。
  */
@@ -49,7 +48,6 @@ async function flushAllStoresSettled(): Promise<void> {
   const flushes: [string, () => Promise<void>][] = [
     ["plugin-state", flushPluginState],
     ["plugin-settings", flushPluginSettings],
-    ["project-store", flushProjectStore],
     ["panel-context-state", flushPanelContextState],
     ["terminal-session-state", flushTerminalSessionState],
     ["terminal-status-bar-prefs", flushTerminalStatusBarPrefs],

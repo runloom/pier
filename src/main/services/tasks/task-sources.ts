@@ -28,7 +28,6 @@ import { vscodeSource } from "./vscode-source.ts";
 
 export interface CollectTaskCandidatesOptions {
   homeDir?: string;
-  projectId: string;
   /** filesystem path of the project root（与契约层 `TaskListResult.projectRootPath` 同源）。 */
   projectRootPath: string;
   recentTasks?: readonly TaskRecentEntry[];
@@ -470,7 +469,6 @@ export async function collectTaskCandidates(
   );
   return {
     errors: results.flatMap((result) => (result.error ? [result.error] : [])),
-    projectId: options.projectId,
     projectRootPath: options.projectRootPath,
     tasks: results.flatMap((result) => result.tasks),
   };

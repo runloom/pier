@@ -11,14 +11,12 @@ import { registerRunActions } from "@/lib/actions/run-actions.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 function context(path: string): PanelContext {
   return {
     contextId: `ctx:${path}`,
     cwd: path,
     openedPath: path,
-    projectId: TEST_PROJECT_ID,
     projectRootPath: path,
     source: "panel",
     updatedAt: 1_772_000_000_000,
@@ -42,7 +40,6 @@ function taskPanel(id: string, projectRoot = "/Users/xyz/ABC/pier") {
       task: {
         cwd: projectRoot,
         label: "test",
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         rawCommand: "pnpm run test",
         runId: "run-1",
@@ -99,7 +96,6 @@ function installWorkspaceApi() {
 function taskList(projectRoot = "/Users/xyz/ABC/pier"): TaskListResult {
   return {
     errors: [],
-    projectId: TEST_PROJECT_ID,
     projectRootPath: projectRoot,
     tasks: [
       {
@@ -271,7 +267,6 @@ describe("run actions", () => {
     await nextMacrotask();
 
     expect(window.pier.tasks.list).toHaveBeenCalledWith({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/Users/xyz/ABC/pier",
     });
 
@@ -348,7 +343,6 @@ describe("run actions", () => {
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: true,
       placement: "active-tab",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
@@ -392,7 +386,6 @@ describe("run actions", () => {
       focus: true,
       inputs: { pkg: "renderer" },
       placement: "active-tab",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
@@ -407,7 +400,6 @@ describe("run actions", () => {
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: true,
       placement: "active-tab",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });

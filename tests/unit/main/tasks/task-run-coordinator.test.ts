@@ -3,7 +3,6 @@ import {
   type TaskRunLaunchPlan,
 } from "@main/services/tasks/task-run-coordinator.ts";
 import { describe, expect, it } from "vitest";
-import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 function launch(
   taskId: string,
@@ -16,7 +15,6 @@ function launch(
     focus: true,
     label,
     presentation: {},
-    projectId: TEST_PROJECT_ID,
     projectRootPath: "/repo",
     rawCommand: label,
     source: "history",
@@ -45,7 +43,6 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "verify",
     });
@@ -85,7 +82,6 @@ describe("task run coordinator", () => {
           dependsOrder: "parallel",
         }),
       ],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "verify",
     });
@@ -129,7 +125,6 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "verify",
     });
@@ -153,7 +148,6 @@ describe("task run coordinator", () => {
 
     const result = await coordinator.start({
       launches: [launch("test", "test")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "test",
     });
@@ -177,13 +171,11 @@ describe("task run coordinator", () => {
 
     const first = await coordinator.start({
       launches: [launch("first", "first")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "first",
     });
     const second = await coordinator.start({
       launches: [launch("second", "second")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "second",
     });
@@ -209,13 +201,11 @@ describe("task run coordinator", () => {
 
     const first = await coordinator.start({
       launches: [launch("first", "first")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "first",
     });
     const second = await coordinator.start({
       launches: [launch("second", "second")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "second",
     });
@@ -248,7 +238,6 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "verify",
     });
@@ -278,7 +267,6 @@ describe("task run coordinator", () => {
 
     const result = await coordinator.start({
       launches: [launch("test", "test")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "test",
     });
@@ -307,7 +295,6 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "verify",
     });
@@ -332,7 +319,6 @@ describe("task run coordinator", () => {
 
     const first = await coordinator.start({
       launches: [launch("first", "first")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "first",
     });
@@ -340,7 +326,6 @@ describe("task run coordinator", () => {
 
     const second = await coordinator.start({
       launches: [launch("second", "second")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "second",
     });
@@ -358,7 +343,6 @@ describe("task run coordinator", () => {
 
     const result = await coordinator.start({
       launches: [launch("test", "test")],
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "test",
     });

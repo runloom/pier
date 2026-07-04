@@ -10,7 +10,6 @@ import { terminalLaunchRegistry } from "@main/state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "@main/state/terminal-session-state.ts";
 import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import { describe, expect, it } from "vitest";
-import { TEST_PROJECT_ID } from "../../support/project-fixtures.ts";
 
 function createArgs(
   overrides: Partial<CreateTerminalArgs> = {}
@@ -48,7 +47,6 @@ describe("terminal create launch options", () => {
         context: {
           contextId: "ctx:/tmp/pier",
           cwd: "/tmp/pier",
-          projectId: TEST_PROJECT_ID,
           projectRootPath: "/tmp/pier",
           source: "panel",
           updatedAt: 1_772_000_000_000,
@@ -58,7 +56,6 @@ describe("terminal create launch options", () => {
           exitCode: 0,
           finishedAt: 1_772_000_001_000,
           label: "test",
-          projectId: TEST_PROJECT_ID,
           projectRootPath: "/tmp/pier",
           rawCommand: "pnpm test",
           runId: "run-1",
@@ -91,7 +88,6 @@ describe("terminal create launch options", () => {
         context: {
           contextId: "ctx:/tmp/pier",
           cwd: "/tmp/pier",
-          projectId: TEST_PROJECT_ID,
           projectRootPath: "/tmp/pier",
           source: "panel",
           updatedAt: 1_772_000_000_000,
@@ -99,7 +95,6 @@ describe("terminal create launch options", () => {
         task: {
           cwd: "/tmp/pier",
           label: "dev",
-          projectId: TEST_PROJECT_ID,
           projectRootPath: "/tmp/pier",
           rawCommand: "bun run dev",
           runId: "run-1",
@@ -130,7 +125,6 @@ describe("terminal create launch options", () => {
           task: {
             cwd: "/tmp/pier",
             label: `x'; touch ${markerPath}; #`,
-            projectId: TEST_PROJECT_ID,
             projectRootPath: "/tmp/pier",
             rawCommand: `$(touch ${markerPath})`,
             runId: "run-1",
@@ -169,7 +163,6 @@ describe("terminal create launch options", () => {
     const relaunchTask = {
       cwd: "/tmp/pier",
       label: "lint",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/tmp/pier",
       rawCommand: "pnpm lint",
       runId: "run-2",
@@ -182,7 +175,6 @@ describe("terminal create launch options", () => {
       task: {
         cwd: "/tmp/pier",
         label: "dev",
-        projectId: TEST_PROJECT_ID,
         projectRootPath: "/tmp/pier",
         rawCommand: "pnpm dev",
         runId: "run-1",
@@ -216,7 +208,6 @@ describe("terminal create launch options", () => {
     const savedContext = {
       contextId: "ctx:/tmp/saved",
       cwd: "/tmp/saved",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/tmp/saved",
       source: "panel",
       updatedAt: 1_772_000_003_000,
@@ -224,7 +215,6 @@ describe("terminal create launch options", () => {
     const argsContext = {
       contextId: "ctx:/tmp/args",
       cwd: "/tmp/args",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/tmp/args",
       source: "panel",
       updatedAt: 1_772_000_004_000,
@@ -234,7 +224,6 @@ describe("terminal create launch options", () => {
       exitCode: 0,
       finishedAt: 1_772_000_005_000,
       label: "saved:test",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/tmp/saved",
       rawCommand: "pnpm saved:test",
       runId: "run-saved",
@@ -248,7 +237,6 @@ describe("terminal create launch options", () => {
       exitCode: 1,
       finishedAt: 1_772_000_006_000,
       label: "args:test",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/tmp/args",
       rawCommand: "pnpm args:test",
       runId: "run-args",

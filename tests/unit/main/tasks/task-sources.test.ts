@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectTaskCandidates } from "@main/services/tasks/task-sources.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 describe("task sources", () => {
   let projectRootPath = "";
@@ -87,7 +86,6 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
-      projectId: TEST_PROJECT_ID,
       projectRootPath,
       recentTasks: [
         {
@@ -137,7 +135,6 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
-      projectId: TEST_PROJECT_ID,
       projectRootPath,
     });
 
@@ -169,7 +166,6 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
-      projectId: TEST_PROJECT_ID,
       projectRootPath,
     });
 
@@ -200,7 +196,6 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
-      projectId: TEST_PROJECT_ID,
       projectRootPath,
     });
 
@@ -237,7 +232,6 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
-      projectId: TEST_PROJECT_ID,
       projectRootPath,
     });
 
@@ -270,7 +264,6 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
-      projectId: TEST_PROJECT_ID,
       projectRootPath,
     });
 
@@ -289,7 +282,6 @@ describe("task sources", () => {
 
     const result = await collectTaskCandidates({
       homeDir,
-      projectId: TEST_PROJECT_ID,
       projectRootPath,
     });
 

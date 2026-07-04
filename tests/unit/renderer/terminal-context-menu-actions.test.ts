@@ -29,7 +29,6 @@ function taskPanel(id: string) {
       task: {
         cwd: "/Users/xyz/ABC/pier",
         label: "test",
-        projectId: "11111111-1111-4111-8111-111111111111",
         projectRootPath: "/Users/xyz/ABC/pier",
         rawCommand: "pnpm run test",
         runId: "run-1",

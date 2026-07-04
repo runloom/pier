@@ -25,7 +25,6 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 interface ProjectContext {
-  projectId: string;
   projectRootPath: string;
 }
 
@@ -37,13 +36,15 @@ function activeProjectContext(): ProjectContext | null {
   }
   const descriptor =
     usePanelDescriptorStore.getState().descriptors[activePanelId];
-  const projectId = descriptor?.context?.projectId;
   const projectRootPath =
-    descriptor?.context?.projectRootPath ?? descriptor?.context?.cwd;
-  if (!(projectId && projectRootPath)) {
+    descriptor?.context?.projectRootPath ??
+    descriptor?.context?.gitRoot ??
+    descriptor?.context?.worktreeRoot ??
+    descriptor?.context?.cwd;
+  if (!projectRootPath) {
     return null;
   }
-  return { projectId, projectRootPath };
+  return { projectRootPath };
 }
 
 function taskSourceLabel(source: TaskSource): string {
@@ -197,7 +198,6 @@ async function spawnTask(args: {
     focus: true,
     ...(args.inputs ? { inputs: args.inputs } : {}),
     placement: "active-tab",
-    projectId: args.project.projectId,
     projectRootPath: args.project.projectRootPath,
     taskId: args.taskId,
   });
@@ -253,7 +253,7 @@ async function rerunActiveTaskPanel(): Promise<void> {
     return;
   }
   await spawnTaskWithInputFlow(
-    { projectId: task.projectId, projectRootPath: task.projectRootPath },
+    { projectRootPath: task.projectRootPath },
     task.taskId
   );
 }
@@ -312,7 +312,6 @@ export async function openRunTaskQuickPick() {
   }
   try {
     const result = await window.pier.tasks.list({
-      projectId: project.projectId,
       projectRootPath: project.projectRootPath,
     });
     if (!shouldReplaceLoadingPick()) {

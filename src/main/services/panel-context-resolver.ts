@@ -6,17 +6,7 @@ import type {
   PanelContext,
   PanelContextSource,
 } from "@shared/contracts/panel.ts";
-import { upsertProjectFromPath } from "../state/project-store.ts";
 import { execGit } from "./git-exec.ts";
-
-/** Warn 时间戳；30s 窗口内相同错误只 log 一次，避免磁盘故障时 log flood。 */
-let lastUpsertWarnAt = 0;
-const UPSERT_WARN_THROTTLE_MS = 30_000;
-
-/** 测试专用：重置 warn 节流状态，避免连测泄漏。 */
-export function _resetUpsertWarnForTests(): void {
-  lastUpsertWarnAt = 0;
-}
 
 export interface ResolvePanelContextOptions {
   execGit?: (
@@ -137,20 +127,6 @@ export async function resolvePanelContextForPath(
   const worktreeSupported = gitRoot
     ? await supportsGitWorktree(cwd, execGit)
     : undefined;
-  const project = await upsertProjectFromPath(projectRoot, now).catch(
-    (err: unknown) => {
-      const nowMs = now();
-      if (nowMs - lastUpsertWarnAt >= UPSERT_WARN_THROTTLE_MS) {
-        lastUpsertWarnAt = nowMs;
-        console.warn(
-          "[panel-context] upsertProjectFromPath failed:",
-          err instanceof Error ? err.message : String(err)
-        );
-      }
-      return null;
-    }
-  );
-
   return {
     contextId: contextIdFor(worktreeKey),
     cwd,
@@ -162,9 +138,7 @@ export async function resolvePanelContextForPath(
     ...(gitCommonDir ? { gitCommonDir } : {}),
     ...(gitRoot ? { gitRoot } : {}),
     ...(head ? { head } : {}),
-    ...(project
-      ? { projectId: project.id, projectRootPath: project.rootPath }
-      : { projectRootPath: projectRoot }),
+    projectRootPath: projectRoot,
     ...(worktreeRoot ? { worktreeRoot } : {}),
     ...(worktreeSupported == null ? {} : { worktreeSupported }),
   };

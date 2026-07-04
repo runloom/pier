@@ -12,8 +12,6 @@ export const PIER = {
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
-  // project registry (uuid-keyed, upsert from panel context roots)
-  PROJECT_LIST: "pier://project:list",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
 } as const;
 
@@ -51,9 +49,6 @@ export const PIER_BROADCAST = {
   // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
   // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
   FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",
-  // Project registry 变更广播 (main → renderer, payload Project[]).
-  // 在 project-store upsert / rename / delete 后广播全量列表。
-  PROJECT_CHANGED: "pier://project:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

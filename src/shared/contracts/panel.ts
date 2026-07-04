@@ -26,10 +26,8 @@ export const panelContextSchema = z.object({
   gitRoot: z.string().min(1).optional(),
   head: z.string().min(1).optional(),
   openedPath: z.string().min(1).optional(),
-  /** canonical Project 引用（project-store 的稳定 uuid）。渐进迁移期间可选。 */
-  projectId: z.string().uuid().optional(),
-  /** Project.rootPath 冗余镜像，供 UI 便利读取（避免额外 IPC round-trip）。 */
-  projectRootPath: z.string().min(1).optional(),
+  /** 当前工作区路径锚点。Git 项目优先为 gitRoot，非 Git 目录为 cwd。 */
+  projectRootPath: z.string().min(1),
   source: panelContextSourceSchema.optional(),
   updatedAt: z.number().int().nonnegative(),
   worktreeKey: z.string().min(1).optional(),

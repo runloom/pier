@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 const TASK_VAR_PREFIX = "$";
 const INPUT_PKG_VAR = `${TASK_VAR_PREFIX}{input:pkg}`;
@@ -59,7 +58,6 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const task = listed.tasks.find(
@@ -67,7 +65,6 @@ describe("task execution planning", () => {
     );
 
     const plan = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: task?.id ?? "",
     });
@@ -125,13 +122,11 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
 
     const plan = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: task?.id ?? "",
     });
@@ -201,7 +196,6 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const task = listed.tasks.find(
@@ -210,7 +204,6 @@ describe("task execution planning", () => {
     );
 
     const plan = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: task?.id ?? "",
     });
@@ -252,14 +245,12 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: task?.id ?? "",
       })
@@ -297,14 +288,12 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const task = listed.tasks.find((candidate) => candidate.label === "a");
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: task?.id ?? "",
       })
@@ -346,14 +335,12 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: task?.id ?? "",
       })
@@ -382,27 +369,23 @@ describe("task execution planning", () => {
     );
     const service = createTaskService({ homeDir });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
     const test = listed.tasks.find((candidate) => candidate.label === "test");
     service.recordStarted({
       panelId: "terminal-dev",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
     });
     service.recordStarted({
       panelId: "terminal-test",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: test?.id ?? "",
     });
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: dev?.id ?? "",
       })
@@ -413,7 +396,6 @@ describe("task execution planning", () => {
       status: "ready",
     });
     const concurrentPreparation = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: test?.id ?? "",
     });
@@ -435,14 +417,12 @@ describe("task execution planning", () => {
     );
     const service = createTaskService({ homeDir });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
 
     service.recordStarted({
       panelId: "terminal-dev",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
       windowId: "main",
@@ -451,7 +431,6 @@ describe("task execution planning", () => {
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: dev?.id ?? "",
       })
@@ -477,21 +456,18 @@ describe("task execution planning", () => {
     );
     const service = createTaskService({ homeDir });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
 
     service.recordStarted({
       panelId: "terminal-dev",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
       windowId: "main",
     });
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: dev?.id ?? "",
       })
@@ -506,7 +482,6 @@ describe("task execution planning", () => {
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: dev?.id ?? "",
       })
@@ -532,14 +507,12 @@ describe("task execution planning", () => {
     );
     const service = createTaskService({ homeDir });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const dev = listed.tasks.find((candidate) => candidate.label === "dev");
 
     service.recordStarted({
       panelId: "terminal-dev",
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
       windowId: "main",
@@ -547,7 +520,6 @@ describe("task execution planning", () => {
     service.markPanelClosed("terminal-dev", "main");
 
     const preparation = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: dev?.id ?? "",
     });
@@ -583,14 +555,12 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const verify = listed.tasks.find(
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
@@ -605,7 +575,6 @@ describe("task execution planning", () => {
           panelId: `panel-${launchPlan.taskId}`,
           windowId: "main",
         }),
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       rootTaskId: verify?.id ?? "",
     });
@@ -616,7 +585,6 @@ describe("task execution planning", () => {
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: verify?.id ?? "",
       })
@@ -665,14 +633,12 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const verify = listed.tasks.find(
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
@@ -687,7 +653,6 @@ describe("task execution planning", () => {
           panelId: `panel-${launchPlan.label}`,
           windowId: "main",
         }),
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       rootTaskId: verify?.id ?? "",
     });
@@ -708,7 +673,6 @@ describe("task execution planning", () => {
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: verify?.id ?? "",
       })
@@ -752,7 +716,6 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const client = listed.tasks.find(
@@ -762,7 +725,6 @@ describe("task execution planning", () => {
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
@@ -782,7 +744,6 @@ describe("task execution planning", () => {
             windowId: "main",
           });
         },
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         rootTaskId: verify?.id ?? "",
       })
@@ -790,7 +751,6 @@ describe("task execution planning", () => {
 
     await expect(
       service.prepareSpawn({
-        projectId: TEST_PROJECT_ID,
         projectRootPath: projectRoot,
         taskId: client?.id ?? "",
       })
@@ -807,7 +767,6 @@ describe("task execution planning", () => {
     service.markPanelClosed(`panel-${client?.id ?? ""}`, "main");
 
     const preparation = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: client?.id ?? "",
     });
@@ -843,14 +802,12 @@ describe("task execution planning", () => {
       writeRecentState: async () => undefined,
     });
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
     const verify = listed.tasks.find(
       (candidate) => candidate.label === "verify"
     );
     const plan = await service.prepareSpawn({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       taskId: verify?.id ?? "",
     });
@@ -868,7 +825,6 @@ describe("task execution planning", () => {
           windowId: "main",
         });
       },
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       rootTaskId: verify?.id ?? "",
     });
@@ -904,7 +860,6 @@ describe("task execution planning", () => {
       focus: true,
       label: "check",
       presentation: {},
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
       rawCommand: "pnpm check",
       source: "package-script",
@@ -929,7 +884,7 @@ describe("task execution planning", () => {
       },
     ]);
     await expect(
-      service.list({ projectId: TEST_PROJECT_ID, projectRootPath: projectRoot })
+      service.list({ projectRootPath: projectRoot })
     ).resolves.toMatchObject({
       tasks: expect.arrayContaining([
         expect.objectContaining({
@@ -984,7 +939,6 @@ describe("task execution planning", () => {
     });
 
     const listed = await service.list({
-      projectId: TEST_PROJECT_ID,
       projectRootPath: projectRoot,
     });
 

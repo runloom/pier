@@ -1,7 +1,6 @@
 import { createTaskService } from "@main/services/tasks/task-service.ts";
 import type { TaskLaunchPlan } from "@shared/contracts/tasks.ts";
 import { describe, expect, it, vi } from "vitest";
-import { TEST_PROJECT_ID } from "../../../support/project-fixtures.ts";
 
 /**
  * 回归覆盖：`task-service.cancelRun` 引入 `onTaskActivity.onFinished` fire 后,
@@ -20,7 +19,6 @@ function makeLaunch(
     focus: true,
     label: taskId,
     presentation: {},
-    projectId: TEST_PROJECT_ID,
     projectRootPath: "/repo",
     rawCommand: taskId,
     source: "history",
@@ -55,7 +53,6 @@ describe("task-service cancelRun onTaskActivity gating", () => {
           panelId: `panel-${launch.taskId}`,
           windowId: "main",
         }),
-      projectId: TEST_PROJECT_ID,
       projectRootPath: "/repo",
       rootTaskId: "test",
     });

@@ -128,7 +128,6 @@ function taskPanelMetadataFor(
   return {
     cwd: launch.cwd,
     label: launch.label,
-    projectId: launch.projectId,
     projectRootPath: launch.projectRootPath,
     rawCommand: launch.rawCommand,
     runId,
@@ -193,7 +192,6 @@ export async function executeRunListCommand(
   return commandSuccess(
     requestId,
     await services.tasks.list({
-      projectId: command.projectId,
       projectRootPath: command.projectRootPath,
     })
   );
@@ -207,7 +205,6 @@ export async function executeRunSpawnCommand(
 ): Promise<PierCommandResult> {
   const preparation = await services.tasks.prepareSpawn({
     inputs: command.inputs,
-    projectId: command.projectId,
     projectRootPath: command.projectRootPath,
     taskId: command.taskId,
   });
@@ -313,7 +310,6 @@ export async function executeRunSpawnCommand(
           throw error;
         }
       },
-      projectId: command.projectId,
       projectRootPath: command.projectRootPath,
       rootTaskId: command.taskId,
     });

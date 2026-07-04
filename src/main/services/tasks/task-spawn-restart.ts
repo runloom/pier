@@ -7,7 +7,6 @@ import type {
 export interface TaskRunInstance {
   kind: "panel";
   panelId: string;
-  projectId: string;
   projectRootPath: string;
   startedAt: number;
   taskId: string;
@@ -16,7 +15,6 @@ export interface TaskRunInstance {
 
 export interface TaskRunCoordinatorInstance {
   kind: "coordinator";
-  projectId: string;
   projectRootPath: string;
   runId: string;
   startedAt: number;
