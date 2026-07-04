@@ -43,9 +43,9 @@ mac:
 
 dmg:
   contents:
-    - x: 110
-      y: 150
-    - x: 240
-      y: 150
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
       type: link
       path: /Applications
