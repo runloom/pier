@@ -336,7 +336,7 @@ app.on("before-quit", (event) => {
       closeForegroundActivityResources();
     } catch (error) {
       console.error(
-        "[agent-session] failed to close resources before quit:",
+        "[foreground-activity] failed to close resources before quit:",
         error instanceof Error ? error.message : String(error)
       );
     }

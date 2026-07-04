@@ -149,7 +149,7 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   foregroundActivityAggregator.onChange(handleBroadcast);
   // emit 脚本安装（一次性）——fire-and-forget，失败仅告警。
   installAgentHooksEmitScript(app.getPath("userData")).catch((err) => {
-    console.error("[agent-session] emit script install failed:", err);
+    console.error("[foreground-activity] emit script install failed:", err);
   });
   // JSONL 尾读（spec §4.4 主路径）：hooks.json 系集成通过 emit 脚本
   // append 到 events.jsonl，observer 250ms 轮询 → 按 kind 分派到
@@ -164,7 +164,7 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
     onCommandStart: (event) =>
       foregroundActivityAggregator.ingestCommandStartHook(event),
     onError: (err) => {
-      console.error("[agent-session] jsonl observer parse failed:", err);
+      console.error("[foreground-activity] jsonl observer parse failed:", err);
     },
   });
   ipcMain.handle("pier:foreground-activity:snapshot", (event) => {
@@ -184,6 +184,6 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       prefs.agentStatusHooks ? installAllAgentHooks() : uninstallAllAgentHooks()
     )
     .catch((err) => {
-      console.error("[agent-session] startup hook install failed:", err);
+      console.error("[foreground-activity] startup hook install failed:", err);
     });
 }

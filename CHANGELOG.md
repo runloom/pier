@@ -100,8 +100,8 @@
 `Project` + task 层最后一里 6 项迁移全部完成，双源架构收? complete：
 
 - ✅ task/run 契约 `projectRoot: string` 迁到 `projectId: uuid + projectRootPath: string`（TaskListResult / TaskLaunchPlan / TaskPanelMetadata / TaskRunSnapshot + PierCommand run.list/run.spawn + PierTasksAPI + PanelContext + 60+ callsite）
-- ✅ Task 生命周期 wire：`task-service.startRun` / `completePanel` / `cancelRun` 走 `onTaskActivity` 回调转发 `agentSessionService.taskLaunched` / `taskFinished` → `ForegroundActivityAggregator`
-- ✅ Project registry renderer 面：新 `pier://project:list` / `pier://project:get` / `pier://project:changed` IPC + `PierProjectAPI` preload + `useProjectStore` + `ProjectBridge`
+- ✅ Task 生命周期 wire：`task-service.startRun` / `completePanel` / `cancelRun` 走 `onTaskActivity` 回调转发 `foregroundActivityService.taskLaunched` / `taskFinished` → `ForegroundActivityAggregator`
+- ✅ Project registry renderer 面：`pier://project:list` / `pier://project:changed` IPC + `PierProjectAPI` preload + `useProjectStore` + `ProjectBridge`（`pier://project:get` 早期实现，后续 hygiene sweep 因 0 caller 删除，见下）
 - ✅ `panel-context-state.ts:keyForContext` 清 legacy `projectRoot` fallback 一层
 - ✅ `PanelContext.projectRoot` 删（→ `projectId + projectRootPath`）
 - ✅ `panel-context-resolver` 输出改产 `projectRootPath`；`upsertProjectFromPath` 兜底 catch 保留（Electron `app.getPath` 不可用时 project 保持 null，`projectRootPath` 从 gitRoot/cwd 派生）
