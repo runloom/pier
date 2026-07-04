@@ -131,6 +131,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   source: { kind: "builtin" },
   terminalStatusItems: [
     {
+      alignment: "right",
       id: "pier.worktree.status",
       order: 10,
       permissions: ["worktree:read", "workspace:open"],
