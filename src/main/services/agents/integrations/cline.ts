@@ -48,6 +48,10 @@ const CLINE_EVENTS: ReadonlyArray<{
   { fileName: "PreToolUse", pierEvent: "ToolStart" },
   { fileName: "PostToolUse", pierEvent: "ToolComplete" },
   { fileName: "TaskCancel", pierEvent: "Stop" },
+  // 正常完成必须有回合边界信号——缺了它状态会卡在 tool/processing 直到
+  // 30min TTL 衰减（loomdesk cline eventStatusMap 同款映射）。
+  { fileName: "TaskComplete", pierEvent: "Stop" },
+  { fileName: "PreCompact", pierEvent: "processing" },
 ];
 
 export function clineHooksDir(): string {

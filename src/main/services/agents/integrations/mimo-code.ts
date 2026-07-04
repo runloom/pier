@@ -78,6 +78,15 @@ function mapPierEvent(event) {
   if (event.type === "session.created") return "SessionStart";
   if (event.type === "session.idle") return "Stop";
   if (event.type === "session.error") return "error";
+  if (event.type === "session.status") {
+    // 同 opencode（MiMo 是 opencode fork, SDK 事件同源）:
+    // busy/retry 推进心跳, idle 回合结束。
+    const statusType =
+      event.properties && event.properties.status && event.properties.status.type;
+    if (statusType === "busy" || statusType === "retry") return "running";
+    if (statusType === "idle") return "Stop";
+    return null;
+  }
   if (event.type === "tui.command.execute") {
     const command = event.properties && event.properties.command;
     return command === "prompt.submit" ? "PromptSubmit" : null;

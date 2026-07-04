@@ -10,9 +10,12 @@ import {
 
 /**
  * Gemini CLI hook 事件 → pier 事件名。
- * 依据 Gemini CLI hooks 文档：无权限确认类 hook（PermissionRequest 无
- * 对应原生事件）——Gemini 的授权确认在 hook 体系之外, 因此 pier 的
- * "waiting" 状态经由 hook 路径不可达（同 grok 集成的取舍）。
+ * 依据 google-gemini/gemini-cli packages/core/src/hooks/types.ts：
+ * HookEventName 含 Notification, NotificationType 当前仅 ToolPermission
+ * （工具权限弹窗提示）——observability-only, 不能 grant/block, 但足以
+ * 驱动 pier 的 "waiting" 状态, 映 PermissionRequest。
+ * （此前注释断言"无权限确认类 hook"已过时——上游 docs/hooks/reference.md
+ * §Notification 明确该事件在 Tool Permissions 系统提示时触发。）
  * 工具事件（BeforeTool/AfterTool）matcher 用空字符串 ""（Gemini 官方
  * 事件表约定, 区别于 grok 的 "*"）。
  *
@@ -34,6 +37,7 @@ const GEMINI_SPEC: NestedJsonIntegrationSpec = {
     { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
     { nativeEvent: "BeforeAgent", pierEvent: "PromptSubmit" },
     { nativeEvent: "AfterAgent", pierEvent: "Stop" },
+    { nativeEvent: "Notification", pierEvent: "PermissionRequest" },
     { matcher: "", nativeEvent: "BeforeTool", pierEvent: "ToolStart" },
     { matcher: "", nativeEvent: "AfterTool", pierEvent: "ToolComplete" },
   ],

@@ -30,8 +30,17 @@ const QWEN_CODE_SPEC: NestedJsonIntegrationSpec = {
     { nativeEvent: "StopFailure", pierEvent: "error" },
     { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
     { nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
+    // QwenLM/qwen-code packages/core/src/hooks/types.ts HookEventName
+    // 实锤含以下三个状态相关事件（docs/users/features/hooks.md 同步列出）。
+    { nativeEvent: "PermissionRequest", pierEvent: "PermissionRequest" },
+    { nativeEvent: "SubagentStart", pierEvent: "SubagentStart" },
+    { nativeEvent: "SubagentStop", pierEvent: "SubagentStop" },
     { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
   ],
+  // ⚠️ 同 gemini.ts 的单位陷阱：Qwen Code 是 Gemini CLI fork, hook 配置的
+  // `timeout` 字段按【毫秒】解释。不覆盖此值时 shared 工厂默认写 5——
+  // 即 5ms, hook 几乎必超时被杀, 整条状态链路静默失效。此处必须是毫秒值。
+  timeoutSeconds: 10_000,
 };
 
 export const qwenCodeIntegration = createNestedJsonIntegration(QWEN_CODE_SPEC);

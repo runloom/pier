@@ -59,8 +59,9 @@ export function opencodeConfigPath(): string {
  * 类型的 command 联合里没有 "input_submit"），permission.updated→
  * PermissionRequest（SDK 类型只有 EventPermissionUpdated /
  * EventPermissionReplied 两种, 没有 "permission.asked"——旧文档页过时）,
- * permission.replied→processing, tool.execute.before→ToolStart,
- * tool.execute.after→ToolComplete。
+ * permission.replied→processing, session.status(busy/retry)→running、
+ * (idle)→Stop（EventSessionStatus——模型忙碌/重试中的推进心跳）,
+ * tool.execute.before→ToolStart, tool.execute.after→ToolComplete。
  */
 export function buildOpencodePluginSource(
   pluginId: AgentKind = AGENT_ID
@@ -96,6 +97,16 @@ function mapPierEvent(event) {
   if (event.type === "session.created") return "SessionStart";
   if (event.type === "session.idle") return "Stop";
   if (event.type === "session.error") return "error";
+  if (event.type === "session.status") {
+    // SDK EventSessionStatus: properties.status.type = busy/retry/idle
+    // （sst/opencode packages/sdk/js/src/gen/types.gen.ts SessionStatus 联合）。
+    // busy/retry 是模型推进/重试中——缺了它长回合只剩 prompt.submit 一跳。
+    const statusType =
+      event.properties && event.properties.status && event.properties.status.type;
+    if (statusType === "busy" || statusType === "retry") return "running";
+    if (statusType === "idle") return "Stop";
+    return null;
+  }
   if (event.type === "tui.command.execute") {
     const command = event.properties && event.properties.command;
     return command === "prompt.submit" ? "PromptSubmit" : null;
