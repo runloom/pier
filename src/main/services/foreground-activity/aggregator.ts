@@ -1,28 +1,30 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
-import {
-  activityStatusForHookEvent,
-  type ForegroundActivity,
-  type ForegroundActivityBroadcast,
-  type TaskActivity,
+import type {
+  ForegroundActivity,
+  ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
+import { activityStatusForHookEvent } from "@shared/contracts/foreground-activity.ts";
 import {
-  type ActivityEntry,
+  type AgentLaunchLayer,
   applyTurnBookkeeping,
   armHookTtlTimer,
   CLOSE_COOLDOWN_MS,
-  clearAllTimers,
-  clearHookTtlTimer,
-  clearVisibilityTimer,
+  clearCommandTimers,
+  clearHookTimers,
+  clearSlotTimers,
   EMIT_DEBOUNCE_MS,
-  newHookAgentEntry,
-  newLaunchAgentEntry,
-  newShellEntry,
-  newTaskEntry,
+  type HookLayer,
+  newAgentLaunchLayer,
+  newHookLayer,
+  newShellLayer,
+  newTaskLayer,
+  type PanelSlot,
+  projectSlot,
   SESSION_CREATING_EVENTS,
   SESSION_END_COOLDOWN_MS,
   SUBAGENT_EVENTS,
   SUSPENDED_JOB_EXIT_CODES,
-  setAgentStatus,
+  setHookStatus,
   TASK_EXIT_LINGER_MS,
   type TimerCtx,
   VISIBILITY_DEBOUNCE_MS,
@@ -33,32 +35,42 @@ import type {
 } from "./types.ts";
 
 /**
- * ForegroundActivityAggregator 实现。API 与文档在 ./types.ts。
+ * ForegroundActivityAggregator 实现。API 与文档在 ./types.ts, 模型与投影在
+ * ./entry.ts。
  *
- * 语义：cooldown 拦迟到 / SessionStart 消抖 250ms / hook TTL 30min 衰减 /
- * subagent 计数 / turn bookkeeping / Ctrl+Z 悬挂例外。逐字迁移自
- * loomdesk 与老 AgentSessionAggregator, 保 tests 回归覆盖。
+ * 双层语义：command 层（OSC/launcher/task）与 hook 层（JSONL 事件）独立
+ * 生灭, 互不覆写；每 panel 投影至多一条 activity。冷却拦迟到 / 新层 250ms
+ * 消抖 / hook TTL 30min 衰减 / subagent 计数 / turn bookkeeping /
+ * Ctrl+Z 悬挂例外——语义细节与 loomdesk ActivityAggregator 对齐。
  */
 export function createForegroundActivityAggregator(
   opts: ForegroundActivityAggregatorOpts = {}
 ): ForegroundActivityAggregator {
   const now = opts.now ?? Date.now;
-  const entries = new Map<string, ActivityEntry>();
-  /** key → 冷却截止时刻。 */
-  const cooldownUntil = new Map<string, number>();
+  const slots = new Map<string, PanelSlot>();
+  /**
+   * panel 死亡冷却（panelClosed/windowClosed/retainPanels）——面板已不在，
+   * 拦一切迟到事件（hook + 命令）。
+   */
+  const panelCooldownUntil = new Map<string, number>();
+  /**
+   * hook 收尾冷却（命令退出/SessionEnd/task linger）——只拦迟到 hook 事件。
+   * 新命令是新鲜 OSC 证据, 永不被此冷却拦截（loomdesk
+   * recentlyEndedSessions 同语义:只 gate agent_hook 条目创建）。
+   */
+  const hookCooldownUntil = new Map<string, number>();
   const listeners = new Set<(b: ForegroundActivityBroadcast) => void>();
-  let emitTimer: ReturnType<typeof setTimeout> | null = null;
+  let emitTimer: NodeJS.Timeout | null = null;
   let disposed = false;
   let broadcastSeq = 0;
 
   function buildBroadcast(): ForegroundActivityBroadcast {
     broadcastSeq += 1;
     const activities: ForegroundActivity[] = [];
-    for (const entry of entries.values()) {
-      if (!entry.hidden) {
-        // 浅拷贝防外部 mutate 污染内部 activity 引用
-        // (IPC serialize 会 structuredClone, 但同进程内 listener 直接消费引用)。
-        activities.push({ ...entry.activity });
+    for (const [panelId, slot] of slots) {
+      const activity = projectSlot(panelId, slot);
+      if (activity) {
+        activities.push(activity);
       }
     }
     return { activities, ts: broadcastSeq };
@@ -77,58 +89,65 @@ export function createForegroundActivityAggregator(
     }, EMIT_DEBOUNCE_MS);
   }
 
-  const timerCtx: TimerCtx = { entries, scheduleEmit, now };
+  const timerCtx: TimerCtx = { now, scheduleEmit, slots };
 
-  function isInCloseCooldown(key: string): boolean {
-    const until = cooldownUntil.get(key);
+  function isInCooldown(map: Map<string, number>, key: string): boolean {
+    const until = map.get(key);
     if (until === undefined) {
       return false;
     }
     if (now() >= until) {
-      cooldownUntil.delete(key);
+      map.delete(key);
       return false;
     }
     return true;
   }
 
-  function deleteEntry(key: string): boolean {
-    const entry = entries.get(key);
-    if (!entry) {
-      return false;
+  function slotFor(key: string): PanelSlot {
+    let slot = slots.get(key);
+    if (!slot) {
+      slot = { command: null, hook: null };
+      slots.set(key, slot);
     }
-    clearAllTimers(entry);
-    entries.delete(key);
-    return true;
+    return slot;
   }
 
-  function closeEntry(key: string, cooldownMs = CLOSE_COOLDOWN_MS): boolean {
-    const removed = deleteEntry(key);
-    cooldownUntil.set(key, now() + cooldownMs);
-    return removed;
+  function dropSlotIfEmpty(key: string): void {
+    const slot = slots.get(key);
+    if (slot && !slot.command && !slot.hook) {
+      slots.delete(key);
+    }
+  }
+
+  /** 整 slot 清除 + 冷却进指定表。返回是否确有移除（决定要不要 emit）。 */
+  function closeSlot(
+    key: string,
+    cooldown: { map: Map<string, number>; ms: number }
+  ): boolean {
+    const slot = slots.get(key);
+    if (slot) {
+      clearSlotTimers(slot);
+      slots.delete(key);
+    }
+    cooldown.map.set(key, now() + cooldown.ms);
+    return slot !== undefined;
   }
 
   function pruneExpiredCooldowns(): void {
-    for (const [id, until] of cooldownUntil) {
-      if (now() >= until) {
-        cooldownUntil.delete(id);
+    for (const map of [panelCooldownUntil, hookCooldownUntil]) {
+      for (const [id, until] of map) {
+        if (now() >= until) {
+          map.delete(id);
+        }
       }
     }
   }
 
-  function revealEntry(entry: ActivityEntry): void {
-    if (entry.hidden) {
-      entry.hidden = false;
-      clearVisibilityTimer(entry);
-    }
-  }
-
-  function armVisibilityTimer(key: string, entry: ActivityEntry): void {
-    if (!entry.hidden) {
-      return;
-    }
-    entry.visibilityTimer = setTimeout(() => {
-      const current = entries.get(key);
-      if (!current) {
+  /** launch 层 250ms 消抖显形（`omp --version` 瞬时命令不闪条）。 */
+  function armLaunchVisibility(key: string, layer: AgentLaunchLayer): void {
+    layer.visibilityTimer = setTimeout(() => {
+      const current = slots.get(key)?.command;
+      if (current?.kind !== "agent-launch" || current !== layer) {
         return;
       }
       current.visibilityTimer = null;
@@ -139,61 +158,77 @@ export function createForegroundActivityAggregator(
     }, VISIBILITY_DEBOUNCE_MS);
   }
 
-  function createHookAgentEntry(
-    key: string,
-    event: AgentHookEventPayload,
-    at: number
-  ): ActivityEntry {
-    const entry = newHookAgentEntry(event, at);
-    entries.set(key, entry);
-    armVisibilityTimer(key, entry);
-    return entry;
-  }
-
-  /** SessionStart 豁免冷却; SessionEnd 移除 + 短冷却拦迟到 hook。已消化返 true。 */
-  function handleLifecycleEvent(key: string, eventName: string): boolean {
-    if (eventName === "SessionStart") {
-      cooldownUntil.delete(key);
-      return false;
-    }
-    if (isInCloseCooldown(key)) {
-      return true;
-    }
-    if (eventName === "SessionEnd") {
-      const removed = deleteEntry(key);
-      cooldownUntil.set(key, now() + SESSION_END_COOLDOWN_MS);
-      if (removed) {
+  /** hook 层 SessionStart 消抖显形（防瞬时闪条）。 */
+  function armHookVisibility(key: string, layer: HookLayer): void {
+    layer.visibilityTimer = setTimeout(() => {
+      const current = slots.get(key)?.hook;
+      if (current !== layer) {
+        return;
+      }
+      current.visibilityTimer = null;
+      if (current.hidden) {
+        current.hidden = false;
         scheduleEmit();
       }
-      return true;
-    }
-    return false;
+    }, VISIBILITY_DEBOUNCE_MS);
   }
 
-  /** 取得/创建 hook agent entry。幽灵门控：终结类迟到事件不得凭空造条目。 */
-  function acquireHookAgentEntry(
+  /** 非 SessionStart 的 hook 事件是真实进展证据——立即显形。 */
+  function revealHook(hook: HookLayer): void {
+    if (hook.hidden) {
+      hook.hidden = false;
+      if (hook.visibilityTimer) {
+        clearTimeout(hook.visibilityTimer);
+        hook.visibilityTimer = null;
+      }
+    }
+  }
+
+  /**
+   * SessionEnd 干净收尾：只清 hook 层（command 层等 OSC D 自己收），
+   * 1.5s 短冷却拦迟到事件。
+   */
+  function endHookSession(key: string): void {
+    const slot = slots.get(key);
+    const hook = slot?.hook ?? null;
+    if (slot && hook) {
+      clearHookTimers(hook);
+      slot.hook = null;
+      dropSlotIfEmpty(key);
+    }
+    hookCooldownUntil.set(key, now() + SESSION_END_COOLDOWN_MS);
+    if (hook) {
+      scheduleEmit();
+    }
+  }
+
+  /**
+   * 取得/新建 hook 层。幽灵门控：终结类迟到事件（Stop/ToolComplete/
+   * SubagentStop/error）不得凭空建会话——返回 null 表示事件应被丢弃。
+   */
+  function acquireHookLayer(
     key: string,
     event: AgentHookEventPayload,
     at: number
-  ): ActivityEntry | null {
-    const existing = entries.get(key);
-    if (existing?.activity.kind === "agent") {
+  ): HookLayer | null {
+    const slot = slotFor(key);
+    const existing = slot.hook;
+    if (existing) {
       if (event.event !== "SessionStart") {
-        revealEntry(existing);
+        revealHook(existing);
       }
       return existing;
     }
-    // existing 是 task/shell/idle — 只有 SESSION_CREATING 事件才允许覆盖为
-    // agent activity。迟到的终结事件 (Stop/ToolComplete/SubagentStop/error)
-    // 不能凭空销毁用户显式建立的 task/shell 活动 (review Commit C P1#1)。
     if (!SESSION_CREATING_EVENTS.has(event.event)) {
+      dropSlotIfEmpty(key);
       return null;
     }
-    if (existing) {
-      clearAllTimers(existing);
-      entries.delete(key);
+    const hook = newHookLayer(event, at);
+    slot.hook = hook;
+    if (hook.hidden) {
+      armHookVisibility(key, hook);
     }
-    return createHookAgentEntry(key, event, at);
+    return hook;
   }
 
   const api: ForegroundActivityAggregator = {
@@ -202,25 +237,29 @@ export function createForegroundActivityAggregator(
         return;
       }
       const key = panelId;
-      cooldownUntil.delete(key);
-      const existing = entries.get(key);
-      if (existing && existing.activity.kind === "agent") {
-        revealEntry(existing);
-        // hook 侧的 TTL timer 无效了（launch 是新生命周期）——清掉
-        // 防止 30min 后回落 ready 的 callback 意外触发。
-        clearHookTtlTimer(existing);
-        existing.activity = {
-          ...existing.activity,
-          agentId,
-        };
+      panelCooldownUntil.delete(key);
+      hookCooldownUntil.delete(key);
+      const slot = slotFor(key);
+      const existing = slot.command;
+      if (existing?.kind === "agent-launch" && existing.agentId === agentId) {
+        // launcher 先验 + OSC 133 C 双击（同 agent）→ 去抖：保层保消抖 timer。
+        existing.updatedAt = now();
+        existing.windowId = windowId;
       } else {
         if (existing) {
-          clearAllTimers(existing);
+          clearCommandTimers(existing);
         }
-        entries.set(
-          key,
-          newLaunchAgentEntry(windowId, panelId, agentId, now())
-        );
+        const layer = newAgentLaunchLayer(windowId, agentId, now());
+        slot.command = layer;
+        armLaunchVisibility(key, layer);
+      }
+      // 异 agent 的 hook 证据在新 agent 命令启动时作废（loomdesk
+      // clearAgentHookActivitiesBySession 同语义）；同 agent 保留——
+      // 覆盖 OSC/hook 到达竞态与相邻重启的证据延续。status 仍唯 hook 可写。
+      const hook = slot.hook;
+      if (hook && hook.agentId !== agentId) {
+        clearHookTimers(hook);
+        slot.hook = null;
       }
       scheduleEmit();
     },
@@ -234,14 +273,17 @@ export function createForegroundActivityAggregator(
         return;
       }
       const key = panelId;
-      if (isInCloseCooldown(key)) {
+      // 只查 panel 死亡冷却：命令收尾的 hook 冷却不拦新命令——
+      // 相邻命令 <5s 也必须正常呈现（loomdesk ingestCommandStart 同语义）。
+      if (isInCooldown(panelCooldownUntil, key)) {
         return;
       }
-      const existing = entries.get(key);
-      if (existing) {
-        clearAllTimers(existing);
+      const slot = slotFor(key);
+      if (slot.command) {
+        clearCommandTimers(slot.command);
       }
-      entries.set(key, newShellEntry(windowId, panelId, commandLine, now()));
+      // 只覆盖 command 层——`fg` 等 shell 命令不摧毁挂起 agent 的 hook 证据。
+      slot.command = newShellLayer(windowId, commandLine, now());
       scheduleEmit();
     },
 
@@ -250,10 +292,12 @@ export function createForegroundActivityAggregator(
         return;
       }
       const key = panelId;
-      if (disposed || !entries.has(key)) {
+      if (disposed || !slots.has(key)) {
         return;
       }
-      if (closeEntry(key)) {
+      // 前台命令退出 = 面板整场结束：双层同清（覆盖崩溃/kill 等无
+      // SessionEnd hook 的路径）+ 5s hook 冷却拦迟到 hook 事件。
+      if (closeSlot(key, { map: hookCooldownUntil, ms: CLOSE_COOLDOWN_MS })) {
         scheduleEmit();
       }
       pruneExpiredCooldowns();
@@ -271,7 +315,19 @@ export function createForegroundActivityAggregator(
         return;
       }
       const key = event.panelId;
-      if (handleLifecycleEvent(key, event.event)) {
+      if (isInCooldown(panelCooldownUntil, key)) {
+        // panel 已死：SessionStart 也不得复活幽灵（loomdesk isKnownSession
+        // 拒掉同类事件的 Pier 替代——panelId 不复用, 复活必为迟到 flush）。
+        return;
+      }
+      if (event.event === "SessionStart") {
+        // 会话开端豁免 hook 收尾冷却（重启即新生命周期）。
+        hookCooldownUntil.delete(key);
+      } else if (isInCooldown(hookCooldownUntil, key)) {
+        return;
+      }
+      if (event.event === "SessionEnd") {
+        endHookSession(key);
         return;
       }
       const status = activityStatusForHookEvent(event.event);
@@ -279,25 +335,20 @@ export function createForegroundActivityAggregator(
         return;
       }
       const at = now();
-      const entry = acquireHookAgentEntry(key, event, at);
-      if (!(entry && applyTurnBookkeeping(entry, event.event))) {
+      const hook = acquireHookLayer(key, event, at);
+      if (!hook) {
         return;
       }
-      if (entry.activity.kind === "agent") {
-        entry.activity = {
-          ...entry.activity,
-          agentId: event.agent,
-          source: "hook",
-        };
+      if (!applyTurnBookkeeping(hook, event.event)) {
+        return;
       }
+      hook.agentId = event.agent;
       if (SUBAGENT_EVENTS.has(event.event)) {
-        if (entry.activity.kind === "agent") {
-          entry.activity = { ...entry.activity, updatedAt: at };
-        }
+        hook.updatedAt = at;
       } else {
-        setAgentStatus(entry, status, at);
+        setHookStatus(hook, status, at);
       }
-      armHookTtlTimer(key, entry, timerCtx);
+      armHookTtlTimer(key, timerCtx);
       scheduleEmit();
     },
 
@@ -306,42 +357,42 @@ export function createForegroundActivityAggregator(
         return;
       }
       const key = panelId;
-      cooldownUntil.delete(key);
-      const existing = entries.get(key);
-      if (existing) {
-        clearAllTimers(existing);
-      }
-      entries.set(
-        key,
-        newTaskEntry(windowId, panelId, task.taskId, task.label, now())
-      );
+      panelCooldownUntil.delete(key);
+      hookCooldownUntil.delete(key);
+      const slot = slotFor(key);
+      // 用户显式操作优先：双层全清（含 hook——task 接管 pty, 旧会话证据作废）。
+      clearSlotTimers(slot);
+      slot.hook = null;
+      slot.command = newTaskLayer(windowId, task.taskId, task.label, now());
       scheduleEmit();
     },
 
     taskFinished(panelId, args) {
-      const key = panelId;
-      const entry = entries.get(key);
-      if (entry?.activity.kind !== "task") {
+      const slot = slots.get(panelId);
+      const command = slot?.command;
+      if (command?.kind !== "task") {
         return;
       }
-      const at = now();
-      const nextActivity: TaskActivity = {
-        ...entry.activity,
-        status: args.status,
-        updatedAt: at,
-        ...(args.exitCode === undefined ? {} : { exitCode: args.exitCode }),
-      };
-      entry.activity = nextActivity;
+      command.status = args.status;
+      command.updatedAt = now();
+      if (args.exitCode !== undefined) {
+        command.exitCode = args.exitCode;
+      }
       // 幂等：linger timer 一旦启动就不重置——防止 native 层多次上报
       // taskExit 导致 linger 无限延长, 用户看不到 activity 消失。
-      if (!entry.taskLingerTimer) {
-        entry.taskLingerTimer = setTimeout(() => {
-          const current = entries.get(key);
-          if (current?.activity.kind !== "task") {
+      if (!command.lingerTimer) {
+        command.lingerTimer = setTimeout(() => {
+          const current = slots.get(panelId)?.command;
+          if (current?.kind !== "task" || current !== command) {
             return;
           }
-          current.taskLingerTimer = null;
-          if (closeEntry(key, TASK_EXIT_LINGER_MS)) {
+          current.lingerTimer = null;
+          if (
+            closeSlot(panelId, {
+              map: hookCooldownUntil,
+              ms: TASK_EXIT_LINGER_MS,
+            })
+          ) {
             scheduleEmit();
           }
         }, TASK_EXIT_LINGER_MS);
@@ -350,8 +401,9 @@ export function createForegroundActivityAggregator(
     },
 
     panelClosed(panelId) {
-      const key = panelId;
-      if (closeEntry(key)) {
+      if (
+        closeSlot(panelId, { map: panelCooldownUntil, ms: CLOSE_COOLDOWN_MS })
+      ) {
         scheduleEmit();
       }
       pruneExpiredCooldowns();
@@ -359,8 +411,12 @@ export function createForegroundActivityAggregator(
 
     windowClosed(windowId) {
       let anyRemoved = false;
-      for (const [key, entry] of [...entries.entries()]) {
-        if (entry.activity.windowId === windowId && closeEntry(key)) {
+      for (const [key, slot] of [...slots.entries()]) {
+        const slotWindowId = slot.command?.windowId ?? slot.hook?.windowId;
+        if (
+          slotWindowId === windowId &&
+          closeSlot(key, { map: panelCooldownUntil, ms: CLOSE_COOLDOWN_MS })
+        ) {
           anyRemoved = true;
         }
       }
@@ -373,14 +429,14 @@ export function createForegroundActivityAggregator(
     retainPanels(windowId, activePanelIds) {
       const active = new Set(activePanelIds);
       let anyRemoved = false;
-      for (const [key, entry] of entries) {
-        if (entry.activity.windowId !== windowId) {
+      for (const [key, slot] of [...slots.entries()]) {
+        const slotWindowId = slot.command?.windowId ?? slot.hook?.windowId;
+        if (slotWindowId !== windowId || active.has(key)) {
           continue;
         }
-        if (active.has(entry.activity.panelId)) {
-          continue;
-        }
-        if (closeEntry(key)) {
+        if (
+          closeSlot(key, { map: panelCooldownUntil, ms: CLOSE_COOLDOWN_MS })
+        ) {
           anyRemoved = true;
         }
       }
@@ -389,6 +445,7 @@ export function createForegroundActivityAggregator(
       }
       pruneExpiredCooldowns();
     },
+
     onChange(cb) {
       listeners.add(cb);
       return () => {
@@ -413,10 +470,10 @@ export function createForegroundActivityAggregator(
         clearTimeout(emitTimer);
         emitTimer = null;
       }
-      for (const entry of entries.values()) {
-        clearAllTimers(entry);
+      for (const slot of slots.values()) {
+        clearSlotTimers(slot);
       }
-      entries.clear();
+      slots.clear();
       listeners.clear();
     },
   };

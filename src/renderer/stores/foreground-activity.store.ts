@@ -33,14 +33,6 @@ export const useForegroundActivityStore = create<ForegroundActivityState>(
   })
 );
 
-/** 250ms 之前的 activity 视为可见（spec §4.3 spawnedAt visibility gating）。 */
-export function isVisibleActivity(
-  activity: ForegroundActivity,
-  now: number
-): boolean {
-  return now - activity.spawnedAt >= 250;
-}
-
 export interface ActivityCounts {
   running: number;
   waiting: number;

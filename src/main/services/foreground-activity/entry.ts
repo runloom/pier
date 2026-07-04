@@ -2,18 +2,24 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type {
   ActivityStatus,
-  AgentActivity,
   ForegroundActivity,
-  ShellActivity,
-  TaskActivity,
 } from "@shared/contracts/foreground-activity.ts";
 
 /**
- * ForegroundActivity 聚合器的模型层：常量、Entry 结构、newX 工厂、
- * timer 释放、turn 记账、TTL 武装。
+ * ForegroundActivity 聚合器的模型层：常量、双层 slot 结构、层工厂、
+ * timer 帮手、回合记账与投影纯函数。
  *
- * 纯数据/纯函数——聚合逻辑见 aggregator.ts。语义源自 loomdesk / 老
- * AgentSessionAggregator，逐字迁移以保 tests 回归覆盖。
+ * 双层模型（loomdesk pty_command ⊥ agent_hook 分层的 Pier 变体）：
+ * - command 层 — OSC 133 C/D、launcher、task lifecycle 驱动的「前台命令存在」。
+ *   agent-launch 只是先验（二进制在跑），**不携带会话 status**——
+ *   `omp update` 这类非会话子命令因此不会谎报「等待输入」。
+ * - hook 层   — 仅 JSONL hook 事件驱动的「agent 会话证据」，status 唯一来源。
+ *
+ * 两层互不覆写（taskLaunched 清 hook 层是唯一例外——用户显式操作优先）。
+ * OSC 与 hook 的到达顺序竞态因此自然消解（loomdesk 需要
+ * matchingAgentHookDetails 把 hook 明细拷进命令条目，双层下无需）；
+ * `fg` 等 shell 命令也不再摧毁挂起 agent 的会话证据。
+ * 对外仍投影为每 panel 至多一条 ForegroundActivity（renderer 契约不变）。
  */
 
 /** debounce 广播批量（EMIT_DEBOUNCE_MS）。 */
@@ -24,7 +30,11 @@ export const CLOSE_COOLDOWN_MS = 5000;
 export const SESSION_END_COOLDOWN_MS = 1500;
 /** hook 静默 30min → status 回落 ready（活动仍存在, 计数 0）。 */
 export const HOOK_FRESH_TTL_MS = 30 * 60 * 1000;
-/** SessionStart 创建的 agent activity 消抖隐藏时长（防瞬时闪条）。 */
+/**
+ * 新建层的消抖隐藏时长（防瞬时闪条）。hook 层用于 SessionStart；
+ * launch 层一律适用——`omp --version` 这类瞬时命令不闪（loomdesk
+ * starting 相位同款语义）。
+ */
 export const VISIBILITY_DEBOUNCE_MS = 250;
 /** task 结束后的呈现保留时长（用户看到 exit color 一段时间后自然消失）。 */
 export const TASK_EXIT_LINGER_MS = 5000;
@@ -37,7 +47,7 @@ export const TURN_RESET_EVENTS = new Set([
   "processing",
   "running",
 ]);
-/** 会话创建事件——只有正向信号才能建 hook-source 会话（幽灵门控）。 */
+/** 会话创建事件——只有正向信号才能建 hook 层（幽灵门控）。 */
 export const SESSION_CREATING_EVENTS = new Set([
   "SessionStart",
   "PromptSubmit",
@@ -51,180 +61,191 @@ export const SUSPENDED_JOB_EXIT_CODES: ReadonlySet<number> = new Set([
   145, 146, 147, 148,
 ]);
 
-export interface ActivityEntry {
-  activity: ForegroundActivity;
-  /** 消抖隐藏期为 true——不进 broadcast 条目。 */
+/** hook 层——agent 会话证据。字段只由 hook 事件（及 TTL 衰减）改写。 */
+export interface HookLayer {
+  agentId: AgentKind;
+  /** SessionStart 消抖隐藏期为 true——不参与投影。 */
   hidden: boolean;
-  hookTtlTimer: ReturnType<typeof setTimeout> | null;
-  taskLingerTimer: ReturnType<typeof setTimeout> | null;
+  spawnedAt: number;
+  stateStartedAt: number;
+  status: ActivityStatus;
+  subagentCount: number;
+  ttlTimer: NodeJS.Timeout | null;
   turnEnded: boolean;
-  visibilityTimer: ReturnType<typeof setTimeout> | null;
+  updatedAt: number;
+  visibilityTimer: NodeJS.Timeout | null;
+  windowId: string;
+}
+
+/** command 层：agent 先验——只证明二进制在跑, 无会话 status。 */
+export interface AgentLaunchLayer {
+  agentId: AgentKind;
+  /** 消抖隐藏期为 true——不参与投影。 */
+  hidden: boolean;
+  kind: "agent-launch";
+  spawnedAt: number;
+  updatedAt: number;
+  visibilityTimer: NodeJS.Timeout | null;
+  windowId: string;
+}
+
+/** command 层：普通 shell 命令。 */
+export interface ShellLayer {
+  commandLine: string;
+  kind: "shell";
+  spawnedAt: number;
+  updatedAt: number;
+  windowId: string;
+}
+
+/** command 层：pier task（用户显式触发）。 */
+export interface TaskLayer {
+  exitCode?: number;
+  kind: "task";
+  label: string;
+  lingerTimer: NodeJS.Timeout | null;
+  spawnedAt: number;
+  status: "cancelled" | "failure" | "running" | "success";
+  taskId: string;
+  updatedAt: number;
+  windowId: string;
+}
+
+export type CommandLayer = AgentLaunchLayer | ShellLayer | TaskLayer;
+
+/** 每 panel 一个 slot：两层独立生灭, 投影时合成一条 activity。 */
+export interface PanelSlot {
+  command: CommandLayer | null;
+  hook: HookLayer | null;
 }
 
 export interface TimerCtx {
-  entries: Map<string, ActivityEntry>;
   now: () => number;
   scheduleEmit: () => void;
+  slots: Map<string, PanelSlot>;
 }
 
-export function clearHookTtlTimer(entry: ActivityEntry): void {
-  if (entry.hookTtlTimer) {
-    clearTimeout(entry.hookTtlTimer);
-    entry.hookTtlTimer = null;
+export function clearHookTimers(hook: HookLayer): void {
+  if (hook.ttlTimer) {
+    clearTimeout(hook.ttlTimer);
+    hook.ttlTimer = null;
+  }
+  if (hook.visibilityTimer) {
+    clearTimeout(hook.visibilityTimer);
+    hook.visibilityTimer = null;
   }
 }
 
-export function clearVisibilityTimer(entry: ActivityEntry): void {
-  if (entry.visibilityTimer) {
-    clearTimeout(entry.visibilityTimer);
-    entry.visibilityTimer = null;
+export function clearCommandTimers(command: CommandLayer): void {
+  if (command.kind === "agent-launch" && command.visibilityTimer) {
+    clearTimeout(command.visibilityTimer);
+    command.visibilityTimer = null;
+  }
+  if (command.kind === "task" && command.lingerTimer) {
+    clearTimeout(command.lingerTimer);
+    command.lingerTimer = null;
   }
 }
 
-export function clearTaskLingerTimer(entry: ActivityEntry): void {
-  if (entry.taskLingerTimer) {
-    clearTimeout(entry.taskLingerTimer);
-    entry.taskLingerTimer = null;
+export function clearSlotTimers(slot: PanelSlot): void {
+  if (slot.hook) {
+    clearHookTimers(slot.hook);
   }
-}
-
-export function clearAllTimers(entry: ActivityEntry): void {
-  clearHookTtlTimer(entry);
-  clearVisibilityTimer(entry);
-  clearTaskLingerTimer(entry);
+  if (slot.command) {
+    clearCommandTimers(slot.command);
+  }
 }
 
 /** hook 静默 30min 后 processing/tool/waiting/error → ready 衰减。 */
-export function armHookTtlTimer(
-  key: string,
-  entry: ActivityEntry,
-  ctx: TimerCtx
-): void {
-  clearHookTtlTimer(entry);
-  entry.hookTtlTimer = setTimeout(() => {
-    const current = ctx.entries.get(key);
-    if (
-      current?.activity.kind !== "agent" ||
-      current.activity.source !== "hook"
-    ) {
+export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
+  const hook = ctx.slots.get(key)?.hook;
+  if (!hook) {
+    return;
+  }
+  if (hook.ttlTimer) {
+    clearTimeout(hook.ttlTimer);
+    hook.ttlTimer = null;
+  }
+  hook.ttlTimer = setTimeout(() => {
+    const current = ctx.slots.get(key)?.hook;
+    if (!current) {
       return;
     }
-    current.hookTtlTimer = null;
-    if (current.activity.status !== "ready") {
+    current.ttlTimer = null;
+    if (current.status !== "ready") {
       const at = ctx.now();
-      current.activity = {
-        ...current.activity,
-        status: "ready",
-        stateStartedAt: at,
-        updatedAt: at,
-      };
+      current.status = "ready";
+      current.stateStartedAt = at;
+      current.updatedAt = at;
       ctx.scheduleEmit();
     }
   }, HOOK_FRESH_TTL_MS);
 }
 
-export function newHookAgentEntry(
+export function newHookLayer(
   event: AgentHookEventPayload,
   at: number
-): ActivityEntry {
-  const activity: AgentActivity = {
-    kind: "agent",
+): HookLayer {
+  return {
     agentId: event.agent,
-    panelId: event.panelId,
-    windowId: event.windowId,
-    source: "hook",
-    status: "ready",
-    subagentCount: 0,
+    hidden: event.event === "SessionStart",
     spawnedAt: at,
     stateStartedAt: at,
-    updatedAt: at,
-  };
-  return {
-    hidden: event.event === "SessionStart",
-    hookTtlTimer: null,
-    visibilityTimer: null,
-    taskLingerTimer: null,
+    status: "ready",
+    subagentCount: 0,
+    ttlTimer: null,
     turnEnded: false,
-    activity,
+    updatedAt: at,
+    visibilityTimer: null,
+    windowId: event.windowId,
   };
 }
 
-export function newLaunchAgentEntry(
+export function newAgentLaunchLayer(
   windowId: string,
-  panelId: string,
   agentId: AgentKind,
   at: number
-): ActivityEntry {
-  const activity: AgentActivity = {
-    kind: "agent",
-    agentId,
-    panelId,
-    windowId,
-    source: "launch",
-    status: "ready",
-    subagentCount: 0,
-    spawnedAt: at,
-    stateStartedAt: at,
-    updatedAt: at,
-  };
+): AgentLaunchLayer {
   return {
-    hidden: false,
-    hookTtlTimer: null,
+    agentId,
+    hidden: true,
+    kind: "agent-launch",
+    spawnedAt: at,
+    updatedAt: at,
     visibilityTimer: null,
-    taskLingerTimer: null,
-    turnEnded: false,
-    activity,
+    windowId,
   };
 }
 
-export function newTaskEntry(
+export function newShellLayer(
   windowId: string,
-  panelId: string,
+  commandLine: string,
+  at: number
+): ShellLayer {
+  return {
+    commandLine: commandLine.slice(0, 4096),
+    kind: "shell",
+    spawnedAt: at,
+    updatedAt: at,
+    windowId,
+  };
+}
+
+export function newTaskLayer(
+  windowId: string,
   taskId: string,
   label: string,
   at: number
-): ActivityEntry {
-  const activity: TaskActivity = {
+): TaskLayer {
+  return {
     kind: "task",
-    taskId,
     label,
-    panelId,
-    windowId,
+    lingerTimer: null,
+    spawnedAt: at,
     status: "running",
-    spawnedAt: at,
+    taskId,
     updatedAt: at,
-  };
-  return {
-    hidden: false,
-    hookTtlTimer: null,
-    visibilityTimer: null,
-    taskLingerTimer: null,
-    turnEnded: false,
-    activity,
-  };
-}
-
-export function newShellEntry(
-  windowId: string,
-  panelId: string,
-  commandLine: string,
-  at: number
-): ActivityEntry {
-  const activity: ShellActivity = {
-    kind: "shell",
-    panelId,
     windowId,
-    commandLine: commandLine.slice(0, 4096),
-    spawnedAt: at,
-    updatedAt: at,
-  };
-  return {
-    hidden: false,
-    hookTtlTimer: null,
-    visibilityTimer: null,
-    taskLingerTimer: null,
-    turnEnded: false,
-    activity,
   };
 }
 
@@ -233,55 +254,100 @@ export function newShellEntry(
  * PermissionRequest 豁免吸收——权限弹窗是回合复活的证据。
  */
 export function applyTurnBookkeeping(
-  entry: ActivityEntry,
+  hook: HookLayer,
   eventName: string
 ): boolean {
-  if (entry.activity.kind !== "agent") {
-    return true;
-  }
   if (TURN_BOUNDARY_EVENTS.has(eventName)) {
-    entry.turnEnded = true;
-    entry.activity = { ...entry.activity, subagentCount: 0 };
+    hook.turnEnded = true;
+    hook.subagentCount = 0;
   } else if (TURN_RESET_EVENTS.has(eventName)) {
-    entry.turnEnded = false;
-    entry.activity = { ...entry.activity, subagentCount: 0 };
+    hook.turnEnded = false;
+    hook.subagentCount = 0;
   } else if (eventName === "PermissionRequest") {
-    entry.turnEnded = false;
-  } else if (entry.turnEnded) {
+    hook.turnEnded = false;
+  } else if (hook.turnEnded) {
     return false;
   }
   if (eventName === "SubagentStart") {
-    entry.activity = {
-      ...entry.activity,
-      subagentCount: entry.activity.subagentCount + 1,
-    };
+    hook.subagentCount += 1;
   } else if (eventName === "SubagentStop") {
-    entry.activity = {
-      ...entry.activity,
-      subagentCount: Math.max(0, entry.activity.subagentCount - 1),
-    };
+    hook.subagentCount = Math.max(0, hook.subagentCount - 1);
   }
   return true;
 }
 
-/** activity 上设置 agent status（同 status 内保 stateStartedAt 稳定）。 */
-export function setAgentStatus(
-  entry: ActivityEntry,
+/** hook 层设置 status（同 status 内保 stateStartedAt 稳定）。 */
+export function setHookStatus(
+  hook: HookLayer,
   status: ActivityStatus,
   at: number
 ): void {
-  if (entry.activity.kind !== "agent") {
-    return;
+  if (hook.status !== status) {
+    hook.status = status;
+    hook.stateStartedAt = at;
   }
-  const prev = entry.activity;
-  if (prev.status === status) {
-    entry.activity = { ...prev, updatedAt: at };
-  } else {
-    entry.activity = {
-      ...prev,
-      status,
-      stateStartedAt: at,
-      updatedAt: at,
+  hook.updatedAt = at;
+}
+
+/**
+ * slot → 对外 activity 投影（纯函数）。
+ * 优先级：task > hook(可见) > agent-launch(可见) > shell。
+ * hook 证据优先于 launch 先验——`fg` 覆盖 command 层后 agent 会话照常呈现;
+ * launch 先验投影**不带 status**, renderer 只出品牌图标。
+ */
+export function projectSlot(
+  panelId: string,
+  slot: PanelSlot
+): ForegroundActivity | null {
+  const { command, hook } = slot;
+  if (command?.kind === "task") {
+    return {
+      kind: "task",
+      label: command.label,
+      panelId,
+      spawnedAt: command.spawnedAt,
+      status: command.status,
+      taskId: command.taskId,
+      updatedAt: command.updatedAt,
+      windowId: command.windowId,
+      ...(command.exitCode === undefined ? {} : { exitCode: command.exitCode }),
     };
   }
+  if (hook && !hook.hidden) {
+    return {
+      agentId: hook.agentId,
+      kind: "agent",
+      panelId,
+      source: "hook",
+      spawnedAt: hook.spawnedAt,
+      stateStartedAt: hook.stateStartedAt,
+      status: hook.status,
+      subagentCount: hook.subagentCount,
+      updatedAt: hook.updatedAt,
+      windowId: hook.windowId,
+    };
+  }
+  if (command?.kind === "agent-launch" && !command.hidden) {
+    return {
+      agentId: command.agentId,
+      kind: "agent",
+      panelId,
+      source: "launch",
+      spawnedAt: command.spawnedAt,
+      subagentCount: 0,
+      updatedAt: command.updatedAt,
+      windowId: command.windowId,
+    };
+  }
+  if (command?.kind === "shell") {
+    return {
+      commandLine: command.commandLine,
+      kind: "shell",
+      panelId,
+      spawnedAt: command.spawnedAt,
+      updatedAt: command.updatedAt,
+      windowId: command.windowId,
+    };
+  }
+  return null;
 }

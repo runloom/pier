@@ -129,12 +129,15 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
   async function processChanges(): Promise<void> {
     try {
       const st = await stat(filePath).catch(() => null);
-      if (!st || st.size <= offset) {
-        // 文件缩小（外部截断）——重置 offset
-        if (st && st.size < offset) {
-          offset = st.size;
-          await persistOffset(offsetPath, offset);
-        }
+      if (!st) {
+        return;
+      }
+      if (st.size < offset) {
+        // 文件被外部截断/重建——从头读当前内容（loomdesk watcher 同语义:
+        // 只重置不读会把重建后已写入的合法事件永久跳过）。
+        offset = 0;
+      }
+      if (st.size === offset) {
         return;
       }
       if (st.size > ROTATE_SIZE) {
@@ -143,13 +146,19 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
       }
 
       const chunk = await readNewBytes(st.size);
-      offset = st.size;
-      await persistOffset(offsetPath, offset);
-
-      if (!chunk.length) {
+      // 只消费到最后一个完整行边界（字节层面找 0x0A——JSONL 写端不保证
+      // 原子换行边界, 半行必须留在文件里等补齐; 按字节切割也天然规避
+      // UTF-8 多字节字符跨 chunk 被 toString 拆坏的问题）。offset 只推进
+      // 过完整行, 崩溃恢复永不丢已落盘的完整事件。
+      const lastNewline = chunk.lastIndexOf(0x0a);
+      if (lastNewline === -1) {
         return;
       }
-      for (const line of chunk.toString("utf8").split("\n")) {
+      const consumed = chunk.subarray(0, lastNewline + 1);
+      offset += consumed.length;
+      await persistOffset(offsetPath, offset);
+
+      for (const line of consumed.toString("utf8").split("\n")) {
         processLine(line);
       }
     } catch (err) {

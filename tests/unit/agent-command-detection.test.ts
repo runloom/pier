@@ -46,6 +46,9 @@ describe("matchAgentCommand (只匹配可执行体, 不扫参数)", () => {
     ["codex", "codex"],
     ["codex --model gpt-5.5", "codex"],
     ["claude --dangerously-skip-permissions", "claude"],
+    ["claude update", "claude"], // 子命令词不参与身份判定（omp update bug 回归 pin）
+    ["omp update", "omp"],
+    ["omp update --check", "omp"],
     ["OPENAI_API_KEY=x codex", "codex"],
     ["env FOO=bar claude --help", "claude"],
     ["sudo -u me claude", "claude"],
@@ -72,6 +75,8 @@ describe("matchAgentCommand (只匹配可执行体, 不扫参数)", () => {
     "pip install x", // "pi" 词元不得命中 "pip"
     "claudette",
     "my-codex-tool",
+    "compare", // "omp" 词元不得命中子串
+    "romp update", // 词边界：前缀不误伤
     "",
   ])("非 agent 命令 → null: %s", (commandLine) => {
     expect(matchAgentCommand(commandLine)).toBeNull();

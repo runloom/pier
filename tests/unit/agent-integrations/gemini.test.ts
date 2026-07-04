@@ -10,13 +10,13 @@ import {
 } from "../../../src/main/services/agents/integrations/gemini.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
-const PERMISSION_REQUEST_RE = /PermissionRequest/i;
 
 const GEMINI_EVENTS = [
   "SessionStart",
   "SessionEnd",
   "BeforeAgent",
   "AfterAgent",
+  "Notification",
   "BeforeTool",
   "AfterTool",
 ];
@@ -49,7 +49,7 @@ function allHookEntries(
 }
 
 describe("withPierGeminiHooks", () => {
-  it("为 6 个 Gemini hook 事件各注入一条 pier 命令", () => {
+  it("为 7 个 Gemini hook 事件各注入一条 pier 命令", () => {
     const next = withPierGeminiHooks({});
     const hooks = next.hooks as Record<string, unknown[]>;
     for (const evt of GEMINI_EVENTS) {
@@ -76,15 +76,18 @@ describe("withPierGeminiHooks", () => {
     }
   });
 
-  it("不存在 PermissionRequest 类原生事件键；hooks 下只有 6 个指定事件键", () => {
+  it("Notification 映射 PermissionRequest（ToolPermission 提示）；hooks 键集 = 7 个指定事件全集", () => {
     const next = withPierGeminiHooks({});
-    const hooks = next.hooks as Record<string, unknown[]>;
+    const hooks = hookMatchers(next);
     const keys = Object.keys(hooks);
     expect(keys).toHaveLength(GEMINI_EVENTS.length);
-    for (const key of keys) {
-      expect(key).not.toMatch(PERMISSION_REQUEST_RE);
-    }
     expect(keys.sort()).toEqual([...GEMINI_EVENTS].sort());
+    const notification = hooks.Notification ?? [];
+    expect(notification).toHaveLength(1);
+    expect(notification[0]?.matcher).toBeUndefined();
+    const cmds = notification.flatMap((m) => m.hooks.map((h) => h.command));
+    expect(cmds).toHaveLength(1);
+    expect(cmds[0]).toContain('"PermissionRequest"');
   });
 
   it("幂等：重复安装不产生重复条目", () => {

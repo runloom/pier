@@ -155,4 +155,118 @@ describe("jsonl-observer", () => {
 
     observer.dispose();
   }, 20_000);
+
+  it("半行不丢：无换行尾部半行不派发不报错, 补齐后完整派发", async () => {
+    writeFileSync(jsonlPath, "");
+
+    const received: AgentHookEventPayload[] = [];
+    const errors: unknown[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent(event) {
+        received.push(event);
+      },
+      onCommandFinished() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onCommandStart() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onError(err) {
+        errors.push(err);
+      },
+    });
+
+    // 完整行 A + 无换行的半行 B（写端不保证原子换行边界）
+    const lineB = eventLine(1);
+    const half = lineB.slice(0, Math.floor(lineB.length / 2));
+    appendFileSync(jsonlPath, `${eventLine(0)}\n${half}`);
+    await observer.pollNow();
+
+    // 只收到 A；半行 B 既不派发也不触发 onError（offset 停在 A 行尾）
+    expect(received.map((e) => e.event)).toEqual(["evt-0"]);
+    expect(errors).toHaveLength(0);
+
+    // 写端补齐 B 尾部 + 换行 → 下轮完整派发, 不拆坏不丢事件
+    appendFileSync(jsonlPath, `${lineB.slice(half.length)}\n`);
+    await observer.pollNow();
+
+    expect(received.map((e) => e.event)).toEqual(["evt-0", "evt-1"]);
+    expect(errors).toHaveLength(0);
+
+    observer.dispose();
+  }, 20_000);
+
+  it("截断重建不丢：size < offset 时 offset 归 0 并继续读当前内容", async () => {
+    writeFileSync(jsonlPath, "");
+
+    const received: AgentHookEventPayload[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent(event) {
+        received.push(event);
+      },
+      onCommandFinished() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onCommandStart() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+    });
+
+    // 写入长行 A（用 sessionId 撑大字节数——schema 严格且 event 上限 64 字符）
+    // → offset 推进到 A 行尾
+    const longLine = JSON.stringify({
+      v: 1,
+      kind: "agentEvent",
+      agent: "claude",
+      event: "evt-long",
+      panelId: "panel-1",
+      windowId: "w-1",
+      sessionId: "s".repeat(120),
+    });
+    appendFileSync(jsonlPath, `${longLine}\n`);
+    await observer.pollNow();
+    expect(received.map((e) => e.event)).toEqual(["evt-long"]);
+
+    // 文件被截断重建为更短的新合法行 C（size < offset）
+    writeFileSync(jsonlPath, `${eventLine(7)}\n`);
+    await observer.pollNow();
+
+    // 重建后的合法事件不得丢（只重置 offset 不读会永久跳过 C）
+    expect(received.map((e) => e.event)).toEqual(["evt-long", "evt-7"]);
+
+    observer.dispose();
+  }, 20_000);
+
+  it("坏行容错：坏 JSON 行触发 onError 但不阻断同批合法行", async () => {
+    writeFileSync(jsonlPath, "");
+
+    const received: AgentHookEventPayload[] = [];
+    const errors: unknown[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent(event) {
+        received.push(event);
+      },
+      onCommandFinished() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onCommandStart() {
+        // 未消费——本 case 只测 agentEvent 路径。
+      },
+      onError(err) {
+        errors.push(err);
+      },
+    });
+
+    // 坏 JSON 行夹在两条合法行之间, 同批到达
+    appendFileSync(jsonlPath, `${eventLine(0)}\n{not-json\n${eventLine(1)}\n`);
+    await observer.pollNow();
+
+    expect(received.map((e) => e.event)).toEqual(["evt-0", "evt-1"]);
+    expect(errors).toHaveLength(1);
+
+    observer.dispose();
+  }, 20_000);
 });

@@ -9,26 +9,33 @@ import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-a
 /**
  * Aggregator 公共 API。native callback、hook observer、task launcher 与 IPC
  * 快照全部经此接口——单入口, 状态归一。
+ *
+ * 内部为双层模型（见 ./entry.ts）：command 层（OSC/launcher/task）与
+ * hook 层（JSONL 事件）独立生灭, 每 panel 投影至多一条 activity。
  */
 export interface ForegroundActivityAggregator {
   /**
-   * launcher 客户端 / native OSC 133 C 命令行匹配的先验点亮：无需 agent
-   * 侧信号即刻建可见 ready 的 agent activity。豁免关闭冷却; 后续 hook
-   * 无缝接管。
+   * launcher 客户端 / native OSC 133 C 命令行匹配的先验点亮：只建
+   * command 层 agent-launch（250ms 消抖后可见, **无 status**——先验只证明
+   * 二进制在跑, 会话状态唯 hook 证据可写）。豁免关闭冷却; hook 层独立
+   * 接管 status。
    */
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
   dispose(): void;
 
   /** Path B 三 kind: agentEvent（真身，聚合器消费驱动 agent activity）。 */
   ingestAgentEvent(event: AgentHookEventPayload): void;
-  /** 前台命令退出：panel 内活动清理 + 5s 冷却。Ctrl+Z 悬挂（145-148）保留活动。 */
+  /**
+   * 前台命令退出：双层同清 + 5s 冷却（覆盖崩溃/kill 等无 SessionEnd hook
+   * 的路径）。Ctrl+Z 悬挂（145-148）双层保留。
+   */
   ingestCommandFinished(panelId: string, exitCode?: number): void;
   /** Path B 三 kind 占位入口——本 aggregator 不消费, 保 union 完整。 */
   ingestCommandFinishedHook(event: CommandFinishedHookEvent): void;
   /**
    * ghostty shell integration command_started：native 已 embed cmdline，
-   * 我们本地做 matchAgentCommand 词元识别; 非空 agent 走 launch 路径，
-   * null 覆盖为 shell activity。
+   * 我们本地做 matchAgentCommand 词元识别; 非空 agent 走 agentLaunched，
+   * null 只覆盖 command 层为 shell（hook 层不动——`fg` 不摧毁挂起会话）。
    */
   ingestCommandStarted(
     panelId: string,
@@ -56,7 +63,7 @@ export interface ForegroundActivityAggregator {
     }
   ): void;
 
-  /** Task 拉起：用户显式操作优先于 agent, 覆盖 per-panel activity。 */
+  /** Task 拉起：用户显式操作优先, 双层全清后建 task 层。 */
   taskLaunched(
     panelId: string,
     windowId: string,

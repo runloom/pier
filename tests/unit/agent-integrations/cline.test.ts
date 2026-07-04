@@ -75,7 +75,7 @@ describe("buildClineHookScript", () => {
 });
 
 describe("install/uninstallClineHooks (文件 IO)", () => {
-  it("6 个事件各写一个可执行文件, 文件名精确匹配事件名", async () => {
+  it("8 个事件各写一个可执行文件, 文件名精确匹配事件名", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-cline-hooks-"));
     const { installClineHooks, CLINE_EVENT_FILE_NAMES } =
       await loadIntegration();
@@ -87,6 +87,8 @@ describe("install/uninstallClineHooks (文件 IO)", () => {
       "PreToolUse",
       "PostToolUse",
       "TaskCancel",
+      "TaskComplete",
+      "PreCompact",
     ]);
     for (const name of CLINE_EVENT_FILE_NAMES) {
       const path = join(dir, name);
@@ -107,6 +109,8 @@ describe("install/uninstallClineHooks (文件 IO)", () => {
       ["PreToolUse", "ToolStart"],
       ["PostToolUse", "ToolComplete"],
       ["TaskCancel", "Stop"],
+      ["TaskComplete", "Stop"],
+      ["PreCompact", "processing"],
     ];
     for (const [file, pierEvent] of expectations) {
       const content = await readFile(join(dir, file), "utf8");
