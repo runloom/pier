@@ -1,6 +1,10 @@
+import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import { describe, expect, it } from "vitest";
 import { resolveLong } from "@/components/common/document-title.tsx";
-import { basename } from "@/panel-kits/terminal/terminal-tab-chrome.ts";
+import {
+  activityTabChromeOverlay,
+  basename,
+} from "@/panel-kits/terminal/terminal-tab-chrome.ts";
 
 describe("basename", () => {
   it('handles "/" root', () => {
@@ -45,5 +49,36 @@ describe("resolveLong", () => {
         },
       })
     ).toBe("Claude Code");
+  });
+});
+
+describe("activityTabChromeOverlay", () => {
+  const agentActivity = {
+    agentId: "claude",
+    kind: "agent",
+    panelId: "terminal-1",
+    source: "hook",
+    spawnedAt: 1,
+    stateStartedAt: 1,
+    status: "processing",
+    subagentCount: 0,
+    updatedAt: 2,
+    windowId: "1",
+  } satisfies ForegroundActivity;
+
+  it("uses the terminal title for agent tabs when present", () => {
+    expect(
+      activityTabChromeOverlay(agentActivity, "Fix parser crash")
+    ).toMatchObject({
+      icon: { id: "agent:claude" },
+      state: { status: "running" },
+      title: "Fix parser crash",
+    });
+  });
+
+  it("falls back to the agent label when the terminal title is empty", () => {
+    expect(activityTabChromeOverlay(agentActivity, "  ")).toMatchObject({
+      title: "Claude",
+    });
   });
 });
