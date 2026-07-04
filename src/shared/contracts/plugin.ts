@@ -41,6 +41,7 @@ export const pluginLocalizedSettingSchema = z.object({
   description: z.string().min(1).optional(),
   enumDescriptions: z.array(z.string().min(1)).optional(),
   label: z.string().min(1).optional(),
+  placeholder: z.string().min(1).optional(),
 });
 export type PluginLocalizedSetting = z.infer<
   typeof pluginLocalizedSettingSchema
@@ -118,114 +119,122 @@ export type PluginTerminalStatusItemContribution = z.infer<
   typeof pluginTerminalStatusItemContributionSchema
 >;
 
-export const pluginConfigurationPropertySchema = z
-  .object({
-    default: z.union([z.string(), z.number(), z.boolean()]),
-    description: z.string().min(1).optional(),
-    enum: z.array(z.string().min(1)).min(1).optional(),
-    enumDescriptions: z.array(z.string().min(1)).optional(),
-    maximum: z.number().optional(),
-    minimum: z.number().optional(),
-    multiline: z.boolean().optional(),
-    order: z.number().optional(),
-    type: z.enum(["string", "number", "boolean"]),
-  })
-  .superRefine((property, ctx) => {
-    if (typeof property.default !== property.type) {
-      ctx.addIssue({
-        code: "custom",
-        message: `default must match type "${property.type}"`,
-        path: ["default"],
-      });
-    }
-    if (property.enum && property.type !== "string") {
-      ctx.addIssue({
-        code: "custom",
-        message: 'enum is only allowed with type "string"',
-        path: ["enum"],
-      });
-    }
-    if (property.multiline && property.type !== "string") {
-      ctx.addIssue({
-        code: "custom",
-        message: 'multiline is only allowed with type "string"',
-        path: ["multiline"],
-      });
-    }
-    if (
-      property.enum &&
-      typeof property.default === "string" &&
-      !property.enum.includes(property.default)
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "default must be a member of enum",
-        path: ["default"],
-      });
-    }
-    if (property.enumDescriptions && !property.enum) {
-      ctx.addIssue({
-        code: "custom",
-        message: "enumDescriptions requires enum",
-        path: ["enumDescriptions"],
-      });
-    }
-    if (
-      property.enumDescriptions &&
-      property.enum &&
-      property.enumDescriptions.length !== property.enum.length
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "enumDescriptions must have the same length as enum",
-        path: ["enumDescriptions"],
-      });
-    }
-    if (
-      (property.minimum !== undefined || property.maximum !== undefined) &&
-      property.type !== "number"
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: 'minimum/maximum are only allowed with type "number"',
-        path: ["minimum"],
-      });
-    }
-    if (
-      property.minimum !== undefined &&
-      property.maximum !== undefined &&
-      property.minimum > property.maximum
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "minimum must not be greater than maximum",
-        path: ["minimum"],
-      });
-    }
-    if (
-      property.type === "number" &&
-      typeof property.default === "number" &&
-      property.minimum !== undefined &&
-      property.default < property.minimum
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "default must be greater than or equal to minimum",
-        path: ["default"],
-      });
-    }
-    if (
-      property.type === "number" &&
-      typeof property.default === "number" &&
-      property.maximum !== undefined &&
-      property.default > property.maximum
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "default must be less than or equal to maximum",
-        path: ["default"],
-      });
-    }
+const pluginConfigurationPropertyBaseSchema = z.object({
+  default: z.union([z.string(), z.number(), z.boolean()]),
+  description: z.string().min(1).optional(),
+  enum: z.array(z.string().min(1)).min(1).optional(),
+  enumDescriptions: z.array(z.string().min(1)).optional(),
+  maximum: z.number().optional(),
+  minimum: z.number().optional(),
+  multiline: z.boolean().optional(),
+  order: z.number().optional(),
+  placeholder: z.string().min(1).optional(),
+  resettable: z.boolean().optional(),
+  type: z.enum(["string", "number", "boolean"]),
+});
+
+type PluginConfigurationPropertyCandidate = z.infer<
+  typeof pluginConfigurationPropertyBaseSchema
+>;
+type PluginConfigurationPropertyIssuePath =
+  | "default"
+  | "enum"
+  | "enumDescriptions"
+  | "minimum"
+  | "multiline"
+  | "placeholder";
+type AddConfigurationPropertyIssue = (
+  path: PluginConfigurationPropertyIssuePath,
+  message: string
+) => void;
+
+function validateConfigurationPropertyTypes(
+  property: PluginConfigurationPropertyCandidate,
+  addIssue: AddConfigurationPropertyIssue
+): void {
+  if (typeof property.default !== property.type) {
+    addIssue("default", `default must match type "${property.type}"`);
+  }
+  if (property.enum && property.type !== "string") {
+    addIssue("enum", 'enum is only allowed with type "string"');
+  }
+  if (property.multiline && property.type !== "string") {
+    addIssue("multiline", 'multiline is only allowed with type "string"');
+  }
+  if (property.placeholder && property.type !== "string") {
+    addIssue("placeholder", 'placeholder is only allowed with type "string"');
+  }
+  if (
+    (property.minimum !== undefined || property.maximum !== undefined) &&
+    property.type !== "number"
+  ) {
+    addIssue("minimum", 'minimum/maximum are only allowed with type "number"');
+  }
+}
+
+function validateConfigurationPropertyEnum(
+  property: PluginConfigurationPropertyCandidate,
+  addIssue: AddConfigurationPropertyIssue
+): void {
+  if (
+    property.enum &&
+    typeof property.default === "string" &&
+    !property.enum.includes(property.default)
+  ) {
+    addIssue("default", "default must be a member of enum");
+  }
+  if (property.enumDescriptions && !property.enum) {
+    addIssue("enumDescriptions", "enumDescriptions requires enum");
+  }
+  if (
+    property.enumDescriptions &&
+    property.enum &&
+    property.enumDescriptions.length !== property.enum.length
+  ) {
+    addIssue(
+      "enumDescriptions",
+      "enumDescriptions must have the same length as enum"
+    );
+  }
+}
+
+function validateConfigurationPropertyRange(
+  property: PluginConfigurationPropertyCandidate,
+  addIssue: AddConfigurationPropertyIssue
+): void {
+  if (
+    property.minimum !== undefined &&
+    property.maximum !== undefined &&
+    property.minimum > property.maximum
+  ) {
+    addIssue("minimum", "minimum must not be greater than maximum");
+  }
+  if (
+    property.type === "number" &&
+    typeof property.default === "number" &&
+    property.minimum !== undefined &&
+    property.default < property.minimum
+  ) {
+    addIssue("default", "default must be greater than or equal to minimum");
+  }
+  if (
+    property.type === "number" &&
+    typeof property.default === "number" &&
+    property.maximum !== undefined &&
+    property.default > property.maximum
+  ) {
+    addIssue("default", "default must be less than or equal to maximum");
+  }
+}
+
+export const pluginConfigurationPropertySchema =
+  pluginConfigurationPropertyBaseSchema.superRefine((property, ctx) => {
+    const addIssue: AddConfigurationPropertyIssue = (path, message) => {
+      ctx.addIssue({ code: "custom", message, path: [path] });
+    };
+    validateConfigurationPropertyTypes(property, addIssue);
+    validateConfigurationPropertyEnum(property, addIssue);
+    validateConfigurationPropertyRange(property, addIssue);
   });
 export type PluginConfigurationProperty = z.infer<
   typeof pluginConfigurationPropertySchema

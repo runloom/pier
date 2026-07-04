@@ -116,6 +116,8 @@ function multilineEntry(id: string): PluginRegistryEntry {
             default: "",
             description: "Prompt template",
             multiline: true,
+            placeholder: "Prompt placeholder",
+            resettable: false,
             type: "string",
           },
         },
@@ -447,6 +449,10 @@ describe("PluginConfigurationSection", () => {
     render(<PluginConfigurationSection pluginId="pier.demo" />);
 
     const textarea = screen.getByRole("textbox", { name: "prompt" });
+    expect(textarea).toHaveAttribute("placeholder", "Prompt placeholder");
+    expect(
+      screen.queryByRole("button", { name: "Reset to default" })
+    ).not.toBeInTheDocument();
     fireEvent.change(textarea, {
       target: { value: "Use feature/* for {{task}}" },
     });

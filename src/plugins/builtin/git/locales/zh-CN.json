@@ -246,7 +246,8 @@
     },
     "pier.git.worktree.branchNamePrompt": {
       "label": "工作树分支提示词",
-      "description": "AI 生成分支名使用的模板。留空使用内置 fallback。支持 {{task}} 和 {{projectRootPath}}。"
+      "description": "可选，留空使用默认模板。{{task}} 会替换为任务描述；{{projectRootPath}} 会替换为项目根路径。",
+      "placeholder": "根据 {{task}} 生成短分支名，遵循 {{projectRootPath}} 中的项目规范。只输出分支名。"
     }
   },
   "terminalStatusItems": {

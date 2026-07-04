@@ -98,9 +98,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       [GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY]: {
         default: "",
         description:
-          "Template used by AI worktree creation to generate branch names. Leave empty to use Pier's built-in fallback. Supports {{task}} and {{projectRootPath}}.",
+          "Optional. Leave blank for the default template. {{task}} becomes the task description; {{projectRootPath}} becomes the project root path.",
         multiline: true,
         order: 20,
+        placeholder:
+          "Generate a short branch name for {{task}}. Follow rules in {{projectRootPath}}. Output only the branch name.",
+        resettable: false,
         type: "string",
       },
     },

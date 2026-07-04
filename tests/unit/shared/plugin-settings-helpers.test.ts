@@ -91,11 +91,12 @@ describe("validateConfigurationValue", () => {
 });
 
 describe("pluginConfigurationPropertySchema", () => {
-  it("允许 string multiline,拒绝非 string multiline", () => {
+  it("允许 string multiline/placeholder,拒绝非 string multiline/placeholder", () => {
     expect(
       pluginConfigurationPropertySchema.parse({
         default: "",
         multiline: true,
+        placeholder: "Prompt",
         type: "string",
       }).multiline
     ).toBe(true);
@@ -103,6 +104,13 @@ describe("pluginConfigurationPropertySchema", () => {
       pluginConfigurationPropertySchema.parse({
         default: true,
         multiline: true,
+        type: "boolean",
+      })
+    ).toThrow();
+    expect(() =>
+      pluginConfigurationPropertySchema.parse({
+        default: true,
+        placeholder: "Prompt",
         type: "boolean",
       })
     ).toThrow();
