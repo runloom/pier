@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -12,6 +13,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
 const tempDirs: string[] = [];
+
+function fallbackSocketPathForUserData(userDataDir: string): string {
+  const suffix = createHash("sha256")
+    .update(userDataDir)
+    .digest("hex")
+    .slice(0, 16);
+  return join(tmpdir(), `pier-control-${suffix}.sock`);
+}
 
 async function makeTempDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "pier-cli-bin-"));
@@ -384,6 +393,41 @@ describe("bin/pier.mjs", () => {
 
     expect(stdout).toBe("");
     await server.close();
+  });
+
+  it("PIER_USER_DATA_DIR 过长时连接到稳定短 socket 路径", async () => {
+    const userDataDir = `/Users/sheep/Library/Application Support/Pier-dev/${"very-long-worktree-name-".repeat(4)}`;
+    const socketPath = fallbackSocketPathForUserData(userDataDir);
+    const server = createPierLocalControlServer({
+      handleRequest: (envelope) => {
+        const parsed = pierCommandEnvelopeSchema.parse(envelope);
+        return Promise.resolve({
+          data: { status: "ok" },
+          ok: true,
+          requestId: parsed.requestId,
+        });
+      },
+      socketPath,
+    });
+    await server.start();
+
+    try {
+      const { stdout } = await execFileAsync(
+        "node",
+        ["bin/pier.mjs", "status", "--json"],
+        {
+          env: { ...process.env, PIER_USER_DATA_DIR: userDataDir },
+        }
+      );
+
+      expect(JSON.parse(stdout)).toMatchObject({
+        data: { status: "ok" },
+        ok: true,
+      });
+    } finally {
+      await server.close();
+      await rm(socketPath, { force: true });
+    }
   });
 
   it("真实 socket 请求携带 CLI 环境但 print-envelope 不输出", async () => {

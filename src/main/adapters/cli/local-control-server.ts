@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { PierCommandResult } from "@shared/contracts/commands.ts";
 
@@ -15,9 +16,14 @@ export interface CreatePierLocalControlServerArgs {
 }
 
 const SOCKET_FILENAME = "pier-control.sock";
+const UNIX_SOCKET_PATH_MAX_BYTES = 103;
 
 function stablePipeSuffix(input: string): string {
   return createHash("sha256").update(input).digest("hex").slice(0, 16);
+}
+
+function shortUnixSocketPath(userDataDir: string): string {
+  return join(tmpdir(), `pier-control-${stablePipeSuffix(userDataDir)}.sock`);
 }
 
 export function resolveLocalControlSocketPath(
@@ -27,7 +33,11 @@ export function resolveLocalControlSocketPath(
   if (platform === "win32") {
     return `\\\\.\\pipe\\pier-control-${stablePipeSuffix(userDataDir)}`;
   }
-  return join(userDataDir, SOCKET_FILENAME);
+  const socketPath = join(userDataDir, SOCKET_FILENAME);
+  if (Buffer.byteLength(socketPath) <= UNIX_SOCKET_PATH_MAX_BYTES) {
+    return socketPath;
+  }
+  return shortUnixSocketPath(userDataDir);
 }
 
 function failure(

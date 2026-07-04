@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,6 +30,14 @@ import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 const tempDirs: string[] = [];
 const WINDOWS_NAMED_PIPE_PATTERN = /^\\\\\.\\pipe\\pier-control-[a-f0-9]{16}$/;
 const execFileAsync = promisify(execFile);
+
+function expectedFallbackSocketPath(userDataDir: string): string {
+  const suffix = createHash("sha256")
+    .update(userDataDir)
+    .digest("hex")
+    .slice(0, 16);
+  return join(tmpdir(), `pier-control-${suffix}.sock`);
+}
 
 async function sendRawRequest(
   socketPath: string,
@@ -228,6 +237,14 @@ describe("resolveLocalControlSocketPath", () => {
   it("在 Unix 平台把 socket 放在 userData 下", () => {
     expect(resolveLocalControlSocketPath("/tmp/pier-user-data", "darwin")).toBe(
       "/tmp/pier-user-data/pier-control.sock"
+    );
+  });
+
+  it("在 Unix socket 路径过长时回退到稳定短路径", () => {
+    const userDataDir = `/Users/sheep/Library/Application Support/Pier-dev/${"very-long-worktree-name-".repeat(4)}`;
+
+    expect(resolveLocalControlSocketPath(userDataDir, "darwin")).toBe(
+      expectedFallbackSocketPath(userDataDir)
     );
   });
 
