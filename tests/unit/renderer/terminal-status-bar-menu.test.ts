@@ -117,8 +117,8 @@ describe("declaredRows", () => {
     const fooRows = rows.filter((row) => row.itemId === "core.foo");
     expect(fooRows).toHaveLength(1);
     // core 走 i18next.t,plugin 走 resolvePluginTerminalStatusItemDisplay;
-    // core 优先意味着不会看到 "Plugin Steal"
-    expect(fooRows[0]?.title).not.toBe("Plugin Steal");
+    // core 优先意味着 title 精确等于 titleKey 翻译结果,而非 "Plugin Steal"
+    expect(fooRows[0]?.title).toBe("Agent status");
   });
 
   it("过滤 disabled 插件贡献的项", () => {

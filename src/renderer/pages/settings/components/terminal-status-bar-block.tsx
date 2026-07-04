@@ -300,22 +300,14 @@ export function TerminalStatusBarBlock() {
         <CardDescription>{t("settings.statusBar.description")}</CardDescription>
       </CardHeader>
       <CardContent>
-        {left.length + right.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {t("settings.statusBar.empty")}
-          </p>
-        ) : (
-          <>
-            <StatusBarGroup
-              heading={t("settings.statusBar.leftGroup")}
-              rows={left}
-            />
-            <StatusBarGroup
-              heading={t("settings.statusBar.rightGroup")}
-              rows={right}
-            />
-          </>
-        )}
+        <StatusBarGroup
+          heading={t("settings.statusBar.leftGroup")}
+          rows={left}
+        />
+        <StatusBarGroup
+          heading={t("settings.statusBar.rightGroup")}
+          rows={right}
+        />
       </CardContent>
     </Card>
   );
