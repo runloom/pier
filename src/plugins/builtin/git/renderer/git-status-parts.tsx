@@ -68,8 +68,10 @@ const PILL_BASE =
 const PILL_VARIANT = {
   progress: "text-status-info-fg",
   danger: "text-status-danger-fg",
+  warning: "text-status-warning-fg",
   neutral: "text-foreground",
   success: "text-status-success-fg",
+  done: "text-status-done-fg",
 } as const;
 
 function Pill({
@@ -150,7 +152,8 @@ export function BranchLabel({
 
 /**
  * Upstream 状态：no upstream 走 muted 内联图标 + tooltip（信息级）；
- * upstream gone 升级为红色文字胶囊（需注意级）——只有小图标时用户容易忽略"远端已删"。
+ * upstream gone 升级为 attention 级黄色文字胶囊（Primer attention 语义：
+ * 远端分支删除通常是合并后的例行清理，非错误）——只有小图标时用户容易忽略"远端已删"。
  */
 export function UpstreamPill({
   branch,
@@ -164,7 +167,7 @@ export function UpstreamPill({
   }
   if (branch.upstreamGone) {
     return (
-      <Pill icon={CloudOff} testId="upstream-gone-pill" variant="danger">
+      <Pill icon={CloudOff} testId="upstream-gone-pill" variant="warning">
         {pluginText(pluginContext, "upstreamGone", "upstream gone")}
       </Pill>
     );
@@ -196,7 +199,7 @@ export function MergedPill({
     return null;
   }
   return (
-    <Pill icon={Check} testId="merged-pill" variant="success">
+    <Pill icon={Check} testId="merged-pill" variant="done">
       {pluginText(pluginContext, "mergedIntoDefault", "merged")}
     </Pill>
   );
@@ -344,7 +347,7 @@ export function WorkingTreeCounts({
         n={counts.untracked}
       />
       <IconNum
-        color="text-destructive"
+        color="text-status-danger-fg"
         icon={AlertTriangle}
         label={pluginText(pluginContext, "srConflict", "conflict")}
         n={counts.conflict}

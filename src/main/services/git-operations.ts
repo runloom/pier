@@ -109,8 +109,10 @@ export async function mergeBranch(
     return target;
   }
   try {
+    // --no-ff：对齐 GitHub merge button 语义，永远产生 merge commit——
+    // ff 合并在 commit graph 上无痕，会让 mergedIntoDefault 检测不到本应用自己的合并。
     const stdout = await execGit(
-      ["merge", "--no-edit", "--no-verify", "--", branch],
+      ["merge", "--no-ff", "--no-edit", "--no-verify", "--", branch],
       target.root,
       { timeoutMs: WRITE_TIMEOUT_MS }
     );

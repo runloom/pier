@@ -1,4 +1,6 @@
+import type { GitRemoteSync } from "../../shared/contracts/git.ts";
 import { execGit as defaultExecGit, GitExecError } from "./git-exec.ts";
+import { recordRemoteSync } from "./git-remote-sync-registry.ts";
 
 const HEARTBEAT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 30_000;
@@ -161,6 +163,17 @@ export function createGitAutofetchService({
     }
   }
 
+  /** RepoFetchState → 对外健康度快照（lastSuccessAt 0 = 从未成功 → null）。 */
+  function syncSnapshot(
+    state: RepoFetchState,
+    phase: GitRemoteSync["state"]
+  ): GitRemoteSync {
+    return {
+      lastSuccessAt: state.lastSuccessAt === 0 ? null : state.lastSuccessAt,
+      state: phase,
+    };
+  }
+
   async function fetchRepo(
     roots: readonly string[],
     state: RepoFetchState
@@ -169,10 +182,12 @@ export function createGitAutofetchService({
       state.inFlight = false;
       return;
     }
+    recordRemoteSync(roots, syncSnapshot(state, "fetching"));
     try {
       await fetchWithRootFallback(roots);
       state.failureCount = 0;
       state.lastSuccessAt = now();
+      recordRemoteSync(roots, syncSnapshot(state, "idle"));
       for (const root of roots) {
         pulse(root);
       }
@@ -182,9 +197,12 @@ export function createGitAutofetchService({
       const message = error instanceof Error ? error.message : String(error);
       if (AUTH_FAILURE_RE.test(`${stderr}\n${message}`)) {
         state.authCooldownUntil = now() + AUTH_COOLDOWN_MS;
+        recordRemoteSync(roots, syncSnapshot(state, "authRequired"));
         console.warn(
           `[git-autofetch] 鉴权失败，暂停 60 分钟自动 fetch: ${roots[0]}: ${message}`
         );
+      } else {
+        recordRemoteSync(roots, syncSnapshot(state, "backoff"));
       }
     } finally {
       state.inFlight = false;

@@ -148,6 +148,8 @@ export async function executeWorktreeCommand(
     case "worktree.create": {
       const created = await services.worktrees.create(command);
       const copiedFiles = await copyCreateIncludes(created, services);
+      // 新 worktree 落盘即 pulse 主仓路径：同 commonDir 的活跃 root 立即感知分支增加
+      services.gitWatch.pulse(command.path);
       return success(requestId, { ...created, copiedFiles });
     }
     case "worktree.creationDefaults": {
@@ -169,10 +171,16 @@ export async function executeWorktreeCommand(
         command,
         services
       );
-    case "worktree.remove":
-      return success(requestId, await services.worktrees.remove(command));
-    case "worktree.prune":
-      return success(requestId, await services.worktrees.prune(command));
+    case "worktree.remove": {
+      const removed = await services.worktrees.remove(command);
+      services.gitWatch.pulse(command.path);
+      return success(requestId, removed);
+    }
+    case "worktree.prune": {
+      const pruned = await services.worktrees.prune(command);
+      services.gitWatch.pulse(command.path);
+      return success(requestId, pruned);
+    }
     default:
       return null;
   }

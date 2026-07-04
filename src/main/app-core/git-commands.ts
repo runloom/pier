@@ -6,10 +6,51 @@ import { commandSuccess as success } from "./command-results.ts";
 import type { PierCoreServices } from "./command-router.ts";
 
 /**
+ * 写操作命令表：执行成功后立即 pulse watch service（业界惯例：应用自己跑完
+ * git 命令即时刷新，不等 fs 事件/poll——linked worktree 的元数据事件在
+ * commonDir，post-op pulse 是最低延迟的第一信号源）。
+ */
+const GIT_WRITE_COMMANDS: Record<string, true> = {
+  "git.checkoutBranch": true,
+  "git.commit": true,
+  "git.createBranch": true,
+  "git.deleteBranch": true,
+  "git.discardChanges": true,
+  "git.merge": true,
+  "git.mergeAbort": true,
+  "git.rebase": true,
+  "git.rebaseAbort": true,
+  "git.rebaseContinue": true,
+  "git.stage": true,
+  "git.stash": true,
+  "git.stashPop": true,
+  "git.undoLastCommit": true,
+  "git.unstage": true,
+};
+
+/**
  * 分发 git.* 命令到 main 进程的 GitService。
  * 读命令需 git:read, 写命令需 git:write; 权限校验在 permissions.ts。
  */
 export async function executeGitCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult | null> {
+  const result = await dispatchGitCommand(requestId, command, services);
+  if (
+    result !== null &&
+    GIT_WRITE_COMMANDS[command.type] === true &&
+    "cwd" in command &&
+    typeof command.cwd === "string"
+  ) {
+    // 有冲突/中止等非 ok 结果也 pulse：MERGE_HEAD 等状态已变，UI 需要立刻看到
+    services.gitWatch.pulse(command.cwd);
+  }
+  return result;
+}
+
+async function dispatchGitCommand(
   requestId: string,
   command: PierCommand,
   services: PierCoreServices

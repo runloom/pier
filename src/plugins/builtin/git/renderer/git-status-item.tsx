@@ -6,6 +6,7 @@ import type {
 import type {
   GitCounts,
   GitDelta,
+  GitRemoteSync,
   GitRepoState,
   GitStatus,
 } from "@shared/contracts/git.ts";
@@ -35,6 +36,55 @@ function basename(path: null | string | undefined): string {
   }
   const parts = path.split(PATH_SEPARATOR_RE).filter(Boolean);
   return parts.at(-1) ?? path;
+}
+
+/**
+ * 远端同步健康度 tooltip 行。refs/remotes 是本地快照——诚实标注快照年龄/暂停原因，
+ * 避免用户把 behind=0 当实时事实。backoff 沿用"x 分钟前"（上次成功仍然成立，自动重试中）。
+ */
+function remoteSyncLine(
+  pluginContext: RendererPluginContext,
+  remoteSync: GitRemoteSync | null
+): string | null {
+  if (remoteSync === null) {
+    return null;
+  }
+  if (remoteSync.state === "fetching") {
+    return pluginText(pluginContext, "remoteSyncFetching", "Fetching remote…");
+  }
+  if (remoteSync.state === "authRequired") {
+    return pluginText(
+      pluginContext,
+      "remoteSyncAuthPaused",
+      "Auto-fetch paused: authentication failed"
+    );
+  }
+  if (remoteSync.lastSuccessAt === null) {
+    return pluginText(
+      pluginContext,
+      "remoteSyncNever",
+      "Remote not fetched yet"
+    );
+  }
+  const minutes = Math.max(
+    0,
+    Math.round((Date.now() - remoteSync.lastSuccessAt) / 60_000)
+  );
+  if (minutes === 0) {
+    return pluginText(
+      pluginContext,
+      "remoteSyncJustNow",
+      "Remote fetched just now"
+    );
+  }
+  return pluginText(
+    pluginContext,
+    "remoteSyncAgo",
+    "Remote fetched {{minutes}} min ago",
+    {
+      minutes,
+    }
+  );
 }
 
 /**
@@ -274,6 +324,7 @@ function WorktreeStatusItem({
   const tooltipDetail = [worktreeName, branch?.branch, worktreePath, cwd]
     .filter(Boolean)
     .join(" · ");
+  const syncLine = remoteSyncLine(pluginContext, status?.remoteSync ?? null);
 
   return (
     <Button
@@ -293,7 +344,7 @@ function WorktreeStatusItem({
         );
       }}
       size="xs"
-      title={`${tooltipHint}\n${tooltipDetail}`}
+      title={[tooltipHint, tooltipDetail, syncLine].filter(Boolean).join("\n")}
       type="button"
       variant="outline"
     >

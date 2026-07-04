@@ -653,6 +653,7 @@ describe("git builtin plugin", () => {
             counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
             delta: null,
             files: [],
+            remoteSync: null,
             repoState: { kind: "clean" as const },
             stashCount: 0,
           })),
@@ -1609,6 +1610,7 @@ describe("git builtin plugin", () => {
       counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
       delta: null,
       files: [],
+      remoteSync: null,
       repoState: { kind: "clean" as const },
       stashCount: 0,
     });
@@ -1647,6 +1649,7 @@ describe("git builtin plugin", () => {
       counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
       delta: null,
       files: [],
+      remoteSync: null,
       repoState: { kind: "clean" as const },
       stashCount: 0,
     });
@@ -1686,6 +1689,7 @@ describe("git builtin plugin", () => {
       counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
       delta: null,
       files: [],
+      remoteSync: null,
       repoState: { kind: "clean" as const },
       stashCount: 0,
     });
@@ -1727,6 +1731,7 @@ describe("git builtin plugin", () => {
       counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
       delta: null,
       files: [],
+      remoteSync: null,
       repoState: { kind: "clean" as const },
       stashCount: 0,
     });

@@ -4,6 +4,10 @@ import {
   createGitAutofetchService,
 } from "@main/services/git-autofetch-service.ts";
 import { GitExecError, type GitExecOptions } from "@main/services/git-exec.ts";
+import {
+  clearRemoteSyncForTests,
+  getRemoteSync,
+} from "@main/services/git-remote-sync-registry.ts";
 import { describe, expect, it, vi } from "vitest";
 
 type ExecGit = CreateGitAutofetchServiceOptions["execGit"];
@@ -327,5 +331,102 @@ describe("git-autofetch-service", () => {
     await h.service.tick();
     expect(h.pulsed).toEqual(["/repo/dead-a", "/repo/alive-b"]);
     expect(execGit).toHaveBeenCalledTimes(2);
+  });
+
+  it("remoteSync：fetch 成功 → 分组内全部 roots 记 idle + lastSuccessAt", async () => {
+    clearRemoteSyncForTests();
+    const h = makeHarness();
+    h.advance(5 * 60_000);
+    await h.service.tick();
+    expect(getRemoteSync("/repo/wt-a")).toEqual({
+      lastSuccessAt: 5 * 60_000,
+      state: "idle",
+    });
+    expect(getRemoteSync("/repo/wt-b")).toEqual({
+      lastSuccessAt: 5 * 60_000,
+      state: "idle",
+    });
+  });
+
+  it("remoteSync：fetch 进行中记 fetching，完成后转 idle", async () => {
+    clearRemoteSyncForTests();
+    let release: (value: string) => void = () => undefined;
+    const gate = new Promise<string>((res) => {
+      release = res;
+    });
+    const h = makeHarness({ execGit: vi.fn(() => gate) satisfies ExecGit });
+    h.advance(5 * 60_000);
+    const ticking = h.service.tick();
+    await vi.waitFor(() => {
+      expect(getRemoteSync("/repo/wt-a")).toEqual({
+        lastSuccessAt: null,
+        state: "fetching",
+      });
+    });
+    release("");
+    await ticking;
+    expect(getRemoteSync("/repo/wt-a")).toEqual({
+      lastSuccessAt: 5 * 60_000,
+      state: "idle",
+    });
+  });
+
+  it("remoteSync：鉴权失败 → authRequired，从未成功时 lastSuccessAt null", async () => {
+    clearRemoteSyncForTests();
+    const h = makeHarness({
+      execGit: vi.fn(() =>
+        Promise.reject(
+          new GitExecError({
+            args: ["fetch"],
+            cwd: "/repo/wt-a",
+            exitCode: 128,
+            message: "auth",
+            stderr: "fatal: could not read Username for 'https://github.com'",
+            stdout: "",
+          })
+        )
+      ) satisfies ExecGit,
+    });
+    h.advance(5 * 60_000);
+    await h.service.tick();
+    expect(getRemoteSync("/repo/wt-a")).toEqual({
+      lastSuccessAt: null,
+      state: "authRequired",
+    });
+    expect(getRemoteSync("/repo/wt-b")).toEqual({
+      lastSuccessAt: null,
+      state: "authRequired",
+    });
+  });
+
+  it("remoteSync：普通失败 → backoff，历史 lastSuccessAt 保留", async () => {
+    clearRemoteSyncForTests();
+    let fail = false;
+    const h = makeHarness({
+      execGit: vi.fn(() => {
+        if (fail) {
+          return Promise.reject(
+            new GitExecError({
+              args: ["fetch"],
+              cwd: "/repo/wt-a",
+              exitCode: 1,
+              message: "network down",
+              stderr: "could not resolve host",
+              stdout: "",
+            })
+          );
+        }
+        return Promise.resolve("");
+      }) satisfies ExecGit,
+    });
+    h.advance(5 * 60_000);
+    await h.service.tick(); // 首轮成功：idle + lastSuccessAt=5min
+    fail = true;
+    h.advance(5 * 60_000);
+    await h.service.tick(); // 次轮失败：转 backoff，历史成功时间不丢
+    expect(getRemoteSync("/repo/wt-a")).toEqual({
+      lastSuccessAt: 5 * 60_000,
+      state: "backoff",
+    });
   });
 });

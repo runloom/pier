@@ -148,6 +148,7 @@ function makeStatus(files: GitStatus["files"]): GitStatus {
     counts: { conflict: 0, modified: files.length, staged: 1, untracked: 1 },
     delta: { deletions: 2, insertions: 5 },
     files,
+    remoteSync: null,
     repoState: { kind: "clean" },
     stashCount: 0,
   };

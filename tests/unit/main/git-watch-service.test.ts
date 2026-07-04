@@ -3,8 +3,14 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execGit } from "@main/services/git-exec.ts";
-import { createGitWatchService } from "@main/services/git-watch-service.ts";
-import { defaultWorktreeSignature } from "@main/services/git-watch-signatures.ts";
+import {
+  createGitWatchService,
+  type GitWatchService,
+} from "@main/services/git-watch-service.ts";
+import {
+  defaultWorktreeSignature,
+  resolveRepoAnchors,
+} from "@main/services/git-watch-signatures.ts";
 import type { GitChangeEvent, GitStatus } from "@shared/contracts/git.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,6 +28,7 @@ function fakeStatus(): GitStatus {
     counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
     delta: null,
     files: [],
+    remoteSync: null,
     repoState: { kind: "clean" },
     stashCount: 0,
   };
@@ -681,6 +688,33 @@ describe("createGitWatchService", () => {
   });
 });
 
+/**
+ * 真实仓库用的 service 装配 + baseline 屏障。
+ * hub 挂接严格发生在 baseline 之后（src 保证），anchors 解析被调用 ⟹ baseline
+ * 已完成采样——此后再做 repo 变更，pulse 必能观测到 refs 差异（消除并行 worker
+ * 负载下"baseline 吸收了变更 / pulse 早于 baseline 被丢弃"两类竞态）。
+ */
+async function watchRealRepoUntilBaseline(
+  gitRoot: string,
+  listener: (event: GitChangeEvent) => void
+): Promise<{ service: GitWatchService; unsubscribe: () => void }> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  const service = createGitWatchService({
+    computeHeadSignature: async () => "h",
+    computeRepoStateSignature: async () => "s",
+    computeWorktreeSignature: async () => "w",
+    fsWatch: () => new FakeWatcher(),
+    pollMs: 60_000,
+    resolveRepoAnchors: async (root) => {
+      const anchors = await resolveRepoAnchors(root);
+      resolve();
+      return anchors;
+    },
+  });
+  const unsubscribe = service.watch(gitRoot, listener);
+  await promise;
+  return { service, unsubscribe };
+}
 describe("createGitWatchService — 真实仓库 refs 验证", () => {
   it("defaultRefsSignature 对 fetch/prune 类 ref 变化敏感（真实仓库）", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-refs-sig-"));
@@ -693,20 +727,12 @@ describe("createGitWatchService — 真实仓库 refs 验证", () => {
       await execGit(["commit", "-q", "--allow-empty", "-m", "init"], {
         cwd: dir,
       });
-      const computeWorktreeSignature = vi.fn(async () => "w");
-      const service = createGitWatchService({
-        computeHeadSignature: async () => "h",
-        computeRepoStateSignature: async () => "s",
-        computeWorktreeSignature,
-        fsWatch: () => new FakeWatcher(),
-        pollMs: 60_000,
-      });
       const listener = vi.fn();
-      const unsubscribe = service.watch(dir, listener);
-      // baseline(首次 force refresh)完成后,制造一次纯 ref 变化:新建分支(refs/heads 多一条)
-      await vi.waitFor(() => {
-        expect(computeWorktreeSignature).toHaveBeenCalledTimes(1);
-      });
+      const { service, unsubscribe } = await watchRealRepoUntilBaseline(
+        dir,
+        listener
+      );
+      // baseline 完成后制造一次纯 ref 变化:新建分支(refs/heads 多一条)
       await execGit(["branch", "feature/x"], { cwd: dir });
       service.pulse(dir);
       await vi.waitFor(() => {
@@ -744,19 +770,11 @@ describe("createGitWatchService — 真实仓库 refs 验证", () => {
       await execGit(["push", "-q", "origin", "other"], { cwd: clone });
       await execGit(["remote", "set-head", "origin", "main"], { cwd: clone });
 
-      const computeWorktreeSignature = vi.fn(async () => "w");
-      const service = createGitWatchService({
-        computeHeadSignature: async () => "h",
-        computeRepoStateSignature: async () => "s",
-        computeWorktreeSignature,
-        fsWatch: () => new FakeWatcher(),
-        pollMs: 60_000,
-      });
       const listener = vi.fn();
-      const unsubscribe = service.watch(clone, listener);
-      await vi.waitFor(() => {
-        expect(computeWorktreeSignature).toHaveBeenCalledTimes(1);
-      });
+      const { service, unsubscribe } = await watchRealRepoUntilBaseline(
+        clone,
+        listener
+      );
       // 唯一变化：origin/HEAD 的 symref target（main → other），refs oid 全不变
       await execGit(["remote", "set-head", "origin", "other"], { cwd: clone });
       service.pulse(clone);
@@ -785,20 +803,11 @@ describe("createGitWatchService — 真实仓库 refs 验证", () => {
       });
       // feature 分支此时无 upstream
       await execGit(["branch", "feature"], { cwd: dir });
-      const computeWorktreeSignature = vi.fn(async () => "w");
-      const service = createGitWatchService({
-        computeHeadSignature: async () => "h",
-        computeRepoStateSignature: async () => "s",
-        computeWorktreeSignature,
-        fsWatch: () => new FakeWatcher(),
-        pollMs: 60_000,
-      });
       const listener = vi.fn();
-      const unsubscribe = service.watch(dir, listener);
-      // baseline(首次 force refresh)完成
-      await vi.waitFor(() => {
-        expect(computeWorktreeSignature).toHaveBeenCalledTimes(1);
-      });
+      const { service, unsubscribe } = await watchRealRepoUntilBaseline(
+        dir,
+        listener
+      );
       // refs/heads 无增删、oid 不变；唯一变化是 branch.feature.merge/remote 配置
       await execGit(["branch", "--set-upstream-to=main", "feature"], {
         cwd: dir,
@@ -815,4 +824,134 @@ describe("createGitWatchService — 真实仓库 refs 验证", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+});
+
+describe("createGitWatchService — repo hub（真实仓库两级拓扑）", () => {
+  it("linked worktree：元数据只落在主仓 .git 下的 commit 也能广播到 worktree 订阅者", async () => {
+    const base = await mkdtemp(join(tmpdir(), "pier-hub-wt-"));
+    try {
+      const main = join(base, "main");
+      const wt = join(base, "wt");
+      await execGit(["init", "-q", "-b", "main", "main"], { cwd: base });
+      await execGit(["config", "user.email", "test@pier.local"], {
+        cwd: main,
+      });
+      await execGit(["config", "user.name", "Pier Test"], { cwd: main });
+      await execGit(["commit", "-q", "--allow-empty", "-m", "init"], {
+        cwd: main,
+      });
+      await execGit(["worktree", "add", "-q", "-b", "feat", wt], {
+        cwd: main,
+      });
+
+      const anchorsResolved: string[] = [];
+      // 默认 fsWatch（真实 watcher）+ pollMs 60s：排除轮询兜底，逼出 hub 路径
+      const service = createGitWatchService({
+        pollMs: 60_000,
+        resolveRepoAnchors: async (gitRoot) => {
+          const anchors = await resolveRepoAnchors(gitRoot);
+          anchorsResolved.push(gitRoot);
+          return anchors;
+        },
+      });
+      const events: GitChangeEvent[] = [];
+      const unsubscribe = service.watch(wt, (e) => events.push(e));
+      // hub 挂接严格在 baseline 之后：anchors 解析完成 ⇒ baseline 已完成
+      await vi.waitFor(
+        () => {
+          expect(anchorsResolved).toContain(wt);
+        },
+        { timeout: 5000 }
+      );
+
+      // 空提交：worktree 目录零文件事件，落盘变化全在主仓 .git
+      // （refs/heads/feat + .git/worktrees/feat/*）——旧实现（只 watch
+      // worktree 目录）永远收不到，这是 hub 拓扑修复的更新不及时回归。
+      await execGit(["commit", "-q", "--allow-empty", "-m", "tick"], {
+        cwd: wt,
+      });
+      await vi.waitFor(
+        () => {
+          expect(events.length).toBeGreaterThan(0);
+        },
+        { timeout: 5000 }
+      );
+      expect(["head", "worktree", "both"]).toContain(events[0]?.changeKind);
+
+      unsubscribe();
+      await service.dispose();
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it("同仓两个订阅（主仓 + worktree）pulse 一次：refs 只算一次且两个 agent 都刷新", async () => {
+    const base = await mkdtemp(join(tmpdir(), "pier-hub-refs-"));
+    try {
+      const main = join(base, "main");
+      const wt = join(base, "wt");
+      await execGit(["init", "-q", "-b", "main", "main"], { cwd: base });
+      await execGit(["config", "user.email", "test@pier.local"], {
+        cwd: main,
+      });
+      await execGit(["config", "user.name", "Pier Test"], { cwd: main });
+      await execGit(["commit", "-q", "--allow-empty", "-m", "init"], {
+        cwd: main,
+      });
+      await execGit(["worktree", "add", "-q", "-b", "feat", wt], {
+        cwd: main,
+      });
+
+      let refsSigCalls = 0;
+      const worktreeSigRoots: string[] = [];
+      const anchorsResolved: string[] = [];
+      const service = createGitWatchService({
+        computeHeadSignature: async () => "h",
+        computeRefsSignature: () => {
+          refsSigCalls += 1;
+          return Promise.resolve("f");
+        },
+        computeRepoStateSignature: async () => "s",
+        computeWorktreeSignature: (gitRoot) => {
+          worktreeSigRoots.push(gitRoot);
+          return Promise.resolve("w");
+        },
+        // 假 watcher：隔离真实 fs 事件，让计数只反映 pulse 驱动的轮次
+        fsWatch: () => new FakeWatcher(),
+        pollMs: 60_000,
+        resolveRepoAnchors: async (gitRoot) => {
+          const anchors = await resolveRepoAnchors(gitRoot);
+          anchorsResolved.push(gitRoot);
+          return anchors;
+        },
+      });
+      const unsubMain = service.watch(main, () => undefined);
+      const unsubWt = service.watch(wt, () => undefined);
+      await vi.waitFor(
+        () => {
+          expect(anchorsResolved).toEqual(expect.arrayContaining([main, wt]));
+        },
+        { timeout: 5000 }
+      );
+
+      const refsBefore = refsSigCalls;
+      worktreeSigRoots.length = 0;
+      service.pulse(main);
+      // repo-wide fan-out：两个 agent 都完成一轮刷新（各算一次 worktree 签名）
+      await vi.waitFor(
+        () => {
+          expect([...worktreeSigRoots].sort()).toEqual([main, wt].sort());
+        },
+        { timeout: 5000 }
+      );
+      // refs 快照每 repo 每轮恰好一次，不随订阅的 gitRoot 数膨胀
+      expect(refsSigCalls - refsBefore).toBe(1);
+
+      unsubMain();
+      unsubWt();
+      await service.dispose();
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  }, 15_000);
 });

@@ -73,6 +73,17 @@ export const gitRepoStateSchema = z.discriminatedUnion("kind", [
 ]);
 export type GitRepoState = z.infer<typeof gitRepoStateSchema>;
 
+/**
+ * 远端同步健康度（repo 级，autofetch 写入）。refs/remotes 是本地快照，
+ * 此字段诚实标注快照年龄与同步暂停原因，避免 UI 把 behind=0 当实时事实。
+ */
+export const gitRemoteSyncSchema = z.object({
+  /** 最近一次 fetch 成功的时间戳（ms）；从未成功为 null。 */
+  lastSuccessAt: z.number().nullable(),
+  state: z.enum(["idle", "fetching", "backoff", "authRequired"]),
+});
+export type GitRemoteSync = z.infer<typeof gitRemoteSyncSchema>;
+
 /** 工作区整体状态：分支信息 + 变更文件列表 + 聚合派生字段。 */
 export const gitStatusSchema = z.object({
   branch: gitBranchInfoSchema,
@@ -80,6 +91,8 @@ export const gitStatusSchema = z.object({
   /** null 表示 diff --numstat 失败（非致命）。 */
   delta: gitDeltaSchema.nullable(),
   files: z.array(gitFileStatusSchema),
+  /** null = 该仓库尚无 autofetch 记录（禁用或未跑过）。 */
+  remoteSync: gitRemoteSyncSchema.nullable(),
   repoState: gitRepoStateSchema,
   stashCount: z.number(),
 });

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { GitDelta, GitRepoState } from "../../shared/contracts/git.ts";
 import { GitExecError } from "./git-exec.ts";
 import { parseGitNumstat } from "./git-parsers.ts";
+import type { DefaultBranchCandidates } from "./git-refs-table.ts";
 
 /** git-service.ts 注入进来；测试可传 fake。 */
 export type ExecGitFn = (
@@ -175,137 +176,40 @@ export async function getStashCount(
 }
 
 /**
- * 判断当前分支的 upstream 是否已 gone（远端 ref 已删）。
- * `for-each-ref --format=%(upstream:track) refs/heads/<branch>` 输出含 `[gone]` 即为 true。
- * branch 为 null（detached HEAD）时直接返回 false。
+ * merged 判定 memo。key = `${headOid}:${tipOid}`：commit oid 哈希覆盖全部祖先，
+ * 两个 oid 即唯一决定图关系，跨仓库全局成立、永不过期；上界防无限增长。
  */
-export async function detectUpstreamGone(
+const MERGED_MEMO_MAX = 512;
+const mergedMemo = new Map<string, boolean>();
+
+export function clearMergedMemoForTests(): void {
+  mergedMemo.clear();
+}
+
+function memoizeMerged(key: string, value: boolean): boolean {
+  if (mergedMemo.size >= MERGED_MEMO_MAX) {
+    const oldest = mergedMemo.keys().next().value;
+    if (oldest !== undefined) {
+      mergedMemo.delete(oldest);
+    }
+  }
+  mergedMemo.set(key, value);
+  return value;
+}
+
+/** cherry 补充判定的规模上界：超界跳过 cherry，按图判据结果返回（成本有界）。 */
+const CHERRY_OWN_MAX = 32;
+const CHERRY_BEHIND_MAX = 2000;
+
+/** merge-base --is-ancestor：exit 0 = 是，exit 1 = 否，其余（ref 失效等）= null。 */
+async function isAncestor(
   execGit: ExecGitFn,
   cwd: string,
-  branch: string | null
-): Promise<boolean> {
-  if (branch === null || branch.length === 0) {
-    return false;
-  }
-  try {
-    const out = await execGit(
-      ["for-each-ref", "--format=%(upstream:track)", `refs/heads/${branch}`],
-      cwd
-    );
-    return out.includes("[gone]");
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 默认分支 remote-tracking ref 缓存（key: gitCommonDir）。
- * TTL 5 分钟；过期视为 miss 重新探测。解析为 null 时**不写缓存**，
- * 让每次调用重探一次（新建 origin/HEAD 后能立即生效），成本一个子进程可接受。
- */
-const DEFAULT_BRANCH_REF_TTL_MS = 5 * 60_000;
-
-interface DefaultBranchRefCacheEntry {
-  at: number;
-  ref: string;
-}
-
-const defaultBranchRefCache = new Map<string, DefaultBranchRefCacheEntry>();
-
-export function clearDefaultBranchRefCacheForTests(): void {
-  defaultBranchRefCache.clear();
-}
-
-/**
- * 从 `refs/remotes/*​/HEAD` 枚举默认分支 remote-tracking ref。
- * 多远端时 origin 优先，否则取第一条 symref 非空的条目。
- * 返回完整 symref target（如 `refs/remotes/upstream/main`）；无则 null。
- */
-export async function resolveDefaultBranchRef(
-  execGit: ExecGitFn,
-  cwd: string,
-  gitCommonDir: string,
-  now: () => number = Date.now
-): Promise<string | null> {
-  const cached = defaultBranchRefCache.get(gitCommonDir);
-  if (cached !== undefined && now() - cached.at < DEFAULT_BRANCH_REF_TTL_MS) {
-    return cached.ref;
-  }
-  const ref = await probeDefaultBranchRef(execGit, cwd);
-  if (ref === null) {
-    // null 不缓存：下次调用重探，新建的 origin/HEAD 能立即被发现。
-    defaultBranchRefCache.delete(gitCommonDir);
-    return null;
-  }
-  defaultBranchRefCache.set(gitCommonDir, { at: now(), ref });
-  return ref;
-}
-
-async function probeDefaultBranchRef(
-  execGit: ExecGitFn,
-  cwd: string
-): Promise<string | null> {
-  let output: string;
-  try {
-    output = await execGit(
-      [
-        "for-each-ref",
-        "--format=%(refname)%00%(symref)",
-        "refs/remotes/*/HEAD",
-      ],
-      cwd
-    );
-  } catch {
-    return null;
-  }
-  let fallback: string | null = null;
-  for (const line of output.split("\n")) {
-    if (line.length === 0) {
-      continue;
-    }
-    const [refname = "", symref = ""] = line.split("\0");
-    if (symref.length === 0 || !symref.startsWith("refs/remotes/")) {
-      continue;
-    }
-    if (refname === "refs/remotes/origin/HEAD") {
-      return symref; // origin 优先
-    }
-    fallback ??= symref;
-  }
-  return fallback;
-}
-
-/**
- * 从 `refs/remotes/<remote>/<name>` 剥离出分支名 `<name>`（保留带斜杠分支名）。
- * 前两段固定为 refs/remotes，第三段是 remote 名。
- */
-function branchNameFromRemoteRef(remoteRef: string): string {
-  return remoteRef.split("/").slice(3).join("/");
-}
-
-/**
- * HEAD 是否已是默认分支 remote-tracking ref 的祖先。
- * merge-base --is-ancestor: exit 0 = 是，exit 1 = 否，其余（如 ref 不存在）= null。
- * squash merge 检测不到（commit 被重写）——spec 已知限制。
- */
-export async function detectMergedIntoDefault(
-  execGit: ExecGitFn,
-  cwd: string,
-  branch: string | null,
-  gitCommonDir: string
+  headOid: string,
+  tipOid: string
 ): Promise<boolean | null> {
-  if (branch === null || branch.length === 0) {
-    return null;
-  }
-  const defaultRef = await resolveDefaultBranchRef(execGit, cwd, gitCommonDir);
-  if (defaultRef === null) {
-    return null;
-  }
-  if (branchNameFromRemoteRef(defaultRef) === branch) {
-    return null;
-  }
   try {
-    await execGit(["merge-base", "--is-ancestor", "HEAD", defaultRef], cwd);
+    await execGit(["merge-base", "--is-ancestor", headOid, tipOid], cwd);
     return true;
   } catch (error) {
     if (error instanceof GitExecError && error.exitCode === 1) {
@@ -313,4 +217,139 @@ export async function detectMergedIntoDefault(
     }
     return null;
   }
+}
+
+/**
+ * HEAD 已是 tip 祖先时，判定它是否经 merge commit 汇入（而非"本来就在主链上"）。
+ * `rev-list --first-parent --parents tip --not HEAD` 输出每行 `<commit> <第一父> ...`：
+ * HEAD 以某条链上提交的**第一父**身份出现 ⇔ HEAD 在 first-parent 主链上
+ * （新建 worktree / ff 合并场景，判 false）；从未以第一父出现 ⇔ 经 merge commit
+ * 的侧支汇入（判 true）。排除侧让遍历停在 HEAD 可达域边界，成本 ∝ 分叉距离。
+ * 注意不能用 `--boundary`：merge commit 的第二父也会进 boundary 集，无判别力。
+ */
+async function mergedViaMergeCommit(
+  execGit: ExecGitFn,
+  cwd: string,
+  headOid: string,
+  tipOid: string
+): Promise<boolean> {
+  const out = await execGit(
+    ["rev-list", "--first-parent", "--parents", tipOid, "--not", headOid],
+    cwd
+  );
+  let sawChain = false;
+  for (const line of out.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+    sawChain = true;
+    if (line.split(" ")[1] === headOid) {
+      return false;
+    }
+  }
+  return sawChain;
+}
+
+/**
+ * HEAD 不是 tip 祖先时的补充判定：own 提交全部 patch 等价于上游
+ * （`git cherry` 全 `-`）⇒ rebase-merge / 单提交 squash 已合入。
+ * 多提交 squash（N 压 1）patch-id 对不上，仍检测不到——已知限制，
+ * 只有 PR API 集成能彻底解决。
+ */
+async function mergedViaCherry(
+  execGit: ExecGitFn,
+  cwd: string,
+  headOid: string,
+  tipOid: string
+): Promise<boolean> {
+  let own = 0;
+  let behind = 0;
+  try {
+    const [ownRaw, behindRaw] = await Promise.all([
+      execGit(["rev-list", "--count", `${tipOid}..${headOid}`], cwd),
+      execGit(["rev-list", "--count", `${headOid}..${tipOid}`], cwd),
+    ]);
+    own = Number(ownRaw.trim());
+    behind = Number(behindRaw.trim());
+  } catch {
+    return false;
+  }
+  if (!(Number.isFinite(own) && Number.isFinite(behind))) {
+    return false;
+  }
+  if (own === 0 || own > CHERRY_OWN_MAX || behind > CHERRY_BEHIND_MAX) {
+    return false;
+  }
+  try {
+    const cherry = await execGit(["cherry", tipOid, headOid], cwd);
+    const lines = cherry.split("\n").filter((line) => line.length > 0);
+    return lines.length > 0 && lines.every((line) => line.startsWith("-"));
+  } catch {
+    return false;
+  }
+}
+
+/** 对单个默认分支候选 tip 的 merged 判定；错误不写 memo（瞬时故障可重试）。 */
+async function mergedIntoTip(
+  execGit: ExecGitFn,
+  cwd: string,
+  headOid: string,
+  tipOid: string
+): Promise<boolean> {
+  if (tipOid.length === 0 || tipOid === headOid) {
+    // tip 与 HEAD 相同：无自有提交（fresh worktree / ff 后），图上无合并痕迹
+    return false;
+  }
+  const key = `${headOid}:${tipOid}`;
+  const cached = mergedMemo.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const ancestor = await isAncestor(execGit, cwd, headOid, tipOid);
+  if (ancestor === null) {
+    return false;
+  }
+  const merged = ancestor
+    ? await mergedViaMergeCommit(execGit, cwd, headOid, tipOid)
+    : await mergedViaCherry(execGit, cwd, headOid, tipOid);
+  return memoizeMerged(key, merged);
+}
+
+/**
+ * 分支工作是否已合入默认分支。核心判据：HEAD 是默认分支 tip 的祖先**且**
+ * 不在其 first-parent 主链上（即经 merge commit 汇入）；非祖先时用 cherry
+ * patch 等价覆盖 rebase-merge / 单提交 squash。remote-tracking tip 与同名
+ * 本地分支 tip 任一命中即 true（覆盖"本地合并未 push"窗口期）。
+ * null = 不适用：detached / 空仓库 / 无默认分支 / 自身就是默认分支。
+ */
+export async function detectMergedIntoDefault(
+  execGit: ExecGitFn,
+  cwd: string,
+  branch: string | null,
+  headOid: string | null,
+  candidates: DefaultBranchCandidates
+): Promise<boolean | null> {
+  if (branch === null || branch.length === 0) {
+    return null;
+  }
+  if (headOid === null || headOid.length === 0) {
+    return null;
+  }
+  const { remote, local } = candidates;
+  const defaultName = remote?.branchName ?? local?.branchName;
+  if (defaultName === undefined) {
+    return null;
+  }
+  if (defaultName === branch) {
+    return null;
+  }
+  for (const tip of [remote, local]) {
+    if (tip === null) {
+      continue;
+    }
+    if (await mergedIntoTip(execGit, cwd, headOid, tip.oid)) {
+      return true;
+    }
+  }
+  return false;
 }

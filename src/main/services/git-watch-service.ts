@@ -1,17 +1,34 @@
-import { type FSWatcher, watch as fsWatchNative } from "node:fs";
 import type {
   GitChangeEvent,
   GitChangeKind,
   GitStatus,
 } from "../../shared/contracts/git.ts";
+import type { PrefetchedStatus } from "./git-status-assembler.ts";
+import {
+  createRepoHub,
+  type HubAgent,
+  type RefsSnapshot,
+  type RepoHub,
+} from "./git-watch-hub.ts";
+import {
+  defaultFsWatch,
+  deriveChangeKind,
+  type FsWatchFn,
+  isNoiseTreeEvent,
+  type WatchEntry,
+} from "./git-watch-internals.ts";
 import {
   defaultHeadSignature,
   defaultRefsSignature,
+  defaultRefsSnapshot,
   defaultRepoStateSignature,
+  resolveRepoAnchors as defaultResolveRepoAnchors,
   defaultWorktreeSignature,
-  type RawWorktreeSnapshot,
+  type RepoAnchors,
   takeRawWorktreeSnapshot,
 } from "./git-watch-signatures.ts";
+
+export type { FsWatchFn } from "./git-watch-internals.ts";
 
 const DEFAULT_DEBOUNCE_MS = 400;
 /**
@@ -24,15 +41,10 @@ const DEFAULT_POLL_MS = 5000;
 /** watcher recreate 冷却窗：防止连续 error 触发无限重建。 */
 const WATCHER_RECREATE_COOLDOWN_MS = 5000;
 
-export type FsWatchFn = (
-  path: string,
-  options?: { recursive?: boolean }
-) => FSWatcher;
-
 export interface CreateGitWatchServiceOptions {
   /** sha256(HEAD oid + symbolic-ref HEAD)。注入便于测试。 */
   computeHeadSignature?: (gitRoot: string) => Promise<string>;
-  /** refs 签名：refs/heads + refs/remotes + refs/stash 的 refname+oid+upstream+symref。注入便于测试。 */
+  /** refs 签名：refs/heads + refs/remotes + refs/stash 的 refname+oid+upstream+track+symref。注入便于测试。 */
   computeRefsSignature?: (gitRoot: string) => Promise<string>;
   /**
    * `.git/*_HEAD` 与 rebase 步进的存在性/内容签名。变化 → 归入 worktree changeKind。
@@ -48,11 +60,12 @@ export interface CreateGitWatchServiceOptions {
   /**
    * 获取完整 GitStatus。变化触发时一并算出随广播下发，
    * 让多个 renderer 订阅者共享一份 snapshot，免各自 IPC refetch + 消除竞态。
-   * 第二参 prefetched：本轮签名计算已拿到的原始输出，getStatus 复用后可跳过重复 spawn（A7）。
+   * 第二参 prefetched：本轮签名计算已拿到的原始输出 + hub 共享 refs 表，
+   * getStatus 复用后可跳过重复 spawn（A7）。
    */
   getStatus?: (
     gitRoot: string,
-    prefetched?: RawWorktreeSnapshot
+    prefetched?: PrefetchedStatus
   ) => Promise<GitStatus>;
   /**
    * poll timer 门控（A5）：返回 false 时 poll tick 跳过 refresh（fs 事件/pulse 不受影响）。
@@ -61,6 +74,11 @@ export interface CreateGitWatchServiceOptions {
   isPollActive?: () => boolean;
   maxWaitMs?: number;
   pollMs?: number;
+  /**
+   * gitDir/commonDir 锚点解析（hub 归属判定）。注入便于测试；
+   * 解析失败（非 git 目录）时 entry 以 standalone 模式运行（仅工作树 watcher + 自有 poll）。
+   */
+  resolveRepoAnchors?: (gitRoot: string) => Promise<RepoAnchors | null>;
 }
 
 export interface GitWatchService {
@@ -72,80 +90,25 @@ export interface GitWatchService {
   pulse(gitRoot: string): void;
   /**
    * 订阅 gitRoot 的 git 变化。返回 unsubscribe 函数。
-   * 同一 gitRoot 多个 listener 共用一个底层 fs watcher(引用计数)。
+   * 同一 gitRoot 多个 listener 共用一个底层 fs watcher(引用计数)；
+   * 同一物理仓库（commonDir）的多个 gitRoot 共用一个元数据 hub。
    * 最后一个 listener 退订时,watcher 自动关闭。
    */
   watch(gitRoot: string, listener: (event: GitChangeEvent) => void): () => void;
 }
 
-interface WatchEntry {
-  /**
-   * baseline(initial refresh force=true)是否已完成。
-   * 完成前所有 fs event 与 poll 都被忽略,避免 worktreeSig/headSig 仍为 ""
-   * 与新签名比较时误报 changeKind="both"。
-   */
-  baselineReady: boolean;
-  debounceTimer: NodeJS.Timeout | null;
-  /** burst 内首个 fs event 时刻；用于 max-wait 计算。空闲时 null。 */
-  firstEventAt: number | null;
-  headSig: string;
-  listeners: Set<(event: GitChangeEvent) => void>;
-  pollTimer: NodeJS.Timeout;
-  /** watcher recreate 冷却截止时刻（ms epoch）。 */
-  recreateCoolingUntil: number;
-  /** refresh 正在执行中（A6：每 root 串行化）。 */
-  refreshing: boolean;
-  refsSig: string;
-  repoStateSig: string;
-  /** refresh 执行期间又被请求 → 结束后合并成一轮 trailing refresh（A6）。 */
-  rerunRequested: boolean;
-  watcher: FSWatcher;
-  worktreeSig: string;
-}
-
-function defaultFsWatch(path: string): FSWatcher {
-  try {
-    return fsWatchNative(path, { recursive: true });
-  } catch {
-    // Linux 不支持 recursive 时,降级只 watch .git(HEAD/index 变更仍能捕获)
-    return fsWatchNative(`${path}/.git`);
-  }
-}
-
-function deriveChangeKind(
-  worktreeChanged: boolean,
-  headChanged: boolean,
-  refsChanged: boolean
-): GitChangeKind | null {
-  if (worktreeChanged && headChanged) {
-    return "both";
-  }
-  if (worktreeChanged) {
-    return "worktree";
-  }
-  if (headChanged) {
-    return "head";
-  }
-  if (refsChanged) {
-    return "refs";
-  }
-  return null;
-}
-
 /**
- * git 变更监听服务。
+ * git 变更监听服务（v3 两级拓扑）。
  * 设计:
- * - fs.watch 触发 → debounce(min(400ms, maxWait-elapsed)) → 重算四签名 → 比对 → 通知 listeners
- *   - 四签名：worktree（status + numstat hash）、head（HEAD oid + symbolic-ref）、
- *     repoState（.git/*_HEAD + rebase 步）、refs（refs/heads+remotes+stash 的 refname+oid+upstream）
- *   - worktree 或 repoState 变化 → changeKind 含 "worktree"；仅 refs 变化 → changeKind "refs"
- * - Max-wait debounce：burst 内首事件后最多 maxWait 一定 refresh；burst 结束后 debounce 再补一次
- * - Broadcast 携带 status snapshot：getStatus 注入时，变化触发一并算完整 GitStatus 下发
- * - 5s 兜底轮询防止 watcher 漏事件；watcher error 走 5s 冷却重建
- * - 引用计数:多个 listener 共用同一 fs watcher
- * - 签名 hash 化避免大输出常驻内存
- * - pulse(gitRoot)/activeRoots()：供 autofetch 等外部驱动方在 fetch 完成后立即触发重算、
- *   注册活跃仓库列表，无需等待 5s poll
+ * - agent（每 gitRoot）：工作树 watcher（过滤 .git/node_modules/lock）→ debounce →
+ *   重算 worktree/head/repoState 签名 → 比对 → 广播；standalone 时兼算 refs 签名与自有 poll
+ * - hub（每物理仓库，key = canonical commonDir）：唯一元数据 watcher（commonDir 递归，
+ *   worktrees/<name> 事件路由到对应 agent，refs 级事件升级 repo-wide）、唯一 poll、
+ *   refs 快照每轮恰算一次（for-each-ref → 签名 + 共享 refs 表）fan-out 给全部 agent
+ * - Max-wait debounce：burst 内首事件后最多 maxWait 一定 refresh
+ * - Broadcast 携带 status snapshot：getStatus 注入时随广播下发（prefetched 复用原始输出与 refs 表）
+ * - 引用计数：多个 listener 共用 agent；多个 agent 共用 hub
+ * - pulse(gitRoot)/activeRoots()：外部驱动方（autofetch/聚焦补课/写操作完成）即时触发
  */
 export function createGitWatchService({
   computeWorktreeSignature = defaultWorktreeSignature,
@@ -158,49 +121,124 @@ export function createGitWatchService({
   debounceMs = DEFAULT_DEBOUNCE_MS,
   maxWaitMs = DEFAULT_MAX_WAIT_MS,
   pollMs = DEFAULT_POLL_MS,
+  resolveRepoAnchors = defaultResolveRepoAnchors,
 }: CreateGitWatchServiceOptions = {}): GitWatchService {
   const entries = new Map<string, WatchEntry>();
+  const hubs = new Map<string, RepoHub>();
+  /** 注入 refs 签名替身时 hub 也走替身（测试 seam）；默认路径才产出共享表。 */
+  const refsSigIsDefault = computeRefsSignature === defaultRefsSignature;
+
+  async function computeRefsSnapshot(cwd: string): Promise<RefsSnapshot> {
+    if (refsSigIsDefault) {
+      return await defaultRefsSnapshot(cwd);
+    }
+    return { signature: await computeRefsSignature(cwd) };
+  }
 
   /**
    * 每 root 串行化（A6）：若正在 refresh，标记 rerunRequested 后返回；
    * 执行体结束若被重复请求，立即合并成一轮 trailing refresh。
-   * 消除 pulse/poll/debounce 并发导致的乱序广播。
+   * hub 下发的 refs 快照在忙碌时暂存 pendingRefsSnap，trailing 轮消费。
    */
-  async function refresh(gitRoot: string, force: boolean): Promise<void> {
+  async function refresh(
+    gitRoot: string,
+    force: boolean,
+    refsSnap?: RefsSnapshot
+  ): Promise<void> {
     const entry = entries.get(gitRoot);
     if (!entry) {
       return;
     }
     if (entry.refreshing) {
       entry.rerunRequested = true;
+      if (refsSnap !== undefined) {
+        entry.pendingRefsSnap = refsSnap;
+      }
       return;
     }
     entry.refreshing = true;
     try {
-      await runRefresh(entry, gitRoot, force);
+      await runRefresh(entry, gitRoot, force, refsSnap);
     } finally {
       entry.refreshing = false;
       if (entry.rerunRequested) {
         entry.rerunRequested = false;
+        const pending = entry.pendingRefsSnap ?? undefined;
+        entry.pendingRefsSnap = null;
         // trailing 合并：立即再跑一轮（非 force）
-        refresh(gitRoot, false).catch(() => undefined);
+        refresh(gitRoot, false, pending).catch(() => undefined);
       }
+    }
+  }
+
+  /**
+   * refs 三态：hub 下发快照 → 直接用；standalone（含 baseline，挂接晚于 baseline）→
+   * 自算；hub-attached 且本轮无快照（纯工作树事件）→ 跳过（refs 归 hub 排他驱动）
+   */
+  function resolveRefsSignature(
+    entry: WatchEntry,
+    gitRoot: string,
+    refsSnap?: RefsSnapshot
+  ): Promise<string> {
+    if (refsSnap !== undefined) {
+      return Promise.resolve(refsSnap.signature);
+    }
+    if (entry.hub === null) {
+      return computeRefsSignature(gitRoot);
+    }
+    return Promise.resolve(entry.refsSig);
+  }
+
+  /** 广播变更：getStatus 注入时随广播附完整 status（prefetch 复用原始输出 + hub refs 表，A7）。 */
+  async function broadcastChange(
+    entry: WatchEntry,
+    gitRoot: string,
+    changeKind: GitChangeKind
+  ): Promise<void> {
+    let status: GitStatus | undefined;
+    if (getStatus) {
+      const raw = takeRawWorktreeSnapshot(gitRoot);
+      let prefetched: PrefetchedStatus | undefined;
+      if (raw !== undefined) {
+        prefetched =
+          entry.lastRefsTable === null
+            ? raw
+            : { ...raw, refsTable: entry.lastRefsTable };
+      }
+      try {
+        status = await getStatus(gitRoot, prefetched);
+      } catch {
+        // getStatus 失败不阻塞广播；renderer 接到不带 status 的广播会走 getStatus IPC fallback
+      }
+    } else {
+      takeRawWorktreeSnapshot(gitRoot);
+    }
+    for (const listener of entry.listeners) {
+      listener(
+        status === undefined
+          ? { changeKind, gitRoot }
+          : { changeKind, gitRoot, status }
+      );
     }
   }
 
   async function runRefresh(
     entry: WatchEntry,
     gitRoot: string,
-    force: boolean
+    force: boolean,
+    refsSnap?: RefsSnapshot
   ): Promise<void> {
     const [nextWorktree, nextHead, nextRepoState, nextRefs] = await Promise.all(
       [
         computeWorktreeSignature(gitRoot),
         computeHeadSignature(gitRoot),
         computeRepoStateSignature(gitRoot),
-        computeRefsSignature(gitRoot),
+        resolveRefsSignature(entry, gitRoot, refsSnap),
       ]
     );
+    if (refsSnap?.table !== undefined) {
+      entry.lastRefsTable = refsSnap.table;
+    }
     const worktreeChanged = nextWorktree !== entry.worktreeSig;
     const headChanged = nextHead !== entry.headSig;
     const repoStateChanged = nextRepoState !== entry.repoStateSig;
@@ -223,26 +261,7 @@ export function createGitWatchService({
       takeRawWorktreeSnapshot(gitRoot);
       return;
     }
-    // 有变化 → 一并算 status 随广播下发（多订阅者共享，免 renderer refetch）
-    let status: GitStatus | undefined;
-    if (getStatus) {
-      // 本轮签名计算已拿到的原始输出（默认路径填充）复用给 getStatus，免重复 spawn（A7）
-      const prefetched = takeRawWorktreeSnapshot(gitRoot);
-      try {
-        status = await getStatus(gitRoot, prefetched);
-      } catch {
-        // getStatus 失败不阻塞广播；renderer 接到不带 status 的广播会走 getStatus IPC fallback
-      }
-    } else {
-      takeRawWorktreeSnapshot(gitRoot);
-    }
-    for (const listener of entry.listeners) {
-      listener(
-        status === undefined
-          ? { changeKind, gitRoot }
-          : { changeKind, gitRoot, status }
-      );
-    }
+    await broadcastChange(entry, gitRoot, changeKind);
   }
 
   function scheduleRefresh(gitRoot: string): void {
@@ -258,9 +277,7 @@ export function createGitWatchService({
     const elapsed = now - entry.firstEventAt;
     // max-wait：从 burst 首事件起最多等 maxWait ms；不够 debounceMs 就按剩余时间跑
     const delay = Math.max(0, Math.min(debounceMs, maxWaitMs - elapsed));
-    if (entry.debounceTimer !== null) {
-      clearTimeout(entry.debounceTimer);
-    }
+    clearTimeout(entry.debounceTimer ?? undefined);
     entry.debounceTimer = setTimeout(() => {
       const target = entries.get(gitRoot);
       if (target) {
@@ -274,7 +291,12 @@ export function createGitWatchService({
   }
 
   function attachWatcherHandlers(entry: WatchEntry, gitRoot: string): void {
-    entry.watcher.on("change", () => scheduleRefresh(gitRoot));
+    entry.watcher.on("change", (_event, filename) => {
+      if (typeof filename === "string" && isNoiseTreeEvent(filename)) {
+        return;
+      }
+      scheduleRefresh(gitRoot);
+    });
     entry.watcher.on("error", () => safeRecreateWatcher(entry, gitRoot));
   }
 
@@ -294,12 +316,65 @@ export function createGitWatchService({
     attachWatcherHandlers(entry, gitRoot);
   }
 
-  function disposeEntry(entry: WatchEntry): void {
-    if (entry.debounceTimer !== null) {
-      clearTimeout(entry.debounceTimer);
+  /**
+   * 异步把 entry 挂接到 repo hub：锚点解析成功 → 加入（或建立）commonDir 对应 hub，
+   * 自有 poll 上收 hub。解析失败保持 standalone（非 git 目录 / git 不可用）。
+   * entry 引用比对防换代竞态（解析期间退订又重订产生新 entry）。
+   */
+  async function attachToHub(
+    gitRoot: string,
+    entry: WatchEntry
+  ): Promise<void> {
+    const anchors = await resolveRepoAnchors(gitRoot);
+    if (anchors === null) {
+      return;
     }
-    clearInterval(entry.pollTimer);
+    if (entries.get(gitRoot) !== entry || entry.hub !== null) {
+      return;
+    }
+    let hub = hubs.get(anchors.commonDir);
+    if (hub === undefined) {
+      const commonDir = anchors.commonDir;
+      hub = createRepoHub({
+        commonDir,
+        computeRefsSnapshot,
+        debounceMs,
+        fsWatch,
+        isPollActive,
+        maxWaitMs,
+        onDispose: () => hubs.delete(commonDir),
+        pollMs,
+      });
+      hubs.set(commonDir, hub);
+    }
+    const handle: HubAgent = {
+      gitDir: anchors.gitDir,
+      gitRoot,
+      requestRefresh: (snap) => {
+        const target = entries.get(gitRoot);
+        if (!target?.baselineReady) {
+          return;
+        }
+        refresh(gitRoot, false, snap).catch(() => undefined);
+      },
+    };
+    entry.hub = hub;
+    entry.hubHandle = handle;
+    hub.attach(handle);
+    // poll 上收 hub：每物理仓库一个 poll，不随打开的 worktree 数膨胀
+    clearInterval(entry.pollTimer ?? undefined);
+    entry.pollTimer = null;
+  }
+
+  function disposeEntry(entry: WatchEntry): void {
+    clearTimeout(entry.debounceTimer ?? undefined);
+    clearInterval(entry.pollTimer ?? undefined);
     entry.watcher.close();
+    if (entry.hub !== null && entry.hubHandle !== null) {
+      entry.hub.detach(entry.hubHandle);
+      entry.hub = null;
+      entry.hubHandle = null;
+    }
   }
 
   function watch(
@@ -325,7 +400,12 @@ export function createGitWatchService({
         debounceTimer: null,
         firstEventAt: null,
         headSig: "",
+        hub: null,
+        hubHandle: null,
+        lastRefsTable: null,
         listeners: new Set(),
+        pendingRefsSnap: null,
+        pendingPulse: false,
         pollTimer,
         recreateCoolingUntil: 0,
         refsSig: "",
@@ -337,13 +417,23 @@ export function createGitWatchService({
       };
       entries.set(gitRoot, entry);
       attachWatcherHandlers(entry, gitRoot);
-      // 初始签名采集:完成后才标 baselineReady,避免与初始 "" 签名比较误报
+      // 初始签名采集:完成后才标 baselineReady,避免与初始 "" 签名比较误报。
+      // hub 挂接严格在 baseline 之后：保证 baseline 一定自算 refs 基线
+      // （防"挂接抢跑 → refsSig 空基线 → 首轮 refresh 误报 refs 变化"）。
       refresh(gitRoot, true)
         .catch(() => undefined)
         .finally(() => {
           const target = entries.get(gitRoot);
-          if (target) {
-            target.baselineReady = true;
+          if (!target) {
+            return;
+          }
+          target.baselineReady = true;
+          // 失败静默保持 standalone（自有 poll 兜底）
+          attachToHub(gitRoot, target).catch(() => undefined);
+          if (target.pendingPulse) {
+            // baseline 期间排队的外部驱动（autofetch/写操作）：补一轮，不丢信号
+            target.pendingPulse = false;
+            refresh(gitRoot, false).catch(() => undefined);
           }
         });
     }
@@ -374,8 +464,30 @@ export function createGitWatchService({
   }
 
   function pulse(gitRoot: string): void {
-    const entry = entries.get(gitRoot);
-    if (!entry?.baselineReady) {
+    let entry = entries.get(gitRoot);
+    if (!entry) {
+      // 写操作完成后以仓库内任意路径 pulse：回退最长前缀匹配（路径边界感知）
+      let bestRoot: string | null = null;
+      for (const root of entries.keys()) {
+        if (
+          gitRoot.startsWith(`${root}/`) &&
+          (bestRoot === null || root.length > bestRoot.length)
+        ) {
+          bestRoot = root;
+        }
+      }
+      entry = bestRoot === null ? undefined : entries.get(bestRoot);
+    }
+    if (!entry) {
+      return;
+    }
+    if (!entry.baselineReady) {
+      entry.pendingPulse = true;
+      return;
+    }
+    if (entry.hub !== null) {
+      // repo-wide：refs 快照算一次 fan-out 全部同仓 agent（fetch 影响整个物理仓库）
+      entry.hub.refreshAll();
       return;
     }
     refresh(gitRoot, false).catch(() => undefined);

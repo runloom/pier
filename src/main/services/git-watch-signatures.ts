@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { execGit } from "./git-exec.ts";
+import { fetchRefsTable } from "./git-refs-table.ts";
+import type { RefsSnapshot } from "./git-watch-hub.ts";
 
 /**
  * numstat 瞬时失败（如 index.lock）时写入签名的哨兵段。
@@ -95,26 +97,33 @@ export async function defaultWorktreeSignature(
 }
 
 /**
- * refs 签名：refs/heads + refs/remotes + refs/stash 的 refname+oid+upstream+symref。
- * 覆盖 fetch/push/prune/stash 纯 ref 操作、分支增删、upstream 配置变化（set/unset-upstream），
- * 以及 refs/remotes/*​/HEAD 符号指向变化（如 remote set-head 改默认分支，A3）。
+ * refs 签名：与 repo hub 共享同一 `for-each-ref` 输出
+ * （refname+oid+upstream+track+symref，见 git-refs-table.ts）。
+ * 覆盖 fetch/push/prune/stash 纯 ref 操作、分支增删、upstream 配置与
+ * gone 状态变化、refs/remotes/*​/HEAD 符号指向变化（A3）。
  */
 export async function defaultRefsSignature(gitRoot: string): Promise<string> {
-  try {
-    const output = await execGit(
-      [
-        "for-each-ref",
-        "--format=%(refname)%00%(objectname)%00%(upstream)%00%(symref)",
-        "refs/heads",
-        "refs/remotes",
-        "refs/stash",
-      ],
-      { cwd: gitRoot }
-    );
-    return createHash("sha256").update(output).digest("hex");
-  } catch {
-    return "";
-  }
+  const table = await fetchRefsTable(
+    (args, cwd) => execGit(args, { cwd }),
+    gitRoot
+  );
+  return table === null ? "" : table.signature;
+}
+
+/**
+ * repo hub 的 refs 快照：一次 for-each-ref 同时产出签名与共享 refs 表
+ * （表供 upstreamGone / 默认分支解析 / merged 判定消费，消除重复 spawn）。
+ */
+export async function defaultRefsSnapshot(
+  gitRoot: string
+): Promise<RefsSnapshot> {
+  const table = await fetchRefsTable(
+    (args, cwd) => execGit(args, { cwd }),
+    gitRoot
+  );
+  return table === null
+    ? { signature: "" }
+    : { signature: table.signature, table };
 }
 
 export async function defaultHeadSignature(gitRoot: string): Promise<string> {
@@ -199,4 +208,62 @@ export async function defaultRepoStateSignature(
       `${merge}|${cherry}|${revert}|${bisect}|${rebaseMergeStep}|${rebaseApply}`
     )
     .digest("hex");
+}
+
+/** watch 拓扑的路径锚点：per-worktree gitDir + 物理仓 commonDir（hub key）。 */
+export interface RepoAnchors {
+  /** canonical（realpath 归一）git common dir——同仓多 worktree 的去重键。 */
+  commonDir: string;
+  /** 本 worktree 的 gitDir（realpath 归一，供 hub 的 worktrees/<name> 事件路由匹配）。 */
+  gitDir: string;
+}
+
+/** 锚点缓存（worktree 生命周期内稳定）。失败不缓存：瞬时故障下一次重试。 */
+const repoAnchorsCache = new Map<string, RepoAnchors>();
+
+export async function resolveRepoAnchors(
+  gitRoot: string
+): Promise<RepoAnchors | null> {
+  const cached = repoAnchorsCache.get(gitRoot);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let lines: string[];
+  try {
+    const out = await execGit(
+      [
+        "rev-parse",
+        "--path-format=absolute",
+        "--absolute-git-dir",
+        "--git-common-dir",
+      ],
+      { cwd: gitRoot }
+    );
+    lines = out
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  } catch {
+    return null;
+  }
+  const rawGitDir = lines[0] ?? "";
+  if (rawGitDir.length === 0) {
+    return null;
+  }
+  const rawCommonDir = lines[1] ?? rawGitDir;
+  // realpath 归一：macOS /var → /private/var 等 symlink 会破坏
+  // gitDir 与 commonDir 的字符串前缀关系（hub 事件路由依赖它）
+  let gitDir = rawGitDir;
+  let commonDir = rawCommonDir;
+  try {
+    [gitDir, commonDir] = await Promise.all([
+      realpath(rawGitDir),
+      realpath(rawCommonDir),
+    ]);
+  } catch {
+    // realpath 失败（路径消失等）：退回原始绝对路径
+  }
+  const anchors: RepoAnchors = { commonDir, gitDir };
+  repoAnchorsCache.set(gitRoot, anchors);
+  return anchors;
 }
