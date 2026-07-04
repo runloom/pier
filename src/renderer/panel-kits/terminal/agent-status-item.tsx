@@ -36,7 +36,8 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const agent = isAgentActivity(activity) ? activity : null;
-  const shimmer = agent ? shouldShimmer(agent.status) : false;
+  const status = agent?.status;
+  const shimmer = status !== undefined && shouldShimmer(status);
   useEffect(() => {
     if (!shimmer) {
       return;
@@ -49,25 +50,43 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
   if (!agent) {
     return null;
   }
-  // ready 也可见（loomdesk："等待输入"）——item 的隐藏只由 agent activity 是否存在决定。
+  const agentLabel =
+    getAgentCatalogEntry(agent.agentId)?.label ?? agent.agentId;
+  // 无 hook 证据（launch 先验, 如 `omp update` 这类非会话子命令）→
+  // icon-only：只出品牌图标, 不谎报状态文案。status 唯 hook 证据可设。
+  if (status === undefined) {
+    return (
+      <span
+        className="inline-flex shrink-0 items-center gap-1"
+        data-agent-status="none"
+        data-testid="agent-status-item"
+      >
+        <span className="inline-flex size-5 shrink-0 items-center justify-center">
+          <AgentIcon agentId={agent.agentId} size={12} />
+        </span>
+        <span className="sr-only">{agentLabel}</span>
+      </span>
+    );
+  }
+  // ready 可见（loomdesk："等待输入"）——hook 证据在场时五态全部出文案。
   const level = shimmer
-    ? longRunLevel(Math.max(0, nowMs - agent.stateStartedAt))
+    ? longRunLevel(
+        Math.max(0, nowMs - (agent.stateStartedAt ?? agent.spawnedAt))
+      )
     : null;
-  const colorVar = statusColorVar(agent.status, level);
-  const label = t(agentStatusTextKey(agent.status));
+  const colorVar = statusColorVar(status, level);
+  const label = t(agentStatusTextKey(status));
   const badge =
     agent.subagentCount > 0
       ? `${label} · ${t("terminal.agentStatus.subagentCount", {
           count: agent.subagentCount,
         })}`
       : label;
-  const agentLabel =
-    getAgentCatalogEntry(agent.agentId)?.label ?? agent.agentId;
 
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1"
-      data-agent-status={agent.status}
+      data-agent-status={status}
       data-testid="agent-status-item"
     >
       <span className="inline-flex size-5 shrink-0 items-center justify-center">
