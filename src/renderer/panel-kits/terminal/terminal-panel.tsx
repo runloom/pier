@@ -187,7 +187,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
-  // agent 会话呈现 overlay 叠在最外层：icon/title 换 agent 的, 会话消失自动回退。
+  // agent 会话呈现 overlay 叠在最外层：icon/status 换 agent, title 保留 agent
+  // TUI 设置的终端标题；会话消失自动回退。
   // Task exit chrome overlay 由 activity 单源提供（foreground-activity 广播），
   // 老 TERMINAL_TAB_CHROME_PATCHED 通路已下线。3 层：base → restore-patch → activity。
   const effectiveTab = mergeTabChrome(
@@ -195,7 +196,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       savedSession?.tab ?? activeLaunch.tab,
       restoredTaskTabPatch(savedSession?.task)
     ),
-    activityTabChromeOverlay(activity)
+    activityTabChromeOverlay(activity, effectiveTitle)
   );
   const statusContext = {
     context: effectiveContext,

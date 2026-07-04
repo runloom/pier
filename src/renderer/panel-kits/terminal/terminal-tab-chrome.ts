@@ -100,13 +100,14 @@ export function terminalPanelDescriptor(args: {
  * tab-chrome-patch 持久化管线）——reload 后经 snapshot pull 自动恢复,
  * 活动消失即自动回退。
  *
- * - `agent` kind: 状态点从 agent status 派生, icon/title 换 agent
+ * - `agent` kind: 状态点从 agent status 派生, icon 换 agent, title 优先保留终端标题
  * - `task` kind: running 显示 running 状态点; success/failure/cancelled
  *   映射到相应的 tab status; label 作为 title
  * - `shell` / `idle` / undefined: 无 overlay, 走 tab 默认呈现
  */
 export function activityTabChromeOverlay(
-  activity: ForegroundActivity | undefined
+  activity: ForegroundActivity | undefined,
+  terminalTitle?: string | null
 ): Partial<PanelTabChrome> | null {
   if (!activity) {
     return null;
@@ -119,7 +120,7 @@ export function activityTabChromeOverlay(
     return {
       ...state,
       icon: { id: agentTabIconId(activity.agentId) },
-      title: entry?.label ?? activity.agentId,
+      title: terminalTitle?.trim() || entry?.label || activity.agentId,
     };
   }
   if (activity.kind === "task") {
