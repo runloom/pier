@@ -14,9 +14,12 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   lstatSync,
+  mkdirSync,
   readdirSync,
+  readFileSync,
   readlinkSync,
   rmSync,
   statSync,
@@ -99,6 +102,131 @@ function isBrokenSymlink(p) {
   } catch {
     return false;
   }
+}
+
+function compareMissingPath(left, right) {
+  const leftExists = existsSync(left);
+  const rightExists = existsSync(right);
+  if (!(leftExists || rightExists)) {
+    return { equal: true };
+  }
+  if (!(leftExists && rightExists)) {
+    return { equal: false, path: leftExists ? right : left };
+  }
+  return null;
+}
+
+function compareSymlink(left, right, leftStat, rightStat) {
+  if (!(leftStat.isSymbolicLink() && rightStat.isSymbolicLink())) {
+    return { equal: false, path: right };
+  }
+  return readlinkSync(left) === readlinkSync(right)
+    ? { equal: true }
+    : { equal: false, path: right };
+}
+
+function compareDirectory(left, right, leftStat, rightStat) {
+  if (!(leftStat.isDirectory() && rightStat.isDirectory())) {
+    return { equal: false, path: right };
+  }
+  const leftEntries = readdirSync(left).sort();
+  const rightEntries = readdirSync(right).sort();
+  if (leftEntries.length !== rightEntries.length) {
+    return { equal: false, path: right };
+  }
+  for (let i = 0; i < leftEntries.length; i += 1) {
+    if (leftEntries[i] !== rightEntries[i]) {
+      return { equal: false, path: path.join(right, rightEntries[i] ?? "") };
+    }
+    const child = compareTree(
+      path.join(left, leftEntries[i]),
+      path.join(right, rightEntries[i])
+    );
+    if (!child.equal) {
+      return child;
+    }
+  }
+  return { equal: true };
+}
+
+function compareFile(left, right, leftStat, rightStat) {
+  if (!(leftStat.isFile() && rightStat.isFile())) {
+    return { equal: false, path: right };
+  }
+  if (leftStat.size !== rightStat.size) {
+    return { equal: false, path: right };
+  }
+  return readFileSync(left).equals(readFileSync(right))
+    ? { equal: true }
+    : { equal: false, path: right };
+}
+
+function compareTree(left, right) {
+  const missing = compareMissingPath(left, right);
+  if (missing) {
+    return missing;
+  }
+
+  const leftStat = lstatSync(left);
+  const rightStat = lstatSync(right);
+  if (leftStat.isSymbolicLink() || rightStat.isSymbolicLink()) {
+    return compareSymlink(left, right, leftStat, rightStat);
+  }
+  if (leftStat.isDirectory() || rightStat.isDirectory()) {
+    return compareDirectory(left, right, leftStat, rightStat);
+  }
+  return compareFile(left, right, leftStat, rightStat);
+}
+
+function libghosttyBuildInputsMatch() {
+  const inputs = [
+    "scripts/build-libghostty.sh",
+    path.join("native", "Vendor", "libghostty-spm", "Patches", "ghostty"),
+  ];
+  for (const input of inputs) {
+    const result = compareTree(
+      path.join(mainRoot, input),
+      path.join(cwd, input)
+    );
+    if (!result.equal) {
+      return { match: false, path: result.path ?? input };
+    }
+  }
+  return { match: true };
+}
+
+function copyLibghosttyFromMain(xcf) {
+  if (process.env.GHOSTTY_TAG || process.env.LAKR_TAG) {
+    console.log(
+      "[setup-worktree] 检测到 GHOSTTY_TAG/LAKR_TAG 覆盖, 跳过主仓 GhosttyKit.xcframework 复用."
+    );
+    return false;
+  }
+
+  const mainXcf = path.join(
+    mainRoot,
+    "native",
+    "Vendor",
+    "libghostty-spm",
+    "GhosttyKit.xcframework"
+  );
+  if (!existsSync(mainXcf)) {
+    return false;
+  }
+
+  const inputs = libghosttyBuildInputsMatch();
+  if (!inputs.match) {
+    console.log(
+      `[setup-worktree] libghostty 构建输入与主仓不一致 (${inputs.path}), 跳过主仓 GhosttyKit.xcframework 复用.`
+    );
+    return false;
+  }
+
+  rmSync(xcf, { force: true, recursive: true });
+  mkdirSync(path.dirname(xcf), { recursive: true });
+  cpSync(mainXcf, xcf, { recursive: true, verbatimSymlinks: true });
+  console.log(`[setup-worktree] 从主仓复制 GhosttyKit.xcframework → ${xcf}`);
+  return true;
 }
 
 // native/build/Release/ 是 `pnpm build:native` (swift + node-gyp) 的产物, git 不入库.
@@ -210,6 +338,9 @@ function ensureLibghostty() {
     "GhosttyKit.xcframework"
   );
   if (existsSync(xcf)) {
+    return;
+  }
+  if (copyLibghosttyFromMain(xcf)) {
     return;
   }
   console.log(
