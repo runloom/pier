@@ -142,6 +142,21 @@ export interface NativeAddon {
   showTerminal(panelId: string): void;
 }
 
+/**
+ * 从 addon 解析路径推导 GHOSTTY_RESOURCES_DIR。
+ *
+ * 打包后 require.resolve 返回 app.asar 内的虚拟路径；消费方是 Ghostty 原生
+ * 代码和它 spawn 的 shell（TERMINFO / ZDOTDIR），走真实文件系统读不了 asar，
+ * 必须重写到 asarUnpack 的物理目录 app.asar.unpacked。dev 路径无此段，原样返回。
+ */
+export function ghosttyResourcesDirFromAddonPath(addonPath: string): string {
+  const nativeRoot = dirname(dirname(dirname(addonPath)));
+  return join(nativeRoot, "GhosttyResources", "ghostty").replace(
+    "/app.asar/",
+    "/app.asar.unpacked/"
+  );
+}
+
 export function loadNativeAddon(): {
   addon: NativeAddon | null;
   error: string | null;
@@ -157,12 +172,8 @@ export function loadNativeAddon(): {
     // Ghostty 找 shell-integration 脚本靠 GHOSTTY_RESOURCES_DIR，pier 把脚本
     // 打在 native/GhosttyResources/ghostty/ 下（zsh/bash/fish/nushell/elvish）。
     // 必须在 ghostty native 首次 init 前设，否则会 fallback 到禁用集成。
-    const nativeRoot = dirname(dirname(dirname(addonPath)));
-    process.env.GHOSTTY_RESOURCES_DIR ??= join(
-      nativeRoot,
-      "GhosttyResources",
-      "ghostty"
-    );
+    process.env.GHOSTTY_RESOURCES_DIR ??=
+      ghosttyResourcesDirFromAddonPath(addonPath);
     const addon: NativeAddon = require(addonPath);
     return { addon, error: null };
   } catch (e) {
