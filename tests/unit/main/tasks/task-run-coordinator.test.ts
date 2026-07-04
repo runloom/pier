@@ -15,7 +15,7 @@ function launch(
     focus: true,
     label,
     presentation: {},
-    projectRoot: "/repo",
+    projectRootPath: "/repo",
     rawCommand: label,
     source: "history",
     tab: { title: label },
@@ -43,7 +43,7 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "verify",
     });
 
@@ -82,7 +82,7 @@ describe("task run coordinator", () => {
           dependsOrder: "parallel",
         }),
       ],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "verify",
     });
 
@@ -125,7 +125,7 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "verify",
     });
 
@@ -148,7 +148,7 @@ describe("task run coordinator", () => {
 
     const result = await coordinator.start({
       launches: [launch("test", "test")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "test",
     });
 
@@ -171,12 +171,12 @@ describe("task run coordinator", () => {
 
     const first = await coordinator.start({
       launches: [launch("first", "first")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "first",
     });
     const second = await coordinator.start({
       launches: [launch("second", "second")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "second",
     });
 
@@ -201,12 +201,12 @@ describe("task run coordinator", () => {
 
     const first = await coordinator.start({
       launches: [launch("first", "first")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "first",
     });
     const second = await coordinator.start({
       launches: [launch("second", "second")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "second",
     });
 
@@ -238,7 +238,7 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "verify",
     });
 
@@ -267,7 +267,7 @@ describe("task run coordinator", () => {
 
     const result = await coordinator.start({
       launches: [launch("test", "test")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "test",
     });
 
@@ -295,7 +295,7 @@ describe("task run coordinator", () => {
           dependsOrder: "sequence",
         }),
       ],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "verify",
     });
 
@@ -319,14 +319,14 @@ describe("task run coordinator", () => {
 
     const first = await coordinator.start({
       launches: [launch("first", "first")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "first",
     });
     await coordinator.completePanel("panel-first", 0);
 
     const second = await coordinator.start({
       launches: [launch("second", "second")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "second",
     });
     await coordinator.completePanel("panel-second", 0);
@@ -343,7 +343,7 @@ describe("task run coordinator", () => {
 
     const result = await coordinator.start({
       launches: [launch("test", "test")],
-      projectRoot: "/repo",
+      projectRootPath: "/repo",
       rootTaskId: "test",
     });
 

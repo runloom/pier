@@ -4,7 +4,7 @@ import { taskCandidate as candidate } from "./task-candidate.ts";
 import { asRecord, commandWithArgs, readTextIfExists } from "./utils.ts";
 
 export interface ComposerSourceOptions {
-  projectRoot: string;
+  projectRootPath: string;
 }
 
 /**
@@ -26,9 +26,9 @@ function composerScriptDescription(value: unknown): string | undefined {
 }
 
 export async function composerSource({
-  projectRoot,
+  projectRootPath,
 }: ComposerSourceOptions): Promise<TaskCandidate[]> {
-  const text = await readTextIfExists(join(projectRoot, "composer.json"));
+  const text = await readTextIfExists(join(projectRootPath, "composer.json"));
   if (!text) {
     return [];
   }
@@ -45,7 +45,7 @@ export async function composerSource({
           command: commandWithArgs("composer", ["run-script", name]),
           kind: "shell",
         },
-        cwd: projectRoot,
+        cwd: projectRootPath,
         ...(description ? { description } : {}),
         idParts: ["composer", name],
         label: name,

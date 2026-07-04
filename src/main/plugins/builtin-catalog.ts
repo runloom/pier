@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MainPluginModule } from "@plugins/api/main.ts";
+import { FILES_PLUGIN_LOCALES } from "@plugins/builtin/files/locales/index.ts";
 import { filesMainPlugin } from "@plugins/builtin/files/main/index.ts";
 import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import { GIT_PLUGIN_LOCALES } from "@plugins/builtin/git/locales/index.ts";
@@ -44,7 +45,7 @@ export const BUILTIN_PLUGIN_SOURCES = [
     defaultEnabled: true,
     id: FILES_PLUGIN_MANIFEST.id,
     kind: "builtin",
-    locales: {},
+    locales: FILES_PLUGIN_LOCALES,
     main: filesMainPlugin,
     manifest: FILES_PLUGIN_MANIFEST,
   },

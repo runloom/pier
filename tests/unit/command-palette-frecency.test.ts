@@ -40,7 +40,7 @@ describe("buildFrecencyMap", () => {
 describe("actionRank", () => {
   const baseAction = (id: string, sortOrder?: number) => ({
     id,
-    category: "View",
+    category: "view",
     title: () => id,
     handler: () => undefined,
     ...(sortOrder == null ? {} : { metadata: { sortOrder } }),
@@ -81,7 +81,7 @@ describe("groupRank", () => {
   });
 
   it("组内任一 action 有 frecency → tier=frecency + maxScore", () => {
-    const actions = [baseAction("a", "View"), baseAction("b", "View")];
+    const actions = [baseAction("a", "view"), baseAction("b", "view")];
     const map = new Map([
       ["a", 3],
       ["b", 7],
@@ -94,7 +94,7 @@ describe("groupRank", () => {
   });
 
   it("组内全无 frecency → tier=fallback + CATEGORY_META.order", () => {
-    const actions = [baseAction("a", "Settings")];
+    const actions = [baseAction("a", "settings")];
     const r = groupRank(actions, new Map());
     expect(r.tier).toBe("fallback");
     // Settings.order = 7 (见 command-palette CATEGORY_META, git 分类插入后顺延)
@@ -107,7 +107,7 @@ describe("groupRank", () => {
 describe("compareActions", () => {
   const mkA = (id: string, sortOrder?: number) => ({
     id,
-    category: "View",
+    category: "view",
     title: () => id,
     handler: () => undefined,
     ...(sortOrder == null ? {} : { metadata: { sortOrder } }),
@@ -141,15 +141,15 @@ describe("compareGroups", () => {
   });
 
   it("frecency 组排在 fallback 组前面", () => {
-    const ga = [mkA("a", "Panel")];
-    const gb = [mkA("b", "View")];
+    const ga = [mkA("a", "panel")];
+    const gb = [mkA("b", "view")];
     const map = new Map([["a", 1]]);
     expect(compareGroups(ga, gb, map)).toBeLessThan(0);
   });
 
-  it("两个 fallback 组: 按 CATEGORY_META.order 排 (View=0 在前, Settings=7 在后)", () => {
-    const view = [mkA("v", "View")];
-    const settings = [mkA("s", "Settings")];
+  it("两个 fallback 组: 按 CATEGORY_META.order 排 (view=0 在前, settings=7 在后)", () => {
+    const view = [mkA("v", "view")];
+    const settings = [mkA("s", "settings")];
     expect(compareGroups(view, settings, new Map())).toBeLessThan(0);
   });
 });

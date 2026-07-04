@@ -3,10 +3,7 @@ import {
   type PanelTabChrome,
   panelContextSchema,
 } from "@shared/contracts/panel.ts";
-import {
-  type TaskPanelMetadata,
-  taskPanelMetadataSchema,
-} from "@shared/contracts/tasks.ts";
+import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
@@ -15,15 +12,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
-import { useAgentSessionStore } from "@/stores/agent-session.store.ts";
+import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
 import {
   computeMonoFontFamily,
   computeMonoFontFamilyList,
   useFontStore,
 } from "@/stores/font.store.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import { useTerminalResizeStore } from "@/stores/terminal.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
-import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import { TerminalSearchBar } from "./terminal-search-bar.tsx";
@@ -34,7 +32,7 @@ import {
 } from "./terminal-status-bar.tsx";
 import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
-  agentTabChromeOverlay,
+  activityTabChromeOverlay,
   mergeTabChrome,
   tabChromeFromParams,
   terminalPanelDescriptor,
@@ -58,14 +56,6 @@ function launchIdFromParams(params: unknown): string | undefined {
   return typeof launchId === "string" && launchId.length > 0
     ? launchId
     : undefined;
-}
-
-function taskFromParams(params: unknown): TaskPanelMetadata | undefined {
-  if (!params || typeof params !== "object" || !("task" in params)) {
-    return;
-  }
-  const parsed = taskPanelMetadataSchema.safeParse(params.task);
-  return parsed.success ? parsed.data : undefined;
 }
 
 interface ActiveTerminalLaunch {
@@ -151,7 +141,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       launchId: launchIdFromParams(props.params),
       sequence: 0,
       tab: tabChromeFromParams(props.params),
-      task: taskFromParams(props.params),
+      task: taskPanelMetadataFromParams(props.params),
     })
   );
   const relaunchRequest = useTerminalRelaunchRequest(panelId);
@@ -189,12 +179,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     (e) => e.title,
     activeLaunch.sequence
   );
-  const tabPatch = usePanelEventState(
-    window.pier.terminal.onTabChromePatch,
-    panelId,
-    (e) => e.tab,
-    activeLaunch.sequence
-  );
 
   const sessionLoaded = savedSession !== undefined;
   const restoredTaskResult = restoredTaskResultFromSession(savedSession?.task);
@@ -202,17 +186,16 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
-  const agentSession = useAgentSessionStore((s) => s.sessions[panelId]);
+  const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   // agent 会话呈现 overlay 叠在最外层：icon/title 换 agent 的, 会话消失自动回退。
+  // Task exit chrome overlay 由 activity 单源提供（foreground-activity 广播），
+  // 老 TERMINAL_TAB_CHROME_PATCHED 通路已下线。3 层：base → restore-patch → activity。
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
-      mergeTabChrome(
-        savedSession?.tab ?? activeLaunch.tab,
-        restoredTaskTabPatch(savedSession?.task)
-      ),
-      tabPatch
+      savedSession?.tab ?? activeLaunch.tab,
+      restoredTaskTabPatch(savedSession?.task)
     ),
-    agentTabChromeOverlay(agentSession)
+    activityTabChromeOverlay(activity)
   );
   const statusContext = {
     context: effectiveContext,

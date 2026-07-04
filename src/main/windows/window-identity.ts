@@ -38,10 +38,6 @@ export function findWindowContext(window: AppWindow): WindowContext | null {
   return appWindowContexts.get(window) ?? null;
 }
 
-export function findWindowSessionId(window: AppWindow): string | null {
-  return findWindowContext(window)?.sessionId ?? null;
-}
-
 export function findAppWindowByElectronId(id: number): AppWindow | null {
   return appWindowsByElectronId.get(id) ?? null;
 }
@@ -50,4 +46,9 @@ export function findAppWindowByWebContents(
   webContents: WebContents
 ): AppWindow | null {
   return appWindowsByWebContents.get(webContents) ?? null;
+}
+
+/** 枚举当前活跃 AppWindow 的 electronId——广播通道给所有窗口发全量快照时用。 */
+export function listAppWindowIds(): readonly number[] {
+  return [...appWindowsByElectronId.keys()];
 }

@@ -1,7 +1,7 @@
 /**
  * 平台检测 + KeyboardEvent → KeyChord 归一化.
  *
- * 平台检测优先用 Electron preload 暴露的 window.pier.platform; 仅当 preload
+ * 平台检测优先用 Electron preload 暴露的 window.pier.env.platform; 仅当 preload
  * 不可用 (浏览器预览 / 测试沙箱) 才回退到 navigator.platform 字符串嗅探.
  */
 import type { KeyChord } from "./types.ts";
@@ -10,7 +10,7 @@ const MAC_NAV_PLATFORM_RE = /Mac|iPhone|iPad/;
 
 function detectMac(): boolean {
   const pierPlatform =
-    typeof window === "undefined" ? undefined : window.pier?.platform;
+    typeof window === "undefined" ? undefined : window.pier?.env?.platform;
   if (pierPlatform != null) {
     return pierPlatform === "darwin";
   }

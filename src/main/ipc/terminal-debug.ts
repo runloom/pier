@@ -13,7 +13,7 @@ import type { IpcMain, WebContents } from "electron";
 import type { AppWindow } from "../windows/app-window.ts";
 import { findAppWindowByElectronId } from "../windows/window-identity.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
-import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
+import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 import {
   readTerminalInputRoutingDebug,
   readTerminalPresentationDebug,
@@ -83,7 +83,7 @@ function keyboardFocusTargetValue(value: unknown): TerminalKeyboardFocusTarget {
   if (record?.kind === "terminal") {
     const nativePanelId = stringValue(record.panelId);
     if (nativePanelId) {
-      return { kind: "terminal", panelId: unscopePanelId(nativePanelId) };
+      return { kind: "terminal", panelId: fromNativePanelKey(nativePanelId) };
     }
   }
   return { kind: "web" };
@@ -137,7 +137,7 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           isOffscreen: booleanValue(surface.isOffscreen),
           isSurfaceFocused: booleanValue(surface.isSurfaceFocused),
           nativePanelId,
-          panelId: unscopePanelId(nativePanelId),
+          panelId: fromNativePanelKey(nativePanelId),
           targetRect: optionalFrameValue(surface.targetRect),
           viewportFrame: optionalFrameValue(surface.viewportFrame),
         },
@@ -145,7 +145,7 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
     }),
     window: {
       activeTerminalPanelId: nativeActiveTerminalPanelId
-        ? unscopePanelId(nativeActiveTerminalPanelId)
+        ? fromNativePanelKey(nativeActiveTerminalPanelId)
         : null,
       inputRoutingStaleDiscardCount:
         typeof rawWindow?.inputRoutingStaleDiscardCount === "number"
@@ -203,7 +203,9 @@ export function recordRendererTerminalRoute(
     action,
     browserWindowId: win.id,
     ...(detail ? { detail } : {}),
-    ...(panelId ? { nativePanelId: scopePanelId(win, panelId), panelId } : {}),
+    ...(panelId
+      ? { nativePanelId: toNativePanelKey(win, panelId), panelId }
+      : {}),
     route: "renderer->main->native",
     windowId: stableWindowIdFor(win),
   });
@@ -235,7 +237,7 @@ export function recordNativeTerminalRoute(
     browserWindowId,
     ...(detail ? { detail } : {}),
     ...(nativePanelId
-      ? { nativePanelId, panelId: unscopePanelId(nativePanelId) }
+      ? { nativePanelId, panelId: fromNativePanelKey(nativePanelId) }
       : {}),
     route: "native->main->renderer",
     ...(targetWindow ? { windowId: stableWindowIdFor(targetWindow) } : {}),

@@ -96,6 +96,14 @@ function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
 
 function cliClientServices(): PierCoreServices {
   return {
+    ai: {
+      status: async () => ({ agent: null, configured: false, label: "" }),
+      suggestBranch: async () => ({
+        message: "not configured",
+        reason: "not_configured",
+        status: "unavailable",
+      }),
+    },
     commandPaletteMru: {
       clear: async () => ({ entries: [], version: 1 }),
       read: async () => ({ entries: [], version: 1 }),
@@ -108,7 +116,7 @@ function cliClientServices(): PierCoreServices {
         contextId: `ctx:${path}`,
         cwd: path,
         openedPath: path,
-        projectRoot: path,
+        projectRootPath: path,
         source: "command",
         updatedAt: 1_772_000_000_000,
         worktreeKey: path,
@@ -278,7 +286,7 @@ describe("local control socket", () => {
   it("通过 socket 执行 worktree list/create/remove 的真实 Git 闭环", async () => {
     const userDataDir = await makeTempDir();
     const repo = await initRepo();
-    const linked = join(repo, ".worktrees", "feature-a");
+    const linked = join(`${repo}.worktree`, "feature-a");
     const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
     const clients = createClientRegistry(() => 1_772_000_000_000);
     clients.register({

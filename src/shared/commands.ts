@@ -25,6 +25,8 @@ export const APP_HANDLED_NATIVE_TERMINAL_COMMANDS = [
   "pier.panel.focusDown",
   "pier.panel.focusLeft",
   "pier.panel.focusRight",
+  "pier.run.task",
+  "pier.worktree.create",
 ] as const;
 
 export type AppHandledNativeTerminalCommand =

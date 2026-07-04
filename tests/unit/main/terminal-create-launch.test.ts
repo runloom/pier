@@ -47,7 +47,7 @@ describe("terminal create launch options", () => {
         context: {
           contextId: "ctx:/tmp/pier",
           cwd: "/tmp/pier",
-          projectRoot: "/tmp/pier",
+          projectRootPath: "/tmp/pier",
           source: "panel",
           updatedAt: 1_772_000_000_000,
         },
@@ -56,7 +56,7 @@ describe("terminal create launch options", () => {
           exitCode: 0,
           finishedAt: 1_772_000_001_000,
           label: "test",
-          projectRoot: "/tmp/pier",
+          projectRootPath: "/tmp/pier",
           rawCommand: "pnpm test",
           runId: "run-1",
           source: "package-script",
@@ -88,14 +88,14 @@ describe("terminal create launch options", () => {
         context: {
           contextId: "ctx:/tmp/pier",
           cwd: "/tmp/pier",
-          projectRoot: "/tmp/pier",
+          projectRootPath: "/tmp/pier",
           source: "panel",
           updatedAt: 1_772_000_000_000,
         },
         task: {
           cwd: "/tmp/pier",
           label: "dev",
-          projectRoot: "/tmp/pier",
+          projectRootPath: "/tmp/pier",
           rawCommand: "bun run dev",
           runId: "run-1",
           source: "package-script",
@@ -125,7 +125,7 @@ describe("terminal create launch options", () => {
           task: {
             cwd: "/tmp/pier",
             label: `x'; touch ${markerPath}; #`,
-            projectRoot: "/tmp/pier",
+            projectRootPath: "/tmp/pier",
             rawCommand: `$(touch ${markerPath})`,
             runId: "run-1",
             source: "history",
@@ -163,7 +163,7 @@ describe("terminal create launch options", () => {
     const relaunchTask = {
       cwd: "/tmp/pier",
       label: "lint",
-      projectRoot: "/tmp/pier",
+      projectRootPath: "/tmp/pier",
       rawCommand: "pnpm lint",
       runId: "run-2",
       source: "package-script",
@@ -175,7 +175,7 @@ describe("terminal create launch options", () => {
       task: {
         cwd: "/tmp/pier",
         label: "dev",
-        projectRoot: "/tmp/pier",
+        projectRootPath: "/tmp/pier",
         rawCommand: "pnpm dev",
         runId: "run-1",
         source: "package-script",
@@ -208,14 +208,14 @@ describe("terminal create launch options", () => {
     const savedContext = {
       contextId: "ctx:/tmp/saved",
       cwd: "/tmp/saved",
-      projectRoot: "/tmp/saved",
+      projectRootPath: "/tmp/saved",
       source: "panel",
       updatedAt: 1_772_000_003_000,
     } as const;
     const argsContext = {
       contextId: "ctx:/tmp/args",
       cwd: "/tmp/args",
-      projectRoot: "/tmp/args",
+      projectRootPath: "/tmp/args",
       source: "panel",
       updatedAt: 1_772_000_004_000,
     } as const;
@@ -224,7 +224,7 @@ describe("terminal create launch options", () => {
       exitCode: 0,
       finishedAt: 1_772_000_005_000,
       label: "saved:test",
-      projectRoot: "/tmp/saved",
+      projectRootPath: "/tmp/saved",
       rawCommand: "pnpm saved:test",
       runId: "run-saved",
       source: "package-script",
@@ -237,7 +237,7 @@ describe("terminal create launch options", () => {
       exitCode: 1,
       finishedAt: 1_772_000_006_000,
       label: "args:test",
-      projectRoot: "/tmp/args",
+      projectRootPath: "/tmp/args",
       rawCommand: "pnpm args:test",
       runId: "run-args",
       source: "package-script",

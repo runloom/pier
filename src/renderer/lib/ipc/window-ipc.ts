@@ -17,7 +17,7 @@ export function createWindow(): Promise<WindowCreateResult> {
 }
 
 export function getWindowContext(): Promise<WindowContext> {
-  return window.pier.getWindowContext();
+  return window.pier.window.getContext();
 }
 
 export function listWindows(): Promise<WindowInfo[]> {
@@ -34,5 +34,5 @@ export function closeWindow(windowId: string): Promise<void> {
 
 /** 关闭调用方所在窗口 (无需传 windowId, main 侧用 sender 定位). */
 export function closeCurrentWindow(): Promise<void> {
-  return window.pier.closeCurrentWindow();
+  return window.pier.window.closeCurrent();
 }

@@ -50,6 +50,8 @@ export interface AgentCatalogEntry {
   label: string;
   launchCmd: string;
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>;
+  /** Headless 一次性调用:append 在 launchCmd/defaultArgs 之后的 argv(含 prompt)。 */
+  oneShotArgs?: (prompt: string) => readonly string[];
 }
 
 /** 探测结果（IPC 返回）。 */

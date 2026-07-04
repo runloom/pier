@@ -12,7 +12,6 @@ export const PIER = {
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
-  WINDOW_FULLSCREEN_STATE: "pier://window:fullscreen-state",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
 } as const;
 
@@ -29,8 +28,12 @@ export const PIER_BROADCAST = {
   PREFERENCES_CHANGED: "pier:preferences:changed",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
-  // macOS 原生全屏进出 (main → renderer, payload { isFullscreen }).
-  WINDOW_FULLSCREEN_CHANGED: "pier://window:fullscreen-changed",
+  // 终端工作目录变更广播 (main → renderer).
+  TERMINAL_CWD_CHANGED: "pier://terminal:cwd-changed",
+  // 终端标题变更广播 (main → renderer).
+  TERMINAL_TITLE_CHANGED: "pier://terminal:title-changed",
+  // 命令面板 MRU 变更广播 (main → renderer, payload MruState).
+  COMMAND_PALETTE_MRU_CHANGED: "pier://command-palette-mru:changed",
   // git 变更广播 (main → renderer, payload GitChangeEvent).
   GIT_CHANGED: "pier://git:changed",
   // 插件 registry 变更广播 (main → renderer, payload PluginRegistryListResult).
@@ -43,12 +46,22 @@ export const PIER_BROADCAST = {
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
   // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
-  // agent 会话状态全量快照广播 (main → 所有 renderer, payload AgentSessionsBroadcast).
-  AGENT_SESSIONS_CHANGED: "pier://agent-session:changed",
+  // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
+  // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
+  FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];
 
 /** preload on() 订阅白名单 — 不在此列的通道不转发. */
-export const ALLOWED_RENDERER_CHANNELS: readonly string[] =
-  Object.values(PIER_BROADCAST);
+export const ALLOWED_RENDERER_CHANNELS: readonly string[] = [
+  ...Object.values(PIER_BROADCAST),
+  // 非 broadcast 但 renderer 需订阅的通道
+  "pier:terminal:request-context-menu",
+  "pier:terminal:focus-request",
+  "pier:terminal:search-state",
+  "pier:keybinding:forward",
+  "pier:keybinding:modifier-state",
+  "pier:renderer-command",
+  "pier:terminal-debug:collect-renderer-snapshot",
+];

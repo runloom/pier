@@ -3,7 +3,7 @@ import type {
   TerminalPresentationReason,
   TerminalPresentationSnapshot,
 } from "@shared/contracts/terminal.ts";
-import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { readRegisteredTerminalAnchorFrame } from "./terminal-layout-coordinator.ts";
 
 export interface TerminalPresentationPanelState {
@@ -142,11 +142,11 @@ export function applyTerminalPresentationNow(
     readFrame: readRegisteredTerminalAnchorFrame,
     reason,
     rendererSequence,
-    suppressVisible: useTerminalResizeStore.getState().suppressTerminals,
+    suppressVisible: useTerminalStore.getState().suppressTerminals,
     workspace: workspaceState,
   });
   lastDesiredSnapshot = snapshot;
-  useTerminalResizeStore.setState({
+  useTerminalStore.setState({
     lastDownlinkSequence: snapshot.rendererSequence,
   });
   window.pier?.terminal?.applyPresentation?.(snapshot);

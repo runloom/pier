@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { droidIntegration } from "../../../src/main/services/agents/integrations/droid.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -97,31 +97,27 @@ describe("droidIntegration", () => {
 
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
-      expect(cmd).toContain('\\"agent\\":\\"droid\\"');
+      expect(cmd).toContain('"droid"');
     }
     // pierEvent 名称核验
-    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"Stop\\"'
-    );
+    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain('"Stop"');
     expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolStart\\"'
+      '"ToolStart"'
     );
     expect(typedHooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolComplete\\"'
+      '"ToolComplete"'
     );
     expect(typedHooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"PromptSubmit\\"'
+      '"PromptSubmit"'
     );
     expect(typedHooks.SessionStart?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"SessionStart\\"'
+      '"SessionStart"'
     );
     expect(typedHooks.SessionEnd?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"SessionEnd\\"'
+      '"SessionEnd"'
     );
     expect(typedHooks.PreCompact?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"processing\\"'
+      '"processing"'
     );
   });
 
@@ -201,8 +197,8 @@ describe("droidIntegration", () => {
   });
 });
 
-describe("droid 遗留清理(上一波误装 hooks.json, 现改回 settings.json)", () => {
-  it("install 顺带清除旧 hooks.json 的 pier 条目并保留用户其他内容", async () => {
+describe("droid 遗留 HTTP hooks 处理（LEGACY_HOOK_MARK 删除后不再自动清理）", () => {
+  it("install 保留旧 hooks.json 的 HTTP-format 条目为用户配置, settings.json 正常写入新 JSONL 条目", async () => {
     const home = await mkdtemp(join(tmpdir(), "pier-droid-legacy-"));
     const prevHome = process.env.HOME;
     process.env.HOME = home;
@@ -230,16 +226,17 @@ describe("droid 遗留清理(上一波误装 hooks.json, 现改回 settings.json
         "utf8"
       );
       await droidIntegration.install();
+      // LEGACY_HOOK_MARK 删除后，旧 HTTP 条目已无法被识别为 pier-managed，
+      // 因此保持原样——作为用户配置对待。这是干净 cutover 的一次性代价。
       const cleaned = JSON.parse(
         await readFile(join(factoryDir, "hooks.json"), "utf8")
       );
-      expect(JSON.stringify(cleaned)).not.toContain("PIER_AGENT_HOOK_PORT");
-      expect(cleaned.hooks.Stop).toHaveLength(1);
-      // 新路径 (settings.json) 正常写入
+      expect(JSON.stringify(cleaned)).toContain("PIER_AGENT_HOOK_PORT");
+      // 新路径 (settings.json) 正常写入 JSONL 通路条目
       const fresh = JSON.parse(
         await readFile(join(factoryDir, "settings.json"), "utf8")
       );
-      expect(JSON.stringify(fresh)).toContain("PIER_AGENT_HOOK_PORT");
+      expect(JSON.stringify(fresh)).toContain(MARK);
     } finally {
       process.env.HOME = prevHome;
     }

@@ -4,7 +4,7 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
-import { scopePanelId } from "./terminal-panel-id.ts";
+import { toNativePanelKey } from "./terminal-panel-id.ts";
 
 const TERMINAL_OPERATION_BINDINGS: Record<TerminalOperation, string> = {
   clearScreen: "clear_screen",
@@ -43,7 +43,7 @@ export function performTerminalOperation(opts: {
   }
   try {
     const ok = opts.addon.performTerminalBindingAction(
-      scopePanelId(opts.win, opts.panelId),
+      toNativePanelKey(opts.win, opts.panelId),
       TERMINAL_OPERATION_BINDINGS[opts.operation]
     );
     return ok

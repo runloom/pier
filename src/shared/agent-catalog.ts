@@ -9,6 +9,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "claude",
     iconId: "claude",
     homepageUrl: "https://claude.com/claude-code",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
   {
     id: "codex",
@@ -18,6 +19,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "codex",
     iconId: "codex",
     homepageUrl: "https://github.com/openai/codex",
+    oneShotArgs: (prompt) => ["exec", "--skip-git-repo-check", prompt],
   },
   {
     id: "gemini",
@@ -27,6 +29,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "gemini",
     iconId: "gemini",
     homepageUrl: "https://github.com/google-gemini/gemini-cli",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
   {
     id: "aider",
@@ -45,6 +48,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "opencode",
     faviconDomain: "opencode.ai",
     homepageUrl: "https://opencode.ai/docs/cli/",
+    oneShotArgs: (prompt) => ["run", prompt],
   },
   {
     id: "cursor",
@@ -54,6 +58,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "cursor-agent",
     faviconDomain: "cursor.com",
     homepageUrl: "https://cursor.com/cli",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
   {
     id: "copilot",
@@ -64,6 +69,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     iconId: "copilot",
     homepageUrl:
       "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
   {
     id: "droid",
@@ -83,6 +89,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     faviconDomain: "moonshot.cn",
     homepageUrl:
       "https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
   {
     id: "pi",
@@ -111,6 +118,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "grok",
     faviconDomain: "x.ai",
     homepageUrl: "https://x.ai/cli",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
   {
     id: "mimo-code",
@@ -256,6 +264,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     expectedProcess: "qwen-code",
     faviconDomain: "qwenlm.github.io",
     homepageUrl: "https://github.com/QwenLM/qwen-code",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
   {
     id: "rovo",

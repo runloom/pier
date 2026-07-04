@@ -52,7 +52,7 @@ const context: PanelContext = {
   contextId: "ctx-pier",
   cwd: "/Users/xyz/ABC/pier",
   openedPath: "/Users/xyz/ABC/pier",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectRootPath: "/Users/xyz/ABC/pier",
   source: "command",
   updatedAt: 1_772_000_000_000,
   worktreeKey: "/Users/xyz/ABC/pier",
@@ -73,13 +73,16 @@ describe("workspace terminal close lifecycle", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        closeCurrentWindow: vi.fn(async () => undefined),
-        getWindowContext: vi.fn(async () => ({
-          mode: "restore",
-          recordId: "record-current",
-          sessionId: "record-current",
-          windowId: "main",
-        })),
+        env: { platform: "darwin" },
+        window: {
+          closeCurrent: vi.fn(async () => undefined),
+          getContext: vi.fn(async () => ({
+            mode: "restore",
+            recordId: "record-current",
+            sessionId: "record-current",
+            windowId: "main",
+          })),
+        },
         workspace: { clearLayout: vi.fn(async () => undefined) },
         terminal: { close: vi.fn() },
       },
@@ -273,7 +276,7 @@ describe("workspace terminal close lifecycle", () => {
 
     await useWorkspaceStore.getState().closeAll();
 
-    expect(window.pier.getWindowContext).toHaveBeenCalled();
+    expect(window.pier.window.getContext).toHaveBeenCalled();
     expect(window.pier.workspace.clearLayout).toHaveBeenCalledWith(
       "record-current"
     );
@@ -295,7 +298,7 @@ describe("workspace terminal close lifecycle", () => {
 
     await useWorkspaceStore.getState().resetLayout();
 
-    expect(window.pier.getWindowContext).toHaveBeenCalled();
+    expect(window.pier.window.getContext).toHaveBeenCalled();
     expect(window.pier.workspace.clearLayout).toHaveBeenCalledWith(
       "record-current"
     );

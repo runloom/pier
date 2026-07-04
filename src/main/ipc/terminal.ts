@@ -18,7 +18,7 @@ import {
   findAppWindowByWebContents,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
-import { agentSessionService } from "./agent-session.ts";
+import { foregroundActivityService } from "./foreground-activity.ts";
 import {
   consumeCreateLaunch,
   resolveCreateTerminalLaunch,
@@ -44,7 +44,7 @@ import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
 import { performTerminalOperation } from "./terminal-operations.ts";
 import { terminalPanelClosed } from "./terminal-panel-closed.ts";
-import { scopePanelId, unscopePanelId } from "./terminal-panel-id.ts";
+import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 import {
   applyLatestTerminalPresentation,
   applyRendererTerminalInputRouting,
@@ -56,7 +56,7 @@ import { registerTerminalSearchIpc } from "./terminal-search.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import { persistInitialTerminalTab } from "./terminal-tab-chrome.ts";
 import { registerTerminalTaskLifecycleForwarding } from "./terminal-task-lifecycle-wiring.ts";
-import { terminalSessionScopeFor } from "./terminal-window-scope.ts";
+import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
 let cachedAddon: NativeAddon | null = null;
 export const getTerminalAddon = (): NativeAddon | null => cachedAddon;
@@ -95,13 +95,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     forwardToWindow(
       id,
       "pier:terminal:request-context-menu",
-      { panelId: unscopePanelId(panelId), x, y },
+      { panelId: fromNativePanelKey(panelId), x, y },
       "pier-mouse-forward"
     );
   });
   addon?.setTerminalFocusRequestCallback((id, panelId) => {
     recordNativeTerminalRoute(id, "focus-request", panelId);
-    const rawPanelId = unscopePanelId(panelId);
+    const rawPanelId = fromNativePanelKey(panelId);
     forwardToWindow(
       id,
       "pier:terminal:focus-request",
@@ -111,7 +111,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   });
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     recordNativeTerminalRoute(id, "cwd", panelId, { cwd });
-    const rawPanelId = unscopePanelId(panelId);
+    const rawPanelId = fromNativePanelKey(panelId);
     const targetWindow = findAppWindowByElectronId(id);
     handleTerminalCwdChange(id, rawPanelId, cwd, targetWindow).catch((err) => {
       console.error("[pier-cwd-context] failed:", err);
@@ -166,7 +166,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       }
       try {
         const handle = win.getNativeWindowHandle();
-        const sessionScope = terminalSessionScopeFor(win);
+        const sessionScope = windowRecordIdFor(win);
         taskLifecycle.resetPanel(
           args.panelId,
           findInternalWindowId(win) ?? undefined
@@ -186,10 +186,10 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           x: args.frame.x,
           y: args.frame.y,
         });
-        const hookEnv = await agentSessionService.hookEnv();
+        const hookEnv = foregroundActivityService.hookEnv();
         const ok = addon.createTerminal(
           handle,
-          scopePanelId(win, args.panelId),
+          toNativePanelKey(win, args.panelId),
           args.frame,
           args.font.family,
           args.font.size,
@@ -203,7 +203,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         if (ok) {
           if (launchAgentId) {
             // launcher 先验身份：图标/状态即刻点亮, 不等 agent 侧信号。
-            agentSessionService.agentLaunched(
+            foregroundActivityService.agentLaunched(
               String(win.id),
               args.panelId,
               launchAgentId
@@ -297,10 +297,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!win) {
         return null;
       }
-      return await readTerminalPanelSession(
-        terminalSessionScopeFor(win),
-        panelId
-      );
+      return await readTerminalPanelSession(windowRecordIdFor(win), panelId);
     }
   );
 
@@ -308,12 +305,12 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     {
       channel: "pier:terminal:show",
       call: (win: AppWindow, panelId: string) =>
-        addon?.showTerminal(scopePanelId(win, panelId)),
+        addon?.showTerminal(toNativePanelKey(win, panelId)),
     },
     {
       channel: "pier:terminal:hide",
       call: (win: AppWindow, panelId: string) =>
-        addon?.hideTerminal(scopePanelId(win, panelId)),
+        addon?.hideTerminal(toNativePanelKey(win, panelId)),
     },
   ] as const;
   for (const { channel, call } of panelIdRelays) {
@@ -342,17 +339,17 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         return;
       }
       const windowId = findInternalWindowId(win) ?? undefined;
-      const sessionScope = terminalSessionScopeFor(win);
+      const sessionScope = windowRecordIdFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
       // relaunch 也走清理+5s 冷却；launcher 立刻重启 agent 时首个 SessionStart
       // 可能被吸收，下个事件自愈，属接受行为。
-      agentSessionService.panelClosed(String(win.id), panelId);
+      foregroundActivityService.panelClosed(panelId);
       if (options?.reason === "relaunch") {
         taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
       } else {
         terminalPanelClosed.notifyTerminalPanelClosed(panelId, windowId);
       }
-      addon?.closeTerminal(scopePanelId(win, panelId));
+      addon?.closeTerminal(toNativePanelKey(win, panelId));
       try {
         await removeTerminalPanelSession(sessionScope, panelId);
       } catch (err) {
@@ -373,7 +370,7 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
         x: frame.x,
         y: frame.y,
       });
-      addon?.setFrame(scopePanelId(win, panelId), frame);
+      addon?.setFrame(toNativePanelKey(win, panelId), frame);
     }
   );
 
@@ -388,11 +385,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     recordRendererTerminalRoute(win, "reconcile", null, {
       count: activeIds.length,
     });
-    agentSessionService.retainPanels(String(win.id), activeIds);
+    foregroundActivityService.retainPanels(String(win.id), activeIds);
     try {
       addon.reconcileTerminals(
         win.getNativeWindowHandle(),
-        activeIds.map((id) => scopePanelId(win, id))
+        activeIds.map((id) => toNativePanelKey(win, id))
       );
     } catch (err) {
       console.error("[pier-terminal-reconcile] failed:", err);

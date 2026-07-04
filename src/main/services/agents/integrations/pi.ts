@@ -13,7 +13,7 @@ const MARKER = "pier-agent-status:v1 (managed by Pier)";
 /**
  * pi 事件 → pier 事件名（loomdesk pi.ts eventStatusMap 对齐, capability
  * "coarse"——pi 无工具/权限粒度, 仅回合级 session/prompt/run/stop 边界）。
- * agent_start → "processing"（pier runtimeStatusForHookEvent 承认的规范
+ * agent_start → "processing"（pier activityStatusForHookEvent 承认的规范
  * 事件名, 非 loomdesk 内部态名 "running"）。
  */
 const PI_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
@@ -51,40 +51,38 @@ export function piDetect(): boolean {
 }
 
 /**
- * 整文件 TS 扩展源码。同 omp：刻意不写顶层 import 声明（electron-vite 模板
- * 字面量扫描陷阱, 见 loomdesk pi.ts 头部注释）, emit 用运行时 require +
- * 全局 fetch。四个 PIER_ 环境变量缺任一即静默 no-op。
+ * 整文件 TS 扩展源码。同 omp：刻意不写顶层 import 声明（electron-vite
+ * 模板字面量扫描陷阱, 见 loomdesk pi.ts 头部注释）, emit 用运行时 require
+ * 拿到 fs.promises 直写 JSONL。三 PIER_ 环境变量缺任一即静默 no-op。
  */
 export function buildPiExtensionSource(): string {
   return `// pier-agent-status:v1 (managed by Pier). Safe to leave in place.
 // ${MARKER}
 // Deliberately no top-level import declarations: electron-vite scans
 // template literals in main's bundle and can otherwise inject an invalid
-// CommonJS shim into the ESM output. Use runtime require + global fetch.
+// CommonJS shim into the ESM output. \`await import()\` inside function
+// body is a CallExpression, not ImportDeclaration, so vite AST scan
+// doesn't fire; works in both CJS (Node <20) and ESM (Node 20+) hosts.
+// (Exception to ts-no-dynamic-import: generated file for a foreign host.)
 
-function pierEmit(event) {
-	const port = process.env.PIER_AGENT_HOOK_PORT;
-	const token = process.env.PIER_AGENT_HOOK_TOKEN;
+async function pierEmit(event) {
+	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
-	if (!port || !token || !panelId || !windowId) return;
-	const body = JSON.stringify({
+	if (!log || !panelId || !windowId) return;
+	const line = JSON.stringify({
 		v: 1,
-		agent: "pi",
-		event,
+		kind: "agentEvent",
+		ts: Date.now() * 1_000_000,
 		panelId,
 		windowId,
-	});
+		pid: process.pid,
+		agent: "pi",
+		event,
+	}) + "\\n";
 	try {
-		fetch("http://127.0.0.1:" + port + "/agent-event", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: "Bearer " + token,
-			},
-			body,
-			signal: AbortSignal.timeout(1500),
-		}).catch(() => {});
+		const { appendFile } = await import("node:fs/promises");
+		await appendFile(log, line);
 	} catch {
 		// best-effort, never throw into the agent's own event loop
 	}

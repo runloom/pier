@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 let homeDir: string;
 
@@ -69,8 +69,8 @@ describe("buildClineHookScript", () => {
     expect(script).toContain(CLINE_HOOK_MARKER);
     expect(script).toContain("cat >/dev/null 2>&1");
     expect(script).toContain(MARK);
-    expect(script).toContain('\\"agent\\":\\"cline\\"');
-    expect(script).toContain('\\"event\\":\\"Stop\\"');
+    expect(script).toContain('"cline"');
+    expect(script).toContain('"Stop"');
   });
 });
 
@@ -110,7 +110,7 @@ describe("install/uninstallClineHooks (文件 IO)", () => {
     ];
     for (const [file, pierEvent] of expectations) {
       const content = await readFile(join(dir, file), "utf8");
-      expect(content, file).toContain(`\\"event\\":\\"${pierEvent}\\"`);
+      expect(content, file).toContain(`"${pierEvent}"`);
     }
   });
 

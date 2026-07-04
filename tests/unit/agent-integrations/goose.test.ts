@@ -16,7 +16,7 @@ import {
   withPierGooseHooks,
 } from "../../../src/main/services/agents/integrations/goose.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 const NATIVE_EVENTS = [
   "SessionStart",
   "SessionEnd",
@@ -46,18 +46,18 @@ describe("withPierGooseHooks / withoutPierGooseHooks", () => {
     }
   });
 
-  it("command 含正确 agent id + pierEvent + PIER_AGENT_HOOK_PORT", () => {
+  it("command 含正确 agent id + pierEvent + PIER_AGENT_HOOKS_DIR mark", () => {
     const next = withPierGooseHooks({});
     const hooks = next.hooks as Record<
       string,
       Array<{ hooks: Array<{ command: string }> }>
     >;
     const preToolCommand = hooks.PreToolUse?.[0]?.hooks[0]?.command ?? "";
-    expect(preToolCommand).toContain('\\"agent\\":\\"goose\\"');
+    expect(preToolCommand).toContain('"goose"');
     expect(preToolCommand).toContain(MARK);
-    expect(preToolCommand).toContain('\\"event\\":\\"ToolStart\\"');
+    expect(preToolCommand).toContain('"ToolStart"');
     const stopCommand = hooks.Stop?.[0]?.hooks[0]?.command ?? "";
-    expect(stopCommand).toContain('\\"event\\":\\"Stop\\"');
+    expect(stopCommand).toContain('"Stop"');
   });
 
   it("幂等：重复安装事件条目不重复", () => {

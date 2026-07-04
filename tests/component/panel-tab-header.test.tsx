@@ -21,7 +21,7 @@ import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 
 type ActiveChangeHandler = (event: { isActive: boolean }) => void;
 
@@ -106,7 +106,7 @@ describe("PanelTabHeader", () => {
     vi.unstubAllGlobals();
     await i18next.changeLanguage("en");
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
-    useTabShortcutHintsStore.getState().reset();
+    useTerminalStore.getState().resetShortcutHints();
   });
 
   it("renders the icon declared by the panel kit metadata", () => {
@@ -401,7 +401,7 @@ describe("PanelTabHeader", () => {
         },
       },
     });
-    useTabShortcutHintsStore.setState({
+    useTerminalStore.setState({
       activeGroupTabHints: { "terminal-1": 1 },
       commandKeyDown: true,
     });
@@ -445,9 +445,7 @@ describe("PanelTabHeader", () => {
         },
       },
     });
-    useTabShortcutHintsStore
-      .getState()
-      .setActiveGroupPanels([{ id: "terminal-1" }]);
+    useTerminalStore.getState().setActiveGroupPanels([{ id: "terminal-1" }]);
 
     const { container } = render(
       <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
@@ -467,7 +465,7 @@ describe("PanelTabHeader", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("dev");
 
     act(() => {
-      useTabShortcutHintsStore.getState().setCommandKeyDown(true);
+      useTerminalStore.getState().setCommandKeyDown(true);
     });
 
     expect(screen.queryByRole("tooltip")).toBeNull();
@@ -641,7 +639,7 @@ describe("PanelTabHeader", () => {
         },
       },
     });
-    useTabShortcutHintsStore.setState({
+    useTerminalStore.setState({
       activeGroupTabHints: { "terminal-1": 1 },
       commandKeyDown: true,
     });
@@ -660,7 +658,7 @@ describe("PanelTabHeader", () => {
   });
 
   it("keeps the original icon for tabs outside the active group while Command is held", () => {
-    useTabShortcutHintsStore.setState({
+    useTerminalStore.setState({
       activeGroupTabHints: { "terminal-1": 1 },
       commandKeyDown: true,
     });
@@ -678,9 +676,7 @@ describe("PanelTabHeader", () => {
   });
 
   it("toggles the active group tab shortcut hint from web Command key events", () => {
-    useTabShortcutHintsStore
-      .getState()
-      .setActiveGroupPanels([{ id: "terminal-1" }]);
+    useTerminalStore.getState().setActiveGroupPanels([{ id: "terminal-1" }]);
 
     const { container } = render(
       <>

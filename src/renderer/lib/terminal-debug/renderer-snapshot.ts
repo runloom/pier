@@ -2,11 +2,11 @@ import type { TerminalDebugRendererSnapshot } from "@shared/contracts/terminal.t
 import {
   hasRegisteredTerminalAnchor,
   readRegisteredTerminalAnchorFrame,
-  readTerminalViewportFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/terminal-lifecycle-debug.ts";
 import { getLastTerminalPresentationSnapshot } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
-import { getLastTerminalInputRoutingSnapshot } from "@/stores/terminal-input-routing.store.ts";
+import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-viewport.ts";
+import { getLastTerminalInputRoutingSnapshot } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {

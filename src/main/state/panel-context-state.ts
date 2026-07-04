@@ -64,7 +64,7 @@ function keyForContext(context: PanelContext): string {
   return (
     context.worktreeKey ??
     context.worktreeRoot ??
-    context.projectRoot ??
+    context.projectRootPath ??
     context.cwd ??
     context.openedPath ??
     context.contextId

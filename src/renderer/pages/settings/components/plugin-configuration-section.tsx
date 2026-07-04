@@ -2,9 +2,10 @@ import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
-import type {
-  PluginConfigurationProperty,
-  PluginRegistryEntry,
+import {
+  GIT_PLUGIN_ID,
+  type PluginConfigurationProperty,
+  type PluginRegistryEntry,
 } from "@shared/contracts/plugin.ts";
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
@@ -20,6 +21,7 @@ import {
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
+import { WorktreeRootPathRow } from "@/pages/settings/components/worktree-section.tsx";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 
@@ -328,6 +330,13 @@ export function PluginConfigurationSection({ pluginId }: { pluginId: string }) {
                 </Fragment>
               );
             })}
+            {/* 工作树目录是项目偏好；这里只借 Git 插件页承载入口，不写入 pluginSettings。 */}
+            {pluginId === GIT_PLUGIN_ID ? (
+              <Fragment key="worktree-preferences">
+                {keys.length > 0 ? <FieldSeparator /> : null}
+                <WorktreeRootPathRow />
+              </Fragment>
+            ) : null}
           </FieldSet>
         </CardContent>
       </Card>

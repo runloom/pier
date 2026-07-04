@@ -4,6 +4,7 @@ import type {
   WorktreeCreateRequest,
   WorktreeCreateResult,
   WorktreeCreationDefaults,
+  WorktreeCreationDefaultsRequest,
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
@@ -17,7 +18,9 @@ import { invokePierCommand } from "./ipc-envelope.ts";
 export interface PierWorktreesAPI {
   check: (request: WorktreeCheckRequest) => Promise<WorktreeCheckResult>;
   create: (request: WorktreeCreateRequest) => Promise<WorktreeCreateResult>;
-  creationDefaults: () => Promise<WorktreeCreationDefaults>;
+  creationDefaults: (
+    request: WorktreeCreationDefaultsRequest
+  ) => Promise<WorktreeCreationDefaults>;
   list: (request: WorktreeListRequest) => Promise<WorktreeListResult>;
   open: (request: WorktreeOpenRequest) => Promise<unknown>;
   openTerminal: (request: WorktreeOpenTerminalRequest) => Promise<unknown>;
@@ -39,8 +42,9 @@ export const worktreesApi: PierWorktreesAPI = {
       path: request.path,
       type: "worktree.create",
     }),
-  creationDefaults: () =>
+  creationDefaults: (request) =>
     invokePierCommand<WorktreeCreationDefaults>({
+      path: request.path,
       type: "worktree.creationDefaults",
     }),
   list: (request) =>

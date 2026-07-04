@@ -46,7 +46,7 @@ function panelContext(path = "/Users/xyz/ABC/pier"): PanelContext {
     contextId: `ctx:${path}`,
     cwd: path,
     openedPath: path,
-    projectRoot: path,
+    projectRootPath: path,
     source: "command",
     updatedAt: now,
     worktreeKey: path,
@@ -141,6 +141,14 @@ function services(
   let recentContexts: PanelContext[] = [];
 
   return {
+    ai: {
+      status: async () => ({ agent: null, configured: false, label: "" }),
+      suggestBranch: async () => ({
+        message: "not configured",
+        reason: "not_configured",
+        status: "unavailable",
+      }),
+    },
     commandPaletteMru: {
       clear: async () => ({ entries: [], version: 1 }),
       read: async () => ({ entries: [], version: 1 }),
@@ -337,6 +345,7 @@ function services(
         removedPath: args.path,
         worktrees: [],
       }),
+      resolveRootPath: async () => "/repo.worktree",
     },
     git: createGitService(),
     gitWatch: createGitWatchService(),
@@ -906,7 +915,7 @@ describe("createCommandRouter", () => {
     const listResult = await router.execute({
       clientId: "desktop-1",
       command: {
-        projectRoot: process.cwd(),
+        projectRootPath: process.cwd(),
         type: "run.list",
       },
       protocolVersion: 1,
@@ -919,7 +928,7 @@ describe("createCommandRouter", () => {
       clientId: "desktop-1",
       command: {
         focus: true,
-        projectRoot: process.cwd(),
+        projectRootPath: process.cwd(),
         taskId: "package-script:test",
         type: "run.spawn",
         windowId: "main",
@@ -1010,7 +1019,7 @@ describe("createCommandRouter", () => {
       clientEnv: { FROM_CLI: "cli" },
       clientId: "desktop-1",
       command: {
-        projectRoot: process.cwd(),
+        projectRootPath: process.cwd(),
         taskId: "package-script:test",
         type: "run.spawn",
         windowId: "main",
@@ -1090,7 +1099,7 @@ describe("createCommandRouter", () => {
       clientEnv: { FROM_CLI: "cli" },
       clientId: "desktop-1",
       command: {
-        projectRoot: process.cwd(),
+        projectRootPath: process.cwd(),
         taskId: "package-script:test",
         type: "run.spawn",
         windowId: "main",
@@ -1222,7 +1231,7 @@ describe("createCommandRouter", () => {
       router.execute({
         clientId: "desktop-1",
         command: {
-          projectRoot: process.cwd(),
+          projectRootPath: process.cwd(),
           taskId: "package-script:test",
           type: "run.spawn",
           windowId: "main",
@@ -1282,7 +1291,7 @@ describe("createCommandRouter", () => {
     });
     fakeServices.tasks.recordStarted({
       panelId: "missing-panel",
-      projectRoot: process.cwd(),
+      projectRootPath: process.cwd(),
       taskId: "package-script:test",
       windowId: "main",
     });
@@ -1292,7 +1301,7 @@ describe("createCommandRouter", () => {
     });
 
     const spawnCommand = {
-      projectRoot: process.cwd(),
+      projectRootPath: process.cwd(),
       taskId: "package-script:test",
       type: "run.spawn" as const,
       windowId: "main",
@@ -1447,7 +1456,7 @@ describe("createCommandRouter", () => {
       const listResult = await router.execute({
         clientId: "desktop-1",
         command: {
-          projectRoot,
+          projectRootPath: projectRoot,
           type: "run.list",
         },
         protocolVersion: 1,
@@ -1484,7 +1493,7 @@ describe("createCommandRouter", () => {
       }
       fakeServices.tasks.recordStarted({
         panelId: "panel-client-reuse",
-        projectRoot,
+        projectRootPath: projectRoot,
         taskId: clientTask.id,
         windowId: "main",
       });
@@ -1493,7 +1502,7 @@ describe("createCommandRouter", () => {
         router.execute({
           clientId: "desktop-1",
           command: {
-            projectRoot,
+            projectRootPath: projectRoot,
             taskId: verifyTask?.id ?? "",
             type: "run.spawn",
             windowId: "main",
@@ -1536,7 +1545,7 @@ describe("createCommandRouter", () => {
         router.execute({
           clientId: "desktop-1",
           command: {
-            projectRoot,
+            projectRootPath: projectRoot,
             taskId: clientTask.id,
             type: "run.spawn",
             windowId: "main",
@@ -1645,7 +1654,7 @@ describe("createCommandRouter", () => {
       const listResult = await router.execute({
         clientId: "desktop-1",
         command: {
-          projectRoot,
+          projectRootPath: projectRoot,
           type: "run.list",
         },
         protocolVersion: 1,
@@ -1682,7 +1691,7 @@ describe("createCommandRouter", () => {
       }
       fakeServices.tasks.recordStarted({
         panelId: "panel-client-reuse",
-        projectRoot,
+        projectRootPath: projectRoot,
         taskId: clientTask.id,
         windowId: "main",
       });
@@ -1691,7 +1700,7 @@ describe("createCommandRouter", () => {
         router.execute({
           clientId: "desktop-1",
           command: {
-            projectRoot,
+            projectRootPath: projectRoot,
             taskId: verifyTask?.id ?? "",
             type: "run.spawn",
             windowId: "main",
@@ -1719,7 +1728,7 @@ describe("createCommandRouter", () => {
         router.execute({
           clientId: "desktop-1",
           command: {
-            projectRoot,
+            projectRootPath: projectRoot,
             taskId: clientTask.id,
             type: "run.spawn",
             windowId: "main",
@@ -1759,7 +1768,7 @@ describe("createCommandRouter", () => {
     const spawnResult = await router.execute({
       clientId: "desktop-1",
       command: {
-        projectRoot: process.cwd(),
+        projectRootPath: process.cwd(),
         taskId: "package-script:test",
         type: "run.spawn",
         windowId: "secondary",
@@ -1829,7 +1838,7 @@ describe("createCommandRouter", () => {
     const spawnResult = await router.execute({
       clientId: "desktop-1",
       command: {
-        projectRoot: process.cwd(),
+        projectRootPath: process.cwd(),
         taskId: "package-script:test",
         type: "run.spawn",
         windowId: "main",
@@ -2183,6 +2192,35 @@ describe("createCommandRouter", () => {
       ok: true,
       requestId: "req-worktree-create",
     });
+  });
+
+  it("worktree.creationDefaults omits the removed branchPrefix even if legacy preferences contain one", async () => {
+    const fakeServices = services();
+    fakeServices.preferences.read = async () =>
+      ({
+        ...makeFakePreferences({ agentStatusHooks: false }),
+        worktreeBranchPrefix: "legacy/",
+      }) as never;
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const result = await router.execute({
+      clientId: "desktop-1",
+      command: { path: "/repo", type: "worktree.creationDefaults" },
+      protocolVersion: 1,
+      requestId: "req-worktree-defaults",
+    });
+
+    expect(result).toMatchObject({
+      data: {
+        rootPath: "/repo.worktree",
+      },
+      ok: true,
+      requestId: "req-worktree-defaults",
+    });
+    expect(result.ok ? result.data : null).not.toHaveProperty("branchPrefix");
   });
 
   it("worktree.open 复用 panel.open 的 context 解析和 renderer 命令", async () => {

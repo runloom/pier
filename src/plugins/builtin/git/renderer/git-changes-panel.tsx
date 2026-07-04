@@ -45,7 +45,7 @@ function gitRootFromContext(context: PanelContext | undefined): string | null {
   return (
     context?.gitRoot ??
     context?.worktreeRoot ??
-    context?.projectRoot ??
+    context?.projectRootPath ??
     context?.cwd ??
     null
   );

@@ -170,6 +170,7 @@ describe("pluginManifestSchema", () => {
       "panel:register",
       "git:read",
       "git:write",
+      "ai:invoke",
     ]);
   });
 

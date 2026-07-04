@@ -1,8 +1,8 @@
 import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
-import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
-import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+import { readTerminalAnchorFrame } from "./terminal-viewport.ts";
 
 type WindowLayoutPulseReason = WindowLayoutPulse["reason"];
 
@@ -38,36 +38,6 @@ let presentationAppliedDispose: (() => void) | null = null;
 let presentationScheduler:
   | ((reason: TerminalLayoutFlushReason) => void)
   | null = null;
-
-export function readTerminalAnchorFrame(
-  anchor: HTMLDivElement
-): TerminalFrame | null {
-  const r = anchor.getBoundingClientRect();
-  if (r.width < 10 || r.height < 10) {
-    return null;
-  }
-  return cssRectToContentViewRect(
-    {
-      height: r.height,
-      width: r.width,
-      x: r.x,
-      y: r.y,
-    },
-    useZoomStore.getState().windowZoomLevel
-  );
-}
-
-export function readTerminalViewportFrame(): TerminalFrame {
-  return cssRectToContentViewRect(
-    {
-      height: window.innerHeight,
-      width: window.innerWidth,
-      x: 0,
-      y: 0,
-    },
-    useZoomStore.getState().windowZoomLevel
-  );
-}
 
 export function isRegisteredTerminalAnchorVisible(panelId: string): boolean {
   const state = anchors.get(panelId);
@@ -189,7 +159,7 @@ export function flushTerminalLayoutFramesTrailing(
 
 function handleWindowResize(): void {
   // resize 隐身期间终端已藏，跳过 flush（否则与 pulse 路径重复下发隐身帧）。
-  if (useTerminalResizeStore.getState().suppressTerminals) {
+  if (useTerminalStore.getState().suppressTerminals) {
     return;
   }
   flushTerminalLayoutFramesTrailing("window-resize");
@@ -217,7 +187,7 @@ function dismissResizePlaceholder(): void {
     clearTimeout(restoreAckTimer);
     restoreAckTimer = null;
   }
-  useTerminalResizeStore.setState({ placeholderVisible: false });
+  useTerminalStore.setState({ placeholderVisible: false });
 }
 
 function enterResizeSuppression(): void {
@@ -228,7 +198,7 @@ function enterResizeSuppression(): void {
     RESIZE_FALLBACK_MS
   );
   // 已隐身：后续 active 帧只续期，不重复下发。
-  if (useTerminalResizeStore.getState().suppressTerminals) {
+  if (useTerminalStore.getState().suppressTerminals) {
     return;
   }
   // 取消上一轮可能仍在等待的撤占位 ack。
@@ -237,7 +207,7 @@ function enterResizeSuppression(): void {
     clearTimeout(restoreAckTimer);
     restoreAckTimer = null;
   }
-  useTerminalResizeStore.setState({
+  useTerminalStore.setState({
     placeholderVisible: true,
     suppressTerminals: true,
   });
@@ -248,11 +218,11 @@ function enterResizeSuppression(): void {
 function exitResizeSuppression(): void {
   clearResizeFallback();
   // 未在隐身（已恢复或从未进入）：幂等空操作。
-  if (!useTerminalResizeStore.getState().suppressTerminals) {
+  if (!useTerminalStore.getState().suppressTerminals) {
     return;
   }
   // 终端恢复可见（仍在占位幕布之后），最终 frame 由随后的 trailing flush 补齐。
-  useTerminalResizeStore.setState({ suppressTerminals: false });
+  useTerminalStore.setState({ suppressTerminals: false });
   notifyPresentationChange("visibility");
   // 等 native 把最终几何应用到位的「就位」ack 再撤占位（精确握手，替代盲等帧数）。
   awaitingRestoreAck = true;
@@ -271,9 +241,7 @@ function handleRestoreAck(rendererSequence: number): void {
   if (!awaitingRestoreAck) {
     return;
   }
-  if (
-    rendererSequence >= useTerminalResizeStore.getState().lastDownlinkSequence
-  ) {
+  if (rendererSequence >= useTerminalStore.getState().lastDownlinkSequence) {
     dismissResizePlaceholder();
   }
 }
@@ -294,7 +262,7 @@ function ensureGlobalListeners(): void {
   }
   if (!windowLayoutPulseDispose) {
     windowLayoutPulseDispose =
-      window.pier?.onWindowLayoutPulse?.((pulse) => {
+      window.pier?.window?.onLayoutPulse?.((pulse) => {
         if (
           pulse.reason === "view-zoom" &&
           typeof pulse.windowZoomLevel === "number"
@@ -317,7 +285,7 @@ function ensureGlobalListeners(): void {
   }
   if (!presentationAppliedDispose) {
     presentationAppliedDispose =
-      window.pier?.onTerminalPresentationApplied?.((payload) => {
+      window.pier?.terminal?.onPresentationApplied?.((payload) => {
         handleRestoreAck(payload.rendererSequence);
       }) ?? null;
   }
@@ -343,8 +311,8 @@ function maybeDisposeGlobalListeners(): void {
     clearTimeout(restoreAckTimer);
     restoreAckTimer = null;
   }
-  if (useTerminalResizeStore.getState().suppressTerminals) {
-    useTerminalResizeStore.setState({
+  if (useTerminalStore.getState().suppressTerminals) {
+    useTerminalStore.setState({
       placeholderVisible: false,
       suppressTerminals: false,
     });

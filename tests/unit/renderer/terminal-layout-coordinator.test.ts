@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  readTerminalAnchorFrame,
-  readTerminalViewportFrame,
   registerTerminalLayoutAnchor,
   setTerminalLayoutPresentationScheduler,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
-import { useTerminalResizeStore } from "@/stores/terminal-resize.store.ts";
+import {
+  readTerminalAnchorFrame,
+  readTerminalViewportFrame,
+} from "@/panel-kits/terminal/terminal-viewport.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 class TestResizeObserver {
@@ -29,28 +31,32 @@ describe("terminal layout coordinator", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        onTerminalPresentationApplied: (
-          cb: (payload: { rendererSequence: number }) => void
-        ) => {
-          window.dispatchEvent(
-            new CustomEvent("test-presentation-applied-subscriber", {
-              detail: cb,
-            })
-          );
-          return () => undefined;
+        terminal: {
+          onPresentationApplied: (
+            cb: (payload: { rendererSequence: number }) => void
+          ) => {
+            window.dispatchEvent(
+              new CustomEvent("test-presentation-applied-subscriber", {
+                detail: cb,
+              })
+            );
+            return () => undefined;
+          },
         },
-        onWindowLayoutPulse: (
-          cb: (pulse: {
-            reason: "resize" | "view-zoom" | "zoom";
-            windowZoomLevel?: number;
-          }) => void
-        ) => {
-          window.dispatchEvent(
-            new CustomEvent("test-window-layout-pulse-subscriber", {
-              detail: cb,
-            })
-          );
-          return () => undefined;
+        window: {
+          onLayoutPulse: (
+            cb: (pulse: {
+              reason: "resize" | "view-zoom" | "zoom";
+              windowZoomLevel?: number;
+            }) => void
+          ) => {
+            window.dispatchEvent(
+              new CustomEvent("test-window-layout-pulse-subscriber", {
+                detail: cb,
+              })
+            );
+            return () => undefined;
+          },
         },
       },
     });
@@ -76,7 +82,7 @@ describe("terminal layout coordinator", () => {
       configurable: true,
       value: originalInnerWidth,
     });
-    useTerminalResizeStore.setState({
+    useTerminalStore.setState({
       lastDownlinkSequence: 0,
       placeholderVisible: false,
       suppressTerminals: false,
@@ -214,8 +220,8 @@ describe("terminal layout coordinator", () => {
   it("resize 'active' pulse 进入隐身：suppressTerminals 与 placeholderVisible 置 true", () => {
     const { trigger, dispose } = captureResizePulse();
     trigger({ phase: "active", reason: "resize" });
-    expect(useTerminalResizeStore.getState().suppressTerminals).toBe(true);
-    expect(useTerminalResizeStore.getState().placeholderVisible).toBe(true);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(true);
     dispose();
   });
 
@@ -223,16 +229,16 @@ describe("terminal layout coordinator", () => {
     const { trigger, dispose } = captureResizePulse();
     trigger({ phase: "active", reason: "resize" });
     trigger({ phase: "end", reason: "resize" });
-    expect(useTerminalResizeStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
     dispose();
   });
 
   it("'zoom' pulse 收尾隐身（maximize/全屏不带 end，避免卡死）", () => {
     const { trigger, dispose } = captureResizePulse();
     trigger({ phase: "active", reason: "resize" });
-    expect(useTerminalResizeStore.getState().suppressTerminals).toBe(true);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
     trigger({ reason: "zoom" });
-    expect(useTerminalResizeStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
     dispose();
   });
 
@@ -240,7 +246,7 @@ describe("terminal layout coordinator", () => {
     const { trigger, dispose } = captureResizePulse();
     trigger({ phase: "active", reason: "resize" });
     trigger({ reason: "resize" });
-    expect(useTerminalResizeStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
     dispose();
   });
 
@@ -249,9 +255,9 @@ describe("terminal layout coordinator", () => {
     try {
       const { trigger, dispose } = captureResizePulse();
       trigger({ phase: "active", reason: "resize" });
-      expect(useTerminalResizeStore.getState().suppressTerminals).toBe(true);
+      expect(useTerminalStore.getState().suppressTerminals).toBe(true);
       vi.advanceTimersByTime(1000);
-      expect(useTerminalResizeStore.getState().suppressTerminals).toBe(false);
+      expect(useTerminalStore.getState().suppressTerminals).toBe(false);
       dispose();
     } finally {
       vi.useRealTimers();
@@ -263,16 +269,16 @@ describe("terminal layout coordinator", () => {
     trigger({ phase: "active", reason: "resize" });
     trigger({ phase: "end", reason: "resize" });
     // 终端已恢复可见，但占位仍在，等 native 就位 ack。
-    expect(useTerminalResizeStore.getState().suppressTerminals).toBe(false);
-    expect(useTerminalResizeStore.getState().placeholderVisible).toBe(true);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(true);
     // 模拟 trailing flush 又下发最终帧，lastDownlinkSequence 推到 5。
-    useTerminalResizeStore.setState({ lastDownlinkSequence: 5 });
+    useTerminalStore.setState({ lastDownlinkSequence: 5 });
     // native 只应用到 seq=3 < 5：尚未追上，占位不撤。
     triggerAck(3);
-    expect(useTerminalResizeStore.getState().placeholderVisible).toBe(true);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(true);
     // native 追上最终帧 seq=5：撤占位。
     triggerAck(5);
-    expect(useTerminalResizeStore.getState().placeholderVisible).toBe(false);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(false);
     dispose();
   });
 
@@ -282,9 +288,9 @@ describe("terminal layout coordinator", () => {
       const { trigger, dispose } = captureResizePulse();
       trigger({ phase: "active", reason: "resize" });
       trigger({ phase: "end", reason: "resize" });
-      expect(useTerminalResizeStore.getState().placeholderVisible).toBe(true);
+      expect(useTerminalStore.getState().placeholderVisible).toBe(true);
       vi.advanceTimersByTime(500);
-      expect(useTerminalResizeStore.getState().placeholderVisible).toBe(false);
+      expect(useTerminalStore.getState().placeholderVisible).toBe(false);
       dispose();
     } finally {
       vi.useRealTimers();

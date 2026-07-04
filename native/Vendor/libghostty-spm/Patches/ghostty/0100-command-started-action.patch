@@ -1,0 +1,163 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 72bbb57a8..b39878c9f 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -859,6 +859,13 @@ typedef struct {
+   uint64_t duration;
+ } ghostty_action_command_finished_s;
+ 
++// apprt.action.CommandStarted.C
++typedef struct {
++  // Command line text if OSC 133 C / 633 E carried a cmdline option;
++  // otherwise the empty string (never NULL).
++  const char* command_line;
++} ghostty_action_command_started_s;
++
+ // apprt.action.StartSearch.C
+ typedef struct {
+   const char* needle;
+@@ -943,6 +950,7 @@ typedef enum {
+   GHOSTTY_ACTION_PROGRESS_REPORT,
+   GHOSTTY_ACTION_SHOW_ON_SCREEN_KEYBOARD,
+   GHOSTTY_ACTION_COMMAND_FINISHED,
++  GHOSTTY_ACTION_COMMAND_STARTED,
+   GHOSTTY_ACTION_START_SEARCH,
+   GHOSTTY_ACTION_END_SEARCH,
+   GHOSTTY_ACTION_SEARCH_TOTAL,
+@@ -986,6 +994,7 @@ typedef union {
+   ghostty_surface_message_childexited_s child_exited;
+   ghostty_action_progress_report_s progress_report;
+   ghostty_action_command_finished_s command_finished;
++  ghostty_action_command_started_s command_started;
+   ghostty_action_start_search_s start_search;
+   ghostty_action_search_total_s search_total;
+   ghostty_action_search_selected_s search_selected;
+diff --git a/src/Surface.zig b/src/Surface.zig
+index c56c9791c..48e22a49b 100644
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -1125,8 +1125,22 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
+             try self.selectionScrollTick();
+         },
+ 
+-        .start_command => {
++        .start_command => |w| {
++            defer w.deinit();
+             self.command_timer = try .now();
++
++            // Null-terminated copy for the C ABI. Empty string is valid
++            // (when shell did not include cmdline).
++            const cmdline = try self.alloc.dupeZ(u8, w.slice());
++            defer self.alloc.free(cmdline);
++
++            _ = self.rt_app.performAction(
++                .{ .surface = self },
++                .command_started,
++                .{ .command_line = cmdline },
++            ) catch |err| {
++                log.warn("apprt failed to notify command start={}", .{err});
++            };
+         },
+ 
+         .stop_command => |v| timer: {
+diff --git a/src/apprt/action.zig b/src/apprt/action.zig
+index 4728d73ce..4b101f502 100644
+--- a/src/apprt/action.zig
++++ b/src/apprt/action.zig
+@@ -325,6 +325,11 @@ pub const Action = union(Key) {
+     /// A command has finished,
+     command_finished: CommandFinished,
+ 
++    /// A command has started (OSC 133 C or OSC 633 E). Emitted just before
++    /// the shell begins execution of the user's command. Paired with
++    /// command_finished when the command completes.
++    command_started: CommandStarted,
++
+     /// Start the search overlay with an optional initial needle. If the
+     /// search is already active and the needle is non-empty, update the
+     /// current search needle and focus the search input.
+@@ -409,6 +414,7 @@ pub const Action = union(Key) {
+         progress_report,
+         show_on_screen_keyboard,
+         command_finished,
++        command_started,
+         start_search,
+         end_search,
+         search_total,
+@@ -962,6 +968,24 @@ pub const CommandFinished = struct {
+     }
+ };
+ 
++pub const CommandStarted = struct {
++    /// The command line text (from OSC 633 E's `cmdline` option or OSC 133 C
++    /// with a cmdline). Empty string if no cmdline was provided by the shell.
++    /// The pointer must remain valid for the duration of the performAction call.
++    command_line: [:0]const u8,
++
++    /// sync with ghostty_action_command_started_s in ghostty.h
++    pub const C = extern struct {
++        command_line: [*:0]const u8,
++    };
++
++    pub fn cval(self: CommandStarted) C {
++        return .{
++            .command_line = self.command_line.ptr,
++        };
++    }
++};
++
+ pub const StartSearch = struct {
+     needle: [:0]const u8,
+ 
+diff --git a/src/apprt/surface.zig b/src/apprt/surface.zig
+index 3cb0016fa..0fab3a147 100644
+--- a/src/apprt/surface.zig
++++ b/src/apprt/surface.zig
+@@ -91,8 +91,10 @@ pub const Message = union(enum) {
+     /// Report the progress of an action using a GUI element
+     progress_report: terminal.osc.Command.ProgressReport,
+ 
+-    /// A command has started in the shell, start a timer.
+-    start_command,
++    /// A command has started in the shell (OSC 133 C or OSC 633 E).
++    /// Payload is the command line text (may be empty if the shell did not
++    /// provide a cmdline). Start a timer and emit command_started action.
++    start_command: WriteReq,
+ 
+     /// A command has finished in the shell, stop the timer and send out
+     /// notifications as appropriate. The optional u8 is the exit code
+diff --git a/src/termio/stream_handler.zig b/src/termio/stream_handler.zig
+index 657ca25c7..62a4c13f0 100644
+--- a/src/termio/stream_handler.zig
++++ b/src/termio/stream_handler.zig
+@@ -1094,9 +1094,29 @@ pub const StreamHandler = struct {
+     ) !void {
+         switch (cmd.action) {
+             .end_input_start_output => {
+-                self.surfaceMessageWriter(.start_command);
++                // Extract command line text if the shell provided it via OSC
++                // 133 C or OSC 633 E's cmdline/cmdline_url options. If unset
++                // or decode fails, pass an empty string. Buffer capped at
++                // 4096 bytes (typical shell command line cap).
++                var cmdline_buf: [4096]u8 = undefined;
++                var w: std.Io.Writer = .fixed(&cmdline_buf);
++                cmd.writeCommandLine(&w) catch {};
++                const cmdline_bytes = w.buffered();
++
++                const req = apprt.surface.Message.WriteReq.init(
++                    self.alloc,
++                    cmdline_bytes,
++                ) catch |err| {
++                    log.warn(
++                        "start_command WriteReq init failed err={}",
++                        .{err},
++                    );
++                    return;
++                };
++                self.surfaceMessageWriter(.{ .start_command = req });
+             },
+ 
++
+             .end_command => {
+                 // The specification seems to not specify the type but
+                 // other terminals accept 32-bits, but exit codes are really

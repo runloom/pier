@@ -198,7 +198,34 @@ function ensureNativeAddon() {
   }
 }
 
+// GhosttyKit.xcframework 由 scripts/build-libghostty.sh 现地构建，不入库。
+// 缺失就走 pnpm build:libghostty，避免 build:native 时 swift build 报难懂
+// 的 "no such module 'libghostty'" 让用户猜。
+function ensureLibghostty() {
+  const xcf = path.join(
+    cwd,
+    "native",
+    "Vendor",
+    "libghostty-spm",
+    "GhosttyKit.xcframework"
+  );
+  if (existsSync(xcf)) {
+    return;
+  }
+  console.log(
+    "[setup-worktree] GhosttyKit.xcframework 缺失, 从上游 + patches 现地构建 (首次约 3-5 分钟)..."
+  );
+  const r = spawnSync("pnpm", ["build:libghostty"], { cwd, stdio: "inherit" });
+  if (r.status !== 0) {
+    console.error(
+      `[setup-worktree] libghostty 构建失败 (exit ${r.status}). 见上方脚本输出.`
+    );
+    process.exit(1);
+  }
+}
+
 linkNodeModules();
+ensureLibghostty();
 ensureNativeAddon();
 
 console.log(

@@ -69,9 +69,10 @@ ${eventLines}
 }
 
 /**
- * Python 插件入口。emit 内嵌：`os.environ` 读四个 PIER_ 变量, 缺任一静默
- * no-op；`urllib.request` POST, timeout 1.5s, except 吞异常（orca
- * hook-service.ts _post_to_orca 同款纪律, payload 精简为 pier v1 schema）。
+ * Python 插件入口。emit 内嵌：`os.environ` 读三个 PIER_ 变量, 缺任一静默
+ * no-op；`open(..., "a")` append 写 JSONL, except 吞异常（orca
+ * hook-service.ts 同款纪律, payload 精简为 pier v1 agentEvent schema）。
+ * POSIX 保证 <4KB append 原子。
  */
 export function buildHermesPluginInit(): string {
   const eventNames = HERMES_EVENTS.map((e) => `"${e.nativeEvent}"`).join(", ");
@@ -83,8 +84,7 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.error
-import urllib.request
+import time
 from typing import Any, Callable
 
 EVENTS = (${eventNames})
@@ -95,36 +95,30 @@ ${eventMapEntries}
 
 
 def _pier_emit(pier_event: str) -> None:
-    port = os.environ.get("PIER_AGENT_HOOK_PORT", "")
-    token = os.environ.get("PIER_AGENT_HOOK_TOKEN", "")
+    log = os.environ.get("PIER_AGENT_EVENT_LOG", "")
     panel_id = os.environ.get("PIER_PANEL_ID", "")
     window_id = os.environ.get("PIER_WINDOW_ID", "")
-    if not port or not token or not panel_id or not window_id:
+    if not log or not panel_id or not window_id:
         return
-    body = json.dumps(
+    line = json.dumps(
         {
             "v": 1,
-            "agent": "hermes",
-            "event": pier_event,
+            "kind": "agentEvent",
+            "ts": int(time.time_ns()),
             "panelId": panel_id,
             "windowId": window_id,
+            "pid": os.getpid(),
+            "agent": "hermes",
+            "event": pier_event,
         }
-    ).encode("utf-8")
-    request = urllib.request.Request(
-        "http://127.0.0.1:" + port + "/agent-event",
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + token,
-        },
-    )
+    ) + "\\n"
     try:
-        with urllib.request.urlopen(request, timeout=1.5):
-            pass
-    except (OSError, urllib.error.URLError):
-        pass
-    except Exception:
+        with open(log, "a", encoding="utf-8") as fp:
+            fp.write(line)
+    except OSError:
+        # 磁盘满 / 权限 / broken pipe 等文件 IO 失败——静默降级不干扰
+        # hermes 本体。不宽泛 catch Exception, 否则会掩盖 os.getpid /
+        # json.dumps 等内部 bug (review Commit B P1#2)。
         pass
 
 

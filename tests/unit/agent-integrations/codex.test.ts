@@ -10,7 +10,7 @@ import {
   withPierCodexHooks,
 } from "../../../src/main/services/agents/integrations/codex.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 const CODEX_EVENTS = [
   "SessionStart",
@@ -52,8 +52,6 @@ describe("withPierCodexHooks", () => {
     }
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
     }
   });
 

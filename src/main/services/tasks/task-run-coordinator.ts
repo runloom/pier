@@ -20,7 +20,7 @@ type TaskRunTerminalOpen = (
 export interface TaskRunCoordinatorStartArgs {
   launches: readonly TaskRunLaunchPlan[];
   openTerminal?: TaskRunTerminalOpen;
-  projectRoot: string;
+  projectRootPath: string;
   rootTaskId: string;
 }
 
@@ -63,7 +63,7 @@ interface TaskRunNodeState {
 interface TaskRunState {
   nodes: Map<string, TaskRunNodeState>;
   panelIds: string[];
-  projectRoot: string;
+  projectRootPath: string;
   rootTaskId: string;
   runId: string;
 }
@@ -132,7 +132,7 @@ function snapshot(run: TaskRunState): TaskRunSnapshot {
         nodeSnapshot(taskId, node),
       ])
     ),
-    projectRoot: run.projectRoot,
+    projectRootPath: run.projectRootPath,
     rootTaskId: run.rootTaskId,
     runId: run.runId,
     status: aggregateStatus(run),
@@ -375,7 +375,7 @@ export function createTaskRunCoordinator({
       panelToRunNode.delete(panelNodeKey(panelId, node?.windowId ?? windowId));
       sweepFinishedRuns();
     },
-    async start({ launches, openTerminal, projectRoot, rootTaskId }) {
+    async start({ launches, openTerminal, projectRootPath, rootTaskId }) {
       const terminalOpen = openTerminal ?? defaultOpenTerminal;
       if (!terminalOpen) {
         throw new Error("TaskRunCoordinator requires an openTerminal callback");
@@ -393,7 +393,7 @@ export function createTaskRunCoordinator({
           ])
         ),
         panelIds: [],
-        projectRoot,
+        projectRootPath,
         rootTaskId,
         runId,
       };

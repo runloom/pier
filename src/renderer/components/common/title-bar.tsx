@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { resolveLong } from "@/components/common/document-title.tsx";
 import {
-  agentSessionCounts,
-  useAgentSessionStore,
-} from "@/stores/agent-session.store.ts";
+  activityCounts,
+  useForegroundActivityStore,
+} from "@/stores/foreground-activity.store.ts";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 
 const TITLEBAR_HEIGHT = "38px";
@@ -34,11 +34,11 @@ export function TitleBar() {
 
   // resolveLong 可能返回空字符串 (descriptor 字段空值降级时), `||` 而非 `??`,
   // 让空串也回退到 "Pier" — 与 document-title.tsx 的兜底行为对齐.
-  const runningCount = useAgentSessionStore(
-    (s) => agentSessionCounts(s.sessions).running
+  const runningCount = useForegroundActivityStore(
+    (s) => activityCounts(s.activities).running
   );
-  const waitingCount = useAgentSessionStore(
-    (s) => agentSessionCounts(s.sessions).waiting
+  const waitingCount = useForegroundActivityStore(
+    (s) => activityCounts(s.activities).waiting
   );
   const text = (active && resolveLong(active)) || "Pier";
   return (

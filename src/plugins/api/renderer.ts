@@ -1,3 +1,8 @@
+import type {
+  AiStatusResult,
+  AiSuggestBranchRequest,
+  AiSuggestBranchResult,
+} from "@shared/contracts/ai.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
   FileListRequest,
@@ -36,6 +41,7 @@ import type {
   WorktreeCreateRequest,
   WorktreeCreateResult,
   WorktreeCreationDefaults,
+  WorktreeCreationDefaultsRequest,
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
@@ -171,6 +177,16 @@ export interface RendererPluginNotificationOptions {
 export interface RendererPluginContext {
   actions: {
     register(action: RendererPluginAction): () => void;
+  };
+  /**
+   * AI 任务级能力(main 侧持有 provider 配置与密钥;插件需声明 ai:invoke)。
+   * 结果用 status 区分,不抛业务异常 —— 未配置/失败时调用方自行降级。
+   */
+  ai: {
+    status(): Promise<AiStatusResult>;
+    suggestBranch(
+      request: AiSuggestBranchRequest
+    ): Promise<AiSuggestBranchResult>;
   };
   commandPalette: {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
@@ -311,7 +327,9 @@ export interface RendererPluginContext {
   worktrees: {
     check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
     create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
-    creationDefaults(): Promise<WorktreeCreationDefaults>;
+    creationDefaults(
+      request: WorktreeCreationDefaultsRequest
+    ): Promise<WorktreeCreationDefaults>;
     list(request: WorktreeListRequest): Promise<WorktreeListResult>;
     open(request: WorktreeOpenRequest): Promise<unknown>;
     openTerminal(request: WorktreeOpenTerminalRequest): Promise<unknown>;

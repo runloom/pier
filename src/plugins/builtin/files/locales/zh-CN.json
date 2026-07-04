@@ -1,0 +1,19 @@
+{
+  "messages": {
+    "panel.title": "文件",
+    "panel.noProjectContext.title": "无项目上下文",
+    "panel.noProjectContext.description": "请打开一个项目或工作树以浏览文件。",
+    "panel.loadError.title": "无法加载文件",
+    "panel.loadError.fallback": "文件加载失败",
+    "panel.loading.label": "正在加载文件",
+    "panel.empty.title": "未发现文件",
+    "panel.empty.description": "该项目根目录下没有可显示的文件。",
+    "panel.tree.label": "文件"
+  },
+  "name": "文件",
+  "panels": {
+    "pier.files.explorer": {
+      "title": "文件"
+    }
+  }
+}

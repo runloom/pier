@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isPierHookCommand,
   pierHookCommand,
   removePierTextBlock,
   upsertPierTextBlock,
@@ -7,13 +8,35 @@ import {
   withPierNestedHooks,
 } from "../../src/main/services/agents/integrations/shared.ts";
 
-describe("pierHookCommand（泛化 agent 参数）", () => {
-  it("payload 携带指定 agent 与 pier 事件名", () => {
+describe("pierHookCommand（JSONL emit 脚本格式）", () => {
+  it("命令引用 emit 脚本路径并携带 agentEvent kind + agentId + pierEvent", () => {
     const cmd = pierHookCommand("codex", "PromptSubmit");
-    expect(cmd).toContain('\\"agent\\":\\"codex\\"');
-    expect(cmd).toContain('\\"event\\":\\"PromptSubmit\\"');
-    expect(cmd).toContain("$PIER_WINDOW_ID");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: 断言 shell 命令里的 ${PIER_AGENT_HOOKS_DIR} 变量引用形式，本就该是字面量
+    expect(cmd).toContain("${PIER_AGENT_HOOKS_DIR}/emit");
+    // emit 脚本 kind dispatch：第一个位置参数固定为 agentEvent
+    expect(cmd).toContain('"agentEvent"');
+    expect(cmd).toContain('"codex"');
+    expect(cmd).toContain('"PromptSubmit"');
+    // 首参 agentEvent 出现在 agentId 之前
+    expect(cmd.indexOf('"agentEvent"')).toBeLessThan(cmd.indexOf('"codex"'));
     expect(cmd.endsWith("|| true")).toBe(true);
+  });
+
+  it("isPierHookCommand 识别新格式", () => {
+    const cmd = pierHookCommand("claude", "Stop");
+    expect(isPierHookCommand(cmd)).toBe(true);
+  });
+
+  it("isPierHookCommand 拒绝老 HTTP curl 格式（LEGACY marker 已删）", () => {
+    const oldCmd =
+      '[ -n "$PIER_AGENT_HOOK_PORT" ] && curl -fsS http://127.0.0.1:$PIER_AGENT_HOOK_PORT/agent-event || true';
+    expect(isPierHookCommand(oldCmd)).toBe(false);
+  });
+
+  it("isPierHookCommand 排除无关命令", () => {
+    expect(isPierHookCommand("echo hello")).toBe(false);
+    expect(isPierHookCommand(42)).toBe(false);
+    expect(isPierHookCommand(null)).toBe(false);
   });
 });
 

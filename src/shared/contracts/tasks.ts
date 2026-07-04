@@ -99,7 +99,7 @@ export type TaskSourceError = z.infer<typeof taskSourceErrorSchema>;
 export const taskListResultSchema = z
   .object({
     errors: z.array(taskSourceErrorSchema),
-    projectRoot: z.string().min(1),
+    projectRootPath: z.string().min(1),
     tasks: z.array(taskCandidateSchema),
   })
   .strict();
@@ -118,7 +118,7 @@ export const taskLaunchPlanSchema = z
     focus: z.boolean(),
     label: z.string().min(1),
     presentation: taskPresentationSchema,
-    projectRoot: z.string().min(1),
+    projectRootPath: z.string().min(1),
     rawCommand: z.string().min(1),
     source: taskSourceSchema,
     tab: panelTabChromeSchema,
@@ -161,7 +161,7 @@ export const taskPanelMetadataSchema = z
     exitSource: taskExitSourceSchema.optional(),
     finishedAt: z.number().int().nonnegative().optional(),
     label: z.string().min(1),
-    projectRoot: z.string().min(1),
+    projectRootPath: z.string().min(1),
     rawCommand: z.string().min(1),
     runId: taskRunIdSchema,
     source: taskSourceSchema,
@@ -169,7 +169,7 @@ export const taskPanelMetadataSchema = z
     status: taskPanelStatusSchema,
     taskId: z.string().min(1),
   })
-  .strict();
+  .strip();
 export type TaskPanelMetadata = z.infer<typeof taskPanelMetadataSchema>;
 
 export const taskRunNodeStatusSchema = z.enum([
@@ -198,7 +198,7 @@ export type TaskRunNodeSnapshot = z.infer<typeof taskRunNodeSnapshotSchema>;
 export const taskRunSnapshotSchema = z
   .object({
     nodes: z.record(z.string().min(1), taskRunNodeSnapshotSchema),
-    projectRoot: z.string().min(1),
+    projectRootPath: z.string().min(1),
     rootTaskId: z.string().min(1),
     runId: taskRunIdSchema,
     status: taskRunNodeStatusSchema,

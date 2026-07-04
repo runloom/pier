@@ -93,6 +93,29 @@ describe("buildMenuEntries", () => {
     expect(ids).toEqual(["t.first", "t.no-group", "t.last"]);
   });
 
+  it("metadata.menuHidden() 为 true 的 action 整行移除 (含空 group 不留 separator)", () => {
+    actionRegistry.register({
+      id: "t.visible",
+      category: "T",
+      title: () => "Visible",
+      surfaces: ["test/hidden"],
+      metadata: { group: "1_a" },
+      handler: () => undefined,
+    });
+    actionRegistry.register({
+      id: "t.hidden",
+      category: "T",
+      title: () => "Hidden",
+      surfaces: ["test/hidden"],
+      metadata: { group: "9_z", menuHidden: () => true },
+      handler: () => undefined,
+    });
+    const entries = buildMenuEntries("test/hidden");
+    expect(entries.map((e) => (e.type === "action" ? e.id : e.type))).toEqual([
+      "t.visible",
+    ]);
+  });
+
   it("enabled() 函数结果写到 entry.enabled", () => {
     actionRegistry.register({
       id: "t.disabled",

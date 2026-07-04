@@ -17,7 +17,7 @@ import { useEffect } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
-import { useTabShortcutHintsStore } from "@/stores/tab-shortcut-hints.store.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { isTextInputElement } from "./is-text-input.ts";
 import { chordFromEvent } from "./matcher.ts";
 import { keybindingRegistry } from "./registry.ts";
@@ -139,7 +139,7 @@ function hasFlag(modifierFlags: number, flag: number): boolean {
 }
 
 function setCommandKeyDown(commandKeyDown: boolean): void {
-  useTabShortcutHintsStore.getState().setCommandKeyDown(commandKeyDown);
+  useTerminalStore.getState().setCommandKeyDown(commandKeyDown);
 }
 
 function isCommandKeyEvent(e: KeyboardEvent): boolean {

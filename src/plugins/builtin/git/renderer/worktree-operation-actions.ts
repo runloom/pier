@@ -44,7 +44,7 @@ function activeWorktreeTarget(
   const path =
     panelContext?.worktreeRoot ??
     panelContext?.gitRoot ??
-    panelContext?.projectRoot ??
+    panelContext?.projectRootPath ??
     panelContext?.cwd ??
     null;
   if (!(path && (panelContext?.worktreeRoot || panelContext?.gitRoot))) {
@@ -162,7 +162,7 @@ function registerWorktreeCreateAction(
         }
         const [branches, defaults] = await Promise.all([
           context.git.listBranches(listResult.mainPath, { kind: "all" }),
-          context.worktrees.creationDefaults(),
+          context.worktrees.creationDefaults({ path: listResult.mainPath }),
         ]);
         openWorktreeCreateOverlay(context, {
           branches,

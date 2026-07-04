@@ -85,14 +85,22 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     };
 
     vi.doMock("electron", () => ({
-      // terminal.ts only imports Electron types at runtime now.
+      app: { getPath: vi.fn((k: string) => `/tmp/pier-test-${k}`) },
     }));
-    vi.doMock("node:module", () => ({
-      createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
-      default: {
-        createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
-      },
-    }));
+    vi.doMock("node:module", () => {
+      // fake require 带 .resolve —— loadNativeAddon 会先 resolve 拿绝对路径
+      // 再 require(addonPath)，两步都需要工作。
+      const fakeRequire = Object.assign(
+        vi.fn(() => fakeAddon),
+        {
+          resolve: vi.fn((p: string) => p),
+        }
+      );
+      return {
+        createRequire: vi.fn(() => fakeRequire),
+        default: { createRequire: vi.fn(() => fakeRequire) },
+      };
+    });
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => null),
       patchTerminalPanelTab: vi.fn(async () => undefined),
@@ -129,7 +137,6 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => `w${winId}`),
-      findWindowSessionId: vi.fn(() => `session-${winId}`),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -193,12 +200,22 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       [w2.webContents, w2],
     ]);
     vi.doMock("electron", () => ({
-      // terminal.ts only imports Electron types at runtime now.
+      app: { getPath: vi.fn((k: string) => `/tmp/pier-test-${k}`) },
     }));
-    vi.doMock("node:module", () => ({
-      createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
-      default: { createRequire: vi.fn(() => vi.fn(() => fakeAddon)) },
-    }));
+    vi.doMock("node:module", () => {
+      // fake require 带 .resolve —— loadNativeAddon 会先 resolve 拿绝对路径
+      // 再 require(addonPath)，两步都需要工作。
+      const fakeRequire = Object.assign(
+        vi.fn(() => fakeAddon),
+        {
+          resolve: vi.fn((p: string) => p),
+        }
+      );
+      return {
+        createRequire: vi.fn(() => fakeRequire),
+        default: { createRequire: vi.fn(() => fakeRequire) },
+      };
+    });
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => null),
       patchTerminalPanelTab: vi.fn(async () => undefined),
@@ -226,7 +243,6 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       // 按 webContents 反查:每个 sender 是不同 webContents 对象, 路由对应 window.
       findAppWindowByWebContents: vi.fn((wc: unknown) => wcMap.get(wc) ?? null),
       findInternalWindowId: vi.fn(() => "main"),
-      findWindowSessionId: vi.fn((win: { id: number }) => `session-${win.id}`),
     }));
 
     const fakeIpcMain = {
@@ -269,10 +285,10 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       "Menlo",
       13,
       {
-        env: {
+        env: expect.objectContaining({
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "1",
-        },
+        }),
       }
     );
     expect(fakeAddon.createTerminal).toHaveBeenNthCalledWith(
@@ -283,10 +299,10 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       "Menlo",
       13,
       {
-        env: {
+        env: expect.objectContaining({
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "2",
-        },
+        }),
       }
     );
   });
@@ -351,10 +367,10 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       "Menlo",
       13,
       {
-        env: {
+        env: expect.objectContaining({
           PIER_PANEL_ID: "panel-a",
           PIER_WINDOW_ID: "7",
-        },
+        }),
       }
     );
   });
@@ -363,9 +379,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     const launch = {
       command: "pnpm test",
       cwd: "/tmp/pier",
-      env: {
-        PIER_MODE: "dev",
-      },
+      env: { PIER_MODE: "dev" },
       profileId: "codex",
     };
     const { consumeLaunch, fakeAddon, invokeHandlers, win } =
@@ -391,11 +405,11 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       {
         command: "pnpm test",
         cwd: "/tmp/pier",
-        env: {
+        env: expect.objectContaining({
           PIER_MODE: "dev",
           PIER_PANEL_ID: "panel-a",
           PIER_WINDOW_ID: "7",
-        },
+        }),
       }
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-1");
@@ -447,14 +461,14 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       { panelId: "terminal-3" }
     );
     expect(win.webContents.send).toHaveBeenCalledWith(
-      "pier:terminal:cwd-change",
+      "pier://terminal:cwd-changed",
       {
         context: expect.objectContaining({ cwd: "/some/path" }),
         panelId: "terminal-4",
       }
     );
     expect(win.webContents.send).toHaveBeenCalledWith(
-      "pier:terminal:title-change",
+      "pier://terminal:title-changed",
       { panelId: "terminal-5", title: "My Terminal" }
     );
   });

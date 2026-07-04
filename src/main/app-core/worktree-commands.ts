@@ -151,10 +151,13 @@ export async function executeWorktreeCommand(
       return success(requestId, { ...created, copiedFiles });
     }
     case "worktree.creationDefaults": {
-      const preferences = await services.preferences.read();
+      const [preferences, rootPath] = await Promise.all([
+        services.preferences.read(),
+        services.worktrees.resolveRootPath({ path: command.path }),
+      ]);
       return success(requestId, {
-        branchPrefix: preferences.worktreeBranchPrefix,
         copyPatterns: preferences.worktreeCopyPatterns,
+        rootPath,
         setupCommand: preferences.worktreeSetupCommand,
       });
     }

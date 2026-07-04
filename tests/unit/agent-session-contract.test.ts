@@ -2,15 +2,18 @@ import {
   agentHookEventSchema,
   agentKindFromTabIconId,
   agentTabIconId,
-  runtimeStatusForHookEvent,
-  tabStatusForAgentStatus,
 } from "@shared/contracts/agent-session.ts";
+import {
+  activityStatusForHookEvent,
+  tabStatusForActivityStatus,
+} from "@shared/contracts/foreground-activity.ts";
 import { describe, expect, it } from "vitest";
 
 describe("agentHookEventSchema", () => {
-  it("接受合法 hook 事件", () => {
+  it("接受合法 agentEvent 分支", () => {
     const parsed = agentHookEventSchema.safeParse({
       v: 1,
+      kind: "agentEvent",
       agent: "claude",
       event: "PromptSubmit",
       panelId: "panel-1",
@@ -19,10 +22,45 @@ describe("agentHookEventSchema", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("接受合法 commandStart 分支", () => {
+    const parsed = agentHookEventSchema.safeParse({
+      v: 1,
+      kind: "commandStart",
+      panelId: "panel-1",
+      windowId: "3",
+      commandLine: "codex --resume",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("接受合法 commandFinished 分支", () => {
+    const parsed = agentHookEventSchema.safeParse({
+      v: 1,
+      kind: "commandFinished",
+      panelId: "panel-1",
+      windowId: "3",
+      exitCode: 0,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("拒绝缺 kind 的老 body", () => {
+    expect(
+      agentHookEventSchema.safeParse({
+        v: 1,
+        agent: "claude",
+        event: "Stop",
+        panelId: "p",
+        windowId: "3",
+      }).success
+    ).toBe(false);
+  });
+
   it("拒绝未知 agent、缺 panelId、缺 windowId", () => {
     expect(
       agentHookEventSchema.safeParse({
         v: 1,
+        kind: "agentEvent",
         agent: "not-an-agent",
         event: "Stop",
         panelId: "p",
@@ -32,6 +70,7 @@ describe("agentHookEventSchema", () => {
     expect(
       agentHookEventSchema.safeParse({
         v: 1,
+        kind: "agentEvent",
         agent: "claude",
         event: "Stop",
         windowId: "3",
@@ -40,6 +79,7 @@ describe("agentHookEventSchema", () => {
     expect(
       agentHookEventSchema.safeParse({
         v: 1,
+        kind: "agentEvent",
         agent: "claude",
         event: "Stop",
         panelId: "p",
@@ -51,6 +91,7 @@ describe("agentHookEventSchema", () => {
     expect(
       agentHookEventSchema.safeParse({
         v: 1,
+        kind: "agentEvent",
         agent: "claude",
         event: "x".repeat(65),
         panelId: "p",
@@ -60,7 +101,7 @@ describe("agentHookEventSchema", () => {
   });
 });
 
-describe("runtimeStatusForHookEvent", () => {
+describe("activityStatusForHookEvent", () => {
   it.each([
     ["PermissionRequest", "waiting"],
     ["ToolStart", "tool"],
@@ -73,15 +114,15 @@ describe("runtimeStatusForHookEvent", () => {
     ["SubagentStart", "processing"],
     ["SubagentStop", "processing"],
   ] as const)("%s → %s", (event, status) => {
-    expect(runtimeStatusForHookEvent(event)).toBe(status);
+    expect(activityStatusForHookEvent(event)).toBe(status);
   });
 
   it("未知事件 → null", () => {
-    expect(runtimeStatusForHookEvent("SomethingElse")).toBeNull();
+    expect(activityStatusForHookEvent("SomethingElse")).toBeNull();
   });
 });
 
-describe("tabStatusForAgentStatus", () => {
+describe("tabStatusForActivityStatus", () => {
   it.each([
     ["processing", "running"],
     ["tool", "running"],
@@ -89,7 +130,7 @@ describe("tabStatusForAgentStatus", () => {
     ["error", "failed"],
     ["ready", "idle"],
   ] as const)("%s → %s", (status, tab) => {
-    expect(tabStatusForAgentStatus(status)).toBe(tab);
+    expect(tabStatusForActivityStatus(status)).toBe(tab);
   });
 });
 

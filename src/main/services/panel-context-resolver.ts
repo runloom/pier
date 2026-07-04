@@ -127,12 +127,10 @@ export async function resolvePanelContextForPath(
   const worktreeSupported = gitRoot
     ? await supportsGitWorktree(cwd, execGit)
     : undefined;
-
   return {
     contextId: contextIdFor(worktreeKey),
     cwd,
     openedPath,
-    projectRoot,
     source,
     updatedAt: now(),
     worktreeKey,
@@ -140,6 +138,7 @@ export async function resolvePanelContextForPath(
     ...(gitCommonDir ? { gitCommonDir } : {}),
     ...(gitRoot ? { gitRoot } : {}),
     ...(head ? { head } : {}),
+    projectRootPath: projectRoot,
     ...(worktreeRoot ? { worktreeRoot } : {}),
     ...(worktreeSupported == null ? {} : { worktreeSupported }),
   };

@@ -57,6 +57,7 @@ function makeServices(): PierCoreServices {
     { get: () => () => Promise.reject(new Error("not stubbed")) }
   );
   return {
+    ai: trap as never,
     commandPaletteMru: trap as never,
     git: createGitService(),
     gitWatch: createGitWatchService(),

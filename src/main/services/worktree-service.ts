@@ -1,5 +1,12 @@
 import { mkdir as fsMkdir, realpath as fsRealpath } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
@@ -17,12 +24,17 @@ import { execGit } from "./git-exec.ts";
 
 const SAFE_WORKTREE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 
+interface WorktreeRootPreferences {
+  worktreeRootPath: string;
+}
+
 export interface WorktreeService {
   check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
   create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
   list(request: WorktreeListRequest): Promise<WorktreeListResult>;
   prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
   remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
+  resolveRootPath(request: WorktreeListRequest): Promise<string>;
 }
 
 export interface CreateWorktreeServiceOptions {
@@ -32,6 +44,7 @@ export interface CreateWorktreeServiceOptions {
     options?: { timeoutMs?: number }
   ) => Promise<string>;
   mkdir?: (path: string) => Promise<void>;
+  readPreferences?: () => Promise<WorktreeRootPreferences>;
   realpath?: (path: string) => Promise<string>;
 }
 
@@ -206,6 +219,27 @@ function isInsideDirectory(child: string, parent: string): boolean {
   );
 }
 
+function defaultWorktreeRoot(mainPath: string): string {
+  return join(dirname(mainPath), `${basename(mainPath)}.worktree`);
+}
+
+export function resolveWorktreeRootPath(
+  mainPath: string,
+  configuredRootPath: string
+): string {
+  const rootPath = configuredRootPath.trim();
+  if (rootPath.length === 0) {
+    return defaultWorktreeRoot(mainPath);
+  }
+  return isAbsolute(rootPath)
+    ? resolve(rootPath)
+    : resolve(dirname(mainPath), rootPath);
+}
+
+function uniquePaths(paths: readonly string[]): string[] {
+  return [...new Set(paths.map((path) => resolve(path)))];
+}
+
 async function validateBranchName(
   branch: string,
   cwd: string,
@@ -223,6 +257,7 @@ export function createWorktreeService({
   mkdir = async (path) => {
     await fsMkdir(path, { recursive: true });
   },
+  readPreferences = async () => ({ worktreeRootPath: "" }),
   realpath = fsRealpath,
 }: CreateWorktreeServiceOptions = {}): WorktreeService {
   async function check({
@@ -302,6 +337,42 @@ export function createWorktreeService({
     };
   }
 
+  async function resolveRootPath({
+    path,
+  }: WorktreeListRequest): Promise<string> {
+    const result = await list({ path });
+    if (result.status === "unavailable") {
+      serviceError(result.reason, `cannot resolve worktree root from ${path}`);
+    }
+    const preferences = await readPreferences();
+    return resolveWorktreeRootPath(
+      result.mainPath,
+      preferences.worktreeRootPath
+    );
+  }
+
+  async function managedRoots(mainPath: string): Promise<string[]> {
+    const preferences = await readPreferences();
+    return uniquePaths([
+      resolveWorktreeRootPath(mainPath, preferences.worktreeRootPath),
+      defaultWorktreeRoot(mainPath),
+      join(mainPath, ".worktrees"),
+    ]);
+  }
+
+  async function isInsideManagedRoot(
+    targetPath: string,
+    mainPath: string
+  ): Promise<boolean> {
+    for (const rootPath of await managedRoots(mainPath)) {
+      const managedRoot = await safeRealpath(rootPath, realpath);
+      if (isInsideDirectory(targetPath, managedRoot)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   async function create(
     request: WorktreeCreateRequest
   ): Promise<WorktreeCreateResult> {
@@ -318,9 +389,9 @@ export function createWorktreeService({
     }
     await validateBranchName(request.branch, before.mainPath, execGit);
 
-    // Pier-owned worktrees live under the main checkout so Git remains the source of truth.
-    const targetPath = join(before.mainPath, ".worktrees", request.name);
-    await mkdir(join(before.mainPath, ".worktrees"));
+    const rootPath = await resolveRootPath({ path: before.mainPath });
+    const targetPath = join(rootPath, request.name);
+    await mkdir(rootPath);
     await execGit(
       [
         "worktree",
@@ -381,12 +452,7 @@ export function createWorktreeService({
       }
     }
 
-    // Safe remove only covers Pier-managed linked worktrees and delegates deletion to Git.
-    const managedRoot = await safeRealpath(
-      join(before.mainPath, ".worktrees"),
-      realpath
-    );
-    if (!isInsideDirectory(target.path, managedRoot)) {
+    if (!(await isInsideManagedRoot(target.path, before.mainPath))) {
       serviceError(
         "unsafe_path",
         `worktree is outside Pier-managed directory: ${target.path}`
@@ -427,5 +493,5 @@ export function createWorktreeService({
     return await list({ path: before.mainPath });
   }
 
-  return { check, create, list, prune, remove };
+  return { check, create, list, prune, remove, resolveRootPath };
 }

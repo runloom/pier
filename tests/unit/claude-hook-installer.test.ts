@@ -9,7 +9,7 @@ import {
   withPierClaudeHooks,
 } from "../../src/main/services/agents/integrations/claude.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -47,8 +47,6 @@ describe("withPierClaudeHooks", () => {
     expect(hooks.Notification).toBeUndefined();
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
     }
   });
 

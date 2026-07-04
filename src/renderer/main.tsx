@@ -5,7 +5,7 @@ import {
   installTerminalInputRoutingBlurSuppressor,
   installTerminalInputRoutingDragWatcher,
   installTerminalInputRoutingPointerDownListener,
-} from "@/stores/terminal-input-routing.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { initI18n } from "./i18n/index.ts";
@@ -32,6 +32,7 @@ import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
+import { initWorktreePreferences } from "./stores/worktree-preferences.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
 
 async function bootstrap() {
@@ -63,6 +64,7 @@ async function bootstrap() {
       initTerminalPreferences(),
       initAgentPreferences(),
       initTerminalStatusBarPrefs(),
+      initWorktreePreferences(),
     ]);
   } catch (err) {
     console.error("[pier] theme/locale init failed:", err);

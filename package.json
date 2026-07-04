@@ -9,7 +9,7 @@
     "pier": "./bin/pier.mjs"
   },
   "license": "TBD",
-  "packageManager": "pnpm@10.23.0",
+  "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=10.0.0"
@@ -22,6 +22,7 @@
     "format:check": "ultracite check",
     "depcruise": "depcruise --config dependency-cruiser.config.cjs src packages",
     "check:file-size": "bash scripts/check-file-size.sh",
+    "build:libghostty": "bash scripts/build-libghostty.sh",
     "build:native": "cd native && bash build.sh",
     "build:icons": "node ./scripts/build-app-icons.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size",
@@ -40,10 +41,12 @@
     "build:dist": "pnpm build:native && pnpm build:electron && electron-builder --publish never",
     "build": "pnpm build:electron",
     "setup:worktree": "node ./scripts/setup-worktree.mjs",
+    "bootstrap": "bash scripts/bootstrap.sh",
     "prepare": "husky",
     "postinstall": "node ./scripts/ensure-electron.mjs"
   },
   "dependencies": {
+    "@hookform/resolvers": "5.4.0",
     "@leeoniya/ufuzzy": "1.0.19",
     "@pier/ui": "workspace:*",
     "@pierre/theme": "^1.1.0",
@@ -59,6 +62,7 @@
     "radix-ui": "^1.6.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-hook-form": "7.80.0",
     "react-resizable-panels": "^4.11.2",
     "recharts": "^3.8.1",
     "sonner": "2.0.7",
@@ -95,18 +99,6 @@
     "ultracite": "7.8.3",
     "vite": "8.0.16",
     "vitest": "4.1.8"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@biomejs/biome",
-      "@swc/core",
-      "electron",
-      "electron-winstaller",
-      "esbuild"
-    ],
-    "patchedDependencies": {
-      "@pierre/trees@1.0.0-beta.5": "patches/@pierre__trees@1.0.0-beta.5.patch"
-    }
   },
   "$pin-policy": "exact pin 到 install 当日 latest stable; 不用 latest 字面; 升级走 plan unlock"
 }

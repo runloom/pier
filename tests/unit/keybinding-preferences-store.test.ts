@@ -222,7 +222,9 @@ describe("keybinding-preferences.store", () => {
     await initKeybindingPreferences();
 
     expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
-      expect.arrayContaining(["Ctrl+Shift+KeyD"])
+      // darwin: stringifyChord 把 Ctrl+Shift+KeyD 归一化为 Mod+Shift+KeyD
+      // (Mod = cmdOrCtrl on mac).
+      expect.arrayContaining(["Mod+Shift+KeyD"])
     );
   });
 

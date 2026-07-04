@@ -11,7 +11,7 @@ import type {
 import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
-import { scopePanelId } from "./terminal-panel-id.ts";
+import { toNativePanelKey } from "./terminal-panel-id.ts";
 
 interface TerminalPresentationWindowState {
   desiredInputRouting?: TerminalInputRoutingSnapshot | undefined;
@@ -130,7 +130,7 @@ function scopeBasePanel(
   target: TerminalKeyboardFocusTarget
 ): TerminalKeyboardFocusTarget {
   return target.kind === "terminal"
-    ? { kind: "terminal", panelId: scopePanelId(win, target.panelId) }
+    ? { kind: "terminal", panelId: toNativePanelKey(win, target.panelId) }
     : target;
 }
 
@@ -143,14 +143,14 @@ function scopeNativePresentation(
     activePanelId:
       effective.activePanelId === effective.activeTerminalPanelId &&
       effective.activePanelId
-        ? scopePanelId(win, effective.activePanelId)
+        ? toNativePanelKey(win, effective.activePanelId)
         : effective.activePanelId,
     activeTerminalPanelId: effective.activeTerminalPanelId
-      ? scopePanelId(win, effective.activeTerminalPanelId)
+      ? toNativePanelKey(win, effective.activeTerminalPanelId)
       : null,
     terminals: effective.terminals.map((terminal) => ({
       ...terminal,
-      panelId: scopePanelId(win, terminal.panelId),
+      panelId: toNativePanelKey(win, terminal.panelId),
     })),
   };
 }

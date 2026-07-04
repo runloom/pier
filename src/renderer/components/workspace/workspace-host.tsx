@@ -29,11 +29,11 @@ import {
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   activateTerminalInputRouting,
   setTerminalBasePanel,
-} from "@/stores/terminal-input-routing.store.ts";
-import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
@@ -198,7 +198,7 @@ export function WorkspaceHost() {
       // 跳过 (不覆盖 user 操作) — user 显式新建的 panel 优先于磁盘旧 layout.
       let userTouched = false;
       let didNotifyReadyToShow = false;
-      const windowContextPromise = window.pier.getWindowContext();
+      const windowContextPromise = window.pier.window.getContext();
 
       const notifyReadyToShow = (): void => {
         if (didNotifyReadyToShow) {
@@ -208,7 +208,7 @@ export function WorkspaceHost() {
         // 此时 BrowserWindow 仍是 show:false, 隐藏页面的 requestAnimationFrame 可能
         // 不推进; 用 macrotask 接在同步 layout restore 后通知 main 显示窗口.
         setTimeout(() => {
-          window.pier.readyToShow();
+          window.pier.window.readyToShow();
         }, 0);
       };
 
@@ -319,7 +319,7 @@ export function WorkspaceHost() {
           // 终端焦点意图：让任何活跃的共存浮层（如搜索栏）让出键盘但保持可见，
           // effective 随 basePanel=terminal 转向终端。
           activateTerminalInputRouting(req.panelId);
-          useTerminalOverlayFocus.getState().yieldToTerminal();
+          useTerminalStore.getState().yieldToTerminal();
           syncTerminalPresentation(event.api, "dockview-active-panel");
         }
       });

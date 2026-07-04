@@ -129,6 +129,7 @@ describe("host-context panels", () => {
     const storedContext: PanelContext = {
       contextId: "ctx-1",
       gitRoot: "/repo",
+      projectRootPath: "/repo",
       updatedAt: 1,
     };
     usePanelDescriptorStore.getState().upsert("pier.test.panel", {
@@ -148,7 +149,12 @@ describe("host-context panels", () => {
 
   it("open with a source context replaces the panel's stored context", () => {
     usePanelDescriptorStore.getState().upsert("pier.test.panel", {
-      context: { contextId: "ctx-old", gitRoot: "/old", updatedAt: 1 },
+      context: {
+        contextId: "ctx-old",
+        gitRoot: "/old",
+        projectRootPath: "/old",
+        updatedAt: 1,
+      },
       display: { short: "Test" },
     });
     const { api } = mockApi(["pier.test.panel"]);
@@ -157,6 +163,7 @@ describe("host-context panels", () => {
     const nextContext: PanelContext = {
       contextId: "ctx-new",
       gitRoot: "/new",
+      projectRootPath: "/new",
       updatedAt: 2,
     };
 

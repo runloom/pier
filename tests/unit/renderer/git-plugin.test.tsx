@@ -39,7 +39,7 @@ import { usePluginOverlayStore } from "@/stores/plugin-overlay.store.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
   resetTerminalInputRoutingForTests,
-} from "@/stores/terminal-input-routing.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const toastMocks = vi.hoisted(() => ({
@@ -82,7 +82,7 @@ const context: PanelContext = {
   cwd: "/Users/xyz/ABC/pier",
   gitRoot: "/Users/xyz/ABC/pier",
   openedPath: "/Users/xyz/ABC/pier",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectRootPath: "/Users/xyz/ABC/pier",
   source: "panel",
   updatedAt: now,
   worktreeKey: "/Users/xyz/ABC/pier",
@@ -534,16 +534,16 @@ describe("git builtin plugin", () => {
               isMain: false,
               locked: false,
               lockedReason: null,
-              path: "/Users/xyz/ABC/pier/.worktrees/new-worktree",
+              path: "/Users/xyz/ABC/pier.worktree/new-worktree",
               prunable: false,
               prunableReason: null,
             },
-            targetPath: "/Users/xyz/ABC/pier/.worktrees/new-worktree",
+            targetPath: "/Users/xyz/ABC/pier.worktree/new-worktree",
             worktrees: [],
           })),
           creationDefaults: vi.fn(async () => ({
-            branchPrefix: "wt/",
             copyPatterns: [],
+            rootPath: "/Users/xyz/ABC/pier.worktree",
             setupCommand: "",
           })),
           list: vi.fn(async () => ({
@@ -692,7 +692,6 @@ describe("git builtin plugin", () => {
         },
         preferences: {
           read: vi.fn(async () => ({
-            worktreeBranchPrefix: "wt/",
             worktreeCopyPatterns: [],
             worktreeSetupCommand: "",
           })),
@@ -836,6 +835,7 @@ describe("git builtin plugin", () => {
             contextId: "ctx-home",
             cwd: "/Users/xyz",
             openedPath: "/Users/xyz",
+            projectRootPath: "/Users/xyz",
             source: "panel",
             updatedAt: now,
           },
@@ -970,7 +970,9 @@ describe("git builtin plugin", () => {
     expect(window.pier.worktrees.list).toHaveBeenCalledWith({
       path: "/Users/xyz/ABC/pier",
     });
-    expect(window.pier.worktrees.creationDefaults).toHaveBeenCalled();
+    expect(window.pier.worktrees.creationDefaults).toHaveBeenCalledWith({
+      path: "/Users/xyz/ABC/pier",
+    });
     expect(window.pier.git.listBranches).toHaveBeenCalledWith(
       "/Users/xyz/ABC/pier",
       { kind: "all" }
@@ -1571,7 +1573,7 @@ describe("git builtin plugin", () => {
           branch: "feature/worktree",
           cwd: "/Users/xyz/ABC/pier-feature/src",
           gitRoot: "/Users/xyz/ABC/pier-feature",
-          projectRoot: "/Users/xyz/ABC/pier-feature",
+          projectRootPath: "/Users/xyz/ABC/pier-feature",
           worktreeRoot: "/Users/xyz/ABC/pier-feature",
         },
         cwd: "/Users/xyz/ABC/pier-feature/src",
@@ -1765,6 +1767,7 @@ describe("git builtin plugin", () => {
           contextId: "ctx-home",
           cwd: "/Users/xyz",
           openedPath: "/Users/xyz",
+          projectRootPath: "/Users/xyz",
           source: "panel",
           updatedAt: now,
         },
@@ -1827,7 +1830,7 @@ describe("git builtin plugin", () => {
       );
     }
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
@@ -1899,7 +1902,7 @@ describe("git builtin plugin", () => {
 
   it("Files explorer lazily loads expanded directory children from the host files API", async () => {
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
@@ -1953,7 +1956,7 @@ describe("git builtin plugin", () => {
 
   it("Files explorer renders an explicit empty state for an empty project root", async () => {
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
@@ -1975,7 +1978,7 @@ describe("git builtin plugin", () => {
 
   it("Files explorer shows a directory-scoped error when lazy child loading fails", async () => {
     const projectRoot =
-      context.projectRoot ??
+      context.projectRootPath ??
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??

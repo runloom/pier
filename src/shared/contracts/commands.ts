@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aiSuggestBranchRequestSchema } from "./ai.ts";
 import {
   fileListRequestSchema,
   fileMoveRequestSchema,
@@ -38,13 +39,13 @@ import {
   type WorktreeOperationErrorReason,
   worktreeCheckRequestSchema,
   worktreeCreateRequestSchema,
+  worktreeCreationDefaultsRequestSchema,
   worktreeListRequestSchema,
   worktreeOpenRequestSchema,
   worktreeOpenTerminalRequestSchema,
   worktreePruneRequestSchema,
   worktreeRemoveRequestSchema,
 } from "./worktree.ts";
-
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
 
@@ -97,14 +98,14 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   z.object({
-    projectRoot: z.string().min(1),
+    projectRootPath: z.string().min(1),
     type: z.literal("run.list"),
   }),
   z.object({
     focus: z.boolean().optional(),
     inputs: z.record(z.string().min(1), z.string()).optional(),
     placement: pierCommandPlacementSchema.optional(),
-    projectRoot: z.string().min(1),
+    projectRootPath: z.string().min(1),
     taskId: z.string().min(1),
     type: z.literal("run.spawn"),
     windowId: z.string().min(1).optional(),
@@ -170,7 +171,9 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   worktreeCreateRequestSchema.extend({
     type: z.literal("worktree.create"),
   }),
-  z.object({ type: z.literal("worktree.creationDefaults") }),
+  worktreeCreationDefaultsRequestSchema.extend({
+    type: z.literal("worktree.creationDefaults"),
+  }),
   worktreeOpenRequestSchema.extend({
     focus: z.boolean().optional(),
     placement: pierCommandPlacementSchema.optional(),
@@ -370,6 +373,11 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({
     cwd: z.string().min(1),
     type: z.literal("git.undoLastCommit"),
+  }),
+  // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
+  z.object({ type: z.literal("ai.status") }),
+  aiSuggestBranchRequestSchema.extend({
+    type: z.literal("ai.suggestBranch"),
   }),
 ]);
 

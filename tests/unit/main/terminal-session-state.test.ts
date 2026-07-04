@@ -12,7 +12,7 @@ function taskMetadata(
   return {
     cwd: "/Users/xyz/ABC/pier",
     label: "test",
-    projectRoot: "/Users/xyz/ABC/pier",
+    projectRootPath: "/Users/xyz/ABC/pier",
     rawCommand: "pnpm test",
     runId: "run-1",
     source: "package-script",
@@ -28,7 +28,7 @@ function context(root: string, updatedAt = 1_772_000_000_000): PanelContext {
     contextId: `ctx:${root}`,
     cwd: root,
     openedPath: root,
-    projectRoot: root,
+    projectRootPath: root,
     source: "panel",
     updatedAt,
     worktreeKey: root,

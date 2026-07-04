@@ -6,128 +6,29 @@ import type {
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
-import { List, Play, SquareTerminal } from "lucide-react";
+import { List, Play, RotateCcw } from "lucide-react";
 import { panelKindOf } from "@/components/workspace/panel-registry.ts";
-import type { WorkspacePanelSnapshot } from "@/components/workspace/workspace-panel-snapshots.ts";
-import { buildWorkspacePanelSnapshots } from "@/components/workspace/workspace-panel-snapshots.ts";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
-import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
+import {
+  activeTaskPanelMetadata,
+  rendererActionContributionRuntime,
+} from "@/lib/actions/renderer-action-runtime.ts";
+import { openTerminalListQuickPick } from "@/lib/actions/terminal-list-quickpick.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type {
   QuickPickItem,
-  QuickPickItemBadge,
   QuickPickSection,
 } from "@/lib/command-palette/types.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
-const PATH_SEPARATOR_RE = /[\\/]/;
-
-function terminalLabel(panel: WorkspacePanelSnapshot): string {
-  return (
-    panel.display?.short ??
-    panel.context?.cwd?.split(PATH_SEPARATOR_RE).filter(Boolean).at(-1) ??
-    panel.id
-  );
+interface ProjectContext {
+  projectRootPath: string;
 }
 
-function terminalTabBadge(panel: WorkspacePanelSnapshot): QuickPickItemBadge[] {
-  return [
-    {
-      label: i18next.t("commandPalette.run.badge.tab", {
-        tab: panel.tabIndex + 1,
-        total: panel.tabCount,
-      }),
-      variant: "outline",
-    },
-  ];
-}
-
-function sectionHeading(panel: WorkspacePanelSnapshot): string {
-  return i18next.t("commandPalette.run.section.group", {
-    group: panel.groupIndex + 1,
-  });
-}
-
-function comparePanels(
-  a: WorkspacePanelSnapshot,
-  b: WorkspacePanelSnapshot
-): number {
-  return (
-    a.groupIndex - b.groupIndex ||
-    a.tabIndex - b.tabIndex ||
-    a.id.localeCompare(b.id)
-  );
-}
-
-function buildTerminalPanelSections(openPanels: WorkspacePanelSnapshot[]): {
-  panelsByItemId: Map<string, WorkspacePanelSnapshot>;
-  sections: QuickPickSection[];
-} {
-  const panelsByItemId = new Map<string, WorkspacePanelSnapshot>();
-  const sections: Array<{
-    heading: string;
-    id: string;
-    items: QuickPickItem[];
-  }> = [];
-  const sectionById = new Map<
-    string,
-    { heading: string; id: string; items: QuickPickItem[] }
-  >();
-
-  for (const panel of [...openPanels].sort(comparePanels)) {
-    const itemId = `panel:${panel.id}`;
-    panelsByItemId.set(itemId, panel);
-    const sectionId = `group:${panel.groupIndex}`;
-    let section = sectionById.get(sectionId);
-    if (!section) {
-      section = {
-        heading: sectionHeading(panel),
-        id: sectionId,
-        items: [],
-      };
-      sectionById.set(sectionId, section);
-      sections.push(section);
-    }
-    const item: QuickPickItem = {
-      badges: terminalTabBadge(panel),
-      checked: panel.active === true,
-      icon: SquareTerminal,
-      id: itemId,
-      searchTerms: [
-        panel.id,
-        panel.context?.cwd,
-        panel.context?.projectRoot,
-        panel.context?.gitRoot,
-        panel.context?.branch,
-        section.heading,
-      ].filter((value): value is string => typeof value === "string"),
-      label: terminalLabel(panel),
-      ...(panel.context?.cwd ? { detail: panel.context.cwd } : {}),
-    };
-    section.items = [...section.items, item];
-  }
-
-  return {
-    panelsByItemId,
-    sections: sections satisfies QuickPickSection[],
-  };
-}
-
-function currentTerminalPanels(): WorkspacePanelSnapshot[] {
-  const api = useWorkspaceStore.getState().api;
-  if (!api) {
-    return [];
-  }
-  return buildWorkspacePanelSnapshots(
-    api,
-    usePanelDescriptorStore.getState().descriptors
-  ).filter((panel) => panel.kind === "terminal");
-}
-
-function activeProjectRoot(): string | null {
+function activeProjectContext(): ProjectContext | null {
   const api = useWorkspaceStore.getState().api;
   const activePanelId = api?.activePanel?.id;
   if (!activePanelId) {
@@ -135,7 +36,15 @@ function activeProjectRoot(): string | null {
   }
   const descriptor =
     usePanelDescriptorStore.getState().descriptors[activePanelId];
-  return descriptor?.context?.projectRoot ?? descriptor?.context?.cwd ?? null;
+  const projectRootPath =
+    descriptor?.context?.projectRootPath ??
+    descriptor?.context?.gitRoot ??
+    descriptor?.context?.worktreeRoot ??
+    descriptor?.context?.cwd;
+  if (!projectRootPath) {
+    return null;
+  }
+  return { projectRootPath };
 }
 
 function taskSourceLabel(source: TaskSource): string {
@@ -282,14 +191,14 @@ async function collectTaskInputs(
 
 async function spawnTask(args: {
   inputs?: Record<string, string>;
-  projectRoot: string;
+  project: ProjectContext;
   taskId: string;
 }): Promise<TaskSpawnResult> {
   return await window.pier.tasks.spawn({
     focus: true,
     ...(args.inputs ? { inputs: args.inputs } : {}),
     placement: "active-tab",
-    projectRoot: args.projectRoot,
+    projectRootPath: args.project.projectRootPath,
     taskId: args.taskId,
   });
 }
@@ -308,14 +217,17 @@ function focusTerminalPanel(panelId: string): void {
     console.error("[run-actions] focus task terminal failed:", result.message);
   }
 }
-async function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
-  let result = await spawnTask({ projectRoot, taskId: item.id });
+async function spawnTaskWithInputFlow(
+  project: ProjectContext,
+  taskId: string
+): Promise<void> {
+  let result = await spawnTask({ project, taskId });
   if (result.status === "requires-input") {
     const inputs = await collectTaskInputs(result.inputs);
     if (!inputs) {
       return;
     }
-    result = await spawnTask({ inputs, projectRoot, taskId: item.id });
+    result = await spawnTask({ inputs, project, taskId });
   }
   if (result.status === "unsupported") {
     console.error("[run-actions] task unsupported:", result.message);
@@ -325,11 +237,31 @@ async function handleTaskAccept(projectRoot: string, item: QuickPickItem) {
     focusTerminalPanel(result.panelId);
   }
 }
+
+function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
+  return spawnTaskWithInputFlow(project, item.id);
+}
+
+/**
+ * 任务面板右键"重新运行": 复用 Run Task 的 spawn 流程。main 侧 prepareSpawn
+ * 会走 restart 路径 — 运行中的任务先取消再在原 panel 重启, 已结束的任务
+ * 直接复用原 panel relaunch。
+ */
+async function rerunActiveTaskPanel(): Promise<void> {
+  const task = activeTaskPanelMetadata();
+  if (!task) {
+    return;
+  }
+  await spawnTaskWithInputFlow(
+    { projectRootPath: task.projectRootPath },
+    task.taskId
+  );
+}
 export async function openRunTaskQuickPick() {
-  const projectRoot = activeProjectRoot();
+  const project = activeProjectContext();
   const title = i18next.t("commandPalette.action.runTask");
   const placeholder = i18next.t("commandPalette.placeholder.runTask");
-  if (!projectRoot) {
+  if (!project) {
     useCommandPaletteController.getState().openQuickPick({
       title,
       placeholder,
@@ -379,7 +311,9 @@ export async function openRunTaskQuickPick() {
     return;
   }
   try {
-    const result = await window.pier.tasks.list({ projectRoot });
+    const result = await window.pier.tasks.list({
+      projectRootPath: project.projectRootPath,
+    });
     if (!shouldReplaceLoadingPick()) {
       return;
     }
@@ -399,7 +333,7 @@ export async function openRunTaskQuickPick() {
               },
             ],
           }),
-      onAccept: (item) => handleTaskAccept(projectRoot, item),
+      onAccept: (item) => handleTaskAccept(project, item),
     });
   } catch (error) {
     if (!shouldReplaceLoadingPick()) {
@@ -421,47 +355,6 @@ export async function openRunTaskQuickPick() {
   }
 }
 
-function openTerminalListQuickPick() {
-  const api = useWorkspaceStore.getState().api;
-  if (!api) {
-    return;
-  }
-  const { panelsByItemId, sections } = buildTerminalPanelSections(
-    currentTerminalPanels()
-  );
-  useCommandPaletteController.getState().openQuickPick({
-    title: i18next.t("commandPalette.action.terminalList"),
-    placeholder: i18next.t("commandPalette.placeholder.terminalList"),
-    ...(sections.length > 0
-      ? { sections }
-      : {
-          items: [
-            {
-              description: i18next.t("commandPalette.run.action.later"),
-              detail: i18next.t("commandPalette.run.noTerminalsDetail"),
-              disabled: true,
-              id: "terminal-empty",
-              label: i18next.t("commandPalette.run.noTerminals"),
-            },
-          ],
-        }),
-    onAccept: (item) => {
-      const panel = panelsByItemId.get(item.id);
-      if (!panel) {
-        return;
-      }
-      const result = activateWorkspacePanel(api, panel.id, {
-        expectedKind: "terminal",
-        kindOfComponent: panelKindOf,
-        reveal: "always",
-      });
-      if (!result.ok) {
-        throw new Error(result.message);
-      }
-    },
-  });
-}
-
 export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
     categoryKey: "run",
@@ -472,6 +365,19 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     sortOrder: 0,
     surfaces: ["command-palette"],
     titleKey: "commandPalette.action.runTask",
+  },
+  {
+    categoryKey: "run",
+    // 与 pier.panel.newTerminal 同组同位: 任务面板上二者互斥换位。
+    group: "1_new",
+    handler: rerunActiveTaskPanel,
+    iconComponent: RotateCcw,
+    id: "pier.run.rerunTask",
+    menuHiddenWhen: "!terminal.activeIsTaskPanel",
+    sortOrder: 1,
+    surfaces: ["dockview-tab", "terminal/content"],
+    titleKey: "contextMenu.action.rerunTask",
+    when: "terminal.activeIsTaskPanel",
   },
   {
     categoryKey: "run",

@@ -116,7 +116,9 @@ final class EventRouterView: NSView {
         "Mod+Shift+Enter",
         "Mod+Shift+Equal",
         "Mod+Shift+KeyD",
+        "Mod+Shift+KeyN",
         "Mod+Shift+KeyP",
+        "Mod+Shift+KeyT",
     ]
 
     static func setTerminalAppShortcutKeys(_ keys: Set<String>) {
@@ -368,6 +370,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceSearchDelegate,
     TerminalSurfaceTitleDelegate,
     TerminalSurfaceCommandFinishedDelegate,
+    TerminalSurfaceCommandStartedDelegate,
     TerminalSurfaceCloseDelegate,
     TerminalSurfaceScrollbarDelegate
 {
@@ -395,6 +398,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// exitCode 为 nil 时在 C ABI 边界统一转成 -1。
     static var forwardCommandFinishedCallback: ((Int, String, Int, UInt64) -> Void)?
 
+    /// 全局 callback: Ghostty shell integration command_started → main process.
+    /// commandLine 可能为空字符串（shell 未提供 OSC 133 C/633 E cmdline 时）.
+    static var forwardCommandStartedCallback: ((Int, String, String) -> Void)?
+
     /// 全局 callback: Ghostty surface close → main process.
     /// processAlive=false 表示底层进程已自然退出；true 表示 surface 关闭时进程仍存活。
     static var forwardProcessClosedCallback: ((Int, String, Bool) -> Void)?
@@ -418,6 +425,14 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
             panelId,
             exitCode ?? -1,
             durationNanos
+        )
+    }
+
+    func terminalDidStartCommand(commandLine: String) {
+        TerminalEventDelegate.forwardCommandStartedCallback?(
+            browserWindowId,
+            panelId,
+            commandLine
         )
     }
 
@@ -1785,6 +1800,7 @@ public func ghosttyBridgeFreeString(_ ptr: UnsafeMutablePointer<CChar>?) {
 // C 函数指针 typealias 集中放在一起 — addon.mm 通过 ThreadSafeFunction 包装让
 // JS 端能安全接收. C string 在 @_cdecl 内 withCString 取临时指针调用 cb, cb 返回
 // 后字符串生命周期结束 (addon.mm 端 trampoline 已 std::string 拷贝, 不会 dangling).
+public typealias CommandStartedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
 public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
@@ -1925,6 +1941,23 @@ public func ghosttyBridgeSetCommandFinishedForwardCallback(_ cb: CommandFinished
             }
         } else {
             TerminalEventDelegate.forwardCommandFinishedCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_command_started_forward_callback")
+public func ghosttyBridgeSetCommandStartedForwardCallback(_ cb: CommandStartedForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardCommandStartedCallback = { wid, panelId, commandLine in
+                panelId.withCString { pidPtr in
+                    commandLine.withCString { cmdPtr in
+                        cb(wid, pidPtr, cmdPtr)
+                    }
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardCommandStartedCallback = nil
         }
     }
 }

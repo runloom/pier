@@ -1,11 +1,9 @@
+import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type {
   TaskExitReason,
   TaskExitSource,
 } from "@shared/contracts/tasks.ts";
-import type {
-  CreateTerminalArgs,
-  TerminalTabChromePatchEvent,
-} from "@shared/contracts/terminal.ts";
+import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import { updateTerminalPanelTab } from "../state/terminal-session-state.ts";
 
 export async function persistInitialTerminalTab(
@@ -31,7 +29,7 @@ export interface TerminalTaskExitStatus {
 
 export function taskExitTabPatch(
   exit: TerminalTaskExitStatus
-): TerminalTabChromePatchEvent["tab"] {
+): Partial<PanelTabChrome> {
   if (exit.reason === "user") {
     return {
       state: {

@@ -1,6 +1,6 @@
 # AI 工作台能力评分清单
 
-更新时间：2026-06-25
+更新时间：2026-07-04
 
 ## 调研口径
 
@@ -42,6 +42,173 @@
 满分 30。替代风险越高，总分越低。
 
 优先级不是总分排序。若 Claude/Codex 已经很好地覆盖某项能力，Pier 只有在能补齐本地开发闭环、跨 agent 状态、工作树隔离、终端现场、证据绑定或权限边界时才应实现；否则应标为后置集成或不做。能力总表中的“建设理由 / 改进点”用于区分：闭环补齐、差异化增强、后置集成和不做。
+
+## 全局能力 DAG
+
+本 DAG 基于 2026-07-04 当前仓库状态和上方能力清单整理。它只描述 Pier 主体与插件底座的依赖关系，不把 AI 自动化、Agent 编排、RAG / 知识库、eval / 测试评估直接放进主体实现。
+
+状态标记：
+
+- `完成`：当前仓库已有主体契约、服务、界面或测试闭环，可以继续扩展。
+- `部分完成`：已有基础实现，但仍有迁移、权限、审计、持久化、第三方运行时或可用性缺口。
+- `待实现`：当前只有规划或 capability 预留，尚未形成主体闭环。
+- `插件方向`：不进 Pier 主体，只在插件底座成熟后作为插件支持。
+
+```mermaid
+flowchart TD
+    A0["[P0][完成] 产品边界<br/>本地 AI 开发工作台<br/>不做任务台账 / 看板 / 自动调度"]
+    A1["[P0][完成] 路径锚点上下文<br/>PanelContext / Git 根目录 / worktree / cwd"]
+    A2["[P0][完成] 本机控制面<br/>CLI / socket / command router / JSON 结果"]
+    A3["[P0][部分完成] 权限契约<br/>capability / command metadata / 插件权限预留"]
+    A4["[P0][部分完成] 原生终端运行时<br/>Ghostty / PTY / focus / launch / cwd"]
+    A5["[P0][完成] 多面板工作区<br/>dockview / panel registry / 插件 panel 合并"]
+    A6["[P0][完成] Git 与文件主体 API<br/>status / diff / patch / branch / file ops"]
+    A7["[P0][完成] 内置插件宿主<br/>manifest / settings / builtin runtime / panel / command"]
+    A8["[P1][部分完成] Profile 与密钥<br/>terminal profile / safeStorage / env 注入基础"]
+    A9["[P0][部分完成] 前台活动与 Agent 状态<br/>agent / task / shell / idle 聚合"]
+    A10["[P1][部分完成] worktree 操作<br/>list / create / open / bootstrap"]
+    A11["[P1][待实现] Transcript 资产层<br/>终端输出分段 / 查询 / 回放 / 摘要"]
+    A12["[P1][待实现] Evidence 证据层<br/>测试 / 评估 / 审查结果挂载"]
+    A13["[P1][部分完成] AI 调用底座<br/>ai.status / suggestBranch / provider 配置"]
+    A14["[P1][待实现] 外部插件运行时<br/>local process / MCP / JSON-RPC / 第三方隔离"]
+    A15["[P1][部分完成] 插件事件与触发器<br/>Git / Terminal / Plugin 事件已有<br/>trigger/action 协议待补"]
+    A16["[P1][待实现] 插件审计与资源限制<br/>敏感调用日志 / 超时 / 取消 / 崩溃隔离"]
+    A17["[P2][部分完成] 插件安装与版本兼容<br/>apiVersion 已有<br/>local/git/registry 安装待补"]
+    A18["[P2][插件方向] AI 自动化工作流插件<br/>Zapier / Make 的 AI 版本"]
+    A19["[P2][插件方向] Agent 编排插件<br/>多模型 / 多步骤 / 并发执行"]
+    A20["[P2][插件方向] RAG / 知识库插件<br/>企业问答 / 向量索引 / 检索注入"]
+    A21["[P2][插件方向] eval / 测试评估插件<br/>评估集 / 打分器 / 回归报告"]
+    A22["[P3][插件方向] 产品前端设计质量插件<br/>截图审查 / 设计差异 / 修复建议"]
+    A23["[P3][插件方向] 开发知识资产插件<br/>决策 / 计划 / 证据 / 上下文包管理"]
+
+    A0 --> A1
+    A0 --> A2
+    A0 --> A4
+    A0 --> A5
+
+    A1 --> A2
+    A1 --> A4
+    A1 --> A6
+    A1 --> A8
+    A1 --> A9
+    A1 --> A10
+
+    A2 --> A3
+    A2 --> A5
+    A2 --> A6
+    A2 --> A8
+    A2 --> A13
+
+    A3 --> A7
+    A3 --> A8
+    A3 --> A14
+    A3 --> A15
+    A3 --> A16
+
+    A4 --> A9
+    A4 --> A11
+    A4 --> A12
+
+    A5 --> A7
+    A5 --> A15
+
+    A6 --> A7
+    A6 --> A12
+    A6 --> A20
+    A6 --> A21
+    A6 --> A23
+
+    A7 --> A14
+    A7 --> A15
+    A7 --> A17
+
+    A8 --> A13
+    A8 --> A14
+    A8 --> A18
+    A8 --> A19
+    A8 --> A20
+
+    A9 --> A11
+    A9 --> A19
+
+    A10 --> A6
+    A10 --> A19
+    A10 --> A21
+
+    A11 --> A12
+    A11 --> A18
+    A11 --> A19
+    A11 --> A20
+    A11 --> A23
+
+    A12 --> A18
+    A12 --> A19
+    A12 --> A21
+    A12 --> A22
+    A12 --> A23
+
+    A13 --> A18
+    A13 --> A19
+    A13 --> A21
+
+    A14 --> A18
+    A14 --> A19
+    A14 --> A20
+    A14 --> A21
+    A14 --> A22
+    A14 --> A23
+
+    A15 --> A18
+    A15 --> A19
+    A15 --> A20
+    A15 --> A21
+
+    A16 --> A18
+    A16 --> A19
+    A16 --> A20
+    A16 --> A21
+
+    A17 --> A14
+
+    classDef done fill:#dff5e1,stroke:#2f7d32,color:#133b16;
+    classDef partial fill:#fff4cc,stroke:#a66f00,color:#4a3400;
+    classDef todo fill:#f3f4f6,stroke:#6b7280,color:#111827;
+    classDef plugin fill:#e8f0ff,stroke:#315fbd,color:#102a5c;
+
+    class A0,A1,A2,A5,A6,A7 done;
+    class A3,A4,A8,A9,A10,A13,A15,A17 partial;
+    class A11,A12,A14,A16 todo;
+    class A18,A19,A20,A21,A22,A23 plugin;
+```
+
+### DAG 节点说明
+
+| 节点 | 状态 | 重要程度 | 当前依据 | 下一步 |
+|---|---|---|---|---|
+| 产品边界 | 完成 | P0 | `AGENTS.md` 已明确 Pier 是本地 AI 开发工作台，且不做任务生命周期、SQLite 任务台账、看板、自动调度。 | 继续用该边界约束后续插件和主体能力。 |
+| 路径锚点上下文 | 完成 | P0 | `PanelContext.projectRootPath` 已作为必需路径锚点；`resolvePanelContextForPath()` 对 Git 目录使用仓库根目录，对非 Git 目录使用 `cwd`；主体已移除 `Project` 注册表和 `projectId` 外键。 | 后续只围绕 `projectRootPath` / `gitRoot` / `worktreeRoot` 扩展插件和资产能力，不再引入无所有权的 `projectId`。 |
+| 本机控制面 | 完成 | P0 | 已有 CLI、socket、本机命令信封、`command-router`、`renderer-command bridge` 和 JSON 结果。 | 按新能力继续扩展命令，不改变统一路由。 |
+| 权限契约 | 部分完成 | P0 | capability 已扩展到 plugin、git、file、profile、secret、transcript、evidence、network、ai 等。 | 补插件审计、第三方插件授权确认和敏感 capability 的用户可见记录。 |
+| 原生终端运行时 | 部分完成 | P0 | 已有 Ghostty 原生桥、终端生命周期、焦点、cwd/title、launch 参数和大量测试。 | 补 transcript 分段、长期运行恢复、profile 状态可见性。 |
+| 多面板工作区 | 完成 | P0 | `WorkspaceHost` 是 dockview 唯一业务边界，`panel-registry` 已支持 core panel 与插件 panel 合并。 | 保持 renderer 业务不直接 import dockview 的边界。 |
+| Git 与文件主体 API | 完成 | P0 | 已有 Git status、diff、patch、branch、stash、write 命令和 File list/read/write/move/trash 契约。 | 后续重点转向证据绑定和插件使用体验。 |
+| 内置插件宿主 | 完成 | P0 | 已有 manifest、插件设置、builtin main/renderer runtime、Git/Files 内置插件、插件 panel/command/status item。 | 继续把通用业务能力迁到内置插件，主体只保留宿主能力。 |
+| Profile 与密钥 | 部分完成 | P1 | 已有 terminal profile service/state、terminal launch profileId、`safeStorage` 密钥 store。 | 补项目级 / worktree 级 profile 绑定、状态栏切换和插件可控 secret ref。 |
+| 前台活动与 Agent 状态 | 部分完成 | P0 | 已有 `ForegroundActivity` 四态聚合器、agent/task/shell/idle 模型和广播。 | 收敛老 `agent-session` 双写，增强不同 agent 的状态映射与 UI 稳定性。 |
+| worktree 操作 | 部分完成 | P1 | 已有 worktree list/create/open/bootstrap 相关命令、服务和设置。 | 明确其作为 Git 插件与项目上下文的延伸，不升级为任务调度系统。 |
+| Transcript 资产层 | 待实现 | P1 | AGENTS 已定义原始终端输出写 transcript 分段文件，但当前主体还未形成统一查询/回放层。 | 实现 session 级分段、索引、检索、摘要和保留策略。 |
+| Evidence 证据层 | 待实现 | P1 | capability 已预留 `evidence:write`，但缺少契约、存储、UI 和与 diff/session 的绑定。 | 定义 evidence 契约，支持测试、评估、审查和截图证据挂载。 |
+| AI 调用底座 | 部分完成 | P1 | 已有 `ai.status`、`ai.suggestBranch` 和 renderer 插件 `ai` context。 | 保持窄能力，避免扩成通用模型平台；补 provider/profile/secret 的清晰边界。 |
+| 外部插件运行时 | 待实现 | P1 | 当前第三方本地插件仍是 manifest-only；可执行 runtime 只覆盖 builtin 插件。 | 实现本地进程、MCP 或 JSON-RPC 插件隔离运行。 |
+| 插件事件与触发器 | 部分完成 | P1 | 已有 Git、Terminal、Plugin、ForegroundActivity 等广播，以及插件 action/panel API。 | 补标准 trigger/action 协议，让自动化插件能声明事件和动作。 |
+| 插件审计与资源限制 | 待实现 | P1 | 权限已有，但还没有统一敏感调用日志、超时、取消、崩溃隔离和资源限制。 | 建立插件审计日志和后台进程监管。 |
+| 插件安装与版本兼容 | 部分完成 | P2 | manifest 已有 `apiVersion` 和 source kind，但 git/registry/local 可执行安装仍未完整开放。 | 支持本地目录安装、版本兼容检查、来源完整性和禁用回滚。 |
+| AI 自动化工作流插件 | 插件方向 | P2 | 依赖事件、动作、profile、secret、审计和外部插件运行时。 | 插件自带流程引擎，Pier 只提供本地触发器和动作。 |
+| Agent 编排插件 | 插件方向 | P2 | 依赖终端、profile、Agent 状态、transcript、evidence 和外部插件运行时。 | 插件自己实现多模型、多步骤、并发和结果合并。 |
+| RAG / 知识库插件 | 插件方向 | P2 | 依赖 file/git/transcript、secret、network 和外部插件运行时。 | 插件自己实现索引、embedding、向量库和企业知识源连接。 |
+| eval / 测试评估插件 | 插件方向 | P2 | 依赖 Git、transcript、evidence、AI 调用底座和外部插件运行时。 | 插件自己实现评估集、评分器、模型对比和报告。 |
+| 产品前端设计质量插件 | 插件方向 | P3 | 依赖截图、文件、Git、evidence 和外部插件运行时。 | 后续作为 Pier 插件支持，不进入主体。 |
+| 开发知识资产插件 | 插件方向 | P3 | 依赖 transcript、evidence、file/git 上下文和插件运行时。 | 后续管理决策、计划、证据、上下文包和未验证项。 |
 
 ## 能力总表
 

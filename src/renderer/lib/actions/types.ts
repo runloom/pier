@@ -22,6 +22,11 @@ export interface ActionMetadata {
   group?: string;
   iconComponent?: LucideIcon;
   /**
+   * 返回 true 时该 action 从右键菜单整行移除 (非置灰)。只在 buildMenuEntries
+   * 投影 context menu 时生效;命令面板/快捷键路径不读此字段。
+   */
+  menuHidden?: () => boolean;
+  /**
    * 菜单 accelerator 展示可借用另一条 command 的 keybinding.
    * 用于菜单 action 与快捷键 action 分离, 但用户需要看到同一个快捷键提示的场景.
    */

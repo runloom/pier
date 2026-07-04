@@ -4,10 +4,13 @@ import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-cha
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app } from "electron";
+import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import {
   createMainPluginHostApi,
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
+import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
+import { createAiService } from "../services/ai/ai-service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
@@ -56,7 +59,7 @@ export interface PierAppCore {
 function broadcastMruState(state: MruState): void {
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
-      win.webContents.send("pier:command-palette-mru:changed", state);
+      win.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_MRU_CHANGED, state);
     }
   }
 }
@@ -145,19 +148,36 @@ function createPierAppCore(): PierAppCore {
     plugins: basePlugins,
     settings: pluginSettings,
   });
+  const preferences = createPreferencesService({ eventBus });
+  const secrets = createSecretsStore();
+  // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
+  const agentDetection = createAgentDetectionService();
   const services: PierCoreServices = {
+    ai: createAiService({
+      detectAgents: async () => (await agentDetection.detect()).detectedIds,
+      readPreferences: () => preferences.read(),
+    }),
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
     files: createFileService(),
-    preferences: createPreferencesService({ eventBus }),
-    secrets: createSecretsStore(),
+    preferences,
+    secrets,
     processEnvironment: createProcessEnvironmentService(),
     plugins: pluginHost.plugins,
     pluginSettings,
     panelContexts: createPanelContextService(),
     rendererCommand,
-    tasks: createTaskService(),
+    tasks: createTaskService({
+      onTaskActivity: {
+        onLaunched: (panelId, windowId, task) => {
+          foregroundActivityService.taskLaunched(panelId, windowId ?? "", task);
+        },
+        onFinished: (panelId, args) => {
+          foregroundActivityService.taskFinished(panelId, args);
+        },
+      },
+    }),
     terminalProfiles: createTerminalProfileService(),
     terminalStatusBarPrefs: {
       applyOverrides: async (patches) => {
@@ -196,7 +216,9 @@ function createPierAppCore(): PierAppCore {
       },
     }),
     workspace: createWorkspaceService(),
-    worktrees: createWorktreeService(),
+    worktrees: createWorktreeService({
+      readPreferences: () => preferences.read(),
+    }),
     ...(() => {
       // git 与 gitWatch 一体：watch 广播需带 status snapshot（多订阅共享 + 免竞态），
       // 所以在这里显式绑 getStatus，避免拆构造顺序

@@ -15,6 +15,7 @@ export const commandPalette = {
     language: "Select language",
   },
   category: {
+    file: "File",
     git: "Git",
     view: "View",
     settings: "Settings",
@@ -46,88 +47,6 @@ export const commandPalette = {
     zoomIn: "Zoom In",
     zoomOut: "Zoom Out",
     resetZoom: "Reset Zoom",
-  },
-  aliases: {
-    pier: {
-      agent: {
-        new: ["agent", "new agent", "ai agent", "start agent"],
-      },
-      commandPalette: {
-        clearRecent: ["clear history", "reset history", "command history"],
-      },
-      config: {
-        locale: ["language", "locale", "i18n", "display language"],
-        stylePreset: ["style", "color scheme", "theme preset", "preset"],
-        theme: ["theme", "color mode", "dark", "light"],
-      },
-      panel: {
-        equalizeSplits: [
-          "balance panels",
-          "distribute panels",
-          "even panels",
-          "layout panels",
-        ],
-        newTerminal: [
-          "terminal",
-          "new terminal",
-          "open terminal",
-          "create terminal",
-        ],
-      },
-      run: {
-        task: ["task", "run task", "command"],
-        terminalList: ["terminal list", "session list", "switch terminal"],
-      },
-      settings: {
-        open: ["settings", "preferences", "options"],
-      },
-      terminal: {
-        openDebugWindow: [
-          "terminal debug",
-          "native terminal debug",
-          "debug route",
-        ],
-      },
-      view: {
-        resetZoom: ["reset zoom", "restore zoom", "default zoom"],
-        zoomIn: ["zoom in", "increase zoom"],
-        zoomOut: ["zoom out", "decrease zoom"],
-      },
-      workspace: {
-        resetLayout: ["reset layout", "restore layout", "workspace layout"],
-      },
-    },
-    theme: {
-      dark: ["dark", "dark mode"],
-      light: ["light", "light mode"],
-      system: ["system", "auto", "follow system"],
-    },
-    stylePreset: {
-      pierre: ["pierre"],
-      "pierre-soft": ["pierre soft"],
-      catppuccin: ["catppuccin"],
-      everforest: ["everforest"],
-      github: ["github"],
-      "github-default": ["github default"],
-      "github-high-contrast": ["github high contrast", "high contrast"],
-      "gruvbox-hard": ["gruvbox hard"],
-      "gruvbox-medium": ["gruvbox medium"],
-      "gruvbox-soft": ["gruvbox soft"],
-      kanagawa: ["kanagawa"],
-      vscode: ["vscode", "vs code"],
-      material: ["material"],
-      min: ["min"],
-      one: ["one"],
-      "rose-pine": ["rose pine"],
-      slack: ["slack"],
-      solarized: ["solarized"],
-      vitesse: ["vitesse"],
-    },
-    locale: {
-      system: ["system", "auto", "follow system"],
-      "zh-CN": ["zh", "chinese", "simplified chinese"],
-      en: ["en", "english"],
-    },
   },
   run: {
     action: {

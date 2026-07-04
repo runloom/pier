@@ -243,26 +243,31 @@ describe("projectPreferencesSchema — agent preferences", () => {
 });
 
 describe("worktree preferences", () => {
-  it("空对象解析出 worktree 默认值", () => {
-    const prefs = projectPreferencesSchema.parse({});
-    expect(prefs.worktreeBranchPrefix).toBe("wt/");
-    expect(prefs.worktreeCopyPatterns).toEqual([
-      ".env*",
-      "*.local",
-      ".claude/settings.local.json",
-    ]);
-    expect(prefs.worktreeSetupCommand).toBe("");
-  });
-
-  it("可覆盖 worktree 键", () => {
+  it("omits the removed branch prefix preference from parsed preferences", () => {
     const prefs = projectPreferencesSchema.parse({
       worktreeBranchPrefix: "feature/",
+    });
+
+    expect(prefs).not.toHaveProperty("worktreeBranchPrefix");
+  });
+
+  it("可覆盖保留的 worktree 键", () => {
+    const prefs = projectPreferencesSchema.parse({
       worktreeCopyPatterns: [".env"],
       worktreeSetupCommand: "pnpm setup:worktree",
+      worktreeRootPath: "/Users/alice/project.worktree",
     });
-    expect(prefs.worktreeBranchPrefix).toBe("feature/");
     expect(prefs.worktreeCopyPatterns).toEqual([".env"]);
     expect(prefs.worktreeSetupCommand).toBe("pnpm setup:worktree");
+    expect(prefs.worktreeRootPath).toBe("/Users/alice/project.worktree");
+  });
+
+  it("拒绝过长的 worktree 根目录路径", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({
+        worktreeRootPath: `/${"x".repeat(1025)}`,
+      })
+    ).toThrow();
   });
 });
 

@@ -7,12 +7,14 @@ export type WorkspaceWhenField =
   | "hasActivePanel"
   | "hasApi"
   | "panelCount";
-export type TerminalWhenField = "hasActivePanel";
+export type TerminalWhenField = "activeIsTaskPanel" | "hasActivePanel";
 
 export type ActionWhenClause =
   | `workspace.${WorkspaceWhenField}`
+  | `!workspace.${WorkspaceWhenField}`
   | `workspace.${WorkspaceWhenField} > ${number}`
-  | `terminal.${TerminalWhenField}`;
+  | `terminal.${TerminalWhenField}`
+  | `!terminal.${TerminalWhenField}`;
 
 type ActionWhenAnd = "&&" | "&& " | " &&" | " && ";
 
@@ -27,6 +29,11 @@ export interface ActionContribution {
   handler: () => void | Promise<void>;
   iconComponent?: LucideIcon;
   id: string;
+  /**
+   * 为 true 时该 action 从右键菜单整行移除 (非置灰)。只影响 context menu
+   * surface;命令面板/快捷键不受影响 (那两处仍走 when → enabled 置灰/拦截)。
+   */
+  menuHiddenWhen?: ActionWhenExpression;
   shortcutSourceId?: string;
   sortOrder?: number;
   submenuKey?: string;
@@ -38,6 +45,8 @@ export interface ActionContribution {
 
 export interface ActionWhenContext {
   terminal: {
+    /** 当前 active panel 是任务面板 (terminal + 合法 params.task)。 */
+    activeIsTaskPanel: boolean;
     hasActivePanel: boolean;
   };
   workspace: {

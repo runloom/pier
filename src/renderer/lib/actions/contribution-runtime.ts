@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import type {
   ActionContribution,
   ActionContributionRuntime,
@@ -6,21 +7,16 @@ import type {
 import { actionRegistry } from "./registry.ts";
 import type { Action, ActionCategoryKey, ActionMetadata } from "./types.ts";
 
-const CATEGORY_BY_KEY: Record<ActionCategoryKey, string> = {
-  file: "File",
-  git: "Git",
-  panel: "Panel",
-  run: "Run",
-  settings: "Settings",
-  terminal: "Terminal",
-  view: "View",
-  window: "Window",
-  workspace: "Workspace",
-  worktree: "Worktree",
-};
+/** 用 i18n 解析 category 显示名，key 同时用作 locale 无关的分组键 */
+export function getCategory(key: ActionCategoryKey): string {
+  return i18next.t(`commandPalette.category.${key}`, { defaultValue: key });
+}
 
 const BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel", "hasApi"]);
-const TERMINAL_BOOLEAN_WHEN_FIELDS = new Set(["hasActivePanel"]);
+const TERMINAL_BOOLEAN_WHEN_FIELDS = new Set([
+  "activeIsTaskPanel",
+  "hasActivePanel",
+]);
 const NUMBER_WHEN_FIELDS = new Set([
   "activeGroupPanelCount",
   "groupCount",
@@ -30,6 +26,7 @@ const BOOLEAN_CLAUSE_RE = /^workspace\.([A-Za-z]+)$/;
 const TERMINAL_BOOLEAN_CLAUSE_RE = /^terminal\.([A-Za-z]+)$/;
 const NUMBER_CLAUSE_RE = /^workspace\.([A-Za-z]+)\s*>\s*(\d+)$/;
 const WHEN_CONJUNCTION_RE = /\s*&&\s*/;
+const NEGATION_PREFIX_RE = /^!\s*/;
 
 export function evaluateActionWhen(
   expression: string | undefined,
@@ -47,6 +44,12 @@ function evaluateActionWhenClause(
   clause: string,
   context: ActionWhenContext
 ): boolean {
+  if (NEGATION_PREFIX_RE.test(clause)) {
+    return !evaluateActionWhenClause(
+      clause.replace(NEGATION_PREFIX_RE, ""),
+      context
+    );
+  }
   const booleanMatch = BOOLEAN_CLAUSE_RE.exec(clause);
   if (booleanMatch) {
     const field = booleanMatch[1];
@@ -80,6 +83,8 @@ function booleanTerminalValue(
   context: ActionWhenContext
 ): boolean {
   switch (field) {
+    case "activeIsTaskPanel":
+      return context.terminal.activeIsTaskPanel;
     case "hasActivePanel":
       return context.terminal.hasActivePanel;
     default:
@@ -126,7 +131,7 @@ export function createActionFromContribution(
     evaluateActionWhen(contribution.when, runtime.getContext());
 
   return {
-    category: CATEGORY_BY_KEY[contribution.categoryKey],
+    category: contribution.categoryKey,
     enabled: isEnabled,
     handler: async () => {
       if (!isEnabled()) {
@@ -158,6 +163,11 @@ function createMetadata(
   }
   if (contribution.iconComponent) {
     metadata.iconComponent = contribution.iconComponent;
+  }
+  const menuHiddenWhen = contribution.menuHiddenWhen;
+  if (menuHiddenWhen) {
+    metadata.menuHidden = () =>
+      evaluateActionWhen(menuHiddenWhen, runtime.getContext());
   }
   if (contribution.shortcutSourceId) {
     metadata.shortcutSourceId = contribution.shortcutSourceId;

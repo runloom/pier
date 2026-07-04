@@ -128,7 +128,7 @@ function taskPanelMetadataFor(
   return {
     cwd: launch.cwd,
     label: launch.label,
-    projectRoot: launch.projectRoot,
+    projectRootPath: launch.projectRootPath,
     rawCommand: launch.rawCommand,
     runId,
     source: launch.source,
@@ -191,7 +191,9 @@ export async function executeRunListCommand(
 ): Promise<PierCommandResult> {
   return commandSuccess(
     requestId,
-    await services.tasks.list({ projectRoot: command.projectRoot })
+    await services.tasks.list({
+      projectRootPath: command.projectRootPath,
+    })
   );
 }
 
@@ -203,7 +205,7 @@ export async function executeRunSpawnCommand(
 ): Promise<PierCommandResult> {
   const preparation = await services.tasks.prepareSpawn({
     inputs: command.inputs,
-    projectRoot: command.projectRoot,
+    projectRootPath: command.projectRootPath,
     taskId: command.taskId,
   });
   if (preparation.status === "requires-input") {
@@ -308,7 +310,7 @@ export async function executeRunSpawnCommand(
           throw error;
         }
       },
-      projectRoot: command.projectRoot,
+      projectRootPath: command.projectRootPath,
       rootTaskId: command.taskId,
     });
   } catch (error) {

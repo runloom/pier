@@ -8,7 +8,6 @@ import type { IDockviewPanelProps } from "dockview-react";
 import { type RefObject, useEffect, useRef } from "react";
 import { computeMonoFontFamilyList } from "@/stores/font.store.ts";
 import {
-  readTerminalAnchorFrame,
   registerTerminalLayoutAnchor,
   type TerminalLayoutRegistration,
 } from "./terminal-layout-coordinator.ts";
@@ -18,6 +17,7 @@ import {
   updateTerminalPanelLifecycleDebug,
 } from "./terminal-lifecycle-debug.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
+import { readTerminalAnchorFrame } from "./terminal-viewport.ts";
 
 interface UseTerminalNativeLifecycleArgs {
   anchorRef: RefObject<HTMLDivElement | null>;

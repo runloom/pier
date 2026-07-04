@@ -25,13 +25,13 @@ import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-statu
 import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
+  resetTerminalOverlayFocusForTests,
+  useTerminalStore,
+} from "@/stores/terminal.store.ts";
+import {
   resetTerminalInputRoutingForTests,
   setTerminalBasePanel,
-} from "@/stores/terminal-input-routing.store.ts";
-import {
-  resetTerminalOverlayFocusForTests,
-  useTerminalOverlayFocus,
-} from "@/stores/terminal-overlay-focus.store.ts";
+} from "@/stores/terminal-input-routing-slice.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 interface TerminalRelaunchRequest {
@@ -155,7 +155,7 @@ const completedTaskTab: PanelTabChrome = {
 const taskMetadata: TaskPanelMetadata = {
   cwd: "/Users/xyz/ABC/pier",
   label: "test",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectRootPath: "/Users/xyz/ABC/pier",
   rawCommand: "pnpm run test",
   runId: "run-1",
   source: "package-script",
@@ -259,7 +259,7 @@ const context: PanelContext = {
   contextId: "ctx-pier",
   cwd: "/Users/xyz/ABC/pier",
   openedPath: "/Users/xyz/ABC/pier",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectRootPath: "/Users/xyz/ABC/pier",
   source: "command",
   updatedAt: 1_772_000_000_000,
   worktreeKey: "/Users/xyz/ABC/pier",
@@ -285,9 +285,6 @@ describe("TerminalPanel lifecycle", () => {
     cb: (event: { panelId: string; title: string }) => void;
   }> = [];
 
-  let tabChromePatchListeners: Array<{
-    cb: (event: { panelId: string; tab: Partial<PanelTabChrome> }) => void;
-  }> = [];
   let searchStateListeners: Array<{
     cb: (event: { panelId: string; selected: number; total: number }) => void;
   }> = [];
@@ -305,7 +302,6 @@ describe("TerminalPanel lifecycle", () => {
       y: 20,
     };
     emitWindowLayoutPulse = null;
-    tabChromePatchListeners = [];
     searchStateListeners = [];
     cwdChangeListeners = [];
     titleChangeListeners = [];
@@ -383,15 +379,6 @@ describe("TerminalPanel lifecycle", () => {
             searchStateListeners.push(listener);
             return () => {
               searchStateListeners = searchStateListeners.filter(
-                (entry) => entry !== listener
-              );
-            };
-          }),
-          onTabChromePatch: vi.fn((cb) => {
-            const listener = { cb };
-            tabChromePatchListeners.push(listener);
-            return () => {
-              tabChromePatchListeners = tabChromePatchListeners.filter(
                 (entry) => entry !== listener
               );
             };
@@ -590,6 +577,7 @@ describe("TerminalPanel lifecycle", () => {
               contextId: "ctx-home",
               cwd: "/Users/xyz",
               openedPath: "/Users/xyz",
+              projectRootPath: "/Users/xyz",
               source: "panel",
               updatedAt: 1_772_000_000_000,
             },
@@ -637,16 +625,6 @@ describe("TerminalPanel lifecycle", () => {
       updatedAt: 1_772_000_001_000,
       worktreeKey: "/Users/xyz/ABC/pier/old-run",
       worktreeRoot: "/Users/xyz/ABC/pier/old-run",
-    };
-    const firstRunTabPatch: Partial<PanelTabChrome> = {
-      state: {
-        label: "Old run",
-        status: "running",
-      },
-      title: "old runtime tab",
-      tooltip: {
-        title: "old runtime tab",
-      },
     };
     const relaunchContext: PanelContext = {
       ...context,
@@ -705,9 +683,6 @@ describe("TerminalPanel lifecycle", () => {
       }
       for (const listener of titleChangeListeners) {
         listener.cb({ panelId: "terminal-1", title: "old runtime title" });
-      }
-      for (const listener of tabChromePatchListeners) {
-        listener.cb({ panelId: "terminal-1", tab: firstRunTabPatch });
       }
     });
 
@@ -783,16 +758,6 @@ describe("TerminalPanel lifecycle", () => {
       worktreeKey: "/Users/xyz/ABC/pier/packages/app/src",
       worktreeRoot: "/Users/xyz/ABC/pier/packages/app/src",
     };
-    const postRelaunchTabPatch: Partial<PanelTabChrome> = {
-      state: {
-        label: "Runtime ready",
-        status: "running",
-      },
-      title: "new runtime tab",
-      tooltip: {
-        title: "new runtime tab",
-      },
-    };
 
     act(() => {
       for (const listener of cwdChangeListeners) {
@@ -800,9 +765,6 @@ describe("TerminalPanel lifecycle", () => {
       }
       for (const listener of titleChangeListeners) {
         listener.cb({ panelId: "terminal-1", title: "new runtime title" });
-      }
-      for (const listener of tabChromePatchListeners) {
-        listener.cb({ panelId: "terminal-1", tab: postRelaunchTabPatch });
       }
     });
 
@@ -1192,48 +1154,6 @@ describe("TerminalPanel lifecycle", () => {
     });
   });
 
-  it("merges terminal tab chrome patches without replacing the tab title", async () => {
-    const props = createPanelProps({
-      params: { context, tab: taskTab },
-    });
-
-    render(<TerminalPanel {...props} />);
-
-    await waitFor(() => {
-      expect(props.api.setTitle).toHaveBeenCalledWith("test");
-    });
-    act(() => {
-      for (const listener of tabChromePatchListeners) {
-        const legacyPatch = {
-          panelId: "terminal-1",
-          tab: {
-            state: {
-              busy: false,
-              colorToken: "destructive",
-              label: "Failed 1",
-            },
-          },
-        } as unknown as Parameters<typeof listener.cb>[0];
-        listener.cb(legacyPatch);
-      }
-    });
-
-    await waitFor(() => {
-      expect(
-        usePanelDescriptorStore.getState().descriptors["terminal-1"]
-      ).toMatchObject({
-        tab: {
-          title: "test",
-          state: {
-            colorToken: "destructive",
-            label: "Failed 1",
-            status: "failed",
-          },
-        },
-      });
-    });
-  });
-
   it("does not restart native terminal creation when context params trigger rerenders", async () => {
     const props = createPanelProps({
       params: { context },
@@ -1279,7 +1199,7 @@ describe("TerminalPanel lifecycle", () => {
         contextId: "ctx-current-work",
         cwd: "/Users/xyz/ABC/current-work",
         openedPath: "/Users/xyz/ABC/current-work",
-        projectRoot: "/Users/xyz/ABC/current-work",
+        projectRootPath: "/Users/xyz/ABC/current-work",
         worktreeKey: "/Users/xyz/ABC/current-work",
       },
       title: "Claude Code",
@@ -1616,7 +1536,7 @@ describe("TerminalPanel lifecycle", () => {
     // 模拟终端焦点意图（onFocusRequest 处理器走的同一组 store API）：
     // 让出键盘 + 把 basePanel 置为 terminal。
     act(() => {
-      useTerminalOverlayFocus.getState().yieldToTerminal();
+      useTerminalStore.getState().yieldToTerminal();
       setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
     });
 

@@ -17,7 +17,7 @@ const context = {
   contextId: "ctx-1",
   cwd: "/Users/xyz/ABC/pier",
   openedPath: "/Users/xyz/ABC/pier",
-  projectRoot: "/Users/xyz/ABC/pier",
+  projectRootPath: "/Users/xyz/ABC/pier",
   source: "command",
   updatedAt: 1_772_000_000_000,
   worktreeKey: "/Users/xyz/ABC/pier",
@@ -49,6 +49,26 @@ describe("shared panel contract", () => {
       cwd: "/Users/xyz/ABC/pier",
       worktreeKey: "/Users/xyz/ABC/pier",
     });
+  });
+
+  it("requires canonical path identity on panel context", () => {
+    const withoutProjectRootPath = {
+      ...context,
+      projectRootPath: undefined,
+    };
+
+    expect(panelContextSchema.safeParse(withoutProjectRootPath).success).toBe(
+      false
+    );
+  });
+
+  it("strips legacy projectId from panel context input", () => {
+    const parsed = panelContextSchema.parse({
+      ...context,
+      projectId: "11111111-1111-4111-8111-111111111111",
+    });
+
+    expect(parsed).not.toHaveProperty("projectId");
   });
 
   it("parses shared panel descriptors", () => {

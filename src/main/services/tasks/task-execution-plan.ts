@@ -95,18 +95,18 @@ function resolveVariables(
   value: string,
   context: {
     inputs: Record<string, string>;
-    projectRoot: string;
+    projectRootPath: string;
   }
 ): string {
   return value.replace(VARIABLE_RE, (_full, token: string) => {
     if (token === "workspaceFolder" || token === "workspaceRoot") {
-      return context.projectRoot;
+      return context.projectRootPath;
     }
     if (token === "workspaceFolderBasename") {
-      return projectBasename(context.projectRoot);
+      return projectBasename(context.projectRootPath);
     }
     if (token === "cwd") {
-      return context.projectRoot;
+      return context.projectRootPath;
     }
     if (token.startsWith("env:")) {
       return process.env[token.slice("env:".length)] ?? "";
@@ -127,7 +127,7 @@ function resolveVariables(
 
 function resolvedEnv(
   task: TaskCandidate,
-  context: { inputs: Record<string, string>; projectRoot: string }
+  context: TaskExecutionContext
 ): Record<string, string> | undefined {
   const entries = Object.entries(task.env ?? {}).map(([key, value]) => [
     key,
@@ -138,7 +138,7 @@ function resolvedEnv(
 
 function buildCommand(
   task: TaskCandidate,
-  context: { inputs: Record<string, string>; projectRoot: string }
+  context: TaskExecutionContext
 ): string {
   if (task.commandSpec.kind === "process") {
     return commandWithArgs(
@@ -173,7 +173,7 @@ function withPresentation(command: string, task: TaskCandidate): string {
 
 function launchForTask(
   task: TaskCandidate,
-  context: { inputs: Record<string, string>; projectRoot: string },
+  context: TaskExecutionContext,
   labels: ReadonlyMap<string, TaskCandidate>
 ): TaskLaunchPlan {
   const cwd = resolveVariables(task.cwd, context);
@@ -192,7 +192,7 @@ function launchForTask(
     focus: task.presentation?.focus ?? task.presentation?.reveal !== "never",
     label: task.label,
     presentation: task.presentation ?? {},
-    projectRoot: context.projectRoot,
+    projectRootPath: context.projectRootPath,
     rawCommand,
     source: task.source,
     tab: {
@@ -253,9 +253,15 @@ function expandLaunchOrder(
   return ordered;
 }
 
+/** buildTaskLaunches / resolveVariables 的输入 context. */
+export interface TaskExecutionContext {
+  inputs: Record<string, string>;
+  projectRootPath: string;
+}
+
 export function buildTaskLaunches(
   task: TaskCandidate,
-  context: { inputs: Record<string, string>; projectRoot: string },
+  context: TaskExecutionContext,
   tasks: readonly TaskCandidate[]
 ): TaskLaunchPlan[] {
   const labels = taskBySourceLabel(tasks);

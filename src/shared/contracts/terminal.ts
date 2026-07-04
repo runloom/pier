@@ -307,11 +307,6 @@ export interface TerminalTitleEvent {
   title: string;
 }
 
-export interface TerminalTabChromePatchEvent {
-  panelId: string;
-  tab: Partial<PanelTabChrome>;
-}
-
 export interface TerminalPanelSessionSnapshot {
   context?: PanelContext | undefined;
   tab?: PanelTabChrome | undefined;
@@ -420,12 +415,13 @@ export interface TerminalAPI {
   ) => () => void;
   /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
   onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
+  /** renderer 下发的 presentation 已被 native 同步应用, 用于 resize 撤占位的精确握手. */
+  onPresentationApplied(
+    cb: (payload: { rendererSequence: number }) => void
+  ): () => void;
   /** main 端应用菜单请求打开当前终端搜索栏. */
   onSearchOpenRequest(cb: () => void): () => void;
   onSearchState(cb: (event: TerminalSearchStateEvent) => void): () => void;
-  onTabChromePatch(
-    cb: (event: TerminalTabChromePatchEvent) => void
-  ): () => void;
   /**
    * 订阅 terminal title (OSC 0/2) 变化. 回调返回 dispose 函数.
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.

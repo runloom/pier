@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
 import i18next from "i18next";
 import { beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -96,9 +97,12 @@ describe("action contribution boundary", () => {
   });
 
   it("declares every default keymap command as an action contribution", () => {
-    const contributionIds = new Set(
-      ALL_ACTION_CONTRIBUTIONS.map((contribution) => contribution.id)
-    );
+    // 默认 keymap 只能指向宿主 contribution 或内置插件 manifest 声明的命令,
+    // 保证每条默认快捷键都能 resolve 到真实存在的 action。
+    const contributionIds = new Set([
+      ...ALL_ACTION_CONTRIBUTIONS.map((contribution) => contribution.id),
+      ...GIT_PLUGIN_MANIFEST.commands.map((command) => command.id),
+    ]);
     const missing = Array.from(
       new Set(DEFAULT_KEYMAP.map((binding) => binding.commandId))
     ).filter((commandId) => !contributionIds.has(commandId));

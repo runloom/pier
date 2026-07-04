@@ -6,7 +6,7 @@ import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 const PROBE_TIMEOUT_MS = 5000;
 
 /** 用 which/where 查命令是否在 PATH 上（不 spawn binary，避免副作用）。 */
-function defaultProbe(cmd: string): Promise<boolean> {
+export function probeCommand(cmd: string): Promise<boolean> {
   const binary = platform() === "win32" ? "where" : "which";
   return new Promise((resolve) => {
     execFile(binary, [cmd], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
@@ -55,7 +55,7 @@ export interface CreateAgentDetectionServiceArgs {
 
 export function createAgentDetectionService({
   hydratePath = defaultHydratePath,
-  probe = defaultProbe,
+  probe = probeCommand,
 }: CreateAgentDetectionServiceArgs = {}): AgentDetectionService {
   let pathHydrated = false;
   let hydrateInFlight: Promise<string[]> | null = null;

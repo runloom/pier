@@ -4,8 +4,11 @@ import type { TerminalSearchStateEvent } from "@shared/contracts/terminal.ts";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing.store.ts";
-import { useTerminalOverlayFocus } from "@/stores/terminal-overlay-focus.store.ts";
+import {
+  useTerminalOverlayFocus,
+  useTerminalStore,
+} from "@/stores/terminal.store.ts";
+import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing-slice.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
@@ -60,9 +63,9 @@ export function TerminalSearchBar({
     if (!visible) {
       return;
     }
-    useTerminalOverlayFocus.getState().activateOverlay(searchId);
+    useTerminalStore.getState().activateOverlay(searchId);
     return () => {
-      useTerminalOverlayFocus.getState().deactivateOverlay(searchId);
+      useTerminalStore.getState().deactivateOverlay(searchId);
     };
   }, [visible, searchId]);
 
@@ -157,7 +160,7 @@ export function TerminalSearchBar({
     setQuery("");
     setSearchState(EMPTY_SEARCH_STATE);
     endSearch();
-    useTerminalOverlayFocus.getState().deactivateOverlay(searchId);
+    useTerminalStore.getState().deactivateOverlay(searchId);
     onClose();
   };
 
@@ -197,9 +200,7 @@ export function TerminalSearchBar({
           className="h-7 pl-7 text-xs outline-none placeholder:text-muted-foreground/65"
           data-testid="terminal-search-input"
           onChange={(event) => runSearch(event.currentTarget.value)}
-          onFocus={() =>
-            useTerminalOverlayFocus.getState().activateOverlay(searchId)
-          }
+          onFocus={() => useTerminalStore.getState().activateOverlay(searchId)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();

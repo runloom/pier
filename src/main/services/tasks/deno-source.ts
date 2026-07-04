@@ -10,7 +10,7 @@ import {
 } from "./utils.ts";
 
 export interface DenoSourceOptions {
-  projectRoot: string;
+  projectRootPath: string;
 }
 
 /** deno task 值: 字符串命令, 或对象形式 { command, description }。 */
@@ -31,11 +31,11 @@ function isRunnableDenoTask(value: unknown): boolean {
 }
 
 export async function denoSource({
-  projectRoot,
+  projectRootPath,
 }: DenoSourceOptions): Promise<TaskCandidate[]> {
   const text =
-    (await readTextIfExists(join(projectRoot, "deno.json"))) ??
-    (await readTextIfExists(join(projectRoot, "deno.jsonc")));
+    (await readTextIfExists(join(projectRootPath, "deno.json"))) ??
+    (await readTextIfExists(join(projectRootPath, "deno.jsonc")));
   if (!text) {
     return [];
   }
@@ -52,7 +52,7 @@ export async function denoSource({
           command: commandWithArgs("deno", ["task", name]),
           kind: "shell",
         },
-        cwd: projectRoot,
+        cwd: projectRootPath,
         ...(description ? { description } : {}),
         idParts: ["deno", name],
         label: name,

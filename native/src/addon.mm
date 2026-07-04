@@ -64,6 +64,11 @@ extern "C" {
     typedef void (*CommandFinishedForwardFn)(long browserWindowId, const char* panelId,
                                              long exitCode, unsigned long long durationNanos);
     void ghostty_bridge_set_command_finished_forward_callback(CommandFinishedForwardFn cb);
+    // Command started forward: swift shell integration command_started → JS.
+    // 签名 (browserWindowId, panelId UTF-8, commandLine UTF-8).
+    typedef void (*CommandStartedForwardFn)(long browserWindowId, const char* panelId,
+                                            const char* commandLine);
+    void ghostty_bridge_set_command_started_forward_callback(CommandStartedForwardFn cb);
     // Process closed forward: swift TerminalSurfaceCloseDelegate → JS.
     // 签名 (browserWindowId, panelId UTF-8, processAlive).
     typedef void (*ProcessClosedForwardFn)(long browserWindowId, const char* panelId,
@@ -553,6 +558,37 @@ static Napi::Value JsSetCommandFinishedForwardCallback(const Napi::CallbackInfo&
                                 &g_commandFinishedForwardTrampoline);
 }
 
+// ---- Command started forward (Ghostty shell integration → foreground activity aggregator) ----
+struct CommandStartedForwardPayload {
+    long windowId;
+    std::string panelId;
+    std::string commandLine;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::String::New(env, commandLine),
+        });
+    }
+};
+static ForwardChannel<CommandStartedForwardPayload> g_commandStartedChannel("PierCommandStartedForward");
+static void g_commandStartedForwardTrampoline(
+    long windowId,
+    const char* panelId,
+    const char* commandLine
+) {
+    g_commandStartedChannel.emit({
+        windowId,
+        std::string(panelId),
+        std::string(commandLine),
+    });
+}
+static Napi::Value JsSetCommandStartedForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_commandStartedChannel,
+                                ghostty_bridge_set_command_started_forward_callback,
+                                &g_commandStartedForwardTrampoline);
+}
+
 // ---- Process closed forward (Ghostty surface close → task lifecycle) ----
 struct ProcessClosedForwardPayload {
     long windowId;
@@ -755,6 +791,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setSearchForwardCallback", Napi::Function::New(env, JsSetSearchForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));
     exports.Set("setCommandFinishedForwardCallback", Napi::Function::New(env, JsSetCommandFinishedForwardCallback));
+    exports.Set("setCommandStartedForwardCallback", Napi::Function::New(env, JsSetCommandStartedForwardCallback));
     exports.Set("setProcessClosedForwardCallback", Napi::Function::New(env, JsSetProcessClosedForwardCallback));
     exports.Set("applyTerminalPresentation", Napi::Function::New(env, JsApplyTerminalPresentation));
     exports.Set("applyTerminalInputRouting", Napi::Function::New(env, JsApplyTerminalInputRouting));

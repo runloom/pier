@@ -9,7 +9,7 @@ import {
   withPierGeminiHooks,
 } from "../../../src/main/services/agents/integrations/gemini.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 const PERMISSION_REQUEST_RE = /PermissionRequest/i;
 
 const GEMINI_EVENTS = [
@@ -57,8 +57,6 @@ describe("withPierGeminiHooks", () => {
     }
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
     }
   });
 

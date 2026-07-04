@@ -69,14 +69,22 @@ describe("terminal focus restoration", () => {
     };
 
     vi.doMock("electron", () => ({
-      // terminal.ts only imports Electron types at runtime now.
+      app: { getPath: vi.fn((k: string) => `/tmp/pier-test-${k}`) },
     }));
-    vi.doMock("node:module", () => ({
-      createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
-      default: {
-        createRequire: vi.fn(() => vi.fn(() => fakeAddon)),
-      },
-    }));
+    vi.doMock("node:module", () => {
+      // fake require 带 .resolve —— loadNativeAddon 会先 resolve 拿绝对路径
+      // 再 require(addonPath)，两步都需要工作。
+      const fakeRequire = Object.assign(
+        vi.fn(() => fakeAddon),
+        {
+          resolve: vi.fn((p: string) => p),
+        }
+      );
+      return {
+        createRequire: vi.fn(() => fakeRequire),
+        default: { createRequire: vi.fn(() => fakeRequire) },
+      };
+    });
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       readTerminalPanelSession: vi.fn(async () => ({
         context: {
@@ -128,7 +136,6 @@ describe("terminal focus restoration", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => ipcWindow),
       findInternalWindowId: vi.fn(() => "main"),
-      findWindowSessionId: vi.fn(() => "session-main"),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -324,7 +331,10 @@ describe("terminal focus restoration", () => {
       13,
       {
         cwd: "/Users/xyz/ABC/pier",
-        env: { PIER_PANEL_ID: "terminal-1", PIER_WINDOW_ID: "7" },
+        env: expect.objectContaining({
+          PIER_PANEL_ID: "terminal-1",
+          PIER_WINDOW_ID: "7",
+        }),
       }
     );
   });
@@ -361,7 +371,10 @@ describe("terminal focus restoration", () => {
       13,
       {
         cwd: "/Users/xyz/ABC/pier",
-        env: { PIER_PANEL_ID: "terminal-1", PIER_WINDOW_ID: "7" },
+        env: expect.objectContaining({
+          PIER_PANEL_ID: "terminal-1",
+          PIER_WINDOW_ID: "7",
+        }),
       }
     );
   });
@@ -399,11 +412,11 @@ describe("terminal focus restoration", () => {
       {
         command: "pnpm test",
         cwd: "/Users/xyz/ABC/pier",
-        env: {
+        env: expect.objectContaining({
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",
           SECRET: "token",
-        },
+        }),
       }
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-rerun");
@@ -434,7 +447,10 @@ describe("terminal focus restoration", () => {
       13,
       {
         cwd: "/Users/xyz/ABC/pier",
-        env: { PIER_PANEL_ID: "terminal-1", PIER_WINDOW_ID: "7" },
+        env: expect.objectContaining({
+          PIER_PANEL_ID: "terminal-1",
+          PIER_WINDOW_ID: "7",
+        }),
       }
     );
   });

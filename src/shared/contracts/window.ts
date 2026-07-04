@@ -12,6 +12,5 @@ export interface WindowCreateResult {
 export interface WindowContext {
   mode: WindowOpenMode;
   recordId: string;
-  sessionId: string;
   windowId: string;
 }

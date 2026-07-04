@@ -14,6 +14,7 @@ export const contextMenu = {
     find: "Find",
     newTerminal: "New Terminal",
     paste: "Paste",
+    rerunTask: "Rerun Task",
     selectAll: "Select All",
     splitDown: "Split Down",
     splitLeft: "Split Left",

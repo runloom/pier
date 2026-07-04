@@ -1,0 +1,23 @@
+diff --git a/src/shell-integration/zsh/ghostty-integration b/src/shell-integration/zsh/ghostty-integration
+index dc9bd1605..664d8947a 100644
+--- a/src/shell-integration/zsh/ghostty-integration
++++ b/src/shell-integration/zsh/ghostty-integration
+@@ -229,7 +229,17 @@ _ghostty_deferred_init() {
+         # its preexec hook before us, we'll incorrectly mark its output as
+         # belonging to the command (as if the user typed it into zle) rather
+         # than command output.
+-        builtin print -nu $_ghostty_fd '\e]133;C\a'
++        # OSC 133 C carries the command line as `cmdline_url` (URL percent
++        # encoded) so terminal-side listeners (e.g. Pier agent detection) can
++        # identify the running command from a single signal. Only escape the
++        # bytes that would break OSC parsing: %, ;, BEL (\a), ESC (\e). Other
++        # bytes pass through unchanged so multibyte UTF-8 stays valid.
++        local _ghostty_cmdline=$1
++        _ghostty_cmdline=${_ghostty_cmdline//'%'/%25}
++        _ghostty_cmdline=${_ghostty_cmdline//';'/%3B}
++        _ghostty_cmdline=${_ghostty_cmdline//$'\a'/%07}
++        _ghostty_cmdline=${_ghostty_cmdline//$'\e'/%1B}
++        builtin print -nu $_ghostty_fd '\e]133;C;cmdline_url='$_ghostty_cmdline'\a'
+         (( _ghostty_state = 1 ))
+     }
+ 

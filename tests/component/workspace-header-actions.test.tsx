@@ -183,7 +183,6 @@ beforeEach(async () => {
       },
       preferences: {
         read: vi.fn(async () => ({
-          worktreeBranchPrefix: "wt/",
           worktreeCopyPatterns: [],
           worktreeSetupCommand: "",
         })),
@@ -880,7 +879,12 @@ describe("WorkspaceHeaderActions", () => {
       descriptors: {
         "panel-1": {
           display: { short: "Panel" },
-          context: { contextId: "ctx-1", updatedAt: 0, cwd: "/repo" },
+          context: {
+            contextId: "ctx-1",
+            cwd: "/repo",
+            projectRootPath: "/repo",
+            updatedAt: 0,
+          },
         },
       },
     });
@@ -903,7 +907,12 @@ describe("WorkspaceHeaderActions", () => {
           ...state.descriptors,
           "panel-1": {
             display: { short: "Panel" },
-            context: { contextId: "ctx-1", updatedAt: 1, cwd: "/different" },
+            context: {
+              contextId: "ctx-1",
+              cwd: "/different",
+              projectRootPath: "/different",
+              updatedAt: 1,
+            },
           },
         },
       });

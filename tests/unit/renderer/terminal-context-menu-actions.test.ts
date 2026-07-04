@@ -22,6 +22,25 @@ function terminalPanel(id: string) {
   };
 }
 
+function taskPanel(id: string) {
+  return {
+    ...terminalPanel(id),
+    params: {
+      task: {
+        cwd: "/Users/xyz/ABC/pier",
+        label: "test",
+        projectRootPath: "/Users/xyz/ABC/pier",
+        rawCommand: "pnpm run test",
+        runId: "run-1",
+        source: "package-script",
+        startedAt: 1_772_000_000_000,
+        status: "running",
+        taskId: "package-script:test",
+      },
+    },
+  };
+}
+
 function webPanel(id: string) {
   return {
     id,
@@ -31,7 +50,9 @@ function webPanel(id: string) {
 }
 
 function createApi(
-  activePanel: ReturnType<typeof terminalPanel | typeof webPanel>
+  activePanel: ReturnType<
+    typeof terminalPanel | typeof taskPanel | typeof webPanel
+  >
 ) {
   return {
     activeGroup: { panels: [activePanel] },
@@ -110,8 +131,10 @@ describe("terminal content context menu actions", () => {
     const { registerTerminalActions } = await import(
       "@/panel-kits/terminal/register-actions.ts"
     );
+    const { registerRunActions } = await import("@/lib/actions/run-actions.ts");
     disposers.push(registerPanelActions());
     disposers.push(registerTerminalActions());
+    disposers.push(registerRunActions());
   }
 
   it("adds terminal editing actions to the top of terminal/content", async () => {
@@ -145,6 +168,46 @@ describe("terminal content context menu actions", () => {
       "查找",
       "清屏",
     ]);
+  });
+
+  it("replaces new-terminal/split with rerun on task panel menus", async () => {
+    await registerActions();
+    useWorkspaceStore
+      .getState()
+      .setApi(createApi(taskPanel("terminal-task")) as never);
+
+    const contentIds = collectActionIds(buildMenuEntries("terminal/content"));
+    expect(contentIds).toContain("pier.run.rerunTask");
+    expect(contentIds).not.toEqual(
+      expect.arrayContaining([
+        "pier.panel.newTerminal",
+        "pier.panel.splitRight",
+        "pier.panel.splitDown",
+        "pier.panel.splitLeft",
+        "pier.panel.splitUp",
+      ])
+    );
+
+    const tabIds = collectActionIds(buildMenuEntries("dockview-tab"));
+    expect(tabIds).toContain("pier.run.rerunTask");
+    expect(tabIds).not.toContain("pier.panel.newTerminal");
+  });
+
+  it("keeps new-terminal/split and hides rerun on plain terminal menus", async () => {
+    await registerActions();
+
+    const contentIds = collectActionIds(buildMenuEntries("terminal/content"));
+    expect(contentIds).toEqual(
+      expect.arrayContaining([
+        "pier.panel.newTerminal",
+        "pier.panel.splitRight",
+      ])
+    );
+    expect(contentIds).not.toContain("pier.run.rerunTask");
+
+    const tabIds = collectActionIds(buildMenuEntries("dockview-tab"));
+    expect(tabIds).toContain("pier.panel.newTerminal");
+    expect(tabIds).not.toContain("pier.run.rerunTask");
   });
 
   it("does not expose terminal-only actions on the dockview tab menu", async () => {

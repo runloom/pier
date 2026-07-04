@@ -10,7 +10,7 @@ import {
   withPierAntigravityHooks,
 } from "../../../src/main/services/agents/integrations/antigravity.ts";
 
-const MARK = "PIER_AGENT_HOOK_PORT";
+const MARK = "PIER_AGENT_HOOKS_DIR";
 
 const ALL_EVENTS = ["PreInvocation", "PostToolUse", "Stop"];
 
@@ -33,8 +33,6 @@ describe("withPierAntigravityHooks", () => {
     }
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
-      expect(cmd).toContain("$PIER_PANEL_ID");
-      expect(cmd).toContain("$PIER_WINDOW_ID");
     }
   });
 
@@ -75,14 +73,12 @@ describe("withPierAntigravityHooks", () => {
       Array<{ hooks: Array<{ command: string }> }>
     >;
     expect(hooks.PreInvocation?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"PromptSubmit\\"'
+      '"PromptSubmit"'
     );
     expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"ToolComplete\\"'
+      '"ToolComplete"'
     );
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toContain(
-      '\\"event\\":\\"Stop\\"'
-    );
+    expect(hooks.Stop?.[0]?.hooks[0]?.command).toContain('"Stop"');
   });
 
   it("幂等：重复安装不产生重复条目", () => {

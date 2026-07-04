@@ -1,8 +1,12 @@
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import type {
+  AgentActivity,
+  ForegroundActivity,
+} from "@shared/contracts/foreground-activity.ts";
 import { useEffect, useState } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
-import { useAgentSessionStore } from "@/stores/agent-session.store.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { AgentShimmerText } from "./agent-shimmer-text.tsx";
 import {
   agentStatusTextKey,
@@ -14,6 +18,12 @@ import { terminalStatusItemRegistry } from "./terminal-status-bar.tsx";
 
 const LONG_RUN_TICK_MS = 250;
 
+function isAgentActivity(
+  activity: ForegroundActivity | undefined
+): activity is AgentActivity {
+  return activity?.kind === "agent";
+}
+
 /**
  * 终端状态栏 agent item —— 结构对齐 loomdesk status-bar-activity-item：
  * [品牌图标(20px 容器内 12px)] [badge 文案(11px): 状态词 (+ · N 个子代理)] [sr-only agent 名]
@@ -22,10 +32,11 @@ const LONG_RUN_TICK_MS = 250;
  */
 function AgentStatusItemView({ panelId }: { panelId: string }) {
   const t = useT();
-  const session = useAgentSessionStore((s) => s.sessions[panelId]);
+  const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const shimmer = session ? shouldShimmer(session.status) : false;
+  const agent = isAgentActivity(activity) ? activity : null;
+  const shimmer = agent ? shouldShimmer(agent.status) : false;
   useEffect(() => {
     if (!shimmer) {
       return;
@@ -35,33 +46,32 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
     return () => clearInterval(id);
   }, [shimmer]);
 
-  if (!session) {
+  if (!agent) {
     return null;
   }
-  // ready 也可见（loomdesk："等待输入"）——item 的隐藏只由会话不存在决定。
+  // ready 也可见（loomdesk："等待输入"）——item 的隐藏只由 agent activity 是否存在决定。
   const level = shimmer
-    ? longRunLevel(Math.max(0, nowMs - session.stateStartedAt))
+    ? longRunLevel(Math.max(0, nowMs - agent.stateStartedAt))
     : null;
-  const colorVar = statusColorVar(session.status, level);
-  const label = t(agentStatusTextKey(session.status));
+  const colorVar = statusColorVar(agent.status, level);
+  const label = t(agentStatusTextKey(agent.status));
   const badge =
-    session.subagentCount > 0
+    agent.subagentCount > 0
       ? `${label} · ${t("terminal.agentStatus.subagentCount", {
-          count: session.subagentCount,
+          count: agent.subagentCount,
         })}`
       : label;
-  const agentLabel = session.agentId
-    ? (getAgentCatalogEntry(session.agentId)?.label ?? session.agentId)
-    : "agent";
+  const agentLabel =
+    getAgentCatalogEntry(agent.agentId)?.label ?? agent.agentId;
 
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1"
-      data-agent-status={session.status}
+      data-agent-status={agent.status}
       data-testid="agent-status-item"
     >
       <span className="inline-flex size-5 shrink-0 items-center justify-center">
-        <AgentIcon agentId={session.agentId} size={12} />
+        <AgentIcon agentId={agent.agentId} size={12} />
       </span>
       <span className="whitespace-nowrap text-[11px]" data-activity-badge>
         {shimmer ? (
@@ -77,15 +87,18 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
 
 /**
  * 注册核心 agent 状态栏 item。
- * isVisible 按面板是否存在会话门控——否则每个终端都会为空状态预留状态栏高度
- * （违反"未启用/无会话时零影响"）。getState 为非响应式读取；响应性由调用方
- * （agent-sessions-bridge）在会话 key 集合变化时重新 register 驱动。
+ * isVisible 按面板是否有 agent kind 的 activity 门控——否则每个终端都会为空状态
+ * 预留状态栏高度（违反"未启用/无 agent 时零影响"）。getState 为非响应式读取；
+ * 响应性由调用方（foreground-activity-bridge）在 activity key 集合变化时重新 register 驱动。
  */
 export function registerAgentStatusItem(): () => void {
   return terminalStatusItemRegistry.register({
     id: "core.agent-status",
-    isVisible: (ctx) =>
-      Boolean(useAgentSessionStore.getState().sessions[ctx.panelId]),
+    isVisible: (ctx) => {
+      const activity =
+        useForegroundActivityStore.getState().activities[ctx.panelId];
+      return activity?.kind === "agent";
+    },
     order: -10,
     render: (ctx) => <AgentStatusItemView panelId={ctx.panelId} />,
   });

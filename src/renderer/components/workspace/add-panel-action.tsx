@@ -5,6 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
@@ -15,12 +16,21 @@ import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { openRunTaskQuickPick } from "@/lib/actions/run-actions.ts";
+import { formatChord } from "@/lib/keybindings/formatter.ts";
+import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
+const NEW_TERMINAL_ACTION_ID = "pier.panel.newTerminal";
+const RUN_TASK_ACTION_ID = "pier.run.task";
 const WORKTREE_CREATE_ACTION_ID = "pier.worktree.create";
+
+function shortcutLabel(commandId: string): string | null {
+  const binding = keybindingRegistry.getBindingsFor(commandId)[0];
+  return binding ? formatChord(binding.chord) : null;
+}
 
 /**
  * Tab 栏 add 按钮 — dockview leftHeaderActionsComponent 模式.
@@ -50,6 +60,12 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     () => actionRegistry.getVersion(),
     () => 0
   );
+  // 订阅 keybindingRegistry 版本变化:用户在设置里改快捷键后菜单提示要跟着刷新。
+  useSyncExternalStore(
+    (cb) => keybindingRegistry.subscribe(cb),
+    () => keybindingRegistry.getVersion(),
+    () => 0
+  );
 
   const enabledAgents = detectedIds.filter(
     (id) => !disabledAgentIds.includes(id)
@@ -59,6 +75,10 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const worktreeCreateEnabled = Boolean(
     worktreeCreateAction && (worktreeCreateAction.enabled?.() ?? true)
   );
+
+  const newTerminalShortcut = shortcutLabel(NEW_TERMINAL_ACTION_ID);
+  const runTaskShortcut = shortcutLabel(RUN_TASK_ACTION_ID);
+  const worktreeCreateShortcut = shortcutLabel(WORKTREE_CREATE_ACTION_ID);
 
   return (
     <div className="flex h-full items-center justify-center px-1">
@@ -81,7 +101,11 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
             <Plus className="size-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuContent
+          align="start"
+          className="max-h-[min(var(--radix-dropdown-menu-content-available-height),480px)] w-56"
+          data-scrollbar="none"
+        >
           <DropdownMenuItem
             onClick={() => {
               useWorkspaceStore.getState().addTerminal({
@@ -91,6 +115,9 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
           >
             <Terminal className="size-4" />
             <span>{t("workspace.addPanelMenu.newTerminal")}</span>
+            {newTerminalShortcut ? (
+              <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
@@ -99,6 +126,9 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
           >
             <Play className="size-4" />
             <span>{t("workspace.addPanelMenu.newTask")}</span>
+            {runTaskShortcut ? (
+              <DropdownMenuShortcut>{runTaskShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!worktreeCreateEnabled}
@@ -117,6 +147,11 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
           >
             <GitBranchPlus className="size-4" />
             <span>{t("workspace.addPanelMenu.newWorktree")}</span>
+            {worktreeCreateShortcut ? (
+              <DropdownMenuShortcut>
+                {worktreeCreateShortcut}
+              </DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>

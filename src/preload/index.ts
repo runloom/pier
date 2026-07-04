@@ -27,11 +27,7 @@ import type {
   TaskRunSnapshot,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
-import type {
-  TerminalAPI,
-  TerminalDebugRendererSnapshotRequest,
-  TerminalDebugRendererSnapshotResult,
-} from "@shared/contracts/terminal.ts";
+import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type {
   WindowContext,
   WindowCreateResult,
@@ -39,14 +35,19 @@ import type {
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
-import {
-  agentSessionsApi,
-  type PierAgentSessionsAPI,
-} from "./agent-session-api.ts";
+import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import { filesApi, type PierFilesAPI } from "./file-api.ts";
+import {
+  foregroundActivityApi,
+  type PierForegroundActivityAPI,
+} from "./foreground-activity-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
-import { invokePierCommand } from "./ipc-envelope.ts";
-import { pluginSettingsApi } from "./plugin-settings-api.ts";
+import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
+import {
+  type PierPluginSettingsAPI,
+  pluginSettingsApi,
+} from "./plugin-settings-api.ts";
+import { terminalApi } from "./terminal-api.ts";
 import {
   type PierTerminalStatusBarPrefsAPI,
   terminalStatusBarPrefsApi,
@@ -126,6 +127,7 @@ export interface PierPluginsAPI {
   onChanged: (cb: (snapshot: PluginRegistryListResult) => void) => () => void;
 }
 
+export type { PierAiAPI } from "./ai-api.ts";
 export type { PierFilesAPI } from "./file-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
@@ -165,7 +167,7 @@ export interface PierSettingsAPI {
 
 export interface PierTasksAPI {
   cancel: (args: { runId: string }) => Promise<TaskRunSnapshot>;
-  list: (args: { projectRoot: string }) => Promise<TaskListResult>;
+  list: (args: { projectRootPath: string }) => Promise<TaskListResult>;
   spawn: (args: {
     focus?: boolean;
     inputs?: Record<string, string>;
@@ -175,37 +177,44 @@ export interface PierTasksAPI {
       | "split-below"
       | "split-left"
       | "split-above";
-    projectRoot: string;
+    projectRootPath: string;
     taskId: string;
   }) => Promise<TaskSpawnResult>;
   status: (args: { runId: string }) => Promise<TaskRunSnapshot>;
 }
 
+/** window 子命名空间 — 窗口生命周期与布局事件. */
+export interface PierWindowNsAPI {
+  closeCurrent: () => Promise<void>;
+  getContext: () => Promise<WindowContext>;
+  onLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
+  readyToShow: () => void;
+}
+
+/** env 子命名空间 — 运行时环境信息. */
+export interface PierEnvAPI {
+  platform: NodeJS.Platform;
+}
+
 export interface PierWindowAPI {
-  agentSessions: PierAgentSessionsAPI;
   agents: PierAgentsAPI;
-  closeCurrentWindow: () => Promise<void>;
+  ai: PierAiAPI;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<WindowCreateResult>;
+  env: PierEnvAPI;
   files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
-  getWindowContext: () => Promise<WindowContext>;
+  foregroundActivity: PierForegroundActivityAPI;
   git: PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   menu: PierMenuAPI;
   notifications: PierNotificationsAPI;
-  onTerminalPresentationApplied: (
-    cb: (payload: { rendererSequence: number }) => void
-  ) => () => void;
-  onWindowLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
-  platform: NodeJS.Platform;
-  pluginSettings: import("./plugin-settings-api.ts").PierPluginSettingsAPI;
+  pluginSettings: PierPluginSettingsAPI;
   plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
-  readyToShow: () => void;
   rendererCommand: PierRendererCommandAPI;
   secrets: PierSecretsAPI;
   settings: PierSettingsAPI;
@@ -213,28 +222,9 @@ export interface PierWindowAPI {
   terminal: TerminalAPI;
   terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
   theme: PierThemeAPI;
+  window: PierWindowNsAPI;
   workspace: PierWorkspaceAPI;
   worktrees: PierWorktreesAPI;
-}
-
-/**
- * 订阅 main → renderer IPC 事件, 返回 dispose 函数.
- *
- * 所有 forward 类 API (keybinding.onForward / terminal.onCwdChange /
- * onTitleChange / onContextMenuRequest / preferences.onChanged) 共用此模板.
- * 加新订阅:一行 (channel, cb).
- */
-function subscribeIpc<P>(
-  channel: string,
-  cb: (payload: P) => void
-): () => void {
-  const listener = (_event: unknown, payload: P): void => {
-    cb(payload);
-  };
-  ipcRenderer.on(channel, listener);
-  return () => {
-    ipcRenderer.off(channel, listener);
-  };
 }
 
 const agentsApi: PierAgentsAPI = {
@@ -253,78 +243,6 @@ const preferencesApi: PierPreferencesAPI = {
       patch,
       type: "preferences.update",
     }),
-};
-
-const terminalApi: TerminalAPI = {
-  applyInputRouting: (snapshot) =>
-    ipcRenderer.send("pier:terminal:apply-input-routing", snapshot),
-  applyPresentation: (snapshot) =>
-    ipcRenderer.send("pier:terminal:apply-presentation", snapshot),
-  applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
-  close: (panelId, options) =>
-    ipcRenderer
-      .invoke("pier:terminal:close", panelId, options)
-      .then(() => undefined),
-  create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
-  debugSnapshot: (args) =>
-    ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
-  endSearch: (panelId) =>
-    ipcRenderer.invoke("pier:terminal:end-search", panelId),
-  hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
-  navigateSearch: (panelId, direction) =>
-    ipcRenderer.invoke("pier:terminal:navigate-search", panelId, direction),
-  reconcile: (activeIds) =>
-    ipcRenderer.send("pier:terminal:reconcile", activeIds),
-  onContextMenuRequest: (cb) =>
-    subscribeIpc("pier:terminal:request-context-menu", cb),
-  onCwdChange: (cb) => subscribeIpc("pier:terminal:cwd-change", cb),
-  onDebugRendererSnapshotRequest: (cb) => {
-    const listener = async (
-      _event: unknown,
-      req: TerminalDebugRendererSnapshotRequest
-    ) => {
-      const result: TerminalDebugRendererSnapshotResult = {
-        ok: false,
-        requestId: req.requestId,
-      };
-      try {
-        result.renderer = await cb(req);
-        result.ok = true;
-      } catch (err) {
-        result.error = err instanceof Error ? err.message : String(err);
-      }
-      ipcRenderer.send("pier:terminal-debug:renderer-snapshot-result", result);
-    };
-    ipcRenderer.on("pier:terminal-debug:collect-renderer-snapshot", listener);
-    return () => {
-      ipcRenderer.off(
-        "pier:terminal-debug:collect-renderer-snapshot",
-        listener
-      );
-    };
-  },
-  onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
-  onSearchOpenRequest: (cb) =>
-    subscribeIpc(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST, cb),
-  onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),
-  onTabChromePatch: (cb) => subscribeIpc("pier:terminal:tab-chrome-patch", cb),
-  onTitleChange: (cb) => subscribeIpc("pier:terminal:title-change", cb),
-  openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
-  performOperation: (panelId, operation) =>
-    ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
-  readSession: (panelId) =>
-    ipcRenderer.invoke("pier:terminal:read-session", panelId),
-  search: (panelId, query) =>
-    ipcRenderer.invoke("pier:terminal:search", panelId, query),
-  setAppShortcutKeys: (keys) =>
-    ipcRenderer.send("pier:terminal:set-app-shortcut-keys", keys),
-  setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),
-  setFont: (panelId, font) =>
-    ipcRenderer.send("pier:terminal:set-font", panelId, font),
-  setFrame: (panelId, frame) =>
-    ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
-  setup: () => ipcRenderer.invoke("pier:terminal:setup"),
-  show: (panelId) => ipcRenderer.send("pier:terminal:show", panelId),
 };
 
 const notificationsApi: PierNotificationsAPI = {
@@ -377,9 +295,9 @@ const commandPaletteMruApi: PierCommandPaletteMruAPI = {
     const listener = (_event: unknown, state: MruState) => {
       handler(state);
     };
-    ipcRenderer.on("pier:command-palette-mru:changed", listener);
+    ipcRenderer.on(PIER_BROADCAST.COMMAND_PALETTE_MRU_CHANGED, listener);
     return () => {
-      ipcRenderer.off("pier:command-palette-mru:changed", listener);
+      ipcRenderer.off(PIER_BROADCAST.COMMAND_PALETTE_MRU_CHANGED, listener);
     };
   },
 };
@@ -432,7 +350,7 @@ const tasksApi: PierTasksAPI = {
     }),
   list: (args) =>
     invokePierCommand<TaskListResult>({
-      projectRoot: args.projectRoot,
+      projectRootPath: args.projectRootPath,
       type: "run.list",
     }),
   spawn: (args) =>
@@ -440,7 +358,7 @@ const tasksApi: PierTasksAPI = {
       ...(args.focus === undefined ? {} : { focus: args.focus }),
       ...(args.inputs ? { inputs: args.inputs } : {}),
       ...(args.placement ? { placement: args.placement } : {}),
-      projectRoot: args.projectRoot,
+      projectRootPath: args.projectRootPath,
       taskId: args.taskId,
       type: "run.spawn",
     }),
@@ -453,41 +371,43 @@ const tasksApi: PierTasksAPI = {
 
 const api: PierWindowAPI = {
   agents: agentsApi,
-  agentSessions: agentSessionsApi,
-  closeCurrentWindow: () => ipcRenderer.invoke("pier://window:close-current"),
+  foregroundActivity: foregroundActivityApi,
+  ai: aiApi,
   closeWindow: (windowId) =>
     invokePierCommand<void>({ type: "window.close", windowId }),
   commandPalette: commandPaletteApi,
   commandPaletteMru: commandPaletteMruApi,
   createWindow: () =>
     invokePierCommand<WindowCreateResult>({ type: "window.create" }),
+  env: {
+    platform: process.platform,
+  },
   focusWindow: (windowId) =>
     invokePierCommand<void>({ type: "window.focus", windowId }),
   files: filesApi,
-  getWindowContext: () => ipcRenderer.invoke("pier://window:context"),
+  git: gitApi,
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   menu: menuApi,
   notifications: notificationsApi,
-  onTerminalPresentationApplied: (cb) =>
-    subscribeIpc(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, cb),
-  onWindowLayoutPulse: (cb) =>
-    subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
-  platform: process.platform,
   plugins: pluginsApi,
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,
-  readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
   rendererCommand: rendererCommandApi,
+  secrets: secretsApi,
   settings: settingsApi,
   tasks: tasksApi,
   terminal: terminalApi,
   terminalStatusBarPrefs: terminalStatusBarPrefsApi,
   theme: themeApi,
+  window: {
+    closeCurrent: () => ipcRenderer.invoke("pier://window:close-current"),
+    getContext: () => ipcRenderer.invoke("pier://window:context"),
+    onLayoutPulse: (cb) => subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
+    readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
+  },
   workspace: workspaceApi,
   worktrees: worktreesApi,
-  secrets: secretsApi,
-  git: gitApi,
 };
 
 contextBridge.exposeInMainWorld("pier", api);

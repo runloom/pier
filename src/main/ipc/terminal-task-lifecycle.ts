@@ -1,9 +1,9 @@
+import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type {
   TaskExitReason,
   TaskExitSource,
   TaskPanelStatus,
 } from "@shared/contracts/tasks.ts";
-import type { TerminalTabChromePatchEvent } from "@shared/contracts/terminal.ts";
 import {
   type TerminalTaskExitStatus,
   taskExitTabPatch,
@@ -15,17 +15,12 @@ export interface TerminalTaskLifecycleDeps {
     exitCode: number,
     windowId?: string | undefined
   ): Promise<unknown>;
-  forwardTabPatch(
-    browserWindowId: number,
-    panelId: string,
-    tab: TerminalTabChromePatchEvent["tab"]
-  ): void;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
   now(): number;
   patchTab(
     sessionScope: string,
     panelId: string,
-    tab: TerminalTabChromePatchEvent["tab"]
+    tab: Partial<PanelTabChrome>
   ): Promise<void>;
   patchTaskStatus(
     sessionScope: string,
@@ -90,6 +85,17 @@ function normalizedCompletionCode(code: number | undefined): number {
   return typeof code === "number" && code >= 0 ? code : 1;
 }
 
+/**
+ * Native shell 回调协调器：
+ * - 排序 task-exit-marker 与 shell-command-finished 两路 exit code hint（前者胜）
+ * - Dedupe 同 panel 的多路终结事件（native process close + exit code hint）
+ * - 记录 launcher/panel 侧「预期用户主动关闭」（`ignoreNextNativeUserClose`）
+ * - 终结时把状态写入 terminal-session-state.json（`patchTaskStatus` + `patchTab`，
+ *   restore-on-restart 单源）。
+ *
+ * 不负责活动 broadcast：那走 `foregroundActivityService.taskFinished`
+ * → `ForegroundActivityAggregator` 单源。
+ */
 export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
   const exitCodeHints = new Map<string, ExitCodeHintArgs>();
   const finishedPanels = new Set<string>();
@@ -140,7 +146,6 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
 
     const tab = taskExitTabPatch(exit);
     await deps.patchTab(sessionScope, args.panelId, tab);
-    deps.forwardTabPatch(args.browserWindowId, args.panelId, tab);
     return true;
   };
 

@@ -1,9 +1,9 @@
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import {
-  type AgentSessionSnapshot,
-  agentTabIconId,
-  tabStatusForAgentStatus,
-} from "@shared/contracts/agent-session.ts";
+  type ForegroundActivity,
+  tabStatusForActivityStatus,
+} from "@shared/contracts/foreground-activity.ts";
 import {
   normalizePanelTabChromeInput,
   type PanelContext,
@@ -95,25 +95,56 @@ export function terminalPanelDescriptor(args: {
 }
 
 /**
- * agent 会话的 tab 呈现 overlay：状态点 + icon + title 全部由 renderer store
- * 单源驱动（纯呈现层, 不进 tab-chrome-patch 持久化管线）——reload 后经
- * snapshot pull 自动恢复, 会话消失即自动回退, 无 main/renderer 生命周期
- * 不同步问题。标题启发式会话无 agentId, 只带状态点不换 icon/title。
+ * 前台活动 → tab 呈现 overlay：状态点 + icon + title 全部由 renderer store
+ * 消费同一 `ForegroundActivityBroadcast` 单源驱动（纯呈现层, 不进
+ * tab-chrome-patch 持久化管线）——reload 后经 snapshot pull 自动恢复,
+ * 活动消失即自动回退。
+ *
+ * - `agent` kind: 状态点从 agent status 派生, icon/title 换 agent
+ * - `task` kind: running 显示 running 状态点; success/failure/cancelled
+ *   映射到相应的 tab status; label 作为 title
+ * - `shell` / `idle` / undefined: 无 overlay, 走 tab 默认呈现
  */
-export function agentTabChromeOverlay(
-  session: AgentSessionSnapshot | undefined
+export function activityTabChromeOverlay(
+  activity: ForegroundActivity | undefined
 ): Partial<PanelTabChrome> | null {
-  if (!session) {
+  if (!activity) {
     return null;
   }
-  const status = { state: { status: tabStatusForAgentStatus(session.status) } };
-  if (!session.agentId) {
-    return status;
+  if (activity.kind === "agent") {
+    const state = {
+      state: { status: tabStatusForActivityStatus(activity.status) },
+    };
+    const entry = getAgentCatalogEntry(activity.agentId);
+    return {
+      ...state,
+      icon: { id: agentTabIconId(activity.agentId) },
+      title: entry?.label ?? activity.agentId,
+    };
   }
-  const entry = getAgentCatalogEntry(session.agentId);
-  return {
-    ...status,
-    icon: { id: agentTabIconId(session.agentId) },
-    title: entry?.label ?? session.agentId,
-  };
+  if (activity.kind === "task") {
+    const status = taskTabStatus(activity.status);
+    return {
+      state: { status },
+      title: activity.label,
+    };
+  }
+  return null;
+}
+
+function taskTabStatus(
+  status: "running" | "success" | "failure" | "cancelled"
+): "running" | "succeeded" | "failed" | "cancelled" | "idle" {
+  switch (status) {
+    case "running":
+      return "running";
+    case "success":
+      return "succeeded";
+    case "failure":
+      return "failed";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "idle";
+  }
 }
