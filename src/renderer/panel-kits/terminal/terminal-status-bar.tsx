@@ -7,6 +7,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { Notifier } from "@/lib/util/notifier.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
+import { CORE_TERMINAL_STATUS_ITEMS } from "./core-terminal-status-items.ts";
 import { openTerminalStatusBarContextMenu } from "./terminal-status-bar-menu.ts";
 import {
   declaredTerminalStatusItemsById,
@@ -71,7 +72,7 @@ export function useTerminalStatusBarItems(): TerminalStatusBarGroups<TerminalSta
     () =>
       mergeTerminalStatusItems(
         registered,
-        declaredTerminalStatusItemsById(plugins),
+        declaredTerminalStatusItemsById(plugins, CORE_TERMINAL_STATUS_ITEMS),
         prefs
       ),
     [registered, plugins, prefs]
@@ -111,7 +112,10 @@ export function hasVisibleTerminalStatusItems(
 export function hasDeclaredTerminalStatusItems(
   plugins: readonly PluginRegistryEntry[]
 ): boolean {
-  return declaredTerminalStatusItemsById(plugins).size > 0;
+  return (
+    declaredTerminalStatusItemsById(plugins, CORE_TERMINAL_STATUS_ITEMS).size >
+    0
+  );
 }
 
 /**
