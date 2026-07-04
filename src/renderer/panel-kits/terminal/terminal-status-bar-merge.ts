@@ -15,6 +15,7 @@ import type {
   PluginTerminalStatusItemContribution,
 } from "@shared/contracts/plugin.ts";
 import type {
+  CoreTerminalStatusItemDeclaration,
   TerminalStatusBarItemOverride,
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
@@ -54,11 +55,23 @@ export function compareOuterFirst(
   return a.order - b.order || a.id.localeCompare(b.id);
 }
 
-/** 已启用插件 manifest 声明的状态栏项索引(设置页与合并管道共用数据源)。 */
+/** 已启用插件 manifest 声明的状态栏项 + core 声明源合并索引(设置页与合并管道共用数据源)。
+ *  同 id 时 core 优先(防插件抢占 core id)。 */
 export function declaredTerminalStatusItemsById(
-  plugins: readonly PluginRegistryEntry[]
-): ReadonlyMap<string, PluginTerminalStatusItemContribution> {
-  const byId = new Map<string, PluginTerminalStatusItemContribution>();
+  plugins: readonly PluginRegistryEntry[],
+  coreItems: readonly CoreTerminalStatusItemDeclaration[]
+): ReadonlyMap<
+  string,
+  PluginTerminalStatusItemContribution | DeclaredTerminalStatusItem
+> {
+  const byId = new Map<
+    string,
+    PluginTerminalStatusItemContribution | DeclaredTerminalStatusItem
+  >();
+  // Core 先塞:同 id 时 core 优先,防止插件抢占 core id。
+  for (const item of coreItems) {
+    byId.set(item.id, { alignment: item.alignment, order: item.order });
+  }
   for (const entry of plugins) {
     // F12:口径统一用 entry.runtime.enabled(与 runtime 激活、pluginNavItems、
     // collectEnabledConfigurationProperties 同源),而不是顶层 entry.enabled
@@ -67,6 +80,9 @@ export function declaredTerminalStatusItemsById(
       continue;
     }
     for (const item of entry.manifest.terminalStatusItems) {
+      if (byId.has(item.id)) {
+        continue;
+      }
       byId.set(item.id, item);
     }
   }
