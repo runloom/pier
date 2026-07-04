@@ -19,6 +19,11 @@ export const terminal = {
     previous: "上一个匹配",
   },
   statusBar: {
+    item: {
+      agentStatus: {
+        title: "Agent 状态",
+      },
+    },
     manage: "管理状态栏…",
   },
 } as const;

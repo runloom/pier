@@ -19,6 +19,11 @@ export const terminal = {
     previous: "Previous match",
   },
   statusBar: {
+    item: {
+      agentStatus: {
+        title: "Agent status",
+      },
+    },
     manage: "Manage Status Bar…",
   },
 } as const;
