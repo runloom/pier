@@ -76,3 +76,15 @@ export function withItemOverridePatch(
   }
   return Object.keys(next).length > 0 ? next : null;
 }
+
+/**
+ * Core-owned(非插件贡献)终端状态栏项静态声明。
+ * 与 PluginTerminalStatusItemContribution 平行,同 id 冲突时 core 优先。
+ * titleKey 走全局 i18next.t 解析(不复用 manifest.localization)。
+ */
+export interface CoreTerminalStatusItemDeclaration {
+  alignment?: "left" | "right";
+  id: string;
+  order?: number;
+  titleKey: string;
+}

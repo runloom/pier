@@ -24,7 +24,6 @@ export const settings = {
     description: "控制终端状态栏项的显隐与排序。列表越靠上越靠外侧。",
     leftGroup: "左侧",
     rightGroup: "右侧",
-    empty: "已启用插件没有声明状态栏项",
     moveUp: "上移(向外侧)",
     moveDown: "下移(向内侧)",
     moveToLeft: "移到左侧",

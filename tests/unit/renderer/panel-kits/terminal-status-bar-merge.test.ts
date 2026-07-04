@@ -1,5 +1,8 @@
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+import type {
+  CoreTerminalStatusItemDeclaration,
+  TerminalStatusBarPrefs,
+} from "@shared/contracts/terminal-status-bar.ts";
 import { describe, expect, it } from "vitest";
 import {
   compareOuterFirst,
@@ -195,16 +198,60 @@ describe("compareOuterFirst / normalizedGroupOrders", () => {
 
 describe("declaredTerminalStatusItemsById(F12:口径统一用 runtime.enabled)", () => {
   it("enabled=false 但 runtime.enabled=true 时仍纳入(以运行时激活态为准)", () => {
-    const byId = declaredTerminalStatusItemsById([
-      pluginEntry("pier.drift", { enabled: false, runtimeEnabled: true }),
-    ]);
+    const byId = declaredTerminalStatusItemsById(
+      [pluginEntry("pier.drift", { enabled: false, runtimeEnabled: true })],
+      []
+    );
     expect(byId.has("pier.drift.item")).toBe(true);
   });
 
   it("enabled=true 但 runtime.enabled=false 时被排除(以运行时激活态为准)", () => {
-    const byId = declaredTerminalStatusItemsById([
-      pluginEntry("pier.drift", { enabled: true, runtimeEnabled: false }),
-    ]);
+    const byId = declaredTerminalStatusItemsById(
+      [pluginEntry("pier.drift", { enabled: true, runtimeEnabled: false })],
+      []
+    );
     expect(byId.has("pier.drift.item")).toBe(false);
+  });
+});
+
+describe("declaredTerminalStatusItemsById(core 声明源)", () => {
+  const coreItem: CoreTerminalStatusItemDeclaration = {
+    id: "core.foo",
+    order: -5,
+    alignment: "left",
+    titleKey: "core.foo.title",
+  };
+
+  it("core 声明进入 map,与插件声明并列", () => {
+    const byId = declaredTerminalStatusItemsById(
+      [pluginEntry("pier.a", { enabled: true, runtimeEnabled: true })],
+      [coreItem]
+    );
+    expect(byId.has("core.foo")).toBe(true);
+    expect(byId.has("pier.a.item")).toBe(true);
+    expect(byId.get("core.foo")).toEqual({ alignment: "left", order: -5 });
+  });
+
+  it("同 id 时 core 优先,plugin 声明被跳过", () => {
+    const collisionPlugin: PluginRegistryEntry = {
+      ...pluginEntry("pier.collide", { enabled: true, runtimeEnabled: true }),
+    };
+    collisionPlugin.manifest = {
+      ...collisionPlugin.manifest,
+      terminalStatusItems: [
+        { id: "core.foo", order: 999, permissions: [], title: "Plugin Steal" },
+      ],
+    };
+    const byId = declaredTerminalStatusItemsById([collisionPlugin], [coreItem]);
+    expect(byId.get("core.foo")).toEqual({ alignment: "left", order: -5 });
+  });
+
+  it("无 core 声明时行为等价旧签名(coreItems=[])", () => {
+    const byId = declaredTerminalStatusItemsById(
+      [pluginEntry("pier.a", { enabled: true, runtimeEnabled: true })],
+      []
+    );
+    expect(byId.size).toBe(1);
+    expect(byId.has("pier.a.item")).toBe(true);
   });
 });

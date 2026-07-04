@@ -4,13 +4,17 @@
  * 之上,web popover 自状态栏向上展开会被原生视图遮挡;原生菜单也是终端面板
  * 既有右键通道(lib/context-menu/use-context-menu.ts)。
  *
- * 勾选列表数据源 = 已启用插件 manifest 声明的 terminalStatusItems(与设置页
- * 管理块一致,含当前未注册渲染的项);标题经 resolvePluginTerminalStatusItemDisplay
- * i18n 解析。
+ * 勾选列表数据源 = core 声明源(CORE_TERMINAL_STATUS_ITEMS)+ 已启用插件
+ * manifest 声明的 terminalStatusItems(与设置页管理块一致,含当前未注册渲染
+ * 的项);同 id 时 core 优先。core 标题经 i18next.t(titleKey)解析,plugin
+ * 标题经 resolvePluginTerminalStatusItemDisplay i18n 解析。
  */
 import type { MenuItem } from "@shared/contracts/menu.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+import type {
+  CoreTerminalStatusItemDeclaration,
+  TerminalStatusBarPrefs,
+} from "@shared/contracts/terminal-status-bar.ts";
 import i18next from "i18next";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { toast } from "sonner";
@@ -20,6 +24,7 @@ import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+import { CORE_TERMINAL_STATUS_ITEMS } from "./core-terminal-status-items.ts";
 import { resolveEffectiveTerminalStatusItemConfig } from "./terminal-status-bar-merge.ts";
 
 const MANAGE_ACTION_ID = "pier.terminalStatusBar.manage";
@@ -31,13 +36,30 @@ export interface DeclaredItemRow {
   title: string;
 }
 
-/** 导出供单测直接覆盖(过滤 disabled 插件 / 按 title 排序 / hidden 生效值解析)。 */
+/** 导出供单测直接覆盖(过滤 disabled 插件 / 按 title 排序 / hidden 生效值解析)。
+ *  Core 声明源与 plugin manifest 声明源合并,同 id 时 core 优先。 */
 export function declaredRows(
   plugins: readonly PluginRegistryEntry[],
-  prefs: TerminalStatusBarPrefs
+  prefs: TerminalStatusBarPrefs,
+  coreItems: readonly CoreTerminalStatusItemDeclaration[]
 ): DeclaredItemRow[] {
   const locale = i18next.language || "en";
   const rows: DeclaredItemRow[] = [];
+  const seen = new Set<string>();
+
+  for (const item of coreItems) {
+    const config = resolveEffectiveTerminalStatusItemConfig(
+      { alignment: item.alignment, order: item.order },
+      prefs.items[item.id]
+    );
+    rows.push({
+      hidden: config.hidden,
+      itemId: item.id,
+      title: i18next.t(item.titleKey),
+    });
+    seen.add(item.id);
+  }
+
   for (const entry of plugins) {
     // F12:与 merge.ts / terminal-status-bar-block.tsx 同口径,用
     // entry.runtime.enabled(实际运行时激活态)而非顶层 entry.enabled。
@@ -45,6 +67,9 @@ export function declaredRows(
       continue;
     }
     for (const item of entry.manifest.terminalStatusItems) {
+      if (seen.has(item.id)) {
+        continue;
+      }
       const config = resolveEffectiveTerminalStatusItemConfig(
         item,
         prefs.items[item.id]
@@ -74,7 +99,8 @@ export async function openTerminalStatusBarContextMenu(
   );
   const rows = declaredRows(
     usePluginRegistryStore.getState().plugins,
-    useTerminalStatusBarPrefsStore.getState().prefs
+    useTerminalStatusBarPrefsStore.getState().prefs,
+    CORE_TERMINAL_STATUS_ITEMS
   );
   const template: MenuItem[] = [
     ...rows.map<MenuItem>((row) => ({

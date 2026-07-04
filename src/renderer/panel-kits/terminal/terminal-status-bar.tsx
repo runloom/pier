@@ -7,6 +7,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { Notifier } from "@/lib/util/notifier.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
+import { CORE_TERMINAL_STATUS_ITEMS } from "./core-terminal-status-items.ts";
 import { openTerminalStatusBarContextMenu } from "./terminal-status-bar-menu.ts";
 import {
   declaredTerminalStatusItemsById,
@@ -71,7 +72,7 @@ export function useTerminalStatusBarItems(): TerminalStatusBarGroups<TerminalSta
     () =>
       mergeTerminalStatusItems(
         registered,
-        declaredTerminalStatusItemsById(plugins),
+        declaredTerminalStatusItemsById(plugins, CORE_TERMINAL_STATUS_ITEMS),
         prefs
       ),
     [registered, plugins, prefs]
@@ -107,17 +108,27 @@ export function hasVisibleTerminalStatusItems(
  *
  * 与 terminal-panel.tsx 的 hasStatusBar 判定必须同一口径 —— 两处都改这个函数,
  * 不要各自维出一份等价逻辑。
+ *
+ * 注:core 声明源(CORE_TERMINAL_STATUS_ITEMS)恒非空,本函数实际恒返回 true ——
+ * 设计原意为「有声明就挂载」故不视为退化;详见 spec §5。
  */
 export function hasDeclaredTerminalStatusItems(
   plugins: readonly PluginRegistryEntry[]
 ): boolean {
-  return declaredTerminalStatusItemsById(plugins).size > 0;
+  return (
+    declaredTerminalStatusItemsById(plugins, CORE_TERMINAL_STATUS_ITEMS).size >
+    0
+  );
 }
 
 /**
  * F4:挂载判定的唯一实现 —— TerminalStatusBar 组件与 terminal-panel.tsx 的
  * hasStatusBar(控制 h-7 内容区留白)都必须调这一个函数,禁止各自重复等价逻辑
  * (曾经两处判定口径不一致是本 bug 的根因之一)。
+ *
+ * 注:core 声明源(CORE_TERMINAL_STATUS_ITEMS)恒非空,hasDeclaredTerminalStatusItems
+ * 恒返回 true,故本函数也恒返回 true —— 设计原意为「有声明就挂载」故不视为退化;
+ * 详见 spec §5。
  */
 export function shouldMountTerminalStatusBar(
   groups: TerminalStatusBarGroups<TerminalStatusItem>,
@@ -154,6 +165,8 @@ export function TerminalStatusBar({
   // F4:挂载判定见 shouldMountTerminalStatusBar 注释 —— 此前只看「当前有可见
   // 项」,用户把全部项都隐藏后容器连同右键管理入口一起 unmount,没有任何 UI
   // 能再打开恢复,构成自锁。
+  // 注:core 声明源恒非空,shouldMountTerminalStatusBar 实际恒返回 true —— 设计
+  // 原意为「有声明就挂载」故不视为退化;详见 spec §5。
   if (!shouldMountTerminalStatusBar(groups, statusContext, plugins)) {
     return null;
   }

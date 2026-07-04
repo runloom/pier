@@ -85,6 +85,42 @@ describe("declaredRows", () => {
     await initI18n();
   });
 
+  it("core 声明源的项出现在 rows 里,title 走 i18next.t(titleKey)", () => {
+    const rows = declaredRows([], prefsOf(), [
+      {
+        id: "core.foo",
+        titleKey: "terminal.statusBar.item.agentStatus.title", // 复用已翻译 key(Task 6 添加)
+      },
+    ]);
+
+    expect(rows.map((row) => row.itemId)).toContain("core.foo");
+  });
+
+  it("同 id 时 core 优先,plugin 声明被跳过", () => {
+    const rows = declaredRows(
+      [
+        terminalStatusItemEntry(
+          "pier.a",
+          [{ id: "core.foo", title: "Plugin Steal" }],
+          true
+        ),
+      ],
+      prefsOf(),
+      [
+        {
+          id: "core.foo",
+          titleKey: "terminal.statusBar.item.agentStatus.title",
+        },
+      ]
+    );
+
+    const fooRows = rows.filter((row) => row.itemId === "core.foo");
+    expect(fooRows).toHaveLength(1);
+    // core 走 i18next.t,plugin 走 resolvePluginTerminalStatusItemDisplay;
+    // core 优先意味着 title 精确等于 titleKey 翻译结果,而非 "Plugin Steal"
+    expect(fooRows[0]?.title).toBe("Agent status");
+  });
+
   it("过滤 disabled 插件贡献的项", () => {
     const rows = declaredRows(
       [
@@ -99,7 +135,8 @@ describe("declaredRows", () => {
           false
         ),
       ],
-      prefsOf()
+      prefsOf(),
+      []
     );
 
     expect(rows.map((row) => row.itemId)).toEqual(["enabled.item"]);
@@ -115,7 +152,8 @@ describe("declaredRows", () => {
           /* runtimeEnabled */ true
         ),
       ],
-      prefsOf()
+      prefsOf(),
+      []
     );
 
     expect(rows.map((row) => row.itemId)).toEqual(["drift.item"]);
@@ -131,7 +169,8 @@ describe("declaredRows", () => {
           /* runtimeEnabled */ false
         ),
       ],
-      prefsOf()
+      prefsOf(),
+      []
     );
 
     expect(rows).toEqual([]);
@@ -145,7 +184,8 @@ describe("declaredRows", () => {
           { id: "a.item", title: "Apple" },
         ]),
       ],
-      prefsOf()
+      prefsOf(),
+      []
     );
 
     expect(rows.map((row) => row.title)).toEqual(["Apple", "Zebra"]);
@@ -159,7 +199,8 @@ describe("declaredRows", () => {
           { id: "hidden.override", title: "Hidden Override" },
         ]),
       ],
-      prefsOf({ "hidden.override": { hidden: true } })
+      prefsOf({ "hidden.override": { hidden: true } }),
+      []
     );
 
     const byId = new Map(rows.map((row) => [row.itemId, row.hidden]));

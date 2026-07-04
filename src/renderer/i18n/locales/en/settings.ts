@@ -25,7 +25,6 @@ export const settings = {
       "Show, hide, and reorder terminal status bar items. Higher in the list means closer to the outer edge.",
     leftGroup: "Left",
     rightGroup: "Right",
-    empty: "Enabled plugins declare no status bar items",
     moveUp: "Move up (outward)",
     moveDown: "Move down (inward)",
     moveToLeft: "Move to left group",

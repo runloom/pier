@@ -1,8 +1,9 @@
 /**
  * 设置对话框「终端 → 状态栏」管理块。
  *
- * 数据来源 = plugin-registry.store 中已启用插件 manifest 声明的
- * terminalStatusItems(含当前未注册渲染的,按声明展示) × 用户覆盖镜像。
+ * 数据来源 = core 声明源(CORE_TERMINAL_STATUS_ITEMS)+ plugin-registry.store
+ * 中已启用插件 manifest 声明的 terminalStatusItems(含当前未注册渲染的,按声明
+ * 展示) × 用户覆盖镜像;同 id 时 core 优先(与右键菜单/合并层同口径)。
  * 排序交互为上移/下移按钮(首版不引入 dnd 依赖,spec §3.3);列表为外侧优先序,
  * 上移 = 向外侧。重排落库:交换后按 normalizedGroupOrders(index*10)给顺序有
  * 变化的项写 order 覆盖。
@@ -19,6 +20,7 @@ import {
 import { Switch } from "@pier/ui/switch.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type {
+  CoreTerminalStatusItemDeclaration,
   TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
@@ -27,6 +29,7 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginTerminalStatusItemDisplay } from "@/lib/plugins/display.ts";
+import { CORE_TERMINAL_STATUS_ITEMS } from "@/panel-kits/terminal/core-terminal-status-items.ts";
 import {
   compareOuterFirst,
   normalizedGroupOrders,
@@ -46,38 +49,59 @@ interface StatusBarRow {
 
 function buildRows(
   plugins: readonly PluginRegistryEntry[],
-  prefs: TerminalStatusBarPrefs
+  prefs: TerminalStatusBarPrefs,
+  coreItems: readonly CoreTerminalStatusItemDeclaration[]
 ): { left: StatusBarRow[]; right: StatusBarRow[] } {
   const locale = i18next.language || "en";
   const left: StatusBarRow[] = [];
   const right: StatusBarRow[] = [];
+  const seen = new Set<string>();
+
+  const pushRow = (
+    id: string,
+    declaredAlignment: "left" | "right" | undefined,
+    declaredOrder: number | undefined,
+    title: string
+  ) => {
+    const config = resolveEffectiveTerminalStatusItemConfig(
+      { alignment: declaredAlignment, order: declaredOrder },
+      prefs.items[id]
+    );
+    const row: StatusBarRow = {
+      alignment: config.alignment,
+      hasOverride: prefs.items[id] !== undefined,
+      hidden: config.hidden,
+      id,
+      order: config.order,
+      title,
+    };
+    if (config.alignment === "right") {
+      right.push(row);
+    } else {
+      left.push(row);
+    }
+    seen.add(id);
+  };
+
+  for (const item of coreItems) {
+    pushRow(item.id, item.alignment, item.order, i18next.t(item.titleKey));
+  }
   for (const entry of plugins) {
     // F12:与 merge.ts / menu.ts 同口径,用 entry.runtime.enabled(实际运行时激活态)。
     if (!entry.runtime.enabled) {
       continue;
     }
     for (const item of entry.manifest.terminalStatusItems) {
-      const config = resolveEffectiveTerminalStatusItemConfig(
-        item,
-        prefs.items[item.id]
-      );
-      const row: StatusBarRow = {
-        alignment: config.alignment,
-        hasOverride: prefs.items[item.id] !== undefined,
-        hidden: config.hidden,
-        id: item.id,
-        order: config.order,
-        title: resolvePluginTerminalStatusItemDisplay(
-          entry.manifest,
-          item,
-          locale
-        ).title,
-      };
-      if (config.alignment === "right") {
-        right.push(row);
-      } else {
-        left.push(row);
+      if (seen.has(item.id)) {
+        continue;
       }
+      pushRow(
+        item.id,
+        item.alignment,
+        item.order,
+        resolvePluginTerminalStatusItemDisplay(entry.manifest, item, locale)
+          .title
+      );
     }
   }
   left.sort(compareOuterFirst);
@@ -268,7 +292,7 @@ export function TerminalStatusBarBlock() {
   const t = useT();
   const plugins = usePluginRegistryStore((s) => s.plugins);
   const prefs = useTerminalStatusBarPrefsStore((s) => s.prefs);
-  const { left, right } = buildRows(plugins, prefs);
+  const { left, right } = buildRows(plugins, prefs, CORE_TERMINAL_STATUS_ITEMS);
   return (
     <Card>
       <CardHeader>
@@ -276,22 +300,14 @@ export function TerminalStatusBarBlock() {
         <CardDescription>{t("settings.statusBar.description")}</CardDescription>
       </CardHeader>
       <CardContent>
-        {left.length + right.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {t("settings.statusBar.empty")}
-          </p>
-        ) : (
-          <>
-            <StatusBarGroup
-              heading={t("settings.statusBar.leftGroup")}
-              rows={left}
-            />
-            <StatusBarGroup
-              heading={t("settings.statusBar.rightGroup")}
-              rows={right}
-            />
-          </>
-        )}
+        <StatusBarGroup
+          heading={t("settings.statusBar.leftGroup")}
+          rows={left}
+        />
+        <StatusBarGroup
+          heading={t("settings.statusBar.rightGroup")}
+          rows={right}
+        />
       </CardContent>
     </Card>
   );
