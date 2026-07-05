@@ -78,7 +78,7 @@ function runAction(action: Action): void {
  * 把 swift forward 来的 chars 转成 KeyboardEvent.code 格式 (与 default keymap
  * 一致 — keymap 用 "KeyT" / "Backquote" / "Digit1" / "ArrowUp" 等).
  *
- * Pier 当前默认 keymap 涉及的字符: t/w/n/p/`/,. + Enter + 方向键. 其他不在 keymap 的
+ * Pier 当前默认 keymap 涉及的字符: t/w/n/p/r/`/,. + Enter + 方向键. 其他不在 keymap 的
  * chord 即使命中也 resolve 不到 action, 不需要在这里穷举所有可能符号.
  *
  * 方向键: macOS charactersIgnoringModifiers 在按方向键时返回 NSUpArrowFunctionKey

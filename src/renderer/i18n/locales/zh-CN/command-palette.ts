@@ -62,6 +62,8 @@ export const commandPalette = {
     loadFailed: "任务加载失败",
     loadingTasks: "正在查找任务...",
     loadingTasksDetail: "正在扫描当前项目支持的任务源",
+    startingTask: "正在启动任务...",
+    startingTaskWithLabel: "正在启动 {{label}}...",
     noTasks: "未发现可运行任务",
     noTasksDetail:
       "支持 package.json、deno.json、composer.json、VS Code、Zed、Cargo、Make、mise、Justfile、Taskfile 和 pyproject",

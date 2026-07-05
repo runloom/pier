@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const MARK = "PIER_AGENT_EVENT_LOG";
+/** 顶层 ImportDeclaration 探测（行首 import——electron-vite 扫描陷阱）。 */
+const TOP_LEVEL_IMPORT_RE = /^import\s/m;
 
 let homeDir: string;
 
@@ -38,14 +40,21 @@ describe("buildKiloPluginSource", () => {
     expect(source).toContain("const server = async () => {");
   });
 
-  it("直写 JSONL（appendFile 通路，无 HTTP fetch）", async () => {
+  it("同步 JSONL（pierAppend → appendFileSync, 异步退化分支）", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
-    expect(source).toContain('import { appendFile } from "node:fs/promises"');
-    expect(source).toContain("await appendFile(log, line)");
+    // 同步写路径
+    expect(source).toContain("appendFileSync");
+    expect(source).toContain('process.getBuiltinModule("node:fs")');
+    expect(source).toContain("pierAppend(log, line)");
+    // 旧 Node 异步退化
+    expect(source).toContain('import("node:fs/promises")');
+    // 无 HTTP
     expect(source).not.toContain("/agent-event");
     expect(source).not.toContain("Authorization");
     expect(source).not.toContain("fetch(");
+    // 无顶层 import 声明（electron-vite 模板字面量扫描陷阱）
+    expect(source).not.toMatch(TOP_LEVEL_IMPORT_RE);
   });
 
   it("env 守卫覆盖三个必需变量（LOG/PANEL_ID/WINDOW_ID）", async () => {
@@ -79,38 +88,45 @@ describe("buildKiloPluginSource", () => {
     expect(source).toContain("ts: Date.now() * 1_000_000");
   });
 
-  it("事件映射齐全：session.created/idle/error/deleted, permission.asked/replied（非 permission.updated）, tool.execute", async () => {
+  it("事件映射齐全：session.created/idle/error/deleted/status, permission.asked/replied, tool.execute", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
     expect(source).toContain('"session.created") return "SessionStart"');
     expect(source).toContain('"session.idle") return "Stop"');
     expect(source).toContain('"session.error") return "error"');
     expect(source).toContain('"session.deleted") return "SessionEnd"');
+    // session.status: busy/retry→running（TURN_RESET）, idle→Stop
+    expect(source).toContain('"session.status"');
+    expect(source).toContain('"busy"');
+    expect(source).toContain('"retry"');
+    expect(source).toContain('return "running"');
     expect(source).toContain('"permission.asked") return "PermissionRequest"');
     expect(source).toContain('"permission.replied") return "processing"');
     expect(source).not.toContain("permission.updated");
     expect(source).toContain('"tool.execute.before"');
     expect(source).toContain('"tool.execute.after"');
-    expect(source).toContain('emitPierEvent("ToolStart")');
-    expect(source).toContain('emitPierEvent("ToolComplete")');
+    expect(source).toContain('pierEmit("ToolStart")');
+    expect(source).toContain('pierEmit("ToolComplete")');
   });
 
-  it("不装 PromptSubmit：官方事件表未明确 message.updated 可区分用户提交, 宁缺毋滥", async () => {
+  it("不装 PromptSubmit：command.executed payload 未确认, session.status(busy/retry) 已提供 TURN_RESET", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
     expect(source).not.toContain("PromptSubmit");
     expect(source).not.toContain("message.updated");
   });
 
-  it("加载即 emit SessionStart：server 工厂体开头, 先于 event 订阅返回", async () => {
+  it("不合成 SessionStart：session.created 提供真实信号, 工厂体无合成 emit", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
+    // mapPierEvent 内 session.created→SessionStart 是正确的数据映射,
+    // 但 server 工厂体不应有显式 pierEmit("SessionStart") 合成调用。
     const serverStart = source.indexOf("const server = async () => {");
-    const loadEmit = source.indexOf('await emitPierEvent("SessionStart");');
-    const returnStatement = source.indexOf("return {", serverStart);
-    expect(serverStart).toBeGreaterThanOrEqual(0);
-    expect(loadEmit).toBeGreaterThan(serverStart);
-    expect(loadEmit).toBeLessThan(returnStatement);
+    const serverBody = source.slice(
+      serverStart,
+      source.indexOf("export default")
+    );
+    expect(serverBody).not.toContain('pierEmit("SessionStart")');
   });
 });
 

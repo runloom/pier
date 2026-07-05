@@ -190,6 +190,14 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       exitCodeHints.delete(key);
       finishedPanels.delete(key);
     },
+    /**
+     * relaunch close 前置臂旗标, 由下一个 processAlive=true 的 native
+     * process-close 消费。dead-pty relaunch 无 native echo（bridge close
+     * 不发事件）, 旗标会悬挂——无害：alive=true 的消费场景都发生在面板
+     * 真关闭/reconcile 之后, 被 skip 的 finish 产物彼时已随 session 移除
+     * 失效；Set 按 panelKey 去重, 无泄漏增长。**勿在 resetPanel 里清它**：
+     * create 之后迟到的旧 pane echo 会把新 run 误 finalize 成 cancelled。
+     */
     ignoreNextNativeUserClose(
       panelId: string,
       windowId?: string | undefined

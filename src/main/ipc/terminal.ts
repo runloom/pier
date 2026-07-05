@@ -158,6 +158,8 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     "pier:terminal:create",
     async (event, args: CreateTerminalArgs) => {
       if (!addon) {
+        // 同下方 create 失败清理：pty 从未活过, 先验 activity 必须撤。
+        foregroundActivityService.panelClosed(args.panelId);
         return { ok: false, error: loadError ?? "native addon not loaded" };
       }
       const win = windowFromWebContents(event.sender);
@@ -223,10 +225,18 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           await persistInitialTerminalTab(sessionScope, args.panelId, args.tab);
           conformTerminalPresentationAfterCreate(win, addon);
         }
+        if (!ok) {
+          // create 失败 = pty 从未活过：撤掉先验登记的 activity（fresh spawn
+          // 与 rerun relaunch 都在 create 前已由 taskLaunched 登记 running
+          // task 层）, 否则错误面板上 spinner 永转、taskLive 谎报。空 slot
+          // 时是 no-op；5s 冷却不碍重试——taskLaunched/agentLaunched 会先清。
+          foregroundActivityService.panelClosed(args.panelId);
+        }
         return ok
           ? { ok: true }
           : { ok: false, error: "createTerminal returned false" };
       } catch (e) {
+        foregroundActivityService.panelClosed(args.panelId);
         return {
           ok: false,
           error: e instanceof Error ? e.message : String(e),
@@ -359,12 +369,17 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       const windowId = findInternalWindowId(win) ?? undefined;
       const sessionScope = windowRecordIdFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
-      // relaunch 也走清理+5s 冷却；launcher 立刻重启 agent 时首个 SessionStart
-      // 可能被吸收，下个事件自愈，属接受行为。
-      foregroundActivityService.panelClosed(panelId);
       if (options?.reason === "relaunch") {
+        // relaunch = 同 panel 换 pty, 不是面板死亡——activity slot 不清。
+        // rerun 时序：terminal.open 的 renderer 命令 resolve 后, main 侧
+        // onLaunched → taskLaunched 先登记新 running task 层, renderer 的
+        // relaunch effect 随后才发本 close。这里清掉会连根拔走该层：任务
+        // 真退出时 taskFinished 落空（kind 守卫）, tab 永远停在 create 时
+        // 持久化的 Running 基线。旧 pty 的收尾由 native process-closed →
+        // ptyExited 按层语义处理（task 层保留, 其余照清）。
         taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
       } else {
+        foregroundActivityService.panelClosed(panelId);
         terminalPanelClosed.notifyTerminalPanelClosed(panelId, windowId);
       }
       addon?.closeTerminal(toNativePanelKey(win, panelId));

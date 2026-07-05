@@ -54,6 +54,11 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    commandId: "pier.run.rerunTask",
+    keys: "Mod+Alt+KeyR",
+    scope: "global",
+  },
+  {
     commandId: "pier.worktree.create",
     keys: "Mod+Shift+KeyN",
     scope: "global",

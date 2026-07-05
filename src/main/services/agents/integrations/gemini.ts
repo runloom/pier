@@ -19,6 +19,12 @@ import {
  * 工具事件（BeforeTool/AfterTool）matcher 用空字符串 ""（Gemini 官方
  * 事件表约定, 区别于 grok 的 "*"）。
  *
+ * subagent 风险备忘：AfterAgent 仅在最外层调用（activeCalls===1）时触发,
+ * 且按 prompt_id 去重（client.ts fireBeforeAgentHookSafe / fireAfterAgentHookSafe）。
+ * 上游无独立 SubagentStart/SubagentStop 事件。若未来 subagent 使用独立
+ * GeminiClient 实例, 则各自触发 BeforeAgent/AfterAgent 且无法区分主/子——
+ * 上游 issue #17760 追踪 subagent hook 可配置性但尚未完成, 届时需重审本表。
+ *
  * ⚠️ 单位陷阱：Gemini 把 hook 配置里的 `timeout` 字段解释为【毫秒】,
  * 不是 Claude/Grok 那种秒。工厂写入 JSON 的字段名固定为 `timeout`,
  * 取值来自本 spec 的 `timeoutSeconds`（字段名沿用 shared.ts 类型定义,
@@ -38,6 +44,7 @@ const GEMINI_SPEC: NestedJsonIntegrationSpec = {
     { nativeEvent: "BeforeAgent", pierEvent: "PromptSubmit" },
     { nativeEvent: "AfterAgent", pierEvent: "Stop" },
     { nativeEvent: "Notification", pierEvent: "PermissionRequest" },
+    { nativeEvent: "PreCompress", pierEvent: "processing" },
     { matcher: "", nativeEvent: "BeforeTool", pierEvent: "ToolStart" },
     { matcher: "", nativeEvent: "AfterTool", pierEvent: "ToolComplete" },
   ],

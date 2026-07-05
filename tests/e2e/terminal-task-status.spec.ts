@@ -180,6 +180,93 @@ test.describe("Terminal task status e2e", () => {
     }
   });
 
+  test("rerun reuses the panel and lands the second exit status", async () => {
+    test.setTimeout(120_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-task-rerun-e2e-"));
+    const projectRoot = mkdtempSync(join(tmpdir(), "pier-task-rerun-proj-"));
+    writeQuickTaskProject(projectRoot);
+
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+
+      const spawnArgs = [
+        "tasks",
+        "run",
+        "package-script:quick",
+        "--path",
+        projectRoot,
+      ];
+      const first = await runPierCliJson<RunSpawnData>(userDataDir, spawnArgs);
+      expect(first.ok).toBe(true);
+      const firstRunId = first.data?.runId ?? "";
+      expect(firstRunId).not.toBe("");
+
+      let panelId = "";
+      await expect
+        .poll(
+          async () => {
+            const status = await runPierCliJson<RunStatusData>(userDataDir, [
+              "tasks",
+              "status",
+              firstRunId,
+            ]);
+            const node = status.data?.nodes["package-script:quick"];
+            panelId = node?.panelId ?? panelId;
+            return node?.status;
+          },
+          { timeout: 20_000 }
+        )
+        .toBe("succeeded");
+      expect(panelId).not.toBe("");
+
+      const tab = win.locator(`[data-panel-tab-id="${panelId}"]`);
+      await expect(tab).toHaveAttribute("data-tab-status", "succeeded");
+
+      // 重新运行同一 task：prepareSpawn 的 restart 路径复用原 panel relaunch。
+      const second = await runPierCliJson<RunSpawnData>(userDataDir, spawnArgs);
+      expect(second.ok).toBe(true);
+      const secondRunId = second.data?.runId ?? "";
+      expect(secondRunId).not.toBe("");
+      expect(secondRunId).not.toBe(firstRunId);
+
+      let rerunPanelId = "";
+      await expect
+        .poll(
+          async () => {
+            const status = await runPierCliJson<RunStatusData>(userDataDir, [
+              "tasks",
+              "status",
+              secondRunId,
+            ]);
+            const node = status.data?.nodes["package-script:quick"];
+            rerunPanelId = node?.panelId ?? rerunPanelId;
+            return node?.status;
+          },
+          { timeout: 20_000 }
+        )
+        .toBe("succeeded");
+      // panel 复用是本回归的前提——不复用则测试退化为两次独立 spawn。
+      expect(rerunPanelId).toBe(panelId);
+
+      // 回归守卫：relaunch close 曾清掉 rerun 已登记的 running task 层，
+      // 第二次退出的 taskFinished 落空 → tab 永远停在 "Running" 基线。
+      await expect(tab).toHaveAttribute("data-tab-status", "succeeded");
+      await expect(tab).toHaveAttribute("data-tab-state-label", "Succeeded");
+      // 终态常驻：冷却窗口(5s)过后不得被迟到清理翻回。
+      await win.waitForTimeout(6000);
+      await expect(tab).toHaveAttribute("data-tab-status", "succeeded");
+      await expect(tab).toHaveAttribute("data-tab-state-label", "Succeeded");
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   test("reload reattaches the live terminal for a running task", async () => {
     test.setTimeout(120_000);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-task-reload-e2e-"));

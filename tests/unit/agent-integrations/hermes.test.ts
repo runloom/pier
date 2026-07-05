@@ -12,6 +12,7 @@ import {
   hermesDetect,
   hermesHome,
   hermesInitPath,
+  hermesIntegration,
   hermesManifestPath,
   hermesPluginDir,
   installHermesPlugin,
@@ -25,7 +26,6 @@ const EXCEPT_PASS_RE = /except[^\n]*:\s*(?:\n\s*#[^\n]*)*\s*\n\s*pass/;
 const NATIVE_EVENTS = [
   "on_session_start",
   "pre_llm_call",
-  "post_llm_call",
   "pre_tool_call",
   "post_tool_call",
   "pre_approval_request",
@@ -85,15 +85,16 @@ describe("buildHermesPluginInit", () => {
   it("事件映射齐全：EVENT_MAP 覆盖全部原生事件, 值为正确 pier 事件名", () => {
     const init = buildHermesPluginInit();
     expect(init).toContain('"on_session_start": "SessionStart"');
-    expect(init).toContain('"pre_llm_call": "PromptSubmit"');
-    expect(init).toContain('"post_llm_call": "Stop"');
+    expect(init).toContain('"pre_llm_call": "processing"');
     expect(init).toContain('"pre_tool_call": "ToolStart"');
     expect(init).toContain('"post_tool_call": "ToolComplete"');
     expect(init).toContain('"pre_approval_request": "PermissionRequest"');
-    expect(init).toContain('"post_approval_response": "processing"');
+    expect(init).toContain('"post_approval_response": "ToolStart"');
     expect(init).toContain('"on_session_end": "SessionEnd"');
     expect(init).toContain('"on_session_finalize": "SessionEnd"');
     expect(init).toContain('"on_session_reset": "Stop"');
+    // post_llm_call 不映射——每轮 LLM 调用都发, 映射 Stop 会谎报 ready
+    expect(init).not.toContain("post_llm_call");
   });
 
   it("agent 字段为 hermes", () => {
@@ -101,18 +102,13 @@ describe("buildHermesPluginInit", () => {
     expect(init).toContain('"agent": "hermes"');
   });
 
-  it("加载即 emit SessionStart：register(ctx) 体内独立调用 _pier_emit, 先于 hook 遍历注册循环", () => {
+  it("register(ctx) 无合成 SessionStart——真实 on_session_start 覆盖, 合成版在非会话上下文误发", () => {
     const init = buildHermesPluginInit();
     const registerStart = init.indexOf("def register(ctx: Any) -> None:");
-    const loadEmit = init.indexOf('_pier_emit("SessionStart")', registerStart);
-    const forLoop = init.indexOf("for event_name in EVENTS:", registerStart);
     expect(registerStart).toBeGreaterThanOrEqual(0);
-    expect(loadEmit).toBeGreaterThan(registerStart);
-    expect(loadEmit).toBeLessThan(forLoop);
-    // 独立语句：不依赖 _make_hook/register_hook 事件表机制。
-    const between = init.slice(registerStart, forLoop);
-    expect(between.match(/_pier_emit\("SessionStart"\)/g)).toHaveLength(1);
-    expect(between).not.toContain("register_hook");
+    // register 体内不应有独立的 _pier_emit 调用
+    const body = init.slice(registerStart);
+    expect(body).not.toContain('_pier_emit("SessionStart")');
   });
 });
 
@@ -357,11 +353,8 @@ describe("install/uninstallHermesPlugin (文件 IO)", () => {
 });
 
 describe("hermesIntegration 契约", () => {
-  it("capability 为 full, id 为 hermes", async () => {
-    const { hermesIntegration } = await import(
-      "../../../src/main/services/agents/integrations/hermes.ts"
-    );
-    expect(hermesIntegration.capability).toBe("full");
+  it("capability 为 coarse, id 为 hermes", () => {
+    expect(hermesIntegration.capability).toBe("coarse");
     expect(hermesIntegration.id).toBe("hermes");
   });
 });

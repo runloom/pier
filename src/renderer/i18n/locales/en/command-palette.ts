@@ -62,6 +62,8 @@ export const commandPalette = {
     loadFailed: "Failed to load tasks",
     loadingTasks: "Finding tasks...",
     loadingTasksDetail: "Scanning supported task sources in the active project",
+    startingTask: "Starting task...",
+    startingTaskWithLabel: "Starting {{label}}...",
     noTasks: "No runnable tasks found",
     noTasksDetail:
       "Supported sources include package.json, deno.json, composer.json, VS Code, Zed, Cargo, Make, mise, Justfile, Taskfile, and pyproject",
