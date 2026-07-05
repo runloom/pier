@@ -1,9 +1,11 @@
+import { Card, CardContent } from "@pier/ui/card.tsx";
+import { FieldSet } from "@pier/ui/field.tsx";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useWorktreePreferencesStore } from "@/stores/worktree-preferences.store.ts";
 
-export function WorktreeRootPathRow() {
+function WorktreeRootPathRow() {
   const t = useT();
   const persisted = useWorktreePreferencesStore((s) => s.worktreeRootPath);
   const setWorktreeRootPath = useWorktreePreferencesStore(
@@ -34,5 +36,25 @@ export function WorktreeRootPathRow() {
       placeholder={t("settings.row.worktreeRootPathPlaceholder")}
       value={draft}
     />
+  );
+}
+
+/**
+ * 工作区 section: 承载宿主级工作区偏好(worktree 目录等)。它是 host
+ * preferences 而非插件设置, 因此不走 PluginConfigurationSection。
+ */
+export function WorkspaceSection() {
+  const t = useT();
+  return (
+    <div className="px-4 pb-4" id="workspace">
+      <h1 className="mb-4 text-xl">{t("settings.section.workspace")}</h1>
+      <Card>
+        <CardContent>
+          <FieldSet>
+            <WorktreeRootPathRow />
+          </FieldSet>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

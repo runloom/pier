@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
 
-export const GIT_PLUGIN_ID = "pier.git";
-
 export const pluginSourceKindSchema = z.enum([
   "builtin",
   "local",

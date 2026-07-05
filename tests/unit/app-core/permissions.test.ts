@@ -263,12 +263,6 @@ describe("authorizeCommand", () => {
         type: "file.writeText",
       },
       {
-        newPath: "src/main.ts",
-        path: "src/index.ts",
-        root: "/repo",
-        type: "file.rename",
-      },
-      {
         newPath: "packages/app/src/index.ts",
         path: "src/index.ts",
         root: "/repo",

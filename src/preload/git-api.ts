@@ -21,6 +21,9 @@ import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
+// 注意:写类 git 命令(commit / branch 的增删切)仍保留在 main 命令表,服务 CLI 与未来表面,
+// 但不经 preload 暴露 —— renderer 当前无消费方,收窄本桥可达面,避免闲置写入口扩大攻击面。
+
 /** diff 范围/路径选项(IPC 层用值类型;详细 zod 在 contracts/git.ts) */
 export interface GitDiffOptionsValue {
   from?: string;
@@ -53,22 +56,6 @@ export interface GitDiffSearchBranchesOptionsValue {
   query?: string;
 }
 
-export interface GitCommitOptionsValue {
-  allowEmpty?: boolean;
-  message: string;
-  signoff?: boolean;
-}
-
-export interface GitCreateBranchOptionsValue {
-  name: string;
-  startPoint?: string;
-}
-
-export interface GitDeleteBranchOptionsValue {
-  force?: boolean;
-  name: string;
-}
-
 export interface GitStashOptionsValue {
   includeUntracked?: boolean;
   message?: string;
@@ -77,17 +64,7 @@ export interface GitStashOptionsValue {
 export interface PierGitAPI {
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
-  checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
-  commit: (cwd: string, options: GitCommitOptionsValue) => Promise<boolean>;
   continueRebase: (cwd: string) => Promise<GitRebaseContinueResult>;
-  createBranch: (
-    cwd: string,
-    options: GitCreateBranchOptionsValue
-  ) => Promise<boolean>;
-  deleteBranch: (
-    cwd: string,
-    options: GitDeleteBranchOptionsValue
-  ) => Promise<boolean>;
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
   // 读(git:read)
   getCommit: (cwd: string, oid: string) => Promise<GitCommit>;
@@ -207,34 +184,6 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<boolean>({ cwd, paths, type: "git.unstage" }),
   discardChanges: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.discardChanges" }),
-  commit: (cwd, options) =>
-    invokePierCommand<boolean>({
-      ...(options.allowEmpty !== undefined && {
-        allowEmpty: options.allowEmpty,
-      }),
-      cwd,
-      message: options.message,
-      ...(options.signoff !== undefined && { signoff: options.signoff }),
-      type: "git.commit",
-    }),
-  createBranch: (cwd, options) =>
-    invokePierCommand<boolean>({
-      cwd,
-      name: options.name,
-      ...(options.startPoint !== undefined && {
-        startPoint: options.startPoint,
-      }),
-      type: "git.createBranch",
-    }),
-  deleteBranch: (cwd, options) =>
-    invokePierCommand<boolean>({
-      cwd,
-      ...(options.force !== undefined && { force: options.force }),
-      name: options.name,
-      type: "git.deleteBranch",
-    }),
-  checkoutBranch: (cwd, name) =>
-    invokePierCommand<boolean>({ cwd, name, type: "git.checkoutBranch" }),
   merge: (cwd, branch) =>
     invokePierCommand<GitMergeResult>({
       branch,

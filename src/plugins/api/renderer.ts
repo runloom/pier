@@ -10,8 +10,6 @@ import type {
   FileMoveRequest,
   FileMoveResult,
   FileReadTextRequest,
-  FileRenameRequest,
-  FileRenameResult,
   FileTrashRequest,
   FileTrashResult,
   FileWriteTextRequest,
@@ -45,7 +43,9 @@ import type {
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
+  WorktreeOpenResult,
   WorktreeOpenTerminalRequest,
+  WorktreeOpenTerminalResult,
   WorktreePruneRequest,
   WorktreeRemoveRequest,
   WorktreeRemoveResult,
@@ -215,7 +215,6 @@ export interface RendererPluginContext {
     ): Promise<FileListResult>;
     move(request: FileMoveRequest): Promise<FileMoveResult>;
     readText(request: FileReadTextRequest): Promise<string>;
-    rename(request: FileRenameRequest): Promise<FileRenameResult>;
     trash(request: FileTrashRequest): Promise<FileTrashResult>;
     writeText(request: FileWriteTextRequest): Promise<FileWriteTextResult>;
   };
@@ -329,8 +328,10 @@ export interface RendererPluginContext {
       request: WorktreeCreationDefaultsRequest
     ): Promise<WorktreeCreationDefaults>;
     list(request: WorktreeListRequest): Promise<WorktreeListResult>;
-    open(request: WorktreeOpenRequest): Promise<unknown>;
-    openTerminal(request: WorktreeOpenTerminalRequest): Promise<unknown>;
+    open(request: WorktreeOpenRequest): Promise<WorktreeOpenResult>;
+    openTerminal(
+      request: WorktreeOpenTerminalRequest
+    ): Promise<WorktreeOpenTerminalResult>;
     prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
     remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
   };
@@ -338,5 +339,10 @@ export interface RendererPluginContext {
 
 export interface RendererPluginModule {
   activate(context: RendererPluginContext): () => void;
+  /**
+   * 设置页等宿主 UI 用的插件图标。放在 module 而非 manifest:manifest 是可序列化
+   * 数据(跨 IPC),而 builtin module 被宿主静态 import,禁用状态下也取得到。
+   */
+  icon?: LucideIcon;
   id: string;
 }

@@ -8,6 +8,7 @@ export const settings = {
     keybindings: "Keyboard",
     plugins: "Plugins",
     terminal: "Terminal",
+    workspace: "Workspace",
     agents: "Agents",
     pluginGroup: "Plugin Settings",
   },
@@ -17,6 +18,7 @@ export const settings = {
     keybindings: "Keyboard Shortcuts",
     plugins: "Plugins",
     terminal: "Terminal",
+    workspace: "Workspace",
     agents: "Agents",
   },
   statusBar: {

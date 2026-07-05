@@ -4,7 +4,6 @@ import {
   fileListRequestSchema,
   fileMoveRequestSchema,
   fileReadTextRequestSchema,
-  fileRenameRequestSchema,
   fileTrashRequestSchema,
   fileWriteTextRequestSchema,
 } from "./file.ts";
@@ -235,9 +234,6 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   fileWriteTextRequestSchema.extend({
     type: z.literal("file.writeText"),
-  }),
-  fileRenameRequestSchema.extend({
-    type: z.literal("file.rename"),
   }),
   fileMoveRequestSchema.extend({
     type: z.literal("file.move"),

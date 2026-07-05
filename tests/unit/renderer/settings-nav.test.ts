@@ -6,4 +6,8 @@ describe("settings navigation metadata", () => {
     expect(NAV_ITEMS.some((item) => "label" in item)).toBe(false);
     expect(NAV_ITEMS.map((item) => item.id)).not.toContain("worktree");
   });
+
+  it("workspace(宿主级工作区偏好)是顶层静态分区", () => {
+    expect(NAV_ITEMS.map((item) => item.id)).toContain("workspace");
+  });
 });

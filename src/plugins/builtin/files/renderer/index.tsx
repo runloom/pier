@@ -294,5 +294,7 @@ export const filesRendererPlugin: RendererPluginModule = {
       kind: "web",
       title: context.i18n.t("panel.title", undefined, "Files"),
     }),
+  // 设置页(插件行/插件导航项)读取此图标;module 自描述,宿主不再按 id 特判。
+  icon: FolderTree,
   id: FILES_PLUGIN_ID,
 };

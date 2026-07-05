@@ -1,8 +1,9 @@
-import {
-  type PluginManifest,
-  GIT_PLUGIN_ID as SHARED_GIT_PLUGIN_ID,
-} from "@shared/contracts/plugin.ts";
+import type { PluginManifest } from "@shared/contracts/plugin.ts";
 import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "./settings.ts";
+
+// 插件 id 属于插件包自身(与 files 插件对称);宿主侧经 registry entry 的
+// manifest.id 消费,不再从 shared 契约取常量。
+export const GIT_PLUGIN_ID = "pier.git";
 
 export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   apiVersion: 1,
@@ -111,7 +112,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   description: "Built-in git command palette and terminal status support.",
   engines: { pier: ">=0.1.0" },
   homepage: "https://github.com/runloom/pier",
-  id: SHARED_GIT_PLUGIN_ID,
+  id: GIT_PLUGIN_ID,
   localization: {
     defaultLocale: "en",
     files: {

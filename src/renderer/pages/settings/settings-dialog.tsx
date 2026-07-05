@@ -26,6 +26,7 @@ import { KeybindingsSection } from "@/pages/settings/components/keybindings-sect
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
+import { WorkspaceSection } from "@/pages/settings/components/worktree-section.tsx";
 import {
   NAV_ITEMS,
   type PluginNavItem,
@@ -186,6 +187,7 @@ export function SettingsDialog() {
           >
             {activeSection === "appearance" ? <AppearanceSection /> : null}
             {activeSection === "terminal" ? <TerminalSection /> : null}
+            {activeSection === "workspace" ? <WorkspaceSection /> : null}
             {activeSection === "keybindings" ? <KeybindingsSection /> : null}
             {activeSection === "plugins" ? <PluginsSection /> : null}
             {activeSection === "agents" ? <AgentsSection /> : null}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { panelContextSchema } from "./panel.ts";
 
 export const worktreeUnavailableReasonSchema = z.enum([
   "not_git_repo",
@@ -142,4 +143,23 @@ export const worktreeOpenTerminalRequestSchema = z.object({
 });
 export type WorktreeOpenTerminalRequest = z.infer<
   typeof worktreeOpenTerminalRequestSchema
+>;
+
+/**
+ * worktree.open / worktree.openTerminal 的成功载荷。
+ * 生产方是 renderer 的 panel.open / terminal.open 命令处理器
+ * (workspace-renderer-commands.ts),经 main 透传回调用方。
+ */
+export const worktreeOpenResultSchema = z.object({
+  context: panelContextSchema,
+  panelId: z.string().min(1),
+});
+export type WorktreeOpenResult = z.infer<typeof worktreeOpenResultSchema>;
+
+export const worktreeOpenTerminalResultSchema = z.object({
+  context: panelContextSchema.optional(),
+  panelId: z.string().min(1),
+});
+export type WorktreeOpenTerminalResult = z.infer<
+  typeof worktreeOpenTerminalResultSchema
 >;

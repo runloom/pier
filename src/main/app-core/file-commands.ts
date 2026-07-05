@@ -29,11 +29,6 @@ export async function executeFileCommand(
         return failure(requestId, "internal_error", "file service unavailable");
       }
       return success(requestId, await services.files.writeText(command));
-    case "file.rename":
-      if (!services.files) {
-        return failure(requestId, "internal_error", "file service unavailable");
-      }
-      return success(requestId, await services.files.rename(command));
     case "file.move":
       if (!services.files) {
         return failure(requestId, "internal_error", "file service unavailable");

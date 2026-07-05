@@ -79,7 +79,6 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "file.list": { capabilities: ["file:read"] },
   "file.move": { capabilities: ["file:write"] },
   "file.readText": { capabilities: ["file:read"] },
-  "file.rename": { capabilities: ["file:write"] },
   "file.trash": { capabilities: ["file:write"] },
   "file.writeText": { capabilities: ["file:write"] },
   // Git 读写分开授权:读命令 git:read, 写命令 git:write。

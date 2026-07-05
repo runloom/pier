@@ -23,22 +23,19 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import {
-  GIT_PLUGIN_ID,
-  type PluginRegistryEntry,
-} from "@shared/contracts/plugin.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import {
   Activity,
   ArrowRight,
   Command,
-  GitBranch,
   type LucideIcon,
   PanelsTopLeft,
   Puzzle,
 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { getBuiltinRendererPluginModule } from "@/lib/plugins/builtin-catalog.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
 import { pluginSectionId } from "@/pages/settings/data/appearance-nav.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
@@ -77,15 +74,6 @@ function PluginsEmptyState() {
       </EmptyHeader>
     </Empty>
   );
-}
-
-/**
- * 当前所有插件均为 builtin source(schema 已支持 local/git/registry, 但尚无实例)。
- * 没有 manifest.icon 字段可读 —— builtin git 特判为 GitBranch, 其余 lucide Puzzle
- * 兜底。出现非 builtin source 时再按 3-tabs 详情页方案扩展(spec 变更记录 2026-07-03)。
- */
-function pluginRowIcon(entry: PluginRegistryEntry): LucideIcon {
-  return entry.manifest.id === GIT_PLUGIN_ID ? GitBranch : Puzzle;
 }
 
 interface ContributionCountItem {
@@ -151,7 +139,11 @@ function PluginRow({
   const t = useT();
   const canToggle = entry.runtime.canToggle;
   const display = resolvePluginDisplay(entry, i18next.language);
-  const RowIcon = pluginRowIcon(entry);
+  // 图标由 builtin renderer module 自描述(module.icon), 查不到 module 或未声明时
+  // lucide Puzzle 兜底; manifest 无 icon 字段(schema 已支持 local/git/registry,
+  // 但尚无实例)。出现非 builtin source 时再按 3-tabs 详情页方案扩展(2026-07-03)。
+  const RowIcon =
+    getBuiltinRendererPluginModule(entry.manifest.id)?.icon ?? Puzzle;
   const actionKey = entry.enabled ? "disable" : "enable";
   const actionLabel = t(`settings.plugins.action.${actionKey}`);
   const actionAriaLabel = t(`settings.plugins.action.${actionKey}Plugin`, {

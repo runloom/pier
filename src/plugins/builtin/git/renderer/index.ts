@@ -2,8 +2,8 @@ import type {
   RendererPluginContext,
   RendererPluginModule,
 } from "@plugins/api/renderer.ts";
-import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
 import { GitBranch } from "lucide-react";
+import { GIT_PLUGIN_ID } from "../manifest.ts";
 import { registerGitActions } from "./git-actions.ts";
 import { registerGitChangesAction } from "./git-changes-action.ts";
 import { createGitChangesPanel } from "./git-changes-panel.tsx";
@@ -29,9 +29,9 @@ export function registerGitPluginContributions(
           "Git Changes"
         ),
         hint: context.i18n.t(
-          "ui.panelHint.gitChangesPlaceholder",
+          "ui.panelHint.gitChangesClean",
           undefined,
-          "Change preview coming soon"
+          "No changes in the working tree"
         ),
       }),
       icon: GitBranch,
@@ -53,5 +53,7 @@ export function registerGitPluginContributions(
 
 export const gitRendererPlugin: RendererPluginModule = {
   activate: (context) => registerGitPluginContributions(context),
+  // 设置页(插件行/插件导航项)读取此图标;module 自描述,宿主不再按 id 特判。
+  icon: GitBranch,
   id: GIT_PLUGIN_ID,
 };

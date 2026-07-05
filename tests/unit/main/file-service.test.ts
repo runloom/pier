@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFileService } from "@main/services/file-service.ts";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let tempDirs: string[] = [];
 let root: string;
@@ -73,5 +73,120 @@ describe("createFileService", () => {
       })
     ).rejects.toThrow();
     await expect(readFile(outsideFile, "utf8")).rejects.toThrow();
+  });
+
+  it("moves a file within the root via rename", async () => {
+    await mkdir(join(root, "src"));
+    await writeFile(join(root, "src", "index.ts"), "export {};\n");
+
+    const service = createFileService();
+
+    await expect(
+      service.move({ newPath: "dest/main.ts", path: "src/index.ts", root })
+    ).resolves.toEqual({
+      moved: true,
+      newPath: "dest/main.ts",
+      oldPath: "src/index.ts",
+      root,
+    });
+    await expect(readFile(join(root, "dest", "main.ts"), "utf8")).resolves.toBe(
+      "export {};\n"
+    );
+    await expect(
+      readFile(join(root, "src", "index.ts"), "utf8")
+    ).rejects.toThrow();
+  });
+
+  it("falls back to copy + delete when rename fails with EXDEV", async () => {
+    await mkdir(join(root, "src"));
+    await writeFile(join(root, "src", "index.ts"), "export {};\n");
+
+    // 真实测试环境无法稳定制造跨设备目录,注入抛 EXDEV 的 rename
+    // 以覆盖降级分支;cp/rm 走真实文件系统验证复制+删源效果。
+    const renameFile = vi.fn(() =>
+      Promise.reject(
+        Object.assign(new Error("EXDEV: cross-device link not permitted"), {
+          code: "EXDEV",
+        })
+      )
+    );
+    const service = createFileService({ renameFile });
+
+    await expect(
+      service.move({ newPath: "dest/main.ts", path: "src/index.ts", root })
+    ).resolves.toEqual({
+      moved: true,
+      newPath: "dest/main.ts",
+      oldPath: "src/index.ts",
+      root,
+    });
+    expect(renameFile).toHaveBeenCalledWith(
+      join(root, "src", "index.ts"),
+      join(root, "dest", "main.ts")
+    );
+    await expect(readFile(join(root, "dest", "main.ts"), "utf8")).resolves.toBe(
+      "export {};\n"
+    );
+    await expect(
+      readFile(join(root, "src", "index.ts"), "utf8")
+    ).rejects.toThrow();
+  });
+
+  it("rethrows non-EXDEV rename errors without the copy fallback", async () => {
+    await mkdir(join(root, "src"));
+    await writeFile(join(root, "src", "index.ts"), "export {};\n");
+
+    const service = createFileService({
+      renameFile: () =>
+        Promise.reject(
+          Object.assign(new Error("EPERM: operation not permitted"), {
+            code: "EPERM",
+          })
+        ),
+    });
+
+    await expect(
+      service.move({ newPath: "dest/main.ts", path: "src/index.ts", root })
+    ).rejects.toThrow("EPERM");
+    await expect(
+      readFile(join(root, "dest", "main.ts"), "utf8")
+    ).rejects.toThrow();
+    await expect(readFile(join(root, "src", "index.ts"), "utf8")).resolves.toBe(
+      "export {};\n"
+    );
+  });
+
+  it("trashes via the injected trashItem with the resolved absolute path", async () => {
+    await writeFile(join(root, "junk.txt"), "junk\n");
+
+    const trashItem = vi.fn(() => Promise.resolve());
+    const service = createFileService({ trashItem });
+
+    await expect(service.trash({ path: "junk.txt", root })).resolves.toEqual({
+      path: "junk.txt",
+      root,
+      trashed: true,
+    });
+    expect(trashItem).toHaveBeenCalledTimes(1);
+    expect(trashItem).toHaveBeenCalledWith(join(root, "junk.txt"));
+  });
+
+  it("rejects trashing paths that escape the root without touching the trash", async () => {
+    await writeFile(join(outsideRoot, "secret.txt"), "outside\n");
+    await symlink(
+      join(outsideRoot, "secret.txt"),
+      join(root, "secret-link.txt")
+    );
+
+    const trashItem = vi.fn(() => Promise.resolve());
+    const service = createFileService({ trashItem });
+
+    await expect(
+      service.trash({ path: "../secret.txt", root })
+    ).rejects.toThrow();
+    await expect(
+      service.trash({ path: "secret-link.txt", root })
+    ).rejects.toThrow();
+    expect(trashItem).not.toHaveBeenCalled();
   });
 });

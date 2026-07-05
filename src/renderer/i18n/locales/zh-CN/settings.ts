@@ -8,6 +8,7 @@ export const settings = {
     keybindings: "快捷键",
     plugins: "插件",
     terminal: "终端",
+    workspace: "工作区",
     agents: "智能体",
     pluginGroup: "插件设置",
   },
@@ -17,6 +18,7 @@ export const settings = {
     keybindings: "快捷键",
     plugins: "插件",
     terminal: "终端",
+    workspace: "工作区",
     agents: "智能体",
   },
   statusBar: {

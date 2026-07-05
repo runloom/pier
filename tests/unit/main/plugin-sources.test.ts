@@ -11,8 +11,10 @@ import { join } from "node:path";
 import { BUILTIN_PLUGIN_SOURCES } from "@main/plugins/builtin-catalog.ts";
 import { createPluginService } from "@main/services/plugin-service.ts";
 import { createDefaultPluginSources } from "@main/services/plugin-sources.ts";
-import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
-import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
+import {
+  GIT_PLUGIN_ID,
+  GIT_PLUGIN_MANIFEST,
+} from "@plugins/builtin/git/manifest.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];

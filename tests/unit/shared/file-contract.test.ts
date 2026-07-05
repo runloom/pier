@@ -48,12 +48,6 @@ describe("shared file contract", () => {
         type: "file.writeText",
       },
       {
-        newPath: "src/renderer/main.ts",
-        path: "src/renderer/index.ts",
-        root,
-        type: "file.rename",
-      },
-      {
         newPath: "src/plugins/index.ts",
         path: "src/renderer/index.ts",
         root,
@@ -78,15 +72,6 @@ describe("shared file contract", () => {
         }).success
       ).toBe(false);
     }
-
-    expect(
-      pierCommandSchema.safeParse({
-        newPath: "/Users/xyz/ABC/pier/src/renderer/main.ts",
-        path: "src/renderer/index.ts",
-        root,
-        type: "file.rename",
-      }).success
-    ).toBe(false);
 
     expect(
       pierCommandSchema.safeParse({

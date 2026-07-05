@@ -39,6 +39,28 @@ module.exports = {
       to: { path: "^src/(main|renderer)" },
     },
     {
+      name: "host-import-builtin-plugins-only-via-catalog",
+      severity: "error",
+      comment:
+        "宿主 (main/renderer) 只能在 builtin-catalog 登记处 import 插件包, 保持单一登记点; 其它宿主代码经 catalog 间接获取",
+      from: {
+        path: "^src/(main|renderer)",
+        pathNot: [
+          "^src/renderer/lib/plugins/builtin-catalog\\.ts$",
+          "^src/main/plugins/builtin-catalog\\.ts$",
+        ],
+      },
+      to: { path: "^src/plugins/builtin" },
+    },
+    {
+      name: "builtin-plugins-not-cross-import",
+      severity: "error",
+      comment:
+        "builtin 插件包之间互相隔离, 不可跨包 import (共享逻辑走 @plugins/api 或 @shared 契约)",
+      from: { path: "^src/plugins/builtin/([^/]+)" },
+      to: { path: "^src/plugins/builtin/(?!$1)([^/]+)" },
+    },
+    {
       name: "renderer-no-direct-dockview-core",
       severity: "error",
       comment:

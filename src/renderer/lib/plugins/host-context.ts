@@ -8,7 +8,6 @@ import type {
   RendererPluginQuickPickItem,
   RendererPluginQuickPickSection,
 } from "@plugins/api/renderer.ts";
-import type { FileListRequest } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
@@ -47,7 +46,9 @@ import {
   resolvePluginMessage,
 } from "./display.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
+import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
+import { createPluginWorktreesContext } from "./host-worktree-context.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 import {
   getPluginPanelRegistrations,
@@ -145,9 +146,22 @@ function adaptAction(
   entry: PluginRegistryEntry | undefined
 ): Action {
   const metadata = adaptActionMetadata(action.metadata, entry, action.id);
+  // 命令级 permissions 不再是纯声明:触发时逐项校验,与 manifest 单一真源。
+  const declaredPermissions =
+    entry?.manifest.commands.find((command) => command.id === action.id)
+      ?.permissions ?? [];
+  const handler =
+    declaredPermissions.length > 0
+      ? () => {
+          for (const permission of declaredPermissions) {
+            assertPluginCapability(entry, permission);
+          }
+          return action.handler();
+        }
+      : action.handler;
   return {
     category: action.category,
-    handler: action.handler,
+    handler,
     id: action.id,
     ...(action.disabledReason ? { disabledReason: action.disabledReason } : {}),
     ...(action.enabled ? { enabled: action.enabled } : {}),
@@ -323,19 +337,6 @@ function pluginPanelDescriptor(
   };
 }
 
-function normalizeFileListRequest(
-  requestOrRoot: FileListRequest | string,
-  options?: { path?: string }
-): FileListRequest {
-  if (typeof requestOrRoot !== "string") {
-    return requestOrRoot;
-  }
-  return {
-    path: options?.path ?? "",
-    root: requestOrRoot,
-  };
-}
-
 function openPluginPanel(
   panelId: string,
   options: { context?: PanelContext } = {}
@@ -454,45 +455,8 @@ export function createRendererPluginContext(
         return terminalStatusItemRegistry.register(item);
       },
     },
-    files: {
-      list: (requestOrRoot, options) => {
-        assertPluginCapability(entry, "file:read");
-        return window.pier.files.list(
-          normalizeFileListRequest(requestOrRoot, options)
-        );
-      },
-      move: (request) => {
-        assertPluginCapability(entry, "file:write");
-        return window.pier.files.move(request);
-      },
-      readText: (request) => {
-        assertPluginCapability(entry, "file:read");
-        return window.pier.files.readText(request);
-      },
-      rename: (request) => {
-        assertPluginCapability(entry, "file:write");
-        return window.pier.files.rename(request);
-      },
-      trash: (request) => {
-        assertPluginCapability(entry, "file:write");
-        return window.pier.files.trash(request);
-      },
-      writeText: (request) => {
-        assertPluginCapability(entry, "file:write");
-        return window.pier.files.writeText(request);
-      },
-    },
-    worktrees: {
-      check: (request) => window.pier.worktrees.check(request),
-      create: (request) => window.pier.worktrees.create(request),
-      creationDefaults: (request) =>
-        window.pier.worktrees.creationDefaults(request),
-      list: (request) => window.pier.worktrees.list(request),
-      open: (request) => window.pier.worktrees.open(request),
-      openTerminal: (request) => window.pier.worktrees.openTerminal(request),
-      prune: (request) => window.pier.worktrees.prune(request),
-      remove: (request) => window.pier.worktrees.remove(request),
-    },
+    files: createPluginFilesContext(entry, assertPluginCapability),
+    worktrees: createPluginWorktreesContext(entry, assertPluginCapability),
     git: createPluginGitContext(entry, assertPluginCapability),
     ai: createPluginAiContext(entry, assertPluginCapability),
   };

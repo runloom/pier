@@ -8,7 +8,9 @@ import type {
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOpenRequest,
+  WorktreeOpenResult,
   WorktreeOpenTerminalRequest,
+  WorktreeOpenTerminalResult,
   WorktreePruneRequest,
   WorktreeRemoveRequest,
   WorktreeRemoveResult,
@@ -22,8 +24,10 @@ export interface PierWorktreesAPI {
     request: WorktreeCreationDefaultsRequest
   ) => Promise<WorktreeCreationDefaults>;
   list: (request: WorktreeListRequest) => Promise<WorktreeListResult>;
-  open: (request: WorktreeOpenRequest) => Promise<unknown>;
-  openTerminal: (request: WorktreeOpenTerminalRequest) => Promise<unknown>;
+  open: (request: WorktreeOpenRequest) => Promise<WorktreeOpenResult>;
+  openTerminal: (
+    request: WorktreeOpenTerminalRequest
+  ) => Promise<WorktreeOpenTerminalResult>;
   prune: (request: WorktreePruneRequest) => Promise<WorktreeListResult>;
   remove: (request: WorktreeRemoveRequest) => Promise<WorktreeRemoveResult>;
 }
@@ -53,12 +57,15 @@ export const worktreesApi: PierWorktreesAPI = {
       type: "worktree.list",
     }),
   open: (request) =>
-    invokePierCommand<unknown>({
+    invokePierCommand<WorktreeOpenResult>({
       path: request.path,
       type: "worktree.open",
     }),
   openTerminal: (request) =>
-    invokePierCommand<unknown>({ ...request, type: "worktree.openTerminal" }),
+    invokePierCommand<WorktreeOpenTerminalResult>({
+      ...request,
+      type: "worktree.openTerminal",
+    }),
   prune: (request) =>
     invokePierCommand<WorktreeListResult>({
       path: request.path,

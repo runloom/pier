@@ -47,12 +47,9 @@ export const fileWriteTextRequestSchema = z.object({
 });
 export type FileWriteTextRequest = z.infer<typeof fileWriteTextRequestSchema>;
 
-export const fileRenameRequestSchema = fileReadTextRequestSchema.extend({
+export const fileMoveRequestSchema = fileReadTextRequestSchema.extend({
   newPath: nonEmptyFileRootRelativePathSchema,
 });
-export type FileRenameRequest = z.infer<typeof fileRenameRequestSchema>;
-
-export const fileMoveRequestSchema = fileRenameRequestSchema;
 export type FileMoveRequest = z.infer<typeof fileMoveRequestSchema>;
 
 export const fileTrashRequestSchema = fileReadTextRequestSchema;
@@ -72,13 +69,6 @@ export interface FileWriteTextResult {
   path: string;
   root: string;
   written: true;
-}
-
-export interface FileRenameResult {
-  newPath: string;
-  oldPath: string;
-  renamed: true;
-  root: string;
 }
 
 export interface FileMoveResult {

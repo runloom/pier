@@ -57,7 +57,6 @@ interface GitPanelApi {
     root: string,
     options: { path: string; staged?: boolean }
   ): Promise<GitDiffPatch>;
-  getFileContent(root: string, options: { path: string }): Promise<string>;
   getStatus(root: string): Promise<GitStatus>;
   watch?(root: string, listener: (event: GitChangeEvent) => void): () => void;
 }
@@ -202,7 +201,6 @@ describe("GitChangesPanel (plugin)", () => {
   it("renders the active Git context status as a file tree instead of placeholder copy", async () => {
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => ""),
       getStatus: vi.fn(async () =>
         makeStatus([
           { index: ".", origPath: null, path: "src/App.tsx", worktree: "M" },
@@ -220,7 +218,7 @@ describe("GitChangesPanel (plugin)", () => {
     });
 
     const tree = within(await findFileTree(container));
-    expect(screen.queryByText("Change preview coming soon")).toBeNull();
+    expect(screen.queryByText("No changes in the working tree")).toBeNull();
     expect(
       tree.getByRole("treeitem", { name: APP_PATH_BUTTON_PATTERN })
     ).toBeVisible();
@@ -233,7 +231,6 @@ describe("GitChangesPanel (plugin)", () => {
     const emptyHint = "No changes in this worktree";
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => ""),
       getStatus: vi.fn().mockRejectedValue(new Error("git status unavailable")),
     };
 
@@ -253,7 +250,6 @@ describe("GitChangesPanel (plugin)", () => {
   it("loads restored registered Git Changes panels from the runtime Git API when params omit git", async () => {
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => ""),
       getStatus: vi.fn(async () =>
         makeStatus([
           {
@@ -302,7 +298,6 @@ describe("GitChangesPanel (plugin)", () => {
   it("renders the changes tree as a flex child while leaving scrollbars to @pierre/trees", async () => {
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => ""),
       getStatus: vi.fn(async () =>
         makeStatus([
           { index: ".", origPath: null, path: "src/App.tsx", worktree: "M" },
@@ -328,10 +323,9 @@ describe("GitChangesPanel (plugin)", () => {
     ).toBeInstanceOf(HTMLElement);
   });
 
-  it("uses @pierre/trees built-in Git status lane and activates a changed file through the diff/content path", async () => {
+  it("uses @pierre/trees built-in Git status lane and activates a changed file through the diff path", async () => {
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "export function App() {}"),
       getStatus: vi.fn(async () =>
         makeStatus([
           { index: "M", origPath: null, path: "src/App.tsx", worktree: "." },
@@ -377,15 +371,11 @@ describe("GitChangesPanel (plugin)", () => {
         staged: true,
       });
     });
-    expect(git.getFileContent).toHaveBeenCalledWith("/workspace/pier", {
-      path: "src/App.tsx",
-    });
   });
 
   it("opens a staged-only modified file through the staged diff path", async () => {
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "HEAD content"),
       getStatus: vi.fn(async () =>
         makeStatus([
           {
@@ -422,7 +412,6 @@ describe("GitChangesPanel (plugin)", () => {
     {
       label: "staged renamed",
       newPath: "src/NewName.tsx",
-      oldPath: "src/OldName.tsx",
       stagedDiff: true,
       status: {
         index: "R",
@@ -434,7 +423,6 @@ describe("GitChangesPanel (plugin)", () => {
     {
       label: "unstaged copied",
       newPath: "src/CopiedName.tsx",
-      oldPath: "src/OriginalName.tsx",
       stagedDiff: false,
       status: {
         index: ".",
@@ -446,18 +434,15 @@ describe("GitChangesPanel (plugin)", () => {
   ] satisfies Array<{
     label: string;
     newPath: string;
-    oldPath: string;
     stagedDiff: boolean;
     status: GitStatus["files"][number];
-  }>)("loads HEAD content from the original path for a $label row", async ({
+  }>)("opens a $label row through the diff path using the new path", async ({
     newPath,
-    oldPath,
     stagedDiff,
     status,
   }) => {
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "old HEAD content"),
       getStatus: vi.fn(async () => makeStatus([status])),
     };
 
@@ -477,14 +462,6 @@ describe("GitChangesPanel (plugin)", () => {
         path: newPath,
         ...(stagedDiff ? { staged: true } : {}),
       });
-    });
-    await waitFor(() => {
-      expect(git.getFileContent).toHaveBeenCalledWith("/workspace/pier", {
-        path: oldPath,
-      });
-    });
-    expect(git.getFileContent).not.toHaveBeenCalledWith("/workspace/pier", {
-      path: newPath,
     });
   });
 
@@ -516,14 +493,13 @@ describe("GitChangesPanel (plugin)", () => {
     path: string;
     stagedDiff: boolean;
     status: GitStatus["files"][number];
-  }>)("opens an $label file through the diff path without requesting HEAD content", async ({
+  }>)("opens an $label file through the diff path", async ({
     path,
     stagedDiff,
     status,
   }) => {
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "HEAD content should not be loaded"),
       getStatus: vi.fn(async () => makeStatus([status])),
     };
 
@@ -544,7 +520,6 @@ describe("GitChangesPanel (plugin)", () => {
         ...(stagedDiff ? { staged: true } : {}),
       });
     });
-    expect(git.getFileContent).not.toHaveBeenCalled();
   });
 
   it("applies a watch event status snapshot without refetching the root status", async () => {
@@ -556,7 +531,6 @@ describe("GitChangesPanel (plugin)", () => {
       .mockRejectedValue(new Error("status should not be refetched"));
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "from watch content"),
       getStatus,
       watch: vi.fn((_root, listener) => {
         watchListener = listener;
@@ -611,7 +585,6 @@ describe("GitChangesPanel (plugin)", () => {
       .mockResolvedValue(initialStatus);
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "stale content"),
       getStatus,
       watch: vi.fn((_root, listener) => {
         watchListener = listener;
@@ -670,7 +643,6 @@ describe("GitChangesPanel (plugin)", () => {
     });
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "stale content"),
       getStatus: vi
         .fn<GitPanelApi["getStatus"]>()
         .mockReturnValueOnce(initialStatusPromise)
@@ -751,7 +723,6 @@ describe("GitChangesPanel (plugin)", () => {
     };
     const git: GitPanelApi = {
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "old root content"),
       getStatus: vi.fn((root: string) => {
         if (root === oldRoot) {
           return Promise.resolve(

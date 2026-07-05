@@ -1,5 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { GIT_PLUGIN_LOCALES } from "@plugins/builtin/git/locales/index.ts";
+import { GIT_PLUGIN_ID } from "@plugins/builtin/git/manifest.ts";
 import {
   openWorktreeCreateOverlay,
   type WorktreeCreateOverlayData,
@@ -10,13 +11,13 @@ import type {
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
 import type { GitBranchRef } from "@shared/contracts/git.ts";
-import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
 import type {
   WorktreeCreateRequest,
   WorktreeCreateResult,
   WorktreeCreationDefaults,
   WorktreeItem,
   WorktreeOpenTerminalRequest,
+  WorktreeOpenTerminalResult,
 } from "@shared/contracts/worktree.ts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
@@ -135,7 +136,11 @@ function deferTextGeneration(): {
 const createMock =
   vi.fn<(request: WorktreeCreateRequest) => Promise<WorktreeCreateResult>>();
 const openTerminalMock =
-  vi.fn<(request: WorktreeOpenTerminalRequest) => Promise<unknown>>();
+  vi.fn<
+    (
+      request: WorktreeOpenTerminalRequest
+    ) => Promise<WorktreeOpenTerminalResult>
+  >();
 const aiStatusMock = vi.fn<() => Promise<AiStatusResult>>();
 const generateTextMock =
   vi.fn<(request: AiGenerateTextRequest) => Promise<AiGenerateTextResult>>();
@@ -214,7 +219,6 @@ function createMockContext(): RendererPluginContext {
       list: unimplemented("files.list"),
       move: unimplemented("files.move"),
       readText: unimplemented("files.readText"),
-      rename: unimplemented("files.rename"),
       trash: unimplemented("files.trash"),
       writeText: unimplemented("files.writeText"),
     },
@@ -302,7 +306,7 @@ describe("WorktreeCreateOverlay", () => {
     installSelectPolyfills();
     vi.clearAllMocks();
     createMock.mockResolvedValue(createResultFor("fix-focus", "fix-focus"));
-    openTerminalMock.mockResolvedValue(null);
+    openTerminalMock.mockResolvedValue({ panelId: "worktree-terminal" });
     aiStatusMock.mockResolvedValue({
       agent: "claude",
       configured: true,

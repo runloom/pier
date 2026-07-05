@@ -73,7 +73,7 @@ function pierMock() {
   };
 }
 
-describe("SettingsDialog — Git plugin owns Worktree preferences", () => {
+describe("SettingsDialog — Workspace section owns Worktree preferences", () => {
   beforeEach(async () => {
     await initI18n();
     usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
@@ -127,7 +127,7 @@ describe("SettingsDialog — Git plugin owns Worktree preferences", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders Worktree Directory on the built-in Git settings page and writes through project preferences", async () => {
+  it("renders Worktree Directory in the Workspace section and writes through project preferences", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [gitEntry()],
@@ -137,13 +137,16 @@ describe("SettingsDialog — Git plugin owns Worktree preferences", () => {
     });
     act(() => {
       useSettingsDialogStore.setState({
-        activeSection: "plugin:pier.git",
+        activeSection: "workspace",
         isOpen: true,
       });
     });
 
     render(<SettingsDialog />);
 
+    expect(
+      screen.getByRole("heading", { name: "Workspace" })
+    ).toBeInTheDocument();
     const worktreeInput = screen.getByRole("textbox", {
       name: "Worktree Directory",
     });
@@ -168,6 +171,46 @@ describe("SettingsDialog — Git plugin owns Worktree preferences", () => {
       "worktreeRootPath",
       expect.anything()
     );
+  });
+
+  it("navigates to the Workspace section from the sidebar nav item", () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [gitEntry()],
+    });
+    act(() => {
+      useSettingsDialogStore.setState({
+        activeSection: "appearance",
+        isOpen: true,
+      });
+    });
+
+    render(<SettingsDialog />);
+
+    fireEvent.click(screen.getByTestId("settings-nav-workspace"));
+
+    expect(
+      screen.getByRole("textbox", { name: "Worktree Directory" })
+    ).toBeInTheDocument();
+  });
+
+  it("no longer renders Worktree Directory on the built-in Git settings page", () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [gitEntry()],
+    });
+    act(() => {
+      useSettingsDialogStore.setState({
+        activeSection: "plugin:pier.git",
+        isOpen: true,
+      });
+    });
+
+    render(<SettingsDialog />);
+
+    expect(
+      screen.queryByRole("textbox", { name: "Worktree Directory" })
+    ).not.toBeInTheDocument();
   });
 
   it("does not render the removed Branch Prefix setting on the built-in Git settings page", () => {

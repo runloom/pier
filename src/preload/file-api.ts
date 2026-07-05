@@ -9,8 +9,6 @@ import type {
   FileMoveRequest,
   FileMoveResult,
   FileReadTextRequest,
-  FileRenameRequest,
-  FileRenameResult,
   FileTrashRequest,
   FileTrashResult,
   FileWriteTextRequest,
@@ -23,7 +21,6 @@ export interface PierFilesAPI {
   list: (request: FileListRequest) => Promise<FileListResult>;
   move: (request: FileMoveRequest) => Promise<FileMoveResult>;
   readText: (request: FileReadTextRequest) => Promise<string>;
-  rename: (request: FileRenameRequest) => Promise<FileRenameResult>;
   trash: (request: FileTrashRequest) => Promise<FileTrashResult>;
   writeText: (request: FileWriteTextRequest) => Promise<FileWriteTextResult>;
 }
@@ -62,13 +59,6 @@ export const filesApi: PierFilesAPI = {
       path: request.path,
       root: request.root,
       type: "file.writeText",
-    }),
-  rename: (request) =>
-    invokePierCommand<FileRenameResult>({
-      newPath: request.newPath,
-      path: request.path,
-      root: request.root,
-      type: "file.rename",
     }),
   move: (request) =>
     invokePierCommand<FileMoveResult>({

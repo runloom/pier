@@ -1,13 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { GIT_PLUGIN_ID } from "@plugins/builtin/git/manifest.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import {
-  GIT_PLUGIN_ID,
-  type PluginRegistryEntry,
-} from "@shared/contracts/plugin.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   act,
   cleanup,

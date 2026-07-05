@@ -133,6 +133,7 @@ async function dispatchGitCommand(
         paths: command.paths,
       });
       return success(requestId, true);
+    // 以下写命令当前无 renderer/插件消费方,保留给 CLI/未来表面;授权由 permissions.ts 按 client capability 把门
     case "git.commit":
       await services.git.commit(command.cwd, {
         ...(command.allowEmpty !== undefined && {

@@ -9,6 +9,14 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 const FILE_WRITE_CAPABILITY_PATTERN = /file:write/;
 const GIT_READ_CAPABILITY_PATTERN = /git:read/;
 const GIT_WRITE_CAPABILITY_PATTERN = /git:write/;
+const COMMAND_GIT_WRITE_CAPABILITY_PATTERN =
+  /plugin capability not granted:.*git:write/;
+const WORKSPACE_OPEN_CAPABILITY_PATTERN =
+  /plugin capability not granted:.*workspace:open/;
+const WORKTREE_READ_CAPABILITY_PATTERN =
+  /plugin capability not granted:.*worktree:read/;
+const WORKTREE_WRITE_CAPABILITY_PATTERN =
+  /plugin capability not granted:.*worktree:write/;
 
 const toastMocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -60,11 +68,6 @@ interface ExpectedFilesFacade {
     root: string;
   }): Promise<unknown>;
   readText(request: { path: string; root: string }): Promise<string>;
-  rename(request: {
-    newPath: string;
-    path: string;
-    root: string;
-  }): Promise<unknown>;
   trash(request: { path: string; root: string }): Promise<unknown>;
   writeText(request: {
     contents: string;
@@ -156,6 +159,76 @@ const pluginEntry = {
     kind: "builtin",
   },
 } satisfies PluginRegistryEntry;
+
+const commandPermissionEntry = {
+  ...pluginEntry,
+  manifest: {
+    ...pluginEntry.manifest,
+    commands: [
+      ...sampleCommands,
+      {
+        id: "sample.write",
+        permissions: ["git:write"],
+        title: "Sample: Write",
+      },
+    ],
+  },
+} satisfies PluginRegistryEntry;
+
+function createWorktreesFacadeMock() {
+  return {
+    check: vi.fn(async () => ({
+      mainPath: "/repo",
+      path: "/repo",
+      status: "supported" as const,
+    })),
+    create: vi.fn(async () => ({
+      created: {
+        bare: false,
+        branch: "feature/new",
+        detached: false,
+        head: "abc123",
+        isCurrent: false,
+        isMain: false,
+        locked: false,
+        lockedReason: null,
+        path: "/repo/.worktrees/new",
+        prunable: false,
+        prunableReason: null,
+      },
+      targetPath: "/repo/.worktrees/new",
+      worktrees: [],
+    })),
+    creationDefaults: vi.fn(async () => ({
+      copyPatterns: [".env"],
+      rootPath: "/repo",
+      setupCommand: "pnpm install",
+    })),
+    list: vi.fn(async () => ({
+      mainPath: "/repo",
+      path: "/repo",
+      status: "available" as const,
+      worktrees: [],
+    })),
+    open: vi.fn(async () => ({
+      context: panelContext,
+      panelId: "terminal-worktree",
+    })),
+    openTerminal: vi.fn(async () => ({
+      panelId: "terminal-worktree",
+    })),
+    prune: vi.fn(async () => ({
+      mainPath: "/repo",
+      path: "/repo",
+      status: "available" as const,
+      worktrees: [],
+    })),
+    remove: vi.fn(async () => ({
+      removedPath: "/repo/.worktrees/new",
+      worktrees: [],
+    })),
+  };
+}
 
 beforeAll(async () => {
   await initI18n();
@@ -255,6 +328,50 @@ describe("createRendererPluginContext", () => {
       })
     ).toThrow(undeclaredContributionErrorPattern);
     expect(actionRegistry.get("sample.missing")).toBeUndefined();
+  });
+
+  it("blocks gated action invocation before the plugin handler when capability is missing", () => {
+    const handler = vi.fn();
+    const context = createRendererPluginContext({
+      ...commandPermissionEntry,
+      effectivePermissions: [],
+    });
+
+    const dispose = context.actions.register({
+      category: "Test",
+      handler,
+      id: "sample.write",
+      title: () => "Sample: Write",
+    });
+
+    const registered = actionRegistry.get("sample.write");
+    expect(registered).toBeDefined();
+    expect(() => registered?.handler()).toThrow(
+      COMMAND_GIT_WRITE_CAPABILITY_PATTERN
+    );
+    expect(handler).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it("invokes gated action handlers once the declared capability is granted", () => {
+    const handler = vi.fn();
+    const context = createRendererPluginContext({
+      ...commandPermissionEntry,
+      effectivePermissions: ["git:write"],
+    });
+
+    const dispose = context.actions.register({
+      category: "Test",
+      handler,
+      id: "sample.write",
+      title: () => "Sample: Write",
+    });
+
+    actionRegistry.get("sample.write")?.handler();
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    dispose();
   });
 
   it("rejects terminal status registration not declared by the plugin manifest", () => {
@@ -446,6 +563,169 @@ describe("createRendererPluginContext", () => {
     expect(remove).toHaveBeenCalledWith({ path: "/repo/.worktrees/new" });
   });
 
+  it("blocks worktree reads before the preload facade when worktree:read is missing", async () => {
+    const worktrees = createWorktreesFacadeMock();
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { worktrees },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["worktree:write", "workspace:open"],
+    });
+
+    const readCalls: ReadonlyArray<() => Promise<unknown>> = [
+      () => context.worktrees.check({ path: "/repo" }),
+      () => context.worktrees.creationDefaults({ path: "/repo" }),
+      () => context.worktrees.list({ path: "/repo" }),
+    ];
+    for (const call of readCalls) {
+      await expect(Promise.resolve().then(call)).rejects.toThrow(
+        WORKTREE_READ_CAPABILITY_PATTERN
+      );
+    }
+
+    for (const preloadMethod of Object.values(worktrees)) {
+      expect(preloadMethod).not.toHaveBeenCalled();
+    }
+  });
+
+  it("blocks worktree mutations before the preload facade when worktree:write is missing", async () => {
+    const worktrees = createWorktreesFacadeMock();
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { worktrees },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["worktree:read", "workspace:open"],
+    });
+
+    const writeCalls: ReadonlyArray<() => Promise<unknown>> = [
+      () =>
+        context.worktrees.create({
+          branch: "feature/new",
+          name: "new",
+          path: "/repo",
+        }),
+      () =>
+        context.worktrees.openTerminal({
+          path: "/repo/.worktrees/new",
+          runSetup: true,
+        }),
+      () => context.worktrees.prune({ path: "/repo" }),
+      () => context.worktrees.remove({ path: "/repo/.worktrees/new" }),
+    ];
+    for (const call of writeCalls) {
+      await expect(Promise.resolve().then(call)).rejects.toThrow(
+        WORKTREE_WRITE_CAPABILITY_PATTERN
+      );
+    }
+
+    for (const preloadMethod of Object.values(worktrees)) {
+      expect(preloadMethod).not.toHaveBeenCalled();
+    }
+  });
+
+  it("blocks worktree open before the preload facade until both worktree:read and workspace:open are granted", async () => {
+    const worktrees = createWorktreesFacadeMock();
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { worktrees },
+    });
+
+    const openOnlyContext = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["workspace:open"],
+    });
+    await expect(
+      Promise.resolve().then(() =>
+        openOnlyContext.worktrees.open({ path: "/repo" })
+      )
+    ).rejects.toThrow(WORKTREE_READ_CAPABILITY_PATTERN);
+
+    const readOnlyContext = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["worktree:read"],
+    });
+    await expect(
+      Promise.resolve().then(() =>
+        readOnlyContext.worktrees.open({ path: "/repo" })
+      )
+    ).rejects.toThrow(WORKSPACE_OPEN_CAPABILITY_PATTERN);
+    expect(worktrees.open).not.toHaveBeenCalled();
+
+    const grantedContext = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["worktree:read", "workspace:open"],
+    });
+    await expect(
+      grantedContext.worktrees.open({ path: "/repo" })
+    ).resolves.toEqual({
+      context: panelContext,
+      panelId: "terminal-worktree",
+    });
+    expect(worktrees.open).toHaveBeenCalledWith({ path: "/repo" });
+  });
+
+  it("allows worktree plugins with full permissions to invoke every preload method", async () => {
+    const worktrees = createWorktreesFacadeMock();
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { worktrees },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: [
+        "workspace:open",
+        "worktree:read",
+        "worktree:write",
+      ],
+    });
+
+    await context.worktrees.check({ path: "/repo" });
+    await context.worktrees.create({
+      branch: "feature/new",
+      name: "new",
+      path: "/repo",
+    });
+    await expect(
+      context.worktrees.creationDefaults({ path: "/repo" })
+    ).resolves.toEqual({
+      copyPatterns: [".env"],
+      rootPath: "/repo",
+      setupCommand: "pnpm install",
+    });
+    await context.worktrees.list({ path: "/repo" });
+    await context.worktrees.open({ path: "/repo" });
+    await expect(
+      context.worktrees.openTerminal({
+        path: "/repo/.worktrees/new",
+        runSetup: true,
+      })
+    ).resolves.toEqual({ panelId: "terminal-worktree" });
+    await context.worktrees.prune({ path: "/repo" });
+    await context.worktrees.remove({ path: "/repo/.worktrees/new" });
+
+    expect(worktrees.check).toHaveBeenCalledWith({ path: "/repo" });
+    expect(worktrees.create).toHaveBeenCalledWith({
+      branch: "feature/new",
+      name: "new",
+      path: "/repo",
+    });
+    expect(worktrees.creationDefaults).toHaveBeenCalledWith({ path: "/repo" });
+    expect(worktrees.list).toHaveBeenCalledWith({ path: "/repo" });
+    expect(worktrees.open).toHaveBeenCalledWith({ path: "/repo" });
+    expect(worktrees.openTerminal).toHaveBeenCalledWith({
+      path: "/repo/.worktrees/new",
+      runSetup: true,
+    });
+    expect(worktrees.prune).toHaveBeenCalledWith({ path: "/repo" });
+    expect(worktrees.remove).toHaveBeenCalledWith({
+      path: "/repo/.worktrees/new",
+    });
+  });
+
   it("delegates file methods to the preload facade", async () => {
     const root = "/repo";
     const list = vi.fn(async () => [
@@ -453,13 +733,12 @@ describe("createRendererPluginContext", () => {
     ]);
     const readText = vi.fn(async () => "export const value = 1;\n");
     const writeText = vi.fn(async () => ({ written: true }));
-    const rename = vi.fn(async () => ({ renamed: true }));
     const move = vi.fn(async () => ({ moved: true }));
     const trash = vi.fn(async () => ({ trashed: true }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        files: { list, move, readText, rename, trash, writeText },
+        files: { list, move, readText, trash, writeText },
       },
     });
     const context = createRendererPluginContext() as RendererPluginContext & {
@@ -480,13 +759,6 @@ describe("createRendererPluginContext", () => {
       })
     ).resolves.toEqual({ written: true });
     await expect(
-      context.files.rename({
-        newPath: "src/main.ts",
-        path: "src/index.ts",
-        root,
-      })
-    ).resolves.toEqual({ renamed: true });
-    await expect(
       context.files.move({
         newPath: "packages/app/src/index.ts",
         path: "src/main.ts",
@@ -501,11 +773,6 @@ describe("createRendererPluginContext", () => {
     expect(readText).toHaveBeenCalledWith({ path: "src/index.ts", root });
     expect(writeText).toHaveBeenCalledWith({
       contents: "export const value = 2;\n",
-      path: "src/index.ts",
-      root,
-    });
-    expect(rename).toHaveBeenCalledWith({
-      newPath: "src/main.ts",
       path: "src/index.ts",
       root,
     });
@@ -527,13 +794,12 @@ describe("createRendererPluginContext", () => {
     ]);
     const readText = vi.fn(async () => "export const value = 1;\n");
     const writeText = vi.fn(async () => ({ written: true }));
-    const rename = vi.fn(async () => ({ renamed: true }));
     const move = vi.fn(async () => ({ moved: true }));
     const trash = vi.fn(async () => ({ trashed: true }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        files: { list, move, readText, rename, trash, writeText },
+        files: { list, move, readText, trash, writeText },
       },
     });
     const context = createRendererPluginContext({
@@ -561,15 +827,6 @@ describe("createRendererPluginContext", () => {
     ).rejects.toThrow(FILE_WRITE_CAPABILITY_PATTERN);
     await expect(
       Promise.resolve().then(() =>
-        context.files.rename({
-          newPath: "src/main.ts",
-          path: "src/index.ts",
-          root,
-        })
-      )
-    ).rejects.toThrow(FILE_WRITE_CAPABILITY_PATTERN);
-    await expect(
-      Promise.resolve().then(() =>
         context.files.move({
           newPath: "packages/app/src/index.ts",
           path: "src/index.ts",
@@ -586,7 +843,6 @@ describe("createRendererPluginContext", () => {
     expect(list).toHaveBeenCalledWith({ path: "src", root });
     expect(readText).toHaveBeenCalledWith({ path: "src/index.ts", root });
     expect(writeText).not.toHaveBeenCalled();
-    expect(rename).not.toHaveBeenCalled();
     expect(move).not.toHaveBeenCalled();
     expect(trash).not.toHaveBeenCalled();
   });
@@ -596,13 +852,12 @@ describe("createRendererPluginContext", () => {
     const list = vi.fn(async () => []);
     const readText = vi.fn(async () => "");
     const writeText = vi.fn(async () => ({ written: true }));
-    const rename = vi.fn(async () => ({ renamed: true }));
     const move = vi.fn(async () => ({ moved: true }));
     const trash = vi.fn(async () => ({ trashed: true }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        files: { list, move, readText, rename, trash, writeText },
+        files: { list, move, readText, trash, writeText },
       },
     });
     const context = createRendererPluginContext({
@@ -620,13 +875,6 @@ describe("createRendererPluginContext", () => {
       })
     ).resolves.toEqual({ written: true });
     await expect(
-      context.files.rename({
-        newPath: "src/main.ts",
-        path: "src/index.ts",
-        root,
-      })
-    ).resolves.toEqual({ renamed: true });
-    await expect(
       context.files.move({
         newPath: "packages/app/src/index.ts",
         path: "src/main.ts",
@@ -639,11 +887,6 @@ describe("createRendererPluginContext", () => {
 
     expect(writeText).toHaveBeenCalledWith({
       contents: "export const value = 2;\n",
-      path: "src/index.ts",
-      root,
-    });
-    expect(rename).toHaveBeenCalledWith({
-      newPath: "src/main.ts",
       path: "src/index.ts",
       root,
     });
