@@ -756,6 +756,12 @@ final class GhosttyBridgeImpl {
         builder.withWindowPaddingY(terminalPaddingY)
         builder.withCustom("scrollbar", "system")
         builder.withCustom("keybind", "super+backspace=text:\\x15")
+        // Pier 负责光标形状偏好; Ghostty shell integration 默认会在 prompt 强制 bar。
+        // 厚度调整走 Ghostty 全局字形度量: bar / 空心块光标会加粗, underline 同时影响
+        // 下划线光标和 SGR-4 下划线文本; 为 HiDPI 可读性接受这个一致加粗。
+        builder.withCustom("shell-integration-features", "no-cursor")
+        builder.withCustom("adjust-cursor-thickness", "1")
+        builder.withCustom("adjust-underline-thickness", "1")
         // 文字锐度: 在线性空间做边缘 alpha 混合并按字形亮度校正。macOS 默认 native 在
         // Display P3 空间混合, 会让深色底上的浅色字边缘偏暗/偏粗(显"肉"); linear-corrected
         // 去掉这层暗化又不像纯 linear 那样发细。见 ghostty alpha-blending 文档。
