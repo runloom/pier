@@ -1,5 +1,3 @@
-import { Badge } from "@pier/ui/badge.tsx";
-import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import type {
@@ -9,7 +7,6 @@ import type {
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
-import { RotateCcw } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
@@ -51,45 +48,10 @@ async function writeSetting(
   }
 }
 
-function SettingRowShell({
-  children,
-  modified,
-  modifiedLabel,
-  onReset,
-  resetLabel,
-  resettable = true,
-}: {
-  children: ReactNode;
-  modified: boolean;
-  modifiedLabel: string;
-  onReset: () => void;
-  resetLabel: string;
-  resettable?: boolean;
-}) {
+function SettingRowShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">{children}</div>
-      {modified ? <Badge variant="secondary">{modifiedLabel}</Badge> : null}
-      {resettable ? (
-        <Button
-          // Reset 按钮始终挂载(不随 modified 卸载): 卸载会在点击后把键盘焦点
-          // 甩回 body。用 aria-disabled + onClick 短路代替条件渲染/原生 disabled。
-          aria-disabled={!modified}
-          aria-label={resetLabel}
-          onClick={() => {
-            if (!modified) {
-              return;
-            }
-            onReset();
-          }}
-          size="xs"
-          title={resetLabel}
-          type="button"
-          variant="ghost"
-        >
-          <RotateCcw />
-        </Button>
-      ) : null}
     </div>
   );
 }
@@ -235,10 +197,6 @@ function PluginSettingRow({
     i18next.language
   );
   const effective = effectiveConfigurationValue(property, userValue);
-  // modified 语义与 usePluginSettingsStore 的持久化语义对齐: values 里只存用户改过的值,
-  // 因此 "该 key 是否被用户覆盖" 应直接看 userValue 是否存在, 而不是比较 effective 与 default
-  // (覆盖值恰好等于 default 时仍是一次用户写入, 需要展示 Modified/Reset 以便清除幽灵覆盖)。
-  const modified = userValue !== undefined;
   const failedText = t("settings.pluginConfiguration.writeFailed");
   const rowId = `plugin-setting-${settingKey}`;
 
@@ -307,25 +265,7 @@ function PluginSettingRow({
     );
   }
 
-  return (
-    <SettingRowShell
-      modified={modified}
-      modifiedLabel={t("settings.pluginConfiguration.modified")}
-      onReset={() => {
-        usePluginSettingsStore
-          .getState()
-          .reset(settingKey)
-          .catch((err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err);
-            toast.error(failedText, { description: message });
-          });
-      }}
-      resetLabel={t("settings.pluginConfiguration.resetToDefault")}
-      resettable={property.resettable !== false}
-    >
-      {control}
-    </SettingRowShell>
-  );
+  return <SettingRowShell>{control}</SettingRowShell>;
 }
 
 export function PluginConfigurationSection({ pluginId }: { pluginId: string }) {

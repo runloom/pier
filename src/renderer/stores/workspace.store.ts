@@ -9,6 +9,10 @@ import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
+import {
+  clearFreshTerminalPanel,
+  markFreshTerminalPanel,
+} from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import { focusWorkspaceGroup } from "@/stores/workspace-focus-group.ts";
 import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
@@ -234,13 +238,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       task: opts?.task,
     });
     const titlePath = context?.cwd;
-    api.addPanel({
-      id,
-      component: "terminal",
-      title: titlePath ? `Terminal: ${titlePath}` : "Terminal",
-      ...(params && { params }),
-      position: position ?? fallbackPosition,
-    });
+    markFreshTerminalPanel(id);
+    try {
+      api.addPanel({
+        id,
+        component: "terminal",
+        title: titlePath ? `Terminal: ${titlePath}` : "Terminal",
+        ...(params && { params }),
+        position: position ?? fallbackPosition,
+      });
+    } catch (err) {
+      clearFreshTerminalPanel(id);
+      throw err;
+    }
     scheduleRevealDockviewTabByPanelId(id);
     return id;
   },
@@ -361,16 +371,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
             return context ? { context } : undefined;
           })()
         : undefined;
-    api.addPanel({
-      id: newId,
-      component,
-      ...(panel.title !== undefined && { title: panel.title }),
-      ...(params && { params }),
-      position: {
-        referencePanel: panel.id,
-        direction,
-      },
-    });
+    if (component === "terminal") {
+      markFreshTerminalPanel(newId);
+    }
+    try {
+      api.addPanel({
+        id: newId,
+        component,
+        ...(panel.title !== undefined && { title: panel.title }),
+        ...(params && { params }),
+        position: {
+          referencePanel: panel.id,
+          direction,
+        },
+      });
+    } catch (err) {
+      if (component === "terminal") {
+        clearFreshTerminalPanel(newId);
+      }
+      throw err;
+    }
     scheduleRevealDockviewTabByPanelId(newId);
   },
 
@@ -427,11 +447,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       api.removePanel(p);
     }
     // 重建 default — 与 workspace-host.applyDefaultLayout 一致.
-    api.addPanel({
-      id: "terminal-1",
-      component: "terminal",
-      title: "Terminal",
-    });
+    markFreshTerminalPanel("terminal-1");
+    try {
+      api.addPanel({
+        id: "terminal-1",
+        component: "terminal",
+        title: "Terminal",
+      });
+    } catch (err) {
+      clearFreshTerminalPanel("terminal-1");
+      throw err;
+    }
     scheduleRevealDockviewTabByPanelId("terminal-1");
   },
 }));

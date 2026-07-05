@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
+import {
+  consumeFreshTerminalPanel,
+  resetFreshTerminalPanelsForTests,
+} from "@/stores/terminal-panel-session-hints.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
@@ -90,11 +94,13 @@ describe("workspace.store panel reveal policy", () => {
       },
     });
     useWorkspaceStore.getState().setApi(null);
+    resetFreshTerminalPanelsForTests();
   });
 
   afterEach(() => {
     setDockviewTabRevealRoot(null);
     useWorkspaceStore.getState().setApi(null);
+    resetFreshTerminalPanelsForTests();
     Reflect.deleteProperty(window, "pier");
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -134,6 +140,7 @@ describe("workspace.store panel reveal policy", () => {
     const panelId = useWorkspaceStore.getState().addTerminal();
 
     expect(panelId).toBe("terminal-123");
+    expect(consumeFreshTerminalPanel("terminal-123")).toBe(true);
     expect(scrollLeftFor(root)).toBe(88);
     root.remove();
   });
@@ -152,6 +159,7 @@ describe("workspace.store panel reveal policy", () => {
     expect(api.addPanel).toHaveBeenCalledWith(
       expect.objectContaining({ id: "terminal-123" })
     );
+    expect(consumeFreshTerminalPanel("terminal-123")).toBe(true);
     expect(scrollLeftFor(root)).toBe(88);
     root.remove();
   });
@@ -244,6 +252,7 @@ describe("workspace.store panel reveal policy", () => {
       id: "terminal-1",
       title: "Terminal",
     });
+    expect(consumeFreshTerminalPanel("terminal-1")).toBe(true);
     expect(scrollLeftFor(root)).toBe(88);
     root.remove();
   });

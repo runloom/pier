@@ -21,6 +21,10 @@ import {
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal.store.ts";
+import {
+  consumeFreshTerminalPanel,
+  isFreshTerminalPanel,
+} from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
@@ -128,6 +132,13 @@ function restoredTaskResultFromSession(
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
+  const freshPanelRef = useRef<{ panelId: string; value: boolean }>({
+    panelId,
+    value: isFreshTerminalPanel(panelId),
+  });
+  if (freshPanelRef.current.panelId !== panelId) {
+    freshPanelRef.current = { panelId, value: isFreshTerminalPanel(panelId) };
+  }
   const [activeLaunch, setActiveLaunch] = useState<ActiveTerminalLaunch>(
     () => ({
       context: panelContextFromParams(props.params),
@@ -157,7 +168,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
-  >(undefined);
+  >(() => (freshPanelRef.current.value ? null : undefined));
   const sessionReadVersionRef = useRef(0);
 
   const runtimeContext = usePanelEventState(
@@ -215,6 +226,14 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
 
   useEffect(() => {
+    if (
+      freshPanelRef.current.panelId === panelId &&
+      freshPanelRef.current.value
+    ) {
+      consumeFreshTerminalPanel(panelId);
+      setSavedSession(null);
+      return;
+    }
     let disposed = false;
     const readVersion = sessionReadVersionRef.current + 1;
     sessionReadVersionRef.current = readVersion;

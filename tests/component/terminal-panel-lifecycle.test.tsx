@@ -32,6 +32,10 @@ import {
   resetTerminalInputRoutingForTests,
   setTerminalBasePanel,
 } from "@/stores/terminal-input-routing-slice.ts";
+import {
+  markFreshTerminalPanel,
+  resetFreshTerminalPanelsForTests,
+} from "@/stores/terminal-panel-session-hints.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 interface TerminalRelaunchRequest {
@@ -306,6 +310,7 @@ describe("TerminalPanel lifecycle", () => {
     cwdChangeListeners = [];
     titleChangeListeners = [];
     terminalRelaunchStoreMock.reset();
+    resetFreshTerminalPanelsForTests();
 
     resetTerminalInputRoutingForTests();
     resetTerminalOverlayFocusForTests();
@@ -406,6 +411,7 @@ describe("TerminalPanel lifecycle", () => {
     terminalStatusItemRegistry.clearForTests();
     resetTerminalInputRoutingForTests();
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    resetFreshTerminalPanelsForTests();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -461,6 +467,39 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({ panelId: "terminal-1" })
       );
+    });
+  });
+
+  it("skips session restore for freshly created terminal panels", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockImplementation(
+      () => new Promise(() => undefined)
+    );
+    markFreshTerminalPanel("terminal-1");
+    const props = createPanelProps({
+      params: {
+        context,
+        launchId: "launch-1",
+        tab: taskTab,
+        task: taskMetadata,
+      },
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          launchId: "launch-1",
+          panelId: "terminal-1",
+          tab: taskTab,
+          task: taskMetadata,
+        })
+      );
+    });
+    expect(window.pier.terminal.readSession).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(props.api.setTitle).toHaveBeenCalledWith("test");
     });
   });
 

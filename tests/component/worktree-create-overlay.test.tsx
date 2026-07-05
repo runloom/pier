@@ -511,6 +511,34 @@ describe("WorktreeCreateOverlay", () => {
     ).toBeInTheDocument();
   });
 
+  it("AI 未配置:切回智能生成后点击创建才展示错误", async () => {
+    aiStatusMock.mockResolvedValueOnce({
+      agent: null,
+      configured: false,
+      label: "",
+    });
+    generateTextMock.mockResolvedValueOnce({
+      message: "no agent",
+      reason: "not_configured",
+      status: "unavailable",
+    });
+    await openOverlay(context);
+
+    expect(
+      await screen.findByRole("textbox", { name: BRANCH_LABEL })
+    ).toBeInTheDocument();
+
+    clickTab(AI_TAB);
+    const task = await screen.findByRole("textbox", { name: TASK_LABEL });
+    fireEvent.change(task, { target: { value: "fix focus" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    expect(
+      await screen.findByText("Agent invocation failed: no agent")
+    ).toBeInTheDocument();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   it("自定义模式:输入分支名实时展示目录预览,提交创建并打开终端", async () => {
     createMock.mockResolvedValue(
       createResultFor("fix-dialog", "feature/fix-dialog")

@@ -172,17 +172,14 @@ describe("AiFieldDescription", () => {
   it("does not mention branch prefixes in the smart generation hint", () => {
     render(
       <AiFieldDescription
-        agentLabel="Claude"
-        aiConfigured={true}
         rootPath="/repo.worktree"
-        statusLoading={false}
         text={text}
       />
     );
 
     expect(
       screen.getByText(
-        "Default agent (Claude) will generate a branch name from the task description and create an isolated worktree under /repo.worktree."
+        "Smart generation uses the task description and current project context to generate a branch name and create an isolated worktree under /repo.worktree."
       )
     ).toBeInTheDocument();
     expect(screen.queryByText(PREFIX_COPY)).not.toBeInTheDocument();

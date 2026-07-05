@@ -153,8 +153,6 @@ function WorktreeCreateOverlay({
     });
   }, [branchValue, data]);
 
-  const aiConfigured = aiStatus?.configured === true;
-
   function closeOverlay(): void {
     closedRef.current = true;
     close();
@@ -214,7 +212,6 @@ function WorktreeCreateOverlay({
   }
 
   const busy = phase !== "idle";
-  const confirmDisabled = busy || (mode === "ai" && !aiConfigured);
 
   return (
     <Dialog
@@ -293,10 +290,7 @@ function WorktreeCreateOverlay({
                   <FieldError>{form.formState.errors.text.message}</FieldError>
                 ) : null}
                 <AiFieldDescription
-                  agentLabel={aiStatus?.label ?? ""}
-                  aiConfigured={aiConfigured}
                   rootPath={data.defaults.rootPath}
-                  statusLoading={aiStatus === null}
                   text={text}
                 />
               </Field>
@@ -385,7 +379,7 @@ function WorktreeCreateOverlay({
             >
               {context.i18n.t("ui.cancel", undefined, "Cancel")}
             </Button>
-            <Button disabled={confirmDisabled} type="submit" variant="default">
+            <Button disabled={busy} type="submit" variant="default">
               {confirmButtonContent(phase, text)}
             </Button>
           </DialogFooter>

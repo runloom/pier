@@ -72,37 +72,6 @@ function entry(id: string, enabled = true): PluginRegistryEntry {
   };
 }
 
-/** 仅一个 boolean 属性的最小 fixture：避免多行场景下按钮定位歧义(M2 测试专用)。 */
-function singleFlagEntry(id: string): PluginRegistryEntry {
-  return {
-    effectivePermissions: [],
-    enabled: true,
-    manifest: {
-      apiVersion: 1,
-      commands: [],
-      configuration: {
-        properties: {
-          [`${id}.enabledFlag`]: {
-            default: true,
-            description: "Boolean flag",
-            type: "boolean",
-          },
-        },
-        title: `${id} Settings`,
-      },
-      engines: { pier: ">=0.1.0" },
-      id,
-      name: `${id}-name`,
-      panels: [],
-      permissions: [],
-      source: { kind: "builtin" },
-      terminalStatusItems: [],
-      version: "1.0.0",
-    },
-    runtime: { canToggle: true, enabled: true, kind: "builtin" },
-  };
-}
-
 function multilineEntry(id: string): PluginRegistryEntry {
   return {
     effectivePermissions: [],
@@ -134,19 +103,6 @@ function multilineEntry(id: string): PluginRegistryEntry {
     },
     runtime: { canToggle: true, enabled: true, kind: "builtin" },
   };
-}
-
-// M2: Reset 按钮不再随 modified 卸载, entry("pier.demo") 的 4 行会各挂载一个
-// Reset 按钮。已有测试大多只关心"当前被修改的那一行", 用 aria-disabled=false
-// 唯一定位, 避免 getByRole 因多个同名按钮而报 multiple elements found。
-function getEnabledResetButton(): HTMLElement {
-  const button = screen
-    .getAllByRole("button", { name: "Reset to default" })
-    .find((candidate) => candidate.getAttribute("aria-disabled") === "false");
-  if (!button) {
-    throw new Error("expected exactly one enabled Reset button");
-  }
-  return button;
 }
 
 const REGISTRY_INITIAL_STATE = {
@@ -519,23 +475,7 @@ describe("PluginConfigurationSection", () => {
     });
   });
 
-  it("重置失败时 store.error 非空, 触发 toast.error 提示", async () => {
-    Object.defineProperty(window, "pier", {
-      configurable: true,
-      value: {
-        pluginSettings: {
-          getAll: vi.fn(async () => ({ values: {}, version: 1 })),
-          onChanged: vi.fn(() => () => undefined),
-          reset: vi.fn(() => {
-            throw new Error("reset boom");
-          }),
-          set: vi.fn(async (key: string, value: unknown) => ({
-            values: { [key]: value },
-            version: 1,
-          })),
-        },
-      },
-    });
+  it("用户覆盖值不显示已修改标记和恢复默认按钮", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
@@ -546,140 +486,41 @@ describe("PluginConfigurationSection", () => {
     });
     render(<PluginConfigurationSection pluginId="pier.demo" />);
 
-    fireEvent.click(getEnabledResetButton());
-
-    await waitFor(() => {
-      expect(usePluginSettingsStore.getState().error).toBe("reset boom");
-    });
-    await waitFor(() => {
-      expect(toastMocks.error).toHaveBeenCalledWith(
-        "Failed to update setting",
-        expect.objectContaining({ description: "reset boom" })
-      );
-    });
+    expect(screen.queryByText("Modified")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Reset to default" })
+    ).not.toBeInTheDocument();
+    expect(window.pier.pluginSettings.reset).not.toHaveBeenCalled();
   });
 
-  it("已修改值显示已修改标记, 点击恢复默认调用 reset", async () => {
+  it("覆盖值与 default 相同时仍不显示已修改标记和恢复默认按钮", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
     });
-    usePluginSettingsStore.setState({
-      initialized: true,
-      values: { "pier.demo.enabledFlag": false },
-    });
-    render(<PluginConfigurationSection pluginId="pier.demo" />);
-
-    expect(screen.getByText("Modified")).toBeInTheDocument();
-
-    fireEvent.click(getEnabledResetButton());
-
-    await waitFor(() => {
-      expect(window.pier.pluginSettings.reset).toHaveBeenCalledWith(
-        "pier.demo.enabledFlag"
-      );
-    });
-  });
-
-  it("覆盖值与 default 相同时仍显示已修改标记, Reset 后消失(F11)", async () => {
-    usePluginRegistryStore.setState({
-      initialized: true,
-      plugins: [entry("pier.demo")],
-    });
-    // 用户写入的值与 schema default 相同(true) — 幽灵覆盖场景。
     usePluginSettingsStore.setState({
       initialized: true,
       values: { "pier.demo.enabledFlag": true },
     });
     render(<PluginConfigurationSection pluginId="pier.demo" />);
 
-    expect(screen.getByText("Modified")).toBeInTheDocument();
-
-    fireEvent.click(getEnabledResetButton());
-
-    await waitFor(() => {
-      expect(window.pier.pluginSettings.reset).toHaveBeenCalledWith(
-        "pier.demo.enabledFlag"
-      );
-    });
-
-    usePluginSettingsStore.setState({ values: {} });
-
-    await waitFor(() => {
-      expect(screen.queryByText("Modified")).toBeNull();
-    });
+    expect(screen.queryByText("Modified")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Reset to default" })
+    ).not.toBeInTheDocument();
   });
 
-  it("未修改值不显示已修改标记,但 Reset 按钮仍挂载并 aria-disabled(M2)", () => {
+  it("未修改值不显示已修改标记和恢复默认按钮", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
     });
     render(<PluginConfigurationSection pluginId="pier.demo" />);
+
     expect(screen.queryByText("Modified")).toBeNull();
-
-    // M2: Reset 按钮不再随 modified 卸载 —— 每行都应始终挂载一个,
-    // 未修改时用 aria-disabled(而非原生 disabled/条件渲染)表达不可用。
-    const resetButtons = screen.getAllByRole("button", {
-      name: "Reset to default",
-    });
-    expect(resetButtons).toHaveLength(4);
-    for (const button of resetButtons) {
-      expect(button).toHaveAttribute("aria-disabled", "true");
-      expect(button).not.toBeDisabled();
-    }
-  });
-
-  it("点击 Reset 后按钮仍挂载并带 aria-disabled,键盘焦点不跌落 body(M2)", async () => {
-    usePluginRegistryStore.setState({
-      initialized: true,
-      plugins: [singleFlagEntry("pier.solo")],
-    });
-    usePluginSettingsStore.setState({
-      initialized: true,
-      values: { "pier.solo.enabledFlag": false },
-    });
-    render(<PluginConfigurationSection pluginId="pier.solo" />);
-
-    expect(screen.getByText("Modified")).toBeInTheDocument();
-    const resetButton = screen.getByRole("button", {
-      name: "Reset to default",
-    });
-    expect(resetButton).toHaveAttribute("aria-disabled", "false");
-    resetButton.focus();
-    expect(document.activeElement).toBe(resetButton);
-
-    fireEvent.click(resetButton);
-
-    await waitFor(() => {
-      expect(window.pier.pluginSettings.reset).toHaveBeenCalledWith(
-        "pier.solo.enabledFlag"
-      );
-    });
-    await waitFor(() => {
-      expect(resetButton).toHaveAttribute("aria-disabled", "true");
-    });
-
-    // 仍是同一个 DOM 节点(未随 modified 翻转被卸载重建),键盘焦点没有跌落到 body。
-    expect(screen.getByRole("button", { name: "Reset to default" })).toBe(
-      resetButton
-    );
-    expect(document.activeElement).toBe(resetButton);
-    expect(document.activeElement).not.toBe(document.body);
-  });
-
-  it("未修改时点击 Reset 被短路,不调用 reset(M2)", () => {
-    usePluginRegistryStore.setState({
-      initialized: true,
-      plugins: [singleFlagEntry("pier.solo")],
-    });
-    render(<PluginConfigurationSection pluginId="pier.solo" />);
-
-    const resetButton = screen.getByRole("button", {
-      name: "Reset to default",
-    });
-    expect(resetButton).toHaveAttribute("aria-disabled", "true");
-    fireEvent.click(resetButton);
+    expect(
+      screen.queryByRole("button", { name: "Reset to default" })
+    ).not.toBeInTheDocument();
     expect(window.pier.pluginSettings.reset).not.toHaveBeenCalled();
   });
 });

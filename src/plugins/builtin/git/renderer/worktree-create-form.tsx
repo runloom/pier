@@ -242,38 +242,19 @@ export function readBranchNamePromptTemplate(
 }
 
 export function AiFieldDescription({
-  agentLabel,
-  aiConfigured,
   rootPath,
-  statusLoading,
   text,
 }: {
-  agentLabel: string;
-  aiConfigured: boolean;
   rootPath: string;
-  statusLoading: boolean;
   text: TextFn;
 }) {
-  if (aiConfigured) {
-    return (
-      <FieldDescription>
-        {text(
-          "taskHint",
-          { agent: agentLabel, root: rootPath },
-          "Default agent ({{agent}}) will generate a branch name from the task description and create an isolated worktree under {{root}}."
-        )}
-      </FieldDescription>
-    );
-  }
   return (
-    <FieldDescription className="text-destructive">
-      {statusLoading
-        ? text("aiChecking", undefined, "Checking available agents…")
-        : text(
-            "aiUnconfigured",
-            undefined,
-            "No command-line agent is available for naming. Install or enable one, or switch to manual naming."
-          )}
+    <FieldDescription>
+      {text(
+        "taskHint",
+        { root: rootPath },
+        "Smart generation uses the task description and current project context to generate a branch name and create an isolated worktree under {{root}}."
+      )}
     </FieldDescription>
   );
 }
