@@ -1,4 +1,5 @@
 .build/
+.build-per-arch/
 build/
 build_swift/
 node_modules/

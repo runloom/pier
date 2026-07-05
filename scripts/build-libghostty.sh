@@ -41,6 +41,18 @@ HEADERS_STAGING="${PIER_ROOT}/.libghostty-build-tmp/headers"
 # --------- pinned 版本 ---------
 : "${GHOSTTY_TAG:=v1.3.1}"
 : "${LAKR_TAG:=storage.1.2.8}"
+# Zig 路径：优先环境变量，其次遍历 Apple Silicon / Intel brew 前缀，最后回退到 PATH。
+if [ -z "${ZIG:-}" ]; then
+    for candidate in \
+        /opt/homebrew/opt/zig@0.15/bin/zig \
+        /usr/local/opt/zig@0.15/bin/zig \
+        "$(command -v zig 2>/dev/null || true)"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            ZIG="$candidate"
+            break
+        fi
+    done
+fi
 : "${ZIG:=/opt/homebrew/opt/zig@0.15/bin/zig}"
 
 # --------- 依赖前置检查 ---------

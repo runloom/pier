@@ -65,12 +65,30 @@ fi
 info "brew OK ($(brew --version | head -1))"
 
 # ---------- zig 0.15 ----------
-ZIG_BIN="/opt/homebrew/opt/zig@0.15/bin/zig"
+# Apple Silicon brew 在 /opt/homebrew，Intel brew 在 /usr/local，探测两条路径。
+ZIG_BIN=""
+for candidate in \
+    /opt/homebrew/opt/zig@0.15/bin/zig \
+    /usr/local/opt/zig@0.15/bin/zig; do
+    if [ -x "$candidate" ]; then
+        ZIG_BIN="$candidate"
+        break
+    fi
+done
 info "检查 zig 0.15..."
-if [ ! -x "$ZIG_BIN" ]; then
-    warn "未找到 $ZIG_BIN"
+if [ -z "$ZIG_BIN" ]; then
+    warn "未找到 zig 0.15（/opt/homebrew 和 /usr/local 均未装）"
     if confirm "允许自动 brew install zig@0.15?"; then
         brew install zig@0.15
+        # 装完再探测一次
+        for candidate in \
+            /opt/homebrew/opt/zig@0.15/bin/zig \
+            /usr/local/opt/zig@0.15/bin/zig; do
+            if [ -x "$candidate" ]; then
+                ZIG_BIN="$candidate"
+                break
+            fi
+        done
     else
         err "跳过 zig 安装，后续 build:libghostty 会失败"
         exit 1

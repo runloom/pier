@@ -101,6 +101,39 @@ pnpm dev              # 否则 panel 内会报 "Cannot find module .../ghostty_n
 
 `pnpm dev` 的 `predev` 阶段也已加 native addon 存在性守卫，缺了会清楚提示去跑 `pnpm setup:worktree`，不会进 Electron 后才在 panel 内炸。
 
+### 打包分发（`pnpm build:dist`）
+
+`build:dist` 走 `scripts/build-dist.sh`：加载 `electron-builder.env` → `NATIVE_ARCHS="arm64 x86_64" pnpm build:native` → `pnpm build:electron` → `electron-builder --mac --arm64 --x64 --publish never`。
+
+- **native 分层**：`libGhosttyBridge.dylib` 和 `ghostty_native.node` 逐 arch 编译再 `lipo -create` 成 universal fat（GhosttyKit.xcframework 本身已 universal）。dev 不打 dist 时 `pnpm build:native` 默认只编 host arch，快。
+- **electron-builder**：`electron-builder.yml` mac target `arch: [arm64, x64]`，产出两个 dmg（`Pier-<ver>-arm64.dmg` + `Pier-<ver>.dmg`）。universal native 二进制两份 dmg 都能吃。
+- **产物**：`dist-builder/` 下的两个 dmg。Apple Silicon 用户下 `-arm64.dmg`，Intel 用户下不带 arch 后缀那个（electron-builder 对 x64 dmg 默认不带 suffix）。
+- **首次约 30 分钟**（native 85s + electron-vite 5s + 每 arch rebuild/pack/sign/notarize 各 ~15 分钟串行）；之后增量 ~20 分钟。
+- **只签名不 notarize**（本机测/CI 无 notarize 凭证）：`pnpm build:dist --no-notarize`。
+
+#### 新机器上首次打包 checklist
+
+`pnpm bootstrap` 只解决**编译依赖**（zig / Xcode CLI / pnpm / native addon）；签名 + notarize 凭证得手动补：
+
+1. **签名证书**（`Developer ID Application`）：
+   - 源机 Keychain Access → 找证书 → 右键 Export → `.p12`（设导出密码）→ 传目标机 → 双击导入。
+   - 或去 Apple Developer 后台各自申请（Team ID 会变）。
+   - 验证：`security find-identity -v -p codesigning` 能看到 `Developer ID Application: ...` 一行。
+2. **notarize keychain profile**：
+   ```bash
+   xcrun notarytool store-credentials pier-notarize \
+     --apple-id "<your-apple-id>" \
+     --team-id <TEAM_ID>
+   # 交互式提示 Password，粘贴 app-specific password（appleid.apple.com 生成，可重用）
+   ```
+   验证：`xcrun notarytool history --keychain-profile pier-notarize` 不报 profile 缺失即可。
+3. **`electron-builder.env`**（gitignored，每台机各建）：
+   ```
+   APPLE_KEYCHAIN_PROFILE=pier-notarize
+   APPLE_TEAM_ID=<TEAM_ID>
+   ```
+   `<TEAM_ID>` 换成签名证书括号里的 10 位。
+4. `pnpm build:dist`。
 ## 05 安全边界
 
 - Git 默认只读。除非用户明确要求，不创建 commit、分支、PR 或 push。
