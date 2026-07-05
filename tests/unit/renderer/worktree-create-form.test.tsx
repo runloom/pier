@@ -44,9 +44,11 @@ const DATA: WorktreeCreateOverlayData = {
 
 function formValues(overrides: Partial<FormValues> = {}): FormValues {
   return {
+    agentId: "",
     base: HEAD_SENTINEL,
     branch: "",
     mode: "ai",
+    startTask: false,
     text: "修复终端焦点问题",
     ...overrides,
   };
@@ -170,12 +172,7 @@ describe("resolveSubmitDraft", () => {
 
 describe("AiFieldDescription", () => {
   it("does not mention branch prefixes in the smart generation hint", () => {
-    render(
-      <AiFieldDescription
-        rootPath="/repo.worktree"
-        text={text}
-      />
-    );
+    render(<AiFieldDescription rootPath="/repo.worktree" text={text} />);
 
     expect(
       screen.getByText(

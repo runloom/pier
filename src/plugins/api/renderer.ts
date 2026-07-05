@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AiGenerateTextRequest,
   AiGenerateTextResult,
@@ -174,9 +175,22 @@ export interface RendererPluginNotificationOptions {
   description?: string;
 }
 
+export interface RendererPluginAgentSelection {
+  detectedIds: readonly AgentKind[];
+  enabledIds: readonly AgentKind[];
+  selectedId: AgentKind | null;
+}
+
 export interface RendererPluginContext {
   actions: {
     register(action: RendererPluginAction): () => void;
+  };
+  /**
+   * Host-owned agent selection state. Plugins get a narrow snapshot so they can
+   * offer agent choices without importing renderer stores.
+   */
+  agents: {
+    selection(): Promise<RendererPluginAgentSelection>;
   };
   /**
    * AI 任务级能力(main 侧持有 provider 配置与密钥;插件需声明 ai:invoke)。

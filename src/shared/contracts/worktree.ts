@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentKindSchema } from "./agent.ts";
 import { panelContextSchema } from "./panel.ts";
 
 export const worktreeUnavailableReasonSchema = z.enum([
@@ -138,6 +139,7 @@ export type WorktreeCreationDefaults = z.infer<
 >;
 
 export const worktreeOpenTerminalRequestSchema = z.object({
+  agentId: agentKindSchema.optional(),
   path: z.string().min(1),
   runSetup: z.boolean(),
 });

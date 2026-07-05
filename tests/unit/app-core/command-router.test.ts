@@ -13,6 +13,7 @@ import type {
 } from "@main/services/process-environment-service.ts";
 import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { WorktreeServiceError } from "@main/services/worktree-service.ts";
+import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
@@ -815,7 +816,11 @@ describe("createCommandRouter", () => {
       requestId: "r",
     });
     expect(terminalLaunches).toEqual([
-      { command: "claude --dangerously-skip-permissions", cwd: "/tmp/pier" },
+      {
+        agentId: "claude",
+        command: "claude --dangerously-skip-permissions",
+        cwd: "/tmp/pier",
+      },
     ]);
   });
 
@@ -864,7 +869,7 @@ describe("createCommandRouter", () => {
     });
     // explicit command wins; the agent's resolved command is NOT used
     expect(terminalLaunches).toEqual([
-      { command: "echo explicit", cwd: "/tmp/pier" },
+      { agentId: "claude", command: "echo explicit", cwd: "/tmp/pier" },
     ]);
   });
 
@@ -2296,6 +2301,69 @@ describe("createCommandRouter", () => {
       context: panelContext("/repo/.worktrees/feature-a"),
       focus: false,
       type: "panel.open",
+      windowId: "main",
+    });
+  });
+
+  it("worktree.openTerminal 带 agentId 时在目标工作树打开 agent 对话", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    fakeServices.preferences.read = async () =>
+      makeFakePreferences({
+        agentDefaultArgs: {
+          codex: "--dangerously-bypass-approvals-and-sandbox",
+        },
+        agentStatusHooks: false,
+        worktreeSetupCommand: "pnpm setup:worktree",
+      });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          agentId: "codex",
+          path: "/repo/.worktrees/feature-a",
+          runSetup: true,
+          type: "worktree.openTerminal",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-agent-terminal",
+      })
+    ).resolves.toEqual({
+      data: {
+        context: panelContext("/repo/.worktrees/feature-a"),
+        panelId: "terminal-from-renderer",
+        windowId: "main",
+      },
+      ok: true,
+      requestId: "req-worktree-agent-terminal",
+    });
+
+    expect(terminalLaunches).toEqual([
+      {
+        agentId: "codex",
+        command: "codex --dangerously-bypass-approvals-and-sandbox",
+        cwd: "/repo/.worktrees/feature-a",
+      },
+    ]);
+    expect(rendererCommands.at(-1)).toEqual({
+      context: panelContext("/repo/.worktrees/feature-a"),
+      focus: true,
+      launchId: "launch-1",
+      tab: {
+        icon: { id: agentTabIconId("codex") },
+        title: "Codex",
+      },
+      type: "terminal.open",
       windowId: "main",
     });
   });

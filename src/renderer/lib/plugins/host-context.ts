@@ -45,6 +45,7 @@ import {
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
+import { createPluginAgentsContext } from "./host-agents-context.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
@@ -392,6 +393,7 @@ export function createRendererPluginContext(
         return actionRegistry.register(adaptAction(action, entry));
       },
     },
+    agents: createPluginAgentsContext(),
     commandPalette: {
       openQuickPick: (quickPick) =>
         useCommandPaletteController
