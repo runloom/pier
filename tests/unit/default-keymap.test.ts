@@ -1,6 +1,8 @@
 import { APP_HANDLED_NATIVE_TERMINAL_COMMANDS } from "@shared/commands.ts";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
+import { parseChord } from "@/lib/keybindings/parse.ts";
+import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 
 const TERMINAL_MODE_APP_SHORTCUTS = [
   "Ctrl+Shift+ArrowDown",
@@ -8,6 +10,7 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Ctrl+Shift+ArrowRight",
   "Ctrl+Shift+ArrowUp",
   "Ctrl+Shift+KeyD",
+  "Mod+Alt+KeyR",
   "Mod+Backquote",
   "Mod+Comma",
   "Mod+Digit0",
@@ -176,10 +179,30 @@ describe("DEFAULT_KEYMAP", () => {
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.run.rerunTask",
+      keys: "Mod+Alt+KeyR",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.worktree.create",
       keys: "Mod+Shift+KeyN",
       scope: "global",
     });
+  });
+
+  it("resolves the rerun task shortcut from DEFAULT_KEYMAP", () => {
+    keybindingRegistry.loadUserKeymap([]);
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+
+    const commandId = keybindingRegistry.resolve(
+      parseChord("Mod+Alt+KeyR", false),
+      {
+        activePanelComponent: null,
+        overlayStack: [],
+      }
+    );
+
+    expect(commandId).toBe("pier.run.rerunTask");
   });
 
   it("does not use the macOS Dock Command+Option+D shortcut family for debug window", () => {

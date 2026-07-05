@@ -170,6 +170,7 @@ export interface PierTasksAPI {
   list: (args: { projectRootPath: string }) => Promise<TaskListResult>;
   spawn: (args: {
     focus?: boolean;
+    forceRestart?: boolean;
     inputs?: Record<string, string>;
     placement?:
       | "active-tab"
@@ -356,6 +357,9 @@ const tasksApi: PierTasksAPI = {
   spawn: (args) =>
     invokePierCommand<TaskSpawnResult>({
       ...(args.focus === undefined ? {} : { focus: args.focus }),
+      ...(args.forceRestart === undefined
+        ? {}
+        : { forceRestart: args.forceRestart }),
       ...(args.inputs ? { inputs: args.inputs } : {}),
       ...(args.placement ? { placement: args.placement } : {}),
       projectRootPath: args.projectRootPath,
