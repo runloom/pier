@@ -48,7 +48,7 @@ if [ -f "$ENV_FILE" ]; then
     . "$ENV_FILE"
     set +a
 else
-    echo "[build:dist] 未找到 $ENV_FILE，将只用环境变量"
+    echo "[build:dist] 未找到 $ENV_FILE, 将只用环境变量"
 fi
 
 # ---------- 构建 ----------
