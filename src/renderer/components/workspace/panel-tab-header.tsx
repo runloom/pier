@@ -286,7 +286,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   return (
     <Tooltip delayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
       <TooltipTrigger asChild>{tabContent}</TooltipTrigger>
-      <TooltipContent align="start" side="bottom" sideOffset={8}>
+      <TooltipContent align="center" side="bottom" sideOffset={8}>
         <span className="whitespace-pre-line">{tooltipText}</span>
       </TooltipContent>
     </Tooltip>

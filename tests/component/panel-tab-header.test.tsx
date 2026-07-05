@@ -247,6 +247,10 @@ describe("PanelTabHeader", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
 
     advanceTooltipDelay(1);
+    const tooltipContent = document.querySelector(
+      "[data-slot='tooltip-content']"
+    );
+    expect(tooltipContent).toHaveAttribute("data-align", "center");
     const tooltip = screen.getByRole("tooltip");
     expect(tooltip).toHaveTextContent("test");
     expect(tooltip).toHaveTextContent("Running");

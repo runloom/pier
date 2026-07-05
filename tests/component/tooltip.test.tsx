@@ -7,6 +7,24 @@ import {
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+function findTooltipContent(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const content = document.querySelector('[data-slot="tooltip-content"]');
+    expect(content).not.toBeNull();
+    return content as HTMLElement;
+  });
+}
+
+function expectNoManualHorizontalArrowClasses(tooltip: HTMLElement): void {
+  expect(
+    Array.from(tooltip.classList).filter(
+      (className) =>
+        className.startsWith("before:left-") ||
+        className.startsWith("before:right-")
+    )
+  ).toEqual([]);
+}
+
 describe("Tooltip primitive", () => {
   beforeEach(() => {
     class ResizeObserverMock {
@@ -39,15 +57,12 @@ describe("Tooltip primitive", () => {
       </TooltipProvider>
     );
 
-    const tooltip = await waitFor(() => {
-      const content = document.querySelector('[data-slot="tooltip-content"]');
-      expect(content).not.toBeNull();
-      return content as HTMLElement;
-    });
+    const tooltip = await findTooltipContent();
     expect(tooltip).toHaveTextContent("Compact help");
     expect(tooltip).toHaveAttribute("data-slot", "tooltip-content");
     expect(tooltip).toHaveClass(
       "max-w-64",
+      "min-w-12",
       "gap-1",
       "px-2",
       "py-1",
@@ -59,44 +74,49 @@ describe("Tooltip primitive", () => {
       "text-background",
       "rounded-xl"
     );
-    expect(tooltip.querySelector("svg")).toBeNull();
-    expect(tooltip).toHaveClass(
-      "before:content-['']",
-      "before:pointer-events-none",
-      "before:absolute",
-      "before:size-2.5",
-      "before:rotate-45",
-      "before:bg-foreground",
-      "before:left-1/2",
-      "before:-translate-x-1/2",
-      "data-[side=bottom]:before:top-0",
-      "data-[side=top]:before:bottom-0"
-    );
+    expectNoManualHorizontalArrowClasses(tooltip);
   });
 
-  it("keeps a content-owned arrow aligned to the trigger for start alignment", async () => {
+  it.each([
+    ["top center", "top", "center"],
+    ["bottom center", "bottom", "center"],
+    ["bottom start", "bottom", "start"],
+    ["bottom end", "bottom", "end"],
+  ] as const)("delegates %s arrow placement to Radix instead of manual pseudo-element offsets", async (_name, side, align) => {
     render(
       <TooltipProvider>
         <Tooltip defaultOpen>
           <TooltipTrigger asChild>
-            <button type="button">Trigger</button>
+            <button type="button">Trigger with a wider label</button>
           </TooltipTrigger>
-          <TooltipContent align="start" side="bottom">
-            Compact help
+          <TooltipContent align={align} side={side}>
+            ?
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );
 
-    const tooltip = await waitFor(() => {
-      const content = document.querySelector('[data-slot="tooltip-content"]');
-      expect(content).not.toBeNull();
-      return content as HTMLElement;
-    });
-    expect(tooltip.querySelector("svg")).toBeNull();
-    expect(tooltip).toHaveClass(
-      "before:left-[calc(var(--radix-tooltip-trigger-width)/2)]",
-      "before:-translate-x-1/2"
+    const tooltip = await findTooltipContent();
+    expect(tooltip).toHaveTextContent("?");
+    expect(tooltip.querySelector('[data-slot="tooltip-arrow"]')).not.toBeNull();
+    expectNoManualHorizontalArrowClasses(tooltip);
+  });
+
+  it('does not render an arrow for side="right" without manual horizontal pseudo-arrow classes', async () => {
+    render(
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger on the left</button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Right-side help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
+
+    const tooltip = await findTooltipContent();
+    expect(tooltip).toHaveTextContent("Right-side help");
+    expect(tooltip.querySelector('[data-slot="tooltip-arrow"]')).toBeNull();
+    expectNoManualHorizontalArrowClasses(tooltip);
   });
 });
