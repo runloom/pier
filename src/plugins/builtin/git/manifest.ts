@@ -2,6 +2,7 @@ import {
   type PluginManifest,
   GIT_PLUGIN_ID as SHARED_GIT_PLUGIN_ID,
 } from "@shared/contracts/plugin.ts";
+import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "./settings.ts";
 
 export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   apiVersion: 1,
@@ -91,7 +92,19 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
         default: true,
         description:
           "Show working tree change counts and line delta in the worktree status item.",
+        order: 10,
         type: "boolean",
+      },
+      [GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY]: {
+        default: "",
+        description:
+          "Optional. Leave blank for the default template. {{task}} becomes the task description; {{projectRootPath}} becomes the project root path.",
+        multiline: true,
+        order: 20,
+        placeholder:
+          "Generate a short branch name for {{task}}. Follow rules in {{projectRootPath}}. Output only the branch name.",
+        resettable: false,
+        type: "string",
       },
     },
   },

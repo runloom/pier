@@ -5,9 +5,9 @@ import {
   type WorktreeCreateOverlayData,
 } from "@plugins/builtin/git/renderer/worktree-create-overlay.tsx";
 import type {
+  AiGenerateTextRequest,
+  AiGenerateTextResult,
   AiStatusResult,
-  AiSuggestBranchRequest,
-  AiSuggestBranchResult,
 } from "@shared/contracts/ai.ts";
 import type { GitBranchRef } from "@shared/contracts/git.ts";
 import { GIT_PLUGIN_ID } from "@shared/contracts/plugin.ts";
@@ -121,12 +121,12 @@ function overlayData(
     ...overrides,
   };
 }
-function deferBranchSuggestion(): {
-  promise: Promise<AiSuggestBranchResult>;
-  resolve: (value: AiSuggestBranchResult) => void;
+function deferTextGeneration(): {
+  promise: Promise<AiGenerateTextResult>;
+  resolve: (value: AiGenerateTextResult) => void;
 } {
-  let resolve!: (value: AiSuggestBranchResult) => void;
-  const promise = new Promise<AiSuggestBranchResult>((next) => {
+  let resolve!: (value: AiGenerateTextResult) => void;
+  const promise = new Promise<AiGenerateTextResult>((next) => {
     resolve = next;
   });
   return { promise, resolve };
@@ -137,8 +137,8 @@ const createMock =
 const openTerminalMock =
   vi.fn<(request: WorktreeOpenTerminalRequest) => Promise<unknown>>();
 const aiStatusMock = vi.fn<() => Promise<AiStatusResult>>();
-const suggestBranchMock =
-  vi.fn<(request: AiSuggestBranchRequest) => Promise<AiSuggestBranchResult>>();
+const generateTextMock =
+  vi.fn<(request: AiGenerateTextRequest) => Promise<AiGenerateTextResult>>();
 const notificationsSuccessMock = vi.fn();
 const notificationsErrorMock = vi.fn();
 const tMock = vi.fn(
@@ -173,14 +173,14 @@ function createMockContext(): RendererPluginContext {
   return {
     actions: { register: unimplemented("actions.register") },
     ai: {
+      generateText: generateTextMock,
       status: aiStatusMock,
-      suggestBranch: suggestBranchMock,
     },
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
     },
     configuration: {
-      get: unimplemented("configuration.get"),
+      get: <T,>() => "" as T,
       onDidChange: unimplemented("configuration.onDidChange"),
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
@@ -308,7 +308,7 @@ describe("WorktreeCreateOverlay", () => {
       configured: true,
       label: "Claude",
     });
-    suggestBranchMock.mockResolvedValue({ slug: "fix-focus", status: "ok" });
+    generateTextMock.mockResolvedValue({ status: "ok", text: "fix-focus\n" });
     context = createMockContext();
     useKeybindingScope.setState({
       activePanelComponent: null,
@@ -353,10 +353,10 @@ describe("WorktreeCreateOverlay", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("en locale shows Generating… while branch suggestion is pending", async () => {
+  it("en locale shows Generating… while branch generation is pending", async () => {
     context = createLocalizedContext("en");
-    const suggestion = deferBranchSuggestion();
-    suggestBranchMock.mockReturnValueOnce(suggestion.promise);
+    const generation = deferTextGeneration();
+    generateTextMock.mockReturnValueOnce(generation.promise);
 
     await openOverlay(context);
 
@@ -370,8 +370,8 @@ describe("WorktreeCreateOverlay", () => {
     ).toBeInTheDocument();
 
     await act(async () => {
-      suggestion.resolve({ slug: "fix-focus", status: "ok" });
-      await suggestion.promise;
+      generation.resolve({ status: "ok", text: "fix-focus\n" });
+      await generation.promise;
     });
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
@@ -382,10 +382,10 @@ describe("WorktreeCreateOverlay", () => {
     });
   });
 
-  it("zh-CN locale shows 智能生成中… while branch suggestion is pending", async () => {
+  it("zh-CN locale shows 智能生成中… while branch generation is pending", async () => {
     context = createLocalizedContext("zh-CN");
-    const suggestion = deferBranchSuggestion();
-    suggestBranchMock.mockReturnValueOnce(suggestion.promise);
+    const generation = deferTextGeneration();
+    generateTextMock.mockReturnValueOnce(generation.promise);
 
     await openOverlay(context);
 
@@ -399,8 +399,8 @@ describe("WorktreeCreateOverlay", () => {
     ).toBeInTheDocument();
 
     await act(async () => {
-      suggestion.resolve({ slug: "fix-focus", status: "ok" });
-      await suggestion.promise;
+      generation.resolve({ status: "ok", text: "fix-focus\n" });
+      await generation.promise;
     });
     await vi.waitFor(() => {
       expect(createMock).toHaveBeenCalledWith({
@@ -427,7 +427,7 @@ describe("WorktreeCreateOverlay", () => {
     ).toHaveFocus();
   });
 
-  it("默认 AI 模式:提交先调 suggestBranch,创建并打开终端后关闭 overlay,且不弹成功通知", async () => {
+  it("默认 AI 模式:提交先调 generateText,创建并打开终端后关闭 overlay,且不弹成功通知", async () => {
     await openOverlay(context);
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
@@ -437,8 +437,9 @@ describe("WorktreeCreateOverlay", () => {
     });
 
     await vi.waitFor(() => {
-      expect(suggestBranchMock).toHaveBeenCalledWith({
-        text: "修复终端焦点问题",
+      expect(generateTextMock).toHaveBeenCalledWith({
+        projectRootPath: "/repo",
+        prompt: expect.stringContaining("修复终端焦点问题"),
       });
     });
     await vi.waitFor(() => {
@@ -468,12 +469,12 @@ describe("WorktreeCreateOverlay", () => {
     expect(
       await screen.findByText("Enter a task description")
     ).toBeInTheDocument();
-    expect(suggestBranchMock).not.toHaveBeenCalled();
+    expect(generateTextMock).not.toHaveBeenCalled();
     expect(createMock).not.toHaveBeenCalled();
   });
 
   it("AI 生成失败:错误文案渲染、overlay 保留、不创建", async () => {
-    suggestBranchMock.mockResolvedValueOnce({
+    generateTextMock.mockResolvedValueOnce({
       message: "boom",
       reason: "request_failed",
       status: "unavailable",
@@ -535,7 +536,7 @@ describe("WorktreeCreateOverlay", () => {
         runSetup: true,
       });
     });
-    expect(suggestBranchMock).not.toHaveBeenCalled();
+    expect(generateTextMock).not.toHaveBeenCalled();
   });
 
   it("自定义模式:非法字符与已存在分支被校验拦截", async () => {
@@ -655,7 +656,7 @@ describe("WorktreeCreateOverlay", () => {
   });
 
   it("切换标签会清空上一次的提交错误", async () => {
-    suggestBranchMock.mockResolvedValueOnce({
+    generateTextMock.mockResolvedValueOnce({
       message: "boom",
       reason: "request_failed",
       status: "unavailable",

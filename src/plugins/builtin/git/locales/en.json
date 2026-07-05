@@ -237,7 +237,7 @@
     "ui.worktreeCreate.prepareCopy": "Copy {{count}} ignored file entries",
     "ui.worktreeCreate.prepareLabel": "Before creating",
     "ui.worktreeCreate.prepareSetup": "Run setup command",
-    "ui.worktreeCreate.taskHint": "Default agent ({{agent}}) will generate a branch name from the task description and create an isolated worktree under {{root}}.",
+    "ui.worktreeCreate.taskHint": "Default agent ({{agent}}) will use this project context to generate a branch name and create an isolated worktree under {{root}}.",
     "ui.worktreeCreate.taskLabel": "Task",
     "ui.worktreeCreate.taskPlaceholder": "Example: fix the settings divider alignment",
     "ui.worktreeCreate.title": "New Worktree",
@@ -253,6 +253,11 @@
     "pier.git.statusItem.showDirtyIndicator": {
       "label": "Show dirty indicator",
       "description": "Show working tree change counts and line delta in the worktree status item."
+    },
+    "pier.git.worktree.branchNamePrompt": {
+      "label": "Worktree branch prompt",
+      "description": "Optional. Leave blank for the default template. {{task}} becomes the task description; {{projectRootPath}} becomes the project root path.",
+      "placeholder": "Generate a short branch name for {{task}}. Follow rules in {{projectRootPath}}. Output only the branch name."
     }
   },
   "terminalStatusItems": {

@@ -248,6 +248,7 @@ export interface PluginSettingDisplayText {
   description?: string;
   enumDescriptions?: readonly string[];
   label: string;
+  placeholder?: string;
 }
 
 /** label 缺省 = key 去掉 `<pluginId>.` 前缀后的全部剩余段（避免尾段撞名）。 */
@@ -271,6 +272,12 @@ export function resolvePluginSettingDisplay(
       locale,
       (messages) => messages.settings?.[key]?.description
     ) ?? property?.description;
+  const placeholder =
+    resolveFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.settings?.[key]?.placeholder
+    ) ?? property?.placeholder;
   const localeEnumDescriptions = resolveArrayFromLocales(
     manifest,
     locale,
@@ -293,6 +300,7 @@ export function resolvePluginSettingDisplay(
       ) ?? defaultPluginSettingLabel(manifest.id, key),
     ...(description ? { description } : {}),
     ...(enumDescriptions ? { enumDescriptions } : {}),
+    ...(placeholder ? { placeholder } : {}),
   };
 }
 

@@ -12,13 +12,13 @@ export function createPluginAiContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["ai"] {
   return {
+    generateText: (request) => {
+      assertPluginCapability(entry, "ai:invoke");
+      return window.pier.ai.generateText(request);
+    },
     status: () => {
       assertPluginCapability(entry, "ai:invoke");
       return window.pier.ai.status();
-    },
-    suggestBranch: (request) => {
-      assertPluginCapability(entry, "ai:invoke");
-      return window.pier.ai.suggestBranch(request);
     },
   };
 }

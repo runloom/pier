@@ -23,6 +23,12 @@ function entryWith(overrides: {
             description: "Manifest fallback description.",
             type: "boolean",
           },
+          "pier.git.worktree.branchNamePrompt": {
+            default: "",
+            description: "Manifest prompt description.",
+            placeholder: "Manifest prompt placeholder.",
+            type: "string",
+          },
           "pier.git.statusItem.mode": {
             default: "auto",
             enum: ["auto", "manual"],
@@ -126,6 +132,34 @@ describe("resolvePluginSettingDisplay", () => {
         "en"
       ).enumDescriptions
     ).toEqual(["Auto (manifest)", "Manual (manifest)"]);
+  });
+
+  it("placeholder locale 覆盖回落 manifest", () => {
+    const entry = entryWith({
+      locales: {
+        "zh-CN": {
+          settings: {
+            "pier.git.worktree.branchNamePrompt": {
+              placeholder: "中文占位符",
+            },
+          },
+        },
+      },
+    });
+    expect(
+      resolvePluginSettingDisplay(
+        entry.manifest,
+        "pier.git.worktree.branchNamePrompt",
+        "zh-CN"
+      ).placeholder
+    ).toBe("中文占位符");
+    expect(
+      resolvePluginSettingDisplay(
+        entry.manifest,
+        "pier.git.worktree.branchNamePrompt",
+        "en"
+      ).placeholder
+    ).toBe("Manifest prompt placeholder.");
   });
 
   it("locale enumDescriptions 与 enum 长度不符时忽略并回落 manifest（防止下标错位）", () => {

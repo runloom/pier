@@ -106,12 +106,12 @@ function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
 function cliClientServices(): PierCoreServices {
   return {
     ai: {
-      status: async () => ({ agent: null, configured: false, label: "" }),
-      suggestBranch: async () => ({
+      generateText: async () => ({
         message: "not configured",
         reason: "not_configured",
         status: "unavailable",
       }),
+      status: async () => ({ agent: null, configured: false, label: "" }),
     },
     commandPaletteMru: {
       clear: async () => ({ entries: [], version: 1 }),

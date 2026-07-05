@@ -15,33 +15,34 @@ export const aiStatusResultSchema = z.object({
 });
 export type AiStatusResult = z.infer<typeof aiStatusResultSchema>;
 
-export const aiSuggestBranchRequestSchema = z.object({
-  text: z.string().min(1).max(2000),
+export const aiGenerateTextRequestSchema = z.object({
+  /**
+   * 当前项目根路径。main 侧在此 cwd 下运行一次性 agent,以便 agent 自动加载
+   * AGENTS.md / CLAUDE.md / GEMINI.md / Cursor rules 等项目级 AI 资产。
+   */
+  projectRootPath: z.string().min(1).max(4096).optional(),
+  prompt: z.string().min(1).max(12_000),
 });
-export type AiSuggestBranchRequest = z.infer<
-  typeof aiSuggestBranchRequestSchema
->;
+export type AiGenerateTextRequest = z.infer<typeof aiGenerateTextRequestSchema>;
 
-export const aiSuggestBranchFailureReasonSchema = z.enum([
+export const aiGenerateTextFailureReasonSchema = z.enum([
   "not_configured",
   "timeout",
   "request_failed",
-  "invalid_response",
 ]);
-export type AiSuggestBranchFailureReason = z.infer<
-  typeof aiSuggestBranchFailureReasonSchema
+export type AiGenerateTextFailureReason = z.infer<
+  typeof aiGenerateTextFailureReasonSchema
 >;
 
-export const aiSuggestBranchResultSchema = z.discriminatedUnion("status", [
+export const aiGenerateTextResultSchema = z.discriminatedUnion("status", [
   z.object({
-    /** 规整后的英文 slug(小写、连字符分隔、ASCII),不含 branch prefix。 */
-    slug: z.string().min(1),
+    text: z.string(),
     status: z.literal("ok"),
   }),
   z.object({
     message: z.string(),
-    reason: aiSuggestBranchFailureReasonSchema,
+    reason: aiGenerateTextFailureReasonSchema,
     status: z.literal("unavailable"),
   }),
 ]);
-export type AiSuggestBranchResult = z.infer<typeof aiSuggestBranchResultSchema>;
+export type AiGenerateTextResult = z.infer<typeof aiGenerateTextResultSchema>;

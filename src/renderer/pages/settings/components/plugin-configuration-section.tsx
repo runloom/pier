@@ -21,6 +21,7 @@ import {
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
+import { TextareaRow } from "@/pages/settings/components/rows/textarea-row.tsx";
 import { WorktreeRootPathRow } from "@/pages/settings/components/worktree-section.tsx";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
@@ -58,35 +59,39 @@ function SettingRowShell({
   modifiedLabel,
   onReset,
   resetLabel,
+  resettable = true,
 }: {
   children: ReactNode;
   modified: boolean;
   modifiedLabel: string;
   onReset: () => void;
   resetLabel: string;
+  resettable?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">{children}</div>
       {modified ? <Badge variant="secondary">{modifiedLabel}</Badge> : null}
-      <Button
-        // Reset 按钮始终挂载(不随 modified 卸载): 卸载会在点击后把键盘焦点
-        // 甩回 body。用 aria-disabled + onClick 短路代替条件渲染/原生 disabled。
-        aria-disabled={!modified}
-        aria-label={resetLabel}
-        onClick={() => {
-          if (!modified) {
-            return;
-          }
-          onReset();
-        }}
-        size="xs"
-        title={resetLabel}
-        type="button"
-        variant="ghost"
-      >
-        <RotateCcw />
-      </Button>
+      {resettable ? (
+        <Button
+          // Reset 按钮始终挂载(不随 modified 卸载): 卸载会在点击后把键盘焦点
+          // 甩回 body。用 aria-disabled + onClick 短路代替条件渲染/原生 disabled。
+          aria-disabled={!modified}
+          aria-label={resetLabel}
+          onClick={() => {
+            if (!modified) {
+              return;
+            }
+            onReset();
+          }}
+          size="xs"
+          title={resetLabel}
+          type="button"
+          variant="ghost"
+        >
+          <RotateCcw />
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -98,7 +103,9 @@ function StringSettingRow({
   label,
   max,
   min,
+  multiline = false,
   onCommit,
+  placeholder,
   type,
 }: {
   description?: string | undefined;
@@ -107,8 +114,10 @@ function StringSettingRow({
   label: string;
   max?: number | undefined;
   min?: number | undefined;
+  multiline?: boolean;
   /** 返回 clamp/规整后的最终值，供输入框无条件回弹展示。 */
   onCommit: (raw: string) => string;
+  placeholder?: string | undefined;
   type: "number" | "text";
 }) {
   const [draft, setDraft] = useState(effective);
@@ -145,6 +154,27 @@ function StringSettingRow({
     };
   }, []);
 
+  if (multiline) {
+    return (
+      <TextareaRow
+        {...(description === undefined ? {} : { description })}
+        id={id}
+        label={label}
+        onBlur={(raw) => {
+          const committed = onCommit(raw);
+          lastCommittedRef.current = committed;
+          setDraft(committed);
+        }}
+        onChange={setDraft}
+        onEscape={() => setDraft(effective)}
+        {...(placeholder === undefined ? {} : { placeholder })}
+        rows={7}
+        textareaClassName="min-h-[168px] w-[520px] font-mono text-xs"
+        value={draft}
+      />
+    );
+  }
+
   return (
     <InputRow
       {...(description === undefined ? {} : { description })}
@@ -160,6 +190,7 @@ function StringSettingRow({
       }}
       onChange={setDraft}
       onEscape={() => setDraft(effective)}
+      {...(placeholder === undefined ? {} : { placeholder })}
       type={type}
       value={draft}
     />
@@ -265,12 +296,14 @@ function PluginSettingRow({
         effective={String(effective)}
         id={rowId}
         label={display.label}
+        multiline={property.multiline === true}
         onCommit={(raw) => {
           if (raw !== effective) {
             writeSetting(settingKey, raw, failedText);
           }
           return raw;
         }}
+        placeholder={display.placeholder}
         type="text"
       />
     );
@@ -290,6 +323,7 @@ function PluginSettingRow({
           });
       }}
       resetLabel={t("settings.pluginConfiguration.resetToDefault")}
+      resettable={property.resettable !== false}
     >
       {control}
     </SettingRowShell>

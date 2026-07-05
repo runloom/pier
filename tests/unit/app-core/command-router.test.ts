@@ -142,12 +142,12 @@ function services(
 
   return {
     ai: {
-      status: async () => ({ agent: null, configured: false, label: "" }),
-      suggestBranch: async () => ({
+      generateText: async () => ({
         message: "not configured",
         reason: "not_configured",
         status: "unavailable",
       }),
+      status: async () => ({ agent: null, configured: false, label: "" }),
     },
     commandPaletteMru: {
       clear: async () => ({ entries: [], version: 1 }),
@@ -370,6 +370,47 @@ describe("createCommandRouter", () => {
       data: [{ focused: true, id: "main", recordId: "record-main" }],
       ok: true,
       requestId: "req-1",
+    });
+  });
+
+  it("ai.generateText 透传 prompt 与项目根路径到 AI service", async () => {
+    const generateText = vi.fn(async () => ({
+      text: "feature/fix-focus\n",
+      status: "ok" as const,
+    }));
+    const coreServices = services();
+    coreServices.ai = {
+      status: async () => ({
+        agent: "codex",
+        configured: true,
+        label: "Codex",
+      }),
+      generateText,
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: coreServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          projectRootPath: "/repo",
+          prompt: "修复终端焦点",
+          type: "ai.generateText",
+        },
+        protocolVersion: 1,
+        requestId: "req-ai",
+      })
+    ).resolves.toEqual({
+      data: { status: "ok", text: "feature/fix-focus\n" },
+      ok: true,
+      requestId: "req-ai",
+    });
+    expect(generateText).toHaveBeenCalledWith({
+      projectRootPath: "/repo",
+      prompt: "修复终端焦点",
     });
   });
 

@@ -20,7 +20,7 @@ export interface CommandMetadata {
 
 const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "ai.status": { capabilities: ["ai:invoke"] },
-  "ai.suggestBranch": { capabilities: ["ai:invoke"] },
+  "ai.generateText": { capabilities: ["ai:invoke"] },
   "app.status": { capabilities: ["app:read"] },
   "commandPaletteMru.clear": { capabilities: ["app:read"] },
   "commandPaletteMru.read": { capabilities: ["app:read"] },

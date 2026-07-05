@@ -232,7 +232,7 @@
     "ui.worktreeCreate.prepareCopy": "复制 {{count}} 项被忽略文件",
     "ui.worktreeCreate.prepareLabel": "创建前",
     "ui.worktreeCreate.prepareSetup": "运行 setup 命令",
-    "ui.worktreeCreate.taskHint": "默认智能体（{{agent}}）将根据任务描述生成规范的英文分支名，并在 {{root}} 下创建独立工作树。",
+    "ui.worktreeCreate.taskHint": "默认智能体（{{agent}}）会在当前项目上下文中生成分支名，并在 {{root}} 下创建独立工作树。",
     "ui.worktreeCreate.taskLabel": "任务描述",
     "ui.worktreeCreate.taskPlaceholder": "例如：修复设置页分隔线错位",
     "ui.worktreeCreate.title": "新建工作树",
@@ -248,6 +248,11 @@
     "pier.git.statusItem.showDirtyIndicator": {
       "label": "显示变更指示",
       "description": "在工作树状态项中显示变更文件计数与行数增减。"
+    },
+    "pier.git.worktree.branchNamePrompt": {
+      "label": "工作树分支提示词",
+      "description": "可选，留空使用默认模板。{{task}} 会替换为任务描述；{{projectRootPath}} 会替换为项目根路径。",
+      "placeholder": "根据 {{task}} 生成短分支名，遵循 {{projectRootPath}} 中的项目规范。只输出分支名。"
     }
   },
   "terminalStatusItems": {

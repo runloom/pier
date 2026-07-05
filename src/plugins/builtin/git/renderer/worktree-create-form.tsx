@@ -5,17 +5,34 @@ import { Badge } from "@pier/ui/badge.tsx";
 import { FieldDescription } from "@pier/ui/field.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "@plugins/builtin/git/settings.ts";
 import type { GitBranchRef } from "@shared/contracts/git.ts";
 import type { WorktreeCreationDefaults } from "@shared/contracts/worktree.ts";
 import type { WorktreeCreationDraft } from "@shared/worktree-naming.ts";
 import {
   deriveWorktreeCreation,
   deriveWorktreeCreationFromSlug,
+  sanitizeBranchCandidate,
 } from "@shared/worktree-naming.ts";
 import { z } from "zod";
 
 export const HEAD_SENTINEL = "__head__";
 const BRANCH_LIKE_PATTERN = /^[A-Za-z0-9._/-]+$/;
+const TASK_PLACEHOLDER = "{{task}}";
+const PROJECT_ROOT_PLACEHOLDER = "{{projectRootPath}}";
+const MAX_BRANCH_CANDIDATE_CHARS = 64;
+
+export const FALLBACK_BRANCH_NAME_PROMPT = [
+  "Turn this software task description (any language) into a short git branch name.",
+  "Use the current repository context and follow any loaded project or agent instructions that define branch naming conventions.",
+  "Examples of project instructions include AGENTS.md, CLAUDE.md, GEMINI.md, Cursor rules, OpenCode rules, and Copilot repository instructions.",
+  "Reply with ONLY one branch name on the last line of your output:",
+  "prefer 2-5 lowercase English words, ASCII letters and digits plus . _ / - only,",
+  "include a required project prefix such as feature/ only when project instructions require it,",
+  "no quotes, no spaces, no trailing punctuation, at most 64 characters.",
+  "Summarize the task's intent in English.",
+  "Task: {{task}}",
+].join("\n");
 
 export type CreateMode = "ai" | "custom";
 export type SubmitPhase = "creating" | "generating" | "idle";
@@ -104,8 +121,9 @@ export function buildFormSchema(
 }
 
 interface ResolveDraftArgs {
+  branchNamePromptTemplate: string;
   data: WorktreeCreateOverlayData;
-  suggestBranch: RendererPluginContext["ai"]["suggestBranch"];
+  generateText: RendererPluginContext["ai"]["generateText"];
   text: TextFn;
   values: FormValues;
 }
@@ -114,10 +132,61 @@ export type ResolveDraftResult =
   | { draft: WorktreeCreationDraft }
   | { error: string };
 
-/** custom 模式同步派生;ai 模式先调 AI 生成 slug 再规整/去重。 */
+export function buildBranchNamePrompt({
+  projectRootPath,
+  template,
+  text,
+}: {
+  projectRootPath: string;
+  template: string;
+  text: string;
+}): string {
+  const base = template.trim() || FALLBACK_BRANCH_NAME_PROMPT;
+  const withProject = base.replaceAll(
+    PROJECT_ROOT_PLACEHOLDER,
+    projectRootPath
+  );
+  if (withProject.includes(TASK_PLACEHOLDER)) {
+    return withProject.replaceAll(TASK_PLACEHOLDER, text);
+  }
+  return `${withProject}\n\nTask: ${text}`;
+}
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: 剥离终端 ANSI 转义序列需要匹配 ESC 控制符
+const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
+
+export function extractAnswerLine(stdout: string): string {
+  const lines = stdout
+    .replace(ANSI_PATTERN, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return lines.at(-1) ?? "";
+}
+
+function truncateBranchCandidate(candidate: string): string {
+  if (candidate.length <= MAX_BRANCH_CANDIDATE_CHARS) {
+    return candidate;
+  }
+  const truncated = sanitizeBranchCandidate(
+    candidate.slice(0, MAX_BRANCH_CANDIDATE_CHARS)
+  );
+  return truncated.replace(/[-./]+$/g, "");
+}
+
+export function normalizeBranchSuggestion(raw: string): string {
+  const cleaned = sanitizeBranchCandidate(raw.toLowerCase());
+  if (!cleaned) {
+    return "";
+  }
+  return truncateBranchCandidate(cleaned);
+}
+
+/** custom 模式同步派生;ai 模式先调通用 AI 文本生成,再由 Git 插件规整/去重。 */
 export async function resolveSubmitDraft({
+  branchNamePromptTemplate,
   data,
-  suggestBranch,
+  generateText,
   text,
   values,
 }: ResolveDraftArgs): Promise<ResolveDraftResult> {
@@ -130,17 +199,27 @@ export async function resolveSubmitDraft({
       draft: deriveWorktreeCreation({ ...shared, input: values.branch.trim() }),
     };
   }
-  const suggestion = await suggestBranch({ text: values.text.trim() });
-  if (suggestion.status !== "ok") {
+  const generation = await generateText({
+    prompt: buildBranchNamePrompt({
+      projectRootPath: data.mainPath,
+      template: branchNamePromptTemplate,
+      text: values.text.trim(),
+    }),
+    projectRootPath: data.mainPath,
+  });
+  if (generation.status !== "ok") {
     return {
       error: text(
-        `generateFailed.${suggestion.reason}`,
-        { message: suggestion.message },
+        `generateFailed.${generation.reason}`,
+        { message: generation.message },
         "Agent invocation failed: {{message}}"
       ),
     };
   }
-  const draft = deriveWorktreeCreationFromSlug(suggestion.slug, shared);
+  const branchCandidate = normalizeBranchSuggestion(
+    extractAnswerLine(generation.text)
+  );
+  const draft = deriveWorktreeCreationFromSlug(branchCandidate, shared);
   if (!draft) {
     return {
       error: text(
@@ -151,6 +230,15 @@ export async function resolveSubmitDraft({
     };
   }
   return { draft };
+}
+
+export function readBranchNamePromptTemplate(
+  configuration: RendererPluginContext["configuration"]
+): string {
+  const value = configuration.get<unknown>(
+    GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY
+  );
+  return typeof value === "string" ? value : "";
 }
 
 export function AiFieldDescription({

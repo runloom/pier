@@ -83,6 +83,7 @@ describe("resolveOneShotInvocation", () => {
     const result = resolveOneShotInvocation({
       agentId: "claude",
       agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
+      cwd: "/repo",
       prompt: "hello",
     });
     expect(result).toEqual({
@@ -96,6 +97,7 @@ describe("resolveOneShotInvocation", () => {
       agentId: "claude",
       override: "/opt/bin/claude --model haiku",
       agentDefaultArgs: {},
+      cwd: "/repo",
       prompt: "hello",
     });
     expect(result).toEqual({
@@ -109,8 +111,32 @@ describe("resolveOneShotInvocation", () => {
       resolveOneShotInvocation({
         agentId: "aider",
         agentDefaultArgs: {},
+        cwd: "/repo",
         prompt: "hello",
       })
     ).toBeNull();
+  });
+
+  it("Codex one-shot 显式绑定项目 cwd 并使用只读 ephemeral 执行", () => {
+    const result = resolveOneShotInvocation({
+      agentId: "codex",
+      agentDefaultArgs: {},
+      cwd: "/repo",
+      prompt: "hello",
+    });
+
+    expect(result).toEqual({
+      binary: "codex",
+      args: [
+        "exec",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "-s",
+        "read-only",
+        "--cd",
+        "/repo",
+        "hello",
+      ],
+    });
   });
 });

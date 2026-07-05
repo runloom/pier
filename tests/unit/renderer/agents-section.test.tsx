@@ -14,14 +14,15 @@ import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 /**
- * agent-preferences store 只关心 5 个字段, 但整个 preferences 对象需要
- * 完整——用 makeFakePreferences() 补齐其他默认。DEFAULT_PREFERENCES 仅
- * 保留 store 关心的 5 字段, 便于 setState 直接使用。
+ * agent-preferences store 只关心 agent 设置字段, 但整个 preferences 对象
+ * 需要完整——用 makeFakePreferences() 补齐其他默认。DEFAULT_PREFERENCES 仅
+ * 保留 store 关心的字段, 便于 setState 直接使用。
  */
 const DEFAULT_PREFERENCES = {
   agentCommandOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {},
+  agentStatusHooks: true,
   defaultAgentId: null,
   disabledAgentIds: [],
 };
@@ -34,10 +35,12 @@ function makePierMock(detectedIds: string[] = []) {
     },
     preferences: {
       read: vi.fn(async () => makeFakePreferences(DEFAULT_PREFERENCES)),
-      update: vi.fn(async (patch: Record<string, unknown>) => ({
-        ...DEFAULT_PREFERENCES,
-        ...patch,
-      })),
+      update: vi.fn(async (patch: Record<string, unknown>) =>
+        makeFakePreferences({
+          ...DEFAULT_PREFERENCES,
+          ...patch,
+        })
+      ),
       onChanged: vi.fn(() => () => undefined),
     },
   };
