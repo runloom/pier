@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import type {
@@ -74,11 +75,12 @@ export function readCreateLaunch(
 
 export function resolveCreateTerminalLaunch(
   args: CreateTerminalArgs,
-  saved: TerminalPanelSession | null
+  saved: TerminalPanelSession | null,
+  options: { taskLive?: boolean } = {}
 ): {
   context: CreateTerminalArgs["context"];
   /** launcher 启动的 agent 身份（+按钮/命令面板）——用于会话即时点亮。 */
-  launchAgentId?: import("@shared/contracts/agent.ts").AgentKind | undefined;
+  launchAgentId?: AgentKind | undefined;
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined;
   task?: TaskPanelMetadata | undefined;
 } {
@@ -92,6 +94,19 @@ export function resolveCreateTerminalLaunch(
     ? (args.task ?? saved?.task)
     : (saved?.task ?? args.task);
   if (task && !launch) {
+    if (options.taskLive) {
+      // reload 重挂路径：native 面保留（swift 对已存在 panelId 纯 reattach,
+      // 忽略 launch spec）——task 元数据原样直通, 不得把 running 强转
+      // cancelled 落盘, 否则真实退出时 patchTaskStatus 的 running 守卫失败,
+      // 终态永久丢失。
+      return {
+        context,
+        nativeLaunch: nativeLaunchOptions(null, cwd, {
+          restoredSession: true,
+        }),
+        task,
+      };
+    }
     const restoredTask: TaskPanelMetadata =
       task.status === "running" ? { ...task, status: "cancelled" } : task;
     return {

@@ -36,8 +36,6 @@ export const HOOK_FRESH_TTL_MS = 30 * 60 * 1000;
  * starting 相位同款语义）。
  */
 export const VISIBILITY_DEBOUNCE_MS = 250;
-/** task 结束后的呈现保留时长（用户看到 exit color 一段时间后自然消失）。 */
-export const TASK_EXIT_LINGER_MS = 5000;
 
 /** 回合边界事件（回合结束/切换/错误）——之后的迟到工具事件被吸收。 */
 export const TURN_BOUNDARY_EVENTS = new Set(["Stop", "SessionStart", "error"]);
@@ -103,7 +101,6 @@ export interface TaskLayer {
   exitCode?: number;
   kind: "task";
   label: string;
-  lingerTimer: NodeJS.Timeout | null;
   spawnedAt: number;
   status: "cancelled" | "failure" | "running" | "success";
   taskId: string;
@@ -140,10 +137,6 @@ export function clearCommandTimers(command: CommandLayer): void {
   if (command.kind === "agent-launch" && command.visibilityTimer) {
     clearTimeout(command.visibilityTimer);
     command.visibilityTimer = null;
-  }
-  if (command.kind === "task" && command.lingerTimer) {
-    clearTimeout(command.lingerTimer);
-    command.lingerTimer = null;
   }
 }
 
@@ -240,7 +233,6 @@ export function newTaskLayer(
   return {
     kind: "task",
     label,
-    lingerTimer: null,
     spawnedAt: at,
     status: "running",
     taskId,

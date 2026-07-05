@@ -466,7 +466,7 @@ describe("parsePierCliArgs", () => {
         requestId: "req-tasks-list",
       }).envelope.command
     ).toEqual({
-      projectRoot: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/xyz/ABC/pier",
       type: "run.list",
     });
 
@@ -477,7 +477,7 @@ describe("parsePierCliArgs", () => {
         requestId: "req-tasks-list-path",
       }).envelope.command
     ).toEqual({
-      projectRoot: "/Users/xyz/ABC/bay",
+      projectRootPath: "/Users/xyz/ABC/bay",
       type: "run.list",
     });
   });
@@ -510,7 +510,7 @@ describe("parsePierCliArgs", () => {
       focus: false,
       inputs: { pkg: "renderer" },
       placement: "split-below",
-      projectRoot: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
       type: "run.spawn",
       windowId: "main",

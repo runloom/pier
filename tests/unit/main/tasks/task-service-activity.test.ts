@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
  * 若不按 `node.status` 过滤会把已 succeeded 的 activity 覆盖为 cancelled。
  *
  * 这是 e40d01d8 修复的行为。守卫防退化：多 task DAG 部分完成后 restart 不再让
- * 已 success 的 tab 在 5s linger 内被闪回 cancelled。
+ * 已 success 的 tab 被覆盖为 cancelled（activity 终态常驻, 覆盖即永久谎报）。
  */
 function makeLaunch(
   taskId: string,

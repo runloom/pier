@@ -469,4 +469,128 @@ describe("terminal session state", () => {
       },
     });
   });
+
+  it("sweeps orphaned running tasks to cancelled with restore exit metadata", async () => {
+    const {
+      readTerminalPanelSession,
+      reconcileOrphanedRunningTasks,
+      updateTerminalPanelContext,
+      updateTerminalPanelTab,
+      updateTerminalPanelTask,
+    } = await loadTerminalSessionState();
+
+    const pier = context("/Users/xyz/ABC/pier");
+    await updateTerminalPanelContext("main", "terminal-1", pier);
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-1",
+      taskMetadata({ status: "running" })
+    );
+    await updateTerminalPanelTab("main", "terminal-1", {
+      badge: { label: "package.json" },
+      icon: { id: "pier.task" },
+      state: { label: "Running", status: "running" },
+      title: "test",
+    });
+
+    await expect(
+      reconcileOrphanedRunningTasks(() => 1_772_000_009_000)
+    ).resolves.toBe(1);
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      tab: {
+        badge: { label: "package.json" },
+        icon: { id: "pier.task" },
+        state: {
+          colorToken: "warning",
+          label: "Cancelled",
+          status: "cancelled",
+        },
+        title: "test",
+      },
+      task: {
+        exitReason: "restore",
+        exitSource: "restore",
+        finishedAt: 1_772_000_009_000,
+        status: "cancelled",
+      },
+    });
+  });
+
+  it("leaves finished tasks and plain sessions untouched during the sweep", async () => {
+    const {
+      readTerminalPanelSession,
+      reconcileOrphanedRunningTasks,
+      updateTerminalPanelContext,
+      updateTerminalPanelTask,
+    } = await loadTerminalSessionState();
+
+    const pier = context("/Users/xyz/ABC/pier");
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-1",
+      taskMetadata({
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      })
+    );
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-2",
+      taskMetadata({
+        exitCode: 1,
+        finishedAt: 1_772_000_002_000,
+        runId: "run-2",
+        status: "failed",
+        taskId: "package-script:lint",
+      })
+    );
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-3",
+      taskMetadata({
+        finishedAt: 1_772_000_003_000,
+        runId: "run-3",
+        status: "cancelled",
+        taskId: "package-script:dev",
+      })
+    );
+    await updateTerminalPanelContext("main", "terminal-4", pier);
+
+    await expect(
+      reconcileOrphanedRunningTasks(() => 1_772_000_009_000)
+    ).resolves.toBe(0);
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      task: {
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      },
+    });
+    await expect(
+      readTerminalPanelSession("main", "terminal-2")
+    ).resolves.toMatchObject({
+      task: { exitCode: 1, finishedAt: 1_772_000_002_000, status: "failed" },
+    });
+    await expect(
+      readTerminalPanelSession("main", "terminal-3")
+    ).resolves.toMatchObject({
+      task: { finishedAt: 1_772_000_003_000, status: "cancelled" },
+    });
+    const plain = await readTerminalPanelSession("main", "terminal-4");
+    expect(plain).toMatchObject({ context: pier });
+    expect(plain?.task).toBeUndefined();
+  });
+
+  it("returns zero when reconciling an empty session state", async () => {
+    const { reconcileOrphanedRunningTasks } = await loadTerminalSessionState();
+
+    await expect(reconcileOrphanedRunningTasks()).resolves.toBe(0);
+  });
 });

@@ -175,8 +175,13 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
           sessionScope,
           args.panelId
         );
+        const taskLive = foregroundActivityService
+          .snapshot(String(win.id))
+          .activities.some(
+            (a) => a.kind === "task" && a.panelId === args.panelId
+          );
         const { context, launchAgentId, nativeLaunch, task } =
-          resolveCreateTerminalLaunch(args, saved);
+          resolveCreateTerminalLaunch(args, saved, { taskLive });
         // Task identity is persisted before native launch so immediate command-finished
         // callbacks can be gated to the task panel instead of repainting plain terminals.
         await persistInitialTerminalTask(sessionScope, args.panelId, task);
@@ -297,7 +302,20 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       if (!win) {
         return null;
       }
-      return await readTerminalPanelSession(windowRecordIdFor(win), panelId);
+      const session = await readTerminalPanelSession(
+        windowRecordIdFor(win),
+        panelId
+      );
+      if (!session?.task) {
+        return session;
+      }
+      // main 担保的 task 活性：foreground-activity 有 task slot（终态常驻,
+      // 与 panel 同寿命）⇔ 该 task 面板寿命仍在本 main 进程内 ⇔ renderer
+      // 属 reload 重挂路径, 应渲染真终端而非静态结果卡。
+      const taskLive = foregroundActivityService
+        .snapshot(String(win.id))
+        .activities.some((a) => a.kind === "task" && a.panelId === panelId);
+      return { ...session, taskLive };
     }
   );
 

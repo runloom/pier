@@ -25,7 +25,7 @@
     "build:libghostty": "bash scripts/build-libghostty.sh",
     "build:native": "cd native && bash build.sh",
     "build:icons": "node ./scripts/build-app-icons.mjs",
-    "check": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size",
+    "check": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size && pnpm test:unit && pnpm test:component",
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:component": "vitest run tests/component",

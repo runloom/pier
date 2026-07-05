@@ -546,8 +546,8 @@ describe("TerminalPanel lifecycle", () => {
     ).toContain("bottom-6");
   });
 
-  it("does not render a terminal status bar only because the panel has task metadata", () => {
-    const { container, queryByTestId } = render(
+  it("mounts the terminal status bar for a panel with task metadata", async () => {
+    const { container, findByTestId } = render(
       <TerminalPanel
         {...createPanelProps({
           params: { context, tab: taskTab, task: taskMetadata },
@@ -555,13 +555,16 @@ describe("TerminalPanel lifecycle", () => {
       />
     );
 
-    expect(queryByTestId("terminal-status-bar")).toBeNull();
+    const statusBar = await findByTestId("terminal-status-bar");
+    expect(
+      statusBar.querySelector('[data-testid="terminal-status-bar-spacer"]')
+    ).not.toBeNull();
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
-    ).not.toContain("bottom-6");
+    ).toContain("bottom-6");
   });
 
-  it("does not reserve status bar space when no item is visible for the panel", () => {
+  it("keeps the status bar mounted when no item is visible for the panel", async () => {
     terminalStatusItemRegistry.register({
       id: "test.worktree-status",
       isVisible: ({ context: panelContext }) =>
@@ -569,7 +572,7 @@ describe("TerminalPanel lifecycle", () => {
       render: () => <span>worktree</span>,
     });
 
-    const { container, queryByTestId } = render(
+    const { container, findByTestId } = render(
       <TerminalPanel
         {...createPanelProps({
           params: {
@@ -586,10 +589,14 @@ describe("TerminalPanel lifecycle", () => {
       />
     );
 
-    expect(queryByTestId("terminal-status-bar")).toBeNull();
+    const statusBar = await findByTestId("terminal-status-bar");
+    expect(statusBar).not.toHaveTextContent("worktree");
+    expect(
+      statusBar.querySelector('[data-testid="terminal-status-bar-spacer"]')
+    ).not.toBeNull();
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
-    ).not.toContain("bottom-6");
+    ).toContain("bottom-6");
   });
 
   it("passes launchId into native terminal creation", async () => {
@@ -693,11 +700,11 @@ describe("TerminalPanel lifecycle", () => {
         context: firstRuntimeContext,
         display: {
           long: "old runtime title",
-          short: "old runtime tab",
+          short: "test",
           terminalTitle: "old runtime title",
         },
         tab: expect.objectContaining({
-          title: "old runtime tab",
+          title: "test",
         }),
       });
     });
@@ -775,16 +782,10 @@ describe("TerminalPanel lifecycle", () => {
         context: postRelaunchContext,
         display: {
           long: "new runtime title",
-          short: "new runtime tab",
+          short: "lint",
           terminalTitle: "new runtime title",
         },
-        tab: expect.objectContaining({
-          state: {
-            label: "Runtime ready",
-            status: "running",
-          },
-          title: "new runtime tab",
-        }),
+        tab: relaunchTab,
       });
     });
   });
@@ -1117,10 +1118,17 @@ describe("TerminalPanel lifecycle", () => {
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
   });
 
-  it("renders restored running task as a cancelled result without native terminal", async () => {
+  it("renders a swept running task as a cancelled result card on app restart", async () => {
     vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
       context,
-      tab: taskTab,
+      tab: {
+        ...taskTab,
+        state: {
+          colorToken: "warning",
+          label: "Cancelled",
+          status: "cancelled",
+        },
+      },
       task: taskMetadata,
       title: "test",
       updatedAt: "2026-06-25T00:00:00.000Z",
@@ -1152,6 +1160,38 @@ describe("TerminalPanel lifecycle", () => {
         status: "cancelled",
       });
     });
+  });
+
+  it("remounts a live running task as a real terminal on renderer reload", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      context,
+      tab: taskTab,
+      task: taskMetadata,
+      taskLive: true,
+      title: "test",
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+
+    const { container, queryByTestId } = render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context,
+            launchId: "launch-1",
+            tab: taskTab,
+            task: taskMetadata,
+          },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    expect(queryByTestId("terminal-task-result")).toBeNull();
+    expect(container.querySelector(".terminal-anchor")).not.toBeNull();
   });
 
   it("does not restart native terminal creation when context params trigger rerenders", async () => {

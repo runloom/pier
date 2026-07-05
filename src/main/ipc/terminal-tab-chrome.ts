@@ -1,3 +1,4 @@
+import { taskTabStateForActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type {
   TaskExitReason,
@@ -31,40 +32,10 @@ export function taskExitTabPatch(
   exit: TerminalTaskExitStatus
 ): Partial<PanelTabChrome> {
   if (exit.reason === "user") {
-    return {
-      state: {
-        colorToken: "warning",
-        label: "Cancelled",
-        status: "cancelled",
-      },
-    };
+    return { state: taskTabStateForActivityStatus("cancelled") };
   }
-
   if (exit.code === 0) {
-    return {
-      state: {
-        colorToken: "success",
-        label: "Succeeded",
-        status: "succeeded",
-      },
-    };
+    return { state: taskTabStateForActivityStatus("success", 0) };
   }
-
-  if (typeof exit.code === "number") {
-    return {
-      state: {
-        colorToken: "destructive",
-        label: `Failed ${exit.code}`,
-        status: "failed",
-      },
-    };
-  }
-
-  return {
-    state: {
-      colorToken: "destructive",
-      label: "Failed",
-      status: "failed",
-    },
-  };
+  return { state: taskTabStateForActivityStatus("failure", exit.code) };
 }

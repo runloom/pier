@@ -50,11 +50,19 @@ export interface ForegroundActivityAggregator {
 
   /** panel 关闭 → 清 activity + 冷却拦迟到 hook。 */
   panelClosed(panelId: string): void;
+  /**
+   * native pty 进程退出（面板可能仍开着）：task 面板保留终态 activity
+   * （只清 hook 证据 + hook 冷却）；其余面板等同 panelClosed。
+   */
+  ptyExited(panelId: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的活动按 panelClosed 处理。 */
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;
 
   snapshot(windowId?: string): ForegroundActivityBroadcast;
-  /** Task 完成：更新 task activity status + exitCode, 保留 5s linger 后清。 */
+  /**
+   * Task 完成：更新 task activity status + exitCode。终态常驻——activity
+   * 保留到 panelClosed / rerun / 新命令接管, 供 tab 退出 chrome 持续呈现。
+   */
   taskFinished(
     panelId: string,
     args: {

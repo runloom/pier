@@ -124,7 +124,7 @@ describe("terminal close IPC reason semantics", () => {
         contextId: `ctx:${path}`,
         cwd: path,
         openedPath: path,
-        projectRoot: path,
+        projectRootPath: path,
         source: "panel",
         updatedAt: 1,
         worktreeKey: path,

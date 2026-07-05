@@ -41,6 +41,18 @@ export function findWindowContext(window: AppWindow): WindowContext | null {
 export function findAppWindowByElectronId(id: number): AppWindow | null {
   return appWindowsByElectronId.get(id) ?? null;
 }
+/**
+ * 内部 windowId（WindowContext.windowId, 如 "main"）→ AppWindow 反查。
+ * O(#windows) 线性扫——窗口数恒小, 不值得维护第三张索引。
+ */
+export function findAppWindowByInternalId(windowId: string): AppWindow | null {
+  for (const window of appWindowsByElectronId.values()) {
+    if (appWindowIds.get(window) === windowId) {
+      return window;
+    }
+  }
+  return null;
+}
 
 export function findAppWindowByWebContents(
   webContents: WebContents

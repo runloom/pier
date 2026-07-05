@@ -109,27 +109,20 @@ function RestoredTaskResultView({
   );
 }
 
+/**
+ * 静态结果卡只给「真死」的 task 面板（app restart 路径）：taskLive =
+ * main 担保该 task 面板寿命仍在本进程内（reload 重挂路径）→ 渲染真终端。
+ * running + 非 live 理论上被 main 启动清算兜底为 cancelled；此处保留同款
+ * 强转防极端竞态下卡片谎报 "running"。
+ */
 function restoredTaskResultFromSession(
-  task: TaskPanelMetadata | undefined
+  session: TerminalPanelSessionSnapshot | null | undefined
 ): TaskPanelMetadata | undefined {
-  if (!task) {
+  const task = session?.task;
+  if (!task || session?.taskLive) {
     return;
   }
   return task.status === "running" ? { ...task, status: "cancelled" } : task;
-}
-
-function restoredTaskTabPatch(
-  task: TaskPanelMetadata | undefined
-): Partial<PanelTabChrome> | null {
-  return task?.status === "running" || task?.status === "cancelled"
-    ? {
-        state: {
-          colorToken: "warning",
-          label: "Cancelled",
-          status: "cancelled",
-        },
-      }
-    : null;
 }
 
 export function TerminalPanel(props: IDockviewPanelProps) {
@@ -181,7 +174,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
 
   const sessionLoaded = savedSession !== undefined;
-  const restoredTaskResult = restoredTaskResultFromSession(savedSession?.task);
+  const restoredTaskResult = restoredTaskResultFromSession(savedSession);
   const effectiveContext =
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
@@ -189,13 +182,11 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   // agent 会话呈现 overlay 叠在最外层：icon/status 换 agent, title 保留 agent
   // TUI 设置的终端标题；会话消失自动回退。
-  // Task exit chrome overlay 由 activity 单源提供（foreground-activity 广播），
-  // 老 TERMINAL_TAB_CHROME_PATCHED 通路已下线。3 层：base → restore-patch → activity。
+  // 2 层：base(持久化 tab, main 启动清算保证 restore 真相) → activity
+  // overlay(task 终态常驻单源)。老 TERMINAL_TAB_CHROME_PATCHED 与
+  // restore-patch 推断层均已下线。
   const effectiveTab = mergeTabChrome(
-    mergeTabChrome(
-      savedSession?.tab ?? activeLaunch.tab,
-      restoredTaskTabPatch(savedSession?.task)
-    ),
+    savedSession?.tab ?? activeLaunch.tab,
     activityTabChromeOverlay(activity, effectiveTitle)
   );
   const statusContext = {

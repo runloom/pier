@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { agentKindSchema } from "./agent.ts";
-import type { PanelTabStatus } from "./panel.ts";
+import type { PanelTabState, PanelTabStatus } from "./panel.ts";
 /**
  * ForegroundActivity — 前台面板活动的统一模型（unified aggregator 契约）。
  *
@@ -159,5 +159,30 @@ export function tabStatusForActivityStatus(
       return "failed";
     default:
       return "idle";
+  }
+}
+
+/**
+ * task activity status → tab 完整 state（指示器 + label + 色 token）。
+ * renderer 活动 overlay 与 main 持久化 taskExitTabPatch 共用此单源——
+ * 活体呈现与 restore-on-restart 呈现必须逐字节一致。
+ */
+export function taskTabStateForActivityStatus(
+  status: TaskActivity["status"],
+  exitCode?: number
+): PanelTabState {
+  switch (status) {
+    case "running":
+      return { label: "Running", status: "running" };
+    case "success":
+      return { colorToken: "success", label: "Succeeded", status: "succeeded" };
+    case "failure":
+      return {
+        colorToken: "destructive",
+        label: exitCode === undefined ? "Failed" : `Failed ${exitCode}`,
+        status: "failed",
+      };
+    default:
+      return { colorToken: "warning", label: "Cancelled", status: "cancelled" };
   }
 }

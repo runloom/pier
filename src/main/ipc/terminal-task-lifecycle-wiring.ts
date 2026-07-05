@@ -114,7 +114,9 @@ export function registerTerminalTaskLifecycleForwarding(
     });
     const rawPanelId = fromNativePanelKey(panelId);
     const targetWindow = findAppWindowByElectronId(id);
-    foregroundActivityService.panelClosed(rawPanelId);
+    // pty 进程退出 ≠ 面板关闭：task 面板保留终态 activity（tab 退出
+    // chrome 单源）, 其余面板照旧清理。真正的面板关闭走 pier:terminal:close。
+    foregroundActivityService.ptyExited(rawPanelId);
     lifecycle
       .completeFromNativeProcessClose({
         browserWindowId: id,

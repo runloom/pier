@@ -97,16 +97,17 @@ function installPierWindowApi() {
   Object.defineProperty(window, "pier", {
     configurable: true,
     value: {
-      getWindowContext: vi.fn(async () => ({
-        mode: "restore",
-        recordId: "record-current",
-        sessionId: "record-current",
-        windowId: "main",
-      })),
-      readyToShow: vi.fn(),
       rendererCommand: {
         onCommand: vi.fn(),
         resolve: vi.fn(),
+      },
+      window: {
+        getContext: vi.fn(async () => ({
+          mode: "restore",
+          recordId: "record-current",
+          windowId: "main",
+        })),
+        readyToShow: vi.fn(),
       },
       terminal: {
         applyInputRouting: vi.fn(),
@@ -183,6 +184,12 @@ function createDockviewApi(
       layoutChange();
     },
   };
+}
+
+function waitMs(ms: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(resolve, ms);
+  return promise;
 }
 
 describe("WorkspaceHost", () => {
@@ -548,8 +555,10 @@ describe("WorkspaceHost", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        getWindowContext: vi.fn(() => new Promise(() => undefined)),
-        readyToShow: vi.fn(),
+        window: {
+          getContext: vi.fn(() => new Promise<never>(() => undefined)),
+          readyToShow: vi.fn(),
+        },
         rendererCommand: {
           onCommand: vi.fn((cb) => {
             bridge.listener = cb;
@@ -631,8 +640,10 @@ describe("WorkspaceHost", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        getWindowContext: vi.fn(() => new Promise(() => undefined)),
-        readyToShow: vi.fn(),
+        window: {
+          getContext: vi.fn(() => new Promise<never>(() => undefined)),
+          readyToShow: vi.fn(),
+        },
         rendererCommand: {
           onCommand: vi.fn(),
           resolve: vi.fn(),
@@ -680,5 +691,77 @@ describe("WorkspaceHost", () => {
         title: "Terminal",
       })
     );
+  });
+
+  it("flushes the pending debounced layout save on beforeunload", async () => {
+    // beforeunload 监听器注册在 window 上且从不移除, 本文件早前测试可能遗留
+    // pending 的 500ms debounce timer — 先派发一次把它们冲掉, 再清空计数,
+    // 保证下面的断言只观察本测试自己的 flush。
+    window.dispatchEvent(new Event("beforeunload"));
+    await waitMs(0);
+    vi.mocked(window.pier.workspace.saveLayout).mockClear();
+
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-flush",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    // 等 getContext resolve (flushRecordId 经 .then 缓存) 且 restore 流程结束
+    // (isApplyingPersistedLayout 已放开), 之后的 layout change 才算 user touched。
+    await waitMs(0);
+
+    dockview.emitLayoutChange();
+    expect(window.pier.workspace.saveLayout).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event("beforeunload"));
+
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledTimes(1);
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledWith(
+      { panels: ["terminal-flush"] },
+      "record-current"
+    );
+
+    // flush 必须 clearTimeout — 等过 SAVE_DEBOUNCE_MS 不得出现第二次 save。
+    await waitMs(600);
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not save again on beforeunload after the debounced save already fired", async () => {
+    window.dispatchEvent(new Event("beforeunload"));
+    await waitMs(0);
+    vi.mocked(window.pier.workspace.saveLayout).mockClear();
+
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-settled",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    await waitMs(0);
+
+    dockview.emitLayoutChange();
+    // 等 debounce 正常落盘 — 此时 saveTimer 已自然清空。
+    await waitMs(600);
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledTimes(1);
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledWith(
+      { panels: ["terminal-settled"] },
+      "record-current"
+    );
+    vi.mocked(window.pier.workspace.saveLayout).mockClear();
+
+    window.dispatchEvent(new Event("beforeunload"));
+
+    expect(window.pier.workspace.saveLayout).not.toHaveBeenCalled();
   });
 });

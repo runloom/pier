@@ -22,6 +22,30 @@ function createArgs(
   };
 }
 
+function savedRunningDevSession(): TerminalPanelSession {
+  return {
+    context: {
+      contextId: "ctx:/tmp/pier",
+      cwd: "/tmp/pier",
+      projectRootPath: "/tmp/pier",
+      source: "panel",
+      updatedAt: 1_772_000_000_000,
+    },
+    task: {
+      cwd: "/tmp/pier",
+      label: "dev",
+      projectRootPath: "/tmp/pier",
+      rawCommand: "bun run dev",
+      runId: "run-1",
+      source: "package-script",
+      startedAt: 1_772_000_000_000,
+      status: "running",
+      taskId: "package-script:dev",
+    },
+    updatedAt: "2026-06-30T00:00:00.000Z",
+  };
+}
+
 describe("terminal create launch options", () => {
   it("does not pass profileId through to native when it has no native effect", () => {
     expect(
@@ -269,5 +293,31 @@ describe("terminal create launch options", () => {
     expect(result.nativeLaunch?.command).toContain("Command: pnpm saved:test");
     expect(result.nativeLaunch?.command).not.toContain("args:test");
     expect(result.nativeLaunch?.command).not.toContain("pnpm args:test");
+  });
+
+  it("passes a live saved running task through unchanged on renderer reload", () => {
+    const saved = savedRunningDevSession();
+
+    const result = resolveCreateTerminalLaunch(createArgs(), saved, {
+      taskLive: true,
+    });
+
+    expect(result.task).toEqual(saved.task);
+    expect(result.task?.status).toBe("running");
+    expect(result.launchAgentId).toBeUndefined();
+    expect(result.nativeLaunch).toEqual({ cwd: "/tmp/pier" });
+    expect(result.nativeLaunch?.command).toBeUndefined();
+  });
+
+  it("coerces the same saved running task to a cancelled summary without taskLive", () => {
+    const saved = savedRunningDevSession();
+
+    const result = resolveCreateTerminalLaunch(createArgs(), saved);
+
+    expect(result.task).toMatchObject({ status: "cancelled" });
+    expect(result.nativeLaunch?.cwd).toBe("/tmp/pier");
+    expect(result.nativeLaunch?.command).toContain("[pier] restored task");
+    expect(result.nativeLaunch?.command).toContain("Status: cancelled");
+    expect(result.nativeLaunch?.command).not.toContain("Status: running");
   });
 });

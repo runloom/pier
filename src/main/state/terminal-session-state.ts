@@ -9,6 +9,7 @@
  * No file lock — single-process, no cross-process contention.
  */
 import { join } from "node:path";
+import { taskTabStateForActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import {
   normalizePanelTabChromeInput,
   type PanelContext,
@@ -351,6 +352,49 @@ export async function removeTerminalPanelSession(
     }
     return state;
   });
+}
+/**
+ * App 启动孤儿清算：上个进程存活期内标记 running 的 task 不可能仍在运行
+ * （pty 随 app 退出死亡）——统一改写 cancelled（exitReason/Source =
+ * "restore"）+ Cancelled tab chrome。此后磁盘状态不说谎：session 读到
+ * "running" 只可能是本进程内真活（renderer reload 重挂路径）。
+ * 返回清算条数（可观测性/测试用）。
+ */
+export async function reconcileOrphanedRunningTasks(
+  now: () => number = Date.now
+): Promise<number> {
+  const s = await ensureStore();
+  let swept = 0;
+  s.mutate((state) => {
+    for (const windowState of Object.values(state.windows)) {
+      for (const [panelId, panel] of Object.entries(windowState.panels)) {
+        if (panel.task?.status !== "running") {
+          continue;
+        }
+        const nextTask = taskPanelMetadataSchema.safeParse({
+          ...panel.task,
+          exitReason: "restore",
+          exitSource: "restore",
+          finishedAt: now(),
+          status: "cancelled",
+        });
+        if (!nextTask.success) {
+          continue;
+        }
+        windowState.panels[panelId] = {
+          ...panel,
+          tab: mergePanelTabChrome(panel.tab, {
+            state: taskTabStateForActivityStatus("cancelled"),
+          }),
+          task: nextTask.data,
+          updatedAt: new Date(now()).toISOString(),
+        };
+        swept += 1;
+      }
+    }
+    return state;
+  });
+  return swept;
 }
 
 export async function flushTerminalSessionState(): Promise<void> {

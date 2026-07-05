@@ -25,7 +25,6 @@ import {
   SUBAGENT_EVENTS,
   SUSPENDED_JOB_EXIT_CODES,
   setHookStatus,
-  TASK_EXIT_LINGER_MS,
   type TimerCtx,
   VISIBILITY_DEBOUNCE_MS,
 } from "./entry.ts";
@@ -54,7 +53,7 @@ export function createForegroundActivityAggregator(
    */
   const panelCooldownUntil = new Map<string, number>();
   /**
-   * hook 收尾冷却（命令退出/SessionEnd/task linger）——只拦迟到 hook 事件。
+   * hook 收尾冷却（命令退出/SessionEnd）——只拦迟到 hook 事件。
    * 新命令是新鲜 OSC 证据, 永不被此冷却拦截（loomdesk
    * recentlyEndedSessions 同语义:只 gate agent_hook 条目创建）。
    */
@@ -378,25 +377,10 @@ export function createForegroundActivityAggregator(
       if (args.exitCode !== undefined) {
         command.exitCode = args.exitCode;
       }
-      // 幂等：linger timer 一旦启动就不重置——防止 native 层多次上报
-      // taskExit 导致 linger 无限延长, 用户看不到 activity 消失。
-      if (!command.lingerTimer) {
-        command.lingerTimer = setTimeout(() => {
-          const current = slots.get(panelId)?.command;
-          if (current?.kind !== "task" || current !== command) {
-            return;
-          }
-          current.lingerTimer = null;
-          if (
-            closeSlot(panelId, {
-              map: hookCooldownUntil,
-              ms: TASK_EXIT_LINGER_MS,
-            })
-          ) {
-            scheduleEmit();
-          }
-        }, TASK_EXIT_LINGER_MS);
-      }
+      // 终态常驻：task 层保留最终状态直到 panelClosed / rerun(taskLaunched) /
+      // 新命令接管——tab 的退出 chrome 由 activity 单源持续供给, 与持久化
+      // taskExitTabPatch 的 restore 语义一致（否则 renderer 在活动消失后只能
+      // 回退到 mount 时的陈旧 "Running" 基线）。
       scheduleEmit();
     },
 
@@ -407,6 +391,24 @@ export function createForegroundActivityAggregator(
         scheduleEmit();
       }
       pruneExpiredCooldowns();
+    },
+    ptyExited(panelId) {
+      const slot = slots.get(panelId);
+      if (slot?.command?.kind === "task") {
+        // pty 死亡 ≠ 面板关闭：task 进程退出是正常完结, 面板仍开着呈现
+        // 结果——保留 task 层（退出 chrome 单源）, 只清 hook 证据并冷却
+        // 拦迟到 hook。随后 lifecycle 的 taskFinished 照常落在本 slot 上
+        // （crash/kill 无 exit marker 的路径依赖这个顺序容忍）。
+        if (slot.hook) {
+          clearHookTimers(slot.hook);
+          slot.hook = null;
+          scheduleEmit();
+        }
+        hookCooldownUntil.set(panelId, now() + CLOSE_COOLDOWN_MS);
+        pruneExpiredCooldowns();
+        return;
+      }
+      api.panelClosed(panelId);
     },
 
     windowClosed(windowId) {

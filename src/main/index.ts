@@ -33,6 +33,7 @@ import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
+import { reconcileOrphanedRunningTasks } from "./state/terminal-session-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
 import { createWindowZoomController } from "./windows/window-zoom.ts";
@@ -294,6 +295,12 @@ app.whenReady().then(async () => {
         error instanceof Error ? error.message : String(error)
       );
     });
+
+  // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
+  // 从此不说谎（上进程遗留的 running 一律 cancelled）。
+  await reconcileOrphanedRunningTasks().catch((error: unknown) => {
+    console.error("[terminal-session] orphan task sweep failed:", error);
+  });
 
   const restored = await appCore.services.window.restoreOpenWindows();
   if (restored.length === 0) {

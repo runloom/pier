@@ -43,8 +43,59 @@
   shell activity（仅 `SESSION_CREATING_EVENTS` 才允许覆盖为 agent kind）。
 - **`agentLaunched`** 覆盖已有 hook agent activity 时清 `hookTtlTimer`，防止
   30min 后回落 ready 的旧 callback 触发。
-- **`taskFinished` linger 幂等**——多次上报 task exit 时首个 linger timer
-  优先，防止 timer 无限延长。
+- **Task tab 退出状态谎报**——任务结束后 tab 永久回落 "Running" 谎报运行中。
+  五处根因一并修复：
+  - `taskFinished` 终态常驻：移除 5s linger 清理，task activity 保留最终
+    status 直到 panelClosed / rerun / 新命令接管（tab 退出 chrome 的唯一
+    live 来源，消失即回退 mount 时的陈旧 "Running" 基线）。
+  - 新增 `ptyExited(panelId)`（native process-close 改走此入口）：pty 进程
+    退出 ≠ 面板关闭——task 面板保留终态 activity，只清 hook 证据；其余面板
+    等同 `panelClosed`。
+  - `taskLaunched` 门面把内部 windowId（如 `"main"`）换算成 electron
+    BrowserWindow.id 字符串——否则广播路由 `Number("main")=NaN`，task
+    activity 永远到不了 renderer。
+  - 新共享单源 `taskTabStateForActivityStatus`：renderer 活动 overlay 与
+    main 持久化 `taskExitTabPatch` 输出同一份完整 tab state
+    （指示器+label+色 token），修 label 停留 "Running" 的半更新。
+  - `bin/pier-cli-parser.js` `run.list`/`run.spawn` 的 `projectRoot` 字段
+    改回 schema 现名 `projectRootPath`（#53 迁移遗漏，CLI `tasks list/run`
+    与 terminal-task-status e2e 因此全断）。
+- **Task 面板 reload/restart 混淆**——renderer reload（main 进程未死）被当作
+  app restart 处理：running task 面板渲染静态 "Cancelled" 结果卡，活 pty 沦为
+  不可见僵尸（reconcile 按 layout 上报而保留）, 完成后 tab 又与卡片矛盾。
+  重设计为「活性单源 + 磁盘不说谎」：
+  - 新契约字段 `TerminalPanelSessionSnapshot.taskLive`：main 以
+    foreground-activity 的 task slot（终态常驻, 与面板同寿命）担保该 task
+    面板寿命仍在本进程内；`read-session` 注入。
+  - renderer 结果卡只给真死面板（`task && !taskLive`）；live 面板照常渲染
+    终端 → `create` → swift 对已存在 panelId 纯 reattach（PTY/scrollback
+    零销毁, 与 C 方案对齐）。`restoredTaskTabPatch` 推断层删除。
+  - `resolveCreateTerminalLaunch` 增 `taskLive` 直通分支：reattach 时 task
+    元数据原样保留, 不再把 running 强转 cancelled 落盘（否则真实退出时
+    `patchTaskStatus` 的 running 守卫失败, 终态永久丢失）。
+  - 新增启动孤儿清算 `reconcileOrphanedRunningTasks()`（`app.whenReady` 内
+    先于窗口恢复）：上进程遗留的 running 一律 cancelled（exitReason/Source
+    `"restore"`, 该枚举首个消费者）+ Cancelled tab chrome 落盘。
+  - e2e 实证：reload 重挂（终端非卡片, 存活 pty 退出后 tab 仍正确翻
+    succeeded）+ restart 清算（Cancelled 卡 + Cancelled tab）双场景 ×2 稳定。
+- **上游漏更新的死测试修复**（均在 clean main 上失败）：
+  - `workspace-host.test.tsx` 9 例：#53 preload API 改 `pier.window.getContext`
+    命名空间后 mock 仍是平铺 `getWindowContext`。
+  - `terminal-panel-lifecycle.test.tsx` 3 例：#56 状态栏恒挂载（自锁修复）与
+    #57 删除运行时 tab-patch 通路后, 测试仍钉旧契约/不可能值
+    （"old runtime tab" 等无 emitter 的死期望）。
+- **Layout 保存 500ms debounce 空窗**——面板创建后 <500ms 内 reload 会恢复
+  旧 layout：新面板从 UI 消失, 其活 pty 被 reconcile 判孤儿回收。
+  `workspace-host` 增 `beforeunload` flush：有未落盘变更时立即补发
+  `saveLayout`（invoke 消息投递即达 main, renderer teardown 不影响写盘）。
+- **e2e 无人值守可靠性**：
+  - `command-palette.spec.ts` 用显式条件等待（`[cmdk-input]` 可见等）替代
+    固定 `waitForTimeout` 睡眠——冷启动慢机上点击不再竞速 UI。
+  - `native-terminal-focus.spec.ts` 五个 osascript System Events keystroke
+    测试增加投递能力探测（首个门控测试内 6s 试写 marker, 模块级缓存判定）：
+    无人值守/缺 Accessibility 权限时显式 SKIP 而非 3×retry 失败。
+- **`pnpm check` 纳入 unit + component 测试套件**——此前门禁不含任何测试,
+  是 12 个死测试烂在 main 的直接原因（AGENTS.md 同步更新）。
 - **`buildBroadcast`** 浅拷贝 `activity` 引用，防同进程 listener 意外
   mutate 污染 aggregator 内部状态。
 - **`Cargo.toml` name 派生** 用 `[package]` 段锚定正则，修复

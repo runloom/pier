@@ -199,6 +199,14 @@ export function WorkspaceHost() {
       let userTouched = false;
       let didNotifyReadyToShow = false;
       const windowContextPromise = window.pier.window.getContext();
+      let flushRecordId: string | null = null;
+      windowContextPromise
+        .then((windowContext) => {
+          flushRecordId = windowContext.recordId;
+        })
+        .catch(() => {
+          // getContext 失败时 flush 兜底静默失效; 常规 save 路径自会重试并报错。
+        });
 
       const notifyReadyToShow = (): void => {
         if (didNotifyReadyToShow) {
@@ -274,6 +282,26 @@ export function WorkspaceHost() {
             console.error("[workspace] saveLayout failed:", err);
           });
         }, SAVE_DEBOUNCE_MS);
+      });
+
+      // 关 500ms debounce 空窗：reload/关窗时若有未落盘的 layout 变更, 立即
+      // 补发 save。invoke 消息投递即达 main, renderer teardown 不影响 main
+      // 写盘（否则面板创建后 <500ms 内 reload 会恢复到旧 layout——新面板
+      // 从 UI 消失, 其活 pty 被 reconcile 判孤儿回收）。
+      window.addEventListener("beforeunload", () => {
+        if (!saveTimer) {
+          return;
+        }
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        if (!flushRecordId) {
+          return;
+        }
+        window.pier.workspace
+          .saveLayout(event.api.toJSON(), flushRecordId)
+          .catch(() => {
+            // teardown 期 response 通道可能已断; main 侧写盘不受影响。
+          });
       });
 
       event.api.onDidMaximizedGroupChange(() => {

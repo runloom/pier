@@ -17,7 +17,10 @@ import {
   type JsonlObserver,
 } from "../services/foreground-activity/jsonl-observer.ts";
 import { readPreferences } from "../state/preferences.ts";
-import { findAppWindowByWebContents } from "../windows/window-identity.ts";
+import {
+  findAppWindowByInternalId,
+  findAppWindowByWebContents,
+} from "../windows/window-identity.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 
 const foregroundActivityAggregator = createForegroundActivityAggregator();
@@ -113,7 +116,15 @@ export const foregroundActivityService = {
     windowId: string,
     task: { taskId: string; label: string }
   ): void {
-    foregroundActivityAggregator.taskLaunched(panelId, windowId, task);
+    // task 生命周期回调携带内部 windowId（WindowContext.windowId, 如
+    // "main"）；聚合器与广播/快照/清理全链统一 electron BrowserWindow.id
+    // 字符串词汇——不换算的话 Number("main")=NaN, 广播永远到不了 renderer。
+    const win = findAppWindowByInternalId(windowId);
+    foregroundActivityAggregator.taskLaunched(
+      panelId,
+      win ? String(win.id) : windowId,
+      task
+    );
   },
   taskFinished(
     panelId: string,
@@ -126,6 +137,9 @@ export const foregroundActivityService = {
   },
   panelClosed(panelId: string): void {
     foregroundActivityAggregator.panelClosed(panelId);
+  },
+  ptyExited(panelId: string): void {
+    foregroundActivityAggregator.ptyExited(panelId);
   },
   retainPanels(windowId: string, activePanelIds: readonly string[]): void {
     foregroundActivityAggregator.retainPanels(windowId, activePanelIds);

@@ -311,6 +311,13 @@ export interface TerminalPanelSessionSnapshot {
   context?: PanelContext | undefined;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;
+  /**
+   * main 担保的 task 活性：该 panel 的 task 面板寿命仍在本 main 进程内
+   * （foreground-activity 有 task slot——running 或终态常驻）。true = renderer
+   * reload 重挂路径（native 面保留, 渲染真终端）；false/缺席 = app restart,
+   * 渲染静态结果卡。
+   */
+  taskLive?: boolean | undefined;
   title?: string | undefined;
   updatedAt: string;
 }

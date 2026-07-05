@@ -324,7 +324,7 @@ async function writeMarkerFromTerminal(
   win: Page,
   filePath: string,
   marker: string,
-  options: { focusDelayMs?: number } = {}
+  options: { focusDelayMs?: number; timeoutMs?: number } = {}
 ) {
   const command = `printf ${shellQuote(marker)} > ${shellQuote(filePath)}`;
   await focusElectronApp(app);
@@ -335,9 +335,40 @@ async function writeMarkerFromTerminal(
   await pasteTextIntoFocusedApp(command);
   await expect
     .poll(() => (existsSync(filePath) ? readFileSync(filePath, "utf8") : ""), {
-      timeout: 10_000,
+      timeout: options.timeoutMs ?? 10_000,
     })
     .toBe(marker);
+}
+
+const KEYSTROKE_SKIP_REASON =
+  "System Events keystrokes undeliverable (unattended session or missing Accessibility permission)";
+
+let keystrokesDeliverable: boolean | undefined;
+
+async function ensureKeystrokesDeliverable(
+  app: ElectronApplication,
+  win: Page,
+  markerDir: string
+): Promise<void> {
+  if (keystrokesDeliverable === false) {
+    test.skip(true, KEYSTROKE_SKIP_REASON);
+  }
+  if (keystrokesDeliverable === true) {
+    return;
+  }
+  try {
+    await writeMarkerFromTerminal(
+      app,
+      win,
+      join(markerDir, "probe.txt"),
+      "probe-ok",
+      { timeoutMs: 6000 }
+    );
+    keystrokesDeliverable = true;
+  } catch {
+    keystrokesDeliverable = false;
+    test.skip(true, KEYSTROKE_SKIP_REASON);
+  }
 }
 
 async function buildFourTerminalGrid(win: Page) {
@@ -421,6 +452,7 @@ async function dragTopLeftTabIntoBottomLeftRightSplit(win: Page) {
 
 test.describe("Native terminal focus e2e", () => {
   test("initial terminal accepts shell input", async () => {
+    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -431,6 +463,7 @@ test.describe("Native terminal focus e2e", () => {
       await win.waitForLoadState("domcontentloaded");
       await waitForTerminalCount(win, 1);
       await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
 
       await writeMarkerFromTerminal(
         app,
@@ -446,6 +479,7 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("terminal accepts shell input after tab drag into split group", async () => {
+    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -459,6 +493,7 @@ test.describe("Native terminal focus e2e", () => {
       });
 
       await buildFourTerminalGrid(win);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
       await dragTopLeftTabIntoBottomLeftRightSplit(win);
 
       await writeMarkerFromTerminal(
@@ -475,6 +510,7 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("terminal accepts shell input after command palette overlay closes", async () => {
+    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -485,6 +521,7 @@ test.describe("Native terminal focus e2e", () => {
       await win.waitForLoadState("domcontentloaded");
       await waitForTerminalCount(win, 1);
       await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
 
       await win.keyboard.press("Meta+Shift+KeyP");
       await expect(win.locator('[role="dialog"]')).toBeAttached({
@@ -572,6 +609,7 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("native terminal content focus does not reveal its hidden tab", async () => {
+    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -586,6 +624,7 @@ test.describe("Native terminal focus e2e", () => {
       await waitForPierCli(userDataDir);
       await waitForTerminalPanelCount(userDataDir, 1);
       await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
 
       await win.keyboard.press("Meta+KeyD");
       await waitForTerminalPanelCount(userDataDir, 2);
@@ -635,6 +674,7 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("auxiliary terminal content click restores native input without revealing its hidden tab", async () => {
+    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -649,6 +689,7 @@ test.describe("Native terminal focus e2e", () => {
       await waitForPierCli(userDataDir);
       await waitForTerminalPanelCount(userDataDir, 1);
       await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
 
       await win.keyboard.press("Meta+KeyD");
       await waitForTerminalPanelCount(userDataDir, 2);

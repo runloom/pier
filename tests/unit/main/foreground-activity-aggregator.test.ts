@@ -224,8 +224,13 @@ describe("ForegroundActivityAggregator", () => {
     a = agg.snapshot().activities[0] as TaskActivity;
     expect(a.status).toBe("success");
     expect(a.exitCode).toBe(0);
-    // 5s linger 后自然清理
-    advance(5001);
+    // 终态常驻：活动不随时间消失（tab 退出 chrome 的唯一 live 来源, 消失会
+    // 让 renderer 回退到 mount 时的陈旧 "Running" 基线）
+    advance(60_000);
+    a = agg.snapshot().activities[0] as TaskActivity;
+    expect(a.status).toBe("success");
+    // panel 关闭才清
+    agg.panelClosed("p1");
     expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });
@@ -410,16 +415,20 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("回归: taskFinished 双次调用 linger 幂等 (第二次不重置 timer)", () => {
+  it("回归: task 终态常驻, rerun(taskLaunched) 复位为 running", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
-    agg.taskFinished("p1", { status: "success", exitCode: 0 });
-    // linger 已启动, 3s 后二次 taskFinished
-    advance(3000);
     agg.taskFinished("p1", { status: "failure", exitCode: 1 });
-    // 从第一次调用起再 2001ms (总 5001ms) → 首次 linger 到期 → activity 应清
-    advance(2001);
-    expect(agg.snapshot().activities).toHaveLength(0);
+    // 终态跨任意时长常驻（tab 退出 chrome 单源）
+    advance(30_000);
+    let a = agg.snapshot().activities[0] as TaskActivity;
+    expect(a.status).toBe("failure");
+    expect(a.exitCode).toBe(1);
+    // 同 panel rerun：task 层整体替换, 回 running（#41 终端复用流）
+    agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
+    a = agg.snapshot().activities[0] as TaskActivity;
+    expect(a.status).toBe("running");
+    expect(a.exitCode).toBeUndefined();
     agg.dispose();
   });
 
@@ -469,13 +478,13 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("回归: windowClosed 清 taskLingerTimer (无残留 timer)", () => {
+  it("回归: windowClosed 清已完成 task activity (无幽灵复活)", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
     agg.taskFinished("p1", { status: "success", exitCode: 0 });
     agg.windowClosed("1");
     expect(agg.snapshot().activities).toHaveLength(0);
-    // linger timer 应已清; advance 后不应有幽灵 emit / 状态复活
+    // advance 后不应有幽灵 emit / 状态复活
     advance(6000);
     expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
@@ -593,6 +602,86 @@ describe("ForegroundActivityAggregator", () => {
     const snap = agg.snapshot();
     expect(snap.activities).toHaveLength(1);
     expect(snap.activities[0]?.kind).toBe("task");
+    agg.dispose();
+  });
+
+  it("回归: ptyExited ≠ panelClosed — task 终态在 pty 退出后常驻", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
+    agg.taskFinished("p1", { status: "success", exitCode: 0 });
+    // 原生 pty 进程退出 ≠ 面板关闭：task 层是 tab 退出 chrome 的单源, 必须保留
+    agg.ptyExited("p1");
+    let snap = agg.snapshot();
+    expect(snap.activities).toHaveLength(1);
+    let a = snap.activities[0] as TaskActivity;
+    expect(a.kind).toBe("task");
+    expect(a.status).toBe("success");
+    expect(a.exitCode).toBe(0);
+    // 跨任意时长常驻（若 ptyExited 走了 panelClosed 清层路径, 此处已为空）
+    advance(10_000);
+    snap = agg.snapshot();
+    expect(snap.activities).toHaveLength(1);
+    a = snap.activities[0] as TaskActivity;
+    expect(a.status).toBe("success");
+    agg.dispose();
+  });
+
+  it("回归: crash 顺序容忍 — ptyExited 先于 taskFinished 到达时 task 层不丢", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
+    // crash/kill：无 exit marker, 原生 process-close 先到, lifecycle 尚未收尾
+    agg.ptyExited("p1");
+    let a = agg.snapshot().activities[0] as TaskActivity;
+    expect(a).toBeDefined();
+    expect(a.kind).toBe("task");
+    expect(a.status).toBe("running");
+    // 随后异步 lifecycle 的 taskFinished 照常落在本 slot 上
+    agg.taskFinished("p1", { status: "failure", exitCode: 1 });
+    a = agg.snapshot().activities[0] as TaskActivity;
+    expect(a.status).toBe("failure");
+    expect(a.exitCode).toBe(1);
+    agg.dispose();
+  });
+
+  it("回归: 非 task 面板 ptyExited 等同 panelClosed — 清层且 5s 冷却拦 SessionStart", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestCommandStarted("p1", "1", "ls", null);
+    expect(agg.snapshot().activities).toHaveLength(1);
+    // shell 面板 pty 退出 → 完整 panelClosed 语义（若 no-op 此处仍有 activity）
+    agg.ptyExited("p1");
+    expect(agg.snapshot().activities).toHaveLength(0);
+    // 幽灵防复活：panel 冷却期内 SessionStart 也被拦（过消抖窗仍无 activity）
+    agg.ingestAgentEvent(hookEvent("SessionStart"));
+    advance(250);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    // panel 冷却过期后 SessionStart 才能重建
+    advance(4751);
+    agg.ingestAgentEvent(hookEvent("SessionStart"));
+    advance(250);
+    expect(agg.snapshot().activities).toHaveLength(1);
+    agg.dispose();
+  });
+
+  it("回归: task 面板 ptyExited 清 hook 证据并冷却迟到 hook, task 投影不动", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("p1", "1", { taskId: "t1", label: "test" });
+    // hook 层在 task 投影之下建立（task 压住 hook 投影）
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.taskFinished("p1", { status: "success", exitCode: 0 });
+    agg.ptyExited("p1");
+    let snap = agg.snapshot();
+    expect(snap.activities).toHaveLength(1);
+    let a = snap.activities[0] as TaskActivity;
+    expect(a.kind).toBe("task");
+    expect(a.status).toBe("success");
+    // 迟到 hook 落在冷却上 → 不得重建 hook 层 / 改动投影
+    agg.ingestAgentEvent(hookEvent("ToolStart"));
+    advance(250);
+    snap = agg.snapshot();
+    expect(snap.activities).toHaveLength(1);
+    a = snap.activities[0] as TaskActivity;
+    expect(a.kind).toBe("task");
+    expect(a.status).toBe("success");
     agg.dispose();
   });
 });

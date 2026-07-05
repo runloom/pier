@@ -392,7 +392,7 @@ function parseTasks(action, value, unexpected, args, cwd, route) {
       throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
     }
     return {
-      projectRoot: projectRootOption(args, cwd),
+      projectRootPath: projectRootOption(args, cwd),
       type: "run.list",
     };
   }
@@ -406,7 +406,7 @@ function parseTasks(action, value, unexpected, args, cwd, route) {
       ...(inputs && { inputs }),
       ...(route.placement && { placement: route.placement }),
       ...(route.windowId && { windowId: route.windowId }),
-      projectRoot: projectRootOption(args, cwd),
+      projectRootPath: projectRootOption(args, cwd),
       taskId: requireValue(value),
       type: "run.spawn",
     };

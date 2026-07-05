@@ -284,7 +284,7 @@ export function createTaskService({
         forgetRunningPanel(node.panelId, node.windowId);
         // 只对本次 cancel 才真正翻状态的节点 fire onFinished（cancelRun 内 coordinator
         // 只把 pending/running 改为 cancelled；succeeded/failed 节点保留原状态）。
-        // 无过滤会把已 success 的 activity 在 5s linger 内闪回 cancelled。
+        // 无过滤会把已 success 的 activity 覆盖为 cancelled（终态常驻后即永久谎报）。
         if (node.status === "cancelled") {
           onTaskActivity?.onFinished(node.panelId, { status: "cancelled" });
         }

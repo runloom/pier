@@ -3,6 +3,7 @@ import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import {
   type ForegroundActivity,
   tabStatusForActivityStatus,
+  taskTabStateForActivityStatus,
 } from "@shared/contracts/foreground-activity.ts";
 import {
   normalizePanelTabChromeInput,
@@ -101,8 +102,8 @@ export function terminalPanelDescriptor(args: {
  * 活动消失即自动回退。
  *
  * - `agent` kind: 状态点从 agent status 派生, icon 换 agent, title 优先保留终端标题
- * - `task` kind: running 显示 running 状态点; success/failure/cancelled
- *   映射到相应的 tab status; label 作为 title
+ * - `task` kind: 完整 tab state（指示器+label+色 token）由
+ *   taskTabStateForActivityStatus 单源派生（与持久化 taskExitTabPatch 一致）; label 作为 title
  * - `shell` / `idle` / undefined: 无 overlay, 走 tab 默认呈现
  */
 export function activityTabChromeOverlay(
@@ -124,28 +125,10 @@ export function activityTabChromeOverlay(
     };
   }
   if (activity.kind === "task") {
-    const status = taskTabStatus(activity.status);
     return {
-      state: { status },
+      state: taskTabStateForActivityStatus(activity.status, activity.exitCode),
       title: activity.label,
     };
   }
   return null;
-}
-
-function taskTabStatus(
-  status: "running" | "success" | "failure" | "cancelled"
-): "running" | "succeeded" | "failed" | "cancelled" | "idle" {
-  switch (status) {
-    case "running":
-      return "running";
-    case "success":
-      return "succeeded";
-    case "failure":
-      return "failed";
-    case "cancelled":
-      return "cancelled";
-    default:
-      return "idle";
-  }
 }
