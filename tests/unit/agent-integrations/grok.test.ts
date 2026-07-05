@@ -53,7 +53,7 @@ describe("grokIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("写入专用文件 ~/.grok/hooks/pier-status.json，7 个事件各一条命令", async () => {
+  it("写入专用文件 ~/.grok/hooks/pier-status.json，14 个事件各一条命令", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -65,31 +65,64 @@ describe("grokIntegration", () => {
     }
     const typedHooks = hooks as unknown as Record<string, Matcher[]>;
 
+    // 生命周期/非工具事件：无 matcher
     for (const evt of [
       "SessionStart",
       "UserPromptSubmit",
       "Stop",
+      "StopFailure",
+      "Notification",
+      "SubagentStart",
+      "SubagentStop",
+      "PreCompact",
+      "PostCompact",
       "SessionEnd",
     ]) {
       expect(hooks[evt], evt).toHaveLength(1);
       expect(typedHooks[evt]?.[0]?.matcher).toBeUndefined();
     }
-    for (const evt of ["PreToolUse", "PostToolUse", "PostToolUseFailure"]) {
+    // 工具事件：matcher "*"（官方文档 line 147 明确 matcher 测试 tool name）
+    for (const evt of [
+      "PreToolUse",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "PermissionDenied",
+    ]) {
       expect(hooks[evt], evt).toHaveLength(1);
       expect(typedHooks[evt]?.[0]?.matcher).toBe("*");
     }
-    expect(hooks.Notification).toBeUndefined();
 
+    // 所有命令包含 agentId
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
       expect(cmd).toContain('"grok"');
     }
 
+    // pierEvent 名称核验（本机 ~/.grok/docs/user-guide/10-hooks.md 对照）
     expect(typedHooks.PostToolUseFailure?.[0]?.hooks[0]?.command).toContain(
       '"ToolComplete"'
     );
     expect(typedHooks.SessionEnd?.[0]?.hooks[0]?.command).toContain(
       '"SessionEnd"'
+    );
+    expect(typedHooks.StopFailure?.[0]?.hooks[0]?.command).toContain('"error"');
+    expect(typedHooks.Notification?.[0]?.hooks[0]?.command).toContain(
+      '"PermissionRequest"'
+    );
+    expect(typedHooks.PermissionDenied?.[0]?.hooks[0]?.command).toContain(
+      '"processing"'
+    );
+    expect(typedHooks.SubagentStart?.[0]?.hooks[0]?.command).toContain(
+      '"SubagentStart"'
+    );
+    expect(typedHooks.SubagentStop?.[0]?.hooks[0]?.command).toContain(
+      '"SubagentStop"'
+    );
+    expect(typedHooks.PreCompact?.[0]?.hooks[0]?.command).toContain(
+      '"processing"'
+    );
+    expect(typedHooks.PostCompact?.[0]?.hooks[0]?.command).toContain(
+      '"processing"'
     );
   });
 

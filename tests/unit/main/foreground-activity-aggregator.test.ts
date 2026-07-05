@@ -684,4 +684,102 @@ describe("ForegroundActivityAggregator", () => {
     expect(a.status).toBe("success");
     agg.dispose();
   });
+
+  describe("omp 新映射下的多轮/子代理交错回归", () => {
+    // omp 集成重写后 turn_start/turn_end 不再订阅——旧映射把 turn_end 映射为
+    // Stop, 每轮 LLM round 边界都会谎报「等待输入」。以下事件名是新映射
+    // (OMP_EVENT_MAP / OMP_SUBAGENT_EVENT_MAP) 输出的 pier 事件, 序列取自
+    // 真实 omp 进程 probe 采集的原生事件流。
+    function ompEvent(event: string): AgentHookEventPayload {
+      return {
+        v: 1,
+        kind: "agentEvent",
+        agent: "omp",
+        event,
+        panelId: "p1",
+        windowId: "1",
+      };
+    }
+
+    it("多轮工具循环期间 status 恒为 tool, 仅 Stop 才 ready (旧 turn_end→Stop 谎报回归)", () => {
+      const agg = createForegroundActivityAggregator({ now });
+      // 原生: session_start → agent_start → 2×(tool_call → tool_result) → agent_end
+      agg.ingestAgentEvent(ompEvent("SessionStart"));
+      agg.ingestAgentEvent(ompEvent("PromptSubmit"));
+      let a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.agentId).toBe("omp");
+      expect(a.status).toBe("processing");
+      for (let round = 1; round <= 2; round += 1) {
+        agg.ingestAgentEvent(ompEvent("ToolStart"));
+        a = agg.snapshot().activities[0] as AgentActivity;
+        expect(a.status, `第 ${round} 轮 ToolStart 后`).toBe("tool");
+        agg.ingestAgentEvent(ompEvent("ToolComplete"));
+        a = agg.snapshot().activities[0] as AgentActivity;
+        // 旧 bug 形态: turn_end→Stop 会在轮间此处插入 ready(谎报等待输入)
+        expect(a.status, `第 ${round} 轮 ToolComplete 后`).toBe("tool");
+      }
+      agg.ingestAgentEvent(ompEvent("Stop"));
+      a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.status).toBe("ready");
+      agg.dispose();
+    });
+
+    it("子代理交错: Subagent 事件不改主 status, subagentCount 1→0, activity 全程不拆层", () => {
+      const agg = createForegroundActivityAggregator({ now });
+      agg.ingestAgentEvent(ompEvent("SessionStart"));
+      agg.ingestAgentEvent(ompEvent("PromptSubmit"));
+      // 真实 probe 交错(主 M / 子 S)。子实例的 session_* 不产生 pier 事件,
+      // 主 activity 不得被中途拆层。
+      // [原生事件, pier 事件, 期望 status, 期望 subagentCount]
+      const steps: [string, string, string, number][] = [
+        ["M:tool_call(task)", "ToolStart", "tool", 0],
+        ["M:tool_result(task)", "ToolComplete", "tool", 0],
+        ["S:agent_start", "SubagentStart", "tool", 1],
+        ["M:tool_call(job)", "ToolStart", "tool", 1],
+        ["S:agent_end", "SubagentStop", "tool", 0],
+        ["M:tool_result(job)", "ToolComplete", "tool", 0],
+      ];
+      for (const [native, event, status, subagents] of steps) {
+        agg.ingestAgentEvent(ompEvent(event));
+        const snap = agg.snapshot();
+        expect(snap.activities, native).toHaveLength(1);
+        const a = snap.activities[0] as AgentActivity;
+        expect(a.status, native).toBe(status);
+        expect(a.subagentCount, native).toBe(subagents);
+      }
+      // M:agent_end → Stop: 回合真正结束
+      agg.ingestAgentEvent(ompEvent("Stop"));
+      const a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.status).toBe("ready");
+      expect(a.subagentCount).toBe(0);
+      agg.dispose();
+    });
+
+    it("Stop 后迟到 ToolComplete/ToolStart 被吸收, PromptSubmit 复活回合", () => {
+      // 「Stop 后迟到 ToolStart 被吸收」已有独立用例; 此处补缺口:
+      // ToolComplete 同样被吸收 + PromptSubmit 是解除吸收的唯一复活证据。
+      const agg = createForegroundActivityAggregator({ now });
+      agg.ingestAgentEvent(ompEvent("PromptSubmit"));
+      agg.ingestAgentEvent(ompEvent("ToolStart"));
+      agg.ingestAgentEvent(ompEvent("Stop"));
+      let a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.status).toBe("ready");
+      // 迟到工具事件(扩展侧 pierEmit 异步落盘乱序)不得复活 tool
+      agg.ingestAgentEvent(ompEvent("ToolComplete"));
+      a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.status).toBe("ready");
+      agg.ingestAgentEvent(ompEvent("ToolStart"));
+      a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.status).toBe("ready");
+      // 新一轮 agent_start → PromptSubmit 才解除吸收
+      agg.ingestAgentEvent(ompEvent("PromptSubmit"));
+      a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.status).toBe("processing");
+      // 复活后工具事件恢复生效
+      agg.ingestAgentEvent(ompEvent("ToolStart"));
+      a = agg.snapshot().activities[0] as AgentActivity;
+      expect(a.status).toBe("tool");
+      agg.dispose();
+    });
+  });
 });

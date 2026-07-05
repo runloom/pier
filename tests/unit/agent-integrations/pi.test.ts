@@ -15,7 +15,6 @@ import {
 
 const NATIVE_EVENTS = [
   "session_start",
-  "input",
   "agent_start",
   "agent_end",
   "session_shutdown",
@@ -30,35 +29,40 @@ describe("buildPiExtensionSource", () => {
     expect(src).toContain("PIER_WINDOW_ID");
     expect(src).not.toContain("PIER_AGENT_HOOK_PORT");
     expect(src).not.toContain("PIER_AGENT_HOOK_TOKEN");
-    // 无顶层 ImportDeclaration；await import() 是 CallExpression 允许在函数体内。
+    // 无顶层 ImportDeclaration；pierAppend 用 process.getBuiltinModule（运行时调用）。
     for (const line of src.split("\n")) {
       expect(line.trimStart().startsWith("import ")).toBe(false);
     }
-    // 运行时动态 import 拿到 fs.promises（ESM/CJS 兼容）
-    expect(src).toContain('await import("node:fs/promises")');
-    expect(src).not.toContain('require("node:fs/promises")');
+    // 同步优先：process.getBuiltinModule + appendFileSync
+    expect(src).toContain("process.getBuiltinModule");
+    expect(src).toContain("appendFileSync");
+    // 异步退化分支保留（旧 Node 宿主）
+    expect(src).toContain('import("node:fs/promises")');
+    expect(src).toContain("appendFile");
     // HTTP 通路已删
     expect(src).not.toContain("fetch(");
     expect(src).not.toContain("/agent-event");
   });
 
-  it("事件表齐全：全部 5 个原生事件均注册且映射到正确 pier 事件（coarse 粒度）", () => {
+  it("事件表齐全：全部 4 个原生事件均注册且映射到正确 pier 事件（coarse 粒度）", () => {
     const src = buildPiExtensionSource();
-    expect(PI_EVENT_MAP).toHaveLength(5);
+    expect(PI_EVENT_MAP).toHaveLength(4);
     for (const evt of NATIVE_EVENTS) {
       expect(src).toContain(`pi.on("${evt}"`);
     }
     expect(src).toContain('pierEmit("SessionStart")');
     expect(src).toContain('pierEmit("PromptSubmit")');
-    expect(src).toContain('pierEmit("processing")');
     expect(src).toContain('pierEmit("Stop")');
     expect(src).toContain('pierEmit("SessionEnd")');
+    // agent_start 映射 PromptSubmit（与 omp 对齐, 非旧 processing）
     expect(
       PI_EVENT_MAP.find((e) => e.nativeEvent === "agent_start")?.pierEvent
-    ).toBe("processing");
+    ).toBe("PromptSubmit");
     expect(
       PI_EVENT_MAP.find((e) => e.nativeEvent === "agent_end")?.pierEvent
     ).toBe("Stop");
+    // 旧 input→PromptSubmit 已删——input 在 validation 前触发, 会卡态
+    expect(PI_EVENT_MAP.find((e) => e.nativeEvent === "input")).toBeUndefined();
     // pi 无工具/权限粒度事件
     expect(src).not.toContain("ToolStart");
     expect(src).not.toContain("PermissionRequest");

@@ -7,6 +7,7 @@ import {
   installOmpExtension,
   OMP_EVENT_MAP,
   OMP_MARKER,
+  OMP_SUBAGENT_EVENT_MAP,
   ompDetect,
   ompExtensionPath,
   ompHome,
@@ -15,10 +16,12 @@ import {
 
 const NATIVE_EVENTS = [
   "session_start",
-  "turn_start",
+  "agent_start",
   "tool_call",
   "tool_result",
-  "turn_end",
+  "tool_approval_requested",
+  "tool_approval_resolved",
+  "agent_end",
   "session_shutdown",
 ];
 
@@ -37,35 +40,54 @@ describe("buildOmpExtensionSource", () => {
     for (const line of src.split("\n")) {
       expect(line.trimStart().startsWith("import ")).toBe(false);
     }
-    // 运行时动态 import 拿到 fs.promises（ESM/CJS 兼容, 无 require ReferenceError）
-    expect(src).toContain('await import("node:fs/promises")');
+    // 运行时 process.getBuiltinModule 同步 append：非 ImportDeclaration,
+    // 保 JSONL 文件序（同毫秒事件在未 await 的异步 append 下乱序）,
+    // 且宿主退出前最后的 session_shutdown 必落盘。
+    expect(src).toContain('process.getBuiltinModule("node:fs")');
+    expect(src).toContain("appendFileSync");
+    expect(src).not.toContain('await import("node:fs/promises")');
     expect(src).not.toContain('require("node:fs/promises")');
     // HTTP 通路已删
     expect(src).not.toContain("fetch(");
     expect(src).not.toContain("/agent-event");
   });
 
-  it("事件表齐全：全部 6 个原生事件均注册且映射到正确 pier 事件", () => {
+  it("事件表齐全：主表 8 项、子代理表 2 项, 逐事件单次订阅且无 turn_*", () => {
     const src = buildOmpExtensionSource();
-    expect(OMP_EVENT_MAP).toHaveLength(6);
+    // 主会话映射：回合真边界是 agent_start/agent_end；turn_* 是每轮 LLM
+    // round 边界, 映射 Stop 会在多轮工具循环中途谎报「等待输入」——不再订阅。
+    expect(OMP_EVENT_MAP).toHaveLength(8);
+    expect(
+      Object.fromEntries(OMP_EVENT_MAP.map((e) => [e.nativeEvent, e.pierEvent]))
+    ).toEqual({
+      session_start: "SessionStart",
+      agent_start: "PromptSubmit",
+      tool_call: "ToolStart",
+      tool_result: "ToolComplete",
+      tool_approval_requested: "PermissionRequest",
+      tool_approval_resolved: "ToolStart",
+      agent_end: "Stop",
+      session_shutdown: "SessionEnd",
+    });
+    // 子代理映射：task subagent 实例只上报计数事件, 不打穿主状态。
+    expect(OMP_SUBAGENT_EVENT_MAP).toHaveLength(2);
+    expect(
+      Object.fromEntries(
+        OMP_SUBAGENT_EVENT_MAP.map((e) => [e.nativeEvent, e.pierEvent])
+      )
+    ).toEqual({
+      agent_start: "SubagentStart",
+      agent_end: "SubagentStop",
+    });
+    // 生成源码：8 个原生事件各恰好一次订阅（主/子映射合一, 单次 pi.on）。
     for (const evt of NATIVE_EVENTS) {
-      expect(src).toContain(`pi.on("${evt}"`);
+      expect(
+        src.match(new RegExp(`pi\\.on\\("${evt}"`, "g")),
+        evt
+      ).toHaveLength(1);
     }
-    expect(src).toContain('pierEmit("SessionStart")');
-    expect(src).toContain('pierEmit("PromptSubmit")');
-    expect(src).toContain('pierEmit("ToolStart")');
-    expect(src).toContain('pierEmit("ToolComplete")');
-    expect(src).toContain('pierEmit("Stop")');
-    expect(src).toContain('pierEmit("SessionEnd")');
-    expect(
-      OMP_EVENT_MAP.find((e) => e.nativeEvent === "session_start")?.pierEvent
-    ).toBe("SessionStart");
-    expect(
-      OMP_EVENT_MAP.find((e) => e.nativeEvent === "tool_call")?.pierEvent
-    ).toBe("ToolStart");
-    expect(
-      OMP_EVENT_MAP.find((e) => e.nativeEvent === "tool_result")?.pierEvent
-    ).toBe("ToolComplete");
+    expect(src).not.toContain('pi.on("turn_start"');
+    expect(src).not.toContain('pi.on("turn_end"');
   });
 
   it("agent 字段为 omp", () => {
@@ -73,23 +95,242 @@ describe("buildOmpExtensionSource", () => {
     expect(src).toContain('agent: "omp"');
   });
 
-  it("加载即 emit SessionStart：extension 函数体开头独立调用, 先于 pi.on 订阅", () => {
+  it("角色分派取代加载即上报：无字面量 pierEmit 调用, 经实例计数 + hasUI 判定", () => {
     const src = buildOmpExtensionSource();
-    const functionStart = src.indexOf(
-      "export default function PierAgentStatus(pi)"
+    // 不再「加载即 pierEmit(\"SessionStart\")」——SessionStart 只作为
+    // pierDispatch 的参数出现, 由 session_start 事件触发。
+    expect(src).not.toContain('pierEmit("');
+    // 角色判定要素：模块级实例计数、统一分派函数、hasUI 主会话判定。
+    expect(src).toContain("pierInstanceCount");
+    expect(src).toContain("pierDispatch");
+    expect(src).toContain("hasUI === true");
+    // 同步 append 已取代 promise 串行链。
+    expect(src).not.toContain("pierEmitChain");
+  });
+});
+
+describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () => {
+  const ORIG = {
+    log: process.env.PIER_AGENT_EVENT_LOG,
+    panelId: process.env.PIER_PANEL_ID,
+    windowId: process.env.PIER_WINDOW_ID,
+  };
+
+  afterEach(() => {
+    restoreEnv("PIER_AGENT_EVENT_LOG", ORIG.log);
+    restoreEnv("PIER_PANEL_ID", ORIG.panelId);
+    restoreEnv("PIER_WINDOW_ID", ORIG.windowId);
+  });
+
+  function restoreEnv(key: string, value: string | undefined): void {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  interface OmpEventCtx {
+    hasUI: boolean;
+  }
+  type OmpHandler = (event: unknown, ctx: OmpEventCtx) => void;
+  type OmpExtensionFactory = (pi: {
+    on: (name: string, handler: OmpHandler) => void;
+  }) => void;
+
+  /** 假 pi：on 收集 handlers, fire 模拟宿主派发；未订阅事件静默无操作。 */
+  function createFakePi() {
+    const handlers = new Map<string, OmpHandler[]>();
+    return {
+      pi: {
+        on(name: string, handler: OmpHandler): void {
+          const list = handlers.get(name);
+          if (list) {
+            list.push(handler);
+          } else {
+            handlers.set(name, [handler]);
+          }
+        },
+      },
+      fire(name: string, ctx: OmpEventCtx): void {
+        for (const handler of handlers.get(name) ?? []) {
+          handler({}, ctx);
+        }
+      },
+    };
+  }
+
+  /**
+   * 求值生成源码, 一次求值 = 一个全新模块实例（pierInstanceCount 归零）,
+   * 模拟一个新的 omp 宿主进程；三个 PIER_ 环境变量指向唯一临时 JSONL。
+   *
+   * 不写临时文件走 import()：vitest 模块运行器解析不了仓库根外的文件,
+   * jsdom 池的 vm 上下文又未接通动态 import 回调, 原生 import() 同样不可用。
+   * 生成源码同步化后不含任何 import, 把模块边界 export default 换成
+   * module.exports 即可用 new Function 直接求值——被测逻辑一字未改。
+   */
+  async function loadFreshExtension(): Promise<{
+    factory: OmpExtensionFactory;
+    logPath: string;
+  }> {
+    const source = buildOmpExtensionSource();
+    // 钉住替换点唯一：若未来注释/字符串里再出现同 token, replace 只改首处,
+    // 漏改的第二处会让 new Function 语法错误且排查成本高——先显式失败。
+    const exportTokenCount =
+      source.match(/export default function/g)?.length ?? 0;
+    if (exportTokenCount !== 1) {
+      throw new Error(
+        `生成源码应恰含一处 export default function, 实际 ${exportTokenCount} 处`
+      );
+    }
+    const cjsSource = source.replace(
+      "export default function",
+      "module.exports = function"
     );
-    const loadEmit = src.indexOf('pierEmit("SessionStart");', functionStart);
-    const firstSubscription = src.indexOf(
-      'pi.on("session_start"',
-      functionStart
-    );
-    expect(functionStart).toBeGreaterThanOrEqual(0);
-    expect(loadEmit).toBeGreaterThan(functionStart);
-    expect(loadEmit).toBeLessThan(firstSubscription);
-    // 独立语句, 不在任何 pi.on(...) 回调闭包内。
-    const between = src.slice(functionStart, firstSubscription);
-    expect(between.match(/pierEmit\("SessionStart"\)/g)).toHaveLength(1);
-    expect(between).not.toContain("pi.on(");
+    const moduleShim: { exports: OmpExtensionFactory | undefined } = {
+      exports: undefined,
+    };
+    const evaluate = new Function("module", cjsSource) as (
+      shim: typeof moduleShim
+    ) => void;
+    evaluate(moduleShim);
+    if (typeof moduleShim.exports !== "function") {
+      throw new Error("生成源码未导出扩展工厂函数");
+    }
+    const dir = await mkdtemp(join(tmpdir(), "pier-omp-ext-"));
+    const logPath = join(dir, "events.jsonl");
+    process.env.PIER_AGENT_EVENT_LOG = logPath;
+    process.env.PIER_PANEL_ID = "panel-1";
+    process.env.PIER_WINDOW_ID = "window-1";
+    return { factory: moduleShim.exports, logPath };
+  }
+
+  async function readEmittedRecords(
+    logPath: string
+  ): Promise<Record<string, unknown>[]> {
+    const raw = await readFile(logPath, "utf8");
+    return raw
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  }
+
+  function eventsOf(records: Record<string, unknown>[]): unknown[] {
+    return records.map((record) => record.event);
+  }
+
+  it("主会话(hasUI=true)：事件同步落盘且顺序精确, turn_end 无输出", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = { hasUI: true };
+    // turn_end 夹在序列中间：未订阅 → 不产生任何行（核心 bug 回归——
+    // 旧版映射 Stop, 多轮工具循环中途会谎报「等待输入」）。
+    for (const evt of [
+      "session_start",
+      "agent_start",
+      "tool_call",
+      "tool_result",
+      "turn_end",
+      "tool_approval_requested",
+      "tool_approval_resolved",
+      "agent_end",
+    ]) {
+      main.fire(evt, ctx);
+    }
+    const records = await readEmittedRecords(logPath);
+    expect(eventsOf(records)).toEqual([
+      "SessionStart",
+      "PromptSubmit",
+      "ToolStart",
+      "ToolComplete",
+      "PermissionRequest",
+      "ToolStart",
+      "Stop",
+    ]);
+    // JSONL 载荷契约（聚合器按这些字段消费）。
+    expect(records[0]).toMatchObject({
+      v: 1,
+      kind: "agentEvent",
+      panelId: "panel-1",
+      windowId: "window-1",
+      pid: process.pid,
+      agent: "omp",
+      event: "SessionStart",
+    });
+    expect(typeof records[0]?.ts).toBe("number");
+  });
+
+  it("task subagent(非首实例且 hasUI=false)：交错序列中只追加 Subagent 计数事件", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    // 同进程两次工厂调用 = 主会话 + task subagent（实测同 pid）。
+    const main = createFakePi();
+    const sub = createFakePi();
+    factory(main.pi);
+    factory(sub.pi);
+    const mainCtx: OmpEventCtx = { hasUI: true };
+    const subCtx: OmpEventCtx = { hasUI: false };
+    // 真实 probe 交错序列（2026-07-05, M 主会话 / S 子实例）。
+    main.fire("session_start", mainCtx); // SessionStart
+    main.fire("agent_start", mainCtx); // PromptSubmit
+    main.fire("tool_call", mainCtx); // ToolStart (task)
+    main.fire("tool_result", mainCtx); // ToolComplete
+    sub.fire("session_start", subCtx); // 子表无此项 → 无输出, 角色在此锁定 sub
+    sub.fire("agent_start", subCtx); // SubagentStart
+    main.fire("tool_call", mainCtx); // ToolStart (job)
+    sub.fire("tool_call", subCtx); // 无输出
+    sub.fire("tool_result", subCtx); // 无输出
+    sub.fire("agent_end", subCtx); // SubagentStop
+    main.fire("tool_result", mainCtx); // ToolComplete
+    main.fire("agent_end", mainCtx); // Stop
+    sub.fire("session_shutdown", subCtx); // 无输出——不拆主会话层
+    main.fire("session_shutdown", mainCtx); // SessionEnd
+    expect(eventsOf(await readEmittedRecords(logPath))).toEqual([
+      "SessionStart",
+      "PromptSubmit",
+      "ToolStart",
+      "ToolComplete",
+      "SubagentStart",
+      "ToolStart",
+      "SubagentStop",
+      "ToolComplete",
+      "Stop",
+      "SessionEnd",
+    ]);
+  });
+
+  it("headless 主会话兜底：首实例即使 hasUI=false 也按主表上报", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    // omp -p 主会话无 UI, 靠「进程内首实例必是主会话」兜底。
+    const ctx: OmpEventCtx = { hasUI: false };
+    main.fire("session_start", ctx);
+    main.fire("agent_start", ctx);
+    main.fire("agent_end", ctx);
+    expect(eventsOf(await readEmittedRecords(logPath))).toEqual([
+      "SessionStart",
+      "PromptSubmit",
+      "Stop",
+    ]);
+  });
+
+  it("PIER_ 环境变量缺失时静默 no-op；恢复后按 emit 调用时读取生效", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = { hasUI: true };
+    delete process.env.PIER_PANEL_ID;
+    // 守卫拦截且写入是同步路径 → fire 返回后即可断言文件不存在。
+    main.fire("session_start", ctx);
+    await expect(readFile(logPath, "utf8")).rejects.toThrow();
+    // 恢复后生效, 且被拦截的 SessionStart 不会补写（若守卫失效, 它会先于
+    // PromptSubmit 出现在文件里）。
+    process.env.PIER_PANEL_ID = "panel-1";
+    main.fire("agent_start", ctx);
+    expect(eventsOf(await readEmittedRecords(logPath))).toEqual([
+      "PromptSubmit",
+    ]);
   });
 });
 

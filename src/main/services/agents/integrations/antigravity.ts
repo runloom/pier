@@ -53,7 +53,9 @@ const antigravityConfigPath = () => join(antigravityConfigDir(), "hooks.json");
 
 const ANTIGRAVITY_SPEC: NestedJsonIntegrationSpec = {
   agentId: "antigravity",
-  capability: "full",
+  // 仅 3 个事件(PreInvocation/PostToolUse/Stop),无 SessionStart/SessionEnd/
+  // ToolStart/error/permission,能力有限——"coarse" 如实反映覆盖度。
+  capability: "coarse",
   configPath: antigravityConfigPath,
   detect: () =>
     existsSync(antigravityConfigDir()) ||

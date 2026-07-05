@@ -17,6 +17,7 @@ const GEMINI_EVENTS = [
   "BeforeAgent",
   "AfterAgent",
   "Notification",
+  "PreCompress",
   "BeforeTool",
   "AfterTool",
 ];
@@ -49,7 +50,7 @@ function allHookEntries(
 }
 
 describe("withPierGeminiHooks", () => {
-  it("为 7 个 Gemini hook 事件各注入一条 pier 命令", () => {
+  it("为 8 个 Gemini hook 事件各注入一条 pier 命令", () => {
     const next = withPierGeminiHooks({});
     const hooks = next.hooks as Record<string, unknown[]>;
     for (const evt of GEMINI_EVENTS) {
@@ -76,7 +77,7 @@ describe("withPierGeminiHooks", () => {
     }
   });
 
-  it("Notification 映射 PermissionRequest（ToolPermission 提示）；hooks 键集 = 7 个指定事件全集", () => {
+  it("Notification 映射 PermissionRequest；PreCompress 映射 processing；hooks 键集 = 8 个指定事件全集", () => {
     const next = withPierGeminiHooks({});
     const hooks = hookMatchers(next);
     const keys = Object.keys(hooks);
@@ -88,6 +89,14 @@ describe("withPierGeminiHooks", () => {
     const cmds = notification.flatMap((m) => m.hooks.map((h) => h.command));
     expect(cmds).toHaveLength(1);
     expect(cmds[0]).toContain('"PermissionRequest"');
+    // PreCompress → processing（压缩期间保持活跃状态）
+    const preCompress = hooks.PreCompress ?? [];
+    expect(preCompress).toHaveLength(1);
+    expect(preCompress[0]?.matcher).toBeUndefined();
+    const compressCmds = preCompress.flatMap((m) =>
+      m.hooks.map((h) => h.command)
+    );
+    expect(compressCmds[0]).toContain('"processing"');
   });
 
   it("幂等：重复安装不产生重复条目", () => {

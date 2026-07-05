@@ -22,9 +22,17 @@ describe("buildAmpPluginSource", () => {
     expect(source).toContain("managed by Pier");
   });
 
-  it("直写 JSONL（appendFile 通路，无 HTTP fetch）", () => {
-    expect(source).toContain('import { appendFile } from "node:fs/promises"');
-    expect(source).toContain("await appendFile(log, line)");
+  it("同步优先写 JSONL（pierAppend: getBuiltinModule + appendFileSync, 异步退化）", () => {
+    // 同步优先分支
+    expect(source).toContain("process.getBuiltinModule");
+    expect(source).toContain("appendFileSync");
+    // 异步退化分支保留（旧 Node 宿主）
+    expect(source).toContain('import("node:fs/promises")');
+    expect(source).toContain("appendFile");
+    // 无顶层 import 声明（pierAppend 用运行时调用, 不触发 vite 扫描）
+    for (const line of source.split("\n")) {
+      expect(line.trimStart().startsWith("import ")).toBe(false);
+    }
     expect(source).not.toContain("/agent-event");
     expect(source).not.toContain("Authorization");
     expect(source).not.toContain("fetch(");
@@ -74,24 +82,21 @@ describe("buildAmpPluginSource", () => {
     expect(source).toContain('return { action: "allow" }');
   });
 
-  it("加载即 emit：函数体开头独立调用 emitPierEvent, 先于 amp.on 事件订阅", () => {
+  it("无加载合成 SessionStart：session.start 只在真实事件订阅回调内 emit", () => {
     const functionStart = source.indexOf("export default function (amp");
-    const loadEmit = source.indexOf('void emitPierEvent("session.start");');
     const firstSubscription = source.indexOf(
       'amp.on("session.start"',
       functionStart
     );
     expect(functionStart).toBeGreaterThanOrEqual(0);
-    expect(loadEmit).toBeGreaterThan(functionStart);
-    expect(loadEmit).toBeLessThan(firstSubscription);
-    // 该调用独立于任何 amp.on(...) 回调闭包内, 是启动路径的顶层语句。
+    expect(firstSubscription).toBeGreaterThan(functionStart);
+    // 工厂体到首个订阅之间不得有独立 emitPierEvent 调用（合成版在工厂按
+    // 会话/子代理多次执行的宿主上会打穿主状态, omp task subagent 教训）。
     const betweenFnAndSubscription = source.slice(
       functionStart,
       firstSubscription
     );
-    expect(
-      betweenFnAndSubscription.match(/emitPierEvent\("session\.start"\)/g)
-    ).toHaveLength(1);
+    expect(betweenFnAndSubscription).not.toContain("emitPierEvent(");
   });
 });
 

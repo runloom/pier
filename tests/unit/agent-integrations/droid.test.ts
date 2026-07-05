@@ -65,7 +65,7 @@ describe("droidIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("事件表齐全：7 个事件各一条命令，工具事件 matcher 为 *，不装 SubagentStop/Notification/PermissionRequest", async () => {
+  it("事件表齐全：9 个事件各一条命令，工具事件 matcher 为 *，不装 SubagentStop", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -77,22 +77,27 @@ describe("droidIntegration", () => {
     }
     const typedHooks = hooks as unknown as Record<string, Matcher[]>;
 
+    // 无 matcher 事件
     for (const evt of [
       "SessionStart",
       "SessionEnd",
       "UserPromptSubmit",
+      "Notification",
       "Stop",
+      "StopFailure",
       "PreCompact",
     ]) {
       expect(hooks[evt], evt).toHaveLength(1);
       expect(typedHooks[evt]?.[0]?.matcher).toBeUndefined();
     }
+    // 工具事件 matcher "*"
     for (const evt of ["PreToolUse", "PostToolUse"]) {
       expect(hooks[evt], evt).toHaveLength(1);
       expect(typedHooks[evt]?.[0]?.matcher).toBe("*");
     }
+    // 不装 SubagentStop：无 SubagentStart 配对, 计数永远为 0
     expect(hooks.SubagentStop).toBeUndefined();
-    expect(hooks.Notification).toBeUndefined();
+    // 不装原生 PermissionRequest（droid 无此事件, 用 Notification 代替）
     expect(hooks.PermissionRequest).toBeUndefined();
 
     for (const cmd of hookCommands(installed)) {
@@ -119,6 +124,11 @@ describe("droidIntegration", () => {
     expect(typedHooks.PreCompact?.[0]?.hooks[0]?.command).toContain(
       '"processing"'
     );
+    // 新增事件 pierEvent 核验（本机 loomdesk 实装先例）
+    expect(typedHooks.Notification?.[0]?.hooks[0]?.command).toContain(
+      '"PermissionRequest"'
+    );
+    expect(typedHooks.StopFailure?.[0]?.hooks[0]?.command).toContain('"error"');
   });
 
   it("幂等：重复安装不产生重复条目", async () => {

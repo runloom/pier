@@ -3,6 +3,7 @@ import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
 import { appCore } from "../app-core/app-core.ts";
 import { windowManager } from "../windows/window-manager.ts";
+import { createGitWatchSubscriptions } from "./git-watch-subscriptions.ts";
 
 /**
  * git 变更监听 IPC:
@@ -10,8 +11,11 @@ import { windowManager } from "../windows/window-manager.ts";
  * - PIER.GIT_WATCH_STOP → 停止订阅
  *
  * 设计要点:
- * - 按 (webContentsId, gitRoot) 引用计数:同 wc 同 gitRoot 多次 start 只算一份订阅
- * - webContents 销毁时自动 unsubscribe 全部订阅(防泄漏)
+ * - 按 (webContentsId, gitRoot) 引用计数(git-watch-subscriptions):同 wc 同 gitRoot
+ *   多个消费方共享一份底层订阅,最后一个 stop 才销毁——单个面板 unmount 不得杀死
+ *   其余面板共享的订阅(否则它们的 git 状态永久冻结)
+ * - webContents 销毁或跨文档导航(reload)时自动 unsubscribe 全部订阅(防泄漏):
+ *   reload 后旧 renderer 的 stop 永远不会到达,不清零则计数虚增、底层 watcher 常驻
  * - WeakSet hookedWebContents 守护 `destroyed` 监听器**每 wc 只注册一次**
  *   (避免同 wc 订阅多 gitRoot / start-stop-start 累积多个 destroyed listener
  *    触发 Node MaxListenersExceededWarning)
@@ -19,12 +23,8 @@ import { windowManager } from "../windows/window-manager.ts";
  *   (与命令链路同等待遇,防 watch 绕过权限系统)
  */
 export function registerGitWatchIpc(): void {
-  const subscriptions = new Map<string, () => void>();
+  const subscriptions = createGitWatchSubscriptions();
   const hookedWebContents = new WeakSet<WebContents>();
-
-  function key(webContentsId: number, gitRoot: string): string {
-    return `${webContentsId}::${gitRoot}`;
-  }
 
   function ensureClientHasGitRead(wc: WebContents): boolean {
     const window = windowManager.fromWebContents(wc);
@@ -51,19 +51,18 @@ export function registerGitWatchIpc(): void {
     return client?.capabilities.includes("git:read") === true;
   }
 
-  function hookDestroyOnce(wc: WebContents): void {
+  function hookLifecycleOnce(wc: WebContents): void {
     if (hookedWebContents.has(wc)) {
       return;
     }
     hookedWebContents.add(wc);
     wc.once("destroyed", () => {
-      const prefix = `${wc.id}::`;
-      for (const [storedKey, dispose] of subscriptions.entries()) {
-        if (storedKey.startsWith(prefix)) {
-          dispose();
-          subscriptions.delete(storedKey);
-        }
-      }
+      subscriptions.dropAll(wc.id);
+    });
+    // did-navigate 只在主 frame 跨文档导航(含 reload)提交时触发;
+    // 新文档 preload 的 START 严格晚于 commit 送达,清零无竞态
+    wc.on("did-navigate", () => {
+      subscriptions.dropAll(wc.id);
     });
   }
 
@@ -77,20 +76,14 @@ export function registerGitWatchIpc(): void {
       if (!ensureClientHasGitRead(wc)) {
         return false;
       }
-      const subKey = key(wc.id, gitRoot);
-      if (subscriptions.has(subKey)) {
-        return true;
-      }
-      const unsubscribe = appCore.services.gitWatch.watch(
-        gitRoot,
-        (changeEvent) => {
+      subscriptions.start(wc.id, gitRoot, () =>
+        appCore.services.gitWatch.watch(gitRoot, (changeEvent) => {
           if (!wc.isDestroyed()) {
             wc.send(PIER_BROADCAST.GIT_CHANGED, changeEvent);
           }
-        }
+        })
       );
-      subscriptions.set(subKey, unsubscribe);
-      hookDestroyOnce(wc);
+      hookLifecycleOnce(wc);
       return true;
     }
   );
@@ -101,12 +94,7 @@ export function registerGitWatchIpc(): void {
       if (typeof gitRoot !== "string" || gitRoot.length === 0) {
         return false;
       }
-      const subKey = key(event.sender.id, gitRoot);
-      const unsubscribe = subscriptions.get(subKey);
-      if (unsubscribe) {
-        unsubscribe();
-        subscriptions.delete(subKey);
-      }
+      subscriptions.stop(event.sender.id, gitRoot);
       return true;
     }
   );

@@ -188,6 +188,6 @@ describe("antigravityIntegration.detect()", () => {
 
   it("integration 元信息符合 spec", () => {
     expect(antigravityIntegration.id).toBe("antigravity");
-    expect(antigravityIntegration.capability).toBe("full");
+    expect(antigravityIntegration.capability).toBe("coarse");
   });
 });
