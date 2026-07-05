@@ -1220,6 +1220,58 @@ describe("createGitService", () => {
     });
   });
 
+  it("merge 默认走裸 merge：允许 ff、不注入 --no-ff / --no-verify、无隐式探测调用", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("Updating abc..def\nFast-forward\n");
+      },
+    });
+
+    await expect(service.merge("/repo", "main")).resolves.toEqual({
+      kind: "ok",
+      message: "Updating abc..def\nFast-forward",
+    });
+    // 只允许 resolve root + merge 两次调用：防止回归引入按分支探测的隐式策略
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["merge", "--no-edit", "--", "main"],
+    ]);
+  });
+
+  it("merge 冲突时按未合并文件数返回 conflict", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        // countConflicts 的固定参数形态：对不上就落入下方 throw，
+        // 计数退化为 stderr 兜底的 1，断言会红
+        if (args.join(" ") === "diff --name-only --diff-filter=U") {
+          return Promise.resolve("src/a.ts\nsrc/b.ts\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: merge conflict",
+          stderr:
+            "CONFLICT (content): Merge conflict in src/a.ts\nAutomatic merge failed; fix conflicts and then commit the result.",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.merge("/repo", "feature/x")).resolves.toEqual({
+      conflictCount: 2,
+      kind: "conflict",
+    });
+  });
+
   it("listStashes 按 LoomDesk 返回 ok entries 包装", async () => {
     const service = createGitService({
       execGit: (args) => {
@@ -1322,6 +1374,164 @@ describe("createGitService", () => {
     await expect(service.popStash("/repo", 0)).resolves.toEqual({
       kind: "conflict",
     });
+  });
+
+  it("applyStash 不带 index 时 argv 为裸 stash apply", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.applyStash("/repo")).resolves.toEqual({ kind: "ok" });
+    // resolve root + 冲突基线 + apply,顺序固定:防止回归丢掉基线抵扣或注入多余参数
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["diff", "--name-only", "--diff-filter=U"],
+      ["stash", "apply"],
+    ]);
+  });
+
+  it("applyStash 带 index 时追加 stash@{2}", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.applyStash("/repo", 2)).resolves.toEqual({
+      kind: "ok",
+    });
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["diff", "--name-only", "--diff-filter=U"],
+      ["stash", "apply", "stash@{2}"],
+    ]);
+  });
+
+  it("applyStash 失败后新增未合并文件判定为 conflict", async () => {
+    let applyAttempted = false;
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "diff") {
+          // stderr 不含 CONFLICT 字样:只能靠操作前后未合并文件增量判定
+          return Promise.resolve(applyAttempted ? "src/conflict.ts\n" : "");
+        }
+        applyAttempted = true;
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: apply failed",
+          stderr: "error: could not restore untracked files from stash",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.applyStash("/repo", 0)).resolves.toEqual({
+      kind: "conflict",
+    });
+  });
+
+  it("dropStash 带 index 时 argv 为 stash drop stash@{1} 且无冲突基线调用", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("Dropped stash@{1}\n");
+      },
+    });
+
+    await expect(service.dropStash("/repo", 1)).resolves.toEqual({
+      kind: "ok",
+    });
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["stash", "drop", "stash@{1}"],
+    ]);
+  });
+
+  it("dropStash 失败按 LoomDesk 返回 unavailable 带 stderr", async () => {
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        throw new GitExecError({
+          args,
+          cwd,
+          exitCode: 1,
+          message: "git 退出码 1: bad ref",
+          stderr: "error: stash@{9} is not a valid reference",
+          stdout: "",
+        });
+      },
+    });
+
+    await expect(service.dropStash("/repo", 9)).resolves.toEqual({
+      kind: "unavailable",
+      message: "error: stash@{9} is not a valid reference",
+    });
+  });
+
+  it("stash 缺省与 includeUntracked: false 都不追加 --include-untracked", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("Saved working directory\n");
+      },
+    });
+
+    await expect(service.stash("/repo", {})).resolves.toEqual({ kind: "ok" });
+    await expect(
+      service.stash("/repo", { includeUntracked: false })
+    ).resolves.toEqual({ kind: "ok" });
+    expect(calls.filter((args) => args[0] === "stash")).toEqual([
+      ["stash", "push"],
+      ["stash", "push"],
+    ]);
+  });
+
+  it("stash includeUntracked: true 时追加 --include-untracked", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("Saved working directory\n");
+      },
+    });
+
+    await expect(
+      service.stash("/repo", { includeUntracked: true })
+    ).resolves.toEqual({ kind: "ok" });
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["stash", "push", "--include-untracked"],
+    ]);
   });
 
   it("rebase 冲突按 LoomDesk 返回 conflict 而不是抛出", async () => {

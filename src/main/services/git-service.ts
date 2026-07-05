@@ -11,6 +11,8 @@ import type {
   GitRebaseContinueResult,
   GitRebaseResult,
   GitRepoInfo,
+  GitStashApplyResult,
+  GitStashDropResult,
   GitStashListResult,
   GitStashPopResult,
   GitStashResult,
@@ -32,7 +34,9 @@ import { execGit } from "./git-exec.ts";
 import {
   abortMerge,
   abortRebase,
+  applyStash,
   continueRebase,
+  dropStash,
   listStashes,
   mergeBranch,
   popStash,
@@ -91,12 +95,14 @@ function assertSafeBranchName(name: string): void {
 export interface GitService {
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
+  applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
   checkoutBranch(cwd: string, name: string): Promise<void>;
   commit(cwd: string, options: GitCommitOptions): Promise<void>;
   continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
   createBranch(cwd: string, options: GitCreateBranchOptions): Promise<void>;
   deleteBranch(cwd: string, options: GitDeleteBranchOptions): Promise<void>;
   discardChanges(cwd: string, request: GitPathsRequest): Promise<void>;
+  dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
   // —— 读 ——
   getCommit(cwd: string, oid: string): Promise<GitCommit>;
   getCommitPatch(cwd: string, oid: string): Promise<GitDiffPatch>;
@@ -441,6 +447,8 @@ export function createGitService({
       await execGit(["switch", name], cwd, { timeoutMs: WRITE_TIMEOUT_MS });
     },
     merge: (cwd, branch) => mergeBranch(execGit, cwd, branch),
+    applyStash: (cwd, index) => applyStash(execGit, cwd, index),
+    dropStash: (cwd, index) => dropStash(execGit, cwd, index),
     popStash: (cwd, index) => popStash(execGit, cwd, index),
     rebase: (cwd, branch) => rebaseBranch(execGit, cwd, branch),
     stash: (cwd, options) => stashChanges(execGit, cwd, options),

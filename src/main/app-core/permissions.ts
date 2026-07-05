@@ -108,6 +108,8 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.searchBranches": { capabilities: ["git:read"] },
   "git.stage": { capabilities: ["git:write"] },
   "git.stash": { capabilities: ["git:write"] },
+  "git.stashApply": { capabilities: ["git:write"] },
+  "git.stashDrop": { capabilities: ["git:write"] },
   "git.stashList": { capabilities: ["git:read"] },
   "git.stashPop": { capabilities: ["git:write"] },
   "git.undoLastCommit": { capabilities: ["git:write"] },

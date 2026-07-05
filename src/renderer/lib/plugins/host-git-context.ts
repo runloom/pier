@@ -64,6 +64,14 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.popStash(cwd, index);
     },
+    applyStash: (cwd, index) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.applyStash(cwd, index);
+    },
+    dropStash: (cwd, index) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.dropStash(cwd, index);
+    },
     rebase: (cwd, branch) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.rebase(cwd, branch);

@@ -73,25 +73,48 @@ function buildFuzzyOrder<TPayload>(
   return result;
 }
 
+/**
+ * 次带（元数据）整体后移量。可见文本分两个强度带：
+ * 主带 = title + aliases——命令本体的名字，tier 0-3；
+ * 次带 = 「category title」组合、category、快捷键标签——元数据兜底，tier 4-7。
+ * 不分带时，共享 category 的命令在单词类目查询（如 "git"）上会被 category
+ * 精确命中拍平到同一 tier，排序退化成 frecency 说了算——常用的 worktree
+ * 命令反而压过标题真正带 "Git: " 前缀的命令。
+ */
+const PRIMARY_TIER_MAX = 3;
+const SECONDARY_TIER_OFFSET = PRIMARY_TIER_MAX + 1;
+
 function rankDocument<TPayload>(
   document: SearchDocument<TPayload>,
   normalizedQuery: string,
   fuzzyOrder: number,
   frecency: number
 ): SearchRank | null {
-  const visibleTexts = [
-    `${document.category} ${document.title}`,
-    document.title,
-    ...document.aliases,
-    document.category,
-    document.shortcutLabel ?? "",
-  ];
-  const textRank = bestVisibleTextRank(visibleTexts, normalizedQuery);
-  if (textRank) {
+  const primaryRank = bestVisibleTextRank(
+    [document.title, ...document.aliases],
+    normalizedQuery
+  );
+  if (primaryRank) {
     return {
-      ...textRank,
+      ...primaryRank,
       frecency,
       fuzzyOrder,
+    };
+  }
+  const secondaryRank = bestVisibleTextRank(
+    [
+      `${document.category} ${document.title}`,
+      document.category,
+      document.shortcutLabel ?? "",
+    ],
+    normalizedQuery
+  );
+  if (secondaryRank) {
+    return {
+      frecency,
+      fuzzyOrder,
+      matchIndex: secondaryRank.matchIndex,
+      tier: secondaryRank.tier + SECONDARY_TIER_OFFSET,
     };
   }
 
@@ -100,7 +123,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: 0,
-      tier: 4,
+      tier: 8,
     };
   }
 
@@ -110,7 +133,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: 0,
-      tier: 5,
+      tier: 9,
     };
   }
   const stableIdIndex = stableId.indexOf(normalizedQuery);
@@ -119,7 +142,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: stableIdIndex,
-      tier: 6,
+      tier: 10,
     };
   }
 

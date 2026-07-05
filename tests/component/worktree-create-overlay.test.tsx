@@ -214,6 +214,8 @@ function createMockContext(): RendererPluginContext {
       listStashes: unimplemented("git.listStashes"),
       merge: unimplemented("git.merge"),
       popStash: unimplemented("git.popStash"),
+      applyStash: unimplemented("git.applyStash"),
+      dropStash: unimplemented("git.dropStash"),
       rebase: unimplemented("git.rebase"),
       searchBranches: unimplemented("git.searchBranches"),
       stage: unimplemented("git.stage"),

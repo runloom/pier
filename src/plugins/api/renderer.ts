@@ -27,6 +27,8 @@ import type {
   GitRebaseContinueResult,
   GitRebaseResult,
   GitRepoInfo,
+  GitStashApplyResult,
+  GitStashDropResult,
   GitStashListResult,
   GitStashPopResult,
   GitStashResult,
@@ -272,6 +274,8 @@ export interface RendererPluginContext {
     listStashes(cwd: string): Promise<GitStashListResult>;
     merge(cwd: string, branch: string): Promise<GitMergeResult>;
     popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
+    applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
+    dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
     rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
     stage(cwd: string, paths: string[]): Promise<boolean>;
     stash(

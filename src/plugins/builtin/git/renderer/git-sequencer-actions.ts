@@ -27,7 +27,11 @@ export function registerMergeAbortAction(
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
-      const title = commandTitle(context, "pier.git.mergeAbort", "Abort Merge");
+      const title = commandTitle(
+        context,
+        "pier.git.mergeAbort",
+        "Git: Abort Merge"
+      );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
         return;
@@ -61,7 +65,8 @@ export function registerMergeAbortAction(
       sortOrder: 11,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.mergeAbort", "Abort Merge"),
+    title: () =>
+      commandTitle(context, "pier.git.mergeAbort", "Git: Abort Merge"),
   });
 }
 
@@ -76,7 +81,7 @@ export function registerRebaseAbortAction(
       const title = commandTitle(
         context,
         "pier.git.rebaseAbort",
-        "Abort Rebase"
+        "Git: Abort Rebase"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -108,10 +113,11 @@ export function registerRebaseAbortAction(
       categoryKey: "git",
       group: "2_git",
       iconComponent: GitBranch,
-      sortOrder: 15,
+      sortOrder: 18,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.rebaseAbort", "Abort Rebase"),
+    title: () =>
+      commandTitle(context, "pier.git.rebaseAbort", "Git: Abort Rebase"),
   });
 }
 
@@ -126,7 +132,7 @@ export function registerRebaseContinueAction(
       const title = commandTitle(
         context,
         "pier.git.rebaseContinue",
-        "Continue Rebase"
+        "Git: Continue Rebase"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -170,11 +176,11 @@ export function registerRebaseContinueAction(
       categoryKey: "git",
       group: "2_git",
       iconComponent: GitBranch,
-      sortOrder: 16,
+      sortOrder: 19,
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.rebaseContinue", "Continue Rebase"),
+      commandTitle(context, "pier.git.rebaseContinue", "Git: Continue Rebase"),
   });
 }
 
@@ -189,7 +195,7 @@ export function registerUndoCommitAction(
       const title = commandTitle(
         context,
         "pier.git.undoLastCommit",
-        "Undo Last Commit"
+        "Git: Undo Last Commit"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -242,10 +248,10 @@ export function registerUndoCommitAction(
       categoryKey: "git",
       group: "2_git",
       iconComponent: Undo2,
-      sortOrder: 17,
+      sortOrder: 20,
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.undoLastCommit", "Undo Last Commit"),
+      commandTitle(context, "pier.git.undoLastCommit", "Git: Undo Last Commit"),
   });
 }

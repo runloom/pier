@@ -239,7 +239,7 @@ function registerWorktreeListAction(
     },
     id: "pier.worktree.list",
     metadata: {
-      categoryKey: "git",
+      categoryKey: "worktree",
       group: "1_worktree",
       iconComponent: FolderGit2,
       sortOrder: 1,

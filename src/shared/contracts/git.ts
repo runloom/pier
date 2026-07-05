@@ -323,6 +323,15 @@ export const gitStashPopResultSchema = z.discriminatedUnion("kind", [
 ]);
 export type GitStashPopResult = z.infer<typeof gitStashPopResultSchema>;
 
+/** apply 与 pop 同构（ok/conflict/unavailable），复用同一结果联合。 */
+export type GitStashApplyResult = GitStashPopResult;
+
+export const gitStashDropResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitStashDropResult = z.infer<typeof gitStashDropResultSchema>;
+
 export const gitRebaseOptionsSchema = z.object({
   branch: z.string().min(1),
 });

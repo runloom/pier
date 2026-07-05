@@ -93,16 +93,16 @@ async function openBranchPick(
       await runBranchOperation(context, operation, title, cwd, item.data.name);
     },
     placeholder:
-      operation === "merge"
+      operation === "rebase"
         ? pluginText(
-            context,
-            "gitMergeSelectBranch",
-            "Select a branch to merge into the current branch"
-          )
-        : pluginText(
             context,
             "gitRebaseSelectBranch",
             "Select a branch to rebase onto"
+          )
+        : pluginText(
+            context,
+            "gitMergeSelectBranch",
+            "Select a branch to merge into the current branch"
           ),
     renderItem: (item) =>
       createElement(GitBranchQuickPickRow, {
@@ -122,11 +122,11 @@ async function runBranchOperation(
   branch: string
 ): Promise<void> {
   try {
-    if (operation === "merge") {
-      await runMerge(context, title, cwd, branch);
+    if (operation === "rebase") {
+      await runRebase(context, title, cwd, branch);
       return;
     }
-    await runRebase(context, title, cwd, branch);
+    await runMerge(context, title, cwd, branch);
   } catch (err) {
     await showError(context, title, err);
   }
@@ -255,7 +255,7 @@ export function registerMergeAction(
       openBranchPick(
         context,
         "merge",
-        commandTitle(context, "pier.git.merge", "Merge Branch...")
+        commandTitle(context, "pier.git.merge", "Git: Merge Branch...")
       ),
     id: "pier.git.merge",
     metadata: {
@@ -265,7 +265,8 @@ export function registerMergeAction(
       sortOrder: 10,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.merge", "Merge Branch..."),
+    title: () =>
+      commandTitle(context, "pier.git.merge", "Git: Merge Branch..."),
   });
 }
 
@@ -280,16 +281,17 @@ export function registerRebaseAction(
       openBranchPick(
         context,
         "rebase",
-        commandTitle(context, "pier.git.rebase", "Rebase Branch...")
+        commandTitle(context, "pier.git.rebase", "Git: Rebase Branch...")
       ),
     id: "pier.git.rebase",
     metadata: {
       categoryKey: "git",
       group: "2_git",
       iconComponent: GitBranch,
-      sortOrder: 14,
+      sortOrder: 17,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.rebase", "Rebase Branch..."),
+    title: () =>
+      commandTitle(context, "pier.git.rebase", "Git: Rebase Branch..."),
   });
 }

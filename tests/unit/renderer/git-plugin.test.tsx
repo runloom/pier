@@ -73,6 +73,7 @@ function getPierFileTree(container: HTMLElement): HTMLElement {
 
 /** 分支名不应再带 max-w-[...] 固定宽度上限（只在容器溢出时 truncate）。 */
 const FIXED_MAX_WIDTH_CLASS_RE = /max-w-\[/;
+const DROP_STASH_CONFIRM_BODY_RE = /Drop stash@\{2\}\? This cannot be undone\./;
 
 const context: PanelContext = {
   branch: "main",
@@ -136,42 +137,57 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     {
       id: "pier.git.merge",
       permissions: ["git:read", "git:write"],
-      title: "Merge Branch...",
+      title: "Git: Merge Branch...",
     },
     {
       id: "pier.git.mergeAbort",
       permissions: ["git:write"],
-      title: "Abort Merge",
+      title: "Git: Abort Merge",
+    },
+    {
+      id: "pier.git.stashApply",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Apply Stash...",
+    },
+    {
+      id: "pier.git.stashDrop",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Drop Stash...",
+    },
+    {
+      id: "pier.git.stashIncludeUntracked",
+      permissions: ["git:write"],
+      title: "Git: Stash (Include Untracked)",
     },
     {
       id: "pier.git.stash",
       permissions: ["git:write"],
-      title: "Stash",
+      title: "Git: Stash",
     },
     {
       id: "pier.git.stashPop",
       permissions: ["git:read", "git:write"],
-      title: "Pop Stash...",
+      title: "Git: Pop Stash...",
     },
     {
       id: "pier.git.rebase",
       permissions: ["git:read", "git:write"],
-      title: "Rebase Branch...",
+      title: "Git: Rebase Branch...",
     },
     {
       id: "pier.git.rebaseAbort",
       permissions: ["git:write"],
-      title: "Abort Rebase",
+      title: "Git: Abort Rebase",
     },
     {
       id: "pier.git.rebaseContinue",
       permissions: ["git:write"],
-      title: "Continue Rebase",
+      title: "Git: Continue Rebase",
     },
     {
       id: "pier.git.undoLastCommit",
       permissions: ["git:write"],
-      title: "Undo Last Commit",
+      title: "Git: Undo Last Commit",
     },
   ];
   return {
@@ -205,35 +221,35 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             },
             "pier.git.merge": {
               aliases: ["locale git merge"],
-              title: "Merge Branch...",
+              title: "Git: Merge Branch...",
             },
             "pier.git.mergeAbort": {
               aliases: ["locale git merge abort"],
-              title: "Abort Merge",
+              title: "Git: Abort Merge",
             },
             "pier.git.stash": {
               aliases: ["locale git stash"],
-              title: "Stash",
+              title: "Git: Stash",
             },
             "pier.git.stashPop": {
               aliases: ["locale git stash pop"],
-              title: "Pop Stash...",
+              title: "Git: Pop Stash...",
             },
             "pier.git.rebase": {
               aliases: ["locale git rebase"],
-              title: "Rebase Branch...",
+              title: "Git: Rebase Branch...",
             },
             "pier.git.rebaseAbort": {
               aliases: ["locale git rebase abort"],
-              title: "Abort Rebase",
+              title: "Git: Abort Rebase",
             },
             "pier.git.rebaseContinue": {
               aliases: ["locale git rebase continue"],
-              title: "Continue Rebase",
+              title: "Git: Continue Rebase",
             },
             "pier.git.undoLastCommit": {
               aliases: ["locale git undo commit"],
-              title: "Undo Last Commit",
+              title: "Git: Undo Last Commit",
             },
             "pier.worktree.create": {
               aliases: ["locale worktree create"],
@@ -298,35 +314,35 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             },
             "pier.git.merge": {
               aliases: ["本地化合并分支"],
-              title: "合并分支...",
+              title: "Git: 合并分支...",
             },
             "pier.git.mergeAbort": {
               aliases: ["本地化中止合并"],
-              title: "中止合并",
+              title: "Git: 中止合并",
             },
             "pier.git.stash": {
               aliases: ["本地化暂存更改"],
-              title: "暂存更改",
+              title: "Git: 暂存更改",
             },
             "pier.git.stashPop": {
               aliases: ["本地化弹出暂存"],
-              title: "弹出暂存...",
+              title: "Git: 弹出暂存...",
             },
             "pier.git.rebase": {
               aliases: ["本地化变基"],
-              title: "变基到分支...",
+              title: "Git: 变基到分支...",
             },
             "pier.git.rebaseAbort": {
               aliases: ["本地化中止变基"],
-              title: "中止变基",
+              title: "Git: 中止变基",
             },
             "pier.git.rebaseContinue": {
               aliases: ["本地化继续变基"],
-              title: "继续变基",
+              title: "Git: 继续变基",
             },
             "pier.git.undoLastCommit": {
               aliases: ["本地化撤销提交"],
-              title: "撤销上次提交",
+              title: "Git: 撤销上次提交",
             },
             "pier.worktree.create": {
               aliases: ["本地化创建工作树"],
@@ -678,6 +694,8 @@ describe("git builtin plugin", () => {
           })),
           merge: vi.fn(async () => ({ kind: "ok" as const, message: "" })),
           popStash: vi.fn(async () => ({ kind: "ok" as const })),
+          applyStash: vi.fn(async () => ({ kind: "ok" as const })),
+          dropStash: vi.fn(async () => ({ kind: "ok" as const })),
           rebase: vi.fn(async () => ({ kind: "ok" as const, message: "" })),
           stage: vi.fn(async () => true),
           stash: vi.fn(async () => ({ kind: "ok" as const })),
@@ -1446,6 +1464,134 @@ describe("git builtin plugin", () => {
     expect(window.pier.git.popStash).not.toHaveBeenCalled();
   });
 
+  it("Git 暂存命令按 VS Code 语义只暂存已跟踪(includeUntracked: false)", async () => {
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.stash")?.handler();
+
+    expect(window.pier.git.stash).toHaveBeenCalledWith("/Users/xyz/ABC/pier", {
+      includeUntracked: false,
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("Changes stashed", {
+      id: "git-loading-toast",
+    });
+  });
+
+  it("Git 含未跟踪暂存命令传 includeUntracked: true", async () => {
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.stashIncludeUntracked")?.handler();
+
+    expect(window.pier.git.stash).toHaveBeenCalledWith("/Users/xyz/ABC/pier", {
+      includeUntracked: true,
+    });
+  });
+
+  it("Git 应用暂存命令 apply 选中项且不走 pop", async () => {
+    vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
+      entries: [
+        {
+          date: "2026-01-01T00:00:00.000Z",
+          hash: "abc123",
+          index: 1,
+          message: "WIP on main",
+        },
+      ],
+      kind: "ok",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.stashApply")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const item = quickPick?.items?.find((candidate) => candidate.id === "1");
+    if (!(quickPick && item)) {
+      throw new Error("expected stash quick pick");
+    }
+    await quickPick.onAccept(item);
+
+    expect(window.pier.git.applyStash).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      1
+    );
+    expect(window.pier.git.popStash).not.toHaveBeenCalled();
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "Stash applied (kept in stash list)",
+      { id: "git-loading-toast" }
+    );
+  });
+
+  it("Git 删除暂存需确认弹窗通过后才调用 dropStash", async () => {
+    vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
+      entries: [
+        {
+          date: "2026-01-01T00:00:00.000Z",
+          hash: "abc123",
+          index: 2,
+          message: "WIP on main",
+        },
+      ],
+      kind: "ok",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.stashDrop")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const item = quickPick?.items?.find((candidate) => candidate.id === "2");
+    if (!(quickPick && item)) {
+      throw new Error("expected stash quick pick");
+    }
+    const acceptPromise = quickPick.onAccept(item);
+
+    expect(await screen.findByText("Git: Drop Stash...")).toBeVisible();
+    // {{stash}} 插值链路：fallback 也必须替换为实际 label
+    expect(await screen.findByText(DROP_STASH_CONFIRM_BODY_RE)).toBeVisible();
+    // 确认前不得触发删除
+    expect(window.pier.git.dropStash).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Drop" }));
+    await acceptPromise;
+
+    expect(window.pier.git.dropStash).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      2
+    );
+    expect(toastMocks.success).toHaveBeenCalledWith("Stash dropped", {
+      id: "git-loading-toast",
+    });
+  });
+
+  it("Git 删除暂存取消确认则不调用 dropStash", async () => {
+    vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
+      entries: [
+        {
+          date: "2026-01-01T00:00:00.000Z",
+          hash: "abc123",
+          index: 0,
+          message: "WIP on main",
+        },
+      ],
+      kind: "ok",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.stashDrop")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const item = quickPick?.items?.find((candidate) => candidate.id === "0");
+    if (!(quickPick && item)) {
+      throw new Error("expected stash quick pick");
+    }
+    const acceptPromise = quickPick.onAccept(item);
+
+    expect(await screen.findByText("Git: Drop Stash...")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await acceptPromise;
+
+    expect(window.pier.git.dropStash).not.toHaveBeenCalled();
+    expect(toastMocks.loading).not.toHaveBeenCalled();
+  });
+
   it("Git 撤销提交使用 shadcn 确认弹窗并显示 loading 结果", async () => {
     dispose = activateWorktreePlugin();
 
@@ -1453,7 +1599,7 @@ describe("git builtin plugin", () => {
       .get("pier.git.undoLastCommit")
       ?.handler();
 
-    expect(await screen.findByText("Undo Last Commit")).toBeVisible();
+    expect(await screen.findByText("Git: Undo Last Commit")).toBeVisible();
     expect(
       screen.getByText(
         "Undo the last commit? Changes will be preserved as staged."

@@ -9,19 +9,41 @@
       "aliases": ["合并分支", "git merge", "he bing fen zhi"],
       "category": "Git",
       "description": "选择一个分支并合并到当前分支。",
-      "title": "合并分支..."
+      "title": "Git: 合并分支..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["中止合并", "git merge abort", "zhong zhi he bing"],
       "category": "Git",
       "description": "中止当前合并操作。",
-      "title": "中止合并"
+      "title": "Git: 中止合并"
     },
     "pier.git.stash": {
       "aliases": ["暂存更改", "git stash", "zan cun geng gai"],
       "category": "Git",
+      "description": "储藏本地已跟踪的变更。",
+      "title": "Git: 暂存更改"
+    },
+    "pier.git.stashApply": {
+      "aliases": ["应用暂存", "git stash apply", "ying yong zan cun"],
+      "category": "Git",
+      "description": "选择一个储藏并应用，保留在储藏列表中。",
+      "title": "Git: 应用暂存..."
+    },
+    "pier.git.stashDrop": {
+      "aliases": ["删除暂存", "丢弃暂存", "git stash drop", "shan chu zan cun"],
+      "category": "Git",
+      "description": "选择一个储藏并从列表中删除。",
+      "title": "Git: 删除暂存..."
+    },
+    "pier.git.stashIncludeUntracked": {
+      "aliases": [
+        "暂存含未跟踪",
+        "git stash --include-untracked",
+        "zan cun han wei gen zong"
+      ],
+      "category": "Git",
       "description": "储藏本地变更，包含未跟踪文件。",
-      "title": "暂存更改"
+      "title": "Git: 暂存更改（含未跟踪）"
     },
     "pier.git.stashPop": {
       "aliases": [
@@ -34,25 +56,25 @@
       ],
       "category": "Git",
       "description": "选择一个储藏，应用并从储藏列表移除。",
-      "title": "弹出暂存..."
+      "title": "Git: 弹出暂存..."
     },
     "pier.git.rebase": {
       "aliases": ["变基到分支", "git rebase", "bian ji fen zhi"],
       "category": "Git",
       "description": "选择一个分支并将当前分支变基到它之上。",
-      "title": "变基到分支..."
+      "title": "Git: 变基到分支..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["中止变基", "git rebase abort", "zhong zhi bian ji"],
       "category": "Git",
       "description": "中止当前变基操作。",
-      "title": "中止变基"
+      "title": "Git: 中止变基"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["继续变基", "git rebase continue", "ji xu bian ji"],
       "category": "Git",
       "description": "继续当前变基操作。",
-      "title": "继续变基"
+      "title": "Git: 继续变基"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -65,7 +87,7 @@
       ],
       "category": "Git",
       "description": "撤销上次提交，并保留变更为已暂存。",
-      "title": "撤销上次提交"
+      "title": "Git: 撤销上次提交"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -184,6 +206,8 @@
     "ui.gitLoadingMergeAbort": "正在中止合并...",
     "ui.gitLoadingStash": "正在暂存...",
     "ui.gitLoadingStashPop": "正在应用暂存...",
+    "ui.gitLoadingStashApply": "正在应用暂存（保留列表项）...",
+    "ui.gitLoadingStashDrop": "正在删除暂存...",
     "ui.gitLoadingRebase": "正在变基...",
     "ui.gitLoadingRebaseAbort": "正在中止变基...",
     "ui.gitLoadingRebaseContinue": "正在继续变基...",
@@ -201,6 +225,12 @@
     "ui.gitStashSelect": "选择要弹出的暂存",
     "ui.gitStashListEmpty": "暂存列表为空",
     "ui.gitStashPopSuccess": "暂存已应用并移除",
+    "ui.gitStashApplySuccess": "暂存已应用（保留在列表中）",
+    "ui.gitStashDropSuccess": "暂存已删除",
+    "ui.gitStashSelectApply": "选择要应用的暂存",
+    "ui.gitStashSelectDrop": "选择要删除的暂存",
+    "ui.gitStashDropConfirmBody": "删除 {{stash}}？此操作不可撤销。",
+    "ui.gitStashDropConfirmLabel": "删除",
     "ui.gitStashConflictTitle": "暂存冲突",
     "ui.gitStashConflictBody": "暂存已应用但产生了冲突，需要手动解决。",
     "ui.gitRebaseSuccess": "已成功变基到 {{branch}}",

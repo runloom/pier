@@ -4,6 +4,8 @@ import type {
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
+  GitStashApplyResult,
+  GitStashDropResult,
   GitStashEntry,
   GitStashListResult,
   GitStashPopResult,
@@ -109,10 +111,13 @@ export async function mergeBranch(
     return target;
   }
   try {
-    // --no-ff：对齐 GitHub merge button 语义，永远产生 merge commit——
-    // ff 合并在 commit graph 上无痕，会让 mergedIntoDefault 检测不到本应用自己的合并。
+    // 裸 merge（默认允许 ff、不跳 hooks）：与 VS Code「Git: Merge Branch」
+    // 语义一致，尊重用户 git 配置（merge.ff / branch.<name>.mergeoptions）；
+    // 要强制 merge commit 的用户走 merge.ff=false 配置，与 VS Code 相同。
+    // 代价（检测器既有限制）：ff 落地后「源分支自身」的 mergedIntoDefault
+    // 胶囊不亮。--no-edit：GUI 场景无编辑器可开，取 git 默认合并信息。
     const stdout = await execGit(
-      ["merge", "--no-ff", "--no-edit", "--no-verify", "--", branch],
+      ["merge", "--no-edit", "--", branch],
       target.root,
       { timeoutMs: WRITE_TIMEOUT_MS }
     );
@@ -178,20 +183,26 @@ export async function stashChanges(
   }
 }
 
-export async function popStash(
+/**
+ * pop/apply 共用主体：仅差子命令；conflict 归因用操作前基线抵扣。
+ * 返回并集：GitStashApplyResult 当前是 GitStashPopResult 的契约别名，
+ * 若未来 apply 单独扩展 kind，此处签名会强制两个出口显式分流。
+ */
+async function applyStashLike(
   execGit: GitOperationExec,
   cwd: string,
-  index: number | undefined
+  index: number | undefined,
+  subcommand: "apply" | "pop"
 ): Promise<GitStashPopResult> {
   const target = await resolveGitRootOrUnavailable(execGit, cwd);
   if (target.kind === "unavailable") {
     return target;
   }
   const stashRef = index === undefined ? [] : [`stash@{${index}}`];
-  // 基线：pop 前已存在的未合并文件不能归因于本次 pop。
+  // 基线：操作前已存在的未合并文件不能归因于本次 pop/apply。
   const conflictsBefore = await countConflicts(execGit, target.root);
   try {
-    await execGit(["stash", "pop", ...stashRef], target.root, {
+    await execGit(["stash", subcommand, ...stashRef], target.root, {
       timeoutMs: WRITE_TIMEOUT_MS,
     });
     return { kind: "ok" };
@@ -203,6 +214,42 @@ export async function popStash(
     ) {
       return { kind: "conflict" };
     }
+    return unavailable(errorMessage(err));
+  }
+}
+
+export function popStash(
+  execGit: GitOperationExec,
+  cwd: string,
+  index: number | undefined
+): Promise<GitStashPopResult> {
+  return applyStashLike(execGit, cwd, index, "pop");
+}
+
+export function applyStash(
+  execGit: GitOperationExec,
+  cwd: string,
+  index: number | undefined
+): Promise<GitStashApplyResult> {
+  return applyStashLike(execGit, cwd, index, "apply");
+}
+
+export async function dropStash(
+  execGit: GitOperationExec,
+  cwd: string,
+  index: number | undefined
+): Promise<GitStashDropResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  const stashRef = index === undefined ? [] : [`stash@{${index}}`];
+  try {
+    await execGit(["stash", "drop", ...stashRef], target.root, {
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    return { kind: "ok" };
+  } catch (err) {
     return unavailable(errorMessage(err));
   }
 }

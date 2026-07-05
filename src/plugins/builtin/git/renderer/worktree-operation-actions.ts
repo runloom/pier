@@ -186,7 +186,7 @@ function registerWorktreeCreateAction(
     },
     id: "pier.worktree.create",
     metadata: {
-      categoryKey: "git",
+      categoryKey: "worktree",
       group: "1_worktree",
       iconComponent: GitBranch,
       sortOrder: 2,
@@ -272,7 +272,7 @@ function registerWorktreeDeleteAction(
     },
     id: "pier.worktree.delete",
     metadata: {
-      categoryKey: "git",
+      categoryKey: "worktree",
       group: "1_worktree",
       iconComponent: Trash2,
       sortOrder: 3,
@@ -362,7 +362,7 @@ function registerWorktreePruneAction(
     },
     id: "pier.worktree.prune",
     metadata: {
-      categoryKey: "git",
+      categoryKey: "worktree",
       group: "1_worktree",
       iconComponent: BrushCleaning,
       sortOrder: 4,

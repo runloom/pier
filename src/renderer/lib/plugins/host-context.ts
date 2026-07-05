@@ -41,6 +41,7 @@ import type {
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
 import {
+  interpolateMessage,
   resolvePluginCommandAliases,
   resolvePluginCommandDisplay,
   resolvePluginMessage,
@@ -81,11 +82,12 @@ function createPluginI18n(
         .title;
     },
     language,
+    // fallback 也过插值：locale 缺 key 时用户不应看到字面 {{name}} 占位符。
     t: (key: string, values?: RendererPluginMessageValues, fallback = key) =>
       entry
         ? (resolvePluginMessage(entry.manifest, language(), key, values) ??
-          fallback)
-        : fallback,
+          interpolateMessage(fallback, values))
+        : interpolateMessage(fallback, values),
   };
 }
 

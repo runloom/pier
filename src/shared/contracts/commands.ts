@@ -351,6 +351,14 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     cwd: z.string().min(1),
     type: z.literal("git.stashPop"),
   }),
+  gitStashPopOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.stashApply"),
+  }),
+  gitStashPopOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.stashDrop"),
+  }),
   z.object({
     cwd: z.string().min(1),
     type: z.literal("git.stashList"),

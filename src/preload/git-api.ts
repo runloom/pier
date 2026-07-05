@@ -11,6 +11,8 @@ import type {
   GitRebaseContinueResult,
   GitRebaseResult,
   GitRepoInfo,
+  GitStashApplyResult,
+  GitStashDropResult,
   GitStashListResult,
   GitStashPopResult,
   GitStashResult,
@@ -64,8 +66,10 @@ export interface GitStashOptionsValue {
 export interface PierGitAPI {
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
+  applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
   continueRebase: (cwd: string) => Promise<GitRebaseContinueResult>;
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
+  dropStash: (cwd: string, index?: number) => Promise<GitStashDropResult>;
   // 读(git:read)
   getCommit: (cwd: string, oid: string) => Promise<GitCommit>;
   getCommitPatch: (cwd: string, oid: string) => Promise<GitDiffPatch>;
@@ -209,6 +213,18 @@ export const gitApi: PierGitAPI = {
       ...(index !== undefined && { index }),
       cwd,
       type: "git.stashPop",
+    }),
+  applyStash: (cwd, index) =>
+    invokePierCommand<GitStashApplyResult>({
+      ...(index !== undefined && { index }),
+      cwd,
+      type: "git.stashApply",
+    }),
+  dropStash: (cwd, index) =>
+    invokePierCommand<GitStashDropResult>({
+      ...(index !== undefined && { index }),
+      cwd,
+      type: "git.stashDrop",
     }),
   listStashes: (cwd) =>
     invokePierCommand<GitStashListResult>({ cwd, type: "git.stashList" }),

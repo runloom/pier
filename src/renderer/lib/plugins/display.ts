@@ -93,7 +93,7 @@ function resolveListFromLocales(
   return unique(values);
 }
 
-function interpolateMessage(
+export function interpolateMessage(
   template: string,
   values: PluginMessageValues | undefined
 ): string {

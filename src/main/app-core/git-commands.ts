@@ -23,6 +23,8 @@ const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.rebaseContinue": true,
   "git.stage": true,
   "git.stash": true,
+  "git.stashApply": true,
+  "git.stashDrop": true,
   "git.stashPop": true,
   "git.undoLastCommit": true,
   "git.unstage": true,
@@ -181,6 +183,16 @@ async function dispatchGitCommand(
       return success(
         requestId,
         await services.git.popStash(command.cwd, command.index)
+      );
+    case "git.stashApply":
+      return success(
+        requestId,
+        await services.git.applyStash(command.cwd, command.index)
+      );
+    case "git.stashDrop":
+      return success(
+        requestId,
+        await services.git.dropStash(command.cwd, command.index)
       );
     case "git.stashList":
       return success(requestId, await services.git.listStashes(command.cwd));

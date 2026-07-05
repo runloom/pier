@@ -9,49 +9,61 @@
       "aliases": ["git merge", "merge branch", "branch merge"],
       "category": "Git",
       "description": "Select a branch and merge it into the current branch.",
-      "title": "Merge Branch..."
+      "title": "Git: Merge Branch..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "abort merge"],
       "category": "Git",
       "description": "Abort the current merge operation.",
-      "title": "Abort Merge"
+      "title": "Git: Abort Merge"
     },
     "pier.git.stash": {
       "aliases": ["git stash", "stash save"],
       "category": "Git",
+      "description": "Stash local tracked changes.",
+      "title": "Git: Stash"
+    },
+    "pier.git.stashApply": {
+      "aliases": ["git stash apply", "apply stash"],
+      "category": "Git",
+      "description": "Select a stash and apply it while keeping it in the stash list.",
+      "title": "Git: Apply Stash..."
+    },
+    "pier.git.stashDrop": {
+      "aliases": ["git stash drop", "drop stash", "delete stash"],
+      "category": "Git",
+      "description": "Select a stash and delete it from the stash list.",
+      "title": "Git: Drop Stash..."
+    },
+    "pier.git.stashIncludeUntracked": {
+      "aliases": ["git stash --include-untracked", "stash untracked"],
+      "category": "Git",
       "description": "Stash local changes, including untracked files.",
-      "title": "Stash"
+      "title": "Git: Stash (Include Untracked)"
     },
     "pier.git.stashPop": {
-      "aliases": [
-        "git stash pop",
-        "git stash apply",
-        "pop stash",
-        "apply stash",
-        "restore stash"
-      ],
+      "aliases": ["git stash pop", "pop stash", "restore stash"],
       "category": "Git",
       "description": "Select a stash, apply it, and remove it from the stash list.",
-      "title": "Pop Stash..."
+      "title": "Git: Pop Stash..."
     },
     "pier.git.rebase": {
       "aliases": ["git rebase", "rebase branch"],
       "category": "Git",
       "description": "Select a branch and rebase the current branch onto it.",
-      "title": "Rebase Branch..."
+      "title": "Git: Rebase Branch..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["git rebase abort", "abort rebase"],
       "category": "Git",
       "description": "Abort the current rebase operation.",
-      "title": "Abort Rebase"
+      "title": "Git: Abort Rebase"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["git rebase continue", "continue rebase"],
       "category": "Git",
       "description": "Continue the current rebase operation.",
-      "title": "Continue Rebase"
+      "title": "Git: Continue Rebase"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -64,14 +76,13 @@
       ],
       "category": "Git",
       "description": "Undo the last commit while preserving its changes as staged.",
-      "title": "Undo Last Commit"
+      "title": "Git: Undo Last Commit"
     },
     "pier.worktree.create": {
       "aliases": [
         "worktree",
         "worktree create",
         "worktree add",
-        "git worktree add",
         "new worktree",
         "create worktree"
       ],
@@ -84,7 +95,6 @@
         "worktree",
         "worktree delete",
         "worktree remove",
-        "git worktree remove",
         "remove worktree",
         "delete worktree"
       ],
@@ -93,24 +103,13 @@
       "title": "Delete Worktrees..."
     },
     "pier.worktree.prune": {
-      "aliases": [
-        "worktree",
-        "worktree prune",
-        "git worktree prune",
-        "cleanup worktree"
-      ],
+      "aliases": ["worktree", "worktree prune", "cleanup worktree"],
       "category": "Worktree",
       "description": "Prunes stale Git worktree entries.",
       "title": "Prune Stale Worktrees"
     },
     "pier.worktree.list": {
-      "aliases": [
-        "worktree",
-        "worktree list",
-        "git worktree",
-        "git worktree list",
-        "workspace worktree"
-      ],
+      "aliases": ["worktree", "worktree list", "workspace worktree"],
       "category": "Worktree",
       "description": "Lists Git worktrees for the current repository and opens the selected worktree.",
       "title": "List Worktrees"
@@ -189,6 +188,8 @@
     "ui.gitLoadingMergeAbort": "Aborting merge...",
     "ui.gitLoadingStash": "Stashing changes...",
     "ui.gitLoadingStashPop": "Applying stash...",
+    "ui.gitLoadingStashApply": "Applying stash (keeping it in the list)...",
+    "ui.gitLoadingStashDrop": "Dropping stash...",
     "ui.gitLoadingRebase": "Rebasing...",
     "ui.gitLoadingRebaseAbort": "Aborting rebase...",
     "ui.gitLoadingRebaseContinue": "Continuing rebase...",
@@ -206,6 +207,12 @@
     "ui.gitStashSelect": "Select a stash to pop",
     "ui.gitStashListEmpty": "No stashes found",
     "ui.gitStashPopSuccess": "Stash applied and removed",
+    "ui.gitStashApplySuccess": "Stash applied (kept in stash list)",
+    "ui.gitStashDropSuccess": "Stash dropped",
+    "ui.gitStashSelectApply": "Select a stash to apply",
+    "ui.gitStashSelectDrop": "Select a stash to drop",
+    "ui.gitStashDropConfirmBody": "Drop {{stash}}? This cannot be undone.",
+    "ui.gitStashDropConfirmLabel": "Drop",
     "ui.gitStashConflictTitle": "Stash Conflicts",
     "ui.gitStashConflictBody": "Stash was applied but resulted in conflicts that need to be resolved.",
     "ui.gitRebaseSuccess": "Successfully rebased onto {{branch}}",
