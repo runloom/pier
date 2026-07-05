@@ -134,6 +134,9 @@ describe("terminal close IPC reason semantics", () => {
       findAppWindowByElectronId: vi.fn((id: number) =>
         id === win.id ? win : null
       ),
+      findAppWindowByInternalId: vi.fn((id: string) =>
+        id === "window-main" ? win : null
+      ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => "window-main"),
     }));
@@ -210,5 +213,112 @@ describe("terminal close IPC reason semantics", () => {
     await Promise.resolve();
 
     expect(taskPanelClosed).not.toHaveBeenCalled();
+  });
+
+  it("preserves the running task activity across a relaunch close so the exit lands", async () => {
+    const { invokeHandlers, win } = await setupHarness();
+    // 动态 import 必须晚于 setupHarness 的 vi.doMock（resetModules 后按测试
+    // 注册 mock）——静态 import 会绑定未 mock 的模块实例。
+    const { foregroundActivityService } = await import(
+      "@main/ipc/foreground-activity.ts"
+    );
+    const close = invokeHandlers.get("pier:terminal:close");
+
+    // rerun 时序：run.spawn 先登记新 running task 层，renderer 随后才发
+    // relaunch close。
+    foregroundActivityService.taskLaunched("terminal-1", "window-main", {
+      label: "dev",
+      taskId: "task-dev",
+    });
+    await close?.({ sender: win.webContents }, "terminal-1", {
+      reason: "relaunch",
+    });
+
+    const during = foregroundActivityService.snapshot().activities;
+    expect(during).toEqual([
+      expect.objectContaining({
+        kind: "task",
+        panelId: "terminal-1",
+        status: "running",
+        taskId: "task-dev",
+      }),
+    ]);
+
+    // 生产时序里旧 pty 死亡会在 close 与 finish 之间送达 process-closed →
+    // ptyExited；task 层必须挺过这一拍（aggregator 按层语义保留 task 层）。
+    foregroundActivityService.ptyExited("terminal-1");
+    expect(foregroundActivityService.snapshot().activities).toEqual([
+      expect.objectContaining({
+        kind: "task",
+        panelId: "terminal-1",
+        status: "running",
+      }),
+    ]);
+
+    foregroundActivityService.taskFinished("terminal-1", {
+      exitCode: 0,
+      status: "success",
+    });
+
+    const after = foregroundActivityService.snapshot().activities;
+    expect(after).toEqual([
+      expect.objectContaining({
+        exitCode: 0,
+        kind: "task",
+        panelId: "terminal-1",
+        status: "success",
+      }),
+    ]);
+  });
+
+  // 非回归守卫：真实关闭（无 reason）仍走 panelClosed 清理——锚住 else 分支，
+  // 防未来把 relaunch 豁免扩大到所有 close。
+  it("clears the task activity when the panel closes for real", async () => {
+    const { invokeHandlers, win } = await setupHarness();
+    // 同上：mock 注册后才能拿到被 mock 的模块实例。
+    const { foregroundActivityService } = await import(
+      "@main/ipc/foreground-activity.ts"
+    );
+    const close = invokeHandlers.get("pier:terminal:close");
+
+    foregroundActivityService.taskLaunched("terminal-1", "window-main", {
+      label: "dev",
+      taskId: "task-dev",
+    });
+    await close?.({ sender: win.webContents }, "terminal-1");
+
+    expect(foregroundActivityService.snapshot().activities).toEqual([]);
+  });
+
+  it("clears pre-registered task activity when native terminal create fails", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+    // 同上：mock 注册后才能拿到被 mock 的模块实例。
+    const { foregroundActivityService } = await import(
+      "@main/ipc/foreground-activity.ts"
+    );
+    const create = invokeHandlers.get("pier:terminal:create");
+
+    // fresh spawn 与 rerun relaunch 共通时序：taskLaunched 先验登记 running
+    // 层, renderer 随后才 create。create 失败 = pty 从未活过, 层必须撤。
+    foregroundActivityService.taskLaunched("terminal-1", "window-main", {
+      label: "dev",
+      taskId: "task-dev",
+    });
+    fakeAddon.createTerminal.mockReturnValueOnce(false);
+
+    const result = await create?.(
+      { sender: win.webContents },
+      {
+        font: { family: "Menlo", size: 12 },
+        frame: { height: 100, width: 100, x: 0, y: 0 },
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: "createTerminal returned false",
+    });
+    expect(foregroundActivityService.snapshot().activities).toEqual([]);
   });
 });
