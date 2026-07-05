@@ -102,6 +102,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     focus: z.boolean().optional(),
+    forceRestart: z.boolean().optional(),
     inputs: z.record(z.string().min(1), z.string()).optional(),
     placement: pierCommandPlacementSchema.optional(),
     projectRootPath: z.string().min(1),

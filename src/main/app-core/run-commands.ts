@@ -5,6 +5,7 @@ import type {
 } from "@shared/contracts/commands.ts";
 import type {
   TaskLaunchPlan,
+  TaskListResult,
   TaskPanelMetadata,
   TaskPanelRef,
   TaskRunSnapshot,
@@ -16,6 +17,8 @@ import {
   executePanelFocusCommand,
   executeTerminalOpenCommand,
 } from "./panel-commands.ts";
+
+const TASK_ENV_PREWARM_LIMIT = 4;
 
 class RunTerminalOpenError extends Error {
   readonly code: PierCommandErrorCode;
@@ -143,7 +146,7 @@ async function focusAlreadyRunningTask(
   command: Extract<PierCommand, { type: "run.spawn" }>,
   preparation: AlreadyRunningTaskPreparation,
   services: PierCoreServices
-): Promise<PierCommandResult> {
+): Promise<PierCommandResult | null> {
   const focusResult = await executePanelFocusCommand(
     requestId,
     {
@@ -159,6 +162,7 @@ async function focusAlreadyRunningTask(
   if (!focusResult.ok) {
     if (focusResult.error.code === "not_found") {
       services.tasks.markPanelClosed(preparation.panelId, preparation.windowId);
+      return null;
     }
     return focusResult;
   }
@@ -183,18 +187,37 @@ async function closeOpenedPanelsAfterFailure(
   }
   return null;
 }
+function prewarmTaskEnvironments(
+  result: TaskListResult,
+  services: PierCoreServices
+): void {
+  const cwds = new Set<string>();
+  for (const task of result.tasks) {
+    if (task.unsupportedReason) {
+      continue;
+    }
+    cwds.add(task.cwd);
+    if (cwds.size >= TASK_ENV_PREWARM_LIMIT) {
+      break;
+    }
+  }
+  for (const cwd of cwds) {
+    services.processEnvironment
+      .resolve({ cwd, source: "task" })
+      .catch(() => undefined);
+  }
+}
 
 export async function executeRunListCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "run.list" }>,
   services: PierCoreServices
 ): Promise<PierCommandResult> {
-  return commandSuccess(
-    requestId,
-    await services.tasks.list({
-      projectRootPath: command.projectRootPath,
-    })
-  );
+  const result = await services.tasks.list({
+    projectRootPath: command.projectRootPath,
+  });
+  prewarmTaskEnvironments(result, services);
+  return commandSuccess(requestId, result);
 }
 
 export async function executeRunSpawnCommand(
@@ -204,6 +227,7 @@ export async function executeRunSpawnCommand(
   options: { clientEnv?: Record<string, string> | undefined } = {}
 ): Promise<PierCommandResult> {
   const preparation = await services.tasks.prepareSpawn({
+    forceRestart: command.forceRestart ?? true,
     inputs: command.inputs,
     projectRootPath: command.projectRootPath,
     taskId: command.taskId,
@@ -215,12 +239,16 @@ export async function executeRunSpawnCommand(
     return commandSuccess(requestId, preparation);
   }
   if (preparation.status === "already-running") {
-    return await focusAlreadyRunningTask(
+    const focusResult = await focusAlreadyRunningTask(
       requestId,
       command,
       preparation,
       services
     );
+    if (focusResult) {
+      return focusResult;
+    }
+    return await executeRunSpawnCommand(requestId, command, services, options);
   }
 
   if (preparation.restartRunId) {

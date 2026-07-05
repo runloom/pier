@@ -23,6 +23,7 @@ import type {
   PluginRegistryEntry,
   PluginSourceKind,
 } from "@shared/contracts/plugin.ts";
+import type { TaskListResult } from "@shared/contracts/tasks.ts";
 import { describe, expect, it, vi } from "vitest";
 import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
@@ -66,6 +67,16 @@ function panelSnapshot(
     id,
     kind: "terminal",
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, reject, resolve };
 }
 
 function pluginEntry(
@@ -893,6 +904,167 @@ describe("createCommandRouter", () => {
         requestId: "r-unknown",
       })
     ).resolves.toMatchObject({ ok: false, error: { code: "invalid_command" } });
+  });
+
+  it("run.list schedules task shell environment prewarm without awaiting it", async () => {
+    const projectRootPath = "/repo";
+    const listResult = {
+      errors: [],
+      projectRootPath,
+      tasks: [
+        {
+          commandSpec: { command: "pnpm run test", kind: "shell" },
+          concurrencyPolicy: "dedupe",
+          cwd: projectRootPath,
+          id: "package-script:test",
+          label: "test",
+          source: "package-script",
+        },
+      ],
+    } satisfies TaskListResult;
+    const listReady = deferred<TaskListResult>();
+    const listStarted = deferred<void>();
+    const prewarmReady = deferred<ProcessEnvironmentResolveResult>();
+    const resolveEnvironment = vi.fn(() => prewarmReady.promise);
+    const fakeServices = services([], undefined, [], resolveEnvironment);
+    fakeServices.tasks = {
+      ...fakeServices.tasks,
+      list: vi.fn(() => {
+        listStarted.resolve();
+        return listReady.promise;
+      }),
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const result = router.execute({
+      clientId: "desktop-1",
+      command: {
+        projectRootPath,
+        type: "run.list",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-list-prewarm",
+    });
+    await listStarted.promise;
+    expect(fakeServices.tasks.list).toHaveBeenCalledWith({ projectRootPath });
+    expect(resolveEnvironment).not.toHaveBeenCalled();
+
+    listReady.resolve(listResult);
+    await expect(result).resolves.toEqual({
+      data: listResult,
+      ok: true,
+      requestId: "req-run-list-prewarm",
+    });
+
+    expect(resolveEnvironment).toHaveBeenCalledWith({
+      cwd: projectRootPath,
+      source: "task",
+    });
+
+    prewarmReady.resolve({
+      diagnostics: {
+        cacheHit: false,
+        pathChanged: false,
+        shellEnvStatus: "resolved",
+        source: "task",
+      },
+      env: {},
+    });
+  });
+
+  it("run.spawn falls back to a fresh terminal when an already-running panel is stale", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    fakeServices.tasks.recordStarted({
+      panelId: "terminal-stale",
+      projectRootPath: process.cwd(),
+      taskId: "package-script:test",
+      windowId: "main",
+    });
+    const executeRendererCommand = fakeServices.rendererCommand.execute;
+    fakeServices.rendererCommand.execute = vi.fn((command) => {
+      rendererCommands.push(command);
+      if (command.type === "panel.focus") {
+        return Promise.resolve({
+          error: {
+            code: "not_found" as const,
+            message: "panel not found: terminal-stale",
+          },
+          ok: false as const,
+          requestId: "renderer-focus-missing",
+        });
+      }
+      if (command.type === "terminal.open") {
+        return Promise.resolve({
+          data: {
+            context: command.context,
+            panelId: "terminal-fresh",
+          },
+          ok: true as const,
+          requestId: "renderer-terminal-open",
+        });
+      }
+      return executeRendererCommand(command);
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const spawnResult = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        focus: true,
+        forceRestart: false,
+        placement: "active-tab",
+        projectRootPath: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn-stale-running",
+    });
+
+    expect(spawnResult).toMatchObject({
+      data: {
+        panelIds: ["terminal-fresh"],
+        primaryPanelId: "terminal-fresh",
+        status: "started",
+      },
+      ok: true,
+      requestId: "req-run-spawn-stale-running",
+    });
+    expect(rendererCommands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          panelId: "terminal-stale",
+          type: "panel.focus",
+          windowId: "main",
+        }),
+        expect.objectContaining({
+          type: "terminal.open",
+          windowId: "main",
+        }),
+      ])
+    );
+    const terminalOpenCommand = rendererCommands.find(
+      (command) =>
+        typeof command === "object" &&
+        command !== null &&
+        "type" in command &&
+        command.type === "terminal.open"
+    );
+    expect(terminalOpenCommand).not.toHaveProperty("panelId");
+    expect(terminalLaunches).toHaveLength(1);
   });
 
   it("run.spawn 重新解析任务并复用运行中和已完成的 terminal.open", async () => {

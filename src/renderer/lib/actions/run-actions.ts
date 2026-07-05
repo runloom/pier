@@ -7,7 +7,7 @@ import type {
 } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
 import { List, Play, RotateCcw } from "lucide-react";
-import { panelKindOf } from "@/components/workspace/panel-registry.ts";
+import { toast } from "sonner";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import {
@@ -20,9 +20,41 @@ import type {
   QuickPickItem,
   QuickPickSection,
 } from "@/lib/command-palette/types.ts";
-import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+
+const TASK_SPAWN_LOADING_DELAY_MS = 300;
+
+type ToastId = string | number;
+
+async function withTaskSpawnLoading<T>(
+  taskLabel: string | undefined,
+  operation: () => Promise<T>
+): Promise<T> {
+  let toastId: ToastId | undefined;
+  let settled = false;
+  const timer = window.setTimeout(() => {
+    if (settled) {
+      return;
+    }
+    toastId = toast.loading(
+      taskLabel
+        ? i18next.t("commandPalette.run.startingTaskWithLabel", {
+            label: taskLabel,
+          })
+        : i18next.t("commandPalette.run.startingTask")
+    );
+  }, TASK_SPAWN_LOADING_DELAY_MS);
+  try {
+    return await operation();
+  } finally {
+    settled = true;
+    window.clearTimeout(timer);
+    if (toastId !== undefined) {
+      toast.dismiss(toastId);
+    }
+  }
+}
 
 interface ProjectContext {
   projectRootPath: string;
@@ -190,64 +222,56 @@ async function collectTaskInputs(
 }
 
 async function spawnTask(args: {
+  forceRestart: boolean;
   inputs?: Record<string, string>;
   project: ProjectContext;
   taskId: string;
+  taskLabel?: string | undefined;
 }): Promise<TaskSpawnResult> {
-  return await window.pier.tasks.spawn({
-    focus: true,
-    ...(args.inputs ? { inputs: args.inputs } : {}),
-    placement: "active-tab",
-    projectRootPath: args.project.projectRootPath,
-    taskId: args.taskId,
-  });
+  return await withTaskSpawnLoading(
+    args.taskLabel,
+    async () =>
+      await window.pier.tasks.spawn({
+        focus: true,
+        forceRestart: args.forceRestart,
+        ...(args.inputs ? { inputs: args.inputs } : {}),
+        placement: "active-tab",
+        projectRootPath: args.project.projectRootPath,
+        taskId: args.taskId,
+      })
+  );
 }
 
-function focusTerminalPanel(panelId: string): void {
-  const api = useWorkspaceStore.getState().api;
-  if (!api) {
-    return;
-  }
-  const result = activateWorkspacePanel(api, panelId, {
-    expectedKind: "terminal",
-    kindOfComponent: panelKindOf,
-    reveal: "always",
-  });
-  if (!result.ok) {
-    console.error("[run-actions] focus task terminal failed:", result.message);
-  }
-}
 async function spawnTaskWithInputFlow(
   project: ProjectContext,
-  taskId: string
+  taskId: string,
+  options: { forceRestart: boolean; taskLabel?: string | undefined }
 ): Promise<void> {
-  let result = await spawnTask({ project, taskId });
+  let result = await spawnTask({ project, taskId, ...options });
   if (result.status === "requires-input") {
     const inputs = await collectTaskInputs(result.inputs);
     if (!inputs) {
       return;
     }
-    result = await spawnTask({ inputs, project, taskId });
+    result = await spawnTask({ inputs, project, taskId, ...options });
   }
   if (result.status === "unsupported") {
     console.error("[run-actions] task unsupported:", result.message);
     return;
   }
-  if (result.status === "already-running") {
-    focusTerminalPanel(result.panelId);
-  }
 }
 
 function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
-  return spawnTaskWithInputFlow(project, item.id);
+  return spawnTaskWithInputFlow(project, item.id, {
+    forceRestart: false,
+    taskLabel: item.label,
+  });
 }
 
 /**
  * `pier.run.rerunTask`: shared entry point for task-panel context menus,
- * the command palette, and the global rerun shortcut. It reuses Run Task's
- * spawn flow; main-side prepareSpawn takes the restart path — running tasks
- * are cancelled before restarting in the same panel, finished tasks relaunch
- * in that panel directly.
+ * the command palette, and the global rerun shortcut. Unlike Run Task picker
+ * selections, this explicitly asks main to restart the active task in place.
  */
 async function rerunActiveTaskPanel(): Promise<void> {
   const task = activeTaskPanelMetadata();
@@ -256,7 +280,8 @@ async function rerunActiveTaskPanel(): Promise<void> {
   }
   await spawnTaskWithInputFlow(
     { projectRootPath: task.projectRootPath },
-    task.taskId
+    task.taskId,
+    { forceRestart: true, taskLabel: task.label }
   );
 }
 export async function openRunTaskQuickPick() {

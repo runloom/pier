@@ -33,6 +33,7 @@ import {
 } from "./task-spawn-restart.ts";
 
 export interface TaskSpawnRequest {
+  forceRestart?: boolean | undefined;
   inputs?: Record<string, string> | undefined;
   projectRootPath: string;
   taskId: string;
@@ -100,7 +101,7 @@ export interface CreateTaskServiceOptions {
   recentLimit?: number;
   writeRecentState?: (state: TaskRecentState) => Promise<void>;
 }
-
+const TASK_LIST_CACHE_TTL_MS = 2000;
 function runKey(projectRootPath: string, taskId: string): string {
   return `${projectRootPath}\0${taskId}`;
 }
@@ -127,7 +128,17 @@ export function createTaskService({
     ...(writeRecentState ? { writeRecentState } : {}),
   });
 
-  const collect = async (projectRootPath: string) => {
+  const collectCache = new Map<
+    string,
+    { expiresAt: number; result: TaskListResult }
+  >();
+  const collectVersions = new Map<string, number>();
+  const collectInFlight = new Map<
+    string,
+    { promise: Promise<TaskListResult>; version: number }
+  >();
+
+  const collectFresh = async (projectRootPath: string) => {
     await recent.ensureLoaded();
     const result = await collectTaskCandidates({
       projectRootPath,
@@ -136,6 +147,43 @@ export function createTaskService({
     } satisfies CollectTaskCandidatesOptions);
     return { ...result, tasks: recent.sort(result.tasks) };
   };
+
+  const collect = async (projectRootPath: string) => {
+    const cached = collectCache.get(projectRootPath);
+    if (cached && cached.expiresAt > now()) {
+      return cached.result;
+    }
+    const version = collectVersions.get(projectRootPath) ?? 0;
+    const pending = collectInFlight.get(projectRootPath);
+    if (pending && pending.version === version) {
+      return await pending.promise;
+    }
+    const next = collectFresh(projectRootPath)
+      .then((result) => {
+        if ((collectVersions.get(projectRootPath) ?? 0) === version) {
+          collectCache.set(projectRootPath, {
+            expiresAt: now() + TASK_LIST_CACHE_TTL_MS,
+            result,
+          });
+        }
+        return result;
+      })
+      .finally(() => {
+        if (collectInFlight.get(projectRootPath)?.promise === next) {
+          collectInFlight.delete(projectRootPath);
+        }
+      });
+    collectInFlight.set(projectRootPath, { promise: next, version });
+    return await next;
+  };
+
+  function invalidateCollectCache(projectRootPath: string): void {
+    collectCache.delete(projectRootPath);
+    collectVersions.set(
+      projectRootPath,
+      (collectVersions.get(projectRootPath) ?? 0) + 1
+    );
+  }
 
   function rememberPanelRun(
     panelId: string,
@@ -231,6 +279,46 @@ export function createTaskService({
     }
   }
 
+  function alreadyRunningPreparation(
+    projectRootPath: string,
+    taskId: string
+  ): TaskSpawnPreparation | null {
+    const key = runKey(projectRootPath, taskId);
+    const running = runningByKey.get(key);
+    if (!running) {
+      return null;
+    }
+    if (running.kind === "panel") {
+      return {
+        panelId: running.panelId,
+        status: "already-running",
+        ...(running.windowId ? { windowId: running.windowId } : {}),
+      };
+    }
+    const snapshot = taskRuns.status(running.runId);
+    if (!snapshot || isTerminalRunStatus(snapshot.status)) {
+      runningByKey.delete(key);
+      return null;
+    }
+    const rootNode = snapshot.nodes[taskId];
+    const node =
+      rootNode?.panelId === undefined
+        ? Object.values(snapshot.nodes).find(
+            (candidate) =>
+              candidate.panelId !== undefined &&
+              !isTerminalRunStatus(candidate.status)
+          )
+        : rootNode;
+    if (!node?.panelId) {
+      return null;
+    }
+    return {
+      panelId: node.panelId,
+      status: "already-running",
+      ...(node.windowId ? { windowId: node.windowId } : {}),
+    };
+  }
+
   function restartPreparation(
     projectRootPath: string,
     taskId: string,
@@ -311,7 +399,18 @@ export function createTaskService({
     markPanelClosed(panelId, windowId) {
       markPanelActuallyClosed(panelId, windowId);
     },
-    async prepareSpawn({ projectRootPath, taskId, inputs = {} }) {
+    async prepareSpawn({
+      forceRestart = true,
+      projectRootPath,
+      taskId,
+      inputs = {},
+    }) {
+      if (!forceRestart) {
+        const running = alreadyRunningPreparation(projectRootPath, taskId);
+        if (running) {
+          return running;
+        }
+      }
       const list = await collect(projectRootPath);
       const task = list.tasks.find((candidate) => candidate.id === taskId);
       if (!task) {
@@ -353,6 +452,7 @@ export function createTaskService({
     recentTasks: () => recent.entries(),
     async recordRecent(launch) {
       await recent.recordLaunch(launch);
+      invalidateCollectCache(launch.projectRootPath);
     },
     recordStarted({ panelId, projectRootPath, taskId, windowId }) {
       recordStartedRun({
@@ -374,6 +474,7 @@ export function createTaskService({
             windowId: opened.windowId,
           });
           await recent.recordLaunch(launch);
+          invalidateCollectCache(launch.projectRootPath);
           onTaskActivity?.onLaunched(opened.panelId, opened.windowId, {
             taskId: launch.taskId,
             label: launch.label,
