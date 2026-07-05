@@ -60,6 +60,9 @@ playwright-report/
 # cursor
 .cursor/
 
+# codebuddy
+.codebuddy/
+
 # libghostty 本地构建缓存（scripts/build-libghostty.sh 拉取）
 /.ghostty-src/
 /.libghostty-spm-src/
