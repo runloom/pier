@@ -240,10 +240,19 @@ export const gitApi: PierGitAPI = {
       }
     };
     ipcRenderer.on(PIER_BROADCAST.GIT_CHANGED, filtered);
-    ipcRenderer.invoke(PIER.GIT_WATCH_START, gitRoot).catch(() => undefined);
+    // main 侧按 (wc, gitRoot) 引用计数;START 失败(权限/窗口未注册)时不得发 STOP,
+    // 否则会错误递减其他消费方共享的计数。then 链保证 STOP 严格晚于 START 送达。
+    const started = ipcRenderer
+      .invoke(PIER.GIT_WATCH_START, gitRoot)
+      .then((ok: unknown) => ok === true)
+      .catch(() => false);
     return () => {
       ipcRenderer.off(PIER_BROADCAST.GIT_CHANGED, filtered);
-      ipcRenderer.invoke(PIER.GIT_WATCH_STOP, gitRoot).catch(() => undefined);
+      started
+        .then((ok) =>
+          ok ? ipcRenderer.invoke(PIER.GIT_WATCH_STOP, gitRoot) : undefined
+        )
+        .catch(() => undefined);
     };
   },
 };

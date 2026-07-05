@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { access, readFile, realpath } from "node:fs/promises";
+import { access, lstat, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { execGit } from "./git-exec.ts";
+import { parseGitStatus } from "./git-parsers.ts";
 import { fetchRefsTable } from "./git-refs-table.ts";
 import type { RefsSnapshot } from "./git-watch-hub.ts";
 
@@ -11,6 +12,35 @@ import type { RefsSnapshot } from "./git-watch-hub.ts";
  * 恢复成功后再广播一次真实值；连续失败之间签名一致不重复广播。
  */
 const NUMSTAT_ERROR_SENTINEL = "numstat-unavailable";
+
+/** 变更文件 stat 信号的文件数上限：超大脏树截断，保每轮签名成本有界。 */
+const CONTENT_SIGNAL_MAX_FILES = 5000;
+
+/**
+ * 变更文件的内容变化信号。status/numstat 文本对"同一文件再次改写且增删行数
+ * 不变"不敏感（porcelain 不含工作树内容 hash），单靠它们会漏播 diff 内容变化，
+ * 选中文件的 diff 预览就会陈旧。按 status 报告的路径逐个 lstat，取 mtimeMs+size；
+ * stat 失败（已删除/瞬时竞态）记确定性哨兵，下一轮自然收敛。
+ * porcelain 路径相对 repo 顶层，而 gitRoot 即订阅的顶层路径，可直接 join。
+ */
+async function changedFilesStatSignal(
+  gitRoot: string,
+  statusOut: string
+): Promise<string> {
+  const { files } = parseGitStatus(statusOut);
+  const capped = files.slice(0, CONTENT_SIGNAL_MAX_FILES);
+  const parts = await Promise.all(
+    capped.map(async (file) => {
+      try {
+        const stat = await lstat(join(gitRoot, file.path));
+        return `${file.path}\u0001${stat.mtimeMs}\u0001${stat.size}`;
+      } catch {
+        return `${file.path}\u0001missing`;
+      }
+    })
+  );
+  return parts.join("\u0002");
+}
 
 /** 一次签名计算期间捕获的原始 git 输出，供 getStatus 复用（A7）。 */
 export interface RawWorktreeSnapshot {
@@ -43,8 +73,10 @@ type WorktreeExecGit = (
 ) => Promise<string>;
 
 /**
- * worktree 签名：status porcelain(--branch) + numstat(unstaged/staged)拼接后 hash。
- * porcelain v2 不含工作区内容 oid，已修改文件继续编辑时只有 numstat 会变(spec 缺口③)。
+ * worktree 签名：status porcelain(--branch) + numstat(unstaged/staged) +
+ * 变更文件 stat 信号(mtimeMs+size)拼接后 hash。stat 信号补齐 porcelain 的内容盲区
+ *（原 spec 缺口③）：已修改文件继续编辑但增删行数不变时，status/numstat 全文不变，
+ * 唯 mtime/size 变——否则 diff 预览漏更新。
  * status 失败仍整体返回 ""(保持旧语义)；numstat 瞬时失败写哨兵段(A4)——失败与任何真实输出
  * 都不同，从成功态进入失败态广播一次、恢复后再广播真实值，连续失败之间不重复广播。
  *
@@ -67,7 +99,7 @@ export async function defaultWorktreeSignature(
   }
   let unstagedFailed = false;
   let stagedFailed = false;
-  const [unstaged, staged] = await Promise.all([
+  const [unstaged, staged, statSignal] = await Promise.all([
     exec(["diff", "--numstat", "-z", "--no-renames"], { cwd: gitRoot }).catch(
       () => {
         unstagedFailed = true;
@@ -80,6 +112,10 @@ export async function defaultWorktreeSignature(
       stagedFailed = true;
       return NUMSTAT_ERROR_SENTINEL;
     }),
+    // 解析/stat 失败不阻塞签名：写确定性哨兵，退化为旧行为（仅 status/numstat 信号）
+    changedFilesStatSignal(gitRoot, statusOut).catch(
+      () => "stat-signal-unavailable"
+    ),
   ]);
   // 只有默认 exec 路径、且三段都是真实输出时，缓存原始快照供 getStatus 复用。
   if (isDefaultExec && !(unstagedFailed || stagedFailed)) {
@@ -92,7 +128,7 @@ export async function defaultWorktreeSignature(
     lastRawByRoot.delete(gitRoot);
   }
   return createHash("sha256")
-    .update(`${statusOut}\0${unstaged}\0${staged}`)
+    .update(`${statusOut}\0${unstaged}\0${staged}\0${statSignal}`)
     .digest("hex");
 }
 
