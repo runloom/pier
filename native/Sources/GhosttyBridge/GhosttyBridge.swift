@@ -84,6 +84,7 @@ final class EventRouterView: NSView {
         "Ctrl+Shift+ArrowRight",
         "Ctrl+Shift+ArrowUp",
         "Ctrl+Shift+KeyD",
+        "Mod+Alt+KeyR",
         "Mod+Backquote",
         "Mod+Comma",
         "Mod+Digit0",

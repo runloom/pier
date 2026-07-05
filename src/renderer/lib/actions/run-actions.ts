@@ -243,9 +243,11 @@ function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
 }
 
 /**
- * 任务面板右键"重新运行": 复用 Run Task 的 spawn 流程。main 侧 prepareSpawn
- * 会走 restart 路径 — 运行中的任务先取消再在原 panel 重启, 已结束的任务
- * 直接复用原 panel relaunch。
+ * `pier.run.rerunTask`: shared entry point for task-panel context menus,
+ * the command palette, and the global rerun shortcut. It reuses Run Task's
+ * spawn flow; main-side prepareSpawn takes the restart path — running tasks
+ * are cancelled before restarting in the same panel, finished tasks relaunch
+ * in that panel directly.
  */
 async function rerunActiveTaskPanel(): Promise<void> {
   const task = activeTaskPanelMetadata();
@@ -375,7 +377,7 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     id: "pier.run.rerunTask",
     menuHiddenWhen: "!terminal.activeIsTaskPanel",
     sortOrder: 1,
-    surfaces: ["dockview-tab", "terminal/content"],
+    surfaces: ["dockview-tab", "terminal/content", "command-palette"],
     titleKey: "contextMenu.action.rerunTask",
     when: "terminal.activeIsTaskPanel",
   },

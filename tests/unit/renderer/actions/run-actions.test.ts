@@ -391,6 +391,18 @@ describe("run actions", () => {
     });
   });
 
+  it("exposes Rerun Task to the command palette when run actions are registered", () => {
+    installTaskPanelApi();
+    disposeRunActions = registerRunActions();
+
+    const paletteActionIds = actionRegistry
+      .list("command-palette")
+      .map((action) => action.id);
+
+    expect(paletteActionIds).toContain("pier.run.rerunTask");
+    expect(actionRegistry.get("pier.run.rerunTask")?.enabled?.()).toBe(true);
+  });
+
   it("reruns the active task panel through the task bridge", async () => {
     installTaskPanelApi();
     disposeRunActions = registerRunActions();
