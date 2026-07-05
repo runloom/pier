@@ -1,9 +1,12 @@
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
+import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import type {
   PierCommand,
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
+import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { WorktreeCreateResult } from "@shared/contracts/worktree.ts";
 import { copyWorktreeIncludes } from "../services/worktree-bootstrap.ts";
 import {
@@ -57,6 +60,18 @@ function canonicalPath(path: string): string {
 
 function sameResolvedPath(a: string, b: string): boolean {
   return canonicalPath(a) === canonicalPath(b);
+}
+
+function agentTerminalTab(
+  agentId: NonNullable<
+    Extract<PierCommand, { type: "worktree.openTerminal" }>["agentId"]
+  >
+): PanelTabChrome {
+  const entry = getAgentCatalogEntry(agentId);
+  return {
+    icon: { id: agentTabIconId(agentId) },
+    title: entry?.label ?? agentId,
+  };
 }
 
 async function executeWorktreeOpenCommand(
@@ -123,15 +138,22 @@ async function executeWorktreeOpenTerminalCommand(
   }
   // setup 命令只来自用户偏好 —— 插件调用方传不了任意命令字符串。
   const preferences = await services.preferences.read();
-  const setup = command.runSetup ? preferences.worktreeSetupCommand.trim() : "";
+  const setup =
+    command.runSetup && !command.agentId
+      ? preferences.worktreeSetupCommand.trim()
+      : "";
+  const launch = command.agentId
+    ? { agentId: command.agentId, cwd: target.path }
+    : { cwd: target.path, ...(setup ? { command: setup } : {}) };
   return await executeTerminalOpenCommand(
     requestId,
     {
       focus: true,
-      launch: { cwd: target.path, ...(setup ? { command: setup } : {}) },
+      launch,
       type: "terminal.open",
     },
-    services
+    services,
+    command.agentId ? { tab: agentTerminalTab(command.agentId) } : {}
   );
 }
 

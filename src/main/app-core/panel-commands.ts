@@ -133,8 +133,10 @@ function mergeTerminalLaunchCommandAndCwd(
   profile: ResolvedTerminalLaunchOptions | null
 ): ResolvedTerminalLaunchOptions {
   return {
+    ...(profile?.agentId && { agentId: profile.agentId }),
     ...(profile?.command && { command: profile.command }),
     ...(profile?.cwd && { cwd: profile.cwd }),
+    ...(launch.agentId && { agentId: launch.agentId }),
     ...(launch.command && { command: launch.command }),
     ...(launch.cwd && { cwd: launch.cwd }),
   };
@@ -179,10 +181,13 @@ async function resolveTerminalLaunchBase(
   }
   let launchBase = mergeTerminalLaunchCommandAndCwd(rawLaunch, profile);
   // Explicit command / profile command wins; only resolve agent when neither set.
-  if (!launchBase.command && rawLaunch.agentId) {
-    const result = await resolveAgentLaunchCommand(rawLaunch.agentId, services);
+  if (!launchBase.command && launchBase.agentId) {
+    const result = await resolveAgentLaunchCommand(
+      launchBase.agentId,
+      services
+    );
     if (!result.ok) {
-      return { error: `unknown agent: ${rawLaunch.agentId}` };
+      return { error: `unknown agent: ${launchBase.agentId}` };
     }
     launchBase = { ...launchBase, command: result.command };
   }

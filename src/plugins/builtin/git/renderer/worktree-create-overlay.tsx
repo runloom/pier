@@ -8,14 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@pier/ui/field.tsx";
-import { Input } from "@pier/ui/input.tsx";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import {
   Select,
   SelectContent,
@@ -25,9 +18,11 @@ import {
   SelectValue,
 } from "@pier/ui/select.tsx";
 import { Tabs, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
-import { Textarea } from "@pier/ui/textarea.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { AiStatusResult } from "@shared/contracts/ai.ts";
+import type {
+  RendererPluginAgentSelection,
+  RendererPluginContext,
+} from "@plugins/api/renderer.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { WorktreeCreationDraft } from "@shared/worktree-naming.ts";
 import {
   deriveWorktreeCreation,
@@ -36,7 +31,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
-  AiFieldDescription,
   buildFormSchema,
   type CreateMode,
   confirmButtonContent,
@@ -48,10 +42,12 @@ import {
   type SubmitPhase,
   type WorktreeCreateOverlayData,
 } from "./worktree-create-form.tsx";
+import {
+  AiModeFields,
+  CustomModeField,
+} from "./worktree-create-mode-fields.tsx";
 
 export type { WorktreeCreateOverlayData } from "./worktree-create-form.tsx";
-
-const TRAILING_PATH_SEPARATOR_RE = /[\\/]+$/;
 
 interface WorktreeCreateOverlayProps {
   close: () => void;
@@ -75,13 +71,6 @@ function focusActiveModeInput(mode: CreateMode): void {
   }
 }
 
-function worktreeChildPath(rootPath: string, name: string): string {
-  const trimmedRoot = rootPath.replace(TRAILING_PATH_SEPARATOR_RE, "");
-  const separator =
-    trimmedRoot.includes("\\") && !trimmedRoot.includes("/") ? "\\" : "/";
-  return `${trimmedRoot}${separator}${name}`;
-}
-
 function WorktreeCreateOverlay({
   close,
   context,
@@ -89,7 +78,8 @@ function WorktreeCreateOverlay({
 }: WorktreeCreateOverlayProps) {
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [aiStatus, setAiStatus] = useState<AiStatusResult | null>(null);
+  const [agentSelection, setAgentSelection] =
+    useState<RendererPluginAgentSelection | null>(null);
   const closedRef = useRef(false);
 
   const text = useCallback(
@@ -107,7 +97,14 @@ function WorktreeCreateOverlay({
   );
 
   const form = useForm<FormValues>({
-    defaultValues: { base: HEAD_SENTINEL, branch: "", mode: "ai", text: "" },
+    defaultValues: {
+      agentId: "",
+      base: HEAD_SENTINEL,
+      branch: "",
+      mode: "ai",
+      startTask: false,
+      text: "",
+    },
     resolver: zodResolver(schema),
   });
   const mode = form.watch("mode");
@@ -125,14 +122,12 @@ function WorktreeCreateOverlay({
         if (disposed) {
           return;
         }
-        setAiStatus(status);
         if (!status.configured) {
           form.setValue("mode", "custom");
         }
       })
       .catch(() => {
         if (!disposed) {
-          setAiStatus({ agent: null, configured: false, label: "" });
           form.setValue("mode", "custom");
         }
       });
@@ -140,6 +135,33 @@ function WorktreeCreateOverlay({
       disposed = true;
     };
   }, [context.ai, form]);
+
+  useEffect(() => {
+    let disposed = false;
+    context.agents
+      .selection()
+      .then((selection) => {
+        if (disposed) {
+          return;
+        }
+        setAgentSelection(selection);
+        if (selection.selectedId && form.getValues("agentId") === "") {
+          form.setValue("agentId", selection.selectedId);
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          setAgentSelection({
+            detectedIds: [],
+            enabledIds: [],
+            selectedId: null,
+          });
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [context.agents, form]);
 
   const customDraft = useMemo<WorktreeCreationDraft | null>(() => {
     const branch = branchValue.trim();
@@ -153,16 +175,22 @@ function WorktreeCreateOverlay({
     });
   }, [branchValue, data]);
 
+  const agentSelectionLoaded = agentSelection !== null;
+
   function closeOverlay(): void {
     closedRef.current = true;
     close();
   }
 
-  async function openWorktreeTerminal(targetPath: string): Promise<void> {
+  async function openWorktreeTerminal(
+    targetPath: string,
+    agentId: AgentKind | null
+  ): Promise<void> {
     try {
       await context.worktrees.openTerminal({
+        ...(agentId ? { agentId } : {}),
         path: targetPath,
-        runSetup: true,
+        runSetup: agentId === null,
       });
     } catch (err) {
       context.notifications.error(
@@ -204,7 +232,11 @@ function WorktreeCreateOverlay({
         path: data.mainPath,
       });
       closeOverlay();
-      await openWorktreeTerminal(result.targetPath);
+      const agentId =
+        values.mode === "ai" && values.startTask && values.agentId !== ""
+          ? values.agentId
+          : null;
+      await openWorktreeTerminal(result.targetPath, agentId);
     } catch (err) {
       setSubmitError(errorMessage(err));
       setPhase("idle");
@@ -263,67 +295,23 @@ function WorktreeCreateOverlay({
             </Tabs>
 
             {mode === "ai" ? (
-              <Field data-invalid={Boolean(form.formState.errors.text)}>
-                <FieldLabel htmlFor="worktree-create-task">
-                  {text("taskLabel", undefined, "Task")}
-                </FieldLabel>
-                <Textarea
-                  disabled={busy}
-                  id="worktree-create-task"
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      form
-                        .handleSubmit(onSubmit)()
-                        .catch(() => undefined);
-                    }
-                  }}
-                  placeholder={text(
-                    "taskPlaceholder",
-                    undefined,
-                    "Example: fix the settings divider alignment"
-                  )}
-                  rows={3}
-                  {...form.register("text")}
-                />
-                {form.formState.errors.text ? (
-                  <FieldError>{form.formState.errors.text.message}</FieldError>
-                ) : null}
-                <AiFieldDescription
-                  rootPath={data.defaults.rootPath}
-                  text={text}
-                />
-              </Field>
+              <AiModeFields
+                agentSelection={agentSelection}
+                agentSelectionLoaded={agentSelectionLoaded}
+                busy={busy}
+                form={form}
+                onSubmit={onSubmit}
+                rootPath={data.defaults.rootPath}
+                text={text}
+              />
             ) : (
-              <Field data-invalid={Boolean(form.formState.errors.branch)}>
-                <FieldLabel htmlFor="worktree-create-branch">
-                  {text("branchLabel", undefined, "Branch")}
-                </FieldLabel>
-                <Input
-                  className="font-mono"
-                  disabled={busy}
-                  id="worktree-create-branch"
-                  placeholder={text(
-                    "branchPlaceholder",
-                    undefined,
-                    "feature/fix-dialog"
-                  )}
-                  {...form.register("branch")}
-                />
-                {form.formState.errors.branch ? (
-                  <FieldError>
-                    {form.formState.errors.branch.message}
-                  </FieldError>
-                ) : null}
-                {customDraft ? (
-                  <FieldDescription className="font-mono">
-                    {worktreeChildPath(
-                      data.defaults.rootPath,
-                      customDraft.name
-                    )}
-                  </FieldDescription>
-                ) : null}
-              </Field>
+              <CustomModeField
+                busy={busy}
+                customDraft={customDraft}
+                form={form}
+                rootPath={data.defaults.rootPath}
+                text={text}
+              />
             )}
 
             <Field>

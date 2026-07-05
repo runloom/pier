@@ -36,6 +36,8 @@ const CONFIRM_LABEL = "Create";
 const CANCEL_LABEL = "Cancel";
 const CUSTOM_TAB = "Manual naming";
 const AI_TAB = "Smart generation";
+const START_TASK_LABEL = "Start task now";
+const AGENT_LABEL = "Agent";
 
 const ZH_AI_TAB = "智能生成";
 const EN_GENERATING_LABEL = "Generating…";
@@ -144,6 +146,8 @@ const openTerminalMock =
 const aiStatusMock = vi.fn<() => Promise<AiStatusResult>>();
 const generateTextMock =
   vi.fn<(request: AiGenerateTextRequest) => Promise<AiGenerateTextResult>>();
+const agentSelectionMock =
+  vi.fn<RendererPluginContext["agents"]["selection"]>();
 const notificationsSuccessMock = vi.fn();
 const notificationsErrorMock = vi.fn();
 const tMock = vi.fn(
@@ -177,6 +181,9 @@ function createLocalizedContext(
 function createMockContext(): RendererPluginContext {
   return {
     actions: { register: unimplemented("actions.register") },
+    agents: {
+      selection: agentSelectionMock,
+    },
     ai: {
       generateText: generateTextMock,
       status: aiStatusMock,
@@ -262,6 +269,19 @@ function createMockContext(): RendererPluginContext {
 
 // jsdom 缺 Radix Select 依赖的几个浏览器 API,组件测试需要本地垫片。
 function installSelectPolyfills(): void {
+  if (!globalThis.ResizeObserver) {
+    globalThis.ResizeObserver = class ResizeObserver {
+      disconnect(): void {
+        return;
+      }
+      observe(): void {
+        return;
+      }
+      unobserve(): void {
+        return;
+      }
+    };
+  }
   if (!Element.prototype.hasPointerCapture) {
     Element.prototype.hasPointerCapture = () => false;
   }
@@ -307,6 +327,11 @@ describe("WorktreeCreateOverlay", () => {
     vi.clearAllMocks();
     createMock.mockResolvedValue(createResultFor("fix-focus", "fix-focus"));
     openTerminalMock.mockResolvedValue({ panelId: "worktree-terminal" });
+    agentSelectionMock.mockResolvedValue({
+      detectedIds: ["claude", "codex"],
+      enabledIds: ["claude", "codex"],
+      selectedId: "claude",
+    });
     aiStatusMock.mockResolvedValue({
       agent: "claude",
       configured: true,
@@ -463,6 +488,34 @@ describe("WorktreeCreateOverlay", () => {
       screen.queryByRole("textbox", { name: TASK_LABEL })
     ).not.toBeInTheDocument();
     expect(notificationsSuccessMock).not.toHaveBeenCalled();
+  });
+
+  it("AI 模式:勾选开始任务后在新工作树打开所选 agent 对话", async () => {
+    await openOverlay(context);
+
+    fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
+    fireEvent.click(await screen.findByRole("combobox", { name: AGENT_LABEL }));
+    fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
+
+    fireEvent.change(screen.getByRole("textbox", { name: TASK_LABEL }), {
+      target: { value: "修复终端焦点问题" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(createMock).toHaveBeenCalledWith({
+        branch: "fix-focus",
+        name: "fix-focus",
+        path: "/repo",
+      });
+    });
+    await vi.waitFor(() => {
+      expect(openTerminalMock).toHaveBeenCalledWith({
+        agentId: "codex",
+        path: "/repo.worktree/fix-focus",
+        runSetup: false,
+      });
+    });
   });
 
   it("AI 模式:任务描述为空时提交报错且不调 AI", async () => {

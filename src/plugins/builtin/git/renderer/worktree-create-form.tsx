@@ -6,6 +6,7 @@ import { FieldDescription } from "@pier/ui/field.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "@plugins/builtin/git/settings.ts";
+import { type AgentKind, agentKindSchema } from "@shared/contracts/agent.ts";
 import type { GitBranchRef } from "@shared/contracts/git.ts";
 import type { WorktreeCreationDefaults } from "@shared/contracts/worktree.ts";
 import type { WorktreeCreationDraft } from "@shared/worktree-naming.ts";
@@ -46,9 +47,11 @@ export interface WorktreeCreateOverlayData {
 }
 
 export interface FormValues {
+  agentId: AgentKind | "";
   base: string;
   branch: string;
   mode: CreateMode;
+  startTask: boolean;
   text: string;
 }
 
@@ -85,9 +88,11 @@ export function buildFormSchema(
 ) {
   return z
     .object({
+      agentId: z.union([agentKindSchema, z.literal("")]),
       base: z.string(),
       branch: z.string(),
       mode: z.enum(["ai", "custom"]),
+      startTask: z.boolean(),
       text: z.string(),
     })
     .superRefine((values, ctx) => {
@@ -100,6 +105,17 @@ export function buildFormSchema(
             "Enter a task description"
           ),
           path: ["text"],
+        });
+      }
+      if (values.mode === "ai" && values.startTask && values.agentId === "") {
+        ctx.addIssue({
+          code: "custom",
+          message: text(
+            "errorAgentRequired",
+            undefined,
+            "Choose an agent to start the task"
+          ),
+          path: ["agentId"],
         });
       }
       if (values.mode !== "custom") {
