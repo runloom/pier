@@ -25,9 +25,17 @@ describe("buildOpencodePluginSource", () => {
     expect(source).toContain("managed by Pier");
   });
 
-  it("直写 JSONL（appendFile 通路，无 HTTP fetch）", () => {
-    expect(source).toContain('import { appendFile } from "node:fs/promises"');
-    expect(source).toContain("await appendFile(log, line)");
+  it("同步优先写 JSONL（pierAppend: getBuiltinModule + appendFileSync, 异步退化）", () => {
+    // 同步优先分支
+    expect(source).toContain("process.getBuiltinModule");
+    expect(source).toContain("appendFileSync");
+    // 异步退化分支保留（旧 Node 宿主）
+    expect(source).toContain('import("node:fs/promises")');
+    expect(source).toContain("appendFile");
+    // 无顶层 import 声明
+    for (const line of source.split("\n")) {
+      expect(line.trimStart().startsWith("import ")).toBe(false);
+    }
     expect(source).not.toContain("/agent-event");
     expect(source).not.toContain("Authorization");
     expect(source).not.toContain("fetch(");
@@ -73,13 +81,13 @@ describe("buildOpencodePluginSource", () => {
     expect(source).toContain('emitPierEvent("ToolComplete")');
   });
 
-  it("加载即 emit SessionStart：factory 体开头, 先于 event 订阅返回", () => {
+  it("无加载合成 SessionStart：factory 体到 return 之间无独立 emit（真实 session.created 覆盖）", () => {
     const factoryStart = source.indexOf("export const PierAgentStatus");
-    const loadEmit = source.indexOf('await emitPierEvent("SessionStart");');
     const returnStatement = source.indexOf("return {", factoryStart);
     expect(factoryStart).toBeGreaterThanOrEqual(0);
-    expect(loadEmit).toBeGreaterThan(factoryStart);
-    expect(loadEmit).toBeLessThan(returnStatement);
+    expect(returnStatement).toBeGreaterThan(factoryStart);
+    const factoryPrelude = source.slice(factoryStart, returnStatement);
+    expect(factoryPrelude).not.toContain("emitPierEvent(");
   });
 });
 

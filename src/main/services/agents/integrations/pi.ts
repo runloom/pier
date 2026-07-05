@@ -11,15 +11,15 @@ const EXTENSION_FILE_NAME = "pier-agent-status.ts";
 const MARKER = "pier-agent-status:v1 (managed by Pier)";
 
 /**
- * pi 事件 → pier 事件名（loomdesk pi.ts eventStatusMap 对齐, capability
- * "coarse"——pi 无工具/权限粒度, 仅回合级 session/prompt/run/stop 边界）。
- * agent_start → "processing"（pier activityStatusForHookEvent 承认的规范
- * 事件名, 非 loomdesk 内部态名 "running"）。
+ * pi 事件 → pier 事件名（capability "coarse"——pi 无工具/权限粒度, 仅回合级
+ * session/prompt/run/stop 边界）。
+ * agent_start → PromptSubmit（与 omp 对齐）：agent_start 在 model validation
+ * 成功后才触发, 不存在 validation 失败时状态卡 processing 到 TTL 的问题；
+ * 旧 input 事件在 validation 前触发, 已删。
  */
 const PI_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
-  { nativeEvent: "input", pierEvent: "PromptSubmit" },
-  { nativeEvent: "agent_start", pierEvent: "processing" },
+  { nativeEvent: "agent_start", pierEvent: "PromptSubmit" },
   { nativeEvent: "agent_end", pierEvent: "Stop" },
   { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
 ];
@@ -52,20 +52,36 @@ export function piDetect(): boolean {
 
 /**
  * 整文件 TS 扩展源码。同 omp：刻意不写顶层 import 声明（electron-vite
- * 模板字面量扫描陷阱, 见 loomdesk pi.ts 头部注释）, emit 用运行时 require
- * 拿到 fs.promises 直写 JSONL。三 PIER_ 环境变量缺任一即静默 no-op。
+ * 模板字面量扫描陷阱, 见 loomdesk pi.ts 头部注释）。emit 用
+ * `process.getBuiltinModule("node:fs")` 同步 append（同 omp 先例：
+ * 同步既保文件序——聚合器按 JSONL 文件序消费, 也保证宿主退出前
+ * session_shutdown 落盘）；旧 Node 宿主退化为异步 best-effort。
+ * 三 PIER_ 环境变量缺任一即静默 no-op。
  */
 export function buildPiExtensionSource(): string {
   return `// pier-agent-status:v1 (managed by Pier). Safe to leave in place.
 // ${MARKER}
 // Deliberately no top-level import declarations: electron-vite scans
 // template literals in main's bundle and can otherwise inject an invalid
-// CommonJS shim into the ESM output. \`await import()\` inside function
-// body is a CallExpression, not ImportDeclaration, so vite AST scan
-// doesn't fire; works in both CJS (Node <20) and ESM (Node 20+) hosts.
+// CommonJS shim into the ESM output. process.getBuiltinModule is a runtime
+// call — not an ImportDeclaration — so the scan stays inert; available in
+// Bun and Node >= 20.16. Older Node falls back to async best-effort.
 // (Exception to ts-no-dynamic-import: generated file for a foreign host.)
 
-async function pierEmit(event) {
+function pierAppend(log, line) {
+	if (typeof process.getBuiltinModule === "function") {
+		// 同步写:保文件序 + 进程退出前落盘(Bun 与 Node >= 20.16)。
+		const { appendFileSync } = process.getBuiltinModule("node:fs");
+		appendFileSync(log, line);
+		return;
+	}
+	// 旧 Node 宿主退化为异步 best-effort(与旧行为一致, 不更糟)。
+	import("node:fs/promises")
+		.then(({ appendFile }) => appendFile(log, line))
+		.catch(() => {});
+}
+
+function pierEmit(event) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
@@ -81,8 +97,7 @@ async function pierEmit(event) {
 		event,
 	}) + "\\n";
 	try {
-		const { appendFile } = await import("node:fs/promises");
-		await appendFile(log, line);
+		pierAppend(log, line);
 	} catch {
 		// best-effort, never throw into the agent's own event loop
 	}
@@ -90,12 +105,12 @@ async function pierEmit(event) {
 
 export default function PierAgentStatus(pi) {
 	// 加载即 agent 启动：合成 SessionStart 点亮启动态图标（事件流要到首个
-	// 会话/消息才有信号）。
+	// 会话/消息才有信号）。pi-mono 无 subagent 机制（Agent.prompt() throws
+	// if already processing）, 不存在 omp 式多实例加载风险, 合成安全。
 	pierEmit("SessionStart");
 
 	pi.on("session_start", () => pierEmit("SessionStart"));
-	pi.on("input", () => pierEmit("PromptSubmit"));
-	pi.on("agent_start", () => pierEmit("processing"));
+	pi.on("agent_start", () => pierEmit("PromptSubmit"));
 	pi.on("agent_end", () => pierEmit("Stop"));
 	pi.on("session_shutdown", () => pierEmit("SessionEnd"));
 }

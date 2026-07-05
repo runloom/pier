@@ -24,12 +24,17 @@ import {
  *
  * 官方事件全集(docs.factory.ai 9 事件表):PreToolUse, PostToolUse,
  * UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact,
- * SessionStart, SessionEnd。"PermissionRequest" 不在官方事件表内,系此前
- * 集成杜撰,已删除。
+ * SessionStart, SessionEnd。StopFailure 不在官方表内但本机
+ * loomdesk 实装(~/.factory/settings.json)证明 droid 真实支持。
  * matcher 约定:Factory 的 matcher 是正则引擎(非 glob-only), "*" 只是
  * 恰好能匹配任意字符的退化正则写法。
- * 不装 SubagentStop:sub-droid 完成 ≠ 父 droid 完成, 装了会误报 Stop。
- * 不装 Notification:与 Pier 的 claude 决策一致, 视为噪声。
+ * 不装 SubagentStop:pier SubagentStop 仅计数不改状态(entry.ts:56,
+ * SUBAGENT_EVENTS),安装无害——但 droid 无 SubagentStart 配对,
+ * 计数永远为 0, 故仍不装。
+ * Notification→PermissionRequest:droid 无独立 PermissionRequest 事件,
+ * Notification 是唯一授权信号(本机 ~/.factory/settings.json
+ * loomdesk/superset 实装先例)。
+ * StopFailure→error:API 错误导致回合终止(loomdesk 实装先例)。
  * 装 SessionEnd(官方真实存在)与 PreCompact(compact 期间避免状态显示为空闲)。
  */
 const droidConfigPath = () => join(homedir(), ".factory", "settings.json");
@@ -56,7 +61,9 @@ const DROID_SPEC: NestedJsonIntegrationSpec = {
     { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
     { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
     { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
+    { nativeEvent: "Notification", pierEvent: "PermissionRequest" },
     { nativeEvent: "Stop", pierEvent: "Stop" },
+    { nativeEvent: "StopFailure", pierEvent: "error" },
     { nativeEvent: "PreCompact", pierEvent: "processing" },
     { matcher: "*", nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
     { matcher: "*", nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },

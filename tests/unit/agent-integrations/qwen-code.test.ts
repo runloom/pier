@@ -54,7 +54,7 @@ describe("qwenCodeIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("7 个事件各一条命令，StopFailure 映射为 pier error，工具事件无 matcher", async () => {
+  it("14 个事件各一条命令，工具事件无 matcher，新增 4 事件映射正确", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -72,6 +72,13 @@ describe("qwenCodeIntegration", () => {
       "StopFailure",
       "PreToolUse",
       "PostToolUse",
+      "PostToolUseFailure",
+      "PermissionRequest",
+      "PermissionDenied",
+      "PreCompact",
+      "PostCompact",
+      "SubagentStart",
+      "SubagentStop",
       "SessionEnd",
     ]) {
       expect(hooks[evt], evt).toHaveLength(1);
@@ -92,8 +99,20 @@ describe("qwenCodeIntegration", () => {
     expect(typedHooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
       '"ToolComplete"'
     );
+    expect(typedHooks.PostToolUseFailure?.[0]?.hooks[0]?.command).toContain(
+      '"ToolComplete"'
+    );
     expect(typedHooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toContain(
       '"PromptSubmit"'
+    );
+    expect(typedHooks.PermissionDenied?.[0]?.hooks[0]?.command).toContain(
+      '"processing"'
+    );
+    expect(typedHooks.PreCompact?.[0]?.hooks[0]?.command).toContain(
+      '"processing"'
+    );
+    expect(typedHooks.PostCompact?.[0]?.hooks[0]?.command).toContain(
+      '"processing"'
     );
   });
 

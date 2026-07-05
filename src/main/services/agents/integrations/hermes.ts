@@ -11,18 +11,29 @@ const PLUGIN_NAME = "pier-status";
 const MARKER = "pier-agent-status:v1 (managed by Pier)";
 
 /**
- * hermes 事件 → pier 事件名（orca HERMES_EVENTS → pier 规范事件映射,
- * capability "full"）。
+ * hermes 事件 → pier 事件名（capability "coarse"——无真回合结束信号）。
+ *
+ * hermes 的 `post_llm_call` 在每轮 LLM 调用后触发, 而非回合结束; 多工具
+ * 循环中映射 Stop 会在工具执行期间谎报「等待输入」, 且 turnEnded 吸收后续
+ * ToolStart/ToolComplete——与 omp turn_end→Stop 完全同源。hermes 事件体系
+ * 无真正的用户可见回合终结事件, 故不映射 Stop。
+ * 通用不变式：宁可 false-busy（漏报 ready, 危害小）, 不可 false-idle
+ *（谎报 ready, 吸收工具事件, 正是 omp 原 bug）。
+ *
+ * `on_session_reset` 是唯一例外：reset 后 agent 确实回到等待输入状态,
+ * 且下一轮 `pre_llm_call→processing` 能及时解除吸收。
+ *
+ * `post_approval_response` → ToolStart：与 omp 同理——批准路径（绝大多数）
+ * 立即准确；拒绝路径短暂错标 tool, 由后续事件纠正。
  */
 const HERMES_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> =
   [
     { nativeEvent: "on_session_start", pierEvent: "SessionStart" },
-    { nativeEvent: "pre_llm_call", pierEvent: "PromptSubmit" },
-    { nativeEvent: "post_llm_call", pierEvent: "Stop" },
+    { nativeEvent: "pre_llm_call", pierEvent: "processing" },
     { nativeEvent: "pre_tool_call", pierEvent: "ToolStart" },
     { nativeEvent: "post_tool_call", pierEvent: "ToolComplete" },
     { nativeEvent: "pre_approval_request", pierEvent: "PermissionRequest" },
-    { nativeEvent: "post_approval_response", pierEvent: "processing" },
+    { nativeEvent: "post_approval_response", pierEvent: "ToolStart" },
     { nativeEvent: "on_session_end", pierEvent: "SessionEnd" },
     { nativeEvent: "on_session_finalize", pierEvent: "SessionEnd" },
     { nativeEvent: "on_session_reset", pierEvent: "Stop" },
@@ -132,9 +143,6 @@ def _make_hook(event_name: str) -> Callable[..., None]:
 
 
 def register(ctx: Any) -> None:
-    # 加载即 agent 启动：合成 SessionStart 点亮启动态图标（事件流要到首个
-    # 会话/消息才有信号）。
-    _pier_emit("SessionStart")
     for event_name in EVENTS:
         ctx.register_hook(event_name, _make_hook(event_name))
 `;
@@ -362,7 +370,7 @@ export async function uninstallHermesPlugin(
 }
 
 export const hermesIntegration: AgentHookIntegration = {
-  capability: "full",
+  capability: "coarse",
   detect: hermesDetect,
   id: AGENT_ID,
   install: () => installHermesPlugin(),
