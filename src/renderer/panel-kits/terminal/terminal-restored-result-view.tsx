@@ -26,6 +26,7 @@ export function RestoredTaskResultView({
   return (
     <div
       className={`${className} overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]`}
+      data-scrollbar="stable"
       data-testid="terminal-task-result"
       style={{ fontFamily, fontSize }}
     >
@@ -72,6 +73,7 @@ export function RestoredAgentResultView({
   return (
     <div
       className={`${className} overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]`}
+      data-scrollbar="stable"
       data-testid="terminal-agent-result"
       style={{ fontFamily, fontSize }}
     >

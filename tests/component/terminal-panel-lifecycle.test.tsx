@@ -1181,6 +1181,7 @@ describe("TerminalPanel lifecycle", () => {
 
     const result = await screen.findByTestId("terminal-task-result");
     expect(result).toHaveClass("px-2", "py-1.5", "font-mono");
+    expect(result).toHaveAttribute("data-scrollbar", "stable");
     expect(result).not.toHaveClass("p-4", "text-sm");
     expect(result).toHaveStyle({ fontSize: "13px" });
     expect(result).toHaveTextContent("[pier] restored task");
@@ -1220,6 +1221,7 @@ describe("TerminalPanel lifecycle", () => {
     );
 
     const result = await screen.findByTestId("terminal-task-result");
+    expect(result).toHaveAttribute("data-scrollbar", "stable");
     expect(result).toHaveTextContent("Tasktest");
     expect(result).toHaveTextContent("Statuscancelled");
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
@@ -1292,6 +1294,7 @@ describe("TerminalPanel lifecycle", () => {
     render(<TerminalPanel {...createPanelProps({ params: { context } })} />);
 
     const result = await screen.findByTestId("terminal-agent-result");
+    expect(result).toHaveAttribute("data-scrollbar", "stable");
     expect(result).toHaveTextContent("[pier] restored agent");
     expect(result).toHaveTextContent("AgentClaude");
     expect(result).toHaveTextContent("Statusexited");

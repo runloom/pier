@@ -396,6 +396,7 @@
    Firefox 不支持 ::-webkit-scrollbar, 自动 fallback 到上面的标准 CSS Scrollbars. */
 @supports selector(::-webkit-scrollbar) {
   :where(
+    [data-scrollbar],
     [data-flat-scroll],
     [data-slot="dropdown-menu-content"],
     [data-slot="dropdown-menu-sub-content"],
@@ -407,6 +408,7 @@
   }
 
   :where(
+    [data-scrollbar],
     [data-flat-scroll],
     [data-slot="dropdown-menu-content"],
     [data-slot="dropdown-menu-sub-content"],
@@ -420,6 +422,7 @@
   }
 
   :where(
+      [data-scrollbar],
       [data-flat-scroll],
       [data-slot="dropdown-menu-content"],
       [data-slot="dropdown-menu-sub-content"],
@@ -431,6 +434,7 @@
   }
 
   :where(
+      [data-scrollbar],
       [data-flat-scroll],
       [data-slot="dropdown-menu-content"],
       [data-slot="dropdown-menu-sub-content"],
@@ -442,6 +446,7 @@
   }
 
   :where(
+    [data-scrollbar],
     [data-flat-scroll],
     [data-slot="dropdown-menu-content"],
     [data-slot="dropdown-menu-sub-content"],
@@ -452,6 +457,7 @@
   }
 
   :where(
+      [data-scrollbar],
       [data-flat-scroll],
       [data-slot="dropdown-menu-content"],
       [data-slot="dropdown-menu-sub-content"],
@@ -462,7 +468,7 @@
   }
 
   :where(
-    [data-scrollbar]:not([data-scrollbar="terminal"]),
+    [data-scrollbar],
     [data-flat-scroll],
     [data-slot="dropdown-menu-content"],
     [data-slot="dropdown-menu-sub-content"],
