@@ -1,6 +1,9 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { GitStatusDropdown } from "@plugins/builtin/git/renderer/git-status-dropdown.tsx";
-import type { GitStatusDropdownModel } from "@plugins/builtin/git/renderer/git-status-dropdown-model.ts";
+import type {
+  GitStatusDropdownModel,
+  GitStatusDropdownSummaryIcon,
+} from "@plugins/builtin/git/renderer/git-status-dropdown-model.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   cleanup,
@@ -29,7 +32,7 @@ const PANEL_CONTEXT = {
 const DIRTY_MODEL = model({
   actions: [{ id: "openChanges" }, { id: "switchWorktree" }],
   statusGroups: [
-    { parts: [{ label: "7 changed", tone: "warning" }] },
+    { parts: [{ icon: "changed", label: "7 changed", tone: "warning" }] },
     {
       parts: [
         { assistiveLabel: "insertions", label: "+128", tone: "success" },
@@ -42,8 +45,18 @@ const DIRTY_MODEL = model({
     },
     {
       parts: [
-        { assistiveLabel: "ahead", label: "↑2", tone: "muted" },
-        { assistiveLabel: "behind", label: "↓1", tone: "muted" },
+        {
+          assistiveLabel: "ahead",
+          icon: "ahead",
+          label: "↑2",
+          tone: "muted",
+        },
+        {
+          assistiveLabel: "behind",
+          icon: "behind",
+          label: "↓1",
+          tone: "muted",
+        },
       ],
     },
   ],
@@ -53,9 +66,15 @@ const DIRTY_MODEL = model({
 const COMPLETED_MODEL = model({
   actions: [{ id: "switchWorktree" }, { id: "openChanges" }],
   statusGroups: [
-    { parts: [{ label: "No local changes", tone: "default" }] },
-    { parts: [{ label: "merged", tone: "done" }] },
-    { parts: [{ label: "upstream gone", tone: "warning" }] },
+    {
+      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
+    },
+    { parts: [{ icon: "merged", label: "merged", tone: "done" }] },
+    {
+      parts: [
+        { icon: "upstreamGone", label: "upstream gone", tone: "warning" },
+      ],
+    },
   ],
   variant: "completed",
 });
@@ -63,8 +82,8 @@ const COMPLETED_MODEL = model({
 const REBASE_MODEL = model({
   actions: [{ id: "openChanges" }, { id: "switchWorktree" }],
   statusGroups: [
-    { parts: [{ label: "Rebase paused", tone: "info" }] },
-    { parts: [{ label: "3 conflicts", tone: "danger" }] },
+    { parts: [{ icon: "rebase", label: "Rebase paused", tone: "info" }] },
+    { parts: [{ icon: "conflict", label: "3 conflicts", tone: "danger" }] },
   ],
   variant: "active",
 });
@@ -87,8 +106,14 @@ const AHEAD_MODEL = model({
     { id: "switchWorktree" },
   ],
   statusGroups: [
-    { parts: [{ label: "No local changes", tone: "default" }] },
-    { parts: [{ assistiveLabel: "ahead", label: "↑2", tone: "muted" }] },
+    {
+      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
+    },
+    {
+      parts: [
+        { assistiveLabel: "ahead", icon: "ahead", label: "↑2", tone: "muted" },
+      ],
+    },
   ],
   variant: "clean",
 });
@@ -101,8 +126,19 @@ const BEHIND_MODEL = model({
     { id: "switchWorktree" },
   ],
   statusGroups: [
-    { parts: [{ label: "No local changes", tone: "default" }] },
-    { parts: [{ assistiveLabel: "behind", label: "↓2", tone: "muted" }] },
+    {
+      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
+    },
+    {
+      parts: [
+        {
+          assistiveLabel: "behind",
+          icon: "behind",
+          label: "↓2",
+          tone: "muted",
+        },
+      ],
+    },
   ],
   variant: "clean",
 });
@@ -115,15 +151,52 @@ const DIVERGED_MODEL = model({
     { id: "switchWorktree" },
   ],
   statusGroups: [
-    { parts: [{ label: "No local changes", tone: "default" }] },
+    {
+      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
+    },
     {
       parts: [
-        { assistiveLabel: "ahead", label: "↑2", tone: "muted" },
-        { assistiveLabel: "behind", label: "↓2", tone: "muted" },
+        {
+          assistiveLabel: "ahead",
+          icon: "ahead",
+          label: "↑2",
+          tone: "muted",
+        },
+        {
+          assistiveLabel: "behind",
+          icon: "behind",
+          label: "↓2",
+          tone: "muted",
+        },
       ],
     },
   ],
   variant: "clean",
+});
+
+const SUMMARY_ICON_EXPECTATIONS: ReadonlyArray<{
+  icon: GitStatusDropdownSummaryIcon;
+  lucideName: string;
+}> = [
+  { icon: "ahead", lucideName: "git-pull-request-arrow" },
+  { icon: "behind", lucideName: "git-pull-request-arrow" },
+  { icon: "bisect", lucideName: "git-compare-arrows" },
+  { icon: "changed", lucideName: "git-compare-arrows" },
+  { icon: "cherryPick", lucideName: "git-commit-horizontal" },
+  { icon: "clean", lucideName: "git-commit-horizontal" },
+  { icon: "conflict", lucideName: "git-merge-conflict" },
+  { icon: "merge", lucideName: "git-merge" },
+  { icon: "merged", lucideName: "git-merge" },
+  { icon: "rebase", lucideName: "git-pull-request-arrow" },
+  { icon: "revert", lucideName: "git-commit-horizontal" },
+  { icon: "upstreamGone", lucideName: "git-pull-request-closed" },
+];
+
+const ALL_SUMMARY_ICONS_MODEL = model({
+  statusGroups: SUMMARY_ICON_EXPECTATIONS.map(({ icon }) => ({
+    parts: [{ icon, label: icon, tone: "default" }],
+  })),
+  variant: "active",
 });
 
 function model(
@@ -274,6 +347,17 @@ describe("GitStatusDropdown", () => {
     expect(screen.getByText("deletions,", { exact: false })).toHaveClass(
       "sr-only"
     );
+  });
+
+  it("renders Git-specific summary icons for every summary state", async () => {
+    const pluginContext = makePluginContext();
+    await openDropdown(pluginContext, ALL_SUMMARY_ICONS_MODEL);
+
+    for (const { icon, lucideName } of SUMMARY_ICON_EXPECTATIONS) {
+      expect(
+        screen.getByTestId(`git-status-summary-icon-${icon}`)
+      ).toHaveAttribute("data-git-icon", lucideName);
+    }
   });
 
   it("localizes dropdown labels through plugin text", async () => {

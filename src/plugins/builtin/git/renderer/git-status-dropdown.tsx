@@ -15,6 +15,12 @@ import {
   FileDiff,
   FolderGit,
   GitBranch,
+  GitCommitHorizontal,
+  GitCompareArrows,
+  GitMerge,
+  GitMergeConflict,
+  GitPullRequestArrow,
+  GitPullRequestClosed,
   type LucideIcon,
   RefreshCw,
   Upload,
@@ -31,6 +37,8 @@ import type {
   GitStatusDropdownActionId,
   GitStatusDropdownModel,
   GitStatusDropdownSummaryGroup,
+  GitStatusDropdownSummaryIcon,
+  GitStatusDropdownSummaryPart,
   GitStatusDropdownSummaryTone,
 } from "./git-status-dropdown-model.ts";
 
@@ -114,6 +122,30 @@ const SUMMARY_TONE_CLASSES: Record<GitStatusDropdownSummaryTone, string> = {
   warning: "text-status-warning-fg",
 };
 
+const SUMMARY_ICONS: Record<
+  GitStatusDropdownSummaryIcon,
+  { Icon: LucideIcon; gitIcon: string }
+> = {
+  ahead: { Icon: GitPullRequestArrow, gitIcon: "git-pull-request-arrow" },
+  behind: { Icon: GitPullRequestArrow, gitIcon: "git-pull-request-arrow" },
+  bisect: { Icon: GitCompareArrows, gitIcon: "git-compare-arrows" },
+  changed: { Icon: GitCompareArrows, gitIcon: "git-compare-arrows" },
+  cherryPick: {
+    Icon: GitCommitHorizontal,
+    gitIcon: "git-commit-horizontal",
+  },
+  clean: { Icon: GitCommitHorizontal, gitIcon: "git-commit-horizontal" },
+  conflict: { Icon: GitMergeConflict, gitIcon: "git-merge-conflict" },
+  merge: { Icon: GitMerge, gitIcon: "git-merge" },
+  merged: { Icon: GitMerge, gitIcon: "git-merge" },
+  rebase: { Icon: GitPullRequestArrow, gitIcon: "git-pull-request-arrow" },
+  revert: { Icon: GitCommitHorizontal, gitIcon: "git-commit-horizontal" },
+  upstreamGone: {
+    Icon: GitPullRequestClosed,
+    gitIcon: "git-pull-request-closed",
+  },
+};
+
 function ActionItem({
   action,
   onRun,
@@ -130,6 +162,33 @@ function ActionItem({
       <Icon />
       {pluginText(pluginContext, label.key, label.fallback)}
     </DropdownMenuItem>
+  );
+}
+
+function SummaryPart({
+  part,
+}: {
+  part: GitStatusDropdownSummaryPart;
+}): React.ReactElement {
+  const iconSpec = part.icon ? SUMMARY_ICONS[part.icon] : null;
+  const Icon = iconSpec?.Icon ?? null;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 tabular-nums ${SUMMARY_TONE_CLASSES[part.tone]}`}
+    >
+      {Icon && (
+        <Icon
+          aria-hidden="true"
+          className="h-3 w-3 shrink-0"
+          data-git-icon={iconSpec?.gitIcon}
+          data-testid={`git-status-summary-icon-${part.icon}`}
+        />
+      )}
+      {part.label}
+      {part.assistiveLabel && (
+        <span className="sr-only"> {part.assistiveLabel},</span>
+      )}
+    </span>
   );
 }
 
@@ -152,17 +211,9 @@ function SummaryLine({
               ·
             </span>
           )}
-          <span className="inline-flex items-baseline gap-1">
+          <span className="inline-flex items-center gap-1">
             {group.parts.map((part) => (
-              <span
-                className={`tabular-nums ${SUMMARY_TONE_CLASSES[part.tone]}`}
-                key={`${part.label}-${part.tone}`}
-              >
-                {part.label}
-                {part.assistiveLabel && (
-                  <span className="sr-only"> {part.assistiveLabel},</span>
-                )}
-              </span>
+              <SummaryPart key={`${part.label}-${part.tone}`} part={part} />
             ))}
           </span>
         </span>

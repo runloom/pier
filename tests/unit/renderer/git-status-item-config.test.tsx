@@ -212,4 +212,38 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     expect(screen.getByText("MERGING · 1 conflict")).toBeInTheDocument();
     expect(screen.queryByText("MERGING · 1 conflicts")).toBeNull();
   });
+
+  it.each([
+    [
+      "bisecting",
+      { bad: 1, good: 2, kind: "bisecting" as const },
+      "git-compare-arrows",
+    ],
+    [
+      "cherry-picking",
+      { conflictCount: 0, kind: "cherry-picking" as const },
+      "git-commit-horizontal",
+    ],
+    ["merging", { conflictCount: 0, kind: "merging" as const }, "git-merge"],
+    [
+      "rebasing",
+      { conflictCount: 0, current: 1, kind: "rebasing" as const, total: 3 },
+      "git-pull-request-arrow",
+    ],
+    [
+      "reverting",
+      { conflictCount: 0, kind: "reverting" as const },
+      "git-commit-horizontal",
+    ],
+  ])("repo state %s 胶囊使用 Git 图标族", (_name, state, iconName) => {
+    const { context } = makeContext(true);
+
+    const { container } = render(
+      <RepoStatePill pluginContext={context} state={state} />
+    );
+
+    expect(
+      container.querySelector(`[data-git-icon="${iconName}"]`)
+    ).toBeInTheDocument();
+  });
 });

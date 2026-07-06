@@ -32,12 +32,27 @@ export type GitStatusDropdownSummaryTone =
   | "success"
   | "warning";
 
+export type GitStatusDropdownSummaryIcon =
+  | "ahead"
+  | "behind"
+  | "bisect"
+  | "changed"
+  | "cherryPick"
+  | "clean"
+  | "conflict"
+  | "merge"
+  | "merged"
+  | "rebase"
+  | "revert"
+  | "upstreamGone";
+
 export interface GitStatusDropdownAction {
   id: GitStatusDropdownActionId;
 }
 
 export interface GitStatusDropdownSummaryPart {
   assistiveLabel?: string;
+  icon?: GitStatusDropdownSummaryIcon;
   label: string;
   tone: GitStatusDropdownSummaryTone;
 }
@@ -138,6 +153,27 @@ function summaryGroup(
   return { parts };
 }
 
+function operationIcon(
+  kind: Exclude<GitRepoState["kind"], "clean">
+): GitStatusDropdownSummaryIcon {
+  switch (kind) {
+    case "bisecting":
+      return "bisect";
+    case "cherry-picking":
+      return "cherryPick";
+    case "merging":
+      return "merge";
+    case "rebasing":
+      return "rebase";
+    case "reverting":
+      return "revert";
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}
+
 function formatDeltaGroup(
   delta: GitDelta | null,
   text: GitStatusDropdownText
@@ -172,6 +208,7 @@ function formatSyncGroup(
   if (ahead > 0) {
     parts.push({
       assistiveLabel: text.ahead,
+      icon: "ahead",
       label: `↑${ahead}`,
       tone: "muted",
     });
@@ -179,6 +216,7 @@ function formatSyncGroup(
   if (behind > 0) {
     parts.push({
       assistiveLabel: text.behind,
+      icon: "behind",
       label: `↓${behind}`,
       tone: "muted",
     });
@@ -256,13 +294,18 @@ function activeStatusGroups(
   const conflicts = conflictCount(repoState, counts);
   const groups = [
     summaryGroup({
+      icon: operationIcon(repoState.kind),
       label: text.operationPaused(text.operationName(repoState.kind)),
       tone: "info",
     }),
   ];
   if (conflicts > 0) {
     groups.push(
-      summaryGroup({ label: text.conflict(conflicts), tone: "danger" })
+      summaryGroup({
+        icon: "conflict",
+        label: text.conflict(conflicts),
+        tone: "danger",
+      })
     );
   }
   return groups;
@@ -274,6 +317,7 @@ function dirtySummaryGroups(
 ): GitStatusDropdownSummaryGroup[] {
   const pieces = [
     summaryGroup({
+      icon: "changed",
       label: text.changed(totalChanges(status.counts)),
       tone: "warning",
     }),
@@ -293,16 +337,30 @@ function cleanStatusGroups(
   status: GitStatus,
   text: GitStatusDropdownText
 ): GitStatusDropdownSummaryGroup[] {
-  const parts = [summaryGroup({ label: text.noLocalChanges, tone: "default" })];
+  const parts = [
+    summaryGroup({
+      icon: "clean",
+      label: text.noLocalChanges,
+      tone: "default",
+    }),
+  ];
   const sync = formatSyncGroup(status, text);
   if (sync) {
     parts.push(sync);
   }
   if (status.branch.mergedIntoDefault === true) {
-    parts.push(summaryGroup({ label: text.merged, tone: "done" }));
+    parts.push(
+      summaryGroup({ icon: "merged", label: text.merged, tone: "done" })
+    );
   }
   if (status.branch.upstreamGone) {
-    parts.push(summaryGroup({ label: text.upstreamGone, tone: "warning" }));
+    parts.push(
+      summaryGroup({
+        icon: "upstreamGone",
+        label: text.upstreamGone,
+        tone: "warning",
+      })
+    );
   }
   return parts;
 }

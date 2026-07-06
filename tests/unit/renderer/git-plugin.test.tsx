@@ -34,6 +34,8 @@ import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { usePluginOverlayStore } from "@/stores/plugin-overlay.store.ts";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
   resetTerminalInputRoutingForTests,
@@ -210,6 +212,14 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands,
+      configuration: {
+        properties: {
+          "pier.git.statusItem.showDirtyIndicator": {
+            default: true,
+            type: "boolean",
+          },
+        },
+      },
       engines: { pier: ">=0.1.0" },
       id: GIT_PLUGIN_ID,
       localization: {
@@ -532,6 +542,17 @@ describe("git builtin plugin", () => {
           display: { short: "pier" },
         },
       },
+    });
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      error: null,
+      initialized: true,
+      plugins: [pluginEntry(true)],
+    });
+    usePluginSettingsStore.setState({
+      error: null,
+      initialized: true,
+      values: {},
     });
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -1893,7 +1914,104 @@ describe("git builtin plugin", () => {
 
     const merged = await screen.findByTestId("merged-pill");
     expect(merged).toHaveTextContent("merged");
+    expect(
+      merged.querySelector('[data-git-icon="git-merge"]')
+    ).toBeInTheDocument();
     expect(screen.getByTestId("upstream-gone-pill")).toBeInTheDocument();
+  });
+
+  it("工作区状态计数使用 Git 图标族", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/dirty",
+        mergedIntoDefault: false,
+        oid: "abc123",
+        upstream: "origin/feature/dirty",
+        upstreamGone: false,
+      },
+      counts: { conflict: 4, modified: 2, staged: 1, untracked: 3 },
+      delta: null,
+      files: [],
+      remoteSync: null,
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/dirty" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const dirtyIndicator = await screen.findByTestId("git-dirty-indicator");
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-commit-horizontal"]')
+    ).toBeInTheDocument();
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-compare-arrows"]')
+    ).toBeInTheDocument();
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-branch-plus"]')
+    ).toBeInTheDocument();
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-merge-conflict"]')
+    ).toBeInTheDocument();
+  });
+
+  it("同步和 stash 计数使用 Git 图标族", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 2,
+        behind: 1,
+        branch: "feature/sync",
+        mergedIntoDefault: false,
+        oid: "abc123",
+        upstream: "origin/feature/sync",
+        upstreamGone: false,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      remoteSync: null,
+      repoState: { kind: "clean" as const },
+      stashCount: 3,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/sync" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const trigger = await screen.findByTestId("worktree-status-trigger");
+    expect(
+      trigger.querySelectorAll('[data-git-icon="git-pull-request-arrow"]')
+    ).toHaveLength(2);
+    expect(
+      trigger.querySelector('[data-git-icon="git-commit-horizontal"]')
+    ).toBeInTheDocument();
   });
 
   it("DETACHED 胶囊使用 text-foreground（neutral 风格），与 muted 计数区分", async () => {

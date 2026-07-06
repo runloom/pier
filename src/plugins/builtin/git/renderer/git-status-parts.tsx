@@ -6,23 +6,16 @@ import type {
   GitRepoState,
 } from "@shared/contracts/git.ts";
 import {
-  AlertTriangle,
-  Archive,
-  ArrowDown,
-  ArrowUp,
-  Check,
-  Cherry,
-  CloudOff,
-  FilePlus,
   FolderGit2,
   GitBranch,
+  GitBranchPlus,
+  GitCommitHorizontal,
   GitCompareArrows,
   GitMerge,
+  GitMergeConflict,
   GitPullRequestArrow,
+  GitPullRequestClosed,
   type LucideIcon,
-  Pencil,
-  Undo2,
-  Unlink,
 } from "lucide-react";
 import type React from "react";
 import { pluginText } from "./git-plugin-text.ts";
@@ -38,12 +31,14 @@ export function SdDivider(): React.ReactElement {
 /** 图标 + 数字。sr-only 尾逗号让 WorkingTreeCounts 里多个 IconNum 连读有停顿。 */
 function IconNum({
   icon: Icon,
+  iconId,
   n,
   color,
   label,
 }: {
   color: string;
   icon: LucideIcon;
+  iconId: string;
   label: string;
   n: number;
 }): React.ReactElement | null {
@@ -52,7 +47,7 @@ function IconNum({
   }
   return (
     <span className={`inline-flex items-center gap-0.5 tabular-nums ${color}`}>
-      <Icon aria-hidden="true" className="h-3 w-3" />
+      <Icon aria-hidden="true" className="h-3 w-3" data-git-icon={iconId} />
       {n}
       <span className="sr-only"> {label},</span>
     </span>
@@ -77,11 +72,13 @@ const PILL_VARIANT = {
 function Pill({
   variant,
   icon: Icon,
+  iconId,
   children,
   testId,
 }: {
   children: React.ReactNode;
   icon?: LucideIcon;
+  iconId?: string;
   testId?: string;
   variant: keyof typeof PILL_VARIANT;
 }): React.ReactElement {
@@ -90,7 +87,9 @@ function Pill({
       className={`${PILL_BASE} ${PILL_VARIANT[variant]}`}
       data-testid={testId}
     >
-      {Icon && <Icon aria-hidden="true" className="h-3 w-3" />}
+      {Icon && (
+        <Icon aria-hidden="true" className="h-3 w-3" data-git-icon={iconId} />
+      )}
       {children}
     </span>
   );
@@ -134,7 +133,7 @@ export function BranchLabel({
   if (head) {
     return (
       <span className="inline-flex items-center gap-1">
-        <Unlink aria-hidden="true" className="h-3 w-3" />
+        <GitCommitHorizontal aria-hidden="true" className="h-3 w-3" />
         <span className="tabular-nums">{head}</span>
         <Pill variant="neutral">
           {pluginText(pluginContext, "detachedShort", "DETACHED")}
@@ -167,7 +166,12 @@ export function UpstreamPill({
   }
   if (branch.upstreamGone) {
     return (
-      <Pill icon={CloudOff} testId="upstream-gone-pill" variant="warning">
+      <Pill
+        icon={GitPullRequestClosed}
+        iconId="git-pull-request-closed"
+        testId="upstream-gone-pill"
+        variant="warning"
+      >
         {pluginText(pluginContext, "upstreamGone", "upstream gone")}
       </Pill>
     );
@@ -179,7 +183,11 @@ export function UpstreamPill({
         className="inline-flex items-center text-muted-foreground"
         title={label}
       >
-        <CloudOff aria-hidden="true" className="h-3 w-3" />
+        <GitBranchPlus
+          aria-hidden="true"
+          className="h-3 w-3"
+          data-git-icon="git-branch-plus"
+        />
         <span className="sr-only">{label}</span>
       </span>
     );
@@ -199,7 +207,12 @@ export function MergedPill({
     return null;
   }
   return (
-    <Pill icon={Check} testId="merged-pill" variant="done">
+    <Pill
+      icon={GitMerge}
+      iconId="git-merge"
+      testId="merged-pill"
+      variant="done"
+    >
       {pluginText(pluginContext, "mergedIntoDefault", "merged")}
     </Pill>
   );
@@ -210,25 +223,38 @@ type ActiveState = Exclude<GitRepoState, { kind: "clean" }>;
 
 const OP_CONFIG: Record<
   ActiveState["kind"],
-  { icon: LucideIcon; labelFallback: string; labelKey: string }
+  { icon: LucideIcon; iconId: string; labelFallback: string; labelKey: string }
 > = {
   "cherry-picking": {
-    icon: Cherry,
+    icon: GitCommitHorizontal,
+    iconId: "git-commit-horizontal",
     labelFallback: "CHERRY-PICK",
     labelKey: "cherryPicking",
   },
   bisecting: {
     icon: GitCompareArrows,
+    iconId: "git-compare-arrows",
     labelFallback: "BISECT",
     labelKey: "bisecting",
   },
-  merging: { icon: GitMerge, labelFallback: "MERGING", labelKey: "merging" },
+  merging: {
+    icon: GitMerge,
+    iconId: "git-merge",
+    labelFallback: "MERGING",
+    labelKey: "merging",
+  },
   rebasing: {
     icon: GitPullRequestArrow,
+    iconId: "git-pull-request-arrow",
     labelFallback: "REBASING",
     labelKey: "rebasing",
   },
-  reverting: { icon: Undo2, labelFallback: "REVERTING", labelKey: "reverting" },
+  reverting: {
+    icon: GitCommitHorizontal,
+    iconId: "git-commit-horizontal",
+    labelFallback: "REVERTING",
+    labelKey: "reverting",
+  },
 };
 
 function composeOperationText(
@@ -276,9 +302,13 @@ export function RepoStatePill({
     return null;
   }
   const hasConflict = "conflictCount" in state && state.conflictCount > 0;
-  const { icon } = OP_CONFIG[state.kind];
+  const { icon, iconId } = OP_CONFIG[state.kind];
   return (
-    <Pill icon={icon} variant={hasConflict ? "danger" : "progress"}>
+    <Pill
+      icon={icon}
+      iconId={iconId}
+      variant={hasConflict ? "danger" : "progress"}
+    >
       {composeOperationText(state, pluginContext)}
     </Pill>
   );
@@ -302,14 +332,22 @@ export function SyncCounts({
     <span className="inline-flex items-center gap-1 text-muted-foreground tabular-nums">
       {ahead > 0 && (
         <span className="inline-flex items-center gap-0.5">
-          <ArrowUp aria-hidden="true" className="h-3 w-3" />
+          <GitPullRequestArrow
+            aria-hidden="true"
+            className="h-3 w-3"
+            data-git-icon="git-pull-request-arrow"
+          />
           {ahead}
           <span className="sr-only"> {aheadLabel},</span>
         </span>
       )}
       {behind > 0 && (
         <span className="inline-flex items-center gap-0.5">
-          <ArrowDown aria-hidden="true" className="h-3 w-3" />
+          <GitPullRequestArrow
+            aria-hidden="true"
+            className="h-3 w-3"
+            data-git-icon="git-pull-request-arrow"
+          />
           {behind}
           <span className="sr-only"> {behindLabel},</span>
         </span>
@@ -337,25 +375,29 @@ export function WorkingTreeCounts({
     <span className="inline-flex items-center gap-1.5">
       <IconNum
         color="text-success"
-        icon={Check}
+        icon={GitCommitHorizontal}
+        iconId="git-commit-horizontal"
         label={pluginText(pluginContext, "srStaged", "staged")}
         n={counts.staged}
       />
       <IconNum
         color="text-warning"
-        icon={Pencil}
+        icon={GitCompareArrows}
+        iconId="git-compare-arrows"
         label={pluginText(pluginContext, "srModified", "modified")}
         n={counts.modified}
       />
       <IconNum
         color="text-muted-foreground"
-        icon={FilePlus}
+        icon={GitBranchPlus}
+        iconId="git-branch-plus"
         label={pluginText(pluginContext, "srUntracked", "untracked")}
         n={counts.untracked}
       />
       <IconNum
         color="text-status-danger-fg"
-        icon={AlertTriangle}
+        icon={GitMergeConflict}
+        iconId="git-merge-conflict"
         label={pluginText(pluginContext, "srConflict", "conflict")}
         n={counts.conflict}
       />
@@ -410,7 +452,7 @@ export function LargeChangeWarning({
     return null;
   }
   return (
-    <Pill icon={AlertTriangle} variant="danger">
+    <Pill icon={GitCompareArrows} iconId="git-compare-arrows" variant="danger">
       {pluginText(pluginContext, "largeChange", "large change")}
     </Pill>
   );
@@ -429,7 +471,11 @@ export function StashBadge({
   const label = pluginText(pluginContext, "srStash", "stash");
   return (
     <span className="inline-flex items-center gap-0.5 text-muted-foreground tabular-nums">
-      <Archive aria-hidden="true" className="h-3 w-3" />
+      <GitCommitHorizontal
+        aria-hidden="true"
+        className="h-3 w-3"
+        data-git-icon="git-commit-horizontal"
+      />
       {count}
       <span className="sr-only"> {label},</span>
     </span>

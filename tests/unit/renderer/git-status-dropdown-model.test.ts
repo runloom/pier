@@ -85,7 +85,7 @@ function summaryText(model: GitStatusDropdownModel): string {
 }
 
 describe("deriveGitStatusDropdownModel", () => {
-  it("models tracked dirty changes with review, switch, and stash actions", () => {
+  it("models tracked dirty changes with review and switch-worktree actions", () => {
     const model = deriveGitStatusDropdownModel(
       makeStatus({
         branch: {
@@ -117,7 +117,7 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(summaryText(model)).toContain("+128 −42");
     expect(summaryText(model)).toContain("↑2 ↓1");
     expect(model.statusGroups).toEqual([
-      { parts: [{ label: "7 changed", tone: "warning" }] },
+      { parts: [{ icon: "changed", label: "7 changed", tone: "warning" }] },
       {
         parts: [
           { assistiveLabel: "insertions", label: "+128", tone: "success" },
@@ -130,8 +130,18 @@ describe("deriveGitStatusDropdownModel", () => {
       },
       {
         parts: [
-          { assistiveLabel: "ahead", label: "↑2", tone: "muted" },
-          { assistiveLabel: "behind", label: "↓1", tone: "muted" },
+          {
+            assistiveLabel: "ahead",
+            icon: "ahead",
+            label: "↑2",
+            tone: "muted",
+          },
+          {
+            assistiveLabel: "behind",
+            icon: "behind",
+            label: "↓1",
+            tone: "muted",
+          },
         ],
       },
     ]);
@@ -260,7 +270,7 @@ describe("deriveGitStatusDropdownModel", () => {
     ).toEqual(["switchBranch", "switchWorktree", "openChanges"]);
   });
 
-  it("models rebasing conflicts without switch worktree or stash", () => {
+  it("models rebasing conflicts without write actions", () => {
     const model = deriveGitStatusDropdownModel(
       makeStatus({
         counts: { conflict: 3, modified: 0, staged: 0, untracked: 0 },
@@ -286,8 +296,8 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(summaryText(model)).toContain("Rebase paused");
     expect(summaryText(model)).toContain("3 conflicts");
     expect(model.statusGroups).toEqual([
-      { parts: [{ label: "Rebase paused", tone: "info" }] },
-      { parts: [{ label: "3 conflicts", tone: "danger" }] },
+      { parts: [{ icon: "rebase", label: "Rebase paused", tone: "info" }] },
+      { parts: [{ icon: "conflict", label: "3 conflicts", tone: "danger" }] },
     ]);
   });
 
@@ -354,9 +364,15 @@ describe("deriveGitStatusDropdownModel", () => {
       "No local changes · merged · upstream gone"
     );
     expect(model.statusGroups).toEqual([
-      { parts: [{ label: "No local changes", tone: "default" }] },
-      { parts: [{ label: "merged", tone: "done" }] },
-      { parts: [{ label: "upstream gone", tone: "warning" }] },
+      {
+        parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
+      },
+      { parts: [{ icon: "merged", label: "merged", tone: "done" }] },
+      {
+        parts: [
+          { icon: "upstreamGone", label: "upstream gone", tone: "warning" },
+        ],
+      },
     ]);
   });
 
@@ -389,11 +405,23 @@ describe("deriveGitStatusDropdownModel", () => {
       "switchWorktree",
     ]);
     expect(model.statusGroups).toEqual([
-      { parts: [{ label: "No local changes", tone: "default" }] },
+      {
+        parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
+      },
       {
         parts: [
-          { assistiveLabel: "ahead", label: "↑2", tone: "muted" },
-          { assistiveLabel: "behind", label: "↓3", tone: "muted" },
+          {
+            assistiveLabel: "ahead",
+            icon: "ahead",
+            label: "↑2",
+            tone: "muted",
+          },
+          {
+            assistiveLabel: "behind",
+            icon: "behind",
+            label: "↓3",
+            tone: "muted",
+          },
         ],
       },
     ]);
@@ -440,12 +468,26 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(summaryText(aheadOnly)).toBe("No local changes · ↑2");
     expect(summaryText(aheadOnly)).not.toContain("↓0");
     expect(aheadOnly.statusGroups.at(1)).toEqual({
-      parts: [{ assistiveLabel: "ahead", label: "↑2", tone: "muted" }],
+      parts: [
+        {
+          assistiveLabel: "ahead",
+          icon: "ahead",
+          label: "↑2",
+          tone: "muted",
+        },
+      ],
     });
     expect(summaryText(behindOnly)).toBe("No local changes · ↓3");
     expect(summaryText(behindOnly)).not.toContain("↑0");
     expect(behindOnly.statusGroups.at(1)).toEqual({
-      parts: [{ assistiveLabel: "behind", label: "↓3", tone: "muted" }],
+      parts: [
+        {
+          assistiveLabel: "behind",
+          icon: "behind",
+          label: "↓3",
+          tone: "muted",
+        },
+      ],
     });
   });
 
@@ -492,7 +534,7 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(summaryText(model)).toBe("1 项变更 · +2 −1");
     expect(model.statusGroups).toEqual([
-      { parts: [{ label: "1 项变更", tone: "warning" }] },
+      { parts: [{ icon: "changed", label: "1 项变更", tone: "warning" }] },
       {
         parts: [
           { assistiveLabel: "行新增", label: "+2", tone: "success" },
