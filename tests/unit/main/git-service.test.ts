@@ -625,6 +625,7 @@ describe("createGitService", () => {
               "Remote Author",
               "2026-01-03T00:00:00Z",
               "",
+              "",
             ]),
             record([
               "refs/heads/feature/local",
@@ -634,6 +635,7 @@ describe("createGitService", () => {
               "local subject",
               "Local Author",
               "2026-01-02T00:00:00Z",
+              "",
               "",
             ]),
             record([
@@ -645,12 +647,14 @@ describe("createGitService", () => {
               "Main Author",
               "2026-01-01T00:00:00Z",
               "origin/main",
+              "[ahead 2, behind 1]",
             ]),
             record([
               "refs/remotes/origin/HEAD",
               "origin/HEAD",
               "ccc3333",
               " ",
+              "",
               "",
               "",
               "",
@@ -664,6 +668,7 @@ describe("createGitService", () => {
               "current subject",
               "Current Author",
               "2026-01-04T00:00:00Z",
+              "",
               "",
             ]),
           ].join("")
@@ -704,7 +709,95 @@ describe("createGitService", () => {
     });
   });
 
-  it("searchBranches 支持大 limit 返回 50+ 分支且 ahead/behind 补水有上限", async () => {
+  it("searchBranches 按 VS Code 口径返回分支相对上游的 ahead/behind", async () => {
+    const record = (fields: readonly string[]) => `${fields.join("\x1f")}\x1e`;
+    let revListCalls = 0;
+    const service = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "symbolic-ref") {
+          return Promise.resolve("");
+        }
+        if (args[0] === "rev-list") {
+          revListCalls += 1;
+          return Promise.resolve("6\t2\n");
+        }
+        return Promise.resolve(
+          [
+            record([
+              "refs/heads/feature/diverged",
+              "feature/diverged",
+              "aaa1111",
+              " ",
+              "diverged subject",
+              "Author",
+              "2026-01-03T00:00:00Z",
+              "origin/feature/diverged",
+              "[ahead 2, behind 1]",
+            ]),
+            record([
+              "refs/heads/feature/gone",
+              "feature/gone",
+              "bbb2222",
+              " ",
+              "gone subject",
+              "Author",
+              "2026-01-02T00:00:00Z",
+              "origin/feature/gone",
+              "[gone]",
+            ]),
+            record([
+              "refs/heads/feature/unpublished",
+              "feature/unpublished",
+              "ccc3333",
+              " ",
+              "unpublished subject",
+              "Author",
+              "2026-01-01T00:00:00Z",
+              "",
+              "",
+            ]),
+            record([
+              "refs/heads/main",
+              "main",
+              "ddd4444",
+              "*",
+              "main subject",
+              "Author",
+              "2026-01-04T00:00:00Z",
+              "origin/main",
+              "",
+            ]),
+          ].join("")
+        );
+      },
+    });
+
+    const result = await service.searchBranches("/repo", { limit: 50 });
+
+    expect(revListCalls).toBe(0);
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        aheadFromCurrent: 2,
+        behindFromCurrent: 1,
+        name: "feature/diverged",
+      }),
+      expect.objectContaining({
+        aheadFromCurrent: 0,
+        behindFromCurrent: 0,
+        name: "feature/gone",
+      }),
+      expect.objectContaining({
+        aheadFromCurrent: null,
+        behindFromCurrent: null,
+        name: "feature/unpublished",
+      }),
+    ]);
+  });
+
+  it("searchBranches 支持大 limit 返回 50+ 分支且不逐项 rev-list", async () => {
     const record = (index: number) =>
       `${[
         `refs/heads/feature/${index}`,
@@ -714,6 +807,7 @@ describe("createGitService", () => {
         "",
         "",
         "2026-01-01T00:00:00Z",
+        "",
         "",
       ].join("\x1f")}\x1e`;
     let revListCalls = 0;
@@ -740,11 +834,11 @@ describe("createGitService", () => {
     expect(result.status).toBe("ok");
     // 超过旧的 50/100 上限的分支也能被返回(命令面板本地过滤需要全量候选)
     expect(result.items).toHaveLength(120);
-    // ahead/behind 每项一次 rev-list,必须有界,不能随分支数线性放大阻塞时间
-    expect(revListCalls).toBeLessThanOrEqual(20);
+    // ahead/behind 直接来自 for-each-ref 的 upstream:track,不能随分支数逐项 spawn。
+    expect(revListCalls).toBe(0);
     expect(result.items[0]).toMatchObject({
-      aheadFromCurrent: 0,
-      behindFromCurrent: 0,
+      aheadFromCurrent: null,
+      behindFromCurrent: null,
     });
     expect(result.items[119]).toMatchObject({
       aheadFromCurrent: null,

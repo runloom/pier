@@ -5,10 +5,6 @@ import type {
 import { validateGitCwd } from "./git-cwd.ts";
 import { GitExecError } from "./git-exec.ts";
 
-const AHEAD_BEHIND_CONCURRENCY = 8;
-// ahead/behind 每项一次 rev-list;只补水前一屏,避免大仓库把返回阻塞十几秒。
-const AHEAD_BEHIND_HYDRATE_MAX = 20;
-const AHEAD_BEHIND_TIMEOUT_MS = 2000;
 const BRANCH_FIELD_SEPARATOR = "\x1f";
 const BRANCH_RECORD_SEPARATOR = "\x1e";
 const DEFAULT_BRANCH_LIMIT = 20;
@@ -16,8 +12,9 @@ const DEFAULT_BRANCH_LIMIT = 20;
 const MAX_BRANCH_LIMIT = 1000;
 const ORIGIN_HEAD_RE = /^refs\/remotes\/[^/]+\/(.+)$/;
 const REMOTE_HEAD_RE = /\/HEAD$/;
-const SPLIT_WS_RE = /\s+/;
 const TIMEOUT_RE = /timeout|timed out|超时/i;
+const TRACK_AHEAD_RE = /\bahead ([0-9]+)\b/;
+const TRACK_BEHIND_RE = /\bbehind ([0-9]+)\b/;
 
 export type GitBranchSearchExec = (
   args: readonly string[],
@@ -54,7 +51,7 @@ function branchSearchArgs(): string[] {
   return [
     "for-each-ref",
     "--sort=-committerdate",
-    `--format=%(refname)${BRANCH_FIELD_SEPARATOR}%(refname:short)${BRANCH_FIELD_SEPARATOR}%(objectname:short)${BRANCH_FIELD_SEPARATOR}%(HEAD)${BRANCH_FIELD_SEPARATOR}%(subject)${BRANCH_FIELD_SEPARATOR}%(authorname)${BRANCH_FIELD_SEPARATOR}%(committerdate:iso-strict)${BRANCH_FIELD_SEPARATOR}%(upstream:short)${BRANCH_RECORD_SEPARATOR}`,
+    `--format=%(refname)${BRANCH_FIELD_SEPARATOR}%(refname:short)${BRANCH_FIELD_SEPARATOR}%(objectname:short)${BRANCH_FIELD_SEPARATOR}%(HEAD)${BRANCH_FIELD_SEPARATOR}%(subject)${BRANCH_FIELD_SEPARATOR}%(authorname)${BRANCH_FIELD_SEPARATOR}%(committerdate:iso-strict)${BRANCH_FIELD_SEPARATOR}%(upstream:short)${BRANCH_FIELD_SEPARATOR}%(upstream:track)${BRANCH_RECORD_SEPARATOR}`,
     "refs/heads",
     "refs/remotes",
   ];
@@ -86,6 +83,8 @@ function branchOptionFromRecord(
     subject = "",
     authorName = "",
     committerDate = "",
+    ,
+    upstreamTrack = "",
   ] = trimmed.split(BRANCH_FIELD_SEPARATOR);
   const kind = branchKind(refName);
   if (
@@ -96,14 +95,16 @@ function branchOptionFromRecord(
   }
   const name = shortName;
   const isCurrent = head === "*" || (current !== null && shortName === current);
+  // 字段名沿用既有 renderer 契约；值对齐 VS Code，表示本地分支相对上游的 track 状态。
+  const { ahead, behind } = parseUpstreamTrack(kind, upstreamTrack);
   return {
     currentBranch: head === "*" ? shortName : null,
     item: isCurrent
       ? null
       : {
-          aheadFromCurrent: null,
+          aheadFromCurrent: ahead,
           authorName: authorName || null,
-          behindFromCurrent: null,
+          behindFromCurrent: behind,
           commit: commit || null,
           committerDate: committerDate || null,
           current: isCurrent,
@@ -115,6 +116,32 @@ function branchOptionFromRecord(
           refName,
           subject: subject || null,
         },
+  };
+}
+
+function parseTrackCount(pattern: RegExp, track: string): null | number {
+  const raw = pattern.exec(track)?.[1];
+  if (raw === undefined) {
+    return null;
+  }
+  const count = Number.parseInt(raw, 10);
+  return Number.isFinite(count) ? count : null;
+}
+
+function parseUpstreamTrack(
+  kind: GitDiffBranchOption["kind"] | null,
+  upstreamTrack: string
+): { ahead: null | number; behind: null | number } {
+  const track = upstreamTrack.trim();
+  if (kind !== "local" || track.length === 0) {
+    return { ahead: null, behind: null };
+  }
+  if (track === "[gone]") {
+    return { ahead: 0, behind: 0 };
+  }
+  return {
+    ahead: parseTrackCount(TRACK_AHEAD_RE, track) ?? 0,
+    behind: parseTrackCount(TRACK_BEHIND_RE, track) ?? 0,
   };
 }
 
@@ -210,63 +237,6 @@ function groupBranchesByKind(
   return [...pinned, ...locals, ...remotes];
 }
 
-async function computeAheadBehind(
-  execGit: GitBranchSearchExec,
-  cwd: string,
-  refName: string
-): Promise<{ ahead: null | number; behind: null | number }> {
-  try {
-    const output = await execGit(
-      ["rev-list", "--left-right", "--count", `${refName}...HEAD`],
-      cwd,
-      { timeoutMs: AHEAD_BEHIND_TIMEOUT_MS }
-    );
-    const [aheadRaw = "", behindRaw = ""] = output.trim().split(SPLIT_WS_RE);
-    const ahead = Number.parseInt(aheadRaw, 10);
-    const behind = Number.parseInt(behindRaw, 10);
-    if (!(Number.isFinite(ahead) && Number.isFinite(behind))) {
-      return { ahead: null, behind: null };
-    }
-    return { ahead, behind };
-  } catch {
-    return { ahead: null, behind: null };
-  }
-}
-
-async function hydrateAheadBehind(
-  execGit: GitBranchSearchExec,
-  cwd: string,
-  items: readonly GitDiffBranchOption[]
-): Promise<GitDiffBranchOption[]> {
-  const results = items.map((item) => ({ ...item }));
-  const hydrateCount = Math.min(results.length, AHEAD_BEHIND_HYDRATE_MAX);
-  let cursor = 0;
-  const worker = async (): Promise<void> => {
-    while (cursor < hydrateCount) {
-      const index = cursor;
-      cursor += 1;
-      const item = results[index];
-      if (!item) {
-        continue;
-      }
-      const { ahead, behind } = await computeAheadBehind(
-        execGit,
-        cwd,
-        item.refName
-      );
-      item.aheadFromCurrent = ahead;
-      item.behindFromCurrent = behind;
-    }
-  };
-  await Promise.all(
-    Array.from(
-      { length: Math.min(AHEAD_BEHIND_CONCURRENCY, hydrateCount) },
-      () => worker()
-    )
-  );
-  return results;
-}
-
 export async function searchBranches(
   execGit: GitBranchSearchExec,
   cwd: string,
@@ -294,7 +264,7 @@ export async function searchBranches(
     return {
       currentBranch: parsed.currentBranch,
       durationMs: durationSince(startedAt),
-      items: await hydrateAheadBehind(execGit, root, sliced),
+      items: sliced,
       message: null,
       status: "ok",
     };

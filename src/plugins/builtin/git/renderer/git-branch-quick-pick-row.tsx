@@ -53,16 +53,6 @@ export function GitBranchQuickPickRow({
             >
               <span
                 className={
-                  aheadBehind.ahead > 0
-                    ? "text-success"
-                    : "text-muted-foreground/50"
-                }
-                data-branch-picker-row-ahead
-              >
-                {aheadBehind.ahead}↑
-              </span>
-              <span
-                className={
                   aheadBehind.behind > 0
                     ? "text-warning"
                     : "text-muted-foreground/50"
@@ -70,6 +60,16 @@ export function GitBranchQuickPickRow({
                 data-branch-picker-row-behind
               >
                 {aheadBehind.behind}↓
+              </span>
+              <span
+                className={
+                  aheadBehind.ahead > 0
+                    ? "text-success"
+                    : "text-muted-foreground/50"
+                }
+                data-branch-picker-row-ahead
+              >
+                {aheadBehind.ahead}↑
               </span>
             </span>
           ) : null}

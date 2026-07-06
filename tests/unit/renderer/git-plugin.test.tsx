@@ -1349,6 +1349,10 @@ describe("git builtin plugin", () => {
     expect(branchRow.getByText("default")).toBeVisible();
     expect(branchRow.getByText("3↑")).toBeVisible();
     expect(branchRow.getByText("5↓")).toBeVisible();
+    expect(
+      branchRow.container.querySelector("[data-branch-picker-row-ahead-behind]")
+        ?.textContent
+    ).toBe("5↓3↑");
     // ahead/behind 用主题语义 token,badge 用 shadcn Badge,不硬编码调色板色
     expect(branchRow.getByText("3↑")).toHaveClass("text-success");
     expect(branchRow.getByText("5↓")).toHaveClass("text-warning");
