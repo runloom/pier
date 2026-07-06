@@ -942,6 +942,98 @@ describe("createGitService", () => {
     ]);
   });
 
+  it("searchBranches 合并模式标注候选 tip tree 已在当前历史出现", async () => {
+    const record = (fields: readonly string[]) => `${fields.join("\x1f")}\x1e`;
+    const headTree = "a".repeat(40);
+    const matchedTree = "c".repeat(40);
+    const mergeTree = "d".repeat(40);
+    const service = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "symbolic-ref") {
+          return Promise.resolve("");
+        }
+        if (
+          args.join(" ") ===
+          "rev-list --left-right --count refs/heads/feature/squashed...HEAD"
+        ) {
+          return Promise.resolve("6\t7\n");
+        }
+        if (args.join(" ") === "rev-parse HEAD^{tree}") {
+          return Promise.resolve(`${headTree}\n`);
+        }
+        if (
+          args.join(" ") ===
+          "merge-tree --write-tree HEAD refs/heads/feature/squashed"
+        ) {
+          return Promise.resolve(`${mergeTree}\n`);
+        }
+        if (args[0] === "log") {
+          return Promise.resolve(
+            [
+              `${headTree}\x1fd3bb9741\x1fcurrent branch tip`,
+              `${"b".repeat(40)}\x1f119250d8\x1flater main work`,
+              `${matchedTree}\x1feb9c60a2\x1fsquash merge commit`,
+            ].join("\n")
+          );
+        }
+        return Promise.resolve(
+          [
+            record([
+              "refs/heads/feature/squashed",
+              "feature/squashed",
+              "aaa1111",
+              " ",
+              "source branch tip",
+              "Author",
+              "2026-01-03T00:00:00Z",
+              "",
+              "",
+              matchedTree,
+            ]),
+            record([
+              "refs/heads/main",
+              "main",
+              "ddd4444",
+              "*",
+              "main subject",
+              "Author",
+              "2026-01-04T00:00:00Z",
+              "",
+              "",
+              headTree,
+            ]),
+          ].join("")
+        );
+      },
+    });
+
+    const result = await service.searchBranches("/repo", {
+      diffMode: "mergeIntoCurrent",
+      limit: 50,
+    });
+    const item = result.items[0] as (typeof result.items)[number] & {
+      tipTreeInCurrentHistory?: {
+        commit: string;
+        commitsSince: number;
+        subject: string | null;
+      } | null;
+    };
+
+    expect(item).toMatchObject({
+      aheadFromCurrent: 6,
+      behindFromCurrent: 7,
+      name: "feature/squashed",
+      tipTreeInCurrentHistory: {
+        commit: "eb9c60a2",
+        commitsSince: 2,
+        subject: "squash merge commit",
+      },
+    });
+  });
+
   it("searchBranches 支持大 limit 返回 50+ 分支且 ahead/behind 补水有上限", async () => {
     const record = (index: number) =>
       `${[
