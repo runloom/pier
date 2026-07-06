@@ -180,7 +180,7 @@ describe("AgentAccountsService", () => {
     expect(service.snapshot().activeAccountId).toBe(ids[1]);
   });
 
-  it("syncBack 身份 mismatch 中止切换，自动接管外部身份", async () => {
+  it("syncBack 身份 mismatch 归档外部身份后仍切到用户所选账号", async () => {
     await service.adoptCurrent();
     asMock(provider.readIdentity).mockResolvedValue({
       email: "bob@example.com",
@@ -199,14 +199,17 @@ describe("AgentAccountsService", () => {
     const acc1Id = service.snapshot().accounts[0]?.id;
     await service.select(acc1Id ?? "");
 
-    // 外部身份被自动接管为第三个托管账号
+    // 外部身份被归档为第三个托管账号（handleDrift 自动接管）
     expect(service.snapshot().accounts).toHaveLength(3);
     const adopted = service
       .snapshot()
       .accounts.find((a) => a.providerAccountId === "prov-external");
     expect(adopted).toBeDefined();
-    expect(service.snapshot().activeAccountId).toBe(adopted?.id);
-    expect(provider.materialize).not.toHaveBeenCalled();
+    // 关键：不静默中止——最终仍切到用户请求的 acc1，且物化其凭据
+    expect(service.snapshot().activeAccountId).toBe(acc1Id);
+    expect(provider.materialize).toHaveBeenCalledWith(
+      join(managedDir, "codex", acc1Id ?? "")
+    );
   });
 
   it("物化后 debounce 尾巴不自触发漂移处理", async () => {
@@ -256,10 +259,11 @@ describe("AgentAccountsService", () => {
     expect(dirs).toEqual([existingId]);
   });
 
-  it("登录失败清理临时目录并设置错误状态", async () => {
-    asMock(provider.login).mockRejectedValue(new Error("Login cancelled"));
+  it("登录失败清理临时目录并设置错误状态（add reject）", async () => {
+    // 非 abort 的自发失败 → add() reject 且设错误态
+    asMock(provider.login).mockRejectedValue(new Error("Login failed"));
 
-    await service.add("codex");
+    await expect(service.add("codex")).rejects.toThrow("Login failed");
 
     expect(service.snapshot().lastLoginError).not.toBeNull();
     let dirs: string[] = [];
@@ -394,10 +398,12 @@ describe("AgentAccountsService", () => {
     expect(signalRef.current?.aborted).toBe(true);
 
     rejectLogin(new Error("Login cancelled"));
-    // doAdd 不再外抛——错误被内部 catch 消化
-    await addPromise;
+    // 用户取消 → add() reject 以 AbortError 哨兵（调用方据此静默处理）
+    await expect(addPromise).rejects.toMatchObject({ name: "AbortError" });
     await cancelPromise;
     expect(service.snapshot().loginPending).toBeNull();
+    // 取消不设错误态
+    expect(service.snapshot().lastLoginError).toBeNull();
   });
 
   it("watch 漂移处理走 mutation 队列——在途 mutation 结束后才执行", async () => {
@@ -424,10 +430,9 @@ describe("AgentAccountsService", () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(provider.readIdentity).not.toHaveBeenCalled();
 
-    // 放行在途 mutation（登录取消路径不触碰 readIdentity）
-    rejectLogin(new Error("Login cancelled"));
-    // doAdd 不再外抛——错误被内部 catch 消化
-    await addPromise;
+    // 放行在途 mutation（此处未 abort signal，login 自发失败 → add reject）
+    rejectLogin(new Error("Login failed"));
+    await expect(addPromise).rejects.toThrow("Login failed");
 
     // 队列排空后 drift 才执行（handleDrift + doAdoptCurrent 各读一次身份）
     await vi.waitFor(() => {
@@ -560,10 +565,10 @@ describe("AgentAccountsService", () => {
     expect(service.snapshot().accounts).toEqual([]);
   });
 
-  it("doAdd 登录失败设置 lastLoginError", async () => {
+  it("doAdd 登录失败设置 lastLoginError 且 add reject", async () => {
     asMock(provider.login).mockRejectedValue(new Error("Network error"));
 
-    await service.add("codex");
+    await expect(service.add("codex")).rejects.toThrow("Network error");
 
     const snap = service.snapshot();
     expect(snap.lastLoginError).not.toBeNull();
@@ -571,12 +576,14 @@ describe("AgentAccountsService", () => {
     expect(snap.loginPending).toBeNull();
   });
 
-  it("doAdd AbortError（取消）不设错误状态", async () => {
+  it("doAdd AbortError（取消）不设错误状态，add reject 为 AbortError", async () => {
     const abortErr = new Error("Aborted");
     abortErr.name = "AbortError";
     asMock(provider.login).mockRejectedValue(abortErr);
 
-    await service.add("codex");
+    await expect(service.add("codex")).rejects.toMatchObject({
+      name: "AbortError",
+    });
 
     expect(service.snapshot().lastLoginError).toBeNull();
     expect(service.snapshot().loginPending).toBeNull();
@@ -602,7 +609,8 @@ describe("AgentAccountsService", () => {
     await loginStarted.promise;
     // 推进到超过 LOGIN_TIMEOUT_MS（5min）
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
-    await addPromise;
+    // 超时 → add reject（区别于用户取消：超时会设错误态并 reject 非 AbortError）
+    await expect(addPromise).rejects.toThrow("Login timed out after 5 minutes");
 
     const snap = service.snapshot();
     expect(snap.lastLoginError).not.toBeNull();
@@ -612,10 +620,111 @@ describe("AgentAccountsService", () => {
     vi.useRealTimers();
   });
 
-  it("doAdd 重试清除之前的 lastLoginError", async () => {
-    // 先失败
-    asMock(provider.login).mockRejectedValue(new Error("First failure"));
+  it("#2 re-auth 当前活跃账号时把新凭据也物化到真实 ~/.codex", async () => {
+    await service.adoptCurrent(); // A 活跃，prov-acc-1
+    const activeId = service.snapshot().activeAccountId ?? "";
+    asMock(provider.materialize).mockClear();
+    asMock(provider.login).mockImplementation(async (homeDir: string) => {
+      await writeFile(join(homeDir, "auth.json"), '{"tokens":{}}');
+    });
+    // readIdentity 匹配活跃账号 prov-acc-1 → re-auth 分支
+
     await service.add("codex");
+
+    // 活跃账号 re-auth：新凭据须物化到真实 home，否则终端仍用旧凭据
+    expect(provider.materialize).toHaveBeenCalledWith(
+      join(managedDir, "codex", activeId)
+    );
+  });
+
+  it("#6 用量拉取期间活跃账号改变 → 结果不错记到原账号", async () => {
+    await service.adoptCurrent(); // A
+    asMock(provider.readIdentity).mockResolvedValue({
+      email: "b@b.com",
+      providerAccountId: "prov-2",
+    });
+    await service.adoptCurrent(); // B 活跃
+    const [accA, accB] = service.snapshot().accounts;
+
+    const gate = Promise.withResolvers<void>();
+    asMock(provider.fetchUsage).mockReturnValue(
+      gate.promise.then(() => ({ status: "ok" as const }))
+    );
+
+    const refreshP = service.refreshUsage(true); // capturedId = B
+    // 模拟拉取期间 select 完成，活跃账号切到 A
+    stateStore.mutate((s) => ({ ...s, activeAccountId: accA?.id ?? null }));
+    gate.resolve();
+    await refreshP;
+
+    // 读到不确定凭据的结果不得错记到 B 名下
+    expect(service.snapshot().usage[accB?.id ?? ""]).toBeUndefined();
+  });
+
+  it("#11 用量拉取前 await ensureUsageEnv（补齐 PATH）", async () => {
+    service.dispose();
+    const order: string[] = [];
+    const ensureUsageEnv = vi.fn(() => {
+      order.push("ensureEnv");
+      return Promise.resolve();
+    });
+    const freshStore = makeMemoryStateStore();
+    const freshProvider = makeMockProvider();
+    asMock(freshProvider.readIdentity).mockResolvedValueOnce(null);
+    asMock(freshProvider.fetchUsage).mockImplementation(() => {
+      order.push("fetch");
+      return Promise.resolve({ status: "ok" as const });
+    });
+    service = createAgentAccountsService({
+      broadcast: noop as (snap: AgentAccountsSnapshot) => void,
+      ensureUsageEnv,
+      managedBaseDir: managedDir,
+      provider: freshProvider,
+      stateStore: freshStore,
+    });
+    await service.init();
+    // 造一个活跃账号让 doRefreshUsage 真正拉取
+    await service.adoptCurrent();
+    order.length = 0;
+    await service.refreshUsage(true);
+
+    expect(order).toEqual(["ensureEnv", "fetch"]);
+  });
+
+  it("#7 init 已有账号时对账外部身份漂移并 realign", async () => {
+    // 预置：A(prov-acc-1)、B(prov-acc-2)，活跃 B
+    await service.adoptCurrent(); // A
+    asMock(provider.readIdentity).mockResolvedValue({
+      email: "b@b.com",
+      providerAccountId: "prov-acc-2",
+    });
+    await service.adoptCurrent(); // B 活跃
+    const accA = service.snapshot().accounts[0];
+    expect(service.snapshot().activeAccountId).not.toBe(accA?.id);
+
+    // 模拟 app 关闭期间外部 `codex login` 切回 A
+    asMock(provider.readIdentity).mockResolvedValue({
+      email: "test@example.com",
+      providerAccountId: "prov-acc-1",
+    });
+    // 复用同一 store 重建 service（活跃仍持久化为 B）
+    service.dispose();
+    service = createAgentAccountsService({
+      broadcast: (snap) => broadcasts.push(snap),
+      managedBaseDir: managedDir,
+      provider,
+      stateStore,
+    });
+    await service.init();
+
+    // init 对账后活跃 realign 到真实身份 A（非空列表也对账，修复前只有空列表才对账）
+    expect(service.snapshot().activeAccountId).toBe(accA?.id);
+  });
+
+  it("doAdd 重试清除之前的 lastLoginError", async () => {
+    // 先失败（add reject）
+    asMock(provider.login).mockRejectedValue(new Error("First failure"));
+    await expect(service.add("codex")).rejects.toThrow("First failure");
     expect(service.snapshot().lastLoginError).not.toBeNull();
     const accountsBefore = service.snapshot().accounts.length;
 

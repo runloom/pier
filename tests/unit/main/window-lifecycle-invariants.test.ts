@@ -11,8 +11,11 @@ const WINDOW_MANAGER_SOURCE = readFileSync(
   "utf8"
 );
 
+// 窗口放宽到 900：before-quit 现在并发 flush 三处状态（window/secrets/agent-accounts），
+// flushOpenWindows 与 app.quit 之间隔着另两个 flush 块，500 字符窗口已容不下。
+// 不变量本身（before-quit 内 window flush 先于 app.quit）不变。
 const BEFORE_QUIT_FLUSH_RE =
-  /app\.on\("before-quit",\s*\(event\) => \{[\s\S]{0,500}?event\.preventDefault\(\);[\s\S]{0,500}?appCore\.services\.window\s*\.flushOpenWindows\(\)[\s\S]{0,500}?app\.quit\(\);/;
+  /app\.on\("before-quit",\s*\(event\) => \{[\s\S]{0,500}?event\.preventDefault\(\);[\s\S]{0,500}?appCore\.services\.window\s*\.flushOpenWindows\(\)[\s\S]{0,900}?app\.quit\(\);/;
 const CLOSE_GUARD_FLUSH_RE =
   /window\.host\.on\("close",\s*\(event:[\s\S]{0,80}?\) => \{[\s\S]{0,700}?event\.preventDefault\(\);[\s\S]{0,700}?this\.flushBeforeClose\(window,/;
 const QUIT_DESTROY_SKIPS_CLOSE_RE =

@@ -16,7 +16,11 @@ export function registerCodexActions(
       context.commandPalette.openQuickPick({
         items,
         async onAccept(item) {
-          if (item.id === snap.activeAccountId) {
+          // 用 accept 时刻的实时快照判活跃账号，而非 palette 打开时的闭包快照：
+          // 打开期间外部/漂移可能已改活跃账号，用陈旧 snap 会误判为"已是活跃"
+          // 而静默 early-return，用户以为切了实际没切。
+          const live = context.accounts.snapshot();
+          if (item.id === live.activeAccountId) {
             return;
           }
 
@@ -95,6 +99,10 @@ export function registerCodexActions(
         );
       } catch (error) {
         loading.dismiss();
+        // 用户主动取消（AbortError 哨兵）：静默，不弹失败 toast
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
         context.notifications.error(
           context.i18n.t(
             "widget.accounts.addFailed",

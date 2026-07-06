@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { existsSync, type FSWatcher, watch } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync, type FSWatcher, mkdirSync, watch } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
@@ -87,6 +87,10 @@ export function createCodexProvider(
       const src = join(accountHomeDir, "auth.json");
       const dest = join(realCodexHome, "auth.json");
       const content = await readFile(src, "utf-8");
+      // login 全程 CODEX_HOME 指向托管目录，真实 ~/.codex 可能从未被创建
+      // （用户从未直接跑过 codex）——writeFileAtomic 不会自建父目录，故先 mkdir -p，
+      // 否则新机首次切换账号 ENOENT，切号在全新机器上不可用。
+      await mkdir(realCodexHome, { recursive: true });
       await writeFileAtomic(dest, content, { mode: 0o600 });
     },
 
@@ -120,6 +124,11 @@ export function createCodexProvider(
       let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
       try {
+        // 全新机器上 ~/.codex 可能尚不存在，watch 会抛 ENOENT 而静默失效，
+        // 外部 `codex login` 的漂移将侦测不到直到重启。先建目录让 watcher 附着。
+        if (!existsSync(realCodexHome)) {
+          mkdirSync(realCodexHome, { recursive: true });
+        }
         watcher = watch(realCodexHome, (_eventType, filename) => {
           if (filename !== "auth.json") {
             return;

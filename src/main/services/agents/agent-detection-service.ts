@@ -45,6 +45,9 @@ function defaultHydratePath(): Promise<string[]> {
 
 export interface AgentDetectionService {
   detect(): Promise<DetectAgentsResult>;
+  /** 幂等补齐 login-shell PATH（memoized）。GUI 启动的 Electron PATH 缺用户 bin 目录，
+   * 直接 spawn CLI 会 ENOENT；spawn 前 await 本方法即可保证 PATH 就绪。 */
+  ensurePath(): Promise<void>;
   refresh(): Promise<DetectAgentsResult>;
 }
 
@@ -98,6 +101,7 @@ export function createAgentDetectionService({
 
   return {
     detect,
+    ensurePath: hydratePathOnce,
     async refresh() {
       const added = await hydratePathNow();
       const detectResult = await detect();

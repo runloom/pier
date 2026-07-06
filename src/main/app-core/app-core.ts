@@ -172,6 +172,8 @@ function createPierAppCore(): PierAppCore {
       );
       const svc = createAgentAccountsService({
         broadcast: broadcastAgentAccountsChanged,
+        // 用量拉取前补齐 login-shell PATH（memoized），避免 GUI 启动态 spawn codex ENOENT
+        ensureUsageEnv: () => agentDetection.ensurePath(),
         hasVisibleTarget: () => BrowserWindow.getAllWindows().length > 0,
         managedBaseDir: join(app.getPath("userData"), "agent-accounts"),
         provider: createCodexProvider(),

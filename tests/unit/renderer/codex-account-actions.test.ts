@@ -176,6 +176,25 @@ describe("registerCodexActions", () => {
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
+  it("#10 onAccept 用实时快照判活跃：打开后活跃账号漂移仍能切", async () => {
+    const { context, mocks } = makeContext(snapshot);
+    registerCodexActions(context);
+
+    const switchAction = getAction(mocks, "pier.codex.switchAccount");
+    await switchAction.handler(); // 打开时活跃 = acct-1
+
+    // 打开期间外部/漂移把活跃切到 acct-2（原地改快照对象）
+    snapshot.activeAccountId = "acct-2";
+
+    const quickPick = mocks.openQuickPick.mock
+      .calls[0]?.[0] as RendererPluginQuickPick;
+    // 用户选 acct-1：陈旧闭包快照会误判 acct-1 仍活跃而 early-return（bug）；
+    // 实时快照下活跃是 acct-2，acct-1 != acct-2 → 正常发起切换
+    await quickPick.onAccept({ id: "acct-1", label: "a@example.com" });
+
+    expect(mocks.select).toHaveBeenCalledWith("acct-1");
+  });
+
   it("addAccount handler 调 accounts.add", async () => {
     const { context, mocks } = makeContext(snapshot);
     registerCodexActions(context);

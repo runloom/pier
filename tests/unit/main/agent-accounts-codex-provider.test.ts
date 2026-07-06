@@ -50,6 +50,21 @@ describe("createCodexProvider", () => {
     expect(written).toBe(authContent);
   });
 
+  it("materialize 在 realCodexHome 不存在时自建目录（新机首次切号）", async () => {
+    const managedDir = await makeTempDir("managed-fresh");
+    // realHome 指向一个尚不存在的子路径（模拟从未跑过 codex 的机器）
+    const realHome = join(await makeTempDir("real-fresh"), ".codex");
+    const authContent = JSON.stringify({ tokens: { id_token: "fresh" } });
+    await writeFile(join(managedDir, "auth.json"), authContent);
+
+    const provider = createCodexProvider({ realCodexHome: realHome });
+    // 修复前此处 ENOENT
+    await provider.materialize(managedDir);
+
+    const written = await readFile(join(realHome, "auth.json"), "utf-8");
+    expect(written).toBe(authContent);
+  });
+
   it("syncBack 身份匹配时回采 auth.json 并返回 ok", async () => {
     const managedDir = await makeTempDir("managed-sb");
     const realHome = await makeTempDir("real-sb");

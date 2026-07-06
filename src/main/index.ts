@@ -345,6 +345,8 @@ app.on("before-quit", (event) => {
         error instanceof Error ? error.message : String(error)
       );
     }
+    // 并发落盘（顺序不影响正确性）：window / secrets / agent-accounts 三处状态
+    // 都在 app.quit() 前 flush，避免 debounce 窗口内的写丢失。
     Promise.all([
       appCore.services.window.flushOpenWindows().catch((error) => {
         console.error(
@@ -358,12 +360,20 @@ app.on("before-quit", (event) => {
           error instanceof Error ? error.message : String(error)
         );
       }),
+      appCore.services.agentAccounts.flush().catch((error) => {
+        console.error(
+          "[agent-accounts] failed to flush before quit:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }),
     ]).finally(() => {
       app.quit();
     });
     return;
   }
   windowManager.destroyAllForQuit();
+  // 杀在途 `codex login` 子进程 + 停轮询/watch
+  appCore.services.agentAccounts.dispose();
   appCore.pluginHost.dispose();
   localControl?.close().catch(() => {
     // ignore: app 正在退出

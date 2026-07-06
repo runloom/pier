@@ -90,4 +90,40 @@ describe("agent-accounts-state", () => {
       version: 1,
     });
   });
+
+  it("schema 不符时备份原文件（不静默清空账号记录）", async () => {
+    const filePath = tempPath();
+    const { readdir, writeFile } = await import("node:fs/promises");
+    const { dirname, basename } = await import("node:path");
+    // 合法 JSON 但 schema 不符（未来版本 + 含账号记录）
+    const legacy = JSON.stringify({
+      accounts: [
+        {
+          createdAt: 1,
+          email: "keep@me.com",
+          id: "acc-keep",
+          provider: "codex",
+          updatedAt: 1,
+        },
+      ],
+      activeAccountId: "acc-keep",
+      version: 2,
+    });
+    await writeFile(filePath, legacy);
+
+    const store = createAgentAccountsStateStore(filePath);
+    const state = await store.init();
+    // 内存态回退默认值
+    expect(state.accounts).toHaveLength(0);
+    // 原始账号记录必须备份留存，不得静默丢失
+    const dir = dirname(filePath);
+    const base = basename(filePath);
+    const entries = await readdir(dir);
+    const backup = entries.find((f) => f.startsWith(`${base}.corrupt-`));
+    expect(backup).toBeDefined();
+    const { readFile } = await import("node:fs/promises");
+    const backedUp = await readFile(join(dir, backup as string), "utf-8");
+    tempFiles.push(join(dir, backup as string));
+    expect(backedUp).toContain("keep@me.com");
+  });
 });

@@ -11,6 +11,7 @@ import type {
 import writeFileAtomic from "write-file-atomic";
 import type { AgentAccountsStateStore } from "../../state/agent-accounts-state.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
+import { classifyLoginError } from "./login-error.ts";
 import type { AccountUsageResult, AgentAccountProvider } from "./types.ts";
 
 const USAGE_MIN_REFETCH_MS = 5 * 60 * 1000; // 5min
@@ -21,6 +22,12 @@ const WATCH_SUPPRESS_MS = 1500;
 
 export interface AgentAccountsServiceOpts {
   broadcast: (snapshot: AgentAccountsSnapshot) => void;
+  /**
+   * 每次用量拉取前 await（memoized）：补齐 login-shell PATH。GUI 启动的
+   * Electron PATH 缺用户 bin 目录，冷启动 spawn codex 会 ENOENT 并把
+   * "Codex CLI not found" 粘性缓存最长 15min。缺省 no-op。
+   */
+  ensureUsageEnv?: () => Promise<void>;
   /** 是否有可见窗口——轮询 tick 前检查；缺省 () => true。 */
   hasVisibleTarget?: () => boolean;
   managedBaseDir: string;
@@ -33,6 +40,8 @@ export interface AgentAccountsService {
   adoptCurrent(): Promise<void>;
   cancelLogin(provider: string): Promise<void>;
   dispose(): void;
+  /** 强制立即落盘（before-quit 调用，绕过 debounce 防止 500ms 窗口内的写丢失）。 */
+  flush(): Promise<void>;
   init(): Promise<void>;
   refreshUsage(force?: boolean): Promise<void>;
   remove(accountId: string): Promise<void>;
@@ -45,6 +54,7 @@ export function createAgentAccountsService(
 ): AgentAccountsService {
   const { broadcast, managedBaseDir, provider, stateStore } = opts;
   const hasVisibleTarget = opts.hasVisibleTarget ?? (() => true);
+  const ensureUsageEnv = opts.ensureUsageEnv ?? (() => Promise.resolve());
 
   let broadcastSeq = 0;
   let loginAbort: AbortController | null = null;
@@ -166,9 +176,17 @@ export function createAgentAccountsService(
 
     const abort = new AbortController();
     loginAbort = abort;
+    // 超时与用户取消都调 abort.abort()，无法从 signal 区分——用独立标志记录
+    // "是否因超时而 abort"，否则用户主动取消会被误报成"登录超时 5 分钟"。
+    let timedOut = false;
+    const loginTimeout = setTimeout(() => {
+      timedOut = true;
+      abort.abort();
+    }, LOGIN_TIMEOUT_MS);
 
-    const loginTimeout = setTimeout(() => abort.abort(), LOGIN_TIMEOUT_MS);
-
+    // 失败/超时 → 抛出让 add() reject（调用方据此报错，不再假成功 toast）；
+    // 用户取消 → 抛 name "AbortError" 的哨兵错误，调用方据此静默处理。
+    let failure: Error | null = null;
     try {
       await provider.login(dir, abort.signal);
       const identity = await provider.readIdentity(dir);
@@ -192,6 +210,14 @@ export function createAgentAccountsService(
           mode: 0o600,
         });
         await rm(dir, { recursive: true, force: true });
+        // 重新登录的若正是当前活跃账号，新凭据必须也物化到真实 ~/.codex：
+        // 否则终端继续用过期凭据（codex 仍未认证但 Pier 报成功），且下次 select
+        // 的 syncBack 身份匹配会把旧凭据回采覆盖掉新登录，永久丢失重认证。
+        if (stateStore.get().activeAccountId === existing.id) {
+          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+          await provider.materialize(existingDir);
+          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+        }
         stateStore.mutate((s) => ({
           ...s,
           accounts: s.accounts.map((a) =>
@@ -229,29 +255,21 @@ export function createAgentAccountsService(
       await rm(dir, { recursive: true, force: true }).catch(() => {
         /* cleanup best-effort */
       });
-      // 分类错误：AbortError（取消）不设错误状态
-      if (err instanceof Error && err.name === "AbortError") {
-        // 用户取消——静默
-      } else if (
-        err instanceof Error &&
-        abort.signal.aborted &&
-        err.name !== "AbortError"
-      ) {
-        lastLoginError = {
-          at: now(),
-          message: "Login timed out after 5 minutes",
-        };
-      } else {
-        lastLoginError = {
-          at: now(),
-          message: err instanceof Error ? err.message : String(err),
-        };
-      }
+      const classified = classifyLoginError(err, {
+        aborted: abort.signal.aborted,
+        at: now(),
+        timedOut,
+      });
+      lastLoginError = classified.errorState;
+      failure = classified.failure;
     } finally {
       clearTimeout(loginTimeout);
       loginAbort = null;
       loginPending = null;
       emitSnapshot();
+    }
+    if (failure) {
+      throw failure;
     }
   }
 
@@ -277,9 +295,10 @@ export function createAgentAccountsService(
       );
       suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
       if (syncResult === "identity-mismatch") {
-        // 外部已换号：走漂移处理后中止本次切换
+        // 外部已换号：先把外部身份归档（handleDrift 按 providerAccountId 匹配
+        // 现有账号或自动接管为新账号），但不中止用户请求——继续切到用户所选账号，
+        // 否则 select() 静默 resolve、活跃账号停在外部身份上，UI 看似"切换按钮没反应"。
         await handleDrift();
-        return;
       }
     }
 
@@ -336,20 +355,25 @@ export function createAgentAccountsService(
   }
 
   async function doRefreshUsage(force = false): Promise<void> {
-    const state = stateStore.get();
-    if (!state.activeAccountId) {
+    const capturedId = stateStore.get().activeAccountId;
+    if (!capturedId) {
       return;
     }
-    const cached = usageCache[state.activeAccountId];
+    const cached = usageCache[capturedId];
     if (!force && cached && now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS) {
       return; // 防抖：5min 内不重复拉取（手动 force 绕过）
     }
+    // 补齐 login-shell PATH（memoized）：冷启动首次真正 await，之后近乎零成本。
+    // 不做则 GUI 启动态 spawn codex ENOENT，"Codex CLI not found" 粘性缓存 15min。
+    await ensureUsageEnv();
     const abort = new AbortController();
     const result = await provider.fetchUsage(abort.signal);
-    usageCache[state.activeAccountId] = usageResultToAccountUsage(
-      state.activeAccountId,
-      result
-    );
+    // fetchUsage 读的是 RPC 时刻 ~/.codex 的凭据；若 ~15s 拉取期间发生 select()
+    // 切了活跃账号，结果归属不确定——丢弃而非错记到原账号名下（下次 poll 会重拉）。
+    if (stateStore.get().activeAccountId !== capturedId) {
+      return;
+    }
+    usageCache[capturedId] = usageResultToAccountUsage(capturedId, result);
     emitSnapshot();
   }
 
@@ -406,13 +430,18 @@ export function createAgentAccountsService(
   return {
     async init(): Promise<void> {
       await stateStore.init();
-      // 自动接管：无托管账号但本地有真实登录凭据 → 入队接管（幂等）
       const state = stateStore.get();
       if (state.accounts.length === 0) {
+        // 自动接管：无托管账号但本地有真实登录凭据 → 入队接管（幂等）
         const identity = await provider.readIdentity(realCodexHome());
         if (identity) {
           await enqueueMutation(doAdoptCurrent);
         }
+      } else {
+        // 已有账号：对账 ~/.codex 真实身份。app 关闭期间用户可能在终端跑
+        // `codex login` 换了号，持久化的 activeAccountId 会与真实身份漂移；
+        // handleDrift 按 providerAccountId 匹配后realign/接管（身份一致则无害重同步）。
+        await enqueueMutation(handleDrift);
       }
       setupWatch();
       // 启动 usage 轮询
@@ -435,8 +464,11 @@ export function createAgentAccountsService(
       watchDispose = null;
       clearInterval(usagePollTimer ?? undefined);
       usagePollTimer = null;
+      // 杀在途 `codex login` 子进程（provider abort 监听器 child.kill）
       loginAbort?.abort();
     },
+
+    flush: () => stateStore.flush(),
 
     snapshot: () => buildSnapshot(),
 

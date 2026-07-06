@@ -1,7 +1,18 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import type { AccountUsageResult } from "./types.ts";
 
 const RPC_TIMEOUT_MS = 15_000;
+
+/** 可注入 spawn（单测用假子进程驱动 JSON-RPC 状态机）。 */
+export type SpawnFn = (
+  cmd: string,
+  args: string[],
+  opts: {
+    env?: NodeJS.ProcessEnv;
+    stdio: ["pipe", "pipe", "pipe"];
+    windowsHide: boolean;
+  }
+) => ChildProcess;
 
 /**
  * 构造 JSON-RPC 2.0 请求消息（换行分隔协议）。
@@ -74,18 +85,20 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
  * 消息为换行分隔 JSON-RPC 2.0；服务端会发无 id 的通知，跳过即可。
  */
 export function fetchCodexUsage(
-  signal: AbortSignal
+  signal: AbortSignal,
+  opts?: { spawnImpl?: SpawnFn }
 ): Promise<AccountUsageResult> {
   if (signal.aborted) {
     return Promise.resolve({ status: "error", error: "Aborted" });
   }
+  const spawnImpl = opts?.spawnImpl ?? spawn;
 
   return new Promise<AccountUsageResult>((resolve) => {
     let buffer = "";
     let resolved = false;
     let rpcId = 0;
 
-    const child = spawn(
+    const child = spawnImpl(
       "codex",
       ["-s", "read-only", "-a", "untrusted", "app-server"],
       {
@@ -158,6 +171,29 @@ export function fetchCodexUsage(
       clientInfo: { name: "pier", version: "1.0.0" },
     });
 
+    function handleInitResponse(error?: { message: string }): void {
+      // initialize 也可能返回 JSON-RPC error（协议不兼容 / codex 升级后 client
+      // 不受支持）。不检查会盲目往下发 initialized + rateLimits，服务端退出后
+      // 用户只看到笼统的 "RPC process exited unexpectedly"，真实错误被吞。
+      if (error) {
+        settle({ status: "error", error: error.message }, { kill: true });
+        return;
+      }
+      sendNotification("initialized");
+      rateLimitsId = sendRpc("account/rateLimits/read");
+    }
+
+    function handleRateLimitsResponse(
+      error: { message: string } | undefined,
+      result: unknown
+    ): void {
+      if (error) {
+        settle({ status: "error", error: error.message }, { kill: true });
+        return;
+      }
+      settle(parseRateLimitsResult(result), { kill: true });
+    }
+
     function processLine(line: string): void {
       if (!line) {
         return;
@@ -172,16 +208,11 @@ export function fetchCodexUsage(
         return; // 跳过服务端通知（无 id）
       }
       if (msg.id === initId) {
-        sendNotification("initialized");
-        rateLimitsId = sendRpc("account/rateLimits/read");
+        handleInitResponse(msg.error);
         return;
       }
       if (rateLimitsId !== null && msg.id === rateLimitsId) {
-        if (msg.error) {
-          settle({ status: "error", error: msg.error.message }, { kill: true });
-          return;
-        }
-        settle(parseRateLimitsResult(msg.result), { kill: true });
+        handleRateLimitsResponse(msg.error, msg.result);
       }
     }
 

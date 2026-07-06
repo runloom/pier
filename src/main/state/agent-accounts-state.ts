@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { rename } from "node:fs/promises";
 import { agentAccountSchema } from "@shared/contracts/agent-accounts.ts";
 import { z } from "zod";
 import {
@@ -45,9 +47,26 @@ export function createAgentAccountsStateStore(
   return {
     async init(): Promise<AgentAccountsFileState> {
       const raw = await store.init();
-      // Zod 校验——损坏/版本不匹配时回退默认值
+      // Zod 校验——schema 不符（如未来版本 version:2、字段损坏）时回退默认值。
       const result = agentAccountsFileStateSchema.safeParse(raw);
       if (!result.success) {
+        // 直接 replace(DEFAULTS) 会把空注册表原子写覆盖磁盘，账号记录永久丢失，
+        // 而托管凭据目录 agent-accounts/codex/<id> 成孤儿无从恢复。
+        // 先把原文件改名备份（保留可恢复的账号记录），再重置内存态。
+        if (existsSync(filePath)) {
+          const backupPath = `${filePath}.corrupt-${Date.now()}`;
+          try {
+            await rename(filePath, backupPath);
+            console.error(
+              `[agent-accounts] 状态文件 schema 校验失败，已备份到 ${backupPath} 并重置；托管凭据目录保留，可手动恢复`
+            );
+          } catch (err) {
+            console.error(
+              "[agent-accounts] 状态文件损坏且备份失败，仍将重置为默认值：",
+              err instanceof Error ? err.message : String(err)
+            );
+          }
+        }
         store.replace(DEFAULTS);
         return DEFAULTS;
       }
