@@ -1898,6 +1898,58 @@ describe("git builtin plugin", () => {
     expect(pill).toHaveTextContent("upstream gone");
   });
 
+  it("no upstream 状态展示带文字胶囊且不会复用未跟踪图标", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/no-upstream",
+        mergedIntoDefault: null,
+        oid: "abc123",
+        upstream: null,
+        upstreamGone: false,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 1 },
+      delta: null,
+      files: [],
+      remoteSync: null,
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/no-upstream" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const pill = await screen.findByTestId("no-upstream-pill");
+    expect(within(pill).getByText("no upstream")).toBeVisible();
+
+    const trigger = screen.getByTestId("worktree-status-trigger");
+    expect(
+      trigger.querySelectorAll('[data-git-icon="git-branch-plus"]')
+    ).toHaveLength(1);
+
+    const dirtyIndicator = screen.getByTestId("git-dirty-indicator");
+    const untrackedIcons = dirtyIndicator.querySelectorAll(
+      '[data-git-icon="git-branch-plus"]'
+    );
+    expect(untrackedIcons).toHaveLength(1);
+    expect(trigger.querySelector('[data-git-icon="git-branch-plus"]')).toBe(
+      untrackedIcons[0]
+    );
+  });
   it("分支已合入默认分支时展示 merged 胶囊，可与 gone 胶囊共存", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {
