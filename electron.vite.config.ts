@@ -93,14 +93,16 @@ export default defineConfig({
       // 固定预打包集合, 避免运行中"Re-optimizing dependencies"造成新旧
       // chunk 混载(长驻 dev 会话叠加 HMR 时尤其致命)。
       include: ["react", "react-dom", "react-grid-layout"],
-      esbuildOptions: {
-        define: {
-          // react-draggable 的 log() 无条件读 process.env.DRAGGABLE_DEBUG,
-          // esbuild 预打包默认只替换 NODE_ENV。dev renderer 走 http:// 加载,
-          // Electron 不给远程内容注入 process 全局 → 每次 mousedown 在
-          // handleDragStart 入口抛 ReferenceError 且被 React 吞掉, 表现为
-          // dev 拖拽/调整尺寸全部失效; prod 走 file:// 有 process 全局故无恙。
-          "process.env.DRAGGABLE_DEBUG": "undefined",
+      rolldownOptions: {
+        transform: {
+          define: {
+            // react-draggable 的 log() 无条件读 process.env.DRAGGABLE_DEBUG,
+            // Vite 依赖预构建默认只替换 NODE_ENV。dev renderer 走 http:// 加载,
+            // Electron 不给远程内容注入 process 全局 → 每次 mousedown 在
+            // handleDragStart 入口抛 ReferenceError 且被 React 吞掉, 表现为
+            // dev 拖拽/调整尺寸全部失效; prod 走 file:// 有 process 全局故无恙。
+            "process.env.DRAGGABLE_DEBUG": "undefined",
+          },
         },
       },
     },
