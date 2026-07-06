@@ -10,6 +10,7 @@ export type GitStatusDropdownActionId =
   | "openChanges"
   | "pull"
   | "push"
+  | "switchBranch"
   | "switchWorktree"
   | "syncChanges";
 
@@ -91,6 +92,9 @@ const ACTIONS = {
   },
   push: {
     id: "push",
+  },
+  switchBranch: {
+    id: "switchBranch",
   },
   switchWorktree: {
     id: "switchWorktree",
@@ -357,8 +361,17 @@ export function deriveGitStatusDropdownModel(
     return {
       ...base,
       actions: syncAction
-        ? [syncAction, action("switchWorktree"), action("openChanges")]
-        : [action("switchWorktree"), action("openChanges")],
+        ? [
+            syncAction,
+            action("switchBranch"),
+            action("switchWorktree"),
+            action("openChanges"),
+          ]
+        : [
+            action("switchBranch"),
+            action("switchWorktree"),
+            action("openChanges"),
+          ],
       statusGroups,
       variant: "completed",
     };
@@ -371,6 +384,7 @@ export function deriveGitStatusDropdownModel(
     actions: [
       ...(syncAction ? [syncAction] : []),
       action("openChanges"),
+      action("switchBranch"),
       action("switchWorktree"),
     ],
     statusGroups,

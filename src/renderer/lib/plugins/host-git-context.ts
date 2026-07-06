@@ -20,6 +20,10 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.abortRebase(cwd);
     },
+    checkoutBranch: (cwd, name) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.checkoutBranch(cwd, name);
+    },
     continueRebase: (cwd) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.continueRebase(cwd);

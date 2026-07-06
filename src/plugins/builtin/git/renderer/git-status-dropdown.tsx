@@ -13,6 +13,7 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   Download,
   FileDiff,
+  FolderGit,
   GitBranch,
   type LucideIcon,
   RefreshCw,
@@ -37,7 +38,8 @@ const ACTION_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
   openChanges: FileDiff,
   pull: Download,
   push: Upload,
-  switchWorktree: GitBranch,
+  switchBranch: GitBranch,
+  switchWorktree: FolderGit,
   syncChanges: RefreshCw,
 };
 
@@ -56,6 +58,10 @@ const ACTION_LABELS: Record<
   push: {
     fallback: "Push Changes",
     key: "statusDropdownPush",
+  },
+  switchBranch: {
+    fallback: "Switch Branch",
+    key: "statusDropdownSwitchBranch",
   },
   switchWorktree: {
     fallback: "Switch Worktree",

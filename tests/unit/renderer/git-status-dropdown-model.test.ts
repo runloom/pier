@@ -153,7 +153,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["push", "openChanges", "switchWorktree"]);
+    ).toEqual(["push", "openChanges", "switchBranch", "switchWorktree"]);
   });
 
   it("offers pull when the clean branch is only behind its upstream", () => {
@@ -171,7 +171,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["pull", "openChanges", "switchWorktree"]);
+    ).toEqual(["pull", "openChanges", "switchBranch", "switchWorktree"]);
   });
 
   it("offers sync when the clean branch is both ahead and behind", () => {
@@ -189,7 +189,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["syncChanges", "openChanges", "switchWorktree"]);
+    ).toEqual(["syncChanges", "openChanges", "switchBranch", "switchWorktree"]);
   });
 
   it("does not offer pull or sync when local changes could be disturbed", () => {
@@ -242,7 +242,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["openChanges", "switchWorktree"]);
+    ).toEqual(["openChanges", "switchBranch", "switchWorktree"]);
     expect(
       actionIds(
         makeStatus({
@@ -257,7 +257,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["switchWorktree", "openChanges"]);
+    ).toEqual(["switchBranch", "switchWorktree", "openChanges"]);
   });
 
   it("models rebasing conflicts without switch worktree or stash", () => {
@@ -346,6 +346,7 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(model.variant).toBe("completed");
     expect(model.actions.map((action) => action.id)).toEqual([
+      "switchBranch",
       "switchWorktree",
       "openChanges",
     ]);
@@ -381,6 +382,12 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(model.variant).toBe("clean");
     expect(summaryText(model)).toBe("No local changes · ↑2 ↓3");
+    expect(model.actions.map((action) => action.id)).toEqual([
+      "syncChanges",
+      "openChanges",
+      "switchBranch",
+      "switchWorktree",
+    ]);
     expect(model.statusGroups).toEqual([
       { parts: [{ label: "No local changes", tone: "default" }] },
       {

@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitRemoteOperationResult } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import { openSwitchBranchPick } from "./git-branch-actions.ts";
 import { pluginText } from "./git-plugin-text.ts";
 import type {
   GitStatusDropdownActionId,
@@ -93,6 +94,11 @@ export async function runGitStatusDropdownAction({
     await runRemoteAction(pluginContext, actionId, () =>
       pluginContext.git.sync(model.worktreePath)
     );
+    return;
+  }
+
+  if (actionId === "switchBranch") {
+    await openSwitchBranchPick(pluginContext, { cwd: model.worktreePath });
     return;
   }
 

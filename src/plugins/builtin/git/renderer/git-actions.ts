@@ -2,6 +2,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   registerMergeAction,
   registerRebaseAction,
+  registerSwitchBranchAction,
 } from "./git-branch-actions.ts";
 import {
   registerMergeAbortAction,
@@ -20,6 +21,7 @@ import {
 export function registerGitActions(context: RendererPluginContext): () => void {
   const disposers = [
     registerMergeAction(context),
+    registerSwitchBranchAction(context),
     registerMergeAbortAction(context),
     registerStashAction(context),
     registerStashIncludeUntrackedAction(context),

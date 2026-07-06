@@ -242,6 +242,7 @@ export interface RendererPluginContext {
   git: {
     abortMerge(cwd: string): Promise<GitMergeAbortResult>;
     abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
+    checkoutBranch(cwd: string, name: string): Promise<boolean>;
     continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
     discardChanges(cwd: string, paths: string[]): Promise<boolean>;
     getDiffPatch(

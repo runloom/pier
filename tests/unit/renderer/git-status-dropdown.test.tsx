@@ -69,8 +69,23 @@ const REBASE_MODEL = model({
   variant: "active",
 });
 
+const CLEAN_MODEL = model({
+  actions: [
+    { id: "openChanges" },
+    { id: "switchBranch" },
+    { id: "switchWorktree" },
+  ],
+  statusGroups: [{ parts: [{ label: "No local changes", tone: "default" }] }],
+  variant: "clean",
+});
+
 const AHEAD_MODEL = model({
-  actions: [{ id: "push" }, { id: "openChanges" }, { id: "switchWorktree" }],
+  actions: [
+    { id: "push" },
+    { id: "openChanges" },
+    { id: "switchBranch" },
+    { id: "switchWorktree" },
+  ],
   statusGroups: [
     { parts: [{ label: "No local changes", tone: "default" }] },
     { parts: [{ assistiveLabel: "ahead", label: "↑2", tone: "muted" }] },
@@ -79,7 +94,12 @@ const AHEAD_MODEL = model({
 });
 
 const BEHIND_MODEL = model({
-  actions: [{ id: "pull" }, { id: "openChanges" }, { id: "switchWorktree" }],
+  actions: [
+    { id: "pull" },
+    { id: "openChanges" },
+    { id: "switchBranch" },
+    { id: "switchWorktree" },
+  ],
   statusGroups: [
     { parts: [{ label: "No local changes", tone: "default" }] },
     { parts: [{ assistiveLabel: "behind", label: "↓2", tone: "muted" }] },
@@ -91,6 +111,7 @@ const DIVERGED_MODEL = model({
   actions: [
     { id: "syncChanges" },
     { id: "openChanges" },
+    { id: "switchBranch" },
     { id: "switchWorktree" },
   ],
   statusGroups: [
@@ -292,6 +313,72 @@ describe("GitStatusDropdown", () => {
     await waitFor(() => {
       expect(pluginContext.commandPalette.openQuickPick).toHaveBeenCalled();
     });
+  });
+
+  it("opens branch quick pick from the clean dropdown and switches the selected branch", async () => {
+    const pluginContext = makePluginContext();
+    vi.mocked(pluginContext.panels.getActiveContext).mockReturnValue({
+      ...PANEL_CONTEXT,
+      cwd: "/workspace/other",
+      gitRoot: "/workspace/other",
+      openedPath: "/workspace/other",
+      projectRootPath: "/workspace/other",
+      worktreeKey: "/workspace/other",
+      worktreeRoot: "/workspace/other",
+    });
+    pluginContext.git.searchBranches = vi.fn(async () => ({
+      currentBranch: "feature/terminal-status",
+      durationMs: 3,
+      items: [
+        {
+          aheadFromCurrent: null,
+          authorName: null,
+          behindFromCurrent: null,
+          commit: "abc123",
+          committerDate: null,
+          current: false,
+          id: "refs/heads/main",
+          kind: "local" as const,
+          label: "main",
+          name: "main",
+          pinReason: null,
+          refName: "refs/heads/main",
+          subject: null,
+        },
+      ],
+      message: null,
+      status: "ok" as const,
+    }));
+    pluginContext.git.checkoutBranch = vi.fn(async () => true);
+    await openDropdown(pluginContext, CLEAN_MODEL);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Switch Branch" }));
+
+    await waitFor(() => {
+      expect(pluginContext.commandPalette.openQuickPick).toHaveBeenCalled();
+    });
+    const quickPick = vi.mocked(pluginContext.commandPalette.openQuickPick).mock
+      .calls[0]?.[0];
+    const branchItem = quickPick?.items?.find(
+      (candidate) => candidate.id === "refs/heads/main"
+    );
+    if (!(quickPick && branchItem)) {
+      throw new Error("expected switch branch quick pick");
+    }
+
+    await quickPick.onAccept(branchItem);
+
+    expect(pluginContext.git.searchBranches).toHaveBeenCalledWith(
+      "/workspace/pier",
+      { limit: 1000, query: "" }
+    );
+    expect(pluginContext.git.checkoutBranch).toHaveBeenCalledWith(
+      "/workspace/pier",
+      "main"
+    );
+    expect(pluginContext.notifications.loading).toHaveBeenCalledWith(
+      "Switching branch..."
+    );
   });
 
   it("closes the dropdown when an action is selected", async () => {

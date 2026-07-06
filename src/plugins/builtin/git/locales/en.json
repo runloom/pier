@@ -11,6 +11,12 @@
       "description": "Select a branch and merge it into the current branch.",
       "title": "Git: Merge Branch..."
     },
+    "pier.git.switchBranch": {
+      "aliases": ["git switch", "switch branch", "checkout branch"],
+      "category": "Git",
+      "description": "Select a local branch and switch the current worktree to it.",
+      "title": "Git: Switch Branch..."
+    },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "abort merge"],
       "category": "Git",
@@ -138,6 +144,7 @@
     "ui.statusDropdownPush": "Push Changes",
     "ui.statusDropdownPushing": "Pushing changes…",
     "ui.statusDropdownPushSuccess": "Changes pushed",
+    "ui.statusDropdownSwitchBranch": "Switch Branch",
     "ui.statusDropdownSwitchWorktree": "Switch Worktree",
     "ui.statusDropdownSync": "Sync Changes",
     "ui.statusDropdownSyncing": "Syncing changes…",
@@ -218,6 +225,7 @@
     "ui.gitConflictOpenReview": "Open Review",
     "ui.gitLoadingBranches": "Loading branches...",
     "ui.gitLoadingMerge": "Merging...",
+    "ui.gitLoadingSwitchBranch": "Switching branch...",
     "ui.gitLoadingMergeAbort": "Aborting merge...",
     "ui.gitLoadingStash": "Stashing changes...",
     "ui.gitLoadingStashPop": "Applying stash...",
@@ -228,7 +236,9 @@
     "ui.gitLoadingRebaseContinue": "Continuing rebase...",
     "ui.gitLoadingUndoCommit": "Undoing commit...",
     "ui.gitNoOtherBranches": "No other branches found",
+    "ui.gitSwitchSelectBranch": "Select a branch to switch to",
     "ui.gitMergeSelectBranch": "Select a branch to merge into the current branch",
+    "ui.gitSwitchSuccess": "Switched to branch {{branch}}",
     "ui.gitRebaseSelectBranch": "Select a branch to rebase onto",
     "ui.gitMergeSuccess": "Successfully merged branch {{branch}}",
     "ui.gitMergeAlreadyUpToDate": "Branch {{branch}} has no new commits to merge.",

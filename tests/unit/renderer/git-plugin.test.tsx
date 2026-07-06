@@ -135,6 +135,11 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       title: "Git: Open Changes",
     },
     {
+      id: "pier.git.switchBranch",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Switch Branch...",
+    },
+    {
       id: "pier.git.merge",
       permissions: ["git:read", "git:write"],
       title: "Git: Merge Branch...",
@@ -222,6 +227,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "pier.git.merge": {
               aliases: ["locale git merge"],
               title: "Git: Merge Branch...",
+            },
+            "pier.git.switchBranch": {
+              aliases: ["locale git switch branch"],
+              title: "Git: Switch Branch...",
             },
             "pier.git.mergeAbort": {
               aliases: ["locale git merge abort"],
@@ -315,6 +324,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "pier.git.merge": {
               aliases: ["本地化合并分支"],
               title: "Git: 合并分支...",
+            },
+            "pier.git.switchBranch": {
+              aliases: ["本地化切换分支"],
+              title: "Git: 切换分支...",
             },
             "pier.git.mergeAbort": {
               aliases: ["本地化中止合并"],
@@ -747,6 +760,7 @@ describe("git builtin plugin", () => {
     expect(actionRegistry.get("pier.worktree.create")).toBeDefined();
     expect(actionRegistry.get("pier.worktree.delete")).toBeDefined();
     expect(actionRegistry.get("pier.worktree.prune")).toBeDefined();
+    expect(actionRegistry.get("pier.git.switchBranch")).toBeDefined();
     expect(actionRegistry.get("pier.git.merge")).toBeDefined();
     expect(actionRegistry.get("pier.git.stash")).toBeDefined();
     expect(actionRegistry.get("pier.git.rebaseContinue")).toBeDefined();
@@ -1128,6 +1142,66 @@ describe("git builtin plugin", () => {
     expect(toastMocks.loading).toHaveBeenCalledWith("Merging...");
     expect(toastMocks.success).toHaveBeenCalledWith(
       "Successfully merged branch feature/git-panel",
+      { id: "git-loading-toast" }
+    );
+  });
+
+  it("Git 切换分支命令只列出本地分支并切换选中分支", async () => {
+    vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
+      currentBranch: "main",
+      durationMs: 4,
+      items: [
+        branchOption({
+          commit: "def4567890",
+          current: true,
+          kind: "local",
+          name: "main",
+          refName: "refs/heads/main",
+        }),
+        branchOption({
+          commit: "aaa1111111",
+          kind: "remote",
+          name: "origin/feature/remote",
+          refName: "refs/remotes/origin/feature/remote",
+        }),
+        branchOption({
+          commit: "bbb2222222",
+          kind: "local",
+          name: "feature/local",
+          refName: "refs/heads/feature/local",
+        }),
+      ],
+      message: null,
+      status: "ok",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.switchBranch")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    expect(quickPick).toMatchObject({
+      placeholder: "Select a branch to switch to",
+      title: "Git: Switch Branch...",
+    });
+    expect(quickPick?.items?.map((item) => item.id)).toEqual([
+      "refs/heads/feature/local",
+    ]);
+    const item = quickPick?.items?.find(
+      (candidate) => candidate.id === "refs/heads/feature/local"
+    );
+    if (!(quickPick && item)) {
+      throw new Error("expected switch branch quick pick");
+    }
+
+    await quickPick.onAccept(item);
+
+    expect(window.pier.git.checkoutBranch).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      "feature/local"
+    );
+    expect(toastMocks.loading).toHaveBeenCalledWith("Switching branch...");
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "Switched to branch feature/local",
       { id: "git-loading-toast" }
     );
   });
