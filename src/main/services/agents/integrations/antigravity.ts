@@ -16,14 +16,14 @@ import {
  * 信源：官方 changelog/issue 汇证（medium-high confidence——Antigravity
  * 未完全公开 hook schema 文档，以下依据 changelog 与社区 issue 交叉验证）。
  *
- * 配置文件：~/.gemini/config/hooks.json（orca 的判断是对的：Antigravity
+ * 配置文件：~/.gemini/config/hooks.json（Antigravity
  * 基于 Gemini 衍生，沿用 Gemini 的 hooks 配置路径；loomdesk 参考实现把它
  * 当作未注册模块 / 使用 ~/.antigravity/settings.json 是错的，此前版本沿
  * 用了 loomdesk 的错误路径，现已改正）。
  *
  * schema 形状：官方未完全公开，采用与 claude 家族一致的嵌套 hooks 标准形
- * （{Event: [{matcher?, hooks:[{type,command}]}]}）。不采用 orca bundle
- * 观察到的 'pier-status': {Event: definition} 扁平键形——那是 orca 自己
+ * （{Event: [{matcher?, hooks:[{type,command}]}]}）。不采用
+ * 'pier-status': {Event: definition} 扁平键形——那是外部
  * 管理文件的内部约定，不代表 Antigravity 原生 schema。
  *
  * 官方五核心检查点（changelog + issue 汇证）：

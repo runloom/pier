@@ -11,12 +11,12 @@ describe("agentKindSchema", () => {
     expect(agentKindSchema.parse("claude")).toBe("claude");
     expect(() => agentKindSchema.parse("nope")).toThrow();
   });
-  it("含 orca parity 补全的 agent", () => {
+  it("含补全的 agent", () => {
     expect(agentKindSchema.parse("qwen-code")).toBe("qwen-code");
     expect(agentKindSchema.parse("goose")).toBe("goose");
     expect(agentKindSchema.parse("openclaude")).toBe("openclaude");
   });
-  it("不含 orca 专有的 claude-agent-teams", () => {
+  it("不含 claude-agent-teams", () => {
     expect(() => agentKindSchema.parse("claude-agent-teams")).toThrow();
   });
 });

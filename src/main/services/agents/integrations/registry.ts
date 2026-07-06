@@ -5,6 +5,7 @@ import { augIntegration } from "./aug.ts";
 import { autohandIntegration } from "./autohand.ts";
 import { claudeIntegration } from "./claude.ts";
 import { clineIntegration } from "./cline.ts";
+import { codebuddyIntegration } from "./codebuddy.ts";
 import { codexIntegration } from "./codex.ts";
 import { commandCodeIntegration } from "./command-code.ts";
 import { copilotIntegration } from "./copilot.ts";
@@ -39,6 +40,7 @@ export const AGENT_HOOK_INTEGRATIONS: readonly AgentHookIntegration[] = [
   augIntegration,
   autohandIntegration,
   claudeIntegration,
+  codebuddyIntegration,
   clineIntegration,
   codexIntegration,
   commandCodeIntegration,

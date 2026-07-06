@@ -81,8 +81,8 @@ ${eventLines}
 
 /**
  * Python 插件入口。emit 内嵌：`os.environ` 读三个 PIER_ 变量, 缺任一静默
- * no-op；`open(..., "a")` append 写 JSONL, except 吞异常（orca
- * hook-service.ts 同款纪律, payload 精简为 pier v1 agentEvent schema）。
+ * no-op；`open(..., "a")` append 写 JSONL, except 吞异常
+ * （payload 精简为 pier v1 agentEvent schema）。
  * POSIX 保证 <4KB append 原子。
  */
 export function buildHermesPluginInit(): string {
