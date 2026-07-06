@@ -62,6 +62,7 @@ hermes nousresearch.com
 openclaw openclaw.ai
 devin devin.ai
 codebuddy lobehub:codebuddy
+qodercli lobehub:qoder
 EOF
 
 echo "Done. (openclaude.png 手动维护，不在此列。)"

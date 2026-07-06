@@ -331,6 +331,15 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     homepageUrl: "https://cnb.cool/codebuddy/codebuddy-code",
     oneShotArgs: (prompt) => ["-p", prompt],
   },
+  {
+    id: "qodercli",
+    label: "Qoder",
+    launchCmd: "qodercli",
+    detectCmd: "qodercli",
+    expectedProcess: "qodercli",
+    homepageUrl: "https://qoder.com/cli",
+    oneShotArgs: (prompt) => ["-p", prompt],
+  },
 ];
 
 const byId = new Map<string, AgentCatalogEntry>(

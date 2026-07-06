@@ -26,6 +26,7 @@ import { ompIntegration } from "./omp.ts";
 import { openclaudeIntegration } from "./openclaude.ts";
 import { opencodeIntegration } from "./opencode.ts";
 import { piIntegration } from "./pi.ts";
+import { qodercliIntegration } from "./qodercli.ts";
 import { qwenCodeIntegration } from "./qwen-code.ts";
 import type { AgentHookIntegration } from "./types.ts";
 
@@ -62,6 +63,7 @@ export const AGENT_HOOK_INTEGRATIONS: readonly AgentHookIntegration[] = [
   opencodeIntegration,
   openclaudeIntegration,
   piIntegration,
+  qodercliIntegration,
   qwenCodeIntegration,
 ];
 

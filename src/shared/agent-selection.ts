@@ -5,6 +5,7 @@ export const AGENT_AUTO_PICK_ORDER: readonly AgentKind[] = [
   "claude",
   "openclaude",
   "codebuddy",
+  "qodercli",
   "codex",
   "grok",
   "copilot",

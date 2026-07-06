@@ -36,6 +36,7 @@ export const agentKindSchema = z.enum([
   "devin",
   "openclaude",
   "codebuddy",
+  "qodercli",
 ]);
 export type AgentKind = z.infer<typeof agentKindSchema>;
 
@@ -92,6 +93,8 @@ export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   // CodeBuddy Code 是 Claude Code fork,同 flag(--dangerously-skip-permissions,
   // 由 `codebuddy --help` 核定)。
   codebuddy: "--dangerously-skip-permissions",
+  // Qoder CLI：`qodercli --yolo`（docs.qoder.com/zh/cli 核定）。
+  qodercli: "--yolo",
   // 其余 agent 无 yolo flag：goose 走 YOLO_ENV，opencode/kilo 见 UNSUPPORTED_ARGS。
 };
 
