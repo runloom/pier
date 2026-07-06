@@ -24,9 +24,13 @@ export const gitBranchInfoSchema = z.object({
   /** upstream 已配置但对端 ref 已删（`for-each-ref upstream:track` 含 `[gone]`）。 */
   upstreamGone: z.boolean(),
   /**
-   * HEAD 是否已是默认分支 remote-tracking ref 的祖先（merge-base --is-ancestor）。
+   * 当前分支工作是否有本地证据表明已合入默认分支。
    * null = 不适用：detached / 无 origin/HEAD / 当前就在默认分支。
-   * squash merge 检测不到（commit 被重写），是已知限制。
+   * 判据是有界、保守的：merge commit 侧支证据；本地默认分支 reflog
+   * 中晚于当前分支 HEAD reflog 的 ff merge 证据；以及 `git cherry`
+   * patch 等价补充单提交 squash / rebase-merge（own <= 32、behind <= 2000）。
+   * 刚从默认分支新建的零自有提交分支不算已合并；多提交 squash、缺本地
+   * reflog 的远端/拉取式 ff，以及超过上限的大批量 rebase 可能保守返回 false。
    */
   mergedIntoDefault: z.boolean().nullable(),
 });
@@ -271,6 +275,14 @@ const gitUnavailableResultSchema = z.object({
   kind: z.literal("unavailable"),
   message: z.string().nullable(),
 });
+
+export const gitRemoteOperationResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitRemoteOperationResult = z.infer<
+  typeof gitRemoteOperationResultSchema
+>;
 
 export const gitMergeResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ok"), message: z.string() }),

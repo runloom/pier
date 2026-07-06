@@ -3,13 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execGit as execGitRaw } from "@main/services/git-exec.ts";
 import {
+  clearMergedMemoForTests,
+  detectMergedIntoDefault,
+} from "@main/services/git-merged-detector.ts";
+import {
   type DefaultBranchCandidates,
   defaultBranchCandidates,
   fetchRefsTable,
+  type RefsTable,
 } from "@main/services/git-refs-table.ts";
 import {
-  clearMergedMemoForTests,
-  detectMergedIntoDefault,
   detectRepoState,
   type ExecGitFn,
   getLineDelta,
@@ -38,17 +41,48 @@ async function candidatesOf(dir: string): Promise<DefaultBranchCandidates> {
   return defaultBranchCandidates(table);
 }
 
+function upstreamShortNameFor(
+  table: RefsTable,
+  branch: string | null
+): string | null {
+  if (branch === null) {
+    return null;
+  }
+  const refname = `refs/heads/${branch}`;
+  const upstream = table.entries.find(
+    (entry) => entry.refname === refname
+  )?.upstream;
+  if (!upstream) {
+    return null;
+  }
+  if (upstream.startsWith("refs/remotes/")) {
+    return upstream.split("/").slice(2).join("/");
+  }
+  if (upstream.startsWith("refs/heads/")) {
+    return upstream.split("/").slice(2).join("/");
+  }
+  return upstream;
+}
+
 /** 多数场景的公共路径：现取 (headOid, candidates) 后调用被测函数。 */
 async function detectFor(
   dir: string,
   branch: string | null
 ): Promise<boolean | null> {
+  const table = await fetchRefsTable(
+    (args, cwd) => execGitRaw(args, { cwd }),
+    dir
+  );
+  if (table === null) {
+    throw new Error(`refs table unavailable: ${dir}`);
+  }
   return detectMergedIntoDefault(
     execGit,
     dir,
     branch,
     await headOidOf(dir),
-    await candidatesOf(dir)
+    defaultBranchCandidates(table),
+    upstreamShortNameFor(table, branch)
   );
 }
 
@@ -245,7 +279,6 @@ describe("detectMergedIntoDefault", () => {
     );
   });
 
-  // 本次修复的核心回归：HEAD == 默认分支 tip（零自有提交）不是"已合并"
   it("从默认分支 tip 新建分支（零自有提交）→ false", async () => {
     const { dir, run } = await makeClonePair("pier-merged-fresh-");
     tempDirs.push(join(dir, ".."));
@@ -253,7 +286,7 @@ describe("detectMergedIntoDefault", () => {
     expect(await detectFor(dir, "feature/fresh")).toBe(false);
   });
 
-  it("新建分支后 main 继续前进（HEAD 在 first-parent 主链上但落后）→ false", async () => {
+  it("新建分支后 main 继续前进（HEAD 在默认分支历史里但无自有提交）→ false", async () => {
     const { dir, run } = await makeClonePair("pier-merged-behind-");
     tempDirs.push(join(dir, ".."));
     await run(["checkout", "-q", "-b", "feature/behind"]);
@@ -293,7 +326,7 @@ describe("detectMergedIntoDefault", () => {
     expect(await detectFor(dir, "feature/a")).toBe(true);
   });
 
-  it("ff 合并（图上无 merge commit 痕迹）→ false（已知限制固化）", async () => {
+  it("ff 合并（默认分支 tip 已包含当前分支 tip）→ true", async () => {
     const { dir, run } = await makeClonePair("pier-merged-ff-");
     tempDirs.push(join(dir, ".."));
     await run(["checkout", "-q", "-b", "feature/ff"]);
@@ -302,7 +335,116 @@ describe("detectMergedIntoDefault", () => {
     await run(["merge", "-q", "--ff-only", "feature/ff"]);
     await run(["push", "-q", "origin", "main"]);
     await run(["checkout", "-q", "feature/ff"]);
-    expect(await detectFor(dir, "feature/ff")).toBe(false);
+    expect(await detectFor(dir, "feature/ff")).toBe(true);
+  });
+
+  it("远端分支 ff 合入默认分支后，本地同名分支 → true", async () => {
+    const { dir, run } = await makeClonePair("pier-merged-remote-ff-");
+    tempDirs.push(join(dir, ".."));
+    await run(["checkout", "-q", "-b", "feature/remote-ff"]);
+    await run(["commit", "-q", "--allow-empty", "-m", "work"]);
+    await run(["push", "-q", "-u", "origin", "feature/remote-ff"]);
+    await run(["checkout", "-q", "main"]);
+    await run(["merge", "-q", "--ff-only", "origin/feature/remote-ff"]);
+    await run(["push", "-q", "origin", "main"]);
+    await run(["checkout", "-q", "feature/remote-ff"]);
+    expect(await detectFor(dir, "feature/remote-ff")).toBe(true);
+  });
+
+  it("同名旧分支曾 ff 合入，新建零自有提交分支不复用旧 reflog 证据 → false", async () => {
+    const { dir } = await makeClonePair("pier-merged-reused-branch-");
+    tempDirs.push(join(dir, ".."));
+    const runAt = (date: string, args: string[]) =>
+      execGitRaw(args, {
+        cwd: dir,
+        env: { GIT_COMMITTER_DATE: date },
+      });
+
+    await runAt("2026-01-01T00:00:00Z", [
+      "checkout",
+      "-q",
+      "-b",
+      "feature/reuse",
+    ]);
+    await runAt("2026-01-01T00:00:10Z", [
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "work",
+    ]);
+    await runAt("2026-01-01T00:00:20Z", ["checkout", "-q", "main"]);
+    await runAt("2026-01-01T00:00:30Z", [
+      "merge",
+      "-q",
+      "--ff-only",
+      "feature/reuse",
+    ]);
+    await runAt("2026-01-01T00:00:35Z", ["checkout", "-q", "feature/reuse"]);
+    expect(await detectFor(dir, "feature/reuse")).toBe(true);
+    await runAt("2026-01-01T00:00:36Z", ["checkout", "-q", "main"]);
+    await runAt("2026-01-01T00:00:40Z", ["branch", "-D", "feature/reuse"]);
+    await runAt("2026-01-01T00:00:50Z", [
+      "checkout",
+      "-q",
+      "-b",
+      "feature/reuse",
+    ]);
+
+    expect(await detectFor(dir, "feature/reuse")).toBe(false);
+  });
+
+  it("HEAD 等于默认分支 tip 但无匹配 ff reflog 证据 → false", async () => {
+    const headOid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const calls: string[] = [];
+    const fakeExec: ExecGitFn = (args, cwd) => {
+      calls.push(`${cwd} ${args.join(" ")}`);
+      if (args.join(" ") === `merge-base --is-ancestor ${headOid} ${headOid}`) {
+        return Promise.resolve("");
+      }
+      if (
+        args[0] === "reflog" &&
+        args[1] === "show" &&
+        args.at(-1) === "refs/heads/main"
+      ) {
+        return Promise.resolve(`${300}\0${headOid}\0fetch: fast-forward\n`);
+      }
+      if (
+        args[0] === "reflog" &&
+        args[1] === "show" &&
+        args.at(-1) === "refs/heads/feature/no-proof"
+      ) {
+        return Promise.resolve(
+          [
+            `${200}\0${headOid}\0commit: work`,
+            `${100}\0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\0branch: Created from main`,
+          ].join("\n")
+        );
+      }
+      return Promise.reject(
+        new Error(`unexpected git call: ${args.join(" ")}`)
+      );
+    };
+
+    expect(
+      await detectMergedIntoDefault(
+        fakeExec,
+        "/repo/no-proof",
+        "feature/no-proof",
+        headOid,
+        {
+          local: {
+            branchName: "main",
+            oid: headOid,
+            refname: "refs/heads/main",
+          },
+          remote: null,
+        }
+      )
+    ).toBe(false);
+    expect(calls).toContain(
+      "/repo/no-proof reflog show --format=%ct%x00%H%x00%gs refs/heads/main"
+    );
   });
 
   it("单提交分支被 squash 合入 → true（cherry patch 等价路径）", async () => {
@@ -447,5 +589,64 @@ describe("detectMergedIntoDefault", () => {
     ).toBe(true);
     // memo 命中：不再发起任何 git 图查询
     expect(graphCalls).toBe(callsAfterFirst);
+  });
+
+  it("memo key 按仓库路径隔离，避免复用另一个 clone 的 reflog 证据", async () => {
+    const headOid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const tip = {
+      branchName: "main",
+      oid: headOid,
+      refname: "refs/heads/main",
+    };
+    const fakeExec: ExecGitFn = (args, cwd) => {
+      if (args[0] === "merge-base") {
+        return Promise.resolve("");
+      }
+      if (
+        args[0] === "reflog" &&
+        args[1] === "show" &&
+        args.at(-1) === "refs/heads/main"
+      ) {
+        return Promise.resolve(
+          cwd === "/repo/with-proof"
+            ? `${200}\0${headOid}\0merge feature/x: Fast-forward\n`
+            : `${200}\0${headOid}\0fetch: fast-forward\n`
+        );
+      }
+      if (
+        args[0] === "reflog" &&
+        args[1] === "show" &&
+        args.at(-1) === "refs/heads/feature/x"
+      ) {
+        return Promise.resolve(
+          [
+            `${100}\0${headOid}\0commit: work`,
+            `${50}\0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\0branch: Created from main`,
+          ].join("\n")
+        );
+      }
+      return Promise.reject(
+        new Error(`unexpected git call: ${args.join(" ")}`)
+      );
+    };
+
+    await expect(
+      detectMergedIntoDefault(
+        fakeExec,
+        "/repo/with-proof",
+        "feature/x",
+        headOid,
+        { local: tip, remote: null }
+      )
+    ).resolves.toBe(true);
+    await expect(
+      detectMergedIntoDefault(
+        fakeExec,
+        "/repo/without-proof",
+        "feature/x",
+        headOid,
+        { local: tip, remote: null }
+      )
+    ).resolves.toBe(false);
   });
 });

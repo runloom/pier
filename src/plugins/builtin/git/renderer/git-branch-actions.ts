@@ -24,7 +24,7 @@ import {
 } from "./git-command-helpers.ts";
 import { pluginText } from "./git-plugin-text.ts";
 
-type BranchOperation = "merge" | "rebase";
+type BranchOperation = "merge" | "rebase" | "switch";
 
 interface BranchItem extends RendererPluginQuickPickItem {
   data: GitDiffBranchOption;
@@ -39,12 +39,49 @@ function branchItem(branch: GitDiffBranchOption): BranchItem {
   };
 }
 
+function canUseBranchForOperation(
+  branch: GitDiffBranchOption,
+  currentBranch: null | string,
+  operation: BranchOperation
+): boolean {
+  if (branch.current || branch.name === currentBranch) {
+    return false;
+  }
+  return operation === "switch" ? branch.kind === "local" : true;
+}
+
+function branchPickPlaceholder(
+  context: RendererPluginContext,
+  operation: BranchOperation
+): string {
+  if (operation === "rebase") {
+    return pluginText(
+      context,
+      "gitRebaseSelectBranch",
+      "Select a branch to rebase onto"
+    );
+  }
+  if (operation === "switch") {
+    return pluginText(
+      context,
+      "gitSwitchSelectBranch",
+      "Select a branch to switch to"
+    );
+  }
+  return pluginText(
+    context,
+    "gitMergeSelectBranch",
+    "Select a branch to merge into the current branch"
+  );
+}
+
 async function openBranchPick(
   context: RendererPluginContext,
   operation: BranchOperation,
-  title: string
+  title: string,
+  cwdOverride?: string
 ): Promise<void> {
-  const cwd = activeCwdOrMessage(context, title);
+  const cwd = cwdOverride ?? activeCwdOrMessage(context, title);
   if (!cwd) {
     return;
   }
@@ -69,7 +106,9 @@ async function openBranchPick(
     return;
   }
   const items = result.items
-    .filter((branch) => !branch.current && branch.name !== result.currentBranch)
+    .filter((branch) =>
+      canUseBranchForOperation(branch, result.currentBranch, operation)
+    )
     .map(branchItem);
   if (items.length === 0) {
     showInfo(
@@ -92,18 +131,7 @@ async function openBranchPick(
       }
       await runBranchOperation(context, operation, title, cwd, item.data.name);
     },
-    placeholder:
-      operation === "rebase"
-        ? pluginText(
-            context,
-            "gitRebaseSelectBranch",
-            "Select a branch to rebase onto"
-          )
-        : pluginText(
-            context,
-            "gitMergeSelectBranch",
-            "Select a branch to merge into the current branch"
-          ),
+    placeholder: branchPickPlaceholder(context, operation),
     renderItem: (item) =>
       createElement(GitBranchQuickPickRow, {
         branch: item.data as GitDiffBranchOption,
@@ -126,10 +154,38 @@ async function runBranchOperation(
       await runRebase(context, title, cwd, branch);
       return;
     }
+    if (operation === "switch") {
+      await runSwitchBranch(context, title, cwd, branch);
+      return;
+    }
     await runMerge(context, title, cwd, branch);
   } catch (err) {
     await showError(context, title, err);
   }
+}
+
+async function runSwitchBranch(
+  context: RendererPluginContext,
+  title: string,
+  cwd: string,
+  branch: string
+): Promise<void> {
+  const loading = showLoading(
+    context,
+    pluginText(context, "gitLoadingSwitchBranch", "Switching branch...")
+  );
+  try {
+    await context.git.checkoutBranch(cwd, branch);
+  } catch (err) {
+    loading.dismiss();
+    await showError(context, title, err);
+    return;
+  }
+  loading.success(
+    pluginText(context, "gitSwitchSuccess", "Switched to branch {{branch}}", {
+      branch,
+    })
+  );
 }
 
 async function runMerge(
@@ -267,6 +323,39 @@ export function registerMergeAction(
     surfaces: ["command-palette"],
     title: () =>
       commandTitle(context, "pier.git.merge", "Git: Merge Branch..."),
+  });
+}
+
+export function openSwitchBranchPick(
+  context: RendererPluginContext,
+  options: { cwd?: string } = {}
+): Promise<void> {
+  return openBranchPick(
+    context,
+    "switch",
+    commandTitle(context, "pier.git.switchBranch", "Git: Switch Branch..."),
+    options.cwd
+  );
+}
+
+export function registerSwitchBranchAction(
+  context: RendererPluginContext
+): () => void {
+  return context.actions.register({
+    category: "Git",
+    disabledReason: () => disabledReasonForActiveGit(context),
+    enabled: () => enabledForActiveGit(context),
+    handler: async () => openSwitchBranchPick(context),
+    id: "pier.git.switchBranch",
+    metadata: {
+      categoryKey: "git",
+      group: "2_git",
+      iconComponent: GitBranch,
+      sortOrder: 8,
+    },
+    surfaces: ["command-palette"],
+    title: () =>
+      commandTitle(context, "pier.git.switchBranch", "Git: Switch Branch..."),
   });
 }
 

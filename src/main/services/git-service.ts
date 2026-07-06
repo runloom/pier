@@ -10,6 +10,7 @@ import type {
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
+  GitRemoteOperationResult,
   GitRepoInfo,
   GitStashApplyResult,
   GitStashDropResult,
@@ -40,8 +41,11 @@ import {
   listStashes,
   mergeBranch,
   popStash,
+  pullFastForward,
+  pushBranch,
   rebaseBranch,
   stashChanges,
+  syncBranch,
   undoLastCommit,
 } from "./git-operations.ts";
 import {
@@ -125,6 +129,8 @@ export interface GitService {
   listTags(cwd: string): Promise<string[]>;
   merge(cwd: string, branch: string): Promise<GitMergeResult>;
   popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
+  pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;
+  push(cwd: string): Promise<GitRemoteOperationResult>;
   rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
   resolveRef(cwd: string, ref: string): Promise<string>;
   searchBranches(
@@ -137,6 +143,7 @@ export interface GitService {
     cwd: string,
     options: { includeUntracked?: boolean; message?: string }
   ): Promise<GitStashResult>;
+  sync(cwd: string): Promise<GitRemoteOperationResult>;
   undoLastCommit(cwd: string): Promise<GitUndoCommitResult>;
   unstage(cwd: string, request: GitPathsRequest): Promise<void>;
   validateBranchName(cwd: string, name: string): Promise<boolean>;
@@ -450,8 +457,11 @@ export function createGitService({
     applyStash: (cwd, index) => applyStash(execGit, cwd, index),
     dropStash: (cwd, index) => dropStash(execGit, cwd, index),
     popStash: (cwd, index) => popStash(execGit, cwd, index),
+    pullFastForward: (cwd) => pullFastForward(execGit, cwd),
+    push: (cwd) => pushBranch(execGit, cwd),
     rebase: (cwd, branch) => rebaseBranch(execGit, cwd, branch),
     stash: (cwd, options) => stashChanges(execGit, cwd, options),
+    sync: (cwd) => syncBranch(execGit, cwd),
     undoLastCommit: (cwd) => undoLastCommit(execGit, cwd),
   };
 }

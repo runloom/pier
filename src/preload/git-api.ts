@@ -10,6 +10,7 @@ import type {
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
+  GitRemoteOperationResult,
   GitRepoInfo,
   GitStashApplyResult,
   GitStashDropResult,
@@ -23,8 +24,9 @@ import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
-// 注意:写类 git 命令(commit / branch 的增删切)仍保留在 main 命令表,服务 CLI 与未来表面,
-// 但不经 preload 暴露 —— renderer 当前无消费方,收窄本桥可达面,避免闲置写入口扩大攻击面。
+// 注意:commit / branch 增删仍保留在 main 命令表,服务 CLI 与未来表面,
+// 但不经 preload 暴露。renderer 仅暴露当前 UI 已消费的 checkoutBranch 窄口,
+// 避免闲置写入口扩大攻击面。
 
 /** diff 范围/路径选项(IPC 层用值类型;详细 zod 在 contracts/git.ts) */
 export interface GitDiffOptionsValue {
@@ -67,6 +69,7 @@ export interface PierGitAPI {
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
+  checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
   continueRebase: (cwd: string) => Promise<GitRebaseContinueResult>;
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
   dropStash: (cwd: string, index?: number) => Promise<GitStashDropResult>;
@@ -98,6 +101,8 @@ export interface PierGitAPI {
   listTags: (cwd: string) => Promise<string[]>;
   merge: (cwd: string, branch: string) => Promise<GitMergeResult>;
   popStash: (cwd: string, index?: number) => Promise<GitStashPopResult>;
+  pullFastForward: (cwd: string) => Promise<GitRemoteOperationResult>;
+  push: (cwd: string) => Promise<GitRemoteOperationResult>;
   rebase: (cwd: string, branch: string) => Promise<GitRebaseResult>;
   resolveRef: (cwd: string, ref: string) => Promise<string>;
   searchBranches: (
@@ -110,6 +115,7 @@ export interface PierGitAPI {
     cwd: string,
     options?: GitStashOptionsValue
   ) => Promise<GitStashResult>;
+  sync: (cwd: string) => Promise<GitRemoteOperationResult>;
   undoLastCommit: (cwd: string) => Promise<GitUndoCommitResult>;
   unstage: (cwd: string, paths: string[]) => Promise<boolean>;
   validateBranchName: (cwd: string, name: string) => Promise<boolean>;
@@ -188,6 +194,12 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<boolean>({ cwd, paths, type: "git.unstage" }),
   discardChanges: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.discardChanges" }),
+  checkoutBranch: (cwd, name) =>
+    invokePierCommand<boolean>({
+      cwd,
+      name,
+      type: "git.checkoutBranch",
+    }),
   merge: (cwd, branch) =>
     invokePierCommand<GitMergeResult>({
       branch,
@@ -198,6 +210,21 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<GitMergeAbortResult>({
       cwd,
       type: "git.mergeAbort",
+    }),
+  push: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.push",
+    }),
+  pullFastForward: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.pullFastForward",
+    }),
+  sync: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.sync",
     }),
   stash: (cwd, options = {}) =>
     invokePierCommand<GitStashResult>({

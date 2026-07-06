@@ -18,6 +18,8 @@ const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.discardChanges": true,
   "git.merge": true,
   "git.mergeAbort": true,
+  "git.pullFastForward": true,
+  "git.push": true,
   "git.rebase": true,
   "git.rebaseAbort": true,
   "git.rebaseContinue": true,
@@ -26,6 +28,7 @@ const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.stashApply": true,
   "git.stashDrop": true,
   "git.stashPop": true,
+  "git.sync": true,
   "git.undoLastCommit": true,
   "git.unstage": true,
 };
@@ -169,6 +172,15 @@ async function dispatchGitCommand(
       );
     case "git.mergeAbort":
       return success(requestId, await services.git.abortMerge(command.cwd));
+    case "git.push":
+      return success(requestId, await services.git.push(command.cwd));
+    case "git.pullFastForward":
+      return success(
+        requestId,
+        await services.git.pullFastForward(command.cwd)
+      );
+    case "git.sync":
+      return success(requestId, await services.git.sync(command.cwd));
     case "git.stash":
       return success(
         requestId,

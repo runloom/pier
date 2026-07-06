@@ -13,6 +13,12 @@ import type {
 import type React from "react";
 import { useEffect, useState } from "react";
 import { pluginText } from "./git-plugin-text.ts";
+import { GitStatusDropdown } from "./git-status-dropdown.tsx";
+import {
+  deriveGitStatusDropdownModel,
+  type GitStatusDropdownModel,
+} from "./git-status-dropdown-model.ts";
+import { gitStatusDropdownText } from "./git-status-dropdown-text.ts";
 import {
   BranchLabel,
   LargeChangeWarning,
@@ -26,7 +32,6 @@ import {
   WorkingTreeCounts,
   WorktreeBadge,
 } from "./git-status-parts.tsx";
-import { openWorktreeListQuickPick } from "./worktree-list-action.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 
@@ -95,19 +100,20 @@ function remoteSyncLine(
 function useGitStatus(
   pluginContext: RendererPluginContext,
   gitRoot: string | undefined
-): GitStatus | null {
-  const [status, setStatus] = useState<GitStatus | null>(null);
+): GitStatusLoadState {
+  const [state, setState] = useState<GitStatusLoadState>({ kind: "loading" });
 
   useEffect(() => {
     if (!gitRoot) {
-      setStatus(null);
+      setState({ kind: "loading" });
       return;
     }
+    setState({ kind: "loading" });
     let seq = 0;
     let alive = true;
     const apply = (next: GitStatus): void => {
       if (alive) {
-        setStatus(next);
+        setState({ kind: "loaded", status: next });
       }
     };
     const refetch = (): void => {
@@ -119,7 +125,11 @@ function useGitStatus(
             apply(next);
           }
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          if (alive && mySeq === seq) {
+            setState({ kind: "error", message: gitErrorMessage(error) });
+          }
+        });
     };
     refetch();
     const unsubscribe = pluginContext.git.watch(gitRoot, (event) => {
@@ -136,7 +146,7 @@ function useGitStatus(
     };
   }, [pluginContext, gitRoot]);
 
-  return status;
+  return state;
 }
 
 /** 试点设置消费：经 context.configuration 读生效值并 onDidChange 实时响应。 */
@@ -181,6 +191,15 @@ interface StatusFlags {
   stashCount: number;
 }
 
+type GitStatusLoadState =
+  | { kind: "error"; message: string }
+  | { kind: "loaded"; status: GitStatus }
+  | { kind: "loading" };
+
+function gitErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function deriveStatusFlags(
   status: GitStatus | null,
   context: RendererTerminalStatusItemContext["context"]
@@ -215,6 +234,51 @@ function deriveStatusFlags(
     ),
     repoState,
     stashCount: status?.stashCount ?? 0,
+  };
+}
+
+function pendingDropdownModel({
+  context,
+  kind,
+  pluginContext,
+  worktreeName,
+  worktreePath,
+}: {
+  context: NonNullable<RendererTerminalStatusItemContext["context"]>;
+  kind: "error" | "loading";
+  pluginContext: RendererPluginContext;
+  worktreeName: string;
+  worktreePath: string;
+}): GitStatusDropdownModel {
+  const branchLabel = context.branch ?? context.head ?? worktreeName;
+  const statusLabel =
+    kind === "loading"
+      ? pluginText(
+          pluginContext,
+          "statusDropdownLoading",
+          "Loading Git status…"
+        )
+      : pluginText(
+          pluginContext,
+          "statusDropdownUnavailable",
+          "Git status unavailable"
+        );
+  return {
+    actions: [{ id: "openChanges" }, { id: "switchWorktree" }],
+    branchLabel,
+    contextLine: worktreeName,
+    statusGroups: [
+      {
+        parts: [
+          {
+            label: statusLabel,
+            tone: kind === "loading" ? "muted" : "danger",
+          },
+        ],
+      },
+    ],
+    variant: kind === "loading" ? "loading" : "unavailable",
+    worktreePath,
   };
 }
 
@@ -303,10 +367,11 @@ function WorktreeStatusItem({
 }: RendererTerminalStatusItemContext & {
   pluginContext: RendererPluginContext;
 }) {
-  const worktreePath = context?.worktreeRoot ?? context?.gitRoot;
-  const status = useGitStatus(pluginContext, context?.gitRoot);
+  const panelContext = context;
+  const worktreePath = panelContext?.worktreeRoot ?? panelContext?.gitRoot;
+  const statusState = useGitStatus(pluginContext, panelContext?.gitRoot);
   const showDirtyIndicator = useShowDirtyIndicator(pluginContext);
-  if (!worktreePath) {
+  if (!(panelContext && worktreePath)) {
     return null;
   }
   const worktreeName = basename(worktreePath);
@@ -314,35 +379,43 @@ function WorktreeStatusItem({
     return null;
   }
 
+  const status = statusState.kind === "loaded" ? statusState.status : null;
   const branch = status?.branch ?? null;
-  const flags = deriveStatusFlags(status, context);
+  const flags = deriveStatusFlags(status, panelContext);
   const tooltipHint = pluginText(
     pluginContext,
-    "statusOpenTooltip",
-    "Click to switch worktree"
+    "statusDropdownOpenTooltip",
+    "Click to open Git status"
   );
   const tooltipDetail = [worktreeName, branch?.branch, worktreePath, cwd]
     .filter(Boolean)
     .join(" · ");
   const syncLine = remoteSyncLine(pluginContext, status?.remoteSync ?? null);
-
-  return (
+  const dropdownModel =
+    statusState.kind === "loaded"
+      ? deriveGitStatusDropdownModel(statusState.status, panelContext, {
+          fallbackWorktreeName: worktreeName,
+          remoteSyncLabel: syncLine,
+          text: gitStatusDropdownText(pluginContext),
+          worktreePath,
+        })
+      : pendingDropdownModel({
+          context: panelContext,
+          kind: statusState.kind,
+          pluginContext,
+          worktreeName,
+          worktreePath,
+        });
+  const trigger = (
     <Button
       aria-label={pluginText(
         pluginContext,
-        "statusOpenLabel",
-        "Open worktrees for {{name}}",
-        { name: branch?.branch ?? context?.branch ?? worktreeName }
+        "statusDropdownOpenLabel",
+        "Open Git status for {{name}}",
+        { name: branch?.branch ?? panelContext.branch ?? worktreeName }
       )}
       className="h-5 min-w-0 max-w-full gap-1 px-2 font-normal text-xs"
       data-testid="worktree-status-trigger"
-      onClick={() => {
-        openWorktreeListQuickPick(pluginContext, worktreePath).catch(
-          (err: unknown) => {
-            console.error("[worktree-plugin] open worktree list failed:", err);
-          }
-        );
-      }}
       size="xs"
       title={[tooltipHint, tooltipDetail, syncLine].filter(Boolean).join("\n")}
       type="button"
@@ -350,13 +423,23 @@ function WorktreeStatusItem({
     >
       <StatusBody
         branch={branch}
-        context={context}
+        context={panelContext}
         flags={flags}
         pluginContext={pluginContext}
         showDirtyIndicator={showDirtyIndicator}
         worktreeName={worktreeName}
       />
     </Button>
+  );
+
+  return (
+    <GitStatusDropdown
+      context={panelContext}
+      model={dropdownModel}
+      pluginContext={pluginContext}
+    >
+      {trigger}
+    </GitStatusDropdown>
   );
 }
 

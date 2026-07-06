@@ -4,6 +4,7 @@ import type {
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
+  GitRemoteOperationResult,
   GitStashApplyResult,
   GitStashDropResult,
   GitStashEntry,
@@ -112,10 +113,8 @@ export async function mergeBranch(
   }
   try {
     // 裸 merge（默认允许 ff、不跳 hooks）：与 VS Code「Git: Merge Branch」
-    // 语义一致，尊重用户 git 配置（merge.ff / branch.<name>.mergeoptions）；
-    // 要强制 merge commit 的用户走 merge.ff=false 配置，与 VS Code 相同。
-    // 代价（检测器既有限制）：ff 落地后「源分支自身」的 mergedIntoDefault
-    // 胶囊不亮。--no-edit：GUI 场景无编辑器可开，取 git 默认合并信息。
+    // 语义一致，尊重用户 git 配置（merge.ff / branch.<name>.mergeoptions）。
+    // --no-edit：GUI 场景无编辑器可开，取 git 默认合并信息。
     const stdout = await execGit(
       ["merge", "--no-edit", "--", branch],
       target.root,
@@ -148,6 +147,61 @@ export async function abortMerge(
     await execGit(["merge", "--abort"], target.root, {
       timeoutMs: WRITE_TIMEOUT_MS,
     });
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+export async function pushBranch(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    await execGit(["push"], target.root, { timeoutMs: WRITE_TIMEOUT_MS });
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+export async function pullFastForward(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    await execGit(["pull", "--ff-only"], target.root, {
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+export async function syncBranch(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    // Clean diverged sync rebases local-only commits onto upstream before push.
+    // This avoids implicit merge commits while still making Sync actionable.
+    await execGit(["pull", "--rebase"], target.root, {
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    await execGit(["push"], target.root, { timeoutMs: WRITE_TIMEOUT_MS });
     return { kind: "ok" };
   } catch (err) {
     return unavailable(errorMessage(err));

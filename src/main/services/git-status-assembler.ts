@@ -1,4 +1,5 @@
 import type { GitStatus } from "../../shared/contracts/git.ts";
+import { detectMergedIntoDefault } from "./git-merged-detector.ts";
 import {
   deriveCounts,
   parseGitStatus,
@@ -12,7 +13,6 @@ import {
 } from "./git-refs-table.ts";
 import { getRemoteSync } from "./git-remote-sync-registry.ts";
 import {
-  detectMergedIntoDefault,
   detectRepoState,
   type ExecGitFn,
   getLineDelta,
@@ -80,7 +80,8 @@ export async function assembleGitStatus(
           cwd,
           branchName,
           parsed.branch.oid,
-          defaultBranchCandidates(refsTable)
+          defaultBranchCandidates(refsTable),
+          parsed.branch.upstream
         ),
   ]);
   const upstreamGone =
