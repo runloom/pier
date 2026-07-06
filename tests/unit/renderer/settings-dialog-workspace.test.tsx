@@ -15,6 +15,7 @@ import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { useWorktreePreferencesStore } from "@/stores/worktree-preferences.store.ts";
+import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 const REGISTRY_INITIAL_STATE = {
   diagnostics: [],
@@ -60,12 +61,16 @@ function pierMock() {
     },
     preferences: {
       onChanged: vi.fn(() => () => undefined),
-      read: vi.fn(async () => ({
-        worktreeRootPath: "/existing/worktrees",
-      })),
-      update: vi.fn(async (patch: { worktreeRootPath?: string }) => ({
-        worktreeRootPath: patch.worktreeRootPath ?? "/existing/worktrees",
-      })),
+      read: vi.fn(async () =>
+        makeFakePreferences({
+          worktreeRootPath: "/existing/worktrees",
+        })
+      ),
+      update: vi.fn(async (patch: { worktreeRootPath?: string }) =>
+        makeFakePreferences({
+          worktreeRootPath: patch.worktreeRootPath ?? "/existing/worktrees",
+        })
+      ),
     },
     settings: {
       onOpenRequest: vi.fn(() => () => undefined),

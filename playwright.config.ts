@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+process.env.PIER_TEST_DISABLE_QUIT_CONFIRMATION = "1";
+
 // Pier main 进程使用 worktree-specific userData (dev-profile.mjs 派的固定路径).
 // 多个 electron.launch 并发会触发 chromium SingletonLock 冲突, 必须串行。
 export default defineConfig({

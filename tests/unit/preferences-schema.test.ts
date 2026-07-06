@@ -121,6 +121,39 @@ describe("projectPreferencesSchema — terminal preferences", () => {
   });
 });
 
+describe("projectPreferencesSchema - app quit", () => {
+  it("defaults quit confirmation to running activity", () => {
+    expect(projectPreferencesSchema.parse({}).confirmOnQuit).toBe(
+      "hasActivity"
+    );
+  });
+
+  it("accepts planned quit confirmation modes", () => {
+    expect(
+      projectPreferencesSchema.parse({ confirmOnQuit: "always" }).confirmOnQuit
+    ).toBe("always");
+    expect(
+      projectPreferencesSchema.parse({ confirmOnQuit: "hasActivity" })
+        .confirmOnQuit
+    ).toBe("hasActivity");
+    expect(
+      projectPreferencesSchema.parse({ confirmOnQuit: "never" }).confirmOnQuit
+    ).toBe("never");
+  });
+
+  it("rejects unsupported quit confirmation modes", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ confirmOnQuit: "whenRunning" })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ confirmOnQuit: true })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ confirmOnQuit: null })
+    ).toThrow();
+  });
+});
+
 describe("projectPreferencesSchema — user keymap", () => {
   it("默认没有用户快捷键覆盖", () => {
     const parsed = projectPreferencesSchema.parse({});

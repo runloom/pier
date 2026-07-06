@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import {
+  DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   DEFAULT_GIT_AUTO_FETCH_ENABLED,
   DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
   DEFAULT_TERMINAL_CURSOR_BLINK,
@@ -35,6 +36,7 @@ const DEFAULTS: ProjectPreferences = {
   terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
   terminalPasteProtection: DEFAULT_TERMINAL_PASTE_PROTECTION,
   terminalNewCwdPolicy: DEFAULT_TERMINAL_NEW_CWD_POLICY,
+  confirmOnQuit: DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   windowZoomLevel: DEFAULT_WINDOW_ZOOM_LEVEL,
   userKeymap: [],
   defaultAgentId: null,
