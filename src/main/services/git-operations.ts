@@ -4,6 +4,7 @@ import type {
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
+  GitRemoteOperationResult,
   GitStashApplyResult,
   GitStashDropResult,
   GitStashEntry,
@@ -148,6 +149,61 @@ export async function abortMerge(
     await execGit(["merge", "--abort"], target.root, {
       timeoutMs: WRITE_TIMEOUT_MS,
     });
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+export async function pushBranch(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    await execGit(["push"], target.root, { timeoutMs: WRITE_TIMEOUT_MS });
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+export async function pullFastForward(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    await execGit(["pull", "--ff-only"], target.root, {
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+export async function syncBranch(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    // Clean diverged sync rebases local-only commits onto upstream before push.
+    // This avoids implicit merge commits while still making Sync actionable.
+    await execGit(["pull", "--rebase"], target.root, {
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    await execGit(["push"], target.root, { timeoutMs: WRITE_TIMEOUT_MS });
     return { kind: "ok" };
   } catch (err) {
     return unavailable(errorMessage(err));

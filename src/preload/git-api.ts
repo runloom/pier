@@ -10,6 +10,7 @@ import type {
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
+  GitRemoteOperationResult,
   GitRepoInfo,
   GitStashApplyResult,
   GitStashDropResult,
@@ -98,6 +99,8 @@ export interface PierGitAPI {
   listTags: (cwd: string) => Promise<string[]>;
   merge: (cwd: string, branch: string) => Promise<GitMergeResult>;
   popStash: (cwd: string, index?: number) => Promise<GitStashPopResult>;
+  pullFastForward: (cwd: string) => Promise<GitRemoteOperationResult>;
+  push: (cwd: string) => Promise<GitRemoteOperationResult>;
   rebase: (cwd: string, branch: string) => Promise<GitRebaseResult>;
   resolveRef: (cwd: string, ref: string) => Promise<string>;
   searchBranches: (
@@ -110,6 +113,7 @@ export interface PierGitAPI {
     cwd: string,
     options?: GitStashOptionsValue
   ) => Promise<GitStashResult>;
+  sync: (cwd: string) => Promise<GitRemoteOperationResult>;
   undoLastCommit: (cwd: string) => Promise<GitUndoCommitResult>;
   unstage: (cwd: string, paths: string[]) => Promise<boolean>;
   validateBranchName: (cwd: string, name: string) => Promise<boolean>;
@@ -198,6 +202,21 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<GitMergeAbortResult>({
       cwd,
       type: "git.mergeAbort",
+    }),
+  push: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.push",
+    }),
+  pullFastForward: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.pullFastForward",
+    }),
+  sync: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.sync",
     }),
   stash: (cwd, options = {}) =>
     invokePierCommand<GitStashResult>({

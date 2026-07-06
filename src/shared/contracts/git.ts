@@ -272,6 +272,14 @@ const gitUnavailableResultSchema = z.object({
   message: z.string().nullable(),
 });
 
+export const gitRemoteOperationResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitRemoteOperationResult = z.infer<
+  typeof gitRemoteOperationResultSchema
+>;
+
 export const gitMergeResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ok"), message: z.string() }),
   z.object({ kind: z.literal("already_up_to_date") }),

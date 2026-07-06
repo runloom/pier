@@ -1702,7 +1702,7 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("终端状态栏使用自身 panel context 打开 worktree 列表", async () => {
+  it("终端状态栏下拉面板使用自身 panel context 打开 worktree 列表", async () => {
     dispose = activateWorktreePlugin();
     const statusItem = terminalStatusItemRegistry
       .list()
@@ -1727,10 +1727,13 @@ describe("git builtin plugin", () => {
       })
     );
 
+    fireEvent.pointerDown(screen.getByTestId("worktree-status-trigger"), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open worktrees for feature/worktree",
-      })
+      await screen.findByRole("menuitem", { name: "Switch Worktree" })
     );
 
     await waitFor(() => {

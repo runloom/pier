@@ -249,10 +249,17 @@ function composeOperationText(
     );
   }
   if ("conflictCount" in state && state.conflictCount > 0) {
+    const conflictKey =
+      state.conflictCount === 1 ? "conflictSuffixSingle" : "conflictSuffix";
     parts.push(
-      pluginText(pluginContext, "conflictSuffix", " · {{n}} conflicts", {
-        n: state.conflictCount,
-      })
+      pluginText(
+        pluginContext,
+        conflictKey,
+        state.conflictCount === 1 ? " · {{n}} conflict" : " · {{n}} conflicts",
+        {
+          n: state.conflictCount,
+        }
+      )
     );
   }
   return parts.join("");
