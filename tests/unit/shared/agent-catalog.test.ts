@@ -23,7 +23,7 @@ describe("AGENT_CATALOG", () => {
   });
 });
 
-describe("AGENT_CATALOG 完整性（orca parity）", () => {
+describe("AGENT_CATALOG 完整性", () => {
   it("每个 AgentKind 有且仅有一条 entry，且 id 一致", () => {
     for (const id of agentKindSchema.options) {
       const entry = getAgentCatalogEntry(id);

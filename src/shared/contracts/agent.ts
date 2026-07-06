@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** 内置支持的 agent（orca 全集，去 claude-agent-teams——它探测/启动 orca 自身 CLI）。 */
+/** 内置支持的 agent 全集（去 claude-agent-teams——它探测/启动自身 CLI）。 */
 export const agentKindSchema = z.enum([
   "claude",
   "codex",
@@ -35,6 +35,8 @@ export const agentKindSchema = z.enum([
   "openclaw",
   "devin",
   "openclaude",
+  "codebuddy",
+  "qodercli",
 ]);
 export type AgentKind = z.infer<typeof agentKindSchema>;
 
@@ -61,7 +63,7 @@ export interface DetectAgentsResult {
 }
 
 /**
- * 每个 agent 的「跳过权限」flag（照搬 orca tui-agent-permissions.ts）。
+ * 每个 agent 的「跳过权限」flag。
  * 多 token flag（如 `--approval-mode yolo`）作为 opaque string——整串写入/比较，勿按空格 split。
  */
 export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
@@ -88,6 +90,11 @@ export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   hermes: "--yolo",
   devin: "--permission-mode bypass",
   openclaude: "--dangerously-skip-permissions",
+  // CodeBuddy Code 是 Claude Code fork,同 flag(--dangerously-skip-permissions,
+  // 由 `codebuddy --help` 核定)。
+  codebuddy: "--dangerously-skip-permissions",
+  // Qoder CLI：`qodercli --yolo`（docs.qoder.com/zh/cli 核定）。
+  qodercli: "--yolo",
   // 其余 agent 无 yolo flag：goose 走 YOLO_ENV，opencode/kilo 见 UNSUPPORTED_ARGS。
 };
 

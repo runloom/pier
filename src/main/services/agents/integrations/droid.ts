@@ -15,7 +15,7 @@ import {
  *
  * **翻案记录**:上一波「官方核查修正」根据 docs.factory.ai/cli/configuration/
  * hooks-guide 的字面表述把 pier 从 settings.json 改到 hooks.json——**是错的**。
- * 实证:本机 loomdesk/superset/orca 都把 droid hook 装在 settings.json 的
+ * 实证:本机 loomdesk/superset 都把 droid hook 装在 settings.json 的
  * `hooks` 字段, droid TUI 里显示的 "Hooks UserPromptSubmit · 2 个钩子" 全部来自
  * settings.json;pier 装到 hooks.json 后完全不被 droid 执行(诊断 wrapper 写
  * /tmp 的 echo 都没执行到)。官方文档说 hooks.json 可能是新增位置或文档滞后,

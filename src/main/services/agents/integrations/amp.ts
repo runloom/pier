@@ -8,14 +8,14 @@ import type { AgentHookIntegration } from "./types.ts";
 
 const AGENT_ID: AgentKind = "amp";
 
-/** Pier 部署到 amp 自身插件目录下的托管文件（orca AMP_PLUGIN_FILE 同名同位）。 */
+/** Pier 部署到 amp 自身插件目录下的托管文件（同名同位）。 */
 const AMP_PLUGIN_FILE = "pier-agent-status.ts";
 
 /** 托管标记：写在插件源码内, install 幂等比对 + uninstall 删除前必查。 */
 const AMP_PLUGIN_MARKER = "pier-agent-status:v1 (managed by Pier)";
 
 /**
- * amp.on 原生事件 → pier 规范事件名（orca hook-service.ts 事件表对齐）。
+ * amp.on 原生事件 → pier 规范事件名。
  * amp 只有会话/回合/工具五个事件, 无 subagent/permission 细分。
  */
 const AMP_EVENT_MAP: ReadonlyArray<{
@@ -134,7 +134,7 @@ async function readPluginFile(path: string): Promise<string | null> {
 }
 
 /**
- * install：非托管同名文件绝不覆盖（orca amp 语义, console.warn 跳过）；
+ * install：非托管同名文件绝不覆盖（console.warn 跳过）；
  * 字节相同则不落盘（幂等重装零写入）。
  */
 export async function installAmpHooks(

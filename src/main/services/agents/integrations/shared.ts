@@ -233,7 +233,7 @@ export function createNestedJsonIntegration(
 }
 
 // ---------------------------------------------------------------------------
-// 文本块注入（TOML/YAML 等无解析器场景, orca/loomdesk 的 marker 块模式）。
+// 文本块注入（TOML/YAML 等无解析器场景, loomdesk 的 marker 块模式）。
 // ---------------------------------------------------------------------------
 
 const TRAILING_NEWLINES_RE = /\n+$/;

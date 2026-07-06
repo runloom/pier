@@ -5,6 +5,15 @@ import type {
 } from "@shared/contracts/foreground-activity.ts";
 import { activityStatusForHookEvent } from "@shared/contracts/foreground-activity.ts";
 import {
+  logAgentEventDropped,
+  logClearForeignHook,
+  logCommandFinished,
+  logEndHookSession,
+  logPtyExitedTaskRetain,
+  logRouting,
+  setHookStatusWithLog,
+} from "./aggregator-tracing.ts";
+import {
   type AgentLaunchLayer,
   applyTurnBookkeeping,
   armHookTtlTimer,
@@ -24,7 +33,6 @@ import {
   SESSION_END_COOLDOWN_MS,
   SUBAGENT_EVENTS,
   SUSPENDED_JOB_EXIT_CODES,
-  setHookStatus,
   type TimerCtx,
   VISIBILITY_DEBOUNCE_MS,
 } from "./entry.ts";
@@ -33,30 +41,15 @@ import type {
   ForegroundActivityAggregatorOpts,
 } from "./types.ts";
 
-/**
- * ForegroundActivityAggregator 实现。API 与文档在 ./types.ts, 模型与投影在
- * ./entry.ts。
- *
- * 双层语义：command 层（OSC/launcher/task）与 hook 层（JSONL 事件）独立
- * 生灭, 互不覆写；每 panel 投影至多一条 activity。冷却拦迟到 / 新层 250ms
- * 消抖 / hook TTL 30min 衰减 / subagent 计数 / turn bookkeeping /
- * Ctrl+Z 悬挂例外——语义细节与 loomdesk ActivityAggregator 对齐。
- */
+/** ForegroundActivityAggregator：双层 slot 模型，API 见 ./types.ts。 */
 export function createForegroundActivityAggregator(
   opts: ForegroundActivityAggregatorOpts = {}
 ): ForegroundActivityAggregator {
   const now = opts.now ?? Date.now;
   const slots = new Map<string, PanelSlot>();
-  /**
-   * panel 死亡冷却（panelClosed/windowClosed/retainPanels）——面板已不在，
-   * 拦一切迟到事件（hook + 命令）。
-   */
+  /** panel 已死后拦迟到 hook / 命令事件。 */
   const panelCooldownUntil = new Map<string, number>();
-  /**
-   * hook 收尾冷却（命令退出/SessionEnd）——只拦迟到 hook 事件。
-   * 新命令是新鲜 OSC 证据, 永不被此冷却拦截（loomdesk
-   * recentlyEndedSessions 同语义:只 gate agent_hook 条目创建）。
-   */
+  /** hook 收尾后只拦迟到 hook；新命令永不被此冷却拦截。 */
   const hookCooldownUntil = new Map<string, number>();
   const listeners = new Set<(b: ForegroundActivityBroadcast) => void>();
   let emitTimer: NodeJS.Timeout | null = null;
@@ -191,6 +184,7 @@ export function createForegroundActivityAggregator(
     const slot = slots.get(key);
     const hook = slot?.hook ?? null;
     if (slot && hook) {
+      logEndHookSession(key, hook.agentId);
       clearHookTimers(hook);
       slot.hook = null;
       dropSlotIfEmpty(key);
@@ -257,6 +251,7 @@ export function createForegroundActivityAggregator(
       // 覆盖 OSC/hook 到达竞态与相邻重启的证据延续。status 仍唯 hook 可写。
       const hook = slot.hook;
       if (hook && hook.agentId !== agentId) {
+        logClearForeignHook(key, hook.agentId, agentId);
         clearHookTimers(hook);
         slot.hook = null;
       }
@@ -294,8 +289,7 @@ export function createForegroundActivityAggregator(
       if (disposed || !slots.has(key)) {
         return;
       }
-      // 前台命令退出 = 面板整场结束：双层同清（覆盖崩溃/kill 等无
-      // SessionEnd hook 的路径）+ 5s hook 冷却拦迟到 hook 事件。
+      logCommandFinished(key, exitCode);
       if (closeSlot(key, { map: hookCooldownUntil, ms: CLOSE_COOLDOWN_MS })) {
         scheduleEmit();
       }
@@ -314,15 +308,18 @@ export function createForegroundActivityAggregator(
         return;
       }
       const key = event.panelId;
+      const slotBefore = slots.get(key);
+      logRouting(event.event, event.agent, key, slotBefore?.hook ?? null);
       if (isInCooldown(panelCooldownUntil, key)) {
-        // panel 已死：SessionStart 也不得复活幽灵（loomdesk isKnownSession
-        // 拒掉同类事件的 Pier 替代——panelId 不复用, 复活必为迟到 flush）。
+        // panel 已死：SessionStart 也不得复活幽灵。
+        logAgentEventDropped("suppressed-panel-cooldown", key, event.event);
         return;
       }
       if (event.event === "SessionStart") {
-        // 会话开端豁免 hook 收尾冷却（重启即新生命周期）。
+        // 会话开端豁免 hook 收尾冷却。
         hookCooldownUntil.delete(key);
       } else if (isInCooldown(hookCooldownUntil, key)) {
+        logAgentEventDropped("suppressed-hook-cooldown", key, event.event);
         return;
       }
       if (event.event === "SessionEnd") {
@@ -331,21 +328,26 @@ export function createForegroundActivityAggregator(
       }
       const status = activityStatusForHookEvent(event.event);
       if (status === null) {
+        logAgentEventDropped("status-null", key, event.event);
         return;
       }
       const at = now();
       const hook = acquireHookLayer(key, event, at);
       if (!hook) {
+        logAgentEventDropped("ghost-rejected", key, event.event);
         return;
       }
       if (!applyTurnBookkeeping(hook, event.event)) {
+        logAgentEventDropped("absorbed", key, event.event, {
+          frozenStatus: hook.status,
+        });
         return;
       }
       hook.agentId = event.agent;
       if (SUBAGENT_EVENTS.has(event.event)) {
         hook.updatedAt = at;
       } else {
-        setHookStatus(hook, status, at);
+        setHookStatusWithLog(key, hook, status, at, event.agent);
       }
       armHookTtlTimer(key, timerCtx);
       scheduleEmit();
@@ -359,7 +361,7 @@ export function createForegroundActivityAggregator(
       panelCooldownUntil.delete(key);
       hookCooldownUntil.delete(key);
       const slot = slotFor(key);
-      // 用户显式操作优先：双层全清（含 hook——task 接管 pty, 旧会话证据作废）。
+      // 用户显式操作优先：task 接管 pty，旧会话证据作废。
       clearSlotTimers(slot);
       slot.hook = null;
       slot.command = newTaskLayer(windowId, task.taskId, task.label, now());
@@ -395,10 +397,8 @@ export function createForegroundActivityAggregator(
     ptyExited(panelId) {
       const slot = slots.get(panelId);
       if (slot?.command?.kind === "task") {
-        // pty 死亡 ≠ 面板关闭：task 进程退出是正常完结, 面板仍开着呈现
-        // 结果——保留 task 层（退出 chrome 单源）, 只清 hook 证据并冷却
-        // 拦迟到 hook。随后 lifecycle 的 taskFinished 照常落在本 slot 上
-        // （crash/kill 无 exit marker 的路径依赖这个顺序容忍）。
+        // pty 死亡 ≠ 面板关闭：task 面板仍开着呈现结果；只清 hook 证据。
+        logPtyExitedTaskRetain(panelId);
         if (slot.hook) {
           clearHookTimers(slot.hook);
           slot.hook = null;

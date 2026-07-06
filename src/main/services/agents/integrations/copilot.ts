@@ -13,7 +13,7 @@ import type { AgentHookIntegration } from "./types.ts";
 const AGENT_ID: AgentKind = "copilot";
 const TIMEOUT_SECONDS = 5;
 
-/** 专用文件（loomdesk codeisland.json / orca orca.json 同模式）。 */
+/** 专用文件（loomdesk codeisland.json 同模式）。 */
 const configPath = () => join(homedir(), ".copilot", "hooks", "pier.json");
 
 /** Copilot CLI hook 事件 → pier 事件名。 */

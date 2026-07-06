@@ -12,7 +12,7 @@ const commandCodeConfigPath = () =>
 
 /**
  * Command Code hook 事件 → pier 事件名。
- * capability "coarse"：只跟随 orca 的 normalize，装 4 个事件（会话开始 +
+ * capability "coarse"：仅装 4 个事件（会话开始 +
  * 工具起止 + 回合结束）。不补 UserPromptSubmit 并非我们主动弃装——产品
  * 根本没有这个事件，官方共 4 事件（不含 UserPromptSubmit）。
  * matcher 保持 ".*" 不动；此前版本注释里 "裸 * 非法/必须用 .*" 的断言

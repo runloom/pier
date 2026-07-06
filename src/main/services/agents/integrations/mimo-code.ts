@@ -9,7 +9,7 @@ import type { AgentHookIntegration } from "./types.ts";
 const AGENT_ID: AgentKind = "mimo-code";
 
 /**
- * mimo-code 是 opencode 的 fork（orca mimo/hook-service.ts 复用
+ * mimo-code 是 opencode 的 fork（复用
  * opencode 插件源码, 仅换 hook 路径后缀）——插件目录同为
  * `<config>/plugins/`, 目录下任何文件均自动加载。这是对 opencode.json
  * 的 `plugin` 数组注册机制的**补充**而非替代：两条加载路径并存, 目录扫描
@@ -190,8 +190,8 @@ export async function uninstallMimoCodeHooks(
 }
 
 /**
- * detect：mimo-code 配置目录存在或 mimo 命令在 PATH 上（orca
- * resolveSourceConfigDir 的探测逻辑对齐——XDG 目录或已有 home 均视为已装）。
+ * detect：mimo-code 配置目录存在或 mimo 命令在 PATH 上
+ * （XDG 目录或已有 home 均视为已装）。
  */
 function mimoCodeDetect(): boolean {
   return existsSync(mimoCodeConfigDir()) || commandExistsOnPath("mimo-code");

@@ -118,7 +118,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     faviconDomain: "ampcode.com",
     homepageUrl: "https://ampcode.com/manual#install",
   },
-  // orca 全集补全（去 claude-agent-teams——它探测/启动 orca 自身 CLI）。
+  // 全集补全（去 claude-agent-teams——它探测/启动自身 CLI）。
   {
     id: "grok",
     label: "Grok",
@@ -319,7 +319,26 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     detectCmd: "openclaude",
     expectedProcess: "openclaude",
     homepageUrl: "https://openclaude.gitlawb.com/",
-    // 图标 favicons/openclaude.png 是 orca 资产，手动放入（非脚本下载）。
+    // 图标 favicons/openclaude.png 手动放入（非脚本下载）。
+  },
+  {
+    id: "codebuddy",
+    label: "CodeBuddy",
+    launchCmd: "codebuddy",
+    detectCmd: "codebuddy",
+    detectCmdAliases: ["cbc"],
+    expectedProcess: "codebuddy",
+    homepageUrl: "https://cnb.cool/codebuddy/codebuddy-code",
+    oneShotArgs: (prompt) => ["-p", prompt],
+  },
+  {
+    id: "qodercli",
+    label: "Qoder",
+    launchCmd: "qodercli",
+    detectCmd: "qodercli",
+    expectedProcess: "qodercli",
+    homepageUrl: "https://qoder.com/cli",
+    oneShotArgs: (prompt) => ["-p", prompt],
   },
 ];
 

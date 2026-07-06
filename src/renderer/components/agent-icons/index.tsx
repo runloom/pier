@@ -27,7 +27,7 @@ const ICON_BY_ID: Record<string, FC<{ size?: number }>> = {
 };
 
 // 本地打包的 agent 图标（favicons/<id>.png）。多数下载自各域名（见
-// scripts/download-agent-favicons.sh），openclaude.png 是 orca 资产手动放入。
+// scripts/download-agent-favicons.sh），openclaude.png 手动放入。
 // 运行时用本地资产——离线 + 绕开 img-src CSP（外部图源会被拦成空白）。
 // catalog 的 faviconDomain 仅作下载脚本的数据源，运行时不读。
 const LOCAL_ICONS = import.meta.glob("./favicons/*.png", {
