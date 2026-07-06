@@ -34,6 +34,8 @@ import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { usePluginOverlayStore } from "@/stores/plugin-overlay.store.ts";
+import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
   resetTerminalInputRoutingForTests,
@@ -135,6 +137,11 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       title: "Git: Open Changes",
     },
     {
+      id: "pier.git.switchBranch",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Switch Branch...",
+    },
+    {
       id: "pier.git.merge",
       permissions: ["git:read", "git:write"],
       title: "Git: Merge Branch...",
@@ -205,6 +212,14 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands,
+      configuration: {
+        properties: {
+          "pier.git.statusItem.showDirtyIndicator": {
+            default: true,
+            type: "boolean",
+          },
+        },
+      },
       dashboardWidgets: [],
       engines: { pier: ">=0.1.0" },
       id: GIT_PLUGIN_ID,
@@ -223,6 +238,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "pier.git.merge": {
               aliases: ["locale git merge"],
               title: "Git: Merge Branch...",
+            },
+            "pier.git.switchBranch": {
+              aliases: ["locale git switch branch"],
+              title: "Git: Switch Branch...",
             },
             "pier.git.mergeAbort": {
               aliases: ["locale git merge abort"],
@@ -316,6 +335,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "pier.git.merge": {
               aliases: ["本地化合并分支"],
               title: "Git: 合并分支...",
+            },
+            "pier.git.switchBranch": {
+              aliases: ["本地化切换分支"],
+              title: "Git: 切换分支...",
             },
             "pier.git.mergeAbort": {
               aliases: ["本地化中止合并"],
@@ -521,6 +544,17 @@ describe("git builtin plugin", () => {
           display: { short: "pier" },
         },
       },
+    });
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      error: null,
+      initialized: true,
+      plugins: [pluginEntry(true)],
+    });
+    usePluginSettingsStore.setState({
+      error: null,
+      initialized: true,
+      values: {},
     });
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -749,6 +783,7 @@ describe("git builtin plugin", () => {
     expect(actionRegistry.get("pier.worktree.create")).toBeDefined();
     expect(actionRegistry.get("pier.worktree.delete")).toBeDefined();
     expect(actionRegistry.get("pier.worktree.prune")).toBeDefined();
+    expect(actionRegistry.get("pier.git.switchBranch")).toBeDefined();
     expect(actionRegistry.get("pier.git.merge")).toBeDefined();
     expect(actionRegistry.get("pier.git.stash")).toBeDefined();
     expect(actionRegistry.get("pier.git.rebaseContinue")).toBeDefined();
@@ -1134,6 +1169,66 @@ describe("git builtin plugin", () => {
     );
   });
 
+  it("Git 切换分支命令只列出本地分支并切换选中分支", async () => {
+    vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
+      currentBranch: "main",
+      durationMs: 4,
+      items: [
+        branchOption({
+          commit: "def4567890",
+          current: true,
+          kind: "local",
+          name: "main",
+          refName: "refs/heads/main",
+        }),
+        branchOption({
+          commit: "aaa1111111",
+          kind: "remote",
+          name: "origin/feature/remote",
+          refName: "refs/remotes/origin/feature/remote",
+        }),
+        branchOption({
+          commit: "bbb2222222",
+          kind: "local",
+          name: "feature/local",
+          refName: "refs/heads/feature/local",
+        }),
+      ],
+      message: null,
+      status: "ok",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.switchBranch")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    expect(quickPick).toMatchObject({
+      placeholder: "Select a branch to switch to",
+      title: "Git: Switch Branch...",
+    });
+    expect(quickPick?.items?.map((item) => item.id)).toEqual([
+      "refs/heads/feature/local",
+    ]);
+    const item = quickPick?.items?.find(
+      (candidate) => candidate.id === "refs/heads/feature/local"
+    );
+    if (!(quickPick && item)) {
+      throw new Error("expected switch branch quick pick");
+    }
+
+    await quickPick.onAccept(item);
+
+    expect(window.pier.git.checkoutBranch).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      "feature/local"
+    );
+    expect(toastMocks.loading).toHaveBeenCalledWith("Switching branch...");
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "Switched to branch feature/local",
+      { id: "git-loading-toast" }
+    );
+  });
+
   it("Git 分支选择请求全量候选、不截断 50 条并展示加载提示", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
@@ -1319,6 +1414,11 @@ describe("git builtin plugin", () => {
 
     const acceptPromise = branchPick.onAccept(branchItem);
     expect(await screen.findByText("Merge Conflicts")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
+    expect(screen.getByRole("button", { name: "Open Review" })).toHaveAttribute(
+      "data-variant",
+      "default"
+    );
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Merge Conflicts"
     );
@@ -1547,8 +1647,13 @@ describe("git builtin plugin", () => {
     const acceptPromise = quickPick.onAccept(item);
 
     expect(await screen.findByText("Git: Drop Stash...")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     // {{stash}} 插值链路：fallback 也必须替换为实际 label
     expect(await screen.findByText(DROP_STASH_CONFIRM_BODY_RE)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Drop" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
     // 确认前不得触发删除
     expect(window.pier.git.dropStash).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Drop" }));
@@ -1602,11 +1707,16 @@ describe("git builtin plugin", () => {
       ?.handler();
 
     expect(await screen.findByText("Git: Undo Last Commit")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
       screen.getByText(
         "Undo the last commit? Changes will be preserved as staged."
       )
     ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
     expect(useCommandPaletteController.getState().quickPick).toBeNull();
     expect(getLastTerminalInputRoutingSnapshot()).toEqual(
       expect.objectContaining({
@@ -1704,7 +1814,7 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("终端状态栏使用自身 panel context 打开 worktree 列表", async () => {
+  it("终端状态栏下拉面板使用自身 panel context 打开 worktree 列表", async () => {
     dispose = activateWorktreePlugin();
     const statusItem = terminalStatusItemRegistry
       .list()
@@ -1729,10 +1839,13 @@ describe("git builtin plugin", () => {
       })
     );
 
+    fireEvent.pointerDown(screen.getByTestId("worktree-status-trigger"), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open worktrees for feature/worktree",
-      })
+      await screen.findByRole("menuitem", { name: "Switch Worktree" })
     );
 
     await waitFor(() => {
@@ -1818,7 +1931,104 @@ describe("git builtin plugin", () => {
 
     const merged = await screen.findByTestId("merged-pill");
     expect(merged).toHaveTextContent("merged");
+    expect(
+      merged.querySelector('[data-git-icon="git-merge"]')
+    ).toBeInTheDocument();
     expect(screen.getByTestId("upstream-gone-pill")).toBeInTheDocument();
+  });
+
+  it("工作区状态计数使用 Git 图标族", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/dirty",
+        mergedIntoDefault: false,
+        oid: "abc123",
+        upstream: "origin/feature/dirty",
+        upstreamGone: false,
+      },
+      counts: { conflict: 4, modified: 2, staged: 1, untracked: 3 },
+      delta: null,
+      files: [],
+      remoteSync: null,
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/dirty" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const dirtyIndicator = await screen.findByTestId("git-dirty-indicator");
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-commit-horizontal"]')
+    ).toBeInTheDocument();
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-compare-arrows"]')
+    ).toBeInTheDocument();
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-branch-plus"]')
+    ).toBeInTheDocument();
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-merge-conflict"]')
+    ).toBeInTheDocument();
+  });
+
+  it("同步和 stash 计数使用 Git 图标族", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 2,
+        behind: 1,
+        branch: "feature/sync",
+        mergedIntoDefault: false,
+        oid: "abc123",
+        upstream: "origin/feature/sync",
+        upstreamGone: false,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: null,
+      files: [],
+      remoteSync: null,
+      repoState: { kind: "clean" as const },
+      stashCount: 3,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/sync" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const trigger = await screen.findByTestId("worktree-status-trigger");
+    expect(
+      trigger.querySelectorAll('[data-git-icon="git-pull-request-arrow"]')
+    ).toHaveLength(2);
+    expect(
+      trigger.querySelector('[data-git-icon="git-commit-horizontal"]')
+    ).toBeInTheDocument();
   });
 
   it("DETACHED 胶囊使用 text-foreground（neutral 风格），与 muted 计数区分", async () => {

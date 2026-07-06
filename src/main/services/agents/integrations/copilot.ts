@@ -5,7 +5,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -13,7 +13,7 @@ import type { AgentHookIntegration } from "./types.ts";
 const AGENT_ID: AgentKind = "copilot";
 const TIMEOUT_SECONDS = 5;
 
-/** 专用文件（loomdesk codeisland.json / orca orca.json 同模式）。 */
+/** 专用文件（loomdesk codeisland.json 同模式）。 */
 const configPath = () => join(homedir(), ".copilot", "hooks", "pier.json");
 
 /** Copilot CLI hook 事件 → pier 事件名。 */
@@ -70,7 +70,7 @@ export function withPierCopilotHooks(
     const existing = Array.isArray(current) ? current : [];
     const kept = existing.filter((entry) => !isPierCopilotEntry(entry));
     const pierEntry: CopilotHookEntry = {
-      bash: pierHookCommand(AGENT_ID, event.pierEvent),
+      bash: pierHookCommandWithStdinSessionId(AGENT_ID, event.pierEvent),
       timeoutSec: TIMEOUT_SECONDS,
       type: "command",
     };

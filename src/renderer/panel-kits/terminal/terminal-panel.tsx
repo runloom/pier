@@ -8,7 +8,13 @@ import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts
 import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { SquareTerminal } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
@@ -22,12 +28,19 @@ import { useForegroundActivityStore } from "@/stores/foreground-activity.store.t
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal.store.ts";
 import {
+  consumeFreshTerminalInitialInput,
   consumeFreshTerminalPanel,
   isFreshTerminalPanel,
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
+import {
+  RestoredAgentResultView,
+  RestoredTaskResultView,
+  restoredAgentResultFromSession,
+  restoredTaskResultFromSession,
+} from "./terminal-restored-result-view.tsx";
 import { TerminalSearchBar } from "./terminal-search-bar.tsx";
 import {
   shouldMountTerminalStatusBar,
@@ -64,69 +77,11 @@ function launchIdFromParams(params: unknown): string | undefined {
 
 interface ActiveTerminalLaunch {
   context?: PanelContext | undefined;
+  initialInput?: string | undefined;
   launchId?: string | undefined;
   sequence: number;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;
-}
-
-function RestoredTaskResultView({
-  className,
-  fontFamily,
-  fontSize,
-  task,
-}: {
-  className: string;
-  fontFamily: string;
-  fontSize: number;
-  task: TaskPanelMetadata;
-}) {
-  const rows = [
-    ["Task", task.label],
-    ["Status", task.status],
-    ["Command", task.rawCommand],
-    ["CWD", task.cwd],
-  ] as const;
-
-  return (
-    <div
-      className={`${className} overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]`}
-      data-testid="terminal-task-result"
-      style={{ fontFamily, fontSize }}
-    >
-      <p className="mb-1 text-muted-foreground">[pier] restored task</p>
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
-        {rows.map(([label, value]) => (
-          <div className="contents" key={label}>
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="min-w-0 break-words">{value}</dd>
-          </div>
-        ))}
-        {task.exitCode === undefined ? null : (
-          <div className="contents">
-            <dt className="text-muted-foreground">Exit code</dt>
-            <dd>{task.exitCode}</dd>
-          </div>
-        )}
-      </dl>
-    </div>
-  );
-}
-
-/**
- * 静态结果卡只给「真死」的 task 面板（app restart 路径）：taskLive =
- * main 担保该 task 面板寿命仍在本进程内（reload 重挂路径）→ 渲染真终端。
- * running + 非 live 理论上被 main 启动清算兜底为 cancelled；此处保留同款
- * 强转防极端竞态下卡片谎报 "running"。
- */
-function restoredTaskResultFromSession(
-  session: TerminalPanelSessionSnapshot | null | undefined
-): TaskPanelMetadata | undefined {
-  const task = session?.task;
-  if (!task || session?.taskLive) {
-    return;
-  }
-  return task.status === "running" ? { ...task, status: "cancelled" } : task;
 }
 
 export function TerminalPanel(props: IDockviewPanelProps) {
@@ -142,6 +97,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [activeLaunch, setActiveLaunch] = useState<ActiveTerminalLaunch>(
     () => ({
       context: panelContextFromParams(props.params),
+      initialInput: consumeFreshTerminalInitialInput(panelId),
       launchId: launchIdFromParams(props.params),
       sequence: 0,
       tab: tabChromeFromParams(props.params),
@@ -186,6 +142,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
 
   const sessionLoaded = savedSession !== undefined;
   const restoredTaskResult = restoredTaskResultFromSession(savedSession);
+  const restoredAgentResult = restoredAgentResultFromSession(savedSession);
   const effectiveContext =
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
@@ -276,6 +233,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         }
         setActiveLaunch({
           context: relaunchRequest.context,
+          initialInput: relaunchRequest.initialInput,
           launchId: relaunchRequest.launchId,
           sequence: relaunchRequest.sequence,
           tab: relaunchRequest.tab,
@@ -297,6 +255,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     api,
     anchorRef,
     effectiveMonoFontSize,
+    initialInput: activeLaunch.initialInput,
     initialContext: activeLaunch.context,
     initialLaunchId: activeLaunch.launchId,
     initialTab: activeLaunch.tab,
@@ -355,36 +314,51 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   // 占位显示：终端首次就绪前，或窗口 resize 期间（见 TerminalSurfacePlaceholder）。
   const showPlaceholder =
     !error && (!nativeTerminalReady || resizePlaceholderVisible);
+  let terminalBody: ReactNode;
+  if (restoredTaskResult) {
+    terminalBody = (
+      <RestoredTaskResultView
+        className={terminalContentClassName}
+        fontFamily={computeMonoFontFamily(monoFontFamily)}
+        fontSize={effectiveMonoFontSize}
+        task={restoredTaskResult}
+      />
+    );
+  } else if (restoredAgentResult) {
+    terminalBody = (
+      <RestoredAgentResultView
+        agent={restoredAgentResult}
+        className={terminalContentClassName}
+        fontFamily={computeMonoFontFamily(monoFontFamily)}
+        fontSize={effectiveMonoFontSize}
+      />
+    );
+  } else {
+    terminalBody = (
+      <>
+        <div
+          className={`terminal-anchor ${terminalContentClassName}`}
+          ref={anchorRef}
+        />
+        {showPlaceholder ? (
+          <TerminalSurfacePlaceholder className={terminalContentClassName} />
+        ) : null}
+        {error ? (
+          <div
+            className={`${terminalContentClassName} flex items-center justify-center bg-[var(--terminal-background,var(--background))]`}
+          >
+            <p className="text-muted-foreground text-sm">{error}</p>
+          </div>
+        ) : null}
+      </>
+    );
+  }
   return (
     <div
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-testid="terminal-panel-root"
     >
-      {restoredTaskResult ? (
-        <RestoredTaskResultView
-          className={terminalContentClassName}
-          fontFamily={computeMonoFontFamily(monoFontFamily)}
-          fontSize={effectiveMonoFontSize}
-          task={restoredTaskResult}
-        />
-      ) : (
-        <>
-          <div
-            className={`terminal-anchor ${terminalContentClassName}`}
-            ref={anchorRef}
-          />
-          {showPlaceholder ? (
-            <TerminalSurfacePlaceholder className={terminalContentClassName} />
-          ) : null}
-          {error ? (
-            <div
-              className={`${terminalContentClassName} flex items-center justify-center bg-[var(--terminal-background,var(--background))]`}
-            >
-              <p className="text-muted-foreground text-sm">{error}</p>
-            </div>
-          ) : null}
-        </>
-      )}
+      {terminalBody}
       <TerminalSearchBar
         focusRequest={searchFocusRequest}
         onClose={closeTerminalSearch}

@@ -62,6 +62,8 @@ export const settings = {
     terminalPasteProtectionDesc: "粘贴可能直接执行的内容前先确认",
     terminalNewCwdPolicy: "新终端目录",
     terminalNewCwdPolicyDesc: "控制新建或拆分终端时使用哪个工作目录",
+    quitConfirmation: "退出确认",
+    quitConfirmationDesc: "选择按 Cmd+Q 退出 Pier 前何时确认。",
     worktreeRootPath: "工作树目录",
     worktreeRootPathDesc: "留空时使用与主项目同级的 {项目名}.worktree 目录。",
     worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
@@ -80,6 +82,11 @@ export const settings = {
       activeTerminal: "继承当前终端",
       shellDefault: "使用 shell 默认目录",
     },
+  },
+  quitConfirmation: {
+    hasActivity: "有运行中活动时确认",
+    always: "总是确认",
+    never: "从不确认",
   },
   keybindings: {
     change: "更改快捷键",

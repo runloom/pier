@@ -15,13 +15,13 @@ const devinConfigPath = () =>
   join(homedir(), ".config", "devin", "config.json");
 
 /**
- * Devin hook 事件 → pier 事件名（orca DEVIN_EVENTS）。
+ * Devin hook 事件 → pier 事件名。
  * 全部不写 matcher：Devin 把 matcher 当正则，Claude 惯用的 "*" 是非法
  * 正则，写了会导致 hook 注册失败。
  *
  * 已知重叠（不做处理，仅记录）：Devin 默认 `read_config_from` 会导入
  * ~/.claude 的 hooks，若用户同时装了 claude 集成，会出现同一事件双报。
- * orca 用 skipWhenDevinImportsClaude 守卫规避；Pier v1 不做该守卫——
+ * 有的实现用 skipWhenDevinImportsClaude 守卫规避；Pier v1 不做该守卫——
  * 聚合器对同 key（agentId+event+panelId）幂等去重，双报不影响最终状态
  * 展示，仅接受、不特殊处理。
  */
@@ -96,7 +96,7 @@ function skipBlockComment(
  * 提前误判字符串已结束）。输出仍是合法 JSON 文本（注释位置用等长空白
  * 占位，保持行号/列号不变，便于报错定位；不追求还原注释本身）。
  *
- * 写回配置时输出纯 JSON（注释丢失）——这是 orca 同款接受行为，用户
+ * 写回配置时输出纯 JSON（注释丢失）——这是接受行为，用户
  * 原有的 JSONC 注释在 Pier 写入后不会保留。
  */
 export function stripJsonComments(input: string): string {

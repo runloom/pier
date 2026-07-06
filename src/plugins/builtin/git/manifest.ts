@@ -40,6 +40,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.switchBranch",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Switch Branch...",
+    },
+    {
+      category: "Git",
       id: "pier.git.merge",
       permissions: ["git:read", "git:write"],
       title: "Git: Merge Branch...",

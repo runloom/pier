@@ -8,14 +8,14 @@ import type { AgentHookIntegration } from "./types.ts";
 
 const AGENT_ID: AgentKind = "amp";
 
-/** Pier 部署到 amp 自身插件目录下的托管文件（orca AMP_PLUGIN_FILE 同名同位）。 */
+/** Pier 部署到 amp 自身插件目录下的托管文件（同名同位）。 */
 const AMP_PLUGIN_FILE = "pier-agent-status.ts";
 
 /** 托管标记：写在插件源码内, install 幂等比对 + uninstall 删除前必查。 */
 const AMP_PLUGIN_MARKER = "pier-agent-status:v1 (managed by Pier)";
 
 /**
- * amp.on 原生事件 → pier 规范事件名（orca hook-service.ts 事件表对齐）。
+ * amp.on 原生事件 → pier 规范事件名。
  * amp 只有会话/回合/工具五个事件, 无 subagent/permission 细分。
  */
 const AMP_EVENT_MAP: ReadonlyArray<{
@@ -69,13 +69,30 @@ function pierAppend(log, line) {
 		.catch(() => {});
 }
 
-function emitPierEvent(nativeEvent) {
+function pierSessionIdFrom(values) {
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue;
+    for (const key of ["sessionId", "sessionID", "session_id", "threadId", "threadID", "thread_id"]) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
+    }
+    const session = value.session || value.thread;
+    if (session && typeof session === "object") {
+      for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
+        if (typeof session[key] === "string" && session[key]) return session[key];
+      }
+    }
+  }
+  return undefined;
+}
+
+function emitPierEvent(nativeEvent, ...values) {
   const pierEvent = PIER_EVENT_MAP[nativeEvent];
   if (!pierEvent) return;
   const log = process.env.PIER_AGENT_EVENT_LOG;
   const panelId = process.env.PIER_PANEL_ID;
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
+  const sessionId = pierSessionIdFrom(values);
   const line = JSON.stringify({
     v: 1,
     kind: "agentEvent",
@@ -85,6 +102,7 @@ function emitPierEvent(nativeEvent) {
     pid: process.pid,
     agent: "amp",
     event: pierEvent,
+    ...(sessionId ? { sessionId } : {}),
   }) + "\\n";
   try {
     pierAppend(log, line);
@@ -97,25 +115,25 @@ export default function (amp) {
   // 不做加载合成 SessionStart：amp 自身的 session.start 是真实会话开始
   // 信号（下方订阅）；合成版在插件工厂按会话/子代理多次执行的宿主上会
   // 打穿主状态（omp task subagent 教训）。图标点亮由 launch 先验层承担。
-  amp.on("session.start", () => {
-    emitPierEvent("session.start");
+  amp.on("session.start", (...args) => {
+    emitPierEvent("session.start", ...args);
   });
 
-  amp.on("agent.start", () => {
-    emitPierEvent("agent.start");
+  amp.on("agent.start", (...args) => {
+    emitPierEvent("agent.start", ...args);
   });
 
-  amp.on("tool.call", () => {
-    emitPierEvent("tool.call");
+  amp.on("tool.call", (...args) => {
+    emitPierEvent("tool.call", ...args);
     return { action: "allow" };
   });
 
-  amp.on("tool.result", () => {
-    emitPierEvent("tool.result");
+  amp.on("tool.result", (...args) => {
+    emitPierEvent("tool.result", ...args);
   });
 
-  amp.on("agent.end", () => {
-    emitPierEvent("agent.end");
+  amp.on("agent.end", (...args) => {
+    emitPierEvent("agent.end", ...args);
   });
 }
 `;
@@ -134,7 +152,7 @@ async function readPluginFile(path: string): Promise<string | null> {
 }
 
 /**
- * install：非托管同名文件绝不覆盖（orca amp 语义, console.warn 跳过）；
+ * install：非托管同名文件绝不覆盖（console.warn 跳过）；
  * 字节相同则不落盘（幂等重装零写入）。
  */
 export async function installAmpHooks(

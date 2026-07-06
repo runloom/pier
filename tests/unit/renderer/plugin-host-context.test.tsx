@@ -974,10 +974,13 @@ describe("createRendererPluginContext", () => {
       listStashes: vi.fn(async () => []),
       merge: vi.fn(async () => ({ status: "merged" })),
       popStash: vi.fn(async () => ({ status: "popped" })),
+      pullFastForward: vi.fn(async () => ({ kind: "ok" })),
+      push: vi.fn(async () => ({ kind: "ok" })),
       rebase: vi.fn(async () => ({ status: "rebased" })),
       searchBranches: vi.fn(async () => ({ branches: [] })),
       stage: vi.fn(async () => true),
       stash: vi.fn(async () => ({ status: "stashed" })),
+      sync: vi.fn(async () => ({ kind: "ok" })),
       undoLastCommit: vi.fn(async () => ({ status: "undone" })),
       unstage: vi.fn(async () => true),
       watch: vi.fn(() => () => undefined),
@@ -1016,9 +1019,12 @@ describe("createRendererPluginContext", () => {
       () => context.git.discardChanges("/repo", ["README.md"]),
       () => context.git.merge("/repo", "feature"),
       () => context.git.popStash("/repo"),
+      () => context.git.pullFastForward("/repo"),
+      () => context.git.push("/repo"),
       () => context.git.rebase("/repo", "main"),
       () => context.git.stage("/repo", ["README.md"]),
       () => context.git.stash("/repo"),
+      () => context.git.sync("/repo"),
       () => context.git.undoLastCommit("/repo"),
       () => context.git.unstage("/repo", ["README.md"]),
     ];
@@ -1049,6 +1055,9 @@ describe("createRendererPluginContext", () => {
     const stage = vi.fn(async () => true);
     const unstage = vi.fn(async () => true);
     const discardChanges = vi.fn(async () => true);
+    const push = vi.fn(async () => ({ kind: "ok" as const }));
+    const pullFastForward = vi.fn(async () => ({ kind: "ok" as const }));
+    const sync = vi.fn(async () => ({ kind: "ok" as const }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -1056,7 +1065,10 @@ describe("createRendererPluginContext", () => {
           discardChanges,
           getDiffPatch,
           getFileContent,
+          pullFastForward,
+          push,
           stage,
+          sync,
           unstage,
         },
       },
@@ -1088,6 +1100,11 @@ describe("createRendererPluginContext", () => {
     await expect(
       context.git.discardChanges("/repo", ["src/index.ts"])
     ).resolves.toBe(true);
+    await expect(context.git.push("/repo")).resolves.toEqual({ kind: "ok" });
+    await expect(context.git.pullFastForward("/repo")).resolves.toEqual({
+      kind: "ok",
+    });
+    await expect(context.git.sync("/repo")).resolves.toEqual({ kind: "ok" });
 
     expect(getDiffPatch).toHaveBeenCalledWith("/repo", {
       paths: ["src/index.ts"],
@@ -1100,6 +1117,9 @@ describe("createRendererPluginContext", () => {
     expect(stage).toHaveBeenCalledWith("/repo", ["src/index.ts"]);
     expect(unstage).toHaveBeenCalledWith("/repo", ["src/index.ts"]);
     expect(discardChanges).toHaveBeenCalledWith("/repo", ["src/index.ts"]);
+    expect(push).toHaveBeenCalledWith("/repo");
+    expect(pullFastForward).toHaveBeenCalledWith("/repo");
+    expect(sync).toHaveBeenCalledWith("/repo");
   });
 
   it("delegates plain notifications to the host toast layer", () => {

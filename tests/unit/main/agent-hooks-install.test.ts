@@ -91,6 +91,27 @@ describe("installAgentHooksEmitScript", () => {
     expect(typeof parsed.pid).toBe("number");
   });
 
+  it("agentEvent kind 第 4 个参数写入可选 sessionId", async () => {
+    const dir = await makeTempDir();
+    await installAgentHooksEmitScript(dir);
+    const logPath = join(dir, "events.jsonl");
+    const r = spawnSync(
+      "/bin/sh",
+      [emitScriptPath(dir), "agentEvent", "claude", "SessionStart", "s-123"],
+      {
+        env: {
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+          PIER_AGENT_EVENT_LOG: logPath,
+        },
+      }
+    );
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse((await readFile(logPath, "utf8")).trim());
+    expect(parsed.kind).toBe("agentEvent");
+    expect(parsed.sessionId).toBe("s-123");
+  });
+
   it("commandStart kind spawn 写出合法 JSONL + 命令行转义", async () => {
     const dir = await makeTempDir();
     await installAgentHooksEmitScript(dir);

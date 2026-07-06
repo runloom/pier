@@ -10,11 +10,16 @@ describe("terminal focus restoration", () => {
     opts: {
       ipcWindowFocused?: boolean;
       launch?: {
+        agentId?: "claude";
         command?: string;
         cwd?: string;
         env?: Record<string, string>;
         profileId?: string;
       };
+      processEnvironment?: {
+        resolve: (request: unknown) => Promise<{ env: Record<string, string> }>;
+      };
+      savedSession?: unknown;
     } = {}
   ) {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -29,6 +34,7 @@ describe("terminal focus restoration", () => {
       detachWindow: vi.fn(),
       hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
+      sendText: vi.fn(() => true),
       setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
@@ -85,28 +91,37 @@ describe("terminal focus restoration", () => {
         default: { createRequire: vi.fn(() => fakeRequire) },
       };
     });
-    vi.doMock("@main/state/terminal-session-state.ts", () => ({
-      readTerminalPanelSession: vi.fn(async () => ({
-        context: {
-          contextId: "ctx-pier",
-          cwd: "/Users/xyz/ABC/pier",
-          openedPath: "/Users/xyz/ABC/pier",
-          projectRoot: "/Users/xyz/ABC/pier",
-          source: "panel",
-          updatedAt: 1,
-          worktreeKey: "/Users/xyz/ABC/pier",
-        },
-        updatedAt: "2026-06-24T00:00:00.000Z",
-      })),
+    const sessionState = {
+      clearTerminalPanelAgent: vi.fn(async () => undefined),
+      readTerminalPanelSession: vi.fn(async () =>
+        "savedSession" in opts
+          ? opts.savedSession
+          : {
+              context: {
+                contextId: "ctx-pier",
+                cwd: "/Users/xyz/ABC/pier",
+                openedPath: "/Users/xyz/ABC/pier",
+                projectRoot: "/Users/xyz/ABC/pier",
+                source: "panel",
+                updatedAt: 1,
+                worktreeKey: "/Users/xyz/ABC/pier",
+              },
+              updatedAt: "2026-06-24T00:00:00.000Z",
+            }
+      ),
       flushTerminalSessionState: vi.fn(async () => undefined),
+      patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => undefined),
       removeTerminalPanelSession: vi.fn(async () => undefined),
+      updateTerminalPanelAgent: vi.fn(async () => undefined),
+      updateTerminalPanelAgentResume: vi.fn(async () => true),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTab: vi.fn(async () => undefined),
       updateTerminalPanelTask: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
-    }));
+    };
+    vi.doMock("@main/state/terminal-session-state.ts", () => sessionState);
     vi.doMock("@main/state/panel-context-state.ts", () => ({
       recordRecentPanelContext: vi.fn(async () => undefined),
     }));
@@ -143,7 +158,12 @@ describe("terminal focus restoration", () => {
       "@main/ipc/terminal-focus-state.ts"
     );
 
-    registerTerminalIpc(fakeIpcMain as never);
+    registerTerminalIpc(
+      fakeIpcMain as never,
+      opts.processEnvironment
+        ? { processEnvironment: opts.processEnvironment as never }
+        : undefined
+    );
     return {
       consumeLaunch,
       fakeAddon,
@@ -153,6 +173,7 @@ describe("terminal focus restoration", () => {
       readLaunch,
       restoreActivePanelFocus,
       restoreWindow,
+      sessionState,
     };
   }
 
@@ -336,6 +357,218 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
         }),
       }
+    );
+  });
+
+  it("records agent state before native create without persisting launch env", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
+      await setupTerminalFocusHarness({
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/repo",
+          env: { OPENAI_API_KEY: "sk-secret" },
+        },
+        savedSession: null,
+      });
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        launchId: "launch-agent",
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
+      "main",
+      "terminal-1",
+      expect.objectContaining({
+        agentId: "claude",
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/repo",
+        },
+      })
+    );
+    expect(sessionState.updateTerminalPanelAgent).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        launch: expect.objectContaining({
+          env: expect.anything(),
+        }),
+      })
+    );
+    const persistOrder =
+      sessionState.updateTerminalPanelAgent.mock.invocationCallOrder[0];
+    const createOrder = fakeAddon.createTerminal.mock.invocationCallOrder[0];
+    if (persistOrder === undefined || createOrder === undefined) {
+      throw new Error("expected persist and create calls");
+    }
+    expect(persistOrder).toBeLessThan(createOrder);
+  });
+
+  it("re-resolves env for restored running agents without saving it", async () => {
+    const processEnvironment = {
+      resolve: vi.fn(async () => ({
+        env: { OPENAI_API_KEY: "sk-restored" },
+      })),
+    };
+    const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
+      await setupTerminalFocusHarness({
+        processEnvironment,
+        savedSession: {
+          agent: {
+            agentId: "claude",
+            launch: {
+              agentId: "claude",
+              command: "claude",
+              cwd: "/repo",
+            },
+            startedAt: 1_772_000_000_000,
+            status: "running",
+          },
+          context: {
+            contextId: "ctx:/repo",
+            cwd: "/repo",
+            projectRootPath: "/repo",
+            source: "panel",
+            updatedAt: 1,
+          },
+          updatedAt: "2026-07-06T00:00:00.000Z",
+        },
+      });
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(processEnvironment.resolve).toHaveBeenCalledWith({
+      cwd: "/repo",
+      source: "agent",
+    });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          OPENAI_API_KEY: "sk-restored",
+        }),
+      })
+    );
+    expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
+      "main",
+      "terminal-1",
+      expect.objectContaining({
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/repo",
+        },
+      })
+    );
+  });
+
+  it("uses resume adapter for restored running agents with hook session ids", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
+      await setupTerminalFocusHarness({
+        savedSession: {
+          agent: {
+            agentId: "claude",
+            launch: {
+              agentId: "claude",
+              command: "claude --dangerously-skip-permissions",
+              cwd: "/repo",
+            },
+            resume: {
+              capturedAt: 1_772_000_001_000,
+              sessionId: "session-123",
+              source: "hook",
+            },
+            startedAt: 1_772_000_000_000,
+            status: "running",
+          },
+          context: {
+            contextId: "ctx:/repo",
+            cwd: "/repo",
+            projectRootPath: "/repo",
+            source: "panel",
+            updatedAt: 1,
+          },
+          updatedAt: "2026-07-06T00:00:00.000Z",
+        },
+      });
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        command: "claude --dangerously-skip-permissions --resume session-123",
+      })
+    );
+    expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
+      "main",
+      "terminal-1",
+      expect.objectContaining({
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/repo",
+        },
+        resume: {
+          capturedAt: 1_772_000_001_000,
+          sessionId: "session-123",
+          source: "hook",
+        },
+      })
+    );
+  });
+
+  it("sends initial input to the scoped native terminal after creation", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow } =
+      await setupTerminalFocusHarness();
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        initialInput: "修复终端焦点问题\r",
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAddon.sendText).toHaveBeenCalledWith(
+      "7::terminal-1",
+      "修复终端焦点问题\r"
     );
   });
 

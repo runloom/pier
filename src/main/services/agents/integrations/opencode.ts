@@ -88,11 +88,29 @@ function pierAppend(log, line) {
 		.catch(() => {});
 }
 
-function emitPierEvent(pierEvent) {
+function pierSessionIdFrom(event) {
+  const values = [event, event && event.properties];
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue;
+    for (const key of ["sessionId", "sessionID", "session_id"]) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
+    }
+    const session = value.session || value.thread;
+    if (session && typeof session === "object") {
+      for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
+        if (typeof session[key] === "string" && session[key]) return session[key];
+      }
+    }
+  }
+  return undefined;
+}
+
+function emitPierEvent(pierEvent, rawEvent) {
   const log = process.env.PIER_AGENT_EVENT_LOG;
   const panelId = process.env.PIER_PANEL_ID;
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
+  const sessionId = pierSessionIdFrom(rawEvent);
   const line = JSON.stringify({
     v: 1,
     kind: "agentEvent",
@@ -102,6 +120,7 @@ function emitPierEvent(pierEvent) {
     pid: process.pid,
     agent: "${pluginId}",
     event: pierEvent,
+    ...(sessionId ? { sessionId } : {}),
   }) + "\\n";
   try {
     pierAppend(log, line);
@@ -140,7 +159,7 @@ export const PierAgentStatus = () => {
   return {
     event: ({ event }) => {
       const mapped = mapPierEvent(event);
-      if (mapped) emitPierEvent(mapped);
+      if (mapped) emitPierEvent(mapped, event);
     },
     "tool.execute.before": () => {
       emitPierEvent("ToolStart");

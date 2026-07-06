@@ -25,6 +25,7 @@ import { registerTerminalActions } from "./panel-kits/terminal/register-actions.
 import { initAgentAccounts } from "./stores/agent-accounts.store.ts";
 import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
+import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
 import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
@@ -63,6 +64,7 @@ async function bootstrap() {
       initFont(),
       initZoom(),
       initTerminalPreferences(),
+      initAppQuitPreferences(),
       initAgentPreferences(),
       initTerminalStatusBarPrefs(),
       initWorktreePreferences(),

@@ -3,6 +3,10 @@ import type {
   AgentAccountProviderId,
   AgentAccountsSnapshot,
 } from "@shared/contracts/agent-accounts.ts";
+import type {
+  AppQuitConfirmationRequest,
+  AppQuitDecisionPayload,
+} from "@shared/contracts/app-quit.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type {
   MenuPopupOptions,
@@ -130,6 +134,13 @@ export interface PierCommandPaletteAPI {
   onToggleRequest: (cb: () => void) => () => void;
 }
 
+export interface PierAppQuitAPI {
+  decide: (decision: AppQuitDecisionPayload) => Promise<void>;
+  onRequested: (
+    cb: (request: AppQuitConfirmationRequest) => void
+  ) => () => void;
+}
+
 export interface PierPluginsAPI {
   disable: (id: string) => Promise<PluginRegistryEntry>;
   enable: (id: string) => Promise<PluginRegistryEntry>;
@@ -216,6 +227,7 @@ export interface PierWindowAPI {
   accounts: PierAccountsAPI;
   agents: PierAgentsAPI;
   ai: PierAiAPI;
+  appQuit: PierAppQuitAPI;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
@@ -271,6 +283,12 @@ const accountsApi: PierAccountsAPI = {
     invokePierCommand<void>({ accountId, type: "accounts.select" }),
   snapshot: () =>
     invokePierCommand<AgentAccountsSnapshot>({ type: "accounts.snapshot" }),
+};
+
+const appQuitApi: PierAppQuitAPI = {
+  decide: (decision) =>
+    ipcRenderer.invoke(PIER.APP_QUIT_DECISION, decision).then(() => undefined),
+  onRequested: (cb) => subscribeIpc(PIER_BROADCAST.APP_QUIT_REQUESTED, cb),
 };
 
 const preferencesApi: PierPreferencesAPI = {
@@ -414,6 +432,7 @@ const tasksApi: PierTasksAPI = {
 const api: PierWindowAPI = {
   accounts: accountsApi,
   agents: agentsApi,
+  appQuit: appQuitApi,
   foregroundActivity: foregroundActivityApi,
   ai: aiApi,
   closeWindow: (windowId) =>

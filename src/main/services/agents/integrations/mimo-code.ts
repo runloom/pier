@@ -9,7 +9,7 @@ import type { AgentHookIntegration } from "./types.ts";
 const AGENT_ID: AgentKind = "mimo-code";
 
 /**
- * mimo-code 是 opencode 的 fork（orca mimo/hook-service.ts 复用
+ * mimo-code 是 opencode 的 fork（复用
  * opencode 插件源码, 仅换 hook 路径后缀）——插件目录同为
  * `<config>/plugins/`, 目录下任何文件均自动加载。这是对 opencode.json
  * 的 `plugin` 数组注册机制的**补充**而非替代：两条加载路径并存, 目录扫描
@@ -69,11 +69,29 @@ function pierAppend(log, line) {
 		.catch(() => {});
 }
 
-function emitPierEvent(pierEvent) {
+function pierSessionIdFrom(event) {
+  const values = [event, event && event.properties];
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue;
+    for (const key of ["sessionId", "sessionID", "session_id"]) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
+    }
+    const session = value.session || value.thread;
+    if (session && typeof session === "object") {
+      for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
+        if (typeof session[key] === "string" && session[key]) return session[key];
+      }
+    }
+  }
+  return undefined;
+}
+
+function emitPierEvent(pierEvent, rawEvent) {
   const log = process.env.PIER_AGENT_EVENT_LOG;
   const panelId = process.env.PIER_PANEL_ID;
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
+  const sessionId = pierSessionIdFrom(rawEvent);
   const line = JSON.stringify({
     v: 1,
     kind: "agentEvent",
@@ -83,6 +101,7 @@ function emitPierEvent(pierEvent) {
     pid: process.pid,
     agent: "mimo-code",
     event: pierEvent,
+    ...(sessionId ? { sessionId } : {}),
   }) + "\\n";
   try {
     pierAppend(log, line);
@@ -120,7 +139,7 @@ export const PierAgentStatus = () => {
   return {
     event: ({ event }) => {
       const mapped = mapPierEvent(event);
-      if (mapped) emitPierEvent(mapped);
+      if (mapped) emitPierEvent(mapped, event);
     },
     "tool.execute.before": () => {
       emitPierEvent("ToolStart");
@@ -190,8 +209,8 @@ export async function uninstallMimoCodeHooks(
 }
 
 /**
- * detect：mimo-code 配置目录存在或 mimo 命令在 PATH 上（orca
- * resolveSourceConfigDir 的探测逻辑对齐——XDG 目录或已有 home 均视为已装）。
+ * detect：mimo-code 配置目录存在或 mimo 命令在 PATH 上
+ * （XDG 目录或已有 home 均视为已装）。
  */
 function mimoCodeDetect(): boolean {
   return existsSync(mimoCodeConfigDir()) || commandExistsOnPath("mimo-code");

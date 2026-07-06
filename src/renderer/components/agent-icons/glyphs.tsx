@@ -1,4 +1,4 @@
-// Inline brand glyphs — SVG paths/colors copied verbatim from orca.
+// Inline brand glyphs — SVG paths/colors inlined for offline + CSP-safe rendering.
 
 import { useId } from "react";
 
@@ -120,9 +120,9 @@ export function CopilotIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// Gemini: star path is verbatim from orca's GeminiIcon. orca fills it with 8
-// blurred color blobs through a mask (~240 lines); at 14px those blurs are
-// imperceptible, so we approximate with a gradient of orca's 4 brand colors.
+// Gemini: star path inlined. Full brand mark fills it with 8 blurred color
+// blobs through a mask (~240 lines); at 14px those blurs are imperceptible,
+// so we approximate with a gradient of the 4 brand colors.
 export function GeminiIcon({ size = 14 }: { size?: number }) {
   const id = useId().replaceAll(":", "");
   const star =
@@ -148,7 +148,7 @@ export function GeminiIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// OMP: verbatim from orca's OmpIcon (homepage mark, transparent bg).
+// OMP: homepage mark, transparent bg.
 export function OmpIcon({ size = 14 }: { size?: number }) {
   const id = `${useId().replaceAll(":", "")}-omp`;
   return (
@@ -171,7 +171,7 @@ export function OmpIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// Kilocode: verbatim from orca's KiloIcon. Brand-colored (yellow on black),
+// Kilocode: brand-colored (yellow on black),
 // intentionally NOT currentColor — the Google favicon is black-on-black.
 export function KiloIcon({ size = 14 }: { size?: number }) {
   return (

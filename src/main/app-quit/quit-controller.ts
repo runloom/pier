@@ -1,0 +1,102 @@
+import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
+import type { AppQuitConfirmationMode } from "@shared/contracts/preferences.ts";
+import type { AppWindow } from "../windows/app-window.ts";
+import {
+  type QuitActivitySummary,
+  shouldConfirmBeforeQuit,
+  summarizeDangerousQuitActivities,
+} from "./quit-decision.ts";
+
+export type QuitPhase = "idle" | "confirming" | "quitting";
+
+export interface PreventableQuitEvent {
+  preventDefault(): void;
+}
+
+export interface AppQuitControllerDeps {
+  confirmQuit: (args: {
+    parent: AppWindow | null;
+    summaries: readonly QuitActivitySummary[];
+  }) => Promise<boolean>;
+  finalCleanup: () => void;
+  flushBeforeQuit: () => Promise<void>;
+  getActivities: () => readonly ForegroundActivity[];
+  getDialogParent: () => AppWindow | null;
+  logFailure: (error: unknown) => void;
+  proceedToQuit: () => void;
+  readConfirmationMode: () => Promise<AppQuitConfirmationMode>;
+  shouldBypassQuitConfirmationForTests?: () => boolean;
+}
+
+export interface AppQuitController {
+  getPhase: () => QuitPhase;
+  handleBeforeQuit: (event: PreventableQuitEvent) => void;
+}
+
+function canShowQuitConfirmation(
+  parent: AppWindow | null
+): parent is AppWindow {
+  return parent !== null && !parent.isDestroyed();
+}
+
+export function createAppQuitController(
+  deps: AppQuitControllerDeps
+): AppQuitController {
+  let phase: QuitPhase = "idle";
+
+  async function runQuitFlow(): Promise<void> {
+    try {
+      const mode = await deps.readConfirmationMode();
+      const summaries = summarizeDangerousQuitActivities(deps.getActivities());
+      const shouldConfirm =
+        !deps.shouldBypassQuitConfirmationForTests?.() &&
+        shouldConfirmBeforeQuit(mode, summaries.length);
+      if (shouldConfirm) {
+        const parent = deps.getDialogParent();
+        if (canShowQuitConfirmation(parent)) {
+          const confirmed = await deps.confirmQuit({
+            parent,
+            summaries,
+          });
+          if (!confirmed) {
+            phase = "idle";
+            return;
+          }
+        }
+      }
+
+      phase = "quitting";
+      await deps.flushBeforeQuit();
+      deps.proceedToQuit();
+    } catch (error) {
+      deps.logFailure(error);
+      phase = "idle";
+    }
+  }
+
+  return {
+    getPhase: () => phase,
+    handleBeforeQuit: (event) => {
+      if (phase === "quitting") {
+        deps.finalCleanup();
+        return;
+      }
+
+      event.preventDefault();
+
+      if (phase === "confirming") {
+        const parent = deps.getDialogParent();
+        if (parent && !parent.isDestroyed()) {
+          parent.focus();
+        }
+        return;
+      }
+
+      phase = "confirming";
+      runQuitFlow().catch((error) => {
+        deps.logFailure(error);
+        phase = "idle";
+      });
+    },
+  };
+}

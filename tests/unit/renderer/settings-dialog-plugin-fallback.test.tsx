@@ -6,6 +6,7 @@ import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
+import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 function entry(id: string, enabled = true): PluginRegistryEntry {
   return {
@@ -73,23 +74,10 @@ function pierMock() {
     },
     preferences: {
       onChanged: vi.fn(() => () => undefined),
-      read: vi.fn(async () => ({
-        agentCommandOverrides: {},
-        agentDefaultArgs: {},
-        agentDefaultEnv: {},
-        defaultAgentId: null,
-        disabledAgentIds: [],
-        language: "system",
-        stylePreset: "pierre",
-        terminalCursorBlink: true,
-        terminalCursorStyle: "block",
-        terminalNewCwdPolicy: "activeTerminal",
-        terminalPasteProtection: true,
-        terminalScrollbackMb: 64,
-        theme: "system",
-        userKeymap: {},
-      })),
-      update: vi.fn(async (patch: Record<string, unknown>) => patch),
+      read: vi.fn(() => Promise.resolve(makeFakePreferences())),
+      update: vi.fn((patch: Parameters<typeof makeFakePreferences>[0]) =>
+        Promise.resolve(makeFakePreferences(patch))
+      ),
     },
     settings: {
       onOpenRequest: vi.fn(() => () => undefined),

@@ -19,11 +19,29 @@ export const PIER_AGENT_HOOKS_DIR_MARK = "PIER_AGENT_HOOKS_DIR";
  * 第一个位置参数固定 `agentEvent`（emit 脚本 kind dispatch），随后是
  * agent id 与 pier 事件名——见 EMIT_SCRIPT 三 kind 契约。
  */
-export function pierHookCommand(agentId: AgentKind, pierEvent: string): string {
+export function pierHookCommand(
+  agentId: AgentKind,
+  pierEvent: string,
+  sessionIdShellExpression?: string
+): string {
+  const sessionIdArg = sessionIdShellExpression
+    ? ` "${sessionIdShellExpression}"`
+    : "";
   return (
     `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
-    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEvent" "${agentId}" "${pierEvent}" || true`
+    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEvent" "${agentId}" "${pierEvent}"${sessionIdArg} || true`
   );
+}
+
+export function pierHookCommandWithStdinSessionId(
+  agentId: AgentKind,
+  pierEvent: string
+): string {
+  return [
+    "_pier_payload=$(cat 2>/dev/null | head -c 65536)",
+    `_pier_session_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p; s/.*"sessionId"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    pierHookCommand(agentId, pierEvent, "$_pier_session_id"),
+  ].join("; ");
 }
 
 /**
@@ -168,7 +186,10 @@ export function withPierNestedHooks(
       ...(event.matcher === undefined ? {} : { matcher: event.matcher }),
       hooks: [
         {
-          command: pierHookCommand(spec.agentId, event.pierEvent),
+          command: pierHookCommandWithStdinSessionId(
+            spec.agentId,
+            event.pierEvent
+          ),
           timeout: spec.timeoutSeconds ?? 5,
           type: "command",
         },
@@ -233,7 +254,7 @@ export function createNestedJsonIntegration(
 }
 
 // ---------------------------------------------------------------------------
-// 文本块注入（TOML/YAML 等无解析器场景, orca/loomdesk 的 marker 块模式）。
+// 文本块注入（TOML/YAML 等无解析器场景, loomdesk 的 marker 块模式）。
 // ---------------------------------------------------------------------------
 
 const TRAILING_NEWLINES_RE = /\n+$/;

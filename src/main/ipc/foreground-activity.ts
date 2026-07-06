@@ -1,6 +1,7 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { createLogger } from "@shared/logger.ts";
 import { app, type IpcMain } from "electron";
 import {
   agentHooksDir,
@@ -18,15 +19,64 @@ import {
 } from "../services/foreground-activity/jsonl-observer.ts";
 import { readPreferences } from "../state/preferences.ts";
 import {
+  patchTerminalPanelAgentStatus,
+  updateTerminalPanelAgentResume,
+} from "../state/terminal-session-state.ts";
+import {
+  findAppWindowByElectronId,
   findAppWindowByInternalId,
   findAppWindowByWebContents,
 } from "../windows/window-identity.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
+import { windowRecordIdFor } from "./terminal-window-scope.ts";
+
+const log = createLogger("foreground-activity.ipc");
 
 const foregroundActivityAggregator = createForegroundActivityAggregator();
 /** 上次广播覆盖过的窗口——会话清空时也要给这些窗口发空快照清 store。 */
 const lastBroadcastWindowIds = new Set<string>();
 let jsonlObserver: JsonlObserver | null = null;
+
+function markAgentSessionExited(args: {
+  exitCode?: number | undefined;
+  panelId: string;
+  windowId: string;
+}): void {
+  const win = findAppWindowByElectronId(Number(args.windowId));
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  patchTerminalPanelAgentStatus(windowRecordIdFor(win), args.panelId, {
+    ...(args.exitCode === undefined ? {} : { exitCode: args.exitCode }),
+    finishedAt: Date.now(),
+    status: "exited",
+  }).catch((err) => {
+    log.error("agent session exit persist failed", { err });
+  });
+}
+
+function recordAgentResumeSession(args: {
+  agentId: AgentKind;
+  panelId: string;
+  sessionId: string | undefined;
+  windowId: string;
+}): void {
+  if (!args.sessionId) {
+    return;
+  }
+  const win = findAppWindowByElectronId(Number(args.windowId));
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  updateTerminalPanelAgentResume(windowRecordIdFor(win), args.panelId, {
+    agentId: args.agentId,
+    capturedAt: Date.now(),
+    sessionId: args.sessionId,
+    source: "hook",
+  }).catch((err) => {
+    log.error("agent resume metadata persist failed", { err });
+  });
+}
 
 /**
  * 按 windowId 定向发送快照。Pier 窗口是 BaseWindow+WebContentsView（见
@@ -163,7 +213,7 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   foregroundActivityAggregator.onChange(handleBroadcast);
   // emit 脚本安装（一次性）——fire-and-forget，失败仅告警。
   installAgentHooksEmitScript(app.getPath("userData")).catch((err) => {
-    console.error("[foreground-activity] emit script install failed:", err);
+    log.error("emit script install failed", { err });
   });
   // JSONL 尾读（spec §4.4 主路径）：hooks.json 系集成通过 emit 脚本
   // append 到 events.jsonl，observer 250ms 轮询 → 按 kind 分派到
@@ -171,14 +221,29 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // (native shell integration 走 native callback 通路)，是 forward-compat 占位。
   jsonlObserver = createJsonlObserver({
     filePath: eventsJsonlPath(app.getPath("userData")),
-    onAgentEvent: (event) =>
-      foregroundActivityAggregator.ingestAgentEvent(event),
+    onAgentEvent: (event) => {
+      recordAgentResumeSession({
+        agentId: event.agent,
+        panelId: event.panelId,
+        sessionId: event.sessionId,
+        windowId: event.windowId,
+      });
+      if (event.event === "SessionEnd") {
+        markAgentSessionExited({
+          panelId: event.panelId,
+          windowId: event.windowId,
+        });
+      }
+      foregroundActivityAggregator.ingestAgentEvent(event);
+    },
     onCommandFinished: (event) =>
       foregroundActivityAggregator.ingestCommandFinishedHook(event),
     onCommandStart: (event) =>
       foregroundActivityAggregator.ingestCommandStartHook(event),
     onError: (err) => {
-      console.error("[foreground-activity] jsonl observer parse failed:", err);
+      // Per-line JSONL corruption is recoverable; warn keeps diagnostics visible
+      // without treating one bad hook line as a foreground-activity outage.
+      log.warn("jsonl observer parse failed", { err });
     },
   });
   ipcMain.handle("pier:foreground-activity:snapshot", (event) => {
@@ -198,6 +263,6 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       prefs.agentStatusHooks ? installAllAgentHooks() : uninstallAllAgentHooks()
     )
     .catch((err) => {
-      console.error("[foreground-activity] startup hook install failed:", err);
+      log.error("startup hook install failed", { err });
     });
 }

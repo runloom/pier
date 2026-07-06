@@ -344,6 +344,18 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     cwd: z.string().min(1),
     type: z.literal("git.mergeAbort"),
   }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.push"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.pullFastForward"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.sync"),
+  }),
   gitStashOptionsSchema.extend({
     cwd: z.string().min(1),
     type: z.literal("git.stash"),

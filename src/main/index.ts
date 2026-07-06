@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { createLogger } from "@shared/logger.ts";
 import { app, ipcMain, nativeImage } from "electron";
 import {
   type RegisteredLocalControl,
@@ -7,7 +8,12 @@ import {
 } from "./adapters/cli/register-local-control.ts";
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
+import { showAppQuitConfirmation } from "./app-quit/quit-confirmation.ts";
+import { createAppQuitController } from "./app-quit/quit-controller.ts";
+import { createAppQuitRendererTransport } from "./app-quit/quit-renderer-transport.ts";
+import { shouldBypassQuitConfirmationForTests } from "./app-quit/quit-test-runtime.ts";
 import { installCsp } from "./csp.ts";
+import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
 import {
   handleAssetProtocol,
   registerAssetScheme,
@@ -17,6 +23,7 @@ import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import {
   closeForegroundActivityResources,
+  foregroundActivityService,
   registerForegroundActivityIpc,
 } from "./ipc/foreground-activity.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
@@ -42,7 +49,15 @@ const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
 let localControl: RegisteredLocalControl | null = null;
-let didFlushBeforeQuit = false;
+const startupLog = createLogger("startup");
+const windowLog = createLogger("window");
+const windowZoomLog = createLogger("window-zoom");
+const cliLog = createLogger("cli");
+const taskRunLog = createLogger("task-run");
+const terminalSessionLog = createLogger("terminal-session");
+const foregroundActivityLog = createLogger("foreground-activity");
+const secretsLog = createLogger("secrets");
+const appQuitLog = createLogger("app-quit");
 const windowZoom = createWindowZoomController({
   listWindows: () => windowManager.getAll(),
   readPreferences: () => appCore.services.preferences.read(),
@@ -51,7 +66,7 @@ const windowZoom = createWindowZoomController({
 
 windowManager.onCreate(({ window }) => {
   windowZoom.applyPersistedZoomToWindow(window).catch((error) => {
-    console.error("[window-zoom] apply to new window failed:", error);
+    windowZoomLog.error("apply to new window failed", { error });
   });
 });
 
@@ -92,9 +107,11 @@ configureAppIdentity();
 
 // 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
 const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
+if (gotTheLock) {
+  installMainDiagnosticsLogging();
+} else {
   if (isDev) {
-    console.error(
+    startupLog.error(
       formatDevSingleInstanceLockFailure({
         userDataDir: app.getPath("userData"),
         ...(process.env.PIER_DEV_PROFILE
@@ -117,12 +134,13 @@ function getMenuTargetWindow(): AppWindow | null {
   );
 }
 
+function getQuitDialogParentWindow(): AppWindow | null {
+  return getMenuTargetWindow();
+}
+
 function createFreshWindowFromMenu(): void {
   appCore.services.window.create({ mode: "fresh" }).catch((error) => {
-    console.error(
-      "[window] failed to create new window:",
-      error instanceof Error ? error.message : String(error)
-    );
+    windowLog.error("failed to create new window", { error });
   });
 }
 
@@ -171,6 +189,75 @@ function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
   target.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST);
 }
 
+function prepareQuitDialogWindow(target: AppWindow): void {
+  if (target.isMinimized()) {
+    target.restore();
+  }
+  if (isMac) {
+    app.focus({ steal: true });
+  }
+  target.focus();
+  target.webContents.focus();
+}
+
+async function flushBeforeQuitConfirmed(): Promise<void> {
+  try {
+    closeForegroundActivityResources();
+  } catch (error) {
+    foregroundActivityLog.error("failed to close resources before quit", {
+      error,
+    });
+  }
+
+  await Promise.all([
+    appCore.services.window.flushOpenWindows().catch((error) => {
+      windowLog.error("failed to flush windows before quit", { error });
+    }),
+    appCore.services.secrets.flush().catch((error) => {
+      secretsLog.error("failed to flush before quit", { error });
+    }),
+    appCore.services.agentAccounts.flush().catch((error) => {
+      secretsLog.error("failed to flush agent accounts before quit", { error });
+    }),
+  ]);
+}
+
+const appQuitRendererTransport = createAppQuitRendererTransport({
+  getFallbackWindow: getQuitDialogParentWindow,
+  prepareWindow: prepareQuitDialogWindow,
+});
+
+const appQuitController = createAppQuitController({
+  confirmQuit: ({ parent, summaries }) =>
+    showAppQuitConfirmation({
+      sendRequest: (request) =>
+        appQuitRendererTransport.sendRequest(parent, request),
+      summaries,
+    }),
+  finalCleanup: () => {
+    windowManager.destroyAllForQuit();
+    // 杀在途 `codex login` 子进程 + 停轮询/watch
+    appCore.services.agentAccounts.dispose();
+    appCore.pluginHost.dispose();
+    localControl?.close().catch(() => {
+      // ignore: app 正在退出
+    });
+    localControl = null;
+  },
+  flushBeforeQuit: flushBeforeQuitConfirmed,
+  getActivities: () => foregroundActivityService.snapshot().activities,
+  getDialogParent: getQuitDialogParentWindow,
+  logFailure: (error) => {
+    appQuitLog.error("failed before quit", { error });
+  },
+  proceedToQuit: () => app.quit(),
+  readConfirmationMode: async () => {
+    const preferences = await appCore.services.preferences.read();
+    return preferences.confirmOnQuit;
+  },
+  shouldBypassQuitConfirmationForTests,
+});
+
 registerAssetScheme();
 
 app.whenReady().then(async () => {
@@ -190,17 +277,17 @@ app.whenReady().then(async () => {
     onOpenCommandPalette: toggleCommandPaletteFromMenu,
     onResetZoom: () => {
       windowZoom.resetZoom().catch((error) => {
-        console.error("[window-zoom] reset failed:", error);
+        windowZoomLog.error("reset failed", { error });
       });
     },
     onZoomIn: () => {
       windowZoom.zoomIn().catch((error) => {
-        console.error("[window-zoom] zoom in failed:", error);
+        windowZoomLog.error("zoom in failed", { error });
       });
     },
     onZoomOut: () => {
       windowZoom.zoomOut().catch((error) => {
-        console.error("[window-zoom] zoom out failed:", error);
+        windowZoomLog.error("zoom out failed", { error });
       });
     },
     readPreferences: () => appCore.services.preferences.read(),
@@ -265,11 +352,16 @@ app.whenReady().then(async () => {
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
   registerForegroundActivityIpc(ipcMain);
+  ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
+    appQuitRendererTransport.handleDecision(payload);
+  });
   registerSecretsIpc(ipcMain, appCore.services.secrets);
   registerRendererCommandIpc(ipcMain);
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
   registerBundledFonts();
-  registerTerminalIpc(ipcMain);
+  registerTerminalIpc(ipcMain, {
+    processEnvironment: appCore.services.processEnvironment,
+  });
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerNotificationIpc(ipcMain);
@@ -279,7 +371,7 @@ app.whenReady().then(async () => {
       appCore.services.tasks
         .completePanel(panelId, exitCode, windowId)
         .catch((error) => {
-          console.error("[task-run] failed to complete panel:", error);
+          taskRunLog.error("failed to complete panel", { error });
         });
       return;
     }
@@ -290,16 +382,13 @@ app.whenReady().then(async () => {
       localControl = control;
     })
     .catch((error: unknown) => {
-      console.error(
-        "[cli] failed to start local control server:",
-        error instanceof Error ? error.message : String(error)
-      );
+      cliLog.error("failed to start local control server", { error });
     });
 
   // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
   // 从此不说谎（上进程遗留的 running 一律 cancelled）。
   await reconcileOrphanedRunningTasks().catch((error: unknown) => {
-    console.error("[terminal-session] orphan task sweep failed:", error);
+    terminalSessionLog.error("orphan task sweep failed", { error });
   });
 
   const restored = await appCore.services.window.restoreOpenWindows();
@@ -317,10 +406,7 @@ app.whenReady().then(async () => {
           }
         })
         .catch((error) => {
-          console.error(
-            "[window] failed to restore window on activate:",
-            error instanceof Error ? error.message : String(error)
-          );
+          windowLog.error("failed to restore window on activate", { error });
         });
     }
   });
@@ -333,50 +419,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
-  if (!didFlushBeforeQuit) {
-    event.preventDefault();
-    didFlushBeforeQuit = true;
-    // JSONL observer dispose 是同步操作, 抽出 Promise.all 避免无谓的 Promise 包装。
-    try {
-      closeForegroundActivityResources();
-    } catch (error) {
-      console.error(
-        "[foreground-activity] failed to close resources before quit:",
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-    // 并发落盘（顺序不影响正确性）：window / secrets / agent-accounts 三处状态
-    // 都在 app.quit() 前 flush，避免 debounce 窗口内的写丢失。
-    Promise.all([
-      appCore.services.window.flushOpenWindows().catch((error) => {
-        console.error(
-          "[window] failed to flush windows before quit:",
-          error instanceof Error ? error.message : String(error)
-        );
-      }),
-      appCore.services.secrets.flush().catch((error) => {
-        console.error(
-          "[secrets] failed to flush before quit:",
-          error instanceof Error ? error.message : String(error)
-        );
-      }),
-      appCore.services.agentAccounts.flush().catch((error) => {
-        console.error(
-          "[agent-accounts] failed to flush before quit:",
-          error instanceof Error ? error.message : String(error)
-        );
-      }),
-    ]).finally(() => {
-      app.quit();
-    });
+  if (!gotTheLock) {
     return;
   }
-  windowManager.destroyAllForQuit();
-  // 杀在途 `codex login` 子进程 + 停轮询/watch
-  appCore.services.agentAccounts.dispose();
-  appCore.pluginHost.dispose();
-  localControl?.close().catch(() => {
-    // ignore: app 正在退出
-  });
-  localControl = null;
+  appQuitController.handleBeforeQuit(event);
 });

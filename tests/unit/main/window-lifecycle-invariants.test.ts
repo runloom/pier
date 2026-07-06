@@ -11,19 +11,44 @@ const WINDOW_MANAGER_SOURCE = readFileSync(
   "utf8"
 );
 
-// 窗口放宽到 900：before-quit 现在并发 flush 三处状态（window/secrets/agent-accounts），
-// flushOpenWindows 与 app.quit 之间隔着另两个 flush 块，500 字符窗口已容不下。
-// 不变量本身（before-quit 内 window flush 先于 app.quit）不变。
-const BEFORE_QUIT_FLUSH_RE =
-  /app\.on\("before-quit",\s*\(event\) => \{[\s\S]{0,500}?event\.preventDefault\(\);[\s\S]{0,500}?appCore\.services\.window\s*\.flushOpenWindows\(\)[\s\S]{0,900}?app\.quit\(\);/;
+const APP_QUIT_CONTROLLER_CREATION_RE =
+  /const\s+appQuitController\s*=\s*createAppQuitController\(\s*\{/;
+const APP_QUIT_CONTROLLER_FLUSH_INJECTION_RE =
+  /createAppQuitController\(\{[\s\S]{0,2500}?flushBeforeQuit:\s*flushBeforeQuitConfirmed\b/;
+const FLUSH_BEFORE_QUIT_WINDOWS_RE =
+  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1200}?appCore\.services\.window\s*\.flushOpenWindows\(\)/;
+const FLUSH_BEFORE_QUIT_SECRETS_RE =
+  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1200}?appCore\.services\.secrets\.flush\(\)/;
+const FINAL_CLEANUP_DESTROYS_WINDOWS_RE =
+  /createAppQuitController\(\{[\s\S]{0,2500}?finalCleanup:\s*\(\)\s*=>\s*\{[\s\S]{0,500}?windowManager\.destroyAllForQuit\(\)/;
+const BEFORE_QUIT_GUARDS_SECOND_INSTANCE_RE =
+  /app\.on\("before-quit",\s*\(event\) => \{\s*if \(\s*!gotTheLock\s*\) \{\s*return;\s*\}\s*appQuitController\.handleBeforeQuit\(event\);\s*\}\);/;
 const CLOSE_GUARD_FLUSH_RE =
   /window\.host\.on\("close",\s*\(event:[\s\S]{0,80}?\) => \{[\s\S]{0,700}?event\.preventDefault\(\);[\s\S]{0,700}?this\.flushBeforeClose\(window,/;
 const QUIT_DESTROY_SKIPS_CLOSE_RE =
   /if \(\s*!this\.isDestroyingAllForQuit[\s\S]{0,200}?this\.closeFlushDone\.has\(window\)/;
 
 describe("window lifecycle persistence invariants", () => {
-  it("flushes all open window layouts before Cmd+Q destroys windows", () => {
-    expect(MAIN_SOURCE).toMatch(BEFORE_QUIT_FLUSH_RE);
+  it("creates an app quit controller for Cmd+Q", () => {
+    expect(MAIN_SOURCE).toMatch(APP_QUIT_CONTROLLER_CREATION_RE);
+  });
+
+  it("injects a flushBeforeQuit path that flushes window layouts", () => {
+    expect(MAIN_SOURCE).toMatch(APP_QUIT_CONTROLLER_FLUSH_INJECTION_RE);
+    expect(MAIN_SOURCE).toMatch(FLUSH_BEFORE_QUIT_WINDOWS_RE);
+  });
+
+  it("injects a flushBeforeQuit path that flushes secrets", () => {
+    expect(MAIN_SOURCE).toMatch(APP_QUIT_CONTROLLER_FLUSH_INJECTION_RE);
+    expect(MAIN_SOURCE).toMatch(FLUSH_BEFORE_QUIT_SECRETS_RE);
+  });
+
+  it("injects finalCleanup that destroys all windows for quit", () => {
+    expect(MAIN_SOURCE).toMatch(FINAL_CLEANUP_DESTROYS_WINDOWS_RE);
+  });
+
+  it("does not run the app quit controller for a second-instance quit", () => {
+    expect(MAIN_SOURCE).toMatch(BEFORE_QUIT_GUARDS_SECOND_INSTANCE_RE);
   });
 
   it("flushes the current window before user close proceeds", () => {

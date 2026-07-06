@@ -6,8 +6,10 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
 } from "@pier/ui/alert-dialog.tsx";
+import { LogOutIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { useAppDialogStore } from "@/stores/app-dialog.store.ts";
@@ -42,6 +44,9 @@ export function AppDialogHost() {
     return null;
   }
 
+  const isDestructive = dialog.intent === "destructive";
+  const size = dialog.size ?? "default";
+
   return (
     <AlertDialog
       onOpenChange={(open) => {
@@ -51,8 +56,13 @@ export function AppDialogHost() {
       }}
       open
     >
-      <AlertDialogContent>
+      <AlertDialogContent size={size}>
         <AlertDialogHeader>
+          {isDestructive ? (
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <LogOutIcon aria-hidden="true" />
+            </AlertDialogMedia>
+          ) : null}
           <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
           {dialog.body ? (
             <AlertDialogDescription className="whitespace-pre-wrap">
@@ -62,11 +72,17 @@ export function AppDialogHost() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           {dialog.kind === "confirm" ? (
-            <AlertDialogCancel onClick={() => dialog.resolve(false)}>
+            <AlertDialogCancel
+              onClick={() => dialog.resolve(false)}
+              variant={isDestructive ? "ghost" : "outline"}
+            >
               {dialog.cancelLabel ?? t("dialog.cancel")}
             </AlertDialogCancel>
           ) : null}
-          <AlertDialogAction onClick={() => dialog.resolve(true)}>
+          <AlertDialogAction
+            onClick={() => dialog.resolve(true)}
+            variant={isDestructive ? "destructive" : "default"}
+          >
             {dialog.confirmLabel ?? t("dialog.ok")}
           </AlertDialogAction>
         </AlertDialogFooter>

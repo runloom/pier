@@ -127,7 +127,7 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("Stop → status=ready, 后续迟到 ToolStart 被吸收", () => {
+  it("Stop → status=ready, 后续 ToolStart 自然迁移到 tool (Stop 不再置 turnEnded)", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     agg.ingestAgentEvent(hookEvent("Stop"));
@@ -135,7 +135,7 @@ describe("ForegroundActivityAggregator", () => {
     expect(a.status).toBe("ready");
     agg.ingestAgentEvent(hookEvent("ToolStart"));
     a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.status).toBe("ready");
+    expect(a.status).toBe("tool");
     agg.dispose();
   });
 
@@ -575,22 +575,14 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("SessionEnd 只清 hook 层: 投影回落 launch icon-only, 命令退出后全清", () => {
+  it("SessionEnd clears matching launch activity so ended agents do not block quit", () => {
     const agg = createForegroundActivityAggregator({ now });
-    agg.agentLaunched("1", "p1", "codex");
+    agg.agentLaunched("1", "p1", "claude");
     advance(250);
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
-    let a = agg.snapshot().activities[0] as AgentActivity;
+    const a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.source).toBe("hook");
     agg.ingestAgentEvent(hookEvent("SessionEnd"));
-    // hook 清除, command 层保留 → 回落 launch 先验（无 status）
-    a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.kind).toBe("agent");
-    expect(a.source).toBe("launch");
-    expect(a.agentId).toBe("codex");
-    expect(a.status).toBeUndefined();
-    // 前台命令最终退出 → 全清
-    agg.ingestCommandFinished("p1", 0);
     expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });
@@ -755,23 +747,26 @@ describe("ForegroundActivityAggregator", () => {
       agg.dispose();
     });
 
-    it("Stop 后迟到 ToolComplete/ToolStart 被吸收, PromptSubmit 复活回合", () => {
-      // 「Stop 后迟到 ToolStart 被吸收」已有独立用例; 此处补缺口:
-      // ToolComplete 同样被吸收 + PromptSubmit 是解除吸收的唯一复活证据。
+    it("Stop 后迟到工具事件自然迁移状态 (Stop 不再置 turnEnded)", () => {
+      // Stop 不再吸收后续事件——codex/claude 的 Stop hook `decision:"block"`
+      // 续跑机制支持 Stop 后直接发 PreToolUse 不发 UserPromptSubmit, 旧逻辑
+      // 会吸收这些续跑事件锁死 ready, 现在改为自然迁移。
+      // 乱序场景的副作用: pierEmit 异步落盘乱序导致 ToolComplete 比 Stop 后到,
+      // 短暂把 status 从 ready 拉回 tool, 下个真实事件纠正——可接受。
       const agg = createForegroundActivityAggregator({ now });
       agg.ingestAgentEvent(ompEvent("PromptSubmit"));
       agg.ingestAgentEvent(ompEvent("ToolStart"));
       agg.ingestAgentEvent(ompEvent("Stop"));
       let a = agg.snapshot().activities[0] as AgentActivity;
       expect(a.status).toBe("ready");
-      // 迟到工具事件(扩展侧 pierEmit 异步落盘乱序)不得复活 tool
+      // 迟到/续跑 ToolComplete 自然迁移到 tool
       agg.ingestAgentEvent(ompEvent("ToolComplete"));
       a = agg.snapshot().activities[0] as AgentActivity;
-      expect(a.status).toBe("ready");
+      expect(a.status).toBe("tool");
       agg.ingestAgentEvent(ompEvent("ToolStart"));
       a = agg.snapshot().activities[0] as AgentActivity;
-      expect(a.status).toBe("ready");
-      // 新一轮 agent_start → PromptSubmit 才解除吸收
+      expect(a.status).toBe("tool");
+      // 新一轮 PromptSubmit → processing
       agg.ingestAgentEvent(ompEvent("PromptSubmit"));
       a = agg.snapshot().activities[0] as AgentActivity;
       expect(a.status).toBe("processing");

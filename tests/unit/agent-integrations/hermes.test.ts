@@ -79,7 +79,9 @@ describe("buildHermesPluginInit", () => {
       "ctx.register_hook(event_name, _make_hook(event_name))"
     );
     expect(init).toContain("def _make_hook(event_name: str)");
-    expect(init).toContain("def _pier_emit(pier_event: str) -> None:");
+    expect(init).toContain(
+      "def _pier_emit(pier_event: str, payload: dict[str, Any]) -> None:"
+    );
   });
 
   it("事件映射齐全：EVENT_MAP 覆盖全部原生事件, 值为正确 pier 事件名", () => {
@@ -299,7 +301,7 @@ describe("install/uninstallHermesPlugin (文件 IO)", () => {
     await expect(readFile(configPath, "utf8")).rejects.toThrow();
   });
 
-  it("config.yaml plugins.enabled 结构异常时 install 跳过写入 config（但插件文件仍写, 与 orca write-then-enable 顺序不同——此处遵循 goose 纪律：结构异常直接整体跳过）", async () => {
+  it("config.yaml plugins.enabled 结构异常时 install 跳过写入 config（但插件文件仍写, 此处遵循 goose 纪律：结构异常直接整体跳过）", async () => {
     await setup();
     const malformed = "plugins:\n  enabled: [a, b]\n";
     await writeFile(configPath, malformed, "utf8");

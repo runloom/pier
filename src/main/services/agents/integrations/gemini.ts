@@ -30,7 +30,6 @@ import {
  * 取值来自本 spec 的 `timeoutSeconds`（字段名沿用 shared.ts 类型定义,
  * 不可在此处更名）。为了让 Gemini 侧真正获得 10 秒超时, 这里必须传
  * timeoutSeconds: 10_000（即 10000 毫秒), 而不是 10。
- * 参考：orca 的 MANAGED_HOOK_TIMEOUT_MILLISECONDS = 10000。
  * 如果日后有人把这个数值"修正"回 10——那会让 Gemini 侧的实际超时
  * 变成 10 毫秒, 几乎必定导致 pier hook 上报静默失败。
  */

@@ -24,6 +24,7 @@ interface UseTerminalNativeLifecycleArgs {
   api: IDockviewPanelProps["api"];
   effectiveMonoFontSize: number;
   initialContext: PanelContext | undefined;
+  initialInput: string | undefined;
   initialLaunchId: string | undefined;
   initialTab: CreateTerminalArgs["tab"] | undefined;
   initialTask: TaskPanelMetadata | undefined;
@@ -53,6 +54,7 @@ export function useTerminalNativeLifecycle({
   anchorRef,
   effectiveMonoFontSize,
   initialContext,
+  initialInput,
   initialLaunchId,
   initialTab,
   initialTask,
@@ -205,6 +207,7 @@ export function useTerminalNativeLifecycle({
             size: effectiveMonoFontSizeRef.current,
           },
           ...(initialContext && { context: initialContext }),
+          ...(initialInput && { initialInput }),
           ...(initialLaunchId && { launchId: initialLaunchId }),
           ...(initialTab && { tab: initialTab }),
           ...(initialTask && { task: initialTask }),
@@ -325,6 +328,7 @@ export function useTerminalNativeLifecycle({
     api,
     anchorRef,
     initialContext,
+    initialInput,
     initialLaunchId,
     initialTab,
     initialTask,

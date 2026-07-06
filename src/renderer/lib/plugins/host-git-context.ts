@@ -20,6 +20,10 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.abortRebase(cwd);
     },
+    checkoutBranch: (cwd, name) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.checkoutBranch(cwd, name);
+    },
     continueRebase: (cwd) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.continueRebase(cwd);
@@ -64,6 +68,14 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.popStash(cwd, index);
     },
+    pullFastForward: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.pullFastForward(cwd);
+    },
+    push: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.push(cwd);
+    },
     applyStash: (cwd, index) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.applyStash(cwd, index);
@@ -87,6 +99,10 @@ export function createPluginGitContext(
     stash: (cwd, options) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.stash(cwd, options);
+    },
+    sync: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.sync(cwd);
     },
     undoLastCommit: (cwd) => {
       assertPluginCapability(entry, "git:write");

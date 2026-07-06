@@ -20,7 +20,7 @@ export const EVENTS_JSONL_NAME = "events.jsonl";
  * - `$1` = kind（commandStart | commandFinished | agentEvent）
  * - commandStart: `$2` = 命令行文本
  * - commandFinished: `$2` = 退出码（整数字符串）
- * - agentEvent: `$2` = agent id，`$3` = pierEvent 名
+ * - agentEvent: `$2` = agent id，`$3` = pierEvent 名，`$4` = sessionId（可选）
  *
  * 要点：
  * - PIER_PANEL_ID / PIER_WINDOW_ID 缺失时 exit 0（非 Pier 启动的 agent 静默跳过）
@@ -52,8 +52,14 @@ case "$1" in
       "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" >> "$PIER_AGENT_EVENT_LOG"
     ;;
   agentEvent)
-    printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s"}\\n' \\
-      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" >> "$PIER_AGENT_EVENT_LOG"
+    _sid=$(printf '%s' "$4" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    if [ -n "$_sid" ]; then
+      printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","sessionId":"%s"}\\n' \\
+        "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_sid" >> "$PIER_AGENT_EVENT_LOG"
+    else
+      printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s"}\\n' \\
+        "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" >> "$PIER_AGENT_EVENT_LOG"
+    fi
     ;;
 esac
 `;

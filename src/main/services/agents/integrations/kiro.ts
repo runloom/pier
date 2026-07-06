@@ -7,7 +7,7 @@ import {
   commandExistsOnPath,
   isPierHookCommand,
   PIER_AGENT_HOOKS_DIR_MARK,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -47,12 +47,9 @@ const AGENT_ID: AgentKind = "kiro";
  * 提示/工具起止/回合结束）齐全，仅缺 permission 这一项。
  *
  * stdin 处理：kiro 会向 hook 子进程的 stdin 写入 JSON payload（如
- * hook_event_name/cwd/session_id/tool_name 等）。pier 的裸命令
- * `[ -n ... ] && curl ...` 不读取 stdin，若 kiro 端在管道写满前一直等待
- * 子进程读取（或子进程从不消费导致 SIGPIPE/父进程阻塞），存在潜在风险。
- * 保险起见在 kiro 命令前加 `cat >/dev/null 2>&1;` 先排空 stdin 再执行原
- * pier 命令——这是 kiro 集成内自建的命令变体，不修改 shared.ts 的
- * pierHookCommand（其余 agent 不受影响）。
+ * hook_event_name/cwd/session_id/tool_name 等）。Pier 消费该 payload，
+ * 抽取 `session_id` 后作为 JSONL 的 `sessionId` 上报，用于重启后恢复
+ * 同一个 agent 会话；读取 stdin 也避免上游因管道未消费而阻塞。
  */
 
 const KIRO_EVENTS: ReadonlyArray<{
@@ -67,9 +64,9 @@ const KIRO_EVENTS: ReadonlyArray<{
   { nativeEvent: "stop", pierEvent: "Stop" },
 ];
 
-/** kiro 专用命令变体：先排空 stdin 再执行标准 pier curl 命令。 */
+/** kiro 专用命令变体：消费 stdin payload 并携带 session_id 上报。 */
 export function kiroHookCommand(pierEvent: string): string {
-  return `cat >/dev/null 2>&1; ${pierHookCommand(AGENT_ID, pierEvent)}`;
+  return pierHookCommandWithStdinSessionId(AGENT_ID, pierEvent);
 }
 
 interface KiroHookEntry {

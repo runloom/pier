@@ -215,6 +215,7 @@ function createMockContext(): RendererPluginContext {
     git: {
       abortMerge: unimplemented("git.abortMerge"),
       abortRebase: unimplemented("git.abortRebase"),
+      checkoutBranch: unimplemented("git.checkoutBranch"),
       continueRebase: unimplemented("git.continueRebase"),
       discardChanges: unimplemented("git.discardChanges"),
       getDiffPatch: unimplemented("git.getDiffPatch"),
@@ -225,12 +226,15 @@ function createMockContext(): RendererPluginContext {
       listStashes: unimplemented("git.listStashes"),
       merge: unimplemented("git.merge"),
       popStash: unimplemented("git.popStash"),
+      pullFastForward: unimplemented("git.pullFastForward"),
+      push: unimplemented("git.push"),
       applyStash: unimplemented("git.applyStash"),
       dropStash: unimplemented("git.dropStash"),
       rebase: unimplemented("git.rebase"),
       searchBranches: unimplemented("git.searchBranches"),
       stage: unimplemented("git.stage"),
       stash: unimplemented("git.stash"),
+      sync: unimplemented("git.sync"),
       undoLastCommit: unimplemented("git.undoLastCommit"),
       unstage: unimplemented("git.unstage"),
       watch: unimplemented("git.watch"),
@@ -527,6 +531,7 @@ describe("WorktreeCreateOverlay", () => {
         agentId: "codex",
         path: "/repo.worktree/fix-focus",
         runSetup: false,
+        taskPrompt: "修复终端焦点问题",
       });
     });
   });

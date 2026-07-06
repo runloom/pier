@@ -81,8 +81,8 @@ ${eventLines}
 
 /**
  * Python 插件入口。emit 内嵌：`os.environ` 读三个 PIER_ 变量, 缺任一静默
- * no-op；`open(..., "a")` append 写 JSONL, except 吞异常（orca
- * hook-service.ts 同款纪律, payload 精简为 pier v1 agentEvent schema）。
+ * no-op；`open(..., "a")` append 写 JSONL, except 吞异常
+ * （payload 精简为 pier v1 agentEvent schema）。
  * POSIX 保证 <4KB append 原子。
  */
 export function buildHermesPluginInit(): string {
@@ -105,23 +105,44 @@ ${eventMapEntries}
 }
 
 
-def _pier_emit(pier_event: str) -> None:
+def _pier_session_id_from(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    for key in ("sessionId", "sessionID", "session_id"):
+        candidate = value.get(key)
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    for key in ("session", "thread", "context", "ctx"):
+        nested = value.get(key)
+        if isinstance(nested, dict):
+            for nested_key in ("id", "sessionId", "sessionID", "session_id"):
+                candidate = nested.get(nested_key)
+                if isinstance(candidate, str) and candidate:
+                    return candidate
+    return None
+
+
+def _pier_emit(pier_event: str, payload: dict[str, Any]) -> None:
     log = os.environ.get("PIER_AGENT_EVENT_LOG", "")
     panel_id = os.environ.get("PIER_PANEL_ID", "")
     window_id = os.environ.get("PIER_WINDOW_ID", "")
     if not log or not panel_id or not window_id:
         return
+    body = {
+        "v": 1,
+        "kind": "agentEvent",
+        "ts": int(time.time_ns()),
+        "panelId": panel_id,
+        "windowId": window_id,
+        "pid": os.getpid(),
+        "agent": "hermes",
+        "event": pier_event,
+    }
+    session_id = _pier_session_id_from(payload)
+    if session_id:
+        body["sessionId"] = session_id
     line = json.dumps(
-        {
-            "v": 1,
-            "kind": "agentEvent",
-            "ts": int(time.time_ns()),
-            "panelId": panel_id,
-            "windowId": window_id,
-            "pid": os.getpid(),
-            "agent": "hermes",
-            "event": pier_event,
-        }
+        body
     ) + "\\n"
     try:
         with open(log, "a", encoding="utf-8") as fp:
@@ -136,8 +157,8 @@ def _pier_emit(pier_event: str) -> None:
 def _make_hook(event_name: str) -> Callable[..., None]:
     pier_event = EVENT_MAP[event_name]
 
-    def _hook(**_kwargs: Any) -> None:
-        _pier_emit(pier_event)
+    def _hook(**kwargs: Any) -> None:
+        _pier_emit(pier_event, kwargs)
 
     return _hook
 

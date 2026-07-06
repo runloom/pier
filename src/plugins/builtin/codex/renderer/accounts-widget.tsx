@@ -139,6 +139,8 @@ export function createAccountsWidget(
               undefined,
               "Switching accounts affects all terminals, including those outside Pier. Running Codex sessions may be disrupted."
             ),
+            intent: "destructive",
+            size: "sm",
             title: context.i18n.t(
               "widget.accounts.confirmSwitch.title",
               { email: target?.email ?? accountId },

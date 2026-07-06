@@ -209,7 +209,9 @@ export function registerUndoCommitAction(
           "gitUndoCommitConfirm",
           "Undo the last commit? Changes will be preserved as staged."
         ),
-        pluginText(context, "gitUndoCommitConfirmButton", "Undo")
+        pluginText(context, "gitUndoCommitConfirmButton", "Undo"),
+        undefined,
+        { intent: "destructive" }
       );
       if (!confirmed) {
         return;

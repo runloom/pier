@@ -1680,6 +1680,95 @@ describe("createGitService", () => {
     });
   });
 
+  it("push 使用受控 git push 并返回 ok", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.push("/repo")).resolves.toEqual({ kind: "ok" });
+    expect(calls).toEqual([["rev-parse", "--show-toplevel"], ["push"]]);
+  });
+
+  it("pullFastForward 使用 --ff-only 避免隐式 merge", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.pullFastForward("/repo")).resolves.toEqual({
+      kind: "ok",
+    });
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["pull", "--ff-only"],
+    ]);
+  });
+
+  it("sync 先 rebase 拉取再推送", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.sync("/repo")).resolves.toEqual({ kind: "ok" });
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["pull", "--rebase"],
+      ["push"],
+    ]);
+  });
+
+  it("sync 在 rebase 拉取失败时不推送", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "pull") {
+          throw new GitExecError({
+            args,
+            cwd,
+            exitCode: 128,
+            message: "git 退出码 128: rebase failed",
+            stderr: "fatal: rebase failed",
+            stdout: "",
+          });
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.sync("/repo")).resolves.toEqual({
+      kind: "unavailable",
+      message: "fatal: rebase failed",
+    });
+    expect(calls).toEqual([
+      ["rev-parse", "--show-toplevel"],
+      ["pull", "--rebase"],
+    ]);
+  });
+
   it("listTags 返回标签名数组", async () => {
     const service = createGitService({
       execGit: () => Promise.resolve("v1.0.0\nv1.0.1\nv2.0.0\n"),

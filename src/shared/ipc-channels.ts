@@ -6,6 +6,7 @@
 export const PIER = {
   // command router facade
   COMMAND_EXECUTE: "pier://command:execute",
+  APP_QUIT_DECISION: "pier://app-quit:decision",
   // git watch (订阅/退订;事件本身经 PIER_BROADCAST.GIT_CHANGED 广播)
   GIT_WATCH_START: "pier://git:watch-start",
   GIT_WATCH_STOP: "pier://git:watch-stop",
@@ -48,6 +49,8 @@ export const PIER_BROADCAST = {
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
   // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
+  // 应用退出确认请求 (main → renderer, payload AppQuitConfirmationRequest).
+  APP_QUIT_REQUESTED: "pier://app-quit:requested",
   // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
   // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
   FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",

@@ -177,6 +177,278 @@ describe("terminal session state", () => {
     });
   });
 
+  it("preserves saved agent identity for restart restore decisions", async () => {
+    const { readTerminalPanelSession } = await loadTerminalSessionState();
+    const pier = context("/Users/xyz/ABC/pier");
+    await writeFile(
+      join(userDataDir, "terminal-session-state.json"),
+      `${JSON.stringify({
+        version: 1,
+        windows: {
+          main: {
+            panels: {
+              "terminal-1": {
+                agent: {
+                  agentId: "claude",
+                  launch: {
+                    agentId: "claude",
+                    command: "claude --dangerously-skip-permissions",
+                    cwd: "/Users/xyz/ABC/pier",
+                  },
+                  startedAt: 1_772_000_000_000,
+                  status: "running",
+                },
+                context: pier,
+                updatedAt: "2026-07-06T00:00:00.000Z",
+              },
+            },
+          },
+        },
+      })}\n`,
+      "utf-8"
+    );
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        agentId: "claude",
+        launch: {
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/Users/xyz/ABC/pier",
+        },
+        status: "running",
+      },
+    });
+  });
+
+  it("strips saved agent launch env while preserving restore fields", async () => {
+    const { flushTerminalSessionState, readTerminalPanelSession } =
+      await loadTerminalSessionState();
+    await writeFile(
+      join(userDataDir, "terminal-session-state.json"),
+      `${JSON.stringify({
+        version: 1,
+        windows: {
+          main: {
+            panels: {
+              "terminal-1": {
+                agent: {
+                  agentId: "claude",
+                  launch: {
+                    agentId: "claude",
+                    command: "claude",
+                    cwd: "/repo",
+                    env: {
+                      OPENAI_API_KEY: "sk-secret",
+                    },
+                  },
+                  startedAt: 1_772_000_000_000,
+                  status: "running",
+                },
+                updatedAt: "2026-07-06T00:00:00.000Z",
+              },
+            },
+          },
+        },
+      })}\n`,
+      "utf-8"
+    );
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/repo",
+        },
+      },
+    });
+    await flushTerminalSessionState();
+    await expect(
+      readFile(join(userDataDir, "terminal-session-state.json"), "utf-8")
+    ).resolves.not.toContain("OPENAI_API_KEY");
+    await expect(
+      readFile(join(userDataDir, "terminal-session-state.json"), "utf-8")
+    ).resolves.not.toContain("sk-secret");
+  });
+
+  it("persists agent resume metadata from hook session ids", async () => {
+    const {
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "claude",
+      launch: {
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+
+    await expect(
+      updateTerminalPanelAgentResume("main", "terminal-1", {
+        agentId: "claude",
+        capturedAt: 1_772_000_001_000,
+        sessionId: "session-123",
+        source: "hook",
+      })
+    ).resolves.toBe(true);
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        resume: {
+          capturedAt: 1_772_000_001_000,
+          sessionId: "session-123",
+          source: "hook",
+        },
+      },
+    });
+  });
+
+  it("does not attach resume metadata to another agent or exited session", async () => {
+    const {
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "claude",
+      finishedAt: 1_772_000_001_000,
+      launch: {
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      },
+      startedAt: 1_772_000_000_000,
+      status: "exited",
+    });
+
+    await expect(
+      updateTerminalPanelAgentResume("main", "terminal-1", {
+        agentId: "codex",
+        capturedAt: 1_772_000_002_000,
+        sessionId: "wrong-agent-session",
+        source: "hook",
+      })
+    ).resolves.toBe(false);
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.not.toHaveProperty("agent.resume");
+  });
+
+  it("normalizes saved agent resume metadata without keeping raw hook payload", async () => {
+    const { flushTerminalSessionState, readTerminalPanelSession } =
+      await loadTerminalSessionState();
+    await writeFile(
+      join(userDataDir, "terminal-session-state.json"),
+      `${JSON.stringify({
+        version: 1,
+        windows: {
+          main: {
+            panels: {
+              "terminal-1": {
+                agent: {
+                  agentId: "claude",
+                  launch: {
+                    agentId: "claude",
+                    command: "claude",
+                    cwd: "/repo",
+                  },
+                  resume: {
+                    capturedAt: 1_772_000_001_000,
+                    rawPayload: "OPENAI_API_KEY=sk-secret",
+                    sessionId: "session-123",
+                    source: "hook",
+                  },
+                  startedAt: 1_772_000_000_000,
+                  status: "running",
+                },
+                updatedAt: "2026-07-06T00:00:00.000Z",
+              },
+            },
+          },
+        },
+      })}\n`,
+      "utf-8"
+    );
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        resume: {
+          capturedAt: 1_772_000_001_000,
+          sessionId: "session-123",
+          source: "hook",
+        },
+      },
+    });
+    await flushTerminalSessionState();
+    await expect(
+      readFile(join(userDataDir, "terminal-session-state.json"), "utf-8")
+    ).resolves.not.toContain("OPENAI_API_KEY");
+    await expect(
+      readFile(join(userDataDir, "terminal-session-state.json"), "utf-8")
+    ).resolves.not.toContain("sk-secret");
+  });
+
+  it("allows command-finished to add an exit code after agent already exited", async () => {
+    const {
+      patchTerminalPanelAgentStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "claude",
+      launch: {
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+
+    await expect(
+      patchTerminalPanelAgentStatus("main", "terminal-1", {
+        finishedAt: 1_772_000_001_000,
+        status: "exited",
+      })
+    ).resolves.toBe(true);
+    await expect(
+      patchTerminalPanelAgentStatus("main", "terminal-1", {
+        exitCode: 42,
+        finishedAt: 1_772_000_002_000,
+        status: "exited",
+      })
+    ).resolves.toBe(true);
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        exitCode: 42,
+        finishedAt: 1_772_000_002_000,
+        status: "exited",
+      },
+      tab: {
+        state: {
+          label: "Exited 42",
+          status: "failed",
+        },
+      },
+    });
+  });
+
   it("persists task exit reason and source with terminal task status", async () => {
     const {
       patchTerminalPanelTaskStatus,

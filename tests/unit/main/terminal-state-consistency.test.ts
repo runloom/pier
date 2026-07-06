@@ -91,10 +91,14 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       };
     });
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
-      readTerminalPanelSession: vi.fn(async () => null),
+      clearTerminalPanelAgent: vi.fn(async () => undefined),
+      patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
+      readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
+      updateTerminalPanelAgent: vi.fn(async () => undefined),
+      updateTerminalPanelAgentResume: vi.fn(async () => true),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
     }));

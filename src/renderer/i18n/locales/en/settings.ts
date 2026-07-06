@@ -66,6 +66,9 @@ export const settings = {
     terminalNewCwdPolicy: "New Terminal Directory",
     terminalNewCwdPolicyDesc:
       "Choose which directory new or split terminals use",
+    quitConfirmation: "Quit Confirmation",
+    quitConfirmationDesc:
+      "Choose when Pier confirms before quitting with Cmd+Q.",
     worktreeRootPath: "Worktree Directory",
     worktreeRootPathDesc:
       "Leave empty to use a {project}.worktree directory next to the main project.",
@@ -85,6 +88,11 @@ export const settings = {
       activeTerminal: "Inherit active terminal",
       shellDefault: "Use shell default",
     },
+  },
+  quitConfirmation: {
+    hasActivity: "When activity is running",
+    always: "Always",
+    never: "Never",
   },
   keybindings: {
     change: "Change Shortcut",

@@ -31,6 +31,7 @@ import type {
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
+  GitRemoteOperationResult,
   GitRepoInfo,
   GitStashApplyResult,
   GitStashDropResult,
@@ -200,6 +201,9 @@ export interface RendererPluginNotificationOptions {
   description?: string;
 }
 
+export type RendererPluginDialogIntent = "default" | "destructive";
+export type RendererPluginDialogSize = "default" | "sm";
+
 export interface RendererPluginAgentSelection {
   detectedIds: readonly AgentKind[];
   enabledIds: readonly AgentKind[];
@@ -251,12 +255,16 @@ export interface RendererPluginContext {
     alert(options: {
       body?: string;
       confirmLabel?: string;
+      intent?: RendererPluginDialogIntent;
+      size?: RendererPluginDialogSize;
       title: string;
     }): Promise<void>;
     confirm(options: {
       body?: string;
       cancelLabel?: string;
       confirmLabel?: string;
+      intent: RendererPluginDialogIntent;
+      size: RendererPluginDialogSize;
       title: string;
     }): Promise<boolean>;
   };
@@ -277,6 +285,7 @@ export interface RendererPluginContext {
   git: {
     abortMerge(cwd: string): Promise<GitMergeAbortResult>;
     abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
+    checkoutBranch(cwd: string, name: string): Promise<boolean>;
     continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
     discardChanges(cwd: string, paths: string[]): Promise<boolean>;
     getDiffPatch(
@@ -310,6 +319,8 @@ export interface RendererPluginContext {
     listStashes(cwd: string): Promise<GitStashListResult>;
     merge(cwd: string, branch: string): Promise<GitMergeResult>;
     popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
+    pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;
+    push(cwd: string): Promise<GitRemoteOperationResult>;
     applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
     dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
     rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
@@ -318,6 +329,7 @@ export interface RendererPluginContext {
       cwd: string,
       options?: { includeUntracked?: boolean; message?: string }
     ): Promise<GitStashResult>;
+    sync(cwd: string): Promise<GitRemoteOperationResult>;
     undoLastCommit(cwd: string): Promise<GitUndoCommitResult>;
     unstage(cwd: string, paths: string[]): Promise<boolean>;
     watch(

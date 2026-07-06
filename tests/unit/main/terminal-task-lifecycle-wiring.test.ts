@@ -8,6 +8,7 @@ const forwardToWindowMock = vi.hoisted(() => vi.fn());
 const recordExitCodeHintMock = vi.hoisted(() => vi.fn());
 const recordNativeTerminalRouteMock = vi.hoisted(() => vi.fn());
 const resetPanelMock = vi.hoisted(() => vi.fn());
+const patchTerminalPanelAgentStatusMock = vi.hoisted(() => vi.fn());
 const updateTerminalPanelTitleMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@main/ipc/terminal-debug.ts", () => ({
@@ -29,9 +30,11 @@ vi.mock("@main/ipc/terminal-task-lifecycle.ts", () => ({
 
 vi.mock("@main/ipc/terminal-window-scope.ts", () => ({
   terminalSessionScopeFor: () => "session-main",
+  windowRecordIdFor: () => "session-main",
 }));
 
 vi.mock("@main/state/terminal-session-state.ts", () => ({
+  patchTerminalPanelAgentStatus: patchTerminalPanelAgentStatusMock,
   patchTerminalPanelTab: vi.fn(),
   patchTerminalPanelTaskStatus: vi.fn(),
   updateTerminalPanelTitle: updateTerminalPanelTitleMock,
@@ -70,6 +73,8 @@ describe("terminal task lifecycle wiring", () => {
     recordExitCodeHintMock.mockReset();
     recordNativeTerminalRouteMock.mockReset();
     resetPanelMock.mockReset();
+    patchTerminalPanelAgentStatusMock.mockReset();
+    patchTerminalPanelAgentStatusMock.mockResolvedValue(false);
     updateTerminalPanelTitleMock.mockReset();
   });
 
@@ -86,6 +91,11 @@ describe("terminal task lifecycle wiring", () => {
       processAlive: false,
       windowId: "window-main",
     });
+    expect(patchTerminalPanelAgentStatusMock).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      expect.objectContaining({ status: "exited" })
+    );
   });
 
   it("normalizes negative command-finished exit codes before recording hints", () => {
@@ -117,6 +127,11 @@ describe("terminal task lifecycle wiring", () => {
       source: "shell-command-finished",
       windowId: "window-main",
     });
+    expect(patchTerminalPanelAgentStatusMock).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      expect.objectContaining({ exitCode: 0, status: "exited" })
+    );
     expect(recordExitCodeHintMock).not.toHaveBeenCalled();
   });
 

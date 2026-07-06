@@ -7,7 +7,7 @@ import {
   atomicWriteFile,
   commandExistsOnPath,
   pierBlockMarkers,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   removePierTextBlock,
   upsertPierTextBlock,
 } from "./shared.ts";
@@ -98,7 +98,10 @@ export async function vibeExperimentalHooksEnabled(): Promise<boolean> {
  */
 export function buildVibeHookBlock(): string {
   const entries = VIBE_HOOK_EVENTS.map((event) => {
-    const command = pierHookCommand(AGENT_ID, event.pierEvent);
+    const command = pierHookCommandWithStdinSessionId(
+      AGENT_ID,
+      event.pierEvent
+    );
     const commandLiteral = JSON.stringify(command);
     const nameLiteral = JSON.stringify(`pier-${event.nativeType}`);
     return (

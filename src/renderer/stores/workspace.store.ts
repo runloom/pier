@@ -12,6 +12,7 @@ import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   clearFreshTerminalPanel,
   markFreshTerminalPanel,
+  setFreshTerminalInitialInput,
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import { focusWorkspaceGroup } from "@/stores/workspace-focus-group.ts";
@@ -31,6 +32,7 @@ interface WorkspaceState {
   addTab: () => void;
   addTerminal: (opts?: {
     context?: PanelContext;
+    initialInput?: string;
     launchId?: string;
     placement?: PierCommandPlacement;
     referenceGroup?: WorkspaceGroupRef;
@@ -242,6 +244,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     });
     const titlePath = context?.cwd;
     markFreshTerminalPanel(id);
+    if (opts?.initialInput) {
+      setFreshTerminalInitialInput(id, opts.initialInput);
+    }
     try {
       api.addPanel({
         id,

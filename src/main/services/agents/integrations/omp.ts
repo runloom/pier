@@ -101,7 +101,7 @@ function subscriptionLines(): string {
   return Object.entries(byNative)
     .map(
       ([nativeEvent, m]) =>
-        `\tpi.on(${quote(nativeEvent)}, (_event, ctx) => pierDispatch(ctx, ${quote(m.main)}, ${quote(m.sub)}));`
+        `\tpi.on(${quote(nativeEvent)}, (nativeEvent, ctx) => pierDispatch(ctx, nativeEvent, ${quote(m.main)}, ${quote(m.sub)}));`
     )
     .join("\n");
 }
@@ -139,11 +139,28 @@ export function buildOmpExtensionSource(): string {
 
 let pierInstanceCount = 0;
 
-function pierEmit(event) {
+function pierSessionIdFrom(values) {
+	for (const value of values) {
+		if (!value || typeof value !== "object") continue;
+		for (const key of ["sessionId", "sessionID", "session_id"]) {
+			if (typeof value[key] === "string" && value[key]) return value[key];
+		}
+		const session = value.session || value.thread;
+		if (session && typeof session === "object") {
+			for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
+				if (typeof session[key] === "string" && session[key]) return session[key];
+			}
+		}
+	}
+	return undefined;
+}
+
+function pierEmit(event, ...values) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
+	const sessionId = pierSessionIdFrom(values);
 	const line = JSON.stringify({
 		v: 1,
 		kind: "agentEvent",
@@ -153,6 +170,7 @@ function pierEmit(event) {
 		pid: process.pid,
 		agent: "omp",
 		event,
+		...(sessionId ? { sessionId } : {}),
 	}) + "\\n";
 	try {
 		// Synchronous append: keeps file order (the aggregator consumes JSONL
@@ -175,13 +193,13 @@ export default function PierAgentStatus(pi) {
 	const isFirstInstance = pierInstanceCount === 0;
 	pierInstanceCount += 1;
 	let role = null;
-	function pierDispatch(ctx, mainEvent, subEvent) {
+	function pierDispatch(ctx, nativeEvent, mainEvent, subEvent) {
 		if (role === null) {
 			role =
 				(ctx && ctx.hasUI === true) || isFirstInstance ? "main" : "sub";
 		}
 		const event = role === "main" ? mainEvent : subEvent;
-		if (event) pierEmit(event);
+		if (event) pierEmit(event, nativeEvent, ctx);
 	}
 
 ${subscriptionLines()}
