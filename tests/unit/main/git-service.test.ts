@@ -709,9 +709,9 @@ describe("createGitService", () => {
     });
   });
 
-  it("searchBranches 按 VS Code 口径返回分支相对上游的 ahead/behind", async () => {
+  it("searchBranches 返回候选分支相对当前 HEAD 的 ahead/behind", async () => {
     const record = (fields: readonly string[]) => `${fields.join("\x1f")}\x1e`;
-    let revListCalls = 0;
+    const revListCalls: string[][] = [];
     const service = createGitService({
       execGit: (args) => {
         if (isGitRootRequest(args)) {
@@ -721,21 +721,21 @@ describe("createGitService", () => {
           return Promise.resolve("");
         }
         if (args[0] === "rev-list") {
-          revListCalls += 1;
-          return Promise.resolve("6\t2\n");
+          revListCalls.push([...args]);
+          return Promise.resolve("3\t2\n");
         }
         return Promise.resolve(
           [
             record([
-              "refs/heads/feature/diverged",
-              "feature/diverged",
+              "refs/heads/feature/target",
+              "feature/target",
               "aaa1111",
               " ",
-              "diverged subject",
+              "target subject",
               "Author",
               "2026-01-03T00:00:00Z",
-              "origin/feature/diverged",
-              "[ahead 2, behind 1]",
+              "origin/feature/target",
+              "[ahead 9, behind 8]",
             ]),
             record([
               "refs/heads/feature/gone",
@@ -777,27 +777,172 @@ describe("createGitService", () => {
 
     const result = await service.searchBranches("/repo", { limit: 50 });
 
-    expect(revListCalls).toBe(0);
+    expect(revListCalls).toContainEqual([
+      "rev-list",
+      "--left-right",
+      "--count",
+      "refs/heads/feature/target...HEAD",
+    ]);
     expect(result.items).toEqual([
       expect.objectContaining({
-        aheadFromCurrent: 2,
-        behindFromCurrent: 1,
-        name: "feature/diverged",
+        aheadFromCurrent: 3,
+        behindFromCurrent: 2,
+        name: "feature/target",
       }),
       expect.objectContaining({
-        aheadFromCurrent: 0,
-        behindFromCurrent: 0,
+        aheadFromCurrent: 3,
+        behindFromCurrent: 2,
         name: "feature/gone",
       }),
       expect.objectContaining({
-        aheadFromCurrent: null,
-        behindFromCurrent: null,
+        aheadFromCurrent: 3,
+        behindFromCurrent: 2,
         name: "feature/unpublished",
       }),
     ]);
   });
 
-  it("searchBranches 支持大 limit 返回 50+ 分支且不逐项 rev-list", async () => {
+  it("searchBranches 合并模式下无可合入内容时只清空 ahead 并保留 behind", async () => {
+    const record = (fields: readonly string[]) => `${fields.join("\x1f")}\x1e`;
+    const headTree = "a".repeat(40);
+    const mergeModeOptions: {
+      diffMode: "mergeIntoCurrent";
+      limit: number;
+    } = { diffMode: "mergeIntoCurrent", limit: 50 };
+    const service = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "symbolic-ref") {
+          return Promise.resolve("");
+        }
+        if (
+          args.join(" ") ===
+          "rev-list --left-right --count refs/heads/feature/noop...HEAD"
+        ) {
+          return Promise.resolve("6\t4\n");
+        }
+        if (args.join(" ") === "rev-parse HEAD^{tree}") {
+          return Promise.resolve(`${headTree}\n`);
+        }
+        if (
+          args.join(" ") ===
+          "merge-tree --write-tree HEAD refs/heads/feature/noop"
+        ) {
+          return Promise.resolve(`${headTree}\n`);
+        }
+        return Promise.resolve(
+          [
+            record([
+              "refs/heads/feature/noop",
+              "feature/noop",
+              "aaa1111",
+              " ",
+              "noop merge subject",
+              "Author",
+              "2026-01-03T00:00:00Z",
+              "",
+              "",
+            ]),
+            record([
+              "refs/heads/main",
+              "main",
+              "ddd4444",
+              "*",
+              "main subject",
+              "Author",
+              "2026-01-04T00:00:00Z",
+              "",
+              "",
+            ]),
+          ].join("")
+        );
+      },
+    });
+
+    const result = await service.searchBranches("/repo", mergeModeOptions);
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        aheadFromCurrent: 0,
+        behindFromCurrent: 4,
+        name: "feature/noop",
+      }),
+    ]);
+  });
+
+  it("searchBranches 合并模式下有可合入内容时保留提交图 ahead/behind", async () => {
+    const record = (fields: readonly string[]) => `${fields.join("\x1f")}\x1e`;
+    const headTree = "a".repeat(40);
+    const mergeTree = "b".repeat(40);
+    const service = createGitService({
+      execGit: (args) => {
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "symbolic-ref") {
+          return Promise.resolve("");
+        }
+        if (
+          args.join(" ") ===
+          "rev-list --left-right --count refs/heads/feature/content...HEAD"
+        ) {
+          return Promise.resolve("6\t4\n");
+        }
+        if (args.join(" ") === "rev-parse HEAD^{tree}") {
+          return Promise.resolve(`${headTree}\n`);
+        }
+        if (
+          args.join(" ") ===
+          "merge-tree --write-tree HEAD refs/heads/feature/content"
+        ) {
+          return Promise.resolve(`${mergeTree}\n`);
+        }
+        return Promise.resolve(
+          [
+            record([
+              "refs/heads/feature/content",
+              "feature/content",
+              "aaa1111",
+              " ",
+              "content merge subject",
+              "Author",
+              "2026-01-03T00:00:00Z",
+              "",
+              "",
+            ]),
+            record([
+              "refs/heads/main",
+              "main",
+              "ddd4444",
+              "*",
+              "main subject",
+              "Author",
+              "2026-01-04T00:00:00Z",
+              "",
+              "",
+            ]),
+          ].join("")
+        );
+      },
+    });
+
+    const result = await service.searchBranches("/repo", {
+      diffMode: "mergeIntoCurrent",
+      limit: 50,
+    });
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        aheadFromCurrent: 6,
+        behindFromCurrent: 4,
+        name: "feature/content",
+      }),
+    ]);
+  });
+
+  it("searchBranches 支持大 limit 返回 50+ 分支且 ahead/behind 补水有上限", async () => {
     const record = (index: number) =>
       `${[
         `refs/heads/feature/${index}`,
@@ -834,11 +979,11 @@ describe("createGitService", () => {
     expect(result.status).toBe("ok");
     // 超过旧的 50/100 上限的分支也能被返回(命令面板本地过滤需要全量候选)
     expect(result.items).toHaveLength(120);
-    // ahead/behind 直接来自 for-each-ref 的 upstream:track,不能随分支数逐项 spawn。
-    expect(revListCalls).toBe(0);
+    // ahead/behind 每项一次 rev-list,必须有界,不能随分支数线性放大阻塞时间。
+    expect(revListCalls).toBeLessThanOrEqual(20);
     expect(result.items[0]).toMatchObject({
-      aheadFromCurrent: null,
-      behindFromCurrent: null,
+      aheadFromCurrent: 0,
+      behindFromCurrent: 0,
     });
     expect(result.items[119]).toMatchObject({
       aheadFromCurrent: null,
@@ -1314,13 +1459,21 @@ describe("createGitService", () => {
     });
   });
 
-  it("merge 默认走裸 merge：允许 ff、不注入 --no-ff / --no-verify、无隐式探测调用", async () => {
+  it("merge 默认走裸 merge：允许 ff、不注入 --no-ff / --no-verify", async () => {
     const calls: Array<readonly string[]> = [];
+    const headTree = "a".repeat(40);
+    const mergeTree = "b".repeat(40);
     const service = createGitService({
       execGit: (args) => {
         calls.push(args);
         if (isGitRootRequest(args)) {
           return Promise.resolve("/repo\n");
+        }
+        if (args.join(" ") === "rev-parse HEAD^{tree}") {
+          return Promise.resolve(`${headTree}\n`);
+        }
+        if (args.join(" ") === "merge-tree --write-tree HEAD main") {
+          return Promise.resolve(`${mergeTree}\n`);
         }
         return Promise.resolve("Updating abc..def\nFast-forward\n");
       },
@@ -1330,10 +1483,45 @@ describe("createGitService", () => {
       kind: "ok",
       message: "Updating abc..def\nFast-forward",
     });
-    // 只允许 resolve root + merge 两次调用：防止回归引入按分支探测的隐式策略
+    // 允许只读 no-op 预检；实际 merge 仍保持 VS Code 同口径的裸 merge。
     expect(calls).toEqual([
       ["rev-parse", "--show-toplevel"],
+      ["rev-parse", "HEAD^{tree}"],
+      ["merge-tree", "--write-tree", "HEAD", "main"],
       ["merge", "--no-edit", "--", "main"],
+    ]);
+  });
+
+  it("merge 在合入树等于 HEAD 树时返回 already_up_to_date 且不创建空合并提交", async () => {
+    const calls: Array<readonly string[]> = [];
+    const headTree = "a".repeat(40);
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args.join(" ") === "rev-parse HEAD^{tree}") {
+          return Promise.resolve(`${headTree}\n`);
+        }
+        if (
+          args.join(" ") ===
+          "merge-tree --write-tree HEAD feature/plugin-groundwork"
+        ) {
+          return Promise.resolve(`${headTree}\n`);
+        }
+        return Promise.resolve("Merge made by the 'ort' strategy.\n");
+      },
+    });
+
+    await expect(
+      service.merge("/repo", "feature/plugin-groundwork")
+    ).resolves.toEqual({ kind: "already_up_to_date" });
+    expect(calls).not.toContainEqual([
+      "merge",
+      "--no-edit",
+      "--",
+      "feature/plugin-groundwork",
     ]);
   });
 

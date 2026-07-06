@@ -4,7 +4,11 @@ import type {
 } from "../../shared/contracts/git.ts";
 import { validateGitCwd } from "./git-cwd.ts";
 import { GitExecError } from "./git-exec.ts";
+import { mergeWouldKeepHeadTree } from "./git-merge-preview.ts";
 
+const AHEAD_BEHIND_CONCURRENCY = 8;
+const AHEAD_BEHIND_HYDRATE_MAX = 20;
+const AHEAD_BEHIND_TIMEOUT_MS = 2000;
 const BRANCH_FIELD_SEPARATOR = "\x1f";
 const BRANCH_RECORD_SEPARATOR = "\x1e";
 const DEFAULT_BRANCH_LIMIT = 20;
@@ -12,9 +16,8 @@ const DEFAULT_BRANCH_LIMIT = 20;
 const MAX_BRANCH_LIMIT = 1000;
 const ORIGIN_HEAD_RE = /^refs\/remotes\/[^/]+\/(.+)$/;
 const REMOTE_HEAD_RE = /\/HEAD$/;
+const SPLIT_WS_RE = /\s+/;
 const TIMEOUT_RE = /timeout|timed out|超时/i;
-const TRACK_AHEAD_RE = /\bahead ([0-9]+)\b/;
-const TRACK_BEHIND_RE = /\bbehind ([0-9]+)\b/;
 
 export type GitBranchSearchExec = (
   args: readonly string[],
@@ -24,6 +27,7 @@ export type GitBranchSearchExec = (
 
 export interface GitBranchSearchOptions {
   currentBranch?: null | string | undefined;
+  diffMode?: "commitGraph" | "mergeIntoCurrent" | undefined;
   limit?: number | undefined;
   query?: string | undefined;
 }
@@ -83,8 +87,6 @@ function branchOptionFromRecord(
     subject = "",
     authorName = "",
     committerDate = "",
-    ,
-    upstreamTrack = "",
   ] = trimmed.split(BRANCH_FIELD_SEPARATOR);
   const kind = branchKind(refName);
   if (
@@ -95,16 +97,14 @@ function branchOptionFromRecord(
   }
   const name = shortName;
   const isCurrent = head === "*" || (current !== null && shortName === current);
-  // 字段名沿用既有 renderer 契约；值对齐 VS Code，表示本地分支相对上游的 track 状态。
-  const { ahead, behind } = parseUpstreamTrack(kind, upstreamTrack);
   return {
     currentBranch: head === "*" ? shortName : null,
     item: isCurrent
       ? null
       : {
-          aheadFromCurrent: ahead,
+          aheadFromCurrent: null,
           authorName: authorName || null,
-          behindFromCurrent: behind,
+          behindFromCurrent: null,
           commit: commit || null,
           committerDate: committerDate || null,
           current: isCurrent,
@@ -116,32 +116,6 @@ function branchOptionFromRecord(
           refName,
           subject: subject || null,
         },
-  };
-}
-
-function parseTrackCount(pattern: RegExp, track: string): null | number {
-  const raw = pattern.exec(track)?.[1];
-  if (raw === undefined) {
-    return null;
-  }
-  const count = Number.parseInt(raw, 10);
-  return Number.isFinite(count) ? count : null;
-}
-
-function parseUpstreamTrack(
-  kind: GitDiffBranchOption["kind"] | null,
-  upstreamTrack: string
-): { ahead: null | number; behind: null | number } {
-  const track = upstreamTrack.trim();
-  if (kind !== "local" || track.length === 0) {
-    return { ahead: null, behind: null };
-  }
-  if (track === "[gone]") {
-    return { ahead: 0, behind: 0 };
-  }
-  return {
-    ahead: parseTrackCount(TRACK_AHEAD_RE, track) ?? 0,
-    behind: parseTrackCount(TRACK_BEHIND_RE, track) ?? 0,
   };
 }
 
@@ -237,6 +211,76 @@ function groupBranchesByKind(
   return [...pinned, ...locals, ...remotes];
 }
 
+async function computeAheadBehindFromCurrent(
+  execGit: GitBranchSearchExec,
+  cwd: string,
+  refName: string,
+  diffMode: GitBranchSearchOptions["diffMode"]
+): Promise<{ ahead: null | number; behind: null | number }> {
+  try {
+    // 左侧是候选分支独有提交,右侧是当前 HEAD 独有提交。
+    const output = await execGit(
+      ["rev-list", "--left-right", "--count", `${refName}...HEAD`],
+      cwd,
+      { timeoutMs: AHEAD_BEHIND_TIMEOUT_MS }
+    );
+    const [aheadRaw = "", behindRaw = ""] = output.trim().split(SPLIT_WS_RE);
+    const ahead = Number.parseInt(aheadRaw, 10);
+    const behind = Number.parseInt(behindRaw, 10);
+    if (!(Number.isFinite(ahead) && Number.isFinite(behind))) {
+      return { ahead: null, behind: null };
+    }
+    if (diffMode === "mergeIntoCurrent") {
+      if (
+        ahead === 0 ||
+        (await mergeWouldKeepHeadTree(execGit, cwd, refName))
+      ) {
+        return { ahead: 0, behind };
+      }
+      return { ahead, behind };
+    }
+    return { ahead, behind };
+  } catch {
+    return { ahead: null, behind: null };
+  }
+}
+
+async function hydrateAheadBehindFromCurrent(
+  execGit: GitBranchSearchExec,
+  cwd: string,
+  items: readonly GitDiffBranchOption[],
+  diffMode: GitBranchSearchOptions["diffMode"]
+): Promise<GitDiffBranchOption[]> {
+  const results = items.map((item) => ({ ...item }));
+  const hydrateCount = Math.min(results.length, AHEAD_BEHIND_HYDRATE_MAX);
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < hydrateCount) {
+      const index = cursor;
+      cursor += 1;
+      const item = results[index];
+      if (!item) {
+        continue;
+      }
+      const { ahead, behind } = await computeAheadBehindFromCurrent(
+        execGit,
+        cwd,
+        item.refName,
+        diffMode
+      );
+      item.aheadFromCurrent = ahead;
+      item.behindFromCurrent = behind;
+    }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(AHEAD_BEHIND_CONCURRENCY, hydrateCount) },
+      () => worker()
+    )
+  );
+  return results;
+}
+
 export async function searchBranches(
   execGit: GitBranchSearchExec,
   cwd: string,
@@ -264,7 +308,12 @@ export async function searchBranches(
     return {
       currentBranch: parsed.currentBranch,
       durationMs: durationSince(startedAt),
-      items: sliced,
+      items: await hydrateAheadBehindFromCurrent(
+        execGit,
+        root,
+        sliced,
+        options.diffMode
+      ),
       message: null,
       status: "ok",
     };

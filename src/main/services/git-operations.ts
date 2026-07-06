@@ -15,6 +15,7 @@ import type {
 } from "../../shared/contracts/git.ts";
 import { validateGitCwd } from "./git-cwd.ts";
 import { GitExecError } from "./git-exec.ts";
+import { mergeWouldKeepHeadTree } from "./git-merge-preview.ts";
 
 const WRITE_TIMEOUT_MS = 60_000;
 const CONFLICT_RE = /CONFLICT|merge conflict|unmerged/i;
@@ -110,6 +111,9 @@ export async function mergeBranch(
   const target = await resolveGitRootOrUnavailable(execGit, cwd);
   if (target.kind === "unavailable") {
     return target;
+  }
+  if (await mergeWouldKeepHeadTree(execGit, target.root, branch)) {
+    return { kind: "already_up_to_date" };
   }
   try {
     // 裸 merge（默认允许 ff、不跳 hooks）：与 VS Code「Git: Merge Branch」

@@ -56,6 +56,7 @@ export interface GitListBranchesOptionsValue {
 
 export interface GitDiffSearchBranchesOptionsValue {
   currentBranch?: null | string;
+  diffMode?: "commitGraph" | "mergeIntoCurrent";
   limit?: number;
   query?: string;
 }

@@ -94,7 +94,11 @@ async function openBranchPick(
   );
   let result: GitDiffBranchesResult;
   try {
-    result = await context.git.searchBranches(cwd, { limit: 1000, query: "" });
+    result = await context.git.searchBranches(cwd, {
+      ...(operation === "merge" && { diffMode: "mergeIntoCurrent" as const }),
+      limit: 1000,
+      query: "",
+    });
   } catch (err) {
     loading.dismiss();
     await showError(context, title, err);

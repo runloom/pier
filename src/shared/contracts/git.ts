@@ -237,6 +237,7 @@ export const listBranchesOptionsSchema = z.object({
 
 export const gitDiffSearchBranchesOptionsSchema = z.object({
   currentBranch: z.string().nullable().optional(),
+  diffMode: z.enum(["commitGraph", "mergeIntoCurrent"]).optional(),
   limit: z.number().int().min(1).max(1000).optional(),
   query: z.string().max(512).optional(),
 });

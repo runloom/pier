@@ -1250,7 +1250,7 @@ describe("git builtin plugin", () => {
 
     expect(window.pier.git.searchBranches).toHaveBeenCalledWith(
       "/Users/xyz/ABC/pier",
-      { limit: 1000, query: "" }
+      { diffMode: "mergeIntoCurrent", limit: 1000, query: "" }
     );
     expect(toastMocks.loading).toHaveBeenCalledWith("Loading branches...");
     expect(toastMocks.dismiss).toHaveBeenCalledWith("git-loading-toast");
@@ -1375,7 +1375,7 @@ describe("git builtin plugin", () => {
     expect(remoteRow.getByText("· remote subject")).toBeVisible();
     expect(window.pier.git.searchBranches).toHaveBeenCalledWith(
       "/Users/xyz/ABC/pier",
-      { limit: 1000, query: "" }
+      { diffMode: "mergeIntoCurrent", limit: 1000, query: "" }
     );
   });
 

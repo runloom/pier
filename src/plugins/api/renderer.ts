@@ -312,6 +312,7 @@ export interface RendererPluginContext {
       cwd: string,
       options?: {
         currentBranch?: null | string;
+        diffMode?: "commitGraph" | "mergeIntoCurrent";
         limit?: number;
         query?: string;
       }
