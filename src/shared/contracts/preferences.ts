@@ -11,6 +11,11 @@ export const terminalNewCwdPolicySchema = z.enum([
   "activeTerminal",
   "shellDefault",
 ]);
+export const appQuitConfirmationModeSchema = z.enum([
+  "always",
+  "hasActivity",
+  "never",
+]);
 export const keybindingScopeSchema = z.union([
   z.literal("global"),
   z.string().regex(/^(panel|overlay):[A-Za-z0-9._:-]+$/),
@@ -57,6 +62,7 @@ export const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 export const DEFAULT_TERMINAL_SCROLLBACK_MB = 64;
 export const DEFAULT_TERMINAL_PASTE_PROTECTION = true;
 export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
+export const DEFAULT_APP_QUIT_CONFIRMATION_MODE = "hasActivity";
 export const DEFAULT_WINDOW_ZOOM_LEVEL = 0;
 export const MIN_WINDOW_ZOOM_LEVEL = -3;
 export const MAX_WINDOW_ZOOM_LEVEL = 5;
@@ -85,6 +91,9 @@ export const projectPreferencesSchema = z.object({
     .default(DEFAULT_TERMINAL_PASTE_PROTECTION),
   terminalNewCwdPolicy: terminalNewCwdPolicySchema.default(
     DEFAULT_TERMINAL_NEW_CWD_POLICY
+  ),
+  confirmOnQuit: appQuitConfirmationModeSchema.default(
+    DEFAULT_APP_QUIT_CONFIRMATION_MODE
   ),
   windowZoomLevel: z
     .number()
@@ -127,6 +136,9 @@ export type ResolvedTheme = z.infer<typeof resolvedThemeSchema>;
 export type StylePresetId = z.infer<typeof stylePresetIdSchema>;
 export type TerminalCursorStyle = z.infer<typeof terminalCursorStyleSchema>;
 export type TerminalNewCwdPolicy = z.infer<typeof terminalNewCwdPolicySchema>;
+export type AppQuitConfirmationMode = z.infer<
+  typeof appQuitConfirmationModeSchema
+>;
 export type KeybindingScopePreference = z.infer<typeof keybindingScopeSchema>;
 export type UserKeymapEntry = z.infer<typeof userKeymapEntrySchema>;
 export type ProjectPreferences = z.infer<typeof projectPreferencesSchema>;

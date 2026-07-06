@@ -84,6 +84,22 @@ describe("preferences state", () => {
     expect(prefs).not.toHaveProperty("worktreeBranchPrefix");
   });
 
+  it("fills quit confirmation when reading an older preferences file", async () => {
+    await writePreferences({
+      theme: "light",
+      stylePresetId: "pierre",
+      language: "zh-CN",
+      uiFontFamily: "",
+      monoFontFamily: "",
+      monoFontSize: 13,
+    });
+    const { readPreferences } = await importPreferencesState();
+
+    await expect(readPreferences()).resolves.toMatchObject({
+      confirmOnQuit: "hasActivity",
+    });
+  });
+
   it("drops the legacy wt worktree branch prefix when normalizing stored preferences", async () => {
     await writePreferences(legacyPreferencesWithBranchPrefix("wt/"));
     const { readPreferences } = await importPreferencesState();

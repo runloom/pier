@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, ipcMain, nativeImage } from "electron";
 import {
@@ -8,6 +8,10 @@ import {
 } from "./adapters/cli/register-local-control.ts";
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
+import { showAppQuitConfirmation } from "./app-quit/quit-confirmation.ts";
+import { createAppQuitController } from "./app-quit/quit-controller.ts";
+import { createAppQuitRendererTransport } from "./app-quit/quit-renderer-transport.ts";
+import { shouldBypassQuitConfirmationForTests } from "./app-quit/quit-test-runtime.ts";
 import { installCsp } from "./csp.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
 import {
@@ -19,6 +23,7 @@ import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import {
   closeForegroundActivityResources,
+  foregroundActivityService,
   registerForegroundActivityIpc,
 } from "./ipc/foreground-activity.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
@@ -44,7 +49,6 @@ const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
 let localControl: RegisteredLocalControl | null = null;
-let didFlushBeforeQuit = false;
 const startupLog = createLogger("startup");
 const windowLog = createLogger("window");
 const windowZoomLog = createLogger("window-zoom");
@@ -53,6 +57,7 @@ const taskRunLog = createLogger("task-run");
 const terminalSessionLog = createLogger("terminal-session");
 const foregroundActivityLog = createLogger("foreground-activity");
 const secretsLog = createLogger("secrets");
+const appQuitLog = createLogger("app-quit");
 const windowZoom = createWindowZoomController({
   listWindows: () => windowManager.getAll(),
   readPreferences: () => appCore.services.preferences.read(),
@@ -129,6 +134,10 @@ function getMenuTargetWindow(): AppWindow | null {
   );
 }
 
+function getQuitDialogParentWindow(): AppWindow | null {
+  return getMenuTargetWindow();
+}
+
 function createFreshWindowFromMenu(): void {
   appCore.services.window.create({ mode: "fresh" }).catch((error) => {
     windowLog.error("failed to create new window", { error });
@@ -179,6 +188,70 @@ function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
   target.webContents.focus();
   target.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST);
 }
+
+function prepareQuitDialogWindow(target: AppWindow): void {
+  if (target.isMinimized()) {
+    target.restore();
+  }
+  if (isMac) {
+    app.focus({ steal: true });
+  }
+  target.focus();
+  target.webContents.focus();
+}
+
+async function flushBeforeQuitConfirmed(): Promise<void> {
+  try {
+    closeForegroundActivityResources();
+  } catch (error) {
+    foregroundActivityLog.error("failed to close resources before quit", {
+      error,
+    });
+  }
+
+  await Promise.all([
+    appCore.services.window.flushOpenWindows().catch((error) => {
+      windowLog.error("failed to flush windows before quit", { error });
+    }),
+    appCore.services.secrets.flush().catch((error) => {
+      secretsLog.error("failed to flush before quit", { error });
+    }),
+  ]);
+}
+
+const appQuitRendererTransport = createAppQuitRendererTransport({
+  getFallbackWindow: getQuitDialogParentWindow,
+  prepareWindow: prepareQuitDialogWindow,
+});
+
+const appQuitController = createAppQuitController({
+  confirmQuit: ({ parent, summaries }) =>
+    showAppQuitConfirmation({
+      sendRequest: (request) =>
+        appQuitRendererTransport.sendRequest(parent, request),
+      summaries,
+    }),
+  finalCleanup: () => {
+    windowManager.destroyAllForQuit();
+    appCore.pluginHost.dispose();
+    localControl?.close().catch(() => {
+      // ignore: app 正在退出
+    });
+    localControl = null;
+  },
+  flushBeforeQuit: flushBeforeQuitConfirmed,
+  getActivities: () => foregroundActivityService.snapshot().activities,
+  getDialogParent: getQuitDialogParentWindow,
+  logFailure: (error) => {
+    appQuitLog.error("failed before quit", { error });
+  },
+  proceedToQuit: () => app.quit(),
+  readConfirmationMode: async () => {
+    const preferences = await appCore.services.preferences.read();
+    return preferences.confirmOnQuit;
+  },
+  shouldBypassQuitConfirmationForTests,
+});
 
 registerAssetScheme();
 
@@ -274,6 +347,9 @@ app.whenReady().then(async () => {
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
   registerForegroundActivityIpc(ipcMain);
+  ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
+    appQuitRendererTransport.handleDecision(payload);
+  });
   registerSecretsIpc(ipcMain, appCore.services.secrets);
   registerRendererCommandIpc(ipcMain);
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
@@ -336,33 +412,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
-  if (!didFlushBeforeQuit) {
-    event.preventDefault();
-    didFlushBeforeQuit = true;
-    // JSONL observer dispose 是同步操作, 抽出 Promise.all 避免无谓的 Promise 包装。
-    try {
-      closeForegroundActivityResources();
-    } catch (error) {
-      foregroundActivityLog.error("failed to close resources before quit", {
-        error,
-      });
-    }
-    Promise.all([
-      appCore.services.window.flushOpenWindows().catch((error) => {
-        windowLog.error("failed to flush windows before quit", { error });
-      }),
-      appCore.services.secrets.flush().catch((error) => {
-        secretsLog.error("failed to flush before quit", { error });
-      }),
-    ]).finally(() => {
-      app.quit();
-    });
+  if (!gotTheLock) {
     return;
   }
-  windowManager.destroyAllForQuit();
-  appCore.pluginHost.dispose();
-  localControl?.close().catch(() => {
-    // ignore: app 正在退出
-  });
-  localControl = null;
+  appQuitController.handleBeforeQuit(event);
 });

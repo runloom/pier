@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import { FieldDescription, FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import type {
+  AppQuitConfirmationMode,
   TerminalCursorStyle,
   TerminalNewCwdPolicy,
 } from "@shared/contracts/preferences.ts";
@@ -10,6 +11,7 @@ import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { TerminalStatusBarBlock } from "@/pages/settings/components/terminal-status-bar-block.tsx";
+import { useAppQuitPreferencesStore } from "@/stores/app-quit-preferences.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
 const SCROLLBACK_MIN = 10;
@@ -23,6 +25,11 @@ const NEW_CWD_POLICY_OPTIONS = [
   "activeTerminal",
   "shellDefault",
 ] satisfies TerminalNewCwdPolicy[];
+const QUIT_CONFIRMATION_OPTIONS = [
+  "hasActivity",
+  "always",
+  "never",
+] satisfies AppQuitConfirmationMode[];
 
 function clampScrollback(raw: string, fallback: number): number {
   const n = Number.parseInt(raw, 10);
@@ -83,6 +90,7 @@ export function TerminalSection() {
   const terminalNewCwdPolicy = useTerminalPreferencesStore(
     (s) => s.terminalNewCwdPolicy
   );
+  const confirmOnQuit = useAppQuitPreferencesStore((s) => s.confirmOnQuit);
   const setTerminalCursorStyle = useTerminalPreferencesStore(
     (s) => s.setTerminalCursorStyle
   );
@@ -94,6 +102,9 @@ export function TerminalSection() {
   );
   const setTerminalNewCwdPolicy = useTerminalPreferencesStore(
     (s) => s.setTerminalNewCwdPolicy
+  );
+  const setConfirmOnQuit = useAppQuitPreferencesStore(
+    (s) => s.setConfirmOnQuit
   );
 
   return (
@@ -155,6 +166,21 @@ export function TerminalSection() {
                 }))}
                 triggerWidth="w-[180px]"
                 value={terminalNewCwdPolicy}
+              />
+              <FieldSeparator />
+              <SelectRow<AppQuitConfirmationMode>
+                description={t("settings.row.quitConfirmationDesc")}
+                id="settings-quit-confirmation"
+                label={t("settings.row.quitConfirmation")}
+                onChange={(next) => {
+                  setConfirmOnQuit(next).catch(() => undefined);
+                }}
+                options={QUIT_CONFIRMATION_OPTIONS.map((value) => ({
+                  value,
+                  label: t(`settings.quitConfirmation.${value}`),
+                }))}
+                triggerWidth="w-[180px]"
+                value={confirmOnQuit}
               />
             </FieldSet>
           </CardContent>

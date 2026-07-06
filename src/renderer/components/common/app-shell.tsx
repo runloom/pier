@@ -1,4 +1,5 @@
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
+import { AppQuitDialogBridge } from "@/components/common/app-quit-dialog-bridge.tsx";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { DocumentTitle } from "@/components/common/document-title.tsx";
 import { ForegroundActivityBridge } from "@/components/common/foreground-activity-bridge.tsx";
@@ -23,6 +24,7 @@ export function AppShell() {
       <ShellKeybindings />
       <CommandPalette />
       <SettingsDialog />
+      <AppQuitDialogBridge />
       <AppDialogHost />
       <PluginOverlayHost />
       <TerminalDebugSnapshotBridge />
