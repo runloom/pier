@@ -41,6 +41,12 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(import.meta.dirname, "src/renderer"),
+    // 依赖优化缓存必须 worktree 本地：node_modules 是软链到主仓的
+    // (setup:worktree)，默认 cacheDir=node_modules/.vite 会被所有 worktree
+    // 的 dev 会话共享互踩——任一会话 re-optimize 就撕裂其它会话的模块图
+    // (同一依赖图混载两代 ?v= 哈希 → React/事件系统分叉，实测表现为
+    // RGL 拖拽/调整在 dev 全哑而 build 正常)。
+    cacheDir: resolve(import.meta.dirname, ".vite"),
     // 端口由 worktree dev profile 管理, 避免多 worktree 互相抢 5173.
     // strictPort 关键: vite 默认 +1 fallback 与 main 进程 ELECTRON_RENDERER_URL
     // 静态注入不同步 → renderer 加载 404 白屏.
@@ -55,11 +61,47 @@ export default defineConfig({
       },
     },
     resolve: {
-      alias: {
-        "@": resolve(import.meta.dirname, "src/renderer"),
-        "@shared": resolve(import.meta.dirname, "src/shared"),
-        "@plugins": resolve(import.meta.dirname, "src/plugins"),
-        "@pier/ui": resolve(import.meta.dirname, "packages/ui/src"),
+      alias: [
+        {
+          find: "@",
+          replacement: resolve(import.meta.dirname, "src/renderer"),
+        },
+        {
+          find: "@shared",
+          replacement: resolve(import.meta.dirname, "src/shared"),
+        },
+        {
+          find: "@plugins",
+          replacement: resolve(import.meta.dirname, "src/plugins"),
+        },
+        {
+          find: "@pier/ui",
+          replacement: resolve(import.meta.dirname, "packages/ui/src"),
+        },
+        // 注意: 不要给 react-grid-layout 加 alias 或 optimizeDeps.exclude 让它
+        // 绕过预打包生服 —— 其依赖 fast-equals@4(browser 字段指向 UMD)、
+        // react-draggable / react-resizable(CJS)在 dev 原样服务时会直接
+        // SyntaxError。预打包的 CJS 入口(dist/index.js)与 build 的 ESM 入口
+        // (dist/index.mjs)是同一现代 API 的孪生构建, 语义一致。
+      ],
+      // @pier/ui 走源码 alias + optimizeDeps 预打包并存时, dev 可能出现两份
+      // react-dom(根容器与子树的 fiber key 不同源), React 委托事件在错误副本
+      // 上派发 → 子树 onMouseDown 等 handler 永不触发。dedupe 强制唯一副本。
+      dedupe: ["react", "react-dom"],
+    },
+    optimizeDeps: {
+      // 固定预打包集合, 避免运行中"Re-optimizing dependencies"造成新旧
+      // chunk 混载(长驻 dev 会话叠加 HMR 时尤其致命)。
+      include: ["react", "react-dom", "react-grid-layout"],
+      esbuildOptions: {
+        define: {
+          // react-draggable 的 log() 无条件读 process.env.DRAGGABLE_DEBUG,
+          // esbuild 预打包默认只替换 NODE_ENV。dev renderer 走 http:// 加载,
+          // Electron 不给远程内容注入 process 全局 → 每次 mousedown 在
+          // handleDragStart 入口抛 ReferenceError 且被 React 吞掉, 表现为
+          // dev 拖拽/调整尺寸全部失效; prod 走 file:// 有 process 全局故无恙。
+          "process.env.DRAGGABLE_DEBUG": "undefined",
+        },
       },
     },
     plugins: [react(), tailwindcss()],

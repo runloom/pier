@@ -70,3 +70,6 @@ playwright-report/
 
 # GhosttyKit.xcframework 由 scripts/build-libghostty.sh 现地构建，不入库
 /native/Vendor/libghostty-spm/GhosttyKit.xcframework/
+
+# Per-worktree vite 依赖优化缓存（见 electron.vite.config.ts cacheDir 注释）
+/.vite/

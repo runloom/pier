@@ -106,6 +106,23 @@ module.exports = {
       },
     },
     {
+      name: "agent-accounts-narrow-imports",
+      severity: "error",
+      comment:
+        "agent-accounts 模块只应依赖 shared 契约、自身持久化层与 node builtin; 不依赖 services/agents 或 ipc/electron 层, 保账号域独立",
+      from: { path: "^src/main/services/agent-accounts" },
+      to: {
+        pathNot: [
+          "^src/main/services/agent-accounts",
+          "^src/shared",
+          "^src/main/state/agent-accounts-state",
+          "^node:",
+          "node_modules",
+          "^(assert|buffer|child_process|crypto|events|fs|http|https|net|os|path|stream|url|util|zlib)(/|$)",
+        ],
+      },
+    },
+    {
       name: "no-circular",
       severity: "error",
       comment: "严禁循环依赖",
