@@ -1,6 +1,7 @@
 export const workspace = {
   addPanelMenu: {
     trigger: "Add Panel",
+    newDashboard: "New Dashboard",
     newTerminal: "New Terminal",
     newTask: "New Task",
     newWorktree: "New Worktree",

@@ -86,6 +86,7 @@ function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
+      dashboardWidgets: [],
       engines: { pier: ">=0.1.0" },
       id,
       name: id,
@@ -105,6 +106,7 @@ function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
 
 function cliClientServices(): PierCoreServices {
   return {
+    agentAccounts: {} as never,
     ai: {
       generateText: async () => ({
         message: "not configured",

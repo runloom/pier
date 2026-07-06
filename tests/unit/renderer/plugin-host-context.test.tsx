@@ -42,6 +42,10 @@ import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
+import {
+  clearPluginDashboardWidgetsForTests,
+  getPluginDashboardWidgetRegistrations,
+} from "@/lib/plugins/plugin-dashboard-widget-registry.ts";
 import { clearPluginPanelsForTests } from "@/lib/plugins/plugin-panel-registry.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
@@ -97,6 +101,9 @@ const sampleCommands = [
 const sampleTerminalStatusItems = [
   { id: "sample.status", permissions: [], title: "Sample Status" },
 ];
+const sampleDashboardWidgets = [
+  { id: "sample.widget", permissions: [], title: "Sample Widget" },
+];
 const undeclaredContributionErrorPattern = /not declared/;
 
 const pluginEntry = {
@@ -151,6 +158,7 @@ const pluginEntry = {
     permissions: [],
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
+    dashboardWidgets: sampleDashboardWidgets,
     version: "1.0.0",
   },
   runtime: {
@@ -248,6 +256,7 @@ afterEach(() => {
   useWorkspaceStore.setState({ api: null });
   workspaceActivationMocks.activateWorkspacePanel.mockReset();
   vi.restoreAllMocks();
+  clearPluginDashboardWidgetsForTests();
 });
 
 describe("createRendererPluginContext", () => {
@@ -384,6 +393,56 @@ describe("createRendererPluginContext", () => {
       })
     ).toThrow(undeclaredContributionErrorPattern);
     expect(terminalStatusItemRegistry.list()).toEqual([]);
+  });
+
+  it("delegates dashboard widget registration to the internal registry", () => {
+    const context = createRendererPluginContext(pluginEntry);
+
+    const dispose = context.dashboardWidgets.register({
+      component: () => null,
+      icon: House,
+      id: "sample.widget",
+    });
+
+    expect(getPluginDashboardWidgetRegistrations().has("sample.widget")).toBe(
+      true
+    );
+
+    dispose();
+    expect(getPluginDashboardWidgetRegistrations().has("sample.widget")).toBe(
+      false
+    );
+  });
+
+  it("rejects dashboard widget registration not declared by the plugin manifest", () => {
+    const context = createRendererPluginContext(pluginEntry);
+
+    expect(() =>
+      context.dashboardWidgets.register({
+        component: () => null,
+        icon: House,
+        id: "sample.missingWidget",
+      })
+    ).toThrow(undeclaredContributionErrorPattern);
+    expect(
+      getPluginDashboardWidgetRegistrations().has("sample.missingWidget")
+    ).toBe(false);
+  });
+
+  it("allows dashboard widget registration without entry (core context)", () => {
+    const context = createRendererPluginContext();
+
+    const dispose = context.dashboardWidgets.register({
+      component: () => null,
+      icon: House,
+      id: "any.widget",
+    });
+
+    expect(getPluginDashboardWidgetRegistrations().has("any.widget")).toBe(
+      true
+    );
+
+    dispose();
   });
 
   it("opens quick-pick through the command palette controller", () => {

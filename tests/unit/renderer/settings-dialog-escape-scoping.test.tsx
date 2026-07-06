@@ -31,6 +31,7 @@ function entry(id: string): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
+      dashboardWidgets: [],
       configuration: {
         properties: {
           [`${id}.limit`]: {

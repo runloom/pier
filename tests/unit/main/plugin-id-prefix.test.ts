@@ -1,9 +1,11 @@
 import type { PluginStateStore } from "@main/services/plugin-service.ts";
 import {
   createPluginService,
+  findDashboardWidgetIdConflict,
   findPluginIdDotPrefixConflict,
 } from "@main/services/plugin-service.ts";
 import type { PluginRegistryState } from "@shared/contracts/plugin.ts";
+import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
 
 function builtinSource(id: string) {
@@ -135,5 +137,60 @@ describe("plugin registry — terminalStatusItems id 跨插件唯一性", () => 
       "pier.beta",
     ]);
     expect(result.diagnostics).toHaveLength(0);
+  });
+});
+
+function manifestWith(overrides: {
+  dashboardWidgets?: Array<{
+    id: string;
+    permissions: string[];
+    title: string;
+  }>;
+  id: string;
+}) {
+  return pluginManifestSchema.parse({
+    apiVersion: 1,
+    dashboardWidgets: overrides.dashboardWidgets ?? [],
+    engines: { pier: ">=0.1.0" },
+    id: overrides.id,
+    name: overrides.id,
+    source: { kind: "builtin" },
+    version: "1.0.0",
+  });
+}
+
+describe("findDashboardWidgetIdConflict", () => {
+  it("两个插件声明同一 widget id 时返回冲突 id", () => {
+    const accepted = manifestWith({
+      dashboardWidgets: [
+        { id: "pier.a.widget", permissions: [], title: "A Widget" },
+      ],
+      id: "pier.a",
+    });
+    const candidate = manifestWith({
+      dashboardWidgets: [
+        { id: "pier.a.widget", permissions: [], title: "Steal" },
+      ],
+      id: "pier.b",
+    });
+    expect(findDashboardWidgetIdConflict([accepted], candidate)).toBe(
+      "pier.a.widget"
+    );
+  });
+
+  it("无重叠 id 时返回 null", () => {
+    const accepted = manifestWith({
+      dashboardWidgets: [
+        { id: "pier.a.widget", permissions: [], title: "A Widget" },
+      ],
+      id: "pier.a",
+    });
+    const candidate = manifestWith({
+      dashboardWidgets: [
+        { id: "pier.b.widget", permissions: [], title: "B Widget" },
+      ],
+      id: "pier.b",
+    });
+    expect(findDashboardWidgetIdConflict([accepted], candidate)).toBeNull();
   });
 });

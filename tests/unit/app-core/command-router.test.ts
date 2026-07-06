@@ -105,6 +105,7 @@ function pluginEntry(
     manifest: {
       apiVersion: 1,
       commands,
+      dashboardWidgets: [],
       engines: { pier: ">=0.1.0" },
       id,
       name: id,
@@ -153,6 +154,7 @@ function services(
   let recentContexts: PanelContext[] = [];
 
   return {
+    agentAccounts: {} as never,
     ai: {
       generateText: async () => ({
         message: "not configured",

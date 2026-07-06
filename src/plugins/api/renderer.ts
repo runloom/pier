@@ -1,9 +1,14 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
+  AgentAccountProviderId,
+  AgentAccountsSnapshot,
+} from "@shared/contracts/agent-accounts.ts";
+import type {
   AiGenerateTextRequest,
   AiGenerateTextResult,
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
+import type { DashboardGridSize } from "@shared/contracts/dashboard.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
   FileListRequest,
@@ -147,6 +152,24 @@ export interface RendererTerminalStatusItem {
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
 }
 
+export interface DashboardWidgetComponentProps {
+  /**
+   * 卡片占位（格子数，非像素）。用于逻辑分支（如"h ≥ 4 才显示列表"）。
+   * 内容级响应式布局请用 container query（CardContent 已开 @container），
+   * 勿依赖本值换算像素——格宽固定但列数随面板宽度变化。
+   */
+  size: DashboardGridSize;
+}
+
+export interface RendererDashboardWidgetRegistration {
+  component: FunctionComponent<DashboardWidgetComponentProps>;
+  icon: LucideIcon;
+  /** 必须在本插件 manifest.dashboardWidgets 中声明 */
+  id: string;
+  /** 可选标题 thunk，locale 切换实时生效；省略则用 manifest 本地化解析结果 */
+  title?: (() => string) | string;
+}
+
 export interface PluginPanelRegistration {
   component: FunctionComponent<IDockviewPanelProps>;
   /**
@@ -184,6 +207,16 @@ export interface RendererPluginAgentSelection {
 }
 
 export interface RendererPluginContext {
+  accounts: {
+    add(provider: AgentAccountProviderId): Promise<void>;
+    adoptCurrent(): Promise<void>;
+    cancelLogin(provider: AgentAccountProviderId): Promise<void>;
+    onDidChange(cb: (s: AgentAccountsSnapshot) => void): () => void;
+    refreshUsage(): Promise<void>;
+    remove(accountId: string): Promise<void>;
+    select(accountId: string): Promise<void>;
+    snapshot(): AgentAccountsSnapshot;
+  };
   actions: {
     register(action: RendererPluginAction): () => void;
   };
@@ -206,6 +239,9 @@ export interface RendererPluginContext {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
   };
   configuration: PluginConfigurationApi;
+  dashboardWidgets: {
+    register(registration: RendererDashboardWidgetRegistration): () => void;
+  };
   /**
    * 宿主级模态弹窗。渲染、blocking overlay、终端输入路由与 keybinding scope
    * 均由宿主统一处理;全局单例,新弹窗会顶替未决的旧弹窗(旧的按取消 resolve)。

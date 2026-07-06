@@ -279,4 +279,46 @@ describe("authorizeCommand", () => {
       });
     }
   });
+
+  it("account:read 命令允许 desktop-renderer 和 cli-local，拒绝 mcp-local", () => {
+    const readCommands = [
+      { type: "accounts.snapshot" },
+      { type: "accounts.refreshUsage" },
+    ] satisfies PierCommand[];
+    for (const command of readCommands) {
+      expect(authorizeCommand(command, client("desktop-renderer"))).toEqual({
+        ok: true,
+      });
+      expect(authorizeCommand(command, client("cli-local"))).toEqual({
+        ok: true,
+      });
+      expect(authorizeCommand(command, client("mcp-local"))).toEqual({
+        ok: false,
+        reason: "missing capability: account:read",
+      });
+    }
+  });
+
+  it("account:write 命令允许 desktop-renderer，拒绝 cli-local 和 mcp-local", () => {
+    const writeCommands = [
+      { type: "accounts.adoptCurrent" },
+      { provider: "codex", type: "accounts.add" },
+      { provider: "codex", type: "accounts.cancelLogin" },
+      { accountId: "acc-001", type: "accounts.select" },
+      { accountId: "acc-001", type: "accounts.remove" },
+    ] satisfies PierCommand[];
+    for (const command of writeCommands) {
+      expect(authorizeCommand(command, client("desktop-renderer"))).toEqual({
+        ok: true,
+      });
+      expect(authorizeCommand(command, client("cli-local"))).toEqual({
+        ok: false,
+        reason: "missing capability: account:write",
+      });
+      expect(authorizeCommand(command, client("mcp-local"))).toEqual({
+        ok: false,
+        reason: "missing capability: account:write",
+      });
+    }
+  });
 });

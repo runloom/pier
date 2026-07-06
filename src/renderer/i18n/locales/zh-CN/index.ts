@@ -3,6 +3,7 @@ import commandPaletteAliases from "./command-palette.aliases.json" with {
 };
 import { commandPalette } from "./command-palette.ts";
 import { contextMenu } from "./context-menu.ts";
+import { dashboard } from "./dashboard.ts";
 import { dialog } from "./dialog.ts";
 import { settings } from "./settings.ts";
 import { terminal } from "./terminal.ts";
@@ -14,6 +15,7 @@ export const zhCN = {
     aliases: commandPaletteAliases,
   },
   contextMenu,
+  dashboard,
   dialog,
   settings,
   terminal,

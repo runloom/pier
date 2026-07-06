@@ -174,6 +174,57 @@ describe("pluginManifestSchema", () => {
     ]);
   });
 
+  it("dashboard widget 声明的权限并入有效权限", () => {
+    const manifest = pluginManifestSchema.parse({
+      apiVersion: 1,
+      commands: [],
+      dashboardWidgets: [
+        {
+          id: "sample.widget",
+          permissions: ["app:read"],
+          title: "Sample Widget",
+        },
+      ],
+      engines: { pier: ">=0.1.0" },
+      id: "sample.dashboard",
+      name: "Sample Dashboard",
+      source: { kind: "builtin" },
+      version: "1.0.0",
+    });
+    expect(collectEffectivePermissions(manifest)).toContain("app:read");
+  });
+
+  it("dashboard widget 权限与顶层/命令/面板权限去重合并", () => {
+    const manifest = pluginManifestSchema.parse({
+      apiVersion: 1,
+      commands: [
+        {
+          id: "sample.cmd",
+          permissions: ["plugin:read"],
+          title: "Cmd",
+        },
+      ],
+      dashboardWidgets: [
+        {
+          id: "sample.widget",
+          permissions: ["plugin:read", "app:read"],
+          title: "Widget",
+        },
+      ],
+      engines: { pier: ">=0.1.0" },
+      id: "sample.dedup",
+      name: "Sample Dedup",
+      permissions: ["command:register"],
+      source: { kind: "builtin" },
+      version: "1.0.0",
+    });
+    const perms = collectEffectivePermissions(manifest);
+    // 去重：plugin:read 只出现一次
+    expect(perms.filter((p) => p === "plugin:read")).toHaveLength(1);
+    expect(perms).toContain("app:read");
+    expect(perms).toContain("command:register");
+  });
+
   it("拒绝无效 manifest", () => {
     expect(() =>
       pluginManifestSchema.parse({

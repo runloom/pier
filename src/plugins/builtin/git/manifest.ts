@@ -127,6 +127,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       },
     },
   },
+  dashboardWidgets: [],
   description: "Built-in git command palette and terminal status support.",
   engines: { pier: ">=0.1.0" },
   homepage: "https://github.com/runloom/pier",

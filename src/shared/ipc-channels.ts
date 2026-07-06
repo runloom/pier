@@ -16,6 +16,8 @@ export const PIER = {
 } as const;
 
 export const PIER_BROADCAST = {
+  // 账号域变更广播 (main → 所有 renderer, payload AgentAccountsSnapshot).
+  AGENT_ACCOUNTS_CHANGED: "pier://agent-accounts:changed",
   // main 端应用菜单请求 renderer 打开/关闭命令面板.
   COMMAND_PALETTE_TOGGLE_REQUEST: "pier://command-palette:toggle-request",
   // main 端应用菜单请求当前 workspace 新建 terminal panel.
