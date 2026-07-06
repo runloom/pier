@@ -103,7 +103,7 @@ sync_repo() {
         git clone --branch "$ref" "$url" "$dir"
     else
         echo "[+] fetch $dir @ $ref"
-        (cd "$dir" && git fetch --tags origin 2>&1 | tail -3)
+        (cd "$dir" && git fetch --force --no-tags origin "refs/tags/$ref:refs/tags/$ref" 2>&1 | tail -3)
     fi
     (cd "$dir" && git reset --hard "$ref" && git clean -fd) >/dev/null
 }
