@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { createLogger } from "@shared/logger.ts";
 import { app, ipcMain, nativeImage } from "electron";
 import {
   type RegisteredLocalControl,
@@ -8,6 +9,7 @@ import {
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { installCsp } from "./csp.ts";
+import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
 import {
   handleAssetProtocol,
   registerAssetScheme,
@@ -43,6 +45,14 @@ const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
 let localControl: RegisteredLocalControl | null = null;
 let didFlushBeforeQuit = false;
+const startupLog = createLogger("startup");
+const windowLog = createLogger("window");
+const windowZoomLog = createLogger("window-zoom");
+const cliLog = createLogger("cli");
+const taskRunLog = createLogger("task-run");
+const terminalSessionLog = createLogger("terminal-session");
+const foregroundActivityLog = createLogger("foreground-activity");
+const secretsLog = createLogger("secrets");
 const windowZoom = createWindowZoomController({
   listWindows: () => windowManager.getAll(),
   readPreferences: () => appCore.services.preferences.read(),
@@ -51,7 +61,7 @@ const windowZoom = createWindowZoomController({
 
 windowManager.onCreate(({ window }) => {
   windowZoom.applyPersistedZoomToWindow(window).catch((error) => {
-    console.error("[window-zoom] apply to new window failed:", error);
+    windowZoomLog.error("apply to new window failed", { error });
   });
 });
 
@@ -92,9 +102,11 @@ configureAppIdentity();
 
 // 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
 const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
+if (gotTheLock) {
+  installMainDiagnosticsLogging();
+} else {
   if (isDev) {
-    console.error(
+    startupLog.error(
       formatDevSingleInstanceLockFailure({
         userDataDir: app.getPath("userData"),
         ...(process.env.PIER_DEV_PROFILE
@@ -119,10 +131,7 @@ function getMenuTargetWindow(): AppWindow | null {
 
 function createFreshWindowFromMenu(): void {
   appCore.services.window.create({ mode: "fresh" }).catch((error) => {
-    console.error(
-      "[window] failed to create new window:",
-      error instanceof Error ? error.message : String(error)
-    );
+    windowLog.error("failed to create new window", { error });
   });
 }
 
@@ -190,17 +199,17 @@ app.whenReady().then(async () => {
     onOpenCommandPalette: toggleCommandPaletteFromMenu,
     onResetZoom: () => {
       windowZoom.resetZoom().catch((error) => {
-        console.error("[window-zoom] reset failed:", error);
+        windowZoomLog.error("reset failed", { error });
       });
     },
     onZoomIn: () => {
       windowZoom.zoomIn().catch((error) => {
-        console.error("[window-zoom] zoom in failed:", error);
+        windowZoomLog.error("zoom in failed", { error });
       });
     },
     onZoomOut: () => {
       windowZoom.zoomOut().catch((error) => {
-        console.error("[window-zoom] zoom out failed:", error);
+        windowZoomLog.error("zoom out failed", { error });
       });
     },
     readPreferences: () => appCore.services.preferences.read(),
@@ -279,7 +288,7 @@ app.whenReady().then(async () => {
       appCore.services.tasks
         .completePanel(panelId, exitCode, windowId)
         .catch((error) => {
-          console.error("[task-run] failed to complete panel:", error);
+          taskRunLog.error("failed to complete panel", { error });
         });
       return;
     }
@@ -290,16 +299,13 @@ app.whenReady().then(async () => {
       localControl = control;
     })
     .catch((error: unknown) => {
-      console.error(
-        "[cli] failed to start local control server:",
-        error instanceof Error ? error.message : String(error)
-      );
+      cliLog.error("failed to start local control server", { error });
     });
 
   // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
   // 从此不说谎（上进程遗留的 running 一律 cancelled）。
   await reconcileOrphanedRunningTasks().catch((error: unknown) => {
-    console.error("[terminal-session] orphan task sweep failed:", error);
+    terminalSessionLog.error("orphan task sweep failed", { error });
   });
 
   const restored = await appCore.services.window.restoreOpenWindows();
@@ -317,10 +323,7 @@ app.whenReady().then(async () => {
           }
         })
         .catch((error) => {
-          console.error(
-            "[window] failed to restore window on activate:",
-            error instanceof Error ? error.message : String(error)
-          );
+          windowLog.error("failed to restore window on activate", { error });
         });
     }
   });
@@ -340,23 +343,16 @@ app.on("before-quit", (event) => {
     try {
       closeForegroundActivityResources();
     } catch (error) {
-      console.error(
-        "[foreground-activity] failed to close resources before quit:",
-        error instanceof Error ? error.message : String(error)
-      );
+      foregroundActivityLog.error("failed to close resources before quit", {
+        error,
+      });
     }
     Promise.all([
       appCore.services.window.flushOpenWindows().catch((error) => {
-        console.error(
-          "[window] failed to flush windows before quit:",
-          error instanceof Error ? error.message : String(error)
-        );
+        windowLog.error("failed to flush windows before quit", { error });
       }),
       appCore.services.secrets.flush().catch((error) => {
-        console.error(
-          "[secrets] failed to flush before quit:",
-          error instanceof Error ? error.message : String(error)
-        );
+        secretsLog.error("failed to flush before quit", { error });
       }),
     ]).finally(() => {
       app.quit();

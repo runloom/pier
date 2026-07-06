@@ -12,6 +12,9 @@ import {
   type CommandFinishedHookEvent,
   type CommandStartHookEvent,
 } from "@shared/contracts/agent-session.ts";
+import { createLogger } from "@shared/logger.ts";
+
+const log = createLogger("foreground-activity.jsonl-observer");
 
 /** rotate 阈值：10MB。 */
 const ROTATE_SIZE = 10 * 1024 * 1024;
@@ -101,10 +104,22 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
       const parsed = JSON.parse(trimmed);
       const result = agentHookEventSchema.safeParse(parsed);
       if (!result.success) {
+        log.warn("parse-failed", {
+          line: trimmed.slice(0, 200),
+          error: result.error.message,
+        });
         onError?.(result.error);
         return;
       }
       const event = result.data;
+      if (event.kind === "agentEvent") {
+        log.debug("event-line", {
+          kind: event.kind,
+          agent: event.agent,
+          event: event.event,
+          panelId: event.panelId,
+        });
+      }
       switch (event.kind) {
         case "commandStart":
           onCommandStart(event);
@@ -122,6 +137,10 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
         }
       }
     } catch (err) {
+      log.warn("process-line-exception", {
+        line: trimmed.slice(0, 200),
+        err: String(err),
+      });
       onError?.(err);
     }
   }

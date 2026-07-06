@@ -37,8 +37,16 @@ export const HOOK_FRESH_TTL_MS = 30 * 60 * 1000;
  */
 export const VISIBILITY_DEBOUNCE_MS = 250;
 
-/** 回合边界事件（回合结束/切换/错误）——之后的迟到工具事件被吸收。 */
-export const TURN_BOUNDARY_EVENTS = new Set(["Stop", "SessionStart", "error"]);
+/**
+ * 回合边界事件（会话切换/错误）——之后的迟到工具事件被吸收。
+ *
+ * Stop 不列入：codex/claude 的 Stop hook 支持 `decision:"block"` 续跑机制
+ * （agent 自动注入 continuation prompt 不发 UserPromptSubmit 直接进入
+ * PreToolUse）。Stop 置 turnEnded 会吸收这些续跑事件，状态锁死 ready。
+ * omp 集成已用「不订阅 turn_end」规避同类问题，codex 因 Stop 是唯一回合
+ * 边界信号不能照搬，改在此处统一豁免。`Stop → ready` 映射保留不变。
+ */
+export const TURN_BOUNDARY_EVENTS = new Set(["SessionStart", "error"]);
 /** 回合重置事件（新回合开始）——解除吸收 + 清 subagent 计数。 */
 export const TURN_RESET_EVENTS = new Set([
   "PromptSubmit",
