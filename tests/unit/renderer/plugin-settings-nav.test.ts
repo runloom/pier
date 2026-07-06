@@ -18,6 +18,7 @@ function entry(
     manifest: {
       apiVersion: 1,
       commands: [],
+      dashboardWidgets: [],
       ...(configured
         ? {
             configuration: {

@@ -46,11 +46,13 @@ import {
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
+import { createPluginAccountsContext } from "./host-accounts-context.ts";
 import { createPluginAgentsContext } from "./host-agents-context.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
+import { registerPluginDashboardWidget } from "./plugin-dashboard-widget-registry.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 import {
   getPluginPanelRegistrations,
@@ -176,7 +178,7 @@ function adaptAction(
 
 function assertDeclaredContribution(
   entry: PluginRegistryEntry | undefined,
-  kind: "action" | "panel" | "terminalStatusItem",
+  kind: "action" | "dashboardWidget" | "panel" | "terminalStatusItem",
   id: string
 ): void {
   if (!entry) {
@@ -187,6 +189,10 @@ function assertDeclaredContribution(
     declared = entry.manifest.commands.some((command) => command.id === id);
   } else if (kind === "panel") {
     declared = entry.manifest.panels.some((panel) => panel.id === id);
+  } else if (kind === "dashboardWidget") {
+    declared = entry.manifest.dashboardWidgets.some(
+      (widget) => widget.id === id
+    );
   } else {
     declared = entry.manifest.terminalStatusItems.some(
       (item) => item.id === id
@@ -389,6 +395,7 @@ export function createRendererPluginContext(
   entry?: PluginRegistryEntry
 ): RendererPluginContext {
   return {
+    accounts: createPluginAccountsContext(entry, assertPluginCapability),
     actions: {
       register: (action) => {
         assertDeclaredContribution(entry, "action", action.id);
@@ -457,6 +464,12 @@ export function createRendererPluginContext(
       register: (item) => {
         assertDeclaredContribution(entry, "terminalStatusItem", item.id);
         return terminalStatusItemRegistry.register(item);
+      },
+    },
+    dashboardWidgets: {
+      register: (registration) => {
+        assertDeclaredContribution(entry, "dashboardWidget", registration.id);
+        return registerPluginDashboardWidget(registration);
       },
     },
     files: createPluginFilesContext(entry, assertPluginCapability),

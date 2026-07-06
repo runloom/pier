@@ -220,6 +220,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           },
         },
       },
+      dashboardWidgets: [],
       engines: { pier: ">=0.1.0" },
       id: GIT_PLUGIN_ID,
       localization: {
@@ -442,6 +443,7 @@ function filesPluginEntry(enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
+      dashboardWidgets: [],
       engines: { pier: ">=0.1.0" },
       id: FILES_PLUGIN_ID,
       name: "Files",

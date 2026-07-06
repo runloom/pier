@@ -1,5 +1,9 @@
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type {
+  AgentAccountProviderId,
+  AgentAccountsSnapshot,
+} from "@shared/contracts/agent-accounts.ts";
+import type {
   AppQuitConfirmationRequest,
   AppQuitDecisionPayload,
 } from "@shared/contracts/app-quit.ts";
@@ -80,6 +84,17 @@ export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
+}
+
+export interface PierAccountsAPI {
+  add: (provider: AgentAccountProviderId) => Promise<void>;
+  adoptCurrent: () => Promise<void>;
+  cancelLogin: (provider: AgentAccountProviderId) => Promise<void>;
+  onChanged: (cb: (snapshot: AgentAccountsSnapshot) => void) => () => void;
+  refreshUsage: () => Promise<void>;
+  remove: (accountId: string) => Promise<void>;
+  select: (accountId: string) => Promise<void>;
+  snapshot: () => Promise<AgentAccountsSnapshot>;
 }
 
 export interface PierNotificationsAPI {
@@ -209,6 +224,7 @@ export interface PierEnvAPI {
 }
 
 export interface PierWindowAPI {
+  accounts: PierAccountsAPI;
   agents: PierAgentsAPI;
   ai: PierAiAPI;
   appQuit: PierAppQuitAPI;
@@ -245,6 +261,28 @@ const agentsApi: PierAgentsAPI = {
   prepareLaunch: (agentId: AgentKind) =>
     ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
   refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
+};
+
+const accountsApi: PierAccountsAPI = {
+  add: (provider) =>
+    invokePierCommand<void>({ provider, type: "accounts.add" }),
+  adoptCurrent: () =>
+    invokePierCommand<void>({ type: "accounts.adoptCurrent" }),
+  cancelLogin: (provider) =>
+    invokePierCommand<void>({ provider, type: "accounts.cancelLogin" }),
+  onChanged: (cb) =>
+    subscribeIpc<AgentAccountsSnapshot>(
+      PIER_BROADCAST.AGENT_ACCOUNTS_CHANGED,
+      cb
+    ),
+  refreshUsage: () =>
+    invokePierCommand<void>({ type: "accounts.refreshUsage" }),
+  remove: (accountId) =>
+    invokePierCommand<void>({ accountId, type: "accounts.remove" }),
+  select: (accountId) =>
+    invokePierCommand<void>({ accountId, type: "accounts.select" }),
+  snapshot: () =>
+    invokePierCommand<AgentAccountsSnapshot>({ type: "accounts.snapshot" }),
 };
 
 const appQuitApi: PierAppQuitAPI = {
@@ -392,6 +430,7 @@ const tasksApi: PierTasksAPI = {
 };
 
 const api: PierWindowAPI = {
+  accounts: accountsApi,
   agents: agentsApi,
   appQuit: appQuitApi,
   foregroundActivity: foregroundActivityApi,

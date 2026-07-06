@@ -63,6 +63,7 @@
     "radix-ui": "^1.6.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-grid-layout": "^2.2.3",
     "react-hook-form": "7.80.0",
     "react-resizable-panels": "^4.11.2",
     "recharts": "^3.8.1",

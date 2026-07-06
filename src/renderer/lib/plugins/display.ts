@@ -1,3 +1,4 @@
+import type { PluginDashboardWidgetContribution } from "@shared/contracts/dashboard.ts";
 import type {
   PluginCommandContribution,
   PluginLocaleMessages,
@@ -219,6 +220,28 @@ export function resolvePluginTerminalStatusItemDisplay(
         locale,
         (messages) => messages.terminalStatusItems?.[item.id]?.title
       ) ?? item.title,
+    ...(description ? { description } : {}),
+  };
+}
+
+export function resolvePluginDashboardWidgetDisplay(
+  manifest: PluginManifest,
+  widget: PluginDashboardWidgetContribution,
+  locale: string
+): PluginContributionDisplayText {
+  const description =
+    resolveFromLocales(
+      manifest,
+      locale,
+      (messages) => messages.dashboardWidgets?.[widget.id]?.description
+    ) ?? widget.description;
+  return {
+    title:
+      resolveFromLocales(
+        manifest,
+        locale,
+        (messages) => messages.dashboardWidgets?.[widget.id]?.title
+      ) ?? widget.title,
     ...(description ? { description } : {}),
   };
 }

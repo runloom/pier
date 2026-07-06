@@ -29,6 +29,7 @@ import {
   Activity,
   ArrowRight,
   Command,
+  LayoutDashboard,
   type LucideIcon,
   PanelsTopLeft,
   Puzzle,
@@ -114,6 +115,13 @@ function contributionCountItems(
       id: "terminalStatusItems",
       pluralKey: "settings.plugins.contributionSummary.terminalStatusItems",
       singularKey: "settings.plugins.contributionSummary.terminalStatusItem",
+    },
+    {
+      Icon: LayoutDashboard,
+      count: entry.manifest.dashboardWidgets.length,
+      id: "dashboardWidgets",
+      pluralKey: "settings.plugins.contributionSummary.dashboardWidgets",
+      singularKey: "settings.plugins.contributionSummary.dashboardWidget",
     },
   ];
   return counts

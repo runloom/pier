@@ -180,6 +180,16 @@ function createLocalizedContext(
 
 function createMockContext(): RendererPluginContext {
   return {
+    accounts: {
+      add: unimplemented("accounts.add"),
+      adoptCurrent: unimplemented("accounts.adoptCurrent"),
+      cancelLogin: unimplemented("accounts.cancelLogin"),
+      onDidChange: unimplemented("accounts.onDidChange"),
+      refreshUsage: unimplemented("accounts.refreshUsage"),
+      remove: unimplemented("accounts.remove"),
+      select: unimplemented("accounts.select"),
+      snapshot: unimplemented("accounts.snapshot"),
+    },
     actions: { register: unimplemented("actions.register") },
     agents: {
       selection: agentSelectionMock,
@@ -197,6 +207,7 @@ function createMockContext(): RendererPluginContext {
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
     },
+    dashboardWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: unimplemented("dialogs.alert"),
       confirm: unimplemented("dialogs.confirm"),

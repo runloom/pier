@@ -1,4 +1,4 @@
-import { Plus, RotateCcw } from "lucide-react";
+import { LayoutDashboard, Plus, RotateCcw } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
@@ -14,6 +14,19 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     id: "pier.panel.newTab",
     surfaces: [],
     titleKey: "commandPalette.action.newTab",
+    when: "workspace.hasApi",
+  },
+  {
+    categoryKey: "panel",
+    group: "1_new",
+    handler: () => {
+      useWorkspaceStore.getState().addDashboard();
+    },
+    iconComponent: LayoutDashboard,
+    id: "pier.panel.newDashboard",
+    sortOrder: 0,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.newDashboard",
     when: "workspace.hasApi",
   },
   {

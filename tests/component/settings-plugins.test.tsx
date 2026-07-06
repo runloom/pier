@@ -49,6 +49,7 @@ function pluginEntry(overrides: {
     manifest: {
       apiVersion: 1,
       commands,
+      dashboardWidgets: [],
       ...(overrides.description ? { description: overrides.description } : {}),
       engines: { pier: ">=0.1.0" },
       id: overrides.id,

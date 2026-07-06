@@ -10,7 +10,13 @@ import {
 } from "@pier/ui/dropdown-menu.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
-import { GitBranchPlus, Play, Plus, Terminal } from "lucide-react";
+import {
+  GitBranchPlus,
+  LayoutDashboard,
+  Play,
+  Plus,
+  Terminal,
+} from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
@@ -106,6 +112,16 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
           className="max-h-[min(var(--radix-dropdown-menu-content-available-height),480px)] w-56"
           data-scrollbar="none"
         >
+          <DropdownMenuItem
+            onClick={() => {
+              useWorkspaceStore.getState().addDashboard({
+                referenceGroup: props.group,
+              });
+            }}
+          >
+            <LayoutDashboard className="size-4" />
+            <span>{t("workspace.addPanelMenu.newDashboard")}</span>
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
               useWorkspaceStore.getState().addTerminal({

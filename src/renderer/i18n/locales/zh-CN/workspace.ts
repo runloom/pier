@@ -1,6 +1,7 @@
 export const workspace = {
   addPanelMenu: {
     trigger: "添加面板",
+    newDashboard: "新建大盘",
     newTerminal: "新终端",
     newTask: "新任务",
     newWorktree: "新建工作树",

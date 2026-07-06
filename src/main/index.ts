@@ -216,6 +216,9 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
     appCore.services.secrets.flush().catch((error) => {
       secretsLog.error("failed to flush before quit", { error });
     }),
+    appCore.services.agentAccounts.flush().catch((error) => {
+      secretsLog.error("failed to flush agent accounts before quit", { error });
+    }),
   ]);
 }
 
@@ -233,6 +236,8 @@ const appQuitController = createAppQuitController({
     }),
   finalCleanup: () => {
     windowManager.destroyAllForQuit();
+    // 杀在途 `codex login` 子进程 + 停轮询/watch
+    appCore.services.agentAccounts.dispose();
     appCore.pluginHost.dispose();
     localControl?.close().catch(() => {
       // ignore: app 正在退出

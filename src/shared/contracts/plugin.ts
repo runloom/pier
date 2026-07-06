@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pluginDashboardWidgetContributionSchema } from "./dashboard.ts";
 import { pierCapabilitySchema } from "./permissions.ts";
 
 export const pluginSourceKindSchema = z.enum([
@@ -48,6 +49,9 @@ export type PluginLocalizedSetting = z.infer<
 export const pluginLocaleMessagesSchema = z.object({
   commands: z
     .record(z.string().min(1), pluginLocalizedCommandContributionSchema)
+    .optional(),
+  dashboardWidgets: z
+    .record(z.string().min(1), pluginLocalizedContributionSchema)
     .optional(),
   description: z.string().min(1).optional(),
   messages: z.record(z.string().min(1), z.string().min(1)).optional(),
@@ -249,6 +253,9 @@ export const pluginManifestSchema = z
     apiVersion: z.literal(1),
     commands: z.array(pluginCommandContributionSchema).default([]),
     configuration: pluginConfigurationSchema.optional(),
+    dashboardWidgets: z
+      .array(pluginDashboardWidgetContributionSchema)
+      .default([]),
     description: z.string().min(1).optional(),
     engines: z.object({
       pier: z.string().min(1),

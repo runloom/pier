@@ -175,6 +175,8 @@ export const settings = {
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",
+      dashboardWidget: "{{count}} dashboard widget",
+      dashboardWidgets: "{{count}} dashboard widgets",
       none: "No contributions",
       panel: "{{count}} panel",
       panels: "{{count}} panels",

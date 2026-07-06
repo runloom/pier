@@ -35,6 +35,7 @@ export const commandPalette = {
     newTab: "New Tab",
     newWindow: "New Window",
     newAgent: "New Agent",
+    newDashboard: "New Dashboard",
     runTask: "Run Task...",
     terminalList: "Terminal List...",
     selectTheme: "Select Theme",

@@ -15,6 +15,7 @@ function entry(id: string, enabled = true): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
+      dashboardWidgets: [],
       configuration: {
         properties: {
           [`${id}.flag`]: { default: true, type: "boolean" },

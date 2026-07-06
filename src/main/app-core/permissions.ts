@@ -19,6 +19,13 @@ export interface CommandMetadata {
 }
 
 const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
+  "accounts.add": { capabilities: ["account:write"] },
+  "accounts.adoptCurrent": { capabilities: ["account:write"] },
+  "accounts.cancelLogin": { capabilities: ["account:write"] },
+  "accounts.refreshUsage": { capabilities: ["account:read"] },
+  "accounts.remove": { capabilities: ["account:write"] },
+  "accounts.select": { capabilities: ["account:write"] },
+  "accounts.snapshot": { capabilities: ["account:read"] },
   "ai.status": { capabilities: ["ai:invoke"] },
   "ai.generateText": { capabilities: ["ai:invoke"] },
   "app.status": { capabilities: ["app:read"] },

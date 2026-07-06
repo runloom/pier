@@ -2,6 +2,7 @@ import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
+import { dashboardPanelKit } from "@/panel-kits/dashboard/dashboard-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
@@ -19,6 +20,7 @@ interface PanelKitMetadata {
  * 见 getPanelComponents()。新增主系统 panel 时在此登记一行。
  */
 export const panelKits = {
+  dashboard: dashboardPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
 } satisfies Record<string, PanelKitMetadata>;
