@@ -71,6 +71,32 @@ function taskPanelRefKey(ref: TaskPanelRef): string {
   return ref.windowId ? `${ref.windowId}\0${ref.panelId}` : ref.panelId;
 }
 
+function reusablePanelsForCommand(
+  command: Extract<PierCommand, { type: "run.spawn" }>,
+  preparation: Extract<TaskSpawnPreparation, { status: "ready" }>
+): Record<string, TaskPanelRef> | undefined {
+  const existing = preparation.reusablePanels ?? {};
+  const existingOrEmpty =
+    Object.keys(existing).length > 0 ? existing : undefined;
+  const terminalPanelId = command.terminalPanelId;
+  if (!terminalPanelId) {
+    return existingOrEmpty;
+  }
+  const hasMatchingLaunch = preparation.launches.some(
+    (launch) => launch.taskId === command.taskId
+  );
+  if (!hasMatchingLaunch) {
+    return existingOrEmpty;
+  }
+  return {
+    ...existing,
+    [command.taskId]: {
+      panelId: terminalPanelId,
+      ...(command.windowId ? { windowId: command.windowId } : {}),
+    },
+  };
+}
+
 async function closePanelRefs(
   requestId: string,
   panelRefs: TaskPanelRef[],
@@ -255,8 +281,9 @@ export async function executeRunSpawnCommand(
     const snapshot = services.tasks.statusRun(preparation.restartRunId);
     if (snapshot) {
       services.tasks.cancelRun(preparation.restartRunId);
+      const reusablePanels = reusablePanelsForCommand(command, preparation);
       const reusablePanelKeys = new Set(
-        Object.values(preparation.reusablePanels ?? {}).map(taskPanelRefKey)
+        Object.values(reusablePanels ?? {}).map(taskPanelRefKey)
       );
       const obsoletePanelRefs = panelRefsFromSnapshot(snapshot).filter(
         (ref) => !reusablePanelKeys.has(taskPanelRefKey(ref))
@@ -317,10 +344,11 @@ export async function executeRunSpawnCommand(
     return opened;
   };
   try {
+    const reusablePanels = reusablePanelsForCommand(command, preparation);
     started = await services.tasks.startRun({
       launches: preparation.launches,
       openTerminal: async (launch, runId) => {
-        const reusePanel = preparation.reusablePanels?.[launch.taskId];
+        const reusePanel = reusablePanels?.[launch.taskId];
         try {
           return await openTerminalForLaunch(launch, runId, reusePanel);
         } catch (error) {

@@ -1416,6 +1416,64 @@ describe("createCommandRouter", () => {
     );
   });
 
+  it("run.spawn 复用调用方指定的任务 terminal panel", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    const executeRendererCommand = fakeServices.rendererCommand.execute;
+    fakeServices.rendererCommand.execute = vi.fn((command) => {
+      rendererCommands.push(command);
+      if (command.type === "terminal.open") {
+        return Promise.resolve({
+          data: {
+            context: command.context,
+            panelId: command.panelId ?? "terminal-from-renderer",
+          },
+          ok: true as const,
+          requestId: "renderer-terminal-open",
+        });
+      }
+      return executeRendererCommand(command);
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          projectRootPath: process.cwd(),
+          taskId: "package-script:test",
+          terminalPanelId: "terminal-restored-task",
+          type: "run.spawn",
+          windowId: "main",
+        },
+        protocolVersion: 1,
+        requestId: "req-run-spawn-explicit-panel",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        panelIds: ["terminal-restored-task"],
+        primaryPanelId: "terminal-restored-task",
+        status: "started",
+      },
+      ok: true,
+      requestId: "req-run-spawn-explicit-panel",
+    });
+
+    expect(rendererCommands.at(-1)).toMatchObject({
+      panelId: "terminal-restored-task",
+      type: "terminal.open",
+      windowId: "main",
+    });
+  });
+
   it("run.spawn 透传 terminal.open 的稳定错误码", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];

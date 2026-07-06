@@ -566,6 +566,7 @@ describe("run actions", () => {
       forceRestart: true,
       placement: "active-tab",
       projectRootPath: "/Users/xyz/ABC/pier",
+      terminalPanelId: "terminal-task",
       taskId: "package-script:test",
     });
   });

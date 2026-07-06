@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import {
-  activeTaskPanelMetadata,
+  activeTaskPanelRef,
   rendererActionContributionRuntime,
 } from "@/lib/actions/renderer-action-runtime.ts";
 import { openTerminalListQuickPick } from "@/lib/actions/terminal-list-quickpick.ts";
@@ -225,6 +225,7 @@ async function spawnTask(args: {
   forceRestart: boolean;
   inputs?: Record<string, string>;
   project: ProjectContext;
+  terminalPanelId?: string | undefined;
   taskId: string;
   taskLabel?: string | undefined;
 }): Promise<TaskSpawnResult> {
@@ -237,6 +238,9 @@ async function spawnTask(args: {
         ...(args.inputs ? { inputs: args.inputs } : {}),
         placement: "active-tab",
         projectRootPath: args.project.projectRootPath,
+        ...(args.terminalPanelId
+          ? { terminalPanelId: args.terminalPanelId }
+          : {}),
         taskId: args.taskId,
       })
   );
@@ -245,7 +249,11 @@ async function spawnTask(args: {
 async function spawnTaskWithInputFlow(
   project: ProjectContext,
   taskId: string,
-  options: { forceRestart: boolean; taskLabel?: string | undefined }
+  options: {
+    forceRestart: boolean;
+    taskLabel?: string | undefined;
+    terminalPanelId?: string | undefined;
+  }
 ): Promise<void> {
   let result = await spawnTask({ project, taskId, ...options });
   if (result.status === "requires-input") {
@@ -274,14 +282,18 @@ function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
  * selections, this explicitly asks main to restart the active task in place.
  */
 async function rerunActiveTaskPanel(): Promise<void> {
-  const task = activeTaskPanelMetadata();
-  if (!task) {
+  const activeTask = activeTaskPanelRef();
+  if (!activeTask) {
     return;
   }
   await spawnTaskWithInputFlow(
-    { projectRootPath: task.projectRootPath },
-    task.taskId,
-    { forceRestart: true, taskLabel: task.label }
+    { projectRootPath: activeTask.task.projectRootPath },
+    activeTask.task.taskId,
+    {
+      forceRestart: true,
+      taskLabel: activeTask.task.label,
+      terminalPanelId: activeTask.panelId,
+    }
   );
 }
 export async function openRunTaskQuickPick() {

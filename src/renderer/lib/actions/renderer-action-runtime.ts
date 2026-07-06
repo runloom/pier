@@ -7,6 +7,11 @@ import type {
   ActionWhenContext,
 } from "./contribution-types.ts";
 
+interface ActiveTaskPanelRef {
+  panelId: string;
+  task: TaskPanelMetadata;
+}
+
 export function activeTerminalPanelId(): string | null {
   const panel = useWorkspaceStore.getState().api?.activePanel;
   return panel?.view.contentComponent === "terminal" ? panel.id : null;
@@ -19,6 +24,15 @@ export function activeTaskPanelMetadata(): TaskPanelMetadata | null {
     return null;
   }
   return taskPanelMetadataFromParams(panel.params) ?? null;
+}
+
+export function activeTaskPanelRef(): ActiveTaskPanelRef | null {
+  const panel = useWorkspaceStore.getState().api?.activePanel;
+  if (panel?.view.contentComponent !== "terminal") {
+    return null;
+  }
+  const task = taskPanelMetadataFromParams(panel.params);
+  return task ? { panelId: panel.id, task } : null;
 }
 
 export function rendererActionContext(): ActionWhenContext {

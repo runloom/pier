@@ -205,6 +205,7 @@ export interface PierTasksAPI {
       | "split-left"
       | "split-above";
     projectRootPath: string;
+    terminalPanelId?: string;
     taskId: string;
   }) => Promise<TaskSpawnResult>;
   status: (args: { runId: string }) => Promise<TaskRunSnapshot>;
@@ -419,6 +420,9 @@ const tasksApi: PierTasksAPI = {
       ...(args.inputs ? { inputs: args.inputs } : {}),
       ...(args.placement ? { placement: args.placement } : {}),
       projectRootPath: args.projectRootPath,
+      ...(args.terminalPanelId
+        ? { terminalPanelId: args.terminalPanelId }
+        : {}),
       taskId: args.taskId,
       type: "run.spawn",
     }),

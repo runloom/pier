@@ -108,6 +108,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     placement: pierCommandPlacementSchema.optional(),
     projectRootPath: z.string().min(1),
     taskId: z.string().min(1),
+    terminalPanelId: z.string().min(1).optional(),
     type: z.literal("run.spawn"),
     windowId: z.string().min(1).optional(),
   }),
