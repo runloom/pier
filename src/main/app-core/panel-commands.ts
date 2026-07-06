@@ -7,16 +7,11 @@ import type {
 import type { PanelSnapshot, WindowInfo } from "@shared/contracts/events.ts";
 import {
   type PanelContext,
-  type PanelTabChrome,
   panelContextSchema,
   panelDisplaySchema,
   panelKindSchema,
 } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
-import type {
-  TaskPanelMetadata,
-  TaskPanelRef,
-} from "@shared/contracts/tasks.ts";
 import type {
   ResolvedTerminalLaunchOptions,
   TerminalLaunchOptions,
@@ -25,7 +20,6 @@ import { resolveAgentCommand } from "../services/agents/agent-launch.ts";
 import type {
   ProcessEnvironmentResolveRequest,
   ProcessEnvironmentService,
-  ProcessEnvironmentSource,
 } from "../services/process-environment-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import { commandFailure, commandSuccess } from "./command-results.ts";
@@ -35,6 +29,10 @@ import {
   numberValue,
   stringValue,
 } from "./command-value.ts";
+import {
+  rendererTerminalOpenCommand,
+  type TerminalOpenOptions,
+} from "./terminal-open-renderer-command.ts";
 import { orderedWindows, resolveCommandWindow } from "./window-routing.ts";
 
 export interface PanelCommandServices {
@@ -208,7 +206,7 @@ function dataWithWindowId(
 function resolveTerminalOpenTarget(
   command: Extract<PierCommand, { type: "terminal.open" }>,
   services: PanelCommandServices,
-  reusePanel: TaskPanelRef | undefined
+  reusePanel: TerminalOpenOptions["reusePanel"]
 ) {
   const windowId = reusePanel?.windowId ?? command.windowId;
   return resolveCommandWindow(windowId, services, {
@@ -332,13 +330,7 @@ export async function executeTerminalOpenCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "terminal.open" }>,
   services: PanelCommandServices,
-  options: {
-    clientEnv?: Record<string, string> | undefined;
-    source?: ProcessEnvironmentSource | undefined;
-    tab?: PanelTabChrome;
-    task?: TaskPanelMetadata;
-    reusePanel?: TaskPanelRef | undefined;
-  } = {}
+  options: TerminalOpenOptions = {}
 ): Promise<PierCommandResult> {
   const target = resolveTerminalOpenTarget(
     command,
@@ -378,17 +370,15 @@ export async function executeTerminalOpenCommand(
   const launchId = await services.terminalLaunches.register(launch);
   let result: Awaited<ReturnType<typeof services.rendererCommand.execute>>;
   try {
-    result = await services.rendererCommand.execute({
-      ...(context && { context }),
-      focus: command.focus,
-      launchId,
-      ...(options.reusePanel ? { panelId: options.reusePanel.panelId } : {}),
-      placement: command.placement,
-      ...(options.tab && { tab: options.tab }),
-      ...(options.task && { task: options.task }),
-      type: "terminal.open",
-      windowId: target.window.id,
-    });
+    result = await services.rendererCommand.execute(
+      rendererTerminalOpenCommand({
+        command,
+        context,
+        launchId,
+        options,
+        windowId: target.window.id,
+      })
+    );
   } catch (err) {
     await services.terminalLaunches.discard(launchId);
     throw err;

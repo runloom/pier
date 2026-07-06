@@ -225,7 +225,8 @@ async function runDropStash(
       { stash: item.label }
     ),
     pluginText(context, "gitStashDropConfirmLabel", "Drop"),
-    item.detail
+    item.detail,
+    { intent: "destructive" }
   );
   if (!confirmed) {
     return;

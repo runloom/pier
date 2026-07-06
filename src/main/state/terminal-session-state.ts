@@ -1,21 +1,9 @@
-/**
- * Terminal session state persistence.
- *
- * Remembers the last panel context/title per window id + terminal panel id, so a
- * relaunched app can restore tab chrome before creating a fresh shell in the
- * same directory.
- *
- * Uses debouncedJsonStore: in-memory state + 500ms debounced atomic write.
- * No file lock — single-process, no cross-process contention.
- */
-import { join } from "node:path";
+/** Terminal session state persistence: panel metadata per window + terminal id. */
 import { taskTabStateForActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import {
   normalizePanelTabChromeInput,
   type PanelContext,
   type PanelTabChrome,
-  panelContextSchema,
-  panelTabChromeSchema,
 } from "@shared/contracts/panel.ts";
 import {
   type TaskExitReason,
@@ -24,86 +12,19 @@ import {
   type TaskPanelStatus,
   taskPanelMetadataSchema,
 } from "@shared/contracts/tasks.ts";
-import { app } from "electron";
-import { z } from "zod";
+import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import {
-  type DebouncedJsonStore,
-  debouncedJsonStore,
-} from "./debounced-store.ts";
+  type TerminalPanelSession,
+  terminalAgentPanelMetadataSchema,
+} from "./terminal-session-state-schemas.ts";
+import {
+  emptyWindowSession,
+  ensureTerminalSessionStore,
+} from "./terminal-session-store.ts";
 
-const terminalPanelSessionSchema = z.object({
-  context: panelContextSchema.optional(),
-  tab: z.preprocess(
-    normalizePanelTabChromeInput,
-    panelTabChromeSchema.optional()
-  ),
-  task: taskPanelMetadataSchema.optional(),
-  title: z.string().optional(),
-  updatedAt: z.string(),
-});
+export type { TerminalPanelSession } from "./terminal-session-state-schemas.ts";
 
-const terminalWindowSessionSchema = z.object({
-  panels: z.record(z.string(), terminalPanelSessionSchema),
-});
-
-const terminalSessionStateSchema = z.object({
-  version: z.literal(1),
-  windows: z.record(z.string(), terminalWindowSessionSchema),
-});
-
-export type TerminalPanelSession = z.infer<typeof terminalPanelSessionSchema>;
-type TerminalSessionState = z.infer<typeof terminalSessionStateSchema>;
-
-const DEFAULTS: TerminalSessionState = {
-  version: 1,
-  windows: {},
-};
-
-function resolveFilePath(): string {
-  return join(app.getPath("userData"), "terminal-session-state.json");
-}
-
-let store: DebouncedJsonStore<TerminalSessionState> | undefined;
-
-function getStore(): DebouncedJsonStore<TerminalSessionState> {
-  if (!store) {
-    store = debouncedJsonStore<TerminalSessionState>({
-      filePath: resolveFilePath(),
-      defaults: DEFAULTS,
-      debounceMs: 500,
-    });
-  }
-  return store;
-}
-
-/**
- * Ensure store is initialised (read from disk once) and validate the
- * parsed state. Falls back to defaults on corrupt or unknown-version data.
- */
-async function ensureStore(): Promise<
-  DebouncedJsonStore<TerminalSessionState>
-> {
-  const s = getStore();
-  try {
-    const raw = await s.init();
-    const parsed = terminalSessionStateSchema.parse(raw);
-    if (JSON.stringify(raw) !== JSON.stringify(parsed)) {
-      s.replace(parsed);
-    }
-  } catch (err) {
-    console.warn(
-      "[terminal-session-state] parse failed, resetting to defaults:",
-      err
-    );
-    await s.clear();
-    await s.init();
-  }
-  return s;
-}
-
-function emptyWindowSession(): TerminalSessionState["windows"][string] {
-  return { panels: {} };
-}
+const ensureStore = ensureTerminalSessionStore;
 
 export async function readTerminalPanelSession(
   windowId: string,
@@ -150,6 +71,21 @@ function mergePanelTabChrome(
       : {}),
   };
   return normalizePanelTabChromeInput(next) ?? current;
+}
+
+function agentExitTabPatch(
+  exitCode: number | undefined
+): Partial<PanelTabChrome> {
+  const succeeded = exitCode === undefined || exitCode === 0;
+  return {
+    state: succeeded
+      ? { colorToken: "success", label: "Exited", status: "succeeded" }
+      : {
+          colorToken: "destructive",
+          label: `Exited ${exitCode}`,
+          status: "failed",
+        },
+  };
 }
 
 export async function updateTerminalPanelContext(
@@ -220,6 +156,159 @@ export async function updateTerminalPanelTask(
     windowState.panels[panelId] = {
       ...current,
       task: parsed.data,
+      updatedAt: new Date().toISOString(),
+    };
+    return state;
+  });
+}
+
+export async function updateTerminalPanelAgent(
+  windowId: string,
+  panelId: string,
+  agent: TerminalAgentPanelMetadata
+): Promise<void> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return;
+  }
+  const parsed = terminalAgentPanelMetadataSchema.safeParse(agent);
+  if (!parsed.success) {
+    return;
+  }
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId] ?? emptyWindowSession();
+    state.windows[windowId] = windowState;
+    const current = windowState.panels[panelId] ?? {};
+    windowState.panels[panelId] = {
+      ...current,
+      agent: parsed.data,
+      updatedAt: new Date().toISOString(),
+    };
+    return state;
+  });
+}
+
+export async function updateTerminalPanelAgentResume(
+  windowId: string,
+  panelId: string,
+  resume: NonNullable<TerminalAgentPanelMetadata["resume"]> & {
+    agentId: TerminalAgentPanelMetadata["agentId"];
+  }
+): Promise<boolean> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return false;
+  }
+  let patched = false;
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId];
+    const current = windowState?.panels[panelId];
+    if (
+      !(
+        windowState &&
+        current?.agent &&
+        current.agent.status === "running" &&
+        current.agent.agentId === resume.agentId
+      )
+    ) {
+      return state;
+    }
+    const nextAgent = {
+      ...current.agent,
+      resume: {
+        capturedAt: resume.capturedAt,
+        sessionId: resume.sessionId,
+        source: resume.source,
+      },
+    };
+    const parsed = terminalAgentPanelMetadataSchema.safeParse(nextAgent);
+    if (!parsed.success) {
+      return state;
+    }
+    windowState.panels[panelId] = {
+      ...current,
+      agent: parsed.data,
+      updatedAt: new Date().toISOString(),
+    };
+    patched = true;
+    return state;
+  });
+  return patched;
+}
+
+export async function patchTerminalPanelAgentStatus(
+  windowId: string,
+  panelId: string,
+  patch: {
+    exitCode?: number | undefined;
+    finishedAt?: number | undefined;
+    status: TerminalAgentPanelMetadata["status"];
+  }
+): Promise<boolean> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return false;
+  }
+  let patched = false;
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId];
+    const current = windowState?.panels[panelId];
+    if (!(windowState && current?.agent)) {
+      return state;
+    }
+    const canPatchExited =
+      current.agent.status === "exited" &&
+      patch.status === "exited" &&
+      (patch.exitCode !== undefined || patch.finishedAt !== undefined);
+    if (!(current.agent.status === "running" || canPatchExited)) {
+      return state;
+    }
+    const exitCode = patch.exitCode ?? current.agent.exitCode;
+    const nextAgent = {
+      ...current.agent,
+      status: patch.status,
+      ...(patch.exitCode === undefined ? {} : { exitCode: patch.exitCode }),
+      ...(patch.finishedAt === undefined
+        ? {}
+        : { finishedAt: patch.finishedAt }),
+    };
+    const parsed = terminalAgentPanelMetadataSchema.safeParse(nextAgent);
+    if (!parsed.success) {
+      return state;
+    }
+    windowState.panels[panelId] = {
+      ...current,
+      agent: parsed.data,
+      ...(patch.status === "exited"
+        ? {
+            tab: mergePanelTabChrome(current.tab, agentExitTabPatch(exitCode)),
+          }
+        : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    patched = true;
+    return state;
+  });
+  return patched;
+}
+
+export async function clearTerminalPanelAgent(
+  windowId: string,
+  panelId: string
+): Promise<void> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return;
+  }
+  const s = await ensureStore();
+  s.mutate((state) => {
+    const windowState = state.windows[windowId];
+    const current = windowState?.panels[panelId];
+    if (!(windowState && current?.agent)) {
+      return state;
+    }
+    const { agent: _agent, ...nextPanel } = current;
+    windowState.panels[panelId] = {
+      ...nextPanel,
       updatedAt: new Date().toISOString(),
     };
     return state;
@@ -353,13 +442,7 @@ export async function removeTerminalPanelSession(
     return state;
   });
 }
-/**
- * App 启动孤儿清算：上个进程存活期内标记 running 的 task 不可能仍在运行
- * （pty 随 app 退出死亡）——统一改写 cancelled（exitReason/Source =
- * "restore"）+ Cancelled tab chrome。此后磁盘状态不说谎：session 读到
- * "running" 只可能是本进程内真活（renderer reload 重挂路径）。
- * 返回清算条数（可观测性/测试用）。
- */
+/** App 启动孤儿清算：上个进程的 running task 统一落成 cancelled。 */
 export async function reconcileOrphanedRunningTasks(
   now: () => number = Date.now
 ): Promise<number> {

@@ -142,6 +142,7 @@ export const worktreeOpenTerminalRequestSchema = z.object({
   agentId: agentKindSchema.optional(),
   path: z.string().min(1),
   runSetup: z.boolean(),
+  taskPrompt: z.string().min(1).max(12_000).optional(),
 });
 export type WorktreeOpenTerminalRequest = z.infer<
   typeof worktreeOpenTerminalRequestSchema

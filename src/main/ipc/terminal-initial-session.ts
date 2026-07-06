@@ -1,5 +1,14 @@
-import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
+import type {
+  CreateTerminalArgs,
+  TerminalAgentResumeMetadata,
+} from "@shared/contracts/terminal.ts";
+import type {
+  ResolvedTerminalLaunchOptions,
+  TerminalAgentRestoreLaunchOptions,
+} from "@shared/contracts/terminal-launch.ts";
 import {
+  updateTerminalPanelAgent,
   updateTerminalPanelContext,
   updateTerminalPanelTask,
 } from "../state/terminal-session-state.ts";
@@ -31,5 +40,33 @@ export async function persistInitialTerminalTask(
     await updateTerminalPanelTask(sessionScope, panelId, task);
   } catch (err) {
     console.error("[pier-task-initial-persist] failed:", err);
+  }
+}
+
+export async function persistInitialTerminalAgent(
+  sessionScope: string,
+  panelId: string,
+  agentId: AgentKind | undefined,
+  launch: ResolvedTerminalLaunchOptions | undefined,
+  options: { resume?: TerminalAgentResumeMetadata | undefined } = {}
+): Promise<void> {
+  if (!(agentId && launch)) {
+    return;
+  }
+  const restoreLaunch: TerminalAgentRestoreLaunchOptions = {
+    ...(launch.agentId && { agentId: launch.agentId }),
+    ...(launch.command && { command: launch.command }),
+    ...(launch.cwd && { cwd: launch.cwd }),
+  };
+  try {
+    await updateTerminalPanelAgent(sessionScope, panelId, {
+      agentId,
+      launch: restoreLaunch,
+      ...(options.resume && { resume: options.resume }),
+      startedAt: Date.now(),
+      status: "running",
+    });
+  } catch (err) {
+    console.error("[pier-agent-initial-persist] failed:", err);
   }
 }

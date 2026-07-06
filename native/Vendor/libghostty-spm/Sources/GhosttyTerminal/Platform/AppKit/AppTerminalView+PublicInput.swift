@@ -13,9 +13,10 @@
         /// Send raw UTF-8 text directly to the underlying pty (bypassing
         /// key translation). Use this for synthetic input like `\x1b[Z`
         /// (Shift+Tab / CSI Z) or multi-line paste-style injections.
-        /// No-op when the surface has not been created yet.
-        public func sendText(_ text: String) {
-            surface?.sendText(text)
+        /// Returns false when the surface has not been created yet.
+        @discardableResult
+        public func sendText(_ text: String) -> Bool {
+            surface?.sendText(text) ?? false
         }
 
         /// Invoke a named Ghostty binding action (e.g. "copy_to_clipboard",

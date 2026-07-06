@@ -178,6 +178,9 @@ export interface RendererPluginNotificationOptions {
   description?: string;
 }
 
+export type RendererPluginDialogIntent = "default" | "destructive";
+export type RendererPluginDialogSize = "default" | "sm";
+
 export interface RendererPluginAgentSelection {
   detectedIds: readonly AgentKind[];
   enabledIds: readonly AgentKind[];
@@ -216,12 +219,16 @@ export interface RendererPluginContext {
     alert(options: {
       body?: string;
       confirmLabel?: string;
+      intent?: RendererPluginDialogIntent;
+      size?: RendererPluginDialogSize;
       title: string;
     }): Promise<void>;
     confirm(options: {
       body?: string;
       cancelLabel?: string;
       confirmLabel?: string;
+      intent: RendererPluginDialogIntent;
+      size: RendererPluginDialogSize;
       title: string;
     }): Promise<boolean>;
   };

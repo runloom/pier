@@ -1,5 +1,7 @@
 import type {
   RendererPluginContext,
+  RendererPluginDialogIntent,
+  RendererPluginDialogSize,
   RendererPluginLoadingNotification,
 } from "@plugins/api/renderer.ts";
 import { pluginText } from "./git-plugin-text.ts";
@@ -19,6 +21,10 @@ function toastOptions(detail?: string): { description: string } | undefined {
 }
 
 export type GitLoadingToast = RendererPluginLoadingNotification;
+export interface GitConfirmDialogOptions {
+  intent?: RendererPluginDialogIntent;
+  size?: RendererPluginDialogSize;
+}
 
 export function showLoading(
   context: RendererPluginContext,
@@ -85,11 +91,14 @@ export function confirmDialog(
   title: string,
   body: string,
   confirmLabel: string,
-  detail?: string
+  detail?: string,
+  options: GitConfirmDialogOptions = {}
 ): Promise<boolean> {
   return context.dialogs.confirm({
     body: [body, detail].filter(Boolean).join("\n\n"),
     confirmLabel,
+    intent: options.intent ?? "default",
+    size: options.size ?? "sm",
     title,
   });
 }

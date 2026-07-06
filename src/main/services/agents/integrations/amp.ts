@@ -69,13 +69,30 @@ function pierAppend(log, line) {
 		.catch(() => {});
 }
 
-function emitPierEvent(nativeEvent) {
+function pierSessionIdFrom(values) {
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue;
+    for (const key of ["sessionId", "sessionID", "session_id", "threadId", "threadID", "thread_id"]) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
+    }
+    const session = value.session || value.thread;
+    if (session && typeof session === "object") {
+      for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
+        if (typeof session[key] === "string" && session[key]) return session[key];
+      }
+    }
+  }
+  return undefined;
+}
+
+function emitPierEvent(nativeEvent, ...values) {
   const pierEvent = PIER_EVENT_MAP[nativeEvent];
   if (!pierEvent) return;
   const log = process.env.PIER_AGENT_EVENT_LOG;
   const panelId = process.env.PIER_PANEL_ID;
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
+  const sessionId = pierSessionIdFrom(values);
   const line = JSON.stringify({
     v: 1,
     kind: "agentEvent",
@@ -85,6 +102,7 @@ function emitPierEvent(nativeEvent) {
     pid: process.pid,
     agent: "amp",
     event: pierEvent,
+    ...(sessionId ? { sessionId } : {}),
   }) + "\\n";
   try {
     pierAppend(log, line);
@@ -97,25 +115,25 @@ export default function (amp) {
   // 不做加载合成 SessionStart：amp 自身的 session.start 是真实会话开始
   // 信号（下方订阅）；合成版在插件工厂按会话/子代理多次执行的宿主上会
   // 打穿主状态（omp task subagent 教训）。图标点亮由 launch 先验层承担。
-  amp.on("session.start", () => {
-    emitPierEvent("session.start");
+  amp.on("session.start", (...args) => {
+    emitPierEvent("session.start", ...args);
   });
 
-  amp.on("agent.start", () => {
-    emitPierEvent("agent.start");
+  amp.on("agent.start", (...args) => {
+    emitPierEvent("agent.start", ...args);
   });
 
-  amp.on("tool.call", () => {
-    emitPierEvent("tool.call");
+  amp.on("tool.call", (...args) => {
+    emitPierEvent("tool.call", ...args);
     return { action: "allow" };
   });
 
-  amp.on("tool.result", () => {
-    emitPierEvent("tool.result");
+  amp.on("tool.result", (...args) => {
+    emitPierEvent("tool.result", ...args);
   });
 
-  amp.on("agent.end", () => {
-    emitPierEvent("agent.end");
+  amp.on("agent.end", (...args) => {
+    emitPierEvent("agent.end", ...args);
   });
 }
 `;

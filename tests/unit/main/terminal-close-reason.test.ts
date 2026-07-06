@@ -100,10 +100,14 @@ describe("terminal close IPC reason semantics", () => {
       };
     });
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
+      clearTerminalPanelAgent: vi.fn(async () => undefined),
+      patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => true),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
+      updateTerminalPanelAgent: vi.fn(async () => undefined),
+      updateTerminalPanelAgentResume: vi.fn(async () => true),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTab: vi.fn(async () => undefined),
       updateTerminalPanelTask: vi.fn(async () => undefined),

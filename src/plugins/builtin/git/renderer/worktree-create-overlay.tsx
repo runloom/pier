@@ -184,13 +184,15 @@ function WorktreeCreateOverlay({
 
   async function openWorktreeTerminal(
     targetPath: string,
-    agentId: AgentKind | null
+    agentId: AgentKind | null,
+    taskPrompt?: string | undefined
   ): Promise<void> {
     try {
       await context.worktrees.openTerminal({
         ...(agentId ? { agentId } : {}),
         path: targetPath,
         runSetup: agentId === null,
+        ...(agentId && taskPrompt ? { taskPrompt } : {}),
       });
     } catch (err) {
       context.notifications.error(
@@ -236,7 +238,11 @@ function WorktreeCreateOverlay({
         values.mode === "ai" && values.startTask && values.agentId !== ""
           ? values.agentId
           : null;
-      await openWorktreeTerminal(result.targetPath, agentId);
+      await openWorktreeTerminal(
+        result.targetPath,
+        agentId,
+        agentId ? values.text.trim() : undefined
+      );
     } catch (err) {
       setSubmitError(errorMessage(err));
       setPhase("idle");

@@ -575,22 +575,14 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("SessionEnd 只清 hook 层: 投影回落 launch icon-only, 命令退出后全清", () => {
+  it("SessionEnd clears matching launch activity so ended agents do not block quit", () => {
     const agg = createForegroundActivityAggregator({ now });
-    agg.agentLaunched("1", "p1", "codex");
+    agg.agentLaunched("1", "p1", "claude");
     advance(250);
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
-    let a = agg.snapshot().activities[0] as AgentActivity;
+    const a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.source).toBe("hook");
     agg.ingestAgentEvent(hookEvent("SessionEnd"));
-    // hook 清除, command 层保留 → 回落 launch 先验（无 status）
-    a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.kind).toBe("agent");
-    expect(a.source).toBe("launch");
-    expect(a.agentId).toBe("codex");
-    expect(a.status).toBeUndefined();
-    // 前台命令最终退出 → 全清
-    agg.ingestCommandFinished("p1", 0);
     expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });

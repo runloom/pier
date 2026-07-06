@@ -320,4 +320,37 @@ describe("terminal create launch options", () => {
     expect(result.nativeLaunch?.command).toContain("Status: cancelled");
     expect(result.nativeLaunch?.command).not.toContain("Status: running");
   });
+
+  it("restores a previously running agent panel by relaunching the saved agent command", () => {
+    const saved = {
+      agent: {
+        agentId: "claude",
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/tmp/pier",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "running",
+      },
+      context: {
+        contextId: "ctx:/tmp/pier",
+        cwd: "/tmp/pier",
+        projectRootPath: "/tmp/pier",
+        source: "panel",
+        updatedAt: 1_772_000_000_000,
+      },
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } as TerminalPanelSession;
+
+    const result = resolveCreateTerminalLaunch(createArgs(), saved);
+
+    expect(result.launchAgentId).toBe("claude");
+    expect(result.restoredAgent).toEqual(saved.agent);
+    expect(result.nativeLaunch).toEqual({
+      agentId: "claude",
+      command: "claude --dangerously-skip-permissions",
+      cwd: "/tmp/pier",
+    });
+  });
 });

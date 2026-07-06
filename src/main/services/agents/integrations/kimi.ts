@@ -6,7 +6,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   atomicWriteFile,
   commandExistsOnPath,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   removePierTextBlock,
   upsertPierTextBlock,
 } from "./shared.ts";
@@ -95,7 +95,10 @@ const TRAILING_NEWLINES_RE = /\n+$/;
 function buildKimiHooksBlock(): string {
   const lines: string[] = [];
   for (const event of KIMI_HOOK_EVENTS) {
-    const command = pierHookCommand(AGENT_ID, event.pierEvent);
+    const command = pierHookCommandWithStdinSessionId(
+      AGENT_ID,
+      event.pierEvent
+    );
     lines.push("[[hooks]]");
     lines.push(`event = ${JSON.stringify(event.nativeEvent)}`);
     if (event.matcher !== undefined) {

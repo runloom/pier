@@ -1412,6 +1412,11 @@ describe("git builtin plugin", () => {
 
     const acceptPromise = branchPick.onAccept(branchItem);
     expect(await screen.findByText("Merge Conflicts")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
+    expect(screen.getByRole("button", { name: "Open Review" })).toHaveAttribute(
+      "data-variant",
+      "default"
+    );
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Merge Conflicts"
     );
@@ -1640,8 +1645,13 @@ describe("git builtin plugin", () => {
     const acceptPromise = quickPick.onAccept(item);
 
     expect(await screen.findByText("Git: Drop Stash...")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     // {{stash}} 插值链路：fallback 也必须替换为实际 label
     expect(await screen.findByText(DROP_STASH_CONFIRM_BODY_RE)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Drop" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
     // 确认前不得触发删除
     expect(window.pier.git.dropStash).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Drop" }));
@@ -1695,11 +1705,16 @@ describe("git builtin plugin", () => {
       ?.handler();
 
     expect(await screen.findByText("Git: Undo Last Commit")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
       screen.getByText(
         "Undo the last commit? Changes will be preserved as staged."
       )
     ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
     expect(useCommandPaletteController.getState().quickPick).toBeNull();
     expect(getLastTerminalInputRoutingSnapshot()).toEqual(
       expect.objectContaining({

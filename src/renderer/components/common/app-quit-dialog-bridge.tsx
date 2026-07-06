@@ -8,20 +8,47 @@ import { useEffect, useRef } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 
-const MAX_VISIBLE_ACTIVITIES = 8;
-const MAX_DETAIL_LINE_LENGTH = 180;
+const MAX_VISIBLE_ACTIVITY_NAMES = 3;
+const MAX_ACTIVITY_NAME_LENGTH = 72;
 
-function truncateDetailLine(line: string): string {
-  if (line.length <= MAX_DETAIL_LINE_LENGTH) {
-    return line;
+function truncateActivityName(name: string): string {
+  if (name.length <= MAX_ACTIVITY_NAME_LENGTH) {
+    return name;
   }
 
-  return `${line.slice(0, MAX_DETAIL_LINE_LENGTH - 1)}…`;
+  return `${name.slice(0, MAX_ACTIVITY_NAME_LENGTH - 1)}…`;
 }
 
-function formatSummary(summary: QuitActivitySummary): string {
-  const command = summary.commandLine ? ` — ${summary.commandLine}` : "";
-  return `• ${summary.kind}: ${summary.label}${command}`;
+function formatActivityName(
+  t: TFunction,
+  summary: QuitActivitySummary
+): string {
+  return truncateActivityName(
+    t("dialog.appQuit.activityName", {
+      kind: t(`dialog.appQuit.activityKind.${summary.kind}`),
+      label: summary.label,
+    })
+  );
+}
+
+function formatActivityList(
+  t: TFunction,
+  summaries: readonly QuitActivitySummary[]
+): string {
+  const visibleSummaries = summaries.slice(0, MAX_VISIBLE_ACTIVITY_NAMES);
+  const activities = visibleSummaries
+    .map((summary) => formatActivityName(t, summary))
+    .join(t("dialog.appQuit.activitySeparator"));
+  const hiddenCount = summaries.length - visibleSummaries.length;
+
+  if (hiddenCount <= 0) {
+    return activities;
+  }
+
+  return t("dialog.appQuit.activityListWithOverflow", {
+    activities,
+    count: hiddenCount,
+  });
 }
 
 function formatQuitDialogBody(
@@ -32,25 +59,16 @@ function formatQuitDialogBody(
     return t("dialog.appQuit.noActivityDetail");
   }
 
-  const visibleSummaries = summaries.slice(0, MAX_VISIBLE_ACTIVITIES);
-  const lines = [
-    t("dialog.appQuit.activityMessage", { count: summaries.length }),
-    ...visibleSummaries.map((summary) =>
-      truncateDetailLine(formatSummary(summary))
-    ),
-  ];
-
-  if (summaries.length > MAX_VISIBLE_ACTIVITIES) {
-    lines.push(
-      t("dialog.appQuit.overflow", {
-        count: summaries.length - MAX_VISIBLE_ACTIVITIES,
-      })
-    );
+  const firstSummary = summaries[0];
+  if (summaries.length === 1 && firstSummary) {
+    return t("dialog.appQuit.singleActivityDetail", {
+      activity: formatActivityName(t, firstSummary),
+    });
   }
 
-  lines.push(t("dialog.appQuit.activityDetailSuffix"));
-
-  return lines.join("\n");
+  return t("dialog.appQuit.multipleActivityDetail", {
+    activities: formatActivityList(t, summaries),
+  });
 }
 
 function toDecisionPayload(
@@ -91,10 +109,12 @@ export function AppQuitDialogBridge() {
       currentQuitIdRef.current = request.quitId;
 
       const confirmed = await showAppConfirm({
+        title: tRef.current("dialog.appQuit.title"),
         body: formatQuitDialogBody(tRef.current, request.summaries),
         cancelLabel: tRef.current("dialog.appQuit.cancel"),
         confirmLabel: tRef.current("dialog.appQuit.quit"),
-        title: tRef.current("dialog.appQuit.title"),
+        intent: request.summaries.length > 0 ? "destructive" : "default",
+        size: "sm",
       });
 
       if (currentQuitIdRef.current !== request.quitId) {

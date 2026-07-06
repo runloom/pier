@@ -4,6 +4,7 @@ import { create } from "zustand";
 
 export interface TerminalRelaunchRequest {
   context?: PanelContext | undefined;
+  initialInput?: string | undefined;
   launchId: string;
   panelId: string;
   sequence: number;

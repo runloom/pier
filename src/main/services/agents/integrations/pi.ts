@@ -81,11 +81,28 @@ function pierAppend(log, line) {
 		.catch(() => {});
 }
 
-function pierEmit(event) {
+function pierSessionIdFrom(values) {
+	for (const value of values) {
+		if (!value || typeof value !== "object") continue;
+		for (const key of ["sessionId", "sessionID", "session_id"]) {
+			if (typeof value[key] === "string" && value[key]) return value[key];
+		}
+		const session = value.session || value.thread;
+		if (session && typeof session === "object") {
+			for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
+				if (typeof session[key] === "string" && session[key]) return session[key];
+			}
+		}
+	}
+	return undefined;
+}
+
+function pierEmit(event, ...values) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
+	const sessionId = pierSessionIdFrom(values);
 	const line = JSON.stringify({
 		v: 1,
 		kind: "agentEvent",
@@ -95,6 +112,7 @@ function pierEmit(event) {
 		pid: process.pid,
 		agent: "pi",
 		event,
+		...(sessionId ? { sessionId } : {}),
 	}) + "\\n";
 	try {
 		pierAppend(log, line);
@@ -109,10 +127,10 @@ export default function PierAgentStatus(pi) {
 	// if already processing）, 不存在 omp 式多实例加载风险, 合成安全。
 	pierEmit("SessionStart");
 
-	pi.on("session_start", () => pierEmit("SessionStart"));
-	pi.on("agent_start", () => pierEmit("PromptSubmit"));
-	pi.on("agent_end", () => pierEmit("Stop"));
-	pi.on("session_shutdown", () => pierEmit("SessionEnd"));
+	pi.on("session_start", (event, ctx) => pierEmit("SessionStart", event, ctx));
+	pi.on("agent_start", (event, ctx) => pierEmit("PromptSubmit", event, ctx));
+	pi.on("agent_end", (event, ctx) => pierEmit("Stop", event, ctx));
+	pi.on("session_shutdown", (event, ctx) => pierEmit("SessionEnd", event, ctx));
 }
 `;
 }

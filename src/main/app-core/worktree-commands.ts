@@ -74,6 +74,19 @@ function agentTerminalTab(
   };
 }
 
+function buildAgentInitialInput(
+  taskPrompt: string | undefined
+): string | undefined {
+  const normalized = taskPrompt
+    ?.replaceAll("\0", "")
+    .replace(/\r\n?/g, "\n")
+    .trim();
+  if (!normalized) {
+    return;
+  }
+  return `${normalized}\r`;
+}
+
 async function executeWorktreeOpenCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "worktree.open" }>,
@@ -145,6 +158,9 @@ async function executeWorktreeOpenTerminalCommand(
   const launch = command.agentId
     ? { agentId: command.agentId, cwd: target.path }
     : { cwd: target.path, ...(setup ? { command: setup } : {}) };
+  const initialInput = command.agentId
+    ? buildAgentInitialInput(command.taskPrompt)
+    : undefined;
   return await executeTerminalOpenCommand(
     requestId,
     {
@@ -153,7 +169,10 @@ async function executeWorktreeOpenTerminalCommand(
       type: "terminal.open",
     },
     services,
-    command.agentId ? { tab: agentTerminalTab(command.agentId) } : {}
+    {
+      ...(command.agentId ? { tab: agentTerminalTab(command.agentId) } : {}),
+      ...(initialInput ? { initialInput } : {}),
+    }
   );
 }
 

@@ -187,6 +187,13 @@ export function createForegroundActivityAggregator(
       logEndHookSession(key, hook.agentId);
       clearHookTimers(hook);
       slot.hook = null;
+      if (
+        slot.command?.kind === "agent-launch" &&
+        slot.command.agentId === hook.agentId
+      ) {
+        clearCommandTimers(slot.command);
+        slot.command = null;
+      }
       dropSlotIfEmpty(key);
     }
     hookCooldownUntil.set(key, now() + SESSION_END_COOLDOWN_MS);

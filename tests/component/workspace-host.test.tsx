@@ -603,6 +603,7 @@ describe("WorkspaceHost", () => {
       bridge.listener?.({
         command: {
           context,
+          initialInput: "修复终端焦点问题\r",
           launchId: "launch-1",
           type: "terminal.open",
         },
@@ -618,6 +619,9 @@ describe("WorkspaceHost", () => {
           launchId: "launch-1",
         },
       })
+    );
+    expect(addPanel.mock.calls[0]?.[0]?.params).not.toHaveProperty(
+      "initialInput"
     );
     const panelId = addPanel.mock.calls[0]?.[0]?.id;
     expect(resolve).toHaveBeenCalledWith({

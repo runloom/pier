@@ -1,5 +1,7 @@
+import type { AgentKind } from "./agent.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskPanelMetadata } from "./tasks.ts";
+import type { TerminalAgentRestoreLaunchOptions } from "./terminal-launch.ts";
 
 export interface TerminalFrame {
   /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
@@ -265,6 +267,7 @@ export interface CreateTerminalArgs {
   context?: PanelContext | undefined;
   font: TerminalFont;
   frame: TerminalFrame;
+  initialInput?: string | undefined;
   launchId?: string | undefined;
   panelId: string;
   tab?: PanelTabChrome | undefined;
@@ -274,6 +277,22 @@ export interface CreateTerminalArgs {
 export interface CreateTerminalResult {
   error?: string;
   ok: boolean;
+}
+
+export interface TerminalAgentResumeMetadata {
+  capturedAt: number;
+  sessionId: string;
+  source: "hook";
+}
+
+export interface TerminalAgentPanelMetadata {
+  agentId: AgentKind;
+  exitCode?: number | undefined;
+  finishedAt?: number | undefined;
+  launch: TerminalAgentRestoreLaunchOptions;
+  resume?: TerminalAgentResumeMetadata | undefined;
+  startedAt: number;
+  status: "exited" | "running";
 }
 
 export interface TerminalContextMenuRequest {
@@ -308,6 +327,7 @@ export interface TerminalTitleEvent {
 }
 
 export interface TerminalPanelSessionSnapshot {
+  agent?: TerminalAgentPanelMetadata | undefined;
   context?: PanelContext | undefined;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;

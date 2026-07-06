@@ -1,6 +1,9 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
-import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
+import type {
+  CreateTerminalArgs,
+  TerminalAgentPanelMetadata,
+} from "@shared/contracts/terminal.ts";
 import type {
   ResolvedTerminalLaunchOptions,
   TerminalLaunchOptions,
@@ -59,6 +62,7 @@ export function nativeLaunchOptions(
     ...(options.restoredSession
       ? {}
       : {
+          ...(launch?.agentId && { agentId: launch.agentId }),
           ...(launch?.command && { command: launch.command }),
           ...(launch?.env && { env: launch.env }),
         }),
@@ -82,6 +86,8 @@ export function resolveCreateTerminalLaunch(
   /** launcher 启动的 agent 身份（+按钮/命令面板）——用于会话即时点亮。 */
   launchAgentId?: AgentKind | undefined;
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined;
+  restoredAgent?: TerminalAgentPanelMetadata | undefined;
+  restoredAgentLaunch?: boolean | undefined;
   task?: TaskPanelMetadata | undefined;
 } {
   const launch = readCreateLaunch(args);
@@ -93,6 +99,7 @@ export function resolveCreateTerminalLaunch(
   const task = explicitCreate
     ? (args.task ?? saved?.task)
     : (saved?.task ?? args.task);
+  const savedAgent = explicitCreate ? undefined : saved?.agent;
   if (task && !launch) {
     if (options.taskLive) {
       // reload 重挂路径：native 面保留（swift 对已存在 panelId 纯 reattach,
@@ -113,6 +120,15 @@ export function resolveCreateTerminalLaunch(
       context,
       nativeLaunch: restoredTaskLaunchOptions(restoredTask, cwd),
       task: restoredTask,
+    };
+  }
+  if (savedAgent?.status === "running") {
+    return {
+      context,
+      launchAgentId: savedAgent.agentId,
+      nativeLaunch: nativeLaunchOptions(savedAgent.launch, cwd),
+      restoredAgent: savedAgent,
+      restoredAgentLaunch: true,
     };
   }
   return {

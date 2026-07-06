@@ -5,7 +5,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -75,7 +75,7 @@ export function withPierCursorHooks(
     const existing = Array.isArray(current) ? current : [];
     const kept = existing.filter((entry) => !isPierCursorEntry(entry));
     const pierEntry: CursorHookEntry = {
-      command: pierHookCommand(AGENT_ID, event.pierEvent),
+      command: pierHookCommandWithStdinSessionId(AGENT_ID, event.pierEvent),
       timeout: TIMEOUT_SECONDS,
     };
     hooks[event.nativeEvent] = [...kept, pierEntry];
