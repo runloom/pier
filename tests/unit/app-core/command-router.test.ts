@@ -2505,6 +2505,7 @@ describe("createCommandRouter", () => {
           agentId: "codex",
           path: "/repo/.worktrees/feature-a",
           runSetup: true,
+          taskPrompt: "修复终端焦点问题",
           type: "worktree.openTerminal",
         },
         protocolVersion: 1,
@@ -2530,6 +2531,7 @@ describe("createCommandRouter", () => {
     expect(rendererCommands.at(-1)).toEqual({
       context: panelContext("/repo/.worktrees/feature-a"),
       focus: true,
+      initialInput: "修复终端焦点问题\r",
       launchId: "launch-1",
       tab: {
         icon: { id: agentTabIconId("codex") },

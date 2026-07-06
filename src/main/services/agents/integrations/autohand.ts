@@ -5,7 +5,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -96,7 +96,7 @@ export function withPierAutohandHooks(
   );
   const pierEntries: AutohandHookEntry[] = AUTOHAND_HOOK_EVENTS.map(
     (event) => ({
-      command: pierHookCommand(AGENT_ID, event.pierEvent),
+      command: pierHookCommandWithStdinSessionId(AGENT_ID, event.pierEvent),
       enabled: true,
       event: event.nativeEvent,
       timeout: AUTOHAND_HOOK_TIMEOUT_MS,

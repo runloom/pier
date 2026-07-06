@@ -1,4 +1,5 @@
 const freshTerminalPanelIds = new Set<string>();
+const freshTerminalInitialInputs = new Map<string, string>();
 
 export function markFreshTerminalPanel(panelId: string): void {
   freshTerminalPanelIds.add(panelId);
@@ -6,6 +7,7 @@ export function markFreshTerminalPanel(panelId: string): void {
 
 export function clearFreshTerminalPanel(panelId: string): void {
   freshTerminalPanelIds.delete(panelId);
+  freshTerminalInitialInputs.delete(panelId);
 }
 
 export function isFreshTerminalPanel(panelId: string): boolean {
@@ -20,6 +22,22 @@ export function consumeFreshTerminalPanel(panelId: string): boolean {
   return true;
 }
 
+export function setFreshTerminalInitialInput(
+  panelId: string,
+  initialInput: string
+): void {
+  freshTerminalInitialInputs.set(panelId, initialInput);
+}
+
+export function consumeFreshTerminalInitialInput(
+  panelId: string
+): string | undefined {
+  const initialInput = freshTerminalInitialInputs.get(panelId);
+  freshTerminalInitialInputs.delete(panelId);
+  return initialInput;
+}
+
 export function resetFreshTerminalPanelsForTests(): void {
   freshTerminalPanelIds.clear();
+  freshTerminalInitialInputs.clear();
 }

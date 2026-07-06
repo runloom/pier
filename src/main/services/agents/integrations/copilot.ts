@@ -5,7 +5,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -70,7 +70,7 @@ export function withPierCopilotHooks(
     const existing = Array.isArray(current) ? current : [];
     const kept = existing.filter((entry) => !isPierCopilotEntry(entry));
     const pierEntry: CopilotHookEntry = {
-      bash: pierHookCommand(AGENT_ID, event.pierEvent),
+      bash: pierHookCommandWithStdinSessionId(AGENT_ID, event.pierEvent),
       timeoutSec: TIMEOUT_SECONDS,
       type: "command",
     };

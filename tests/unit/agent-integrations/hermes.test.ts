@@ -79,7 +79,9 @@ describe("buildHermesPluginInit", () => {
       "ctx.register_hook(event_name, _make_hook(event_name))"
     );
     expect(init).toContain("def _make_hook(event_name: str)");
-    expect(init).toContain("def _pier_emit(pier_event: str) -> None:");
+    expect(init).toContain(
+      "def _pier_emit(pier_event: str, payload: dict[str, Any]) -> None:"
+    );
   });
 
   it("事件映射齐全：EVENT_MAP 覆盖全部原生事件, 值为正确 pier 事件名", () => {

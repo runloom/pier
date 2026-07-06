@@ -520,6 +520,7 @@ describe("WorktreeCreateOverlay", () => {
         agentId: "codex",
         path: "/repo.worktree/fix-focus",
         runSetup: false,
+        taskPrompt: "修复终端焦点问题",
       });
     });
   });

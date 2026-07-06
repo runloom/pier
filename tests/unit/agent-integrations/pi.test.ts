@@ -51,9 +51,9 @@ describe("buildPiExtensionSource", () => {
       expect(src).toContain(`pi.on("${evt}"`);
     }
     expect(src).toContain('pierEmit("SessionStart")');
-    expect(src).toContain('pierEmit("PromptSubmit")');
-    expect(src).toContain('pierEmit("Stop")');
-    expect(src).toContain('pierEmit("SessionEnd")');
+    expect(src).toContain('pierEmit("PromptSubmit", event, ctx)');
+    expect(src).toContain('pierEmit("Stop", event, ctx)');
+    expect(src).toContain('pierEmit("SessionEnd", event, ctx)');
     // agent_start 映射 PromptSubmit（与 omp 对齐, 非旧 processing）
     expect(
       PI_EVENT_MAP.find((e) => e.nativeEvent === "agent_start")?.pierEvent

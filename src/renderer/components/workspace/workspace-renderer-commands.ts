@@ -103,6 +103,7 @@ function addTerminalForCommand(
       ...(command.context && {
         context: command.context,
       }),
+      ...(command.initialInput && { initialInput: command.initialInput }),
       launchId: command.launchId,
       ...(command.placement && {
         placement: command.placement,
@@ -142,6 +143,7 @@ function addTerminalForCommand(
     panelId: command.panelId,
     launchId: command.launchId,
     ...(command.context && { context: command.context }),
+    ...(command.initialInput && { initialInput: command.initialInput }),
     ...(command.tab && { tab: command.tab }),
     ...(command.task && { task: command.task }),
   });

@@ -62,12 +62,13 @@ describe("clineIntegration 契约", () => {
 });
 
 describe("buildClineHookScript", () => {
-  it("含 shebang + 托管 marker + 排空 stdin + pier 命令", async () => {
+  it("含 shebang + 托管 marker + payload sessionId 抽取 + pier 命令", async () => {
     const { buildClineHookScript, CLINE_HOOK_MARKER } = await loadIntegration();
     const script = buildClineHookScript("Stop");
     expect(script.startsWith("#!/bin/sh\n")).toBe(true);
     expect(script).toContain(CLINE_HOOK_MARKER);
-    expect(script).toContain("cat >/dev/null 2>&1");
+    expect(script).toContain("session_id");
+    expect(script).toContain("sessionId");
     expect(script).toContain(MARK);
     expect(script).toContain('"cline"');
     expect(script).toContain('"Stop"');

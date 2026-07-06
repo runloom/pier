@@ -6,22 +6,31 @@
 import { create } from "zustand";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 
+export type AppDialogIntent = "default" | "destructive";
+export type AppDialogSize = "default" | "sm";
+
 export interface AppAlertOptions {
   body?: string;
   confirmLabel?: string;
+  intent?: AppDialogIntent;
+  size?: AppDialogSize;
   title: string;
 }
 
 export interface AppConfirmOptions extends AppAlertOptions {
   cancelLabel?: string;
+  intent: AppDialogIntent;
+  size: AppDialogSize;
 }
 
 export interface AppDialogRequest {
   body?: string;
   cancelLabel?: string;
   confirmLabel?: string;
+  intent: AppDialogIntent;
   kind: "alert" | "confirm";
   resolve(confirmed: boolean): void;
+  size: AppDialogSize;
   title: string;
 }
 
@@ -35,7 +44,7 @@ export const useAppDialogStore = create<AppDialogState>(() => ({
 
 function openAppDialog(
   kind: AppDialogRequest["kind"],
-  options: AppConfirmOptions
+  options: AppAlertOptions | AppConfirmOptions
 ): Promise<boolean> {
   // 模态弹窗与命令面板不叠放: 弹窗出现时先关面板 (close 幂等,
   // 未 accept 的 quick-pick 由面板 dismiss effect 兜底调 onDismiss)。
@@ -50,9 +59,13 @@ function openAppDialog(
         }
         resolvePromise(confirmed);
       },
+      intent: options.intent ?? "default",
+      size: options.size ?? "default",
       title: options.title,
       ...(options.body ? { body: options.body } : {}),
-      ...(options.cancelLabel ? { cancelLabel: options.cancelLabel } : {}),
+      ...("cancelLabel" in options && options.cancelLabel
+        ? { cancelLabel: options.cancelLabel }
+        : {}),
       ...(options.confirmLabel ? { confirmLabel: options.confirmLabel } : {}),
     };
     useAppDialogStore.setState({ current: request });

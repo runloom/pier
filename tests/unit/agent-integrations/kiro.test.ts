@@ -79,7 +79,7 @@ describe("withPierKiroHooks / withoutPierKiroHooks (纯函数)", () => {
     }
   });
 
-  it("命令内容含 stdin 排空前缀 + pier 标记 + 正确事件名", async () => {
+  it("命令内容从 stdin payload 抽取 session_id 并上报正确事件名", async () => {
     const { withPierKiroHooks } = await loadIntegration();
     const next = withPierKiroHooks({});
     const hooks = next.hooks as Record<
@@ -87,7 +87,8 @@ describe("withPierKiroHooks / withoutPierKiroHooks (纯函数)", () => {
       Array<{ command: string; matcher?: string }>
     >;
     const stopCmd = hooks.stop?.[0]?.command ?? "";
-    expect(stopCmd.startsWith("cat >/dev/null 2>&1; ")).toBe(true);
+    expect(stopCmd).toContain("session_id");
+    expect(stopCmd).toContain("sessionId");
     expect(stopCmd).toContain(MARK);
     expect(stopCmd).toContain('"kiro"');
     expect(stopCmd).toContain('"Stop"');

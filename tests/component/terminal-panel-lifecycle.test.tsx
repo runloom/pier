@@ -1,5 +1,6 @@
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
+import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import {
   act,
   fireEvent,
@@ -35,11 +36,13 @@ import {
 import {
   markFreshTerminalPanel,
   resetFreshTerminalPanelsForTests,
+  setFreshTerminalInitialInput,
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 interface TerminalRelaunchRequest {
   context?: PanelContext | undefined;
+  initialInput?: string | undefined;
   launchId: string;
   panelId: string;
   sequence: number;
@@ -183,6 +186,8 @@ function createPanelProps(
     isVisible?: boolean;
     params?: {
       context?: PanelContext;
+      /** 旧版持久化 layout 字段；TerminalPanel 必须忽略它。 */
+      initialInput?: string;
       launchId?: string;
       tab?: PanelTabChrome;
       task?: TaskPanelMetadata;
@@ -639,10 +644,15 @@ describe("TerminalPanel lifecycle", () => {
   });
 
   it("passes launchId into native terminal creation", async () => {
+    markFreshTerminalPanel("terminal-1");
+    setFreshTerminalInitialInput("terminal-1", "修复终端焦点问题\r");
     render(
       <TerminalPanel
         {...createPanelProps({
-          params: { context, launchId: "launch-1" },
+          params: {
+            context,
+            launchId: "launch-1",
+          },
         })}
       />
     );
@@ -651,8 +661,31 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({
           context,
+          initialInput: "修复终端焦点问题\r",
           launchId: "launch-1",
           panelId: "terminal-1",
+        })
+      );
+    });
+  });
+
+  it("does not replay initial input from persisted panel params", async () => {
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            context,
+            launchId: "launch-1",
+            initialInput: "不应再次发送\r",
+          },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          initialInput: "不应再次发送\r",
         })
       );
     });
@@ -1231,6 +1264,41 @@ describe("TerminalPanel lifecycle", () => {
     });
     expect(queryByTestId("terminal-task-result")).toBeNull();
     expect(container.querySelector(".terminal-anchor")).not.toBeNull();
+  });
+
+  it("renders restored exited agent as a result view without native terminal", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      agent: {
+        agentId: "claude",
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/Users/xyz/ABC/pier",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "exited",
+      },
+      context,
+      tab: {
+        icon: { id: "agent:claude" },
+        title: "Claude",
+      },
+      title: "Claude",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } as TerminalPanelSessionSnapshot);
+
+    render(<TerminalPanel {...createPanelProps({ params: { context } })} />);
+
+    const result = await screen.findByTestId("terminal-agent-result");
+    expect(result).toHaveTextContent("[pier] restored agent");
+    expect(result).toHaveTextContent("AgentClaude");
+    expect(result).toHaveTextContent("Statusexited");
+    expect(result).toHaveTextContent(
+      "Commandclaude --dangerously-skip-permissions"
+    );
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
   });
 
   it("does not restart native terminal creation when context params trigger rerenders", async () => {

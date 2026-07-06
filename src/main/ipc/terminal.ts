@@ -8,6 +8,8 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
+import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
+import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
 import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
@@ -19,11 +21,7 @@ import {
   findInternalWindowId,
 } from "../windows/window-identity.ts";
 import { foregroundActivityService } from "./foreground-activity.ts";
-import {
-  consumeCreateLaunch,
-  resolveCreateTerminalLaunch,
-  withPanelStatusEnv,
-} from "./terminal-create-launch.ts";
+import { handleTerminalCreate } from "./terminal-create-handler.ts";
 import { handleTerminalCwdChange } from "./terminal-cwd-forwarding.ts";
 import {
   recordNativeTerminalRoute,
@@ -35,10 +33,6 @@ import {
   setTerminalFocusAddonProvider,
 } from "./terminal-focus-state.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
-import {
-  persistInitialTerminalContext,
-  persistInitialTerminalTask,
-} from "./terminal-initial-session.ts";
 import { isTerminalInputRoutingSnapshot } from "./terminal-input-routing-validation.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
@@ -46,7 +40,6 @@ import { performTerminalOperation } from "./terminal-operations.ts";
 import { terminalPanelClosed } from "./terminal-panel-closed.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 import {
-  applyLatestTerminalPresentation,
   applyRendererTerminalInputRouting,
   applyRendererTerminalPresentation,
   readTerminalInputRoutingDebug,
@@ -54,7 +47,6 @@ import {
 import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalSearchIpc } from "./terminal-search.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
-import { persistInitialTerminalTab } from "./terminal-tab-chrome.ts";
 import { registerTerminalTaskLifecycleForwarding } from "./terminal-task-lifecycle-wiring.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
@@ -67,22 +59,14 @@ export function windowFromWebContents(
   return findAppWindowByWebContents(webContents);
 }
 
-function conformTerminalPresentationAfterCreate(
-  win: AppWindow,
-  addon: NativeAddon | null
+export function registerTerminalIpc(
+  ipcMain: IpcMain,
+  deps: {
+    processEnvironment?: ProcessEnvironmentService | undefined;
+  } = {}
 ): void {
-  applyLatestTerminalPresentation(win, addon, "restore");
-  const effectiveInputRouting = readTerminalInputRoutingDebug(win).effective;
-  if (effectiveInputRouting) {
-    focusWebContentsForEffectiveInputRouting(
-      win,
-      effectiveInputRouting,
-      "terminal-create-conform"
-    );
-  }
-}
-
-export function registerTerminalIpc(ipcMain: IpcMain): void {
+  const processEnvironment =
+    deps.processEnvironment ?? createProcessEnvironmentService();
   const { addon, error: loadError } = loadNativeAddon();
   cachedAddon = addon;
   setTerminalFocusAddonProvider(() => cachedAddon);
@@ -154,95 +138,15 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
       })
   );
 
-  ipcMain.handle(
-    "pier:terminal:create",
-    async (event, args: CreateTerminalArgs) => {
-      if (!addon) {
-        // 同下方 create 失败清理：pty 从未活过, 先验 activity 必须撤。
-        foregroundActivityService.panelClosed(args.panelId);
-        return { ok: false, error: loadError ?? "native addon not loaded" };
-      }
-      const win = windowFromWebContents(event.sender);
-      if (!win) {
-        return { ok: false, error: "window not found" };
-      }
-      try {
-        const handle = win.getNativeWindowHandle();
-        const sessionScope = windowRecordIdFor(win);
-        taskLifecycle.resetPanel(
-          args.panelId,
-          findInternalWindowId(win) ?? undefined
-        );
-        const saved = await readTerminalPanelSession(
-          sessionScope,
-          args.panelId
-        );
-        const taskLive = foregroundActivityService
-          .snapshot(String(win.id))
-          .activities.some(
-            (a) => a.kind === "task" && a.panelId === args.panelId
-          );
-        const { context, launchAgentId, nativeLaunch, task } =
-          resolveCreateTerminalLaunch(args, saved, { taskLive });
-        // Task identity is persisted before native launch so immediate command-finished
-        // callbacks can be gated to the task panel instead of repainting plain terminals.
-        await persistInitialTerminalTask(sessionScope, args.panelId, task);
-        recordRendererTerminalRoute(win, "create", args.panelId, {
-          height: args.frame.height,
-          width: args.frame.width,
-          x: args.frame.x,
-          y: args.frame.y,
-        });
-        const hookEnv = foregroundActivityService.hookEnv();
-        const ok = addon.createTerminal(
-          handle,
-          toNativePanelKey(win, args.panelId),
-          args.frame,
-          args.font.family,
-          args.font.size,
-          withPanelStatusEnv(
-            nativeLaunch,
-            args.panelId,
-            String(win.id),
-            hookEnv
-          )
-        );
-        if (ok) {
-          if (launchAgentId) {
-            // launcher 先验身份：图标/状态即刻点亮, 不等 agent 侧信号。
-            foregroundActivityService.agentLaunched(
-              String(win.id),
-              args.panelId,
-              launchAgentId
-            );
-          }
-          consumeCreateLaunch(args);
-          await persistInitialTerminalContext(
-            sessionScope,
-            args.panelId,
-            context
-          );
-          await persistInitialTerminalTab(sessionScope, args.panelId, args.tab);
-          conformTerminalPresentationAfterCreate(win, addon);
-        }
-        if (!ok) {
-          // create 失败 = pty 从未活过：撤掉先验登记的 activity（fresh spawn
-          // 与 rerun relaunch 都在 create 前已由 taskLaunched 登记 running
-          // task 层）, 否则错误面板上 spinner 永转、taskLive 谎报。空 slot
-          // 时是 no-op；5s 冷却不碍重试——taskLaunched/agentLaunched 会先清。
-          foregroundActivityService.panelClosed(args.panelId);
-        }
-        return ok
-          ? { ok: true }
-          : { ok: false, error: "createTerminal returned false" };
-      } catch (e) {
-        foregroundActivityService.panelClosed(args.panelId);
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-        };
-      }
-    }
+  ipcMain.handle("pier:terminal:create", (event, args: CreateTerminalArgs) =>
+    handleTerminalCreate({
+      addon,
+      createArgs: args,
+      loadError,
+      processEnvironment,
+      taskLifecycle,
+      win: windowFromWebContents(event.sender),
+    })
   );
 
   ipcMain.on(

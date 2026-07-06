@@ -5,7 +5,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -71,7 +71,7 @@ export function withPierCrushHooks(
   const existing = Array.isArray(current) ? current : [];
   const kept = existing.filter((entry) => !isPierCrushEntry(entry));
   const pierEntry: CrushHookEntry = {
-    command: pierHookCommand(AGENT_ID, CRUSH_PIER_EVENT),
+    command: pierHookCommandWithStdinSessionId(AGENT_ID, CRUSH_PIER_EVENT),
   };
   hooks[CRUSH_NATIVE_EVENT] = [...kept, pierEntry];
   return { ...settings, hooks };

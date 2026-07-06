@@ -22,7 +22,15 @@ export const resolvedTerminalLaunchOptionsSchema =
     profileId: true,
   });
 
+export const terminalAgentRestoreLaunchOptionsSchema =
+  resolvedTerminalLaunchOptionsSchema.omit({
+    env: true,
+  });
+
 export type TerminalLaunchOptions = z.infer<typeof terminalLaunchOptionsSchema>;
 export type ResolvedTerminalLaunchOptions = z.infer<
   typeof resolvedTerminalLaunchOptionsSchema
+>;
+export type TerminalAgentRestoreLaunchOptions = z.infer<
+  typeof terminalAgentRestoreLaunchOptionsSchema
 >;

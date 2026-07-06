@@ -354,7 +354,9 @@ app.whenReady().then(async () => {
   registerRendererCommandIpc(ipcMain);
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
   registerBundledFonts();
-  registerTerminalIpc(ipcMain);
+  registerTerminalIpc(ipcMain, {
+    processEnvironment: appCore.services.processEnvironment,
+  });
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerNotificationIpc(ipcMain);

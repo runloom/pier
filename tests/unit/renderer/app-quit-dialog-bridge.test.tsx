@@ -32,16 +32,18 @@ type AppQuitDecision = "cancel" | "quit";
 
 type AppQuitRequestListener = (payload: AppQuitRequestPayload) => void;
 
-const THREE_ACTIVITIES_TEXT_RE = /3 activities are still running\./;
-const ONE_ACTIVITY_TEXT_RE = /1 activity is still running\./;
+const THREE_ACTIVITIES_TEXT_RE =
+  /Vite dev server \(terminal\), codex-agent \(agent\), Build web \(task\) are still running\./;
+const ONE_ACTIVITY_TEXT_RE = /Vite dev server \(terminal\) is still running\./;
 const BLANK_LINE_TEXT_RE = /\n\s*\n/;
-const SHELL_SUMMARY_TEXT_RE = /shell: Vite dev server — pnpm dev -- --host/;
-const AGENT_SUMMARY_TEXT_RE = /agent: codex-agent/;
-const TASK_SUMMARY_TEXT_RE = /task: Build web/;
-const QUIT_TERMINATES_TEXT_RE = /Quitting will terminate these processes\./;
+const QUIT_TERMINATES_THEM_TEXT_RE = /Quitting Pier will terminate them\./;
+const QUIT_TERMINATES_IT_TEXT_RE = /Quitting Pier will terminate it\./;
 const STILL_RUNNING_TEXT_RE = /still running/;
-const OLD_SERVER_TEXT_RE = /shell: old server/;
-const NEW_AGENT_TEXT_RE = /agent: new agent/;
+const OLD_SERVER_TEXT_RE = /old server \(terminal\)/;
+const NEW_AGENT_TEXT_RE = /new agent \(agent\)/;
+const ZH_SINGLE_AGENT_TEXT_RE = /claude（Agent）仍在运行。/;
+const ZH_TERMINATE_SINGLE_TEXT_RE = /退出 Pier 会终止该进程。/;
+const OLD_AGENT_SUMMARY_TEXT_RE = /agent: claude/;
 
 function shellSummary(overrides: Partial<QuitActivitySummary> = {}) {
   return {
@@ -154,13 +156,14 @@ describe("AppQuitDialogBridge", () => {
     });
 
     expect(await screen.findByText("Quit Pier?")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(screen.getByText(THREE_ACTIVITIES_TEXT_RE)).toBeVisible();
-    expect(screen.getByText(SHELL_SUMMARY_TEXT_RE)).toBeVisible();
-    expect(screen.getByText(AGENT_SUMMARY_TEXT_RE)).toBeVisible();
-    expect(screen.getByText(TASK_SUMMARY_TEXT_RE)).toBeVisible();
-    expect(screen.getByText(QUIT_TERMINATES_TEXT_RE)).toBeVisible();
+    expect(screen.getByText(QUIT_TERMINATES_THEM_TEXT_RE)).toBeVisible();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Quit" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Quit" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Quit" }));
 
@@ -172,7 +175,7 @@ describe("AppQuitDialogBridge", () => {
     });
   });
 
-  it("keeps the single dangerous activity body compact while preserving quit details", async () => {
+  it("keeps the single dangerous activity body compact while preserving the activity name", async () => {
     const { bridge, decide } = installAppQuitApi();
     renderBridgeAndHost();
 
@@ -184,9 +187,10 @@ describe("AppQuitDialogBridge", () => {
     const description = await screen.findByText(ONE_ACTIVITY_TEXT_RE);
     const bodyText = description.textContent ?? "";
 
-    expect(bodyText).toContain("1 activity is still running.");
-    expect(bodyText).toContain("• shell: Vite dev server — pnpm dev -- --host");
-    expect(bodyText).toContain("Quitting will terminate these processes.");
+    expect(bodyText).toContain("Vite dev server (terminal) is still running.");
+    expect(bodyText).toContain("Quitting Pier will terminate it.");
+    expect(bodyText).not.toContain("pnpm dev -- --host");
+    expect(screen.getByText(QUIT_TERMINATES_IT_TEXT_RE)).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
@@ -196,6 +200,24 @@ describe("AppQuitDialogBridge", () => {
       });
     });
     expect(bodyText).not.toMatch(BLANK_LINE_TEXT_RE);
+  });
+
+  it("uses natural Chinese copy for a single running agent", async () => {
+    await i18next.changeLanguage("zh-CN");
+    const { bridge } = installAppQuitApi();
+    renderBridgeAndHost();
+
+    sendQuitRequest(bridge.listener, {
+      quitId: "quit-single-agent-zh",
+      summaries: [agentSummary({ label: "claude" })],
+    });
+
+    expect(await screen.findByText("退出 Pier？")).toBeVisible();
+    expect(screen.getByText(ZH_SINGLE_AGENT_TEXT_RE)).toBeVisible();
+    expect(screen.getByText(ZH_TERMINATE_SINGLE_TEXT_RE)).toBeVisible();
+    expect(
+      screen.queryByText(OLD_AGENT_SUMMARY_TEXT_RE)
+    ).not.toBeInTheDocument();
   });
 
   it("explains that the window layout will be saved when no activities are running", async () => {
@@ -208,12 +230,17 @@ describe("AppQuitDialogBridge", () => {
     });
 
     expect(await screen.findByText("Quit Pier?")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
       screen.getByText(
         "Pier will save the current window layout before quitting."
       )
     ).toBeVisible();
     expect(screen.queryByText(STILL_RUNNING_TEXT_RE)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quit" })).toHaveAttribute(
+      "data-variant",
+      "default"
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 

@@ -48,6 +48,7 @@ export interface NativeAddon {
   reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
   /** 把打包字体 ttf 的绝对路径注册给 CoreText (.process scope)，让 ghostty 能找到。启动时调一次。 */
   registerFonts(paths: string[]): void;
+  sendText(panelId: string, text: string): boolean;
   setAppShortcutKeys(keys: string[]): void;
   setCommandFinishedForwardCallback?(
     cb:

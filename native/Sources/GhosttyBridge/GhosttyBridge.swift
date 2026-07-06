@@ -1328,6 +1328,11 @@ final class GhosttyBridgeImpl {
         return term.terminalView.performBindingAction(action)
     }
 
+    func sendText(panelId: String, text: String) -> Bool {
+        guard let term = terminals[panelId] else { return false }
+        return term.terminalView.sendText(text)
+    }
+
     /// 孤儿清理:关掉该 window 下不在 activeIds 集合中的 terminal NSView. 配合
     /// C 方案 reload 零销毁使用 — renderer 重建后调 reconcile 报告"我现在还需要
     /// 这些 panelId", main 转给这里, 把 reload 前 layout 里有但新 layout 没有
@@ -1746,6 +1751,19 @@ public func ghosttyBridgePerformBindingAction(
         GhosttyBridgeImpl.shared.performBindingAction(
             panelId: String(cString: panelId),
             action: String(cString: action)
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_send_text")
+public func ghosttyBridgeSendText(
+    _ panelId: UnsafePointer<CChar>,
+    _ text: UnsafePointer<CChar>
+) -> Bool {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.sendText(
+            panelId: String(cString: panelId),
+            text: String(cString: text)
         )
     }
 }

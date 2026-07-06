@@ -26,6 +26,7 @@ extern "C" {
     void ghostty_bridge_hide(const char* panelId);
     void ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
+    bool ghostty_bridge_send_text(const char* panelId, const char* text);
     void ghostty_bridge_close_all(void* nsWindow);
     // 孤儿清理:关该 window 下不在 activeIds 中的 NSView. C 方案 reload 零销毁
     // 路径上, renderer 重建后报告"我现在还需要这些 panelId", swift 把不在集合
@@ -226,6 +227,13 @@ static Napi::Value JsPerformBindingAction(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     std::string action = info[1].As<Napi::String>().Utf8Value();
     bool ok = ghostty_bridge_perform_binding_action(panelId.c_str(), action.c_str());
+    return Napi::Boolean::New(info.Env(), ok);
+}
+
+static Napi::Value JsSendText(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    std::string text = info[1].As<Napi::String>().Utf8Value();
+    bool ok = ghostty_bridge_send_text(panelId.c_str(), text.c_str());
     return Napi::Boolean::New(info.Env(), ok);
 }
 
@@ -780,6 +788,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("hideTerminal",    Napi::Function::New(env, JsHide));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
+    exports.Set("sendText", Napi::Function::New(env, JsSendText));
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
     exports.Set("reconcileTerminals", Napi::Function::New(env, JsReconcile));
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));

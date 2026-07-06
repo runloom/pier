@@ -1,6 +1,7 @@
 import { matchAgentCommand } from "@shared/agent-command-detection.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import {
+  patchTerminalPanelAgentStatus,
   patchTerminalPanelTab,
   patchTerminalPanelTaskStatus,
   updateTerminalPanelTitle,
@@ -57,6 +58,19 @@ export function registerTerminalTaskLifecycleForwarding(
     // 透传原始 exitCode：悬挂家族(145-148, Ctrl+Z)不视为 agent 退出。
     foregroundActivityService.commandFinished(rawPanelId, exitCode);
     const targetWindow = findAppWindowByElectronId(id);
+    if (targetWindow && !targetWindow.isDestroyed() && exitCode >= 0) {
+      patchTerminalPanelAgentStatus(
+        windowRecordIdFor(targetWindow),
+        rawPanelId,
+        {
+          exitCode,
+          finishedAt: Date.now(),
+          status: "exited",
+        }
+      ).catch((err) => {
+        console.error("[pier-agent-session:command-finished] failed:", err);
+      });
+    }
     if (exitCode >= 0) {
       lifecycle
         .completeFromExitCodeHint({
@@ -117,6 +131,18 @@ export function registerTerminalTaskLifecycleForwarding(
     // pty 进程退出 ≠ 面板关闭：task 面板保留终态 activity（tab 退出
     // chrome 单源）, 其余面板照旧清理。真正的面板关闭走 pier:terminal:close。
     foregroundActivityService.ptyExited(rawPanelId);
+    if (targetWindow && !targetWindow.isDestroyed() && processAlive === false) {
+      patchTerminalPanelAgentStatus(
+        windowRecordIdFor(targetWindow),
+        rawPanelId,
+        {
+          finishedAt: Date.now(),
+          status: "exited",
+        }
+      ).catch((err) => {
+        console.error("[pier-agent-session:process-closed] failed:", err);
+      });
+    }
     lifecycle
       .completeFromNativeProcessClose({
         browserWindowId: id,

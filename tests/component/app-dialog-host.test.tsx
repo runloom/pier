@@ -58,6 +58,8 @@ describe("AppDialogHost", () => {
       result = showAppConfirm({
         body: "Delete worktree feature-x?",
         confirmLabel: "Delete",
+        intent: "destructive",
+        size: "sm",
         title: "Delete Worktree",
       });
     });
@@ -74,13 +76,50 @@ describe("AppDialogHost", () => {
 
     let result: Promise<boolean> | undefined;
     act(() => {
-      result = showAppConfirm({ confirmLabel: "Go", title: "Rebase Branch" });
+      result = showAppConfirm({
+        confirmLabel: "Go",
+        intent: "default",
+        size: "sm",
+        title: "Rebase Branch",
+      });
     });
 
     expect(await screen.findByText("Rebase Branch")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     await expect(result).resolves.toBe(false);
+  });
+
+  it("危险确认弹窗使用小尺寸媒体样式和危险按钮", async () => {
+    render(<AppDialogHost />);
+
+    let result: Promise<boolean> | undefined;
+    act(() => {
+      result = showAppConfirm({
+        body: "Quitting will terminate these processes.",
+        confirmLabel: "Quit",
+        intent: "destructive",
+        size: "sm",
+        title: "Quit Pier?",
+      });
+    });
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveAttribute("data-size", "sm");
+    expect(
+      dialog.querySelector('[data-slot="alert-dialog-media"]')
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
+      "data-variant",
+      "ghost"
+    );
+    expect(screen.getByRole("button", { name: "Quit" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Quit" }));
+    await expect(result).resolves.toBe(true);
   });
 
   it("alert 弹窗只有 OK 按钮且点击后 resolve", async () => {
@@ -109,7 +148,12 @@ describe("AppDialogHost", () => {
 
     let result: Promise<boolean> | undefined;
     act(() => {
-      result = showAppConfirm({ confirmLabel: "Go", title: "Routing Check" });
+      result = showAppConfirm({
+        confirmLabel: "Go",
+        intent: "default",
+        size: "sm",
+        title: "Routing Check",
+      });
     });
 
     expect(await screen.findByText("Routing Check")).toBeVisible();
@@ -168,13 +212,23 @@ describe("AppDialogHost", () => {
 
     let first: Promise<boolean> | undefined;
     act(() => {
-      first = showAppConfirm({ confirmLabel: "A", title: "First Dialog" });
+      first = showAppConfirm({
+        confirmLabel: "A",
+        intent: "default",
+        size: "sm",
+        title: "First Dialog",
+      });
     });
     expect(await screen.findByText("First Dialog")).toBeVisible();
 
     let second: Promise<boolean> | undefined;
     act(() => {
-      second = showAppConfirm({ confirmLabel: "B", title: "Second Dialog" });
+      second = showAppConfirm({
+        confirmLabel: "B",
+        intent: "default",
+        size: "sm",
+        title: "Second Dialog",
+      });
     });
 
     await expect(first).resolves.toBe(false);
