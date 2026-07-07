@@ -508,10 +508,32 @@ describe("TerminalPanel lifecycle", () => {
     });
   });
 
-  it("creates a native terminal when its anchor is renderable even if dockview visibility is stale", async () => {
+  it("does not create a hidden inactive native terminal only because its anchor is renderable", async () => {
     const props = createPanelProps({ isActive: false, isVisible: false });
 
     render(<TerminalPanel {...props} />);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
+    expect(TestResizeObserver.observeCount).toBe(1);
+  });
+
+  it("creates a native terminal for a hidden panel once it becomes active with a renderable anchor", async () => {
+    const props = createPanelProps({ isActive: false, isVisible: false });
+
+    render(<TerminalPanel {...props} />);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
+
+    act(() => {
+      props.emitActive({ isActive: true });
+    });
 
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(

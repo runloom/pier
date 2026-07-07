@@ -138,6 +138,7 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           isSurfaceFocused: booleanValue(surface.isSurfaceFocused),
           nativePanelId,
           panelId: fromNativePanelKey(nativePanelId),
+          surfaceVisible: booleanValue(surface.surfaceVisible),
           targetRect: optionalFrameValue(surface.targetRect),
           viewportFrame: optionalFrameValue(surface.viewportFrame),
         },

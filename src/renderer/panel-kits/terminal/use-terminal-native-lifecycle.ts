@@ -147,8 +147,7 @@ export function useTerminalNativeLifecycle({
     const isDisposed = () =>
       disposed || lifecycleVersionRef.current !== lifecycleVersion;
 
-    const shouldCreateNativeTerminal = () =>
-      api.isVisible || api.isActive || hasRenderableAnchor();
+    const shouldCreateNativeTerminal = () => api.isVisible || api.isActive;
 
     const markCreateFailure = (message: string) => {
       setError(message);

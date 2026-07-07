@@ -29,9 +29,17 @@ describe("native terminal debug bridge source", () => {
     expect(swift).toContain("lastAppliedNativeApplySequence");
     expect(swift).toContain("staleDiscardCount");
     expect(swift).toContain("rememberLayout(");
+    expect(swift).toContain("terminalView.setSurfaceVisible(entry.visible)");
     expect(swift).toContain("container.isHidden = true");
     expect(addon).toContain("ghostty_bridge_apply_presentation");
     expect(addon).toContain("JsApplyTerminalPresentation");
     expect(addon).toContain('exports.Set("applyTerminalPresentation"');
+  });
+
+  it("exposes terminal surface visibility in the native debug snapshot", () => {
+    const swift = readFileSync(GHOSTTY_BRIDGE_PATH, "utf8");
+
+    expect(swift).toContain('"surfaceVisible"');
+    expect(swift).toContain("term.surfaceVisible");
   });
 });

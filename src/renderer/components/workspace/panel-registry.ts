@@ -4,6 +4,7 @@ import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
 import { dashboardPanelKit } from "@/panel-kits/dashboard/dashboard-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { withPanelResourceBoundary } from "./panel-resource-boundary.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
 type PanelKind = "terminal" | "web";
@@ -38,11 +39,17 @@ export function getPanelComponents(): Record<
 > {
   const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {};
   for (const [id, kit] of Object.entries(corePanelKitByComponent)) {
-    components[id] = kit.component;
+    components[id] =
+      kit.kind === "terminal"
+        ? kit.component
+        : withPanelResourceBoundary(kit.component);
   }
   for (const [id, registration] of getPluginPanelRegistrations()) {
     if (!(id in components)) {
-      components[id] = registration.component;
+      components[id] =
+        registration.kind === "terminal"
+          ? registration.component
+          : withPanelResourceBoundary(registration.component);
     }
   }
   return components;

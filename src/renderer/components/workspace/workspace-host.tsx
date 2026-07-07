@@ -29,6 +29,7 @@ import {
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { updatePanelResourceSnapshot } from "@/stores/panel-resource.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   activateTerminalInputRouting,
@@ -101,16 +102,36 @@ function buildTerminalWorkspacePresentationState(
   };
 }
 
+function syncPanelResourceSnapshot(api: DockviewReadyEvent["api"]): void {
+  updatePanelResourceSnapshot({
+    activePanelId: api.activePanel?.id ?? null,
+    panels: api.panels.map((panel) => ({
+      dockviewActive: panel.api.isActive,
+      dockviewVisible: panel.api.isVisible,
+      id: panel.id,
+    })),
+  });
+}
+
+function reconcileTerminalPanels(api: DockviewReadyEvent["api"]): void {
+  const terminalPanelIds = api.panels
+    .filter((panel) => panel.view.contentComponent === "terminal")
+    .map((panel) => panel.id);
+  window.pier?.terminal?.reconcile?.(terminalPanelIds);
+}
+
 function syncTerminalPresentation(
   api: DockviewReadyEvent["api"],
   flushReason: TerminalLayoutFlushReason
 ): void {
   useWorkspaceStore.getState().syncTabShortcutHints();
+  syncPanelResourceSnapshot(api);
   updateTerminalPresentationWorkspace(
     buildTerminalWorkspacePresentationState(api),
     flushReason
   );
   flushTerminalLayoutFramesTrailing(flushReason);
+  reconcileTerminalPanels(api);
 }
 
 export function WorkspaceHost() {
@@ -417,10 +438,7 @@ export function WorkspaceHost() {
         // panelId 集合, swift 把 reload 前 layout 里有、新 layout 里没有的 NSView
         // 清掉. 首次启动 / layout 未变 时是 noop (swift terminals 字典空 / 集合一致),
         // 只有 reload 后 layout 收缩时才真正回收孤儿. fire-and-forget.
-        const terminalPanelIds = event.api.panels
-          .filter((p) => p.view.contentComponent === "terminal")
-          .map((p) => p.id);
-        window.pier?.terminal?.reconcile?.(terminalPanelIds);
+        reconcileTerminalPanels(event.api);
         notifyReadyToShow();
 
         // 给 dockview 一帧时间 flush layout-change 事件, 再放 save gate
