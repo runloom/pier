@@ -182,10 +182,7 @@ beforeEach(async () => {
         listBranches: vi.fn(async () => []),
       },
       preferences: {
-        read: vi.fn(async () => ({
-          worktreeCopyPatterns: [],
-          worktreeSetupCommand: "",
-        })),
+        read: vi.fn(async () => ({})),
       },
     },
   });

@@ -11,6 +11,8 @@ export const pierCapabilitySchema = z.enum([
   "account:read",
   "account:write",
   "app:read",
+  "environment:read",
+  "environment:write",
   "preferences:read",
   "preferences:write",
   "workspace:read",
@@ -65,6 +67,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "account:read",
     "account:write",
     "app:read",
+    "environment:read",
+    "environment:write",
     "preferences:read",
     "preferences:write",
     "workspace:read",
@@ -93,6 +97,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
   "cli-local": [
     "account:read",
     "app:read",
+    "environment:read",
     "preferences:read",
     "workspace:read",
     "workspace:open",
@@ -109,6 +114,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
   ],
   "mcp-local": [
     "app:read",
+    "environment:read",
     "preferences:read",
     "workspace:read",
     "workspace:open",

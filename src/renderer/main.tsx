@@ -29,6 +29,7 @@ import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
 import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
+import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
@@ -68,6 +69,7 @@ async function bootstrap() {
       initAgentPreferences(),
       initTerminalStatusBarPrefs(),
       initWorktreePreferences(),
+      initLocalEnvironments(),
     ]);
   } catch (err) {
     console.error("[pier] theme/locale init failed:", err);

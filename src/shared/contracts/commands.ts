@@ -2,6 +2,12 @@ import { z } from "zod";
 import { agentAccountProviderSchema } from "./agent-accounts.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
+  environmentProjectRequestSchema,
+  environmentSnapshotRequestSchema,
+  environmentUpdateRequestSchema,
+  environmentWorktreeBindingRequestSchema,
+} from "./environment.ts";
+import {
   fileListRequestSchema,
   fileMoveRequestSchema,
   fileReadTextRequestSchema,
@@ -26,10 +32,6 @@ import {
 import { pluginInspectRequestSchema } from "./plugin.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
 import {
-  type ProjectPreferences,
-  projectPreferencesSchema,
-} from "./preferences.ts";
-import {
   resolvedTerminalLaunchOptionsSchema,
   terminalLaunchEnvKeySchema,
   terminalLaunchOptionsSchema,
@@ -52,26 +54,7 @@ import {
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
 
-type DefaultRemovableSchema = z.ZodType & {
-  removeDefault?: () => z.ZodType;
-};
-
-function removePreferencePatchDefault(schema: z.ZodType): z.ZodType {
-  const removable = schema as DefaultRemovableSchema;
-  return removable.removeDefault?.() ?? schema;
-}
-
-const projectPreferencesPatchShape = Object.fromEntries(
-  Object.entries(projectPreferencesSchema.shape).map(([key, schema]) => [
-    key,
-    removePreferencePatchDefault(schema).optional(),
-  ])
-) as z.ZodRawShape;
-
-export type ProjectPreferencesPatch = Partial<ProjectPreferences>;
-
-export const projectPreferencesPatchSchema: z.ZodType<ProjectPreferencesPatch> =
-  z.object(projectPreferencesPatchShape);
+import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 
 export const pierCommandPlacementSchema = z.enum([
   "active-tab",
@@ -411,6 +394,22 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({
     cwd: z.string().min(1),
     type: z.literal("git.undoLastCommit"),
+  }),
+  // Local environment 域命令
+  environmentSnapshotRequestSchema.extend({
+    type: z.literal("environment.snapshot"),
+  }),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.add"),
+  }),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.remove"),
+  }),
+  environmentUpdateRequestSchema.extend({
+    type: z.literal("environment.update"),
+  }),
+  environmentWorktreeBindingRequestSchema.extend({
+    type: z.literal("environment.worktreeBinding"),
   }),
   // Agent accounts 域命令
   z.object({ type: z.literal("accounts.snapshot") }),

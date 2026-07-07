@@ -1,6 +1,7 @@
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   Bot,
+  Box,
   FolderGit2,
   Keyboard,
   type LucideIcon,
@@ -33,6 +34,7 @@ export const NAV_ITEMS: readonly StaticNavItem[] = [
   { id: "terminal", icon: Terminal, variant: "static" },
   // workspace: 宿主级工作区偏好(worktree 目录等), 不属于任何插件的设置页。
   { id: "workspace", icon: FolderGit2, variant: "static" },
+  { id: "environment", icon: Box, variant: "static" },
   { id: "keybindings", icon: Keyboard, variant: "static" },
   { id: "plugins", icon: Plug, variant: "static" },
   { id: "agents", icon: Bot, variant: "static" },

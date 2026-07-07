@@ -65,6 +65,7 @@ const PILL_VARIANT = {
   danger: "text-status-danger-fg",
   warning: "text-status-warning-fg",
   neutral: "text-foreground",
+  muted: "text-muted-foreground",
   success: "text-status-success-fg",
   done: "text-status-done-fg",
 } as const;
@@ -150,9 +151,10 @@ export function BranchLabel({
 }
 
 /**
- * Upstream 状态：no upstream 走 muted 内联图标 + tooltip（信息级）；
- * upstream gone 升级为 attention 级黄色文字胶囊（Primer attention 语义：
- * 远端分支删除通常是合并后的例行清理，非错误）——只有小图标时用户容易忽略"远端已删"。
+ * Upstream 状态：no upstream 用可见 muted 文本胶囊（纯图标会和 untracked
+ * 计数的 GitBranchPlus 混淆）；upstream gone 升级为 attention 级黄色文字
+ * 胶囊（Primer attention 语义：远端分支删除通常是合并后的例行清理，非错误）
+ * —— 只有小图标时用户容易忽略"远端已删"。
  */
 export function UpstreamPill({
   branch,
@@ -177,19 +179,10 @@ export function UpstreamPill({
     );
   }
   if (branch.upstream === null) {
-    const label = pluginText(pluginContext, "noUpstream", "no upstream");
     return (
-      <span
-        className="inline-flex items-center text-muted-foreground"
-        title={label}
-      >
-        <GitBranchPlus
-          aria-hidden="true"
-          className="h-3 w-3"
-          data-git-icon="git-branch-plus"
-        />
-        <span className="sr-only">{label}</span>
-      </span>
+      <Pill testId="no-upstream-pill" variant="muted">
+        {pluginText(pluginContext, "noUpstream", "no upstream")}
+      </Pill>
     );
   }
   return null;

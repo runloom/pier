@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { AgentAccountsSnapshot } from "@shared/contracts/agent-accounts.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
+import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
@@ -19,6 +20,7 @@ import { createCommandPaletteMruService } from "../services/command-palette-serv
 import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
+import { createLocalEnvironmentService } from "../services/local-environments-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
 import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
@@ -94,6 +96,13 @@ function broadcastAgentAccountsChanged(snapshot: AgentAccountsSnapshot): void {
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
       win.webContents.send(PIER_BROADCAST.AGENT_ACCOUNTS_CHANGED, snapshot);
+    }
+  }
+}
+function broadcastEnvironmentsChanged(snapshot: LocalEnvironmentState): void {
+  for (const win of windowManager.getAll()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(PIER_BROADCAST.ENVIRONMENTS_CHANGED, snapshot);
     }
   }
 }
@@ -203,6 +212,7 @@ function createPierAppCore(): PierAppCore {
     preferences,
     secrets,
     processEnvironment,
+    localEnvironments: createLocalEnvironmentService({ processEnvironment }),
     plugins: pluginHost.plugins,
     pluginSettings,
     panelContexts: createPanelContextService(),
@@ -289,7 +299,11 @@ function createPierAppCore(): PierAppCore {
   };
   return {
     clients,
-    commandRouter: createCommandRouter({ clients, services }),
+    commandRouter: createCommandRouter({
+      clients,
+      onEnvironmentsChanged: broadcastEnvironmentsChanged,
+      services,
+    }),
     eventBus,
     pluginHost,
     services,

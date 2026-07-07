@@ -1,9 +1,9 @@
-import type { ProjectPreferencesPatch } from "@shared/contracts/commands.ts";
 import type {
   PierEvent,
   PreferenceChangedKey,
 } from "@shared/contracts/events.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type { ProjectPreferencesPatch } from "@shared/contracts/preferences-patch.ts";
 import {
   readPreferences as readPreferencesState,
   updatePreferences as updatePreferencesState,
@@ -50,8 +50,6 @@ const PATCHABLE_KEYS = [
   "uiFontFamily",
   "userKeymap",
   "windowZoomLevel",
-  "worktreeCopyPatterns",
-  "worktreeSetupCommand",
   "worktreeRootPath",
 ] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
 

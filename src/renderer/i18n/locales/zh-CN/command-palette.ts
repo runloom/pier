@@ -30,6 +30,7 @@ export const commandPalette = {
     toggleCommandPalette: "显示命令面板",
     openTerminalDebugWindow: "打开终端调试窗口",
     openSettings: "打开设置",
+    openEnvironment: "打开环境设置",
     closeActivePanel: "关闭当前面板",
     focusTab: "切换到第 {{index}} 个标签",
     newTab: "新建标签",
