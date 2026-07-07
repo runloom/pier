@@ -41,6 +41,7 @@ export type SubmitPhase = "creating" | "generating" | "idle";
 export interface WorktreeCreateOverlayData {
   branches: readonly GitBranchRef[];
   defaults: WorktreeCreationDefaults;
+
   existingBranches: readonly string[];
   existingNames: readonly string[];
   mainPath: string;
@@ -282,28 +283,19 @@ export function PrepareBadges({
   defaults: WorktreeCreationDefaults;
   text: TextFn;
 }) {
-  const hasCopy = defaults.copyPatterns.length > 0;
-  const hasSetup = defaults.setupCommand.trim() !== "";
-  if (!(hasCopy || hasSetup)) {
+  if (defaults.copyPatterns.length === 0) {
     return null;
   }
   return (
     <FieldDescription className="flex flex-wrap items-center gap-1.5">
       <span>{text("prepareLabel", undefined, "Before creating")}</span>
-      {hasCopy ? (
-        <Badge variant="secondary">
-          {text(
-            "prepareCopy",
-            { count: defaults.copyPatterns.length },
-            "Copy {{count}} ignored file entries"
-          )}
-        </Badge>
-      ) : null}
-      {hasSetup ? (
-        <Badge variant="secondary">
-          {text("prepareSetup", undefined, "Run setup command")}
-        </Badge>
-      ) : null}
+      <Badge variant="secondary">
+        {text(
+          "prepareCopy",
+          { count: defaults.copyPatterns.length },
+          "Copy {{count}} ignored file entries"
+        )}
+      </Badge>
     </FieldDescription>
   );
 }

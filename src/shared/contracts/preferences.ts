@@ -114,11 +114,6 @@ export const projectPreferencesSchema = z.object({
   agentCommandOverrides: z
     .partialRecord(agentKindSchema, z.string())
     .default({}),
-  worktreeCopyPatterns: z
-    .array(z.string().min(1).max(256))
-    .max(64)
-    .default([".env*", "*.local", ".claude/settings.local.json"]),
-  worktreeSetupCommand: z.string().max(1024).default(""),
   worktreeRootPath: z.string().max(1024).default(""),
   /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
   agentStatusHooks: z.boolean().default(true),

@@ -63,6 +63,7 @@ function makeServices(): PierCoreServices {
     git: createGitService(),
     gitWatch: createGitWatchService(),
     panelContexts: trap as never,
+    localEnvironments: trap as never,
     plugins: trap as never,
     pluginSettings: trap as never,
     preferences: trap as never,

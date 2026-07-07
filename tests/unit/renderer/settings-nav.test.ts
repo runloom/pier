@@ -10,4 +10,8 @@ describe("settings navigation metadata", () => {
   it("workspace(宿主级工作区偏好)是顶层静态分区", () => {
     expect(NAV_ITEMS.map((item) => item.id)).toContain("workspace");
   });
+
+  it("environment is a top-level static settings section", () => {
+    expect(NAV_ITEMS.map((item) => item.id)).toContain("environment");
+  });
 });

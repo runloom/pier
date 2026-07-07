@@ -2,6 +2,12 @@ import { z } from "zod";
 import { agentAccountProviderSchema } from "./agent-accounts.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
+  environmentProjectRequestSchema,
+  environmentSnapshotRequestSchema,
+  environmentUpdateRequestSchema,
+  environmentWorktreeBindingRequestSchema,
+} from "./environment.ts";
+import {
   fileListRequestSchema,
   fileMoveRequestSchema,
   fileReadTextRequestSchema,
@@ -392,6 +398,22 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({
     cwd: z.string().min(1),
     type: z.literal("git.undoLastCommit"),
+  }),
+  // Local environment 域命令
+  environmentSnapshotRequestSchema.extend({
+    type: z.literal("environment.snapshot"),
+  }),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.add"),
+  }),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.remove"),
+  }),
+  environmentUpdateRequestSchema.extend({
+    type: z.literal("environment.update"),
+  }),
+  environmentWorktreeBindingRequestSchema.extend({
+    type: z.literal("environment.worktreeBinding"),
   }),
   // Agent accounts 域命令
   z.object({ type: z.literal("accounts.snapshot") }),

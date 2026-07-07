@@ -284,15 +284,14 @@ describe("worktree preferences", () => {
     expect(prefs).not.toHaveProperty("worktreeBranchPrefix");
   });
 
-  it("可覆盖保留的 worktree 键", () => {
+  it("保留 worktree 根目录配置并剥离旧 setup 命令", () => {
     const prefs = projectPreferencesSchema.parse({
-      worktreeCopyPatterns: [".env"],
-      worktreeSetupCommand: "pnpm setup:worktree",
       worktreeRootPath: "/Users/alice/project.worktree",
+      worktreeSetupCommand: "pnpm setup:worktree",
     });
-    expect(prefs.worktreeCopyPatterns).toEqual([".env"]);
-    expect(prefs.worktreeSetupCommand).toBe("pnpm setup:worktree");
     expect(prefs.worktreeRootPath).toBe("/Users/alice/project.worktree");
+    expect(prefs).not.toHaveProperty("worktreeSetupCommand");
+    expect(prefs).not.toHaveProperty("worktreeCopyPatterns");
   });
 
   it("拒绝过长的 worktree 根目录路径", () => {

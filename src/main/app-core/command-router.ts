@@ -3,6 +3,7 @@ import {
   type PierCommandResult,
   pierCommandEnvelopeSchema,
 } from "@shared/contracts/commands.ts";
+import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import {
   type PanelContext,
   panelSnapshotSchema,
@@ -10,6 +11,11 @@ import {
 import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
 import { FileServiceError } from "../services/file-service.ts";
 import { GitExecError } from "../services/git-exec.ts";
+import {
+  isLocalEnvironmentScriptError,
+  LocalEnvironmentScriptError,
+} from "../services/local-environment-scripts.ts";
+import { LocalEnvironmentServiceError } from "../services/local-environments-service.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
 import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
@@ -21,6 +27,7 @@ import {
   commandSuccess as success,
 } from "./command-results.ts";
 import type { PierCoreServices } from "./command-router-services.ts";
+import { executeEnvironmentCommand } from "./environment-commands.ts";
 import { executeFileCommand } from "./file-commands.ts";
 import { executeGitCommand } from "./git-commands.ts";
 import {
@@ -48,6 +55,7 @@ export interface CommandRouter {
 
 export interface CreateCommandRouterArgs {
   clients: PierClientRegistry;
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void;
   services: PierCoreServices;
 }
 
@@ -313,6 +321,15 @@ function mapCommandError(requestId: string, err: unknown): PierCommandResult {
   if (err instanceof WorktreeServiceError) {
     return failure(requestId, err.reason, err.message);
   }
+  if (err instanceof LocalEnvironmentServiceError) {
+    return failure(requestId, "not_found", `${err.reason}: ${err.message}`);
+  }
+  if (
+    err instanceof LocalEnvironmentScriptError ||
+    isLocalEnvironmentScriptError(err)
+  ) {
+    return failure(requestId, "environment_script_failed", err.message);
+  }
   if (err instanceof FileServiceError) {
     return failure(requestId, "invalid_command", err.message);
   }
@@ -324,9 +341,6 @@ function mapCommandError(requestId: string, err: unknown): PierCommandResult {
     return failure(requestId, err.code, err.message);
   }
   if (err instanceof GitExecError) {
-    // 取 stderr 优先,空则 fallback stdout(git 把 "nothing to commit" 之类放 stdout)
-    // 前 3 行作摘要,让插件能按内容分类("already exists"/"not fully merged"/
-    // "dirty worktree"/"nothing to commit" 等)
     const rawSummary = err.stderr.trim() || err.stdout.trim();
     const summary = rawSummary.split("\n").slice(0, 3).join(" | ");
     const detail = summary.length > 0 ? ` -- ${summary}` : "";
@@ -344,12 +358,20 @@ async function executeCommandByDomain(
   command: PierCommand,
   clients: PierClientRegistry,
   services: PierCoreServices,
-  context: CommandExecutionContext
+  context: CommandExecutionContext,
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void
 ): Promise<PierCommandResult | null> {
   const executors = [
     (cmd: PierCommand) => executeAccountCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executeEnvironmentCommand(
+        requestId,
+        cmd,
+        services,
+        onEnvironmentsChanged
+      ),
     (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeFileCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
@@ -376,7 +398,8 @@ async function executeKnownCommand(
   command: PierCommand,
   clients: PierClientRegistry,
   services: PierCoreServices,
-  context: CommandExecutionContext = {}
+  context: CommandExecutionContext = {},
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void
 ): Promise<PierCommandResult> {
   try {
     const result = await executeCommandByDomain(
@@ -384,7 +407,8 @@ async function executeKnownCommand(
       command,
       clients,
       services,
-      context
+      context,
+      onEnvironmentsChanged
     );
     if (result) {
       return result;
@@ -401,6 +425,7 @@ async function executeKnownCommand(
 
 export function createCommandRouter({
   clients,
+  onEnvironmentsChanged,
   services,
 }: CreateCommandRouterArgs): CommandRouter {
   return {
@@ -422,9 +447,14 @@ export function createCommandRouter({
         return failure(requestId, "permission_denied", auth.reason);
       }
 
-      return await executeKnownCommand(requestId, command, clients, services, {
-        clientEnv,
-      });
+      return await executeKnownCommand(
+        requestId,
+        command,
+        clients,
+        services,
+        { clientEnv },
+        onEnvironmentsChanged
+      );
     },
   };
 }

@@ -191,7 +191,6 @@ function WorktreeCreateOverlay({
       await context.worktrees.openTerminal({
         ...(agentId ? { agentId } : {}),
         path: targetPath,
-        runSetup: agentId === null,
         ...(agentId && taskPrompt ? { taskPrompt } : {}),
       });
     } catch (err) {

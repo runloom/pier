@@ -49,8 +49,6 @@ const PATCHABLE_KEYS = [
   "uiFontFamily",
   "userKeymap",
   "windowZoomLevel",
-  "worktreeCopyPatterns",
-  "worktreeSetupCommand",
   "worktreeRootPath",
 ] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
 

@@ -44,8 +44,6 @@ const DEFAULTS: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
-  worktreeCopyPatterns: [".env*", "*.local", ".claude/settings.local.json"],
-  worktreeSetupCommand: "",
   worktreeRootPath: "",
   agentStatusHooks: true,
   gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,

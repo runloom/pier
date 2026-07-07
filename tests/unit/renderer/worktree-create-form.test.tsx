@@ -35,7 +35,6 @@ const DATA: WorktreeCreateOverlayData = {
   defaults: {
     copyPatterns: [],
     rootPath: "/repo.worktree",
-    setupCommand: "",
   },
   existingBranches: ["main"],
   existingNames: [],

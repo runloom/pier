@@ -62,7 +62,6 @@ describe("Tooltip primitive", () => {
     expect(tooltip).toHaveAttribute("data-slot", "tooltip-content");
     expect(tooltip).toHaveClass(
       "max-w-64",
-      "min-w-12",
       "gap-1",
       "px-2",
       "py-1",

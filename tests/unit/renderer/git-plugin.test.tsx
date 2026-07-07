@@ -118,12 +118,12 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     },
     {
       id: "pier.worktree.create",
-      permissions: ["worktree:write"],
+      permissions: ["worktree:write", "environment:read"],
       title: "Create Worktree",
     },
     {
       id: "pier.worktree.delete",
-      permissions: ["worktree:read", "worktree:write"],
+      permissions: ["worktree:read", "worktree:write", "environment:read"],
       title: "Delete Worktrees...",
     },
     {
@@ -202,6 +202,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       "workspace:open",
       "worktree:read",
       "worktree:write",
+      "environment:read",
       "command:register",
       "panel:register",
       "panel:open",
@@ -594,7 +595,6 @@ describe("git builtin plugin", () => {
           creationDefaults: vi.fn(async () => ({
             copyPatterns: [],
             rootPath: "/Users/xyz/ABC/pier.worktree",
-            setupCommand: "",
           })),
           list: vi.fn(async () => ({
             currentPath: "/Users/xyz/ABC/pier",
@@ -670,6 +670,14 @@ describe("git builtin plugin", () => {
             worktrees: [],
           })),
         },
+        environments: {
+          snapshot: vi.fn(async () => ({
+            projects: [],
+            version: 1,
+            worktreeBindings: [],
+          })),
+          worktreeBinding: vi.fn(async () => null),
+        },
         git: {
           abortMerge: vi.fn(async () => ({ kind: "ok" as const })),
           abortRebase: vi.fn(async () => ({ kind: "ok" as const })),
@@ -744,10 +752,7 @@ describe("git builtin plugin", () => {
           applyInputRouting: vi.fn(),
         },
         preferences: {
-          read: vi.fn(async () => ({
-            worktreeCopyPatterns: [],
-            worktreeSetupCommand: "",
-          })),
+          read: vi.fn(async () => ({})),
         },
       },
     });
@@ -1049,6 +1054,13 @@ describe("git builtin plugin", () => {
       throw new Error("expected delete worktree quick pick");
     }
     const deletePromise = deletePick.onAccept(item);
+    await waitFor(() => {
+      expect(
+        useCommandPaletteController
+          .getState()
+          .quickPick?.items?.some((candidate) => candidate.id === "confirm")
+      ).toBe(true);
+    });
     const confirmDelete = useCommandPaletteController.getState().quickPick;
     const confirmDeleteItem = confirmDelete?.items?.find(
       (candidate) => candidate.id === "confirm"

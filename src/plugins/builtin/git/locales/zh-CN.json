@@ -232,6 +232,7 @@
     "ui.worktreeOperationFailed": "工作树操作失败",
     "ui.noWorktreeToDelete": "没有可删除的工作树",
     "ui.deletePlaceholder": "选择工作树",
+    "ui.deleteCleanupWarning": "将为项目 \u201c{{name}}\u201d 运行 cleanup。",
     "ui.deleteConfirm": "删除工作树 {{name}}?",
     "ui.deleteConfirmButton": "删除",
     "ui.worktreeDeleteSuccess": "工作树已删除",

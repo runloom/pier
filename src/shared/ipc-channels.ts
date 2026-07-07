@@ -14,6 +14,8 @@ export const PIER = {
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
+  ENVIRONMENT_PICK_PROJECT_DIRECTORY:
+    "pier://environment:pick-project-directory",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -54,6 +56,8 @@ export const PIER_BROADCAST = {
   // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
   // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
   FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",
+  // local environment 域变更广播 (main → 所有 renderer, payload LocalEnvironmentState).
+  ENVIRONMENTS_CHANGED: "pier://environments:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

@@ -1,4 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { DockviewApi } from "dockview-react";
@@ -17,6 +18,7 @@ const WORKTREE_READ_CAPABILITY_PATTERN =
   /plugin capability not granted:.*worktree:read/;
 const WORKTREE_WRITE_CAPABILITY_PATTERN =
   /plugin capability not granted:.*worktree:write/;
+const ENVIRONMENT_READ_CAPABILITY_PATTERN = /environment:read/;
 
 const toastMocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -210,7 +212,6 @@ function createWorktreesFacadeMock() {
     creationDefaults: vi.fn(async () => ({
       copyPatterns: [".env"],
       rootPath: "/repo",
-      setupCommand: "pnpm install",
     })),
     list: vi.fn(async () => ({
       mainPath: "/repo",
@@ -260,6 +261,23 @@ afterEach(() => {
 });
 
 describe("createRendererPluginContext", () => {
+  it("declares environment read permission for Git worktree actions that read environment state", () => {
+    const createCommand = GIT_PLUGIN_MANIFEST.commands.find(
+      (command) => command.id === "pier.worktree.create"
+    );
+    const deleteCommand = GIT_PLUGIN_MANIFEST.commands.find(
+      (command) => command.id === "pier.worktree.delete"
+    );
+
+    expect(GIT_PLUGIN_MANIFEST.permissions).toContain("environment:read");
+    expect(createCommand?.permissions).toEqual(
+      expect.arrayContaining(["environment:read"])
+    );
+    expect(deleteCommand?.permissions).toEqual(
+      expect.arrayContaining(["environment:read"])
+    );
+  });
+
   it("delegates terminal status item registration to the internal registry", () => {
     const context = createRendererPluginContext();
 
@@ -670,7 +688,6 @@ describe("createRendererPluginContext", () => {
       () =>
         context.worktrees.openTerminal({
           path: "/repo/.worktrees/new",
-          runSetup: true,
         }),
       () => context.worktrees.prune({ path: "/repo" }),
       () => context.worktrees.remove({ path: "/repo/.worktrees/new" }),
@@ -753,14 +770,12 @@ describe("createRendererPluginContext", () => {
     ).resolves.toEqual({
       copyPatterns: [".env"],
       rootPath: "/repo",
-      setupCommand: "pnpm install",
     });
     await context.worktrees.list({ path: "/repo" });
     await context.worktrees.open({ path: "/repo" });
     await expect(
       context.worktrees.openTerminal({
         path: "/repo/.worktrees/new",
-        runSetup: true,
       })
     ).resolves.toEqual({ panelId: "terminal-worktree" });
     await context.worktrees.prune({ path: "/repo" });
@@ -777,7 +792,6 @@ describe("createRendererPluginContext", () => {
     expect(worktrees.open).toHaveBeenCalledWith({ path: "/repo" });
     expect(worktrees.openTerminal).toHaveBeenCalledWith({
       path: "/repo/.worktrees/new",
-      runSetup: true,
     });
     expect(worktrees.prune).toHaveBeenCalledWith({ path: "/repo" });
     expect(worktrees.remove).toHaveBeenCalledWith({
@@ -1190,5 +1204,144 @@ describe("createRendererPluginContext", () => {
     expect(context.i18n.t("ui.unknown", undefined, "Fallback")).toBe(
       "Fallback"
     );
+  });
+  it("blocks environment reads before the preload facade when environment:read is missing", async () => {
+    const snapshotMock = vi.fn(async () => ({
+      projects: [],
+      version: 1 as const,
+      worktreeBindings: [],
+    }));
+    const worktreeBindingMock = vi.fn(async () => null);
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        environments: {
+          snapshot: snapshotMock,
+          worktreeBinding: worktreeBindingMock,
+        },
+      },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: [],
+    });
+
+    await expect(
+      Promise.resolve().then(() =>
+        context.environments.projectSnapshot("/repo")
+      )
+    ).rejects.toThrow(ENVIRONMENT_READ_CAPABILITY_PATTERN);
+    await expect(
+      Promise.resolve().then(() =>
+        context.environments.worktreeBinding({ worktreePath: "/wt" })
+      )
+    ).rejects.toThrow(ENVIRONMENT_READ_CAPABILITY_PATTERN);
+    expect(snapshotMock).not.toHaveBeenCalled();
+    expect(worktreeBindingMock).not.toHaveBeenCalled();
+  });
+
+  it("delegates environment reads to the preload facade when environment:read is granted", async () => {
+    const snapshotMock = vi.fn(async () => ({
+      projects: [
+        {
+          cleanupCommand: "",
+          env: {},
+          projectRootPath: "/repo",
+          setupCommand: "",
+          updatedAt: 1,
+        },
+      ],
+      version: 1 as const,
+      worktreeBindings: [],
+    }));
+    const worktreeBindingMock = vi.fn(async () => ({
+      cleanupCommand: "",
+      env: {},
+      hasCleanupScript: false,
+      projectRootPath: "/repo",
+      setupCommand: "",
+      worktreePath: "/wt",
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        environments: {
+          snapshot: snapshotMock,
+          worktreeBinding: worktreeBindingMock,
+        },
+      },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["environment:read"],
+    });
+
+    const project = await context.environments.projectSnapshot("/repo");
+    expect(project).toMatchObject({
+      projectRootPath: "/repo",
+    });
+    expect(snapshotMock).toHaveBeenCalledWith({ projectRootPath: "/repo" });
+
+    const binding = await context.environments.worktreeBinding({
+      worktreePath: "/wt",
+    });
+    expect(binding).toMatchObject({ projectRootPath: "/repo" });
+    expect(worktreeBindingMock).toHaveBeenCalledWith({ worktreePath: "/wt" });
+  });
+
+  it("returns the scoped projectSnapshot result when canonical paths differ", async () => {
+    const snapshotMock = vi.fn(async () => ({
+      projects: [
+        {
+          cleanupCommand: "",
+          env: {},
+          projectRootPath: "/real/repo",
+          setupCommand: "",
+          updatedAt: 1,
+        },
+      ],
+      version: 1 as const,
+      worktreeBindings: [],
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        environments: { snapshot: snapshotMock, worktreeBinding: vi.fn() },
+      },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["environment:read"],
+    });
+
+    const result = await context.environments.projectSnapshot("/repo-link");
+
+    expect(snapshotMock).toHaveBeenCalledWith({
+      projectRootPath: "/repo-link",
+    });
+    expect(result).toMatchObject({
+      projectRootPath: "/real/repo",
+    });
+  });
+
+  it("returns null from projectSnapshot when no project matches", async () => {
+    const snapshotMock = vi.fn(async () => ({
+      projects: [],
+      version: 1 as const,
+      worktreeBindings: [],
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        environments: { snapshot: snapshotMock, worktreeBinding: vi.fn() },
+      },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["environment:read"],
+    });
+
+    const result = await context.environments.projectSnapshot("/unknown");
+    expect(result).toBeNull();
   });
 });
