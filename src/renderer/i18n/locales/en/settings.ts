@@ -308,6 +308,8 @@ export const settings = {
       commandOverrideDesc: "Override the agent binary path",
       args: "Launch args",
       argsDesc: "Args appended to the launch command",
+      env: "Launch environment",
+      envDesc: "Environment variables applied to this agent",
     },
     statusHooks: {
       label: "Agent status awareness",

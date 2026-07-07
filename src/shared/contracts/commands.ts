@@ -31,7 +31,6 @@ import {
 } from "./git.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
-import { projectPreferencesSchema } from "./preferences.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
   terminalLaunchEnvKeySchema,
@@ -55,10 +54,7 @@ import {
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
 
-export const projectPreferencesPatchSchema = projectPreferencesSchema.partial();
-export type ProjectPreferencesPatch = z.infer<
-  typeof projectPreferencesPatchSchema
->;
+import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 
 export const pierCommandPlacementSchema = z.enum([
   "active-tab",

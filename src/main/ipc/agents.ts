@@ -2,7 +2,7 @@ import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
-import { resolveAgentCommand } from "../services/agents/agent-launch.ts";
+import { resolveAgentLaunch } from "../services/agents/agent-launch.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 
 export function registerAgentsIpc(ipcMain: IpcMain): void {
@@ -22,15 +22,17 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
     "pier:agents:prepareLaunch",
     async (_e, agentId: AgentKind): Promise<{ launchId: string | null }> => {
       const prefs = await appCore.services.preferences.read();
-      const command = resolveAgentCommand({
+      const launch = resolveAgentLaunch({
         agentId,
         override: prefs.agentCommandOverrides?.[agentId],
         agentDefaultArgs: prefs.agentDefaultArgs,
+        agentDefaultEnv: prefs.agentDefaultEnv,
+        agentPermissionMode: prefs.agentPermissionMode,
       });
-      if (!command) {
+      if (!launch) {
         return { launchId: null };
       }
-      const launchId = terminalLaunchRegistry.register({ agentId, command });
+      const launchId = terminalLaunchRegistry.register({ agentId, ...launch });
       return { launchId };
     }
   );

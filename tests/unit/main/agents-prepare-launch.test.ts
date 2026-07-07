@@ -55,6 +55,8 @@ describe("pier:agents:prepareLaunch", () => {
     fakePreferences.read.mockResolvedValueOnce({
       agentCommandOverrides: {},
       agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      agentPermissionMode: "manual",
     });
 
     const ipcMain = makeIpcMain();
@@ -73,10 +75,36 @@ describe("pier:agents:prepareLaunch", () => {
     });
   });
 
+  it("注册 launch 时带上 agent 默认 env", async () => {
+    fakePreferences.read.mockResolvedValueOnce({
+      agentCommandOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: { goose: { GOOSE_MODE: "auto" } },
+      agentPermissionMode: "manual",
+    });
+
+    const ipcMain = makeIpcMain();
+    registerAgentsIpc(ipcMain as never);
+
+    const result = (await ipcMain.invoke(
+      "pier:agents:prepareLaunch",
+      "goose" as AgentKind
+    )) as { launchId: string | null };
+
+    expect(result.launchId).toBe("launch-abc");
+    expect(registerSpy).toHaveBeenCalledWith({
+      agentId: "goose",
+      command: "goose",
+      env: { GOOSE_MODE: "auto" },
+    });
+  });
+
   it("未知 agent (resolveAgentCommand → null) → launchId: null，不注册", async () => {
     fakePreferences.read.mockResolvedValueOnce({
       agentCommandOverrides: {},
       agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      agentPermissionMode: "manual",
     });
 
     const ipcMain = makeIpcMain();

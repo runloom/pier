@@ -172,9 +172,9 @@ function createPierAppCore(): PierAppCore {
   });
   const preferences = createPreferencesService({ eventBus });
   const secrets = createSecretsStore();
+  const processEnvironment = createProcessEnvironmentService();
   // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
   const agentDetection = createAgentDetectionService();
-  const processEnvironment = createProcessEnvironmentService();
   const services: PierCoreServices = {
     agentAccounts: (() => {
       const agentAccountsStore = createAgentAccountsStateStore(
@@ -282,7 +282,10 @@ function createPierAppCore(): PierAppCore {
     ...(() => {
       // git 与 gitWatch 一体：watch 广播需带 status snapshot（多订阅共享 + 免竞态），
       // 所以在这里显式绑 getStatus，避免拆构造顺序
-      const git = createGitService();
+      const git = createGitService({
+        resolveEnvironment: async (cwd) =>
+          (await processEnvironment.resolve({ cwd, source: "plugin" })).env,
+      });
       return {
         git,
         gitWatch: createGitWatchService({

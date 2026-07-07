@@ -1,8 +1,8 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
-import type { ProjectPreferencesPatch } from "@shared/contracts/commands.ts";
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type { ProjectPreferencesPatch } from "@shared/contracts/preferences-patch.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type {
   TerminalStatusBarItemOverridePatch,

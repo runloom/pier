@@ -129,6 +129,7 @@ export interface TerminalDebugNativeSurfaceSnapshot {
   isSurfaceFocused?: boolean | undefined;
   nativePanelId: string;
   panelId: string;
+  surfaceVisible?: boolean | undefined;
   targetRect?: TerminalFrame | null | undefined;
   viewportFrame?: TerminalFrame | null | undefined;
 }
@@ -196,6 +197,11 @@ export interface TerminalDebugRendererPanelSnapshot {
   hasAnchor: boolean;
   isActivePanel: boolean;
   panelId: string;
+  resourceMode?:
+    | "coldSuspendedCandidate"
+    | "visible"
+    | "warmHidden"
+    | undefined;
   terminalLifecycle?:
     | TerminalDebugRendererTerminalLifecycleSnapshot
     | undefined;

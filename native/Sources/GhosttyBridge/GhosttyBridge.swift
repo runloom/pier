@@ -486,6 +486,7 @@ private struct Terminal {
     /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
     /// weak ref 自动 nil, 不留 dangling.
     let eventDelegate: TerminalEventDelegate
+    var surfaceVisible: Bool
 }
 
 private struct TerminalRuntimePreferences {
@@ -916,8 +917,13 @@ final class GhosttyBridgeImpl {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for entry in presentation.terminals {
-            guard let term = terminals[entry.panelId],
+            guard var term = terminals[entry.panelId],
                   term.parentWindow === parent else { continue }
+            if term.surfaceVisible != entry.visible {
+                term.terminalView.setSurfaceVisible(entry.visible)
+                term.surfaceVisible = entry.visible
+                terminals[entry.panelId] = term
+            }
             var viewport: NSRect?
             if let frame = entry.frame {
                 let nextViewport = frame.nsRect
@@ -1219,7 +1225,8 @@ final class GhosttyBridgeImpl {
             containerView: container,
             terminalView: terminalView,
             parentWindow: parent,
-            eventDelegate: eventDelegate
+            eventDelegate: eventDelegate,
+            surfaceVisible: false
         )
         rememberLayout(
             panelId: panelId,
@@ -1264,7 +1271,12 @@ final class GhosttyBridgeImpl {
     }
 
     func show(panelId: String) {
-        guard let term = terminals[panelId] else { return }
+        guard var term = terminals[panelId] else { return }
+        if !term.surfaceVisible {
+            term.terminalView.setSurfaceVisible(true)
+            term.surfaceVisible = true
+            terminals[panelId] = term
+        }
         if let contentView = term.parentWindow.contentView {
             // 确保终端在所有 web 渲染层之下 (见 createTerminal 注释)
             contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
@@ -1281,7 +1293,12 @@ final class GhosttyBridgeImpl {
     }
 
     func hide(panelId: String) {
-        guard let term = terminals[panelId] else { return }
+        guard var term = terminals[panelId] else { return }
+        if term.surfaceVisible {
+            term.terminalView.setSurfaceVisible(false)
+            term.surfaceVisible = false
+            terminals[panelId] = term
+        }
         // 不 guard `panelId != state.activeTerminalPanelId`. 该 guard 设计目的是防
         // drag drop 后没 show 让 NSView 永远 offscreen, 但对同 group 切 tab 是错的:
         //   tab A→B: hide(A) 先到 main, 此时 swift state 还是 A (focus(B) 还没到),
@@ -1545,6 +1562,7 @@ final class GhosttyBridgeImpl {
                     "isOffscreen": frame.minX < -50000 || frame.minY < -50000,
                     "isSurfaceFocused": term.eventDelegate.isSurfaceFocused,
                     "panelId": panelId,
+                    "surfaceVisible": term.surfaceVisible,
                 ]
                 if let contentView {
                     payload["viewportFrame"] = Self.rectDebugPayload(

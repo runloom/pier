@@ -218,6 +218,7 @@ function services(
     },
     env: {
       ...(request.clientEnv ?? {}),
+      ...(request.agentEnv ?? {}),
       ...(request.profileEnv ?? {}),
       ...(request.explicitEnv ?? {}),
     },
@@ -470,6 +471,80 @@ describe("createCommandRouter", () => {
       ok: true,
       requestId: "req-1",
     });
+  });
+
+  it("preferences.update 切默认智能体时不覆盖权限确认方式", async () => {
+    const patches: unknown[] = [];
+    const fakeServices = services();
+    fakeServices.preferences.update = (patch) => {
+      patches.push(patch);
+      return Promise.resolve(
+        makeFakePreferences({
+          agentPermissionMode: "yolo",
+          defaultAgentId: "claude",
+        })
+      );
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          patch: { defaultAgentId: "claude" },
+          type: "preferences.update",
+        },
+        protocolVersion: 1,
+        requestId: "req-default-agent",
+      })
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(patches).toEqual([{ defaultAgentId: "claude" }]);
+  });
+
+  it("preferences.update 切权限确认方式时不覆盖默认智能体", async () => {
+    const patches: unknown[] = [];
+    const fakeServices = services();
+    fakeServices.preferences.update = (patch) => {
+      patches.push(patch);
+      return Promise.resolve(
+        makeFakePreferences({
+          agentPermissionMode: "yolo",
+          defaultAgentId: "claude",
+        })
+      );
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          patch: {
+            agentDefaultArgs: {},
+            agentDefaultEnv: {},
+            agentPermissionMode: "yolo",
+          },
+          type: "preferences.update",
+        },
+        protocolVersion: 1,
+        requestId: "req-agent-permission-mode",
+      })
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(patches).toEqual([
+      {
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      },
+    ]);
   });
 
   it("ai.generateText 透传 prompt 与项目根路径到 AI service", async () => {
@@ -918,6 +993,40 @@ describe("createCommandRouter", () => {
         agentId: "claude",
         command: "claude --dangerously-skip-permissions",
         cwd: "/tmp/pier",
+      },
+    ]);
+  });
+
+  it("terminal.open 用显式 agentId 时带上 agentDefaultEnv", async () => {
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services([], undefined, terminalLaunches);
+    Object.assign(fakeServices, {
+      preferences: {
+        read: async () =>
+          makeFakePreferences({
+            agentDefaultEnv: { goose: { GOOSE_MODE: "auto" } },
+          }),
+      },
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+    await router.execute({
+      clientId: "desktop-1",
+      command: {
+        type: "terminal.open",
+        launch: { agentId: "goose", cwd: "/tmp/pier" },
+      },
+      protocolVersion: 1,
+      requestId: "r-agent-env",
+    });
+    expect(terminalLaunches).toEqual([
+      {
+        agentId: "goose",
+        command: "goose",
+        cwd: "/tmp/pier",
+        env: { GOOSE_MODE: "auto" },
       },
     ]);
   });

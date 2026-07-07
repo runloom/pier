@@ -302,6 +302,8 @@ export const settings = {
       commandOverrideDesc: "覆盖 agent 可执行路径",
       args: "启动参数",
       argsDesc: "追加到启动命令的参数",
+      env: "启动环境变量",
+      envDesc: "启动此 agent 时附加的环境变量",
     },
     statusHooks: {
       label: "Agent 状态感知",

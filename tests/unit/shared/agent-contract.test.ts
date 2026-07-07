@@ -66,12 +66,16 @@ describe("applyPermissionMode（返回 args + env）", () => {
     const off = applyPermissionMode("manual", on.args, on.env);
     expect(off.args.claude).toBeUndefined();
   });
-  it("保留用户自定义参数（yolo 和 manual 都不动）", () => {
+  it("yolo 追加标准 flag，manual 只移除标准 flag 并保留用户自定义参数", () => {
     expect(
       applyPermissionMode("yolo", { claude: "--mine" }, {}).args.claude
-    ).toBe("--mine");
+    ).toBe("--mine --dangerously-skip-permissions");
     expect(
-      applyPermissionMode("manual", { claude: "--mine" }, {}).args.claude
+      applyPermissionMode(
+        "manual",
+        { claude: "--mine --dangerously-skip-permissions" },
+        {}
+      ).args.claude
     ).toBe("--mine");
   });
 });

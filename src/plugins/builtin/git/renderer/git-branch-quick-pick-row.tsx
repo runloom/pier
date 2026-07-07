@@ -1,5 +1,8 @@
 import { Badge } from "@pier/ui/badge.tsx";
-import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
+import type {
+  GitBranchTipTreeInCurrentHistory,
+  GitDiffBranchOption,
+} from "@shared/contracts/git.ts";
 import { GitBranch } from "lucide-react";
 import { formatRelativeTime } from "./format-relative-time.ts";
 
@@ -9,17 +12,26 @@ const ROW_BADGE_CLASS = "h-4 rounded-sm px-1.5 text-[10px]";
 interface GitBranchQuickPickRowProps {
   branch: GitDiffBranchOption;
   defaultLabel: string;
+  graphCaveatTitle: string;
+  graphLabel: string;
   remoteLabel: string;
+  tipTreeInHistoryLabel: string;
+  tipTreeInHistoryTitle: (match: GitBranchTipTreeInCurrentHistory) => string;
 }
 
 export function GitBranchQuickPickRow({
   branch,
   defaultLabel,
+  graphCaveatTitle,
+  graphLabel,
   remoteLabel,
+  tipTreeInHistoryLabel,
+  tipTreeInHistoryTitle,
 }: GitBranchQuickPickRowProps) {
   const relativeTime = formatRelativeTime(branch.committerDate);
   const hasMeta = Boolean(branch.authorName || branch.commit || branch.subject);
   const aheadBehind = branchAheadBehind(branch);
+  const tipTreeInHistory = branch.tipTreeInCurrentHistory;
 
   return (
     <span
@@ -50,7 +62,14 @@ export function GitBranchQuickPickRow({
             <span
               className="inline-flex shrink-0 items-baseline gap-1 text-[10px] tabular-nums"
               data-branch-picker-row-ahead-behind
+              title={graphCaveatTitle}
             >
+              <span
+                className="text-muted-foreground"
+                data-branch-picker-row-graph-label
+              >
+                {graphLabel}
+              </span>
               <span
                 className={
                   aheadBehind.behind > 0
@@ -72,6 +91,16 @@ export function GitBranchQuickPickRow({
                 {aheadBehind.ahead}↑
               </span>
             </span>
+          ) : null}
+          {tipTreeInHistory ? (
+            <Badge
+              className={ROW_BADGE_CLASS}
+              data-branch-picker-row-tip-tree-in-history
+              title={tipTreeInHistoryTitle(tipTreeInHistory)}
+              variant="secondary"
+            >
+              {tipTreeInHistoryLabel}
+            </Badge>
           ) : null}
           {branch.pinReason ? (
             <Badge

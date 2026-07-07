@@ -1,3 +1,4 @@
+import { pierCommandSchema } from "@shared/contracts/commands.ts";
 import { projectPreferencesSchema } from "@shared/contracts/preferences.ts";
 import { describe, expect, it } from "vitest";
 
@@ -213,6 +214,7 @@ describe("projectPreferencesSchema — user keymap", () => {
 describe("projectPreferencesSchema — agent preferences", () => {
   it("提供 agent 默认值", () => {
     const parsed = projectPreferencesSchema.parse({});
+    expect(parsed.agentPermissionMode).toBe("manual");
     expect(parsed.defaultAgentId).toBeNull();
     expect(parsed.disabledAgentIds).toEqual([]);
     expect(parsed.agentDefaultArgs).toEqual({});
@@ -221,11 +223,13 @@ describe("projectPreferencesSchema — agent preferences", () => {
 
   it("接受 agent 偏好值", () => {
     const parsed = projectPreferencesSchema.parse({
+      agentPermissionMode: "yolo",
       defaultAgentId: "claude",
       disabledAgentIds: ["pi"],
       agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
       agentDefaultEnv: { codex: { CODEX_X: "1" } },
     });
+    expect(parsed.agentPermissionMode).toBe("yolo");
     expect(parsed.defaultAgentId).toBe("claude");
     expect(parsed.disabledAgentIds).toEqual(["pi"]);
     expect(parsed.agentDefaultArgs.claude).toBe(
@@ -272,6 +276,40 @@ describe("projectPreferencesSchema — agent preferences", () => {
     expect(() =>
       projectPreferencesSchema.parse({ agentCommandOverrides: { nope: "x" } })
     ).toThrow();
+  });
+});
+
+describe("preferences.update patch schema", () => {
+  it("切默认智能体时不补全权限确认默认值", () => {
+    const parsed = pierCommandSchema.parse({
+      patch: { defaultAgentId: "claude" },
+      type: "preferences.update",
+    });
+
+    expect(parsed).toEqual({
+      patch: { defaultAgentId: "claude" },
+      type: "preferences.update",
+    });
+  });
+
+  it("切权限确认方式时不补全默认智能体默认值", () => {
+    const parsed = pierCommandSchema.parse({
+      patch: {
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      },
+      type: "preferences.update",
+    });
+
+    expect(parsed).toEqual({
+      patch: {
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      },
+      type: "preferences.update",
+    });
   });
 });
 

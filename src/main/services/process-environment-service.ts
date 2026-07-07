@@ -6,6 +6,7 @@ type Environment = Record<string, string>;
 type RawEnvironment = NodeJS.ProcessEnv | Record<string, string | undefined>;
 
 export interface ProcessEnvironmentResolveRequest {
+  agentEnv?: Record<string, string> | undefined;
   clientEnv?: Record<string, string> | undefined;
   cwd?: string | undefined;
   explicitEnv?: Record<string, string> | undefined;
@@ -280,6 +281,7 @@ export function createProcessEnvironmentService({
         baseEnv,
         shellEnv.env,
         request.clientEnv,
+        request.agentEnv,
         request.profileEnv,
         request.explicitEnv
       );

@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { applyPermissionMode } from "@shared/contracts/agent.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { projectPreferencesSchema } from "@shared/contracts/preferences.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +98,22 @@ describe("preferences state", () => {
 
     await expect(readPreferences()).resolves.toMatchObject({
       confirmOnQuit: "hasActivity",
+    });
+  });
+
+  it("infers agentPermissionMode from legacy all-yolo agent args", async () => {
+    const { args, env } = applyPermissionMode("yolo", {}, {});
+    const legacy: Record<string, unknown> = {
+      ...completePreferences({}),
+      agentPermissionMode: undefined,
+      agentDefaultArgs: args,
+      agentDefaultEnv: env,
+    };
+    await writePreferences(legacy);
+    const { readPreferences } = await importPreferencesState();
+
+    await expect(readPreferences()).resolves.toMatchObject({
+      agentPermissionMode: "yolo",
     });
   });
 
