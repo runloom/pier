@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { resolvePermissionMode } from "@shared/contracts/agent.ts";
 import {
   DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   DEFAULT_GIT_AUTO_FETCH_ENABLED,
@@ -41,6 +42,7 @@ const DEFAULTS: ProjectPreferences = {
   userKeymap: [],
   defaultAgentId: null,
   disabledAgentIds: [],
+  agentPermissionMode: "manual",
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
@@ -53,6 +55,27 @@ const DEFAULTS: ProjectPreferences = {
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;
+
+function hasOwnRecordKey(value: unknown, key: string): boolean {
+  return typeof value === "object" && value !== null && key in value;
+}
+
+function normalizeParsedPreferences(
+  raw: unknown,
+  parsed: ProjectPreferences
+): ProjectPreferences {
+  if (hasOwnRecordKey(raw, "agentPermissionMode")) {
+    return parsed;
+  }
+  const inferred = resolvePermissionMode(
+    parsed.agentDefaultArgs,
+    parsed.agentDefaultEnv
+  );
+  return {
+    ...parsed,
+    agentPermissionMode: inferred === "yolo" ? "yolo" : "manual",
+  };
+}
 
 function getStore(): DebouncedJsonStore<ProjectPreferences> {
   if (!store) {
@@ -69,7 +92,10 @@ async function ensureStore(): Promise<DebouncedJsonStore<ProjectPreferences>> {
   const s = getStore();
   try {
     const raw = await s.init();
-    const parsed = projectPreferencesSchema.parse(raw);
+    const parsed = normalizeParsedPreferences(
+      raw,
+      projectPreferencesSchema.parse(raw)
+    );
     if (JSON.stringify(parsed) !== JSON.stringify(raw)) {
       s.replace(parsed);
     }

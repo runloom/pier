@@ -137,6 +137,7 @@ export function createAiService({
         cwd,
         override: preferences.agentCommandOverrides[agent],
         agentDefaultArgs: preferences.agentDefaultArgs,
+        agentPermissionMode: preferences.agentPermissionMode,
         prompt: request.prompt,
       });
       if (!invocation) {

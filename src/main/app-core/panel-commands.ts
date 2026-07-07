@@ -16,7 +16,7 @@ import type {
   ResolvedTerminalLaunchOptions,
   TerminalLaunchOptions,
 } from "@shared/contracts/terminal-launch.ts";
-import { resolveAgentCommand } from "../services/agents/agent-launch.ts";
+import { resolveAgentLaunch } from "../services/agents/agent-launch.ts";
 import type {
   ProcessEnvironmentResolveRequest,
   ProcessEnvironmentService,
@@ -147,19 +147,23 @@ function optionalEnv(
 }
 
 /** ok:false ⇒ unknown agent (catalog miss) → invalid_command. */
-type AgentCmdResult = { ok: true; command: string } | { ok: false };
+type AgentLaunchResult =
+  | { ok: true; launch: ResolvedTerminalLaunchOptions }
+  | { ok: false };
 
-async function resolveAgentLaunchCommand(
+async function resolveAgentLaunchBase(
   agentId: AgentKind,
   services: Pick<PanelCommandServices, "preferences">
-): Promise<AgentCmdResult> {
+): Promise<AgentLaunchResult> {
   const prefs = await services.preferences.read();
-  const command = resolveAgentCommand({
+  const launch = resolveAgentLaunch({
     agentId,
     override: prefs.agentCommandOverrides?.[agentId],
     agentDefaultArgs: prefs.agentDefaultArgs,
+    agentDefaultEnv: prefs.agentDefaultEnv,
+    agentPermissionMode: prefs.agentPermissionMode,
   });
-  return command === null ? { ok: false } : { ok: true, command };
+  return launch === null ? { ok: false } : { ok: true, launch };
 }
 
 interface ResolvedLaunchBase {
@@ -180,14 +184,11 @@ async function resolveTerminalLaunchBase(
   let launchBase = mergeTerminalLaunchCommandAndCwd(rawLaunch, profile);
   // Explicit command / profile command wins; only resolve agent when neither set.
   if (!launchBase.command && launchBase.agentId) {
-    const result = await resolveAgentLaunchCommand(
-      launchBase.agentId,
-      services
-    );
+    const result = await resolveAgentLaunchBase(launchBase.agentId, services);
     if (!result.ok) {
       return { error: `unknown agent: ${launchBase.agentId}` };
     }
-    launchBase = { ...launchBase, command: result.command };
+    launchBase = { ...launchBase, ...result.launch };
   }
   return { launchBase, profile };
 }
@@ -352,6 +353,7 @@ export async function executeTerminalOpenCommand(
   }
   const { launchBase, profile } = resolved;
   const environmentRequest: ProcessEnvironmentResolveRequest = {
+    ...(launchBase.env ? { agentEnv: launchBase.env } : {}),
     cwd: launchBase.cwd,
     ...(options.clientEnv ? { clientEnv: options.clientEnv } : {}),
     ...(rawLaunch.env ? { explicitEnv: rawLaunch.env } : {}),
