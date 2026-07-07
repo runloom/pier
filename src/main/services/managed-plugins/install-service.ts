@@ -1,0 +1,265 @@
+import { mkdir } from "node:fs/promises";
+import type {
+  ManagedPluginCatalogSnapshot,
+  ManagedPluginInstallIndex,
+  ManagedPluginInstallIndexEntry,
+  ManagedPluginOperationResult,
+  OfficialPluginIndex,
+} from "@shared/contracts/managed-plugin.ts";
+import {
+  computeSimulateRestartMutation,
+  performListCatalogSnapshot,
+} from "./catalog-operations.ts";
+import type { ManagedPluginIndexStore } from "./index-state.ts";
+import {
+  type AssetFetcher,
+  type BundledPluginRegistration,
+  type OperationsContext,
+  performClearDevOverride,
+  performInstall,
+  performRollback,
+  performSetDevOverride,
+  performUninstall,
+  setEnabledFlag,
+} from "./install-operations.ts";
+import {
+  cleanupStalePromotionTemps,
+  defaultCopyDirectory,
+  type ManagedPluginRuntimeSource,
+  materializeRuntimeSource,
+} from "./install-runtime.ts";
+import type { ManagedPluginOperationLogRecord } from "./operation-log.ts";
+import type { ManagedPluginPaths } from "./paths.ts";
+
+/**
+ * Managed plugin install service (design §6, plan Task 3).
+ *
+ * Coordinates a single mutation queue across install index writes, operation
+ * log appends, and staging/installed cleanup. Delegates the individual
+ * operations to `./install-operations.ts` and runtime-source materialization
+ * to `./install-runtime.ts` so this file stays under the file-size hard cap.
+ */
+
+export type RuntimeMode = "development" | "production" | "test";
+
+export type { BundledPluginRegistration } from "./install-operations.ts";
+export type { ManagedPluginRuntimeSource } from "./install-runtime.ts";
+
+export interface RecordActivationResultInput {
+  readonly diagnosticId?: string;
+  readonly error?: string;
+  readonly ok: boolean;
+  readonly phase: "main" | "renderer";
+  readonly pluginId: string;
+  readonly version: string;
+  readonly windowId?: string;
+}
+
+export interface CreateManagedPluginInstallServiceOptions {
+  readonly appendOperationLog: (
+    record: ManagedPluginOperationLogRecord
+  ) => Promise<void>;
+  readonly assetFetcher?: AssetFetcher;
+  readonly bundledPlugins?: readonly BundledPluginRegistration[];
+  readonly copyDirectory?: (src: string, dest: string) => Promise<void>;
+  readonly now?: () => number;
+  readonly officialIndexProvider?: () => OfficialPluginIndex | null;
+  readonly officialIndexRefresh?: () => Promise<void>;
+  readonly onRuntimeSourcesChanged?: (
+    sources: readonly ManagedPluginRuntimeSource[]
+  ) => Promise<void>;
+  readonly paths: ManagedPluginPaths;
+  readonly pierVersion: string;
+  readonly runtimeMode: RuntimeMode;
+  readonly store: ManagedPluginIndexStore;
+}
+
+interface ActivationTracker {
+  mainOk?: boolean;
+  rendererWindowOks: Record<string, boolean>;
+}
+
+export interface ManagedPluginInstallService {
+  readonly clearDevOverride: (
+    id: string
+  ) => Promise<ManagedPluginOperationResult>;
+  readonly disable: (id: string) => Promise<ManagedPluginOperationResult>;
+  readonly enable: (id: string) => Promise<ManagedPluginOperationResult>;
+  readonly getIndex: () => ManagedPluginInstallIndex;
+  readonly getRuntimeSources: () => readonly ManagedPluginRuntimeSource[];
+  readonly init: () => Promise<void>;
+  readonly install: (id: string) => Promise<ManagedPluginOperationResult>;
+  readonly listCatalogSnapshot: () => Promise<ManagedPluginCatalogSnapshot>;
+  readonly listRuntimeSources: () => Promise<
+    readonly ManagedPluginRuntimeSource[]
+  >;
+  readonly recordActivationResult: (
+    input: RecordActivationResultInput
+  ) => Promise<void>;
+  readonly rollback: (
+    id: string,
+    version: string
+  ) => Promise<ManagedPluginOperationResult>;
+  readonly setDevOverride: (
+    id: string,
+    path: string
+  ) => Promise<ManagedPluginOperationResult>;
+  readonly simulateRestartForTests: () => Promise<void>;
+  readonly uninstall: (id: string) => Promise<ManagedPluginOperationResult>;
+}
+
+export function createManagedPluginInstallService(
+  options: CreateManagedPluginInstallServiceOptions
+): ManagedPluginInstallService {
+  const { appendOperationLog, paths, pierVersion, runtimeMode, store } =
+    options;
+  const now = options.now ?? Date.now;
+  const copyDirectory = options.copyDirectory ?? defaultCopyDirectory;
+  const isDevRuntime = runtimeMode === "development" || runtimeMode === "test";
+  const officialIndexProvider = options.officialIndexProvider ?? (() => null);
+
+  let mutationQueue: Promise<unknown> = Promise.resolve();
+  const activationTrackers: Record<string, ActivationTracker> = {};
+  let runtimeSourcesSnapshot: readonly ManagedPluginRuntimeSource[] = [];
+
+  function enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const next = mutationQueue.then(task, task);
+    mutationQueue = next.catch(() => {
+      /* keep chain alive */
+    });
+    return next as Promise<T>;
+  }
+
+  async function refreshRuntimeSnapshot(): Promise<void> {
+    const state = store.get();
+    const sources: ManagedPluginRuntimeSource[] = [];
+    const runtimeCtx = { isDevRuntime, paths, pierVersion };
+    for (const [pluginId, entry] of Object.entries(state.plugins)) {
+      if (!entry.effectiveAtStartup) {
+        continue;
+      }
+      const source = await materializeRuntimeSource(
+        runtimeCtx,
+        pluginId,
+        entry
+      );
+      if (source) {
+        sources.push(source);
+      }
+    }
+    runtimeSourcesSnapshot = sources;
+    if (options.onRuntimeSourcesChanged) {
+      await options.onRuntimeSourcesChanged(sources);
+    }
+  }
+
+  const bundledPlugins = options.bundledPlugins ?? [];
+  const ctx: OperationsContext = {
+    appendOperationLog,
+    bundledPlugins,
+    copyDirectory,
+    isDevRuntime,
+    now,
+    officialIndexProvider,
+    paths,
+    pierVersion,
+    refreshRuntimeSnapshot,
+    store,
+    ...(options.assetFetcher ? { assetFetcher: options.assetFetcher } : {}),
+    ...(options.officialIndexRefresh
+      ? { officialIndexRefresh: options.officialIndexRefresh }
+      : {}),
+  };
+
+  async function performSimulateRestartForTests(): Promise<void> {
+    await enqueue(async () => {
+      const state = store.get();
+      const next = computeSimulateRestartMutation(state, isDevRuntime);
+      store.mutate(() => next);
+      await store.flush();
+    });
+    await refreshRuntimeSnapshot();
+  }
+
+  async function performRecordActivationResult(
+    input: RecordActivationResultInput
+  ): Promise<void> {
+    const key = `${input.pluginId}@${input.version}`;
+    const tracker = activationTrackers[key] ?? { rendererWindowOks: {} };
+    if (input.phase === "main") {
+      tracker.mainOk = input.ok;
+    } else if (input.windowId) {
+      tracker.rendererWindowOks[input.windowId] = input.ok;
+    }
+    activationTrackers[key] = tracker;
+    const rendererResults = Object.values(tracker.rendererWindowOks);
+    const anyRendererOk = rendererResults.some((v) => v === true);
+    const anyFailed =
+      tracker.mainOk === false || rendererResults.includes(false);
+    if (tracker.mainOk === true && anyRendererOk && !anyFailed) {
+      await enqueue(async () => {
+        store.mutate((s) => {
+          const entry = s.plugins[input.pluginId];
+          if (!entry) {
+            return s;
+          }
+          return {
+            ...s,
+            plugins: {
+              ...s.plugins,
+              [input.pluginId]: {
+                ...entry,
+                lastKnownGoodVersion: input.version,
+              },
+            },
+          };
+        });
+        await store.flush();
+      });
+    }
+  }
+
+  return {
+    clearDevOverride: (id) => enqueue(() => performClearDevOverride(ctx, id)),
+    disable: (id) => enqueue(() => setEnabledFlag(ctx, id, false)),
+    enable: (id) => enqueue(() => setEnabledFlag(ctx, id, true)),
+    install: (id) => enqueue(() => performInstall(ctx, id)),
+    getIndex: () => store.get(),
+    async init(): Promise<void> {
+      await mkdir(paths.pluginsDir, { recursive: true });
+      await mkdir(paths.installedDir, { recursive: true });
+      await mkdir(paths.stagingDir, { recursive: true });
+      await mkdir(paths.workDir, { recursive: true });
+      await store.init();
+      await cleanupStalePromotionTemps(paths.installedDir);
+      if (!isDevRuntime) {
+        const state = store.get();
+        let mutated = false;
+        const filteredPlugins: Record<string, ManagedPluginInstallIndexEntry> =
+          {};
+        for (const [id, entry] of Object.entries(state.plugins)) {
+          if (entry.devOverride) {
+            filteredPlugins[id] = { ...entry, devOverride: null };
+            mutated = true;
+          } else {
+            filteredPlugins[id] = entry;
+          }
+        }
+        if (mutated) {
+          store.mutate((s) => ({ ...s, plugins: filteredPlugins }));
+          await store.flush();
+        }
+      }
+      await performSimulateRestartForTests();
+    },
+    listCatalogSnapshot: () => performListCatalogSnapshot(ctx),
+    getRuntimeSources: () => runtimeSourcesSnapshot,
+    listRuntimeSources: async () => runtimeSourcesSnapshot,
+    recordActivationResult: (input) => performRecordActivationResult(input),
+    rollback: (id, version) => enqueue(() => performRollback(ctx, id, version)),
+    setDevOverride: (id, path) =>
+      enqueue(() => performSetDevOverride(ctx, id, path)),
+    simulateRestartForTests: () => performSimulateRestartForTests(),
+    uninstall: (id) => enqueue(() => performUninstall(ctx, id)),
+  };
+}

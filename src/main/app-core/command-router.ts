@@ -13,7 +13,6 @@ import { GitExecError } from "../services/git-exec.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
 import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
-import { executeAccountCommand } from "./account-commands.ts";
 import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
@@ -101,16 +100,30 @@ async function executePluginCommand(
   switch (command.type) {
     case "plugin.list":
       return success(requestId, await services.plugins.list());
-    case "plugin.disable":
+    case "plugin.disable": {
+      if (services.managedPlugins?.getIndex?.().plugins[command.id]) {
+        return success(
+          requestId,
+          await services.managedPlugins.disable(command.id)
+        );
+      }
       return success(
         requestId,
         await services.plugins.setEnabled(command.id, false)
       );
-    case "plugin.enable":
+    }
+    case "plugin.enable": {
+      if (services.managedPlugins?.getIndex?.().plugins[command.id]) {
+        return success(
+          requestId,
+          await services.managedPlugins.enable(command.id)
+        );
+      }
       return success(
         requestId,
         await services.plugins.setEnabled(command.id, true)
       );
+    }
     case "plugin.inspect": {
       const plugin = await services.plugins.inspect(command.id);
       if (!plugin) {
@@ -134,6 +147,52 @@ async function executePluginCommand(
         requestId,
         await services.pluginSettings.reset(command.key)
       );
+    case "plugin.catalog.list":
+      return success(
+        requestId,
+        await services.managedPlugins.listCatalogSnapshot()
+      );
+    case "plugin.checkUpdates":
+      // Trigger a fresh catalog snapshot (which fetches the signed official index
+      // if the rate-limit window allows) and return it.
+      return success(
+        requestId,
+        await services.managedPlugins.listCatalogSnapshot()
+      );
+    case "plugin.install":
+      return success(
+        requestId,
+        await services.managedPlugins.install(command.id)
+      );
+    case "plugin.update":
+      return success(requestId, {
+        error: {
+          code: "internal_error",
+          message:
+            "plugin.update not implemented in v1 core; requires signing infra",
+        },
+        ok: false,
+      });
+    case "plugin.rollback":
+      return success(
+        requestId,
+        await services.managedPlugins.rollback(command.id, command.version)
+      );
+    case "plugin.uninstall":
+      return success(
+        requestId,
+        await services.managedPlugins.uninstall(command.id)
+      );
+    case "plugin.devOverride.set":
+      return success(
+        requestId,
+        await services.managedPlugins.setDevOverride(command.id, command.path)
+      );
+    case "plugin.devOverride.clear":
+      return success(
+        requestId,
+        await services.managedPlugins.clearDevOverride(command.id)
+      );
     default:
       return null;
   }
@@ -155,6 +214,14 @@ async function executeAppStateCommand(
         },
         protocolVersion: 1,
       });
+    case "app.relaunch": {
+      // Deferred require to avoid pulling Electron into pure-node test contexts.
+      // Called only via desktop-renderer, so `app` is present.
+      const { app } = await import("electron");
+      app.relaunch();
+      app.quit();
+      return success(requestId, null);
+    }
     case "commandPaletteMru.clear":
       return success(requestId, await services.commandPaletteMru.clear());
     case "commandPaletteMru.read":
@@ -347,7 +414,6 @@ async function executeCommandByDomain(
   context: CommandExecutionContext
 ): Promise<PierCommandResult | null> {
   const executors = [
-    (cmd: PierCommand) => executeAccountCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),

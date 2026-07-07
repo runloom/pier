@@ -22,7 +22,6 @@ import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
-import { initAgentAccounts } from "./stores/agent-accounts.store.ts";
 import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
 import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
@@ -83,9 +82,6 @@ async function bootstrap() {
   installTerminalInputRoutingPointerDownListener();
   installCommandPaletteMenuRequest();
   initCommandPaletteMru().catch(() => undefined);
-  initAgentAccounts().catch((err) => {
-    console.error("[pier] agent accounts init failed:", err);
-  });
 
   registerConfigActions();
   registerCommandPaletteAction();

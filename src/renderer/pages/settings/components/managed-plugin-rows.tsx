@@ -1,0 +1,261 @@
+import { Button } from "@pier/ui/button.tsx";
+import { Item, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import { Loader2, Package } from "lucide-react";
+import { type JSX, useState } from "react";
+import { toast } from "sonner";
+import { useT } from "@/i18n/use-t.ts";
+import {
+  type ContributionCounts,
+  contributionCountItemsFromCounts,
+} from "./plugin-row.tsx";
+
+/**
+ * Row helpers for `ManagedPluginsSection`.
+ * Split from that file to keep it under the file-size hard cap.
+ */
+
+export type CatalogRow = ManagedPluginCatalogSnapshot["plugins"][number];
+
+export interface ManagedPluginsWindowShim {
+  app?: {
+    relaunch(): Promise<void>;
+  };
+  managedPlugins?: {
+    list(): Promise<ManagedPluginCatalogSnapshot>;
+    checkUpdates(): Promise<ManagedPluginCatalogSnapshot>;
+    disable(id: string): Promise<unknown>;
+    enable(id: string): Promise<unknown>;
+    rollback(id: string, version: string): Promise<unknown>;
+    uninstall(id: string): Promise<unknown>;
+    install(id: string): Promise<unknown>;
+  };
+}
+
+type OpKind = "install" | "uninstall" | "update" | "rollback";
+
+const LOADING_KEY: Record<OpKind, string> = {
+  install: "installing",
+  uninstall: "uninstalling",
+  update: "updating",
+  rollback: "rollingBack",
+};
+const SUCCESS_KEY: Record<OpKind, string> = {
+  install: "installed",
+  uninstall: "uninstalled",
+  update: "updated",
+  rollback: "rolledBack",
+};
+const FAILED_KEY: Record<OpKind, string> = {
+  install: "installFailed",
+  uninstall: "uninstallFailed",
+  update: "updateFailed",
+  rollback: "rollbackFailed",
+};
+
+/**
+ * Shared across install/uninstall/update/rollback buttons.
+ *   - flips `pending` while the promise is in-flight
+ *   - drives sonner `toast.promise` (loading → success/error)
+ *   - refreshes the catalog on completion
+ */
+export function usePluginOp(
+  name: string,
+  onRefresh: () => void
+): {
+  pending: boolean;
+  run(
+    op: Promise<unknown> | undefined,
+    kind: OpKind,
+    values?: { version?: string }
+  ): void;
+} {
+  const t = useT();
+  const [pending, setPending] = useState(false);
+  const run = (
+    op: Promise<unknown> | undefined,
+    kind: OpKind,
+    values?: { version?: string }
+  ): void => {
+    if (!op) return;
+    setPending(true);
+    const p = op.finally(() => {
+      setPending(false);
+      onRefresh();
+    });
+    toast.promise(p, {
+      loading: t(`settings.plugins.toast.${LOADING_KEY[kind]}`, { name }),
+      success: () =>
+        t(`settings.plugins.toast.${SUCCESS_KEY[kind]}`, {
+          name,
+          ...(values ?? {}),
+        }),
+      error: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `${t(`settings.plugins.toast.${FAILED_KEY[kind]}`, { name })} — ${msg}`;
+      },
+    });
+  };
+  return { pending, run };
+}
+
+function Spinner({ pending }: { pending: boolean }): JSX.Element | null {
+  return pending ? (
+    <Loader2 aria-hidden className="size-3.5 animate-spin" />
+  ) : null;
+}
+
+/** Actions attached to an installed managed plugin row. */
+export function ManagedRowExtraActions({
+  row,
+  win,
+  onRefresh,
+}: {
+  row: CatalogRow;
+  win: ManagedPluginsWindowShim | undefined;
+  onRefresh: () => void;
+}): JSX.Element {
+  const t = useT();
+  const { pending, run } = usePluginOp(row.displayName, onRefresh);
+  return (
+    <>
+      {row.update ? (
+        <Button
+          disabled={pending}
+          onClick={() => {
+            const v = row.update?.version;
+            run(
+              win?.managedPlugins?.install(row.id),
+              "update",
+              v ? { version: v } : undefined
+            );
+          }}
+          size="sm"
+          type="button"
+          variant="default"
+        >
+          <Spinner pending={pending} />
+          {t("settings.plugins.action.update")}
+        </Button>
+      ) : null}
+      {row.lastKnownGoodVersion &&
+      row.effective &&
+      row.lastKnownGoodVersion !== row.effective.version ? (
+        <Button
+          disabled={pending}
+          onClick={() => {
+            const lkg = row.lastKnownGoodVersion;
+            if (!lkg) return;
+            run(win?.managedPlugins?.rollback(row.id, lkg), "rollback", {
+              version: lkg,
+            });
+          }}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <Spinner pending={pending} />
+          {t("settings.plugins.action.rollback", {
+            version: row.lastKnownGoodVersion,
+          })}
+        </Button>
+      ) : null}
+      <Button
+        disabled={pending}
+        onClick={() => run(win?.managedPlugins?.uninstall(row.id), "uninstall")}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <Spinner pending={pending} />
+        {t("settings.plugins.action.uninstall")}
+      </Button>
+    </>
+  );
+}
+
+function ContributionCountsInline({
+  counts,
+}: {
+  counts: ContributionCounts | undefined;
+}): JSX.Element {
+  const t = useT();
+  if (!counts) return <span />;
+  const items = contributionCountItemsFromCounts(counts, t);
+  if (items.length === 0) {
+    return (
+      <span className="text-muted-foreground text-xs">
+        {t("settings.plugins.contributionSummary.none")}
+      </span>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+      {items.map(({ Icon, id, label }) => (
+        <span className="inline-flex items-center gap-1" key={id}>
+          <Icon aria-hidden className="size-3.5" />
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Minimal row for a plugin known only by the catalog (bundled/available). */
+export function AvailableManagedRow({
+  row,
+  win,
+  onRefresh,
+}: {
+  row: CatalogRow;
+  win: ManagedPluginsWindowShim | undefined;
+  onRefresh: () => void;
+}): JSX.Element {
+  const t = useT();
+  const { pending, run } = usePluginOp(row.displayName, onRefresh);
+  return (
+    <Item
+      className="rounded-none border-0 px-(--card-spacing)"
+      data-testid={`plugin-row-${row.id}`}
+      role="listitem"
+    >
+      <ItemContent className="min-w-0 gap-1.5">
+        <div className="flex w-full items-center justify-between gap-2">
+          <ItemTitle className="min-w-0">
+            <Package
+              aria-hidden
+              className="size-4 shrink-0 text-muted-foreground"
+            />
+            <span className="truncate">{row.displayName}</span>
+          </ItemTitle>
+          <span className="shrink-0 text-muted-foreground text-xs">
+            {row.update ? `v${row.update.version}` : "—"}
+          </span>
+        </div>
+        {row.description ? (
+          <p className="text-muted-foreground text-xs">{row.description}</p>
+        ) : null}
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <ContributionCountsInline counts={row.contributionCounts} />
+          <Button
+            disabled={pending}
+            onClick={() => {
+              const v = row.update?.version;
+              run(
+                win?.managedPlugins?.install(row.id),
+                "install",
+                v ? { version: v } : undefined
+              );
+            }}
+            size="sm"
+            type="button"
+            variant="default"
+          >
+            <Spinner pending={pending} />
+            {t("settings.plugins.action.install")}
+          </Button>
+        </div>
+      </ItemContent>
+    </Item>
+  );
+}

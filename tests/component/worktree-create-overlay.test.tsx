@@ -180,16 +180,6 @@ function createLocalizedContext(
 
 function createMockContext(): RendererPluginContext {
   return {
-    accounts: {
-      add: unimplemented("accounts.add"),
-      adoptCurrent: unimplemented("accounts.adoptCurrent"),
-      cancelLogin: unimplemented("accounts.cancelLogin"),
-      onDidChange: unimplemented("accounts.onDidChange"),
-      refreshUsage: unimplemented("accounts.refreshUsage"),
-      remove: unimplemented("accounts.remove"),
-      select: unimplemented("accounts.select"),
-      snapshot: unimplemented("accounts.snapshot"),
-    },
     actions: { register: unimplemented("actions.register") },
     agents: {
       selection: agentSelectionMock,

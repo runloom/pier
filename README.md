@@ -22,6 +22,22 @@ pnpm test             # vitest
 pnpm build            # electron-vite build
 ```
 
+## 插件开发
+
+官方插件住在 `packages/plugin-*/`,三方插件走独立 GitHub 仓 + PR 上架官方索引。完整流程见 [`docs/plugins.md`](docs/plugins.md):
+
+```bash
+pnpm plugin:codex:pack       # 打包官方插件(生成 tgz + sha256)
+pnpm plugins:pack            # 打包所有官方插件
+pnpm plugins:index           # 重新生成 plugins/index.v1.json
+```
+
+发布走 GitHub Actions:
+
+- `plugin-<id>-v<version>` tag → 自动 build/pack + 发 GitHub Release + 更新索引
+- 索引托管在 `https://runloom.github.io/pier/plugins/index.v1.json`(GitHub Pages)
+- 三方插件提 PR 改索引 → CI 自动校验 sha256 + URL 可达 → merge 后立即生效
+
 ## CLI 命令
 
 Pier 控制平面已经定义 CLI 命令形态，用于后续 MCP server、脚本和本机自动化调用。当前仓库已实现 `pier` 可执行入口、CLI 参数解析、路径解析、命令信封生成、开发态本机控制通道和 renderer command bridge。

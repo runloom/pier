@@ -14,6 +14,10 @@ export const PIER = {
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
+  // renderer → main plugin RPC invoke channel. Separate from PIER.COMMAND_EXECUTE
+  // so plugin RPC is NEVER reachable from CLI local-control or capability-only
+  // command authorization (design §7.0 / §7.3).
+  PLUGIN_RPC_INVOKE: "pier://plugin-rpc:invoke",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -54,6 +58,10 @@ export const PIER_BROADCAST = {
   // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
   // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
   FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",
+  // main → renderer plugin event broadcast. Sent to all Pier windows;
+  // renderer runtime filters by pluginId before dispatching to plugin
+  // subscribers. Payload MUST NOT include secret material (design §7.3).
+  PLUGIN_RPC_EVENT: "pier://plugin-rpc:event",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

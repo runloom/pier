@@ -1,24 +1,43 @@
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentAccountsSnapshot } from "@shared/contracts/agent-accounts.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
-import { app, BrowserWindow } from "electron";
+import { createLogger } from "@shared/logger.ts";
+import { app } from "electron";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
+import {
+  createExternalMainPluginRuntime,
+  type ExternalMainPluginContext,
+  type ExternalMainPluginRuntime,
+} from "../plugins/external-main-runtime.ts";
 import {
   createMainPluginHostApi,
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
-import { createCodexProvider } from "../services/agent-accounts/codex-provider.ts";
-import { createAgentAccountsService } from "../services/agent-accounts/service.ts";
+import {
+  createPluginRpcBus,
+  type PluginRpcBus,
+} from "../plugins/plugin-rpc-bus.ts";
+import { registerPluginRpcIpc } from "../plugins/plugin-rpc-ipc.ts";
+import { isDevRuntime } from "../runtime-mode.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
+import { createNodeHttpAssetFetcher } from "../services/managed-plugins/http-asset-fetcher.ts";
+import { createHttpOfficialIndexProvider } from "../services/managed-plugins/http-index-provider.ts";
+import { createManagedPluginIndexStore } from "../services/managed-plugins/index-state.ts";
+import {
+  createManagedPluginInstallService,
+  type ManagedPluginInstallService,
+} from "../services/managed-plugins/install-service.ts";
+import { createManagedPluginOperationLog } from "../services/managed-plugins/operation-log.ts";
+import { createManagedPluginPaths } from "../services/managed-plugins/paths.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
 import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
@@ -31,7 +50,6 @@ import { createTerminalProfileService } from "../services/terminal-profile-servi
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
-import { createAgentAccountsStateStore } from "../state/agent-accounts-state.ts";
 import { createSecretsStore } from "../state/secrets-store.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 import {
@@ -90,14 +108,6 @@ function broadcastPluginRegistryChanged(
   }
 }
 
-function broadcastAgentAccountsChanged(snapshot: AgentAccountsSnapshot): void {
-  for (const win of windowManager.getAll()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(PIER_BROADCAST.AGENT_ACCOUNTS_CHANGED, snapshot);
-    }
-  }
-}
-
 function focusRendererTarget(win: AppWindow): void {
   if (win.isMinimized()) {
     win.restore();
@@ -145,8 +155,156 @@ function createPierAppCore(): PierAppCore {
   const rendererCommand = createRendererCommandService({
     host: { send: sendRendererCommand },
   });
+  const managedPluginPaths = createManagedPluginPaths(app.getPath("userData"));
+  const managedPluginIndexStore = createManagedPluginIndexStore(
+    managedPluginPaths.indexFile
+  );
+  const managedPluginOpLog = createManagedPluginOperationLog(
+    managedPluginPaths.operationLogFile
+  );
+  // Bundled Codex plugin. Dev: read from packages/plugin-codex/dist-pkg.
+  // Prod: from `<Resources>/plugin-packages/`. Registration is skipped if the
+  // tgz + sha256 pair is missing (fresh checkout before `pnpm plugins:pack`).
+  const codexBundle = ((): {
+    archivePath: string;
+    contributionCounts: {
+      commands: number;
+      dashboardWidgets: number;
+      panels: number;
+      terminalStatusItems: number;
+    };
+    description?: string;
+    name: string;
+    sha256: string;
+    size?: number;
+    version: string;
+  } | null => {
+    const bundleRoot = isDevRuntime()
+      ? join(process.cwd(), "packages/plugin-codex/dist-pkg")
+      : join(process.resourcesPath ?? "", "plugin-packages");
+    const manifestSrcDir = isDevRuntime()
+      ? join(process.cwd(), "packages/plugin-codex")
+      : bundleRoot;
+    const manifestPath = join(manifestSrcDir, "plugin.json");
+    if (!existsSync(manifestPath)) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        id?: string;
+        name?: string;
+        description?: string;
+        version?: string;
+        commands?: unknown[];
+        dashboardWidgets?: unknown[];
+        panels?: unknown[];
+        terminalStatusItems?: unknown[];
+      };
+      const version = parsed.version ?? "1.0.0";
+      const id = parsed.id ?? "pier.codex";
+      const archivePath = join(bundleRoot, `${id}-${version}.tgz`);
+      const shaPath = `${archivePath}.sha256`;
+      if (!(existsSync(archivePath) && existsSync(shaPath))) {
+        return null;
+      }
+      const sha256 = readFileSync(shaPath, "utf8").trim().split(/\s+/)[0];
+      if (!sha256) {
+        return null;
+      }
+      const size = statSync(archivePath).size;
+      return {
+        archivePath,
+        contributionCounts: {
+          commands: parsed.commands?.length ?? 0,
+          dashboardWidgets: parsed.dashboardWidgets?.length ?? 0,
+          panels: parsed.panels?.length ?? 0,
+          terminalStatusItems: parsed.terminalStatusItems?.length ?? 0,
+        },
+        name: parsed.name ?? "Codex",
+        sha256,
+        size,
+        version,
+        ...(parsed.description ? { description: parsed.description } : {}),
+      };
+    } catch {
+      return null;
+    }
+  })();
+  const codexSeedAvailable = codexBundle !== null;
+  let externalMainRuntimeRef: ExternalMainPluginRuntime | null = null;
+  let pluginHostRef: MainPluginHostApi | null = null;
+  const httpIndex = createHttpOfficialIndexProvider({
+    cachePath: managedPluginPaths.officialIndexCacheFile,
+    logger: (diagnostics) => {
+      for (const d of diagnostics) {
+        console.error(`[managed-plugins] official index: ${d.message}`);
+      }
+    },
+    runtimeMode: isDevRuntime() ? "development" : "production",
+  });
+  const assetFetcher = createNodeHttpAssetFetcher();
+  const activatedRuntimes = new Set<string>();
+  const managedPlugins: ManagedPluginInstallService =
+    createManagedPluginInstallService({
+      appendOperationLog: (record) => managedPluginOpLog.append(record),
+      assetFetcher,
+      bundledPlugins: codexBundle
+        ? [
+            {
+              archivePath: codexBundle.archivePath,
+              contributionCounts: codexBundle.contributionCounts,
+              displayName: codexBundle.name,
+              id: "pier.codex",
+              sha256: codexBundle.sha256,
+              version: codexBundle.version,
+              ...(codexBundle.description
+                ? { description: codexBundle.description }
+                : {}),
+              ...(codexBundle.size ? { size: codexBundle.size } : {}),
+            },
+          ]
+        : [],
+      officialIndexProvider: () => httpIndex.snapshot(),
+      officialIndexRefresh: async () => {
+        await httpIndex.refresh();
+      },
+      onRuntimeSourcesChanged: async (sources) => {
+        // Activate newly-materialized runtimes. Uninstall/rollback are
+        // next-restart per design — we don't tear down live main runtimes
+        // mid-session; renderer just stops seeing the source in the registry.
+        if (externalMainRuntimeRef) {
+          for (const source of sources) {
+            if (source.enabled && !activatedRuntimes.has(source.id)) {
+              await externalMainRuntimeRef.activate(source);
+              activatedRuntimes.add(source.id);
+            }
+          }
+        }
+        if (pluginHostRef) {
+          await pluginHostRef.refresh();
+        }
+      },
+      paths: managedPluginPaths,
+      pierVersion: "0.1.0",
+      runtimeMode: isDevRuntime() ? "development" : "production",
+      store: managedPluginIndexStore,
+    });
   const basePlugins = createPluginService({
     sources: createDefaultPluginSources,
+    externalRuntimeSources: () =>
+      managedPlugins.getRuntimeSources().map((s) => ({
+        enabled: s.enabled,
+        id: s.id,
+        manifest: {
+          ...s.manifest,
+          source: {
+            kind: s.kind === "devOverride" ? "devOverride" : "official",
+          },
+        },
+        rendererEntryUrl: s.rendererEntryUrl,
+        source: s.kind === "devOverride" ? "devOverride" : "official",
+        version: s.version,
+      })),
   });
   const pluginSettings = createPluginSettingsService({ plugins: basePlugins });
   pluginSettings.onDidChange((payload) => {
@@ -163,34 +321,68 @@ function createPierAppCore(): PierAppCore {
   });
   const preferences = createPreferencesService({ eventBus });
   const secrets = createSecretsStore();
+  const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
+    broadcast: (payload) => {
+      for (const win of windowManager.getAll()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(PIER_BROADCAST.PLUGIN_RPC_EVENT, payload);
+        }
+      }
+    },
+  });
+  registerPluginRpcIpc(pluginRpcBus);
+  const externalMainRuntime: ExternalMainPluginRuntime =
+    createExternalMainPluginRuntime({
+      createContext: (source): ExternalMainPluginContext => ({
+        events: {
+          emit: (event, payload) =>
+            pluginRpcBus.emit(source.id, event, payload),
+        },
+        lifecycle: { onBeforeQuit: () => {} },
+        logger: createLogger(source.id),
+        paths: {
+          dataDir: managedPluginPaths.workDir,
+          workDir: join(managedPluginPaths.workDir, source.id),
+        },
+        plugin: { id: source.id, version: source.version },
+        rpc: {
+          handle: (method, handler) =>
+            pluginRpcBus.handle(source.id, method, handler),
+        },
+      }),
+      recordActivationResult: (input) =>
+        managedPlugins.recordActivationResult(input),
+      rpcBus: pluginRpcBus,
+    });
+  externalMainRuntimeRef = externalMainRuntime;
+  pluginHostRef = pluginHost;
+  managedPlugins
+    .init()
+    .then(async () => {
+      // Kick off async official-index refresh — non-blocking. Cache hit
+      // becomes catalog immediately; network response updates on arrival.
+      httpIndex.refresh().catch((err: unknown) => {
+        console.error("[managed-plugins] official-index refresh failed:", err);
+      });
+      // Dev-only: if a bundled plugin is already installed at the same version,
+      // re-run install to overwrite the dist so `pnpm plugin:codex:build` edits
+      // propagate on next Pier restart. Prod skips (install is user-driven).
+      if (isDevRuntime() && codexSeedAvailable) {
+        const index = managedPlugins.getIndex();
+        const codex = index.plugins["pier.codex"];
+        if (codex?.activeVersion === "1.0.0" && !codex.uninstalledAt) {
+          await managedPlugins.install("pier.codex").catch((err: unknown) => {
+            console.error("[managed-plugins] dev re-sync failed:", err);
+          });
+        }
+      }
+    })
+    .catch((err: unknown) => {
+      console.error("[managed-plugins] init failed:", err);
+    });
   // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
   const agentDetection = createAgentDetectionService();
   const services: PierCoreServices = {
-    agentAccounts: (() => {
-      const agentAccountsStore = createAgentAccountsStateStore(
-        join(app.getPath("userData"), "agent-accounts.json")
-      );
-      const svc = createAgentAccountsService({
-        broadcast: broadcastAgentAccountsChanged,
-        // 用量拉取前补齐 login-shell PATH（memoized），避免 GUI 启动态 spawn codex ENOENT
-        ensureUsageEnv: () => agentDetection.ensurePath(),
-        hasVisibleTarget: () => BrowserWindow.getAllWindows().length > 0,
-        managedBaseDir: join(app.getPath("userData"), "agent-accounts"),
-        provider: createCodexProvider(),
-        stateStore: agentAccountsStore,
-      });
-      // init 是异步的，fire-and-forget（对齐 foreground-activity 模式）
-      svc.init().catch((err) => {
-        console.error("[agent-accounts] init failed:", err);
-      });
-      // BrowserWindow focus → usage 刷新（非 force，吃 5min 防抖）
-      app.on("browser-window-focus", () => {
-        svc.refreshUsage(false).catch(() => {
-          /* fire-and-forget */
-        });
-      });
-      return svc;
-    })(),
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
       readPreferences: () => preferences.read(),
@@ -203,6 +395,7 @@ function createPierAppCore(): PierAppCore {
     secrets,
     processEnvironment: createProcessEnvironmentService(),
     plugins: pluginHost.plugins,
+    managedPlugins,
     pluginSettings,
     panelContexts: createPanelContextService(),
     rendererCommand,

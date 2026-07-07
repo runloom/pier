@@ -61,7 +61,17 @@ export interface PluginService {
   setEnabled(id: string, enabled: boolean): Promise<PluginRegistryEntry>;
 }
 
+export interface ExternalPluginRuntimeSource {
+  readonly enabled: boolean;
+  readonly id: string;
+  readonly manifest: PluginManifest;
+  readonly rendererEntryUrl: string;
+  readonly source: "official" | "devOverride";
+  readonly version: string;
+}
+
 export interface CreatePluginServiceOptions {
+  externalRuntimeSources?: () => readonly ExternalPluginRuntimeSource[];
   readTextFile?: (path: string) => Promise<string>;
   sources?: PluginDiscoverySourceProvider;
   state?: PluginStateStore;
@@ -294,6 +304,7 @@ async function readSourceManifest(
 }
 
 export function createPluginService({
+  externalRuntimeSources,
   readTextFile = (path) => readFile(path, "utf8"),
   sources = [],
   state = DEFAULT_STATE,
@@ -362,15 +373,34 @@ export function createPluginService({
       }
     }
     const registryState = await state.read();
+    const externalEntries: PluginRegistryEntry[] = [];
+    if (externalRuntimeSources) {
+      for (const ext of externalRuntimeSources()) {
+        externalEntries.push({
+          effectivePermissions: collectEffectivePermissions(ext.manifest),
+          enabled: ext.enabled,
+          manifest: ext.manifest,
+          runtime: {
+            canToggle: true,
+            enabled: ext.enabled,
+            kind: "external",
+            rendererEntryUrl: ext.rendererEntryUrl,
+          },
+        });
+      }
+    }
     return {
       diagnostics,
-      entries: manifests.map(({ manifest, source }) =>
-        entryFromManifest(manifest, registryState, {
-          defaultEnabled:
-            source.kind === "builtin" && source.defaultEnabled === true,
-          source,
-        })
-      ),
+      entries: [
+        ...manifests.map(({ manifest, source }) =>
+          entryFromManifest(manifest, registryState, {
+            defaultEnabled:
+              source.kind === "builtin" && source.defaultEnabled === true,
+            source,
+          })
+        ),
+        ...externalEntries,
+      ],
     };
   }
 

@@ -1,0 +1,107 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - 'plugin-*-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: 'Plugin id tail (e.g. codex for pier.codex)'
+        required: true
+      version:
+        description: 'Version to release'
+        required: true
+
+# `plugin-<tail>-v<version>` → build `packages/plugin-<tail>`, upload the tgz
+# as a GitHub Release asset, then re-generate `plugins/index.v1.json` and
+# commit it on `main`. The published tgz becomes fetchable at the
+# `RELEASE_BASE` URL used by `scripts/generate-plugin-index.mjs`.
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # We need write access to commit the regenerated index back to main.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse tag
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAIL="${{ github.event.inputs.plugin }}"
+            VERSION="${{ github.event.inputs.version }}"
+            TAG="plugin-${TAIL}-v${VERSION}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            # plugin-<tail>-v<version>
+            REST="${TAG#plugin-}"
+            VERSION="${REST##*-v}"
+            TAIL="${REST%-v${VERSION}}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "tail=$TAIL" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "package=@pier/plugin-$TAIL" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build + pack plugin
+        run: pnpm --filter "${{ steps.parse.outputs.package }}" run build:package
+
+      - name: Locate tgz
+        id: locate
+        run: |
+          DIST="packages/plugin-${{ steps.parse.outputs.tail }}/dist-pkg"
+          TGZ=$(ls "$DIST"/*.tgz | head -1)
+          SHA=$(cat "$TGZ.sha256" | awk '{print $1}')
+          SIZE=$(stat -f%z "$TGZ")
+          echo "tgz=$TGZ" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.parse.outputs.tag }}
+          name: ${{ steps.parse.outputs.tag }}
+          body: |
+            Automated plugin release.
+
+            - sha256: `${{ steps.locate.outputs.sha256 }}`
+            - size: `${{ steps.locate.outputs.size }}`
+          files: |
+            ${{ steps.locate.outputs.tgz }}
+            ${{ steps.locate.outputs.tgz }}.sha256
+
+      - name: Regenerate plugin index
+        run: pnpm plugins:index
+
+      - name: Commit index update
+        run: |
+          if git diff --quiet plugins/index.v1.json; then
+            echo "index unchanged; skipping commit"
+            exit 0
+          fi
+          git config user.name "pier-plugins-bot"
+          git config user.email "bot@runloom.dev"
+          git checkout main
+          git pull --rebase origin main
+          git add plugins/index.v1.json
+          git commit -m "chore(plugins): update index for ${{ steps.parse.outputs.tag }}"
+          git push origin main

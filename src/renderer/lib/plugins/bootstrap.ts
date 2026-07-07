@@ -6,18 +6,23 @@ import {
 import { rendererPluginRuntime } from "./runtime.ts";
 
 /**
- * runtime 只关心「哪些 builtin 插件处于运行态」。广播快照的数组每次都是
- * 新引用, 用该 key 判等去重, 避免 registry 无实质变化时对全部插件做
- * dispose+reactivate。
+ * runtime 关心「哪些插件（builtin + external）处于运行态」。广播快照的
+ * 数组每次都是新引用，用该 key 判等去重，避免 registry 无实质变化时对
+ * 全部插件做 dispose+reactivate。
  */
 export function activeBuiltinPluginKey(
   entries: readonly PluginRegistryEntry[]
 ): string {
   return entries
     .filter(
-      (entry) => entry.runtime.enabled && entry.runtime.kind === "builtin"
+      (entry) =>
+        entry.runtime.enabled &&
+        (entry.runtime.kind === "builtin" || entry.runtime.kind === "external")
     )
-    .map((entry) => entry.manifest.id)
+    .map(
+      (entry) =>
+        `${entry.manifest.id}:${entry.runtime.kind}:${entry.runtime.rendererEntryUrl ?? ""}`
+    )
     .join("\n");
 }
 

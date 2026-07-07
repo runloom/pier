@@ -123,6 +123,32 @@ module.exports = {
       },
     },
     {
+      name: "packages-plugin-api-narrow-imports",
+      severity: "error",
+      comment:
+        "packages/plugin-api 只暴露公共类型/shim, 不能 import app 代码或 builtin 插件实现; 生效条件: 目录存在",
+      from: { path: "^packages/plugin-api/src" },
+      to: {
+        path: "^src/(main|renderer)|^src/plugins/builtin|^@plugins/builtin",
+      },
+    },
+    {
+      name: "packages-plugin-codex-narrow-imports",
+      severity: "error",
+      comment:
+        "packages/plugin-codex 只依赖 @pier/plugin-api / @pier/ui / lucide-react / 已批准 shared 契约与包内文件; 生效条件: 目录存在",
+      from: { path: "^packages/plugin-codex/src" },
+      to: { path: "^src/" },
+    },
+    {
+      name: "host-not-import-plugin-codex-source",
+      severity: "error",
+      comment:
+        "宿主 src/** 不得静态 import packages/plugin-codex/src/**; app 消费 codex 只经 built seed 包与运行时",
+      from: { path: "^src/" },
+      to: { path: "^packages/plugin-codex/src|^@pier/plugin-codex/src" },
+    },
+    {
       name: "no-circular",
       severity: "error",
       comment: "严禁循环依赖",

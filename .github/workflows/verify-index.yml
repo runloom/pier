@@ -1,0 +1,66 @@
+name: Verify Plugin Index
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/index.v1.json'
+
+# Validates every entry in `plugins/index.v1.json`:
+#   1. Schema shape (via jq — full zod validation happens at runtime in Pier)
+#   2. HEAD request against `assetUrl` returns 200
+#   3. GET → sha256 matches declared digest
+#   4. Size matches declared bytes
+#
+# Blocks the PR on any failure.
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON + fetch checks
+        run: |
+          set -euo pipefail
+          INDEX=plugins/index.v1.json
+
+          if ! jq . "$INDEX" >/dev/null; then
+            echo "index is not valid JSON"; exit 1
+          fi
+
+          PLUGIN_IDS=$(jq -r '.plugins | keys[]' "$INDEX")
+
+          for ID in $PLUGIN_IDS; do
+            VERSIONS=$(jq -r ".plugins[\"$ID\"].versions | keys[]" "$INDEX")
+            for V in $VERSIONS; do
+              URL=$(jq -r ".plugins[\"$ID\"].versions[\"$V\"].assetUrl" "$INDEX")
+              EXPECTED_SHA=$(jq -r ".plugins[\"$ID\"].versions[\"$V\"].sha256" "$INDEX")
+              EXPECTED_SIZE=$(jq -r ".plugins[\"$ID\"].versions[\"$V\"].size" "$INDEX")
+
+              echo "== verifying $ID@$V ($URL)"
+
+              STATUS=$(curl -sSLo /tmp/asset -w '%{http_code}' "$URL")
+              if [ "$STATUS" != "200" ]; then
+                echo "HTTP $STATUS from $URL"; exit 1
+              fi
+
+              ACTUAL_SIZE=$(stat -c%s /tmp/asset)
+              if [ "$ACTUAL_SIZE" != "$EXPECTED_SIZE" ]; then
+                echo "size mismatch: expected $EXPECTED_SIZE, got $ACTUAL_SIZE"
+                exit 1
+              fi
+
+              ACTUAL_SHA=$(sha256sum /tmp/asset | awk '{print $1}')
+              if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+                echo "sha256 mismatch:"
+                echo "  expected: $EXPECTED_SHA"
+                echo "  actual:   $ACTUAL_SHA"
+                exit 1
+              fi
+            done
+          done
+
+          echo "index verification passed"

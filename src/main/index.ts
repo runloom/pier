@@ -36,6 +36,10 @@ import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
+import {
+  handlePluginAssetProtocol,
+  registerPluginAssetScheme,
+} from "./plugins/plugin-asset-protocol.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
@@ -216,9 +220,6 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
     appCore.services.secrets.flush().catch((error) => {
       secretsLog.error("failed to flush before quit", { error });
     }),
-    appCore.services.agentAccounts.flush().catch((error) => {
-      secretsLog.error("failed to flush agent accounts before quit", { error });
-    }),
   ]);
 }
 
@@ -236,8 +237,6 @@ const appQuitController = createAppQuitController({
     }),
   finalCleanup: () => {
     windowManager.destroyAllForQuit();
-    // 杀在途 `codex login` 子进程 + 停轮询/watch
-    appCore.services.agentAccounts.dispose();
     appCore.pluginHost.dispose();
     localControl?.close().catch(() => {
       // ignore: app 正在退出
@@ -259,10 +258,15 @@ const appQuitController = createAppQuitController({
 });
 
 registerAssetScheme();
+registerPluginAssetScheme();
 
 app.whenReady().then(async () => {
   installCsp();
   handleAssetProtocol();
+  handlePluginAssetProtocol({
+    getRuntimeSources: () =>
+      appCore.services.managedPlugins.getRuntimeSources(),
+  });
   await appCore.pluginHost.refresh();
   await installAppMenu({
     appName: app.name,

@@ -280,45 +280,77 @@ describe("authorizeCommand", () => {
     }
   });
 
-  it("account:read 命令允许 desktop-renderer 和 cli-local，拒绝 mcp-local", () => {
-    const readCommands = [
-      { type: "accounts.snapshot" },
-      { type: "accounts.refreshUsage" },
-    ] satisfies PierCommand[];
-    for (const command of readCommands) {
-      expect(authorizeCommand(command, client("desktop-renderer"))).toEqual({
-        ok: true,
-      });
-      expect(authorizeCommand(command, client("cli-local"))).toEqual({
-        ok: true,
-      });
-      expect(authorizeCommand(command, client("mcp-local"))).toEqual({
-        ok: false,
-        reason: "missing capability: account:read",
-      });
+  it("plugin.catalog.list allows desktop-renderer and cli-local", () => {
+    expect(
+      authorizeCommand(
+        { type: "plugin.catalog.list" },
+        client("desktop-renderer")
+      )
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand({ type: "plugin.catalog.list" }, client("cli-local"))
+    ).toEqual({ ok: true });
+  });
+
+  it("plugin.catalog.list rejects mcp-local and mobile-paired even with plugin:read capability", () => {
+    for (const kind of ["mcp-local", "mobile-paired"] as const) {
+      const kindClient = client(kind, ["plugin:read"]);
+      const result = authorizeCommand(
+        { type: "plugin.catalog.list" },
+        kindClient
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toMatch(/client kind/);
+      }
     }
   });
 
-  it("account:write 命令允许 desktop-renderer，拒绝 cli-local 和 mcp-local", () => {
-    const writeCommands = [
-      { type: "accounts.adoptCurrent" },
-      { provider: "codex", type: "accounts.add" },
-      { provider: "codex", type: "accounts.cancelLogin" },
-      { accountId: "acc-001", type: "accounts.select" },
-      { accountId: "acc-001", type: "accounts.remove" },
-    ] satisfies PierCommand[];
-    for (const command of writeCommands) {
+  it("managed plugin mutation commands are desktop-renderer only", () => {
+    const mutations = [
+      { type: "plugin.checkUpdates" as const },
+      { type: "plugin.install" as const, id: "pier.codex" },
+      { type: "plugin.update" as const, id: "pier.codex" },
+      { type: "plugin.rollback" as const, id: "pier.codex", version: "1.0.0" },
+      { type: "plugin.uninstall" as const, id: "pier.codex" },
+      {
+        type: "plugin.devOverride.set" as const,
+        id: "pier.codex",
+        path: "/tmp/pier-codex",
+      },
+      { type: "plugin.devOverride.clear" as const, id: "pier.codex" },
+    ];
+    for (const command of mutations) {
       expect(authorizeCommand(command, client("desktop-renderer"))).toEqual({
         ok: true,
       });
-      expect(authorizeCommand(command, client("cli-local"))).toEqual({
-        ok: false,
-        reason: "missing capability: account:write",
-      });
-      expect(authorizeCommand(command, client("mcp-local"))).toEqual({
-        ok: false,
-        reason: "missing capability: account:write",
-      });
+      const cliClient = client("cli-local", ["plugin:write"]);
+      const cliResult = authorizeCommand(command, cliClient);
+      expect(cliResult.ok).toBe(false);
+      if (!cliResult.ok) {
+        expect(cliResult.reason).toMatch(/client kind/);
+      }
     }
+  });
+
+  it("existing capability-only commands (plugin.list, git.getStatus) behave unchanged when allowedClientKinds omitted", () => {
+    const cliClient = client("cli-local", ["plugin:read", "git:read"]);
+    expect(authorizeCommand({ type: "plugin.list" }, cliClient)).toEqual({
+      ok: true,
+    });
+    expect(
+      authorizeCommand({ type: "git.getStatus", cwd: "/tmp" }, cliClient)
+    ).toEqual({ ok: true });
+  });
+
+  it("app.relaunch is desktop-renderer only", () => {
+    expect(
+      authorizeCommand({ type: "app.relaunch" }, client("desktop-renderer"))
+    ).toEqual({ ok: true });
+    const cliResult = authorizeCommand(
+      { type: "app.relaunch" },
+      client("cli-local", ["window:control"])
+    );
+    expect(cliResult.ok).toBe(false);
   });
 });

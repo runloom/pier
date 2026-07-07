@@ -106,7 +106,7 @@ function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
 
 function cliClientServices(): PierCoreServices {
   return {
-    agentAccounts: {} as never,
+    managedPlugins: {} as never,
     ai: {
       generateText: async () => ({
         message: "not configured",

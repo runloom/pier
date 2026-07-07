@@ -1,0 +1,7 @@
+{
+  "keyId": "pier-official-dev-test",
+  "alg": "Ed25519",
+  "publicKeySpkiBase64": "MCowBQYDK2VwAyEAj/YbLSKZbREqoe1/a7wWfoKOFx/qUTUll2sUoBdn1f0=",
+  "privateKeyPkcs8Base64": "MC4CAQAwBQYDK2VwBCIEILKKK32T5Yb6IB7f+22UC+gOrzsi0E3DRh4dgWI25h5W",
+  "note": "Development / test only. Public counterpart hardcoded in src/main/services/managed-plugins/official-index.ts under the same keyId. NEVER used in production."
+}

@@ -1,9 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
-  AgentAccountProviderId,
-  AgentAccountsSnapshot,
-} from "@shared/contracts/agent-accounts.ts";
-import type {
   AiGenerateTextRequest,
   AiGenerateTextResult,
   AiStatusResult,
@@ -211,16 +207,6 @@ export interface RendererPluginAgentSelection {
 }
 
 export interface RendererPluginContext {
-  accounts: {
-    add(provider: AgentAccountProviderId): Promise<void>;
-    adoptCurrent(): Promise<void>;
-    cancelLogin(provider: AgentAccountProviderId): Promise<void>;
-    onDidChange(cb: (s: AgentAccountsSnapshot) => void): () => void;
-    refreshUsage(): Promise<void>;
-    remove(accountId: string): Promise<void>;
-    select(accountId: string): Promise<void>;
-    snapshot(): AgentAccountsSnapshot;
-  };
   actions: {
     register(action: RendererPluginAction): () => void;
   };

@@ -1,0 +1,26 @@
+{
+  "generatedAt": 1783434115433,
+  "plugins": {
+    "pier.codex": {
+      "description": "管理 Codex 账号，登录、切换、观测用量。",
+      "displayName": "Codex 账户管理",
+      "id": "pier.codex",
+      "latest": "1.0.0",
+      "versions": {
+        "1.0.0": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.0.0/pier.codex-1.0.0.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "2c9225842864fa8a7f9c7359f967d2c0255ebf8395ee9a8279519c8319b142ee",
+          "size": 12114
+        }
+      }
+    }
+  },
+  "sequence": 1,
+  "signature": {
+    "alg": "unsigned",
+    "keyId": "pier-official-dev-test",
+    "value": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "version": 1
+}

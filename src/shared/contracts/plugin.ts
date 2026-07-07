@@ -7,6 +7,8 @@ export const pluginSourceKindSchema = z.enum([
   "local",
   "git",
   "registry",
+  "official",
+  "devOverride",
 ]);
 export type PluginSourceKind = z.infer<typeof pluginSourceKindSchema>;
 
@@ -314,7 +316,8 @@ export const pluginRegistryEntrySchema = z.object({
     canToggle: z.boolean(),
     disabledReason: z.string().min(1).optional(),
     enabled: z.boolean(),
-    kind: z.enum(["builtin", "manifest-only"]),
+    kind: z.enum(["builtin", "manifest-only", "external"]),
+    rendererEntryUrl: z.string().min(1).optional(),
   }),
 });
 export type PluginRegistryEntry = z.infer<typeof pluginRegistryEntrySchema>;
