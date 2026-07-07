@@ -2091,6 +2091,35 @@ describe("createGitService", () => {
     ]);
   });
 
+  it("pull 和 push 继承解析后的 shell 环境", async () => {
+    const shellEnv = {
+      PATH: "/shell/bin:/usr/bin",
+      SSH_AUTH_SOCK: "/tmp/pier-agent.sock",
+    };
+    const remoteCommandEnvs: Array<
+      Readonly<Record<string, string>> | undefined
+    > = [];
+    const service = createGitService({
+      execGit: (args, _cwd, options) => {
+        if (args[0] === "pull" || args[0] === "push") {
+          remoteCommandEnvs.push(options?.env);
+        }
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+      resolveEnvironment: async () => shellEnv,
+    });
+
+    await expect(service.pullFastForward("/repo")).resolves.toEqual({
+      kind: "ok",
+    });
+    await expect(service.push("/repo")).resolves.toEqual({ kind: "ok" });
+
+    expect(remoteCommandEnvs).toEqual([shellEnv, shellEnv]);
+  });
+
   it("sync 先 rebase 拉取再推送", async () => {
     const calls: Array<readonly string[]> = [];
     const service = createGitService({
