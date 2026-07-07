@@ -1,4 +1,4 @@
-import type { TerminalDebugRendererSnapshot } from "@shared/contracts/terminal.ts";
+import type { TerminalDebugRendererSnapshot } from "@shared/contracts/terminal-debug.ts";
 import {
   hasRegisteredTerminalAnchor,
   readRegisteredTerminalAnchorFrame,

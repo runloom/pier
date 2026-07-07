@@ -1,6 +1,15 @@
 import type { AgentKind } from "./agent.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskPanelMetadata } from "./tasks.ts";
+// TerminalAPI 是终端 IPC 契约, 里面 debugSnapshot / openDebugWindow 等 debug 相关
+// 方法需要引用 debug schema. 仅 type-only 循环 import (tsc 会 erase), 不构成运行时环。
+import type {
+  TerminalDebugRendererSnapshot,
+  TerminalDebugRendererSnapshotRequest,
+  TerminalDebugSnapshot,
+  TerminalDebugSnapshotArgs,
+  TerminalDebugWindowOpenResult,
+} from "./terminal-debug.ts";
 import type { TerminalAgentRestoreLaunchOptions } from "./terminal-launch.ts";
 
 export interface TerminalFrame {
@@ -73,178 +82,6 @@ export interface TerminalNativePresentationSnapshot
   extends TerminalPresentationSnapshot {
   nativeApplySequence: number;
   windowFocused: boolean;
-}
-
-export interface TerminalDebugPresentationSnapshot {
-  desired?: TerminalPresentationSnapshot | undefined;
-  effective?: TerminalNativePresentationSnapshot | undefined;
-}
-
-export interface TerminalDebugInputRoutingSnapshot {
-  desired?: TerminalInputRoutingSnapshot | undefined;
-  effective?: TerminalNativeInputRoutingSnapshot | undefined;
-}
-
-export type TerminalDebugRoute =
-  | "renderer->main->native"
-  | "renderer->main->webContents"
-  | "native->main->renderer";
-
-export interface TerminalDebugEvent {
-  action: string;
-  at: string;
-  browserWindowId: number;
-  detail?: Record<string, boolean | number | string | null> | undefined;
-  id: number;
-  nativePanelId?: string | undefined;
-  panelId?: string | undefined;
-  route: TerminalDebugRoute;
-  windowId?: string | undefined;
-}
-
-export interface TerminalDebugNativeWindowSnapshot {
-  activeTerminalPanelId: string | null;
-  inputRoutingStaleDiscardCount?: number | undefined;
-  keyboardFocusTarget: TerminalKeyboardFocusTarget;
-  lastAppliedInputRoutingSequence?: number | undefined;
-  lastAppliedNativeApplySequence?: number | undefined;
-  lastAppliedRendererSequence?: number | undefined;
-  lastPresentationReason?: string | undefined;
-  nativeActiveTerminalPanelId: string | null;
-  staleDiscardCount?: number | undefined;
-  terminalTargetCount: number;
-  webOverlayRectCount: number;
-}
-
-export interface TerminalDebugNativeSurfaceSnapshot {
-  alpha: number;
-  browserWindowId: number;
-  cursorSuppressed?: boolean | undefined;
-  frame: TerminalFrame;
-  hasRouterTarget: boolean;
-  hostKeyboardActive?: boolean | undefined;
-  isFirstResponder: boolean;
-  isHidden: boolean;
-  isOffscreen: boolean;
-  isSurfaceFocused?: boolean | undefined;
-  nativePanelId: string;
-  panelId: string;
-  surfaceVisible?: boolean | undefined;
-  targetRect?: TerminalFrame | null | undefined;
-  viewportFrame?: TerminalFrame | null | undefined;
-}
-
-export interface TerminalDebugNativeSnapshot {
-  error?: string | undefined;
-  surfaces: TerminalDebugNativeSurfaceSnapshot[];
-  window: TerminalDebugNativeWindowSnapshot;
-}
-
-export type TerminalDebugIssueSeverity = "error" | "warning";
-
-export interface TerminalDebugIssue {
-  code:
-    | "duplicate_renderer_panel"
-    | "desired_frame_native_mismatch"
-    | "desired_hidden_native_visible"
-    | "desired_visible_native_hidden"
-    | "frame_mismatch"
-    | "input_routing_keyboard_first_responder_mismatch"
-    | "input_routing_keyboard_target_mismatch"
-    | "input_routing_overlay_rect_count_mismatch"
-    | "input_routing_stale"
-    | "input_routing_terminal_cursor_policy_mismatch"
-    | "input_routing_terminal_target_missing"
-    | "input_routing_terminal_surface_focus_mismatch"
-    | "native_hidden_while_anchor_visible"
-    | "native_missing"
-    | "orphan_native_surface"
-    | "presentation_stale"
-    | "renderer_terminal_create_pending"
-    | "renderer_terminal_lifecycle_missing"
-    | "renderer_terminal_placeholder_visible";
-  message: string;
-  panelId?: string | undefined;
-  severity: TerminalDebugIssueSeverity;
-}
-
-export type TerminalDebugRendererTerminalPhase =
-  | "creating"
-  | "disposed"
-  | "error"
-  | "mounted"
-  | "ready"
-  | "waiting_for_session"
-  | "waiting_for_anchor";
-
-export interface TerminalDebugRendererTerminalLifecycleSnapshot {
-  createAttemptCount: number;
-  createPending: boolean;
-  didCreateNativeTerminal: boolean;
-  error: string | null;
-  hasRenderableAnchor: boolean;
-  nativeTerminalReady: boolean;
-  phase: TerminalDebugRendererTerminalPhase;
-  placeholderVisible: boolean;
-  updatedAt: number;
-}
-
-export interface TerminalDebugRendererPanelSnapshot {
-  anchorFrame: TerminalFrame | null;
-  component: string;
-  dockviewActive: boolean;
-  dockviewVisible: boolean;
-  hasAnchor: boolean;
-  isActivePanel: boolean;
-  panelId: string;
-  resourceMode?:
-    | "coldSuspendedCandidate"
-    | "visible"
-    | "warmHidden"
-    | undefined;
-  terminalLifecycle?:
-    | TerminalDebugRendererTerminalLifecycleSnapshot
-    | undefined;
-}
-
-export interface TerminalDebugRendererSnapshot {
-  activePanelId: string | null;
-  desiredInputRouting?: TerminalInputRoutingSnapshot | undefined;
-  desiredPresentation?: TerminalPresentationSnapshot | undefined;
-  hasMaximizedGroup: boolean;
-  panelCount: number;
-  panels: TerminalDebugRendererPanelSnapshot[];
-  viewportFrame?: TerminalFrame | undefined;
-}
-
-export interface TerminalDebugRendererSnapshotRequest {
-  requestId: string;
-}
-
-export interface TerminalDebugRendererSnapshotResult {
-  error?: string | undefined;
-  ok: boolean;
-  renderer?: TerminalDebugRendererSnapshot | undefined;
-  requestId: string;
-}
-
-export interface TerminalDebugSnapshotArgs {
-  targetBrowserWindowId?: number | undefined;
-}
-
-export interface TerminalDebugSnapshot {
-  events: TerminalDebugEvent[];
-  inputRouting?: TerminalDebugInputRoutingSnapshot | undefined;
-  issues?: TerminalDebugIssue[] | undefined;
-  native: TerminalDebugNativeSnapshot;
-  presentation?: TerminalDebugPresentationSnapshot | undefined;
-  renderer?: TerminalDebugRendererSnapshot | undefined;
-}
-
-export interface TerminalDebugWindowOpenResult {
-  error?: string | undefined;
-  ok: boolean;
-  targetBrowserWindowId?: number | undefined;
 }
 
 /**

@@ -7,6 +7,7 @@ const GHOSTTY_BRIDGE_PATH = join(
   "native/Sources/GhosttyBridge/GhosttyBridge.swift"
 );
 const ADDON_PATH = join(process.cwd(), "native/src/addon.mm");
+const RAW_CHARS_PAYLOAD_RE = /"chars":\s*chars/;
 
 describe("native terminal debug bridge source", () => {
   it("exports a native debug snapshot through Swift and N-API", () => {
@@ -41,5 +42,45 @@ describe("native terminal debug bridge source", () => {
 
     expect(swift).toContain('"surfaceVisible"');
     expect(swift).toContain("term.surfaceVisible");
+  });
+
+  it("records EventRouterView routing decisions in a ring buffer surfaced via debug snapshot", () => {
+    const swift = readFileSync(GHOSTTY_BRIDGE_PATH, "utf8");
+
+    expect(swift).toContain('recordDecision(kind: "hit-test"');
+    expect(swift).toContain('recordDecision(kind: "key-down"');
+    expect(swift).toContain('recordDecision(kind: "right-mouse"');
+    // Ring buffer 出口到 debug snapshot: recordHitTest / recordRightMouse 覆盖三种
+    // 路由决策 (web-overlay / terminal / miss), snapshotRecentDecisions 由
+    // debugSnapshot 装进 recentRouterDecisions 字段.
+    expect(swift).toContain("recordHitTest(");
+    expect(swift).toContain("recordRightMouse(");
+    expect(swift).toContain("snapshotRecentDecisions()");
+    expect(swift).toContain('"recentRouterDecisions"');
+  });
+
+  it("redacts raw keystrokes and stamps decision records with a monotonic seq", () => {
+    const swift = readFileSync(GHOSTTY_BRIDGE_PATH, "utf8");
+
+    // Raw `chars` 绝不能进 payload — sudo 密码等敏感输入会随 debug snapshot 泄漏。
+    expect(swift).toContain('"charsLen": chars.count');
+    expect(swift).not.toMatch(RAW_CHARS_PAYLOAD_RE);
+    // seq 单调递增, snapshot 出口暴露给 renderer 做稳定 React key。
+    expect(swift).toContain("nextDecisionSeq");
+    expect(swift).toContain("nextDecisionSeq &+= 1");
+    expect(swift).toContain('"seq": Double(record.seq)');
+  });
+
+  it("guards non-finite coordinates and returns an error-tagged json string instead of empty '{}' when serialization fails", () => {
+    const swift = readFileSync(GHOSTTY_BRIDGE_PATH, "utf8");
+
+    // NaN / Infinity CGFloat 会让 JSONSerialization 拒绝整个 payload; 用有限性
+    // sanitizer 拦一次, 让坏坐标以 -1 明显出现在 UI 而不是塌成 "{}".
+    expect(swift).toContain("sanitizedCoordinate(");
+    expect(swift).toContain("d.isFinite ? d : -1");
+    // jsonString 失败时输出的兜底串必须带 error 字段, 供 normalize 识别。
+    expect(swift).toContain(
+      '{\\"error\\":\\"native snapshot json serialization failed\\"}'
+    );
   });
 });

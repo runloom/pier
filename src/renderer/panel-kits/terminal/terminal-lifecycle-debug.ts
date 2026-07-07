@@ -1,7 +1,7 @@
 import type {
   TerminalDebugRendererTerminalLifecycleSnapshot,
   TerminalDebugRendererTerminalPhase,
-} from "@shared/contracts/terminal.ts";
+} from "@shared/contracts/terminal-debug.ts";
 
 export type TerminalLifecycleDebugPatch = Partial<
   Omit<TerminalDebugRendererTerminalLifecycleSnapshot, "updatedAt">
