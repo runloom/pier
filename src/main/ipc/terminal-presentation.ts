@@ -1,6 +1,4 @@
 import type {
-  TerminalDebugInputRoutingSnapshot,
-  TerminalDebugPresentationSnapshot,
   TerminalInputRoutingSnapshot,
   TerminalKeyboardFocusTarget,
   TerminalNativeInputRoutingSnapshot,
@@ -8,6 +6,10 @@ import type {
   TerminalPresentationReason,
   TerminalPresentationSnapshot,
 } from "@shared/contracts/terminal.ts";
+import type {
+  TerminalDebugInputRoutingSnapshot,
+  TerminalDebugPresentationSnapshot,
+} from "@shared/contracts/terminal-debug.ts";
 import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { TerminalDebugWindowOpenResult } from "@shared/contracts/terminal.ts";
+import type { TerminalDebugWindowOpenResult } from "@shared/contracts/terminal-debug.ts";
 import { BrowserWindow, type IpcMain } from "electron";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { windowFromWebContents } from "./terminal.ts";

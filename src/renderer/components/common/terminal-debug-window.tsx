@@ -1,12 +1,15 @@
 import type {
   TerminalDebugEvent,
+  TerminalDebugRouterDecision,
+  TerminalDebugRouterDecisionPayload,
   TerminalDebugSnapshot,
-} from "@shared/contracts/terminal.ts";
+} from "@shared/contracts/terminal-debug.ts";
 import {
   Activity,
   Columns3,
   Crosshair,
   GitBranch,
+  ListTree,
   MonitorDot,
   MousePointer2,
   RefreshCw,
@@ -186,6 +189,145 @@ function HealthChip({ item }: { item: RouteHealth }) {
   );
 }
 
+function formatDecisionAge(at: number, nowSeconds: number): string {
+  // at=0 是 normalize 对缺失/非法字段的 fallback: 直接算差会得到 55 年级别的
+  // "N千万分钟前" 胡言, 视为未知即可; 超过一天视同 stale 也用 dash.
+  if (!Number.isFinite(at) || at <= 0) {
+    return "—";
+  }
+  const deltaSeconds = Math.max(0, nowSeconds - at);
+  if (deltaSeconds < 1) {
+    return `${Math.round(deltaSeconds * 1000)}ms ago`;
+  }
+  if (deltaSeconds < 60) {
+    return `${deltaSeconds.toFixed(1)}s ago`;
+  }
+  if (deltaSeconds < 3600) {
+    return `${Math.floor(deltaSeconds / 60)}m ago`;
+  }
+  if (deltaSeconds < 86_400) {
+    return `${Math.floor(deltaSeconds / 3600)}h ago`;
+  }
+  return "—";
+}
+
+function formatDecisionPayload(
+  payload: TerminalDebugRouterDecisionPayload
+): string {
+  return Object.entries(payload)
+    .map(([key, raw]) => {
+      if (raw === null) {
+        return `${key}=null`;
+      }
+      if (typeof raw === "number") {
+        // 坐标数值裁到 1 位小数, 长 float 字符串会挤爆行.
+        return `${key}=${Number.isInteger(raw) ? raw : raw.toFixed(1)}`;
+      }
+      // 字符串值走 JSON.stringify 加引号 + 转义: 未来若 payload 里出现空格/tab/
+      // 私区 unicode 的字符串, 空格 join 会把 `chars=" "` 变成两个模糊 token; 引号
+      // 让每个 pair 边界依旧可读。
+      return `${key}=${JSON.stringify(raw)}`;
+    })
+    .join(" ");
+}
+
+/**
+ * 决策是否指向 "看得见但点不到 / 按键不到 terminal" 的可疑路径, 用琥珀色高亮:
+ * - hit-test/right-mouse miss 或 web-overlay: 只有当此窗口存在 terminal target 时
+ *   才算可疑; 纯 web 页面点击也会命中 web-overlay, 那时应视为常态。
+ * - key-down web-passthrough: 仅当 activeTerminalPanelId != null (即 basePanel
+ *   已指向 terminal 但 key 却被路由到 web) 才算可疑; 否则是普通 web 输入。
+ * - key-down menu-consumed: 仅当 acceptsTerminalKeyboard === true (terminal 期待
+ *   接收 key 却被系统菜单吃掉) 才算可疑 —— 正好是 "按 Cmd+K 期望到 terminal 但
+ *   被 macOS menu 拦截" 的经典场景。
+ */
+function isSuspiciousDecision(decision: TerminalDebugRouterDecision): boolean {
+  const rawDecision = decision.payload.decision;
+  if (typeof rawDecision !== "string") {
+    return false;
+  }
+  if (decision.kind === "hit-test") {
+    if (rawDecision !== "miss" && rawDecision !== "web-overlay") {
+      return false;
+    }
+    const targetsCount = decision.payload.targetsCount;
+    return typeof targetsCount === "number" ? targetsCount > 0 : true;
+  }
+  if (decision.kind === "right-mouse") {
+    return rawDecision === "miss" || rawDecision === "web-overlay";
+  }
+  if (decision.kind === "key-down") {
+    if (rawDecision === "web-passthrough") {
+      return decision.payload.activeTerminalPanelId !== null;
+    }
+    if (rawDecision === "menu-consumed") {
+      return decision.payload.acceptsTerminalKeyboard === true;
+    }
+  }
+  return false;
+}
+
+function RouterDecisionsPanel({
+  decisions,
+  droppedCount,
+}: {
+  decisions: TerminalDebugRouterDecision[];
+  droppedCount: number;
+}) {
+  // debug window 每 750ms 拉一次 snapshot 触发 re-render, nowSeconds 顺带刷新;
+  // age 显示误差不超过一次 refresh interval, 对复盘足够。
+  const nowSeconds = Date.now() / 1000;
+  const orderedRecent = useMemo(() => decisions.slice().reverse(), [decisions]);
+  return (
+    <section className="flex min-h-0 shrink-0 flex-col border border-[#d0d0d0] bg-white">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-[#d0d0d0] border-b bg-[#f3f3f3] px-3">
+        <ListTree className="size-4 text-[#6f6f6f]" />
+        <div className="font-semibold text-sm">Recent Router Decisions</div>
+        <div className="ml-auto text-[#6f6f6f] text-xs">
+          {decisions.length} / 64
+          {droppedCount > 0 ? (
+            <span className="ml-2 text-amber-700">
+              ({droppedCount} dropped)
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="max-h-64 min-h-0 overflow-auto">
+        {orderedRecent.length === 0 ? (
+          <div className="p-3 text-[#6f6f6f] text-xs">
+            No decisions yet — reproduce the issue (click, press a key, right
+            click) to populate.
+          </div>
+        ) : (
+          <ul className="divide-y divide-[#eaeaea]">
+            {orderedRecent.map((decision) => {
+              const suspicious = isSuspiciousDecision(decision);
+              return (
+                <li
+                  className={`flex flex-wrap gap-2 px-3 py-1.5 font-mono text-xs ${
+                    suspicious ? "bg-amber-50 text-amber-900" : "text-[#202124]"
+                  }`}
+                  key={decision.seq}
+                >
+                  <span className="shrink-0 text-[#6f6f6f]">
+                    {formatDecisionAge(decision.at, nowSeconds)}
+                  </span>
+                  <span className="shrink-0 font-semibold">
+                    {decision.kind}
+                  </span>
+                  <span className="min-w-0 flex-1 break-all">
+                    {formatDecisionPayload(decision.payload)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function RoutingStateView({
   snapshot,
 }: {
@@ -266,6 +408,10 @@ function RoutingStateView({
           ))}
         </div>
       </aside>
+      <RouterDecisionsPanel
+        decisions={snapshot?.native.window.recentRouterDecisions ?? []}
+        droppedCount={snapshot?.native.window.routerDecisionsDroppedCount ?? 0}
+      />
     </div>
   );
 }

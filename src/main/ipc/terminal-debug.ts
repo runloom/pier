@@ -1,13 +1,18 @@
 import type {
+  TerminalFrame,
+  TerminalKeyboardFocusTarget,
+} from "@shared/contracts/terminal.ts";
+import type {
   TerminalDebugEvent,
   TerminalDebugNativeSnapshot,
   TerminalDebugRendererSnapshot,
   TerminalDebugRendererSnapshotResult,
   TerminalDebugRoute,
+  TerminalDebugRouterDecision,
+  TerminalDebugRouterDecisionKind,
+  TerminalDebugRouterDecisionPayload,
   TerminalDebugSnapshot,
-  TerminalFrame,
-  TerminalKeyboardFocusTarget,
-} from "@shared/contracts/terminal.ts";
+} from "@shared/contracts/terminal-debug.ts";
 import { buildTerminalDebugIssues } from "@shared/terminal-debug-diagnostics.ts";
 import type { IpcMain, WebContents } from "electron";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -89,6 +94,86 @@ function keyboardFocusTargetValue(value: unknown): TerminalKeyboardFocusTarget {
   return { kind: "web" };
 }
 
+const ROUTER_DECISION_KINDS: readonly TerminalDebugRouterDecisionKind[] = [
+  "hit-test",
+  "key-down",
+  "right-mouse",
+];
+
+function routerDecisionKind(
+  value: unknown
+): TerminalDebugRouterDecisionKind | null {
+  return typeof value === "string" &&
+    (ROUTER_DECISION_KINDS as readonly string[]).includes(value)
+    ? (value as TerminalDebugRouterDecisionKind)
+    : null;
+}
+
+/**
+ * Native ring buffer 把 panel id 存成 scoped key (`<browserWindowId>::<panelId>`),
+ * 但 debug window 的其他字段全走 fromNativePanelKey 展示为原始 id — 同一 panel 在
+ * 一个 UI 里以两种格式并排出现会让排错者误判为不同 panel. 这里把 payload 里已知
+ * 会承载 native panel key 的字段单独 demangle, 保持展示一致.
+ */
+const NATIVE_PANEL_KEY_PAYLOAD_FIELDS = new Set([
+  "matchedPanelId",
+  "activeTerminalPanelId",
+]);
+
+function routerDecisionPayload(
+  value: unknown
+): TerminalDebugRouterDecisionPayload {
+  const record = objectRecord(value);
+  if (!record) {
+    return {};
+  }
+  const payload: TerminalDebugRouterDecisionPayload = {};
+  for (const [key, raw] of Object.entries(record)) {
+    if (raw === null) {
+      payload[key] = null;
+    } else if (typeof raw === "boolean" || typeof raw === "number") {
+      payload[key] = raw;
+    } else if (typeof raw === "string") {
+      payload[key] = NATIVE_PANEL_KEY_PAYLOAD_FIELDS.has(key)
+        ? fromNativePanelKey(raw)
+        : raw;
+    }
+  }
+  return payload;
+}
+
+interface RouterDecisionsNormalizeResult {
+  decisions: TerminalDebugRouterDecision[];
+  droppedCount: number;
+}
+
+function routerDecisions(value: unknown): RouterDecisionsNormalizeResult {
+  if (!Array.isArray(value)) {
+    return { decisions: [], droppedCount: 0 };
+  }
+  const decisions: TerminalDebugRouterDecision[] = [];
+  let droppedCount = 0;
+  for (const entry of value) {
+    const record = objectRecord(entry);
+    if (!record) {
+      droppedCount += 1;
+      continue;
+    }
+    const kind = routerDecisionKind(record.kind);
+    if (!kind) {
+      droppedCount += 1;
+      continue;
+    }
+    decisions.push({
+      at: numberValue(record.at),
+      kind,
+      payload: routerDecisionPayload(record.payload),
+      seq: numberValue(record.seq),
+    });
+  }
+  return { decisions, droppedCount };
+}
+
 function frameValue(value: unknown): TerminalFrame {
   const record = objectRecord(value);
   return {
@@ -111,12 +196,28 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
   if (!raw) {
     return emptyNativeSnapshot("native debug snapshot was not an object");
   }
+  // Swift jsonString 在 JSONSerialization 拒绝 payload 时会写 `{"error": "..."}`,
+  // 老实现返回 "{}" 会让 objectRecord({}) 通过, 后续所有字段落到默认值 0, error
+  // 保持 undefined, renderer 展示成一个 "0 targets / 0 web / no decisions" 的假
+  // healthy 状态。检测 error 字段以及 window/surfaces 缺失, 把它标成 error 并让
+  // banner 显式提示。
+  if (typeof raw.error === "string" && raw.error.length > 0) {
+    return emptyNativeSnapshot(raw.error);
+  }
+  if (!("window" in raw || "surfaces" in raw)) {
+    return emptyNativeSnapshot(
+      "native debug snapshot payload missing window/surfaces"
+    );
+  }
 
   const rawWindow = objectRecord(raw.window);
   const nativeActiveTerminalPanelId = stringValue(
     rawWindow?.activeTerminalPanelId
   );
   const rawSurfaces = Array.isArray(raw.surfaces) ? raw.surfaces : [];
+  const routerDecisionsResult = routerDecisions(
+    rawWindow?.recentRouterDecisions
+  );
   return {
     surfaces: rawSurfaces.flatMap((entry) => {
       const surface = objectRecord(entry);
@@ -172,6 +273,11 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           ? rawWindow.lastPresentationReason
           : undefined,
       nativeActiveTerminalPanelId,
+      recentRouterDecisions: routerDecisionsResult.decisions,
+      routerDecisionsDroppedCount:
+        routerDecisionsResult.droppedCount > 0
+          ? routerDecisionsResult.droppedCount
+          : undefined,
       staleDiscardCount:
         typeof rawWindow?.staleDiscardCount === "number"
           ? rawWindow.staleDiscardCount

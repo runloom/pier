@@ -1,14 +1,16 @@
 import type {
-  TerminalDebugInputRoutingSnapshot,
-  TerminalDebugIssue,
-  TerminalDebugNativeSnapshot,
-  TerminalDebugPresentationSnapshot,
-  TerminalDebugRendererSnapshot,
   TerminalFrame,
   TerminalInputRoutingSnapshot,
   TerminalPresentationEntry,
   TerminalPresentationSnapshot,
 } from "./contracts/terminal.ts";
+import type {
+  TerminalDebugInputRoutingSnapshot,
+  TerminalDebugIssue,
+  TerminalDebugNativeSnapshot,
+  TerminalDebugPresentationSnapshot,
+  TerminalDebugRendererSnapshot,
+} from "./contracts/terminal-debug.ts";
 import {
   computeEffectiveKeyboardTarget,
   sameKeyboardFocusTarget,
