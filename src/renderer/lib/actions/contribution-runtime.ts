@@ -133,11 +133,11 @@ export function createActionFromContribution(
   return {
     category: contribution.categoryKey,
     enabled: isEnabled,
-    handler: async () => {
+    handler: async (invocation) => {
       if (!isEnabled()) {
         return;
       }
-      await contribution.handler();
+      await contribution.handler(invocation);
     },
     id: contribution.id,
     metadata,

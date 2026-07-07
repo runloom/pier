@@ -297,16 +297,22 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       }
       api.setActive();
       requestTerminalPresentation("dockview-active-panel");
-      popupContextMenuAt("terminal/content", { x: req.x, y: req.y }).catch(
-        (err: unknown) => {
-          console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
+      popupContextMenuAt(
+        "terminal/content",
+        { x: req.x, y: req.y },
+        {
+          sourcePanelComponent: "terminal",
+          ...(effectiveContext ? { sourcePanelContext: effectiveContext } : {}),
+          sourcePanelId: panelId,
         }
-      );
+      ).catch((err: unknown) => {
+        console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
+      });
     });
     return () => {
       unsubscribe?.();
     };
-  }, [panelId, api.setActive]);
+  }, [panelId, api.setActive, effectiveContext]);
 
   const terminalContentClassName = hasStatusBar
     ? "absolute inset-x-0 top-0 bottom-6"

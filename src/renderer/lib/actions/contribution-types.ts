@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import type { ActionCategoryKey } from "./types.ts";
+import type { ActionCategoryKey, ActionInvocation } from "./types.ts";
 
 export type WorkspaceWhenField =
   | "activeGroupPanelCount"
@@ -26,7 +26,7 @@ export interface ActionContribution {
   categoryKey: ActionCategoryKey;
   excludeFromMru?: boolean;
   group?: string;
-  handler: () => void | Promise<void>;
+  handler: (invocation?: ActionInvocation) => void | Promise<void>;
   iconComponent?: LucideIcon;
   id: string;
   /**

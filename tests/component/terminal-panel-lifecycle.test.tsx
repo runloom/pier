@@ -1819,10 +1819,18 @@ describe("TerminalPanel lifecycle", () => {
     emitContextMenuRequest({ panelId: "terminal-1", x: 12, y: 24 });
 
     await waitFor(() => {
-      expect(popupContextMenuAtMock).toHaveBeenCalledWith("terminal/content", {
-        x: 12,
-        y: 24,
-      });
+      expect(popupContextMenuAtMock).toHaveBeenCalledWith(
+        "terminal/content",
+        {
+          x: 12,
+          y: 24,
+        },
+        {
+          sourcePanelComponent: "terminal",
+          sourcePanelContext: props.params.context,
+          sourcePanelId: "terminal-1",
+        }
+      );
     });
     expect(props.api.setActive).toHaveBeenCalledOnce();
     expect(requestTerminalPresentationMock).toHaveBeenCalledWith(

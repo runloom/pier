@@ -56,7 +56,9 @@ vi.mock("sonner", () => ({
 
 const now = 1_772_000_000_000;
 const FILES_PLUGIN_ID = "pier.files";
-const FILES_PANEL_ID = "pier.files.explorer";
+const FILES_FILE_PANEL_ID = "pier.files.filePanel";
+const FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID =
+  "pier.files.openSelectionAsMarkdown";
 const APP_TSX_TREEITEM_PATTERN = /App\.tsx/;
 const SRC_PERMISSION_LOAD_ERROR_PATTERN =
   /Permission denied loading src|error/i;
@@ -438,24 +440,44 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
 }
 function filesPluginEntry(enabled: boolean): PluginRegistryEntry {
   return {
-    effectivePermissions: ["file:read", "panel:register"],
+    effectivePermissions: [
+      "command:register",
+      "file:read",
+      "file:write",
+      "panel:open",
+      "panel:register",
+      "terminal:read",
+    ],
     enabled,
     manifest: {
       apiVersion: 1,
-      commands: [],
+      commands: [
+        {
+          id: FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
+          permissions: ["terminal:read", "panel:open"],
+          title: "Markdown Preview",
+        },
+      ],
       dashboardWidgets: [],
       engines: { pier: ">=0.1.0" },
       id: FILES_PLUGIN_ID,
       name: "Files",
       panels: [
         {
-          component: FILES_PANEL_ID,
-          id: FILES_PANEL_ID,
-          permissions: ["file:read"],
-          title: "Files",
+          component: FILES_FILE_PANEL_ID,
+          id: FILES_FILE_PANEL_ID,
+          permissions: ["file:read", "file:write"],
+          title: "File",
         },
       ],
-      permissions: ["file:read", "panel:register"],
+      permissions: [
+        "command:register",
+        "file:read",
+        "file:write",
+        "panel:open",
+        "panel:register",
+        "terminal:read",
+      ],
       source: { kind: "builtin" },
       terminalStatusItems: [],
       version: "1.0.0",
@@ -472,15 +494,17 @@ function makeFilesPanelProps(
   params: Record<string, unknown>
 ): IDockviewPanelProps<Record<string, unknown>> {
   return {
-    api: { id: FILES_PANEL_ID, setTitle: vi.fn() },
+    api: {
+      id: FILES_FILE_PANEL_ID,
+      setTitle: vi.fn(),
+      updateParameters: vi.fn(),
+    },
     containerApi: {},
     params,
   } as unknown as IDockviewPanelProps<Record<string, unknown>>;
 }
 
-function renderFilesExplorerPanel(
-  list: RendererPluginContext["files"]["list"]
-) {
+function renderFilesFilePanel(list: RendererPluginContext["files"]["list"]) {
   const filesModule = BUILTIN_RENDERER_PLUGIN_MODULES.find(
     (plugin) => plugin.id === FILES_PLUGIN_ID
   );
@@ -495,11 +519,11 @@ function renderFilesExplorerPanel(
     files: { ...baseFilesContext.files, list },
   };
   const disposeFiles = filesModule.activate(filesContext);
-  const registration = getPluginPanelRegistrations().get(FILES_PANEL_ID);
+  const registration = getPluginPanelRegistrations().get(FILES_FILE_PANEL_ID);
   const FilesPanel = registration?.component;
   if (!FilesPanel) {
     disposeFiles();
-    throw new Error("expected Files explorer panel registration");
+    throw new Error("expected Files file-panel registration");
   }
 
   return {
@@ -2184,7 +2208,7 @@ describe("git builtin plugin", () => {
     expect(gitRendererPlugin.id).toBe(GIT_PLUGIN_ID);
   });
 
-  it("renderer builtin catalog registers the Files explorer web panel and renders root entries", async () => {
+  it("renderer builtin catalog registers the Files file-panel with integrated tree and renders root entries", async () => {
     const filesModule = BUILTIN_RENDERER_PLUGIN_MODULES.find(
       (plugin) => plugin.id === FILES_PLUGIN_ID
     );
@@ -2225,14 +2249,15 @@ describe("git builtin plugin", () => {
     };
     const disposeFiles = filesModule.activate(filesContext);
     try {
-      const registration = getPluginPanelRegistrations().get(FILES_PANEL_ID);
+      const registration =
+        getPluginPanelRegistrations().get(FILES_FILE_PANEL_ID);
       expect(registration).toMatchObject({
-        id: FILES_PANEL_ID,
+        id: FILES_FILE_PANEL_ID,
         kind: "web",
       });
       const FilesPanel = registration?.component;
       if (!FilesPanel) {
-        throw new Error("expected Files explorer panel registration");
+        throw new Error("expected Files file-panel registration");
       }
 
       const { container } = render(
@@ -2265,7 +2290,7 @@ describe("git builtin plugin", () => {
     }
   });
 
-  it("Files explorer lazily loads expanded directory children from the host files API", async () => {
+  it("Files file-panel tree lazily loads expanded directory children from the host files API", async () => {
     const projectRoot =
       context.projectRootPath ??
       context.worktreeRoot ??
@@ -2297,7 +2322,7 @@ describe("git builtin plugin", () => {
         );
       }
     );
-    const { container, disposeFiles } = renderFilesExplorerPanel(list);
+    const { container, disposeFiles } = renderFilesFilePanel(list);
 
     try {
       await waitFor(() => {
@@ -2319,7 +2344,7 @@ describe("git builtin plugin", () => {
     }
   });
 
-  it("Files explorer renders an explicit empty state for an empty project root", async () => {
+  it("Files file-panel tree renders an explicit empty state for an empty project root", async () => {
     const projectRoot =
       context.projectRootPath ??
       context.worktreeRoot ??
@@ -2329,7 +2354,7 @@ describe("git builtin plugin", () => {
     const list = vi.fn<RendererPluginContext["files"]["list"]>(() =>
       Promise.resolve([])
     );
-    const { disposeFiles } = renderFilesExplorerPanel(list);
+    const { disposeFiles } = renderFilesFilePanel(list);
 
     try {
       await waitFor(() => {
@@ -2341,7 +2366,7 @@ describe("git builtin plugin", () => {
     }
   });
 
-  it("Files explorer shows a directory-scoped error when lazy child loading fails", async () => {
+  it("Files file-panel tree shows a directory-scoped error when lazy child loading fails", async () => {
     const projectRoot =
       context.projectRootPath ??
       context.worktreeRoot ??
@@ -2362,7 +2387,7 @@ describe("git builtin plugin", () => {
         return Promise.reject(new Error("Permission denied loading src"));
       }
     );
-    const { container, disposeFiles } = renderFilesExplorerPanel(list);
+    const { container, disposeFiles } = renderFilesFilePanel(list);
 
     try {
       await waitFor(() => {

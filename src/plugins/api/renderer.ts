@@ -42,6 +42,7 @@ import type {
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
 import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
@@ -86,11 +87,22 @@ export interface RendererPluginActionMetadata {
   submenu?: () => string;
 }
 
+export interface ActionInvocation {
+  sourcePanelComponent?: string;
+  sourcePanelContext?: PanelContext;
+  sourcePanelId?: string;
+  surface?: string;
+}
+
+export type RendererPluginActionInvocation = ActionInvocation;
+
 export interface RendererPluginAction {
   category: string;
   disabledReason?: () => null | string | undefined;
   enabled?: () => boolean;
-  handler: () => Promise<void> | void;
+  handler: (
+    invocation?: RendererPluginActionInvocation
+  ) => Promise<void> | void;
   id: string;
   metadata?: RendererPluginActionMetadata;
   surfaces?: readonly (string & {})[];
@@ -171,6 +183,14 @@ export interface RendererDashboardWidgetRegistration {
   title?: (() => string) | string;
 }
 
+export interface PluginPanelInstanceOptions {
+  componentId: string;
+  context?: PanelContext;
+  instanceId: string;
+  params?: Record<string, unknown>;
+  title?: string;
+}
+
 export interface PluginPanelRegistration {
   component: FunctionComponent<IDockviewPanelProps>;
   /**
@@ -208,6 +228,11 @@ export interface RendererPluginAgentSelection {
   detectedIds: readonly AgentKind[];
   enabledIds: readonly AgentKind[];
   selectedId: AgentKind | null;
+}
+
+export interface RendererPluginTerminalContext {
+  activePanelId(): string | null;
+  readSelectionText(panelId?: string): Promise<TerminalSelectionTextResult>;
 }
 
 export interface RendererPluginContext {
@@ -383,8 +408,10 @@ export interface RendererPluginContext {
      * 不支持打开其它插件贡献的 panel(权限/所有权对称约束)。
      */
     open(panelId: string, options?: { context?: PanelContext }): void;
+    openInstance(options: PluginPanelInstanceOptions): void;
     register(registration: PluginPanelRegistration): () => void;
   };
+  terminal: RendererPluginTerminalContext;
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;
   };

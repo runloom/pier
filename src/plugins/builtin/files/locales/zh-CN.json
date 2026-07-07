@@ -1,5 +1,41 @@
 {
+  "commands": {
+    "pier.files.openSelectionAsMarkdown": {
+      "title": "Markdown 内容预览"
+    }
+  },
   "messages": {
+    "filePanel.title": "文件",
+    "filePanel.empty.title": "未选择文件",
+    "filePanel.empty.withTree.description": "从项目目录树中选择一个文件，在当前标签页打开。",
+    "filePanel.empty.noTree.description": "打开文件或终端 Markdown 内容预览后开始编辑。",
+    "filePanel.editor.sourceLabel": "源码编辑器",
+    "filePanel.errors.diskDocumentMissing": "无法恢复这个磁盘文件文档。",
+    "filePanel.errors.invalidParams": "已保存的面板参数无效。",
+    "filePanel.errors.outsideWorkspace": "该文件来源不在恢复的工作区上下文中。",
+    "filePanel.errors.read.fallback": "无法读取文件内容。",
+    "filePanel.errors.read.title": "无法读取文件",
+    "filePanel.errors.restore.title": "无法恢复文件面板",
+    "filePanel.errors.save.fallback": "无法保存文件内容。",
+    "filePanel.errors.save.title": "无法保存文件",
+    "filePanel.readOnly": "只读",
+    "filePanel.save": "保存",
+    "filePanel.status.error": "错误",
+    "filePanel.status.loading": "加载中…",
+    "filePanel.status.saved": "已保存",
+    "filePanel.status.temporary": "临时文件",
+    "filePanel.status.unsaved": "未保存更改",
+    "filePanel.temporary.missing.title": "临时文件无法恢复",
+    "filePanel.temporary.missing.description": "临时文档内容会尽可能从本地草稿缓存恢复，并在文件面板关闭时释放。",
+    "filePanel.tree.blockedByDirtyDocument": "请先保存或处理当前文件，再从目录树打开其他文件。",
+    "filePanel.tree.collapse": "折叠目录树",
+    "filePanel.tree.expand": "展开目录树",
+    "filePanel.view.diffUnsupported": "差异视图暂未启用。",
+    "filePanel.view.preview": "预览",
+    "filePanel.view.richUnsupported": "富文本 Markdown 编辑暂未启用。",
+    "filePanel.view.source": "源码",
+    "files.actions.openSelectionAsMarkdown.title": "Markdown 内容预览",
+    "files.notifications.noTerminalSelection": "没有可打开的终端选区。",
     "panel.title": "文件",
     "panel.noProjectContext.title": "无项目上下文",
     "panel.noProjectContext.description": "请打开一个项目或工作树以浏览文件。",
@@ -12,7 +48,7 @@
   },
   "name": "文件",
   "panels": {
-    "pier.files.explorer": {
+    "pier.files.filePanel": {
       "title": "文件"
     }
   }

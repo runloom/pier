@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
 const FILES_PLUGIN_ID = "pier.files";
-const FILES_PANEL_ID = "pier.files.explorer";
+const FILES_FILE_PANEL_ID = "pier.files.filePanel";
 
 const emptyState = {
   read: () => Promise.resolve({ plugins: {}, version: 1 as const }),
@@ -78,7 +78,7 @@ describe("createDefaultPluginSources", () => {
     expect(GIT_PLUGIN_MANIFEST.locales).toBeUndefined();
   });
 
-  it("includes the builtin Files plugin manifest and explorer panel declaration", async () => {
+  it("includes the builtin Files plugin manifest and single file-panel declaration", async () => {
     const sources = await createDefaultPluginSources({
       readDir: async () => [],
       userDataDir: "/tmp/pier-user-data",
@@ -103,12 +103,17 @@ describe("createDefaultPluginSources", () => {
         id: FILES_PLUGIN_ID,
         panels: [
           expect.objectContaining({
-            component: FILES_PANEL_ID,
-            id: FILES_PANEL_ID,
-            permissions: expect.arrayContaining(["file:read"]),
+            component: FILES_FILE_PANEL_ID,
+            id: FILES_FILE_PANEL_ID,
+            permissions: expect.arrayContaining(["file:read", "file:write"]),
           }),
         ],
-        permissions: expect.arrayContaining(["file:read", "panel:register"]),
+        permissions: expect.arrayContaining([
+          "command:register",
+          "file:read",
+          "panel:register",
+          "terminal:read",
+        ]),
         source: { kind: "builtin" },
       },
     });

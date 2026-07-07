@@ -40,6 +40,7 @@ export interface NativeAddon {
   detachWindow(parentHandle: Buffer): void;
   hideTerminal(panelId: string): void;
   performTerminalBindingAction(panelId: string, action: string): boolean;
+  readSelectionText(panelId: string): string | null;
   /**
    * 孤儿清理:关掉该 window 下不在 activeIds 集合的 terminal NSView. C 方案
    * reload 零销毁路径上, renderer 重建后报告"我现在还需要这些 panelId",

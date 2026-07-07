@@ -113,6 +113,31 @@ function syncTerminalPresentation(
   flushTerminalLayoutFramesTrailing(flushReason);
 }
 
+export function createPluginPanelCloserForWorkspace(
+  api: DockviewReadyEvent["api"]
+): (componentId: string) => void {
+  return (componentId: string) => {
+    const victims = api.panels.filter(
+      (p) => p.view.contentComponent === componentId
+    );
+    if (victims.length === 0) {
+      return;
+    }
+    if (api.totalPanels - victims.length <= 0) {
+      useWorkspaceStore.getState().addTab();
+    }
+    for (const panel of victims) {
+      try {
+        api.removePanel(panel);
+      } catch {
+        // 同 group 内有多个 plugin panel 时,第一个 remove 会触发 removeGroup,
+        // 其后续 panel 的 group 引用已失效,dockview 会 throw。忽略即可 —— 整组
+        // 已随第一个 panel 一起销毁,后续目标已无需再删。
+      }
+    }
+  };
+}
+
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
   const setWorkspaceHasMaximizedGroup = useWorkspaceStore(
@@ -167,26 +192,7 @@ export function WorkspaceHost() {
       // 的副本,光关单例会留下残留。同 component 的所有 panel 一起清理。
       // 若关完后会让 workspace 全空,先补一个 welcome 占位,避免空 workspace 被
       // debounce 持久化为空布局(用户视角:禁用插件不应清空整个工作区)。
-      setPluginPanelCloser((panelId: string) => {
-        const victims = event.api.panels.filter(
-          (p) => p.view.contentComponent === panelId
-        );
-        if (victims.length === 0) {
-          return;
-        }
-        if (event.api.totalPanels - victims.length <= 0) {
-          useWorkspaceStore.getState().addTab();
-        }
-        for (const panel of victims) {
-          try {
-            event.api.removePanel(panel);
-          } catch {
-            // 同 group 内有多个 plugin panel 时,第一个 remove 会触发 removeGroup,
-            // 其后续 panel 的 group 引用已失效,dockview 会 throw。忽略即可 —— 整组
-            // 已随第一个 panel 一起销毁,后续目标已无需再删。
-          }
-        }
-      });
+      setPluginPanelCloser(createPluginPanelCloserForWorkspace(event.api));
 
       // 防 save-loop: fromJSON / 默认 layout 应用期间 onDidLayoutChange 触发的
       // change event 是 program-driven, 不该 save (会 round-trip 存"恢复出来的"

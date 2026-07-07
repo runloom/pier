@@ -1,5 +1,41 @@
 {
+  "commands": {
+    "pier.files.openSelectionAsMarkdown": {
+      "title": "Markdown Preview"
+    }
+  },
   "messages": {
+    "filePanel.title": "File",
+    "filePanel.empty.title": "No file selected",
+    "filePanel.empty.withTree.description": "Select a file from the project tree to open it in this tab.",
+    "filePanel.empty.noTree.description": "Open a file or a terminal Markdown preview to start editing.",
+    "filePanel.editor.sourceLabel": "Source editor",
+    "filePanel.errors.diskDocumentMissing": "This disk file document could not be restored.",
+    "filePanel.errors.invalidParams": "The saved panel parameters are invalid.",
+    "filePanel.errors.outsideWorkspace": "This file source is outside the restored workspace context.",
+    "filePanel.errors.read.fallback": "Unable to read file contents.",
+    "filePanel.errors.read.title": "Unable to read file",
+    "filePanel.errors.restore.title": "Unable to restore file panel",
+    "filePanel.errors.save.fallback": "Unable to save file contents.",
+    "filePanel.errors.save.title": "Unable to save file",
+    "filePanel.readOnly": "Read-only",
+    "filePanel.save": "Save",
+    "filePanel.status.error": "Error",
+    "filePanel.status.loading": "Loading…",
+    "filePanel.status.saved": "Saved",
+    "filePanel.status.temporary": "Temporary file",
+    "filePanel.status.unsaved": "Unsaved changes",
+    "filePanel.temporary.missing.title": "Temporary file cannot be restored",
+    "filePanel.temporary.missing.description": "Temporary document contents are restored from the local draft cache when possible, and are released when the file panel closes.",
+    "filePanel.tree.blockedByDirtyDocument": "Save or discard the current file before opening another file from the tree.",
+    "filePanel.tree.collapse": "Collapse file tree",
+    "filePanel.tree.expand": "Expand file tree",
+    "filePanel.view.diffUnsupported": "Diff view is not enabled yet.",
+    "filePanel.view.preview": "Preview",
+    "filePanel.view.richUnsupported": "Rich Markdown editing is not enabled yet.",
+    "filePanel.view.source": "Source",
+    "files.actions.openSelectionAsMarkdown.title": "Markdown Preview",
+    "files.notifications.noTerminalSelection": "No terminal selection to open.",
     "panel.title": "Files",
     "panel.noProjectContext.title": "No project context",
     "panel.noProjectContext.description": "Open a project or worktree to browse files.",
@@ -12,8 +48,8 @@
   },
   "name": "Files",
   "panels": {
-    "pier.files.explorer": {
-      "title": "Files"
+    "pier.files.filePanel": {
+      "title": "File"
     }
   }
 }

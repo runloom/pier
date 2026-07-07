@@ -9,12 +9,16 @@ let revision = 0;
  * panel —— 仅删 registration 不关 panel 会让禁用插件后旧 dockview 实例残留,
  * 重启时 fromJSON 找不到 component(因 component 已 unregister)。
  */
-let panelCloser: ((panelId: string) => void) | null = null;
+let panelCloser: ((componentId: string) => void) | null = null;
 
 export function setPluginPanelCloser(
-  closer: ((panelId: string) => void) | null
+  closer: ((componentId: string) => void) | null
 ): void {
   panelCloser = closer;
+}
+
+export function closePanelsByPluginComponent(componentId: string): void {
+  panelCloser?.(componentId);
 }
 
 function notify(): void {
@@ -33,7 +37,7 @@ export function registerPluginPanel(
     if (registrations.get(registration.id) === registration) {
       // 先关已打开的 dockview 实例,再删 component 注册 —— 顺序反了的话,
       // dockview render 时找不到 component 会报错。
-      panelCloser?.(registration.id);
+      closePanelsByPluginComponent(registration.id);
       registrations.delete(registration.id);
       notify();
     }

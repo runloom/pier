@@ -266,7 +266,12 @@ function createMockContext(): RendererPluginContext {
     panels: {
       getActiveContext: unimplemented("panels.getActiveContext"),
       open: unimplemented("panels.open"),
+      openInstance: unimplemented("panels.openInstance"),
       register: unimplemented("panels.register"),
+    },
+    terminal: {
+      activePanelId: unimplemented("terminal.activePanelId"),
+      readSelectionText: unimplemented("terminal.readSelectionText"),
     },
     terminalStatusItems: {
       register: unimplemented("terminalStatusItems.register"),

@@ -47,6 +47,7 @@
     "postinstall": "node ./scripts/ensure-electron.mjs"
   },
   "dependencies": {
+    "@codemirror/lang-markdown": "6.5.0",
     "@hookform/resolvers": "5.4.0",
     "@leeoniya/ufuzzy": "1.0.19",
     "@pier/ui": "workspace:*",
@@ -55,6 +56,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",
+    "codemirror": "6.0.2",
     "dockview-react": "6.6.1",
     "embla-carousel-react": "^8.6.0",
     "i18next": "^26.3.1",
@@ -65,8 +67,11 @@
     "react-dom": "19.2.7",
     "react-grid-layout": "^2.2.3",
     "react-hook-form": "7.80.0",
+    "react-markdown": "10.1.0",
     "react-resizable-panels": "^4.11.2",
     "recharts": "^3.8.1",
+    "rehype-sanitize": "6.0.0",
+    "remark-gfm": "4.0.1",
     "sonner": "2.0.7",
     "tailwind-merge": "3.6.0",
     "vaul": "^1.1.2",

@@ -107,7 +107,7 @@ const sampleDashboardWidgets = [
 const undeclaredContributionErrorPattern = /not declared/;
 
 const pluginEntry = {
-  effectivePermissions: [],
+  effectivePermissions: ["command:register"],
   enabled: true,
   manifest: {
     apiVersion: 1,
@@ -155,7 +155,7 @@ const pluginEntry = {
     },
     name: "Sample",
     panels: [],
-    permissions: [],
+    permissions: ["command:register"],
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
     dashboardWidgets: sampleDashboardWidgets,
@@ -343,7 +343,7 @@ describe("createRendererPluginContext", () => {
     const handler = vi.fn();
     const context = createRendererPluginContext({
       ...commandPermissionEntry,
-      effectivePermissions: [],
+      effectivePermissions: ["command:register"],
     });
 
     const dispose = context.actions.register({
@@ -367,7 +367,7 @@ describe("createRendererPluginContext", () => {
     const handler = vi.fn();
     const context = createRendererPluginContext({
       ...commandPermissionEntry,
-      effectivePermissions: ["git:write"],
+      effectivePermissions: ["command:register", "git:write"],
     });
 
     const dispose = context.actions.register({
