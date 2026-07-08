@@ -1,11 +1,5 @@
 import { join } from "node:path";
-import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
-import type { MruState } from "@shared/contracts/command-palette-mru.ts";
-import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
-import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
-import type { TaskBackgroundSnapshot } from "@shared/contracts/tasks.ts";
-import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
@@ -82,6 +76,14 @@ import {
   startManagedPluginDevRuntimeWatch,
 } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
+import {
+  broadcastAppUpdateChanged,
+  broadcastEnvironmentsChanged,
+  broadcastMruState,
+  broadcastPluginRegistryChanged,
+  broadcastTaskBackgroundSnapshot,
+  broadcastTerminalStatusBarPrefs,
+} from "./window-broadcasts.ts";
 
 export interface PierAppCore {
   clients: PierClientRegistry;
@@ -91,61 +93,6 @@ export interface PierAppCore {
   flushExternalPluginsBeforeQuit(): Promise<void>;
   pluginHost: MainPluginHostApi;
   services: PierCoreServices;
-}
-
-function broadcastMruState(state: MruState): void {
-  for (const win of windowManager.getAll()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_MRU_CHANGED, state);
-    }
-  }
-}
-
-function broadcastTerminalStatusBarPrefs(prefs: TerminalStatusBarPrefs): void {
-  for (const win of windowManager.getAll()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(
-        PIER_BROADCAST.TERMINAL_STATUS_BAR_PREFS_CHANGED,
-        prefs
-      );
-    }
-  }
-}
-
-function broadcastPluginRegistryChanged(
-  result: PluginRegistryListResult
-): void {
-  for (const win of windowManager.getAll()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(PIER_BROADCAST.PLUGINS_CHANGED, result);
-    }
-  }
-}
-
-function broadcastEnvironmentsChanged(snapshot: LocalEnvironmentState): void {
-  for (const win of windowManager.getAll()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(PIER_BROADCAST.ENVIRONMENTS_CHANGED, snapshot);
-    }
-  }
-}
-
-function broadcastTaskBackgroundSnapshot(
-  snapshot: TaskBackgroundSnapshot
-): void {
-  for (const win of windowManager.getAll()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(PIER_BROADCAST.TASKS_BACKGROUND_CHANGED, snapshot);
-    }
-  }
-}
-
-function broadcastAppUpdateChanged(snapshot: AppUpdateSnapshot): void {
-  for (const win of windowManager.getAll()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(PIER_BROADCAST.APP_UPDATE_CHANGED, snapshot);
-    }
-  }
 }
 
 function focusRendererTarget(win: AppWindow): void {
