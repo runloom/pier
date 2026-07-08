@@ -24,9 +24,9 @@ const IS_APPLYING_GUARDS_SAVE_RE = /if \(isApplyingPersistedLayout\) \{/;
 const ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE =
   /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,200}?if \(!panel\) \{/;
 const ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE =
-  /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
+  /event\.api\.onDidActivePanelChange\(\(change\) => \{[\s\S]{0,1200}?const panel = change\.panel;[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
 const ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE =
-  /event\.api\.onDidActivePanelChange\(\(panel\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
+  /event\.api\.onDidActivePanelChange\(\(change\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
 const ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE =
   /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,900}?setTerminalBasePanel/;
 const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(

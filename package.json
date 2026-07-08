@@ -1,7 +1,7 @@
 {
   "name": "pier",
   "version": "0.1.0",
-  "description": "Pier — 本地 AI 开发工作台（dockview panel 布局 + 终端 + 代码变更预览 + 多 agent 状态可见性）",
+  "description": "Pier \u2014 \u672c\u5730 AI \u5f00\u53d1\u5de5\u4f5c\u53f0\uff08dockview panel \u5e03\u5c40 + \u7ec8\u7aef + \u4ee3\u7801\u53d8\u66f4\u9884\u89c8 + \u591a agent \u72b6\u6001\u53ef\u89c1\u6027\uff09",
   "type": "module",
   "main": "out/main/index.js",
   "private": true,
@@ -51,8 +51,24 @@
     "postinstall": "node ./scripts/ensure-electron.mjs"
   },
   "dependencies": {
+    "@codemirror/lang-cpp": "6.0.3",
+    "@codemirror/lang-css": "6.3.1",
+    "@codemirror/lang-go": "6.0.1",
+    "@codemirror/lang-html": "6.4.11",
+    "@codemirror/lang-javascript": "6.2.5",
+    "@codemirror/lang-json": "6.0.2",
+    "@codemirror/lang-markdown": "6.5.0",
+    "@codemirror/lang-python": "6.2.1",
+    "@codemirror/lang-rust": "6.0.2",
+    "@codemirror/lang-xml": "6.1.0",
+    "@codemirror/lang-yaml": "6.1.3",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/legacy-modes": "6.5.3",
+    "@codemirror/search": "6.7.1",
+    "@codemirror/state": "6.7.1",
     "@hookform/resolvers": "5.4.0",
     "@leeoniya/ufuzzy": "1.0.19",
+    "@lezer/highlight": "1.2.3",
     "@pier/plugin-api": "workspace:*",
     "@pier/ui": "workspace:*",
     "@pierre/theme": "^1.1.0",
@@ -60,7 +76,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",
-    "dockview-react": "6.6.1",
+    "codemirror": "6.0.2",
+    "dockview-react": "7.0.2",
     "embla-carousel-react": "^8.6.0",
     "es-module-lexer": "1.5.4",
     "i18next": "^26.3.1",
@@ -71,8 +88,11 @@
     "react-dom": "19.2.7",
     "react-grid-layout": "^2.2.3",
     "react-hook-form": "7.80.0",
+    "react-markdown": "10.1.0",
     "react-resizable-panels": "^4.11.2",
     "recharts": "^3.8.1",
+    "rehype-sanitize": "6.0.0",
+    "remark-gfm": "4.0.1",
     "semver": "7.6.3",
     "sonner": "2.0.7",
     "tailwind-merge": "3.6.0",
@@ -112,5 +132,5 @@
     "vite": "8.0.16",
     "vitest": "4.1.8"
   },
-  "$pin-policy": "exact pin 到 install 当日 latest stable; 不用 latest 字面; 升级走 plan unlock"
+  "$pin-policy": "exact pin \u5230 install \u5f53\u65e5 latest stable; \u4e0d\u7528 latest \u5b57\u9762; \u5347\u7ea7\u8d70 plan unlock"
 }
