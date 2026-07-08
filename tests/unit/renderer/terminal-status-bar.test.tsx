@@ -279,6 +279,12 @@ describe("ForegroundActivityBridge terminal status registration", () => {
     expect(
       await screen.findByTestId("task-status-dropdown-item-package-script:test")
     ).toBeTruthy();
+    const rowStatus = screen.getByTestId(
+      "task-status-row-status-package-script:test"
+    );
+    expect(rowStatus).toHaveAttribute("aria-label", "Running");
+    expect(rowStatus).not.toHaveTextContent("Running");
+    expect(screen.getByTestId("task-status-row-running-icon")).toBeTruthy();
     expect(
       screen.queryByTestId("task-status-dropdown-item-package-script:bootstrap")
     ).toBeNull();
@@ -362,5 +368,41 @@ describe("ForegroundActivityBridge terminal status registration", () => {
     );
     expect(screen.getByTestId("task-status-list-icon")).toBeTruthy();
     expect(screen.queryByTestId("task-status-running-icon")).toBeNull();
+  });
+
+  it("uses the success status color for succeeded task rows", async () => {
+    installForegroundActivityApi();
+    rememberTerminalTaskRun({
+      detail: "pnpm run test",
+      label: "test",
+      panelId: "terminal-1",
+      projectRootPath: "/repo",
+      runId: "run-1",
+      status: "succeeded",
+      taskId: "package-script:test",
+    });
+
+    render(
+      <>
+        <ForegroundActivityBridge />
+        <TerminalStatusBar
+          context={{
+            contextId: "ctx-1",
+            projectRootPath: "/repo",
+            updatedAt: 1,
+          }}
+          cwd="/repo"
+          panelId="terminal-1"
+          title={null}
+        />
+      </>
+    );
+
+    const trigger = await screen.findByTestId("task-status-item");
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+
+    expect(
+      await screen.findByTestId("task-status-row-status-package-script:test")
+    ).toHaveClass("text-[var(--status-success-fg)]");
   });
 });

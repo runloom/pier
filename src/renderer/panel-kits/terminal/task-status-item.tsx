@@ -7,13 +7,23 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type {
   TaskBackgroundRunSnapshot,
   TaskBackgroundSnapshot,
   TaskCandidate,
   TaskSpawnMode,
 } from "@shared/contracts/tasks.ts";
-import { ExternalLink, ListChecks, Loader2, RotateCcw } from "lucide-react";
+import {
+  Ban,
+  CheckCircle2,
+  Circle,
+  CircleAlert,
+  ExternalLink,
+  ListChecks,
+  Loader2,
+  RotateCcw,
+} from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
@@ -46,6 +56,8 @@ interface TaskStatusRow {
   status: TaskBackgroundRunSnapshot["status"];
   unsupportedReason?: string;
 }
+
+type TaskRowStatus = TaskBackgroundRunSnapshot["status"];
 
 const EMPTY_TASK_CATALOG = new Map<string, TaskCandidate>();
 
@@ -98,6 +110,131 @@ function commandDetail(task: TaskCandidate): string {
 
 function taskActionTestId(prefix: string, taskId: string): string {
   return `${prefix}-${taskId}`;
+}
+
+function taskStatusLabelKey(status: TaskRowStatus): string {
+  switch (status) {
+    case "blocked":
+      return "terminal.taskStatus.statusBlocked";
+    case "cancelled":
+      return "terminal.taskStatus.statusCancelled";
+    case "failed":
+      return "terminal.taskStatus.statusFailed";
+    case "pending":
+      return "terminal.taskStatus.statusPending";
+    case "running":
+      return "terminal.taskStatus.statusRunning";
+    case "succeeded":
+      return "terminal.taskStatus.statusSucceeded";
+    default:
+      return "terminal.taskStatus.statusPending";
+  }
+}
+
+function TaskRowStatusIcon({
+  status,
+  testId,
+}: {
+  status: TaskRowStatus;
+  testId: string;
+}) {
+  const t = useT();
+  const label = t(taskStatusLabelKey(status));
+  const commonClassName =
+    "inline-flex size-4 shrink-0 items-center justify-center [&_svg:not([class*='size-'])]:size-3";
+  const props = {
+    "aria-label": label,
+    "data-task-row-status": status,
+    "data-testid": testId,
+    title: label,
+  };
+  switch (status) {
+    case "blocked":
+      return (
+        <span
+          className={cn(commonClassName, "text-[var(--status-warning-fg)]")}
+          {...props}
+        >
+          <CircleAlert
+            aria-hidden="true"
+            data-testid="task-status-row-blocked-icon"
+          />
+        </span>
+      );
+    case "cancelled":
+      return (
+        <span
+          className={cn(commonClassName, "text-[var(--status-warning-fg)]")}
+          {...props}
+        >
+          <Ban
+            aria-hidden="true"
+            data-testid="task-status-row-cancelled-icon"
+          />
+        </span>
+      );
+    case "failed":
+      return (
+        <span
+          className={cn(commonClassName, "text-[var(--status-danger-fg)]")}
+          {...props}
+        >
+          <CircleAlert
+            aria-hidden="true"
+            data-testid="task-status-row-failed-icon"
+          />
+        </span>
+      );
+    case "pending":
+      return (
+        <span
+          className={cn(commonClassName, "text-[var(--status-neutral-fg)]")}
+          {...props}
+        >
+          <Circle
+            aria-hidden="true"
+            data-testid="task-status-row-pending-icon"
+          />
+        </span>
+      );
+    case "running":
+      return (
+        <span
+          className={cn(commonClassName, "text-[var(--status-info-fg)]")}
+          {...props}
+        >
+          <Loader2
+            aria-hidden="true"
+            className="animate-spin"
+            data-testid="task-status-row-running-icon"
+          />
+        </span>
+      );
+    case "succeeded":
+      return (
+        <span
+          className={cn(commonClassName, "text-[var(--status-success-fg)]")}
+          {...props}
+        >
+          <CheckCircle2
+            aria-hidden="true"
+            data-testid="task-status-row-succeeded-icon"
+          />
+        </span>
+      );
+    default:
+      return (
+        <span
+          className={cn(commonClassName, "text-[var(--status-neutral-fg)]")}
+          {...props}
+        >
+          <Circle
+            aria-hidden="true"
+            data-testid="task-status-row-pending-icon"
+          />
+        </span>
+      );
+  }
 }
 
 function TaskActionButton({
@@ -262,7 +399,13 @@ function TaskStatusItemView({
           key={task.id}
         >
           <div className="min-w-0 flex-1">
-            <div className="truncate font-medium">{task.label}</div>
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="truncate font-medium">{task.label}</div>
+              <TaskRowStatusIcon
+                status={task.status}
+                testId={`task-status-row-status-${task.id}`}
+              />
+            </div>
             <div className="truncate text-muted-foreground text-xs">
               {task.unsupportedReason ?? task.detail ?? task.status}
             </div>
