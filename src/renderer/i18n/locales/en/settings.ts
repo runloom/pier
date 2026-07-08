@@ -203,6 +203,8 @@ export const settings = {
     checkUpdates: "Check for Updates",
     restartNow: "Restart Pier Now",
     restartNotice: "Restart Pier to use the installed plugin version.",
+    restartDevNotice:
+      "Dev mode: renderer reloaded. Plugin main runtime unload needs a full `pnpm dev` restart.",
     updateAvailable: "Update available",
     restartRequired: "Restart required",
     action: {

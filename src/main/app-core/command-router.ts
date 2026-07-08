@@ -218,6 +218,28 @@ async function executeAppStateCommand(
       // Deferred require to avoid pulling Electron into pure-node test contexts.
       // Called only via desktop-renderer, so `app` is present.
       const { app } = await import("electron");
+      const { isDevRuntime } = await import("../runtime-mode.ts");
+      const { windowManager } = await import("../windows/window-manager.ts");
+      if (isDevRuntime()) {
+        // Real `app.relaunch()` fights `electron-vite dev` — vite dev server
+        // shuts down on quit and the spawned electron boots into a dead URL
+        // (white screen). Instead we (1) advance the managed-plugin restart
+        // state (clear `pendingRestart`, drop `effectiveAtStartup` for
+        // uninstalled entries) so the UI reflects post-restart, then (2)
+        // reload every renderer webContents so its snapshot picks that up.
+        // Plugin main runtimes stay loaded until `pnpm dev` is rerun — the
+        // renderer surfaces a toast to that effect.
+        // NOTE: pier windows are BaseWindow + WebContentsView, not
+        // BrowserWindow, so `BrowserWindow.getAllWindows()` returns []; the
+        // custom windowManager is the source of truth.
+        await services.managedPlugins.simulateRestartForTests();
+        for (const win of windowManager.getAll()) {
+          if (!win.isDestroyed()) {
+            win.webContents.reload();
+          }
+        }
+        return success(requestId, null);
+      }
       app.relaunch();
       app.quit();
       return success(requestId, null);

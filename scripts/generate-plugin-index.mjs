@@ -60,6 +60,18 @@ async function collectPlugin(pluginDir) {
     return null;
   }
   const sha256 = shaRaw.trim().split(/\s+/)[0];
+  const localesSubset = manifest.locales
+    ? Object.fromEntries(
+        Object.entries(manifest.locales)
+          .map(([code, msgs]) => {
+            const pair = {};
+            if (msgs.name) pair.name = msgs.name;
+            if (msgs.description) pair.description = msgs.description;
+            return [code, pair];
+          })
+          .filter(([, v]) => v.name || v.description)
+      )
+    : undefined;
   return {
     manifest,
     entry: {
@@ -67,6 +79,9 @@ async function collectPlugin(pluginDir) {
       displayName: manifest.name,
       id: manifest.id,
       latest: manifest.version,
+      ...(localesSubset && Object.keys(localesSubset).length > 0
+        ? { locales: localesSubset }
+        : {}),
       versions: {
         [manifest.version]: {
           assetUrl: assetUrl(manifest.id, manifest.version),

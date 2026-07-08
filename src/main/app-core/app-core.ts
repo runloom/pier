@@ -1,4 +1,3 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
@@ -60,6 +59,7 @@ import {
 } from "../state/terminal-status-bar-prefs.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { windowManager } from "../windows/window-manager.ts";
+import { readBundledPlugin } from "./bundled-plugin-reader.ts";
 import {
   createClientRegistry,
   type PierClientRegistry,
@@ -162,74 +162,13 @@ function createPierAppCore(): PierAppCore {
   const managedPluginOpLog = createManagedPluginOperationLog(
     managedPluginPaths.operationLogFile
   );
-  // Bundled Codex plugin. Dev: read from packages/plugin-codex/dist-pkg.
-  // Prod: from `<Resources>/plugin-packages/`. Registration is skipped if the
-  // tgz + sha256 pair is missing (fresh checkout before `pnpm plugins:pack`).
-  const codexBundle = ((): {
-    archivePath: string;
-    contributionCounts: {
-      commands: number;
-      dashboardWidgets: number;
-      panels: number;
-      terminalStatusItems: number;
-    };
-    description?: string;
-    name: string;
-    sha256: string;
-    size?: number;
-    version: string;
-  } | null => {
-    const bundleRoot = isDevRuntime()
-      ? join(process.cwd(), "packages/plugin-codex/dist-pkg")
-      : join(process.resourcesPath ?? "", "plugin-packages");
-    const manifestSrcDir = isDevRuntime()
-      ? join(process.cwd(), "packages/plugin-codex")
-      : bundleRoot;
-    const manifestPath = join(manifestSrcDir, "plugin.json");
-    if (!existsSync(manifestPath)) {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-        id?: string;
-        name?: string;
-        description?: string;
-        version?: string;
-        commands?: unknown[];
-        dashboardWidgets?: unknown[];
-        panels?: unknown[];
-        terminalStatusItems?: unknown[];
-      };
-      const version = parsed.version ?? "1.0.0";
-      const id = parsed.id ?? "pier.codex";
-      const archivePath = join(bundleRoot, `${id}-${version}.tgz`);
-      const shaPath = `${archivePath}.sha256`;
-      if (!(existsSync(archivePath) && existsSync(shaPath))) {
-        return null;
-      }
-      const sha256 = readFileSync(shaPath, "utf8").trim().split(/\s+/)[0];
-      if (!sha256) {
-        return null;
-      }
-      const size = statSync(archivePath).size;
-      return {
-        archivePath,
-        contributionCounts: {
-          commands: parsed.commands?.length ?? 0,
-          dashboardWidgets: parsed.dashboardWidgets?.length ?? 0,
-          panels: parsed.panels?.length ?? 0,
-          terminalStatusItems: parsed.terminalStatusItems?.length ?? 0,
-        },
-        name: parsed.name ?? "Codex",
-        sha256,
-        size,
-        version,
-        ...(parsed.description ? { description: parsed.description } : {}),
-      };
-    } catch {
-      return null;
-    }
-  })();
+  const codexBundle = readBundledPlugin({
+    devPackageDir: "packages/plugin-codex",
+    fallbackId: "pier.codex",
+    fallbackName: "Codex",
+    fallbackVersion: "1.0.0",
+    prodPluginDirName: "pier.codex",
+  });
   const codexSeedAvailable = codexBundle !== null;
   let externalMainRuntimeRef: ExternalMainPluginRuntime | null = null;
   let pluginHostRef: MainPluginHostApi | null = null;
@@ -260,6 +199,7 @@ function createPierAppCore(): PierAppCore {
               ...(codexBundle.description
                 ? { description: codexBundle.description }
                 : {}),
+              ...(codexBundle.locales ? { locales: codexBundle.locales } : {}),
               ...(codexBundle.size ? { size: codexBundle.size } : {}),
             },
           ]

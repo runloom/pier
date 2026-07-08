@@ -18,6 +18,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
   AvailableManagedRow,
@@ -228,6 +229,9 @@ export function ManagedPluginsSection({
           {anyPendingRestart ? (
             <Button
               onClick={() => {
+                if (import.meta.env.DEV) {
+                  toast.info(t("settings.plugins.restartDevNotice"));
+                }
                 win?.app?.relaunch().catch((err: unknown) => {
                   console.error("[managed-plugins] relaunch failed:", err);
                 });

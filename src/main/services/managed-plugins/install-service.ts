@@ -104,6 +104,14 @@ export interface ManagedPluginInstallService {
     id: string,
     path: string
   ) => Promise<ManagedPluginOperationResult>;
+  /**
+   * Applies `computeSimulateRestartMutation` to clear pendingRestart,
+   * disposes/creates `effectiveAtStartup` from installed state, and refreshes
+   * the runtime snapshot. Used by tests to advance restart-gated state; used
+   * by the dev `app.relaunch` path (which reloads the renderer without
+   * quitting the main process) to make plugin uninstall visible without
+   * killing electron-vite.
+   */
   readonly simulateRestartForTests: () => Promise<void>;
   readonly uninstall: (id: string) => Promise<ManagedPluginOperationResult>;
 }

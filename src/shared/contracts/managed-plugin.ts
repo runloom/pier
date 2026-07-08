@@ -4,6 +4,8 @@ import { pierCapabilitySchema } from "./permissions.ts";
 import {
   pluginCommandContributionSchema,
   pluginConfigurationSchema,
+  pluginLocaleCodeSchema,
+  pluginLocaleMessagesSchema,
   pluginLocalizationSchema,
   pluginPanelContributionSchema,
   pluginTerminalStatusItemContributionSchema,
@@ -62,6 +64,9 @@ export const managedPluginPackageManifestSchema = z.object({
   engines: z.object({ pier: z.string().min(1) }),
   homepage: z.string().min(1).optional(),
   id: z.string().min(1),
+  locales: z
+    .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
+    .optional(),
   localization: pluginLocalizationSchema.optional(),
   main: relativePosixPathSchema,
   name: z.string().min(1),
@@ -178,11 +183,21 @@ const officialPluginVersionSchema = z.object({
   size: z.number().int().nonnegative(),
 });
 
+const pluginLocalizedTextSchema = z.record(
+  pluginLocaleCodeSchema,
+  z.object({
+    description: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
+  })
+);
+
 const officialPluginEntrySchema = z.object({
   description: z.string().min(1).optional(),
   displayName: z.string().min(1),
   id: z.string().min(1),
   latest: z.string().min(1),
+  /** Per-locale name/description overrides. Renderer picks by user locale. */
+  locales: pluginLocalizedTextSchema.optional(),
   versions: z.record(z.string(), officialPluginVersionSchema),
 });
 export type OfficialPluginEntry = z.infer<typeof officialPluginEntrySchema>;
@@ -237,6 +252,8 @@ export const managedPluginCatalogRowSchema = z.object({
     .optional(),
   description: z.string().min(1).optional(),
   displayName: z.string().min(1),
+  /** Per-locale name/description overrides. Renderer resolves against i18n. */
+  locales: pluginLocalizedTextSchema.optional(),
   effective: catalogStateSchema.nullable(),
   id: z.string().min(1),
   installed: z.boolean(),

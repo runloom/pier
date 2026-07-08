@@ -1,6 +1,7 @@
 import { Button } from "@pier/ui/button.tsx";
 import { Item, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
 import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import i18next from "i18next";
 import { Loader2, Package } from "lucide-react";
 import { type JSX, useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +17,35 @@ import {
  */
 
 export type CatalogRow = ManagedPluginCatalogSnapshot["plugins"][number];
+
+/**
+ * Pick locale-aware name/description from a catalog row.
+ * Falls back to fields on the row itself when no locale entry matches.
+ */
+function resolveRowDisplay(row: CatalogRow): {
+  name: string;
+  description?: string;
+} {
+  const locale = i18next.language ?? "";
+  const shortLocale = locale.split("-")[0] ?? "";
+  const candidates = [locale, shortLocale].filter((v): v is string =>
+    Boolean(v)
+  );
+  for (const code of candidates) {
+    const msg = row.locales?.[code];
+    if (msg?.name || msg?.description) {
+      const description = msg.description ?? row.description;
+      return {
+        name: msg.name ?? row.displayName,
+        ...(description ? { description } : {}),
+      };
+    }
+  }
+  return {
+    name: row.displayName,
+    ...(row.description ? { description: row.description } : {}),
+  };
+}
 
 export interface ManagedPluginsWindowShim {
   app?: {
@@ -116,7 +146,8 @@ export function ManagedRowExtraActions({
   onRefresh: () => void;
 }): JSX.Element {
   const t = useT();
-  const { pending, run } = usePluginOp(row.displayName, onRefresh);
+  const display = resolveRowDisplay(row);
+  const { pending, run } = usePluginOp(display.name, onRefresh);
   return (
     <>
       {row.update ? (
@@ -212,7 +243,8 @@ export function AvailableManagedRow({
   onRefresh: () => void;
 }): JSX.Element {
   const t = useT();
-  const { pending, run } = usePluginOp(row.displayName, onRefresh);
+  const display = resolveRowDisplay(row);
+  const { pending, run } = usePluginOp(display.name, onRefresh);
   return (
     <Item
       className="rounded-none border-0 px-(--card-spacing)"
@@ -226,14 +258,14 @@ export function AvailableManagedRow({
               aria-hidden
               className="size-4 shrink-0 text-muted-foreground"
             />
-            <span className="truncate">{row.displayName}</span>
+            <span className="truncate">{display.name}</span>
           </ItemTitle>
           <span className="shrink-0 text-muted-foreground text-xs">
             {row.update ? `v${row.update.version}` : "—"}
           </span>
         </div>
-        {row.description ? (
-          <p className="text-muted-foreground text-xs">{row.description}</p>
+        {display.description ? (
+          <p className="text-muted-foreground text-xs">{display.description}</p>
         ) : null}
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <ContributionCountsInline counts={row.contributionCounts} />

@@ -30,6 +30,8 @@ export interface BundledPluginRegistration {
   readonly description?: string;
   readonly displayName: string;
   readonly id: string;
+  /** Per-locale name/description overrides shipped in `plugin.json`. */
+  readonly locales?: Record<string, { name?: string; description?: string }>;
   /** sha256 hex digest of the archive; enforced by validation. */
   readonly sha256: string;
   readonly size?: number;

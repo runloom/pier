@@ -28,11 +28,34 @@
   "dataSchemas": {
     "codex.accounts": { "read": ">=1 <=1", "write": 1 }
   },
-  "description": "管理 Codex 账号，登录、切换、观测用量。",
+  "description": "Codex account management and usage monitoring for Pier.",
   "engines": { "pier": ">=0.1.0 <0.2.0" },
   "id": "pier.codex",
+  "locales": {
+    "zh-CN": {
+      "name": "Codex 账户管理",
+      "description": "管理 Codex 账号,登录、切换、观测用量。",
+      "commands": {
+        "pier.codex.addAccount": { "title": "Codex: 添加账号" },
+        "pier.codex.switchAccount": { "title": "Codex: 切换账号" },
+        "pier.codex.refreshUsage": { "title": "Codex: 刷新用量" }
+      },
+      "dashboardWidgets": {
+        "pier.codex.accounts": {
+          "title": "Codex 账号",
+          "description": "管理 Codex 账号和观测用量。"
+        }
+      },
+      "settings": {
+        "pier.codex.confirmSwitch": {
+          "label": "切换账号前弹窗确认",
+          "description": "切换到其他 Codex 账号前先弹一个确认对话框。"
+        }
+      }
+    }
+  },
   "main": "dist/main.js",
-  "name": "Codex 账户管理",
+  "name": "Codex Account Management",
   "panels": [],
   "permissions": ["plugin:read"],
   "publisher": "Pier",

@@ -51,6 +51,11 @@ export async function performListCatalogSnapshot(
       description: bundled?.description,
       displayName:
         officialEntry?.displayName ?? bundled?.displayName ?? pluginId,
+      ...(officialEntry?.locales || bundled?.locales
+        ? {
+            locales: officialEntry?.locales ?? bundled?.locales,
+          }
+        : {}),
       effective: entry.effectiveAtStartup
         ? {
             enabled: entry.effectiveAtStartup.enabled,
@@ -79,6 +84,7 @@ export async function performListCatalogSnapshot(
         desired: { enabled: false, source: "official", version: null },
         diagnostics: [],
         displayName: officialEntry.displayName,
+        ...(officialEntry.locales ? { locales: officialEntry.locales } : {}),
         effective: null,
         id,
         installed: false,
@@ -100,6 +106,7 @@ export async function performListCatalogSnapshot(
       diagnostics: [],
       description: bundled.description,
       displayName: bundled.displayName,
+      ...(bundled.locales ? { locales: bundled.locales } : {}),
       effective: null,
       id: bundled.id,
       installed: false,

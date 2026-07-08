@@ -207,6 +207,8 @@ export const settings = {
     checkUpdates: "检查更新",
     restartNow: "立即重启",
     restartNotice: "重启 Pier 以使新版本生效。",
+    restartDevNotice:
+      "Dev 模式:仅重载渲染进程,插件 main runtime 卸载需退出重跑 `pnpm dev`。",
     updateAvailable: "有可用更新",
     restartRequired: "需重启",
     emptyInstalledTitle: "没有已安装的插件",
