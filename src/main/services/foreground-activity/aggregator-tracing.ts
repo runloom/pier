@@ -1,8 +1,8 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
-import type { HookLayer } from "./entry.ts";
-import { setHookStatus } from "./entry.ts";
+import type { HookLayer, HookScope } from "./entry.ts";
+import { refreshHookProjection, setHookScopeStatus } from "./entry.ts";
 
 /**
  * aggregator 模块的日志辅助函数。
@@ -53,21 +53,40 @@ export function logAgentEventDropped(
  * 更新 hook status 并在变化时记日志（setHookStatus 的日志包装）。
  * 抽出来避免 ingestAgentEvent 内嵌套过深触发复杂度上限。
  */
-export function setHookStatusWithLog(
+export function setHookScopeStatusWithLog(
   key: string,
   hook: HookLayer,
+  scope: HookScope,
   status: ActivityStatus,
   at: number,
   agent: AgentKind
 ): void {
   const prevStatus = hook.status;
-  setHookStatus(hook, status, at);
-  if (prevStatus !== status) {
+  setHookScopeStatus(hook, scope, status, at);
+  if (prevStatus !== hook.status) {
     log.debug("hook-status-change", {
       panelId: key,
       agent,
       prev: prevStatus,
-      next: status,
+      next: hook.status,
+    });
+  }
+}
+
+export function refreshHookProjectionWithLog(
+  key: string,
+  hook: HookLayer,
+  at: number,
+  agent: AgentKind
+): void {
+  const prevStatus = hook.status;
+  refreshHookProjection(hook, at);
+  if (prevStatus !== hook.status) {
+    log.debug("hook-status-change", {
+      panelId: key,
+      agent,
+      prev: prevStatus,
+      next: hook.status,
     });
   }
 }

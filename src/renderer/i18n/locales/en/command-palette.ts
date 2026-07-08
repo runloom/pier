@@ -30,6 +30,7 @@ export const commandPalette = {
     toggleCommandPalette: "Show Command Palette",
     openTerminalDebugWindow: "Open Terminal Debug Window",
     openSettings: "Open Settings",
+    openEnvironment: "Open Environment Settings",
     closeActivePanel: "Close Active Panel",
     focusTab: "Switch to Tab {{index}}",
     newTab: "New Tab",

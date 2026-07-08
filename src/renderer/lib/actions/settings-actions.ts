@@ -17,6 +17,18 @@ export const SETTINGS_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     surfaces: ["command-palette"],
     titleKey: "commandPalette.action.openSettings",
   },
+  {
+    categoryKey: "settings",
+    group: "5_appearance",
+    handler: () => {
+      useSettingsDialogStore.getState().openSection("environment");
+    },
+    iconComponent: SlidersHorizontal,
+    id: "pier.environment.open",
+    sortOrder: 6,
+    surfaces: ["command-palette"],
+    titleKey: "commandPalette.action.openEnvironment",
+  },
 ];
 
 export function registerSettingsActions(): () => void {

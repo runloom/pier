@@ -7,6 +7,14 @@ import type {
 import type { DashboardGridSize } from "@shared/contracts/dashboard.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
+  EnvironmentSnapshotRequest,
+  EnvironmentUpdateRequest,
+  EnvironmentWorktreeBindingRequest,
+  LocalEnvironmentProject,
+  LocalEnvironmentState,
+  LocalEnvironmentWorktreeBindingSnapshot,
+} from "@shared/contracts/environment.ts";
+import type {
   FileListRequest,
   FileListResult,
   FileMoveRequest,
@@ -254,6 +262,22 @@ export interface RendererPluginContext {
       title: string;
     }): Promise<boolean>;
   };
+  /**
+   * Local environment facade. Reads require `environment:read`; writes require
+   * `environment:write`.
+   */
+  environments: {
+    projectSnapshot(
+      projectRootPath: string
+    ): Promise<LocalEnvironmentProject | null>;
+    snapshot(
+      request?: EnvironmentSnapshotRequest
+    ): Promise<LocalEnvironmentState>;
+    update(request: EnvironmentUpdateRequest): Promise<LocalEnvironmentState>;
+    worktreeBinding(
+      request: EnvironmentWorktreeBindingRequest
+    ): Promise<LocalEnvironmentWorktreeBindingSnapshot | null>;
+  };
   files: {
     list(
       requestOrRoot: FileListRequest | string,
@@ -370,6 +394,9 @@ export interface RendererPluginContext {
      */
     open(panelId: string, options?: { context?: PanelContext }): void;
     register(registration: PluginPanelRegistration): () => void;
+  };
+  settings: {
+    openSection(section: "environment"): void;
   };
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;

@@ -6,6 +6,7 @@ import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
 import { createGitService } from "@main/services/git-service.ts";
 import { createGitWatchService } from "@main/services/git-watch-service.ts";
+import { LocalEnvironmentServiceError } from "@main/services/local-environments-service.ts";
 import { PluginServiceError } from "@main/services/plugin-service.ts";
 import type {
   ProcessEnvironmentResolveRequest,
@@ -28,6 +29,77 @@ import { describe, expect, it, vi } from "vitest";
 import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 const now = 1_772_000_000_000;
+interface LocalEnvironmentProjectFixture {
+  cleanupCommand: string;
+  env: Record<string, string>;
+  projectRootPath: string;
+  setupCommand: string;
+  updatedAt: number;
+}
+
+interface LocalEnvironmentsFixture {
+  addProject: (request: unknown) => Promise<unknown>;
+  bindWorktree: (request: unknown) => Promise<void>;
+  clearWorktreeBinding: (worktreePath: string) => Promise<void>;
+  projectSnapshot: (projectRootPath: string) => Promise<unknown>;
+  removeProject: (request: unknown) => Promise<unknown>;
+  resolveForWorktree: (worktreePath: string) => Promise<{
+    project: LocalEnvironmentProjectFixture;
+    projectRootPath: string;
+  } | null>;
+  resolveProject: (
+    projectRootPath: string
+  ) => Promise<LocalEnvironmentProjectFixture | null>;
+  runLifecycle: (request: unknown) => Promise<void>;
+  snapshot: (request?: unknown) => Promise<unknown>;
+  updateProject: (request: unknown) => Promise<unknown>;
+  worktreeBinding: (request: unknown) => Promise<unknown>;
+}
+
+interface WorktreeRemoveHookFixture {
+  beforeRemove?: (target: {
+    mainPath: string;
+    targetPath: string;
+  }) => Promise<void>;
+}
+
+function emptyEnvironmentState() {
+  return { projects: [], version: 1 as const, worktreeBindings: [] };
+}
+
+function pierProject(
+  overrides: Partial<LocalEnvironmentProjectFixture> = {}
+): LocalEnvironmentProjectFixture {
+  return {
+    cleanupCommand: "pnpm cleanup:worktree",
+    env: { NODE_ENV: "development" },
+    projectRootPath: "/repo",
+    setupCommand: "pnpm setup:worktree",
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+function localEnvironmentsOf(
+  services: PierCoreServices
+): LocalEnvironmentsFixture {
+  const servicesWithLocalEnvironments = services as PierCoreServices & {
+    localEnvironments: LocalEnvironmentsFixture;
+  };
+  return servicesWithLocalEnvironments.localEnvironments;
+}
+
+function localEnvironmentScriptError(
+  phase: "setup" | "cleanup",
+  message = `local environment ${phase} script failed`
+) {
+  return Object.assign(new Error(message), {
+    exitCode: 7,
+    phase,
+    stderr: "nope\n",
+    stdout: "",
+  });
+}
 
 function registryWith(client: PierClient) {
   const registry = createClientRegistry(() => now);
@@ -146,6 +218,7 @@ function services(
     },
     env: {
       ...(request.clientEnv ?? {}),
+      ...(request.agentEnv ?? {}),
       ...(request.profileEnv ?? {}),
       ...(request.explicitEnv ?? {}),
     },
@@ -182,6 +255,19 @@ function services(
     },
     processEnvironment: {
       resolve: resolveEnvironment,
+    },
+    localEnvironments: {
+      addProject: vi.fn(async () => emptyEnvironmentState()),
+      bindWorktree: vi.fn(async () => undefined),
+      clearWorktreeBinding: vi.fn(async () => undefined),
+      projectSnapshot: vi.fn(async () => null),
+      removeProject: vi.fn(async () => emptyEnvironmentState()),
+      resolveProject: vi.fn(async () => null),
+      resolveForWorktree: vi.fn(async () => null),
+      runLifecycle: vi.fn(async () => undefined),
+      snapshot: vi.fn(async () => emptyEnvironmentState()),
+      updateProject: vi.fn(async () => emptyEnvironmentState()),
+      worktreeBinding: vi.fn(async () => null),
     },
     plugins: {
       inspect: async (id) =>
@@ -385,6 +471,80 @@ describe("createCommandRouter", () => {
       ok: true,
       requestId: "req-1",
     });
+  });
+
+  it("preferences.update 切默认智能体时不覆盖权限确认方式", async () => {
+    const patches: unknown[] = [];
+    const fakeServices = services();
+    fakeServices.preferences.update = (patch) => {
+      patches.push(patch);
+      return Promise.resolve(
+        makeFakePreferences({
+          agentPermissionMode: "yolo",
+          defaultAgentId: "claude",
+        })
+      );
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          patch: { defaultAgentId: "claude" },
+          type: "preferences.update",
+        },
+        protocolVersion: 1,
+        requestId: "req-default-agent",
+      })
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(patches).toEqual([{ defaultAgentId: "claude" }]);
+  });
+
+  it("preferences.update 切权限确认方式时不覆盖默认智能体", async () => {
+    const patches: unknown[] = [];
+    const fakeServices = services();
+    fakeServices.preferences.update = (patch) => {
+      patches.push(patch);
+      return Promise.resolve(
+        makeFakePreferences({
+          agentPermissionMode: "yolo",
+          defaultAgentId: "claude",
+        })
+      );
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          patch: {
+            agentDefaultArgs: {},
+            agentDefaultEnv: {},
+            agentPermissionMode: "yolo",
+          },
+          type: "preferences.update",
+        },
+        protocolVersion: 1,
+        requestId: "req-agent-permission-mode",
+      })
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(patches).toEqual([
+      {
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      },
+    ]);
   });
 
   it("ai.generateText 透传 prompt 与项目根路径到 AI service", async () => {
@@ -833,6 +993,40 @@ describe("createCommandRouter", () => {
         agentId: "claude",
         command: "claude --dangerously-skip-permissions",
         cwd: "/tmp/pier",
+      },
+    ]);
+  });
+
+  it("terminal.open 用显式 agentId 时带上 agentDefaultEnv", async () => {
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services([], undefined, terminalLaunches);
+    Object.assign(fakeServices, {
+      preferences: {
+        read: async () =>
+          makeFakePreferences({
+            agentDefaultEnv: { goose: { GOOSE_MODE: "auto" } },
+          }),
+      },
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+    await router.execute({
+      clientId: "desktop-1",
+      command: {
+        type: "terminal.open",
+        launch: { agentId: "goose", cwd: "/tmp/pier" },
+      },
+      protocolVersion: 1,
+      requestId: "r-agent-env",
+    });
+    expect(terminalLaunches).toEqual([
+      {
+        agentId: "goose",
+        command: "goose",
+        cwd: "/tmp/pier",
+        env: { GOOSE_MODE: "auto" },
       },
     ]);
   });
@@ -2420,6 +2614,143 @@ describe("createCommandRouter", () => {
     });
   });
 
+  it("分发 environment.* 命令到 local environment service", async () => {
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    const projectRequest = { projectRootPath: "/repo" };
+    const updateRequest = {
+      cleanupCommand: "pnpm cleanup:worktree",
+      copyPatterns: [".env*"],
+      env: { NODE_ENV: "development" },
+      projectRootPath: "/repo",
+      setupCommand: "pnpm setup:worktree",
+    };
+    const bindingRequest = { worktreePath: "/repo/.worktrees/feature-a" };
+    const bindingSnapshot = {
+      cleanupCommand: "pnpm cleanup:worktree",
+      copyPatterns: [".env*"],
+      env: { NODE_ENV: "development" },
+      hasCleanupScript: true,
+      projectRootPath: "/repo",
+      setupCommand: "pnpm setup:worktree",
+      worktreePath: "/repo/.worktrees/feature-a",
+    };
+    localEnvironments.worktreeBinding = vi.fn(async () => bindingSnapshot);
+
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { ...projectRequest, type: "environment.snapshot" },
+        protocolVersion: 1,
+        requestId: "req-environment-snapshot",
+      })
+    ).resolves.toEqual({
+      data: emptyEnvironmentState(),
+      ok: true,
+      requestId: "req-environment-snapshot",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { ...projectRequest, type: "environment.project.add" },
+        protocolVersion: 1,
+        requestId: "req-environment-project-add",
+      })
+    ).resolves.toEqual({
+      data: emptyEnvironmentState(),
+      ok: true,
+      requestId: "req-environment-project-add",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { ...projectRequest, type: "environment.project.remove" },
+        protocolVersion: 1,
+        requestId: "req-environment-project-remove",
+      })
+    ).resolves.toEqual({
+      data: emptyEnvironmentState(),
+      ok: true,
+      requestId: "req-environment-project-remove",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { ...updateRequest, type: "environment.update" },
+        protocolVersion: 1,
+        requestId: "req-environment-update",
+      })
+    ).resolves.toEqual({
+      data: emptyEnvironmentState(),
+      ok: true,
+      requestId: "req-environment-update",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { ...bindingRequest, type: "environment.worktreeBinding" },
+        protocolVersion: 1,
+        requestId: "req-environment-worktree-binding",
+      })
+    ).resolves.toEqual({
+      data: bindingSnapshot,
+      ok: true,
+      requestId: "req-environment-worktree-binding",
+    });
+
+    expect(localEnvironments.snapshot).toHaveBeenCalledWith(projectRequest);
+    expect(localEnvironments.addProject).toHaveBeenCalledWith(projectRequest);
+    expect(localEnvironments.removeProject).toHaveBeenCalledWith(
+      projectRequest
+    );
+    expect(localEnvironments.updateProject).toHaveBeenCalledWith(updateRequest);
+    expect(localEnvironments.worktreeBinding).toHaveBeenCalledWith(
+      bindingRequest
+    );
+  });
+
+  it("maps missing local environment service errors to not_found with project_not_found reason", async () => {
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    localEnvironments.updateProject = vi.fn(() =>
+      Promise.reject(
+        new LocalEnvironmentServiceError("project not found: /repo")
+      )
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          cleanupCommand: "",
+          copyPatterns: [],
+          env: {},
+          projectRootPath: "/repo",
+          setupCommand: "",
+          type: "environment.update",
+        },
+        protocolVersion: 1,
+        requestId: "req-environment-update-missing",
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: "not_found",
+        message: expect.stringContaining("project_not_found"),
+      },
+      ok: false,
+      requestId: "req-environment-update-missing",
+    });
+  });
+
   it("分发 worktree.list 和 worktree.create", async () => {
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
@@ -2470,6 +2801,225 @@ describe("createCommandRouter", () => {
       ok: true,
       requestId: "req-worktree-create",
     });
+  });
+
+  it("worktree.create 编排 resolveProject、bind、copy 和 setup", async () => {
+    const operations: string[] = [];
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    const project = pierProject({ projectRootPath: "/repo-main" });
+    fakeServices.gitWatch.pulse = vi.fn((path: string) => {
+      operations.push(`pulse:${path}`);
+    });
+    fakeServices.preferences.read = vi.fn(() =>
+      Promise.resolve(
+        makeFakePreferences({
+          agentStatusHooks: false,
+        })
+      )
+    );
+    fakeServices.worktrees.check = vi.fn((args) => {
+      operations.push(`check:${args.path}`);
+      return Promise.resolve({
+        currentPath: args.path,
+        mainPath: "/repo-main",
+        path: args.path,
+        status: "supported" as const,
+      });
+    });
+    fakeServices.worktrees.create = vi.fn((args) => {
+      operations.push(`create:${args.name}`);
+      return Promise.resolve({
+        created: {
+          bare: false,
+          branch: args.branch,
+          detached: false,
+          head: "def456",
+          isCurrent: false,
+          isMain: false,
+          locked: false,
+          lockedReason: null,
+          path: "/repo-main.worktree/feature-a",
+          prunable: false,
+          prunableReason: null,
+        },
+        targetPath: "/repo-main.worktree/feature-a",
+        worktrees: [
+          {
+            bare: false,
+            branch: "main",
+            detached: false,
+            head: "abc123",
+            isCurrent: true,
+            isMain: true,
+            locked: false,
+            lockedReason: null,
+            path: "/repo-main",
+            prunable: false,
+            prunableReason: null,
+          },
+        ],
+      });
+    });
+    localEnvironments.resolveProject = vi.fn(() => {
+      operations.push("resolve-project");
+      return Promise.resolve(project);
+    });
+    localEnvironments.bindWorktree = vi.fn(() => {
+      operations.push("bind-worktree");
+      return Promise.resolve();
+    });
+    localEnvironments.runLifecycle = vi.fn(() => {
+      operations.push("setup");
+      return Promise.resolve();
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          base: "origin/main",
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-create-environment",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        copiedFiles: [],
+        targetPath: "/repo-main.worktree/feature-a",
+      },
+      ok: true,
+      requestId: "req-worktree-create-environment",
+    });
+
+    expect(localEnvironments.resolveProject).toHaveBeenCalledWith("/repo-main");
+    expect(localEnvironments.bindWorktree).toHaveBeenCalledWith({
+      projectRootPath: "/repo-main",
+      worktreePath: "/repo-main.worktree/feature-a",
+    });
+    expect(localEnvironments.runLifecycle).toHaveBeenCalledWith({
+      cwd: "/repo-main.worktree/feature-a",
+      project,
+      phase: "setup",
+    });
+    expect(operations).toEqual([
+      "check:/repo",
+      "resolve-project",
+      "create:feature-a",
+      "bind-worktree",
+      "setup",
+      "pulse:/repo",
+    ]);
+  });
+
+  it("worktree.create setup 失败时保留 worktree 和 binding 但不开 terminal 或 agent", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    const project = pierProject({ projectRootPath: "/repo-main" });
+    fakeServices.gitWatch.pulse = vi.fn();
+    fakeServices.preferences.read = vi.fn(() =>
+      Promise.resolve(
+        makeFakePreferences({
+          agentStatusHooks: false,
+        })
+      )
+    );
+    fakeServices.worktrees.check = vi.fn((args) =>
+      Promise.resolve({
+        currentPath: args.path,
+        mainPath: "/repo-main",
+        path: args.path,
+        status: "supported" as const,
+      })
+    );
+    fakeServices.worktrees.create = vi.fn((args) =>
+      Promise.resolve({
+        created: {
+          bare: false,
+          branch: args.branch,
+          detached: false,
+          head: "def456",
+          isCurrent: false,
+          isMain: false,
+          locked: false,
+          lockedReason: null,
+          path: "/repo-main.worktree/feature-a",
+          prunable: false,
+          prunableReason: null,
+        },
+        targetPath: "/repo-main.worktree/feature-a",
+        worktrees: [
+          {
+            bare: false,
+            branch: "main",
+            detached: false,
+            head: "abc123",
+            isCurrent: true,
+            isMain: true,
+            locked: false,
+            lockedReason: null,
+            path: "/repo-main",
+            prunable: false,
+            prunableReason: null,
+          },
+        ],
+      })
+    );
+    localEnvironments.resolveProject = vi.fn(() => Promise.resolve(project));
+    localEnvironments.bindWorktree = vi.fn(() => Promise.resolve(undefined));
+    localEnvironments.runLifecycle = vi.fn(() =>
+      Promise.reject(localEnvironmentScriptError("setup"))
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-create-setup-failed",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "environment_script_failed",
+        message: expect.stringContaining(
+          "local environment setup script failed"
+        ),
+      },
+      ok: false,
+      requestId: "req-worktree-create-setup-failed",
+    });
+
+    expect(fakeServices.worktrees.create).toHaveBeenCalled();
+    expect(localEnvironments.bindWorktree).toHaveBeenCalledWith({
+      projectRootPath: "/repo-main",
+      worktreePath: "/repo-main.worktree/feature-a",
+    });
+    expect(fakeServices.gitWatch.pulse).toHaveBeenCalledWith("/repo");
+    expect(rendererCommands).toEqual([]);
+    expect(terminalLaunches).toEqual([]);
   });
 
   it("worktree.creationDefaults omits the removed branchPrefix even if legacy preferences contain one", async () => {
@@ -2551,7 +3101,6 @@ describe("createCommandRouter", () => {
           codex: "--dangerously-bypass-approvals-and-sandbox",
         },
         agentStatusHooks: false,
-        worktreeSetupCommand: "pnpm setup:worktree",
       });
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
@@ -2564,7 +3113,6 @@ describe("createCommandRouter", () => {
         command: {
           agentId: "codex",
           path: "/repo/.worktrees/feature-a",
-          runSetup: true,
           taskPrompt: "修复终端焦点问题",
           type: "worktree.openTerminal",
         },
@@ -2597,6 +3145,118 @@ describe("createCommandRouter", () => {
         icon: { id: agentTabIconId("codex") },
         title: "Codex",
       },
+      type: "terminal.open",
+      windowId: "main",
+    });
+  });
+
+  it("worktree.openTerminal merges bound environment env into the terminal launch", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    const project = pierProject({
+      env: { PIER_ENVIRONMENT: "local" },
+      projectRootPath: "/repo",
+    });
+    localEnvironments.resolveForWorktree = vi.fn(async () => ({
+      project,
+      projectRootPath: "/repo",
+    }));
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.openTerminal",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-env-terminal",
+      })
+    ).resolves.toEqual({
+      data: {
+        context: panelContext("/repo/.worktrees/feature-a"),
+        panelId: "terminal-from-renderer",
+        windowId: "main",
+      },
+      ok: true,
+      requestId: "req-worktree-env-terminal",
+    });
+
+    expect(terminalLaunches).toEqual([
+      {
+        cwd: "/repo/.worktrees/feature-a",
+        env: { PIER_ENVIRONMENT: "local" },
+      },
+    ]);
+    expect(localEnvironments.resolveForWorktree).toHaveBeenCalledWith(
+      "/repo/.worktrees/feature-a"
+    );
+    expect(rendererCommands.at(-1)).toEqual({
+      context: panelContext("/repo/.worktrees/feature-a"),
+      focus: true,
+      launchId: "launch-1",
+      type: "terminal.open",
+      windowId: "main",
+    });
+  });
+
+  it("worktree.openTerminal ignores stale environment bindings and opens a cwd-only terminal", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    localEnvironments.resolveForWorktree = vi.fn(() =>
+      Promise.reject(
+        new LocalEnvironmentServiceError("bound environment not found: pier")
+      )
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.openTerminal",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-stale-env-terminal",
+      })
+    ).resolves.toEqual({
+      data: {
+        context: panelContext("/repo/.worktrees/feature-a"),
+        panelId: "terminal-from-renderer",
+        windowId: "main",
+      },
+      ok: true,
+      requestId: "req-worktree-stale-env-terminal",
+    });
+
+    expect(terminalLaunches).toEqual([{ cwd: "/repo/.worktrees/feature-a" }]);
+    expect(localEnvironments.resolveForWorktree).toHaveBeenCalledWith(
+      "/repo/.worktrees/feature-a"
+    );
+    expect(rendererCommands.at(-1)).toEqual({
+      context: panelContext("/repo/.worktrees/feature-a"),
+      focus: true,
+      launchId: "launch-1",
       type: "terminal.open",
       windowId: "main",
     });
@@ -2758,6 +3418,177 @@ describe("createCommandRouter", () => {
       ok: true,
       requestId: "req-worktree-remove",
     });
+  });
+
+  it("worktree.remove 在 fake deletion 前为 bound worktree 运行 cleanup", async () => {
+    const operations: string[] = [];
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    const project = pierProject();
+    fakeServices.worktrees.remove = vi.fn(
+      async (args, hooks?: WorktreeRemoveHookFixture) => {
+        operations.push("remove-requested");
+        await hooks?.beforeRemove?.({
+          mainPath: "/repo",
+          targetPath: args.path,
+        });
+        operations.push("delete-worktree");
+        return { removedPath: args.path, worktrees: [] };
+      }
+    );
+    localEnvironments.resolveForWorktree = vi.fn(() => {
+      operations.push("resolve-binding");
+      return Promise.resolve({ project, projectRootPath: "/repo" });
+    });
+    localEnvironments.runLifecycle = vi.fn(() => {
+      operations.push("cleanup");
+      return Promise.resolve();
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.remove",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-remove-cleanup",
+      })
+    ).resolves.toEqual({
+      data: {
+        removedPath: "/repo/.worktrees/feature-a",
+        worktrees: [],
+      },
+      ok: true,
+      requestId: "req-worktree-remove-cleanup",
+    });
+
+    expect(localEnvironments.resolveForWorktree).toHaveBeenCalledWith(
+      "/repo/.worktrees/feature-a"
+    );
+    expect(localEnvironments.runLifecycle).toHaveBeenCalledWith({
+      cwd: "/repo/.worktrees/feature-a",
+      project,
+      phase: "cleanup",
+    });
+    expect(operations).toEqual([
+      "remove-requested",
+      "resolve-binding",
+      "cleanup",
+      "delete-worktree",
+    ]);
+  });
+
+  it("worktree.remove cleanup 失败时返回 environment_script_failed 并阻止删除", async () => {
+    const operations: string[] = [];
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    fakeServices.worktrees.remove = vi.fn(
+      async (args, hooks?: WorktreeRemoveHookFixture) => {
+        operations.push("remove-requested");
+        await hooks?.beforeRemove?.({
+          mainPath: "/repo",
+          targetPath: args.path,
+        });
+        operations.push("delete-worktree");
+        return { removedPath: args.path, worktrees: [] };
+      }
+    );
+    localEnvironments.resolveForWorktree = vi.fn(() =>
+      Promise.resolve({
+        project: pierProject(),
+        projectRootPath: "/repo",
+      })
+    );
+    localEnvironments.runLifecycle = vi.fn(() =>
+      Promise.reject(localEnvironmentScriptError("cleanup"))
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.remove",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-remove-cleanup-failed",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "environment_script_failed",
+        message: expect.stringContaining(
+          "local environment cleanup script failed"
+        ),
+      },
+      ok: false,
+      requestId: "req-worktree-remove-cleanup-failed",
+    });
+
+    expect(operations).toEqual(["remove-requested"]);
+  });
+
+  it("worktree.remove 对 unbound worktree 不运行 cleanup", async () => {
+    const operations: string[] = [];
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    fakeServices.worktrees.remove = vi.fn(
+      async (args, hooks?: WorktreeRemoveHookFixture) => {
+        operations.push("remove-requested");
+        await hooks?.beforeRemove?.({
+          mainPath: "/repo",
+          targetPath: args.path,
+        });
+        operations.push("delete-worktree");
+        return { removedPath: args.path, worktrees: [] };
+      }
+    );
+    localEnvironments.resolveForWorktree = vi.fn(() => {
+      operations.push("resolve-binding");
+      return Promise.resolve(null);
+    });
+    localEnvironments.runLifecycle = vi.fn(() => {
+      operations.push("cleanup");
+      return Promise.resolve();
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          path: "/repo/.worktrees/feature-a",
+          type: "worktree.remove",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-remove-unbound",
+      })
+    ).resolves.toMatchObject({
+      data: {
+        removedPath: "/repo/.worktrees/feature-a",
+      },
+      ok: true,
+      requestId: "req-worktree-remove-unbound",
+    });
+
+    expect(localEnvironments.runLifecycle).not.toHaveBeenCalled();
+    expect(operations).toEqual([
+      "remove-requested",
+      "resolve-binding",
+      "delete-worktree",
+    ]);
   });
 
   it("分发 worktree.check 到 worktree service", async () => {

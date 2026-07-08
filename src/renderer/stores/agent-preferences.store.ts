@@ -2,6 +2,7 @@ import {
   type AgentDefaultArgs,
   type AgentDefaultEnv,
   type AgentKind,
+  type AgentPermissionModePreference,
   UNSUPPORTED_ARGS,
 } from "@shared/contracts/agent.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
@@ -42,6 +43,7 @@ interface AgentPreferenceSnapshot {
   agentCommandOverrides: Partial<Record<AgentKind, string>>;
   agentDefaultArgs: AgentDefaultArgs;
   agentDefaultEnv: AgentDefaultEnv;
+  agentPermissionMode: AgentPermissionModePreference;
   agentStatusHooks: boolean;
   defaultAgentId: DefaultAgentId;
   disabledAgentIds: AgentKind[];
@@ -54,6 +56,11 @@ interface AgentPreferencesState extends AgentPreferenceSnapshot {
   ) => Promise<void>;
   setAgentDefaultArgs: (next: AgentDefaultArgs) => Promise<void>;
   setAgentDefaultEnv: (next: AgentDefaultEnv) => Promise<void>;
+  setAgentPermissionMode: (args: {
+    agentDefaultArgs: AgentDefaultArgs;
+    agentDefaultEnv: AgentDefaultEnv;
+    mode: AgentPermissionModePreference;
+  }) => Promise<void>;
   setAgentStatusHooks: (next: boolean) => Promise<void>;
   setDefaultAgentId: (next: DefaultAgentId) => Promise<void>;
   setDisabledAgentIds: (next: AgentKind[]) => Promise<void>;
@@ -64,6 +71,7 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
     agentCommandOverrides: {},
     agentDefaultArgs: {},
     agentDefaultEnv: {},
+    agentPermissionMode: "manual",
     agentStatusHooks: false,
     defaultAgentId: null,
     disabledAgentIds: [],
@@ -129,6 +137,23 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
       }
     },
 
+    async setAgentPermissionMode({ agentDefaultArgs, agentDefaultEnv, mode }) {
+      const clean = sanitizeAgentDefaultArgs(agentDefaultArgs);
+      try {
+        const merged = await window.pier.preferences.update({
+          agentDefaultArgs: clean,
+          agentDefaultEnv,
+          agentPermissionMode: mode,
+        });
+        useAgentPreferencesStore.getState()._hydrate(snapshotFrom(merged));
+      } catch (err) {
+        console.error(
+          "[agent-preferences.store] setAgentPermissionMode failed:",
+          err
+        );
+      }
+    },
+
     async setAgentCommandOverrides(next) {
       try {
         const merged = await window.pier.preferences.update({
@@ -164,6 +189,7 @@ function snapshotFrom(prefs: ProjectPreferences): AgentPreferenceSnapshot {
     agentCommandOverrides: prefs.agentCommandOverrides,
     agentDefaultArgs: prefs.agentDefaultArgs,
     agentDefaultEnv: prefs.agentDefaultEnv,
+    agentPermissionMode: prefs.agentPermissionMode,
     agentStatusHooks: prefs.agentStatusHooks,
     defaultAgentId: prefs.defaultAgentId,
     disabledAgentIds: prefs.disabledAgentIds,

@@ -113,6 +113,7 @@ describe("createPreferencesService", () => {
       agentCommandOverrides: { claude: "/opt/claude" },
       agentDefaultArgs: { claude: "--dangerously-skip-permissions" },
       agentDefaultEnv: { codex: { X: "1" } },
+      agentPermissionMode: "yolo" as const,
       defaultAgentId: "claude" as const,
       disabledAgentIds: ["pi" as const],
     };

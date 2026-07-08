@@ -186,4 +186,136 @@ describe("terminal native debug IPC", () => {
       ])
     );
   });
+
+  it("normalizes native recentRouterDecisions: demangles panel-id fields, preserves seq, tallies drops for unknown-kind / non-object entries", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    fakeAddon.debugSnapshot.mockReturnValue(
+      JSON.stringify({
+        surfaces: [],
+        window: {
+          activeTerminalPanelId: null,
+          keyboardFocusTarget: { kind: "web" },
+          recentRouterDecisions: [
+            {
+              at: 1_700_000_000.5,
+              kind: "hit-test",
+              payload: {
+                decision: "terminal",
+                matchedPanelId: "7::terminal-1",
+                targetsCount: 2,
+                webOverlayCount: 1,
+                x: 123.5,
+                y: 456,
+              },
+              seq: 10,
+            },
+            {
+              at: 1_700_000_001,
+              kind: "key-down",
+              payload: {
+                acceptsTerminalKeyboard: true,
+                activeTerminalPanelId: "7::terminal-1",
+                charsLen: 1,
+                decision: "terminal-passthrough",
+                mods: 0,
+              },
+              seq: 11,
+            },
+            {
+              at: 1_700_000_002,
+              kind: "unknown-kind",
+              payload: {},
+              seq: 12,
+            },
+            "not-an-object",
+          ],
+          routerDecisionsDroppedCount: 0,
+          terminalTargetCount: 2,
+          webOverlayRectCount: 1,
+        },
+      })
+    );
+
+    const snapshot = (await invokeHandlers.get(
+      "pier:terminal:debug-snapshot"
+    )?.({ sender: win.webContents })) as {
+      native: {
+        window: {
+          recentRouterDecisions?: Array<{
+            at: number;
+            kind: string;
+            payload: Record<string, unknown>;
+            seq: number;
+          }>;
+          routerDecisionsDroppedCount?: number;
+        };
+      };
+    };
+
+    expect(snapshot.native.window.recentRouterDecisions).toEqual([
+      {
+        at: 1_700_000_000.5,
+        kind: "hit-test",
+        payload: {
+          decision: "terminal",
+          matchedPanelId: "terminal-1",
+          targetsCount: 2,
+          webOverlayCount: 1,
+          x: 123.5,
+          y: 456,
+        },
+        seq: 10,
+      },
+      {
+        at: 1_700_000_001,
+        kind: "key-down",
+        payload: {
+          acceptsTerminalKeyboard: true,
+          activeTerminalPanelId: "terminal-1",
+          charsLen: 1,
+          decision: "terminal-passthrough",
+          mods: 0,
+        },
+        seq: 11,
+      },
+    ]);
+    expect(snapshot.native.window.routerDecisionsDroppedCount).toBe(2);
+  });
+
+  it("surfaces the native error banner when the swift snapshot is a serialization-failure fallback", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    fakeAddon.debugSnapshot.mockReturnValue(
+      JSON.stringify({
+        error: "native snapshot json serialization failed",
+      })
+    );
+
+    const snapshot = (await invokeHandlers.get(
+      "pier:terminal:debug-snapshot"
+    )?.({ sender: win.webContents })) as {
+      native: { error?: string };
+    };
+
+    expect(snapshot.native.error).toBe(
+      "native snapshot json serialization failed"
+    );
+  });
+
+  it("surfaces an error rather than a silent healthy snapshot when the native payload lacks window/surfaces", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    fakeAddon.debugSnapshot.mockReturnValue("{}");
+
+    const snapshot = (await invokeHandlers.get(
+      "pier:terminal:debug-snapshot"
+    )?.({ sender: win.webContents })) as {
+      native: { error?: string };
+    };
+
+    expect(snapshot.native.error).toBe(
+      "native debug snapshot payload missing window/surfaces"
+    );
+  });
 });

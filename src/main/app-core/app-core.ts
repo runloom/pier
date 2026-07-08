@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
+import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
@@ -29,6 +30,7 @@ import { createCommandPaletteMruService } from "../services/command-palette-serv
 import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
+import { createLocalEnvironmentService } from "../services/local-environments-service.ts";
 import { createNodeHttpAssetFetcher } from "../services/managed-plugins/http-asset-fetcher.ts";
 import { createHttpOfficialIndexProvider } from "../services/managed-plugins/http-index-provider.ts";
 import { createManagedPluginIndexStore } from "../services/managed-plugins/index-state.ts";
@@ -106,6 +108,14 @@ function broadcastPluginRegistryChanged(
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
       win.webContents.send(PIER_BROADCAST.PLUGINS_CHANGED, result);
+    }
+  }
+}
+
+function broadcastEnvironmentsChanged(snapshot: LocalEnvironmentState): void {
+  for (const win of windowManager.getAll()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(PIER_BROADCAST.ENVIRONMENTS_CHANGED, snapshot);
     }
   }
 }
@@ -330,6 +340,7 @@ function createPierAppCore(): PierAppCore {
     .catch((err: unknown) => {
       console.error("[managed-plugins] init failed:", err);
     });
+  const processEnvironment = createProcessEnvironmentService();
   // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
   const agentDetection = createAgentDetectionService();
   const services: PierCoreServices = {
@@ -343,7 +354,8 @@ function createPierAppCore(): PierAppCore {
     files: createFileService(),
     preferences,
     secrets,
-    processEnvironment: createProcessEnvironmentService(),
+    processEnvironment,
+    localEnvironments: createLocalEnvironmentService({ processEnvironment }),
     plugins: pluginHost.plugins,
     managedPlugins,
     pluginSettings,
@@ -414,7 +426,10 @@ function createPierAppCore(): PierAppCore {
     ...(() => {
       // git 与 gitWatch 一体：watch 广播需带 status snapshot（多订阅共享 + 免竞态），
       // 所以在这里显式绑 getStatus，避免拆构造顺序
-      const git = createGitService();
+      const git = createGitService({
+        resolveEnvironment: async (cwd) =>
+          (await processEnvironment.resolve({ cwd, source: "plugin" })).env,
+      });
       return {
         git,
         gitWatch: createGitWatchService({
@@ -428,7 +443,11 @@ function createPierAppCore(): PierAppCore {
   };
   return {
     clients,
-    commandRouter: createCommandRouter({ clients, services }),
+    commandRouter: createCommandRouter({
+      clients,
+      onEnvironmentsChanged: broadcastEnvironmentsChanged,
+      services,
+    }),
     eventBus,
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),

@@ -22,6 +22,8 @@ export const worktreeOperationErrorReasonSchema = z.enum([
   "main_worktree",
   "current_worktree",
   "unsafe_path",
+  "environment_not_found",
+  "environment_script_failed",
 ]);
 export type WorktreeOperationErrorReason = z.infer<
   typeof worktreeOperationErrorReasonSchema
@@ -132,7 +134,6 @@ export type WorktreeRemoveResult = z.infer<typeof worktreeRemoveResultSchema>;
 export const worktreeCreationDefaultsSchema = z.object({
   copyPatterns: z.array(z.string()),
   rootPath: z.string().min(1),
-  setupCommand: z.string(),
 });
 export type WorktreeCreationDefaults = z.infer<
   typeof worktreeCreationDefaultsSchema
@@ -141,7 +142,6 @@ export type WorktreeCreationDefaults = z.infer<
 export const worktreeOpenTerminalRequestSchema = z.object({
   agentId: agentKindSchema.optional(),
   path: z.string().min(1),
-  runSetup: z.boolean(),
   taskPrompt: z.string().min(1).max(12_000).optional(),
 });
 export type WorktreeOpenTerminalRequest = z.infer<

@@ -26,6 +26,11 @@ export interface CommandMetadata {
 const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "ai.status": { capabilities: ["ai:invoke"] },
   "ai.generateText": { capabilities: ["ai:invoke"] },
+  "environment.project.add": { capabilities: ["environment:write"] },
+  "environment.project.remove": { capabilities: ["environment:write"] },
+  "environment.snapshot": { capabilities: ["environment:read"] },
+  "environment.update": { capabilities: ["environment:write"] },
+  "environment.worktreeBinding": { capabilities: ["environment:read"] },
   "app.status": { capabilities: ["app:read"] },
   "commandPaletteMru.clear": { capabilities: ["app:read"] },
   "commandPaletteMru.read": { capabilities: ["app:read"] },

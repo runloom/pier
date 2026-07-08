@@ -290,12 +290,31 @@ async function deleteSelectedWorktree(
   currentPath: string | undefined,
   worktree: WorktreeItem
 ): Promise<void> {
+  let confirmMessage = pluginText(
+    context,
+    "deleteConfirm",
+    "Delete worktree {{name}}?",
+    { name: itemLabel(worktree) }
+  );
+  const binding = await context.environments
+    .worktreeBinding({ worktreePath: worktree.path })
+    .catch(() => null);
+  if (binding?.hasCleanupScript) {
+    const projectName = basename(binding.projectRootPath);
+    confirmMessage +=
+      "\n" +
+      pluginText(
+        context,
+        "deleteCleanupWarning",
+        "Cleanup will run for project \u201c{{name}}\u201d.",
+        { name: projectName }
+      );
+  }
+
   const confirmed = await confirmQuickPick(
     context,
     title,
-    pluginText(context, "deleteConfirm", "Delete worktree {{name}}?", {
-      name: itemLabel(worktree),
-    }),
+    confirmMessage,
     pluginText(context, "deleteConfirmButton", "Delete")
   );
   if (!confirmed) {

@@ -52,6 +52,25 @@ final class EventRouterView: NSView {
     var targets: [String: Target] = [:]
     var webOverlayRects: [NSRect] = []
 
+    /// 路由决策 ring buffer — hitTest / routeKeyDown / routeRightMouseDown 的最近
+    /// N 次判定, 供 debug snapshot 事后诊断 "看得见但点不到 / 按键不响应" 类问题.
+    /// hitTest 在无 acceptsMouseMoved 场景下频率不高 (mouseDown / scrollWheel /
+    /// dragged), 上限 64 足以覆盖用户复现 bug 的最近数秒操作.
+    ///
+    /// `seq` 单调递增 (不复用), 供 renderer 做稳定 React key; 一段时间无事件时
+    /// UInt64 也够用几百年。绝不把用户按键的 raw chars 放进 payload —— 密码/凭据
+    /// 会随 debug snapshot 落 UI; 需要"按了什么"信息时只写 charsLen + mods。
+    private struct RouterDecisionRecord {
+        let capturedAt: TimeInterval
+        let kind: String
+        let payload: [String: Any]
+        let seq: UInt64
+    }
+    private var recentDecisions: [RouterDecisionRecord] = []
+    private let recentDecisionsLock = NSLock()
+    private var nextDecisionSeq: UInt64 = 0
+    private static let maxRecentDecisions = 64
+
     private weak var ownerWindow: NSWindow?
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
@@ -134,12 +153,15 @@ final class EventRouterView: NSView {
         guard let sv = superview else { return nil }
         let local = convert(point, from: sv)
         if containsWebOverlay(local) {
+            recordHitTest(local: local, decision: "web-overlay", matchedPanelId: NSNull())
             return nil
         }
-        if let (_, target) = terminalTarget(at: local) {
+        if let (matchedPanelId, target) = terminalTarget(at: local) {
+            recordHitTest(local: local, decision: "terminal", matchedPanelId: matchedPanelId)
             let p = target.view.superview?.convert(point, from: sv) ?? point
             return target.view.hitTest(p)
         }
+        recordHitTest(local: local, decision: "miss", matchedPanelId: NSNull())
         return nil
     }
 
@@ -154,6 +176,70 @@ final class EventRouterView: NSView {
             }
         }
         return nil
+    }
+
+    private func recordDecision(kind: String, payload: [String: Any]) {
+        recentDecisionsLock.lock()
+        defer { recentDecisionsLock.unlock() }
+        let seq = nextDecisionSeq
+        nextDecisionSeq &+= 1
+        let record = RouterDecisionRecord(
+            capturedAt: Date().timeIntervalSince1970,
+            kind: kind,
+            payload: payload,
+            seq: seq
+        )
+        recentDecisions.append(record)
+        if recentDecisions.count > Self.maxRecentDecisions {
+            recentDecisions.removeFirst(recentDecisions.count - Self.maxRecentDecisions)
+        }
+    }
+
+    /// NaN / Infinity CGFloat 从 broken superview convert 溢出到 payload 会让
+    /// JSONSerialization.isValidJSONObject 全盘拒绝, jsonString 返回 "{}", 整个
+    /// debug snapshot 塌成空对象 —— 用一个 sanitize 保证坐标非有限时用 -1 兜底,
+    /// UI 上会看到明显异常值而不是无声消失。
+    private static func sanitizedCoordinate(_ value: CGFloat) -> Double {
+        let d = Double(value)
+        return d.isFinite ? d : -1
+    }
+
+    private func recordHitTest(local: NSPoint, decision: String, matchedPanelId: Any) {
+        recordDecision(kind: "hit-test", payload: [
+            "x": Self.sanitizedCoordinate(local.x),
+            "y": Self.sanitizedCoordinate(local.y),
+            "decision": decision,
+            "matchedPanelId": matchedPanelId,
+            "targetsCount": targets.count,
+            "webOverlayCount": webOverlayRects.count,
+        ])
+    }
+
+    private func recordRightMouse(local: NSPoint, decision: String, matchedPanelId: Any) {
+        recordDecision(kind: "right-mouse", payload: [
+            "x": Self.sanitizedCoordinate(local.x),
+            "y": Self.sanitizedCoordinate(local.y),
+            "decision": decision,
+            "matchedPanelId": matchedPanelId,
+        ])
+    }
+
+    /// Debug snapshot 出口: 导出最近路由决策序列, 供 renderer 侧 debug window 展示.
+    /// 顺序为 append 序 (旧 → 新); renderer 侧倒序即最新在顶.
+    ///
+    /// `seq` 用 Double 表达 (JSON 只有 number, UInt64 高位可能落 53 位精度外, 但一次
+    /// pier 会话内递增速度不会突破 2^53). renderer 用 seq 做 React key 保持行 identity.
+    func snapshotRecentDecisions() -> [[String: Any]] {
+        recentDecisionsLock.lock()
+        defer { recentDecisionsLock.unlock() }
+        return recentDecisions.map { record in
+            [
+                "at": record.capturedAt,
+                "kind": record.kind,
+                "payload": record.payload,
+                "seq": Double(record.seq),
+            ]
+        }
     }
 
     /// 在 setupWindow 后调用一次, 绑定 window 并安装 keyboard + mouse 监听.
@@ -282,15 +368,35 @@ final class EventRouterView: NSView {
     private func routeKeyDown(_ event: NSEvent) -> NSEvent? {
         guard let window = ownerWindow, event.window === window else { return event }
 
+        let state = GhosttyBridgeImpl.shared.stateFor(window: window)
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let chars = event.charactersIgnoringModifiers ?? ""
+        let activeTerminalPanelIdValue: Any =
+            state.activeTerminalPanelId.map { $0 as Any } ?? NSNull()
+
+        // 只写 charsLen 数字, 绝不写 raw chars: terminal-passthrough 分支覆盖 sudo
+        // 密码输入, ring buffer 落到 debug snapshot 会随 UI 明文暴露给任何打开
+        // pier.terminal.openDebugWindow 的人。mods + charsLen 已够诊断 "有键但去哪了"。
+        func record(_ decision: String) {
+            recordDecision(kind: "key-down", payload: [
+                "charsLen": chars.count,
+                "mods": Int(mods.rawValue),
+                "acceptsTerminalKeyboard": state.acceptsTerminalKeyboard,
+                "activeTerminalPanelId": activeTerminalPanelIdValue,
+                "decision": decision,
+            ])
+        }
+
         // Web keyboard target: 全 pass through. Web DOM 自然接所有 key
         // (含 ↑/↓/Enter/Cmd+A/Cmd+T 等). 不在此处拦截 Cmd+key — let web's
         // useKeyboardShortcuts 路径 1 (DOM keydown capture) 处理.
-        let state = GhosttyBridgeImpl.shared.stateFor(window: window)
-        guard state.acceptsTerminalKeyboard else { return event }
+        guard state.acceptsTerminalKeyboard else {
+            record("web-passthrough")
+            return event
+        }
 
         // Terminal mode: 只把运行时 allowlist 内的 Pier app 快捷键 forward 给 web
         // (路径 2 IPC), 其他组合全部 pass through 给 Ghostty.
-        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let isCmd = mods.contains(.command)
 
         // macOS menu reserved keys (Cmd+Q/Cmd+H/Cmd+M/Cmd+Comma 等 role-bound items)
@@ -299,17 +405,21 @@ final class EventRouterView: NSView {
         // 永远 swallow 在 web forward 链 (web 没注册 → 静默 drop, 用户感受"Cmd+Q 失效").
         // 仅 Cmd 路径走 menu — menu items 全部都是 Cmd+... 修饰, Ctrl+Shift 不参与.
         if isCmd, NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+            record("menu-consumed")
             return nil
         }
 
-        guard let chars = event.charactersIgnoringModifiers, !chars.isEmpty else {
+        guard !chars.isEmpty else {
+            record("terminal-passthrough-no-chars")
             return passThroughToTerminal(window: window, event: event)
         }
         guard let shortcutKey = Self.terminalAppShortcutKey(modifierFlags: mods, chars: chars),
               Self.terminalAppShortcutKeys.contains(shortcutKey) else {
+            record("terminal-passthrough")
             return passThroughToTerminal(window: window, event: event)
         }
 
+        record("shortcut-forward")
         EventRouterView.forwardCmdKeyCallback?(browserWindowId, mods.rawValue, chars)
         return nil
     }
@@ -326,15 +436,18 @@ final class EventRouterView: NSView {
         // BrowserWindow contentView 一致, 可直接给 main 做 Menu.popup({x,y}).
         let local = self.convert(event.locationInWindow, from: nil)
         if containsWebOverlay(local) {
+            recordRightMouse(local: local, decision: "web-overlay", matchedPanelId: NSNull())
             return event
         }
         if let (panelId, _) = terminalTarget(at: local) {
+            recordRightMouse(local: local, decision: "terminal", matchedPanelId: panelId)
             TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId)
             EventRouterView.forwardRightMouseCallback?(
                 browserWindowId, panelId, Double(local.x), Double(local.y)
             )
             return nil  // 消费, 不让 terminal NSView 收到右键
         }
+        recordRightMouse(local: local, decision: "miss", matchedPanelId: NSNull())
         return event
     }
 
@@ -486,6 +599,7 @@ private struct Terminal {
     /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
     /// weak ref 自动 nil, 不留 dangling.
     let eventDelegate: TerminalEventDelegate
+    var surfaceVisible: Bool
 }
 
 private struct TerminalRuntimePreferences {
@@ -916,8 +1030,13 @@ final class GhosttyBridgeImpl {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for entry in presentation.terminals {
-            guard let term = terminals[entry.panelId],
+            guard var term = terminals[entry.panelId],
                   term.parentWindow === parent else { continue }
+            if term.surfaceVisible != entry.visible {
+                term.terminalView.setSurfaceVisible(entry.visible)
+                term.surfaceVisible = entry.visible
+                terminals[entry.panelId] = term
+            }
             var viewport: NSRect?
             if let frame = entry.frame {
                 let nextViewport = frame.nsRect
@@ -1219,7 +1338,8 @@ final class GhosttyBridgeImpl {
             containerView: container,
             terminalView: terminalView,
             parentWindow: parent,
-            eventDelegate: eventDelegate
+            eventDelegate: eventDelegate,
+            surfaceVisible: false
         )
         rememberLayout(
             panelId: panelId,
@@ -1264,7 +1384,12 @@ final class GhosttyBridgeImpl {
     }
 
     func show(panelId: String) {
-        guard let term = terminals[panelId] else { return }
+        guard var term = terminals[panelId] else { return }
+        if !term.surfaceVisible {
+            term.terminalView.setSurfaceVisible(true)
+            term.surfaceVisible = true
+            terminals[panelId] = term
+        }
         if let contentView = term.parentWindow.contentView {
             // 确保终端在所有 web 渲染层之下 (见 createTerminal 注释)
             contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
@@ -1281,7 +1406,12 @@ final class GhosttyBridgeImpl {
     }
 
     func hide(panelId: String) {
-        guard let term = terminals[panelId] else { return }
+        guard var term = terminals[panelId] else { return }
+        if term.surfaceVisible {
+            term.terminalView.setSurfaceVisible(false)
+            term.surfaceVisible = false
+            terminals[panelId] = term
+        }
         // 不 guard `panelId != state.activeTerminalPanelId`. 该 guard 设计目的是防
         // drag drop 后没 show 让 NSView 永远 offscreen, 但对同 group 切 tab 是错的:
         //   tab A→B: hide(A) 先到 main, 此时 swift state 还是 A (focus(B) 还没到),
@@ -1509,11 +1639,13 @@ final class GhosttyBridgeImpl {
         )
     }
 
+    /// 失败时返回明确带 error 的对象 (而不是 "{}"), 让 main 侧 normalize 能识别
+    /// "整个 snapshot 序列化失败" 而不是把它当成 healthy-empty snapshot 静默展示。
     private static func jsonString(_ value: Any) -> String {
         guard JSONSerialization.isValidJSONObject(value),
               let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
               let json = String(data: data, encoding: .utf8) else {
-            return "{}"
+            return "{\"error\":\"native snapshot json serialization failed\"}"
         }
         return json
     }
@@ -1545,6 +1677,7 @@ final class GhosttyBridgeImpl {
                     "isOffscreen": frame.minX < -50000 || frame.minY < -50000,
                     "isSurfaceFocused": term.eventDelegate.isSurfaceFocused,
                     "panelId": panelId,
+                    "surfaceVisible": term.surfaceVisible,
                 ]
                 if let contentView {
                     payload["viewportFrame"] = Self.rectDebugPayload(
@@ -1565,6 +1698,7 @@ final class GhosttyBridgeImpl {
             "lastAppliedNativeApplySequence": applyState?.lastAppliedNativeApplySequence ?? 0,
             "lastAppliedRendererSequence": applyState?.lastAppliedRendererSequence ?? 0,
             "lastPresentationReason": applyState?.lastPresentationReason ?? "",
+            "recentRouterDecisions": router?.snapshotRecentDecisions() ?? [],
             "staleDiscardCount": applyState?.staleDiscardCount ?? 0,
             "terminalTargetCount": router?.targets.count ?? 0,
             "webOverlayRectCount": router?.webOverlayRects.count ?? 0,

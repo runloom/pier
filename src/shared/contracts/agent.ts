@@ -109,7 +109,12 @@ export const UNSUPPORTED_ARGS: Partial<Record<AgentKind, readonly string[]>> = {
   kilo: ["--dangerously-skip-permissions"],
 };
 
-export type AgentPermissionMode = "yolo" | "manual" | "mixed";
+export const agentPermissionModePreferenceSchema = z.enum(["manual", "yolo"]);
+export type AgentPermissionModePreference = z.infer<
+  typeof agentPermissionModePreferenceSchema
+>;
+
+export type AgentPermissionMode = AgentPermissionModePreference | "mixed";
 
 export type AgentDefaultArgs = Partial<Record<AgentKind, string>>;
 
@@ -119,6 +124,57 @@ export type AgentDefaultEnv = Partial<
 
 const yoloAgentIds = agentKindSchema.options.filter((id) => id in YOLO_FLAGS);
 const yoloEnvAgentIds = agentKindSchema.options.filter((id) => id in YOLO_ENV);
+const WHITESPACE_RE = /\s+/g;
+
+function normalizeArgs(value: string): string {
+  return value.trim().replace(WHITESPACE_RE, " ");
+}
+
+function stripManagedFlag(args: string, flag: string): string {
+  const normalizedArgs = normalizeArgs(args);
+  const normalizedFlag = normalizeArgs(flag);
+  if (!normalizedArgs) {
+    return "";
+  }
+  if (normalizedArgs === normalizedFlag) {
+    return "";
+  }
+  return normalizedArgs
+    .split(normalizedFlag)
+    .map((part) => normalizeArgs(part))
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function resolveEffectiveAgentDefaultArgs(
+  agentId: AgentKind,
+  args: AgentDefaultArgs,
+  mode: AgentPermissionModePreference
+): string {
+  const current = args[agentId]?.trim() ?? "";
+  const flag = YOLO_FLAGS[agentId];
+  if (flag === undefined) {
+    return normalizeArgs(current);
+  }
+  if (mode === "manual") {
+    return normalizeArgs(current);
+  }
+  const customArgs = stripManagedFlag(current, flag);
+  return [customArgs, flag].filter(Boolean).join(" ");
+}
+
+export function resolveEffectiveAgentDefaultEnv(
+  agentId: AgentKind,
+  env: AgentDefaultEnv,
+  mode: AgentPermissionModePreference
+): Record<string, string> {
+  const want = YOLO_ENV[agentId] ?? {};
+  const current = { ...(env[agentId] ?? {}) };
+  if (mode === "yolo") {
+    return { ...current, ...want };
+  }
+  return current;
+}
 
 /** 读 agentDefaultArgs + agentDefaultEnv → 汇总成 Yolo/Manual/Mixed（派生，非存储）。 */
 export function resolvePermissionMode(
@@ -156,7 +212,7 @@ export function resolvePermissionMode(
   return sawYolo ? "yolo" : "manual";
 }
 
-/** flag-based agent 的批量切换（仅动空或标准 yolo 值，用户自定义不动）。 */
+/** flag-based agent 的批量切换：托管标准 yolo flag，保留用户自定义参数。 */
 function applyFlagMode(
   mode: "yolo" | "manual",
   args: AgentDefaultArgs
@@ -168,13 +224,14 @@ function applyFlagMode(
       continue;
     }
     const current = next[id]?.trim() ?? "";
-    if (current !== "" && current !== flag) {
-      continue; // 用户自定义，保留
-    }
-    if (mode === "yolo") {
-      next[id] = flag;
-    } else {
+    const resolved =
+      mode === "manual"
+        ? stripManagedFlag(current, flag)
+        : resolveEffectiveAgentDefaultArgs(id, next, mode);
+    if (resolved === "") {
       delete next[id];
+    } else {
+      next[id] = resolved;
     }
   }
   return next;
@@ -211,7 +268,7 @@ function applyEnvMode(
   return next;
 }
 
-/** 批量切换。仅动「空或正好是标准 yolo 值」的项，用户自定义保持不动。返回新的 args + env。 */
+/** 批量切换。标准权限片段由全局策略托管，用户自定义 args/env 保留。 */
 export function applyPermissionMode(
   mode: "yolo" | "manual",
   args: AgentDefaultArgs,

@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
+  environmentProjectRequestSchema,
+  environmentSnapshotRequestSchema,
+  environmentUpdateRequestSchema,
+  environmentWorktreeBindingRequestSchema,
+} from "./environment.ts";
+import {
   fileListRequestSchema,
   fileMoveRequestSchema,
   fileReadTextRequestSchema,
@@ -35,7 +41,6 @@ import {
   pluginUpdateCommandSchema,
 } from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
-import { projectPreferencesSchema } from "./preferences.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
   terminalLaunchEnvKeySchema,
@@ -59,10 +64,7 @@ import {
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
 
-export const projectPreferencesPatchSchema = projectPreferencesSchema.partial();
-export type ProjectPreferencesPatch = z.infer<
-  typeof projectPreferencesPatchSchema
->;
+import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 
 export const pierCommandPlacementSchema = z.enum([
   "active-tab",
@@ -403,7 +405,23 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     cwd: z.string().min(1),
     type: z.literal("git.undoLastCommit"),
   }),
-  // (accounts.* commands removed — Codex account domain is now a plugin RPC contract)
+  // Local environment 域命令
+  environmentSnapshotRequestSchema.extend({
+    type: z.literal("environment.snapshot"),
+  }),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.add"),
+  }),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.remove"),
+  }),
+  environmentUpdateRequestSchema.extend({
+    type: z.literal("environment.update"),
+  }),
+  environmentWorktreeBindingRequestSchema.extend({
+    type: z.literal("environment.worktreeBinding"),
+  }),
+  // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
   z.object({ type: z.literal("ai.status") }),
   aiGenerateTextRequestSchema.extend({

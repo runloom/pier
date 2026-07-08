@@ -22,6 +22,7 @@ const DEFAULT_PREFERENCES = {
   agentCommandOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {},
+  agentPermissionMode: "manual" as const,
   agentStatusHooks: true,
   defaultAgentId: null,
   disabledAgentIds: [],
@@ -183,6 +184,26 @@ describe("AgentsSection", () => {
     });
   });
 
+  it("expanded agent details show effective launch args from the global permission mode", async () => {
+    useAgentDetectStore.setState({ detectedIds: ["codex"] });
+    useAgentPreferencesStore.setState({
+      ...DEFAULT_PREFERENCES,
+      agentPermissionMode: "yolo",
+      agentDefaultArgs: {},
+    });
+    render(<AgentsSection />);
+    const codexRow = screen.getByTestId("agent-row-codex");
+    const expandBtn = codexRow.querySelector(
+      'button[aria-label="Details"]'
+    ) as HTMLButtonElement;
+    fireEvent.click(expandBtn);
+    await waitFor(() => {
+      expect(screen.getByLabelText("Launch args")).toHaveValue(
+        "--dangerously-bypass-approvals-and-sandbox"
+      );
+    });
+  });
+
   it("Blank chip sets defaultAgentId to blank", async () => {
     render(<AgentsSection />);
     const blankBtn = screen.getByRole("button", { name: "Blank terminal" });
@@ -287,29 +308,27 @@ describe("AgentsSection", () => {
     expect(screen.queryByText("Mixed")).not.toBeInTheDocument();
   });
 
-  it("PermissionModeRow renders a read-only Mixed badge when derived mode is mixed", () => {
-    // A custom (non-standard) flag on one yolo-capable agent forces "mixed".
+  it("PermissionModeRow keeps the persisted yolo select even when per-agent args are custom", () => {
     useAgentPreferencesStore.setState({
       ...DEFAULT_PREFERENCES,
+      agentPermissionMode: "yolo",
       agentDefaultArgs: { claude: "--some-custom-flag" },
     });
     render(<AgentsSection />);
-    expect(screen.getByText("Mixed")).toBeInTheDocument();
-    // No interactive permission-mode select in the mixed (read-only) state.
-    expect(
-      screen.queryByRole("combobox", { name: "Permission Mode" })
-    ).not.toBeInTheDocument();
+    const combobox = screen.getByRole("combobox", { name: "Permission Mode" });
+    expect(combobox).toHaveTextContent("Skip prompts");
+    expect(screen.queryByText("Mixed")).not.toBeInTheDocument();
   });
 
-  it("PermissionModeRow 读 agentDefaultEnv：仅 goose env yolo、args 空 → mixed", () => {
-    // goose 的 yolo 走 env(GOOSE_MODE=auto)；仅它 yolo、其余 flag agent 空 →
-    // 部分 yolo 部分 manual = mixed。证明 env 参与 PermissionModeRow 派生。
+  it("PermissionModeRow keeps the persisted manual select when goose env is present", () => {
     useAgentPreferencesStore.setState({
       ...DEFAULT_PREFERENCES,
       agentDefaultEnv: { goose: { GOOSE_MODE: "auto" } },
     });
     render(<AgentsSection />);
-    expect(screen.getByText("Mixed")).toBeInTheDocument();
+    const combobox = screen.getByRole("combobox", { name: "Permission Mode" });
+    expect(combobox).toHaveTextContent("Manual");
+    expect(screen.queryByText("Mixed")).not.toBeInTheDocument();
   });
 
   it("insets agent list dividers to the card content gutter", async () => {

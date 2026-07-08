@@ -105,6 +105,7 @@ function branchOption(
     label: overrides.name,
     pinReason: null,
     subject: null,
+    tipTreeInCurrentHistory: null,
     ...overrides,
   };
 }
@@ -118,12 +119,12 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     },
     {
       id: "pier.worktree.create",
-      permissions: ["worktree:write"],
+      permissions: ["worktree:write", "environment:read"],
       title: "Create Worktree",
     },
     {
       id: "pier.worktree.delete",
-      permissions: ["worktree:read", "worktree:write"],
+      permissions: ["worktree:read", "worktree:write", "environment:read"],
       title: "Delete Worktrees...",
     },
     {
@@ -202,6 +203,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       "workspace:open",
       "worktree:read",
       "worktree:write",
+      "environment:read",
       "command:register",
       "panel:register",
       "panel:open",
@@ -594,7 +596,6 @@ describe("git builtin plugin", () => {
           creationDefaults: vi.fn(async () => ({
             copyPatterns: [],
             rootPath: "/Users/xyz/ABC/pier.worktree",
-            setupCommand: "",
           })),
           list: vi.fn(async () => ({
             currentPath: "/Users/xyz/ABC/pier",
@@ -670,6 +671,14 @@ describe("git builtin plugin", () => {
             worktrees: [],
           })),
         },
+        environments: {
+          snapshot: vi.fn(async () => ({
+            projects: [],
+            version: 1,
+            worktreeBindings: [],
+          })),
+          worktreeBinding: vi.fn(async () => null),
+        },
         git: {
           abortMerge: vi.fn(async () => ({ kind: "ok" as const })),
           abortRebase: vi.fn(async () => ({ kind: "ok" as const })),
@@ -744,10 +753,7 @@ describe("git builtin plugin", () => {
           applyInputRouting: vi.fn(),
         },
         preferences: {
-          read: vi.fn(async () => ({
-            worktreeCopyPatterns: [],
-            worktreeSetupCommand: "",
-          })),
+          read: vi.fn(async () => ({})),
         },
       },
     });
@@ -1049,6 +1055,13 @@ describe("git builtin plugin", () => {
       throw new Error("expected delete worktree quick pick");
     }
     const deletePromise = deletePick.onAccept(item);
+    await waitFor(() => {
+      expect(
+        useCommandPaletteController
+          .getState()
+          .quickPick?.items?.some((candidate) => candidate.id === "confirm")
+      ).toBe(true);
+    });
     const confirmDelete = useCommandPaletteController.getState().quickPick;
     const confirmDeleteItem = confirmDelete?.items?.find(
       (candidate) => candidate.id === "confirm"
@@ -1294,6 +1307,11 @@ describe("git builtin plugin", () => {
           pinReason: "default",
           refName: "refs/heads/main",
           subject: "main subject",
+          tipTreeInCurrentHistory: {
+            commit: "eb9c60a2",
+            commitsSince: 6,
+            subject: "squash merge commit",
+          },
         }),
         branchOption({
           commit: "bbb2222222",
@@ -1347,16 +1365,36 @@ describe("git builtin plugin", () => {
     const branchRow = render(<div>{quickPick.renderItem(firstBranch)}</div>);
     expect(branchRow.getByText("main")).toBeVisible();
     expect(branchRow.getByText("default")).toBeVisible();
+    expect(branchRow.getByText("graph")).toBeVisible();
     expect(branchRow.getByText("3↑")).toBeVisible();
     expect(branchRow.getByText("5↓")).toBeVisible();
+    expect(branchRow.getByText("seen in history")).toBeVisible();
     expect(
       branchRow.container.querySelector("[data-branch-picker-row-ahead-behind]")
         ?.textContent
-    ).toBe("5↓3↑");
+    ).toBe("graph5↓3↑");
+    expect(
+      branchRow.container.querySelector("[data-branch-picker-row-ahead-behind]")
+    ).toHaveAttribute(
+      "title",
+      "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only."
+    );
+    expect(
+      branchRow.container.querySelector(
+        "[data-branch-picker-row-tip-tree-in-history]"
+      )
+    ).toHaveAttribute(
+      "title",
+      "Branch tip tree matches eb9c60a2 in the current history; current branch has 6 newer commit(s)."
+    );
     // ahead/behind 用主题语义 token,badge 用 shadcn Badge,不硬编码调色板色
     expect(branchRow.getByText("3↑")).toHaveClass("text-success");
     expect(branchRow.getByText("5↓")).toHaveClass("text-warning");
     expect(branchRow.getByText("default")).toHaveAttribute(
+      "data-slot",
+      "badge"
+    );
+    expect(branchRow.getByText("seen in history")).toHaveAttribute(
       "data-slot",
       "badge"
     );
@@ -1898,6 +1936,58 @@ describe("git builtin plugin", () => {
     expect(pill).toHaveTextContent("upstream gone");
   });
 
+  it("no upstream 状态展示带文字胶囊且不会复用未跟踪图标", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "feature/no-upstream",
+        mergedIntoDefault: null,
+        oid: "abc123",
+        upstream: null,
+        upstreamGone: false,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 1 },
+      delta: null,
+      files: [],
+      remoteSync: null,
+      repoState: { kind: "clean" as const },
+      stashCount: 0,
+    });
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    render(
+      statusItem.render({
+        context: { ...context, branch: "feature/no-upstream" },
+        cwd: context.cwd ?? null,
+        panelId: "terminal-1",
+        title: null,
+      })
+    );
+
+    const pill = await screen.findByTestId("no-upstream-pill");
+    expect(within(pill).getByText("no upstream")).toBeVisible();
+
+    const trigger = screen.getByTestId("worktree-status-trigger");
+    expect(
+      trigger.querySelectorAll('[data-git-icon="git-branch-plus"]')
+    ).toHaveLength(1);
+
+    const dirtyIndicator = screen.getByTestId("git-dirty-indicator");
+    const untrackedIcons = dirtyIndicator.querySelectorAll(
+      '[data-git-icon="git-branch-plus"]'
+    );
+    expect(untrackedIcons).toHaveLength(1);
+    expect(trigger.querySelector('[data-git-icon="git-branch-plus"]')).toBe(
+      untrackedIcons[0]
+    );
+  });
   it("分支已合入默认分支时展示 merged 胶囊，可与 gone 胶囊共存", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {

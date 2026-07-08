@@ -57,6 +57,21 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - `showAppAlert` 可保持默认尺寸，用于错误详情时避免把长输出塞进小弹窗；短 alert 如需小尺寸应由调用方显式传 `size: "sm"`。
 - 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts`：锁定文档存在、禁止绕过 `AppDialogHost` 直接使用 shadcn `AlertDialog` primitive，并要求 confirm API 的 `size` / `intent` 保持必填。
 
+### 操作反馈规范
+
+所有用户触发的动作必须有可识别的完成或失败信号，静默失败（`catch (err) { console.error(...) }` 就结束）一律禁止。选择反馈方式时按以下顺序判断，防止漏报也防止重复：
+
+- 已经有**强自然 UI 反馈**（列表新增/删除、导航切换、Modal 关闭、面板打开、表单值即时更新等）→ **不再加 toast**；重复反馈是噪声。
+- 只有**弱 UI 反馈**（Save 按钮从 enabled → disabled、dirty 位清零等）或**完全无 UI 反馈**（写盘、无 refetch 的写请求、后台任务触发） → 成功走 `toast.success(t("..."))`。
+- 任何可能失败的分支 → 必须 `toast.error(t("...Failed"), { description: err instanceof Error ? err.message : String(err) })`。`console.error` 不面向用户，只能作为额外日志。
+- Toast 复用 `sonner`；宿主代码从 `sonner` 直接 `import { toast }`，插件走 `context.notifications.{success,error}`；文案必须走 i18n key，禁止内联字符串。
+
+**代码审查检查点**：
+- 每个 `onClick` / `onSubmit` / async mutation 都要能回答"用户怎么知道刚才发生了什么"。答不出 → finding。
+- 遇到 `catch` 里只有 `console.error` / `console.warn` 而没有 `toast.error` → finding，除非注释里明确说明不面向用户的路径（如启动阶段 boot log）。
+- 遇到"有明显 UI 变化 + 又加了 toast"的双反馈 → minor finding，建议删掉冗余 toast。
+- 遇到内联 toast 文案字符串（未走 i18n） → finding。
+
 ### 前台活动模块 `src/main/services/foreground-activity/`
 
 统一 agent / task / shell / idle 四态活动聚合器：

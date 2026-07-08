@@ -29,6 +29,7 @@ import {
   subscribePluginSettingsChanges,
   usePluginSettingsStore,
 } from "../../stores/plugin-settings.store.ts";
+import { useSettingsDialogStore } from "../../stores/settings-dialog.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
@@ -48,6 +49,7 @@ import {
 } from "./display.ts";
 import { createPluginAgentsContext } from "./host-agents-context.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
+import { createPluginEnvironmentsContext } from "./host-environments-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
@@ -458,6 +460,11 @@ export function createRendererPluginContext(
         return registerPluginPanel(registration);
       },
     },
+    settings: {
+      openSection: (section) => {
+        useSettingsDialogStore.getState().openSection(section);
+      },
+    },
     terminalStatusItems: {
       register: (item) => {
         assertDeclaredContribution(entry, "terminalStatusItem", item.id);
@@ -470,6 +477,10 @@ export function createRendererPluginContext(
         return registerPluginDashboardWidget(registration);
       },
     },
+    environments: createPluginEnvironmentsContext(
+      entry,
+      assertPluginCapability
+    ),
     files: createPluginFilesContext(entry, assertPluginCapability),
     worktrees: createPluginWorktreesContext(entry, assertPluginCapability),
     git: createPluginGitContext(entry, assertPluginCapability),

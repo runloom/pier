@@ -40,6 +40,10 @@ import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
+import {
+  environmentsApi,
+  type PierEnvironmentsAPI,
+} from "./environment-api.ts";
 import { filesApi, type PierFilesAPI } from "./file-api.ts";
 import {
   foregroundActivityApi,
@@ -227,6 +231,7 @@ export interface PierWindowAPI {
   commandPaletteMru: PierCommandPaletteMruAPI;
   createWindow: () => Promise<WindowCreateResult>;
   env: PierEnvAPI;
+  environments: PierEnvironmentsAPI;
   files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
   foregroundActivity: PierForegroundActivityAPI;
@@ -423,6 +428,7 @@ const api: PierWindowAPI = {
   focusWindow: (windowId) =>
     invokePierCommand<void>({ type: "window.focus", windowId }),
   files: filesApi,
+  environments: environmentsApi,
   git: gitApi,
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),

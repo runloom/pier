@@ -21,6 +21,21 @@ function hookEvent(
   };
 }
 
+function agentHookEvent(
+  args: Partial<AgentHookEventPayload> & {
+    event: string;
+  }
+): AgentHookEventPayload {
+  return {
+    v: 1,
+    kind: "agentEvent",
+    agent: "claude",
+    panelId: "p1",
+    windowId: "1",
+    ...args,
+  };
+}
+
 describe("ForegroundActivityAggregator", () => {
   let clock = 0;
   const now = (): number => clock;
@@ -153,6 +168,104 @@ describe("ForegroundActivityAggregator", () => {
     agg.ingestAgentEvent(hookEvent("SessionStart"));
     advance(250);
     expect(agg.snapshot().activities).toHaveLength(1);
+    agg.dispose();
+  });
+
+  it("Pi 扩展运行时: 单个 pid SessionEnd 不清掉仍活跃的同 panel pid", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "SessionStart", pid: 1001 })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "PromptSubmit", pid: 1001 })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "SessionStart", pid: 1002 })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "PromptSubmit", pid: 1002 })
+    );
+    let a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.agentId).toBe("pi");
+    expect(a.status).toBe("processing");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "Stop", pid: 1001 })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "SessionEnd", pid: 1001 })
+    );
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.agentId).toBe("pi");
+    expect(a.status).toBe("processing");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "Stop", pid: 1002 })
+    );
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.status).toBe("ready");
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "SessionEnd", pid: 1002 })
+    );
+    expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("sessionId 优先于 pid: 结束一个 session 不清掉同 panel 另一个 session", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", pid: 1001, sessionId: "s1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", pid: 1002, sessionId: "s2" })
+    );
+    let a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.status).toBe("tool");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SessionEnd", pid: 1001, sessionId: "s1" })
+    );
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.status).toBe("tool");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SessionEnd", pid: 1002, sessionId: "s2" })
+    );
+    expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("Codex/Claude shell hook pid 不作为会话身份", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "codex", event: "PromptSubmit", pid: 2001 })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "codex", event: "Stop", pid: 2002 })
+    );
+    let a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.status).toBe("ready");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "codex", event: "ToolStart", pid: 2003 })
+    );
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.status).toBe("tool");
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "codex", event: "SessionEnd", pid: 2004 })
+    );
+    expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("扩展运行时事件缺 pid 且无 sessionId 时回退到 panel 级收尾", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "pi", event: "PromptSubmit" })
+    );
+    expect(agg.snapshot().activities).toHaveLength(1);
+    agg.ingestAgentEvent(agentHookEvent({ agent: "pi", event: "SessionEnd" }));
+    expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });
 

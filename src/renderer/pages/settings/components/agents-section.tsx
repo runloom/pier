@@ -1,14 +1,10 @@
-import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@pier/ui/card.tsx";
 import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { AGENT_CATALOG, getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import {
-  applyPermissionMode,
-  resolvePermissionMode,
-} from "@shared/contracts/agent.ts";
+import { applyPermissionMode } from "@shared/contracts/agent.ts";
 import { RefreshCw } from "lucide-react";
 import { Fragment, useEffect } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
@@ -94,32 +90,12 @@ function PermissionModeRow() {
   const t = useT();
   const agentDefaultArgs = useAgentPreferencesStore((s) => s.agentDefaultArgs);
   const agentDefaultEnv = useAgentPreferencesStore((s) => s.agentDefaultEnv);
-  const setAgentDefaultArgs = useAgentPreferencesStore(
-    (s) => s.setAgentDefaultArgs
+  const agentPermissionMode = useAgentPreferencesStore(
+    (s) => s.agentPermissionMode
   );
-  const setAgentDefaultEnv = useAgentPreferencesStore(
-    (s) => s.setAgentDefaultEnv
+  const setAgentPermissionMode = useAgentPreferencesStore(
+    (s) => s.setAgentPermissionMode
   );
-
-  const mode = resolvePermissionMode(agentDefaultArgs, agentDefaultEnv);
-
-  if (mode === "mixed") {
-    return (
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-sm">
-            {t("settings.row.agentPermissionMode")}
-          </span>
-          <span className="text-muted-foreground text-sm">
-            {t("settings.row.agentPermissionModeDesc")}
-          </span>
-        </div>
-        <Badge variant="secondary">
-          {t("settings.agents.permissionMode.mixed")}
-        </Badge>
-      </div>
-    );
-  }
 
   return (
     <SelectRow<"yolo" | "manual">
@@ -132,15 +108,18 @@ function PermissionModeRow() {
           agentDefaultArgs,
           agentDefaultEnv
         );
-        setAgentDefaultArgs(applied.args).catch(() => undefined);
-        setAgentDefaultEnv(applied.env).catch(() => undefined);
+        setAgentPermissionMode({
+          agentDefaultArgs: applied.args,
+          agentDefaultEnv: applied.env,
+          mode: next,
+        }).catch(() => undefined);
       }}
       options={PERMISSION_MODE_OPTIONS.map(({ value, labelKey }) => ({
         value,
         label: t(labelKey),
       }))}
       triggerWidth="w-[140px]"
-      value={mode}
+      value={agentPermissionMode}
     />
   );
 }

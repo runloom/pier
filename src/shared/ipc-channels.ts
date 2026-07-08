@@ -18,11 +18,11 @@ export const PIER = {
   // so plugin RPC is NEVER reachable from CLI local-control or capability-only
   // command authorization (design §7.0 / §7.3).
   PLUGIN_RPC_INVOKE: "pier://plugin-rpc:invoke",
+  ENVIRONMENT_PICK_PROJECT_DIRECTORY:
+    "pier://environment:pick-project-directory",
 } as const;
 
 export const PIER_BROADCAST = {
-  // 账号域变更广播 (main → 所有 renderer, payload AgentAccountsSnapshot).
-  AGENT_ACCOUNTS_CHANGED: "pier://agent-accounts:changed",
   // main 端应用菜单请求 renderer 打开/关闭命令面板.
   COMMAND_PALETTE_TOGGLE_REQUEST: "pier://command-palette:toggle-request",
   // main 端应用菜单请求当前 workspace 新建 terminal panel.
@@ -62,6 +62,8 @@ export const PIER_BROADCAST = {
   // renderer runtime filters by pluginId before dispatching to plugin
   // subscribers. Payload MUST NOT include secret material (design §7.3).
   PLUGIN_RPC_EVENT: "pier://plugin-rpc:event",
+  // local environment 域变更广播 (main → 所有 renderer, payload LocalEnvironmentState).
+  ENVIRONMENTS_CHANGED: "pier://environments:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

@@ -162,6 +162,7 @@ describe("pluginManifestSchema", () => {
 
   it("git 插件声明变更面板和命令需要的 git 权限", () => {
     expect(collectEffectivePermissions(GIT_PLUGIN_MANIFEST)).toEqual([
+      "environment:read",
       "workspace:open",
       "worktree:read",
       "worktree:write",
