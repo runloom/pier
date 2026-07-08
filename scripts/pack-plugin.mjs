@@ -10,19 +10,53 @@
 // match `validateManagedPluginPackage` expectations.
 
 import { createHash } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { pipeline } from "node:stream/promises";
-import { createGzip } from "node:zlib";
+import { crc32 } from "node:zlib";
 import tar from "tar-stream";
 
 const pluginDir = resolve(process.cwd());
 const manifestPath = join(pluginDir, "plugin.json");
 const packageJsonPath = join(pluginDir, "package.json");
+const MAX_STORED_DEFLATE_BLOCK_SIZE = 0xff_ff;
+const GZIP_ISIZE_MODULO = 2 ** 32;
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
+}
+
+function deflateStored(buffer) {
+  if (buffer.length === 0) {
+    return Buffer.from([0x01, 0x00, 0x00, 0xff, 0xff]);
+  }
+
+  const chunks = [];
+  for (
+    let offset = 0;
+    offset < buffer.length;
+    offset += MAX_STORED_DEFLATE_BLOCK_SIZE
+  ) {
+    const block = buffer.subarray(
+      offset,
+      Math.min(offset + MAX_STORED_DEFLATE_BLOCK_SIZE, buffer.length)
+    );
+    const header = Buffer.alloc(5);
+    header[0] = offset + block.length >= buffer.length ? 0x01 : 0x00;
+    header.writeUInt16LE(block.length, 1);
+    header.writeUInt16LE(0xff_ff - block.length, 3);
+    chunks.push(header, block);
+  }
+  return Buffer.concat(chunks);
+}
+
+function deterministicGzip(buffer) {
+  const header = Buffer.from([
+    0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+  ]);
+  const trailer = Buffer.alloc(8);
+  trailer.writeUInt32LE(crc32(buffer), 0);
+  trailer.writeUInt32LE(buffer.length % GZIP_ISIZE_MODULO, 4);
+  return Buffer.concat([header, deflateStored(buffer), trailer]);
 }
 
 const manifest = await readJson(manifestPath);
@@ -56,9 +90,12 @@ const members = [
 ];
 
 const pack = tar.pack();
-const gzip = createGzip();
-const out = createWriteStream(archivePath);
-const streamDone = pipeline(pack, gzip, out);
+const tarChunks = [];
+const streamDone = new Promise((resolveStream, rejectStream) => {
+  pack.on("data", (chunk) => tarChunks.push(Buffer.from(chunk)));
+  pack.on("end", resolveStream);
+  pack.on("error", rejectStream);
+});
 
 for (const member of members) {
   const data = await readFile(member.path);
@@ -73,9 +110,9 @@ for (const member of members) {
 pack.finalize();
 await streamDone;
 
-const hash = createHash("sha256");
-await pipeline(createReadStream(archivePath), hash);
-const digest = hash.digest("hex");
+const archiveBytes = deterministicGzip(Buffer.concat(tarChunks));
+await writeFile(archivePath, archiveBytes);
+const digest = createHash("sha256").update(archiveBytes).digest("hex");
 await writeFile(`${archivePath}.sha256`, `${digest}\n`, "utf8");
 
 const { size } = await import("node:fs").then((m) =>
