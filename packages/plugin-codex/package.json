@@ -6,6 +6,8 @@
   "scripts": {
     "build:main": "vite build --config vite.config.main.ts",
     "build:renderer": "vite build --config vite.config.renderer.ts",
+    "dev:main": "vite build --config vite.config.main.ts --watch",
+    "dev:renderer": "vite build --config vite.config.renderer.ts --watch",
     "build": "pnpm build:main && pnpm build:renderer",
     "package": "node ../../scripts/pack-plugin.mjs",
     "build:package": "pnpm build && pnpm package"

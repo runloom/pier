@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
@@ -26,6 +27,8 @@ import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
+import { createAppUpdateService } from "../services/app-updates/app-update-service.ts";
+import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileService } from "../services/file-service.ts";
 import { createGitService } from "../services/git-service.ts";
@@ -73,10 +76,16 @@ import {
   type PierCoreServices,
 } from "./command-router.ts";
 import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
+import {
+  type ManagedPluginDevRuntimeWatch,
+  startManagedPluginDevRuntimeWatch,
+} from "./managed-plugin-dev-runtime-watch.ts";
+import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 
 export interface PierAppCore {
   clients: PierClientRegistry;
   commandRouter: CommandRouter;
+  disposeManagedPluginDevRuntimeWatch(): void;
   eventBus: PierEventBus;
   flushExternalPluginsBeforeQuit(): Promise<void>;
   pluginHost: MainPluginHostApi;
@@ -116,6 +125,14 @@ function broadcastEnvironmentsChanged(snapshot: LocalEnvironmentState): void {
   for (const win of windowManager.getAll()) {
     if (!win.isDestroyed()) {
       win.webContents.send(PIER_BROADCAST.ENVIRONMENTS_CHANGED, snapshot);
+    }
+  }
+}
+
+function broadcastAppUpdateChanged(snapshot: AppUpdateSnapshot): void {
+  for (const win of windowManager.getAll()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(PIER_BROADCAST.APP_UPDATE_CHANGED, snapshot);
     }
   }
 }
@@ -182,7 +199,6 @@ function createPierAppCore(): PierAppCore {
     prodPluginDirName: "pier.codex",
   });
   const codexSeedAvailable = codexBundle !== null;
-  let externalMainRuntimeRef: ExternalMainPluginRuntime | null = null;
   let pluginHostRef: MainPluginHostApi | null = null;
   const httpIndex = createHttpOfficialIndexProvider({
     cachePath: managedPluginPaths.officialIndexCacheFile,
@@ -194,7 +210,10 @@ function createPierAppCore(): PierAppCore {
     runtimeMode: isDevRuntime() ? "development" : "production",
   });
   const assetFetcher = createNodeHttpAssetFetcher();
-  const activatedRuntimes = new Set<string>();
+  let externalMainRuntimeReconciler: ReturnType<
+    typeof createManagedPluginRuntimeReconciler
+  > | null = null;
+  let managedPluginDevRuntimeWatch: ManagedPluginDevRuntimeWatch | null = null;
   const managedPlugins: ManagedPluginInstallService =
     createManagedPluginInstallService({
       appendOperationLog: (record) => managedPluginOpLog.append(record),
@@ -217,20 +236,12 @@ function createPierAppCore(): PierAppCore {
           ]
         : [],
       officialIndexProvider: () => httpIndex.snapshot(),
-      officialIndexRefresh: async () => {
-        await httpIndex.refresh();
+      officialIndexRefresh: async (refreshOptions) => {
+        await httpIndex.refresh(refreshOptions);
       },
       onRuntimeSourcesChanged: async (sources) => {
-        // Activate newly-materialized runtimes. Uninstall/rollback are
-        // next-restart per design — we don't tear down live main runtimes
-        // mid-session; renderer just stops seeing the source in the registry.
-        if (externalMainRuntimeRef) {
-          for (const source of sources) {
-            if (source.enabled && !activatedRuntimes.has(source.id)) {
-              await externalMainRuntimeRef.activate(source);
-              activatedRuntimes.add(source.id);
-            }
-          }
+        if (externalMainRuntimeReconciler) {
+          await externalMainRuntimeReconciler.reconcile(sources);
         }
         if (pluginHostRef) {
           await pluginHostRef.refresh();
@@ -255,6 +266,7 @@ function createPierAppCore(): PierAppCore {
         },
         rendererEntryUrl: s.rendererEntryUrl,
         source: s.kind === "devOverride" ? "devOverride" : "official",
+        ...(s.sourceRevision ? { sourceRevision: s.sourceRevision } : {}),
         version: s.version,
       })),
   });
@@ -314,7 +326,8 @@ function createPierAppCore(): PierAppCore {
         managedPlugins.recordActivationResult(input),
       rpcBus: pluginRpcBus,
     });
-  externalMainRuntimeRef = externalMainRuntime;
+  externalMainRuntimeReconciler =
+    createManagedPluginRuntimeReconciler(externalMainRuntime);
   pluginHostRef = pluginHost;
   managedPlugins
     .init()
@@ -325,14 +338,25 @@ function createPierAppCore(): PierAppCore {
         console.error("[managed-plugins] official-index refresh failed:", err);
       });
       // Dev-only: if a bundled plugin is already installed at the same version,
-      // re-run install to overwrite the dist so `pnpm plugin:codex:build` edits
-      // propagate on next Pier restart. Prod skips (install is user-driven).
+      // point runtime at the source package and watch built dist entries.
       if (isDevRuntime() && codexSeedAvailable) {
+        const codexDevPackageDir = join(process.cwd(), "packages/plugin-codex");
         const index = managedPlugins.getIndex();
         const codex = index.plugins["pier.codex"];
-        if (codex?.activeVersion === "1.0.0" && !codex.uninstalledAt) {
-          await managedPlugins.install("pier.codex").catch((err: unknown) => {
-            console.error("[managed-plugins] dev re-sync failed:", err);
+        if (
+          codex?.activeVersion === codexBundle?.version &&
+          !codex.uninstalledAt
+        ) {
+          await managedPlugins
+            .setDevOverride("pier.codex", codexDevPackageDir)
+            .then(() => managedPlugins.simulateRestartForTests())
+            .catch((err: unknown) => {
+              console.error("[managed-plugins] dev override sync failed:", err);
+            });
+          managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
+            logger: createLogger("managed-plugins"),
+            packageDir: codexDevPackageDir,
+            refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
           });
         }
       }
@@ -341,12 +365,21 @@ function createPierAppCore(): PierAppCore {
       console.error("[managed-plugins] init failed:", err);
     });
   const processEnvironment = createProcessEnvironmentService();
+  const runtimeMode = isDevRuntime() ? "development" : "production";
   // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
   const agentDetection = createAgentDetectionService();
   const services: PierCoreServices = {
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
       readPreferences: () => preferences.read(),
+    }),
+    appUpdates: createAppUpdateService({
+      currentVersion: app.getVersion(),
+      onChange: broadcastAppUpdateChanged,
+      runtimeMode,
+      ...(runtimeMode === "production"
+        ? { updater: createElectronAppUpdaterAdapter() }
+        : {}),
     }),
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
@@ -449,6 +482,10 @@ function createPierAppCore(): PierAppCore {
       services,
     }),
     eventBus,
+    disposeManagedPluginDevRuntimeWatch: () => {
+      managedPluginDevRuntimeWatch?.dispose();
+      managedPluginDevRuntimeWatch = null;
+    },
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),
     pluginHost,

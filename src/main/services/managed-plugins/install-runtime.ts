@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   ManagedPluginInstallIndexEntry,
@@ -25,6 +26,7 @@ export interface ManagedPluginRuntimeSource {
   readonly mainEntryPath: string;
   readonly manifest: ManagedPluginPackageManifest;
   readonly rendererEntryUrl: string;
+  readonly sourceRevision?: string;
   readonly version: string;
 }
 
@@ -32,6 +34,34 @@ export interface RuntimeContext {
   readonly isDevRuntime: boolean;
   readonly paths: ManagedPluginPaths;
   readonly pierVersion: string;
+}
+
+async function computeDevSourceRevision(
+  packageDir: string,
+  manifest: ManagedPluginPackageManifest
+): Promise<string> {
+  const hash = createHash("sha256");
+  hash.update(manifest.version);
+  for (const relativePath of [
+    "plugin.json",
+    manifest.main,
+    manifest.renderer,
+  ]) {
+    const filePath = join(packageDir, relativePath);
+    try {
+      const info = await stat(filePath);
+      hash.update("\0");
+      hash.update(relativePath);
+      hash.update("\0");
+      hash.update(String(info.size));
+      hash.update("\0");
+      hash.update(String(info.mtimeMs));
+    } catch {
+      hash.update("\0missing:");
+      hash.update(relativePath);
+    }
+  }
+  return hash.digest("hex").slice(0, 12);
 }
 
 export async function materializeRuntimeSource(
@@ -63,6 +93,10 @@ export async function materializeRuntimeSource(
       expectedSize: null,
       pierVersion: ctx.pierVersion,
     });
+    const sourceRevision = ctx.isDevRuntime
+      ? await computeDevSourceRevision(packageDir, manifest)
+      : undefined;
+    const rendererEntryUrl = `pier-plugin://${pluginId}/${effective.version}/${manifest.renderer}`;
     return {
       assetsRoot: packageDir,
       enabled: effective.enabled,
@@ -73,7 +107,10 @@ export async function materializeRuntimeSource(
           : "officialInstalled",
       manifest,
       mainEntryPath: join(packageDir, manifest.main),
-      rendererEntryUrl: `pier-plugin://${pluginId}/${effective.version}/${manifest.renderer}`,
+      rendererEntryUrl: sourceRevision
+        ? `${rendererEntryUrl}?rev=${sourceRevision}`
+        : rendererEntryUrl,
+      ...(sourceRevision ? { sourceRevision } : {}),
       version: effective.version,
     };
   } catch {

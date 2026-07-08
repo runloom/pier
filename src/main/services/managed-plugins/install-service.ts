@@ -30,6 +30,7 @@ import {
 } from "./install-runtime.ts";
 import type { ManagedPluginOperationLogRecord } from "./operation-log.ts";
 import type { ManagedPluginPaths } from "./paths.ts";
+import { performUpdate } from "./update-operations.ts";
 
 /**
  * Managed plugin install service (design §6, plan Task 3).
@@ -64,7 +65,9 @@ export interface CreateManagedPluginInstallServiceOptions {
   readonly copyDirectory?: (src: string, dest: string) => Promise<void>;
   readonly now?: () => number;
   readonly officialIndexProvider?: () => OfficialPluginIndex | null;
-  readonly officialIndexRefresh?: () => Promise<void>;
+  readonly officialIndexRefresh?: (options?: {
+    force?: boolean;
+  }) => Promise<void>;
   readonly onRuntimeSourcesChanged?: (
     sources: readonly ManagedPluginRuntimeSource[]
   ) => Promise<void>;
@@ -80,6 +83,7 @@ interface ActivationTracker {
 }
 
 export interface ManagedPluginInstallService {
+  readonly checkUpdates: () => Promise<ManagedPluginCatalogSnapshot>;
   readonly clearDevOverride: (
     id: string
   ) => Promise<ManagedPluginOperationResult>;
@@ -96,6 +100,7 @@ export interface ManagedPluginInstallService {
   readonly recordActivationResult: (
     input: RecordActivationResultInput
   ) => Promise<void>;
+  readonly refreshRuntimeSources: () => Promise<void>;
   readonly rollback: (
     id: string,
     version: string
@@ -114,6 +119,7 @@ export interface ManagedPluginInstallService {
    */
   readonly simulateRestartForTests: () => Promise<void>;
   readonly uninstall: (id: string) => Promise<ManagedPluginOperationResult>;
+  readonly update: (id: string) => Promise<ManagedPluginOperationResult>;
 }
 
 export function createManagedPluginInstallService(
@@ -228,6 +234,12 @@ export function createManagedPluginInstallService(
   }
 
   return {
+    async checkUpdates(): Promise<ManagedPluginCatalogSnapshot> {
+      if (ctx.officialIndexRefresh) {
+        await ctx.officialIndexRefresh({ force: true });
+      }
+      return await performListCatalogSnapshot(ctx);
+    },
     clearDevOverride: (id) => enqueue(() => performClearDevOverride(ctx, id)),
     disable: (id) => enqueue(() => setEnabledFlag(ctx, id, false)),
     enable: (id) => enqueue(() => setEnabledFlag(ctx, id, true)),
@@ -264,10 +276,12 @@ export function createManagedPluginInstallService(
     getRuntimeSources: () => runtimeSourcesSnapshot,
     listRuntimeSources: async () => runtimeSourcesSnapshot,
     recordActivationResult: (input) => performRecordActivationResult(input),
+    refreshRuntimeSources: () => enqueue(() => refreshRuntimeSnapshot()),
     rollback: (id, version) => enqueue(() => performRollback(ctx, id, version)),
     setDevOverride: (id, path) =>
       enqueue(() => performSetDevOverride(ctx, id, path)),
     simulateRestartForTests: () => performSimulateRestartForTests(),
     uninstall: (id) => enqueue(() => performUninstall(ctx, id)),
+    update: (id) => enqueue(() => performUpdate(ctx, id)),
   };
 }

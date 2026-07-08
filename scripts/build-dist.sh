@@ -5,7 +5,7 @@
 # 1. 加载 electron-builder.env（如存在）—— 签名 / notarize / publish 凭证
 # 2. 构建 universal (arm64 + x86_64) native artifacts
 # 3. 构建 renderer / main / preload
-# 4. 打两个 dmg（arm64 + x64）
+# 4. 打两个 dmg + zip 更新包（arm64 + x64）
 #
 # 前置：
 #   - macOS + xcode-select --install
@@ -15,8 +15,10 @@
 #     不 notarize 的话可先跑 --no-notarize
 #
 # 用法：
-#   pnpm build:dist             # 完整签名 + notarize
-#   pnpm build:dist --no-notarize   # 只签名不 notarize（本机测/内部装）
+#   pnpm build:dist                    # 完整签名 + notarize，本地出包不发布
+#   pnpm build:dist --no-notarize      # 只签名不 notarize（本机测/内部装）
+#   pnpm build:dist --publish=always   # 发布到 electron-builder.yml 配置的 provider
+#   PIER_DIST_PUBLISH=always pnpm build:dist
 
 set -euo pipefail
 
@@ -26,13 +28,29 @@ cd "$PIER_ROOT"
 
 # ---------- 参数 ----------
 EB_EXTRA_ARGS=()
-for arg in "$@"; do
+PUBLISH_POLICY="${PIER_DIST_PUBLISH:-never}"
+while [ "$#" -gt 0 ]; do
+    arg="$1"
     case "$arg" in
         --no-notarize)
             EB_EXTRA_ARGS+=(-c.mac.notarize=false)
+            shift
+            ;;
+        --publish=*)
+            PUBLISH_POLICY="${arg#--publish=}"
+            shift
+            ;;
+        --publish)
+            if [ "$#" -lt 2 ]; then
+                echo "[build:dist] --publish 需要参数: never | onTag | onTagOrDraft | always"
+                exit 2
+            fi
+            PUBLISH_POLICY="$2"
+            shift 2
             ;;
         *)
             EB_EXTRA_ARGS+=("$arg")
+            shift
             ;;
     esac
 done
@@ -63,8 +81,8 @@ pnpm build:electron
 
 # macOS 系统 bash 3.2 对空数组 "${arr[@]}" 在 set -u 下会报 unbound，
 # 用 ${arr[@]+"${arr[@]}"} 惯用法兜住。
-echo "[build:dist] [4/4] electron-builder --mac --arm64 --x64"
-pnpm exec electron-builder --mac --arm64 --x64 --publish never ${EB_EXTRA_ARGS[@]+"${EB_EXTRA_ARGS[@]}"}
+echo "[build:dist] [4/4] electron-builder --mac --arm64 --x64 --publish $PUBLISH_POLICY"
+pnpm exec electron-builder --mac --arm64 --x64 --publish "$PUBLISH_POLICY" ${EB_EXTRA_ARGS[@]+"${EB_EXTRA_ARGS[@]}"}
 
 echo "[build:dist] done → dist-builder/"
-ls -lh dist-builder/*.dmg 2>/dev/null || true
+ls -lh dist-builder/*.dmg dist-builder/*.zip dist-builder/latest*.yml 2>/dev/null || true

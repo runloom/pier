@@ -69,26 +69,17 @@ export async function executePluginCommand(
         await services.managedPlugins.listCatalogSnapshot()
       );
     case "plugin.checkUpdates":
-      // Trigger a fresh catalog snapshot (which fetches the signed official index
-      // if the rate-limit window allows) and return it.
-      return success(
-        requestId,
-        await services.managedPlugins.listCatalogSnapshot()
-      );
+      return success(requestId, await services.managedPlugins.checkUpdates());
     case "plugin.install":
       return success(
         requestId,
         await services.managedPlugins.install(command.id)
       );
     case "plugin.update":
-      return success(requestId, {
-        error: {
-          code: "internal_error",
-          message:
-            "plugin.update not implemented in v1 core; requires signing infra",
-        },
-        ok: false,
-      });
+      return success(
+        requestId,
+        await services.managedPlugins.update(command.id)
+      );
     case "plugin.rollback":
       return success(
         requestId,

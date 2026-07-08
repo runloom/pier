@@ -62,6 +62,7 @@ export interface ManagedPluginsWindowShim {
     rollback(id: string, version: string): Promise<unknown>;
     uninstall(id: string): Promise<unknown>;
     install(id: string): Promise<unknown>;
+    update(id: string): Promise<unknown>;
   };
 }
 
@@ -186,7 +187,7 @@ export function ManagedRowExtraActions({
           onClick={() => {
             const v = row.update?.version;
             run(
-              win?.managedPlugins?.install(row.id),
+              win?.managedPlugins?.update(row.id),
               "update",
               v ? { version: v } : undefined
             );

@@ -19,6 +19,11 @@ export const pluginSourceSchema = z.object({
 });
 export type PluginSource = z.infer<typeof pluginSourceSchema>;
 
+export const pluginRuntimePolicySchema = z.object({
+  reloadPolicy: z.enum(["restart", "hot"]).optional(),
+});
+export type PluginRuntimePolicy = z.infer<typeof pluginRuntimePolicySchema>;
+
 export const pluginLocaleCodeSchema = z.string().min(1);
 
 export const pluginLocalizedContributionSchema = z.object({
@@ -273,6 +278,7 @@ export const pluginManifestSchema = z
     permissions: z.array(pierCapabilitySchema).default([]),
     publisher: z.string().min(1).optional(),
     repository: z.string().min(1).optional(),
+    runtime: pluginRuntimePolicySchema.optional(),
     source: pluginSourceSchema,
     terminalStatusItems: z
       .array(pluginTerminalStatusItemContributionSchema)
@@ -318,6 +324,7 @@ export const pluginRegistryEntrySchema = z.object({
     enabled: z.boolean(),
     kind: z.enum(["builtin", "manifest-only", "external"]),
     rendererEntryUrl: z.string().min(1).optional(),
+    sourceRevision: z.string().min(1).optional(),
   }),
 });
 export type PluginRegistryEntry = z.infer<typeof pluginRegistryEntrySchema>;

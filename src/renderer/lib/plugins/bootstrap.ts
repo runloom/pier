@@ -21,7 +21,7 @@ export function activeBuiltinPluginKey(
     )
     .map(
       (entry) =>
-        `${entry.manifest.id}:${entry.runtime.kind}:${entry.runtime.rendererEntryUrl ?? ""}`
+        `${entry.manifest.id}:${entry.runtime.kind}:${entry.runtime.rendererEntryUrl ?? ""}:${entry.runtime.sourceRevision ?? ""}`
     )
     .join("\n");
 }
