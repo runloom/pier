@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1783436376601,
+  "generatedAt": 1783471975204,
   "plugins": {
     "pier.codex": {
       "description": "Codex account management and usage monitoring for Pier.",
@@ -9,15 +9,15 @@
       "locales": {
         "zh-CN": {
           "name": "Codex 账户管理",
-          "description": "管理 Codex 账号，登录、切换、观测用量。"
+          "description": "管理 Codex 账号,登录、切换、观测用量。"
         }
       },
       "versions": {
         "1.0.0": {
           "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.0.0/pier.codex-1.0.0.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "788ed0c1e595188119c00d63e4b04e23c21a58a8ce86a092bc6318f50e014b59",
-          "size": 12315
+          "sha256": "68454b595da066d3e1a11e2f6b28e4f0aff683a792d1ae2131de8589feee8e7a",
+          "size": 12605
         }
       }
     }

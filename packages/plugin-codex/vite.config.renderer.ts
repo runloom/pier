@@ -36,7 +36,15 @@ export default defineConfig({
     minify: false,
     outDir: "dist",
     rollupOptions: {
-      external: ["@pier/plugin-api", /^@pier\/plugin-api\//],
+      // `@pier/plugin-api` and `@pier/plugin-api/main` are types-only in the
+      // renderer bundle, but the subpaths react / react-dom-client /
+      // jsx-runtime / jsx-dev-runtime are runtime shims. They MUST be bundled
+      // inline — the browser can't resolve bare `@pier/plugin-api/react`
+      // specifiers via `pier-plugin://`, and the shims themselves only read
+      // from `globalThis.__PIER_PLUGIN_SHARED__` (installed by the host
+      // before the external renderer loads), so bundling adds no second
+      // React copy.
+      external: ["@pier/plugin-api", "@pier/plugin-api/renderer"],
       output: { inlineDynamicImports: true },
     },
     target: "esnext",
