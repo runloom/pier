@@ -201,6 +201,9 @@ importers:
       '@pier/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@pier/ui':
+        specifier: workspace:*
+        version: link:../ui
       react:
         specifier: 19.2.7
         version: 19.2.7

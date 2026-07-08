@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@pier/plugin-api": "workspace:*",
+    "@pier/ui": "workspace:*",
     "write-file-atomic": "^8.0.0"
   },
   "peerDependencies": {

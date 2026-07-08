@@ -36,8 +36,8 @@ export const NAV_ITEMS: readonly StaticNavItem[] = [
   { id: "workspace", icon: FolderGit2, variant: "static" },
   { id: "environment", icon: Box, variant: "static" },
   { id: "keybindings", icon: Keyboard, variant: "static" },
-  { id: "plugins", icon: Plug, variant: "static" },
   { id: "agents", icon: Bot, variant: "static" },
+  { id: "plugins", icon: Plug, variant: "static" },
 ] as const;
 
 export type SettingsSectionId = string;
