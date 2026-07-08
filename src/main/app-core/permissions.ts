@@ -2,6 +2,7 @@ import type { PierCommand } from "@shared/contracts/commands.ts";
 import type {
   PierCapability,
   PierClient,
+  PierClientKind,
 } from "@shared/contracts/permissions.ts";
 
 export type AuthorizationResult = { ok: true } | { ok: false; reason: string };
@@ -9,23 +10,20 @@ export type AuthorizationResult = { ok: true } | { ok: false; reason: string };
 /**
  * 每条命令一行元数据:
  *   capabilities —— 授权层要求的能力集 (authorizeCommand 校验)
+ *   allowedClientKinds —— 可选. 若定义, 仅列表中的 client kind 允许通过; 未列出的 kind
+ *     在 capability 校验前就被拒绝. 缺省时沿用纯 capability 校验(现有命令的默认行为).
  *
  * 单一真源:加命令时 TypeScript 的 Record 全 key 类型强制必须填 capabilities,
- * 避免遗漏授权配置。所有命令统一经 PIER.COMMAND_EXECUTE 通用 IPC 通道路由,
- * 能力校验是唯一的调用门槛 (无 renderer 专属白名单概念)。
+ * 避免遗漏授权配置。allowedClientKinds 用于 managed plugin 命令这类 "某些客户端
+ * 只读、某些不可写" 的场景(design §7.0), 未来同类命令沿用同一模式。所有命令统一
+ * 经 PIER.COMMAND_EXECUTE 通用 IPC 通道路由。
  */
 export interface CommandMetadata {
+  readonly allowedClientKinds?: readonly PierClientKind[];
   readonly capabilities: readonly PierCapability[];
 }
 
 const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
-  "accounts.add": { capabilities: ["account:write"] },
-  "accounts.adoptCurrent": { capabilities: ["account:write"] },
-  "accounts.cancelLogin": { capabilities: ["account:write"] },
-  "accounts.refreshUsage": { capabilities: ["account:read"] },
-  "accounts.remove": { capabilities: ["account:write"] },
-  "accounts.select": { capabilities: ["account:write"] },
-  "accounts.snapshot": { capabilities: ["account:read"] },
   "ai.status": { capabilities: ["ai:invoke"] },
   "ai.generateText": { capabilities: ["ai:invoke"] },
   "environment.project.add": { capabilities: ["environment:write"] },
@@ -130,6 +128,42 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.undoLastCommit": { capabilities: ["git:write"] },
   "git.unstage": { capabilities: ["git:write"] },
   "git.validateBranchName": { capabilities: ["git:read"] },
+  "plugin.catalog.list": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["plugin:read"],
+  },
+  "plugin.checkUpdates": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["plugin:write", "network"],
+  },
+  "plugin.install": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["plugin:write", "network"],
+  },
+  "plugin.update": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["plugin:write", "network"],
+  },
+  "plugin.rollback": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["plugin:write"],
+  },
+  "plugin.uninstall": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["plugin:write"],
+  },
+  "plugin.devOverride.set": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["plugin:write"],
+  },
+  "plugin.devOverride.clear": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["plugin:write"],
+  },
+  "app.relaunch": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
 };
 
 function terminalOpenCapabilities(
@@ -154,15 +188,22 @@ export function authorizeCommand(
   command: PierCommand,
   client: PierClient
 ): AuthorizationResult {
+  const allowedKinds = COMMAND_METADATA[command.type].allowedClientKinds;
+  if (allowedKinds && !allowedKinds.includes(client.kind)) {
+    return {
+      ok: false,
+      reason: `client kind ${client.kind} not allowed for ${command.type}`,
+    };
+  }
   const requiredCapabilities = requiredCapabilitiesForCommand(command);
   const missing = requiredCapabilities.find(
     (capability) => !client.capabilities.includes(capability)
   );
-  if (!missing) {
-    return { ok: true };
+  if (missing) {
+    return {
+      ok: false,
+      reason: `missing capability: ${missing}`,
+    };
   }
-  return {
-    ok: false,
-    reason: `missing capability: ${missing}`,
-  };
+  return { ok: true };
 }

@@ -84,7 +84,7 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     };
     expect(
       activeBuiltinPluginKey([entry("pier.a", true), disabled, manifestOnly])
-    ).toBe("pier.a");
+    ).toBe("pier.a:builtin:");
     expect(activeBuiltinPluginKey([])).toBe("");
   });
 

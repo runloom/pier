@@ -55,16 +55,6 @@ function createMockContext(): {
 } {
   const actions = new Map<string, RendererPluginAction>();
   const context = {
-    accounts: {
-      add: unimplemented("accounts.add"),
-      adoptCurrent: unimplemented("accounts.adoptCurrent"),
-      cancelLogin: unimplemented("accounts.cancelLogin"),
-      onDidChange: unimplemented("accounts.onDidChange"),
-      refreshUsage: unimplemented("accounts.refreshUsage"),
-      remove: unimplemented("accounts.remove"),
-      select: unimplemented("accounts.select"),
-      snapshot: unimplemented("accounts.snapshot"),
-    },
     actions: {
       register: (action: RendererPluginAction) => {
         actions.set(action.id, action);

@@ -110,7 +110,7 @@ function emptyEnvironmentState() {
 
 function cliClientServices(): PierCoreServices {
   return {
-    agentAccounts: {} as never,
+    managedPlugins: {} as never,
     ai: {
       generateText: async () => ({
         message: "not configured",

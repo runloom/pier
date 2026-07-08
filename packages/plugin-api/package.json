@@ -1,0 +1,20 @@
+{
+  "name": "@pier/plugin-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.ts",
+    "./react": "./src/react.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts",
+    "./react-dom-client": "./src/react-dom-client.ts",
+    "./build-preset": "./src/build-preset.ts"
+  },
+  "peerDependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  }
+}

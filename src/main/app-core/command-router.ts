@@ -19,7 +19,6 @@ import { LocalEnvironmentServiceError } from "../services/local-environments-ser
 import { PluginServiceError } from "../services/plugin-service.ts";
 import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
-import { executeAccountCommand } from "./account-commands.ts";
 import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
@@ -37,6 +36,7 @@ import {
   executeTerminalOpenCommand,
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
+import { executePluginCommand } from "./plugin-commands.ts";
 import {
   executeRunCancelCommand,
   executeRunListCommand,
@@ -101,52 +101,6 @@ async function deriveActivePanelContext(
   return null;
 }
 
-async function executePluginCommand(
-  requestId: string,
-  command: PierCommand,
-  services: PierCoreServices
-): Promise<PierCommandResult | null> {
-  switch (command.type) {
-    case "plugin.list":
-      return success(requestId, await services.plugins.list());
-    case "plugin.disable":
-      return success(
-        requestId,
-        await services.plugins.setEnabled(command.id, false)
-      );
-    case "plugin.enable":
-      return success(
-        requestId,
-        await services.plugins.setEnabled(command.id, true)
-      );
-    case "plugin.inspect": {
-      const plugin = await services.plugins.inspect(command.id);
-      if (!plugin) {
-        return failure(
-          requestId,
-          "not_found",
-          `plugin not found: ${command.id}`
-        );
-      }
-      return success(requestId, plugin);
-    }
-    case "pluginSettings.getAll":
-      return success(requestId, await services.pluginSettings.getAll());
-    case "pluginSettings.set":
-      return success(
-        requestId,
-        await services.pluginSettings.set(command.key, command.value)
-      );
-    case "pluginSettings.reset":
-      return success(
-        requestId,
-        await services.pluginSettings.reset(command.key)
-      );
-    default:
-      return null;
-  }
-}
-
 async function executeAppStateCommand(
   requestId: string,
   command: PierCommand,
@@ -163,6 +117,18 @@ async function executeAppStateCommand(
         },
         protocolVersion: 1,
       });
+    case "app.relaunch": {
+      const { isDevRuntime } = await import("../runtime-mode.ts");
+      const { performDevSoftRelaunch, performProdRelaunch } = await import(
+        "./app-relaunch.ts"
+      );
+      if (isDevRuntime()) {
+        await performDevSoftRelaunch(services.managedPlugins);
+      } else {
+        await performProdRelaunch();
+      }
+      return success(requestId, null);
+    }
     case "commandPaletteMru.clear":
       return success(requestId, await services.commandPaletteMru.clear());
     case "commandPaletteMru.read":
@@ -362,7 +328,6 @@ async function executeCommandByDomain(
   onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void
 ): Promise<PierCommandResult | null> {
   const executors = [
-    (cmd: PierCommand) => executeAccountCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
     (cmd: PierCommand) =>

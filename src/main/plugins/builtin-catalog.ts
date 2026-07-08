@@ -1,9 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MainPluginModule } from "@plugins/api/main.ts";
-import { CODEX_PLUGIN_LOCALES } from "@plugins/builtin/codex/locales/index.ts";
-import { codexMainPlugin } from "@plugins/builtin/codex/main/index.ts";
-import { CODEX_PLUGIN_MANIFEST } from "@plugins/builtin/codex/manifest.ts";
 import { FILES_PLUGIN_LOCALES } from "@plugins/builtin/files/locales/index.ts";
 import { filesMainPlugin } from "@plugins/builtin/files/main/index.ts";
 import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
@@ -21,9 +18,8 @@ export type BuiltinPluginSource = Extract<
   main: MainPluginModule;
 };
 
-function pluginPackageBaseDir(pluginId: "codex" | "files" | "git"): string {
+function pluginPackageBaseDir(pluginId: "files" | "git"): string {
   const urlByPlugin = {
-    codex: new URL("../../plugins/builtin/codex/", import.meta.url),
     files: new URL("../../plugins/builtin/files/", import.meta.url),
     git: new URL("../../plugins/builtin/git/", import.meta.url),
   } satisfies Record<typeof pluginId, URL>;
@@ -52,15 +48,6 @@ export const BUILTIN_PLUGIN_SOURCES = [
     locales: FILES_PLUGIN_LOCALES,
     main: filesMainPlugin,
     manifest: FILES_PLUGIN_MANIFEST,
-  },
-  {
-    baseDir: pluginPackageBaseDir("codex"),
-    defaultEnabled: true,
-    id: CODEX_PLUGIN_MANIFEST.id,
-    kind: "builtin",
-    locales: CODEX_PLUGIN_LOCALES,
-    main: codexMainPlugin,
-    manifest: CODEX_PLUGIN_MANIFEST,
   },
 ] satisfies readonly BuiltinPluginSource[];
 

@@ -1,0 +1,44 @@
+name: Verify Plugin Index
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/verify-index.yml'
+      - 'packages/plugin-*/**'
+      - 'plugins/index.v1.json'
+      - 'scripts/generate-plugin-index.mjs'
+      - 'scripts/pack-plugin.mjs'
+      - 'scripts/verify-plugin-index-assets.mjs'
+
+# Validates every entry in `plugins/index.v1.json`:
+#   1. JSON shape and Ed25519 signature presence
+#   2. Release URL follows the generated official asset convention
+#   3. Local package tgz sha256 matches declared digest
+#   4. Local package tgz size matches declared bytes
+#
+# PRs verify against freshly built local packages because the GitHub Release
+# asset is published later by release-plugin.yml.
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build plugin packages
+        run: pnpm plugins:pack
+
+      - name: Validate index against local packages
+        run: node scripts/verify-plugin-index-assets.mjs

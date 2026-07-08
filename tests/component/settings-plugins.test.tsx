@@ -166,11 +166,11 @@ describe("Settings plugins section", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Plugins" }));
 
     expect(await screen.findByText("Worktree")).toBeVisible();
-    // builtin 插件不展示 Source badge(方向 D:只有唯一 source 时展示徽章无信息量)。
+    // source badge intentionally removed from PluginRow — Installed/Not Installed
+    // tab already distinguishes state; source kind is internal noise for users.
     expect(screen.queryByText("Built-in")).not.toBeInTheDocument();
     expect(screen.getByText("Local Example")).toBeVisible();
-    // non-builtin(local)插件展示 Source badge。
-    expect(screen.getByText("Local")).toBeVisible();
+    expect(screen.queryByText("Local")).not.toBeInTheDocument();
     expect(screen.getByText("Manifest preview")).toBeVisible();
     expect(screen.queryByText("pier.worktree")).not.toBeInTheDocument();
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();

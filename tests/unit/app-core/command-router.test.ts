@@ -227,7 +227,7 @@ function services(
   let recentContexts: PanelContext[] = [];
 
   return {
-    agentAccounts: {} as never,
+    managedPlugins: {} as never,
     ai: {
       generateText: async () => ({
         message: "not configured",

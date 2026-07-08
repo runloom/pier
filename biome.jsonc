@@ -26,6 +26,9 @@
         "src/main/**",
         "src/preload/**",
         "packages/ui/src/**",
+        "packages/plugin-api/src/**",
+        "packages/plugin-codex/src/**",
+        "packages/plugin-codex/vite.config.*.ts",
         "electron.vite.config.ts",
         "vitest.config.ts",
         "tailwind.config.ts",
@@ -34,11 +37,25 @@
       "linter": {
         "rules": {
           "style": {
-            "useFilenamingConvention": "off"
+            "useFilenamingConvention": "off",
+            "noNonNullAssertion": "off",
+            "useBlockStatements": "off"
           },
           "correctness": {
             "noUndeclaredDependencies": "off",
             "noUnresolvedImports": "off"
+          },
+          "performance": {
+            "useTopLevelRegex": "off",
+            "noBarrelFile": "off",
+            "noNamespaceImport": "off"
+          },
+          "suspicious": {
+            "useAwait": "off",
+            "noEmptyBlockStatements": "off"
+          },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
           }
         }
       }

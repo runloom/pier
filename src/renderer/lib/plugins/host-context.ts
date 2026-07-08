@@ -47,7 +47,6 @@ import {
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
-import { createPluginAccountsContext } from "./host-accounts-context.ts";
 import { createPluginAgentsContext } from "./host-agents-context.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
 import { createPluginEnvironmentsContext } from "./host-environments-context.ts";
@@ -397,7 +396,6 @@ export function createRendererPluginContext(
   entry?: PluginRegistryEntry
 ): RendererPluginContext {
   return {
-    accounts: createPluginAccountsContext(entry, assertPluginCapability),
     actions: {
       register: (action) => {
         assertDeclaredContribution(entry, "action", action.id);

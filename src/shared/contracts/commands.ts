@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { agentAccountProviderSchema } from "./agent-accounts.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
   environmentProjectRequestSchema,
@@ -30,6 +29,17 @@ import {
   listBranchesOptionsSchema,
 } from "./git.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
+import {
+  appRelaunchCommandSchema,
+  pluginCatalogListCommandSchema,
+  pluginCheckUpdatesCommandSchema,
+  pluginDevOverrideClearCommandSchema,
+  pluginDevOverrideSetCommandSchema,
+  pluginInstallCommandSchema,
+  pluginRollbackCommandSchema,
+  pluginUninstallCommandSchema,
+  pluginUpdateCommandSchema,
+} from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
@@ -411,31 +421,21 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   environmentWorktreeBindingRequestSchema.extend({
     type: z.literal("environment.worktreeBinding"),
   }),
-  // Agent accounts 域命令
-  z.object({ type: z.literal("accounts.snapshot") }),
-  z.object({ type: z.literal("accounts.adoptCurrent") }),
-  z.object({
-    provider: agentAccountProviderSchema,
-    type: z.literal("accounts.add"),
-  }),
-  z.object({
-    provider: agentAccountProviderSchema,
-    type: z.literal("accounts.cancelLogin"),
-  }),
-  z.object({
-    accountId: z.string().min(1),
-    type: z.literal("accounts.select"),
-  }),
-  z.object({
-    accountId: z.string().min(1),
-    type: z.literal("accounts.remove"),
-  }),
-  z.object({ type: z.literal("accounts.refreshUsage") }),
+  // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
   z.object({ type: z.literal("ai.status") }),
   aiGenerateTextRequestSchema.extend({
     type: z.literal("ai.generateText"),
   }),
+  pluginCatalogListCommandSchema,
+  pluginCheckUpdatesCommandSchema,
+  pluginInstallCommandSchema,
+  pluginUpdateCommandSchema,
+  pluginRollbackCommandSchema,
+  pluginUninstallCommandSchema,
+  pluginDevOverrideSetCommandSchema,
+  pluginDevOverrideClearCommandSchema,
+  appRelaunchCommandSchema,
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;

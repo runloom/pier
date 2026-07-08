@@ -16,9 +16,11 @@ const APP_QUIT_CONTROLLER_CREATION_RE =
 const APP_QUIT_CONTROLLER_FLUSH_INJECTION_RE =
   /createAppQuitController\(\{[\s\S]{0,2500}?flushBeforeQuit:\s*flushBeforeQuitConfirmed\b/;
 const FLUSH_BEFORE_QUIT_WINDOWS_RE =
-  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1200}?appCore\.services\.window\s*\.flushOpenWindows\(\)/;
+  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1600}?appCore\.services\.window\s*\.flushOpenWindows\(\)/;
 const FLUSH_BEFORE_QUIT_SECRETS_RE =
-  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1200}?appCore\.services\.secrets\.flush\(\)/;
+  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1600}?appCore\.services\.secrets\.flush\(\)/;
+const FLUSH_BEFORE_QUIT_EXTERNAL_PLUGINS_RE =
+  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1600}?appCore\.flushExternalPluginsBeforeQuit\(\)/;
 const FINAL_CLEANUP_DESTROYS_WINDOWS_RE =
   /createAppQuitController\(\{[\s\S]{0,2500}?finalCleanup:\s*\(\)\s*=>\s*\{[\s\S]{0,500}?windowManager\.destroyAllForQuit\(\)/;
 const BEFORE_QUIT_GUARDS_SECOND_INSTANCE_RE =
@@ -41,6 +43,11 @@ describe("window lifecycle persistence invariants", () => {
   it("injects a flushBeforeQuit path that flushes secrets", () => {
     expect(MAIN_SOURCE).toMatch(APP_QUIT_CONTROLLER_FLUSH_INJECTION_RE);
     expect(MAIN_SOURCE).toMatch(FLUSH_BEFORE_QUIT_SECRETS_RE);
+  });
+
+  it("injects a flushBeforeQuit path that flushes external plugins", () => {
+    expect(MAIN_SOURCE).toMatch(APP_QUIT_CONTROLLER_FLUSH_INJECTION_RE);
+    expect(MAIN_SOURCE).toMatch(FLUSH_BEFORE_QUIT_EXTERNAL_PLUGINS_RE);
   });
 
   it("injects finalCleanup that destroys all windows for quit", () => {

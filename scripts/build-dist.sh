@@ -55,12 +55,15 @@ fi
 echo "[build:dist] [1/3] universal native (arm64 + x86_64)"
 NATIVE_ARCHS="arm64 x86_64" pnpm build:native
 
-echo "[build:dist] [2/3] electron-vite build (main / preload / renderer)"
+echo "[build:dist] [2/4] package bundled Codex plugin"
+pnpm plugin:codex:pack
+
+echo "[build:dist] [3/4] electron-vite build (main / preload / renderer)"
 pnpm build:electron
 
 # macOS 系统 bash 3.2 对空数组 "${arr[@]}" 在 set -u 下会报 unbound，
 # 用 ${arr[@]+"${arr[@]}"} 惯用法兜住。
-echo "[build:dist] [3/3] electron-builder --mac --arm64 --x64"
+echo "[build:dist] [4/4] electron-builder --mac --arm64 --x64"
 pnpm exec electron-builder --mac --arm64 --x64 --publish never ${EB_EXTRA_ARGS[@]+"${EB_EXTRA_ARGS[@]}"}
 
 echo "[build:dist] done → dist-builder/"

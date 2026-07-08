@@ -1,9 +1,5 @@
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type {
-  AgentAccountProviderId,
-  AgentAccountsSnapshot,
-} from "@shared/contracts/agent-accounts.ts";
-import type {
   AppQuitConfirmationRequest,
   AppQuitDecisionPayload,
 } from "@shared/contracts/app-quit.ts";
@@ -56,6 +52,14 @@ import {
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import {
+  type AppPreloadApi,
+  createAppPreloadApi,
+  createManagedPluginsPreloadApi,
+  createPluginRpcPreloadApi,
+  type ManagedPluginsPreloadApi,
+  type PluginRpcPreloadApi,
+} from "./plugin-management-api.ts";
+import {
   type PierPluginSettingsAPI,
   pluginSettingsApi,
 } from "./plugin-settings-api.ts";
@@ -88,17 +92,6 @@ export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
-}
-
-export interface PierAccountsAPI {
-  add: (provider: AgentAccountProviderId) => Promise<void>;
-  adoptCurrent: () => Promise<void>;
-  cancelLogin: (provider: AgentAccountProviderId) => Promise<void>;
-  onChanged: (cb: (snapshot: AgentAccountsSnapshot) => void) => () => void;
-  refreshUsage: () => Promise<void>;
-  remove: (accountId: string) => Promise<void>;
-  select: (accountId: string) => Promise<void>;
-  snapshot: () => Promise<AgentAccountsSnapshot>;
 }
 
 export interface PierNotificationsAPI {
@@ -229,9 +222,9 @@ export interface PierEnvAPI {
 }
 
 export interface PierWindowAPI {
-  accounts: PierAccountsAPI;
   agents: PierAgentsAPI;
   ai: PierAiAPI;
+  app: AppPreloadApi;
   appQuit: PierAppQuitAPI;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
@@ -245,8 +238,10 @@ export interface PierWindowAPI {
   git: PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
+  managedPlugins: ManagedPluginsPreloadApi;
   menu: PierMenuAPI;
   notifications: PierNotificationsAPI;
+  pluginRpc: PluginRpcPreloadApi;
   pluginSettings: PierPluginSettingsAPI;
   plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
@@ -267,28 +262,6 @@ const agentsApi: PierAgentsAPI = {
   prepareLaunch: (agentId: AgentKind) =>
     ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
   refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
-};
-
-const accountsApi: PierAccountsAPI = {
-  add: (provider) =>
-    invokePierCommand<void>({ provider, type: "accounts.add" }),
-  adoptCurrent: () =>
-    invokePierCommand<void>({ type: "accounts.adoptCurrent" }),
-  cancelLogin: (provider) =>
-    invokePierCommand<void>({ provider, type: "accounts.cancelLogin" }),
-  onChanged: (cb) =>
-    subscribeIpc<AgentAccountsSnapshot>(
-      PIER_BROADCAST.AGENT_ACCOUNTS_CHANGED,
-      cb
-    ),
-  refreshUsage: () =>
-    invokePierCommand<void>({ type: "accounts.refreshUsage" }),
-  remove: (accountId) =>
-    invokePierCommand<void>({ accountId, type: "accounts.remove" }),
-  select: (accountId) =>
-    invokePierCommand<void>({ accountId, type: "accounts.select" }),
-  snapshot: () =>
-    invokePierCommand<AgentAccountsSnapshot>({ type: "accounts.snapshot" }),
 };
 
 const appQuitApi: PierAppQuitAPI = {
@@ -439,7 +412,6 @@ const tasksApi: PierTasksAPI = {
 };
 
 const api: PierWindowAPI = {
-  accounts: accountsApi,
   agents: agentsApi,
   appQuit: appQuitApi,
   foregroundActivity: foregroundActivityApi,
@@ -471,6 +443,9 @@ const api: PierWindowAPI = {
   tasks: tasksApi,
   terminal: terminalApi,
   terminalStatusBarPrefs: terminalStatusBarPrefsApi,
+  managedPlugins: createManagedPluginsPreloadApi(),
+  pluginRpc: createPluginRpcPreloadApi(),
+  app: createAppPreloadApi(),
   theme: themeApi,
   window: {
     closeCurrent: () => ipcRenderer.invoke("pier://window:close-current"),
