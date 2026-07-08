@@ -16,8 +16,8 @@
         "1.0.0": {
           "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.0.0/pier.codex-1.0.0.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "dba80f5774a55adc814de7e86cf056e38a024ce65acbc0306737917c784fdffa",
-          "size": 13478
+          "sha256": "b2320dfdb93f3f2ef575b51cd98c283a56ff5100166c84f4e66485aeb60f6a3f",
+          "size": 13607
         }
       }
     }
@@ -27,6 +27,6 @@
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "XbOPAMazOPwWH9YbGqCDqR+QU4WKWLcvzFVGIW59ZUVQEA6PuFR8ay5rZWeNYOl9g4pyeKV0zPh8yLdmuvpjBw=="
+    "value": "WcTmukTbRGyhY14jYpK/sdRF/dMVRvAiFcxT7B+RXfnZiV0QzXUgbLQoN2AdfzwBp6h75l3yRgvneduxVnqDCw=="
   }
 }
