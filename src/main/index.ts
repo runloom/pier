@@ -241,6 +241,7 @@ const appQuitController = createAppQuitController({
       summaries,
     }),
   finalCleanup: () => {
+    appCore.services.tasks.dispose();
     windowManager.destroyAllForQuit();
     appCore.pluginHost.dispose();
     localControl?.close().catch(() => {

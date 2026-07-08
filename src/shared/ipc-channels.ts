@@ -51,6 +51,8 @@ export const PIER_BROADCAST = {
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
   // 终端状态栏用户覆盖变更后广播完整快照 (main → renderer, payload TerminalStatusBarPrefs).
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
+  // 后台任务状态变更广播 (main → renderer, payload TaskBackgroundSnapshot).
+  TASKS_BACKGROUND_CHANGED: "pier://tasks:background-changed",
   // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
   // 应用退出确认请求 (main → renderer, payload AppQuitConfirmationRequest).

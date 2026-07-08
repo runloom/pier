@@ -38,6 +38,7 @@ import {
 import { authorizeCommand } from "./permissions.ts";
 import { executePluginCommand } from "./plugin-commands.ts";
 import {
+  executeRunBackgroundSnapshotCommand,
   executeRunCancelCommand,
   executeRunListCommand,
   executeRunRecentCommand,
@@ -230,6 +231,8 @@ async function executeRunCommand(
   context: CommandExecutionContext
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
+    case "run.backgroundSnapshot":
+      return executeRunBackgroundSnapshotCommand(requestId, services);
     case "run.list":
       return await executeRunListCommand(requestId, command, services);
     case "run.spawn":

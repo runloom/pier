@@ -31,6 +31,7 @@ import { initKeybindingPreferences } from "./stores/keybinding-preferences.store
 import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
+import { initTaskBackgroundStore } from "./stores/task-background.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
@@ -67,6 +68,7 @@ async function bootstrap() {
       initAppQuitPreferences(),
       initAgentPreferences(),
       initTerminalStatusBarPrefs(),
+      initTaskBackgroundStore(),
       initWorktreePreferences(),
       initLocalEnvironments(),
     ]);

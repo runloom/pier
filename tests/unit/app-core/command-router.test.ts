@@ -331,7 +331,11 @@ function services(
       resolve: () => undefined,
     },
     tasks: createTaskService({
+      processEnvironment: {
+        resolve: resolveEnvironment,
+      },
       readRecentState: () => Promise.resolve({ entries: [], version: 1 }),
+      spawnBackgroundTask: () => ({ kill: () => undefined }),
       writeRecentState: () => Promise.resolve(),
     }),
     terminalLaunches: {
@@ -1261,6 +1265,111 @@ describe("createCommandRouter", () => {
     );
     expect(terminalOpenCommand).not.toHaveProperty("panelId");
     expect(terminalLaunches).toHaveLength(1);
+  });
+
+  it("run.spawn background starts without opening a terminal panel", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      undefined,
+      terminalLaunches
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const spawnResult = await router.execute({
+      clientEnv: { FROM_CLI: "cli" },
+      clientId: "desktop-1",
+      command: {
+        mode: "background",
+        projectRootPath: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn-background",
+    });
+
+    expect(spawnResult).toMatchObject({
+      data: {
+        panelIds: [],
+        runId: expect.any(String),
+        snapshot: {
+          nodes: {
+            "package-script:test": {
+              status: "running",
+              taskId: "package-script:test",
+              windowId: "main",
+            },
+          },
+          status: "running",
+        },
+        status: "started",
+      },
+      ok: true,
+      requestId: "req-run-spawn-background",
+    });
+    expect(rendererCommands).not.toContainEqual(
+      expect.objectContaining({ type: "terminal.open" })
+    );
+    expect(terminalLaunches).toHaveLength(0);
+    expect(fakeServices.tasks.backgroundSnapshot()).toMatchObject({
+      runs: {
+        [process.cwd()]: {
+          "package-script:test": {
+            status: "running",
+            taskId: "package-script:test",
+          },
+        },
+      },
+    });
+  });
+
+  it("run.spawn background closes a prior terminal task panel before restarting", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await router.execute({
+      clientId: "desktop-1",
+      command: {
+        projectRootPath: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn-terminal-before-background",
+    });
+    rendererCommands.length = 0;
+
+    await router.execute({
+      clientId: "desktop-1",
+      command: {
+        mode: "background",
+        projectRootPath: process.cwd(),
+        taskId: "package-script:test",
+        type: "run.spawn",
+        windowId: "main",
+      },
+      protocolVersion: 1,
+      requestId: "req-run-spawn-background-restart-terminal",
+    });
+
+    expect(rendererCommands).toContainEqual(
+      expect.objectContaining({
+        panelId: "terminal-from-renderer",
+        type: "panel.close",
+        windowId: "main",
+      })
+    );
   });
 
   it("run.spawn 重新解析任务并复用运行中和已完成的 terminal.open", async () => {

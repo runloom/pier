@@ -23,6 +23,8 @@ const FLUSH_BEFORE_QUIT_EXTERNAL_PLUGINS_RE =
   /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1600}?appCore\.flushExternalPluginsBeforeQuit\(\)/;
 const FINAL_CLEANUP_DESTROYS_WINDOWS_RE =
   /createAppQuitController\(\{[\s\S]{0,2500}?finalCleanup:\s*\(\)\s*=>\s*\{[\s\S]{0,500}?windowManager\.destroyAllForQuit\(\)/;
+const FINAL_CLEANUP_DISPOSES_TASKS_RE =
+  /createAppQuitController\(\{[\s\S]{0,2500}?finalCleanup:\s*\(\)\s*=>\s*\{[\s\S]{0,500}?appCore\.services\.tasks\.dispose\(\)/;
 const BEFORE_QUIT_GUARDS_SECOND_INSTANCE_RE =
   /app\.on\("before-quit",\s*\(event\) => \{\s*if \(\s*!gotTheLock\s*\) \{\s*return;\s*\}\s*appQuitController\.handleBeforeQuit\(event\);\s*\}\);/;
 const CLOSE_GUARD_FLUSH_RE =
@@ -52,6 +54,10 @@ describe("window lifecycle persistence invariants", () => {
 
   it("injects finalCleanup that destroys all windows for quit", () => {
     expect(MAIN_SOURCE).toMatch(FINAL_CLEANUP_DESTROYS_WINDOWS_RE);
+  });
+
+  it("injects finalCleanup that disposes task-owned background processes", () => {
+    expect(MAIN_SOURCE).toMatch(FINAL_CLEANUP_DISPOSES_TASKS_RE);
   });
 
   it("does not run the app quit controller for a second-instance quit", () => {

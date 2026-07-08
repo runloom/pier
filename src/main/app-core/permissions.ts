@@ -48,6 +48,7 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "preferences.read": { capabilities: ["preferences:read"] },
   "preferences.update": { capabilities: ["preferences:write"] },
   "run.cancel": { capabilities: ["workspace:open"] },
+  "run.backgroundSnapshot": { capabilities: ["workspace:read"] },
   "run.list": { capabilities: ["workspace:read"] },
   "run.recent": { capabilities: ["workspace:read"] },
   "run.spawn": { capabilities: ["workspace:open"] },

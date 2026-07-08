@@ -27,8 +27,10 @@ import {
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
 import type {
+  TaskBackgroundSnapshot,
   TaskListResult,
   TaskRunSnapshot,
+  TaskSpawnMode,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
@@ -189,12 +191,17 @@ export interface PierSettingsAPI {
 }
 
 export interface PierTasksAPI {
+  backgroundSnapshot: () => Promise<TaskBackgroundSnapshot>;
   cancel: (args: { runId: string }) => Promise<TaskRunSnapshot>;
   list: (args: { projectRootPath: string }) => Promise<TaskListResult>;
+  onBackgroundChanged: (
+    cb: (snapshot: TaskBackgroundSnapshot) => void
+  ) => () => void;
   spawn: (args: {
     focus?: boolean;
     forceRestart?: boolean;
     inputs?: Record<string, string>;
+    mode?: TaskSpawnMode;
     placement?:
       | "active-tab"
       | "split-right"
@@ -379,6 +386,10 @@ const keybindingApi: PierKeybindingAPI = {
 };
 
 const tasksApi: PierTasksAPI = {
+  backgroundSnapshot: () =>
+    invokePierCommand<TaskBackgroundSnapshot>({
+      type: "run.backgroundSnapshot",
+    }),
   cancel: (args) =>
     invokePierCommand<TaskRunSnapshot>({
       runId: args.runId,
@@ -389,6 +400,8 @@ const tasksApi: PierTasksAPI = {
       projectRootPath: args.projectRootPath,
       type: "run.list",
     }),
+  onBackgroundChanged: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TASKS_BACKGROUND_CHANGED, cb),
   spawn: (args) =>
     invokePierCommand<TaskSpawnResult>({
       ...(args.focus === undefined ? {} : { focus: args.focus }),
@@ -396,6 +409,7 @@ const tasksApi: PierTasksAPI = {
         ? {}
         : { forceRestart: args.forceRestart }),
       ...(args.inputs ? { inputs: args.inputs } : {}),
+      ...(args.mode ? { mode: args.mode } : {}),
       ...(args.placement ? { placement: args.placement } : {}),
       projectRootPath: args.projectRootPath,
       ...(args.terminalPanelId

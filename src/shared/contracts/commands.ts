@@ -41,6 +41,7 @@ import {
   pluginUpdateCommandSchema,
 } from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
+import { taskSpawnModeSchema } from "./tasks.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
   terminalLaunchEnvKeySchema,
@@ -114,9 +115,13 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("run.list"),
   }),
   z.object({
+    type: z.literal("run.backgroundSnapshot"),
+  }),
+  z.object({
     focus: z.boolean().optional(),
     forceRestart: z.boolean().optional(),
     inputs: z.record(z.string().min(1), z.string()).optional(),
+    mode: taskSpawnModeSchema.optional(),
     placement: pierCommandPlacementSchema.optional(),
     projectRootPath: z.string().min(1),
     taskId: z.string().min(1),

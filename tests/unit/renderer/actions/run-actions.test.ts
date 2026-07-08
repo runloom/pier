@@ -11,6 +11,7 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { registerRunActions } from "@/lib/actions/run-actions.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useTerminalTaskHistoryStore } from "@/stores/terminal-task-history.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("sonner", () => ({
@@ -102,6 +103,31 @@ function installWorkspaceApi() {
   return { api, terminalCurrent, terminalOther };
 }
 
+function installWebWorkspaceApi() {
+  const webCurrent = panel("web-current", "file-viewer");
+  const terminalOther = panel("terminal-other");
+  const api = {
+    activePanel: webCurrent,
+    groups: [{ panels: [webCurrent, terminalOther] }],
+    panels: [webCurrent, terminalOther],
+  };
+  useWorkspaceStore.getState().setApi(api as unknown as DockviewApi);
+  usePanelDescriptorStore.setState({
+    activeId: "web-current",
+    descriptors: {
+      "web-current": {
+        context: context("/Users/xyz/ABC/pier"),
+        display: { short: "README.md" },
+      },
+      "terminal-other": {
+        context: context("/Users/xyz/ABC/loomdesk"),
+        display: { short: "loomdesk" },
+      },
+    },
+  });
+  return { api, terminalOther, webCurrent };
+}
+
 function taskList(projectRoot = "/Users/xyz/ABC/pier"): TaskListResult {
   return {
     errors: [],
@@ -168,6 +194,7 @@ describe("run actions", () => {
     });
     useWorkspaceStore.getState().setApi(null);
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+    useTerminalTaskHistoryStore.setState({ panels: {}, version: 0 });
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -191,6 +218,7 @@ describe("run actions", () => {
     disposeRunActions = null;
     useWorkspaceStore.getState().setApi(null);
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+    useTerminalTaskHistoryStore.setState({ panels: {}, version: 0 });
     useCommandPaletteController.setState({
       mode: "commands",
       open: false,
@@ -336,8 +364,47 @@ describe("run actions", () => {
     });
   });
 
-  it("spawns the selected task through the task bridge", async () => {
+  it("spawns the selected task in the background when Run Task is invoked from a terminal panel", async () => {
     installWorkspaceApi();
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.task")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const target = quickPick?.sections
+      ?.flatMap((section) => section.items)
+      .find((item) => item.id === "package-script:test");
+    if (!(quickPick && target)) {
+      throw new Error("expected task item");
+    }
+
+    await quickPick.onAccept(target);
+
+    expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
+      focus: false,
+      forceRestart: false,
+      mode: "background",
+      placement: "active-tab",
+      projectRootPath: "/Users/xyz/ABC/pier",
+      taskId: "package-script:test",
+    });
+    expect(
+      useTerminalTaskHistoryStore.getState().panels["terminal-current"]?.[
+        "package-script:test"
+      ]
+    ).toMatchObject({
+      detail: "pnpm run test",
+      label: "test",
+      panelId: "terminal-current",
+      projectRootPath: "/Users/xyz/ABC/pier",
+      status: "running",
+      taskId: "package-script:test",
+    });
+    expect(quickPick.renderItem).toBeUndefined();
+  });
+
+  it("falls back to a terminal tab when Run Task is invoked from a non-terminal project panel", async () => {
+    installWebWorkspaceApi();
     disposeRunActions = registerRunActions();
 
     await actionRegistry.get("pier.run.task")?.handler();
@@ -359,6 +426,8 @@ describe("run actions", () => {
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
+    expect(useTerminalTaskHistoryStore.getState().panels).toEqual({});
+    expect(quickPick.renderItem).toBeUndefined();
   });
 
   it("does not locally activate an already-running task panel after main focuses it", async () => {
@@ -534,9 +603,10 @@ describe("run actions", () => {
 
     expect(promptSpy).toHaveBeenCalledWith("Target package", "web");
     expect(window.pier.tasks.spawn).toHaveBeenLastCalledWith({
-      focus: true,
+      focus: false,
       forceRestart: false,
       inputs: { pkg: "renderer" },
+      mode: "background",
       placement: "active-tab",
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
