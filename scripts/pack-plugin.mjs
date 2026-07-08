@@ -43,6 +43,7 @@ if (manifest.version !== packageJson.version) {
 const outDir = join(pluginDir, "dist-pkg");
 await rm(outDir, { force: true, recursive: true });
 await mkdir(outDir, { recursive: true });
+await writeFile(join(outDir, "plugin.json"), await readFile(manifestPath));
 
 const archiveName = `${manifest.id}-${manifest.version}.tgz`;
 const archivePath = join(outDir, archiveName);

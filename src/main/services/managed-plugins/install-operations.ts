@@ -86,6 +86,11 @@ export async function performInstall(
   const state = ctx.store.get();
   const existing = state.plugins[id];
   const source = await resolveInstallSource(ctx, bundled);
+  const isInstalledUpdate = Boolean(
+    existing?.activeVersion &&
+      existing.activeVersion !== source.version &&
+      !existing.uninstalledAt
+  );
   // Already at the target version and not tombstoned — no-op in prod.
   if (
     existing?.activeVersion === source.version &&
@@ -139,7 +144,9 @@ export async function performInstall(
             sha256: source.sha256,
           },
         },
-        pendingRestart: null,
+        pendingRestart: isInstalledUpdate
+          ? { kind: "update", version: source.version }
+          : null,
         pendingUpdate: null,
         source: {
           kind: "official",
@@ -163,7 +170,7 @@ export async function performInstall(
   return {
     ok: true as const,
     pluginId: id,
-    requiresRestart: false,
+    requiresRestart: isInstalledUpdate,
     version: source.version,
   };
 }

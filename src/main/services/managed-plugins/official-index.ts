@@ -78,6 +78,7 @@ export interface FetchOfficialPluginIndexOptions {
   cachePath: string;
   env: Record<string, string | undefined>;
   fetchRawJson?: (url: string) => Promise<string>;
+  indexUrl?: string;
   now?: () => number;
   runtimeMode: "development" | "production" | "test";
   verifySignature?: (args: {
@@ -335,12 +336,12 @@ export async function fetchOfficialPluginIndex(
   const isDevRuntime =
     options.runtimeMode === "development" || options.runtimeMode === "test";
 
-  let url = DEFAULT_OFFICIAL_PLUGIN_INDEX_URL;
+  let url = options.indexUrl ?? DEFAULT_OFFICIAL_PLUGIN_INDEX_URL;
   const envOverride = options.env.PIER_OFFICIAL_PLUGIN_INDEX_URL;
   if (envOverride) {
     if (isDevRuntime) {
       url = envOverride;
-    } else {
+    } else if (!options.indexUrl) {
       diagnostics.push({
         code: "env_override_ignored",
         message: "ignored PIER_OFFICIAL_PLUGIN_INDEX_URL in production runtime",

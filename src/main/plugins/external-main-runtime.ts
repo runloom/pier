@@ -24,6 +24,13 @@ export interface ExternalMainPluginContext {
   events: {
     emit(event: string, payload: unknown): void;
   };
+  legacyCodexAccounts?: {
+    readonly legacyAgentAccountsBaseDir: string;
+    readonly legacyAgentAccountsStateFile: string;
+    readLegacyAuthJson(accountId: string): Promise<string | null>;
+    readLegacySecretsStoreEntry(key: string): Promise<string | null>;
+    readLegacyStateFile(): Promise<string | null>;
+  };
   lifecycle: {
     onBeforeQuit(callback: () => Promise<void> | void): void;
   };

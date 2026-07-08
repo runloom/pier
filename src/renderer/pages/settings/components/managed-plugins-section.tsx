@@ -25,6 +25,7 @@ import {
   type CatalogRow,
   type ManagedPluginsWindowShim,
   ManagedRowExtraActions,
+  rejectFailedManagedPluginOperation,
 } from "./managed-plugin-rows.tsx";
 import { PluginRow, PluginsLoadingState } from "./plugin-row.tsx";
 
@@ -60,7 +61,6 @@ function useCatalog(): {
       .catch((err: unknown) => {
         console.error("[managed-plugins] list failed:", err);
       });
-    // biome-ignore lint/correctness/useExhaustiveDependencies: win is stable after preload
   }, []);
 
   const checkUpdates = useCallback((): void => {
@@ -73,7 +73,6 @@ function useCatalog(): {
         console.error("[managed-plugins] check updates failed:", err);
       })
       .finally(() => setCheckingUpdates(false));
-    // biome-ignore lint/correctness/useExhaustiveDependencies: win is stable after preload
   }, []);
 
   useEffect(() => {
@@ -122,14 +121,18 @@ function UnifiedList({
   rows,
   win,
   onRefreshManaged,
+  onToggleManaged,
   onToggleBuiltin,
+  pendingManagedId,
   pendingBuiltinId,
   emptyKey,
 }: {
   rows: readonly UnifiedRow[];
   win: ManagedPluginsWindowShim | undefined;
   onRefreshManaged: () => void;
+  onToggleManaged(entry: PluginRegistryEntry, row: CatalogRow): void;
   onToggleBuiltin(entry: PluginRegistryEntry): void;
+  pendingManagedId: string | null;
   pendingBuiltinId: string | null;
   emptyKey: "emptyInstalled" | "emptyAvailable";
 }): JSX.Element {
@@ -140,38 +143,69 @@ function UnifiedList({
     <ItemGroup className="gap-0" role="list">
       {rows.map((row, index) => {
         const key = row.kind === "entry" ? row.entry.manifest.id : row.row.id;
-        const extraActions: ReactNode =
-          row.kind === "entry" && row.managedRow ? (
-            <ManagedRowExtraActions
-              onRefresh={onRefreshManaged}
-              row={row.managedRow}
-              win={win}
-            />
-          ) : null;
-        return (
-          <Fragment key={key}>
-            {index > 0 ? (
-              <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
-            ) : null}
-            {row.kind === "entry" ? (
-              <PluginRow
-                entry={row.entry}
-                extraActions={extraActions}
-                onToggle={onToggleBuiltin}
-                pending={pendingBuiltinId === row.entry.manifest.id}
-              />
-            ) : (
+        if (row.kind === "available") {
+          return (
+            <Fragment key={key}>
+              {index > 0 ? (
+                <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
+              ) : null}
               <AvailableManagedRow
                 onRefresh={onRefreshManaged}
                 row={row.row}
                 win={win}
               />
-            )}
+            </Fragment>
+          );
+        }
+        const managedRow = row.managedRow;
+        const displayEntry = managedRow
+          ? withManagedDesiredState(row.entry, managedRow)
+          : row.entry;
+        const extraActions: ReactNode = managedRow ? (
+          <ManagedRowExtraActions
+            onRefresh={onRefreshManaged}
+            row={managedRow}
+            win={win}
+          />
+        ) : null;
+        return (
+          <Fragment key={key}>
+            {index > 0 ? (
+              <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
+            ) : null}
+            <PluginRow
+              entry={displayEntry}
+              extraActions={extraActions}
+              onToggle={
+                managedRow
+                  ? (entry) => onToggleManaged(entry, managedRow)
+                  : onToggleBuiltin
+              }
+              pending={
+                managedRow
+                  ? pendingManagedId === row.entry.manifest.id
+                  : pendingBuiltinId === row.entry.manifest.id
+              }
+            />
           </Fragment>
         );
       })}
     </ItemGroup>
   );
+}
+
+function withManagedDesiredState(
+  entry: PluginRegistryEntry,
+  row: CatalogRow
+): PluginRegistryEntry {
+  return {
+    ...entry,
+    enabled: row.desired.enabled,
+    runtime: {
+      ...entry.runtime,
+      enabled: row.desired.enabled,
+    },
+  };
 }
 
 export function ManagedPluginsSection({
@@ -187,6 +221,7 @@ export function ManagedPluginsSection({
 }): JSX.Element {
   const t = useT();
   const { catalog, refresh, checkUpdates, checkingUpdates, win } = useCatalog();
+  const [pendingManagedId, setPendingManagedId] = useState<string | null>(null);
 
   const managedById = new Map(catalog?.plugins.map((p) => [p.id, p]) ?? []);
   // Trust catalog.installed over registry presence: main broadcasts
@@ -213,6 +248,28 @@ export function ManagedPluginsSection({
     .map((row) => ({ kind: "available", row }));
   const anyPendingRestart = catalog?.plugins.some(
     (p) => p.pendingRestart !== null
+  );
+
+  const toggleManaged = useCallback(
+    (entry: PluginRegistryEntry, row: CatalogRow): void => {
+      const request = row.desired.enabled
+        ? win?.managedPlugins?.disable(entry.manifest.id)
+        : win?.managedPlugins?.enable(entry.manifest.id);
+      if (!request) {
+        return;
+      }
+      setPendingManagedId(entry.manifest.id);
+      rejectFailedManagedPluginOperation(request)
+        .then(refresh)
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          toast.error(message);
+        })
+        .finally(() => {
+          setPendingManagedId(null);
+        });
+    },
+    [refresh, win]
   );
 
   if (!builtinInitialized) {
@@ -271,7 +328,9 @@ export function ManagedPluginsSection({
             emptyKey="emptyInstalled"
             onRefreshManaged={refresh}
             onToggleBuiltin={onToggleBuiltin}
+            onToggleManaged={toggleManaged}
             pendingBuiltinId={pendingBuiltinId}
+            pendingManagedId={pendingManagedId}
             rows={installedRows}
             win={win}
           />
@@ -281,7 +340,9 @@ export function ManagedPluginsSection({
             emptyKey="emptyAvailable"
             onRefreshManaged={refresh}
             onToggleBuiltin={onToggleBuiltin}
+            onToggleManaged={toggleManaged}
             pendingBuiltinId={pendingBuiltinId}
+            pendingManagedId={pendingManagedId}
             rows={availableRows}
             win={win}
           />

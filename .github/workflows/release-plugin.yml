@@ -90,6 +90,10 @@ jobs:
             ${{ steps.locate.outputs.tgz }}.sha256
 
       - name: Regenerate plugin index
+        env:
+          PIER_PLUGIN_INDEX_REQUIRE_SIGNATURE: "1"
+          PIER_PLUGIN_INDEX_SIGNING_KEY_ID: ${{ secrets.PIER_PLUGIN_INDEX_SIGNING_KEY_ID }}
+          PIER_PLUGIN_INDEX_SIGNING_PRIVATE_KEY_BASE64: ${{ secrets.PIER_PLUGIN_INDEX_SIGNING_PRIVATE_KEY_BASE64 }}
         run: pnpm plugins:index
 
       - name: Commit index update

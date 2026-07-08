@@ -214,6 +214,11 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
   }
 
   await Promise.all([
+    appCore.flushExternalPluginsBeforeQuit().catch((error) => {
+      appQuitLog.error("failed to flush external plugins before quit", {
+        error,
+      });
+    }),
     appCore.services.window.flushOpenWindows().catch((error) => {
       windowLog.error("failed to flush windows before quit", { error });
     }),

@@ -45,9 +45,38 @@ export function AccountsWidget({ context }: AccountsWidgetProps): JSX.Element {
   if (!snapshot) {
     return <div>Codex accounts loading</div>;
   }
+  const invoke = (method: string, payload: unknown = null): void => {
+    context.rpc.invoke(method, payload).catch(() => {
+      /* RPC errors surface through the next snapshot/error state. */
+    });
+  };
   return (
     <div>
       <h4>Codex Accounts</h4>
+      <div>
+        <button
+          disabled={snapshot.login !== null}
+          onClick={() => invoke("accounts.add", {})}
+          type="button"
+        >
+          Add account
+        </button>
+        <button
+          disabled={snapshot.login !== null}
+          onClick={() => invoke("accounts.adoptCurrent", null)}
+          type="button"
+        >
+          Use current login
+        </button>
+        {snapshot.login ? (
+          <button
+            onClick={() => invoke("accounts.cancelLogin", null)}
+            type="button"
+          >
+            Cancel login
+          </button>
+        ) : null}
+      </div>
       {snapshot.accounts.length === 0 ? (
         <p>No accounts yet.</p>
       ) : (
@@ -56,15 +85,35 @@ export function AccountsWidget({ context }: AccountsWidgetProps): JSX.Element {
             <li key={account.id}>
               {account.label} ({account.status})
               {account.id === snapshot.activeAccountId && " · active"}
+              {account.id === snapshot.activeAccountId ? null : (
+                <>
+                  <button
+                    aria-label={`Switch to ${account.label}`}
+                    onClick={() =>
+                      invoke("accounts.select", { accountId: account.id })
+                    }
+                    type="button"
+                  >
+                    Switch
+                  </button>
+                  <button
+                    aria-label={`Remove ${account.label}`}
+                    onClick={() =>
+                      invoke("accounts.remove", { accountId: account.id })
+                    }
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>
       )}
       <button
         onClick={() => {
-          context.rpc.invoke("accounts.refreshUsage", null).catch(() => {
-            /* no-op */
-          });
+          invoke("accounts.refreshUsage", null);
         }}
         type="button"
       >

@@ -1,6 +1,9 @@
 import { Button } from "@pier/ui/button.tsx";
 import { Item, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
-import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import type {
+  ManagedPluginCatalogSnapshot,
+  ManagedPluginOperationResult,
+} from "@shared/contracts/managed-plugin.ts";
 import i18next from "i18next";
 import { Loader2, Package } from "lucide-react";
 import { type JSX, useState } from "react";
@@ -83,6 +86,33 @@ const FAILED_KEY: Record<OpKind, string> = {
   rollback: "rollbackFailed",
 };
 
+function isManagedOperationFailure(
+  result: unknown
+): result is Extract<ManagedPluginOperationResult, { ok: false }> {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "ok" in result &&
+    result.ok === false &&
+    "error" in result &&
+    typeof result.error === "object" &&
+    result.error !== null &&
+    "message" in result.error &&
+    typeof result.error.message === "string"
+  );
+}
+
+export function rejectFailedManagedPluginOperation<T>(
+  op: Promise<T>
+): Promise<T> {
+  return op.then((result) => {
+    if (isManagedOperationFailure(result)) {
+      throw new Error(result.error.message);
+    }
+    return result;
+  });
+}
+
 /**
  * Shared across install/uninstall/update/rollback buttons.
  *   - flips `pending` while the promise is in-flight
@@ -109,7 +139,7 @@ export function usePluginOp(
   ): void => {
     if (!op) return;
     setPending(true);
-    const p = op.finally(() => {
+    const p = rejectFailedManagedPluginOperation(op).finally(() => {
       setPending(false);
       onRefresh();
     });

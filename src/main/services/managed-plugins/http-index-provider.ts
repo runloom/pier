@@ -1,5 +1,6 @@
 import type { OfficialPluginIndex } from "@shared/contracts/managed-plugin.ts";
 import {
+  type FetchOfficialPluginIndexOptions,
   fetchOfficialPluginIndex,
   type OfficialIndexDiagnostic,
   type OfficialIndexSource,
@@ -27,10 +28,12 @@ export { DEFAULT_OFFICIAL_PLUGIN_INDEX_URL } from "./official-index.ts";
 export interface HttpOfficialIndexProviderOptions {
   readonly cachePath: string;
   readonly env?: Record<string, string | undefined>;
+  readonly fetchRawJson?: (url: string) => Promise<string>;
   readonly indexUrl?: string;
   readonly logger?: (diagnostics: readonly OfficialIndexDiagnostic[]) => void;
   readonly now?: () => number;
   readonly runtimeMode: "development" | "production" | "test";
+  readonly verifySignature?: FetchOfficialPluginIndexOptions["verifySignature"];
 }
 
 export interface HttpOfficialIndexProvider {
@@ -58,8 +61,13 @@ export function createHttpOfficialIndexProvider(
     const result = await fetchOfficialPluginIndex({
       cachePath: options.cachePath,
       env: options.env ?? process.env,
+      fetchRawJson: options.fetchRawJson ?? fetchRawJsonWithGlobalFetch,
+      ...(options.indexUrl ? { indexUrl: options.indexUrl } : {}),
       runtimeMode: options.runtimeMode,
       ...(options.now ? { now: options.now } : {}),
+      ...(options.verifySignature
+        ? { verifySignature: options.verifySignature }
+        : {}),
     });
     if (result.index) {
       cached = result.index;
@@ -79,4 +87,15 @@ export function createHttpOfficialIndexProvider(
     refresh,
     whenReady: () => ready.promise,
   };
+}
+
+async function fetchRawJsonWithGlobalFetch(url: string): Promise<string> {
+  if (typeof fetch !== "function") {
+    throw new Error("global fetch is unavailable in this runtime");
+  }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  }
+  return response.text();
 }

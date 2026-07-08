@@ -197,6 +197,47 @@ describe("managed plugin install service", () => {
     expect(secondResult).toMatchObject({ ok: true, requiresRestart: false });
   });
 
+  it("updating an installed plugin marks the new version as pending restart", async () => {
+    const seedV1 = await createSeedArchive("1.0.0");
+    const { service: firstSession } = await createService({
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+    await firstSession.install("pier.codex");
+
+    const seedV2 = await createSeedArchive("1.0.1");
+    const { service: sameBootSession } = await createService({
+      bundledArchive: seedV2,
+      bundledVersion: "1.0.1",
+      runtimeMode: "production",
+    });
+
+    const updateResult = await sameBootSession.install("pier.codex");
+
+    expect(updateResult).toMatchObject({
+      ok: true,
+      pluginId: "pier.codex",
+      requiresRestart: true,
+      version: "1.0.1",
+    });
+    const index = sameBootSession.getIndex();
+    expect(index.plugins["pier.codex"]).toMatchObject({
+      activeVersion: "1.0.1",
+      effectiveAtStartup: {
+        enabled: true,
+        sourceKind: "official",
+        version: "1.0.0",
+      },
+      pendingRestart: { kind: "update", version: "1.0.1" },
+    });
+    const catalog = await sameBootSession.listCatalogSnapshot();
+    expect(catalog.plugins[0]?.pendingRestart).toEqual({
+      kind: "update",
+      version: "1.0.1",
+    });
+  });
+
   it("disable is next-start: current session still shows plugin as effective", async () => {
     const seed = await createSeedArchive();
     const { service } = await createService({

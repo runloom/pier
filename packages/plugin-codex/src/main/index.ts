@@ -12,9 +12,20 @@ import { createCodexAccountsService } from "./accounts-service.ts";
 import { createCodexProvider } from "./codex-provider.ts";
 import { createCodexAccountsStateStore } from "./state.ts";
 
+interface CodexPrivateMainPluginContext extends MainPluginContext {
+  legacyCodexAccounts?: {
+    readonly legacyAgentAccountsBaseDir: string;
+    readonly legacyAgentAccountsStateFile: string;
+    readLegacyAuthJson(accountId: string): Promise<string | null>;
+    readLegacySecretsStoreEntry(key: string): Promise<string | null>;
+    readLegacyStateFile(): Promise<string | null>;
+  };
+}
+
 export const plugin: MainPluginModule = {
   id: "pier.codex",
   activate(context: MainPluginContext): () => void {
+    const codexContext = context as CodexPrivateMainPluginContext;
     const stateStore = createCodexAccountsStateStore(
       join(context.paths.workDir, "accounts.json")
     );
@@ -24,6 +35,9 @@ export const plugin: MainPluginModule = {
       managedBaseDir,
       provider,
       stateStore,
+      ...(codexContext.legacyCodexAccounts
+        ? { legacyMigration: codexContext.legacyCodexAccounts }
+        : {}),
       onChanged: (snapshot) =>
         context.events.emit("accounts.changed", snapshot),
     });

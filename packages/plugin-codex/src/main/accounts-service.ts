@@ -13,6 +13,10 @@ import type {
   SelectAccountPayload,
 } from "../shared/accounts.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
+import {
+  type CodexLegacyMigrationAdapter,
+  migrateLegacyAccountsToState,
+} from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
 import type { CodexAccountRecord, CodexAccountsStateStore } from "./state.ts";
 import type { AccountUsageResult, AgentAccountProvider } from "./types.ts";
@@ -21,10 +25,10 @@ const USAGE_MIN_REFETCH_MS = 5 * 60 * 1000;
 const USAGE_POLL_INTERVAL_MS = 15 * 60 * 1000;
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const WATCH_SUPPRESS_MS = 1500;
-
 export interface CodexAccountsServiceOpts {
   ensureUsageEnv?: () => Promise<void>;
   hasVisibleTarget?: () => boolean;
+  legacyMigration?: CodexLegacyMigrationAdapter;
   managedBaseDir: string;
   onChanged: (snapshot: CodexAccountsSnapshot) => void;
   provider: AgentAccountProvider;
@@ -69,11 +73,12 @@ export function createCodexAccountsService(
 
   let mutationQueue: Promise<void> = Promise.resolve();
 
-  function enqueueMutation(fn: () => Promise<void>): Promise<void> {
+  function enqueueMutation<T>(fn: () => Promise<T>): Promise<T> {
     const task = mutationQueue.then(fn, fn);
-    mutationQueue = task.catch(() => {
-      /* keep chain alive */
-    });
+    mutationQueue = task.then(
+      () => undefined,
+      () => undefined
+    );
     return task;
   }
 
@@ -156,9 +161,11 @@ export function createCodexAccountsService(
             ? {
                 ...a,
                 email: identity.email,
-                planType: identity.planType,
-                providerAccountId: identity.providerAccountId,
                 updatedAt: now(),
+                ...(identity.planType ? { planType: identity.planType } : {}),
+                ...(identity.providerAccountId
+                  ? { providerAccountId: identity.providerAccountId }
+                  : {}),
               }
             : a
         ),
@@ -173,10 +180,12 @@ export function createCodexAccountsService(
         createdAt: now(),
         email: identity.email,
         id,
-        planType: identity.planType,
         provider: "codex",
-        providerAccountId: identity.providerAccountId,
         updatedAt: now(),
+        ...(identity.planType ? { planType: identity.planType } : {}),
+        ...(identity.providerAccountId
+          ? { providerAccountId: identity.providerAccountId }
+          : {}),
       };
       stateStore.mutate((s) => ({
         ...s,
@@ -186,6 +195,27 @@ export function createCodexAccountsService(
       }));
     }
     emitSnapshot();
+  }
+
+  async function migrateLegacyAccountsIfNeeded(): Promise<boolean> {
+    const legacyMigration = opts.legacyMigration;
+    const result = await migrateLegacyAccountsToState({
+      ensureManagedDir,
+      ...(legacyMigration ? { legacyMigration } : {}),
+      now,
+      stateStore,
+    });
+    if (!result.migrated) {
+      return false;
+    }
+    if (result.activeAccountId) {
+      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+      await provider.materialize(accountHomeDir(result.activeAccountId));
+      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+    }
+    await stateStore.flush();
+    emitSnapshot();
+    return true;
   }
 
   async function doAdd(): Promise<void> {
@@ -236,9 +266,11 @@ export function createCodexAccountsService(
                   ...a,
                   email: identity.email,
                   lastAuthenticatedAt: now(),
-                  planType: identity.planType,
-                  providerAccountId: identity.providerAccountId,
                   updatedAt: now(),
+                  ...(identity.planType ? { planType: identity.planType } : {}),
+                  ...(identity.providerAccountId
+                    ? { providerAccountId: identity.providerAccountId }
+                    : {}),
                 }
               : a
           ),
@@ -250,10 +282,12 @@ export function createCodexAccountsService(
           email: identity.email,
           id,
           lastAuthenticatedAt: now(),
-          planType: identity.planType,
           provider: "codex",
-          providerAccountId: identity.providerAccountId,
           updatedAt: now(),
+          ...(identity.planType ? { planType: identity.planType } : {}),
+          ...(identity.providerAccountId
+            ? { providerAccountId: identity.providerAccountId }
+            : {}),
         };
         stateStore.mutate((s) => ({
           ...s,
@@ -361,9 +395,9 @@ export function createCodexAccountsService(
       fetchedAt: now(),
       raw: result,
       status: result.status,
-      error: result.error,
-      session: result.session,
-      weekly: result.weekly,
+      ...(result.error ? { error: result.error } : {}),
+      ...(result.session ? { session: result.session } : {}),
+      ...(result.weekly ? { weekly: result.weekly } : {}),
     };
     emitSnapshot();
   }
@@ -419,8 +453,8 @@ export function createCodexAccountsService(
       await stateStore.init();
       const state = stateStore.get();
       if (state.accounts.length === 0) {
-        const identity = await provider.readIdentity(realCodexHome());
-        if (identity) {
+        const migrated = await enqueueMutation(migrateLegacyAccountsIfNeeded);
+        if (!migrated && (await provider.readIdentity(realCodexHome()))) {
           await enqueueMutation(doAdoptCurrent);
         }
       } else {

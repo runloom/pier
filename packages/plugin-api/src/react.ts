@@ -11,6 +11,8 @@
 interface PierPluginShared {
   React: typeof import("react");
   ReactDOMClient: typeof import("react-dom/client");
+  ReactJSXDevRuntime: typeof import("react/jsx-dev-runtime");
+  ReactJSXRuntime: typeof import("react/jsx-runtime");
 }
 
 // Runtime access — the injection happens before plugin renderer entries load.

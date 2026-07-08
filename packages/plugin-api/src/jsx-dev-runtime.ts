@@ -7,9 +7,7 @@ if (!shared) {
   );
 }
 
-const { React } = shared;
+const { ReactJSXDevRuntime } = shared;
 
-export const jsxDEV = (
-  React as unknown as { jsxDEV: (...args: unknown[]) => unknown }
-).jsxDEV;
-export const Fragment = React.Fragment;
+export const jsxDEV = ReactJSXDevRuntime.jsxDEV;
+export const Fragment = ReactJSXDevRuntime.Fragment;

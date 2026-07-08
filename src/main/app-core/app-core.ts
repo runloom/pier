@@ -22,6 +22,7 @@ import {
 } from "../plugins/plugin-rpc-bus.ts";
 import { registerPluginRpcIpc } from "../plugins/plugin-rpc-ipc.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
+import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
@@ -75,6 +76,7 @@ export interface PierAppCore {
   clients: PierClientRegistry;
   commandRouter: CommandRouter;
   eventBus: PierEventBus;
+  flushExternalPluginsBeforeQuit(): Promise<void>;
   pluginHost: MainPluginHostApi;
   services: PierCoreServices;
 }
@@ -279,6 +281,14 @@ function createPierAppCore(): PierAppCore {
             pluginRpcBus.emit(source.id, event, payload),
         },
         lifecycle: { onBeforeQuit: () => {} },
+        ...(source.id === "pier.codex"
+          ? {
+              legacyCodexAccounts: createCodexLegacyMigrationAdapter({
+                secretsStore: secrets,
+                userDataDir: app.getPath("userData"),
+              }),
+            }
+          : {}),
         logger: createLogger(source.id),
         paths: {
           dataDir: managedPluginPaths.workDir,
@@ -420,6 +430,8 @@ function createPierAppCore(): PierAppCore {
     clients,
     commandRouter: createCommandRouter({ clients, services }),
     eventBus,
+    flushExternalPluginsBeforeQuit: () =>
+      externalMainRuntime.flushAllBeforeQuit(),
     pluginHost,
     services,
   };
