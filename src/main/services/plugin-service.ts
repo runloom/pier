@@ -67,6 +67,7 @@ export interface ExternalPluginRuntimeSource {
   readonly manifest: PluginManifest;
   readonly rendererEntryUrl: string;
   readonly source: "official" | "devOverride";
+  readonly sourceRevision?: string;
   readonly version: string;
 }
 
@@ -385,6 +386,9 @@ export function createPluginService({
             enabled: ext.enabled,
             kind: "external",
             rendererEntryUrl: ext.rendererEntryUrl,
+            ...(ext.sourceRevision
+              ? { sourceRevision: ext.sourceRevision }
+              : {}),
           },
         });
       }

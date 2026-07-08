@@ -58,6 +58,7 @@ function makeServices(): PierCoreServices {
   );
   return {
     managedPlugins: trap as never,
+    appUpdates: trap as never,
     ai: trap as never,
     commandPaletteMru: trap as never,
     git: createGitService(),

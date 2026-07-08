@@ -78,6 +78,10 @@ export type PierCommandPlacement = z.infer<typeof pierCommandPlacementSchema>;
 
 export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("app.status") }),
+  z.object({ type: z.literal("appUpdate.status") }),
+  z.object({ type: z.literal("appUpdate.check") }),
+  z.object({ type: z.literal("appUpdate.download") }),
+  z.object({ type: z.literal("appUpdate.quitAndInstall") }),
   z.object({ type: z.literal("preferences.read") }),
   z.object({
     type: z.literal("preferences.update"),

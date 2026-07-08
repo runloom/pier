@@ -2,6 +2,7 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   Bot,
   Box,
+  Download,
   FolderGit2,
   Keyboard,
   type LucideIcon,
@@ -36,6 +37,7 @@ export const NAV_ITEMS: readonly StaticNavItem[] = [
   { id: "workspace", icon: FolderGit2, variant: "static" },
   { id: "environment", icon: Box, variant: "static" },
   { id: "keybindings", icon: Keyboard, variant: "static" },
+  { id: "updates", icon: Download, variant: "static" },
   { id: "agents", icon: Bot, variant: "static" },
   { id: "plugins", icon: Plug, variant: "static" },
 ] as const;

@@ -33,6 +33,26 @@ function entry(id: string, enabled: boolean): PluginRegistryEntry {
   };
 }
 
+function externalEntry(
+  id: string,
+  sourceRevision: string
+): PluginRegistryEntry {
+  return {
+    ...entry(id, true),
+    manifest: {
+      ...entry(id, true).manifest,
+      source: { kind: "official" },
+    },
+    runtime: {
+      canToggle: true,
+      enabled: true,
+      kind: "external",
+      rendererEntryUrl: `pier-plugin://${id}/1.0.0/dist/renderer.js`,
+      sourceRevision,
+    },
+  };
+}
+
 function listResult(
   ...entries: PluginRegistryEntry[]
 ): PluginRegistryListResult {
@@ -84,8 +104,18 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     };
     expect(
       activeBuiltinPluginKey([entry("pier.a", true), disabled, manifestOnly])
-    ).toBe("pier.a:builtin:");
+    ).toBe("pier.a:builtin::");
     expect(activeBuiltinPluginKey([])).toBe("");
+  });
+
+  it("activeBuiltinPluginKey includes external sourceRevision", async () => {
+    const { activeBuiltinPluginKey } = await import(
+      "@/lib/plugins/bootstrap.ts"
+    );
+
+    expect(
+      activeBuiltinPluginKey([externalEntry("pier.codex", "rev-a")])
+    ).not.toBe(activeBuiltinPluginKey([externalEntry("pier.codex", "rev-b")]));
   });
 
   it("初始拉取后 refresh runtime 一次", async () => {

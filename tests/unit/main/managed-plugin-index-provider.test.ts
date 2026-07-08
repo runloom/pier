@@ -82,4 +82,39 @@ describe("createHttpOfficialIndexProvider", () => {
       "env_override_ignored"
     );
   });
+
+  it("allows user-triggered refreshes to bypass the cache interval", async () => {
+    let now = 10;
+    const fetchRawJson = vi.fn(async () =>
+      JSON.stringify({
+        generatedAt: now,
+        plugins: {},
+        sequence: fetchRawJson.mock.calls.length,
+        signature: {
+          alg: "Ed25519",
+          keyId: "pier-official-dev-test",
+          value: "sig",
+        },
+        version: 1,
+      })
+    );
+    const provider = createHttpOfficialIndexProvider({
+      cachePath: join(dir, "official-index-cache.json"),
+      fetchRawJson,
+      now: () => now,
+      runtimeMode: "test",
+      verifySignature: () => true,
+    });
+
+    const first = await provider.refresh();
+    now = 20;
+    const cached = await provider.refresh();
+    const forced = await provider.refresh({ force: true });
+
+    expect(first.source).toBe("network");
+    expect(cached.source).toBe("cache");
+    expect(forced.source).toBe("network");
+    expect(fetchRawJson).toHaveBeenCalledTimes(2);
+    expect(forced.index?.sequence).toBe(2);
+  });
 });

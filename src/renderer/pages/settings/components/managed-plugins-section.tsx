@@ -7,9 +7,16 @@ import {
 } from "@pier/ui/empty.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { AlertCircle, Package, PackageCheck, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import {
   Fragment,
   type JSX,
@@ -43,7 +50,7 @@ import { PluginRow, PluginsLoadingState } from "./plugin-row.tsx";
 function useCatalog(): {
   catalog: ManagedPluginCatalogSnapshot | null;
   refresh: () => void;
-  checkUpdates: () => void;
+  checkUpdates: () => Promise<ManagedPluginCatalogSnapshot | null>;
   checkingUpdates: boolean;
   win: ManagedPluginsWindowShim | undefined;
 } {
@@ -63,17 +70,21 @@ function useCatalog(): {
       });
   }, []);
 
-  const checkUpdates = useCallback((): void => {
-    if (!win?.managedPlugins) return;
-    setCheckingUpdates(true);
-    win.managedPlugins
-      .checkUpdates()
-      .then(setCatalog)
-      .catch((err: unknown) => {
+  const checkUpdates =
+    useCallback(async (): Promise<ManagedPluginCatalogSnapshot | null> => {
+      if (!win?.managedPlugins) return null;
+      setCheckingUpdates(true);
+      try {
+        const next = await win.managedPlugins.checkUpdates();
+        setCatalog(next);
+        return next;
+      } catch (err) {
         console.error("[managed-plugins] check updates failed:", err);
-      })
-      .finally(() => setCheckingUpdates(false));
-  }, []);
+        throw err;
+      } finally {
+        setCheckingUpdates(false);
+      }
+    }, []);
 
   useEffect(() => {
     refresh();
@@ -208,6 +219,10 @@ function withManagedDesiredState(
   };
 }
 
+function errorDescription(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function ManagedPluginsSection({
   builtinEntries,
   builtinInitialized,
@@ -271,6 +286,18 @@ export function ManagedPluginsSection({
     },
     [refresh, win]
   );
+  const handleCheckUpdates = useCallback((): void => {
+    checkUpdates()
+      .then((next) => {
+        if (!next) return;
+        toast.success(t("settings.plugins.toast.checkUpdatesSuccess"));
+      })
+      .catch((err: unknown) => {
+        toast.error(t("settings.plugins.toast.checkUpdatesFailed"), {
+          description: errorDescription(err),
+        });
+      });
+  }, [checkUpdates, t]);
 
   if (!builtinInitialized) {
     return <PluginsLoadingState />;
@@ -278,51 +305,58 @@ export function ManagedPluginsSection({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-(--card-spacing)">
-        <p className="text-muted-foreground text-xs">
-          {t("settings.plugins.trustNotice")}
-        </p>
-        <div className="flex shrink-0 items-center gap-2">
-          {anyPendingRestart ? (
-            <Button
-              onClick={() => {
-                if (import.meta.env.DEV) {
-                  toast.info(t("settings.plugins.restartDevNotice"));
-                }
-                win?.app?.relaunch().catch((err: unknown) => {
-                  console.error("[managed-plugins] relaunch failed:", err);
-                });
-              }}
-              size="sm"
-              type="button"
-              variant="default"
-            >
-              {t("settings.plugins.restartNow")}
-            </Button>
-          ) : null}
-          <Button
-            disabled={checkingUpdates}
-            onClick={checkUpdates}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <RefreshCw aria-hidden className="size-3.5" />
-            {t("settings.plugins.checkUpdates")}
-          </Button>
-        </div>
-      </div>
       <Tabs defaultValue="installed">
-        <TabsList className="mx-(--card-spacing)">
-          <TabsTrigger value="installed">
-            <PackageCheck aria-hidden className="size-3.5" />
-            {t("settings.plugins.tabs.installed")} · {installedRows.length}
-          </TabsTrigger>
-          <TabsTrigger value="available">
-            <Package aria-hidden className="size-3.5" />
-            {t("settings.plugins.tabs.available")}
-          </TabsTrigger>
-        </TabsList>
+        <div className="mx-(--card-spacing) flex items-center justify-between gap-2">
+          <TabsList>
+            <TabsTrigger value="installed">
+              {t("settings.plugins.tabs.installed")}
+            </TabsTrigger>
+            <TabsTrigger value="available">
+              {t("settings.plugins.tabs.available")}
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex shrink-0 items-center gap-2">
+            {anyPendingRestart ? (
+              <Button
+                onClick={() => {
+                  if (import.meta.env.DEV) {
+                    toast.info(t("settings.plugins.restartDevNotice"));
+                  }
+                  win?.app?.relaunch().catch((err: unknown) => {
+                    console.error("[managed-plugins] relaunch failed:", err);
+                  });
+                }}
+                size="sm"
+                type="button"
+                variant="default"
+              >
+                {t("settings.plugins.restartNow")}
+              </Button>
+            ) : null}
+            <TooltipProvider delayDuration={0} disableHoverableContent>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    aria-label={t("settings.plugins.checkUpdates")}
+                    disabled={checkingUpdates}
+                    onClick={handleCheckUpdates}
+                    size="icon-sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <RefreshCw
+                      aria-hidden
+                      className={cn(checkingUpdates && "animate-spin")}
+                    />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t("settings.plugins.checkUpdates")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
         <TabsContent value="installed">
           <UnifiedList
             emptyKey="emptyInstalled"

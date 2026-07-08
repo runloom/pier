@@ -37,7 +37,7 @@ export interface HttpOfficialIndexProviderOptions {
 }
 
 export interface HttpOfficialIndexProvider {
-  readonly refresh: () => Promise<{
+  readonly refresh: (options?: { force?: boolean }) => Promise<{
     diagnostics: readonly OfficialIndexDiagnostic[];
     index: OfficialPluginIndex | null;
     source: OfficialIndexSource;
@@ -53,7 +53,7 @@ export function createHttpOfficialIndexProvider(
   const ready = Promise.withResolvers<void>();
   let readyFired = false;
 
-  async function refresh(): Promise<{
+  async function refresh(refreshOptions?: { force?: boolean }): Promise<{
     diagnostics: readonly OfficialIndexDiagnostic[];
     index: OfficialPluginIndex | null;
     source: OfficialIndexSource;
@@ -63,6 +63,7 @@ export function createHttpOfficialIndexProvider(
       env: options.env ?? process.env,
       fetchRawJson: options.fetchRawJson ?? fetchRawJsonWithGlobalFetch,
       ...(options.indexUrl ? { indexUrl: options.indexUrl } : {}),
+      forceRefresh: refreshOptions?.force === true,
       runtimeMode: options.runtimeMode,
       ...(options.now ? { now: options.now } : {}),
       ...(options.verifySignature

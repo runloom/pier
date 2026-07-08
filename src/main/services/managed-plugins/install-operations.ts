@@ -56,7 +56,9 @@ export interface OperationsContext {
   readonly now: () => number;
   readonly officialIndexProvider: () => OfficialPluginIndex | null;
   /** Ensures the officialIndex is fresh before an install (called before HTTP fetch). */
-  readonly officialIndexRefresh?: () => Promise<void>;
+  readonly officialIndexRefresh?: (options?: {
+    force?: boolean;
+  }) => Promise<void>;
   readonly paths: ManagedPluginPaths;
   readonly pierVersion: string;
   readonly refreshRuntimeSnapshot: () => Promise<void>;
@@ -191,14 +193,41 @@ export async function setEnabledFlag(
       ok: false as const,
     };
   }
+  const sourceKind =
+    entry.effectiveAtStartup?.sourceKind ??
+    (entry.devOverride && ctx.isDevRuntime ? "devOverride" : "official");
+  const effectiveVersion =
+    entry.effectiveAtStartup?.version ??
+    (sourceKind === "devOverride"
+      ? (entry.devOverride?.version ?? entry.activeVersion)
+      : entry.activeVersion);
+  const desiredSourceKind =
+    entry.devOverride && ctx.isDevRuntime ? "devOverride" : "official";
+  const desiredVersion =
+    desiredSourceKind === "devOverride"
+      ? (entry.devOverride?.version ?? entry.activeVersion)
+      : entry.activeVersion;
+  const keepPendingRestart = Boolean(
+    entry.pendingRestart &&
+      effectiveVersion &&
+      desiredVersion &&
+      (sourceKind !== desiredSourceKind || effectiveVersion !== desiredVersion)
+  );
   ctx.store.mutate((s) => ({
     ...s,
     plugins: {
       ...s.plugins,
       [id]: {
         ...entry,
+        effectiveAtStartup: effectiveVersion
+          ? {
+              enabled,
+              sourceKind,
+              version: effectiveVersion,
+            }
+          : null,
         enabled,
-        pendingRestart: { kind: enabled ? "enable" : "disable" },
+        pendingRestart: keepPendingRestart ? entry.pendingRestart : null,
       },
     },
   }));
@@ -210,7 +239,8 @@ export async function setEnabledFlag(
     result: "success",
     timestamp: ctx.now(),
   });
-  return { ok: true as const, pluginId: id, requiresRestart: true };
+  await ctx.refreshRuntimeSnapshot();
+  return { ok: true as const, pluginId: id, requiresRestart: false };
 }
 
 export async function performUninstall(
@@ -236,8 +266,9 @@ export async function performUninstall(
       [id]: {
         ...entry,
         activeVersion: null,
+        effectiveAtStartup: null,
         enabled: false,
-        pendingRestart: { kind: "uninstall" },
+        pendingRestart: null,
         uninstalledAt: ctx.now(),
       },
     },
@@ -251,7 +282,8 @@ export async function performUninstall(
     result: "success",
     timestamp: ctx.now(),
   });
-  return { ok: true as const, pluginId: id, requiresRestart: true };
+  await ctx.refreshRuntimeSnapshot();
+  return { ok: true as const, pluginId: id, requiresRestart: false };
 }
 
 export async function performRollback(

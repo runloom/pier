@@ -118,6 +118,15 @@ async function executeAppStateCommand(
         },
         protocolVersion: 1,
       });
+    case "appUpdate.status":
+      return success(requestId, services.appUpdates.getStatus());
+    case "appUpdate.check":
+      return success(requestId, await services.appUpdates.check());
+    case "appUpdate.download":
+      return success(requestId, await services.appUpdates.download());
+    case "appUpdate.quitAndInstall":
+      services.appUpdates.quitAndInstall();
+      return success(requestId, services.appUpdates.getStatus());
     case "app.relaunch": {
       const { isDevRuntime } = await import("../runtime-mode.ts");
       const { performDevSoftRelaunch, performProdRelaunch } = await import(

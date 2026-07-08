@@ -32,6 +32,17 @@ describe("managed plugin contracts", () => {
     });
   });
 
+  it("accepts a managed package runtime reload policy", () => {
+    expect(
+      managedPluginPackageManifestSchema.parse({
+        ...manifest,
+        runtime: { reloadPolicy: "hot" },
+      })
+    ).toMatchObject({
+      runtime: { reloadPolicy: "hot" },
+    });
+  });
+
   it("rejects absolute package entry paths", () => {
     expect(() =>
       managedPluginPackageManifestSchema.parse({

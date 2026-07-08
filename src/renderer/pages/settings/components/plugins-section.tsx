@@ -1,11 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@pier/ui/card.tsx";
+import { Card, CardContent } from "@pier/ui/card.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
@@ -47,10 +41,6 @@ export function PluginsSection() {
     <div className="px-4 pb-4" id="plugins">
       <h1 className="mb-4 text-xl">{t("settings.section.plugins")}</h1>
       <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.plugins.title")}</CardTitle>
-          <CardDescription>{t("settings.plugins.description")}</CardDescription>
-        </CardHeader>
         <CardContent className="flex flex-col gap-3 px-0">
           {error ? (
             <div className="px-(--card-spacing)">

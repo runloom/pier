@@ -1,3 +1,4 @@
+import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type {
   ManagedPluginCatalogSnapshot,
   ManagedPluginOperationResult,
@@ -36,6 +37,14 @@ export interface PluginRpcPreloadApi {
 
 export interface AppPreloadApi {
   relaunch(): Promise<void>;
+}
+
+export interface AppUpdatePreloadApi {
+  check(): Promise<AppUpdateSnapshot>;
+  download(): Promise<AppUpdateSnapshot>;
+  onChanged(cb: (snapshot: AppUpdateSnapshot) => void): () => void;
+  quitAndInstall(): Promise<AppUpdateSnapshot>;
+  status(): Promise<AppUpdateSnapshot>;
 }
 
 export function createManagedPluginsPreloadApi(): ManagedPluginsPreloadApi {
@@ -96,6 +105,30 @@ export function createManagedPluginsPreloadApi(): ManagedPluginsPreloadApi {
 export function createAppPreloadApi(): AppPreloadApi {
   return {
     relaunch: () => invokePierCommand<void>({ type: "app.relaunch" }),
+  };
+}
+
+export function createAppUpdatePreloadApi(): AppUpdatePreloadApi {
+  return {
+    check: () =>
+      invokePierCommand<AppUpdateSnapshot>({ type: "appUpdate.check" }),
+    download: () =>
+      invokePierCommand<AppUpdateSnapshot>({ type: "appUpdate.download" }),
+    onChanged: (cb) => {
+      const listener = (_event: unknown, payload: AppUpdateSnapshot): void => {
+        cb(payload);
+      };
+      ipcRenderer.on(PIER_BROADCAST.APP_UPDATE_CHANGED, listener);
+      return () => {
+        ipcRenderer.off(PIER_BROADCAST.APP_UPDATE_CHANGED, listener);
+      };
+    },
+    quitAndInstall: () =>
+      invokePierCommand<AppUpdateSnapshot>({
+        type: "appUpdate.quitAndInstall",
+      }),
+    status: () =>
+      invokePierCommand<AppUpdateSnapshot>({ type: "appUpdate.status" }),
   };
 }
 

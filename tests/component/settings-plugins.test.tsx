@@ -297,6 +297,15 @@ describe("Settings plugins section", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "插件" }));
 
+    expect(screen.getAllByText("插件")).toHaveLength(2);
+    expect(
+      screen.queryByText(
+        "内置插件可以在这里启用或停用。本地插件在当前版本只读取插件清单，不执行第三方代码。"
+      )
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("官方插件按可信代码运行，不设沙箱隔离。")
+    ).not.toBeInTheDocument();
     expect(await screen.findByText("工作树")).toBeVisible();
     expect(
       screen.getByText("提供工作树命令面板入口和终端状态栏支持。")

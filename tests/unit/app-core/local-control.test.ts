@@ -111,6 +111,12 @@ function emptyEnvironmentState() {
 function cliClientServices(): PierCoreServices {
   return {
     managedPlugins: {} as never,
+    appUpdates: {
+      check: async () => ({ currentVersion: "0.1.0", state: "disabled" }),
+      download: async () => ({ currentVersion: "0.1.0", state: "disabled" }),
+      getStatus: () => ({ currentVersion: "0.1.0", state: "disabled" }),
+      quitAndInstall: () => undefined,
+    },
     ai: {
       generateText: async () => ({
         message: "not configured",

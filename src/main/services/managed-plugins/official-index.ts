@@ -78,6 +78,7 @@ export interface FetchOfficialPluginIndexOptions {
   cachePath: string;
   env: Record<string, string | undefined>;
   fetchRawJson?: (url: string) => Promise<string>;
+  forceRefresh?: boolean;
   indexUrl?: string;
   now?: () => number;
   runtimeMode: "development" | "production" | "test";
@@ -351,7 +352,11 @@ export async function fetchOfficialPluginIndex(
   }
 
   const cache = await readCache(options.cachePath);
-  if (cache && now - cache.fetchedAt < OFFICIAL_INDEX_MIN_INTERVAL_MS) {
+  if (
+    !options.forceRefresh &&
+    cache &&
+    now - cache.fetchedAt < OFFICIAL_INDEX_MIN_INTERVAL_MS
+  ) {
     diagnostics.push({
       code: "rate_limited",
       message: "recent official index check hit rate limit",

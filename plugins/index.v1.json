@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1783471975204,
+  "generatedAt": 1783516098388,
   "plugins": {
     "pier.codex": {
       "description": "Codex account management and usage monitoring for Pier.",
@@ -16,8 +16,8 @@
         "1.0.0": {
           "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.0.0/pier.codex-1.0.0.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "25dc2119ac1926c2408af13a0495ecaed666fc229d8b643b3c25b77ff9f81b31",
-          "size": 51735
+          "sha256": "ff47055987fd275f4f9b98145d3eafbc26206fd1c824e38e29150c7ae5cf00a3",
+          "size": 160801
         }
       }
     }
@@ -27,6 +27,6 @@
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "CZsmYcA1FJs7E9gA8VKNqu7fSB/hTOt63YNhFVmBJ8HvBfjBjNyVxHskt+NoYJ+lrcqLWcJ1CdDG3NWPsCUsBw=="
+    "value": "G50/ULViJmo4Ju94F/A+HgHsA9gC+FEgpqhwQaZiCsV93/lXYUpiFz1z8Y797Exv3hO0ZEfqvT1t2oh0z0/1BA=="
   }
 }

@@ -32,6 +32,22 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "environment.update": { capabilities: ["environment:write"] },
   "environment.worktreeBinding": { capabilities: ["environment:read"] },
   "app.status": { capabilities: ["app:read"] },
+  "appUpdate.status": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["app:read"],
+  },
+  "appUpdate.check": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["app:read", "network"],
+  },
+  "appUpdate.download": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["app:read", "network"],
+  },
+  "appUpdate.quitAndInstall": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
   "commandPaletteMru.clear": { capabilities: ["app:read"] },
   "commandPaletteMru.read": { capabilities: ["app:read"] },
   "commandPaletteMru.record": { capabilities: ["app:read"] },
