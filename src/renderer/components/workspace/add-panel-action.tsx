@@ -114,13 +114,13 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         >
           <DropdownMenuItem
             onClick={() => {
-              useWorkspaceStore.getState().addDashboard({
+              useWorkspaceStore.getState().addMissionControl({
                 referenceGroup: props.group,
               });
             }}
           >
             <LayoutDashboard className="size-4" />
-            <span>{t("workspace.addPanelMenu.newDashboard")}</span>
+            <span>{t("workspace.addPanelMenu.newMissionControl")}</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {

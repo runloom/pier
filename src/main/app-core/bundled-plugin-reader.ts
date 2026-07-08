@@ -25,7 +25,7 @@ export interface BundledPluginBundle {
   readonly archivePath: string;
   readonly contributionCounts: {
     readonly commands: number;
-    readonly dashboardWidgets: number;
+    readonly missionControlWidgets: number;
     readonly panels: number;
     readonly terminalStatusItems: number;
   };
@@ -71,7 +71,7 @@ export function readBundledPlugin(
       description?: string;
       version?: string;
       commands?: unknown[];
-      dashboardWidgets?: unknown[];
+      missionControlWidgets?: unknown[];
       panels?: unknown[];
       terminalStatusItems?: unknown[];
       locales?: Record<string, { name?: string; description?: string }>;
@@ -93,7 +93,7 @@ export function readBundledPlugin(
       archivePath,
       contributionCounts: {
         commands: parsed.commands?.length ?? 0,
-        dashboardWidgets: parsed.dashboardWidgets?.length ?? 0,
+        missionControlWidgets: parsed.missionControlWidgets?.length ?? 0,
         panels: parsed.panels?.length ?? 0,
         terminalStatusItems: parsed.terminalStatusItems?.length ?? 0,
       },

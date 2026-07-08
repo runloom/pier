@@ -75,7 +75,9 @@ function createMockContext(): {
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
     },
-    dashboardWidgets: { register: unimplemented("dashboardWidgets.register") },
+    missionControlWidgets: {
+      register: unimplemented("missionControlWidgets.register"),
+    },
     dialogs: {
       alert: unimplemented("dialogs.alert"),
       confirm: unimplemented("dialogs.confirm"),

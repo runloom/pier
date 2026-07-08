@@ -13,7 +13,7 @@ export { AccountsWidget } from "./accounts-widget.tsx";
 export const plugin: ExternalRendererPluginModule = {
   id: "pier.codex",
   activate(context: ExternalRendererPluginContext): () => void {
-    const dispose = context.dashboardWidgets.register({
+    const dispose = context.missionControlWidgets.register({
       id: "pier.codex.accounts",
       title: () => "Codex Accounts",
       component: (_props) => AccountsWidgetImpl({ context }),

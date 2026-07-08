@@ -33,7 +33,7 @@ export interface ContributionCountItem {
 /** Contribution counts by kind. */
 export interface ContributionCounts {
   readonly commands: number;
-  readonly dashboardWidgets: number;
+  readonly missionControlWidgets: number;
   readonly panels: number;
   readonly terminalStatusItems: number;
 }
@@ -73,10 +73,10 @@ export function contributionCountItemsFromCounts(
     },
     {
       Icon: LayoutDashboard,
-      count: counts.dashboardWidgets,
-      id: "dashboardWidgets",
-      pluralKey: "settings.plugins.contributionSummary.dashboardWidgets",
-      singularKey: "settings.plugins.contributionSummary.dashboardWidget",
+      count: counts.missionControlWidgets,
+      id: "missionControlWidgets",
+      pluralKey: "settings.plugins.contributionSummary.missionControlWidgets",
+      singularKey: "settings.plugins.contributionSummary.missionControlWidget",
     },
   ];
   return buckets
@@ -97,7 +97,7 @@ export function contributionCountItems(
   return contributionCountItemsFromCounts(
     {
       commands: entry.manifest.commands.length,
-      dashboardWidgets: entry.manifest.dashboardWidgets.length,
+      missionControlWidgets: entry.manifest.missionControlWidgets.length,
       panels: entry.manifest.panels.length,
       terminalStatusItems: entry.manifest.terminalStatusItems.length,
     },

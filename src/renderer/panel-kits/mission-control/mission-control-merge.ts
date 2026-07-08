@@ -1,10 +1,10 @@
-import type { RendererDashboardWidgetRegistration } from "@plugins/api/renderer.ts";
+import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
 import type {
-  CoreDashboardWidgetDeclaration,
-  DashboardPanelParams,
-} from "@shared/contracts/dashboard.ts";
+  CoreMissionControlWidgetDeclaration,
+  MissionControlPanelParams,
+} from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { resolvePluginDashboardWidgetDisplay } from "@/lib/plugins/display.ts";
+import { resolvePluginMissionControlWidgetDisplay } from "@/lib/plugins/display.ts";
 
 export type ResolvedWidgetStatus =
   | "core"
@@ -12,10 +12,10 @@ export type ResolvedWidgetStatus =
   | "plugin-disabled"
   | "unknown";
 
-export interface ResolvedDashboardWidget {
+export interface ResolvedMissionControlWidget {
   description?: string;
   id: string;
-  registration: RendererDashboardWidgetRegistration | null;
+  registration: RendererMissionControlWidgetRegistration | null;
   status: ResolvedWidgetStatus;
   title: string;
 }
@@ -38,7 +38,7 @@ function collectPluginWidgetIds(
     if (enabledOnly && !entry.runtime.enabled) {
       continue;
     }
-    for (const widget of entry.manifest.dashboardWidgets) {
+    for (const widget of entry.manifest.missionControlWidgets) {
       ids.add(widget.id);
     }
   }
@@ -46,7 +46,7 @@ function collectPluginWidgetIds(
 }
 
 function resolveTitle(
-  reg: RendererDashboardWidgetRegistration | null,
+  reg: RendererMissionControlWidgetRegistration | null,
   fallback: string
 ): string {
   if (!reg) {
@@ -54,7 +54,7 @@ function resolveTitle(
   }
   if (typeof reg.title === "function") {
     // 插件作者代码：merge 阶段在 per-card ErrorBoundary 之外执行，
-    // 抛错会炸整个大盘 —— 兜底回退到 manifest 标题。
+    // 抛错会炸整个指挥中心 —— 兜底回退到 manifest 标题。
     try {
       return reg.title();
     } catch {
@@ -70,12 +70,15 @@ function resolvePluginWidgetDescription(
   locale: string
 ): string | undefined {
   for (const entry of plugins) {
-    const widget = entry.manifest.dashboardWidgets.find(
+    const widget = entry.manifest.missionControlWidgets.find(
       (w) => w.id === widgetId
     );
     if (widget) {
-      return resolvePluginDashboardWidgetDisplay(entry.manifest, widget, locale)
-        .description;
+      return resolvePluginMissionControlWidgetDisplay(
+        entry.manifest,
+        widget,
+        locale
+      ).description;
     }
   }
   return;
@@ -88,12 +91,15 @@ function resolvePluginWidgetTitle(
   locale: string
 ): string | undefined {
   for (const entry of plugins) {
-    const widget = entry.manifest.dashboardWidgets.find(
+    const widget = entry.manifest.missionControlWidgets.find(
       (w) => w.id === widgetId
     );
     if (widget) {
-      return resolvePluginDashboardWidgetDisplay(entry.manifest, widget, locale)
-        .title;
+      return resolvePluginMissionControlWidgetDisplay(
+        entry.manifest,
+        widget,
+        locale
+      ).title;
     }
   }
   return;
@@ -108,20 +114,26 @@ function resolvePluginWidgetTitle(
  * 3. 插件声明但未注册（插件禁用） → status "plugin-disabled"，占位卡
  * 4. 声明不存在（插件被卸载） → status "unknown"，占位卡带移除按钮
  */
-export function resolveDashboardWidgets(
-  params: DashboardPanelParams,
-  coreWidgets: readonly CoreDashboardWidgetDeclaration[],
+export function resolveMissionControlWidgets(
+  params: MissionControlPanelParams,
+  coreWidgets: readonly CoreMissionControlWidgetDeclaration[],
   plugins: readonly PluginRegistryEntry[],
-  widgetRegistrations: ReadonlyMap<string, RendererDashboardWidgetRegistration>,
-  coreComponentMap: ReadonlyMap<string, RendererDashboardWidgetRegistration>,
+  widgetRegistrations: ReadonlyMap<
+    string,
+    RendererMissionControlWidgetRegistration
+  >,
+  coreComponentMap: ReadonlyMap<
+    string,
+    RendererMissionControlWidgetRegistration
+  >,
   locale = "en"
-): ResolvedDashboardWidget[] {
+): ResolvedMissionControlWidget[] {
   const coreById = new Map(coreWidgets.map((w) => [w.id, w]));
   const enabledPluginIds = collectPluginWidgetIds(plugins, true);
   const allPluginIds = collectPluginWidgetIds(plugins, false);
 
   const seen = new Set<string>();
-  const result: ResolvedDashboardWidget[] = [];
+  const result: ResolvedMissionControlWidget[] = [];
 
   for (const entry of params.widgets) {
     if (seen.has(entry.id)) {
@@ -162,17 +174,20 @@ interface PluginWidgetResolveCtx {
   enabledPluginIds: ReadonlySet<string>;
   locale: string;
   plugins: readonly PluginRegistryEntry[];
-  widgetRegistrations: ReadonlyMap<string, RendererDashboardWidgetRegistration>;
+  widgetRegistrations: ReadonlyMap<
+    string,
+    RendererMissionControlWidgetRegistration
+  >;
 }
 
 /**
  * 非 core widget 的解析：启用（含加载态）、禁用、已卸载三态。
- * 从 resolveDashboardWidgets 主循环抽出，控制单函数认知复杂度。
+ * 从 resolveMissionControlWidgets 主循环抽出，控制单函数认知复杂度。
  */
 function resolvePluginWidget(
   id: string,
   ctx: PluginWidgetResolveCtx
-): ResolvedDashboardWidget {
+): ResolvedMissionControlWidget {
   const {
     allPluginIds,
     enabledPluginIds,

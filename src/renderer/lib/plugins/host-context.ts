@@ -53,7 +53,7 @@ import { createPluginEnvironmentsContext } from "./host-environments-context.ts"
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
-import { registerPluginDashboardWidget } from "./plugin-dashboard-widget-registry.ts";
+import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 import {
   getPluginPanelRegistrations,
@@ -179,7 +179,7 @@ function adaptAction(
 
 function assertDeclaredContribution(
   entry: PluginRegistryEntry | undefined,
-  kind: "action" | "dashboardWidget" | "panel" | "terminalStatusItem",
+  kind: "action" | "missionControlWidget" | "panel" | "terminalStatusItem",
   id: string
 ): void {
   if (!entry) {
@@ -190,8 +190,8 @@ function assertDeclaredContribution(
     declared = entry.manifest.commands.some((command) => command.id === id);
   } else if (kind === "panel") {
     declared = entry.manifest.panels.some((panel) => panel.id === id);
-  } else if (kind === "dashboardWidget") {
-    declared = entry.manifest.dashboardWidgets.some(
+  } else if (kind === "missionControlWidget") {
+    declared = entry.manifest.missionControlWidgets.some(
       (widget) => widget.id === id
     );
   } else {
@@ -471,10 +471,14 @@ export function createRendererPluginContext(
         return terminalStatusItemRegistry.register(item);
       },
     },
-    dashboardWidgets: {
+    missionControlWidgets: {
       register: (registration) => {
-        assertDeclaredContribution(entry, "dashboardWidget", registration.id);
-        return registerPluginDashboardWidget(registration);
+        assertDeclaredContribution(
+          entry,
+          "missionControlWidget",
+          registration.id
+        );
+        return registerPluginMissionControlWidget(registration);
       },
     },
     environments: createPluginEnvironmentsContext(

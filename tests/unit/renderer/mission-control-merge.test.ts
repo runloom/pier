@@ -1,19 +1,19 @@
-import type { RendererDashboardWidgetRegistration } from "@plugins/api/renderer.ts";
-import type { CoreDashboardWidgetDeclaration } from "@shared/contracts/dashboard.ts";
-import { salvageDashboardPanelParams } from "@shared/contracts/dashboard.ts";
+import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
+import type { CoreMissionControlWidgetDeclaration } from "@shared/contracts/mission-control.ts";
+import { salvageMissionControlPanelParams } from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { House, LayoutDashboard } from "lucide-react";
 import { describe, expect, it } from "vitest";
-import { resolveDashboardWidgets } from "@/panel-kits/dashboard/dashboard-merge.ts";
+import { resolveMissionControlWidgets } from "@/panel-kits/mission-control/mission-control-merge.ts";
 
-const coreWidget: CoreDashboardWidgetDeclaration = {
+const coreWidget: CoreMissionControlWidgetDeclaration = {
   defaultSize: { h: 3, w: 4 },
   id: "core.activity-overview",
   minSize: { h: 2, w: 3 },
-  titleKey: "dashboard.widget.activityOverview.title",
+  titleKey: "missionControl.widget.activityOverview.title",
 };
 
-const coreReg: RendererDashboardWidgetRegistration = {
+const coreReg: RendererMissionControlWidgetRegistration = {
   component: () => null,
   icon: LayoutDashboard,
   id: "core.activity-overview",
@@ -30,7 +30,7 @@ function pluginEntry(
     manifest: {
       apiVersion: 1,
       commands: [],
-      dashboardWidgets: widgets.map((w) => ({
+      missionControlWidgets: widgets.map((w) => ({
         id: w.id,
         permissions: [],
         title: w.title ?? w.id,
@@ -52,9 +52,9 @@ function pluginEntry(
   } as PluginRegistryEntry;
 }
 
-describe("resolveDashboardWidgets", () => {
+describe("resolveMissionControlWidgets", () => {
   it("resolves core widget from params", () => {
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }] },
       [coreWidget],
       [],
@@ -72,14 +72,14 @@ describe("resolveDashboardWidgets", () => {
       enabled: true,
       runtimeEnabled: true,
     });
-    const pluginReg: RendererDashboardWidgetRegistration = {
+    const pluginReg: RendererMissionControlWidgetRegistration = {
       component: () => null,
       icon: House,
       id: "pier.codex.accounts",
       title: "Codex Accounts",
     };
 
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 4, id: "pier.codex.accounts", w: 4, x: 0, y: 0 }] },
       [],
       [entry],
@@ -99,7 +99,7 @@ describe("resolveDashboardWidgets", () => {
       runtimeEnabled: false,
     });
 
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 3, id: "pier.codex.accounts", w: 4, x: 0, y: 0 }] },
       [],
       [entry],
@@ -113,7 +113,7 @@ describe("resolveDashboardWidgets", () => {
   });
 
   it("resolves unknown when widget id has no matching declaration", () => {
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 3, id: "gone.widget", w: 4, x: 0, y: 0 }] },
       [],
       [],
@@ -126,8 +126,8 @@ describe("resolveDashboardWidgets", () => {
     expect(result[0]?.registration).toBeNull();
   });
 
-  it("deduplicates widgets within the same dashboard", () => {
-    const result = resolveDashboardWidgets(
+  it("deduplicates widgets within the same mission control", () => {
+    const result = resolveMissionControlWidgets(
       {
         widgets: [
           { h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 },
@@ -144,7 +144,7 @@ describe("resolveDashboardWidgets", () => {
   });
 
   it("resolves empty params to empty list", () => {
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [] },
       [coreWidget],
       [],
@@ -160,14 +160,14 @@ describe("resolveDashboardWidgets", () => {
       enabled: true,
       runtimeEnabled: true,
     });
-    const pluginReg: RendererDashboardWidgetRegistration = {
+    const pluginReg: RendererMissionControlWidgetRegistration = {
       component: () => null,
       icon: House,
       id: "pier.codex.accounts",
       title: () => "Dynamic Title",
     };
 
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 3, id: "pier.codex.accounts", w: 4, x: 0, y: 0 }] },
       [],
       [entry],
@@ -185,7 +185,7 @@ describe("resolveDashboardWidgets", () => {
       { enabled: false, runtimeEnabled: false }
     );
 
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 3, id: "pier.codex.accounts", w: 4, x: 0, y: 0 }] },
       [],
       [entry],
@@ -205,7 +205,7 @@ describe("resolveDashboardWidgets", () => {
     );
 
     // registration Map 为空 → 加载态
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 3, id: "pier.codex.accounts", w: 4, x: 0, y: 0 }] },
       [],
       [entry],
@@ -219,7 +219,7 @@ describe("resolveDashboardWidgets", () => {
   });
 
   it("unknown (plugin uninstalled) keeps raw id as title", () => {
-    const result = resolveDashboardWidgets(
+    const result = resolveMissionControlWidgets(
       { widgets: [{ h: 3, id: "gone.widget", w: 4, x: 0, y: 0 }] },
       [],
       [],
@@ -232,10 +232,10 @@ describe("resolveDashboardWidgets", () => {
   });
 });
 
-describe("salvageDashboardPanelParams", () => {
+describe("salvageMissionControlPanelParams", () => {
   it("整体合法时原样返回", () => {
     const raw = { widgets: [{ h: 3, id: "a", w: 4, x: 0, y: 0 }] };
-    expect(salvageDashboardPanelParams(raw)).toEqual(raw);
+    expect(salvageMissionControlPanelParams(raw)).toEqual(raw);
   });
 
   it("混合合法/非法条目时只丢非法项", () => {
@@ -246,24 +246,26 @@ describe("salvageDashboardPanelParams", () => {
         { h: 2.5, id: "bad-h", w: 4, x: 0, y: 3 }, // h 非整数
       ],
     };
-    expect(salvageDashboardPanelParams(raw)).toEqual({
+    expect(salvageMissionControlPanelParams(raw)).toEqual({
       widgets: [{ h: 3, id: "good", w: 4, x: 0, y: 0 }],
     });
   });
 
   it("widgets 不是数组 / raw 为 null 时回退空", () => {
-    expect(salvageDashboardPanelParams({ widgets: "junk" })).toEqual({
+    expect(salvageMissionControlPanelParams({ widgets: "junk" })).toEqual({
       widgets: [],
     });
-    expect(salvageDashboardPanelParams(null)).toEqual({ widgets: [] });
-    expect(salvageDashboardPanelParams(undefined)).toEqual({ widgets: [] });
+    expect(salvageMissionControlPanelParams(null)).toEqual({ widgets: [] });
+    expect(salvageMissionControlPanelParams(undefined)).toEqual({
+      widgets: [],
+    });
   });
 
   it("抢救出的条目不含多余字段", () => {
     const raw = {
       widgets: [{ extra: true, h: 3, id: "a", w: 4, x: 0, y: 0 }],
     };
-    expect(salvageDashboardPanelParams(raw)).toEqual({
+    expect(salvageMissionControlPanelParams(raw)).toEqual({
       widgets: [{ h: 3, id: "a", w: 4, x: 0, y: 0 }],
     });
   });
@@ -275,7 +277,7 @@ describe("salvageDashboardPanelParams", () => {
         { h: 3, id: "bad", w: 4, x: 12, y: 0 }, // 逼出逐条路径
       ],
     };
-    expect(salvageDashboardPanelParams(raw)).toEqual({
+    expect(salvageMissionControlPanelParams(raw)).toEqual({
       widgets: [{ h: 3, id: "a", w: 4, x: 0, y: 0 }],
     });
   });

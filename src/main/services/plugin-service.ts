@@ -108,7 +108,7 @@ export function collectEffectivePermissions(
       permissions.add(permission);
     }
   }
-  for (const widget of manifest.dashboardWidgets) {
+  for (const widget of manifest.missionControlWidgets) {
     for (const permission of widget.permissions) {
       permissions.add(permission);
     }
@@ -151,16 +151,16 @@ export function findTerminalStatusItemIdConflict(
   return null;
 }
 
-export function findDashboardWidgetIdConflict(
+export function findMissionControlWidgetIdConflict(
   acceptedManifests: readonly PluginManifest[],
   candidate: PluginManifest
 ): string | null {
   const acceptedIds = new Set(
     acceptedManifests.flatMap((manifest) =>
-      manifest.dashboardWidgets.map((widget) => widget.id)
+      manifest.missionControlWidgets.map((widget) => widget.id)
     )
   );
-  for (const widget of candidate.dashboardWidgets) {
+  for (const widget of candidate.missionControlWidgets) {
     if (acceptedIds.has(widget.id)) {
       return widget.id;
     }
@@ -355,14 +355,14 @@ export function createPluginService({
           });
           continue;
         }
-        const dashboardWidgetConflict = findDashboardWidgetIdConflict(
+        const missionControlWidgetConflict = findMissionControlWidgetIdConflict(
           manifests.map((item) => item.manifest),
           withLocales.manifest
         );
-        if (dashboardWidgetConflict) {
+        if (missionControlWidgetConflict) {
           diagnostics.push({
             code: "invalid_manifest",
-            message: `dashboardWidgets id must be unique across plugins ("${dashboardWidgetConflict}"): ${withLocales.manifest.id}`,
+            message: `missionControlWidgets id must be unique across plugins ("${missionControlWidgetConflict}"): ${withLocales.manifest.id}`,
             source: diagnosticSource(source),
           });
           continue;

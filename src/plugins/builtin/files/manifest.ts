@@ -6,7 +6,7 @@ export const FILES_PANEL_ID = "pier.files.explorer";
 export const FILES_PLUGIN_MANIFEST = {
   apiVersion: 1,
   commands: [],
-  dashboardWidgets: [],
+  missionControlWidgets: [],
   engines: { pier: ">=0.1.0" },
   id: FILES_PLUGIN_ID,
   localization: {

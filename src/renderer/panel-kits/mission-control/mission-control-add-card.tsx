@@ -15,29 +15,32 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import type { RendererDashboardWidgetRegistration } from "@plugins/api/renderer.ts";
-import type { CoreDashboardWidgetDeclaration } from "@shared/contracts/dashboard.ts";
+import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
+import type { CoreMissionControlWidgetDeclaration } from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import { LayoutDashboard, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { resolvePluginDashboardWidgetDisplay } from "@/lib/plugins/display.ts";
+import { resolvePluginMissionControlWidgetDisplay } from "@/lib/plugins/display.ts";
 
-interface DashboardAddCardProps {
+interface MissionControlAddCardProps {
   addedIds: ReadonlySet<string>;
   coreWidgetRegistrations: ReadonlyMap<
     string,
-    RendererDashboardWidgetRegistration
+    RendererMissionControlWidgetRegistration
   >;
-  coreWidgets: readonly CoreDashboardWidgetDeclaration[];
+  coreWidgets: readonly CoreMissionControlWidgetDeclaration[];
   isEmpty: boolean;
   onAdd: (widgetId: string) => void;
   plugins: readonly PluginRegistryEntry[];
-  widgetRegistrations: ReadonlyMap<string, RendererDashboardWidgetRegistration>;
+  widgetRegistrations: ReadonlyMap<
+    string,
+    RendererMissionControlWidgetRegistration
+  >;
 }
 
-export function DashboardAddCard({
+export function MissionControlAddCard({
   addedIds,
   coreWidgetRegistrations,
   coreWidgets,
@@ -45,7 +48,7 @@ export function DashboardAddCard({
   onAdd,
   plugins,
   widgetRegistrations,
-}: DashboardAddCardProps) {
+}: MissionControlAddCardProps) {
   const t = useT();
   const locale = i18next.language || "en";
   const [open, setOpen] = useState(false);
@@ -53,7 +56,7 @@ export function DashboardAddCard({
   // 先显式关菜单、把变更推迟到本轮事件之后再执行：onAdd 会同步
   // updateParameters 触发整面板重渲，菜单项瞬间翻 disabled 会打断
   // Radix 的 select→close 链，菜单卡开且背景 pointer-events 锁死
-  // （表现为"整个大盘拖不动"）。
+  // （表现为"整个指挥中心拖不动"）。
   const handleSelect = useCallback(
     (widgetId: string) => {
       setOpen(false);
@@ -67,7 +70,7 @@ export function DashboardAddCard({
   const pluginWidgets = useMemo(() => {
     const items: {
       disabled: boolean;
-      icon: RendererDashboardWidgetRegistration["icon"] | null;
+      icon: RendererMissionControlWidgetRegistration["icon"] | null;
       id: string;
       title: string;
     }[] = [];
@@ -76,9 +79,9 @@ export function DashboardAddCard({
       if (!entry.runtime.enabled) {
         continue;
       }
-      for (const widget of entry.manifest.dashboardWidgets) {
+      for (const widget of entry.manifest.missionControlWidgets) {
         const reg = widgetRegistrations.get(widget.id);
-        const display = resolvePluginDashboardWidgetDisplay(
+        const display = resolvePluginMissionControlWidgetDisplay(
           entry.manifest,
           widget,
           locale
@@ -103,13 +106,13 @@ export function DashboardAddCard({
       {coreWidgets.length > 0 ? (
         <>
           <DropdownMenuLabel>
-            {t("dashboard.picker.coreSection")}
+            {t("missionControl.picker.coreSection")}
           </DropdownMenuLabel>
           {coreWidgets.map((cw) => {
             const added = addedIds.has(cw.id);
             return (
               <DropdownMenuItem
-                data-testid={`dashboard-widget-picker-item-${cw.id}`}
+                data-testid={`mission-control-widget-picker-item-${cw.id}`}
                 disabled={added}
                 key={cw.id}
                 onSelect={() => {
@@ -132,13 +135,13 @@ export function DashboardAddCard({
         <>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>
-            {t("dashboard.picker.pluginSection")}
+            {t("missionControl.picker.pluginSection")}
           </DropdownMenuLabel>
           {pluginWidgets.map((pw) => {
             const Icon = pw.icon;
             return (
               <DropdownMenuItem
-                data-testid={`dashboard-widget-picker-item-${pw.id}`}
+                data-testid={`mission-control-widget-picker-item-${pw.id}`}
                 disabled={pw.disabled}
                 key={pw.id}
                 onSelect={() => {
@@ -160,26 +163,26 @@ export function DashboardAddCard({
   if (isEmpty) {
     return (
       <div className="flex h-full min-h-48 items-center justify-center pb-16">
-        <Empty className="border-0 py-8" data-testid="dashboard-empty">
+        <Empty className="border-0 py-8" data-testid="mission-control-empty">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <LayoutDashboard />
             </EmptyMedia>
-            <EmptyTitle>{t("dashboard.empty")}</EmptyTitle>
+            <EmptyTitle>{t("missionControl.empty")}</EmptyTitle>
             <EmptyDescription>
-              {t("dashboard.emptyDescription")}
+              {t("missionControl.emptyDescription")}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <DropdownMenu onOpenChange={setOpen} open={open}>
               <DropdownMenuTrigger asChild>
                 <Button
-                  data-testid="dashboard-add-widget"
+                  data-testid="mission-control-add-widget"
                   size="sm"
                   variant="outline"
                 >
                   <Plus className="mr-1.5 size-4" />
-                  {t("dashboard.addWidget")}
+                  {t("missionControl.addWidget")}
                 </Button>
               </DropdownMenuTrigger>
               {menuContent}
@@ -197,11 +200,11 @@ export function DashboardAddCard({
       <DropdownMenuTrigger asChild>
         <button
           className="flex size-full flex-col items-center justify-center gap-2 rounded-xl border border-border/60 border-dashed text-muted-foreground text-sm transition-colors hover:border-border hover:bg-accent/40 hover:text-foreground"
-          data-testid="dashboard-add-widget"
+          data-testid="mission-control-add-widget"
           type="button"
         >
           <Plus className="size-5" />
-          <span>{t("dashboard.addWidget")}</span>
+          <span>{t("missionControl.addWidget")}</span>
         </button>
       </DropdownMenuTrigger>
       {menuContent}

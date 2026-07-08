@@ -1,47 +1,52 @@
 import {
-  type CoreDashboardWidgetDeclaration,
-  DASHBOARD_GRID_COLS,
-  dashboardGridSizeSchema,
-  dashboardPanelParamsSchema,
+  type CoreMissionControlWidgetDeclaration,
   HOST_DEFAULT_WIDGET_SIZE,
   HOST_MAX_WIDGET_SIZE,
   HOST_MIN_WIDGET_SIZE,
-  pluginDashboardWidgetContributionSchema,
-} from "@shared/contracts/dashboard.ts";
+  MISSION_CONTROL_GRID_COLS,
+  missionControlGridSizeSchema,
+  missionControlPanelParamsSchema,
+  pluginMissionControlWidgetContributionSchema,
+} from "@shared/contracts/mission-control.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
 
 const W_AXIS_PATTERN = /w axis/;
 const H_AXIS_PATTERN = /h axis/;
 
-describe("dashboardGridSizeSchema", () => {
+describe("missionControlGridSizeSchema", () => {
   it("accepts valid grid size", () => {
-    const result = dashboardGridSizeSchema.parse({ h: 3, w: 4 });
+    const result = missionControlGridSizeSchema.parse({ h: 3, w: 4 });
     expect(result).toEqual({ h: 3, w: 4 });
   });
 
-  it("rejects w exceeding DASHBOARD_GRID_COLS", () => {
+  it("rejects w exceeding MISSION_CONTROL_GRID_COLS", () => {
     expect(() =>
-      dashboardGridSizeSchema.parse({ h: 3, w: DASHBOARD_GRID_COLS + 1 })
+      missionControlGridSizeSchema.parse({
+        h: 3,
+        w: MISSION_CONTROL_GRID_COLS + 1,
+      })
     ).toThrow();
   });
 
   it("rejects h exceeding 24", () => {
-    expect(() => dashboardGridSizeSchema.parse({ h: 25, w: 4 })).toThrow();
+    expect(() => missionControlGridSizeSchema.parse({ h: 25, w: 4 })).toThrow();
   });
 
   it("rejects non-integer w", () => {
-    expect(() => dashboardGridSizeSchema.parse({ h: 3, w: 4.5 })).toThrow();
+    expect(() =>
+      missionControlGridSizeSchema.parse({ h: 3, w: 4.5 })
+    ).toThrow();
   });
 
   it("rejects w < 1", () => {
-    expect(() => dashboardGridSizeSchema.parse({ h: 3, w: 0 })).toThrow();
+    expect(() => missionControlGridSizeSchema.parse({ h: 3, w: 0 })).toThrow();
   });
 });
 
-describe("pluginDashboardWidgetContributionSchema", () => {
+describe("pluginMissionControlWidgetContributionSchema", () => {
   it("parses minimal widget contribution (all sizes use defaults)", () => {
-    const result = pluginDashboardWidgetContributionSchema.parse({
+    const result = pluginMissionControlWidgetContributionSchema.parse({
       id: "pier.test.widget",
       title: "Test Widget",
     });
@@ -53,7 +58,7 @@ describe("pluginDashboardWidgetContributionSchema", () => {
   });
 
   it("parses full widget contribution with explicit sizes", () => {
-    const result = pluginDashboardWidgetContributionSchema.parse({
+    const result = pluginMissionControlWidgetContributionSchema.parse({
       defaultSize: { h: 4, w: 6 },
       description: "A test widget",
       id: "pier.test.widget",
@@ -70,7 +75,7 @@ describe("pluginDashboardWidgetContributionSchema", () => {
   });
 
   it("defaults permissions to empty array", () => {
-    const result = pluginDashboardWidgetContributionSchema.parse({
+    const result = pluginMissionControlWidgetContributionSchema.parse({
       id: "w",
       title: "W",
     });
@@ -79,7 +84,7 @@ describe("pluginDashboardWidgetContributionSchema", () => {
 
   it("rejects when min.w > default.w (superRefine bounds check)", () => {
     expect(() =>
-      pluginDashboardWidgetContributionSchema.parse({
+      pluginMissionControlWidgetContributionSchema.parse({
         defaultSize: { h: 3, w: 2 },
         id: "bad",
         minSize: { h: 2, w: 5 },
@@ -90,7 +95,7 @@ describe("pluginDashboardWidgetContributionSchema", () => {
 
   it("rejects when default.h > max.h (superRefine bounds check)", () => {
     expect(() =>
-      pluginDashboardWidgetContributionSchema.parse({
+      pluginMissionControlWidgetContributionSchema.parse({
         defaultSize: { h: 10, w: 4 },
         id: "bad",
         maxSize: { h: 5, w: 12 },
@@ -100,7 +105,7 @@ describe("pluginDashboardWidgetContributionSchema", () => {
   });
 
   it("passes when omitting all sizes (defaults satisfy bounds)", () => {
-    const result = pluginDashboardWidgetContributionSchema.parse({
+    const result = pluginMissionControlWidgetContributionSchema.parse({
       id: "ok",
       title: "OK",
     });
@@ -111,7 +116,7 @@ describe("pluginDashboardWidgetContributionSchema", () => {
   it("rejects min > default with effective defaults", () => {
     // minSize.w=5, defaultSize 缺省 HOST_DEFAULT=4 → 5 > 4 违反
     expect(() =>
-      pluginDashboardWidgetContributionSchema.parse({
+      pluginMissionControlWidgetContributionSchema.parse({
         id: "bad",
         minSize: { h: 2, w: 5 },
         title: "Bad",
@@ -120,14 +125,14 @@ describe("pluginDashboardWidgetContributionSchema", () => {
   });
 });
 
-describe("dashboardPanelParamsSchema", () => {
+describe("missionControlPanelParamsSchema", () => {
   it("parses empty widgets list", () => {
-    const result = dashboardPanelParamsSchema.parse({ widgets: [] });
+    const result = missionControlPanelParamsSchema.parse({ widgets: [] });
     expect(result.widgets).toEqual([]);
   });
 
   it("parses widgets with x/y/w/h", () => {
-    const result = dashboardPanelParamsSchema.parse({
+    const result = missionControlPanelParamsSchema.parse({
       widgets: [
         { h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 },
         { h: 4, id: "pier.codex.accounts", w: 6, x: 4, y: 0 },
@@ -140,7 +145,7 @@ describe("dashboardPanelParamsSchema", () => {
 
   it("rejects widget without id", () => {
     expect(() =>
-      dashboardPanelParamsSchema.parse({
+      missionControlPanelParamsSchema.parse({
         widgets: [{ h: 3, w: 4, x: 0, y: 0 }],
       })
     ).toThrow();
@@ -148,24 +153,24 @@ describe("dashboardPanelParamsSchema", () => {
 
   it("rejects x exceeding grid bounds", () => {
     expect(() =>
-      dashboardPanelParamsSchema.parse({
+      missionControlPanelParamsSchema.parse({
         widgets: [{ h: 3, id: "w", w: 4, x: 12, y: 0 }],
       })
     ).toThrow();
   });
 });
 
-describe("CoreDashboardWidgetDeclaration type", () => {
+describe("CoreMissionControlWidgetDeclaration type", () => {
   it("is structurally compatible", () => {
-    const declaration: CoreDashboardWidgetDeclaration = {
+    const declaration: CoreMissionControlWidgetDeclaration = {
       defaultSize: { h: 3, w: 4 },
       id: "core.activity-overview",
       minSize: { h: 2, w: 3 },
-      titleKey: "dashboard.widget.activityOverview.title",
+      titleKey: "missionControl.widget.activityOverview.title",
     };
     expect(declaration.id).toBe("core.activity-overview");
     expect(declaration.titleKey).toBe(
-      "dashboard.widget.activityOverview.title"
+      "missionControl.widget.activityOverview.title"
     );
     expect(declaration.defaultSize).toEqual({ h: 3, w: 4 });
   });
@@ -185,7 +190,7 @@ describe("契约级缺省常量", () => {
   });
 });
 
-describe("pluginManifestSchema dashboardWidgets field", () => {
+describe("pluginManifestSchema missionControlWidgets field", () => {
   const baseManifest = {
     apiVersion: 1,
     engines: { pier: ">=0.1.0" },
@@ -195,15 +200,15 @@ describe("pluginManifestSchema dashboardWidgets field", () => {
     version: "1.0.0",
   };
 
-  it("defaults dashboardWidgets to empty array", () => {
+  it("defaults missionControlWidgets to empty array", () => {
     const result = pluginManifestSchema.parse(baseManifest);
-    expect(result.dashboardWidgets).toEqual([]);
+    expect(result.missionControlWidgets).toEqual([]);
   });
 
-  it("parses manifest with dashboardWidgets", () => {
+  it("parses manifest with missionControlWidgets", () => {
     const result = pluginManifestSchema.parse({
       ...baseManifest,
-      dashboardWidgets: [
+      missionControlWidgets: [
         {
           defaultSize: { h: 4, w: 4 },
           id: "test.plugin.widget",
@@ -213,7 +218,7 @@ describe("pluginManifestSchema dashboardWidgets field", () => {
         },
       ],
     });
-    expect(result.dashboardWidgets).toHaveLength(1);
-    expect(result.dashboardWidgets[0]?.id).toBe("test.plugin.widget");
+    expect(result.missionControlWidgets).toHaveLength(1);
+    expect(result.missionControlWidgets[0]?.id).toBe("test.plugin.widget");
   });
 });

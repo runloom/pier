@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pluginDashboardWidgetContributionSchema } from "./dashboard.ts";
+import { pluginMissionControlWidgetContributionSchema } from "./mission-control.ts";
 import { pierCapabilitySchema } from "./permissions.ts";
 import {
   pluginCommandContributionSchema,
@@ -56,9 +56,6 @@ export const managedPluginPackageManifestSchema = z.object({
   apiVersion: z.literal(1),
   commands: z.array(pluginCommandContributionSchema).default([]),
   configuration: pluginConfigurationSchema.optional(),
-  dashboardWidgets: z
-    .array(pluginDashboardWidgetContributionSchema)
-    .default([]),
   dataSchemas: z.record(z.string(), managedPluginDataSchemaSchema).optional(),
   description: z.string().min(1).optional(),
   engines: z.object({ pier: z.string().min(1) }),
@@ -69,6 +66,9 @@ export const managedPluginPackageManifestSchema = z.object({
     .optional(),
   localization: pluginLocalizationSchema.optional(),
   main: relativePosixPathSchema,
+  missionControlWidgets: z
+    .array(pluginMissionControlWidgetContributionSchema)
+    .default([]),
   name: z.string().min(1),
   panels: z.array(pluginPanelContributionSchema).default([]),
   permissions: z.array(pierCapabilitySchema).default([]),
@@ -245,7 +245,7 @@ export const managedPluginCatalogRowSchema = z.object({
   contributionCounts: z
     .object({
       commands: z.number().int().nonnegative(),
-      dashboardWidgets: z.number().int().nonnegative(),
+      missionControlWidgets: z.number().int().nonnegative(),
       panels: z.number().int().nonnegative(),
       terminalStatusItems: z.number().int().nonnegative(),
     })

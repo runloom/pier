@@ -17,7 +17,7 @@ import type {
 } from "../shared/accounts.ts";
 
 /**
- * Codex accounts dashboard widget (plan Task 10). Consumes plugin RPC only —
+ * Codex accounts Mission Control widget (plan Task 10). Consumes plugin RPC only —
  * no host `context.accounts` facade. Subscribes to `accounts.changed` BEFORE
  * requesting the initial snapshot, and applies only snapshots whose
  * `revision` exceeds the current one (revision-based stale rejection).

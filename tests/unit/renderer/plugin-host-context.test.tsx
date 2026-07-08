@@ -45,9 +45,9 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
 import {
-  clearPluginDashboardWidgetsForTests,
-  getPluginDashboardWidgetRegistrations,
-} from "@/lib/plugins/plugin-dashboard-widget-registry.ts";
+  clearPluginMissionControlWidgetsForTests,
+  getPluginMissionControlWidgetRegistrations,
+} from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
 import { clearPluginPanelsForTests } from "@/lib/plugins/plugin-panel-registry.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
@@ -103,7 +103,7 @@ const sampleCommands = [
 const sampleTerminalStatusItems = [
   { id: "sample.status", permissions: [], title: "Sample Status" },
 ];
-const sampleDashboardWidgets = [
+const sampleMissionControlWidgets = [
   { id: "sample.widget", permissions: [], title: "Sample Widget" },
 ];
 const undeclaredContributionErrorPattern = /not declared/;
@@ -160,7 +160,7 @@ const pluginEntry = {
     permissions: [],
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
-    dashboardWidgets: sampleDashboardWidgets,
+    missionControlWidgets: sampleMissionControlWidgets,
     version: "1.0.0",
   },
   runtime: {
@@ -257,7 +257,7 @@ afterEach(() => {
   useWorkspaceStore.setState({ api: null });
   workspaceActivationMocks.activateWorkspacePanel.mockReset();
   vi.restoreAllMocks();
-  clearPluginDashboardWidgetsForTests();
+  clearPluginMissionControlWidgetsForTests();
 });
 
 describe("createRendererPluginContext", () => {
@@ -413,50 +413,50 @@ describe("createRendererPluginContext", () => {
     expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
-  it("delegates dashboard widget registration to the internal registry", () => {
+  it("delegates Mission Control widget registration to the internal registry", () => {
     const context = createRendererPluginContext(pluginEntry);
 
-    const dispose = context.dashboardWidgets.register({
+    const dispose = context.missionControlWidgets.register({
       component: () => null,
       icon: House,
       id: "sample.widget",
     });
 
-    expect(getPluginDashboardWidgetRegistrations().has("sample.widget")).toBe(
-      true
-    );
+    expect(
+      getPluginMissionControlWidgetRegistrations().has("sample.widget")
+    ).toBe(true);
 
     dispose();
-    expect(getPluginDashboardWidgetRegistrations().has("sample.widget")).toBe(
-      false
-    );
+    expect(
+      getPluginMissionControlWidgetRegistrations().has("sample.widget")
+    ).toBe(false);
   });
 
-  it("rejects dashboard widget registration not declared by the plugin manifest", () => {
+  it("rejects Mission Control widget registration not declared by the plugin manifest", () => {
     const context = createRendererPluginContext(pluginEntry);
 
     expect(() =>
-      context.dashboardWidgets.register({
+      context.missionControlWidgets.register({
         component: () => null,
         icon: House,
         id: "sample.missingWidget",
       })
     ).toThrow(undeclaredContributionErrorPattern);
     expect(
-      getPluginDashboardWidgetRegistrations().has("sample.missingWidget")
+      getPluginMissionControlWidgetRegistrations().has("sample.missingWidget")
     ).toBe(false);
   });
 
-  it("allows dashboard widget registration without entry (core context)", () => {
+  it("allows Mission Control widget registration without entry (core context)", () => {
     const context = createRendererPluginContext();
 
-    const dispose = context.dashboardWidgets.register({
+    const dispose = context.missionControlWidgets.register({
       component: () => null,
       icon: House,
       id: "any.widget",
     });
 
-    expect(getPluginDashboardWidgetRegistrations().has("any.widget")).toBe(
+    expect(getPluginMissionControlWidgetRegistrations().has("any.widget")).toBe(
       true
     );
 

@@ -1,4 +1,4 @@
-import type { DashboardWidgetComponentProps } from "@plugins/api/renderer.ts";
+import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import { PanelsTopLeft } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
@@ -54,7 +54,7 @@ function StatTile({
   );
 }
 
-export function ActivityWidget(_props: DashboardWidgetComponentProps) {
+export function ActivityWidget(_props: MissionControlWidgetComponentProps) {
   const t = useT();
   const activities = useForegroundActivityStore((s) => s.activities);
   const { running, waiting } = activityCounts(activities);
@@ -69,17 +69,17 @@ export function ActivityWidget(_props: DashboardWidgetComponentProps) {
         data-testid="activity-stat-grid"
       >
         <StatTile
-          label={t("dashboard.widget.activityOverview.total")}
+          label={t("missionControl.widget.activityOverview.total")}
           value={total}
         />
         <StatTile
           dotClass="bg-success"
-          label={t("dashboard.widget.activityOverview.running")}
+          label={t("missionControl.widget.activityOverview.running")}
           value={running}
         />
         <StatTile
           dotClass="bg-warning"
-          label={t("dashboard.widget.activityOverview.waiting")}
+          label={t("missionControl.widget.activityOverview.waiting")}
           value={waiting}
         />
       </div>
@@ -93,7 +93,7 @@ export function ActivityWidget(_props: DashboardWidgetComponentProps) {
               key={g.kind}
             >
               <span className="font-medium text-sm">
-                {t(`dashboard.widget.activityOverview.kind.${g.kind}`)}
+                {t(`missionControl.widget.activityOverview.kind.${g.kind}`)}
               </span>
               <span className="font-mono text-muted-foreground text-xs tabular-nums">
                 {g.count}
@@ -108,11 +108,11 @@ export function ActivityWidget(_props: DashboardWidgetComponentProps) {
             className="@[14rem]:size-5 size-4 text-muted-foreground/60"
           />
           <p className="font-medium text-sm">
-            {t("dashboard.widget.activityOverview.empty")}
+            {t("missionControl.widget.activityOverview.empty")}
           </p>
           {/* 窄卡空间寸土寸金，副句只在 ≥14rem 显示 */}
           <p className="@[14rem]:block hidden text-muted-foreground text-xs">
-            {t("dashboard.widget.activityOverview.emptyHint")}
+            {t("missionControl.widget.activityOverview.emptyHint")}
           </p>
         </div>
       )}

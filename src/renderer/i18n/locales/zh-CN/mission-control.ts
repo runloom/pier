@@ -1,9 +1,9 @@
-export const dashboard = {
+export const missionControl = {
   addWidget: "添加组件",
-  empty: "大盘还是空的",
+  empty: "指挥中心还是空的",
   emptyDescription: "添加组件以监控活动和管理工作区。",
-  panelTitle: "大盘",
-  panelTitleShort: "大盘",
+  panelTitle: "指挥中心",
+  panelTitleShort: "指挥中心",
   picker: {
     coreSection: "核心",
     pluginSection: "插件",

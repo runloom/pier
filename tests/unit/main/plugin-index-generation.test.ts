@@ -49,7 +49,7 @@ describe("generate-plugin-index", () => {
       JSON.stringify({
         apiVersion: 1,
         commands: [],
-        dashboardWidgets: [],
+        missionControlWidgets: [],
         description: "Codex account management.",
         engines: { pier: ">=0.1.0 <0.2.0" },
         id: "pier.codex",

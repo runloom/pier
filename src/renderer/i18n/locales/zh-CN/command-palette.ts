@@ -36,7 +36,7 @@ export const commandPalette = {
     newTab: "新建标签",
     newWindow: "新建窗口",
     newAgent: "新建智能体",
-    newDashboard: "新建大盘",
+    newMissionControl: "新建指挥中心",
     runTask: "运行任务...",
     terminalList: "终端列表...",
     selectTheme: "选择主题",

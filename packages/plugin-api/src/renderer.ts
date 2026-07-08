@@ -9,13 +9,13 @@ import type { ComponentType, ReactNode } from "react";
  * plugin coupling into a de-facto host API.
  */
 
-export interface DashboardWidgetComponentProps {
+export interface MissionControlWidgetComponentProps {
   height: number;
   width: number;
 }
 
-export interface RendererDashboardWidgetRegistration {
-  component: ComponentType<DashboardWidgetComponentProps>;
+export interface RendererMissionControlWidgetRegistration {
+  component: ComponentType<MissionControlWidgetComponentProps>;
   icon?: ComponentType<{ size?: number | string }>;
   id: string;
   title: string | (() => string);
@@ -40,15 +40,17 @@ export interface ExternalRendererPluginContext {
     reset(key: string): Promise<void>;
     set(key: string, value: unknown): Promise<void>;
   };
-  dashboardWidgets: {
-    register(registration: RendererDashboardWidgetRegistration): () => void;
-  };
   dialogs: {
     alert(options: { body?: string; title: string }): Promise<void>;
     confirm(options: { body?: string; title: string }): Promise<boolean>;
   };
   i18n: {
     t(key: string, fallback?: string): string;
+  };
+  missionControlWidgets: {
+    register(
+      registration: RendererMissionControlWidgetRegistration
+    ): () => void;
   };
   notifications: {
     error(message: string): void;

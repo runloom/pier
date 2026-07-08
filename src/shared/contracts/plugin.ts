@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pluginDashboardWidgetContributionSchema } from "./dashboard.ts";
+import { pluginMissionControlWidgetContributionSchema } from "./mission-control.ts";
 import { pierCapabilitySchema } from "./permissions.ts";
 
 export const pluginSourceKindSchema = z.enum([
@@ -52,11 +52,11 @@ export const pluginLocaleMessagesSchema = z.object({
   commands: z
     .record(z.string().min(1), pluginLocalizedCommandContributionSchema)
     .optional(),
-  dashboardWidgets: z
-    .record(z.string().min(1), pluginLocalizedContributionSchema)
-    .optional(),
   description: z.string().min(1).optional(),
   messages: z.record(z.string().min(1), z.string().min(1)).optional(),
+  missionControlWidgets: z
+    .record(z.string().min(1), pluginLocalizedContributionSchema)
+    .optional(),
   name: z.string().min(1).optional(),
   panels: z
     .record(z.string().min(1), pluginLocalizedContributionSchema)
@@ -255,9 +255,6 @@ export const pluginManifestSchema = z
     apiVersion: z.literal(1),
     commands: z.array(pluginCommandContributionSchema).default([]),
     configuration: pluginConfigurationSchema.optional(),
-    dashboardWidgets: z
-      .array(pluginDashboardWidgetContributionSchema)
-      .default([]),
     description: z.string().min(1).optional(),
     engines: z.object({
       pier: z.string().min(1),
@@ -268,6 +265,9 @@ export const pluginManifestSchema = z
     locales: z
       .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
       .optional(),
+    missionControlWidgets: z
+      .array(pluginMissionControlWidgetContributionSchema)
+      .default([]),
     name: z.string().min(1),
     panels: z.array(pluginPanelContributionSchema).default([]),
     permissions: z.array(pierCapabilitySchema).default([]),

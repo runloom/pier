@@ -31,7 +31,7 @@ async function launchPierApp(
  * 的 waitForAppShellReady：domcontentloaded 太早，此时全局 keydown 监听
  * 尚未注册，CDP 按键会被丢掉）。
  *
- * 仅适用于"终端是活跃面板"的首启默认布局；恢复阶段活跃 tab 是大盘时，
+ * 仅适用于"终端是活跃面板"的首启默认布局；恢复阶段活跃 tab 是指挥中心时，
  * 后台终端面板不挂 .terminal-anchor，不能用本函数（见下方恢复阶段的等待）。
  */
 async function waitForAppShellReady(win: Page): Promise<void> {
@@ -41,42 +41,49 @@ async function waitForAppShellReady(win: Page): Promise<void> {
   });
 }
 
-/** 经命令面板执行"新建大盘"（renderer action 无 preload 直调通道，命令面板是标准入口）。 */
-async function openDashboardViaPalette(win: Page): Promise<void> {
+/** 经命令面板执行"新建指挥中心"（renderer action 无 preload 直调通道，命令面板是标准入口）。 */
+async function openMissionControlViaPalette(win: Page): Promise<void> {
   await win.keyboard.press("Meta+Shift+KeyP");
   await expect(win.locator("[cmdk-input]")).toBeVisible({ timeout: 10_000 });
-  const item = win.locator("[cmdk-item]").filter({ hasText: "新建大盘" });
+  const item = win.locator("[cmdk-item]").filter({ hasText: "新建指挥中心" });
   await expect(item).toBeVisible({ timeout: 10_000 });
   await item.click();
 }
 
-test.describe("Dashboard widget persistence e2e", () => {
-  test("新建大盘 → 添加 core activity widget → 重启 → 组装恢复", async () => {
-    const userDataDir = mkdtempSync(join(tmpdir(), "pier-dashboard-e2e-"));
+test.describe("MissionControl widget persistence e2e", () => {
+  test("新建指挥中心 → 添加 core activity widget → 重启 → 组装恢复", async () => {
+    const userDataDir = mkdtempSync(
+      join(tmpdir(), "pier-mission-control-e2e-")
+    );
     try {
-      // 第一次启动：新建大盘 + 添加 widget
+      // 第一次启动：新建指挥中心 + 添加 widget
       const firstApp = await launchPierApp(userDataDir);
       const firstWindow = await firstApp.firstWindow();
       await waitForAppShellReady(firstWindow);
 
-      await openDashboardViaPalette(firstWindow);
+      await openMissionControlViaPalette(firstWindow);
 
-      // 空态大盘出现（Phase 1 dashboard-panel.tsx 的空态 testid）
-      await firstWindow.waitForSelector('[data-testid="dashboard-empty"]', {
-        timeout: 5000,
-      });
+      // 空态指挥中心出现（Phase 1 mission-control-panel.tsx 的空态 testid）
+      await firstWindow.waitForSelector(
+        '[data-testid="mission-control-empty"]',
+        {
+          timeout: 5000,
+        }
+      );
 
       // 点击"添加组件"，选择 core.activity-overview
-      await firstWindow.locator('[data-testid="dashboard-add-widget"]').click();
+      await firstWindow
+        .locator('[data-testid="mission-control-add-widget"]')
+        .click();
       await firstWindow
         .locator(
-          '[data-testid="dashboard-widget-picker-item-core.activity-overview"]'
+          '[data-testid="mission-control-widget-picker-item-core.activity-overview"]'
         )
         .click();
 
       // 验证 widget 卡片出现
       await firstWindow.waitForSelector(
-        '[data-testid="dashboard-widget-core.activity-overview"]',
+        '[data-testid="mission-control-widget-core.activity-overview"]',
         { timeout: 5000 }
       );
 
@@ -88,11 +95,11 @@ test.describe("Dashboard widget persistence e2e", () => {
       const restoredApp = await launchPierApp(userDataDir);
       try {
         const restoredWindow = await restoredApp.firstWindow();
-        // 恢复的布局里大盘是活跃 tab，终端在后台 tab（dockview 不挂后台
+        // 恢复的布局里指挥中心是活跃 tab，终端在后台 tab（dockview 不挂后台
         // 面板内容，.terminal-anchor 恒为 0）——直接等恢复目标本身。
         await restoredWindow.waitForLoadState("domcontentloaded");
         const widgetCard = restoredWindow.locator(
-          '[data-testid="dashboard-widget-core.activity-overview"]'
+          '[data-testid="mission-control-widget-core.activity-overview"]'
         );
         await expect(widgetCard).toBeVisible({ timeout: 15_000 });
       } finally {

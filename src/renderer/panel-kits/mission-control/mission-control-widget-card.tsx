@@ -8,11 +8,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@pier/ui/card.tsx";
-import type { DashboardGridSize } from "@shared/contracts/dashboard.ts";
+import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
 import { GripVertical, Trash2 } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode, useMemo } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import type { ResolvedDashboardWidget } from "./dashboard-merge.ts";
+import type { ResolvedMissionControlWidget } from "./mission-control-merge.ts";
 
 interface WidgetErrorBoundaryProps {
   children: ReactNode;
@@ -38,7 +38,7 @@ class WidgetErrorBoundary extends Component<
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(
-      `[dashboard] widget ${this.props.widgetId} crashed:`,
+      `[mission-control] widget ${this.props.widgetId} crashed:`,
       error,
       info.componentStack
     );
@@ -58,17 +58,17 @@ class WidgetErrorBoundary extends Component<
   }
 }
 
-interface DashboardWidgetCardProps {
+interface MissionControlWidgetCardProps {
   onRemove: () => void;
-  size: DashboardGridSize;
-  widget: ResolvedDashboardWidget;
+  size: MissionControlGridSize;
+  widget: ResolvedMissionControlWidget;
 }
 
-export function DashboardWidgetCard({
+export function MissionControlWidgetCard({
   onRemove,
   size,
   widget,
-}: DashboardWidgetCardProps) {
+}: MissionControlWidgetCardProps) {
   const t = useT();
 
   const title = useMemo(() => {
@@ -94,7 +94,7 @@ export function DashboardWidgetCard({
     if (widget.status === "plugin-disabled") {
       return (
         <div className="flex items-center justify-center p-4 text-muted-foreground text-sm">
-          {t("dashboard.widget.pluginDisabled")}
+          {t("missionControl.widget.pluginDisabled")}
         </div>
       );
     }
@@ -102,9 +102,9 @@ export function DashboardWidgetCard({
       return (
         <Alert className="m-3" variant="destructive">
           <AlertDescription className="flex flex-col items-center gap-2">
-            <span>{t("dashboard.widget.unknown")}</span>
+            <span>{t("missionControl.widget.unknown")}</span>
             <Button onClick={onRemove} size="xs" variant="destructive">
-              {t("dashboard.widget.remove")}
+              {t("missionControl.widget.remove")}
             </Button>
           </AlertDescription>
         </Alert>
@@ -113,7 +113,7 @@ export function DashboardWidgetCard({
     if (!widget.registration) {
       return (
         <div className="flex items-center justify-center p-4 text-muted-foreground text-sm">
-          {t("dashboard.widget.loading")}
+          {t("missionControl.widget.loading")}
         </div>
       );
     }
@@ -130,9 +130,9 @@ export function DashboardWidgetCard({
       // rounded-xl 覆盖 Card 原语的 24px 大圆角——密集网格里的 widget 卡
       // 用 12px 更紧凑（幽灵卡/拖拽占位框同步此值）
       className="group h-full gap-0 rounded-xl py-0 [--card-spacing:--spacing(3)]"
-      data-testid={`dashboard-widget-${widget.id}`}
+      data-testid={`mission-control-widget-${widget.id}`}
     >
-      <CardHeader className="dashboard-widget-drag-handle cursor-grab items-center gap-0.5 border-border/60 border-b pt-3 active:cursor-grabbing">
+      <CardHeader className="mission-control-widget-drag-handle cursor-grab items-center gap-0.5 border-border/60 border-b pt-3 active:cursor-grabbing">
         <CardTitle className="flex items-center gap-1.5 font-semibold text-sm">
           <GripVertical className="-ml-0.5 size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100" />
           {Icon ? (
@@ -147,7 +147,7 @@ export function DashboardWidgetCard({
         ) : null}
         <CardAction>
           <Button
-            aria-label={t("dashboard.widget.remove")}
+            aria-label={t("missionControl.widget.remove")}
             className="text-muted-foreground opacity-0 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
             onClick={onRemove}
             size="icon-xs"

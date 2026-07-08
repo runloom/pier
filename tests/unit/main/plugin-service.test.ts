@@ -175,11 +175,11 @@ describe("pluginManifestSchema", () => {
     ]);
   });
 
-  it("dashboard widget 声明的权限并入有效权限", () => {
+  it("mission control widget 声明的权限并入有效权限", () => {
     const manifest = pluginManifestSchema.parse({
       apiVersion: 1,
       commands: [],
-      dashboardWidgets: [
+      missionControlWidgets: [
         {
           id: "sample.widget",
           permissions: ["app:read"],
@@ -187,15 +187,15 @@ describe("pluginManifestSchema", () => {
         },
       ],
       engines: { pier: ">=0.1.0" },
-      id: "sample.dashboard",
-      name: "Sample Dashboard",
+      id: "sample.mission-control",
+      name: "Sample MissionControl",
       source: { kind: "builtin" },
       version: "1.0.0",
     });
     expect(collectEffectivePermissions(manifest)).toContain("app:read");
   });
 
-  it("dashboard widget 权限与顶层/命令/面板权限去重合并", () => {
+  it("mission control widget 权限与顶层/命令/面板权限去重合并", () => {
     const manifest = pluginManifestSchema.parse({
       apiVersion: 1,
       commands: [
@@ -205,7 +205,7 @@ describe("pluginManifestSchema", () => {
           title: "Cmd",
         },
       ],
-      dashboardWidgets: [
+      missionControlWidgets: [
         {
           id: "sample.widget",
           permissions: ["plugin:read", "app:read"],

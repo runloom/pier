@@ -1,6 +1,9 @@
-import type { RendererDashboardWidgetRegistration } from "@plugins/api/renderer.ts";
+import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
 
-const registrations = new Map<string, RendererDashboardWidgetRegistration>();
+const registrations = new Map<
+  string,
+  RendererMissionControlWidgetRegistration
+>();
 const listeners = new Set<() => void>();
 let revision = 0;
 
@@ -11,8 +14,8 @@ function notify(): void {
   }
 }
 
-export function registerPluginDashboardWidget(
-  registration: RendererDashboardWidgetRegistration
+export function registerPluginMissionControlWidget(
+  registration: RendererMissionControlWidgetRegistration
 ): () => void {
   registrations.set(registration.id, registration);
   notify();
@@ -24,9 +27,9 @@ export function registerPluginDashboardWidget(
   };
 }
 
-export function getPluginDashboardWidgetRegistrations(): ReadonlyMap<
+export function getPluginMissionControlWidgetRegistrations(): ReadonlyMap<
   string,
-  RendererDashboardWidgetRegistration
+  RendererMissionControlWidgetRegistration
 > {
   return registrations;
 }
@@ -36,14 +39,14 @@ export function getPluginDashboardWidgetRegistrations(): ReadonlyMap<
  * useSyncExternalStore 的 snapshot 函数返回引用稳定的原始值，
  * 让 React 仅在版本变化时重渲染。
  */
-export function getPluginDashboardWidgetRevision(): number {
+export function getPluginMissionControlWidgetRevision(): number {
   return revision;
 }
 
 /**
- * 订阅 dashboard widget 注册表变化（给 useSyncExternalStore 用）。
+ * 订阅 Mission Control widget 注册表变化（给 useSyncExternalStore 用）。
  */
-export function subscribePluginDashboardWidgetRegistry(
+export function subscribePluginMissionControlWidgetRegistry(
   listener: () => void
 ): () => void {
   listeners.add(listener);
@@ -52,7 +55,7 @@ export function subscribePluginDashboardWidgetRegistry(
   };
 }
 
-export function clearPluginDashboardWidgetsForTests(): void {
+export function clearPluginMissionControlWidgetsForTests(): void {
   registrations.clear();
   notify();
 }

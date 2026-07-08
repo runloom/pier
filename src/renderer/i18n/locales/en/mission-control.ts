@@ -1,10 +1,10 @@
-export const dashboard = {
+export const missionControl = {
   addWidget: "Add Widget",
-  empty: "Your dashboard is empty",
+  empty: "Mission Control is empty",
   emptyDescription:
     "Add widgets to monitor activity and manage your workspace.",
-  panelTitle: "Dashboard",
-  panelTitleShort: "Dashboard",
+  panelTitle: "Mission Control",
+  panelTitleShort: "Mission Control",
   picker: {
     coreSection: "Core",
     pluginSection: "Plugins",

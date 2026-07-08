@@ -20,7 +20,7 @@ function pluginEntryWithStatusItem(id: string): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      dashboardWidgets: [],
+      missionControlWidgets: [],
       engines: { pier: ">=0.1.0" },
       id,
       name: id,

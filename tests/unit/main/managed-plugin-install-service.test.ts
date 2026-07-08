@@ -24,7 +24,7 @@ function pluginManifest(version: string): string {
   return JSON.stringify({
     apiVersion: 1,
     commands: [],
-    dashboardWidgets: [],
+    missionControlWidgets: [],
     dataSchemas: { "codex.accounts": { read: ">=1 <=1", write: 1 } },
     engines: { pier: ">=0.1.0 <0.2.0" },
     id: "pier.codex",

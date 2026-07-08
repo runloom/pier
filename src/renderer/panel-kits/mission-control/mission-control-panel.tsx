@@ -2,10 +2,10 @@
 import "react-grid-layout/css/styles.css";
 
 import {
-  DASHBOARD_GRID_COLS,
-  type DashboardGridSize,
-  salvageDashboardPanelParams,
-} from "@shared/contracts/dashboard.ts";
+  MISSION_CONTROL_GRID_COLS,
+  type MissionControlGridSize,
+  salvageMissionControlPanelParams,
+} from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import i18next from "i18next";
@@ -22,16 +22,16 @@ import { useContainerWidth } from "@/hooks/use-container-width.ts";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
-  getPluginDashboardWidgetRegistrations,
-  getPluginDashboardWidgetRevision,
-  subscribePluginDashboardWidgetRegistry,
-} from "@/lib/plugins/plugin-dashboard-widget-registry.ts";
+  getPluginMissionControlWidgetRegistrations,
+  getPluginMissionControlWidgetRevision,
+  subscribePluginMissionControlWidgetRegistry,
+} from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import {
-  CORE_DASHBOARD_WIDGET_COMPONENTS,
-  CORE_DASHBOARD_WIDGETS,
-} from "./core-dashboard-widgets.ts";
-import { DashboardAddCard } from "./dashboard-add-card.tsx";
+  CORE_MISSION_CONTROL_WIDGET_COMPONENTS,
+  CORE_MISSION_CONTROL_WIDGETS,
+} from "./core-mission-control-widgets.ts";
+import { MissionControlAddCard } from "./mission-control-add-card.tsx";
 import {
   appendEntry,
   applyDerivedLayoutChange,
@@ -44,9 +44,9 @@ import {
   layoutToEntries,
   MARGIN,
   ROW_HEIGHT,
-} from "./dashboard-grid-geometry.ts";
-import { resolveDashboardWidgets } from "./dashboard-merge.ts";
-import { DashboardWidgetCard } from "./dashboard-widget-card.tsx";
+} from "./mission-control-grid-geometry.ts";
+import { resolveMissionControlWidgets } from "./mission-control-merge.ts";
+import { MissionControlWidgetCard } from "./mission-control-widget-card.tsx";
 
 /** 一格占位（格宽 + 水平间距），幽灵卡像素定位用。 */
 const GRID_UNIT = CELL_WIDTH + MARGIN[0];
@@ -128,17 +128,19 @@ function findSizeDeclaration(
   plugins: readonly PluginRegistryEntry[]
 ):
   | {
-      defaultSize?: DashboardGridSize | undefined;
-      maxSize?: DashboardGridSize | undefined;
-      minSize?: DashboardGridSize | undefined;
+      defaultSize?: MissionControlGridSize | undefined;
+      maxSize?: MissionControlGridSize | undefined;
+      minSize?: MissionControlGridSize | undefined;
     }
   | undefined {
-  const core = CORE_DASHBOARD_WIDGETS.find((w) => w.id === id);
+  const core = CORE_MISSION_CONTROL_WIDGETS.find((w) => w.id === id);
   if (core) {
     return core;
   }
   for (const entry of plugins) {
-    const widget = entry.manifest.dashboardWidgets.find((w) => w.id === id);
+    const widget = entry.manifest.missionControlWidgets.find(
+      (w) => w.id === id
+    );
     if (widget) {
       return widget;
     }
@@ -146,30 +148,30 @@ function findSizeDeclaration(
   return;
 }
 
-export function DashboardPanel(props: IDockviewPanelProps) {
+export function MissionControlPanel(props: IDockviewPanelProps) {
   const t = useT();
   usePanelDescriptor(props.api, {
     display: {
-      long: t("dashboard.panelTitle"),
-      short: t("dashboard.panelTitleShort"),
+      long: t("missionControl.panelTitle"),
+      short: t("missionControl.panelTitleShort"),
     },
   });
 
   const [containerRef, containerWidth] = useContainerWidth();
   const cols = computeAvailableCols(containerWidth);
-  const isDerived = cols < DASHBOARD_GRID_COLS;
+  const isDerived = cols < MISSION_CONTROL_GRID_COLS;
 
   // 订阅 widget 注册表变化——捕获 revision 数值作为依赖
   const widgetRevision = useSyncExternalStore(
-    subscribePluginDashboardWidgetRegistry,
-    getPluginDashboardWidgetRevision,
-    getPluginDashboardWidgetRevision
+    subscribePluginMissionControlWidgetRegistry,
+    getPluginMissionControlWidgetRevision,
+    getPluginMissionControlWidgetRevision
   );
 
   const plugins = usePluginRegistryStore((s) => s.plugins);
 
   const params = useMemo(
-    () => salvageDashboardPanelParams(props.params),
+    () => salvageMissionControlPanelParams(props.params),
     [props.params]
   );
 
@@ -178,7 +180,7 @@ export function DashboardPanel(props: IDockviewPanelProps) {
     // 复制成新 Map：注册表 getter 返回的是同一个被原地修改的实例，直接透传
     // 会让下游 resolved useMemo 因引用相等永不重算（插件晚于首渲注册时
     // widget 卡死在 Loading 态）。
-    () => new Map(getPluginDashboardWidgetRegistrations()),
+    () => new Map(getPluginMissionControlWidgetRegistrations()),
     [widgetRevision]
   );
 
@@ -186,12 +188,12 @@ export function DashboardPanel(props: IDockviewPanelProps) {
 
   const resolved = useMemo(
     () =>
-      resolveDashboardWidgets(
+      resolveMissionControlWidgets(
         params,
-        CORE_DASHBOARD_WIDGETS,
+        CORE_MISSION_CONTROL_WIDGETS,
         plugins,
         widgetRegistrations,
-        CORE_DASHBOARD_WIDGET_COMPONENTS,
+        CORE_MISSION_CONTROL_WIDGET_COMPONENTS,
         locale
       ),
     [params, plugins, widgetRegistrations, locale]
@@ -299,7 +301,7 @@ export function DashboardPanel(props: IDockviewPanelProps) {
       >
         {/* 左对齐（用户定）：左/上/下边距恒等于卡间距 12px，不做居中留白 */}
         <div
-          data-testid="dashboard-grid-wrapper"
+          data-testid="mission-control-grid-wrapper"
           style={{ width: gridPixelWidth(cols) }}
         >
           {resolved.length > 0 ? (
@@ -336,12 +338,12 @@ export function DashboardPanel(props: IDockviewPanelProps) {
               >
                 {resolved.map((widget) => {
                   const item = layout.find((l) => l.i === widget.id);
-                  const size: DashboardGridSize = item
+                  const size: MissionControlGridSize = item
                     ? { h: item.h, w: item.w }
                     : { h: 3, w: 4 };
                   return (
                     <div key={widget.id}>
-                      <DashboardWidgetCard
+                      <MissionControlWidgetCard
                         onRemove={() => handleRemove(widget.id)}
                         size={size}
                         widget={widget}
@@ -360,10 +362,12 @@ export function DashboardPanel(props: IDockviewPanelProps) {
                   width: gridPixelWidth(ghostW),
                 }}
               >
-                <DashboardAddCard
+                <MissionControlAddCard
                   addedIds={addedIds}
-                  coreWidgetRegistrations={CORE_DASHBOARD_WIDGET_COMPONENTS}
-                  coreWidgets={CORE_DASHBOARD_WIDGETS}
+                  coreWidgetRegistrations={
+                    CORE_MISSION_CONTROL_WIDGET_COMPONENTS
+                  }
+                  coreWidgets={CORE_MISSION_CONTROL_WIDGETS}
                   isEmpty={false}
                   onAdd={handleAdd}
                   plugins={plugins}
@@ -372,10 +376,10 @@ export function DashboardPanel(props: IDockviewPanelProps) {
               </div>
             </div>
           ) : (
-            <DashboardAddCard
+            <MissionControlAddCard
               addedIds={addedIds}
-              coreWidgetRegistrations={CORE_DASHBOARD_WIDGET_COMPONENTS}
-              coreWidgets={CORE_DASHBOARD_WIDGETS}
+              coreWidgetRegistrations={CORE_MISSION_CONTROL_WIDGET_COMPONENTS}
+              coreWidgets={CORE_MISSION_CONTROL_WIDGETS}
               isEmpty
               onAdd={handleAdd}
               plugins={plugins}
@@ -388,8 +392,8 @@ export function DashboardPanel(props: IDockviewPanelProps) {
   );
 }
 
-export const dashboardPanelKit = {
-  component: DashboardPanel,
+export const missionControlPanelKit = {
+  component: MissionControlPanel,
   icon: LayoutDashboard,
   kind: "web",
 } as const;

@@ -1,11 +1,11 @@
 import type { PluginManifest } from "@shared/contracts/plugin.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
-import { resolvePluginDashboardWidgetDisplay } from "@/lib/plugins/display.ts";
+import { resolvePluginMissionControlWidgetDisplay } from "@/lib/plugins/display.ts";
 
 const baseManifest = pluginManifestSchema.parse({
   apiVersion: 1,
-  dashboardWidgets: [
+  missionControlWidgets: [
     {
       description: "Fallback desc",
       id: "test.widget",
@@ -16,7 +16,7 @@ const baseManifest = pluginManifestSchema.parse({
   id: "test.plugin",
   locales: {
     en: {
-      dashboardWidgets: {
+      missionControlWidgets: {
         "test.widget": {
           description: "Localized desc",
           title: "Localized Title",
@@ -24,7 +24,7 @@ const baseManifest = pluginManifestSchema.parse({
       },
     },
     "zh-CN": {
-      dashboardWidgets: {
+      missionControlWidgets: {
         "test.widget": {
           title: "本地化标题",
         },
@@ -36,12 +36,12 @@ const baseManifest = pluginManifestSchema.parse({
   version: "1.0.0",
 }) as PluginManifest;
 
-describe("resolvePluginDashboardWidgetDisplay", () => {
+describe("resolvePluginMissionControlWidgetDisplay", () => {
   // biome-ignore lint/style/noNonNullAssertion: test fixture — known length
-  const widget = baseManifest.dashboardWidgets[0]!;
+  const widget = baseManifest.missionControlWidgets[0]!;
 
   it("resolves localized title and description for matching locale", () => {
-    const display = resolvePluginDashboardWidgetDisplay(
+    const display = resolvePluginMissionControlWidgetDisplay(
       baseManifest,
       widget,
       "en"
@@ -50,8 +50,8 @@ describe("resolvePluginDashboardWidgetDisplay", () => {
     expect(display.description).toBe("Localized desc");
   });
 
-  it("falls back to manifest title when locale has no dashboardWidgets entry", () => {
-    const display = resolvePluginDashboardWidgetDisplay(
+  it("falls back to manifest title when locale has no missionControlWidgets entry", () => {
+    const display = resolvePluginMissionControlWidgetDisplay(
       baseManifest,
       widget,
       "fr"
@@ -61,7 +61,7 @@ describe("resolvePluginDashboardWidgetDisplay", () => {
   });
 
   it("resolves zh-CN locale with partial fields", () => {
-    const display = resolvePluginDashboardWidgetDisplay(
+    const display = resolvePluginMissionControlWidgetDisplay(
       baseManifest,
       widget,
       "zh-CN"
@@ -74,7 +74,7 @@ describe("resolvePluginDashboardWidgetDisplay", () => {
   it("omits description when neither locale nor manifest provides one", () => {
     const noDescManifest = pluginManifestSchema.parse({
       apiVersion: 1,
-      dashboardWidgets: [{ id: "test.nodesc", title: "No Desc" }],
+      missionControlWidgets: [{ id: "test.nodesc", title: "No Desc" }],
       engines: { pier: ">=0.1.0" },
       id: "test.nodesc",
       name: "NoDesc",
@@ -82,10 +82,10 @@ describe("resolvePluginDashboardWidgetDisplay", () => {
       version: "1.0.0",
     }) as PluginManifest;
 
-    const display = resolvePluginDashboardWidgetDisplay(
+    const display = resolvePluginMissionControlWidgetDisplay(
       noDescManifest,
       // biome-ignore lint/style/noNonNullAssertion: test fixture — known length
-      noDescManifest.dashboardWidgets[0]!,
+      noDescManifest.missionControlWidgets[0]!,
       "en"
     );
     expect(display.title).toBe("No Desc");

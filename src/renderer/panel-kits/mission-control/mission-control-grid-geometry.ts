@@ -1,10 +1,10 @@
-import type { DashboardGridSize } from "@shared/contracts/dashboard.ts";
+import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
 import {
-  DASHBOARD_GRID_COLS,
   HOST_DEFAULT_WIDGET_SIZE,
   HOST_MAX_WIDGET_SIZE,
   HOST_MIN_WIDGET_SIZE,
-} from "@shared/contracts/dashboard.ts";
+  MISSION_CONTROL_GRID_COLS,
+} from "@shared/contracts/mission-control.ts";
 import type { LayoutItem } from "react-grid-layout";
 
 /** 行高（px）——RGL rowHeight 参数。 */
@@ -25,7 +25,7 @@ const GRID_UNIT = CELL_WIDTH + MARGIN[0];
  */
 export function computeAvailableCols(contentWidth: number): number {
   const k = Math.floor((contentWidth + MARGIN[0]) / GRID_UNIT);
-  return Math.max(1, Math.min(DASHBOARD_GRID_COLS, k));
+  return Math.max(1, Math.min(MISSION_CONTROL_GRID_COLS, k));
 }
 
 /** k 列网格的像素总宽（containerPadding 为 [0,0] 时）。 */
@@ -123,7 +123,13 @@ export function repackEntries(
     if (!e) {
       continue;
     }
-    const pos = findOrderedFit(placed, e.w, e.h, DASHBOARD_GRID_COLS, cursor);
+    const pos = findOrderedFit(
+      placed,
+      e.w,
+      e.h,
+      MISSION_CONTROL_GRID_COLS,
+      cursor
+    );
     placed.push({ h: e.h, id: e.id, w: e.w, x: pos.x, y: pos.y });
     cursor.x = pos.x + 1;
     cursor.y = pos.y;
@@ -194,31 +200,35 @@ export function applyDerivedLayoutChange(
 }
 
 interface SizeDeclaration {
-  defaultSize?: DashboardGridSize | undefined;
-  maxSize?: DashboardGridSize | undefined;
-  minSize?: DashboardGridSize | undefined;
+  defaultSize?: MissionControlGridSize | undefined;
+  maxSize?: MissionControlGridSize | undefined;
+  minSize?: MissionControlGridSize | undefined;
 }
 
-function effectiveMin(decl: SizeDeclaration | undefined): DashboardGridSize {
+function effectiveMin(
+  decl: SizeDeclaration | undefined
+): MissionControlGridSize {
   return decl?.minSize ?? HOST_MIN_WIDGET_SIZE;
 }
 
-function effectiveMax(decl: SizeDeclaration | undefined): DashboardGridSize {
+function effectiveMax(
+  decl: SizeDeclaration | undefined
+): MissionControlGridSize {
   return decl?.maxSize ?? HOST_MAX_WIDGET_SIZE;
 }
 
 function effectiveDefault(
   decl: SizeDeclaration | undefined
-): DashboardGridSize {
+): MissionControlGridSize {
   return decl?.defaultSize ?? HOST_DEFAULT_WIDGET_SIZE;
 }
 
 /** clamp w/h ∈ [min, max] */
 function clampSize(
-  size: DashboardGridSize,
-  min: DashboardGridSize,
-  max: DashboardGridSize
-): DashboardGridSize {
+  size: MissionControlGridSize,
+  min: MissionControlGridSize,
+  max: MissionControlGridSize
+): MissionControlGridSize {
   return {
     h: Math.max(min.h, Math.min(max.h, size.h)),
     w: Math.max(min.w, Math.min(max.w, size.w)),
@@ -227,7 +237,7 @@ function clampSize(
 
 /** clamp x ∈ [0, 12 - w]（historical params 越界时收敛而非报错）。 */
 function clampX(x: number, w: number): number {
-  return Math.max(0, Math.min(DASHBOARD_GRID_COLS - w, x));
+  return Math.max(0, Math.min(MISSION_CONTROL_GRID_COLS - w, x));
 }
 
 /**
@@ -285,7 +295,7 @@ export function appendEntry(
   const max = effectiveMax(decl);
   const size = clampSize(dflt, min, max);
 
-  const pos = findFirstFit(entries, size.w, size.h, DASHBOARD_GRID_COLS);
+  const pos = findFirstFit(entries, size.w, size.h, MISSION_CONTROL_GRID_COLS);
   return { h: size.h, id, w: size.w, x: pos.x, y: pos.y };
 }
 

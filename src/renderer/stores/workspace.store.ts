@@ -20,7 +20,7 @@ import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 
 interface WorkspaceState {
   activateTabInActiveGroup: (index: number) => void;
-  addDashboard: (opts?: {
+  addMissionControl: (opts?: {
     referenceGroup?: WorkspaceGroupRef;
   }) => string | null;
   addPanel: (opts: {
@@ -262,20 +262,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     scheduleRevealDockviewTabByPanelId(id);
     return id;
   },
-  addDashboard(opts) {
+  addMissionControl(opts) {
     const api = get().api;
     if (!api) {
       return null;
     }
-    const id = uniquePanelId(api, "dashboard");
+    const id = uniquePanelId(api, "mission-control");
     const activeGroup = opts?.referenceGroup ?? api.activeGroup;
     const fallbackPosition = activeGroup
       ? { referenceGroup: activeGroup, direction: "within" as const }
       : { direction: "right" as const };
     api.addPanel({
       id,
-      component: "dashboard",
-      title: "Dashboard",
+      component: "mission-control",
+      title: "Mission Control",
       params: { widgets: [] },
       position: fallbackPosition,
     });

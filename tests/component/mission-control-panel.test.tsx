@@ -1,6 +1,6 @@
 import type {
-  DashboardWidgetComponentProps,
-  RendererDashboardWidgetRegistration,
+  MissionControlWidgetComponentProps,
+  RendererMissionControlWidgetRegistration,
 } from "@plugins/api/renderer.ts";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
@@ -8,10 +8,10 @@ import { AlertTriangle } from "lucide-react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import {
-  clearPluginDashboardWidgetsForTests,
-  registerPluginDashboardWidget,
-} from "@/lib/plugins/plugin-dashboard-widget-registry.ts";
-import { DashboardPanel } from "@/panel-kits/dashboard/dashboard-panel.tsx";
+  clearPluginMissionControlWidgetsForTests,
+  registerPluginMissionControlWidget,
+} from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
+import { MissionControlPanel } from "@/panel-kits/mission-control/mission-control-panel.tsx";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 
 const REMOVE_LABEL_RE = /remove/i;
@@ -26,7 +26,7 @@ function makeProps(
 ): IDockviewPanelProps<Record<string, unknown>> {
   return {
     api: {
-      id: "dashboard-test",
+      id: "mission-control-test",
       setTitle: vi.fn(),
       updateParameters: updateParameters ?? vi.fn(),
     },
@@ -36,7 +36,7 @@ function makeProps(
 }
 
 afterEach(() => {
-  clearPluginDashboardWidgetsForTests();
+  clearPluginMissionControlWidgetsForTests();
   usePluginRegistryStore.setState({
     diagnostics: [],
     error: null,
@@ -45,21 +45,23 @@ afterEach(() => {
   });
 });
 
-describe("DashboardPanel", () => {
+describe("MissionControlPanel", () => {
   it("renders empty state and add-widget card when no widgets", () => {
     const props = makeProps({ widgets: [] });
-    render(<DashboardPanel {...props} />);
-    expect(screen.getByTestId("dashboard-empty")).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-add-widget")).toBeInTheDocument();
+    render(<MissionControlPanel {...props} />);
+    expect(screen.getByTestId("mission-control-empty")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("mission-control-add-widget")
+    ).toBeInTheDocument();
   });
 
   it("renders core activity-overview widget with testid", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
     expect(
-      screen.getByTestId("dashboard-widget-core.activity-overview")
+      screen.getByTestId("mission-control-widget-core.activity-overview")
     ).toBeInTheDocument();
   });
 
@@ -75,7 +77,7 @@ describe("DashboardPanel", () => {
           manifest: {
             apiVersion: 1,
             commands: [],
-            dashboardWidgets: [
+            missionControlWidgets: [
               { id: "pier.test.widget", permissions: [], title: "Test" },
             ],
             engines: { pier: ">=0.1.0" },
@@ -95,9 +97,9 @@ describe("DashboardPanel", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "pier.test.widget", w: 4, x: 0, y: 0 }],
     });
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
     expect(
-      screen.getByTestId("dashboard-widget-pier.test.widget")
+      screen.getByTestId("mission-control-widget-pier.test.widget")
     ).toBeInTheDocument();
   });
 
@@ -110,7 +112,7 @@ describe("DashboardPanel", () => {
       updateParameters
     );
 
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
 
     const removeButton = screen.getByLabelText(REMOVE_LABEL_RE);
     fireEvent.click(removeButton);
@@ -122,7 +124,7 @@ describe("DashboardPanel", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
 
     const removeButton = screen.getByLabelText(REMOVE_LABEL_RE);
     expect(removeButton.className).toContain("opacity-0");
@@ -131,17 +133,17 @@ describe("DashboardPanel", () => {
   });
 
   it("catches widget error via ErrorBoundary without crashing panel", () => {
-    function CrashingWidget(_props: DashboardWidgetComponentProps): never {
+    function CrashingWidget(_props: MissionControlWidgetComponentProps): never {
       throw new Error("widget boom");
     }
 
-    const crashReg: RendererDashboardWidgetRegistration = {
+    const crashReg: RendererMissionControlWidgetRegistration = {
       component: CrashingWidget,
       icon: AlertTriangle,
       id: "pier.crash.widget",
     };
 
-    registerPluginDashboardWidget(crashReg);
+    registerPluginMissionControlWidget(crashReg);
 
     usePluginRegistryStore.setState({
       diagnostics: [],
@@ -154,7 +156,7 @@ describe("DashboardPanel", () => {
           manifest: {
             apiVersion: 1,
             commands: [],
-            dashboardWidgets: [
+            missionControlWidgets: [
               {
                 id: "pier.crash.widget",
                 permissions: [],
@@ -180,7 +182,7 @@ describe("DashboardPanel", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "pier.crash.widget", w: 4, x: 0, y: 0 }],
     });
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
 
     expect(screen.getByText("widget boom")).toBeInTheDocument();
 
@@ -198,7 +200,7 @@ describe("DashboardPanel", () => {
           manifest: {
             apiVersion: 1,
             commands: [],
-            dashboardWidgets: [
+            missionControlWidgets: [
               { id: "pier.late.widget", permissions: [], title: "Late" },
             ],
             engines: { pier: ">=0.1.0" },
@@ -218,18 +220,18 @@ describe("DashboardPanel", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "pier.late.widget", w: 4, x: 0, y: 0 }],
     });
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
 
     // 插件已启用但组件未注册 → 加载占位，真实组件不在场
     expect(screen.getByText("Loading…")).toBeInTheDocument();
     expect(screen.queryByTestId("late-widget-body")).not.toBeInTheDocument();
 
-    function LateWidget(_props: DashboardWidgetComponentProps) {
+    function LateWidget(_props: MissionControlWidgetComponentProps) {
       return <div data-testid="late-widget-body">late widget ready</div>;
     }
 
     act(() => {
-      registerPluginDashboardWidget({
+      registerPluginMissionControlWidget({
         component: LateWidget,
         icon: AlertTriangle,
         id: "pier.late.widget",
@@ -246,7 +248,7 @@ describe("DashboardPanel", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    const { container } = render(<DashboardPanel {...props} />);
+    const { container } = render(<MissionControlPanel {...props} />);
     const handle = container.querySelector(".react-resizable-handle-se");
     expect(handle).toBeInTheDocument();
   });
@@ -257,9 +259,9 @@ describe("固定格宽与派生模式", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    const { container } = render(<DashboardPanel {...props} />);
+    const { container } = render(<MissionControlPanel {...props} />);
     const wrapper = container.querySelector(
-      "[data-testid='dashboard-grid-wrapper']"
+      "[data-testid='mission-control-grid-wrapper']"
     );
     expect(wrapper).toBeInTheDocument();
     expect((wrapper as HTMLElement).style.width).toBe("788px");
@@ -275,7 +277,7 @@ describe("固定格宽与派生模式", () => {
       { widgets: [{ h: 3, id: "core.activity-overview", w: 12, x: 0, y: 0 }] },
       updateParameters
     );
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
     expect(updateParameters).not.toHaveBeenCalled();
   });
 
@@ -290,9 +292,9 @@ describe("固定格宽与派生模式", () => {
       },
       updateParameters
     );
-    render(<DashboardPanel {...props} />);
+    render(<MissionControlPanel {...props} />);
     expect(
-      screen.getByTestId("dashboard-widget-core.activity-overview")
+      screen.getByTestId("mission-control-widget-core.activity-overview")
     ).toBeInTheDocument();
     expect(updateParameters).not.toHaveBeenCalled();
   });
@@ -301,7 +303,7 @@ describe("固定格宽与派生模式", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    const { container } = render(<DashboardPanel {...props} />);
+    const { container } = render(<MissionControlPanel {...props} />);
     const content = container.querySelector("[data-slot='card-content']");
     expect(content?.className).toContain("@container");
   });
@@ -310,7 +312,7 @@ describe("固定格宽与派生模式", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    const { container } = render(<DashboardPanel {...props} />);
+    const { container } = render(<MissionControlPanel {...props} />);
     const statGrid = container.querySelector(
       "[data-testid='activity-stat-grid']"
     );

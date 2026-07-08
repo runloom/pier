@@ -2,20 +2,22 @@ import type { RefinementCtx } from "zod";
 import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
 
-/** 大盘网格列数。契约级常量：w/x 的取值域由它决定。 */
-export const DASHBOARD_GRID_COLS = 12;
+/** 指挥中心网格列数。契约级常量：w/x 的取值域由它决定。 */
+export const MISSION_CONTROL_GRID_COLS = 12;
 
 /** 网格尺寸（单位：格）。 */
-export const dashboardGridSizeSchema = z.object({
+export const missionControlGridSizeSchema = z.object({
   h: z.number().int().min(1).max(24),
-  w: z.number().int().min(1).max(DASHBOARD_GRID_COLS),
+  w: z.number().int().min(1).max(MISSION_CONTROL_GRID_COLS),
 });
-export type DashboardGridSize = z.infer<typeof dashboardGridSizeSchema>;
+export type MissionControlGridSize = z.infer<
+  typeof missionControlGridSizeSchema
+>;
 
 /** 尺寸缺省值（契约级，宿主与校验共用同一真相源）。 */
-export const HOST_DEFAULT_WIDGET_SIZE: DashboardGridSize = { h: 3, w: 4 };
-export const HOST_MIN_WIDGET_SIZE: DashboardGridSize = { h: 2, w: 2 };
-export const HOST_MAX_WIDGET_SIZE: DashboardGridSize = { h: 12, w: 12 };
+export const HOST_DEFAULT_WIDGET_SIZE: MissionControlGridSize = { h: 3, w: 4 };
+export const HOST_MIN_WIDGET_SIZE: MissionControlGridSize = { h: 2, w: 2 };
+export const HOST_MAX_WIDGET_SIZE: MissionControlGridSize = { h: 12, w: 12 };
 
 /**
  * superRefine 校验：按生效值（缺省补齐后）检查 min ≤ default ≤ max 双轴。
@@ -23,9 +25,9 @@ export const HOST_MAX_WIDGET_SIZE: DashboardGridSize = { h: 12, w: 12 };
  */
 function validateWidgetSizeBounds(
   val: {
-    defaultSize?: DashboardGridSize | undefined;
-    maxSize?: DashboardGridSize | undefined;
-    minSize?: DashboardGridSize | undefined;
+    defaultSize?: MissionControlGridSize | undefined;
+    maxSize?: MissionControlGridSize | undefined;
+    minSize?: MissionControlGridSize | undefined;
   },
   ctx: RefinementCtx
 ): void {
@@ -54,52 +56,54 @@ function validateWidgetSizeBounds(
  * superRefine 校验（按生效值，即缺省补齐后）：min.w ≤ default.w ≤ max.w 且
  * min.h ≤ default.h ≤ max.h，违反者 manifest 验证失败。
  */
-export const pluginDashboardWidgetContributionSchema = z
+export const pluginMissionControlWidgetContributionSchema = z
   .object({
-    defaultSize: dashboardGridSizeSchema.optional(),
+    defaultSize: missionControlGridSizeSchema.optional(),
     description: z.string().min(1).optional(),
     id: z.string().min(1),
-    maxSize: dashboardGridSizeSchema.optional(),
-    minSize: dashboardGridSizeSchema.optional(),
+    maxSize: missionControlGridSizeSchema.optional(),
+    minSize: missionControlGridSizeSchema.optional(),
     permissions: z.array(pierCapabilitySchema).default([]),
     title: z.string().min(1),
   })
   .superRefine(validateWidgetSizeBounds);
-export type PluginDashboardWidgetContribution = z.infer<
-  typeof pluginDashboardWidgetContributionSchema
+export type PluginMissionControlWidgetContribution = z.infer<
+  typeof pluginMissionControlWidgetContributionSchema
 >;
 
 /**
- * 大盘单实例组装清单（存 dockview panel params，随 layout 持久化）。
+ * 指挥中心单实例组装清单（存 dockview panel params，随 layout 持久化）。
  * 每项即 react-grid-layout 的一个 layout item（i=id，x/y/w/h 同义直存）。
  */
-export const dashboardPanelWidgetEntrySchema = z.object({
+export const missionControlPanelWidgetEntrySchema = z.object({
   h: z.number().int().min(1),
-  id: z.string().min(1), // widget id；单实例语义，同一大盘内去重
-  w: z.number().int().min(1).max(DASHBOARD_GRID_COLS),
+  id: z.string().min(1), // widget id；单实例语义，同一指挥中心内去重
+  w: z.number().int().min(1).max(MISSION_CONTROL_GRID_COLS),
   x: z
     .number()
     .int()
     .min(0)
-    .max(DASHBOARD_GRID_COLS - 1),
+    .max(MISSION_CONTROL_GRID_COLS - 1),
   y: z.number().int().min(0),
 });
 
-export const dashboardPanelParamsSchema = z.object({
-  widgets: z.array(dashboardPanelWidgetEntrySchema),
+export const missionControlPanelParamsSchema = z.object({
+  widgets: z.array(missionControlPanelWidgetEntrySchema),
 });
-export type DashboardPanelParams = z.infer<typeof dashboardPanelParamsSchema>;
+export type MissionControlPanelParams = z.infer<
+  typeof missionControlPanelParamsSchema
+>;
 
 /**
  * params 逐条抢救：整体合法直接返回；否则逐条校验，丢非法项、留合法项。
  * 替代"整体 safeParse 失败 → 空数组"——那条路径会让一条脏数据毁掉整个
- * 大盘组装，且用户下一次编辑就把空布局永久写回。
+ * 指挥中心组装，且用户下一次编辑就把空布局永久写回。
  * 抢救结果只用于渲染，调用方不得主动回写（避免打开面板即触发写盘）。
  */
-export function salvageDashboardPanelParams(
+export function salvageMissionControlPanelParams(
   raw: unknown
-): DashboardPanelParams {
-  const full = dashboardPanelParamsSchema.safeParse(raw);
+): MissionControlPanelParams {
+  const full = missionControlPanelParamsSchema.safeParse(raw);
   if (full.success) {
     return full.data;
   }
@@ -111,7 +115,7 @@ export function salvageDashboardPanelParams(
     return { widgets: [] };
   }
   const widgets = widgetsRaw.flatMap((entry) => {
-    const parsed = dashboardPanelWidgetEntrySchema.safeParse(entry);
+    const parsed = missionControlPanelWidgetEntrySchema.safeParse(entry);
     return parsed.success ? [parsed.data] : [];
   });
   return { widgets };
@@ -121,11 +125,11 @@ export function salvageDashboardPanelParams(
  * Core-owned widget 静态声明，平行于 CoreTerminalStatusItemDeclaration。
  * 尺寸语义同贡献点；titleKey 走全局 i18next.t 解析。
  */
-export interface CoreDashboardWidgetDeclaration {
-  defaultSize?: DashboardGridSize;
+export interface CoreMissionControlWidgetDeclaration {
+  defaultSize?: MissionControlGridSize;
   descriptionKey?: string; // 全局 i18next key（可选副标题）
   id: string; // "core." 前缀
-  maxSize?: DashboardGridSize;
-  minSize?: DashboardGridSize;
+  maxSize?: MissionControlGridSize;
+  minSize?: MissionControlGridSize;
   titleKey: string; // 全局 i18next key
 }

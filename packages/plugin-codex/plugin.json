@@ -15,16 +15,6 @@
       }
     }
   },
-  "dashboardWidgets": [
-    {
-      "defaultSize": { "w": 4, "h": 4 },
-      "description": "Manage Codex accounts and monitor usage.",
-      "id": "pier.codex.accounts",
-      "maxSize": { "w": 8, "h": 10 },
-      "minSize": { "w": 3, "h": 3 },
-      "title": "Codex Accounts"
-    }
-  ],
   "dataSchemas": {
     "codex.accounts": { "read": ">=1 <=1", "write": 1 }
   },
@@ -40,7 +30,7 @@
         "pier.codex.switchAccount": { "title": "Codex: 切换账号" },
         "pier.codex.refreshUsage": { "title": "Codex: 刷新用量" }
       },
-      "dashboardWidgets": {
+      "missionControlWidgets": {
         "pier.codex.accounts": {
           "title": "Codex 账号",
           "description": "管理 Codex 账号和观测用量。"
@@ -55,6 +45,16 @@
     }
   },
   "main": "dist/main.js",
+  "missionControlWidgets": [
+    {
+      "defaultSize": { "w": 4, "h": 4 },
+      "description": "Manage Codex accounts and monitor usage.",
+      "id": "pier.codex.accounts",
+      "maxSize": { "w": 8, "h": 10 },
+      "minSize": { "w": 3, "h": 3 },
+      "title": "Codex Accounts"
+    }
+  ],
   "name": "Codex Account Management",
   "panels": [],
   "permissions": ["plugin:read"],

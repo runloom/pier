@@ -1,9 +1,9 @@
 import type {
-  RendererDashboardWidgetRegistration as ExternalDashboardWidgetRegistration,
+  RendererMissionControlWidgetRegistration as ExternalMissionControlWidgetRegistration,
   RendererPluginAction as ExternalPluginAction,
   ExternalRendererPluginContext,
 } from "@pier/plugin-api/renderer";
-import type { DashboardWidgetComponentProps } from "@plugins/api/renderer.ts";
+import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   collectEnabledConfigurationProperties,
@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
-import { registerPluginDashboardWidget } from "./plugin-dashboard-widget-registry.ts";
+import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
 
 /**
  * Builds a plugin-scoped `ExternalRendererPluginContext`. The plugin id is
@@ -33,13 +33,13 @@ export interface RendererPluginRpcBridge {
 
 function assertDeclared(
   entry: PluginRegistryEntry,
-  kind: "action" | "dashboardWidget",
+  kind: "action" | "missionControlWidget",
   id: string
 ): void {
   const declared =
     kind === "action"
       ? entry.manifest.commands
-      : entry.manifest.dashboardWidgets;
+      : entry.manifest.missionControlWidgets;
   if (!declared.some((c) => c.id === id)) {
     throw new Error(
       `plugin ${entry.manifest.id} tried to register undeclared ${kind}: ${id}`
@@ -114,12 +114,12 @@ export function createExternalRendererPluginContext(
         await usePluginSettingsStore.getState().set(key, value as never);
       },
     },
-    dashboardWidgets: {
-      register: (registration: ExternalDashboardWidgetRegistration) => {
-        assertDeclared(entry, "dashboardWidget", registration.id);
-        return registerPluginDashboardWidget({
+    missionControlWidgets: {
+      register: (registration: ExternalMissionControlWidgetRegistration) => {
+        assertDeclared(entry, "missionControlWidget", registration.id);
+        return registerPluginMissionControlWidget({
           component:
-            registration.component as unknown as FunctionComponent<DashboardWidgetComponentProps>,
+            registration.component as unknown as FunctionComponent<MissionControlWidgetComponentProps>,
           icon: (registration.icon ?? KeyRound) as LucideIcon,
           id: registration.id,
           title: () => resolveTitle(registration.title),

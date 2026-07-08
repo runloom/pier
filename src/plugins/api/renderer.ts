@@ -4,7 +4,6 @@ import type {
   AiGenerateTextResult,
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
-import type { DashboardGridSize } from "@shared/contracts/dashboard.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
   EnvironmentSnapshotRequest,
@@ -45,6 +44,7 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
+import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,
@@ -157,19 +157,19 @@ export interface RendererTerminalStatusItem {
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
 }
 
-export interface DashboardWidgetComponentProps {
+export interface MissionControlWidgetComponentProps {
   /**
    * 卡片占位（格子数，非像素）。用于逻辑分支（如"h ≥ 4 才显示列表"）。
    * 内容级响应式布局请用 container query（CardContent 已开 @container），
    * 勿依赖本值换算像素——格宽固定但列数随面板宽度变化。
    */
-  size: DashboardGridSize;
+  size: MissionControlGridSize;
 }
 
-export interface RendererDashboardWidgetRegistration {
-  component: FunctionComponent<DashboardWidgetComponentProps>;
+export interface RendererMissionControlWidgetRegistration {
+  component: FunctionComponent<MissionControlWidgetComponentProps>;
   icon: LucideIcon;
-  /** 必须在本插件 manifest.dashboardWidgets 中声明 */
+  /** 必须在本插件 manifest.missionControlWidgets 中声明 */
   id: string;
   /** 可选标题 thunk，locale 切换实时生效；省略则用 manifest 本地化解析结果 */
   title?: (() => string) | string;
@@ -237,9 +237,6 @@ export interface RendererPluginContext {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
   };
   configuration: PluginConfigurationApi;
-  dashboardWidgets: {
-    register(registration: RendererDashboardWidgetRegistration): () => void;
-  };
   /**
    * 宿主级模态弹窗。渲染、blocking overlay、终端输入路由与 keybinding scope
    * 均由宿主统一处理;全局单例,新弹窗会顶替未决的旧弹窗(旧的按取消 resolve)。
@@ -357,6 +354,11 @@ export interface RendererPluginContext {
       values?: RendererPluginMessageValues,
       fallback?: string
     ): string;
+  };
+  missionControlWidgets: {
+    register(
+      registration: RendererMissionControlWidgetRegistration
+    ): () => void;
   };
   /**
    * 通知能力。error/info/success/loading 是应用内 toast(由宿主统一渲染与

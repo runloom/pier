@@ -1,7 +1,7 @@
 import {
-  DASHBOARD_GRID_COLS,
   HOST_DEFAULT_WIDGET_SIZE,
-} from "@shared/contracts/dashboard.ts";
+  MISSION_CONTROL_GRID_COLS,
+} from "@shared/contracts/mission-control.ts";
 import { describe, expect, it } from "vitest";
 import {
   appendEntry,
@@ -17,7 +17,7 @@ import {
   readingOrderIds,
   repackEntries,
   sameOrder,
-} from "@/panel-kits/dashboard/dashboard-grid-geometry.ts";
+} from "@/panel-kits/mission-control/mission-control-grid-geometry.ts";
 
 describe("entryToLayoutItem", () => {
   it("maps entry fields to RGL layout item with min/max", () => {
@@ -59,7 +59,7 @@ describe("entryToLayoutItem", () => {
       { h: 3, id: "w1", w: 4, x: 11, y: 0 },
       undefined
     );
-    expect(item.x).toBe(DASHBOARD_GRID_COLS - 4);
+    expect(item.x).toBe(MISSION_CONTROL_GRID_COLS - 4);
   });
 
   it("uses HOST defaults when decl is undefined", () => {

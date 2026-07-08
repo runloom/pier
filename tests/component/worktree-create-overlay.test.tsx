@@ -197,7 +197,7 @@ function createMockContext(): RendererPluginContext {
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
     },
-    dashboardWidgets: { register: vi.fn(() => vi.fn()) },
+    missionControlWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: unimplemented("dialogs.alert"),
       confirm: unimplemented("dialogs.confirm"),
