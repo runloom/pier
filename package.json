@@ -29,6 +29,7 @@
     "plugin:codex:pack": "pnpm --filter @pier/plugin-codex build:package",
     "plugins:pack": "pnpm -r --filter '@pier/plugin-*' --workspace-concurrency=1 run build:package",
     "plugins:index": "node ./scripts/generate-plugin-index.mjs",
+    "check:plugin-index": "pnpm plugins:pack && node scripts/verify-plugin-index-assets.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size && pnpm test:unit && pnpm test:component",
     "test": "vitest",
     "test:unit": "vitest run tests/unit",

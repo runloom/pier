@@ -10,10 +10,17 @@ const releaseWorkflow = readFileSync(
   join(process.cwd(), ".github/workflows/release-plugin.yml"),
   "utf8"
 );
+const prePushHook = readFileSync(
+  join(process.cwd(), ".husky/pre-push"),
+  "utf8"
+);
 const buildDistScript = readFileSync(
   join(process.cwd(), "scripts/build-dist.sh"),
   "utf8"
 );
+const packageJson = JSON.parse(
+  readFileSync(join(process.cwd(), "package.json"), "utf8")
+) as { scripts?: Record<string, string> };
 const committedOfficialIndex = JSON.parse(
   readFileSync(join(process.cwd(), "plugins/index.v1.json"), "utf8")
 ) as { signature?: { alg?: string } };
@@ -37,5 +44,15 @@ describe("managed plugin packaging governance", () => {
 
   it("does not commit an unsigned official index", () => {
     expect(committedOfficialIndex.signature?.alg).toBe("Ed25519");
+  });
+
+  it("checks official plugin index metadata before pushing", () => {
+    expect(packageJson.scripts?.["check:plugin-index"]).toContain(
+      "verify-plugin-index-assets.mjs"
+    );
+    expect(packageJson.scripts?.["check:plugin-index"]).toContain(
+      "plugins:pack"
+    );
+    expect(prePushHook).toContain("pnpm check:plugin-index");
   });
 });
