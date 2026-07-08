@@ -71,7 +71,7 @@ describe("Codex AccountsWidget", () => {
       schemaVersion: 1,
     });
 
-    render(<AccountsWidget context={context} />);
+    const { container } = render(<AccountsWidget context={context} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Add account" }));
 
@@ -79,6 +79,10 @@ describe("Codex AccountsWidget", () => {
       method: "accounts.add",
       payload: {},
     });
+    expect(container.querySelector('[data-slot="empty"]')).not.toBeNull();
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toHaveAttribute("data-slot", "button");
+    }
   });
 
   it("renders switch and cancel controls for account workflows", async () => {
@@ -93,7 +97,7 @@ describe("Codex AccountsWidget", () => {
       schemaVersion: 1,
     });
 
-    render(<AccountsWidget context={context} />);
+    const { container } = render(<AccountsWidget context={context} />);
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Switch to other@example.com" })
@@ -110,5 +114,9 @@ describe("Codex AccountsWidget", () => {
         payload: null,
       });
     });
+    expect(container.querySelectorAll('[data-slot="badge"]').length).toBe(3);
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toHaveAttribute("data-slot", "button");
+    }
   });
 });

@@ -224,7 +224,7 @@ export function KeybindingsSection() {
             })}
           </div>
         </CardContent>
-        <CardFooter className="justify-end border-border/70 border-t px-4 py-3">
+        <CardFooter className="justify-end border-border/70 border-t">
           <Button
             disabled={!hasAnyUserEntry}
             onClick={() => {

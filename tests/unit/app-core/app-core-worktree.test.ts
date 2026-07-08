@@ -42,6 +42,7 @@ function mockElectron(userDataDir: string): void {
       }
       return userDataDir;
     }),
+    getVersion: vi.fn(() => "0.1.0"),
     isPackaged: false,
     name: "Pier",
     on: vi.fn(),

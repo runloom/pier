@@ -55,6 +55,8 @@ export const PIER_BROADCAST = {
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
   // 应用退出确认请求 (main → renderer, payload AppQuitConfirmationRequest).
   APP_QUIT_REQUESTED: "pier://app-quit:requested",
+  // 主体更新状态变更广播 (main → renderer, payload AppUpdateSnapshot).
+  APP_UPDATE_CHANGED: "pier://app-update:changed",
   // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
   // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
   FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",

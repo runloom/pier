@@ -53,7 +53,9 @@ import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import {
   type AppPreloadApi,
+  type AppUpdatePreloadApi,
   createAppPreloadApi,
+  createAppUpdatePreloadApi,
   createManagedPluginsPreloadApi,
   createPluginRpcPreloadApi,
   type ManagedPluginsPreloadApi,
@@ -226,6 +228,7 @@ export interface PierWindowAPI {
   ai: PierAiAPI;
   app: AppPreloadApi;
   appQuit: PierAppQuitAPI;
+  appUpdate: AppUpdatePreloadApi;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
@@ -446,6 +449,7 @@ const api: PierWindowAPI = {
   managedPlugins: createManagedPluginsPreloadApi(),
   pluginRpc: createPluginRpcPreloadApi(),
   app: createAppPreloadApi(),
+  appUpdate: createAppUpdatePreloadApi(),
   theme: themeApi,
   window: {
     closeCurrent: () => ipcRenderer.invoke("pier://window:close-current"),

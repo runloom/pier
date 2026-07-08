@@ -10,6 +10,7 @@
 
 interface PierPluginShared {
   React: typeof import("react");
+  ReactDOM: typeof import("react-dom");
   ReactDOMClient: typeof import("react-dom/client");
   ReactJSXDevRuntime: typeof import("react/jsx-dev-runtime");
   ReactJSXRuntime: typeof import("react/jsx-runtime");

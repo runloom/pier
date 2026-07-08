@@ -242,6 +242,7 @@ const appQuitController = createAppQuitController({
     }),
   finalCleanup: () => {
     windowManager.destroyAllForQuit();
+    appCore.disposeManagedPluginDevRuntimeWatch();
     appCore.pluginHost.dispose();
     localControl?.close().catch(() => {
       // ignore: app 正在退出

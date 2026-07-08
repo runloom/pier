@@ -80,9 +80,12 @@ describe("PluginsSection", () => {
       initialized: true,
       plugins: [entry("pier.git", true)],
     });
-    render(<PluginsSection />);
+    const { container } = render(<PluginsSection />);
     expect(screen.getByTestId("plugin-row-pier.git")).toBeInTheDocument();
     expect(window.pier.plugins.list).not.toHaveBeenCalled();
+    const content = container.querySelector('[data-slot="card-content"]');
+    expect(content).toHaveClass("px-0");
+    expect(content).not.toHaveClass("py-(--card-spacing)");
   });
 
   it("store 更新时(模拟广播落地)行随之更新", () => {

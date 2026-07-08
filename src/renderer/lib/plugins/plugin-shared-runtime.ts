@@ -1,6 +1,7 @@
 import * as React from "react";
 import * as ReactJSXDevRuntime from "react/jsx-dev-runtime";
 import * as ReactJSXRuntime from "react/jsx-runtime";
+import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
 
 /**
@@ -16,6 +17,7 @@ declare global {
   var __PIER_PLUGIN_SHARED__:
     | {
         React: typeof React;
+        ReactDOM: typeof ReactDOM;
         ReactDOMClient: typeof ReactDOMClient;
         ReactJSXDevRuntime: typeof ReactJSXDevRuntime;
         ReactJSXRuntime: typeof ReactJSXRuntime;
@@ -29,6 +31,7 @@ export function installPluginSharedRuntime(): void {
   }
   globalThis.__PIER_PLUGIN_SHARED__ = {
     React,
+    ReactDOM,
     ReactDOMClient,
     ReactJSXDevRuntime,
     ReactJSXRuntime,

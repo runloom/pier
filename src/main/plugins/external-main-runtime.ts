@@ -68,19 +68,79 @@ export const PLUGIN_BEFORE_QUIT_TIMEOUT_MS = 5000;
 
 export interface ExternalMainPluginRuntime {
   activate(source: ManagedPluginRuntimeSource): Promise<void>;
+  dispose(pluginId: string): Promise<void>;
   disposeAll(): Promise<void>;
   flushAllBeforeQuit(): Promise<void>;
+  reload(source: ManagedPluginRuntimeSource): Promise<void>;
 }
 
 export function createExternalMainPluginRuntime(options: {
   createContext: (
     source: ManagedPluginRuntimeSource
   ) => ExternalMainPluginContext;
+  importModule?: (moduleUrl: string) => Promise<unknown>;
   recordActivationResult: (input: RecordActivationResultInput) => Promise<void>;
   rpcBus: PluginRpcBus;
 }): ExternalMainPluginRuntime {
   const disposers: Record<string, () => void> = {};
   const flushCallbacks: Record<string, Array<() => Promise<void> | void>> = {};
+  const importModule =
+    options.importModule ??
+    ((moduleUrl: string) => import(/* @vite-ignore */ moduleUrl));
+
+  async function flushPluginCallbacks(
+    pluginId: string,
+    callbacks: ReadonlyArray<() => Promise<void> | void>
+  ): Promise<void> {
+    const tasks = callbacks.map((cb) =>
+      (async () => {
+        try {
+          await Promise.race([
+            Promise.resolve(cb()),
+            new Promise<void>((_, reject) =>
+              setTimeout(
+                () => reject(new Error("before-quit flush timeout")),
+                PLUGIN_BEFORE_QUIT_TIMEOUT_MS
+              )
+            ),
+          ]);
+        } catch (err) {
+          console.error(
+            `[external-main-runtime] before-quit flush failed for ${pluginId}:`,
+            err
+          );
+        }
+      })()
+    );
+    await Promise.all(tasks);
+  }
+
+  async function disposePlugin(pluginId: string): Promise<void> {
+    const callbacks = flushCallbacks[pluginId] ?? [];
+    await flushPluginCallbacks(pluginId, callbacks);
+    const disposer = disposers[pluginId];
+    if (disposer) {
+      try {
+        disposer();
+      } catch (err) {
+        console.error(
+          `[external-main-runtime] dispose failed for ${pluginId}:`,
+          err
+        );
+      }
+    }
+    options.rpcBus.clearPlugin(pluginId);
+    delete disposers[pluginId];
+    delete flushCallbacks[pluginId];
+  }
+
+  function moduleUrlForSource(source: ManagedPluginRuntimeSource): string {
+    const moduleUrl = pathToFileURL(source.mainEntryPath);
+    if (source.sourceRevision) {
+      moduleUrl.searchParams.set("rev", source.sourceRevision);
+    }
+    return moduleUrl.href;
+  }
 
   return {
     async activate(source): Promise<void> {
@@ -98,8 +158,8 @@ export function createExternalMainPluginRuntime(options: {
         },
       };
       try {
-        const moduleUrl = pathToFileURL(source.mainEntryPath).href;
-        const mod: unknown = await import(moduleUrl);
+        const moduleUrl = moduleUrlForSource(source);
+        const mod: unknown = await importModule(moduleUrl);
         if (!mod || typeof mod !== "object" || !("plugin" in mod)) {
           throw new Error(`plugin export missing in ${source.mainEntryPath}`);
         }
@@ -140,52 +200,22 @@ export function createExternalMainPluginRuntime(options: {
         });
       }
     },
+    dispose: (pluginId) => disposePlugin(pluginId),
     async disposeAll(): Promise<void> {
-      for (const [id, disposer] of Object.entries(disposers)) {
-        try {
-          disposer();
-        } catch (err) {
-          console.error(
-            `[external-main-runtime] dispose failed for ${id}:`,
-            err
-          );
-        }
-        options.rpcBus.clearPlugin(id);
-      }
-      for (const key of Object.keys(disposers)) {
-        delete disposers[key];
-      }
-      for (const key of Object.keys(flushCallbacks)) {
-        delete flushCallbacks[key];
+      for (const id of Object.keys(disposers)) {
+        await disposePlugin(id);
       }
     },
     async flushAllBeforeQuit(): Promise<void> {
       const tasks: Promise<void>[] = [];
       for (const [pluginId, callbacks] of Object.entries(flushCallbacks)) {
-        for (const cb of callbacks) {
-          tasks.push(
-            (async () => {
-              try {
-                await Promise.race([
-                  Promise.resolve(cb()),
-                  new Promise<void>((_, reject) =>
-                    setTimeout(
-                      () => reject(new Error("before-quit flush timeout")),
-                      PLUGIN_BEFORE_QUIT_TIMEOUT_MS
-                    )
-                  ),
-                ]);
-              } catch (err) {
-                console.error(
-                  `[external-main-runtime] before-quit flush failed for ${pluginId}:`,
-                  err
-                );
-              }
-            })()
-          );
-        }
+        tasks.push(flushPluginCallbacks(pluginId, callbacks));
       }
       await Promise.all(tasks);
+    },
+    async reload(source): Promise<void> {
+      await disposePlugin(source.id);
+      await this.activate(source);
     },
   };
 }

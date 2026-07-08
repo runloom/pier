@@ -7,6 +7,24 @@ if (!shared) {
   );
 }
 
-const { ReactDOMClient } = shared;
+const { ReactDOM, ReactDOMClient } = shared;
+
+export default ReactDOM;
+
+export const {
+  createPortal,
+  flushSync,
+  preconnect,
+  prefetchDNS,
+  preinit,
+  preinitModule,
+  preload,
+  preloadModule,
+  requestFormReset,
+  unstable_batchedUpdates,
+  useFormState,
+  useFormStatus,
+  version,
+} = ReactDOM;
 
 export const { createRoot, hydrateRoot } = ReactDOMClient;
