@@ -1,8 +1,12 @@
 import type {
+  TaskCandidate,
   TaskLaunchPlan,
+  TaskListResult,
   TaskPanelRef,
   TaskRunSnapshot,
+  TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
+import { buildTaskLaunches } from "./task-execution-plan.ts";
 
 export interface TaskRunInstance {
   kind: "panel";
@@ -68,6 +72,72 @@ function panelRestartPreparation(
       },
     },
   };
+}
+
+/** forceRestart=false 时复用已在跑的实例：返回可聚焦的 panel，无可复用返回 null。 */
+export function alreadyRunningPreparation(args: {
+  deleteRunning(key: string): void;
+  isBackgroundPanel(panelId: string): boolean;
+  key: string;
+  running: RunningTaskInstance | undefined;
+  statusRun(runId: string): TaskRunSnapshot | null;
+  taskId: string;
+}): TaskSpawnPreparation | null {
+  const { running } = args;
+  if (!running) {
+    return null;
+  }
+  if (running.kind === "panel") {
+    return {
+      panelId: running.panelId,
+      status: "already-running",
+      ...(running.windowId ? { windowId: running.windowId } : {}),
+    };
+  }
+  const snapshot = args.statusRun(running.runId);
+  if (!snapshot || isTerminalRunStatus(snapshot.status)) {
+    args.deleteRunning(args.key);
+    return null;
+  }
+  const rootNode = snapshot.nodes[args.taskId];
+  const node =
+    rootNode?.panelId === undefined
+      ? Object.values(snapshot.nodes).find(
+          (candidate) =>
+            candidate.panelId !== undefined &&
+            !isTerminalRunStatus(candidate.status)
+        )
+      : rootNode;
+  if (!node?.panelId) {
+    return null;
+  }
+  if (args.isBackgroundPanel(node.panelId)) {
+    return null;
+  }
+  return {
+    panelId: node.panelId,
+    status: "already-running",
+    ...(node.windowId ? { windowId: node.windowId } : {}),
+  };
+}
+
+export function buildReadyPreparation(
+  task: TaskCandidate,
+  tasks: TaskListResult["tasks"],
+  inputs: Record<string, string>,
+  projectRootPath: string
+): TaskSpawnPreparation {
+  try {
+    return {
+      launches: buildTaskLaunches(task, { inputs, projectRootPath }, tasks),
+      status: "ready",
+    };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : String(error),
+      status: "unsupported",
+    };
+  }
 }
 
 export function restartPreparation(args: {
