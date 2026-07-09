@@ -25,6 +25,7 @@ export const FILES_EDITOR_COPY_COMMAND_ID = "pier.files.editor.copy";
 export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
 export const FILES_EDITOR_SELECT_ALL_COMMAND_ID = "pier.files.editor.selectAll";
 
+export const FILES_PROJECT_STATUS_ITEM_ID = "pier.files.project";
 export const FILES_PLUGIN_MANIFEST = {
   apiVersion: 1,
   commands: [
@@ -37,13 +38,13 @@ export const FILES_PLUGIN_MANIFEST = {
     {
       category: "file",
       id: FILES_NEW_FILE_COMMAND_ID,
-      permissions: ["file:read", "file:write"],
+      permissions: ["file:read", "file:write", "panel:open"],
       title: "New File...",
     },
     {
       category: "file",
       id: FILES_NEW_FOLDER_COMMAND_ID,
-      permissions: ["file:read", "file:write"],
+      permissions: ["file:read", "file:write", "panel:open"],
       title: "New Folder...",
     },
     {
@@ -179,6 +180,14 @@ export const FILES_PLUGIN_MANIFEST = {
   ],
   publisher: "Pier",
   source: { kind: "builtin" },
-  terminalStatusItems: [],
+  terminalStatusItems: [
+    {
+      alignment: "right",
+      id: FILES_PROJECT_STATUS_ITEM_ID,
+      order: 9,
+      permissions: ["panel:open", "file:read"],
+      title: "Project",
+    },
+  ],
   version: "1.0.0",
 } satisfies PluginManifest;
