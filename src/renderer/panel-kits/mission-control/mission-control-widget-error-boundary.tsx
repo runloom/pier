@@ -3,6 +3,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface WidgetErrorBoundaryProps {
   children: ReactNode;
+  fallbackMessage: string;
   onRetry: () => void;
   retryLabel: string;
   widgetId: string;
@@ -42,7 +43,7 @@ export class WidgetErrorBoundary extends Component<
     if (this.state.error) {
       return (
         <WidgetError
-          message={this.state.error.message || "Widget error"}
+          message={this.state.error.message || this.props.fallbackMessage}
           onRetry={this.props.onRetry}
           retryLabel={this.props.retryLabel}
         />

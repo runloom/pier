@@ -8,8 +8,10 @@ import {
 } from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
+import i18next from "i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layout, LayoutItem } from "react-grid-layout";
+import { toast } from "sonner";
 import { CORE_MISSION_CONTROL_WIDGETS } from "./core-mission-control-widgets.ts";
 import { deriveOptimalAutoLayout } from "./mission-control-auto-layout.ts";
 import {
@@ -165,6 +167,7 @@ export function useMissionControlPanelState(
     const newJson = JSON.stringify(next);
     if (newJson !== prevEntriesRef.current) {
       persist(next);
+      toast.success(i18next.t("missionControl.arrangeSuccess"));
     }
   }, [params.widgets, persist, plugins]);
 

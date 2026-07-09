@@ -59,6 +59,7 @@ import { buildMissionControlLibraryItems } from "./mission-control-library.ts";
 import { MissionControlLibraryDialog } from "./mission-control-library-dialog.tsx";
 import { resolveMissionControlWidgets } from "./mission-control-merge.ts";
 import { MissionControlSettingsSheet } from "./mission-control-settings-sheet.tsx";
+import { MissionControlToolbar } from "./mission-control-toolbar.tsx";
 import { MissionControlWidgetCard } from "./mission-control-widget-card.tsx";
 import {
   findWidgetDeclaration,
@@ -228,7 +229,7 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
       className={[
         "flex h-full flex-col bg-surface-canvas",
         "[&_.react-grid-placeholder]:rounded-xl! [&_.react-grid-placeholder]:bg-primary/10! [&_.react-grid-placeholder]:opacity-100!",
-        "[&_.react-grid-item:hover_.react-resizable-handle]:opacity-100 [&_.react-resizable-handle]:opacity-0",
+        "[&_.react-grid-item:hover_.react-resizable-handle]:opacity-100 [&_.react-resizable-handle]:opacity-40",
         // 拖拽中：卡片抬升（阴影加深 + 提层），落点占位框由上面的 placeholder 样式承载
         "[&_.react-grid-item.react-draggable-dragging]:z-30",
         "[&_.react-grid-item.react-draggable-dragging_[data-slot=card]]:shadow-lg",
@@ -236,6 +237,14 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
         "[&_[data-highlighted=true]_[data-slot=card]]:ring-2 [&_[data-highlighted=true]_[data-slot=card]]:ring-primary/50",
       ].join(" ")}
     >
+      <MissionControlToolbar
+        canArrange={resolved.length > 0}
+        locked={locked}
+        onAdd={() => setLibraryOpen(true)}
+        onArrange={state.handleArrangeLayout}
+        onRefreshAll={state.refreshAll}
+        onToggleLocked={state.handleToggleLocked}
+      />
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
@@ -331,6 +340,7 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
               ) : (
                 <MissionControlAddCard
                   isEmpty
+                  locked={locked}
                   onBrowse={() => setLibraryOpen(true)}
                   showAction={!locked}
                 />

@@ -6,6 +6,7 @@ import type {
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import {
   afterEach,
   beforeAll,
@@ -21,7 +22,15 @@ import {
   registerPluginMissionControlWidget,
 } from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
 import { MissionControlPanel } from "@/panel-kits/mission-control/mission-control-panel.tsx";
+import {
+  resetAppDialogForTests,
+  useAppDialogStore,
+} from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 
 const MENU_LABEL_RE = /widget menu/i;
 const REMOVE_LABEL_RE = /remove/i;
@@ -101,6 +110,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetAppDialogForTests();
   clearPluginMissionControlWidgetsForTests();
   usePluginRegistryStore.setState({
     diagnostics: [],
@@ -163,35 +173,107 @@ describe("MissionControlPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("removes a widget via the card menu", async () => {
+  it("asks for confirmation before removing unknown widget inline", async () => {
     const updateParameters = vi.fn();
     const props = makeProps(
       {
-        widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
+        widgets: [
+          {
+            h: 3,
+            id: "orphan-instance",
+            w: 4,
+            widgetId: "pier.removed.widget",
+            x: 0,
+            y: 0,
+          },
+        ],
       },
       updateParameters
     );
-
     render(<MissionControlPanel {...props} />);
 
+    expect(screen.getByText(/Widget unavailable/i)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByTestId("mission-control-widget-unknown-remove")
+    );
+
+    const dialog = useAppDialogStore.getState().current;
+    expect(dialog?.kind).toBe("confirm");
+    expect(updateParameters).not.toHaveBeenCalled();
+
+    if (dialog?.kind === "confirm" || dialog?.kind === "alert") {
+      await act(async () => {
+        dialog.resolve(true);
+      });
+    }
+
+    await vi.waitFor(() => {
+      expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
+    });
+  });
+
+  it("asks for confirmation before removing a widget", async () => {
+    const updateParameters = vi.fn();
+    const props = makeProps(
+      { widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }] },
+      updateParameters
+    );
+    render(<MissionControlPanel {...props} />);
     openWidgetMenu();
     fireEvent.click(
       await screen.findByTestId("mission-control-widget-menu-remove")
     );
 
-    expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
+    const dialog = useAppDialogStore.getState().current;
+    expect(dialog?.kind).toBe("confirm");
+    expect(updateParameters).not.toHaveBeenCalled();
+
+    if (dialog?.kind === "confirm" || dialog?.kind === "alert") {
+      await act(async () => {
+        dialog.resolve(false);
+      });
+    }
+    expect(updateParameters).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      await screen.findByTestId("mission-control-widget-menu-remove")
+    );
+    const dialog2 = useAppDialogStore.getState().current;
+    if (dialog2?.kind === "confirm" || dialog2?.kind === "alert") {
+      await act(async () => {
+        dialog2.resolve(true);
+      });
+    }
+
+    await vi.waitFor(() => {
+      expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
+    });
   });
 
-  it("menu trigger visible on group-hover (focus:opacity-100 assertion)", () => {
+  it("edit affordances stay faintly visible without hover", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    render(<MissionControlPanel {...props} />);
+    const { container } = render(<MissionControlPanel {...props} />);
+
+    const handle = container.querySelector(
+      ".mission-control-widget-drag-handle"
+    );
+    expect(handle).toBeTruthy();
+    expect(handle?.className).not.toContain("opacity-0");
+    expect(handle?.className).toMatch(/opacity-40|opacity-50|opacity-60/);
 
     const trigger = screen.getByLabelText(MENU_LABEL_RE);
-    expect(trigger.className).toContain("opacity-0");
-    expect(trigger.className).toContain("group-hover:opacity-100");
+    expect(trigger.className).not.toContain("opacity-0");
     expect(trigger.className).toContain("focus-visible:opacity-100");
+
+    const gridRoot = container.firstElementChild;
+    expect(gridRoot?.className).not.toContain(
+      "[&_.react-resizable-handle]:opacity-0"
+    );
+    expect(gridRoot?.className).toMatch(
+      /\[&_\.react-resizable-handle\]:opacity-40|\[&_\.react-resizable-handle\]:opacity-50|\[&_\.react-resizable-handle\]:opacity-60/
+    );
   });
 
   it("card menu does not expose manual resize presets", async () => {
@@ -269,6 +351,7 @@ describe("MissionControlPanel", () => {
     render(<MissionControlPanel {...props} />);
 
     expect(screen.getByText("widget boom")).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="widget-error"]')).toBeTruthy();
     expect(screen.getByText(/retry/i)).toBeInTheDocument();
 
     spy.mockRestore();
@@ -627,7 +710,7 @@ describe("实例模型与锁定", () => {
 
     openWidgetMenu();
 
-    expect(await screen.findByText(/refresh/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Refresh$/i)).toBeInTheDocument();
     expect(
       await screen.findByTestId("mission-control-widget-menu-settings")
     ).toBeInTheDocument();
@@ -857,5 +940,75 @@ describe("固定格宽与派生模式", () => {
     );
     expect(statGrid?.className).toContain("grid-cols-1");
     expect(statGrid?.className).toContain("@[14rem]:grid-cols-3");
+  });
+});
+
+describe("P0 toolbar chrome", () => {
+  it("renders toolbar actions without opening context menu", () => {
+    const props = makeProps({
+      widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
+    });
+    render(<MissionControlPanel {...props} />);
+
+    expect(screen.getByTestId("mission-control-toolbar")).toBeInTheDocument();
+    expect(screen.getByTestId("mission-control-toolbar-add")).toBeEnabled();
+    expect(
+      screen.getByTestId("mission-control-toolbar-refresh-all")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("mission-control-toolbar-arrange")).toBeEnabled();
+    expect(
+      screen.getByTestId("mission-control-toolbar-lock")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("mission-control-locked-banner")
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows locked banner and disables add/arrange when locked", () => {
+    const props = makeProps({
+      locked: true,
+      widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
+    });
+    render(<MissionControlPanel {...props} />);
+
+    expect(
+      screen.getByTestId("mission-control-locked-banner")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("mission-control-toolbar-add")).toBeDisabled();
+    expect(
+      screen.getByTestId("mission-control-toolbar-arrange")
+    ).toBeDisabled();
+  });
+
+  it("locked empty state uses locked copy and hides add CTA", () => {
+    const props = makeProps({ locked: true, widgets: [] });
+    render(<MissionControlPanel {...props} />);
+
+    expect(screen.getByTestId("mission-control-empty")).toHaveTextContent(
+      /locked/i
+    );
+    expect(
+      screen.queryByTestId("mission-control-add-widget")
+    ).not.toBeInTheDocument();
+  });
+
+  it("toasts after explicit arrange layout writeback", async () => {
+    const updateParameters = vi.fn();
+    const props = makeProps(
+      {
+        widgets: [
+          { h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 },
+          { h: 3, id: "core.system-resources", w: 4, x: 4, y: 0 },
+        ],
+      },
+      updateParameters
+    );
+    render(<MissionControlPanel {...props} />);
+    fireEvent.click(screen.getByTestId("mission-control-toolbar-arrange"));
+
+    await vi.waitFor(() => {
+      expect(updateParameters).toHaveBeenCalled();
+    });
+    expect(toast.success).toHaveBeenCalled();
   });
 });

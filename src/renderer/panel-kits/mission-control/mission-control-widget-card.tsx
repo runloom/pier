@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import type { ResolvedMissionControlWidget } from "./mission-control-merge.ts";
 import { WidgetErrorBoundary } from "./mission-control-widget-error-boundary.tsx";
 
@@ -93,6 +94,18 @@ export function MissionControlWidgetCard({
 
   const Icon = widget.registration?.icon;
 
+  const confirmRemove = async (): Promise<void> => {
+    const confirmed = await showAppConfirm({
+      body: t("missionControl.removeConfirmBody"),
+      intent: "destructive",
+      size: "sm",
+      title: t("missionControl.removeConfirmTitle"),
+    });
+    if (confirmed) {
+      onRemove();
+    }
+  };
+
   const renderBody = (): React.ReactNode => {
     if (widget.status === "plugin-disabled") {
       return (
@@ -107,7 +120,14 @@ export function MissionControlWidgetCard({
           <AlertDescription className="flex flex-col items-center gap-2">
             <span>{t("missionControl.widget.unknown")}</span>
             {locked ? null : (
-              <Button onClick={onRemove} size="xs" variant="destructive">
+              <Button
+                data-testid="mission-control-widget-unknown-remove"
+                onClick={async () => {
+                  await confirmRemove();
+                }}
+                size="xs"
+                variant="destructive"
+              >
                 {t("missionControl.widget.remove")}
               </Button>
             )}
@@ -121,6 +141,7 @@ export function MissionControlWidgetCard({
     const WidgetComponent = widget.registration.component;
     return (
       <WidgetErrorBoundary
+        fallbackMessage={t("missionControl.widget.errorFallback")}
         key={`${widget.instanceId}:${refreshToken}`}
         onRetry={onRefresh}
         retryLabel={t("missionControl.widget.retry")}
@@ -149,7 +170,7 @@ export function MissionControlWidgetCard({
           {locked ? null : (
             <span
               aria-hidden="true"
-              className="mission-control-widget-drag-handle -ml-1 flex size-5 cursor-grab items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100"
+              className="mission-control-widget-drag-handle -ml-1 flex size-5 cursor-grab items-center justify-center rounded-md text-muted-foreground/70 opacity-40 transition-opacity active:cursor-grabbing group-hover:opacity-100"
             >
               <GripVertical className="size-3.5" />
             </span>
@@ -168,7 +189,7 @@ export function MissionControlWidgetCard({
               <DropdownMenuTrigger asChild>
                 <Button
                   aria-label={t("missionControl.widget.menu")}
-                  className="text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                  className="text-muted-foreground opacity-40 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                   data-testid="mission-control-widget-menu-trigger"
                   size="icon-xs"
                   variant="ghost"
@@ -206,7 +227,10 @@ export function MissionControlWidgetCard({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       data-testid="mission-control-widget-menu-remove"
-                      onSelect={onRemove}
+                      onSelect={async (event) => {
+                        event.preventDefault();
+                        await confirmRemove();
+                      }}
                       variant="destructive"
                     >
                       <Trash2 className="size-4" />
