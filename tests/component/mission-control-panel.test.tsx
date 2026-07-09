@@ -189,18 +189,22 @@ describe("MissionControlPanel", () => {
     expect(dialog?.kind).toBe("confirm");
     expect(updateParameters).not.toHaveBeenCalled();
 
-    await act(async () => {
-      dialog?.resolve(false);
-    });
+    if (dialog?.kind === "confirm" || dialog?.kind === "alert") {
+      await act(async () => {
+        dialog.resolve(false);
+      });
+    }
     expect(updateParameters).not.toHaveBeenCalled();
 
     fireEvent.click(
       await screen.findByTestId("mission-control-widget-menu-remove")
     );
     const dialog2 = useAppDialogStore.getState().current;
-    await act(async () => {
-      dialog2?.resolve(true);
-    });
+    if (dialog2?.kind === "confirm" || dialog2?.kind === "alert") {
+      await act(async () => {
+        dialog2.resolve(true);
+      });
+    }
 
     await vi.waitFor(() => {
       expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
