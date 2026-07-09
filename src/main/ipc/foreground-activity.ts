@@ -222,6 +222,10 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   jsonlObserver = createJsonlObserver({
     filePath: eventsJsonlPath(app.getPath("userData")),
     onAgentEvent: (event) => {
+      const accepted = foregroundActivityAggregator.ingestAgentEvent(event);
+      if (!accepted) {
+        return;
+      }
       recordAgentResumeSession({
         agentId: event.agent,
         panelId: event.panelId,
@@ -234,7 +238,6 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
           windowId: event.windowId,
         });
       }
-      foregroundActivityAggregator.ingestAgentEvent(event);
     },
     onCommandFinished: (event) =>
       foregroundActivityAggregator.ingestCommandFinishedHook(event),

@@ -33,19 +33,30 @@ export function logAgentEventDropped(
   reason:
     | "suppressed-panel-cooldown"
     | "suppressed-hook-cooldown"
+    | "foreign-agent-hook"
     | "ghost-rejected"
     | "absorbed"
     | "status-null",
   panelId: string,
   event: string,
-  extra?: { frozenStatus?: ActivityStatus }
+  extra?: {
+    eventAgent?: AgentKind;
+    frozenStatus?: ActivityStatus;
+    ownerAgent?: AgentKind;
+  }
 ): void {
   log.debug(`ingestAgentEvent:${reason}`, {
     panelId,
     event,
+    ...(extra?.eventAgent === undefined
+      ? {}
+      : { eventAgent: extra.eventAgent }),
     ...(extra?.frozenStatus === undefined
       ? {}
       : { frozenStatus: extra.frozenStatus }),
+    ...(extra?.ownerAgent === undefined
+      ? {}
+      : { ownerAgent: extra.ownerAgent }),
   });
 }
 

@@ -103,6 +103,10 @@ export function createForegroundActivityAggregator(
     }
   }
 
+  function commandOwnedAgent(slot: PanelSlot | undefined) {
+    return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
+  }
+
   /** 整 slot 清除 + 冷却进指定表。返回是否确有移除（决定要不要 emit）。 */
   function closeSlot(
     key: string,
@@ -316,39 +320,48 @@ export function createForegroundActivityAggregator(
 
     ingestAgentEvent(event) {
       if (disposed) {
-        return;
+        return false;
       }
       const key = event.panelId;
       const slotBefore = slots.get(key);
       logRouting(event.event, event.agent, key, slotBefore?.hook ?? null);
+      const ownerAgent = commandOwnedAgent(slotBefore);
+      if (ownerAgent !== null && ownerAgent !== event.agent) {
+        logAgentEventDropped("foreign-agent-hook", key, event.event, {
+          eventAgent: event.agent,
+          ownerAgent,
+        });
+        return false;
+      }
       const identity = hookScopeIdentity(event);
       if (!hookScopes.allowsAgentEventAfterCooldowns(key, event, identity)) {
-        return;
+        return false;
       }
       if (hookScopes.handleSessionEnd(key, event, identity)) {
-        return;
+        return true;
       }
       const status = activityStatusForHookEvent(event.event);
       if (status === null) {
         logAgentEventDropped("status-null", key, event.event);
-        return;
+        return false;
       }
       const at = now();
       const hook = acquireHookLayer(key, event, at);
       if (!hook) {
         logAgentEventDropped("ghost-rejected", key, event.event);
-        return;
+        return false;
       }
       const scope = getOrCreateHookScope(hook, identity, at);
       if (!applyTurnBookkeeping(scope, event.event)) {
         logAgentEventDropped("absorbed", key, event.event, {
           frozenStatus: scope.status,
         });
-        return;
+        return false;
       }
       hookScopes.noteStatusEvent(key, hook, scope, event, status, at);
       armHookTtlTimer(key, timerCtx);
       scheduleEmit();
+      return true;
     },
 
     taskLaunched(panelId, windowId, task) {

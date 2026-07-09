@@ -23,8 +23,12 @@ export interface ForegroundActivityAggregator {
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
   dispose(): void;
 
-  /** Path B 三 kind: agentEvent（真身，聚合器消费驱动 agent activity）。 */
-  ingestAgentEvent(event: AgentHookEventPayload): void;
+  /**
+   * Path B 三 kind: agentEvent（真身，聚合器消费驱动 agent activity）。
+   * 返回 true 表示事件归属有效且已被聚合器消费；调用方只应为 true
+   * 的事件写会话恢复/退出等旁路状态，避免异 agent 子流程污染当前 panel。
+   */
+  ingestAgentEvent(event: AgentHookEventPayload): boolean;
   /**
    * 前台命令退出：双层同清 + 5s 冷却（覆盖崩溃/kill 等无 SessionEnd hook
    * 的路径）。Ctrl+Z 悬挂（145-148）双层保留。

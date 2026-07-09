@@ -661,13 +661,67 @@ describe("ForegroundActivityAggregator", () => {
   it("hook 证据优先于 launch 先验: PromptSubmit 立即可见并压过消抖中的 launch", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.agentLaunched("1", "p1", "codex");
-    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "codex", event: "PromptSubmit" })
+    );
     // hook 证据立即显形, 无须等 launch 消抖
     const a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.kind).toBe("agent");
     expect(a.source).toBe("hook");
     expect(a.status).toBe("processing");
-    expect(a.agentId).toBe("claude");
+    expect(a.agentId).toBe("codex");
+    agg.dispose();
+  });
+
+  it("回归: 明确前台 agent 命令拒绝异 agent hook 抢占归属", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.agentLaunched("1", "p1", "codex");
+    advance(250);
+    let a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.source).toBe("launch");
+    expect(a.agentId).toBe("codex");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "claude",
+        event: "SessionStart",
+        sessionId: "foreign",
+      })
+    );
+    advance(250);
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.source).toBe("launch");
+    expect(a.agentId).toBe("codex");
+    expect(a.status).toBeUndefined();
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "codex", event: "PromptSubmit" })
+    );
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.source).toBe("hook");
+    expect(a.agentId).toBe("codex");
+    expect(a.status).toBe("processing");
+    agg.dispose();
+  });
+
+  it("回归: 异 agent SessionEnd 不清当前前台 agent 活动", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.agentLaunched("1", "p1", "codex");
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "codex", event: "PromptSubmit" })
+    );
+    let a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.source).toBe("hook");
+    expect(a.agentId).toBe("codex");
+    expect(a.status).toBe("processing");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "claude", event: "SessionEnd" })
+    );
+    a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.source).toBe("hook");
+    expect(a.agentId).toBe("codex");
+    expect(a.status).toBe("processing");
     agg.dispose();
   });
 
