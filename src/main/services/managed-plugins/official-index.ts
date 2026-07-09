@@ -5,19 +5,13 @@ import {
   type OfficialPluginIndex,
   officialPluginIndexSchema,
 } from "@shared/contracts/managed-plugin.ts";
-// selectLatestCompatibleVersion re-exported from ./version.ts at bottom
 
 /**
  * Official index fetch + Ed25519 signature verification (design §5).
  *
- * Verification order is FIXED:
- *   1. fetch raw bytes with size cap
- *   2. parse UTF-8 JSON with duplicate object-key rejection
- *   3. extract only signature envelope fields (keyId, alg, value)
- *   4. canonicalize the full parsed object with `signature` field removed
- *   5. Ed25519 verify against pinned public key by keyId
- *   6. ONLY THEN run strict `officialPluginIndexSchema.parse`
- *
+ * Verification order is fixed: fetch bytes, reject duplicate keys, extract the
+ * signature envelope, canonicalize without the root signature, verify Ed25519,
+ * then run strict schema parsing.
  * Never sign Zod-stripped output. Never accept an unknown alg. Never accept
  * an unknown keyId. Rejected updates fall back to cached last-known-good.
  */
