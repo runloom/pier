@@ -94,6 +94,7 @@ function entryWithCapabilities(
       apiVersion: 1,
       commands: [{ id: testAction.id, permissions: [], title: "Open" }],
       missionControlWidgets: [],
+      settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.files",
       name: "Files",

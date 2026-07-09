@@ -1,39 +1,43 @@
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
 import {
-  NAV_ITEMS,
-  pluginIdFromSectionId,
   pluginNavItems,
   pluginSectionId,
 } from "@/pages/settings/data/appearance-nav.ts";
 
 function entry(
   id: string,
-  opts: { configured?: boolean; enabled?: boolean; title?: string } = {}
+  options: {
+    configured?: boolean;
+    enabled?: boolean;
+    settingsPages?: boolean;
+  } = {}
 ): PluginRegistryEntry {
-  const { configured = true, enabled = true, title } = opts;
+  const { configured = true, enabled = true, settingsPages = false } = options;
+
   return {
     effectivePermissions: [],
     enabled,
     manifest: {
       apiVersion: 1,
       commands: [],
+      engines: { pier: ">=0.1.0" },
+      id,
       missionControlWidgets: [],
+      name: `${id}-name`,
+      panels: [],
+      permissions: [],
+      settingsPages: settingsPages ? [{ id: `${id}.page` }] : [],
       ...(configured
         ? {
             configuration: {
               properties: {
-                [`${id}.enabled`]: { default: true, type: "boolean" },
+                [`${id}.flag`]: { default: true, type: "boolean" },
               },
-              ...(title ? { title } : {}),
+              title: `${id} Settings`,
             },
           }
         : {}),
-      engines: { pier: ">=0.1.0" },
-      id,
-      name: `${id}-name`,
-      panels: [],
-      permissions: [],
       source: { kind: "builtin" },
       terminalStatusItems: [],
       version: "1.0.0",
@@ -42,39 +46,36 @@ function entry(
   };
 }
 
-describe("settings 导航 — 插件项 variant", () => {
-  it("静态项全部是 static variant 且不含硬编码 label", () => {
-    expect(NAV_ITEMS.every((item) => item.variant === "static")).toBe(true);
-    expect(NAV_ITEMS.some((item) => "label" in item)).toBe(false);
+describe("pluginNavItems", () => {
+  it("includes enabled plugins that declare configuration", () => {
+    const items = pluginNavItems([entry("pier.configured")], "en");
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toBe(pluginSectionId("pier.configured"));
+    expect(items[0]?.pluginId).toBe("pier.configured");
   });
 
-  it("插件项只收已启用且声明 configuration 的插件", () => {
+  it("includes enabled plugins that only declare settingsPages", () => {
     const items = pluginNavItems(
-      [
-        entry("pier.a", { title: "A Settings" }),
-        entry("pier.b", { enabled: false }),
-        entry("pier.c", { configured: false }),
-      ],
+      [entry("pier.only-page", { configured: false, settingsPages: true })],
       "en"
     );
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({
-      id: "plugin:pier.a",
-      label: "A Settings",
-      pluginId: "pier.a",
-      variant: "plugin",
-    });
+    expect(items[0]?.id).toBe("plugin:pier.only-page");
   });
 
-  it("configuration.title 缺省回落插件显示名", () => {
-    expect(pluginNavItems([entry("pier.a")], "en")[0]?.label).toBe(
-      "pier.a-name"
+  it("excludes disabled plugins even when they declare configuration", () => {
+    const items = pluginNavItems(
+      [entry("pier.disabled", { enabled: false })],
+      "en"
     );
+    expect(items).toHaveLength(0);
   });
 
-  it("section id 与 pluginId 双向换算", () => {
-    expect(pluginSectionId("pier.git")).toBe("plugin:pier.git");
-    expect(pluginIdFromSectionId("plugin:pier.git")).toBe("pier.git");
-    expect(pluginIdFromSectionId("plugins")).toBeNull();
+  it("excludes plugins with neither configuration nor settingsPages", () => {
+    const items = pluginNavItems(
+      [entry("pier.empty", { configured: false })],
+      "en"
+    );
+    expect(items).toHaveLength(0);
   });
 });

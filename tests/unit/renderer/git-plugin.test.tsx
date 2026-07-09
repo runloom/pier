@@ -227,6 +227,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
       },
       missionControlWidgets: [],
+      settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: GIT_PLUGIN_ID,
       localization: {

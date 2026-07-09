@@ -16,6 +16,7 @@ const pluginEntry = {
     apiVersion: 1,
     commands: [],
     missionControlWidgets: [],
+    settingsPages: [],
     engines: { pier: ">=0.1.0" },
     groupContent: [{ id: "host.test.groupView", title: "Group View" }],
     id: "host.test",

@@ -59,15 +59,21 @@ export function pluginIdFromSectionId(
 }
 
 /**
- * 插件导航项：已启用且声明 configuration 的插件；icon 取 builtin renderer
- * module 的自描述图标(module.icon), 查不到或未声明时 lucide Puzzle 兜底。
+ * 插件导航项：已启用且声明 configuration 或 settingsPages 的插件；icon 取
+ * builtin renderer module 的自描述图标(module.icon), 查不到或未声明时 lucide
+ * Puzzle 兜底。
  */
 export function pluginNavItems(
   entries: readonly PluginRegistryEntry[],
   locale: string
 ): PluginNavItem[] {
   return entries
-    .filter((entry) => entry.runtime.enabled && entry.manifest.configuration)
+    .filter(
+      (entry) =>
+        entry.runtime.enabled &&
+        (Boolean(entry.manifest.configuration) ||
+          entry.manifest.settingsPages.length > 0)
+    )
     .map((entry) => ({
       icon: getBuiltinRendererPluginModule(entry.manifest.id)?.icon ?? Puzzle,
       id: pluginSectionId(entry.manifest.id),

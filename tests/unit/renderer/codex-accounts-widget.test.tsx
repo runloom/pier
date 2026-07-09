@@ -24,6 +24,9 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
   };
   return {
     context: {
+      app: {
+        openSettings: vi.fn(),
+      },
       actions: {
         register: vi.fn(() => () => undefined),
       },
@@ -51,6 +54,9 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
       rpc: {
         invoke,
         on: vi.fn(() => () => undefined),
+      },
+      settingsPages: {
+        register: vi.fn(() => () => undefined),
       },
     },
     invokeCalls,

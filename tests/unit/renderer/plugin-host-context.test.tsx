@@ -170,6 +170,7 @@ const pluginEntry = {
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
     missionControlWidgets: sampleMissionControlWidgets,
+    settingsPages: [],
     version: "1.0.0",
   },
   runtime: {

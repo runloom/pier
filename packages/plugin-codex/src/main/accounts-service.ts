@@ -25,6 +25,7 @@ const USAGE_MIN_REFETCH_MS = 5 * 60 * 1000;
 const USAGE_POLL_INTERVAL_MS = 15 * 60 * 1000;
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const WATCH_SUPPRESS_MS = 1500;
+export const SYSTEM_USAGE_CACHE_KEY = "__system__";
 export interface CodexAccountsServiceOpts {
   ensureUsageEnv?: () => Promise<void>;
   hasVisibleTarget?: () => boolean;
@@ -45,14 +46,28 @@ export interface CodexAccountsService {
   refreshUsage(force?: boolean): Promise<void>;
   remove(payload: RemoveAccountPayload): Promise<void>;
   select(payload: SelectAccountPayload): Promise<void>;
+  selectSystemDefault(): Promise<void>;
   snapshot(): CodexAccountsSnapshot;
 }
 
-interface UsageCacheEntry extends CodexUsageSnapshot {
+interface UsageCacheEntry {
   error?: string;
+  fetchedAt: number;
+  raw?: unknown;
   session?: AccountUsageResult["session"];
-  status?: "error" | "ok";
+  status: "error" | "ok";
   weekly?: AccountUsageResult["weekly"];
+}
+
+function toUsageSnapshot(entry: UsageCacheEntry): CodexUsageSnapshot {
+  return {
+    fetchedAt: entry.fetchedAt,
+    status: entry.status,
+    ...(entry.error ? { error: entry.error } : {}),
+    ...(entry.session ? { session: entry.session } : {}),
+    ...(entry.weekly ? { weekly: entry.weekly } : {}),
+    ...(entry.raw === undefined ? {} : { raw: entry.raw }),
+  };
 }
 
 export function createCodexAccountsService(
@@ -101,28 +116,25 @@ export function createCodexAccountsService(
       label: record.email ?? record.id,
       status:
         record.id === stateStore.get().activeAccountId ? "active" : "available",
-      usage: usage
-        ? {
-            fetchedAt: usage.fetchedAt,
-            raw: {
-              session: usage.session,
-              weekly: usage.weekly,
-              status: usage.status,
-              error: usage.error,
-            },
-          }
-        : null,
+      usage: usage ? toUsageSnapshot(usage) : null,
       error:
         lastLoginError && loginPending === null ? lastLoginError.message : null,
     };
   }
 
+  function activeUsageCacheKey(activeAccountId: string | null): string {
+    return activeAccountId ?? SYSTEM_USAGE_CACHE_KEY;
+  }
+
   function buildSnapshot(): CodexAccountsSnapshot {
     broadcastSeq += 1;
     const state = stateStore.get();
+    const cacheKey = activeUsageCacheKey(state.activeAccountId);
+    const activeUsageEntry = usageCache[cacheKey];
     return {
       accounts: state.accounts.map(toSummary),
       activeAccountId: state.activeAccountId,
+      activeUsage: activeUsageEntry ? toUsageSnapshot(activeUsageEntry) : null,
       login: loginPending ? { provider: "codex", startedAt: now() } : null,
       revision: broadcastSeq,
       schemaVersion: state.schemaVersion,
@@ -376,12 +388,40 @@ export function createCodexAccountsService(
     emitSnapshot();
   }
 
-  async function doRefreshUsage(force = false): Promise<void> {
-    const capturedId = stateStore.get().activeAccountId;
-    if (!capturedId) {
+  async function doSelectSystemDefault(): Promise<void> {
+    const state = stateStore.get();
+    if (state.activeAccountId === null) {
       return;
     }
-    const cached = usageCache[capturedId];
+
+    const activeAccount = state.accounts.find(
+      (a) => a.id === state.activeAccountId
+    );
+    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+    const syncResult = await provider.syncBack(
+      accountHomeDir(state.activeAccountId),
+      activeAccount?.providerAccountId
+    );
+    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+    if (syncResult === "identity-mismatch") {
+      await handleDrift();
+    }
+
+    stateStore.mutate((s) => ({
+      ...s,
+      activeAccountId: null,
+      revision: s.revision + 1,
+    }));
+    emitSnapshot();
+    doRefreshUsage(true).catch(() => {
+      /* fire-and-forget */
+    });
+  }
+
+  async function doRefreshUsage(force = false): Promise<void> {
+    const capturedId = stateStore.get().activeAccountId;
+    const cacheKey = activeUsageCacheKey(capturedId);
+    const cached = usageCache[cacheKey];
     if (!force && cached && now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS) {
       return;
     }
@@ -391,7 +431,7 @@ export function createCodexAccountsService(
     if (stateStore.get().activeAccountId !== capturedId) {
       return;
     }
-    usageCache[capturedId] = {
+    usageCache[cacheKey] = {
       fetchedAt: now(),
       raw: result,
       status: result.status,
@@ -494,6 +534,7 @@ export function createCodexAccountsService(
       });
     },
     select: (payload) => enqueueMutation(() => doSelect(payload.accountId)),
+    selectSystemDefault: () => enqueueMutation(doSelectSystemDefault),
     remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
     refreshUsage: (force) => doRefreshUsage(force),
   };

@@ -2,6 +2,7 @@ import type {
   RendererMissionControlWidgetRegistration as ExternalMissionControlWidgetRegistration,
   RendererPluginAction as ExternalPluginAction,
   ExternalRendererPluginContext,
+  RendererSettingsPageRegistration as ExternalSettingsPageRegistration,
 } from "@pier/plugin-api/renderer";
 import type {
   MissionControlWidgetComponentProps as HostMissionControlWidgetComponentProps,
@@ -18,7 +19,12 @@ import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
+import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
+import {
+  getPluginSettingsPage,
+  registerPluginSettingsPage,
+} from "./plugin-settings-page-registry.ts";
 
 /**
  * Builds a plugin-scoped `ExternalRendererPluginContext`. The plugin id is
@@ -36,13 +42,17 @@ export interface RendererPluginRpcBridge {
 
 function assertDeclared(
   entry: PluginRegistryEntry,
-  kind: "action" | "missionControlWidget",
+  kind: "action" | "missionControlWidget" | "settingsPage",
   id: string
 ): void {
-  const declared =
-    kind === "action"
-      ? entry.manifest.commands
-      : entry.manifest.missionControlWidgets;
+  let declared: ReadonlyArray<{ id: string }>;
+  if (kind === "action") {
+    declared = entry.manifest.commands;
+  } else if (kind === "missionControlWidget") {
+    declared = entry.manifest.missionControlWidgets;
+  } else {
+    declared = entry.manifest.settingsPages;
+  }
   if (!declared.some((c) => c.id === id)) {
     throw new Error(
       `plugin ${entry.manifest.id} tried to register undeclared ${kind}: ${id}`
@@ -71,6 +81,13 @@ export function createExternalRendererPluginContext(
   const pluginId = entry.manifest.id;
 
   return {
+    app: {
+      openSettings: (options) => {
+        useSettingsDialogStore
+          .getState()
+          .openSection(options?.section ?? "appearance");
+      },
+    },
     actions: {
       register: (action: ExternalPluginAction) => {
         assertDeclared(entry, "action", action.id);
@@ -143,6 +160,17 @@ export function createExternalRendererPluginContext(
         });
       },
     },
+    settingsPages: {
+      register: (registration: ExternalSettingsPageRegistration) => {
+        assertDeclared(entry, "settingsPage", registration.id);
+        if (getPluginSettingsPage(pluginId)) {
+          throw new Error(
+            `plugin ${pluginId} already registered a settings page`
+          );
+        }
+        return registerPluginSettingsPage(pluginId, registration);
+      },
+    },
     dialogs: {
       alert: (options) => {
         const args: { body?: string; size: "sm"; title: string } = {
@@ -155,10 +183,14 @@ export function createExternalRendererPluginContext(
       confirm: (options) => {
         const args: {
           body?: string;
-          intent: "default";
+          intent: "default" | "destructive";
           size: "sm";
           title: string;
-        } = { intent: "default", size: "sm", title: options.title };
+        } = {
+          intent: options.intent ?? "default",
+          size: "sm",
+          title: options.title,
+        };
         if (options.body !== undefined) args.body = options.body;
         return showAppConfirm(args);
       },
