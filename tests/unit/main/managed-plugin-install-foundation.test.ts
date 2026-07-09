@@ -435,7 +435,7 @@ describe("managed plugin install foundation", () => {
     ]);
   });
 
-  it("rejects official index rollback", async () => {
+  it("returns stale cache when a rollback update is rejected", async () => {
     const cachePath = join(dir, "plugins", "official-index-cache.json");
     await mkdir(join(dir, "plugins"), { recursive: true });
     await writeFile(
@@ -456,29 +456,39 @@ describe("managed plugin install foundation", () => {
         },
       })
     );
-    await expect(
-      fetchOfficialPluginIndex({
-        cachePath,
-        runtimeMode: "development",
-        env: {},
-        verifySignature: () => true,
-        fetchRawJson: async () =>
-          JSON.stringify({
-            generatedAt: 2,
-            plugins: {},
-            sequence: 9,
-            signature: {
-              keyId: "pier-official-dev-test",
-              alg: "Ed25519",
-              value: "sig",
-            },
-            version: 1,
-          }),
+    const result = await fetchOfficialPluginIndex({
+      cachePath,
+      runtimeMode: "development",
+      env: {},
+      verifySignature: () => true,
+      fetchRawJson: async () =>
+        JSON.stringify({
+          generatedAt: 2,
+          plugins: {},
+          sequence: 9,
+          signature: {
+            keyId: "pier-official-dev-test",
+            alg: "Ed25519",
+            value: "sig",
+          },
+          version: 1,
+        }),
+    });
+
+    expect(result.source).toBe("cache");
+    expect(result.index?.sequence).toBe(10);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "official_index_rejected",
+        severity: "warning",
       })
-    ).rejects.toThrow(/official index rollback/);
+    );
+    expect(result.diagnostics.at(-1)?.message).toContain(
+      "official index rollback"
+    );
   });
 
-  it("rejects same-version hash drift", async () => {
+  it("returns stale cache when a same-version hash drift update is rejected", async () => {
     const cachePath = join(dir, "plugins", "official-index-cache.json");
     await mkdir(join(dir, "plugins"), { recursive: true });
     await writeFile(
@@ -499,42 +509,52 @@ describe("managed plugin install foundation", () => {
         },
       })
     );
-    await expect(
-      fetchOfficialPluginIndex({
-        cachePath,
-        runtimeMode: "development",
-        env: {},
-        verifySignature: () => true,
-        fetchRawJson: async () =>
-          JSON.stringify({
-            generatedAt: 2,
-            plugins: {
-              "pier.codex": {
-                description: "Codex",
-                displayName: "Codex",
-                id: "pier.codex",
-                latest: "1.0.0",
-                versions: {
-                  "1.0.0": {
-                    assetUrl:
-                      "https://github.com/pier-plugins/codex/releases/download/v1.0.0/pkg.tgz",
-                    pier: ">=0.1.0 <0.2.0",
-                    sha256: "new",
-                    size: 1,
-                  },
+    const result = await fetchOfficialPluginIndex({
+      cachePath,
+      runtimeMode: "development",
+      env: {},
+      verifySignature: () => true,
+      fetchRawJson: async () =>
+        JSON.stringify({
+          generatedAt: 2,
+          plugins: {
+            "pier.codex": {
+              description: "Codex",
+              displayName: "Codex",
+              id: "pier.codex",
+              latest: "1.0.0",
+              versions: {
+                "1.0.0": {
+                  assetUrl:
+                    "https://github.com/pier-plugins/codex/releases/download/v1.0.0/pkg.tgz",
+                  pier: ">=0.1.0 <0.2.0",
+                  sha256: "new",
+                  size: 1,
                 },
               },
             },
-            sequence: 11,
-            signature: {
-              keyId: "pier-official-dev-test",
-              alg: "Ed25519",
-              value: "sig",
-            },
-            version: 1,
-          }),
+          },
+          sequence: 11,
+          signature: {
+            keyId: "pier-official-dev-test",
+            alg: "Ed25519",
+            value: "sig",
+          },
+          version: 1,
+        }),
+    });
+
+    expect(result.source).toBe("cache");
+    expect(result.index?.sequence).toBe(10);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "official_index_rejected",
+        severity: "warning",
       })
-    ).rejects.toThrow(/hash drift/);
+    );
+    expect(result.diagnostics.at(-1)?.message).toContain(
+      "same-version hash drift"
+    );
   });
 
   it("verifies signatures before schema parse and never signs stripped data", async () => {
@@ -567,108 +587,130 @@ describe("managed plugin install foundation", () => {
     expect(signedPayloads[0]).not.toContain("signature");
   });
 
-  it("rejects unsigned indexes, unknown signing keys, and unsupported algorithms", async () => {
+  it("returns empty diagnostics for unsigned indexes, unknown signing keys, and unsupported algorithms", async () => {
     const cachePath = join(dir, "plugins/cache-sig.json");
-    await expect(
-      fetchOfficialPluginIndex({
-        cachePath,
-        runtimeMode: "development",
-        env: {},
-        verifySignature: () => false,
-        fetchRawJson: async () =>
-          JSON.stringify({
-            generatedAt: 1,
-            plugins: {},
-            sequence: 1,
-            signature: {
-              keyId: "pier-official-dev-test",
-              alg: "Ed25519",
-              value: "bad",
-            },
-            version: 1,
-          }),
+    const invalidSignature = await fetchOfficialPluginIndex({
+      cachePath,
+      runtimeMode: "development",
+      env: {},
+      verifySignature: () => false,
+      fetchRawJson: async () =>
+        JSON.stringify({
+          generatedAt: 1,
+          plugins: {},
+          sequence: 1,
+          signature: {
+            keyId: "pier-official-dev-test",
+            alg: "Ed25519",
+            value: "bad",
+          },
+          version: 1,
+        }),
+    });
+    expect(invalidSignature.source).toBe("empty");
+    expect(invalidSignature.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "official_index_rejected",
+        severity: "error",
       })
-    ).rejects.toThrow(/official index signature/);
-    await expect(
-      fetchOfficialPluginIndex({
-        cachePath,
-        runtimeMode: "development",
-        env: {},
-        verifySignature: () => true,
-        fetchRawJson: async () =>
-          JSON.stringify({
-            generatedAt: 1,
-            plugins: {},
-            sequence: 1,
-            signature: {
-              keyId: "pier-official-dev-test",
-              alg: "RS256",
-              value: "sig",
-            },
-            version: 1,
-          }),
-      })
-    ).rejects.toThrow(/unsupported signature algorithm/);
-    await expect(
-      fetchOfficialPluginIndex({
-        cachePath,
-        runtimeMode: "development",
-        env: {},
-        verifySignature: () => true,
-        fetchRawJson: async () =>
-          JSON.stringify({
-            generatedAt: 1,
-            plugins: {},
-            sequence: 1,
-            signature: {
-              keyId: "unknown-key",
-              alg: "Ed25519",
-              value: "sig",
-            },
-            version: 1,
-          }),
-      })
-    ).rejects.toThrow(/unknown signing key/);
+    );
+    expect(invalidSignature.diagnostics.at(-1)?.message).toContain(
+      "official index signature"
+    );
+
+    const unsupportedAlgorithm = await fetchOfficialPluginIndex({
+      cachePath,
+      runtimeMode: "development",
+      env: {},
+      verifySignature: () => true,
+      fetchRawJson: async () =>
+        JSON.stringify({
+          generatedAt: 1,
+          plugins: {},
+          sequence: 1,
+          signature: {
+            keyId: "pier-official-dev-test",
+            alg: "RS256",
+            value: "sig",
+          },
+          version: 1,
+        }),
+    });
+    expect(unsupportedAlgorithm.source).toBe("empty");
+    expect(unsupportedAlgorithm.diagnostics.at(-1)?.message).toContain(
+      "unsupported signature algorithm"
+    );
+
+    const unknownKey = await fetchOfficialPluginIndex({
+      cachePath,
+      runtimeMode: "development",
+      env: {},
+      verifySignature: () => true,
+      fetchRawJson: async () =>
+        JSON.stringify({
+          generatedAt: 1,
+          plugins: {},
+          sequence: 1,
+          signature: {
+            keyId: "unknown-key",
+            alg: "Ed25519",
+            value: "sig",
+          },
+          version: 1,
+        }),
+    });
+    expect(unknownKey.source).toBe("empty");
+    expect(unknownKey.diagnostics.at(-1)?.message).toContain(
+      "unknown signing key"
+    );
   });
 
-  it("rejects non-allowlisted GitHub asset URLs and non-HTTPS redirects", async () => {
+  it("returns empty diagnostics for non-allowlisted GitHub asset URLs and rejects non-HTTPS redirects", async () => {
     const cachePath = join(dir, "plugins/cache-asset.json");
-    await expect(
-      fetchOfficialPluginIndex({
-        cachePath,
-        runtimeMode: "development",
-        env: {},
-        verifySignature: () => true,
-        fetchRawJson: async () =>
-          JSON.stringify({
-            generatedAt: 1,
-            plugins: {
-              "pier.codex": {
-                description: "Codex",
-                displayName: "Codex",
-                id: "pier.codex",
-                latest: "1.0.0",
-                versions: {
-                  "1.0.0": {
-                    assetUrl:
-                      "https://github.com/untrusted/codex/releases/download/v1.0.0/pkg.tgz",
-                    pier: ">=0.1.0 <0.2.0",
-                    sha256: "h",
-                    size: 1,
-                  },
+    const result = await fetchOfficialPluginIndex({
+      cachePath,
+      runtimeMode: "development",
+      env: {},
+      verifySignature: () => true,
+      fetchRawJson: async () =>
+        JSON.stringify({
+          generatedAt: 1,
+          plugins: {
+            "pier.codex": {
+              description: "Codex",
+              displayName: "Codex",
+              id: "pier.codex",
+              latest: "1.0.0",
+              versions: {
+                "1.0.0": {
+                  assetUrl:
+                    "https://github.com/untrusted/codex/releases/download/v1.0.0/pkg.tgz",
+                  pier: ">=0.1.0 <0.2.0",
+                  sha256: "h",
+                  size: 1,
                 },
               },
             },
-            sequence: 1,
-            signature: {
-              keyId: "pier-official-dev-test",
-              alg: "Ed25519",
-              value: "sig",
-            },
-            version: 1,
-          }),
+          },
+          sequence: 1,
+          signature: {
+            keyId: "pier-official-dev-test",
+            alg: "Ed25519",
+            value: "sig",
+          },
+          version: 1,
+        }),
+    });
+    expect(result.source).toBe("empty");
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "official_index_rejected",
+        severity: "error",
       })
-    ).rejects.toThrow(/non-allowlisted GitHub asset/);
+    );
+    expect(result.diagnostics.at(-1)?.message).toContain(
+      "non-allowlisted GitHub asset"
+    );
     await expect(
       validateOfficialAssetRedirect({
         assetUrl:

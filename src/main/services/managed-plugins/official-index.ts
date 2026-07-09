@@ -228,6 +228,24 @@ async function writeCache(
   await writeFile(cachePath, JSON.stringify(cache));
 }
 
+function rejectedOfficialIndexUpdateResult(
+  diagnostics: OfficialIndexDiagnostic[],
+  cache: OfficialIndexCache | null,
+  error: unknown
+): OfficialIndexFetchResult {
+  const message = error instanceof Error ? error.message : String(error);
+  diagnostics.push({
+    code: "official_index_rejected",
+    message: `rejected official index update: ${message}`,
+    severity: cache ? "warning" : "error",
+  });
+  return {
+    diagnostics,
+    index: cache?.index ?? null,
+    source: cache ? "cache" : "empty",
+  };
+}
+
 function verifyEd25519(args: {
   keyId: string;
   payload: string;
@@ -397,70 +415,75 @@ export async function fetchOfficialPluginIndex(
     };
   }
 
-  if (rawText.length > MAX_INDEX_BYTES) {
-    throw new Error(
-      `official index exceeds max size: ${rawText.length} > ${MAX_INDEX_BYTES}`
-    );
-  }
+  let index: OfficialPluginIndex;
+  try {
+    if (rawText.length > MAX_INDEX_BYTES) {
+      throw new Error(
+        `official index exceeds max size: ${rawText.length} > ${MAX_INDEX_BYTES}`
+      );
+    }
 
-  const parsed = parseJsonRejectDuplicates(rawText) as {
-    signature?: { keyId?: string; alg?: string; value?: string };
-    plugins?: Record<string, unknown>;
-    sequence?: number;
-  } | null;
+    const parsed = parseJsonRejectDuplicates(rawText) as {
+      signature?: { keyId?: string; alg?: string; value?: string };
+      plugins?: Record<string, unknown>;
+      sequence?: number;
+    } | null;
 
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error("official index root must be an object");
-  }
-  const signature = parsed.signature;
-  if (!(signature?.keyId && signature.alg && signature.value)) {
-    throw new Error("official index signature envelope missing");
-  }
-  if (signature.alg !== "Ed25519") {
-    throw new Error(`unsupported signature algorithm: ${signature.alg}`);
-  }
-  if (!OFFICIAL_PLUGIN_INDEX_PUBLIC_KEYS_BY_ID[signature.keyId]) {
-    throw new Error(`unknown signing key: ${signature.keyId}`);
-  }
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("official index root must be an object");
+    }
+    const signature = parsed.signature;
+    if (!(signature?.keyId && signature.alg && signature.value)) {
+      throw new Error("official index signature envelope missing");
+    }
+    if (signature.alg !== "Ed25519") {
+      throw new Error(`unsupported signature algorithm: ${signature.alg}`);
+    }
+    if (!OFFICIAL_PLUGIN_INDEX_PUBLIC_KEYS_BY_ID[signature.keyId]) {
+      throw new Error(`unknown signing key: ${signature.keyId}`);
+    }
 
-  const canonicalPayload = canonicalizeIndexPayload(parsed);
-  const verified = verify({
-    keyId: signature.keyId,
-    payload: canonicalPayload,
-    signature: signature.value,
-  });
-  if (!verified) {
-    throw new Error("official index signature verification failed");
-  }
+    const canonicalPayload = canonicalizeIndexPayload(parsed);
+    const verified = verify({
+      keyId: signature.keyId,
+      payload: canonicalPayload,
+      signature: signature.value,
+    });
+    if (!verified) {
+      throw new Error("official index signature verification failed");
+    }
 
-  const index = officialPluginIndexSchema.parse(parsed);
+    index = officialPluginIndexSchema.parse(parsed);
 
-  if (cache && index.sequence < cache.highestSequence) {
-    throw new Error(
-      `official index rollback: ${index.sequence} < ${cache.highestSequence}`
-    );
-  }
+    if (cache && index.sequence < cache.highestSequence) {
+      throw new Error(
+        `official index rollback: ${index.sequence} < ${cache.highestSequence}`
+      );
+    }
 
-  if (cache) {
-    for (const [pluginId, entry] of Object.entries(index.plugins)) {
-      for (const [ver, verEntry] of Object.entries(entry.versions)) {
-        const cacheKey = `${pluginId}@${ver}`;
-        const previousHash = cache.versionHashes[cacheKey];
-        if (previousHash && previousHash !== verEntry.sha256) {
-          throw new Error(
-            `same-version hash drift for ${cacheKey}: cached ${previousHash} vs new ${verEntry.sha256}`
-          );
+    if (cache) {
+      for (const [pluginId, entry] of Object.entries(index.plugins)) {
+        for (const [ver, verEntry] of Object.entries(entry.versions)) {
+          const cacheKey = `${pluginId}@${ver}`;
+          const previousHash = cache.versionHashes[cacheKey];
+          if (previousHash && previousHash !== verEntry.sha256) {
+            throw new Error(
+              `same-version hash drift for ${cacheKey}: cached ${previousHash} vs new ${verEntry.sha256}`
+            );
+          }
         }
       }
     }
-  }
 
-  for (const entry of Object.values(index.plugins)) {
-    for (const verEntry of Object.values(entry.versions)) {
-      if (!isAllowedGitHubAsset(verEntry.assetUrl)) {
-        throw new Error(`non-allowlisted GitHub asset: ${verEntry.assetUrl}`);
+    for (const entry of Object.values(index.plugins)) {
+      for (const verEntry of Object.values(entry.versions)) {
+        if (!isAllowedGitHubAsset(verEntry.assetUrl)) {
+          throw new Error(`non-allowlisted GitHub asset: ${verEntry.assetUrl}`);
+        }
       }
     }
+  } catch (err) {
+    return rejectedOfficialIndexUpdateResult(diagnostics, cache, err);
   }
 
   const nextVersionHashes: Record<string, string> = { ...cache?.versionHashes };
