@@ -62,9 +62,17 @@ export interface RendererPluginAction {
   title: string | (() => string);
 }
 
+export interface RendererSettingsPageRegistration {
+  component: ComponentType<Record<string, never>>;
+  id: string;
+}
+
 export interface ExternalRendererPluginContext {
   actions: {
     register(action: RendererPluginAction): () => void;
+  };
+  app: {
+    openSettings(options?: { section?: string }): void;
   };
   configuration: {
     get<T = unknown>(key: string): T;
@@ -76,7 +84,11 @@ export interface ExternalRendererPluginContext {
   };
   dialogs: {
     alert(options: { body?: string; title: string }): Promise<void>;
-    confirm(options: { body?: string; title: string }): Promise<boolean>;
+    confirm(options: {
+      body?: string;
+      title: string;
+      intent?: "default" | "destructive";
+    }): Promise<boolean>;
   };
   i18n: {
     t(key: string, fallback?: string): string;
@@ -94,6 +106,9 @@ export interface ExternalRendererPluginContext {
   rpc: {
     invoke<T = unknown>(method: string, payload?: unknown): Promise<T>;
     on<T = unknown>(event: string, callback: (payload: T) => void): () => void;
+  };
+  settingsPages: {
+    register(registration: RendererSettingsPageRegistration): () => void;
   };
 }
 
