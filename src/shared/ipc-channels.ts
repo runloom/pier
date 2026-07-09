@@ -10,6 +10,9 @@ export const PIER = {
   // git watch (订阅/退订;事件本身经 PIER_BROADCAST.GIT_CHANGED 广播)
   GIT_WATCH_START: "pier://git:watch-start",
   GIT_WATCH_STOP: "pier://git:watch-stop",
+  // file watch (订阅/退订;事件本身经 PIER_BROADCAST.FILE_CHANGED 广播)
+  FILE_WATCH_START: "pier://file:watch-start",
+  FILE_WATCH_STOP: "pier://file:watch-stop",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
@@ -43,6 +46,8 @@ export const PIER_BROADCAST = {
   COMMAND_PALETTE_MRU_CHANGED: "pier://command-palette-mru:changed",
   // git 变更广播 (main → renderer, payload GitChangeEvent).
   GIT_CHANGED: "pier://git:changed",
+  // 文件系统变更广播 (main → renderer, payload FileWatchEvent).
+  FILE_CHANGED: "pier://file:changed",
   // 插件 registry 变更广播 (main → renderer, payload PluginRegistryListResult).
   // main 在插件 setEnabled / registry refresh 后发送最新快照给所有窗口.
   PLUGINS_CHANGED: "pier://plugins:changed",

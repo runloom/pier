@@ -144,6 +144,11 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     keys: "Ctrl+Shift+ArrowRight",
     scope: "global",
   },
+  {
+    commandId: "pier.files.save",
+    keys: "Mod+KeyS",
+    scope: "panel:pier.files.filePanel",
+  },
 ];
 
 const CODE_TO_ELECTRON: Readonly<Record<string, string>> = {

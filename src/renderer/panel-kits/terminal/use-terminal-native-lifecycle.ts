@@ -30,17 +30,27 @@ interface UseTerminalNativeLifecycleArgs {
   initialTask: TaskPanelMetadata | undefined;
   monoFontFamily: string;
   panelId: string;
+  retryNonce: number;
   sessionLoaded: boolean;
-  setError: (error: string | null) => void;
+  setCreateError: (error: string) => void;
   setNativeTerminalReady: (ready: boolean) => void;
 }
 
-function waitForRealSize(anchor: HTMLDivElement): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
+function waitForRealSize(
+  anchor: HTMLDivElement,
+  shouldStop: () => boolean
+): Promise<CreateTerminalArgs["frame"] | null> {
+  const { promise, resolve } = Promise.withResolvers<
+    CreateTerminalArgs["frame"] | null
+  >();
   const check = () => {
+    if (shouldStop()) {
+      resolve(null);
+      return;
+    }
     const frame = readTerminalAnchorFrame(anchor);
     if (frame) {
-      resolve();
+      resolve(frame);
       return;
     }
     requestAnimationFrame(check);
@@ -60,8 +70,9 @@ export function useTerminalNativeLifecycle({
   initialTask,
   monoFontFamily,
   panelId,
+  retryNonce,
   sessionLoaded,
-  setError,
+  setCreateError,
   setNativeTerminalReady,
 }: UseTerminalNativeLifecycleArgs): void {
   const monoFontFamilyRef = useRef(monoFontFamily);
@@ -75,9 +86,8 @@ export function useTerminalNativeLifecycle({
     if (!anchor) {
       return;
     }
-
     let disposed = false;
-    const lifecycleVersion = lifecycleVersionRef.current + 1;
+    const lifecycleVersion = lifecycleVersionRef.current + retryNonce + 1;
     lifecycleVersionRef.current = lifecycleVersion;
     const subscriptions: Array<{ dispose(): void }> = [];
     let layoutRegistration: TerminalLayoutRegistration | null = null;
@@ -85,6 +95,7 @@ export function useTerminalNativeLifecycle({
     let didCreateNativeTerminal = false;
     let createPromise: Promise<void> | null = null;
     let createAttemptCount = 0;
+    let createFailureLatched = false;
     let lifecycleError: string | null = null;
     let lifecycleNativeTerminalReady = false;
     setNativeTerminalReady(false);
@@ -133,13 +144,19 @@ export function useTerminalNativeLifecycle({
       layoutRegistration?.flushNow("dockview-dimensions");
     };
 
-    const logCreateError = (err: unknown) => {
-      console.error(`[terminal-panel] create ${panelId} failed:`, err);
+    const markCreateFailure = (message: string) => {
+      createFailureLatched = true;
+      setCreateError(message);
       markLifecycle({
         createPending: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: message,
         phase: "error",
       });
+    };
+
+    const logCreateError = (err: unknown) => {
+      console.error(`[terminal-panel] create ${panelId} failed:`, err);
+      markCreateFailure(err instanceof Error ? err.message : String(err));
     };
 
     const hasRenderableAnchor = () => readTerminalAnchorFrame(anchor) !== null;
@@ -147,16 +164,8 @@ export function useTerminalNativeLifecycle({
     const isDisposed = () =>
       disposed || lifecycleVersionRef.current !== lifecycleVersion;
 
-    const shouldCreateNativeTerminal = () => api.isVisible || api.isActive;
-
-    const markCreateFailure = (message: string) => {
-      setError(message);
-      markLifecycle({
-        createPending: false,
-        error: message,
-        phase: "error",
-      });
-    };
+    const shouldCreateNativeTerminal = () =>
+      !createFailureLatched && (api.isVisible || api.isActive);
 
     const acceptCreateResult = (result: CreateTerminalResult): boolean => {
       if (isDisposed()) {
@@ -170,7 +179,7 @@ export function useTerminalNativeLifecycle({
     };
 
     const ensureNativeTerminal = (): Promise<void> => {
-      if (didCreateNativeTerminal) {
+      if (didCreateNativeTerminal || createFailureLatched) {
         return Promise.resolve();
       }
       if (createPromise) {
@@ -181,14 +190,8 @@ export function useTerminalNativeLifecycle({
         phase: hasRenderableAnchor() ? "creating" : "waiting_for_anchor",
       });
       createPromise = (async () => {
-        await waitForRealSize(anchor);
-        if (isDisposed() || didCreateNativeTerminal) {
-          return;
-        }
-
-        const frame = readTerminalAnchorFrame(anchor);
-        if (!frame) {
-          markCreateFailure("无法获取面板坐标");
+        const frame = await waitForRealSize(anchor, isDisposed);
+        if (!frame || isDisposed() || didCreateNativeTerminal) {
           return;
         }
 
@@ -332,8 +335,9 @@ export function useTerminalNativeLifecycle({
     initialTab,
     initialTask,
     panelId,
+    retryNonce,
     sessionLoaded,
-    setError,
+    setCreateError,
     setNativeTerminalReady,
   ]);
 }

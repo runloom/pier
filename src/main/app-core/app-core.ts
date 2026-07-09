@@ -25,7 +25,9 @@ import { createAiService } from "../services/ai/ai-service.ts";
 import { createAppUpdateService } from "../services/app-updates/app-update-service.ts";
 import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createFileDraftsService } from "../services/file-drafts-service.ts";
 import { createFileService } from "../services/file-service.ts";
+import { createFileWatchService } from "../services/file-watch-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createLocalEnvironmentService } from "../services/local-environments-service.ts";
@@ -342,7 +344,11 @@ function createPierAppCore(): PierAppCore {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
+    fileDrafts: createFileDraftsService({
+      userDataDir: app.getPath("userData"),
+    }),
     files: createFileService(),
+    fileWatch: createFileWatchService(),
     preferences,
     secrets,
     processEnvironment,

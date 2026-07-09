@@ -6,13 +6,7 @@ import {
   environmentUpdateRequestSchema,
   environmentWorktreeBindingRequestSchema,
 } from "./environment.ts";
-import {
-  fileListRequestSchema,
-  fileMoveRequestSchema,
-  fileReadTextRequestSchema,
-  fileTrashRequestSchema,
-  fileWriteTextRequestSchema,
-} from "./file.ts";
+import { fileCommandSchemas } from "./file-commands.ts";
 import {
   getFileContentOptionsSchema,
   gitCommitOptionsSchema,
@@ -250,23 +244,10 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     patches: terminalStatusBarOverridePatchesSchema,
     type: z.literal("terminalStatusBar.prefs.applyOverrides"),
   }),
-  fileListRequestSchema.extend({
-    type: z.literal("file.list"),
-  }),
-  fileReadTextRequestSchema.extend({
-    type: z.literal("file.readText"),
-  }),
-  fileWriteTextRequestSchema.extend({
-    type: z.literal("file.writeText"),
-  }),
-  fileMoveRequestSchema.extend({
-    type: z.literal("file.move"),
-  }),
-  fileTrashRequestSchema.extend({
-    type: z.literal("file.trash"),
-  }),
+  ...fileCommandSchemas,
   // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
+  z.object({ type: z.literal("git.listIgnored"), cwd: z.string().min(1) }),
   z.object({ type: z.literal("git.getRepoInfo"), cwd: z.string().min(1) }),
   z.object({
     type: z.literal("git.isWorkingTreeClean"),
@@ -471,6 +452,7 @@ export type PierCommandErrorCode =
   | "platform_unavailable"
   | "unsupported"
   | "internal_error"
+  | "file_conflict"
   /**
    * git CLI 退出非 0 时的统一错误码;message 含 git 返回的 stderr 摘要,
    * 插件可据此分类("already exists"、"not fully merged"、"dirty worktree" 等)。

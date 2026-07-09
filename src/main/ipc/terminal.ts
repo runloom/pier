@@ -5,6 +5,7 @@ import type {
   TerminalFont,
   TerminalFrame,
   TerminalPresentationSnapshot,
+  TerminalSelectionTextResult,
 } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
@@ -36,7 +37,10 @@ import { forwardToWindow } from "./terminal-forwarding.ts";
 import { isTerminalInputRoutingSnapshot } from "./terminal-input-routing-validation.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
-import { performTerminalOperation } from "./terminal-operations.ts";
+import {
+  performTerminalOperation,
+  readTerminalSelectionText,
+} from "./terminal-operations.ts";
 import { terminalPanelClosed } from "./terminal-panel-closed.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 import {
@@ -135,6 +139,42 @@ export function registerTerminalIpc(
         operation,
         panelId,
         win: windowFromWebContents(event.sender),
+      })
+  );
+
+  ipcMain.handle(
+    "pier:terminal:read-selection-text",
+    (event, panelId: unknown) =>
+      Promise.resolve().then(() => {
+        const trimmedPanelId =
+          typeof panelId === "string" ? panelId.trim() : "";
+        if (!trimmedPanelId) {
+          return { kind: "empty" } satisfies TerminalSelectionTextResult;
+        }
+        const win = windowFromWebContents(event.sender);
+        if (!win) {
+          return {
+            kind: "error",
+            message: "Terminal window is not available.",
+          } satisfies TerminalSelectionTextResult;
+        }
+        try {
+          const text = readTerminalSelectionText({
+            addon,
+            loadError,
+            panelId: trimmedPanelId,
+            win,
+          });
+          if (!text) {
+            return { kind: "empty" } satisfies TerminalSelectionTextResult;
+          }
+          return { kind: "ok", text } satisfies TerminalSelectionTextResult;
+        } catch (err) {
+          return {
+            kind: "error",
+            message: err instanceof Error ? err.message : String(err),
+          } satisfies TerminalSelectionTextResult;
+        }
       })
   );
 

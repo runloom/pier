@@ -204,6 +204,7 @@ function createPanelProps(
   let onDidVisibilityChange: ((event: { isVisible: boolean }) => void) | null =
     null;
   const api = {
+    group: { id: "group-terminal-1" },
     height: 300,
     id: "terminal-1",
     get isActive() {
@@ -1445,6 +1446,96 @@ describe("TerminalPanel lifecycle", () => {
     );
   });
 
+  it("recovers from transient coordinate loss during native create without leaving an error overlay", async () => {
+    const visibleFrame = { height: 300, width: 400, x: 10, y: 20 };
+    const missingFrame = { height: 0, width: 0, x: 0, y: 0 };
+    let stableCoordinates = false;
+    let waitForRealSizeReads = 0;
+    const rectFor = (frame: typeof visibleFrame): DOMRect =>
+      ({
+        bottom: frame.y + frame.height,
+        height: frame.height,
+        left: frame.x,
+        right: frame.x + frame.width,
+        top: frame.y,
+        width: frame.width,
+        x: frame.x,
+        y: frame.y,
+        toJSON: () => null,
+      }) as DOMRect;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.classList.contains("terminal-anchor")) {
+        const stack =
+          new Error("capture stack for waitForRealSize test").stack ?? "";
+        if (!stableCoordinates && stack.includes("waitForRealSize")) {
+          waitForRealSizeReads += 1;
+          return rectFor(
+            waitForRealSizeReads === 1 ? visibleFrame : missingFrame
+          );
+        }
+        return rectFor(stableCoordinates ? visibleFrame : missingFrame);
+      }
+      return originalGetBoundingClientRect.call(this);
+    };
+    const props = createPanelProps();
+
+    const { container } = render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(waitForRealSizeReads).toBeGreaterThan(0);
+    });
+    await act(async () => undefined);
+    stableCoordinates = true;
+    act(() => {
+      props.emitDimensions({
+        height: visibleFrame.height,
+        width: visibleFrame.width,
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          frame: expect.objectContaining(visibleFrame),
+          panelId: "terminal-1",
+        })
+      );
+    });
+    expect(screen.queryByText("无法获取面板坐标")).not.toBeInTheDocument();
+    expect(
+      container.querySelector('[data-testid="terminal-placeholder"]')
+    ).toBeNull();
+  });
+
+  it("offers a retry action after a terminal create failure that clears the error and calls create again", async () => {
+    const retryCreate = createDeferred<{ ok: true }>();
+    vi.mocked(window.pier.terminal.create)
+      .mockResolvedValueOnce({
+        error: "终端创建失败",
+        ok: false,
+      })
+      .mockImplementationOnce(() => retryCreate.promise);
+    const props = createPanelProps();
+
+    const { findByText } = render(<TerminalPanel {...props} />);
+
+    expect(await findByText("终端创建失败")).toBeInTheDocument();
+    const retryButton = screen.getByRole("button", { name: "重试" });
+    act(() => {
+      fireEvent.click(retryButton);
+    });
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByText("终端创建失败")).not.toBeInTheDocument();
+
+    await act(async () => {
+      retryCreate.resolve({ ok: true });
+      await retryCreate.promise;
+    });
+  });
+
   it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {
     const props = createPanelProps();
 
@@ -1841,10 +1932,19 @@ describe("TerminalPanel lifecycle", () => {
     emitContextMenuRequest({ panelId: "terminal-1", x: 12, y: 24 });
 
     await waitFor(() => {
-      expect(popupContextMenuAtMock).toHaveBeenCalledWith("terminal/content", {
-        x: 12,
-        y: 24,
-      });
+      expect(popupContextMenuAtMock).toHaveBeenCalledWith(
+        "terminal/content",
+        {
+          x: 12,
+          y: 24,
+        },
+        {
+          sourcePanelComponent: "terminal",
+          sourcePanelContext: props.params.context,
+          sourcePanelGroupId: "group-terminal-1",
+          sourcePanelId: "terminal-1",
+        }
+      );
     });
     expect(props.api.setActive).toHaveBeenCalledOnce();
     expect(requestTerminalPresentationMock).toHaveBeenCalledWith(

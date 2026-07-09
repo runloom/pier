@@ -192,6 +192,11 @@ export interface TerminalOperationResult {
   ok: boolean;
 }
 
+export type TerminalSelectionTextResult =
+  | { kind: "empty" }
+  | { kind: "error"; message: string }
+  | { kind: "ok"; text: string };
+
 export type TerminalSearchDirection = "next" | "previous";
 
 export interface TerminalSearchStateEvent {
@@ -302,6 +307,7 @@ export interface TerminalAPI {
     panelId: string,
     operation: TerminalOperation
   ): Promise<TerminalOperationResult>;
+  readSelectionText(panelId: string): Promise<TerminalSelectionTextResult>;
   /**
    * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
    * 标题/cwd, 真正的 native terminal 可以等 panel 可见时再创建.

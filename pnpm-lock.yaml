@@ -7688,7 +7688,7 @@ snapshots:
       json-schema-typed: 7.0.3
       onetime: 5.1.2
       pkg-up: 3.1.0
-      semver: 7.6.3
+      semver: 7.8.5
 
   content-disposition@1.1.0: {}
 
@@ -8426,7 +8426,7 @@ snapshots:
       es6-error: 4.1.1
       matcher: 3.0.0
       roarr: 2.15.4
-      semver: 7.6.3
+      semver: 7.8.5
       serialize-error: 7.0.1
     optional: true
 
@@ -8917,7 +8917,7 @@ snapshots:
 
   make-dir@4.0.0:
     dependencies:
-      semver: 7.6.3
+      semver: 7.8.5
 
   markdown-table@3.0.4: {}
 
@@ -9349,11 +9349,11 @@ snapshots:
 
   node-abi@4.31.0:
     dependencies:
-      semver: 7.6.3
+      semver: 7.8.5
 
   node-api-version@0.2.1:
     dependencies:
-      semver: 7.6.3
+      semver: 7.8.5
 
   node-domexception@1.0.0: {}
 
@@ -9370,7 +9370,7 @@ snapshots:
       graceful-fs: 4.2.11
       nopt: 9.0.0
       proc-log: 6.1.0
-      semver: 7.6.3
+      semver: 7.8.5
       tar: 7.5.16
       tinyglobby: 0.2.17
       undici: 6.27.0

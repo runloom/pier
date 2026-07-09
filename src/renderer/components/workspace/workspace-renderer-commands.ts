@@ -74,7 +74,7 @@ async function closePanelForCommand(panelId: string): Promise<void> {
     await closeCurrentWindow();
     return;
   }
-  state.closePanel(panelId);
+  await state.closePanel(panelId);
 }
 
 function addPanelForCommand(

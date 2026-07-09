@@ -69,6 +69,8 @@ export const terminalApi: TerminalAPI = {
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
   performOperation: (panelId, operation) =>
     ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
+  readSelectionText: (panelId) =>
+    ipcRenderer.invoke("pier:terminal:read-selection-text", panelId),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   search: (panelId, query) =>

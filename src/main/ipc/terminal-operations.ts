@@ -22,6 +22,21 @@ function isTerminalOperation(value: unknown): value is TerminalOperation {
   );
 }
 
+export function readTerminalSelectionText(opts: {
+  addon: NativeAddon | null;
+  loadError: string | null;
+  panelId: string;
+  win: AppWindow;
+}): string | null {
+  if (!opts.addon) {
+    throw new Error(opts.loadError ?? "native addon not loaded");
+  }
+  const text = opts.addon.readSelectionText(
+    toNativePanelKey(opts.win, opts.panelId)
+  );
+  return text && text.length > 0 ? text : null;
+}
+
 export function performTerminalOperation(opts: {
   addon: NativeAddon | null;
   loadError: string | null;

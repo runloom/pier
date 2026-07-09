@@ -708,6 +708,17 @@ body {
   font-weight: 600 !important;
 }
 
+/* Preview tab 视觉 —— 与 Cursor / VS Code 对齐:tab title 斜体、图标半透明,
+ * 表示"这个 tab 是临时预览,再点其他文件会被替换";修改内容或双击后 params.pinned
+ * 变 true,data-pier-tab-preview 消失,恢复正常粗体 tab。 */
+.dockview-theme-pier .dv-tab .dv-default-tab[data-pier-tab-preview="true"] .dv-default-tab-content {
+  font-style: italic;
+  font-weight: 400;
+}
+.dockview-theme-pier .dv-tab .dv-default-tab[data-pier-tab-preview="true"] .pier-panel-tab-icon {
+  opacity: 0.7;
+}
+
 .dockview-theme-pier .pier-panel-tab-icon,
 .dv-tab.dv-tab-dragging .pier-panel-tab-icon,
 .dv-tab-ghost-drag .pier-panel-tab-icon {

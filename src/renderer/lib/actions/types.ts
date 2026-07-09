@@ -2,7 +2,19 @@
  * Action 域 model. Action 只描述"能做什么", Keybinding 描述"怎么触发".
  * 二者一对多, 通过 commandId 字符串关联.
  */
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { LucideIcon } from "lucide-react";
+
+export interface ActionInvocation {
+  // 右键 surface 携带的目标载荷 —— 例如 files/tree-item 里被右键的树节点、
+  // files/editor 里的当前选区。数据结构由具体 surface + action 双方约定。
+  metadata?: Record<string, unknown>;
+  sourcePanelComponent?: string;
+  sourcePanelContext?: PanelContext;
+  sourcePanelGroupId?: string;
+  sourcePanelId?: string;
+  surface?: string;
+}
 
 export interface ActionMetadata {
   aliases?: () => readonly string[];
@@ -58,7 +70,7 @@ export interface Action {
   category: string;
   disabledReason?: () => string | null | undefined;
   enabled?: () => boolean;
-  handler: () => void | Promise<void>;
+  handler: (invocation?: ActionInvocation) => void | Promise<void>;
   id: string;
   metadata?: ActionMetadata;
   /** 命令面板 / 右键菜单 surface 列表。空数组 = 仅快捷键触发，不在任何 surface 展示。 */

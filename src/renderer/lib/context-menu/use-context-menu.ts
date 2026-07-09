@@ -10,6 +10,7 @@
  */
 import { type MouseEvent, useCallback } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import type { ActionInvocation } from "@/lib/actions/types.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { buildMenuEntries } from "./build-entries.ts";
@@ -25,6 +26,7 @@ export interface UseContextMenuOptions {
    * 默认路径会把 React event.clientX / clientY 从 CSS px 转成 contentView 坐标.
    */
   getCoords?: (event: MouseEvent) => { x: number; y: number };
+  invocation?: Omit<ActionInvocation, "surface">;
 }
 
 export function useContextMenu(
@@ -44,9 +46,11 @@ export function useContextMenu(
           },
           useZoomStore.getState().windowZoomLevel
         );
-      popupAndDispatch(surface, coords).catch((err: unknown) => {
-        console.error(`[menu] unhandled popup ${surface}:`, err);
-      });
+      popupAndDispatch(surface, coords, options?.invocation).catch(
+        (err: unknown) => {
+          console.error(`[menu] unhandled popup ${surface}:`, err);
+        }
+      );
     },
     [surface, options]
   );
@@ -58,14 +62,16 @@ export function useContextMenu(
  */
 export async function popupContextMenuAt(
   surface: string,
-  coords: { x: number; y: number }
+  coords: { x: number; y: number },
+  invocation?: Omit<ActionInvocation, "surface">
 ): Promise<void> {
-  await popupAndDispatch(surface, coords);
+  await popupAndDispatch(surface, coords, invocation);
 }
 
 async function popupAndDispatch(
   surface: string,
-  coords: { x: number; y: number }
+  coords: { x: number; y: number },
+  invocation?: Omit<ActionInvocation, "surface">
 ): Promise<void> {
   const template = buildMenuEntries(surface);
   if (template.length === 0) {
@@ -98,7 +104,9 @@ async function popupAndDispatch(
     return;
   }
 
-  await Promise.resolve(action.handler()).catch((err: unknown) => {
-    console.error(`[menu] action ${result.actionId} threw:`, err);
-  });
+  await Promise.resolve(action.handler({ ...invocation, surface })).catch(
+    (err: unknown) => {
+      console.error(`[menu] action ${result.actionId} threw:`, err);
+    }
+  );
 }

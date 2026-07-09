@@ -104,6 +104,15 @@ export type PluginPanelContribution = z.infer<
   typeof pluginPanelContributionSchema
 >;
 
+export const pluginGroupContentContributionSchema = z.object({
+  description: z.string().min(1).optional(),
+  id: z.string().min(1),
+  title: z.string().min(1),
+});
+export type PluginGroupContentContribution = z.infer<
+  typeof pluginGroupContentContributionSchema
+>;
+
 export const terminalStatusItemAlignmentSchema = z.enum(["left", "right"]);
 export type TerminalStatusItemAlignment = z.infer<
   typeof terminalStatusItemAlignmentSchema
@@ -265,6 +274,7 @@ export const pluginManifestSchema = z
       pier: z.string().min(1),
     }),
     homepage: z.string().min(1).optional(),
+    groupContent: z.array(pluginGroupContentContributionSchema).optional(),
     id: z.string().min(1),
     localization: pluginLocalizationSchema.optional(),
     locales: z
@@ -286,16 +296,26 @@ export const pluginManifestSchema = z
     version: z.string().min(1),
   })
   .superRefine((manifest, ctx) => {
-    if (!manifest.configuration) {
-      return;
-    }
     const prefix = `${manifest.id}.`;
-    for (const key of Object.keys(manifest.configuration.properties)) {
-      if (!(key.startsWith(prefix) && key.length > prefix.length)) {
+    if (manifest.configuration) {
+      for (const key of Object.keys(manifest.configuration.properties)) {
+        if (!(key.startsWith(prefix) && key.length > prefix.length)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `configuration key must start with "${prefix}": ${key}`,
+            path: ["configuration", "properties", key],
+          });
+        }
+      }
+    }
+    for (const [index, contribution] of (
+      manifest.groupContent ?? []
+    ).entries()) {
+      if (!contribution.id.startsWith(prefix)) {
         ctx.addIssue({
           code: "custom",
-          message: `configuration key must start with "${prefix}": ${key}`,
-          path: ["configuration", "properties", key],
+          message: `groupContent id must start with "${prefix}": ${contribution.id}`,
+          path: ["groupContent", index, "id"],
         });
       }
     }

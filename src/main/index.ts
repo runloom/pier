@@ -21,6 +21,7 @@ import {
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
+import { registerFileWatchIpc } from "./ipc/file-watch.ts";
 import {
   closeForegroundActivityResources,
   foregroundActivityService,
@@ -392,6 +393,7 @@ app.whenReady().then(async () => {
   registerThemeIpc(ipcMain);
   registerNotificationIpc(ipcMain);
   registerGitWatchIpc();
+  registerFileWatchIpc();
   setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
     if (typeof exitCode === "number") {
       appCore.services.tasks

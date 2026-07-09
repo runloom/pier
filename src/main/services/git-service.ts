@@ -32,6 +32,7 @@ import type {
 import { listBranches as listGitBranches } from "./git-branch-list.ts";
 import { searchBranches as searchGitBranches } from "./git-branch-search.ts";
 import { execGit } from "./git-exec.ts";
+import { listIgnoredPaths } from "./git-ignored.ts";
 import {
   abortMerge,
   abortRebase,
@@ -125,6 +126,8 @@ export interface GitService {
     cwd: string,
     options: ListBranchesOptions
   ): Promise<GitBranchRef[]>;
+  /** gitignore 命中的路径(相对 gitRoot;目录折叠为 `dir/` 单条)。树的 ignored 变暗用。 */
+  listIgnored(cwd: string): Promise<string[]>;
   listStashes(cwd: string): Promise<GitStashListResult>;
   listTags(cwd: string): Promise<string[]>;
   merge(cwd: string, branch: string): Promise<GitMergeResult>;
@@ -403,6 +406,7 @@ export function createGitService({
     listBranches: (cwd, options) => listGitBranches(runGit, cwd, options),
     searchBranches: (cwd, options = {}) =>
       searchGitBranches(runGit, cwd, options),
+    listIgnored: (cwd) => listIgnoredPaths(runGit, cwd),
     listStashes: (cwd) => listStashes(runGit, cwd),
     listTags: async (cwd) => {
       const output = await runGit(

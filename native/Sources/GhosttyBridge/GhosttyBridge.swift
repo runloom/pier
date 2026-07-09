@@ -1458,6 +1458,11 @@ final class GhosttyBridgeImpl {
         return term.terminalView.performBindingAction(action)
     }
 
+    func readSelectionText(panelId: String) -> String? {
+        guard let term = terminals[panelId] else { return nil }
+        return term.terminalView.readSelectionText()
+    }
+
     func sendText(panelId: String, text: String) -> Bool {
         guard let term = terminals[panelId] else { return false }
         return term.terminalView.sendText(text)
@@ -1900,6 +1905,16 @@ public func ghosttyBridgeSendText(
             text: String(cString: text)
         )
     }
+}
+
+@_cdecl("ghostty_bridge_read_selection_text")
+public func ghosttyBridgeReadSelectionText(
+    _ panelId: UnsafePointer<CChar>
+) -> UnsafeMutablePointer<CChar>? {
+    let text = MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.readSelectionText(panelId: String(cString: panelId))
+    }
+    return text?.withCString { strdup($0) }
 }
 
 @_cdecl("ghostty_bridge_close_all")

@@ -1,6 +1,5 @@
 import type { PluginConfigurationApi } from "@plugins/api/configuration.ts";
 import type {
-  PluginPanelRegistration,
   RendererPluginAction,
   RendererPluginContext,
   RendererPluginMessageValues,
@@ -8,7 +7,6 @@ import type {
   RendererPluginQuickPickItem,
   RendererPluginQuickPickSection,
 } from "@plugins/api/renderer.ts";
-import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
@@ -18,19 +16,20 @@ import {
 } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
 import { toast } from "sonner";
+import { useZoomStore } from "@/stores/zoom.store.ts";
 import { terminalStatusItemRegistry } from "../../panel-kits/terminal/terminal-status-bar.tsx";
-import { showAppAlert, showAppConfirm } from "../../stores/app-dialog.store.ts";
 import {
-  type PanelDescriptor,
-  usePanelDescriptorStore,
-} from "../../stores/panel-descriptor.store.ts";
+  showAppAlert,
+  showAppChoice,
+  showAppConfirm,
+  showAppPrompt,
+} from "../../stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "../../stores/plugin-registry.store.ts";
 import {
   subscribePluginSettingsChanges,
   usePluginSettingsStore,
 } from "../../stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "../../stores/settings-dialog.store.ts";
-import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
 import { useCommandPaletteController } from "../command-palette/controller.ts";
@@ -39,8 +38,8 @@ import type {
   QuickPickItem,
   QuickPickSection,
 } from "../command-palette/types.ts";
-import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
-import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
+import { popupContextMenuAt } from "../context-menu/use-context-menu.ts";
+import { cssPointToContentViewPoint } from "../window-zoom/coordinates.ts";
 import {
   interpolateMessage,
   resolvePluginCommandAliases,
@@ -52,13 +51,12 @@ import { createPluginAiContext } from "./host-ai-context.ts";
 import { createPluginEnvironmentsContext } from "./host-environments-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
+import { createHostGroupContentContext } from "./host-group-content-context.tsx";
+import { createPluginPanelsContext } from "./host-panels-context.ts";
+import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
 import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
-import {
-  getPluginPanelRegistrations,
-  registerPluginPanel,
-} from "./plugin-panel-registry.ts";
 
 function createPluginI18n(
   entry?: PluginRegistryEntry
@@ -156,13 +154,13 @@ function adaptAction(
   const declaredPermissions =
     entry?.manifest.commands.find((command) => command.id === action.id)
       ?.permissions ?? [];
-  const handler =
+  const handler: Action["handler"] =
     declaredPermissions.length > 0
-      ? () => {
+      ? (invocation) => {
           for (const permission of declaredPermissions) {
             assertPluginCapability(entry, permission);
           }
-          return action.handler();
+          return action.handler(invocation);
         }
       : action.handler;
   return {
@@ -179,7 +177,12 @@ function adaptAction(
 
 function assertDeclaredContribution(
   entry: PluginRegistryEntry | undefined,
-  kind: "action" | "missionControlWidget" | "panel" | "terminalStatusItem",
+  kind:
+    | "action"
+    | "groupContent"
+    | "missionControlWidget"
+    | "panel"
+    | "terminalStatusItem",
   id: string
 ): void {
   if (!entry) {
@@ -193,6 +196,10 @@ function assertDeclaredContribution(
   } else if (kind === "missionControlWidget") {
     declared = entry.manifest.missionControlWidgets.some(
       (widget) => widget.id === id
+    );
+  } else if (kind === "groupContent") {
+    declared = (entry.manifest.groupContent ?? []).some(
+      (contribution) => contribution.id === id
     );
   } else {
     declared = entry.manifest.terminalStatusItems.some(
@@ -325,71 +332,24 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
   };
 }
 
-function resolveRegistrationTitle(
-  registration: PluginPanelRegistration | undefined,
-  fallback: string
-): string {
-  const title = registration?.title;
-  if (typeof title === "function") {
-    return title();
-  }
-  return title ?? fallback;
-}
-
-function pluginPanelDescriptor(
-  panelId: string,
-  registration: PluginPanelRegistration | undefined,
-  context: PanelContext | undefined
-): PanelDescriptor {
-  return {
-    ...(context ? { context } : {}),
-    display: { short: resolveRegistrationTitle(registration, panelId) },
-  };
-}
-
-function openPluginPanel(
-  panelId: string,
-  options: { context?: PanelContext } = {}
-): void {
-  const api = useWorkspaceStore.getState().api;
-  if (!api) {
-    return;
-  }
-  const registration = getPluginPanelRegistrations().get(panelId);
-  const descriptorStore = usePanelDescriptorStore.getState();
-  // 无来源 context 时保留 panel 已存的 context,避免重开时被抹掉。
-  const context =
-    options.context ?? descriptorStore.descriptors[panelId]?.context;
-  descriptorStore.upsert(
-    panelId,
-    pluginPanelDescriptor(panelId, registration, context)
-  );
-  const params = {
-    ...(registration?.getParams?.() ?? {}),
-    ...(context ? { context } : {}),
-  };
-  const hasParams = Object.keys(params).length > 0;
-  const existing = api.panels.find((panel) => panel.id === panelId);
-  if (existing) {
-    existing.api.updateParameters(params);
-    activateWorkspacePanel(api, existing.id, { reveal: "always" });
-    return;
-  }
-  api.addPanel({
-    id: panelId,
-    component: panelId,
-    title: resolveRegistrationTitle(registration, panelId),
-    position: { direction: "right" },
-    ...(hasParams ? { params } : {}),
-  });
-  scheduleRevealDockviewTabByPanelId(panelId);
-}
-
 function toastNotificationOptions(options?: {
+  action?: { label: string; onClick: () => void };
   description?: string;
-}): { description: string } | undefined {
+}):
+  | {
+      action?: { label: string; onClick: () => void };
+      description?: string;
+    }
+  | undefined {
   const description = options?.description?.trim();
-  return description ? { description } : undefined;
+  const action = options?.action;
+  if (!(description || action)) {
+    return;
+  }
+  return {
+    ...(description ? { description } : {}),
+    ...(action ? { action } : {}),
+  };
 }
 
 export function createRendererPluginContext(
@@ -399,6 +359,7 @@ export function createRendererPluginContext(
     actions: {
       register: (action) => {
         assertDeclaredContribution(entry, "action", action.id);
+        assertPluginCapability(entry, "command:register");
         return actionRegistry.register(adaptAction(action, entry));
       },
     },
@@ -409,10 +370,19 @@ export function createRendererPluginContext(
           .getState()
           .openQuickPick(adaptQuickPick(quickPick)),
     },
+    contextMenu: {
+      popup: (surface, coords, invocation) => {
+        const zoomLevel = useZoomStore.getState().windowZoomLevel;
+        const contentPoint = cssPointToContentViewPoint(coords, zoomLevel);
+        return popupContextMenuAt(surface, contentPoint, invocation);
+      },
+    },
     configuration: createPluginConfiguration(entry),
     dialogs: {
       alert: (options) => showAppAlert(options),
+      choice: (options) => showAppChoice(options),
       confirm: (options) => showAppConfirm(options),
+      prompt: (options) => showAppPrompt(options),
     },
     i18n: createPluginI18n(entry),
     notifications: {
@@ -442,24 +412,11 @@ export function createRendererPluginContext(
       system: (options) => window.pier.notifications.system(options),
     },
     overlays: createPluginOverlaysApi(entry),
-    panels: {
-      getActiveContext: () => {
-        const state = usePanelDescriptorStore.getState();
-        return state.activeId
-          ? (state.descriptors[state.activeId]?.context ?? null)
-          : null;
-      },
-      open: (panelId, options) => {
-        // 与 register 对称:必须在自己 manifest 声明的 panel 才能打开,
-        // 防止 A 插件越权打开 B 插件的 panel。
-        assertDeclaredContribution(entry, "panel", panelId);
-        openPluginPanel(panelId, options);
-      },
-      register: (registration: PluginPanelRegistration) => {
-        assertDeclaredContribution(entry, "panel", registration.id);
-        return registerPluginPanel(registration);
-      },
-    },
+    panels: createPluginPanelsContext(
+      entry,
+      assertDeclaredContribution,
+      assertPluginCapability
+    ),
     settings: {
       openSection: (section) => {
         useSettingsDialogStore.getState().openSection(section);
@@ -481,11 +438,16 @@ export function createRendererPluginContext(
         return registerPluginMissionControlWidget(registration);
       },
     },
+    groupContent: createHostGroupContentContext(
+      entry,
+      assertDeclaredContribution
+    ),
     environments: createPluginEnvironmentsContext(
       entry,
       assertPluginCapability
     ),
     files: createPluginFilesContext(entry, assertPluginCapability),
+    terminal: createPluginTerminalContext(entry, assertPluginCapability),
     worktrees: createPluginWorktreesContext(entry, assertPluginCapability),
     git: createPluginGitContext(entry, assertPluginCapability),
     ai: createPluginAiContext(entry, assertPluginCapability),

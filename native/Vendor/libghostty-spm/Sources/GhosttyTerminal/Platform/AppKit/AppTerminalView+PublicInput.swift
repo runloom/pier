@@ -25,5 +25,15 @@
         public func performBindingAction(_ action: String) -> Bool {
             surface?.performBindingAction(action) ?? false
         }
+
+        /// Read the current terminal selection without invoking copy actions or
+        /// touching the system clipboard. Returns nil when no non-empty
+        /// selection is available.
+        public func readSelectionText() -> String? {
+            guard let text = surface?.readSelection(), !text.isEmpty else {
+                return nil
+            }
+            return text
+        }
     }
 #endif

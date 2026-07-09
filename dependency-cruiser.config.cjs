@@ -61,6 +61,16 @@ module.exports = {
       to: { path: "^src/plugins/builtin/(?!$1)([^/]+)" },
     },
     {
+      name: "builtin-plugins-not-import-dockview",
+      severity: "error",
+      comment:
+        "builtin 插件不得直接 import dockview; dockview 组/面板能力必须经插件 API 与宿主 workspace 边界",
+      from: { path: "^src/plugins/builtin/" },
+      to: {
+        path: "node_modules/(dockview-react|dockview-core|dockview)(/|$)",
+      },
+    },
+    {
       name: "renderer-no-direct-dockview-core",
       severity: "error",
       comment:

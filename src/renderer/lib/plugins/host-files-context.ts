@@ -27,11 +27,37 @@ export function createPluginFilesContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["files"] {
   return {
+    copy: (request) => {
+      assertPluginCapability(entry, "file:write");
+      return window.pier.files.copy(request);
+    },
+    drafts: {
+      delete: (key) => {
+        assertPluginCapability(entry, "file:write");
+        return window.pier.files.drafts.delete(key);
+      },
+      list: () => {
+        assertPluginCapability(entry, "file:read");
+        return window.pier.files.drafts.list();
+      },
+      set: (key, value) => {
+        assertPluginCapability(entry, "file:write");
+        return window.pier.files.drafts.set(key, value);
+      },
+    },
+    exists: (request) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.exists(request);
+    },
     list: (requestOrRoot, options) => {
       assertPluginCapability(entry, "file:read");
       return window.pier.files.list(
         normalizeFileListRequest(requestOrRoot, options)
       );
+    },
+    mkdir: (request) => {
+      assertPluginCapability(entry, "file:write");
+      return window.pier.files.mkdir(request);
     },
     move: (request) => {
       assertPluginCapability(entry, "file:write");
@@ -41,9 +67,21 @@ export function createPluginFilesContext(
       assertPluginCapability(entry, "file:read");
       return window.pier.files.readText(request);
     },
+    reveal: (request) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.reveal(request);
+    },
+    stat: (request) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.stat(request);
+    },
     trash: (request) => {
       assertPluginCapability(entry, "file:write");
       return window.pier.files.trash(request);
+    },
+    watch: (root, listener, options) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.watch(root, listener, options);
     },
     writeText: (request) => {
       assertPluginCapability(entry, "file:write");

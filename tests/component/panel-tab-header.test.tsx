@@ -42,7 +42,8 @@ function createHeaderProps(
   component: string,
   title: string,
   onActiveChange?: (handler: ActiveChangeHandler) => void,
-  id = `${component}-1`
+  id = `${component}-1`,
+  params: Record<string, unknown> = {}
 ): IDockviewPanelHeaderProps {
   return {
     api: {
@@ -53,12 +54,13 @@ function createHeaderProps(
         onActiveChange?.(handler);
         return { dispose: vi.fn() };
       }),
+      onDidParametersChange: vi.fn(() => ({ dispose: vi.fn() })),
       onDidTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
       setActive: vi.fn(),
       title,
     },
     containerApi: {},
-    params: {},
+    params,
     tabLocation: "header",
   } as unknown as IDockviewPanelHeaderProps;
 }
@@ -707,5 +709,89 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector('[data-panel-tab-icon="terminal"]')
     ).not.toBeNull();
+  });
+
+  it("marks only file preview tabs with preview chrome", () => {
+    const { container: previewContainer } = render(
+      <PanelTabHeader
+        {...createHeaderProps(
+          "pier.files.filePanel",
+          "README.md",
+          undefined,
+          "pier.files.filePanel:disk:abc",
+          { pinned: false }
+        )}
+      />
+    );
+    expect(
+      previewContainer.querySelector('[data-pier-tab-preview="true"]')
+    ).not.toBeNull();
+
+    const { container: terminalContainer } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+    expect(
+      terminalContainer.querySelector('[data-pier-tab-preview="true"]')
+    ).toBeNull();
+
+    const { container: welcomeContainer } = render(
+      <PanelTabHeader {...createHeaderProps("welcome", "Welcome")} />
+    );
+    expect(
+      welcomeContainer.querySelector('[data-pier-tab-preview="true"]')
+    ).toBeNull();
+  });
+
+  it("pins only file preview tabs when double-clicking tab content", () => {
+    const terminalUpdateParameters = vi.fn();
+    const terminalProps = createHeaderProps(
+      "terminal",
+      "Terminal",
+      undefined,
+      "terminal-1",
+      { pinned: false }
+    );
+    Object.assign(terminalProps.api, {
+      updateParameters: terminalUpdateParameters,
+    });
+    const { container: terminalContainer } = render(
+      <PanelTabHeader {...terminalProps} />
+    );
+
+    const terminalTab = terminalContainer.querySelector(
+      '[data-panel-tab-id="terminal-1"]'
+    );
+    expect(terminalTab).not.toBeNull();
+    fireEvent.doubleClick(terminalTab as HTMLElement);
+    expect(terminalUpdateParameters).not.toHaveBeenCalled();
+
+    const fileUpdateParameters = vi.fn();
+    const fileProps = createHeaderProps(
+      "pier.files.filePanel",
+      "README.md",
+      undefined,
+      "pier.files.filePanel:disk:abc",
+      { pinned: false, uri: "file:///workspace/README.md" }
+    );
+    Object.assign(fileProps.api, { updateParameters: fileUpdateParameters });
+    const fileDoubleClickBubble = vi.fn();
+    const { container: fileContainer } = render(
+      <button onDoubleClick={fileDoubleClickBubble} type="button">
+        <PanelTabHeader {...fileProps} />
+      </button>
+    );
+
+    const fileTab = fileContainer.querySelector(
+      '[data-panel-tab-id="pier.files.filePanel:disk:abc"]'
+    );
+    expect(fileTab).not.toBeNull();
+    fireEvent.doubleClick(fileTab as HTMLElement);
+
+    expect(fileUpdateParameters).toHaveBeenCalledTimes(1);
+    expect(fileUpdateParameters).toHaveBeenCalledWith({
+      pinned: true,
+      uri: "file:///workspace/README.md",
+    });
+    expect(fileDoubleClickBubble).not.toHaveBeenCalled();
   });
 });

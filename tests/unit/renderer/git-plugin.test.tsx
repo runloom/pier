@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import { GIT_PLUGIN_ID } from "@plugins/builtin/git/manifest.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
@@ -56,8 +57,11 @@ vi.mock("sonner", () => ({
 
 const now = 1_772_000_000_000;
 const FILES_PLUGIN_ID = "pier.files";
-const FILES_PANEL_ID = "pier.files.explorer";
+const FILES_FILE_PANEL_ID = "pier.files.filePanel";
 const APP_TSX_TREEITEM_PATTERN = /App\.tsx/;
+const NESTED_TREEITEM_PATTERN = /nested/;
+const DEEP_A_TS_TREEITEM_PATTERN = /deep-a\.ts/;
+const DEEP_B_TS_TREEITEM_PATTERN = /deep-b\.ts/;
 const SRC_PERMISSION_LOAD_ERROR_PATTERN =
   /Permission denied loading src|error/i;
 
@@ -439,29 +443,11 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
   };
 }
 function filesPluginEntry(enabled: boolean): PluginRegistryEntry {
+  // 直接用真 manifest,避免测试内联副本与插件命令表漂移。
   return {
-    effectivePermissions: ["file:read", "panel:register"],
+    effectivePermissions: [...FILES_PLUGIN_MANIFEST.permissions],
     enabled,
-    manifest: {
-      apiVersion: 1,
-      commands: [],
-      missionControlWidgets: [],
-      engines: { pier: ">=0.1.0" },
-      id: FILES_PLUGIN_ID,
-      name: "Files",
-      panels: [
-        {
-          component: FILES_PANEL_ID,
-          id: FILES_PANEL_ID,
-          permissions: ["file:read"],
-          title: "Files",
-        },
-      ],
-      permissions: ["file:read", "panel:register"],
-      source: { kind: "builtin" },
-      terminalStatusItems: [],
-      version: "1.0.0",
-    },
+    manifest: FILES_PLUGIN_MANIFEST,
     runtime: {
       canToggle: true,
       enabled,
@@ -474,15 +460,17 @@ function makeFilesPanelProps(
   params: Record<string, unknown>
 ): IDockviewPanelProps<Record<string, unknown>> {
   return {
-    api: { id: FILES_PANEL_ID, setTitle: vi.fn() },
+    api: {
+      id: FILES_FILE_PANEL_ID,
+      setTitle: vi.fn(),
+      updateParameters: vi.fn(),
+    },
     containerApi: {},
     params,
   } as unknown as IDockviewPanelProps<Record<string, unknown>>;
 }
 
-function renderFilesExplorerPanel(
-  list: RendererPluginContext["files"]["list"]
-) {
+function renderFilesFilePanel(list: RendererPluginContext["files"]["list"]) {
   const filesModule = BUILTIN_RENDERER_PLUGIN_MODULES.find(
     (plugin) => plugin.id === FILES_PLUGIN_ID
   );
@@ -497,11 +485,11 @@ function renderFilesExplorerPanel(
     files: { ...baseFilesContext.files, list },
   };
   const disposeFiles = filesModule.activate(filesContext);
-  const registration = getPluginPanelRegistrations().get(FILES_PANEL_ID);
+  const registration = getPluginPanelRegistrations().get(FILES_FILE_PANEL_ID);
   const FilesPanel = registration?.component;
   if (!FilesPanel) {
     disposeFiles();
-    throw new Error("expected Files explorer panel registration");
+    throw new Error("expected Files file-panel registration");
   }
 
   return {
@@ -561,6 +549,22 @@ describe("git builtin plugin", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
+        files: {
+          exists: vi.fn(async () => ({ exists: true })),
+          list: vi.fn(async () => []),
+          mkdir: vi.fn(async () => ({ created: true })),
+          move: vi.fn(async () => ({ moved: true })),
+          readText: vi.fn(async () => ""),
+          stat: vi.fn(async () => ({
+            exists: true,
+            isDirectory: false,
+            mtimeMs: 1,
+            size: 0,
+          })),
+          trash: vi.fn(async () => ({ trashed: true })),
+          watch: vi.fn(() => vi.fn()),
+          writeText: vi.fn(async () => ({ mtimeMs: 1, written: true })),
+        },
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
         plugins: {
           inspect: vi.fn(async () => pluginEntry(true)),
@@ -699,6 +703,7 @@ describe("git builtin plugin", () => {
             insertions: 0,
           })),
           getDiffText: vi.fn(async () => ""),
+          listIgnored: vi.fn(async () => []),
           getStatus: vi.fn(async () => ({
             branch: {
               ahead: 0,
@@ -2274,7 +2279,7 @@ describe("git builtin plugin", () => {
     expect(gitRendererPlugin.id).toBe(GIT_PLUGIN_ID);
   });
 
-  it("renderer builtin catalog registers the Files explorer web panel and renders root entries", async () => {
+  it("renderer builtin catalog registers the Files file-panel with integrated tree and renders root entries", async () => {
     const filesModule = BUILTIN_RENDERER_PLUGIN_MODULES.find(
       (plugin) => plugin.id === FILES_PLUGIN_ID
     );
@@ -2315,14 +2320,15 @@ describe("git builtin plugin", () => {
     };
     const disposeFiles = filesModule.activate(filesContext);
     try {
-      const registration = getPluginPanelRegistrations().get(FILES_PANEL_ID);
+      const registration =
+        getPluginPanelRegistrations().get(FILES_FILE_PANEL_ID);
       expect(registration).toMatchObject({
-        id: FILES_PANEL_ID,
+        id: FILES_FILE_PANEL_ID,
         kind: "web",
       });
       const FilesPanel = registration?.component;
       if (!FilesPanel) {
-        throw new Error("expected Files explorer panel registration");
+        throw new Error("expected Files file-panel registration");
       }
 
       const { container } = render(
@@ -2338,7 +2344,13 @@ describe("git builtin plugin", () => {
         'file-tree-container[aria-label="Files"]'
       );
       expect(filesTreeHost).toBeInstanceOf(HTMLElement);
-      expect(filesTreeHost).toHaveClass("min-h-0", "flex-1", "w-full");
+      // bridge wrapper 承接布局尺寸(flex-1),shadow host 自身撑满 wrapper。
+      const treeBridge = container.querySelector(
+        '[data-slot="pier-file-tree-bridge"]'
+      );
+      expect(treeBridge).toBeInstanceOf(HTMLElement);
+      expect(treeBridge).toHaveClass("min-h-0", "flex-1", "w-full");
+      expect(filesTreeHost).toHaveClass("h-full", "min-h-0", "w-full");
       expect(
         (filesTreeHost as HTMLElement).shadowRoot?.querySelector(
           '[data-file-tree-virtualized-scroll="true"]'
@@ -2355,7 +2367,7 @@ describe("git builtin plugin", () => {
     }
   });
 
-  it("Files explorer lazily loads expanded directory children from the host files API", async () => {
+  it("Files file-panel tree lazily loads expanded directory children from the host files API", async () => {
     const projectRoot =
       context.projectRootPath ??
       context.worktreeRoot ??
@@ -2387,7 +2399,7 @@ describe("git builtin plugin", () => {
         );
       }
     );
-    const { container, disposeFiles } = renderFilesExplorerPanel(list);
+    const { container, disposeFiles } = renderFilesFilePanel(list);
 
     try {
       await waitFor(() => {
@@ -2409,7 +2421,71 @@ describe("git builtin plugin", () => {
     }
   });
 
-  it("Files explorer renders an explicit empty state for an empty project root", async () => {
+  it("Files file-panel tree lazily loads second-level directory children after a first-level expand", async () => {
+    const projectRoot =
+      context.projectRootPath ??
+      context.worktreeRoot ??
+      context.gitRoot ??
+      context.cwd ??
+      "/Users/xyz/ABC/pier";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      (_root, options) => {
+        if (options?.path === "") {
+          return Promise.resolve([
+            { kind: "directory", path: "src", root: projectRoot },
+          ]);
+        }
+        if (options?.path === "src") {
+          return Promise.resolve([
+            { kind: "directory", path: "src/nested", root: projectRoot },
+            { kind: "file", path: "src/index.ts", root: projectRoot },
+          ]);
+        }
+        if (options?.path === "src/nested") {
+          return Promise.resolve([
+            { kind: "file", path: "src/nested/deep-a.ts", root: projectRoot },
+            { kind: "file", path: "src/nested/deep-b.ts", root: projectRoot },
+          ]);
+        }
+        return Promise.reject(
+          new Error(`unexpected list path ${options?.path ?? "<missing>"}`)
+        );
+      }
+    );
+    const { container, disposeFiles } = renderFilesFilePanel(list);
+
+    try {
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, { path: "" });
+      });
+      const tree = within(getPierFileTree(container));
+
+      fireEvent.click(tree.getByRole("treeitem", { name: "src" }));
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, { path: "src" });
+      });
+      const nestedRow = await tree.findByRole("treeitem", {
+        name: NESTED_TREEITEM_PATTERN,
+      });
+
+      fireEvent.click(nestedRow);
+      await waitFor(() => {
+        expect(list).toHaveBeenCalledWith(projectRoot, {
+          path: "src/nested",
+        });
+      });
+      expect(
+        await tree.findByRole("treeitem", { name: DEEP_A_TS_TREEITEM_PATTERN })
+      ).toBeVisible();
+      expect(
+        await tree.findByRole("treeitem", { name: DEEP_B_TS_TREEITEM_PATTERN })
+      ).toBeVisible();
+    } finally {
+      disposeFiles();
+    }
+  });
+
+  it("Files file-panel tree renders an explicit empty state for an empty project root", async () => {
     const projectRoot =
       context.projectRootPath ??
       context.worktreeRoot ??
@@ -2419,7 +2495,7 @@ describe("git builtin plugin", () => {
     const list = vi.fn<RendererPluginContext["files"]["list"]>(() =>
       Promise.resolve([])
     );
-    const { disposeFiles } = renderFilesExplorerPanel(list);
+    const { disposeFiles } = renderFilesFilePanel(list);
 
     try {
       await waitFor(() => {
@@ -2431,7 +2507,7 @@ describe("git builtin plugin", () => {
     }
   });
 
-  it("Files explorer shows a directory-scoped error when lazy child loading fails", async () => {
+  it("Files file-panel tree shows a directory-scoped error when lazy child loading fails", async () => {
     const projectRoot =
       context.projectRootPath ??
       context.worktreeRoot ??
@@ -2452,7 +2528,7 @@ describe("git builtin plugin", () => {
         return Promise.reject(new Error("Permission denied loading src"));
       }
     );
-    const { container, disposeFiles } = renderFilesExplorerPanel(list);
+    const { container, disposeFiles } = renderFilesFilePanel(list);
 
     try {
       await waitFor(() => {

@@ -411,6 +411,31 @@ describe("createGitService", () => {
     expect(prefetchedCalls.some((a) => a[0] === "for-each-ref")).toBe(true);
   });
 
+  it("listIgnored 用 ls-files --others --ignored --directory 并按 NUL 切分", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args, cwd) => {
+        calls.push(args);
+        expect(cwd).toBe("/repo");
+        return Promise.resolve("node_modules/\0dist/\0.env\0");
+      },
+    });
+
+    await expect(service.listIgnored("/repo")).resolves.toEqual([
+      "node_modules/",
+      "dist/",
+      ".env",
+    ]);
+    expect(calls[0]).toEqual([
+      "ls-files",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "--directory",
+      "-z",
+    ]);
+  });
+
   // C3: 默认带 --no-color + --no-ext-diff（防用户配 diff.external 覆盖输出）
   it("getDiffText 默认带 --no-color --no-ext-diff 并原样返回文本", async () => {
     const calls: Array<readonly string[]> = [];

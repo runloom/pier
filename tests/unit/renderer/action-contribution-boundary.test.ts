@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
 import i18next from "i18next";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -102,6 +103,7 @@ describe("action contribution boundary", () => {
     const contributionIds = new Set([
       ...ALL_ACTION_CONTRIBUTIONS.map((contribution) => contribution.id),
       ...GIT_PLUGIN_MANIFEST.commands.map((command) => command.id),
+      ...FILES_PLUGIN_MANIFEST.commands.map((command) => command.id),
     ]);
     const missing = Array.from(
       new Set(DEFAULT_KEYMAP.map((binding) => binding.commandId))

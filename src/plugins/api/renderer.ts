@@ -4,68 +4,29 @@ import type {
   AiGenerateTextResult,
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
-import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
-  EnvironmentSnapshotRequest,
-  EnvironmentUpdateRequest,
-  EnvironmentWorktreeBindingRequest,
-  LocalEnvironmentProject,
-  LocalEnvironmentState,
-  LocalEnvironmentWorktreeBindingSnapshot,
-} from "@shared/contracts/environment.ts";
-import type {
-  FileListRequest,
-  FileListResult,
-  FileMoveRequest,
-  FileMoveResult,
-  FileReadTextRequest,
-  FileTrashRequest,
-  FileTrashResult,
-  FileWriteTextRequest,
-  FileWriteTextResult,
-} from "@shared/contracts/file.ts";
-import type {
-  GitBranchRef,
-  GitChangeEvent,
-  GitDiffBranchesResult,
-  GitDiffPatch,
-  GitMergeAbortResult,
-  GitMergeResult,
-  GitRebaseAbortResult,
-  GitRebaseContinueResult,
-  GitRebaseResult,
-  GitRemoteOperationResult,
-  GitRepoInfo,
-  GitStashApplyResult,
-  GitStashDropResult,
-  GitStashListResult,
-  GitStashPopResult,
-  GitStashResult,
-  GitStatus,
-  GitUndoCommitResult,
-} from "@shared/contracts/git.ts";
+  IDockviewPanelProps,
+  PierDockviewGroupHandle,
+} from "@shared/contracts/dockview.ts";
 import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import type {
-  WorktreeCheckRequest,
-  WorktreeCheckResult,
-  WorktreeCreateRequest,
-  WorktreeCreateResult,
-  WorktreeCreationDefaults,
-  WorktreeCreationDefaultsRequest,
-  WorktreeListRequest,
-  WorktreeListResult,
-  WorktreeOpenRequest,
-  WorktreeOpenResult,
-  WorktreeOpenTerminalRequest,
-  WorktreeOpenTerminalResult,
-  WorktreePruneRequest,
-  WorktreeRemoveRequest,
-  WorktreeRemoveResult,
-} from "@shared/contracts/worktree.ts";
+import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
+import type {
+  RendererPluginEnvironmentsFacade,
+  RendererPluginFilesFacade,
+  RendererPluginGitFacade,
+  RendererPluginWorktreesFacade,
+} from "./renderer-facades.ts";
+
+export type {
+  RendererPluginEnvironmentsFacade,
+  RendererPluginFilesFacade,
+  RendererPluginGitFacade,
+  RendererPluginWorktreesFacade,
+} from "./renderer-facades.ts";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
@@ -90,11 +51,24 @@ export interface RendererPluginActionMetadata {
   submenu?: () => string;
 }
 
+export interface ActionInvocation {
+  metadata?: Record<string, unknown>;
+  sourcePanelComponent?: string;
+  sourcePanelContext?: PanelContext;
+  sourcePanelGroupId?: string;
+  sourcePanelId?: string;
+  surface?: string;
+}
+
+export type RendererPluginActionInvocation = ActionInvocation;
+
 export interface RendererPluginAction {
   category: string;
   disabledReason?: () => null | string | undefined;
   enabled?: () => boolean;
-  handler: () => Promise<void> | void;
+  handler: (
+    invocation?: RendererPluginActionInvocation
+  ) => Promise<void> | void;
   id: string;
   metadata?: RendererPluginActionMetadata;
   surfaces?: readonly (string & {})[];
@@ -175,6 +149,43 @@ export interface RendererMissionControlWidgetRegistration {
   title?: (() => string) | string;
 }
 
+export interface PluginGroupContentClaim {
+  group: PierDockviewGroupHandle;
+  id: string;
+  ownerId: symbol;
+  render: () => ReactNode;
+  visible: (group: PierDockviewGroupHandle) => boolean;
+}
+
+export type PluginPanelGroupId = string;
+
+export interface PluginPanelInstanceSnapshot {
+  readonly componentId: string;
+  readonly groupId: PluginPanelGroupId | null;
+  readonly id: string;
+  readonly params?: Readonly<Record<string, unknown>>;
+  readonly title: string;
+}
+
+export interface PluginPanelInstanceOptions {
+  componentId: string;
+  context?: PanelContext;
+  /**
+   * true 表示打开前替换目标 group 内同 componentId 的未固定 preview。
+   * 未传 targetGroupId 时只回退当前 active group；没有 active group 时跳过关闭。
+   */
+  dropUnpinnedInstances?: boolean;
+  instanceId: string;
+  params?: Record<string, unknown>;
+  /**
+   * 指定目标 dockview group。传入后,宿主只在该 group 内执行 preview 替换和
+   * 已有 instanceId 复用。若 group 不存在,宿主不得关闭任何 preview,也不得
+   * 更新或激活目标 group 外的已有 instance。
+   */
+  targetGroupId?: PluginPanelGroupId;
+  title?: string;
+}
+
 export interface PluginPanelRegistration {
   component: FunctionComponent<IDockviewPanelProps>;
   /**
@@ -202,6 +213,11 @@ export interface RendererPluginLoadingNotification {
 }
 
 export interface RendererPluginNotificationOptions {
+  /** toast 上的动作按钮(如移动后的「撤销」)。点击后 toast 自动关闭。 */
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
   description?: string;
 }
 
@@ -212,6 +228,11 @@ export interface RendererPluginAgentSelection {
   detectedIds: readonly AgentKind[];
   enabledIds: readonly AgentKind[];
   selectedId: AgentKind | null;
+}
+
+export interface RendererPluginTerminalContext {
+  activePanelId(): string | null;
+  readSelectionText(panelId?: string): Promise<TerminalSelectionTextResult>;
 }
 
 export interface RendererPluginContext {
@@ -238,6 +259,26 @@ export interface RendererPluginContext {
   };
   configuration: PluginConfigurationApi;
   /**
+   * 弹出宿主级原生上下文菜单。插件在 DOM 右键处理里计算 CSS 坐标,宿主内部
+   * 转成 BrowserWindow contentView 坐标 + 收集 surface 上注册的 actions +
+   * popup native menu + 触发选中 action.handler(invocation)。
+   * 传入 invocation.metadata 是 action.handler 侧的载荷通道(具体形状由
+   * surface + action 双方约定,插件用 zod 或类型守卫解析)。
+   */
+  contextMenu: {
+    popup(
+      surface: string,
+      coords: { x: number; y: number },
+      invocation?: {
+        metadata?: Record<string, unknown>;
+        sourcePanelComponent?: string;
+        sourcePanelContext?: PanelContext;
+        sourcePanelGroupId?: string;
+        sourcePanelId?: string;
+      }
+    ): Promise<void>;
+  };
+  /**
    * 宿主级模态弹窗。渲染、blocking overlay、终端输入路由与 keybinding scope
    * 均由宿主统一处理;全局单例,新弹窗会顶替未决的旧弹窗(旧的按取消 resolve)。
    * confirmLabel/cancelLabel 省略时用宿主 i18n 的默认文案(OK/Cancel)。
@@ -258,92 +299,48 @@ export interface RendererPluginContext {
       size: RendererPluginDialogSize;
       title: string;
     }): Promise<boolean>;
+    /**
+     * 三选弹窗(如 保存/放弃/取消)。confirm → "confirm",altLabel 按钮 →
+     * "alt",取消/Esc → "cancel"。intent 作用于 alt 按钮(破坏性放弃)。
+     */
+    choice(options: {
+      altLabel: string;
+      body?: string;
+      cancelLabel?: string;
+      confirmLabel: string;
+      intent: RendererPluginDialogIntent;
+      size: RendererPluginDialogSize;
+      title: string;
+    }): Promise<"alt" | "cancel" | "confirm">;
+    // 文本输入弹窗。resolve:submit → 返回 trim 后的字符串;cancel → null。
+    // validate 在 submit 前跑一次,返回非空 = 校验失败(在弹窗内展示,不 resolve),
+    // 返回 null/undefined 才放行。keybinding scope + terminal focus 与 host 统一处理。
+    prompt(options: {
+      body?: string;
+      cancelLabel?: string;
+      confirmLabel?: string;
+      initialValue?: string;
+      intent: RendererPluginDialogIntent;
+      placeholder?: string;
+      size: RendererPluginDialogSize;
+      title: string;
+      validate?: (value: string) => Promise<string | null> | string | null;
+    }): Promise<string | null>;
   };
   /**
    * Local environment facade. Reads require `environment:read`; writes require
    * `environment:write`.
    */
-  environments: {
-    projectSnapshot(
-      projectRootPath: string
-    ): Promise<LocalEnvironmentProject | null>;
-    snapshot(
-      request?: EnvironmentSnapshotRequest
-    ): Promise<LocalEnvironmentState>;
-    update(request: EnvironmentUpdateRequest): Promise<LocalEnvironmentState>;
-    worktreeBinding(
-      request: EnvironmentWorktreeBindingRequest
-    ): Promise<LocalEnvironmentWorktreeBindingSnapshot | null>;
-  };
-  files: {
-    list(
-      requestOrRoot: FileListRequest | string,
-      options?: { path?: string }
-    ): Promise<FileListResult>;
-    move(request: FileMoveRequest): Promise<FileMoveResult>;
-    readText(request: FileReadTextRequest): Promise<string>;
-    trash(request: FileTrashRequest): Promise<FileTrashResult>;
-    writeText(request: FileWriteTextRequest): Promise<FileWriteTextResult>;
-  };
+  environments: RendererPluginEnvironmentsFacade;
+  files: RendererPluginFilesFacade;
   /**
    * Git 主体能力(对应 main 进程 GitService;插件按 manifest 声明的 capability 调用)。
    * 这里仅做 preload facade 的窄透传,git 业务交互仍由插件自己实现。
    */
-  git: {
-    abortMerge(cwd: string): Promise<GitMergeAbortResult>;
-    abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
-    checkoutBranch(cwd: string, name: string): Promise<boolean>;
-    continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
-    discardChanges(cwd: string, paths: string[]): Promise<boolean>;
-    getDiffPatch(
-      cwd: string,
-      options?: {
-        from?: string;
-        path?: string;
-        paths?: string[];
-        staged?: boolean;
-        to?: string;
-      }
-    ): Promise<GitDiffPatch>;
-    getFileContent(
-      cwd: string,
-      options: { path: string; ref?: string }
-    ): Promise<string>;
-    getStatus(cwd: string): Promise<GitStatus>;
-    getRepoInfo(cwd: string): Promise<GitRepoInfo>;
-    listBranches(
-      cwd: string,
-      options: { kind: "all" | "local" | "remote" }
-    ): Promise<GitBranchRef[]>;
-    searchBranches(
-      cwd: string,
-      options?: {
-        currentBranch?: null | string;
-        diffMode?: "commitGraph" | "mergeIntoCurrent";
-        limit?: number;
-        query?: string;
-      }
-    ): Promise<GitDiffBranchesResult>;
-    listStashes(cwd: string): Promise<GitStashListResult>;
-    merge(cwd: string, branch: string): Promise<GitMergeResult>;
-    popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
-    pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;
-    push(cwd: string): Promise<GitRemoteOperationResult>;
-    applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
-    dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
-    rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
-    stage(cwd: string, paths: string[]): Promise<boolean>;
-    stash(
-      cwd: string,
-      options?: { includeUntracked?: boolean; message?: string }
-    ): Promise<GitStashResult>;
-    sync(cwd: string): Promise<GitRemoteOperationResult>;
-    undoLastCommit(cwd: string): Promise<GitUndoCommitResult>;
-    unstage(cwd: string, paths: string[]): Promise<boolean>;
-    watch(
-      gitRoot: string,
-      listener: (event: GitChangeEvent) => void
-    ): () => void;
+  git: RendererPluginGitFacade;
+  groupContent: {
+    claim(claim: PluginGroupContentClaim): boolean;
+    release(input: { groupId: string; id: string; ownerId: symbol }): void;
   };
   i18n: {
     commandDescription(commandId: string): string | undefined;
@@ -389,34 +386,43 @@ export interface RendererPluginContext {
     }): void;
   };
   panels: {
+    /**
+     * 当前活动 panel 若属于本插件贡献的组件,返回其 dockview instance id。
+     * 用于 keybinding 分发时定位到具体 panel 实例(action.handler 收到的
+     * invocation 里没有 panelId,得插件主动查)。不属于本插件的 panel
+     * (含 null active) 返回 null,不越权。
+     */
     getActiveContext(): PanelContext | null;
+    getActiveInstanceId(componentId: string): string | null;
+    listInstances(componentId: string): readonly PluginPanelInstanceSnapshot[];
     /**
      * 单例打开指定 panel。panelId 必须在本插件 manifest 的 panels[] 中声明 ——
      * 不支持打开其它插件贡献的 panel(权限/所有权对称约束)。
      */
     open(panelId: string, options?: { context?: PanelContext }): void;
+    openInstance(options: PluginPanelInstanceOptions): void;
     register(registration: PluginPanelRegistration): () => void;
+    /**
+     * 注册关闭前守卫。仅可为本插件声明的 componentId 注册；返回 false 可否决关闭。
+     */
+    registerCloseGuard(
+      componentId: string,
+      guard: (input: {
+        closingPanelIds?: readonly string[];
+        componentId: string;
+        panelId: string;
+        params?: unknown;
+      }) => boolean | Promise<boolean>
+    ): () => void;
   };
   settings: {
     openSection(section: "environment"): void;
   };
+  terminal: RendererPluginTerminalContext;
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;
   };
-  worktrees: {
-    check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
-    create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
-    creationDefaults(
-      request: WorktreeCreationDefaultsRequest
-    ): Promise<WorktreeCreationDefaults>;
-    list(request: WorktreeListRequest): Promise<WorktreeListResult>;
-    open(request: WorktreeOpenRequest): Promise<WorktreeOpenResult>;
-    openTerminal(
-      request: WorktreeOpenTerminalRequest
-    ): Promise<WorktreeOpenTerminalResult>;
-    prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
-    remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
-  };
+  worktrees: RendererPluginWorktreesFacade;
 }
 
 export interface RendererPluginModule {

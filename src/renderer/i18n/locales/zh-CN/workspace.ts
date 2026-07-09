@@ -1,4 +1,7 @@
 export const workspace = {
+  tab: {
+    unsaved: "未保存的更改",
+  },
   addPanelMenu: {
     trigger: "添加面板",
     newMissionControl: "新建指挥中心",

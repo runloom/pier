@@ -98,6 +98,7 @@ export interface PierGitAPI {
     cwd: string,
     options: GitListBranchesOptionsValue
   ) => Promise<GitBranchRef[]>;
+  listIgnored: (cwd: string) => Promise<string[]>;
   listStashes: (cwd: string) => Promise<GitStashListResult>;
   listTags: (cwd: string) => Promise<string[]>;
   merge: (cwd: string, branch: string) => Promise<GitMergeResult>;
@@ -130,6 +131,8 @@ export interface PierGitAPI {
 export const gitApi: PierGitAPI = {
   getStatus: (cwd) =>
     invokePierCommand<GitStatus>({ cwd, type: "git.getStatus" }),
+  listIgnored: (cwd) =>
+    invokePierCommand<string[]>({ cwd, type: "git.listIgnored" }),
   getRepoInfo: (cwd) =>
     invokePierCommand<GitRepoInfo>({ cwd, type: "git.getRepoInfo" }),
   isWorkingTreeClean: (cwd) =>

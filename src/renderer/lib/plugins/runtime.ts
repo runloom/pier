@@ -9,6 +9,7 @@ import {
 } from "./external-plugin-context.ts";
 import { loadExternalRendererPlugin } from "./external-renderer-loader.ts";
 import { createRendererPluginContext } from "./host-context.ts";
+import { clearHostGroupContentForPlugin } from "./host-group-content-context.tsx";
 import { installPluginSharedRuntime } from "./plugin-shared-runtime.ts";
 
 function indexModules(
@@ -122,8 +123,12 @@ export class RendererPluginRuntime {
     const context = createRendererPluginContext(entry);
     const dispose = module.activate(context);
     this.disposers.set(entry.manifest.id, () => {
-      dispose();
-      closeOverlaysForPlugin(entry.manifest.id);
+      try {
+        dispose();
+      } finally {
+        clearHostGroupContentForPlugin(entry.manifest.id);
+        closeOverlaysForPlugin(entry.manifest.id);
+      }
     });
   }
 

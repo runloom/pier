@@ -52,6 +52,10 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:read");
       return window.pier.git.getStatus(cwd);
     },
+    listIgnored: (cwd) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.listIgnored(cwd);
+    },
     listBranches: (cwd, options) => {
       assertPluginCapability(entry, "git:read");
       return window.pier.git.listBranches(cwd, options);
