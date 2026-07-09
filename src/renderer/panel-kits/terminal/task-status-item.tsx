@@ -338,6 +338,7 @@ function TaskStatusItemView({
         align="start"
         className="w-80"
         data-testid="task-status-dropdown"
+        side="top"
         sideOffset={6}
       >
         <DropdownMenuLabel>
