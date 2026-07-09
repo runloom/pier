@@ -173,6 +173,45 @@ describe("MissionControlPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("asks for confirmation before removing unknown widget inline", async () => {
+    const updateParameters = vi.fn();
+    const props = makeProps(
+      {
+        widgets: [
+          {
+            h: 3,
+            id: "orphan-instance",
+            w: 4,
+            widgetId: "pier.removed.widget",
+            x: 0,
+            y: 0,
+          },
+        ],
+      },
+      updateParameters
+    );
+    render(<MissionControlPanel {...props} />);
+
+    expect(screen.getByText(/Widget unavailable/i)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByTestId("mission-control-widget-unknown-remove")
+    );
+
+    const dialog = useAppDialogStore.getState().current;
+    expect(dialog?.kind).toBe("confirm");
+    expect(updateParameters).not.toHaveBeenCalled();
+
+    if (dialog?.kind === "confirm" || dialog?.kind === "alert") {
+      await act(async () => {
+        dialog.resolve(true);
+      });
+    }
+
+    await vi.waitFor(() => {
+      expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
+    });
+  });
+
   it("asks for confirmation before removing a widget", async () => {
     const updateParameters = vi.fn();
     const props = makeProps(

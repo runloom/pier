@@ -94,6 +94,18 @@ export function MissionControlWidgetCard({
 
   const Icon = widget.registration?.icon;
 
+  const confirmRemove = async (): Promise<void> => {
+    const confirmed = await showAppConfirm({
+      body: t("missionControl.removeConfirmBody"),
+      intent: "destructive",
+      size: "sm",
+      title: t("missionControl.removeConfirmTitle"),
+    });
+    if (confirmed) {
+      onRemove();
+    }
+  };
+
   const renderBody = (): React.ReactNode => {
     if (widget.status === "plugin-disabled") {
       return (
@@ -108,7 +120,14 @@ export function MissionControlWidgetCard({
           <AlertDescription className="flex flex-col items-center gap-2">
             <span>{t("missionControl.widget.unknown")}</span>
             {locked ? null : (
-              <Button onClick={onRemove} size="xs" variant="destructive">
+              <Button
+                data-testid="mission-control-widget-unknown-remove"
+                onClick={async () => {
+                  await confirmRemove();
+                }}
+                size="xs"
+                variant="destructive"
+              >
                 {t("missionControl.widget.remove")}
               </Button>
             )}
@@ -210,15 +229,7 @@ export function MissionControlWidgetCard({
                       data-testid="mission-control-widget-menu-remove"
                       onSelect={async (event) => {
                         event.preventDefault();
-                        const confirmed = await showAppConfirm({
-                          body: t("missionControl.removeConfirmBody"),
-                          intent: "destructive",
-                          size: "sm",
-                          title: t("missionControl.removeConfirmTitle"),
-                        });
-                        if (confirmed) {
-                          onRemove();
-                        }
+                        await confirmRemove();
                       }}
                       variant="destructive"
                     >
