@@ -9,6 +9,7 @@ import {
   pluginLocalizationSchema,
   pluginPanelContributionSchema,
   pluginRuntimePolicySchema,
+  pluginSettingsPageContributionSchema,
   pluginTerminalStatusItemContributionSchema,
 } from "./plugin.ts";
 
@@ -74,6 +75,10 @@ export const managedPluginPackageManifestSchema = z.object({
   panels: z.array(pluginPanelContributionSchema).default([]),
   permissions: z.array(pierCapabilitySchema).default([]),
   publisher: z.string().min(1).optional(),
+  settingsPages: z
+    .array(pluginSettingsPageContributionSchema)
+    .max(1)
+    .default([]),
   renderer: relativePosixPathSchema,
   repository: z.string().min(1).optional(),
   runtime: pluginRuntimePolicySchema.optional(),

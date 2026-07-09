@@ -53,6 +53,13 @@ export type PluginLocalizedSetting = z.infer<
   typeof pluginLocalizedSettingSchema
 >;
 
+export const pluginLocalizedSettingsPageSchema = z.object({
+  title: z.string().min(1).optional(),
+});
+export type PluginLocalizedSettingsPage = z.infer<
+  typeof pluginLocalizedSettingsPageSchema
+>;
+
 export const pluginLocaleMessagesSchema = z.object({
   commands: z
     .record(z.string().min(1), pluginLocalizedCommandContributionSchema)
@@ -68,6 +75,9 @@ export const pluginLocaleMessagesSchema = z.object({
     .optional(),
   settings: z
     .record(z.string().min(1), pluginLocalizedSettingSchema)
+    .optional(),
+  settingsPages: z
+    .record(z.string().min(1), pluginLocalizedSettingsPageSchema)
     .optional(),
   terminalStatusItems: z
     .record(z.string().min(1), pluginLocalizedContributionSchema)
@@ -135,6 +145,14 @@ export const pluginTerminalStatusItemContributionSchema = z.object({
 });
 export type PluginTerminalStatusItemContribution = z.infer<
   typeof pluginTerminalStatusItemContributionSchema
+>;
+
+export const pluginSettingsPageContributionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).optional(),
+});
+export type PluginSettingsPageContribution = z.infer<
+  typeof pluginSettingsPageContributionSchema
 >;
 
 const pluginConfigurationPropertyBaseSchema = z.object({
@@ -286,6 +304,10 @@ export const pluginManifestSchema = z
     name: z.string().min(1),
     panels: z.array(pluginPanelContributionSchema).default([]),
     permissions: z.array(pierCapabilitySchema).default([]),
+    settingsPages: z
+      .array(pluginSettingsPageContributionSchema)
+      .max(1)
+      .default([]),
     publisher: z.string().min(1).optional(),
     repository: z.string().min(1).optional(),
     runtime: pluginRuntimePolicySchema.optional(),
