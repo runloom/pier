@@ -6,6 +6,7 @@ import type {
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import {
   afterEach,
   beforeAll,
@@ -26,6 +27,10 @@ import {
   useAppDialogStore,
 } from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
 
 const MENU_LABEL_RE = /widget menu/i;
 const REMOVE_LABEL_RE = /remove/i;
@@ -941,5 +946,25 @@ describe("P0 toolbar chrome", () => {
     expect(
       screen.queryByTestId("mission-control-add-widget")
     ).not.toBeInTheDocument();
+  });
+
+  it("toasts after explicit arrange layout writeback", async () => {
+    const updateParameters = vi.fn();
+    const props = makeProps(
+      {
+        widgets: [
+          { h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 },
+          { h: 3, id: "core.system-resources", w: 4, x: 4, y: 0 },
+        ],
+      },
+      updateParameters
+    );
+    render(<MissionControlPanel {...props} />);
+    fireEvent.click(screen.getByTestId("mission-control-toolbar-arrange"));
+
+    await vi.waitFor(() => {
+      expect(updateParameters).toHaveBeenCalled();
+    });
+    expect(toast.success).toHaveBeenCalled();
   });
 });
