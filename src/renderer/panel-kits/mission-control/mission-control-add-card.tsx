@@ -12,6 +12,7 @@ import { useT } from "@/i18n/use-t.ts";
 
 interface MissionControlAddCardProps {
   isEmpty: boolean;
+  locked?: boolean;
   onBrowse: () => void;
   showAction?: boolean;
 }
@@ -22,12 +23,14 @@ interface MissionControlAddCardProps {
  */
 export function MissionControlAddCard({
   isEmpty,
+  locked = false,
   onBrowse,
   showAction = true,
 }: MissionControlAddCardProps) {
   const t = useT();
 
   if (isEmpty) {
+    const showAddAction = showAction && !locked;
     return (
       <div className="flex h-full min-h-48 items-center justify-center pb-16">
         <Empty className="border-0 py-8" data-testid="mission-control-empty">
@@ -35,12 +38,18 @@ export function MissionControlAddCard({
             <EmptyMedia variant="icon">
               <LayoutDashboard />
             </EmptyMedia>
-            <EmptyTitle>{t("missionControl.empty")}</EmptyTitle>
+            <EmptyTitle>
+              {locked
+                ? t("missionControl.lockedEmpty")
+                : t("missionControl.empty")}
+            </EmptyTitle>
             <EmptyDescription>
-              {t("missionControl.emptyDescription")}
+              {locked
+                ? t("missionControl.lockedEmptyDescription")
+                : t("missionControl.emptyDescription")}
             </EmptyDescription>
           </EmptyHeader>
-          {showAction ? (
+          {showAddAction ? (
             <EmptyContent>
               <Button
                 data-testid="mission-control-add-widget"

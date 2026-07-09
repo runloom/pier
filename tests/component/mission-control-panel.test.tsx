@@ -627,7 +627,7 @@ describe("实例模型与锁定", () => {
 
     openWidgetMenu();
 
-    expect(await screen.findByText(/refresh/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Refresh$/i)).toBeInTheDocument();
     expect(
       await screen.findByTestId("mission-control-widget-menu-settings")
     ).toBeInTheDocument();
@@ -857,5 +857,55 @@ describe("固定格宽与派生模式", () => {
     );
     expect(statGrid?.className).toContain("grid-cols-1");
     expect(statGrid?.className).toContain("@[14rem]:grid-cols-3");
+  });
+});
+
+describe("P0 toolbar chrome", () => {
+  it("renders toolbar actions without opening context menu", () => {
+    const props = makeProps({
+      widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
+    });
+    render(<MissionControlPanel {...props} />);
+
+    expect(screen.getByTestId("mission-control-toolbar")).toBeInTheDocument();
+    expect(screen.getByTestId("mission-control-toolbar-add")).toBeEnabled();
+    expect(
+      screen.getByTestId("mission-control-toolbar-refresh-all")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("mission-control-toolbar-arrange")).toBeEnabled();
+    expect(
+      screen.getByTestId("mission-control-toolbar-lock")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("mission-control-locked-banner")
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows locked banner and disables add/arrange when locked", () => {
+    const props = makeProps({
+      locked: true,
+      widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
+    });
+    render(<MissionControlPanel {...props} />);
+
+    expect(
+      screen.getByTestId("mission-control-locked-banner")
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("mission-control-toolbar-add")).toBeDisabled();
+    expect(
+      screen.getByTestId("mission-control-toolbar-arrange")
+    ).toBeDisabled();
+  });
+
+  it("locked empty state uses locked copy and hides add CTA", () => {
+    const props = makeProps({ locked: true, widgets: [] });
+    render(<MissionControlPanel {...props} />);
+
+    expect(screen.getByTestId("mission-control-empty")).toHaveTextContent(
+      /locked/i
+    );
+    expect(
+      screen.queryByTestId("mission-control-add-widget")
+    ).not.toBeInTheDocument();
   });
 });
