@@ -126,51 +126,8 @@ export interface FilesDocument {
   name: string;
   readOnly: boolean;
   savedContents: string;
+  saveState: "idle" | "saving";
   source: FilesDocumentSource;
-}
-
-export interface FileEditorAdapterLabels {
-  diffUnsupported: string;
-  richUnsupported: string;
-  sourceEditor: string;
-}
-
-export interface FilesEditorSearchLabels {
-  close: string;
-  matchCase?: string;
-  next: string;
-  noMatches: string;
-  placeholder: string;
-  previous: string;
-  regexp?: string;
-  replace?: string;
-  replaceAll?: string;
-  replacePlaceholder?: string;
-  selectAll?: string;
-  wholeWord?: string;
-}
-
-export interface FileEditorAdapterProps {
-  documentId?: string;
-  editorSessionId?: string;
-  filePath?: string;
-  labels?: FileEditorAdapterLabels;
-  language: FilesDocumentLanguage | string;
-  mode: FileViewMode;
-  onChange?: (value: string) => void;
-  // 编辑器右键宿主级 popup 的钩子。source 层 (CodeMirror) 拿 selection 再拼
-  // metadata,rich/preview mode 不需要 —— 上层传 undefined 即可。
-  onEditorContextMenu?: (
-    event: MouseEvent,
-    ranges: readonly EditorRange[]
-  ) => void;
-  originalValue?: string;
-  readOnly?: boolean;
-  searchLabels?: FilesEditorSearchLabels;
-  // Monotonic counter: bumping it opens the project search bar.
-  // Value 0 (default) means never triggered.
-  searchRequest?: number;
-  value: string;
 }
 
 export interface EditorRange {

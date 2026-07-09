@@ -14,6 +14,7 @@ import {
   FILES_REVEAL_COMMAND_ID,
   FILES_TREE_REFRESH_COMMAND_ID,
 } from "../manifest.ts";
+import type { FileEditorController } from "./file-editor-controller.ts";
 import {
   basename,
   dirnameRelative,
@@ -29,10 +30,6 @@ import {
 } from "./file-tree-action-utils.ts";
 import { createDuplicateAction } from "./file-tree-actions-duplicate.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
-import {
-  moveDiskDocumentSource,
-  removeDiskDocumentForPath,
-} from "./files-document-store.ts";
 import { createFilesTranslate, type FilesTranslate } from "./files-i18n.ts";
 import {
   beginInlineCreate,
@@ -152,7 +149,8 @@ function createNewChildAction(
 
 function createRenameAction(
   context: RendererPluginContext,
-  t: FilesTranslate
+  t: FilesTranslate,
+  controller: FileEditorController
 ): RendererPluginAction {
   return pluginAction({
     id: FILES_RENAME_COMMAND_ID,
@@ -211,8 +209,17 @@ function createRenameAction(
           root: target.root,
         });
         moveFilesTreeEntry(target.root, target.path, newPath);
-        moveDiskDocumentSource(target.root, target.path, newPath);
-        notifyMoveWithUndo(context, t, target.root, target.path, newPath);
+        const moveDocument = (root: string, from: string, to: string) =>
+          controller.moveDiskDocumentSource(root, from, to);
+        moveDocument(target.root, target.path, newPath);
+        notifyMoveWithUndo(
+          context,
+          t,
+          target.root,
+          target.path,
+          newPath,
+          moveDocument
+        );
       } catch (error) {
         context.notifications.error(
           error instanceof Error
@@ -226,7 +233,8 @@ function createRenameAction(
 
 function createDeleteAction(
   context: RendererPluginContext,
-  t: FilesTranslate
+  t: FilesTranslate,
+  controller: FileEditorController
 ): RendererPluginAction {
   return pluginAction({
     id: FILES_DELETE_COMMAND_ID,
@@ -265,7 +273,7 @@ function createDeleteAction(
         try {
           await context.files.trash({ path, root: target.root });
           removeFilesTreeEntry(target.root, path);
-          removeDiskDocumentForPath(target.root, path);
+          controller.removeDiskDocumentForPath(target.root, path);
         } catch (error) {
           context.notifications.error(
             error instanceof Error
@@ -423,15 +431,16 @@ function createTreeRefreshAction(
 }
 
 export function createFilesTreeActions(
-  context: RendererPluginContext
+  context: RendererPluginContext,
+  controller: FileEditorController
 ): RendererPluginAction[] {
   const t = createFilesTranslate(context);
   return [
     createNewChildAction("file", FILES_NEW_FILE_COMMAND_ID, context, t),
     createNewChildAction("folder", FILES_NEW_FOLDER_COMMAND_ID, context, t),
-    createRenameAction(context, t),
+    createRenameAction(context, t, controller),
     createDuplicateAction(context, t),
-    createDeleteAction(context, t),
+    createDeleteAction(context, t, controller),
     createCopyPathAction(context, t, "absolute"),
     createCopyPathAction(context, t, "relative"),
     createCopyPathWithRangeAction(context, t),

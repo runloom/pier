@@ -74,6 +74,7 @@ export function withDocumentSaved(
     conflictDiskContents: null,
     diskConflict: false,
     error: null,
+    saveState: "idle",
     savedContents,
   };
 }
@@ -98,7 +99,20 @@ export function withDocumentSaveError(
     dirty: true,
     error: message,
     loadState: document.loadState === "loading" ? "loading" : "loaded",
+    saveState: "idle",
   };
+}
+
+export function withDocumentSaving(document: FilesDocument): FilesDocument {
+  return document.saveState === "saving"
+    ? document
+    : { ...document, error: null, saveState: "saving" };
+}
+
+export function withDocumentSaveIdle(document: FilesDocument): FilesDocument {
+  return document.saveState === "idle"
+    ? document
+    : { ...document, saveState: "idle" };
 }
 
 export function withDocumentConflictContents(

@@ -61,6 +61,7 @@ export function createUntitledMarkdownRecord(input: {
     loadState: "loaded",
     name: input.name,
     readOnly: false,
+    saveState: "idle",
     savedContents: input.contents,
     source: input.origin
       ? createUntitledSource({
@@ -90,6 +91,7 @@ export function restoreUntitledMarkdownRecord(input: {
     loadState: "loaded",
     name: input.name,
     readOnly: false,
+    saveState: "idle",
     savedContents: input.persisted.savedContents,
     source: input.persisted.origin
       ? createUntitledSource({
@@ -122,6 +124,7 @@ export function createDiskDocumentRecord(input: {
       loadState: "loaded",
       name: input.name ?? nameFromPath(input.path),
       readOnly: false,
+      saveState: "idle",
       savedContents: input.draft.savedContents,
       source: { kind: "disk", path: input.path, root: input.root },
     };
@@ -139,6 +142,7 @@ export function createDiskDocumentRecord(input: {
     loadState: "idle",
     name: input.name ?? nameFromPath(input.path),
     readOnly: false,
+    saveState: "idle",
     savedContents: "",
     source: { kind: "disk", path: input.path, root: input.root },
   };

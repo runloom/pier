@@ -29,7 +29,6 @@ import {
   toTreeItem,
   useFilesTreeSnapshot,
 } from "./file-tree-sidebar-helpers.ts";
-import { moveDiskDocumentSource } from "./files-document-store.ts";
 import {
   type DoubleClickTrack,
   detectDoubleClick,
@@ -60,12 +59,14 @@ const TREE_DOUBLE_CLICK_WINDOW_MS = 400;
 export function FileTreeSidebar({
   activeFilePath,
   context,
+  controller,
   instanceId,
   onOpenFile,
   root,
+  watchHub,
 }: FileTreeSidebarProps) {
   const t = useMemo(() => createFilesTranslate(context), [context]);
-  const snapshot = useFilesTreeSnapshot(context, root);
+  const snapshot = useFilesTreeSnapshot(context, root, watchHub);
 
   // Git 装饰:变更染色(getStatus + git.watch 增量) + ignored 变暗(listIgnored)。
   const [gitDecorations, setGitDecorations] = useState<FilesGitDecorations>(
@@ -202,7 +203,7 @@ export function FileTreeSidebar({
       try {
         await context.files.move({ newPath: to, path: from, root });
         moveFilesTreeEntry(root, from, to);
-        moveDiskDocumentSource(root, from, to);
+        controller.moveDiskDocumentSource(root, from, to);
         if (!options?.silent) {
           const name = to.split("/").at(-1) ?? to;
           context.notifications.success(
@@ -230,7 +231,7 @@ export function FileTreeSidebar({
         );
       }
     },
-    [context, root, t]
+    [context, controller, root, t]
   );
   const performMoveRef = useRef<typeof performMove | null>(null);
   performMoveRef.current = performMove;

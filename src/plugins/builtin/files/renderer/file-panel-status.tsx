@@ -69,6 +69,9 @@ function statusTextForDocument(
   if (document.loadState === "loading") {
     return t("filePanel.status.loading", "Loading…");
   }
+  if (document.saveState === "saving") {
+    return t("filePanel.status.saving", "Saving…");
+  }
   if (document.error) {
     return t("filePanel.status.error", "Error");
   }
@@ -90,6 +93,12 @@ function statusToneForDocument(
   if (document.loadState === "loading") {
     return {
       label: t("filePanel.status.loading", "Loading…"),
+      tone: "bg-info animate-pulse",
+    };
+  }
+  if (document.saveState === "saving") {
+    return {
+      label: t("filePanel.status.saving", "Saving…"),
       tone: "bg-info animate-pulse",
     };
   }

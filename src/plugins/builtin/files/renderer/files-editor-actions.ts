@@ -3,7 +3,6 @@ import type {
   RendererPluginActionInvocation,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
-import { EditorView } from "codemirror";
 import { z } from "zod";
 import {
   FILES_EDITOR_COPY_COMMAND_ID,
@@ -11,7 +10,7 @@ import {
   FILES_EDITOR_PASTE_COMMAND_ID,
   FILES_EDITOR_SELECT_ALL_COMMAND_ID,
 } from "../manifest.ts";
-import { getFilesEditorView } from "./files-editor-view-registry.ts";
+import type { FileEditorController } from "./file-editor-controller.ts";
 import { createFilesTranslate, type FilesTranslate } from "./files-i18n.ts";
 
 // 编辑器右键基础编辑操作由 editorSessionId 定位具体 view,再用 documentId
@@ -21,52 +20,14 @@ const editorDocumentMetadataSchema = z.object({
   editorSessionId: z.string().min(1),
 });
 
-function resolveEditorView(
+function resolveEditorTarget(
   invocation: RendererPluginActionInvocation | undefined
-): EditorView | null {
+): { documentId: string; editorSessionId: string } | null {
   const parsed = editorDocumentMetadataSchema.safeParse(invocation?.metadata);
   if (!parsed.success) {
     return null;
   }
-  return getFilesEditorView({
-    documentId: parsed.data.documentId,
-    editorSessionId: parsed.data.editorSessionId,
-  });
-}
-
-/** 选区文本;全部为空选区时按 VS Code 语义取各光标所在整行(含换行)。 */
-function selectionText(view: EditorView): {
-  text: string;
-  usedLineFallback: boolean;
-} {
-  const { state } = view;
-  const hasSelection = state.selection.ranges.some((range) => !range.empty);
-  if (hasSelection) {
-    return {
-      text: state.selection.ranges
-        .filter((range) => !range.empty)
-        .map((range) => state.sliceDoc(range.from, range.to))
-        .join("\n"),
-      usedLineFallback: false,
-    };
-  }
-  const line = state.doc.lineAt(state.selection.main.head);
-  return {
-    text: `${line.text}\n`,
-    usedLineFallback: true,
-  };
-}
-
-function isEditable(view: EditorView): boolean {
-  return view.state.facet(EditorView.editable);
-}
-
-async function copyFromView(view: EditorView): Promise<{
-  usedLineFallback: boolean;
-}> {
-  const { text, usedLineFallback } = selectionText(view);
-  await navigator.clipboard.writeText(text);
-  return { usedLineFallback };
+  return parsed.data;
 }
 
 function editorAction(action: {
@@ -86,7 +47,8 @@ function editorAction(action: {
 }
 
 export function createFilesEditorActions(
-  context: RendererPluginContext
+  context: RendererPluginContext,
+  controller: FileEditorController
 ): RendererPluginAction[] {
   const t: FilesTranslate = createFilesTranslate(context);
   const reportError = (error: unknown, fallback: string) => {
@@ -101,23 +63,16 @@ export function createFilesEditorActions(
       sortOrder: 1,
       title: () => t("filePanel.editor.action.cut", "Cut"),
       handler: async (invocation) => {
-        const view = resolveEditorView(invocation);
-        if (!(view && isEditable(view))) {
+        const target = resolveEditorTarget(invocation);
+        if (!target) {
           return;
         }
         try {
-          const { usedLineFallback } = await copyFromView(view);
-          const { state } = view;
-          if (usedLineFallback) {
-            const line = state.doc.lineAt(state.selection.main.head);
-            // 整行剪切:连同行尾换行删除(最后一行删到行首前的换行)。
-            const from = line.from;
-            const to = Math.min(line.to + 1, state.doc.length);
-            view.dispatch({ changes: { from, to } });
-          } else {
-            view.dispatch(state.replaceSelection(""));
-          }
-          view.focus();
+          await controller.executeEditorCommand(
+            target.documentId,
+            target.editorSessionId,
+            "cut"
+          );
         } catch (error) {
           reportError(
             error,
@@ -131,13 +86,16 @@ export function createFilesEditorActions(
       sortOrder: 2,
       title: () => t("filePanel.editor.action.copy", "Copy"),
       handler: async (invocation) => {
-        const view = resolveEditorView(invocation);
-        if (!view) {
+        const target = resolveEditorTarget(invocation);
+        if (!target) {
           return;
         }
         try {
-          await copyFromView(view);
-          view.focus();
+          await controller.executeEditorCommand(
+            target.documentId,
+            target.editorSessionId,
+            "copy"
+          );
         } catch (error) {
           reportError(
             error,
@@ -151,17 +109,16 @@ export function createFilesEditorActions(
       sortOrder: 3,
       title: () => t("filePanel.editor.action.paste", "Paste"),
       handler: async (invocation) => {
-        const view = resolveEditorView(invocation);
-        if (!(view && isEditable(view))) {
+        const target = resolveEditorTarget(invocation);
+        if (!target) {
           return;
         }
         try {
-          const text = await navigator.clipboard.readText();
-          if (text.length === 0) {
-            return;
-          }
-          view.dispatch(view.state.replaceSelection(text));
-          view.focus();
+          await controller.executeEditorCommand(
+            target.documentId,
+            target.editorSessionId,
+            "paste"
+          );
         } catch (error) {
           reportError(
             error,
@@ -175,15 +132,15 @@ export function createFilesEditorActions(
       sortOrder: 4,
       title: () => t("filePanel.editor.action.selectAll", "Select All"),
       handler: async (invocation) => {
-        const view = resolveEditorView(invocation);
-        if (!view) {
+        const target = resolveEditorTarget(invocation);
+        if (!target) {
           return;
         }
-        view.dispatch({
-          selection: { anchor: 0, head: view.state.doc.length },
-        });
-        view.focus();
-        return await Promise.resolve();
+        await controller.executeEditorCommand(
+          target.documentId,
+          target.editorSessionId,
+          "selectAll"
+        );
       },
     }),
   ];

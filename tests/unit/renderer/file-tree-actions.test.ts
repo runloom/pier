@@ -12,6 +12,7 @@ import {
   FILES_NEW_FOLDER_COMMAND_ID,
   FILES_RENAME_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
+import type { FileEditorController } from "@plugins/builtin/files/renderer/file-editor-controller.ts";
 import { createFilesTreeActions } from "@plugins/builtin/files/renderer/file-tree-actions.ts";
 import {
   addFilesTreeEntry,
@@ -50,6 +51,14 @@ function file(path: string): FileEntry {
 
 function directory(path: string): FileEntry {
   return { kind: "directory", path, root: ROOT };
+}
+
+function treeActions(context: RendererPluginContext): RendererPluginAction[] {
+  const controller = {
+    moveDiskDocumentSource: vi.fn(),
+    removeDiskDocumentForPath: vi.fn(),
+  } as unknown as FileEditorController;
+  return createFilesTreeActions(context, controller);
 }
 
 function treeInvocation(metadata: FileEntry): RendererPluginActionInvocation {
@@ -205,10 +214,7 @@ describe("file-tree-actions", () => {
       cancelled: false,
       value: "new.ts",
     });
-    const action = actionById(
-      createFilesTreeActions(context),
-      FILES_NEW_FILE_COMMAND_ID
-    );
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
 
     await action.handler(treeInvocation(directory("src")));
 
@@ -237,7 +243,7 @@ describe("file-tree-actions", () => {
       value: "components",
     });
     const action = actionById(
-      createFilesTreeActions(context),
+      treeActions(context),
       FILES_NEW_FOLDER_COMMAND_ID
     );
 
@@ -262,10 +268,7 @@ describe("file-tree-actions", () => {
       cancelled: false,
       value: "new.ts",
     });
-    const action = actionById(
-      createFilesTreeActions(context),
-      FILES_NEW_FILE_COMMAND_ID
-    );
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
 
     await action.handler(treeInvocation(directory("src")));
 
@@ -281,10 +284,7 @@ describe("file-tree-actions", () => {
       cancelled: false,
       value: "root.ts",
     });
-    const action = actionById(
-      createFilesTreeActions(context),
-      FILES_NEW_FILE_COMMAND_ID
-    );
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
 
     await action.handler({
       metadata: { root: ROOT, treeId: "group-1" },
@@ -305,10 +305,7 @@ describe("file-tree-actions", () => {
       cancelled: false,
       value: "a/b/nested.ts",
     });
-    const action = actionById(
-      createFilesTreeActions(context),
-      FILES_NEW_FILE_COMMAND_ID
-    );
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
 
     await action.handler({ surface: "command-palette" });
 
@@ -333,10 +330,7 @@ describe("file-tree-actions", () => {
       cancelled: false,
       value: "new.ts",
     });
-    const action = actionById(
-      createFilesTreeActions(context),
-      FILES_RENAME_COMMAND_ID
-    );
+    const action = actionById(treeActions(context), FILES_RENAME_COMMAND_ID);
 
     await action.handler(treeInvocation(file("src/old.ts")));
 
@@ -355,10 +349,7 @@ describe("file-tree-actions", () => {
   it("confirms delete with a destructive small dialog, trashes the file, and removes it from the tree", async () => {
     const { context, dialogs, files } = makeContext();
     addFilesTreeEntry(ROOT, file("src/delete-me.ts"));
-    const action = actionById(
-      createFilesTreeActions(context),
-      FILES_DELETE_COMMAND_ID
-    );
+    const action = actionById(treeActions(context), FILES_DELETE_COMMAND_ID);
 
     await action.handler(treeInvocation(file("src/delete-me.ts")));
 
@@ -383,10 +374,7 @@ describe("file-tree-actions", () => {
     const { context, dialogs, files } = makeContext();
     dialogs.confirm.mockResolvedValueOnce(false);
     addFilesTreeEntry(ROOT, file("src/keep.ts"));
-    const action = actionById(
-      createFilesTreeActions(context),
-      FILES_DELETE_COMMAND_ID
-    );
+    const action = actionById(treeActions(context), FILES_DELETE_COMMAND_ID);
 
     await action.handler(treeInvocation(file("src/keep.ts")));
 
@@ -399,7 +387,7 @@ describe("file-tree-actions", () => {
   it("copies absolute and relative tree paths to the clipboard", async () => {
     const { context } = makeContext();
     const writeClipboardText = installClipboard();
-    const actions = createFilesTreeActions(context);
+    const actions = treeActions(context);
 
     await actionById(actions, FILES_COPY_PATH_COMMAND_ID).handler(
       treeInvocation(file("src/index.ts"))
@@ -416,7 +404,7 @@ describe("file-tree-actions", () => {
     const { context } = makeContext();
     const writeClipboardText = installClipboard();
     const action = actionById(
-      createFilesTreeActions(context),
+      treeActions(context),
       FILES_COPY_PATH_WITH_RANGE_COMMAND_ID
     );
 

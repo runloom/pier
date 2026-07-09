@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
+import type { FileEditorController } from "./file-editor-controller.ts";
 import { ResolvedFilePanelActions } from "./file-panel-actions.tsx";
 import { ResolvedFilePanel } from "./file-panel-body.tsx";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
@@ -30,7 +31,6 @@ import {
   useProjectFileTreeCollapsed,
 } from "./file-tree-preferences.ts";
 import { FileTreeSidebar } from "./file-tree-sidebar.tsx";
-import { ensureDiskDocument } from "./files-document-store.ts";
 import type {
   FilesDocumentPanelSource,
   FileViewMode,
@@ -53,6 +53,7 @@ import {
   openFilesTreeSearch,
   revealFilesTreePath,
 } from "./files-tree-registry.ts";
+import type { FilesWatchHub } from "./files-watch-hub.ts";
 
 function sourceTitle(source: FilesDocumentPanelSource): string {
   if (source.kind === "untitled") {
@@ -77,10 +78,14 @@ function breadcrumbSegmentsForSource(
 
 export function FilesGroupView({
   context,
+  controller,
   group,
+  watchHub,
 }: {
   context: RendererPluginContext;
+  controller: FileEditorController;
   group: PierDockviewGroupHandle;
+  watchHub: FilesWatchHub;
 }) {
   const groupId = group.id;
   const t = useMemo(() => createFilesTranslate(context), [context]);
@@ -113,7 +118,6 @@ export function FilesGroupView({
   const [modeByDocumentId, setModeByDocumentId] = useState<
     ReadonlyMap<string, FileViewMode>
   >(() => new Map());
-  const [saving, setSaving] = useState(false);
   const [searchRequest, setSearchRequest] = useState(0);
 
   // invalid 区分:params 有 source 字段但解析失败 → 显示错误态而非空态。
@@ -246,12 +250,6 @@ export function FilesGroupView({
         path: entry.path,
         root: entry.root,
       };
-      const nextName = entry.path.split("/").at(-1) ?? entry.path;
-      ensureDiskDocument({
-        name: nextName,
-        path: entry.path,
-        root: entry.root,
-      });
       const pinned = options?.pinned === true;
       openSourceInGroup(nextSource, { pinned });
     },
@@ -285,9 +283,11 @@ export function FilesGroupView({
       <FileTreeSidebar
         activeFilePath={activeFilePath}
         context={context}
+        controller={controller}
         instanceId={groupId}
         onOpenFile={handleOpenFileFromTree}
         root={root}
+        watchHub={watchHub}
       />
     ) : null;
 
@@ -387,34 +387,10 @@ export function FilesGroupView({
     );
     trailing = (
       <ResolvedFilePanelActions
-        configuration={context.configuration}
-        files={context.files}
+        controller={controller}
         mode={mode}
         onModeChange={setMode}
-        onSavingChange={setSaving}
         panelId={activeTab?.panelId}
-        resolveConflict={async () => {
-          const choice = await context.dialogs.choice({
-            altLabel: t("filePanel.conflict.compareLabel", "Compare"),
-            body: t(
-              "filePanel.conflict.body",
-              "The file has been modified outside Pier. Overwrite it anyway?"
-            ),
-            cancelLabel: t("filePanel.conflict.cancelLabel", "Cancel"),
-            confirmLabel: t("filePanel.conflict.confirmLabel", "Overwrite"),
-            intent: "destructive",
-            size: "sm",
-            title: t("filePanel.conflict.title", "File changed on disk"),
-          });
-          if (choice === "confirm") {
-            return "overwrite";
-          }
-          if (choice === "alt") {
-            return "compare";
-          }
-          return "cancel";
-        }}
-        saving={saving}
         source={selectedSource}
         t={t}
       />
@@ -425,13 +401,10 @@ export function FilesGroupView({
     body = (
       <ResolvedFilePanel
         context={context}
-        files={context.files}
-        manageUntitledLifecycle={false}
+        controller={controller}
         mode={mode}
-        panelApi={undefined}
         panelContext={panelContext}
         panelId={activeTab?.panelId}
-        panelParams={undefined}
         searchRequest={searchRequest}
         source={selectedSource}
         t={t}

@@ -1,5 +1,3 @@
-import { useSyncExternalStore } from "react";
-import { clearCodeMirrorDocumentState } from "./code-mirror-editor.tsx";
 import {
   clearPersistedDiskDrafts,
   clearPersistedUntitledDocuments,
@@ -40,6 +38,8 @@ import {
   withDocumentLoading,
   withDocumentSaved,
   withDocumentSaveError,
+  withDocumentSaveIdle,
+  withDocumentSaving,
 } from "./files-document-reducers.ts";
 import type {
   FilesDocument,
@@ -331,7 +331,6 @@ export function moveDiskDocumentSource(
     if (entry.id !== nextId) {
       documents.delete(entry.id);
       documentAliases.set(entry.id, nextId);
-      clearCodeMirrorDocumentState(entry.id);
     }
     documentAliases.set(diskDocumentId(root, previousPath), nextId);
     documents.set(nextId, nextDocument);
@@ -363,7 +362,6 @@ export function removeDiskDocumentForPath(root: string, path: string): void {
           : path
       )
     );
-    clearCodeMirrorDocumentState(entry.id);
   }
   notify();
 }
@@ -416,6 +414,14 @@ export function markDocumentSaveError(
   );
 }
 
+export function markDocumentSaving(documentId: string): void {
+  replaceDocument(documentId, withDocumentSaving);
+}
+
+export function markDocumentSaveIdle(documentId: string): void {
+  replaceDocument(documentId, withDocumentSaveIdle);
+}
+
 export function setDocumentConflictContents(
   documentId: string,
   contents: string | null
@@ -449,17 +455,12 @@ export function removeDocument(documentId: string): void {
 
   removeDocumentAliasesFor(documentId);
   removeDocumentAliasesFor(resolvedDocumentId);
-  clearCodeMirrorDocumentState(resolvedDocumentId);
   notify();
 }
 
 export function clearFilesDocumentStore(
   options: { persisted?: boolean } = {}
 ): void {
-  for (const documentId of documents.keys()) {
-    clearCodeMirrorDocumentState(documentId);
-  }
-  clearCodeMirrorDocumentState();
   documents.clear();
   documentAliases.clear();
   pendingUntitledRestores.clear();
@@ -480,13 +481,4 @@ export function subscribeFilesDocumentStore(listener: () => void): () => void {
   return () => {
     listeners.delete(listener);
   };
-}
-
-export function useFilesDocument(documentId: string): FilesDocument | null {
-  useSyncExternalStore(
-    subscribeFilesDocumentStore,
-    getFilesDocumentStoreRevision,
-    getFilesDocumentStoreRevision
-  );
-  return getDocument(documentId);
 }

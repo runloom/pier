@@ -58,6 +58,9 @@ function readDraftValue(key: string): string | null {
 }
 
 function writeDraftValue(key: string, value: string): void {
+  if (readDraftValue(key) === value) {
+    return;
+  }
   hydratedDrafts.set(key, value);
   if (draftBackend) {
     draftBackend.set(key, value).catch(() => {

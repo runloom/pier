@@ -7,7 +7,6 @@ import {
   validateName,
   validateRelativePath,
 } from "./file-tree-action-utils.ts";
-import { ensureDiskDocument } from "./files-document-store.ts";
 import type { FilesDocumentPanelSource } from "./files-document-types.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import {
@@ -108,7 +107,6 @@ function openCreatedDiskFile(
   treeId: string | undefined
 ): void {
   const name = basename(path);
-  ensureDiskDocument({ name, path, root });
   const source: FilesDocumentPanelSource = { kind: "disk", path, root };
   const panelContext = context.panels.getActiveContext();
   context.panels.openInstance({

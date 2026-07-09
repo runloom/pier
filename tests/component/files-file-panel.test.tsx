@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { getSearchQuery } from "@codemirror/search";
 import type {
   RendererPluginActionInvocation,
   RendererPluginContext,
@@ -9,12 +10,12 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_GROUP_VIEW_CONTENT_ID,
 } from "@plugins/builtin/files/manifest.ts";
-import { createFilePanel } from "@plugins/builtin/files/renderer/file-panel.tsx";
+import { FileEditorController } from "@plugins/builtin/files/renderer/file-editor-controller.ts";
+import { createFilePanel as createFilePanelWithController } from "@plugins/builtin/files/renderer/file-panel.tsx";
 import {
   createFileFilePanelInstanceId,
   fileFilePanelIdentityKey,
 } from "@plugins/builtin/files/renderer/file-panel-id.ts";
-import { triggerFilePanelSave } from "@plugins/builtin/files/renderer/file-panel-save-registry.ts";
 import { FileTreeSidebar } from "@plugins/builtin/files/renderer/file-tree-sidebar.tsx";
 import {
   clearFilesDocumentStore,
@@ -24,6 +25,7 @@ import {
   markDocumentLoaded,
   removeDocument,
   restoreUntitledDocumentFromPanelSource,
+  updateDocumentContents,
 } from "@plugins/builtin/files/renderer/files-document-store.ts";
 import type { FilesDocumentPanelSource } from "@plugins/builtin/files/renderer/files-document-types.ts";
 import { createFilesEditorActions } from "@plugins/builtin/files/renderer/files-editor-actions.ts";
@@ -36,6 +38,7 @@ import {
   openFilesTreeSearch,
 } from "@plugins/builtin/files/renderer/files-tree-registry.ts";
 import { clearFilesTreeStore } from "@plugins/builtin/files/renderer/files-tree-store.ts";
+import { FilesWatchHub } from "@plugins/builtin/files/renderer/files-watch-hub.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
@@ -103,6 +106,17 @@ const CM_SEARCH_DOM_HANDLER_OVERRIDE =
 const FILE_PANEL_DISK_INSTANCE_ID =
   /^pier\.files\.filePanel:disk:[a-z0-9]+:[A-Za-z0-9_-]+$/;
 const FILES_GROUP_VIEW_SELECTOR = `[data-slot="${FILES_GROUP_VIEW_CONTENT_ID}"]`;
+
+interface TestFilesRuntime {
+  controller: FileEditorController;
+  watchHub: FilesWatchHub;
+}
+
+const testFilesRuntimes = new Set<TestFilesRuntime>();
+const testFilesRuntimesByContext = new WeakMap<
+  RendererPluginContext,
+  TestFilesRuntime
+>();
 
 const panelContext: PanelContext = {
   branch: "main",
@@ -235,6 +249,30 @@ function createMockContext(overrides?: {
       registerCloseGuard: vi.fn(() => vi.fn()),
     },
   } as unknown as RendererPluginContext;
+}
+
+function filesRuntimeFor(context: RendererPluginContext): TestFilesRuntime {
+  const existing = testFilesRuntimesByContext.get(context);
+  if (existing) {
+    return existing;
+  }
+  const watchHub = new FilesWatchHub(context.files);
+  const runtime = {
+    controller: new FileEditorController(context, watchHub),
+    watchHub,
+  };
+  testFilesRuntimes.add(runtime);
+  testFilesRuntimesByContext.set(context, runtime);
+  return runtime;
+}
+
+function createFilePanel(context: RendererPluginContext) {
+  const runtime = filesRuntimeFor(context);
+  return createFilePanelWithController(
+    context,
+    runtime.controller,
+    runtime.watchHub
+  );
 }
 
 function makeProps(
@@ -407,6 +445,11 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   filesGroupViewRootProbe.reset();
+  for (const runtime of testFilesRuntimes) {
+    runtime.controller.dispose();
+    runtime.watchHub.dispose();
+  }
+  testFilesRuntimes.clear();
 });
 
 describe("Files file-panel", () => {
@@ -706,11 +749,11 @@ describe("Files file-panel", () => {
         | undefined;
       expect(metadata?.documentId).toBe(document.id);
       expect(metadata?.editorSessionId).toContain("left-file-panel");
-      expect(metadata?.editorSessionId).toContain(document.id);
 
-      const copyAction = createFilesEditorActions(context).find(
-        (action) => action.id === FILES_EDITOR_COPY_COMMAND_ID
-      );
+      const copyAction = createFilesEditorActions(
+        context,
+        filesRuntimeFor(context).controller
+      ).find((action) => action.id === FILES_EDITOR_COPY_COMMAND_ID);
       if (!copyAction) {
         throw new Error("copy action was not registered");
       }
@@ -825,9 +868,10 @@ describe("Files file-panel", () => {
       expect(metadata?.documentId).toBe(document.id);
       expect(metadata?.editorSessionId).toContain("same-file-panel-a");
 
-      const copyAction = createFilesEditorActions(context).find(
-        (action) => action.id === FILES_EDITOR_COPY_COMMAND_ID
-      );
+      const copyAction = createFilesEditorActions(
+        context,
+        filesRuntimeFor(context).controller
+      ).find((action) => action.id === FILES_EDITOR_COPY_COMMAND_ID);
       if (!copyAction) {
         throw new Error("copy action was not registered");
       }
@@ -908,9 +952,10 @@ describe("Files file-panel", () => {
         removeDocument(document.id);
       });
 
-      const copyAction = createFilesEditorActions(context).find(
-        (action) => action.id === FILES_EDITOR_COPY_COMMAND_ID
-      );
+      const copyAction = createFilesEditorActions(
+        context,
+        filesRuntimeFor(context).controller
+      ).find((action) => action.id === FILES_EDITOR_COPY_COMMAND_ID);
       if (!copyAction) {
         throw new Error("copy action was not registered");
       }
@@ -2098,17 +2143,21 @@ describe("Files file-panel", () => {
         <div data-testid="sidebar-a">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-a"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
         <div data-testid="sidebar-b">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-b"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
       </>
@@ -2144,17 +2193,21 @@ describe("Files file-panel", () => {
         <div data-testid="sidebar-a">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-a"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
         <div data-testid="sidebar-b">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-b"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
       </>
@@ -2479,7 +2532,7 @@ describe("Files file-panel", () => {
     expect(screen.getByText("const value = 1;")).toBeVisible();
   });
 
-  it("preserves edited Markdown contents across source to preview to source mode switches", () => {
+  it("preserves editor state, selection, scroll, and undo history across view mode switches", () => {
     const document = createUntitledMarkdownDocument({
       contents: "# Before\n\n- draft",
     });
@@ -2489,18 +2542,75 @@ describe("Files file-panel", () => {
     });
 
     replaceEditorText(container, "# After\n\n- kept through preview\n");
+    const editedView = findCodeMirrorView(container);
+    act(() => {
+      editedView.dispatch({ selection: { anchor: 2, head: 7 } });
+      editedView.scrollDOM.scrollLeft = 17;
+      editedView.scrollDOM.scrollTop = 143;
+    });
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     expect(screen.getByRole("heading", { name: "After" })).toBeVisible();
     expect(screen.getByText("kept through preview")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Source" }));
 
-    expect(findCodeMirrorView(container).state.doc.toString()).toBe(
+    const restoredView = findCodeMirrorView(container);
+    expect(restoredView.state.doc.toString()).toBe(
       "# After\n\n- kept through preview\n"
     );
+    expect(restoredView.state.selection.main).toMatchObject({
+      anchor: 2,
+      head: 7,
+    });
+    expect(restoredView.scrollDOM.scrollLeft).toBe(17);
+    expect(restoredView.scrollDOM.scrollTop).toBe(143);
     expect(getDocument(document.id)?.currentContents).toBe(
       "# After\n\n- kept through preview\n"
     );
+    fireEvent.keyDown(restoredView.contentDOM, { ctrlKey: true, key: "z" });
+    expect(restoredView.state.doc.toString()).toBe("# Before\n\n- draft");
+  });
+
+  it("preserves the view session when an open disk document is renamed", () => {
+    const source = {
+      kind: "disk" as const,
+      path: "before.md",
+      root: PROJECT_ROOT,
+    };
+    const document = ensureDiskDocument(source);
+    markDocumentLoaded(document.id, "before\n", 1);
+    const pluginContext = createMockContext();
+    const { container } = renderFilePanel(
+      { context: panelContext, source },
+      pluginContext
+    );
+    const originalView = findCodeMirrorView(container);
+    act(() => {
+      originalView.dispatch({
+        changes: {
+          from: 0,
+          insert: "edited",
+          to: originalView.state.doc.length,
+        },
+        selection: { anchor: 2, head: 4 },
+      });
+      originalView.scrollDOM.scrollTop = 91;
+      filesRuntimeFor(pluginContext).controller.moveDiskDocumentSource(
+        PROJECT_ROOT,
+        "before.md",
+        "after.md"
+      );
+    });
+
+    const renamedView = findCodeMirrorView(container);
+    expect(renamedView.state.doc.toString()).toBe("edited");
+    expect(renamedView.state.selection.main).toMatchObject({
+      anchor: 2,
+      head: 4,
+    });
+    expect(renamedView.scrollDOM.scrollTop).toBe(91);
+    fireEvent.keyDown(renamedView.contentDOM, { ctrlKey: true, key: "z" });
+    expect(renamedView.state.doc.toString()).toBe("before\n");
   });
 
   it("does not render raw HTML or allow link clicks to navigate the current window", () => {
@@ -2722,8 +2832,7 @@ describe("Files file-panel", () => {
       readText: vi.fn(async () => "# Before\n"),
       writeText,
     });
-    // pier.files.save action.handler 里读 getActiveInstanceId 命中此 panelId,
-    // 走 registry → 触发面板注册的 save。
+    // pier.files.save action 解析活动 panelId 后统一转发给控制器。
     (
       context.panels.getActiveInstanceId as ReturnType<typeof vi.fn>
     ).mockReturnValue(panelId);
@@ -2746,7 +2855,7 @@ describe("Files file-panel", () => {
     // 直接调用 action.handler 是 Cmd+S 命中 keybinding → dispatch 的
     // renderer 侧终点。此处等价于快捷键触发,不需要跑 jsdom KeyboardEvent。
     await act(async () => {
-      await triggerFilePanelSave(panelId);
+      await filesRuntimeFor(context).controller.savePanel(panelId);
     });
 
     await waitFor(() => {
@@ -3078,6 +3187,23 @@ describe("Files file-panel", () => {
     expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
   });
 
+  it("does not render a restoration error while acquiring a disk document", () => {
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "src/pending.ts", root: PROJECT_ROOT },
+      },
+      createMockContext({
+        readText: vi.fn(() => new Promise<string>(() => undefined)),
+      })
+    );
+
+    expect(
+      screen.queryByText("This disk file document could not be restored.")
+    ).toBeNull();
+    expect(screen.getByRole("status", { name: "Loading…" })).toBeVisible();
+  });
+
   it("renders the search button in the chrome for CodeMirror find widget", async () => {
     // Search 按钮始终存在;back/forward 属于宿主级全局导航,不在文件面板里。
     renderFilePanel(
@@ -3162,11 +3288,69 @@ describe("Files file-panel", () => {
     expect(container.querySelector(".cm-search")).toBeNull();
   });
 
+  it("recomputes search results after local and external document changes", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "foo foo\n",
+    });
+    const { container } = renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Find in file" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Find" }), {
+      target: { value: "foo" },
+    });
+    expect(screen.getByText("1/2")).toBeVisible();
+
+    const view = findCodeMirrorView(container);
+    act(() => {
+      view.dispatch({
+        changes: { from: view.state.doc.length, insert: "foo" },
+      });
+    });
+    expect(screen.getByText("1/3")).toBeVisible();
+
+    act(() => updateDocumentContents(document.id, "foo"));
+    expect(screen.getByText("1/1")).toBeVisible();
+  });
+
+  it("clears retained search decorations when returning from preview", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# foo\n\nfoo\n",
+    });
+    const { container } = renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Find in file" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Find" }), {
+      target: { value: "foo" },
+    });
+    expect(getSearchQuery(findCodeMirrorView(container).state).valid).toBe(
+      true
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Source" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".cm-editor")).toBeInstanceOf(HTMLElement);
+    });
+    expect(screen.queryByTestId("files-editor-search-bar")).toBeNull();
+    expect(getSearchQuery(findCodeMirrorView(container).state).valid).toBe(
+      false
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Find in file" }));
+    expect(await screen.findByRole("textbox", { name: "Find" })).toHaveValue(
+      ""
+    );
+  });
+
   it("installs a high-priority CodeMirror DOM handler before basicSetup can open the default search panel", async () => {
     const editorSource = await readFile(
       join(
         process.cwd(),
-        "src/plugins/builtin/files/renderer/code-mirror-editor.tsx"
+        "src/plugins/builtin/files/renderer/file-editor-view-session.ts"
       ),
       "utf8"
     );
@@ -3178,7 +3362,7 @@ describe("Files file-panel", () => {
     expect(setupIndex).toBeGreaterThanOrEqual(0);
     expect(overrideIndex).toBeLessThan(setupIndex);
     expect(editorSource).toContain("keydown: (event)");
-    expect(editorSource).toContain("openSearchRef.current()");
+    expect(editorSource).toContain("this.#presentation.onOpenSearch()");
   });
 
   it("promotes a preview panel to pinned when the user first modifies the document", async () => {

@@ -4,7 +4,6 @@ import type {
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import { z } from "zod";
-import { moveDiskDocumentSource } from "./files-document-store.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
 import { moveFilesTreeEntry } from "./files-tree-store.ts";
 
@@ -182,7 +181,8 @@ export function notifyMoveWithUndo(
   t: FilesTranslate,
   root: string,
   fromPath: string,
-  toPath: string
+  toPath: string,
+  onDocumentMove: (root: string, fromPath: string, toPath: string) => void
 ): void {
   const name = basename(toPath);
   context.notifications.success(t("filePanel.tree.moved", `Moved "${name}"`), {
@@ -193,7 +193,7 @@ export function notifyMoveWithUndo(
           .move({ newPath: fromPath, path: toPath, root })
           .then(() => {
             moveFilesTreeEntry(root, toPath, fromPath);
-            moveDiskDocumentSource(root, toPath, fromPath);
+            onDocumentMove(root, toPath, fromPath);
           })
           .catch((error: unknown) => {
             context.notifications.error(

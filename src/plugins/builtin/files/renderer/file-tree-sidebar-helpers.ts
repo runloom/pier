@@ -2,6 +2,7 @@ import type { PierFileTreeItem } from "@pier/ui/file-tree.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import type { FileEditorController } from "./file-editor-controller.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import {
   getFilesTreeSnapshot,
@@ -9,6 +10,7 @@ import {
   subscribeFilesTreeSession,
 } from "./files-tree-store.ts";
 import { ensureFilesTreeWatch } from "./files-tree-watch.ts";
+import type { FilesWatchHub } from "./files-watch-hub.ts";
 
 export function extractItemPathFromEvent(event: MouseEvent): string | null {
   const path = event.composedPath();
@@ -27,10 +29,12 @@ export function extractItemPathFromEvent(event: MouseEvent): string | null {
 export interface FileTreeSidebarProps {
   activeFilePath?: string | null;
   context: RendererPluginContext;
+  controller: FileEditorController;
   /** 注册表键:共享 group 视图传 groupId,内联回退传 panelId。 */
   instanceId: string;
   onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;
   root: string;
+  watchHub: FilesWatchHub;
 }
 
 export function toTreeItem(entry: FileEntry): PierFileTreeItem {
@@ -50,7 +54,8 @@ export function toTreeItem(entry: FileEntry): PierFileTreeItem {
 
 export function useFilesTreeSnapshot(
   context: RendererPluginContext,
-  root: string
+  root: string,
+  watchHub: FilesWatchHub
 ) {
   const subscribe = useCallback(
     (listener: () => void) => subscribeFilesTreeSession(root, listener),
@@ -66,8 +71,8 @@ export function useFilesTreeSnapshot(
       context.files.list,
       t("panel.loadError.fallback", "Failed to load files")
     );
-    ensureFilesTreeWatch(context, root);
-  }, [context, root, t]);
+    ensureFilesTreeWatch(context, watchHub, root);
+  }, [context, root, t, watchHub]);
 
   return snapshot;
 }
