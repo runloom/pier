@@ -848,7 +848,7 @@ body {
 
 .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
   width: 5px;
-  z-index: 1;
+  z-index: 10;
 }
 
 .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::before {
@@ -859,7 +859,7 @@ body {
   left: 2px;
   width: 1px;
   background-color: var(--border);
-  z-index: 1;
+  z-index: 10;
 }
 
 .dv-split-view-container.dv-horizontal
@@ -871,7 +871,7 @@ body {
 
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
   height: 5px;
-  z-index: 1;
+  z-index: 10;
 }
 
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::before {
@@ -882,7 +882,7 @@ body {
   top: 2px;
   height: 1px;
   background-color: var(--border);
-  z-index: 1;
+  z-index: 10;
 }
 
 .dv-split-view-container.dv-vertical
