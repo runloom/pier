@@ -46,6 +46,7 @@ interface FileTreeRefs {
   itemsByPath: ReadonlyMap<string, PierFileTreeItem>;
   loadableDirectoryPaths: ReadonlyMap<string, string>;
   onLoadDirectory: ((path: string) => Promise<void> | void) | undefined;
+  onModelPathsRemoved: ((paths: readonly string[]) => void) | undefined;
   onMovePaths: ((moves: readonly PierFileTreeMove[]) => void) | undefined;
   onOpenPath: ((path: string) => void) | undefined;
   onRenamePath:
@@ -60,17 +61,42 @@ const EMPTY_REFS: FileTreeRefs = {
   itemsByPath: new Map(),
   loadableDirectoryPaths: new Map(),
   onLoadDirectory: undefined,
+  onModelPathsRemoved: undefined,
   onMovePaths: undefined,
   onOpenPath: undefined,
   onRenamePath: undefined,
   onSelectPaths: undefined,
 };
 
+interface RenameViewState {
+  getPath: () => string | null;
+  isActive: () => boolean;
+}
+
+/** @pierre/trees 用 unique symbol 暴露 rename view,未进包 public exports。 */
+function readRenameView(model: object): RenameViewState | null {
+  const proto = Object.getPrototypeOf(model) as object | null;
+  if (!proto) {
+    return null;
+  }
+  for (const symbol of Object.getOwnPropertySymbols(proto)) {
+    if (String(symbol) !== "Symbol(FILE_TREE_RENAME_VIEW)") {
+      continue;
+    }
+    const getter = (
+      model as Record<symbol, (() => RenameViewState) | undefined>
+    )[symbol];
+    return typeof getter === "function" ? getter.call(model) : null;
+  }
+  return null;
+}
+
 export function PierFileTree({
   directoryStates,
   items,
   label,
   onLoadDirectory,
+  onModelPathsRemoved,
   onMovePaths,
   onOpenPath,
   onRenamePath,
@@ -145,6 +171,7 @@ export function PierFileTree({
       itemsByPath,
       loadableDirectoryPaths,
       onLoadDirectory: undefined,
+      onModelPathsRemoved: undefined,
       onMovePaths: undefined,
       onOpenPath: undefined,
       onRenamePath: undefined,
@@ -153,6 +180,7 @@ export function PierFileTree({
   }, [directoryStates, items]);
 
   refs.current.onLoadDirectory = onLoadDirectory;
+  refs.current.onModelPathsRemoved = onModelPathsRemoved;
   refs.current.onMovePaths = onMovePaths;
   refs.current.onOpenPath = onOpenPath;
   refs.current.onRenamePath = onRenamePath;
@@ -215,10 +243,15 @@ export function PierFileTree({
     paths,
     renaming: {
       onRename: (event) => {
+        const from = stripTrailingSlash(event.sourcePath);
+        const to = stripTrailingSlash(event.destinationPath);
+        if (from !== to) {
+          modelAheadMovesRef.current.set(from, to);
+        }
         refs.current.onRenamePath?.({
-          from: stripTrailingSlash(event.sourcePath),
+          from,
           isFolder: event.isFolder,
-          to: stripTrailingSlash(event.destinationPath),
+          to,
         });
       },
     },
@@ -230,6 +263,9 @@ export function PierFileTree({
   });
 
   const activeSearchRef = React.useRef<string | null>(null);
+  // 库在 onRename 后会同步 model.move;React paths 尚未更新时记录已应用的 move,
+  // 避免后续 path sync 再 batch 一次造成幽灵节点。
+  const modelAheadMovesRef = React.useRef(new Map<string, string>());
 
   React.useImperativeHandle(
     treeApiRef,
@@ -276,10 +312,82 @@ export function PierFileTree({
           // 目标尚未加载(懒加载目录):祖先已展开,子层加载后用户可见。
         }
       },
-      startRenaming: (path) => {
+      removePaths: (pathsToRemove) => {
+        for (const path of pathsToRemove) {
+          const item = refs.current.itemsByPath.get(path);
+          const officialPath = item ? toOfficialPath(item) : path;
+          const directory =
+            item?.kind === "directory" || officialPath.endsWith("/");
+          try {
+            model.remove(
+              officialPath,
+              directory ? { recursive: true } : undefined
+            );
+          } catch {
+            // 路径已不在模型中:忽略。
+          }
+        }
+      },
+      startRenaming: (path, options) => {
         const item = refs.current.itemsByPath.get(path);
         const officialPath = item ? toOfficialPath(item) : path;
-        return model.startRenaming(officialPath);
+        const callerPath = item?.path ?? stripTrailingSlash(path);
+        const removeIfCanceled = options?.removeIfCanceled === true;
+        const started = model.startRenaming(
+          officialPath,
+          removeIfCanceled ? { removeIfCanceled: true } : undefined
+        );
+        if (!(started && removeIfCanceled)) {
+          return started;
+        }
+        // 库在 basename 未改时不调 onRename;新建占位确认默认名需要补一次回调。
+        // Esc/空提交走 removeIfCanceled → onMutation(remove) → onModelPathsRemoved。
+        let settled = false;
+        let renameDelivered = false;
+        const previousOnRename = refs.current.onRenamePath;
+        const settle = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          refs.current.onRenamePath = previousOnRename;
+          unsubscribeMutation();
+          unsubscribeSubscribe();
+        };
+        refs.current.onRenamePath = (move) => {
+          renameDelivered = true;
+          previousOnRename?.(move);
+          settle();
+        };
+        const unsubscribeMutation = model.onMutation("remove", (event) => {
+          const removed = stripTrailingSlash(event.path);
+          if (
+            removed !== callerPath &&
+            removed !== stripTrailingSlash(officialPath)
+          ) {
+            return;
+          }
+          settle();
+          refs.current.onModelPathsRemoved?.([callerPath]);
+        });
+        const unsubscribeSubscribe = model.subscribe(() => {
+          const renameView = readRenameView(model);
+          if (!renameView || renameView.isActive() || renameDelivered) {
+            return;
+          }
+          const stillPresent = Boolean(
+            model.getItem(officialPath) || model.getItem(callerPath)
+          );
+          settle();
+          if (stillPresent) {
+            previousOnRename?.({
+              from: callerPath,
+              isFolder: item?.kind === "directory",
+              to: callerPath,
+            });
+          }
+        });
+        return started;
       },
     }),
     [model]
@@ -395,7 +503,29 @@ export function PierFileTree({
 
     const localMutation = singlePathMutation(previousPaths, paths);
     if (localMutation) {
-      model.batch(localMutation);
+      const aheadMoves = modelAheadMovesRef.current;
+      const alreadyAppliedByModel =
+        localMutation.length === 1 &&
+        localMutation[0]?.type === "move" &&
+        aheadMoves.get(stripTrailingSlash(localMutation[0].from)) ===
+          stripTrailingSlash(localMutation[0].to);
+      if (alreadyAppliedByModel && localMutation[0]?.type === "move") {
+        aheadMoves.delete(stripTrailingSlash(localMutation[0].from));
+      } else {
+        model.batch(localMutation);
+        for (const [from, to] of aheadMoves) {
+          if (
+            localMutation.some(
+              (op) =>
+                op.type === "move" &&
+                stripTrailingSlash(op.from) === from &&
+                stripTrailingSlash(op.to) === to
+            )
+          ) {
+            aheadMoves.delete(from);
+          }
+        }
+      }
       previousPathsRef.current = paths;
       previousRenderSignatureRef.current = renderSignature;
       return;

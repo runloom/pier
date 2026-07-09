@@ -150,11 +150,15 @@ export function markParentEmptyAfterChildRemove(
 export function mergeDirectoryEntries(
   previousEntries: ReadonlyMap<string, FileEntry>,
   directoryPath: string,
-  loadedEntries: readonly FileEntry[]
+  loadedEntries: readonly FileEntry[],
+  retainPaths?: ReadonlySet<string>
 ): ReadonlyMap<string, FileEntry> {
   const loadedEntriesByPath = entriesByPath(loadedEntries);
   let nextEntries: Map<string, FileEntry> | null = null;
   for (const entryPath of previousEntries.keys()) {
+    if (retainPaths?.has(entryPath)) {
+      continue;
+    }
     if (
       shouldRemoveEntryOnDirectoryMerge(
         entryPath,
