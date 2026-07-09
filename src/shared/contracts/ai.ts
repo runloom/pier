@@ -1,7 +1,8 @@
 /**
  * AI 服务契约:main 进程复用本机已安装的 CLI agent(claude/codex/gemini 等)
  * 做一次性文本生成,renderer/插件只发任务级命令。
- * 结果统一用 status 区分成功/不可用,失败不抛异常 —— 调用方可静默降级。
+ * generateText 失败时按 auto-pick 顺序 fallback 下一个 agent,最多尝试 3 个;
+ * 全部失败或无可试 agent 才返回 unavailable。失败不抛异常 —— 调用方可静默降级。
  */
 import { z } from "zod";
 import { agentKindSchema } from "./agent.ts";

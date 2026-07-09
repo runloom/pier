@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import "dockview-react/dist/styles/dockview.css";
-import { TooltipProvider } from "@pier/ui/tooltip.tsx";
+import { dismissAllTooltips, TooltipProvider } from "@pier/ui/tooltip.tsx";
 import {
   getPluginPanelRevision,
   setPluginPanelCloser,
@@ -359,6 +359,9 @@ export function WorkspaceHost() {
           });
         }
         descriptorStore.setActive(panel?.id ?? null);
+
+        // 程序化切 tab / 关闭面板等路径指针未必移动, 主动收掉残留 tooltip.
+        dismissAllTooltips();
 
         syncActivePanelScope(panel);
         syncTerminalPresentation(event.api, "dockview-active-panel");

@@ -1,10 +1,14 @@
 import {
+  dismissAllTooltips,
+  releaseTooltipSuppression,
+  resetTooltipDismissStateForTests,
+  suppressTooltips,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
-import { render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function findTooltipContent(): Promise<HTMLElement> {
@@ -12,6 +16,12 @@ function findTooltipContent(): Promise<HTMLElement> {
     const content = document.querySelector('[data-slot="tooltip-content"]');
     expect(content).not.toBeNull();
     return content as HTMLElement;
+  });
+}
+
+async function expectTooltipClosed(): Promise<void> {
+  await waitFor(() => {
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
   });
 }
 
@@ -39,9 +49,11 @@ describe("Tooltip primitive", () => {
       }
     }
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    resetTooltipDismissStateForTests();
   });
 
   afterEach(() => {
+    resetTooltipDismissStateForTests();
     vi.unstubAllGlobals();
   });
 
@@ -117,5 +129,106 @@ describe("Tooltip primitive", () => {
     expect(tooltip).toHaveTextContent("Right-side help");
     expect(tooltip.querySelector('[data-slot="tooltip-arrow"]')).toBeNull();
     expectNoManualHorizontalArrowClasses(tooltip);
+  });
+
+  it("dismissAllTooltips closes an open tooltip", async () => {
+    render(
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+
+    await findTooltipContent();
+    act(() => {
+      dismissAllTooltips();
+    });
+    await expectTooltipClosed();
+  });
+
+  it("suppresses open attempts until release and a fresh hover", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+
+    const trigger = getByRole("button");
+    act(() => {
+      suppressTooltips();
+    });
+
+    fireEvent.pointerMove(trigger);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+
+    act(() => {
+      releaseTooltipSuppression();
+    });
+    // Soft-suppress holds until a pointermove that is not itself a reopen.
+    fireEvent.pointerMove(document.body);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+
+    // Radix only re-enters after leave clears hasPointerMoveOpenedRef.
+    fireEvent.pointerLeave(trigger);
+    fireEvent.pointerMove(trigger);
+    await findTooltipContent();
+  });
+
+  it("closes on document pointerdown / keydown / window blur", async () => {
+    render(
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+
+    await findTooltipContent();
+    fireEvent.pointerDown(document.body);
+    await expectTooltipClosed();
+
+    // Re-open via controlled path for the next signal.
+    const view = render(
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger 2</button>
+          </TooltipTrigger>
+          <TooltipContent>Help 2</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    await findTooltipContent();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await expectTooltipClosed();
+    view.unmount();
+
+    render(
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger 3</button>
+          </TooltipTrigger>
+          <TooltipContent>Help 3</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    await findTooltipContent();
+    fireEvent.blur(window);
+    await expectTooltipClosed();
   });
 });

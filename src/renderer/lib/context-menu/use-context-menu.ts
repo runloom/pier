@@ -8,6 +8,10 @@
  *
  * Phase 1 的 actions 都用 store.getState() 读 active panel 决策, 不需传 args.
  */
+import {
+  releaseTooltipSuppression,
+  suppressTooltips,
+} from "@pier/ui/tooltip.tsx";
 import { type MouseEvent, useCallback } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { ActionInvocation } from "@/lib/actions/types.ts";
@@ -78,35 +82,43 @@ async function popupAndDispatch(
     return;
   }
 
-  const result = await window.pier.menu
-    .popup(template, coords)
-    .catch((err: unknown) => {
-      console.error(`[menu] popup ${surface} failed:`, err);
-      return null;
-    });
-  if (!result?.actionId) {
-    return;
-  }
-
-  const action = actionRegistry.get(result.actionId);
-  if (!action) {
-    console.warn(
-      `[menu] action ${result.actionId} not found (registered after menu open?)`
-    );
-    return;
-  }
+  // 原生 Menu.popup 会夺走 pointer 事件流; Radix tooltip 的 delay timer 仍可能
+  // 在菜单打开后 fire. 硬抑制覆盖整个 popup 生命周期, 关闭后 soft-suppress
+  // 到下一次 pointermove (见 @pier/ui/tooltip).
+  suppressTooltips();
   try {
-    if (action.enabled?.() === false) {
+    const result = await window.pier.menu
+      .popup(template, coords)
+      .catch((err: unknown) => {
+        console.error(`[menu] popup ${surface} failed:`, err);
+        return null;
+      });
+    if (!result?.actionId) {
       return;
     }
-  } catch (err) {
-    console.error(`[menu] action ${result.actionId} enabled() threw:`, err);
-    return;
-  }
 
-  await Promise.resolve(action.handler({ ...invocation, surface })).catch(
-    (err: unknown) => {
-      console.error(`[menu] action ${result.actionId} threw:`, err);
+    const action = actionRegistry.get(result.actionId);
+    if (!action) {
+      console.warn(
+        `[menu] action ${result.actionId} not found (registered after menu open?)`
+      );
+      return;
     }
-  );
+    try {
+      if (action.enabled?.() === false) {
+        return;
+      }
+    } catch (err) {
+      console.error(`[menu] action ${result.actionId} enabled() threw:`, err);
+      return;
+    }
+
+    await Promise.resolve(action.handler({ ...invocation, surface })).catch(
+      (err: unknown) => {
+        console.error(`[menu] action ${result.actionId} threw:`, err);
+      }
+    );
+  } finally {
+    releaseTooltipSuppression();
+  }
 }

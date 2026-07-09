@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import { pickAgent } from "@shared/agent-selection.ts";
+import { AGENT_AUTO_PICK_ORDER, pickAgent } from "@shared/agent-selection.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AiGenerateTextRequest,
@@ -49,6 +49,8 @@ export interface RunOneShotOptions {
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 const MAX_STDOUT_BYTES = 4 * 1024 * 1024;
+/** one-shot 失败后最多再试几个 agent（含首选，合计上限）。 */
+const MAX_ONE_SHOT_ATTEMPTS = 3;
 
 function oneShotCwd(projectRootPath: string | undefined): string {
   return projectRootPath?.trim() || tmpdir();
@@ -91,17 +93,66 @@ export function defaultRunOneShot(
   });
 }
 
+function oneShotEligible(
+  preferences: ProjectPreferences,
+  detected: readonly AgentKind[]
+): AgentKind[] {
+  const det = new Set(detected.filter((id) => supportsOneShot(id)));
+  const dis = new Set(preferences.disabledAgentIds);
+  return AGENT_AUTO_PICK_ORDER.filter((id) => det.has(id) && !dis.has(id));
+}
+
 /** 与 New Agent 一致:优先 defaultAgentId,否则按 AGENT_AUTO_PICK_ORDER 兜底;仅保留支持 one-shot 的。 */
 function resolveOneShotAgent(
   preferences: ProjectPreferences,
   detected: readonly AgentKind[]
 ): AgentKind | null {
-  const oneShotDetected = detected.filter((id) => supportsOneShot(id));
   return pickAgent(
     preferences.defaultAgentId,
-    oneShotDetected,
+    detected.filter((id) => supportsOneShot(id)),
     preferences.disabledAgentIds
   );
+}
+
+/**
+ * 生成候选链：默认 agent（若可用）置首，其余按 auto-pick 顺序补足，去重后截断到上限。
+ */
+function resolveOneShotFallbackChain(
+  preferences: ProjectPreferences,
+  detected: readonly AgentKind[]
+): AgentKind[] {
+  const eligible = oneShotEligible(preferences, detected);
+  if (eligible.length === 0) {
+    return [];
+  }
+  const preferred = preferences.defaultAgentId;
+  const ordered: AgentKind[] = [];
+  if (preferred && preferred !== "blank" && eligible.includes(preferred)) {
+    ordered.push(preferred);
+  }
+  for (const id of eligible) {
+    if (!ordered.includes(id)) {
+      ordered.push(id);
+    }
+  }
+  return ordered.slice(0, MAX_ONE_SHOT_ATTEMPTS);
+}
+
+function failureResult(
+  err: unknown
+): Extract<AiGenerateTextResult, { status: "unavailable" }> {
+  if (err instanceof AgentRunError) {
+    return {
+      message: err.message,
+      reason: err.kind === "timeout" ? "timeout" : "request_failed",
+      status: "unavailable",
+    };
+  }
+  return {
+    message: err instanceof Error ? err.message : String(err),
+    reason: "request_failed",
+    status: "unavailable",
+  };
 }
 
 export function createAiService({
@@ -110,21 +161,24 @@ export function createAiService({
   runOneShot = defaultRunOneShot,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 }: CreateAiServiceOptions): AiService {
-  async function resolveAgent(): Promise<{
-    agent: AgentKind | null;
+  async function resolveContext(): Promise<{
+    agents: AgentKind[];
     preferences: ProjectPreferences;
   }> {
     const [preferences, detected] = await Promise.all([
       readPreferences(),
       detectAgents(),
     ]);
-    return { agent: resolveOneShotAgent(preferences, detected), preferences };
+    return {
+      agents: resolveOneShotFallbackChain(preferences, detected),
+      preferences,
+    };
   }
 
   return {
     async generateText(request) {
-      const { agent, preferences } = await resolveAgent();
-      if (!agent) {
+      const { agents, preferences } = await resolveContext();
+      if (agents.length === 0) {
         return {
           message: "no detected agent supports one-shot generation",
           reason: "not_configured",
@@ -132,44 +186,53 @@ export function createAiService({
         };
       }
       const cwd = oneShotCwd(request.projectRootPath);
-      const invocation = resolveOneShotInvocation({
-        agentId: agent,
-        cwd,
-        override: preferences.agentCommandOverrides[agent],
-        agentDefaultArgs: preferences.agentDefaultArgs,
-        agentPermissionMode: preferences.agentPermissionMode,
-        prompt: request.prompt,
-      });
-      if (!invocation) {
-        return {
-          message: `agent ${agent} has no one-shot command`,
-          reason: "not_configured",
-          status: "unavailable",
-        };
-      }
-      try {
-        const text = await runOneShot(invocation.binary, invocation.args, {
+      let lastFailure: Extract<
+        AiGenerateTextResult,
+        { status: "unavailable" }
+      > | null = null;
+
+      for (const agent of agents) {
+        const invocation = resolveOneShotInvocation({
+          agentId: agent,
           cwd,
-          timeoutMs,
+          override: preferences.agentCommandOverrides[agent],
+          agentDefaultArgs: preferences.agentDefaultArgs,
+          agentPermissionMode: preferences.agentPermissionMode,
+          prompt: request.prompt,
         });
-        return { status: "ok", text };
-      } catch (err) {
-        if (err instanceof AgentRunError) {
-          return {
-            message: err.message,
-            reason: err.kind === "timeout" ? "timeout" : "request_failed",
+        if (!invocation) {
+          lastFailure = {
+            message: `agent ${agent} has no one-shot command`,
+            reason: "not_configured",
             status: "unavailable",
           };
+          continue;
         }
-        return {
-          message: err instanceof Error ? err.message : String(err),
-          reason: "request_failed",
-          status: "unavailable",
-        };
+        try {
+          const text = await runOneShot(invocation.binary, invocation.args, {
+            cwd,
+            timeoutMs,
+          });
+          return { status: "ok", text };
+        } catch (err) {
+          lastFailure = failureResult(err);
+        }
       }
+
+      return (
+        lastFailure ?? {
+          message: "no detected agent supports one-shot generation",
+          reason: "not_configured",
+          status: "unavailable",
+        }
+      );
     },
     async status() {
-      const { agent } = await resolveAgent();
+      const [preferences, detected] = await Promise.all([
+        readPreferences(),
+        detectAgents(),
+      ]);
+      const agent = resolveOneShotAgent(preferences, detected);
       return {
         agent,
         configured: agent !== null,
