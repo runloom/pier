@@ -145,6 +145,95 @@ describe("createAiService(agent one-shot)", () => {
       status: "unavailable",
     });
   });
+
+  it("generateText:首个 agent 失败后按 auto-pick 顺序 fallback 到下一个", async () => {
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockRejectedValueOnce(
+        new AgentRunError("run_failed", "claude not logged in")
+      )
+      .mockResolvedValueOnce("feature/file-plugin\n");
+    const service = makeService({
+      detected: ["claude", "codex", "gemini"],
+      runOneShot,
+    });
+
+    const result = await service.generateText({ prompt: "file 插件完善" });
+
+    expect(result).toEqual({ status: "ok", text: "feature/file-plugin\n" });
+    expect(runOneShot).toHaveBeenCalledTimes(2);
+    expect(runOneShot.mock.calls[0]?.[0]).toBe("claude");
+    expect(runOneShot.mock.calls[1]?.[0]).toBe("codex");
+  });
+
+  it("generateText:最多尝试 3 个 agent，第 3 个成功则返回", async () => {
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockRejectedValueOnce(new AgentRunError("run_failed", "claude fail"))
+      .mockRejectedValueOnce(new AgentRunError("timeout", "codex timeout"))
+      .mockResolvedValueOnce("ok-branch\n");
+    const service = makeService({
+      // auto-pick: claude → codex → grok → … → gemini
+      detected: ["claude", "codex", "gemini", "grok"],
+      runOneShot,
+    });
+
+    const result = await service.generateText({ prompt: "x" });
+
+    expect(result).toEqual({ status: "ok", text: "ok-branch\n" });
+    expect(runOneShot).toHaveBeenCalledTimes(3);
+    expect(runOneShot.mock.calls.map((call) => call[0])).toEqual([
+      "claude",
+      "codex",
+      "grok",
+    ]);
+  });
+
+  it("generateText:3 个都失败时返回最后一次错误，且不尝试第 4 个", async () => {
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockRejectedValueOnce(new AgentRunError("run_failed", "claude fail"))
+      .mockRejectedValueOnce(new AgentRunError("run_failed", "codex fail"))
+      .mockRejectedValueOnce(new AgentRunError("timeout", "grok timeout"));
+    const service = makeService({
+      detected: ["claude", "codex", "gemini", "grok"],
+      runOneShot,
+    });
+
+    const result = await service.generateText({ prompt: "x" });
+
+    expect(result).toMatchObject({
+      message: "grok timeout",
+      reason: "timeout",
+      status: "unavailable",
+    });
+    expect(runOneShot).toHaveBeenCalledTimes(3);
+    expect(runOneShot.mock.calls.map((call) => call[0])).toEqual([
+      "claude",
+      "codex",
+      "grok",
+    ]);
+  });
+
+  it("generateText:默认 agent 优先，失败后再按 auto-pick 顺序补足", async () => {
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockRejectedValueOnce(new AgentRunError("run_failed", "gemini fail"))
+      .mockResolvedValueOnce("from-claude\n");
+    const service = makeService({
+      detected: ["claude", "codex", "gemini"],
+      preferences: { defaultAgentId: "gemini" },
+      runOneShot,
+    });
+
+    const result = await service.generateText({ prompt: "x" });
+
+    expect(result).toEqual({ status: "ok", text: "from-claude\n" });
+    expect(runOneShot.mock.calls.map((call) => call[0])).toEqual([
+      "gemini",
+      "claude",
+    ]);
+  });
 });
 
 describe("defaultRunOneShot", () => {
