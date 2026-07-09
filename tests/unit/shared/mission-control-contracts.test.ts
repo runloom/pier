@@ -7,6 +7,8 @@ import {
   missionControlGridSizeSchema,
   missionControlPanelParamsSchema,
   pluginMissionControlWidgetContributionSchema,
+  salvageMissionControlPanelParams,
+  widgetEntryWidgetId,
 } from "@shared/contracts/mission-control.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
@@ -62,6 +64,11 @@ describe("pluginMissionControlWidgetContributionSchema", () => {
       defaultSize: { h: 4, w: 6 },
       description: "A test widget",
       id: "pier.test.widget",
+      layoutPriority: "primary",
+      layoutProfiles: [
+        { h: 3, key: "normal", w: 4 },
+        { h: 3, key: "wide", w: 6 },
+      ],
       maxSize: { h: 10, w: 8 },
       minSize: { h: 3, w: 3 },
       permissions: ["app:read"],
@@ -71,6 +78,11 @@ describe("pluginMissionControlWidgetContributionSchema", () => {
     expect(result.minSize).toEqual({ h: 3, w: 3 });
     expect(result.maxSize).toEqual({ h: 10, w: 8 });
     expect(result.description).toBe("A test widget");
+    expect(result.layoutPriority).toBe("primary");
+    expect(result.layoutProfiles).toEqual([
+      { h: 3, key: "normal", w: 4 },
+      { h: 3, key: "wide", w: 6 },
+    ]);
     expect(result.permissions).toEqual(["app:read"]);
   });
 
@@ -102,6 +114,18 @@ describe("pluginMissionControlWidgetContributionSchema", () => {
         title: "Bad",
       })
     ).toThrow(H_AXIS_PATTERN);
+  });
+
+  it("rejects layoutProfiles outside effective size bounds", () => {
+    expect(() =>
+      pluginMissionControlWidgetContributionSchema.parse({
+        defaultSize: { h: 3, w: 4 },
+        id: "bad",
+        layoutProfiles: [{ h: 3, key: "full", w: 12 }],
+        maxSize: { h: 4, w: 6 },
+        title: "Bad",
+      })
+    ).toThrow(/layoutProfiles|maxSize/);
   });
 
   it("passes when omitting all sizes (defaults satisfy bounds)", () => {
@@ -158,6 +182,125 @@ describe("missionControlPanelParamsSchema", () => {
       })
     ).toThrow();
   });
+
+  it("parses v2 entry with widgetId and params (zero-migration additive)", () => {
+    const result = missionControlPanelParamsSchema.parse({
+      widgets: [
+        {
+          h: 4,
+          id: "uuid-1",
+          params: { blocks: [{ metricId: "core.activity.total" }] },
+          w: 3,
+          widgetId: "core.custom-card",
+          x: 0,
+          y: 0,
+        },
+      ],
+    });
+    expect(result.widgets[0]?.widgetId).toBe("core.custom-card");
+    expect(result.widgets[0]?.params).toEqual({
+      blocks: [{ metricId: "core.activity.total" }],
+    });
+  });
+
+  it("parses panel-level locked flag", () => {
+    const result = missionControlPanelParamsSchema.parse({
+      locked: true,
+      widgets: [],
+    });
+    expect(result.locked).toBe(true);
+  });
+
+  it("rejects non-object params on entry", () => {
+    expect(() =>
+      missionControlPanelParamsSchema.parse({
+        widgets: [{ h: 3, id: "w", params: "junk", w: 4, x: 0, y: 0 }],
+      })
+    ).toThrow();
+  });
+
+  it("rejects non-JSON params values on entry", () => {
+    expect(() =>
+      missionControlPanelParamsSchema.parse({
+        widgets: [
+          {
+            h: 3,
+            id: "w",
+            params: { render: () => null },
+            w: 4,
+            x: 0,
+            y: 0,
+          },
+        ],
+      })
+    ).toThrow();
+  });
+});
+
+describe("widgetEntryWidgetId", () => {
+  it("v2 条目取 widgetId", () => {
+    expect(widgetEntryWidgetId({ id: "uuid-1", widgetId: "core.a" })).toBe(
+      "core.a"
+    );
+  });
+
+  it("v1 条目回退实例 id（历史上两者同值）", () => {
+    expect(widgetEntryWidgetId({ id: "core.a" })).toBe("core.a");
+  });
+});
+
+describe("salvageMissionControlPanelParams v2", () => {
+  it("保留 locked 并逐条抢救混合新旧条目", () => {
+    const raw = {
+      locked: true,
+      widgets: [
+        { h: 3, id: "legacy", w: 4, x: 0, y: 0 },
+        {
+          h: 4,
+          id: "uuid-1",
+          params: { blocks: [] },
+          w: 3,
+          widgetId: "core.custom-card",
+          x: 4,
+          y: 0,
+        },
+        { h: 3, id: "bad", params: 42, w: 4, x: 0, y: 3 }, // params 非对象
+      ],
+    };
+    const result = salvageMissionControlPanelParams(raw);
+    expect(result.locked).toBe(true);
+    expect(result.widgets).toHaveLength(2);
+    expect(result.widgets[1]?.widgetId).toBe("core.custom-card");
+  });
+});
+
+describe("contribution schema v2 metadata", () => {
+  it("parses category/searchTerms/multiInstance/configurable/refreshable", () => {
+    const result = pluginMissionControlWidgetContributionSchema.parse({
+      category: "analytics",
+      configurable: true,
+      id: "pier.test.widget",
+      searchTerms: ["usage", "用量"],
+      multiInstance: true,
+      refreshable: true,
+      title: "Test Widget",
+    });
+    expect(result.category).toBe("analytics");
+    expect(result.searchTerms).toEqual(["usage", "用量"]);
+    expect(result.multiInstance).toBe(true);
+    expect(result.configurable).toBe(true);
+    expect(result.refreshable).toBe(true);
+  });
+
+  it("rejects unknown category", () => {
+    expect(() =>
+      pluginMissionControlWidgetContributionSchema.parse({
+        category: "misc",
+        id: "w",
+        title: "W",
+      })
+    ).toThrow();
+  });
 });
 
 describe("CoreMissionControlWidgetDeclaration type", () => {
@@ -165,6 +308,12 @@ describe("CoreMissionControlWidgetDeclaration type", () => {
     const declaration: CoreMissionControlWidgetDeclaration = {
       defaultSize: { h: 3, w: 4 },
       id: "core.activity-overview",
+      layoutPriority: "primary",
+      layoutProfiles: [
+        { h: 2, key: "compact", w: 3 },
+        { h: 3, key: "normal", w: 4 },
+        { h: 3, key: "wide", w: 6 },
+      ],
       minSize: { h: 2, w: 3 },
       titleKey: "missionControl.widget.activityOverview.title",
     };
@@ -173,6 +322,7 @@ describe("CoreMissionControlWidgetDeclaration type", () => {
       "missionControl.widget.activityOverview.title"
     );
     expect(declaration.defaultSize).toEqual({ h: 3, w: 4 });
+    expect(declaration.layoutPriority).toBe("primary");
   });
 });
 

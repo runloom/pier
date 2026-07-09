@@ -46,10 +46,7 @@ import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
-import {
-  registerTerminalFullscreenWebOverlay,
-  requestTerminalWebFocus,
-} from "@/stores/terminal-input-routing-slice.ts";
+import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 
 function useActions(): readonly Action[] {
   // version 变 → snapshot 变 → useSyncExternalStore 通知 React 重渲,
@@ -122,20 +119,18 @@ export function CommandPalette() {
   const isOpen = controller.open;
   const requestId = controller.requestId;
 
-  // 注册全窗口 Web 输入路由;
-  // 同时 push scope id 进 keybinding scope 栈, 让浮层期间 panel/global
+  // 键盘打开时显式请求 Web 焦点；Dialog overlay 的鼠标命中几何由 @pier/ui
+  // 默认注册。同时 push scope id 进 keybinding scope 栈, 让浮层期间 panel/global
   // scope 被阻断 (spec user Q1 选项 B: overlay 内未注册的快捷键不 fall through)。
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-    const route = registerTerminalFullscreenWebOverlay("command-palette");
     const releaseWebFocus = requestTerminalWebFocus("command-palette");
     useKeybindingScope.getState().pushBlockingScope("overlay:command-palette");
     return () => {
       useKeybindingScope.getState().popBlockingScope("overlay:command-palette");
       releaseWebFocus();
-      route.dispose();
     };
   }, [isOpen]);
 

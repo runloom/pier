@@ -1,16 +1,66 @@
 import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
 import type { CoreMissionControlWidgetDeclaration } from "@shared/contracts/mission-control.ts";
-import { Activity } from "lucide-react";
+import { Activity, Blocks, Cpu } from "lucide-react";
 import { ActivityWidget } from "./core-widgets/activity-widget.tsx";
+import { CustomCardSettings } from "./core-widgets/custom-card/custom-card-settings.tsx";
+import { CustomCardWidget } from "./core-widgets/custom-card/custom-card-widget.tsx";
+import { SystemResourcesWidget } from "./core-widgets/system-resources-widget.tsx";
+import {
+  ActivityWidgetPreview,
+  CustomCardWidgetPreview,
+  SystemResourcesWidgetPreview,
+} from "./core-widgets/widget-previews.tsx";
 
 export const CORE_MISSION_CONTROL_WIDGETS: readonly CoreMissionControlWidgetDeclaration[] =
   [
     {
+      category: "agent",
       defaultSize: { h: 3, w: 4 },
       descriptionKey: "missionControl.widget.activityOverview.description",
       id: "core.activity-overview",
+      layoutPriority: "primary",
+      layoutProfiles: [
+        { h: 2, key: "compact", w: 3 },
+        { h: 3, key: "normal", w: 4 },
+        { h: 3, key: "wide", w: 6 },
+        { h: 3, key: "full", w: 12 },
+      ],
+      searchTerms: ["activity", "agent", "session", "活动", "会话"],
       minSize: { h: 2, w: 3 },
       titleKey: "missionControl.widget.activityOverview.title",
+    },
+    {
+      category: "system",
+      defaultSize: { h: 4, w: 4 },
+      descriptionKey: "missionControl.widget.systemResources.description",
+      id: "core.system-resources",
+      layoutPriority: "primary",
+      layoutProfiles: [
+        { h: 3, key: "compact", w: 3 },
+        { h: 4, key: "normal", w: 4 },
+        { h: 4, key: "wide", w: 6 },
+        { h: 5, key: "full", w: 12 },
+      ],
+      searchTerms: ["cpu", "memory", "load", "内存", "负载", "系统"],
+      minSize: { h: 2, w: 3 },
+      titleKey: "missionControl.widget.systemResources.title",
+    },
+    {
+      category: "custom",
+      configurable: true,
+      defaultSize: { h: 4, w: 3 },
+      descriptionKey: "missionControl.widget.customCard.description",
+      id: "core.custom-card",
+      layoutPriority: "normal",
+      layoutProfiles: [
+        { h: 2, key: "compact", w: 2 },
+        { h: 4, key: "normal", w: 3 },
+        { h: 4, key: "wide", w: 6 },
+      ],
+      searchTerms: ["custom", "kpi", "metric", "自定义", "指标", "组装"],
+      minSize: { h: 2, w: 2 },
+      multiInstance: true,
+      titleKey: "missionControl.widget.customCard.title",
     },
   ];
 
@@ -28,6 +78,26 @@ export const CORE_MISSION_CONTROL_WIDGET_COMPONENTS: ReadonlyMap<
       component: ActivityWidget,
       icon: Activity,
       id: "core.activity-overview",
+      previewComponent: ActivityWidgetPreview,
+    },
+  ],
+  [
+    "core.system-resources",
+    {
+      component: SystemResourcesWidget,
+      icon: Cpu,
+      id: "core.system-resources",
+      previewComponent: SystemResourcesWidgetPreview,
+    },
+  ],
+  [
+    "core.custom-card",
+    {
+      component: CustomCardWidget,
+      icon: Blocks,
+      id: "core.custom-card",
+      previewComponent: CustomCardWidgetPreview,
+      settingsComponent: CustomCardSettings,
     },
   ],
 ]);

@@ -23,6 +23,8 @@ export const PIER = {
   PLUGIN_RPC_INVOKE: "pier://plugin-rpc:invoke",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
+  // 系统资源快照（renderer 拉取式轮询;指挥中心 system-resources 物料）
+  SYSTEM_STATS_SNAPSHOT: "pier://system-stats:snapshot",
 } as const;
 
 export const PIER_BROADCAST = {

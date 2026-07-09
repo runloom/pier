@@ -32,6 +32,7 @@ import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerNotificationIpc } from "./ipc/notification.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerSecretsIpc } from "./ipc/secrets.ts";
+import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
@@ -364,6 +365,7 @@ app.whenReady().then(async () => {
   registerMenuIpc(ipcMain);
   registerAgentsIpc(ipcMain);
   registerForegroundActivityIpc(ipcMain);
+  registerSystemStatsIpc(ipcMain);
   ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
     appQuitRendererTransport.handleDecision(payload);
   });

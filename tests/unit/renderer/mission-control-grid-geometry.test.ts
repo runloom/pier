@@ -3,6 +3,8 @@ import {
   MISSION_CONTROL_GRID_COLS,
 } from "@shared/contracts/mission-control.ts";
 import { describe, expect, it } from "vitest";
+import { CORE_MISSION_CONTROL_WIDGETS } from "@/panel-kits/mission-control/core-mission-control-widgets.ts";
+import { deriveOptimalAutoLayout } from "@/panel-kits/mission-control/mission-control-auto-layout.ts";
 import {
   appendEntry,
   applyDerivedLayoutChange,
@@ -16,11 +18,12 @@ import {
   ROW_HEIGHT,
   readingOrderIds,
   repackEntries,
+  resolveResponsiveGridSize,
   sameOrder,
 } from "@/panel-kits/mission-control/mission-control-grid-geometry.ts";
 
 describe("entryToLayoutItem", () => {
-  it("maps entry fields to RGL layout item with min/max", () => {
+  it("maps entry fields to layout item with min/max", () => {
     const item = entryToLayoutItem(
       { h: 3, id: "w1", w: 4, x: 0, y: 0 },
       { minSize: { h: 2, w: 2 }, maxSize: { h: 8, w: 8 } }
@@ -75,7 +78,7 @@ describe("entryToLayoutItem", () => {
 });
 
 describe("layoutToEntries", () => {
-  it("strips transient RGL fields, keeps id/x/y/w/h", () => {
+  it("strips transient layout fields, keeps id/x/y/w/h", () => {
     const entries = layoutToEntries([
       {
         h: 3,
@@ -237,128 +240,325 @@ describe("gridPixelWidth", () => {
   });
 });
 
+describe("resolveResponsiveGridSize", () => {
+  it("没有显式 min/max 时只做必要宽度 clamp，不自动改变高度", () => {
+    expect(resolveResponsiveGridSize({ h: 3, w: 4 }, undefined, 12)).toEqual({
+      h: 3,
+      w: 4,
+    });
+    expect(resolveResponsiveGridSize({ h: 3, w: 4 }, undefined, 2)).toEqual({
+      h: 3,
+      w: 2,
+    });
+  });
+
+  it("显式 minSize 表示自动尺寸，未声明 maxSize 时可放大到可用宽度", () => {
+    const decl = {
+      defaultSize: { h: 3, w: 4 },
+      minSize: { h: 2, w: 3 },
+    };
+    expect(resolveResponsiveGridSize({ h: 3, w: 4 }, decl, 3)).toEqual({
+      h: 2,
+      w: 3,
+    });
+    expect(resolveResponsiveGridSize({ h: 3, w: 4 }, decl, 12)).toEqual({
+      h: 3,
+      w: 12,
+    });
+  });
+
+  it("显式 maxSize 表示可自动放大，未声明 minSize 则不自动缩小到基准以下之外", () => {
+    const decl = {
+      defaultSize: { h: 3, w: 4 },
+      maxSize: { h: 5, w: 8 },
+    };
+    expect(resolveResponsiveGridSize({ h: 3, w: 4 }, decl, 12)).toEqual({
+      h: 5,
+      w: 8,
+    });
+    expect(resolveResponsiveGridSize({ h: 3, w: 4 }, decl, 3)).toEqual({
+      h: 3,
+      w: 3,
+    });
+  });
+});
+
 describe("deriveLayout", () => {
-  it("k≥所有卡片需求时按阅读序 first-fit 铺排", () => {
-    const derived = deriveLayout(
-      [
-        { h: 2, i: "b", w: 4, x: 4, y: 0 },
-        { h: 2, i: "a", w: 4, x: 0, y: 0 },
-      ],
-      8
-    );
-    // 阅读序 a(0,0) → b(4,0)，8 列同行放得下
-    expect(derived).toEqual([
-      { h: 2, i: "a", w: 4, x: 0, y: 0 },
-      { h: 2, i: "b", w: 4, x: 4, y: 0 },
-    ]);
-  });
-
-  it("放不下的卡片换行下移", () => {
-    const derived = deriveLayout(
-      [
-        { h: 2, i: "a", w: 4, x: 0, y: 0 },
-        { h: 3, i: "b", w: 6, x: 4, y: 0 },
-      ],
-      8
-    );
-    // b 宽 6，a 后同行只剩 4 → b 落第二行
-    expect(derived.find((l) => l.i === "b")).toMatchObject({ x: 0, y: 2 });
-  });
-
-  it("w 超过 k 时 clamp 到 k，minW/maxW 同步 clamp", () => {
-    const derived = deriveLayout(
-      [{ h: 2, i: "a", w: 12, x: 0, y: 0, maxW: 12, minW: 6 }],
-      4
-    );
-    expect(derived[0]).toMatchObject({ maxW: 4, minW: 4, w: 4, x: 0, y: 0 });
-  });
-
-  it("k=1 全部单列堆叠", () => {
-    const derived = deriveLayout(
-      [
-        { h: 2, i: "a", w: 4, x: 0, y: 0 },
-        { h: 3, i: "b", w: 4, x: 4, y: 0 },
-      ],
-      1
-    );
-    expect(derived).toEqual([
-      { h: 2, i: "a", w: 1, x: 0, y: 0 },
-      { h: 3, i: "b", w: 1, x: 0, y: 2 },
-    ]);
-  });
-
-  it("确定性：同输入同输出，且不改输入数组", () => {
+  it("按阅读序派生窄容器布局，并保持确定性", () => {
     const input = [
-      { h: 2, i: "b", w: 4, x: 4, y: 0 },
-      { h: 2, i: "a", w: 4, x: 0, y: 0 },
+      { h: 3, i: "b", w: 4, x: 4, y: 0 },
+      { h: 3, i: "a", w: 4, x: 0, y: 0 },
+      { h: 3, i: "c", w: 4, x: 8, y: 0 },
     ];
-    const snapshot = JSON.stringify(input);
-    expect(deriveLayout(input, 4)).toEqual(deriveLayout(input, 4));
-    expect(JSON.stringify(input)).toBe(snapshot);
+
+    const derived = deriveLayout(input, 8);
+
+    expect(derived.map((item) => item.i)).toEqual(["a", "b", "c"]);
+    expect(derived.map(({ i, w, x, y }) => ({ i, w, x, y }))).toEqual([
+      { i: "a", w: 4, x: 0, y: 0 },
+      { i: "b", w: 4, x: 4, y: 0 },
+      { i: "c", w: 4, x: 0, y: 3 },
+    ]);
+    expect(deriveLayout(input, 8)).toEqual(derived);
+    expect(input[0]).toMatchObject({ i: "b", x: 4, y: 0 });
   });
 
-  it("同格坐标用 id 兜底排序保证确定性", () => {
-    const derived = deriveLayout(
-      [
-        { h: 2, i: "z", w: 2, x: 0, y: 0 },
-        { h: 2, i: "a", w: 2, x: 0, y: 0 }, // 脏数据：同坐标
-      ],
-      4
-    );
-    expect(derived[0]?.i).toBe("a");
-  });
-});
-
-describe("deriveLayout 保序（禁回填）", () => {
-  it("小卡不回填到前面空隙：显示阅读序 == 基准阅读序", () => {
-    // k=8：a w6 → (0,0)；b w6 放不进剩余 2 列 → (0,1)；
-    // c w2 若回填会落 (6,0)（顺序变 a,c,b），保序必须落 (6,1) 或更晚
-    const derived = deriveLayout(
-      [
-        { h: 1, i: "a", w: 6, x: 0, y: 0 },
-        { h: 1, i: "b", w: 6, x: 0, y: 1 },
-        { h: 1, i: "c", w: 2, x: 6, y: 1 },
-      ],
-      8
-    );
-    expect(
-      readingOrderIds(derived.map((l) => ({ id: l.i, x: l.x, y: l.y })))
-    ).toEqual(["a", "b", "c"]);
-    // 保序实现下 c 恰好可与 b 同行并排
-    expect(derived.find((l) => l.i === "c")).toMatchObject({ x: 6, y: 1 });
+  it("列数小于物料宽度时收敛到可用列宽", () => {
+    const derived = deriveLayout([{ h: 3, i: "a", w: 12, x: 0, y: 0 }], 5);
+    expect(derived[0]).toMatchObject({ h: 3, i: "a", w: 5, x: 0, y: 0 });
   });
 
-  it("同行仍可并排（保序不等于强制换行）", () => {
+  it("显式 min/max 尺寸参与派生展示尺寸", () => {
+    const derived = deriveLayout([{ h: 3, i: "a", w: 4, x: 0, y: 0 }], 8, {
+      getSizeDeclaration: () => ({
+        defaultSize: { h: 3, w: 4 },
+        minSize: { h: 2, w: 3 },
+      }),
+    });
+    expect(derived[0]).toMatchObject({ h: 3, w: 8 });
+  });
+
+  it("保序派生不让后续小卡回填到前序卡片之前的空洞", () => {
     const derived = deriveLayout(
       [
-        { h: 2, i: "a", w: 4, x: 0, y: 0 },
-        { h: 2, i: "b", w: 4, x: 4, y: 0 },
+        { h: 2, i: "a", w: 5, x: 0, y: 0 },
+        { h: 2, i: "b", w: 5, x: 5, y: 0 },
+        { h: 2, i: "c", w: 2, x: 10, y: 0 },
       ],
       8
     );
-    expect(derived).toEqual([
-      { h: 2, i: "a", w: 4, x: 0, y: 0 },
-      { h: 2, i: "b", w: 4, x: 4, y: 0 },
+    expect(derived.map(({ i, x, y }) => ({ i, x, y }))).toEqual([
+      { i: "a", x: 0, y: 0 },
+      { i: "b", x: 0, y: 2 },
+      { i: "c", x: 5, y: 2 },
     ]);
   });
 });
 
-describe("repackEntries 保序（禁回填）", () => {
-  it("重排后基准阅读序精确等于新顺序（混合宽度不回填）", () => {
-    // 12 列：a w6@(0,0)，b w8 放不下同行 → (0,2)，c w4 保序 → (8,2)（b 右侧同行）
-    // 而非回填到 (6,0)
-    const basis = [
-      { h: 2, id: "a", w: 6, x: 0, y: 0 },
-      { h: 2, id: "b", w: 8, x: 0, y: 2 },
-      { h: 2, id: "c", w: 4, x: 8, y: 2 },
+describe("deriveOptimalAutoLayout", () => {
+  const primaryProfiles = {
+    layoutPriority: "primary" as const,
+    layoutProfiles: [
+      { h: 2, key: "compact", w: 3 },
+      { h: 3, key: "normal", w: 4 },
+      { h: 3, key: "wide", w: 6 },
+    ],
+  };
+  const normalProfiles = {
+    layoutPriority: "normal" as const,
+    layoutProfiles: [
+      { h: 2, key: "compact", w: 2 },
+      { h: 3, key: "normal", w: 4 },
+      { h: 3, key: "wide", w: 6 },
+    ],
+  };
+  const rowWidths = (layout: ReturnType<typeof deriveOptimalAutoLayout>) =>
+    [...new Set(layout.map((l) => l.y))].map((y) =>
+      layout.filter((l) => l.y === y).reduce((sum, l) => sum + l.w, 0)
+    );
+  const emptyArea = (layout: ReturnType<typeof deriveOptimalAutoLayout>) =>
+    [...new Set(layout.map((l) => l.y))].reduce((sum, y) => {
+      const row = layout.filter((l) => l.y === y);
+      const height = Math.max(...row.map((l) => l.h));
+      const filled = row.reduce((area, l) => area + l.w * l.h, 0);
+      return sum + 12 * height - filled;
+    }, 0);
+
+  it("两个 primary 物料在 12 列下优先同排填满整行", () => {
+    const layout = deriveOptimalAutoLayout(
+      [
+        { h: 3, i: "activity", w: 4, x: 0, y: 0 },
+        { h: 4, i: "system", w: 4, x: 4, y: 0 },
+      ],
+      12,
+      {
+        getSizeDeclaration: () => primaryProfiles,
+      }
+    );
+
+    expect(layout).toMatchObject([
+      { i: "activity", w: 6, x: 0, y: 0 },
+      { i: "system", w: 6, x: 6, y: 0 },
+    ]);
+  });
+
+  it("视觉阅读顺序按 12 列基准坐标派生，而不是 params 数组顺序", () => {
+    const layout = deriveOptimalAutoLayout(
+      [
+        { h: 3, i: "b", w: 4, x: 4, y: 0 },
+        { h: 3, i: "a", w: 4, x: 0, y: 0 },
+        { h: 3, i: "c", w: 4, x: 8, y: 0 },
+      ],
+      8,
+      {
+        getSizeDeclaration: () => normalProfiles,
+      }
+    );
+
+    expect(
+      readingOrderIds(layout.map((l) => ({ id: l.i, x: l.x, y: l.y })))
+    ).toEqual(["a", "b", "c"]);
+  });
+
+  it("存在满行解时优先选择高利用率布局，不留下可避免行尾空洞", () => {
+    const profiles = {
+      layoutPriority: "normal" as const,
+      layoutProfiles: [
+        { h: 3, key: "normal", w: 4 },
+        { h: 3, key: "wide", w: 6 },
+      ],
+    };
+    const layout = deriveOptimalAutoLayout(
+      ["a", "b", "c", "d", "e"].map((i, n) => ({
+        h: 3,
+        i,
+        w: 4,
+        x: (n % 3) * 4,
+        y: Math.floor(n / 3) * 3,
+      })),
+      12,
+      { getSizeDeclaration: () => profiles }
+    );
+
+    expect(rowWidths(layout)).toEqual([12, 12]);
+  });
+
+  it("混合高度物料优先减少实际空洞面积，而不是只看行尾空列", () => {
+    const profilesById = new Map([
+      [
+        "a",
+        {
+          layoutPriority: "normal" as const,
+          layoutProfiles: [{ h: 8, key: "normal", w: 8 }],
+        },
+      ],
+      [
+        "b",
+        {
+          layoutPriority: "normal" as const,
+          layoutProfiles: [{ h: 2, key: "normal", w: 4 }],
+        },
+      ],
+      [
+        "c",
+        {
+          layoutPriority: "normal" as const,
+          layoutProfiles: [{ h: 2, key: "normal", w: 4 }],
+        },
+      ],
+      [
+        "d",
+        {
+          layoutPriority: "normal" as const,
+          layoutProfiles: [{ h: 2, key: "normal", w: 4 }],
+        },
+      ],
+    ]);
+    const layout = deriveOptimalAutoLayout(
+      [
+        { h: 8, i: "a", w: 8, x: 0, y: 0 },
+        { h: 2, i: "b", w: 4, x: 8, y: 0 },
+        { h: 2, i: "c", w: 4, x: 0, y: 8 },
+        { h: 2, i: "d", w: 4, x: 4, y: 8 },
+      ],
+      12,
+      { getSizeDeclaration: (id) => profilesById.get(id) }
+    );
+
+    expect(emptyArea(layout)).toBeLessThanOrEqual(40);
+  });
+
+  it("有可行替代时避免最后一行只有普通窄卡", () => {
+    const twoColumnProfiles = {
+      layoutPriority: "normal" as const,
+      layoutProfiles: [
+        { h: 3, key: "normal", w: 4 },
+        { h: 3, key: "wide", w: 6 },
+      ],
+    };
+    const layout = deriveOptimalAutoLayout(
+      [
+        { h: 3, i: "a", w: 4, x: 0, y: 0 },
+        { h: 3, i: "b", w: 4, x: 4, y: 0 },
+        { h: 3, i: "c", w: 4, x: 0, y: 3 },
+      ],
+      8,
+      {
+        getSizeDeclaration: () => twoColumnProfiles,
+      }
+    );
+
+    const lastY = Math.max(...layout.map((l) => l.y));
+    const lastRow = layout.filter((l) => l.y === lastY);
+    expect(lastRow.map((l) => l.i)).toEqual(["b", "c"]);
+  });
+
+  it("行内余量优先分给 primary 物料", () => {
+    const layout = deriveOptimalAutoLayout(
+      [
+        { h: 3, i: "primary", w: 4, x: 0, y: 0 },
+        { h: 3, i: "normal", w: 4, x: 4, y: 0 },
+      ],
+      8,
+      {
+        getSizeDeclaration: (id) =>
+          id === "primary" ? primaryProfiles : normalProfiles,
+      }
+    );
+
+    expect(layout).toMatchObject([
+      { i: "primary", w: 6, x: 0, y: 0 },
+      { i: "normal", w: 2, x: 6, y: 0 },
+    ]);
+  });
+
+  it("确定性输出且不修改输入 layout", () => {
+    const input = [
+      { h: 3, i: "a", w: 4, x: 0, y: 0 },
+      { h: 3, i: "b", w: 4, x: 4, y: 0 },
     ];
-    const repacked = repackEntries(basis, ["a", "b", "c"]);
-    expect(readingOrderIds(repacked)).toEqual(["a", "b", "c"]);
-    expect(repacked.find((e) => e.id === "c")).toMatchObject({ x: 8, y: 2 });
+    const before = JSON.stringify(input);
+
+    expect(
+      deriveOptimalAutoLayout(input, 12, {
+        getSizeDeclaration: () => primaryProfiles,
+      })
+    ).toEqual(
+      deriveOptimalAutoLayout(input, 12, {
+        getSizeDeclaration: () => primaryProfiles,
+      })
+    );
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  it("真实核心物料在常见列宽下保持稳定阅读序与非空布局", () => {
+    const input = [
+      { h: 3, i: "core.activity-overview", w: 4, x: 0, y: 0 },
+      { h: 4, i: "core.system-resources", w: 4, x: 4, y: 0 },
+      { h: 4, i: "instance-1", w: 3, x: 8, y: 0 },
+    ];
+    const getSizeDeclaration = (id: string) => {
+      const widgetId = id === "instance-1" ? "core.custom-card" : id;
+      return CORE_MISSION_CONTROL_WIDGETS.find((w) => w.id === widgetId);
+    };
+
+    for (const cols of [12, 8, 6, 4]) {
+      const layout = deriveOptimalAutoLayout(input, cols, {
+        getSizeDeclaration,
+      });
+      expect(
+        readingOrderIds(layout.map((l) => ({ id: l.i, x: l.x, y: l.y })))
+      ).toEqual([
+        "core.activity-overview",
+        "core.system-resources",
+        "instance-1",
+      ]);
+      expect(layout.every((l) => l.w <= cols && l.w > 0 && l.h > 0)).toBe(true);
+    }
   });
 });
 
-describe("readingOrderIds / sameOrder", () => {
+describe("readingOrderIds", () => {
   it("按 y 优先 x 其次输出 id 序", () => {
     expect(
       readingOrderIds([
@@ -382,8 +582,8 @@ describe("repackEntries", () => {
       { h: 2, id: "a", w: 6, x: 0, y: 0 },
       { h: 2, id: "b", w: 6, x: 6, y: 0 },
     ];
-    const repacked = repackEntries(basis, ["b", "a"]);
-    expect(repacked).toEqual([
+
+    expect(repackEntries(basis, ["b", "a"])).toEqual([
       { h: 2, id: "b", w: 6, x: 0, y: 0 },
       { h: 2, id: "a", w: 6, x: 6, y: 0 },
     ]);
@@ -394,130 +594,87 @@ describe("repackEntries", () => {
       { h: 3, id: "a", w: 4, x: 0, y: 0 },
       { h: 2, id: "b", w: 8, x: 4, y: 0 },
     ];
+
     const repacked = repackEntries(basis, ["b", "a"]);
-    expect(repacked.find((e) => e.id === "a")).toMatchObject({ h: 3, w: 4 });
-    expect(repacked.find((e) => e.id === "b")).toMatchObject({ h: 2, w: 8 });
+
+    expect(repacked.find((entry) => entry.id === "a")).toMatchObject({
+      h: 3,
+      w: 4,
+    });
+    expect(repacked.find((entry) => entry.id === "b")).toMatchObject({
+      h: 2,
+      w: 8,
+    });
   });
 
-  it("newOrder 缺失的 id 追加到末尾（防御脏输入）", () => {
+  it("newOrder 缺失的 id 追加到末尾，不存在于基准的 id 被忽略", () => {
     const basis = [
       { h: 2, id: "a", w: 6, x: 0, y: 0 },
       { h: 2, id: "b", w: 6, x: 6, y: 0 },
     ];
-    const repacked = repackEntries(basis, ["b"]);
-    expect(repacked.map((e) => e.id)).toEqual(["b", "a"]);
-  });
 
-  it("newOrder 中不存在于基准的 id 被忽略", () => {
-    const basis = [{ h: 2, id: "a", w: 6, x: 0, y: 0 }];
-    const repacked = repackEntries(basis, ["ghost", "a"]);
-    expect(repacked.map((e) => e.id)).toEqual(["a"]);
+    expect(repackEntries(basis, ["ghost", "b"]).map((e) => e.id)).toEqual([
+      "b",
+      "a",
+    ]);
   });
 });
 
 describe("applyDerivedLayoutChange", () => {
-  it("纯回声（RGL 回报与派生布局一致）返回 null", () => {
-    const basis = [
-      { h: 2, id: "a", w: 6, x: 0, y: 0 },
-      { h: 2, id: "b", w: 6, x: 6, y: 0 },
-    ];
-    // k=8 派生：a 同行放不下 b → b 换行
-    const derived = [
-      { h: 2, i: "a", w: 6, x: 0, y: 0 },
-      { h: 2, i: "b", w: 6, x: 0, y: 2 },
-    ];
-    const echo = derived.map((l) => ({ ...l }));
-    expect(applyDerivedLayoutChange(basis, derived, echo)).toBeNull();
+  const basis = [
+    { h: 3, id: "a", w: 6, x: 0, y: 0 },
+    { h: 3, id: "b", w: 6, x: 6, y: 0 },
+  ];
+  const derived = [
+    { h: 3, i: "a", w: 4, x: 0, y: 0 },
+    { h: 3, i: "b", w: 4, x: 4, y: 0 },
+  ];
+
+  it("纯挂载回声返回 null，不污染基准布局", () => {
+    expect(applyDerivedLayoutChange(basis, derived, derived)).toBeNull();
   });
 
-  it("仅 resize：基准对应条目更新 w/h，x/y 不动，返回新数组", () => {
-    const basis = [
-      { h: 2, id: "a", w: 4, x: 0, y: 0 },
-      { h: 2, id: "b", w: 4, x: 4, y: 0 },
-    ];
-    const derived = [
-      { h: 2, i: "a", w: 4, x: 0, y: 0 },
-      { h: 2, i: "b", w: 4, x: 4, y: 0 },
-    ];
-    // a 拉宽到 5，b 被 RGL 顺推到 x=5——阅读序不变，只算 resize
+  it("只调整尺寸时把 w/h 差分写回对应基准条目", () => {
     const next = [
-      { h: 2, i: "a", w: 5, x: 0, y: 0 },
-      { h: 2, i: "b", w: 4, x: 5, y: 0 },
+      { h: 4, i: "a", w: 5, x: 0, y: 0 },
+      { h: 3, i: "b", w: 4, x: 4, y: 0 },
     ];
-    const result = applyDerivedLayoutChange(basis, derived, next);
-    expect(result).toEqual([
-      { h: 2, id: "a", w: 5, x: 0, y: 0 },
-      { h: 2, id: "b", w: 4, x: 4, y: 0 },
-    ]);
-    expect(result).not.toBe(basis);
-  });
 
-  it("仅改高度不污染被派生 clamp 的宽：基准 w=12 保持不变", () => {
-    // 基准 w=12 在 k=8 派生下 clamp 到 8；用户拖 s 手柄只改高度，
-    // 若整组写回会把派生宽 8 静默写进基准，回全宽后永久变窄
-    const basis = [{ h: 3, id: "a", w: 12, x: 0, y: 0 }];
-    const derived = [{ h: 3, i: "a", w: 8, x: 0, y: 0 }];
-    const next = [{ h: 5, i: "a", w: 8, x: 0, y: 0 }];
     expect(applyDerivedLayoutChange(basis, derived, next)).toEqual([
-      { h: 5, id: "a", w: 12, x: 0, y: 0 },
+      { h: 4, id: "a", w: 5, x: 0, y: 0 },
+      { h: 3, id: "b", w: 6, x: 6, y: 0 },
     ]);
   });
 
-  it("仅拖拽：阅读序变化，返回按新序 repack 的基准", () => {
-    const basis = [
-      { h: 2, id: "a", w: 6, x: 0, y: 0 },
-      { h: 2, id: "b", w: 6, x: 6, y: 0 },
-    ];
-    // k=8 派生：单列上下堆叠
-    const derived = [
-      { h: 2, i: "a", w: 6, x: 0, y: 0 },
-      { h: 2, i: "b", w: 6, x: 0, y: 2 },
-    ];
-    // 用户把 b 拖到 a 上方 → 新阅读序 [b, a]
-    const next = [
-      { h: 2, i: "b", w: 6, x: 0, y: 0 },
-      { h: 2, i: "a", w: 6, x: 0, y: 2 },
-    ];
-    // 12 列 repack：b、a 各宽 6，同行并排
-    expect(applyDerivedLayoutChange(basis, derived, next)).toEqual([
-      { h: 2, id: "b", w: 6, x: 0, y: 0 },
-      { h: 2, id: "a", w: 6, x: 6, y: 0 },
+  it("派生 resize 只改高度时保留基准宽度", () => {
+    const narrowBasis = [{ h: 3, id: "wide", w: 12, x: 0, y: 0 }];
+    const narrowDerived = [{ h: 3, i: "wide", w: 8, x: 0, y: 0 }];
+    const next = [{ h: 4, i: "wide", w: 8, x: 0, y: 0 }];
+
+    expect(applyDerivedLayoutChange(narrowBasis, narrowDerived, next)).toEqual([
+      { h: 4, id: "wide", w: 12, x: 0, y: 0 },
     ]);
   });
 
-  it("resize+拖拽复合：先差分尺寸再 repack，repack 输入含新尺寸", () => {
-    const basis = [
-      { h: 2, id: "a", w: 6, x: 0, y: 0 },
-      { h: 2, id: "b", w: 6, x: 6, y: 0 },
-    ];
-    const derived = [
-      { h: 2, i: "a", w: 6, x: 0, y: 0 },
-      { h: 2, i: "b", w: 6, x: 0, y: 2 },
-    ];
-    // b 拉宽到 7 并拖到 a 上方
-    const next = [
-      { h: 2, i: "b", w: 7, x: 0, y: 0 },
-      { h: 2, i: "a", w: 6, x: 0, y: 2 },
-    ];
-    // 12 列 repack 吃到 b 的新宽 7：7+6>12 → a 换行。
-    // 若 repack 输入还是旧宽 6，a 会错误地并排在 (6,0)。
-    expect(applyDerivedLayoutChange(basis, derived, next)).toEqual([
-      { h: 2, id: "b", w: 7, x: 0, y: 0 },
-      { h: 2, id: "a", w: 6, x: 0, y: 2 },
+  it("派生 resize 只改宽度时保留基准高度", () => {
+    const narrowBasis = [{ h: 6, id: "tall", w: 12, x: 0, y: 0 }];
+    const narrowDerived = [{ h: 4, i: "tall", w: 8, x: 0, y: 0 }];
+    const next = [{ h: 4, i: "tall", w: 6, x: 0, y: 0 }];
+
+    expect(applyDerivedLayoutChange(narrowBasis, narrowDerived, next)).toEqual([
+      { h: 6, id: "tall", w: 6, x: 0, y: 0 },
     ]);
   });
 
-  it("nextLayout 含未知 id 时不崩且忽略该项", () => {
-    const basis = [{ h: 2, id: "a", w: 4, x: 0, y: 0 }];
-    const derived = [{ h: 2, i: "a", w: 4, x: 0, y: 0 }];
+  it("只拖拽换序时按新阅读序重装基准布局", () => {
     const next = [
-      { h: 2, i: "a", w: 4, x: 0, y: 0 },
-      { h: 2, i: "ghost", w: 4, x: 4, y: 0 },
+      { h: 3, i: "a", w: 4, x: 4, y: 0 },
+      { h: 3, i: "b", w: 4, x: 0, y: 0 },
     ];
-    // ghost 让阅读序比较判为变化 → 走 repack，但 repack 丢弃未知 id，
-    // 基准条目几何不变
+
     expect(applyDerivedLayoutChange(basis, derived, next)).toEqual([
-      { h: 2, id: "a", w: 4, x: 0, y: 0 },
+      { h: 3, id: "b", w: 6, x: 0, y: 0 },
+      { h: 3, id: "a", w: 6, x: 6, y: 0 },
     ]);
   });
 });

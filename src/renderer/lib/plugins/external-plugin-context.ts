@@ -3,7 +3,10 @@ import type {
   RendererPluginAction as ExternalPluginAction,
   ExternalRendererPluginContext,
 } from "@pier/plugin-api/renderer";
-import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
+import type {
+  MissionControlWidgetComponentProps as HostMissionControlWidgetComponentProps,
+  MissionControlWidgetSettingsProps as HostMissionControlWidgetSettingsProps,
+} from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   collectEnabledConfigurationProperties,
@@ -117,12 +120,26 @@ export function createExternalRendererPluginContext(
     missionControlWidgets: {
       register: (registration: ExternalMissionControlWidgetRegistration) => {
         assertDeclared(entry, "missionControlWidget", registration.id);
+        const title = registration.title;
         return registerPluginMissionControlWidget({
           component:
-            registration.component as unknown as FunctionComponent<MissionControlWidgetComponentProps>,
+            registration.component as FunctionComponent<HostMissionControlWidgetComponentProps>,
           icon: (registration.icon ?? KeyRound) as LucideIcon,
           id: registration.id,
-          title: () => resolveTitle(registration.title),
+          ...(registration.previewComponent
+            ? {
+                previewComponent:
+                  registration.previewComponent as FunctionComponent,
+              }
+            : {}),
+          ...(registration.settingsComponent
+            ? {
+                settingsComponent:
+                  registration.settingsComponent as FunctionComponent<HostMissionControlWidgetSettingsProps>,
+              }
+            : {}),
+          // 省略 title = 用 manifest 本地化标题（宿主 merge 层解析）
+          ...(title === undefined ? {} : { title: () => resolveTitle(title) }),
         });
       },
     },

@@ -37,10 +37,7 @@ import {
 } from "@/pages/settings/data/appearance-nav.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
-import {
-  registerTerminalFullscreenWebOverlay,
-  requestTerminalWebFocus,
-} from "@/stores/terminal-input-routing-slice.ts";
+import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 
 const SIDEBAR_STYLE: CSSProperties = {
   "--sidebar-width": "10rem",
@@ -92,11 +89,9 @@ export function SettingsDialog() {
     if (!open) {
       return;
     }
-    const route = registerTerminalFullscreenWebOverlay("settings-dialog");
     const releaseWebFocus = requestTerminalWebFocus("settings-dialog");
     return () => {
       releaseWebFocus();
-      route.dispose();
     };
   }, [open]);
 

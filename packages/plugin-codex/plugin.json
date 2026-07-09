@@ -47,9 +47,11 @@
   "main": "dist/main.js",
   "missionControlWidgets": [
     {
+      "category": "agent",
       "defaultSize": { "w": 4, "h": 4 },
       "description": "Manage Codex accounts and monitor usage.",
       "id": "pier.codex.accounts",
+      "searchTerms": ["codex", "account", "usage", "账号", "用量"],
       "maxSize": { "w": 8, "h": 10 },
       "minSize": { "w": 3, "h": 3 },
       "title": "Codex Accounts"
@@ -61,5 +63,5 @@
   "publisher": "Pier",
   "renderer": "dist/renderer.js",
   "terminalStatusItems": [],
-  "version": "1.0.0"
+  "version": "1.0.1"
 }

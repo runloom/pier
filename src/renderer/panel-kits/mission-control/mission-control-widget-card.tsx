@@ -4,72 +4,75 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@pier/ui/card.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@pier/ui/dropdown-menu.tsx";
+import { WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
-import { GripVertical, Trash2 } from "lucide-react";
-import { Component, type ErrorInfo, type ReactNode, useMemo } from "react";
+import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
+import {
+  Copy,
+  EllipsisVertical,
+  GripVertical,
+  RefreshCw,
+  Settings2,
+  Trash2,
+} from "lucide-react";
+import { useMemo } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import type { ResolvedMissionControlWidget } from "./mission-control-merge.ts";
-
-interface WidgetErrorBoundaryProps {
-  children: ReactNode;
-  widgetId: string;
-}
-
-interface WidgetErrorBoundaryState {
-  error: Error | null;
-}
-
-class WidgetErrorBoundary extends Component<
-  WidgetErrorBoundaryProps,
-  WidgetErrorBoundaryState
-> {
-  constructor(props: WidgetErrorBoundaryProps) {
-    super(props);
-    this.state = { error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): WidgetErrorBoundaryState {
-    return { error };
-  }
-
-  override componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error(
-      `[mission-control] widget ${this.props.widgetId} crashed:`,
-      error,
-      info.componentStack
-    );
-  }
-
-  override render(): ReactNode {
-    if (this.state.error) {
-      return (
-        <Alert className="m-3" variant="destructive">
-          <AlertDescription>
-            {this.state.error.message || "Widget error"}
-          </AlertDescription>
-        </Alert>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { WidgetErrorBoundary } from "./mission-control-widget-error-boundary.tsx";
 
 interface MissionControlWidgetCardProps {
+  locked: boolean;
+  onDuplicate: () => void;
+  onOpenSettings: () => void;
+  onRefresh: () => void;
   onRemove: () => void;
+  refreshToken: number;
   size: MissionControlGridSize;
+  updateParams: (patch: Record<string, JsonValue>) => void;
+  visible: boolean;
   widget: ResolvedMissionControlWidget;
 }
 
+/** 菜单条目按声明能力位与锁定态过滤；空菜单时整个触发器不渲染。 */
+function useMenuFlags(widget: ResolvedMissionControlWidget, locked: boolean) {
+  const canRefresh =
+    widget.refreshable &&
+    (widget.status === "core" || widget.status === "plugin-active");
+  const canConfigure =
+    widget.configurable && widget.registration?.settingsComponent !== undefined;
+  const canEditLayout = !locked;
+  return {
+    any: canRefresh || canConfigure || canEditLayout,
+    canConfigure,
+    canEditLayout,
+    canRefresh,
+  };
+}
+
 export function MissionControlWidgetCard({
+  locked,
+  onDuplicate,
+  onOpenSettings,
+  onRefresh,
   onRemove,
+  refreshToken,
   size,
+  updateParams,
+  visible,
   widget,
 }: MissionControlWidgetCardProps) {
   const t = useT();
+  const menu = useMenuFlags(widget, locked);
 
   const title = useMemo(() => {
     if (widget.status === "core") {
@@ -90,7 +93,7 @@ export function MissionControlWidgetCard({
 
   const Icon = widget.registration?.icon;
 
-  const renderBody = (): ReactNode => {
+  const renderBody = (): React.ReactNode => {
     if (widget.status === "plugin-disabled") {
       return (
         <div className="flex items-center justify-center p-4 text-muted-foreground text-sm">
@@ -103,61 +106,119 @@ export function MissionControlWidgetCard({
         <Alert className="m-3" variant="destructive">
           <AlertDescription className="flex flex-col items-center gap-2">
             <span>{t("missionControl.widget.unknown")}</span>
-            <Button onClick={onRemove} size="xs" variant="destructive">
-              {t("missionControl.widget.remove")}
-            </Button>
+            {locked ? null : (
+              <Button onClick={onRemove} size="xs" variant="destructive">
+                {t("missionControl.widget.remove")}
+              </Button>
+            )}
           </AlertDescription>
         </Alert>
       );
     }
     if (!widget.registration) {
-      return (
-        <div className="flex items-center justify-center p-4 text-muted-foreground text-sm">
-          {t("missionControl.widget.loading")}
-        </div>
-      );
+      return <WidgetSkeleton data-testid="mission-control-widget-loading" />;
     }
     const WidgetComponent = widget.registration.component;
     return (
-      <WidgetErrorBoundary widgetId={widget.id}>
-        <WidgetComponent size={size} />
+      <WidgetErrorBoundary
+        key={`${widget.instanceId}:${refreshToken}`}
+        onRetry={onRefresh}
+        retryLabel={t("missionControl.widget.retry")}
+        widgetId={widget.widgetId}
+      >
+        <WidgetComponent
+          instanceId={widget.instanceId}
+          params={widget.params}
+          refreshToken={refreshToken}
+          size={size}
+          updateParams={updateParams}
+          visible={visible}
+        />
       </WidgetErrorBoundary>
     );
   };
 
   return (
     <Card
-      // rounded-xl 覆盖 Card 原语的 24px 大圆角——密集网格里的 widget 卡
-      // 用 12px 更紧凑（幽灵卡/拖拽占位框同步此值）
       className="group h-full gap-0 rounded-xl py-0 [--card-spacing:--spacing(3)]"
-      data-testid={`mission-control-widget-${widget.id}`}
+      data-testid={`mission-control-widget-${widget.instanceId}`}
+      data-widget-id={widget.widgetId}
     >
-      <CardHeader className="mission-control-widget-drag-handle cursor-grab items-center gap-0.5 border-border/60 border-b pt-3 active:cursor-grabbing">
+      <CardHeader className="select-none items-center gap-0.5 border-border/60 border-b pt-3">
         <CardTitle className="flex items-center gap-1.5 font-semibold text-sm">
-          <GripVertical className="-ml-0.5 size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100" />
+          {locked ? null : (
+            <span
+              aria-hidden="true"
+              className="mission-control-widget-drag-handle -ml-1 flex size-5 cursor-grab items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100"
+            >
+              <GripVertical className="size-3.5" />
+            </span>
+          )}
           {Icon ? (
             <Icon className="size-3.5 shrink-0 text-muted-foreground" />
           ) : null}
-          <span className="truncate">{title}</span>
+          {/* 描述不占卡头第二行（挤压内容区），挂 title 提示即可 */}
+          <span className="truncate" title={description ?? undefined}>
+            {title}
+          </span>
         </CardTitle>
-        {description ? (
-          <CardDescription className="col-span-full text-xs">
-            {description}
-          </CardDescription>
+        {menu.any ? (
+          <CardAction>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label={t("missionControl.widget.menu")}
+                  className="text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                  data-testid="mission-control-widget-menu-trigger"
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <EllipsisVertical className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {menu.canRefresh ? (
+                  <DropdownMenuItem onSelect={onRefresh}>
+                    <RefreshCw className="size-4" />
+                    {t("missionControl.widget.refresh")}
+                  </DropdownMenuItem>
+                ) : null}
+                {menu.canConfigure ? (
+                  <DropdownMenuItem
+                    data-testid="mission-control-widget-menu-settings"
+                    onSelect={onOpenSettings}
+                  >
+                    <Settings2 className="size-4" />
+                    {t("missionControl.widget.settings")}
+                  </DropdownMenuItem>
+                ) : null}
+                {menu.canEditLayout && widget.multiInstance ? (
+                  <DropdownMenuItem
+                    data-testid="mission-control-widget-menu-duplicate"
+                    onSelect={onDuplicate}
+                  >
+                    <Copy className="size-4" />
+                    {t("missionControl.widget.duplicate")}
+                  </DropdownMenuItem>
+                ) : null}
+                {menu.canEditLayout ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      data-testid="mission-control-widget-menu-remove"
+                      onSelect={onRemove}
+                      variant="destructive"
+                    >
+                      <Trash2 className="size-4" />
+                      {t("missionControl.widget.remove")}
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </CardAction>
         ) : null}
-        <CardAction>
-          <Button
-            aria-label={t("missionControl.widget.remove")}
-            className="text-muted-foreground opacity-0 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
-            onClick={onRemove}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </CardAction>
       </CardHeader>
-      {/* overflow-y-auto：卡片高度是用户拖出的格子数，内容装不下时滚动而非裁切 */}
       <CardContent
         className="@container min-h-0 flex-1 overflow-y-auto p-0"
         data-scrollbar="stable"

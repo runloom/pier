@@ -67,6 +67,7 @@ import {
   type PierPluginSettingsAPI,
   pluginSettingsApi,
 } from "./plugin-settings-api.ts";
+import { type PierSystemStatsAPI, systemStatsApi } from "./system-stats-api.ts";
 import { terminalApi } from "./terminal-api.ts";
 import {
   type PierTerminalStatusBarPrefsAPI,
@@ -258,6 +259,7 @@ export interface PierWindowAPI {
   rendererCommand: PierRendererCommandAPI;
   secrets: PierSecretsAPI;
   settings: PierSettingsAPI;
+  systemStats: PierSystemStatsAPI;
   tasks: PierTasksAPI;
   terminal: TerminalAPI;
   terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
@@ -457,6 +459,7 @@ const api: PierWindowAPI = {
   rendererCommand: rendererCommandApi,
   secrets: secretsApi,
   settings: settingsApi,
+  systemStats: systemStatsApi,
   tasks: tasksApi,
   terminal: terminalApi,
   terminalStatusBarPrefs: terminalStatusBarPrefsApi,

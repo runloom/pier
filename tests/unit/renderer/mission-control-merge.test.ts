@@ -230,6 +230,73 @@ describe("resolveMissionControlWidgets", () => {
     expect(result[0]?.status).toBe("unknown");
     expect(result[0]?.title).toBe("gone.widget");
   });
+
+  it("v2 实例条目：widgetId 解析物料、instanceId 保持实例身份、params 透传", () => {
+    const multiCore: CoreMissionControlWidgetDeclaration = {
+      configurable: true,
+      id: "core.custom-card",
+      multiInstance: true,
+      titleKey: "missionControl.widget.customCard.title",
+    };
+    const reg: RendererMissionControlWidgetRegistration = {
+      component: () => null,
+      icon: LayoutDashboard,
+      id: "core.custom-card",
+    };
+
+    const result = resolveMissionControlWidgets(
+      {
+        widgets: [
+          {
+            h: 4,
+            id: "uuid-1",
+            params: { blocks: [{ metricId: "m1" }] },
+            w: 3,
+            widgetId: "core.custom-card",
+            x: 0,
+            y: 0,
+          },
+          {
+            h: 4,
+            id: "uuid-2",
+            w: 3,
+            widgetId: "core.custom-card",
+            x: 3,
+            y: 0,
+          },
+        ],
+      },
+      [multiCore],
+      [],
+      new Map(),
+      new Map([["core.custom-card", reg]])
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result[0]?.instanceId).toBe("uuid-1");
+    expect(result[0]?.widgetId).toBe("core.custom-card");
+    expect(result[0]?.params).toEqual({ blocks: [{ metricId: "m1" }] });
+    expect(result[0]?.configurable).toBe(true);
+    expect(result[0]?.multiInstance).toBe(true);
+    expect(result[1]?.instanceId).toBe("uuid-2");
+    expect(result[1]?.params).toEqual({});
+  });
+
+  it("v1 条目回退：instanceId 即 widgetId，能力位缺省 false", () => {
+    const result = resolveMissionControlWidgets(
+      { widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }] },
+      [coreWidget],
+      [],
+      new Map(),
+      new Map([["core.activity-overview", coreReg]])
+    );
+
+    expect(result[0]?.instanceId).toBe("core.activity-overview");
+    expect(result[0]?.widgetId).toBe("core.activity-overview");
+    expect(result[0]?.configurable).toBe(false);
+    expect(result[0]?.multiInstance).toBe(false);
+    expect(result[0]?.refreshable).toBe(false);
+  });
 });
 
 describe("salvageMissionControlPanelParams", () => {

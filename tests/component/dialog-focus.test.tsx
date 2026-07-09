@@ -1,7 +1,8 @@
 import { Command, CommandDialog, CommandInput } from "@pier/ui/command.tsx";
 import { Dialog, DialogContent } from "@pier/ui/dialog.tsx";
+import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 describe("Dialog initial focus", () => {
   it("focuses dialog content by default instead of the first button", () => {
@@ -32,5 +33,31 @@ describe("Dialog initial focus", () => {
     );
 
     expect(screen.getByLabelText("Command search")).toHaveFocus();
+  });
+
+  it("registers the dialog overlay for terminal hit testing", () => {
+    const dispose = vi.fn();
+    const registerElement = vi.fn(() => ({ dispose }));
+    const { unmount } = render(
+      <TerminalOverlayContext.Provider value={{ registerElement }}>
+        <Dialog open>
+          <DialogContent>
+            <button type="button">Primary action</button>
+          </DialogContent>
+        </Dialog>
+      </TerminalOverlayContext.Provider>
+    );
+
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+
+    expect(overlay).toBeInstanceOf(HTMLElement);
+    expect(registerElement).toHaveBeenCalledWith(
+      expect.stringMatching(/^terminal-overlay:/),
+      overlay
+    );
+
+    unmount();
+
+    expect(dispose).toHaveBeenCalled();
   });
 });

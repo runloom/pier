@@ -1,7 +1,9 @@
 import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { Button } from "./button.tsx";
+import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
 function Dialog({
@@ -32,6 +34,8 @@ function DialogOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+  const overlayRef = useTerminalOverlay();
+  const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <DialogPrimitive.Overlay
       className={cn(
@@ -40,6 +44,7 @@ function DialogOverlay({
       )}
       data-slot="dialog-overlay"
       {...props}
+      ref={composedRef}
     />
   );
 }

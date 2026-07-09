@@ -1,23 +1,36 @@
-// RGL v2 CSS (v2 合并了 react-resizable 样式，只需一个 CSS 文件)
+// RGL v2 CSS（v2 合并了 react-resizable 样式，只需一个 CSS 文件）
 import "react-grid-layout/css/styles.css";
-
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@pier/ui/context-menu.tsx";
+import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
 import {
   MISSION_CONTROL_GRID_COLS,
-  type MissionControlGridSize,
   salvageMissionControlPanelParams,
+  widgetEntryWidgetId,
 } from "@shared/contracts/mission-control.ts";
-import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import i18next from "i18next";
-import { LayoutDashboard } from "lucide-react";
-import type { ReactNode, Ref } from "react";
-import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
-import GridLayout, {
-  type Layout,
-  noCompactor,
-  type ResizeHandleAxis,
-  verticalCompactor,
-} from "react-grid-layout";
+import {
+  LayoutDashboard,
+  LayoutGrid,
+  Lock,
+  LockOpen,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import GridLayout, { noCompactor, verticalCompactor } from "react-grid-layout";
 import { useContainerWidth } from "@/hooks/use-container-width.ts";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { useT } from "@/i18n/use-t.ts";
@@ -33,120 +46,32 @@ import {
 } from "./core-mission-control-widgets.ts";
 import { MissionControlAddCard } from "./mission-control-add-card.tsx";
 import {
-  appendEntry,
-  applyDerivedLayoutChange,
   CELL_WIDTH,
   computeAvailableCols,
   deriveLayout,
   entryToLayoutItem,
-  findAddSlot,
   gridPixelWidth,
-  layoutToEntries,
   MARGIN,
   ROW_HEIGHT,
+  resolveResponsiveGridSize,
 } from "./mission-control-grid-geometry.ts";
+import { buildMissionControlLibraryItems } from "./mission-control-library.ts";
+import { MissionControlLibraryDialog } from "./mission-control-library-dialog.tsx";
 import { resolveMissionControlWidgets } from "./mission-control-merge.ts";
+import { MissionControlSettingsSheet } from "./mission-control-settings-sheet.tsx";
 import { MissionControlWidgetCard } from "./mission-control-widget-card.tsx";
+import {
+  findWidgetDeclaration,
+  useMissionControlPanelState,
+} from "./use-mission-control-panel-state.ts";
+import { usePanelVisible } from "./use-panel-visible.ts";
 
-/** 一格占位（格宽 + 水平间距），幽灵卡像素定位用。 */
+/** 一格占位（格宽 + 水平间距），添加入口尺寸换算用。 */
 const GRID_UNIT = CELL_WIDTH + MARGIN[0];
 
-/**
- * 幽灵添加卡的格子高度：与真卡同行并排时取默认 widget 高度（3 格）对齐底边；
- * 独占一行（x=0 落位，典型于窄单列）时降为 2 格——占位不该比真卡更重。
- */
-const GHOST_ROWS_INLINE = 3;
-const GHOST_ROWS_OWN_ROW = 2;
-
-/**
- * 自定义 resize 手柄：se 角点阵 grip（唯一可见手柄），s / e 边是隐形热区，
- * hover 热区时浮现 2px 细线。RGL 自带 CSS 用高优先级选择器强加 20×20 尺寸、
- * 旋转与 ::after chevron——此处用 important 工具类与容器级 after:hidden 压制，
- * 否则边手柄会被渲染成旋转 45° 的"圆形 chevron 按钮"。
- */
-function renderResizeHandle(
-  axis: ResizeHandleAxis,
-  ref: Ref<HTMLElement>
-): ReactNode {
-  const base = `react-resizable-handle react-resizable-handle-${axis} absolute z-10 transition-opacity duration-150 after:hidden`;
-
-  if (axis === "se") {
-    return (
-      <div
-        className={`${base} right-0 bottom-0 size-5 cursor-se-resize`}
-        ref={ref as Ref<HTMLDivElement>}
-      >
-        {/* 经典双斜线 se-resize 图形——点阵在暗色下读作噪点，已弃用 */}
-        <svg
-          aria-hidden="true"
-          className="absolute right-1 bottom-1 size-2.5 text-muted-foreground/40"
-          fill="none"
-          viewBox="0 0 8 8"
-        >
-          <path
-            d="M7 1L1 7"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.2"
-          />
-          <path
-            d="M7 4.5L4.5 7"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.2"
-          />
-        </svg>
-      </div>
-    );
-  }
-
-  if (axis === "s") {
-    return (
-      <div
-        className={`${base} group/handle transform-none! right-2 bottom-0 left-2! ml-0! h-2! w-auto! cursor-s-resize`}
-        ref={ref as Ref<HTMLDivElement>}
-      >
-        <div className="absolute inset-x-6 bottom-0.5 h-0.5 rounded-full bg-primary/40 opacity-0 transition-opacity group-hover/handle:opacity-100" />
-      </div>
-    );
-  }
-
-  // axis === "e"
-  return (
-    <div
-      className={`${base} group/handle transform-none! top-2! right-0 bottom-2 mt-0! h-auto! w-2! cursor-e-resize`}
-      ref={ref as Ref<HTMLDivElement>}
-    >
-      <div className="absolute inset-y-6 right-0.5 w-0.5 rounded-full bg-primary/40 opacity-0 transition-opacity group-hover/handle:opacity-100" />
-    </div>
-  );
-}
-
-/** 声明查找：core / 插件 manifest 中找 widget 的尺寸三元组。 */
-function findSizeDeclaration(
-  id: string,
-  plugins: readonly PluginRegistryEntry[]
-):
-  | {
-      defaultSize?: MissionControlGridSize | undefined;
-      maxSize?: MissionControlGridSize | undefined;
-      minSize?: MissionControlGridSize | undefined;
-    }
-  | undefined {
-  const core = CORE_MISSION_CONTROL_WIDGETS.find((w) => w.id === id);
-  if (core) {
-    return core;
-  }
-  for (const entry of plugins) {
-    const widget = entry.manifest.missionControlWidgets.find(
-      (w) => w.id === id
-    );
-    if (widget) {
-      return widget;
-    }
-  }
-  return;
-}
+/** 添加卡的展示尺寸：和普通中号物料同宽，窄容器可收缩成轻量入口。 */
+const GHOST_PREFERRED_SIZE: MissionControlGridSize = { h: 3, w: 4 };
+const GHOST_MIN_SIZE: MissionControlGridSize = { h: 2, w: 2 };
 
 export function MissionControlPanel(props: IDockviewPanelProps) {
   const t = useT();
@@ -174,6 +99,21 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
     () => salvageMissionControlPanelParams(props.params),
     [props.params]
   );
+  const locked = params.locked === true;
+
+  const sizeDeclarationsByInstanceId = useMemo(() => {
+    const map = new Map<
+      string,
+      ReturnType<typeof findWidgetDeclaration> | undefined
+    >();
+    for (const entry of params.widgets) {
+      map.set(
+        entry.id,
+        findWidgetDeclaration(widgetEntryWidgetId(entry), plugins)
+      );
+    }
+    return map;
+  }, [params.widgets, plugins]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: widgetRevision is the cache-buster for this mutable Map
   const widgetRegistrations = useMemo(
@@ -201,193 +141,265 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
 
   const basisLayout = useMemo(
     () =>
-      params.widgets.map((entry) => {
-        const decl = findSizeDeclaration(entry.id, plugins);
-        return entryToLayoutItem(entry, decl);
-      }),
-    [params.widgets, plugins]
+      params.widgets.map((entry) =>
+        entryToLayoutItem(entry, sizeDeclarationsByInstanceId.get(entry.id))
+      ),
+    [params.widgets, sizeDeclarationsByInstanceId]
   );
 
-  // k<12 进入派生模式：纯函数换行重排，结果只渲染不持久化
+  const getSizeDeclaration = useCallback(
+    (instanceId: string) => sizeDeclarationsByInstanceId.get(instanceId),
+    [sizeDeclarationsByInstanceId]
+  );
+
   const layout = useMemo(
-    () => (isDerived ? deriveLayout(basisLayout, cols) : basisLayout),
-    [basisLayout, cols, isDerived]
+    () =>
+      isDerived
+        ? deriveLayout(basisLayout, cols, { getSizeDeclaration })
+        : basisLayout,
+    [basisLayout, cols, getSizeDeclaration, isDerived]
   );
 
-  const addedIds = useMemo(
-    () => new Set(params.widgets.map((w) => w.id)),
-    [params.widgets]
+  const state = useMissionControlPanelState(params, props.api, plugins);
+  const visible = usePanelVisible(props.api);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [settingsInstanceId, setSettingsInstanceId] = useState<string | null>(
+    null
   );
+  const settingsWidget =
+    resolved.find((w) => w.instanceId === settingsInstanceId) ?? null;
 
-  // 幽灵添加卡落位：显示布局的下一个 first-fit 空位（默认卡宽随 k clamp）。
-  // 先按 3 格高试放——放得下且与真卡同行（x>0）就对齐底边；
-  // 否则按 2 格高独占一行。
-  const ghostW = Math.min(4, cols);
-  const ghost = useMemo(() => {
-    const inlineSlot = findAddSlot(layout, cols, ghostW, GHOST_ROWS_INLINE);
-    if (inlineSlot.x > 0) {
-      return { rows: GHOST_ROWS_INLINE, slot: inlineSlot };
+  const addedCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of params.widgets) {
+      const widgetId = widgetEntryWidgetId(entry);
+      counts.set(widgetId, (counts.get(widgetId) ?? 0) + 1);
     }
-    return {
-      rows: GHOST_ROWS_OWN_ROW,
-      slot: findAddSlot(layout, cols, ghostW, GHOST_ROWS_OWN_ROW),
-    };
-  }, [layout, cols, ghostW]);
+    return counts;
+  }, [params.widgets]);
 
-  const prevEntriesRef = useRef(JSON.stringify(params.widgets));
-
-  const handleLayoutChange = useCallback(
-    (newLayout: Layout) => {
-      // 全宽模式：直存基准（原有路径）
-      if (!isDerived) {
-        const newEntries = layoutToEntries(newLayout);
-        const newJson = JSON.stringify(newEntries);
-        if (newJson !== prevEntriesRef.current) {
-          prevEntriesRef.current = newJson;
-          props.api.updateParameters({ widgets: newEntries });
-        }
-        return;
-      }
-
-      // 派生模式：绝不把 k 列坐标写回。resize 差分与拖拽换序的识别
-      // 收敛在 applyDerivedLayoutChange 纯函数里，纯回声返回 null。
-      const next = applyDerivedLayoutChange(params.widgets, layout, newLayout);
-      if (next) {
-        prevEntriesRef.current = JSON.stringify(next);
-        props.api.updateParameters({ widgets: next });
-      }
-    },
-    [isDerived, layout, params.widgets, props.api]
+  const libraryItems = useMemo(
+    () =>
+      buildMissionControlLibraryItems({
+        addedCounts,
+        coreComponentMap: CORE_MISSION_CONTROL_WIDGET_COMPONENTS,
+        coreWidgets: CORE_MISSION_CONTROL_WIDGETS,
+        locale,
+        plugins,
+        translate: t,
+        widgetRegistrations,
+      }),
+    [addedCounts, locale, plugins, t, widgetRegistrations]
   );
 
-  const handleAdd = useCallback(
-    (widgetId: string) => {
-      const decl = findSizeDeclaration(widgetId, plugins);
-      const newEntry = appendEntry(params.widgets, widgetId, decl);
-      const next = [...params.widgets, newEntry];
-      prevEntriesRef.current = JSON.stringify(next);
-      props.api.updateParameters({ widgets: next });
-    },
-    [params.widgets, plugins, props.api]
+  // 添加入口尺寸跟随容器列数；位置固定在网格下方，避免承诺自动重排后的落点。
+  const ghostSize = useMemo(
+    () =>
+      resolveResponsiveGridSize(
+        GHOST_PREFERRED_SIZE,
+        { minSize: GHOST_MIN_SIZE },
+        cols
+      ),
+    [cols]
+  );
+  const addCardStyle = useMemo(
+    () => ({
+      height: ghostSize.h * GRID_UNIT - MARGIN[1],
+      width: gridPixelWidth(ghostSize.w),
+    }),
+    [ghostSize]
   );
 
-  const handleRemove = useCallback(
-    (widgetId: string) => {
-      const next = params.widgets.filter((w) => w.id !== widgetId);
-      prevEntriesRef.current = JSON.stringify(next);
-      props.api.updateParameters({ widgets: next });
-    },
-    [params.widgets, props.api]
-  );
+  // 新添加的卡滚动入视口（高亮环由 data-highlighted 样式承载）
+  useEffect(() => {
+    if (state.highlightId === null) {
+      return;
+    }
+    const el = document.querySelector(
+      `[data-testid="mission-control-widget-${state.highlightId}"]`
+    );
+    el?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [state.highlightId]);
+
+  const showGhost = !locked && resolved.length > 0;
 
   return (
     <div
       className={[
         "flex h-full flex-col bg-surface-canvas",
-        // RGL 自带 CSS 给 placeholder 强加 background:red + opacity:.2，
-        // 同优先级靠加载序生效，必须 important 压制
         "[&_.react-grid-placeholder]:rounded-xl! [&_.react-grid-placeholder]:bg-primary/10! [&_.react-grid-placeholder]:opacity-100!",
         "[&_.react-grid-item:hover_.react-resizable-handle]:opacity-100 [&_.react-resizable-handle]:opacity-0",
         // 拖拽中：卡片抬升（阴影加深 + 提层），落点占位框由上面的 placeholder 样式承载
         "[&_.react-grid-item.react-draggable-dragging]:z-30",
         "[&_.react-grid-item.react-draggable-dragging_[data-slot=card]]:shadow-lg",
+        // 新添加卡的一次性高亮环
+        "[&_[data-highlighted=true]_[data-slot=card]]:ring-2 [&_[data-highlighted=true]_[data-slot=card]]:ring-primary/50",
       ].join(" ")}
     >
-      <div
-        // 外边距 = 网格 gutter（MARGIN 12px），四边与卡间距同节奏
-        className="flex-1 overflow-auto p-3"
-        data-scrollbar="stable"
-        ref={containerRef}
-      >
-        {/* 左对齐（用户定）：左/上/下边距恒等于卡间距 12px，不做居中留白 */}
-        <div
-          data-testid="mission-control-grid-wrapper"
-          style={{ width: gridPixelWidth(cols) }}
-        >
-          {resolved.length > 0 ? (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            // 外边距 = 网格 gutter（MARGIN 12px），四边与卡间距同节奏
+            className="flex-1 overflow-auto p-3"
+            data-scrollbar="stable"
+            ref={containerRef}
+          >
+            {/* 左对齐（用户定）：左/上/下边距恒等于卡间距 12px，不做居中留白 */}
             <div
-              className="relative"
-              style={{
-                minHeight: (ghost.slot.y + ghost.rows) * GRID_UNIT - MARGIN[1],
-              }}
+              data-testid="mission-control-grid-wrapper"
+              style={{ width: gridPixelWidth(cols) }}
             >
-              <GridLayout
-                // 派生布局保序输出可能带竖向空隙，verticalCompactor 会上提回填
-                // 并在挂载时触发"误判为用户拖拽"的写盘，故派生模式禁压实。
-                compactor={isDerived ? noCompactor : verticalCompactor}
-                dragConfig={{
-                  // 整卡可拖（对齐主流仪表盘直觉：抓哪里都能拖），交互元素豁免。
-                  // 不再限定 header 把手——用户第一反应是抓卡片身体，抓不动
-                  // 会被感知为"拖拽坏了"。[data-no-drag] 是 widget 体内的逃生舱。
-                  cancel:
-                    "button, a, input, textarea, select, [role='menuitem'], [data-no-drag]",
-                }}
-                gridConfig={{
-                  cols,
-                  containerPadding: [0, 0],
-                  margin: MARGIN,
-                  rowHeight: ROW_HEIGHT,
-                }}
-                layout={layout}
-                onLayoutChange={handleLayoutChange}
-                resizeConfig={{
-                  handleComponent: renderResizeHandle,
-                  handles: ["se", "s", "e"],
-                }}
-                width={gridPixelWidth(cols)}
-              >
-                {resolved.map((widget) => {
-                  const item = layout.find((l) => l.i === widget.id);
-                  const size: MissionControlGridSize = item
-                    ? { h: item.h, w: item.w }
-                    : { h: 3, w: 4 };
-                  return (
-                    <div key={widget.id}>
-                      <MissionControlWidgetCard
-                        onRemove={() => handleRemove(widget.id)}
-                        size={size}
-                        widget={widget}
+              {resolved.length > 0 ? (
+                <div>
+                  <GridLayout
+                    compactor={isDerived ? noCompactor : verticalCompactor}
+                    dragConfig={{
+                      cancel:
+                        "button, a, input, textarea, select, [role='menuitem'], [data-no-drag]",
+                      enabled: !locked,
+                      handle: ".mission-control-widget-drag-handle",
+                    }}
+                    gridConfig={{
+                      cols,
+                      containerPadding: [0, 0],
+                      margin: MARGIN,
+                      rowHeight: ROW_HEIGHT,
+                    }}
+                    layout={layout}
+                    onLayoutChange={(newLayout) =>
+                      state.handleLayoutChange(newLayout, { isDerived, layout })
+                    }
+                    resizeConfig={{
+                      enabled: !locked,
+                      handles: locked ? [] : ["se"],
+                    }}
+                    width={gridPixelWidth(cols)}
+                  >
+                    {resolved.map((widget) => {
+                      const item = layout.find(
+                        (layoutItem) => layoutItem.i === widget.instanceId
+                      );
+                      const size: MissionControlGridSize = {
+                        h: item?.h ?? 3,
+                        w: item?.w ?? 4,
+                      };
+                      return (
+                        <div
+                          data-highlighted={
+                            widget.instanceId === state.highlightId
+                          }
+                          key={widget.instanceId}
+                        >
+                          <MissionControlWidgetCard
+                            locked={locked}
+                            onDuplicate={() =>
+                              state.handleDuplicate(widget.instanceId)
+                            }
+                            onOpenSettings={() =>
+                              setSettingsInstanceId(widget.instanceId)
+                            }
+                            onRefresh={() =>
+                              state.refreshOne(widget.instanceId)
+                            }
+                            onRemove={() =>
+                              state.handleRemove(widget.instanceId)
+                            }
+                            refreshToken={
+                              state.refreshTokens[widget.instanceId] ?? 0
+                            }
+                            size={size}
+                            updateParams={(patch) =>
+                              state.handleUpdateParams(widget.instanceId, patch)
+                            }
+                            visible={visible}
+                            widget={widget}
+                          />
+                        </div>
+                      );
+                    })}
+                  </GridLayout>
+                  {/* 添加入口只负责打开物料库；新物料落点由持久化基准布局决定。 */}
+                  {showGhost ? (
+                    <div className="mt-3" style={addCardStyle}>
+                      <MissionControlAddCard
+                        isEmpty={false}
+                        onBrowse={() => setLibraryOpen(true)}
                       />
                     </div>
-                  );
-                })}
-              </GridLayout>
-              {/* 幽灵添加卡占据网格的下一个空位，而非横贯底部 */}
-              <div
-                className="absolute"
-                style={{
-                  height: ghost.rows * GRID_UNIT - MARGIN[1],
-                  left: ghost.slot.x * GRID_UNIT,
-                  top: ghost.slot.y * GRID_UNIT,
-                  width: gridPixelWidth(ghostW),
-                }}
-              >
+                  ) : null}
+                </div>
+              ) : (
                 <MissionControlAddCard
-                  addedIds={addedIds}
-                  coreWidgetRegistrations={
-                    CORE_MISSION_CONTROL_WIDGET_COMPONENTS
-                  }
-                  coreWidgets={CORE_MISSION_CONTROL_WIDGETS}
-                  isEmpty={false}
-                  onAdd={handleAdd}
-                  plugins={plugins}
-                  widgetRegistrations={widgetRegistrations}
+                  isEmpty
+                  onBrowse={() => setLibraryOpen(true)}
+                  showAction={!locked}
                 />
-              </div>
+              )}
             </div>
-          ) : (
-            <MissionControlAddCard
-              addedIds={addedIds}
-              coreWidgetRegistrations={CORE_MISSION_CONTROL_WIDGET_COMPONENTS}
-              coreWidgets={CORE_MISSION_CONTROL_WIDGETS}
-              isEmpty
-              onAdd={handleAdd}
-              plugins={plugins}
-              widgetRegistrations={widgetRegistrations}
-            />
-          )}
-        </div>
-      </div>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-44">
+          <ContextMenuItem
+            disabled={locked}
+            onSelect={() => setLibraryOpen(true)}
+          >
+            <Plus className="size-4" />
+            {t("missionControl.addWidget")}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={state.refreshAll}>
+            <RefreshCw className="size-4" />
+            {t("missionControl.context.refreshAll")}
+          </ContextMenuItem>
+          <ContextMenuItem
+            data-testid="mission-control-arrange-layout"
+            disabled={locked || resolved.length === 0}
+            onSelect={state.handleArrangeLayout}
+          >
+            <LayoutGrid className="size-4" />
+            {t("missionControl.context.arrangeLayout")}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            data-testid="mission-control-toggle-lock"
+            onSelect={state.handleToggleLocked}
+          >
+            {locked ? (
+              <LockOpen className="size-4" />
+            ) : (
+              <Lock className="size-4" />
+            )}
+            {locked
+              ? t("missionControl.context.unlock")
+              : t("missionControl.context.lock")}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <MissionControlLibraryDialog
+        items={libraryItems}
+        onAdd={(widgetId) => {
+          state.handleAdd(widgetId);
+          setLibraryOpen(false);
+        }}
+        onOpenChange={setLibraryOpen}
+        open={libraryOpen}
+      />
+      <MissionControlSettingsSheet
+        onOpenChange={(open) => {
+          if (!open) {
+            setSettingsInstanceId(null);
+          }
+        }}
+        updateParams={(patch) => {
+          if (settingsInstanceId !== null) {
+            state.handleUpdateParams(settingsInstanceId, patch);
+          }
+        }}
+        widget={
+          settingsWidget?.registration?.settingsComponent
+            ? settingsWidget
+            : null
+        }
+      />
     </div>
   );
 }

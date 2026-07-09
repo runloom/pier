@@ -13,9 +13,10 @@ export { AccountsWidget } from "./accounts-widget.tsx";
 export const plugin: ExternalRendererPluginModule = {
   id: "pier.codex",
   activate(context: ExternalRendererPluginContext): () => void {
+    // title 不在注册时硬编码——省略后宿主回退 manifest 本地化标题
+    // （locales.zh-CN.missionControlWidgets["pier.codex.accounts"]）。
     const dispose = context.missionControlWidgets.register({
       id: "pier.codex.accounts",
-      title: () => "Codex Accounts",
       component: (_props) => AccountsWidgetImpl({ context }),
     });
     return dispose;

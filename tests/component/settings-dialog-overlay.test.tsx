@@ -1,10 +1,28 @@
+import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import { act, cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
+import {
+  getLastTerminalInputRoutingSnapshot,
+  registerTerminalElementWebOverlay,
+  resetTerminalInputRoutingForTests,
+} from "@/stores/terminal-input-routing-slice.ts";
 
 const BACKDROP_FILTER_CLASS = /backdrop-blur|backdrop-filter/;
+const terminalOverlayRegistry = {
+  registerElement: registerTerminalElementWebOverlay,
+};
+
+function renderWithTerminalOverlay(children: ReactNode) {
+  return render(
+    <TerminalOverlayContext.Provider value={terminalOverlayRegistry}>
+      {children}
+    </TerminalOverlayContext.Provider>
+  );
+}
 
 describe("SettingsDialog input routing", () => {
   beforeAll(async () => {
@@ -15,11 +33,31 @@ describe("SettingsDialog input routing", () => {
     cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    resetTerminalInputRoutingForTests();
     useSettingsDialogStore.setState({ isOpen: false });
   });
 
   it("keeps the default settings backdrop without hiding native terminal surfaces", () => {
     const applyInputRouting = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 720,
+      height: 696,
+      left: 0,
+      right: 1280,
+      toJSON: () => ({}),
+      top: 24,
+      width: 1280,
+      x: 0,
+      y: 24,
+    });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class ResizeObserver {
+        disconnect = vi.fn();
+        observe = vi.fn();
+        unobserve = vi.fn();
+      }
+    );
     vi.stubGlobal("matchMedia", () => ({
       addEventListener: vi.fn(),
       matches: false,
@@ -34,7 +72,7 @@ describe("SettingsDialog input routing", () => {
     });
     useSettingsDialogStore.setState({ isOpen: true });
 
-    render(<SettingsDialog />);
+    renderWithTerminalOverlay(<SettingsDialog />);
 
     const overlay = document.querySelector('[data-slot="dialog-overlay"]');
 
@@ -44,15 +82,18 @@ describe("SettingsDialog input routing", () => {
     expect(overlay?.className).not.toContain("inset-0");
     expect(overlay?.className).not.toContain("bg-black/30");
     expect(overlay?.className).not.toMatch(BACKDROP_FILTER_CLASS);
-    expect(applyInputRouting).toHaveBeenLastCalledWith(
+    expect(getLastTerminalInputRoutingSnapshot()).toEqual(
       expect.objectContaining({
         basePanel: { kind: "web" },
         webOverlayRects: expect.arrayContaining([
-          expect.objectContaining({ id: "settings-dialog" }),
+          expect.objectContaining({
+            id: expect.stringMatching(/^terminal-overlay:/),
+          }),
         ]),
         webRequestCount: 1,
       })
     );
+    expect(applyInputRouting).toHaveBeenCalled();
   });
 
   it("does not autofocus the first settings navigation item on open", () => {

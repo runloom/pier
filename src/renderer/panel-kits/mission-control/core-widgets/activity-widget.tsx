@@ -1,23 +1,14 @@
+import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import { PanelsTopLeft } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
   activityCounts,
   useForegroundActivityStore,
 } from "@/stores/foreground-activity.store.ts";
-
-function groupActivities(
-  activities: Record<string, ForegroundActivity>
-): { count: number; kind: ForegroundActivity["kind"] }[] {
-  const counts = new Map<ForegroundActivity["kind"], number>();
-  for (const a of Object.values(activities)) {
-    counts.set(a.kind, (counts.get(a.kind) ?? 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .map(([kind, count]) => ({ count, kind }))
-    .sort((a, b) => a.kind.localeCompare(b.kind));
-}
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 /**
  * KPI 统计块：状态身份由文字旁的色点承载，label/value 走文本 token
@@ -54,12 +45,69 @@ function StatTile({
   );
 }
 
+function activityStatusDot(activity: ForegroundActivity): string {
+  if (activity.kind === "agent") {
+    if (activity.status === "processing" || activity.status === "tool") {
+      return "bg-success";
+    }
+    if (activity.status === "waiting") {
+      return "bg-warning";
+    }
+    if (activity.status === "error") {
+      return "bg-destructive";
+    }
+    return "bg-muted-foreground/40";
+  }
+  if (activity.kind === "task") {
+    if (activity.status === "running") {
+      return "bg-success";
+    }
+    if (activity.status === "failure") {
+      return "bg-destructive";
+    }
+    return "bg-muted-foreground/40";
+  }
+  return "bg-muted-foreground/40";
+}
+
+function activityLabel(
+  activity: ForegroundActivity,
+  t: (key: string) => string
+): string {
+  if (activity.kind === "agent") {
+    return activity.agentId;
+  }
+  if (activity.kind === "task") {
+    return activity.label;
+  }
+  if (activity.kind === "shell") {
+    return (
+      activity.commandLine ??
+      t("missionControl.widget.activityOverview.kind.shell")
+    );
+  }
+  return t("missionControl.widget.activityOverview.kind.idle");
+}
+
 export function ActivityWidget(_props: MissionControlWidgetComponentProps) {
   const t = useT();
   const activities = useForegroundActivityStore((s) => s.activities);
+  const workspaceApi = useWorkspaceStore((s) => s.api);
   const { running, waiting } = activityCounts(activities);
-  const groups = groupActivities(activities);
   const total = Object.keys(activities).length;
+
+  // 非 idle 活动按最近更新排序 —— 每行都是 drill-down 入口（点击聚焦对应面板）
+  const rows = Object.values(activities)
+    .filter((a) => a.kind !== "idle")
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+
+  const handleReveal = (panelId: string): void => {
+    if (!workspaceApi) {
+      return;
+    }
+    // 点击后的反馈是面板切换本身（强自然 UI 反馈）；找不到面板时静默无害。
+    activateWorkspacePanel(workspaceApi, panelId, { reveal: "always" });
+  };
 
   return (
     <div className="flex min-h-full flex-col gap-3 p-3">
@@ -85,36 +133,38 @@ export function ActivityWidget(_props: MissionControlWidgetComponentProps) {
       </div>
 
       {/* 活动列表 / 空态（空态占满剩余高度，垂直水平居中） */}
-      {groups.length > 0 ? (
+      {rows.length > 0 ? (
         <div className="flex flex-col">
-          {groups.map((g, i) => (
-            <div
-              className={`flex items-center justify-between py-1.5 ${i > 0 ? "border-border/50 border-t" : ""}`}
-              key={g.kind}
+          {rows.map((activity, i) => (
+            <button
+              className={`flex items-center justify-between gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-accent/50 ${i > 0 ? "border-border/50 border-t" : ""}`}
+              key={activity.panelId}
+              onClick={() => handleReveal(activity.panelId)}
+              type="button"
             >
-              <span className="font-medium text-sm">
-                {t(`missionControl.widget.activityOverview.kind.${g.kind}`)}
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={`size-2 shrink-0 rounded-full ${activityStatusDot(activity)}`}
+                />
+                <span className="truncate font-medium text-sm">
+                  {activityLabel(activity, t)}
+                </span>
               </span>
-              <span className="font-mono text-muted-foreground text-xs tabular-nums">
-                {g.count}
+              <span className="shrink-0 font-mono text-muted-foreground text-xs">
+                {t(
+                  `missionControl.widget.activityOverview.kind.${activity.kind}`
+                )}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center @[14rem]:gap-1.5 gap-1 @[14rem]:py-2 py-0 text-center">
-          <PanelsTopLeft
-            aria-hidden="true"
-            className="@[14rem]:size-5 size-4 text-muted-foreground/60"
-          />
-          <p className="font-medium text-sm">
-            {t("missionControl.widget.activityOverview.empty")}
-          </p>
-          {/* 窄卡空间寸土寸金，副句只在 ≥14rem 显示 */}
-          <p className="@[14rem]:block hidden text-muted-foreground text-xs">
-            {t("missionControl.widget.activityOverview.emptyHint")}
-          </p>
-        </div>
+        <WidgetEmpty
+          hint={t("missionControl.widget.activityOverview.emptyHint")}
+          icon={PanelsTopLeft}
+          title={t("missionControl.widget.activityOverview.empty")}
+        />
       )}
     </div>
   );

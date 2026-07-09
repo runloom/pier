@@ -189,6 +189,75 @@ async function collectPlugin(pluginDir) {
   };
 }
 
+async function readExistingIndex() {
+  const raw = await readFile(outFile, "utf8").catch((err) => {
+    if (err?.code === "ENOENT") {
+      return null;
+    }
+    throw err;
+  });
+  if (raw === null) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `existing official plugin index is not valid JSON: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+function previousSequence(existingIndex) {
+  return Number.isInteger(existingIndex?.sequence) ? existingIndex.sequence : 0;
+}
+
+function nextSequence(existingIndex) {
+  const explicit = process.env.PIER_INDEX_SEQUENCE;
+  const sequence =
+    explicit === undefined
+      ? previousSequence(existingIndex) + 1
+      : Number(explicit);
+  if (!Number.isInteger(sequence) || sequence < 0) {
+    throw new Error(`invalid PIER_INDEX_SEQUENCE: ${explicit ?? sequence}`);
+  }
+  return sequence;
+}
+
+function assertNoSameVersionDrift(existingIndex, nextPlugins) {
+  const previousPlugins = existingIndex?.plugins;
+  if (
+    !previousPlugins ||
+    typeof previousPlugins !== "object" ||
+    Array.isArray(previousPlugins)
+  ) {
+    return;
+  }
+
+  for (const [id, plugin] of Object.entries(nextPlugins)) {
+    for (const [version, entry] of Object.entries(plugin.versions)) {
+      const previousEntry = previousPlugins[id]?.versions?.[version];
+      if (!previousEntry) {
+        continue;
+      }
+      const cacheKey = `${id}@${version}`;
+      if (previousEntry.sha256 && previousEntry.sha256 !== entry.sha256) {
+        throw new Error(
+          `same-version hash drift for ${cacheKey}: existing ${previousEntry.sha256} vs generated ${entry.sha256}; bump the plugin version instead of rewriting an immutable release`
+        );
+      }
+      if (
+        Number.isInteger(previousEntry.size) &&
+        previousEntry.size !== entry.size
+      ) {
+        throw new Error(
+          `same-version size drift for ${cacheKey}: existing ${previousEntry.size} vs generated ${entry.size}; bump the plugin version instead of rewriting an immutable release`
+        );
+      }
+    }
+  }
+}
+
 const dirents = await readdir(packagesDir, { withFileTypes: true });
 const plugins = {};
 for (const d of dirents) {
@@ -197,8 +266,11 @@ for (const d of dirents) {
   if (info) plugins[info.entry.id] = info.entry;
 }
 
+const existingIndex = await readExistingIndex();
+assertNoSameVersionDrift(existingIndex, plugins);
+
 const generatedAt = Number(process.env.PIER_INDEX_GENERATED_AT ?? Date.now());
-const sequence = Number(process.env.PIER_INDEX_SEQUENCE ?? 1);
+const sequence = nextSequence(existingIndex);
 
 const indexPayload = {
   generatedAt,

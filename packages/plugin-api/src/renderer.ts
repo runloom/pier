@@ -1,5 +1,13 @@
 import type { ComponentType, ReactNode } from "react";
 
+export type JsonValue =
+  | boolean
+  | null
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 /**
  * External renderer plugin context. Deliberately account-free — the Codex
  * plugin owns its own account domain via plugin-scoped RPC (design §7.2).
@@ -9,16 +17,42 @@ import type { ComponentType, ReactNode } from "react";
  * plugin coupling into a de-facto host API.
  */
 
+export interface MissionControlGridSize {
+  h: number;
+  w: number;
+}
+
 export interface MissionControlWidgetComponentProps {
-  height: number;
-  width: number;
+  /** Instance id. Multi-instance widgets use this as their persistence scope. */
+  instanceId: string;
+  /** Widget-private persisted params. Plugins own validation and fallback. */
+  params: Readonly<Record<string, JsonValue>>;
+  /** Incremented when the user triggers widget refresh. */
+  refreshToken: number;
+  /** Grid size in cells. Use container queries for visual responsiveness. */
+  size: MissionControlGridSize;
+  /** Shallow-merge params patch back into the host panel state. */
+  updateParams: (patch: Record<string, JsonValue>) => void;
+  /** Current Mission Control panel visibility. Polling widgets should pause when false. */
+  visible: boolean;
+}
+
+export interface MissionControlWidgetSettingsProps {
+  instanceId: string;
+  params: Readonly<Record<string, JsonValue>>;
+  updateParams: (patch: Record<string, JsonValue>) => void;
 }
 
 export interface RendererMissionControlWidgetRegistration {
   component: ComponentType<MissionControlWidgetComponentProps>;
   icon?: ComponentType<{ size?: number | string }>;
   id: string;
-  title: string | (() => string);
+  /** 物料库预览卡（样例数据静态渲染，宿主以 pointer-events-none 展示）。 */
+  previewComponent?: ComponentType;
+  /** Settings panel. Required when the manifest contribution is configurable. */
+  settingsComponent?: ComponentType<MissionControlWidgetSettingsProps>;
+  /** 省略时用 manifest 本地化标题（locales.<lang>.missionControlWidgets）。 */
+  title?: string | (() => string);
 }
 
 export interface RendererPluginAction {

@@ -2,8 +2,11 @@ import type { RendererMissionControlWidgetRegistration } from "@plugins/api/rend
 import type {
   CoreMissionControlWidgetDeclaration,
   MissionControlPanelParams,
+  PluginMissionControlWidgetContribution,
 } from "@shared/contracts/mission-control.ts";
+import { widgetEntryWidgetId } from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { resolvePluginMissionControlWidgetDisplay } from "@/lib/plugins/display.ts";
 
 export type ResolvedWidgetStatus =
@@ -12,23 +15,27 @@ export type ResolvedWidgetStatus =
   | "plugin-disabled"
   | "unknown";
 
+const EMPTY_PARAMS: Readonly<Record<string, JsonValue>> = Object.freeze({});
+
+/**
+ * 渲染清单条目 —— 实例模型（v2）：
+ * `instanceId` 是持久化条目 id（多实例物料为 uuid），`widgetId` 是物料 id。
+ * chrome 能力位（configurable/multiInstance/refreshable）来自声明，
+ * unknown 态一律 false。
+ */
 export interface ResolvedMissionControlWidget {
+  configurable: boolean;
   description?: string;
-  id: string;
+  instanceId: string;
+  multiInstance: boolean;
+  params: Readonly<Record<string, JsonValue>>;
+  refreshable: boolean;
   registration: RendererMissionControlWidgetRegistration | null;
   status: ResolvedWidgetStatus;
   title: string;
+  widgetId: string;
 }
 
-/**
- * 合并 params ∩ (core 声明 ∪ 插件声明 ∪ 运行时注册) → 渲染清单。
- *
- * 解析逻辑：
- * 1. core 声明 → status "core"，取 core 组件表组件
- * 2. 插件声明且运行时已注册 → status "plugin-active"，取注册表组件
- * 3. 插件声明但未注册（插件禁用） → status "plugin-disabled"，占位卡
- * 4. 声明不存在（插件被卸载） → status "unknown"，占位卡带移除按钮
- */
 function collectPluginWidgetIds(
   plugins: readonly PluginRegistryEntry[],
   enabledOnly: boolean
@@ -64,42 +71,21 @@ function resolveTitle(
   return reg.title ?? fallback;
 }
 
-function resolvePluginWidgetDescription(
+function findPluginContribution(
   widgetId: string,
-  plugins: readonly PluginRegistryEntry[],
-  locale: string
-): string | undefined {
-  for (const entry of plugins) {
-    const widget = entry.manifest.missionControlWidgets.find(
-      (w) => w.id === widgetId
-    );
-    if (widget) {
-      return resolvePluginMissionControlWidgetDisplay(
-        entry.manifest,
-        widget,
-        locale
-      ).description;
+  plugins: readonly PluginRegistryEntry[]
+):
+  | {
+      contribution: PluginMissionControlWidgetContribution;
+      manifest: PluginRegistryEntry["manifest"];
     }
-  }
-  return;
-}
-
-/** manifest 本地化标题（禁用/加载态无运行时 registration 时的回退，胜过裸 id）。 */
-function resolvePluginWidgetTitle(
-  widgetId: string,
-  plugins: readonly PluginRegistryEntry[],
-  locale: string
-): string | undefined {
+  | undefined {
   for (const entry of plugins) {
     const widget = entry.manifest.missionControlWidgets.find(
       (w) => w.id === widgetId
     );
     if (widget) {
-      return resolvePluginMissionControlWidgetDisplay(
-        entry.manifest,
-        widget,
-        locale
-      ).title;
+      return { contribution: widget, manifest: entry.manifest };
     }
   }
   return;
@@ -113,6 +99,9 @@ function resolvePluginWidgetTitle(
  * 2. 插件声明且运行时已注册 → status "plugin-active"，取注册表组件
  * 3. 插件声明但未注册（插件禁用） → status "plugin-disabled"，占位卡
  * 4. 声明不存在（插件被卸载） → status "unknown"，占位卡带移除按钮
+ *
+ * 实例语义：按实例 id 去重（同一 uuid 只渲染一次）；同一 widgetId 的多个
+ * 实例（multiInstance 物料）各自独立解析。
  */
 export function resolveMissionControlWidgets(
   params: MissionControlPanelParams,
@@ -140,15 +129,24 @@ export function resolveMissionControlWidgets(
       continue;
     }
     seen.add(entry.id);
+    const widgetId = widgetEntryWidgetId(entry);
+    const instance = {
+      instanceId: entry.id,
+      params: entry.params ?? EMPTY_PARAMS,
+      widgetId,
+    };
 
-    const coreDecl = coreById.get(entry.id);
+    const coreDecl = coreById.get(widgetId);
     if (coreDecl) {
       result.push({
         ...(coreDecl.descriptionKey
           ? { description: coreDecl.descriptionKey }
           : {}),
-        id: entry.id,
-        registration: coreComponentMap.get(entry.id) ?? null,
+        ...instance,
+        configurable: coreDecl.configurable === true,
+        multiInstance: coreDecl.multiInstance === true,
+        refreshable: coreDecl.refreshable === true,
+        registration: coreComponentMap.get(widgetId) ?? null,
         status: "core",
         title: coreDecl.titleKey,
       });
@@ -156,7 +154,7 @@ export function resolveMissionControlWidgets(
     }
 
     result.push(
-      resolvePluginWidget(entry.id, {
+      resolvePluginWidget(instance, {
         allPluginIds,
         enabledPluginIds,
         locale,
@@ -185,7 +183,11 @@ interface PluginWidgetResolveCtx {
  * 从 resolveMissionControlWidgets 主循环抽出，控制单函数认知复杂度。
  */
 function resolvePluginWidget(
-  id: string,
+  instance: {
+    instanceId: string;
+    params: Readonly<Record<string, JsonValue>>;
+    widgetId: string;
+  },
   ctx: PluginWidgetResolveCtx
 ): ResolvedMissionControlWidget {
   const {
@@ -195,27 +197,41 @@ function resolvePluginWidget(
     plugins,
     widgetRegistrations,
   } = ctx;
+  const { widgetId } = instance;
+  const declared = findPluginContribution(widgetId, plugins);
   // manifest 本地化标题：启用加载态与禁用态都优先它，胜过裸 id
-  const manifestTitle = resolvePluginWidgetTitle(id, plugins, locale);
+  const display = declared
+    ? resolvePluginMissionControlWidgetDisplay(
+        declared.manifest,
+        declared.contribution,
+        locale
+      )
+    : undefined;
+  const flags = {
+    configurable: declared?.contribution.configurable === true,
+    multiInstance: declared?.contribution.multiInstance === true,
+    refreshable: declared?.contribution.refreshable === true,
+  };
 
-  if (enabledPluginIds.has(id)) {
-    const reg = widgetRegistrations.get(id) ?? null;
-    const desc = resolvePluginWidgetDescription(id, plugins, locale);
+  if (enabledPluginIds.has(widgetId)) {
+    const reg = widgetRegistrations.get(widgetId) ?? null;
     return {
-      ...(desc ? { description: desc } : {}),
-      id,
+      ...(display?.description ? { description: display.description } : {}),
+      ...instance,
+      ...flags,
       registration: reg,
       status: "plugin-active",
-      title: resolveTitle(reg, manifestTitle ?? id),
+      title: resolveTitle(reg, display?.title ?? widgetId),
     };
   }
 
   // 禁用态 manifest 仍在，用本地化标题；unknown（插件已卸载）只剩裸 id
-  const isDisabled = allPluginIds.has(id);
+  const isDisabled = allPluginIds.has(widgetId);
   return {
-    id,
+    ...instance,
+    ...flags,
     registration: null,
     status: isDisabled ? "plugin-disabled" : "unknown",
-    title: isDisabled ? (manifestTitle ?? id) : id,
+    title: isDisabled ? (display?.title ?? widgetId) : widgetId,
   };
 }

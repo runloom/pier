@@ -547,6 +547,7 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("CLI focus reveals a hidden terminal tab and restores native input", async () => {
+    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -559,6 +560,9 @@ test.describe("Native terminal focus e2e", () => {
         BrowserWindow.getAllWindows()[0]?.setSize(640, 520);
       });
       await waitForPierCli(userDataDir);
+      await waitForTerminalCount(win, 1);
+      await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
 
       const snapshot = await createTerminalTabs(userDataDir, win, 12);
       const visibleTabs = await tabVisibilities(win);
