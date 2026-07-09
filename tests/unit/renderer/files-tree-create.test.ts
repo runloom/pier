@@ -33,6 +33,7 @@ function makeContext(overrides?: {
   const openInstance =
     overrides?.openInstance ??
     vi.fn<RendererPluginContext["panels"]["openInstance"]>();
+
   const files = {
     exists: vi.fn<RendererPluginContext["files"]["exists"]>(
       async (request) => ({
@@ -312,7 +313,7 @@ describe("inline create commit/cancel", () => {
       root: ROOT,
     });
     const { context, files } = makeContext();
-    files.writeText.mockRejectedValueOnce(new Error("disk full"));
+    vi.mocked(files.writeText).mockRejectedValueOnce(new Error("disk full"));
     addFilesTreeEntry(ROOT, {
       kind: "file",
       path: "src/untitled.ts",
