@@ -275,6 +275,7 @@ describe("pier.codex accounts service", () => {
           weekly: { usedPercent: 12, windowMinutes: 10_080 },
         })
       ),
+      readIdentity: vi.fn(async () => null),
     });
     const service = createCodexAccountsService({
       managedBaseDir: join(dir, "managed"),
@@ -284,9 +285,12 @@ describe("pier.codex accounts service", () => {
     });
     await service.init();
 
+    expect(service.snapshot().activeAccountId).toBeNull();
+
     await service.refreshUsage(true);
 
     const snap = service.snapshot();
+    expect(snap.activeAccountId).toBeNull();
     expect(snap.activeUsage?.status).toBe("ok");
     expect(snap.activeUsage?.session?.usedPercent).toBe(32);
     expect(snap.activeUsage?.weekly?.usedPercent).toBe(12);
