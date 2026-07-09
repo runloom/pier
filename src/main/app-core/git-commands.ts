@@ -63,6 +63,8 @@ async function dispatchGitCommand(
   switch (command.type) {
     case "git.getStatus":
       return success(requestId, await services.git.getStatus(command.cwd));
+    case "git.listIgnored":
+      return success(requestId, await services.git.listIgnored(command.cwd));
     case "git.getRepoInfo":
       return success(requestId, await services.git.getRepoInfo(command.cwd));
     case "git.isWorkingTreeClean":

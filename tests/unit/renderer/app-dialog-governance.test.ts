@@ -15,6 +15,10 @@ const REQUIRED_APP_CONFIRM_OPTIONS_RE =
   /interface AppConfirmOptions[\s\S]*intent: AppDialogIntent;[\s\S]*size: AppDialogSize;/;
 const REQUIRED_PLUGIN_CONFIRM_OPTIONS_RE =
   /confirm\(options: \{[\s\S]*intent: RendererPluginDialogIntent;[\s\S]*size: RendererPluginDialogSize;/;
+const REQUIRED_APP_PROMPT_OPTIONS_RE =
+  /interface AppPromptOptions[\s\S]*intent: AppDialogIntent;[\s\S]*size: AppDialogSize;/;
+const REQUIRED_PLUGIN_PROMPT_OPTIONS_RE =
+  /prompt\(options: \{[\s\S]*intent: RendererPluginDialogIntent;[\s\S]*size: RendererPluginDialogSize;/;
 
 function sourceFiles(dir: string): string[] {
   const entries = readdirSync(dir);
@@ -71,5 +75,21 @@ describe("app dialog usage governance", () => {
 
     expect(appDialogStore).toMatch(REQUIRED_APP_CONFIRM_OPTIONS_RE);
     expect(pluginRendererApi).toMatch(REQUIRED_PLUGIN_CONFIRM_OPTIONS_RE);
+  });
+
+  it("requires prompt dialog request to declare size + intent explicitly", () => {
+    const appDialogStore = readFileSync(
+      join(ROOT, "src", "renderer", "stores", "app-dialog.store.ts"),
+      "utf8"
+    );
+    const pluginRendererApi = readFileSync(
+      join(ROOT, "src", "plugins", "api", "renderer.ts"),
+      "utf8"
+    );
+
+    // 与 confirm 对齐:size 与 intent 强制,避免 prompt 无声继承 default 尺寸
+    // 导致长内容溢出、或误用 destructive 语义。
+    expect(appDialogStore).toMatch(REQUIRED_APP_PROMPT_OPTIONS_RE);
+    expect(pluginRendererApi).toMatch(REQUIRED_PLUGIN_PROMPT_OPTIONS_RE);
   });
 });

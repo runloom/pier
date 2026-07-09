@@ -3,6 +3,7 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { closeOverlaysForPlugin } from "../../stores/plugin-overlay.store.ts";
 import { BUILTIN_RENDERER_PLUGIN_MODULES } from "./builtin-catalog.ts";
 import { createRendererPluginContext } from "./host-context.ts";
+import { clearHostGroupContentForPlugin } from "./host-group-content-context.tsx";
 
 function indexModules(
   modules: readonly RendererPluginModule[]
@@ -40,8 +41,12 @@ export class RendererPluginRuntime {
       const context = createRendererPluginContext(entry);
       const dispose = module.activate(context);
       this.disposers.set(entry.manifest.id, () => {
-        dispose();
-        closeOverlaysForPlugin(entry.manifest.id);
+        try {
+          dispose();
+        } finally {
+          clearHostGroupContentForPlugin(entry.manifest.id);
+          closeOverlaysForPlugin(entry.manifest.id);
+        }
       });
     }
   }

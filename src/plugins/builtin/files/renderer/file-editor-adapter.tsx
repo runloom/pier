@@ -1,5 +1,6 @@
 import { CodeMirrorEditor } from "./code-mirror-editor.tsx";
 import type { FileEditorAdapterProps } from "./files-document-types.ts";
+import { FilesLineDiff } from "./files-line-diff.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
 
 const DEFAULT_LABELS = {
@@ -16,7 +17,18 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
   }
 
   if (props.mode === "diff") {
-    return <UnsupportedFileView label={labels.diffUnsupported} />;
+    // originalValue = 磁盘版本(保存冲突 Compare)或最近一次保存的内容。
+    if (props.originalValue === undefined) {
+      return <UnsupportedFileView label={labels.diffUnsupported} />;
+    }
+    return (
+      <FilesLineDiff
+        currentLabel="editor"
+        originalLabel="disk"
+        originalValue={props.originalValue}
+        value={props.value}
+      />
+    );
   }
 
   if (props.mode === "rich") {

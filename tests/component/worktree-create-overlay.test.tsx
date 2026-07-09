@@ -201,6 +201,9 @@ function createMockContext(): RendererPluginContext {
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
     },
+    contextMenu: {
+      popup: unimplemented("contextMenu.popup"),
+    },
     configuration: {
       get: <T,>() => "" as T,
       onDidChange: unimplemented("configuration.onDidChange"),
@@ -210,7 +213,9 @@ function createMockContext(): RendererPluginContext {
     dashboardWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: unimplemented("dialogs.alert"),
+      choice: unimplemented("dialogs.choice"),
       confirm: unimplemented("dialogs.confirm"),
+      prompt: unimplemented("dialogs.prompt"),
     },
     git: {
       abortMerge: unimplemented("git.abortMerge"),
@@ -222,6 +227,7 @@ function createMockContext(): RendererPluginContext {
       getFileContent: unimplemented("git.getFileContent"),
       getRepoInfo: unimplemented("git.getRepoInfo"),
       getStatus: unimplemented("git.getStatus"),
+      listIgnored: unimplemented("git.listIgnored"),
       listBranches: unimplemented("git.listBranches"),
       listStashes: unimplemented("git.listStashes"),
       merge: unimplemented("git.merge"),
@@ -240,11 +246,26 @@ function createMockContext(): RendererPluginContext {
       watch: unimplemented("git.watch"),
     },
     files: {
+      copy: unimplemented("files.copy"),
+      drafts: {
+        delete: unimplemented("files.drafts.delete"),
+        list: unimplemented("files.drafts.list"),
+        set: unimplemented("files.drafts.set"),
+      },
+      exists: unimplemented("files.exists"),
       list: unimplemented("files.list"),
+      mkdir: unimplemented("files.mkdir"),
       move: unimplemented("files.move"),
       readText: unimplemented("files.readText"),
+      reveal: unimplemented("files.reveal"),
+      stat: unimplemented("files.stat"),
       trash: unimplemented("files.trash"),
+      watch: unimplemented("files.watch"),
       writeText: unimplemented("files.writeText"),
+    },
+    groupContent: {
+      claim: unimplemented("groupContent.claim"),
+      release: unimplemented("groupContent.release"),
     },
     i18n: {
       commandDescription: unimplemented("i18n.commandDescription"),
@@ -265,9 +286,12 @@ function createMockContext(): RendererPluginContext {
     },
     panels: {
       getActiveContext: unimplemented("panels.getActiveContext"),
+      getActiveInstanceId: unimplemented("panels.getActiveInstanceId"),
+      listInstances: unimplemented("panels.listInstances"),
       open: unimplemented("panels.open"),
       openInstance: unimplemented("panels.openInstance"),
       register: unimplemented("panels.register"),
+      registerCloseGuard: unimplemented("panels.registerCloseGuard"),
     },
     terminal: {
       activePanelId: unimplemented("terminal.activePanelId"),

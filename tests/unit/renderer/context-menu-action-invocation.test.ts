@@ -79,6 +79,7 @@ describe("context-menu action invocation", () => {
       {
         sourcePanelComponent: "terminal",
         sourcePanelContext: terminalPanelContext,
+        sourcePanelGroupId: "group-terminal-2",
         sourcePanelId: "terminal:2",
       }
     );
@@ -87,6 +88,7 @@ describe("context-menu action invocation", () => {
       expect.objectContaining({
         sourcePanelComponent: "terminal",
         sourcePanelContext: terminalPanelContext,
+        sourcePanelGroupId: "group-terminal-2",
         sourcePanelId: "terminal:2",
         surface,
       })

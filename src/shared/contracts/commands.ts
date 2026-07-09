@@ -2,9 +2,16 @@ import { z } from "zod";
 import { agentAccountProviderSchema } from "./agent-accounts.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
+  fileCopyRequestSchema,
+  fileDraftsDeleteRequestSchema,
+  fileDraftsSetRequestSchema,
+  fileExistsRequestSchema,
   fileListRequestSchema,
+  fileMkdirRequestSchema,
   fileMoveRequestSchema,
   fileReadTextRequestSchema,
+  fileRevealRequestSchema,
+  fileStatRequestSchema,
   fileTrashRequestSchema,
   fileWriteTextRequestSchema,
 } from "./file.ts";
@@ -244,8 +251,32 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   fileTrashRequestSchema.extend({
     type: z.literal("file.trash"),
   }),
+  fileMkdirRequestSchema.extend({
+    type: z.literal("file.mkdir"),
+  }),
+  fileExistsRequestSchema.extend({
+    type: z.literal("file.exists"),
+  }),
+  fileStatRequestSchema.extend({
+    type: z.literal("file.stat"),
+  }),
+  fileCopyRequestSchema.extend({
+    type: z.literal("file.copy"),
+  }),
+  fileRevealRequestSchema.extend({
+    type: z.literal("file.reveal"),
+  }),
+  // hot-exit 草稿:renderer 崩溃/重载后可恢复的脏文档缓存(userData JSON)。
+  z.object({ type: z.literal("file.drafts.list") }),
+  fileDraftsSetRequestSchema.extend({
+    type: z.literal("file.drafts.set"),
+  }),
+  fileDraftsDeleteRequestSchema.extend({
+    type: z.literal("file.drafts.delete"),
+  }),
   // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
+  z.object({ type: z.literal("git.listIgnored"), cwd: z.string().min(1) }),
   z.object({ type: z.literal("git.getRepoInfo"), cwd: z.string().min(1) }),
   z.object({
     type: z.literal("git.isWorkingTreeClean"),
@@ -444,6 +475,7 @@ export type PierCommandErrorCode =
   | "platform_unavailable"
   | "unsupported"
   | "internal_error"
+  | "file_conflict"
   /**
    * git CLI 退出非 0 时的统一错误码;message 含 git 返回的 stderr 摘要,
    * 插件可据此分类("already exists"、"not fully merged"、"dirty worktree" 等)。

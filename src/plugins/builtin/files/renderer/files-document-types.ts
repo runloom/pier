@@ -2,7 +2,27 @@ import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
 
-export type FilesDocumentLanguage = "markdown" | "text";
+export type FilesDocumentLanguage =
+  | "cpp"
+  | "css"
+  | "go"
+  | "html"
+  | "java"
+  | "javascript"
+  | "json"
+  | "kotlin"
+  | "markdown"
+  | "python"
+  | "ruby"
+  | "rust"
+  | "shell"
+  | "sql"
+  | "swift"
+  | "text"
+  | "toml"
+  | "typescript"
+  | "xml"
+  | "yaml";
 
 export interface FilesDocumentOrigin {
   panelId?: string;
@@ -46,6 +66,22 @@ export function parseFilesDocumentPanelSource(
   return parsed.success ? parsed.data : null;
 }
 
+export function sameFilesDocumentPanelSource(
+  left: FilesDocumentPanelSource | null | undefined,
+  right: FilesDocumentPanelSource | null | undefined
+): boolean {
+  if (!(left && right) || left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind === "untitled" && right.kind === "untitled") {
+    return left.id === right.id;
+  }
+  if (left.kind === "disk" && right.kind === "disk") {
+    return left.root === right.root && left.path === right.path;
+  }
+  return false;
+}
+
 export function isDiskSourceRootAllowed(
   root: string,
   context: PanelContext | null | undefined
@@ -74,9 +110,15 @@ export type FilesDocumentCapability =
   | "saveAs";
 
 export interface FilesDocument {
+  /** Disk mtime captured at last successful load/save; used for write conflict checks. */
+  baseMtimeMs: number | null;
   capabilities: readonly FilesDocumentCapability[];
+  /** 冲突 Compare 拉取的磁盘快照;非冲突态为 null。 */
+  conflictDiskContents: string | null;
   currentContents: string;
   dirty: boolean;
+  /** True when disk changed under an unsaved (dirty) document. */
+  diskConflict: boolean;
   error: string | null;
   id: string;
   language: FilesDocumentLanguage;
@@ -93,12 +135,49 @@ export interface FileEditorAdapterLabels {
   sourceEditor: string;
 }
 
+export interface FilesEditorSearchLabels {
+  close: string;
+  matchCase?: string;
+  next: string;
+  noMatches: string;
+  placeholder: string;
+  previous: string;
+  regexp?: string;
+  replace?: string;
+  replaceAll?: string;
+  replacePlaceholder?: string;
+  selectAll?: string;
+  wholeWord?: string;
+}
+
 export interface FileEditorAdapterProps {
+  documentId?: string;
+  editorSessionId?: string;
+  filePath?: string;
   labels?: FileEditorAdapterLabels;
   language: FilesDocumentLanguage | string;
   mode: FileViewMode;
   onChange?: (value: string) => void;
+  // 编辑器右键宿主级 popup 的钩子。source 层 (CodeMirror) 拿 selection 再拼
+  // metadata,rich/preview mode 不需要 —— 上层传 undefined 即可。
+  onEditorContextMenu?: (
+    event: MouseEvent,
+    ranges: readonly EditorRange[]
+  ) => void;
   originalValue?: string;
   readOnly?: boolean;
+  searchLabels?: FilesEditorSearchLabels;
+  // Monotonic counter: bumping it opens the project search bar.
+  // Value 0 (default) means never triggered.
+  searchRequest?: number;
   value: string;
+}
+
+export interface EditorRange {
+  endCol: number;
+  endLine: number;
+  from: number;
+  startCol: number;
+  startLine: number;
+  to: number;
 }

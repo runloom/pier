@@ -1,18 +1,25 @@
 import type {
-  PluginPanelInstanceOptions,
+  PluginPanelInstanceSnapshot,
   PluginPanelRegistration,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import {
-  type PanelDescriptor,
-  usePanelDescriptorStore,
-} from "../../stores/panel-descriptor.store.ts";
+import { registerPanelCloseGuard } from "@/lib/workspace/panel-close-guards.ts";
+import { usePanelDescriptorStore } from "../../stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
+import {
+  pluginPanelDescriptor,
+  resolveRegistrationTitle,
+} from "./host-panel-descriptors.ts";
+import {
+  groupForPanel,
+  openPluginPanelInstance,
+} from "./host-panel-instance-open.ts";
+import { clonePanelParams } from "./host-panel-params.ts";
 import {
   getPluginPanelRegistrations,
   registerPluginPanel,
@@ -28,29 +35,6 @@ type AssertPluginCapability = (
   entry: PluginRegistryEntry | undefined,
   capability: PierCapability
 ) => void;
-
-function resolveRegistrationTitle(
-  registration: PluginPanelRegistration | undefined,
-  fallback: string
-): string {
-  const title = registration?.title;
-  if (typeof title === "function") {
-    return title();
-  }
-  return title ?? fallback;
-}
-
-function pluginPanelDescriptor(
-  panelId: string,
-  registration: PluginPanelRegistration | undefined,
-  context: PanelContext | undefined,
-  title = resolveRegistrationTitle(registration, panelId)
-): PanelDescriptor {
-  return {
-    ...(context ? { context } : {}),
-    display: { short: title },
-  };
-}
 
 function openPluginPanel(
   panelId: string,
@@ -90,62 +74,6 @@ function openPluginPanel(
   scheduleRevealDockviewTabByPanelId(panelId);
 }
 
-function openPluginPanelInstance(options: PluginPanelInstanceOptions): void {
-  const api = useWorkspaceStore.getState().api;
-  const registration = getPluginPanelRegistrations().get(options.componentId);
-  if (!registration) {
-    throw new Error(
-      `plugin panel component not registered: ${options.componentId}`
-    );
-  }
-  const descriptorStore = usePanelDescriptorStore.getState();
-  const context =
-    options.context ?? descriptorStore.descriptors[options.instanceId]?.context;
-  const resolvedTitle =
-    options.title ??
-    resolveRegistrationTitle(registration, options.componentId);
-  const existing = api?.panels.find((panel) => panel.id === options.instanceId);
-  if (
-    existing?.view.contentComponent !== undefined &&
-    existing.view.contentComponent !== options.componentId
-  ) {
-    throw new Error(
-      `plugin panel instance id collision: ${options.instanceId} already belongs to ${existing.view.contentComponent}`
-    );
-  }
-  descriptorStore.upsert(
-    options.instanceId,
-    pluginPanelDescriptor(
-      options.instanceId,
-      registration,
-      context,
-      resolvedTitle
-    )
-  );
-  if (!api) {
-    return;
-  }
-  const panelParams: Record<string, unknown> = {
-    ...(registration.getParams?.() ?? {}),
-    ...(options.params ?? {}),
-    ...(context ? { context } : {}),
-    pluginComponentId: options.componentId,
-  };
-  if (existing) {
-    existing.api.updateParameters(panelParams);
-    existing.api.setTitle(resolvedTitle);
-    activateWorkspacePanel(api, existing.id, { reveal: "always" });
-    return;
-  }
-  api.addPanel({
-    id: options.instanceId,
-    component: options.componentId,
-    title: resolvedTitle,
-    params: panelParams,
-  });
-  scheduleRevealDockviewTabByPanelId(options.instanceId);
-}
-
 export function createPluginPanelsContext(
   entry: PluginRegistryEntry | undefined,
   assertDeclaredContribution: AssertDeclaredContribution,
@@ -157,6 +85,36 @@ export function createPluginPanelsContext(
       return state.activeId
         ? (state.descriptors[state.activeId]?.context ?? null)
         : null;
+    },
+    getActiveInstanceId: (componentId) => {
+      const panel = useWorkspaceStore.getState().api?.activePanel;
+      if (!panel || panel.view.contentComponent !== componentId) {
+        return null;
+      }
+      // 只允许查本插件贡献的组件,避免跨插件泄漏 panel id。
+      assertDeclaredContribution(entry, "panel", componentId);
+      return panel.id;
+    },
+    listInstances: (componentId): readonly PluginPanelInstanceSnapshot[] => {
+      assertDeclaredContribution(entry, "panel", componentId);
+      const api = useWorkspaceStore.getState().api;
+      if (!api) {
+        return [];
+      }
+      return api.panels
+        .filter((panel) => panel.view.contentComponent === componentId)
+        .map((panel) => {
+          const snapshot = {
+            componentId,
+            groupId: groupForPanel(api, panel.id)?.id ?? null,
+            id: panel.id,
+            title: panel.title || panel.id,
+          };
+          const params = clonePanelParams(
+            panel.params as Record<string, unknown> | undefined
+          );
+          return params === undefined ? snapshot : { ...snapshot, params };
+        });
     },
     open: (panelId, options) => {
       // 与 register 对称:必须在自己 manifest 声明的 panel 才能打开,
@@ -174,6 +132,11 @@ export function createPluginPanelsContext(
       assertDeclaredContribution(entry, "panel", registration.id);
       assertPluginCapability(entry, "panel:register");
       return registerPluginPanel(registration);
+    },
+    registerCloseGuard: (componentId, guard) => {
+      assertDeclaredContribution(entry, "panel", componentId);
+      assertPluginCapability(entry, "panel:register");
+      return registerPanelCloseGuard(componentId, guard);
     },
   };
 }

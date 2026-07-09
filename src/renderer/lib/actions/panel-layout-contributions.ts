@@ -21,7 +21,9 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       group: "9_close",
-      handler: () => useWorkspaceStore.getState().closeActivePanel(),
+      handler: async () => {
+        await useWorkspaceStore.getState().closeActivePanel();
+      },
       id: "pier.panel.closeActive",
       surfaces: [],
       titleKey: "commandPalette.action.closeActivePanel",
@@ -50,10 +52,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       group: "9_close",
-      handler: () => {
+      handler: async () => {
         const panelId = activePanelId();
         if (panelId) {
-          useWorkspaceStore.getState().closePanel(panelId);
+          await useWorkspaceStore.getState().closePanel(panelId);
         }
       },
       id: "pier.panel.close",
@@ -66,10 +68,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       group: "9_close",
-      handler: () => {
+      handler: async () => {
         const panelId = activePanelId();
         if (panelId) {
-          useWorkspaceStore.getState().closeOthers(panelId);
+          await useWorkspaceStore.getState().closeOthers(panelId);
         }
       },
       id: "pier.panel.closeOthers",

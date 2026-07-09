@@ -16,7 +16,9 @@ import { createAgentAccountsService } from "../services/agent-accounts/service.t
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createFileDraftsService } from "../services/file-drafts-service.ts";
 import { createFileService } from "../services/file-service.ts";
+import { createFileWatchService } from "../services/file-watch-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
@@ -198,7 +200,11 @@ function createPierAppCore(): PierAppCore {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
+    fileDrafts: createFileDraftsService({
+      userDataDir: app.getPath("userData"),
+    }),
     files: createFileService(),
+    fileWatch: createFileWatchService(),
     preferences,
     secrets,
     processEnvironment: createProcessEnvironmentService(),

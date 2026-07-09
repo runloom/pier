@@ -169,9 +169,51 @@ function tabStatusIndicator(
   );
 }
 
+const FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";
+
+// dockview panel params 里可选 `pinned: boolean`。只有文件面板显式
+// pinned:false 才是 preview tab(Cursor / VS Code 语义:斜体 + 半透明);
+// 其他 panel 不设置 pinned 时必须按正常 tab 处理。
+interface PanelPreviewParams {
+  dirty?: unknown;
+  pinned?: unknown;
+}
+
+interface PanelTabApiWithParameters {
+  updateParameters?: (params: Record<string, unknown>) => void;
+}
+
+function paramsIsPreview(
+  component: string | undefined,
+  params: PanelPreviewParams | undefined
+): boolean {
+  return component === FILE_PANEL_COMPONENT_ID && params?.pinned === false;
+}
+
+// 文件面板未保存标记(VS Code 语义:tab 上的实心圆点)。dirty 由 files 插件
+// 经 updateParameters 写进 params,与 preview 斜体同一条数据通道。
+function paramsIsDirty(
+  component: string | undefined,
+  params: PanelPreviewParams | undefined
+): boolean {
+  return component === FILE_PANEL_COMPONENT_ID && params?.dirty === true;
+}
+
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const t = useT();
   const [title, setTitle] = useState<string>(props.api.title ?? "");
+  const [isPreview, setIsPreview] = useState<boolean>(() =>
+    paramsIsPreview(
+      props.api.component,
+      props.params as PanelPreviewParams | undefined
+    )
+  );
+  const [isDirty, setIsDirty] = useState<boolean>(() =>
+    paramsIsDirty(
+      props.api.component,
+      props.params as PanelPreviewParams | undefined
+    )
+  );
   const descriptor = usePanelDescriptorStore(
     (state) => state.descriptors[props.api.id]
   );
@@ -237,6 +279,40 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     };
   }, [props.api]);
 
+  useEffect(() => {
+    // params 变更时同步 preview 视觉 —— 文件面板 preview→pinned 就地 promote
+    // 时通过 updateParameters 覆盖 pinned:true,tab 头收到事件后取消斜体。
+    const disposable = props.api.onDidParametersChange((next) => {
+      setIsPreview(
+        paramsIsPreview(
+          props.api.component,
+          next as PanelPreviewParams | undefined
+        )
+      );
+      setIsDirty(
+        paramsIsDirty(
+          props.api.component,
+          next as PanelPreviewParams | undefined
+        )
+      );
+    });
+    setIsPreview(
+      paramsIsPreview(
+        props.api.component,
+        props.params as PanelPreviewParams | undefined
+      )
+    );
+    setIsDirty(
+      paramsIsDirty(
+        props.api.component,
+        props.params as PanelPreviewParams | undefined
+      )
+    );
+    return () => {
+      disposable.dispose();
+    };
+  }, [props.api, props.params]);
+
   const baseOnContextMenu = useContextMenu("dockview-tab");
   const onContextMenu = useCallback(
     (event: MouseEvent) => {
@@ -244,6 +320,26 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       baseOnContextMenu(event);
     },
     [baseOnContextMenu, props.api]
+  );
+  const onDoubleClick = useCallback(
+    (event: MouseEvent) => {
+      if (!isPreview) {
+        return;
+      }
+      const updateParameters = (props.api as PanelTabApiWithParameters)
+        .updateParameters;
+      if (!updateParameters) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      updateParameters({
+        ...((props.params as Record<string, unknown> | undefined) ?? {}),
+        pinned: true,
+      });
+      setIsPreview(false);
+    },
+    [isPreview, props.api, props.params]
   );
   // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
   // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
@@ -253,14 +349,25 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
       className="dv-default-tab relative"
       data-panel-tab-id={props.api.id}
+      data-pier-tab-preview={isPreview ? "true" : undefined}
       data-tab-state-label={tab?.state?.label}
       data-tab-status={status}
       onContextMenu={onContextMenu}
+      onDoubleClick={onDoubleClick}
       role="tab"
       tabIndex={0}
     >
       {leadingVisual}
       <span className="dv-default-tab-content">{displayTitle}</span>
+      {isDirty ? (
+        <span
+          aria-label={t("workspace.tab.unsaved")}
+          className="size-1.5 shrink-0 rounded-full bg-warning"
+          data-pier-tab-dirty="true"
+          role="status"
+          title={t("workspace.tab.unsaved")}
+        />
+      ) : null}
       {statusIndicator}
       <button
         aria-label="Close tab"

@@ -17,5 +17,8 @@ export const dialog = {
     title: "退出 Pier？",
   },
   cancel: "取消",
+  error: {
+    invalid: "输入无效",
+  },
   ok: "确定",
 } as const;

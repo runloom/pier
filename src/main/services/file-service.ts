@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   cp,
   mkdir,
@@ -6,16 +7,27 @@ import {
   realpath,
   rename,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type {
+  FileCopyRequest,
+  FileCopyResult,
   FileEntry,
+  FileExistsRequest,
+  FileExistsResult,
   FileListRequest,
   FileListResult,
+  FileMkdirRequest,
+  FileMkdirResult,
   FileMoveRequest,
   FileMoveResult,
   FileReadTextRequest,
+  FileRevealRequest,
+  FileRevealResult,
+  FileStatRequest,
+  FileStatResult,
   FileTrashRequest,
   FileTrashResult,
   FileWriteTextRequest,
@@ -23,9 +35,17 @@ import type {
 } from "@shared/contracts/file.ts";
 
 export class FileServiceError extends Error {
-  constructor(message: string) {
+  readonly code?: "file_conflict" | "internal_error";
+
+  constructor(
+    message: string,
+    options?: { code?: "file_conflict" | "internal_error" }
+  ) {
     super(message);
     this.name = "FileServiceError";
+    if (options?.code) {
+      this.code = options.code;
+    }
   }
 }
 
@@ -119,9 +139,14 @@ async function resolveWritableScopedPath(
 }
 
 export interface FileService {
+  copy(request: FileCopyRequest): Promise<FileCopyResult>;
+  exists(request: FileExistsRequest): Promise<FileExistsResult>;
   list(request: FileListRequest): Promise<FileListResult>;
+  mkdir(request: FileMkdirRequest): Promise<FileMkdirResult>;
   move(request: FileMoveRequest): Promise<FileMoveResult>;
   readText(request: FileReadTextRequest): Promise<string>;
+  reveal(request: FileRevealRequest): Promise<FileRevealResult>;
+  stat(request: FileStatRequest): Promise<FileStatResult>;
   trash(request: FileTrashRequest): Promise<FileTrashResult>;
   writeText(request: FileWriteTextRequest): Promise<FileWriteTextResult>;
 }
@@ -130,6 +155,7 @@ export interface FileServiceOptions {
   // 测试注入点:vitest 单测环境没有 electron runtime,也无法稳定制造
   // 跨设备文件系统,注入 fake 才能覆盖 trash 与 move 的 EXDEV 降级分支。
   renameFile?: (source: string, target: string) => Promise<void>;
+  revealItem?: (path: string) => void;
   trashItem?: (path: string) => Promise<void>;
 }
 
@@ -140,10 +166,19 @@ async function trashViaElectronShell(path: string): Promise<void> {
   await shell.trashItem(path);
 }
 
+function revealViaElectronShell(path: string): void {
+  import("electron")
+    .then(({ shell }) => {
+      shell.showItemInFolder(path);
+    })
+    .catch(() => undefined);
+}
+
 export function createFileService(
   options: FileServiceOptions = {}
 ): FileService {
   const renameFile = options.renameFile ?? rename;
+  const revealItem = options.revealItem ?? revealViaElectronShell;
   const trashItem = options.trashItem ?? trashViaElectronShell;
   return {
     async list(request) {
@@ -176,9 +211,38 @@ export function createFileService(
         request.root,
         request.path
       );
+      if (request.expectedMtimeMs != null) {
+        try {
+          const current = await stat(target);
+          if (Math.abs(current.mtimeMs - request.expectedMtimeMs) > 0.5) {
+            throw new FileServiceError("file changed on disk", {
+              code: "file_conflict",
+            });
+          }
+        } catch (error) {
+          if (error instanceof FileServiceError) {
+            throw error;
+          }
+          if (!isMissingPathError(error)) {
+            throw error;
+          }
+          throw new FileServiceError("file changed on disk", {
+            code: "file_conflict",
+          });
+        }
+      }
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, request.contents, "utf8");
+      const tempTarget = `${target}.pier-tmp-${process.pid}-${Date.now()}-${randomUUID()}`;
+      await writeFile(tempTarget, request.contents, "utf8");
+      try {
+        await renameFile(tempTarget, target);
+      } catch (error) {
+        await rm(tempTarget, { force: true }).catch(() => undefined);
+        throw error;
+      }
+      const writtenStat = await stat(target);
       return {
+        mtimeMs: writtenStat.mtimeMs,
         path: request.path,
         root: request.root,
         written: true,
@@ -217,6 +281,41 @@ export function createFileService(
         root: request.root,
       };
     },
+    async copy(request) {
+      const source = await resolveExistingScopedPath(
+        request.root,
+        request.path
+      );
+      const target = await resolveWritableScopedPath(
+        request.root,
+        request.newPath
+      );
+      await mkdir(dirname(target), { recursive: true });
+      // 与 move 一致的"不覆盖已存在目标"语义;目录递归复制。
+      await cp(source, target, {
+        errorOnExist: true,
+        force: false,
+        recursive: true,
+      });
+      return {
+        copied: true,
+        newPath: relative(resolve(request.root), target).split(sep).join("/"),
+        oldPath: request.path,
+        root: request.root,
+      };
+    },
+    async reveal(request) {
+      const target = await resolveExistingScopedPath(
+        request.root,
+        request.path
+      );
+      revealItem(target);
+      return {
+        path: request.path,
+        revealed: true,
+        root: request.root,
+      };
+    },
     async trash(request) {
       const target = await resolveExistingScopedPath(
         request.root,
@@ -230,6 +329,60 @@ export function createFileService(
         root: request.root,
         trashed: true,
       };
+    },
+    async mkdir(request) {
+      const target = await resolveWritableScopedPath(
+        request.root,
+        request.path
+      );
+      // recursive:true 让并发/嵌套创建自动兜底,避免 "父目录不存在" 的 ENOENT,
+      // 同时对已存在的目录不抛错(与 UI 语义"确保存在"一致)。
+      await mkdir(target, { recursive: true });
+      return {
+        created: true,
+        path: request.path,
+        root: request.root,
+      };
+    },
+    async exists(request) {
+      try {
+        await resolveExistingScopedPath(request.root, request.path);
+        return { exists: true, path: request.path, root: request.root };
+      } catch (error) {
+        if (isMissingPathError(error)) {
+          return { exists: false, path: request.path, root: request.root };
+        }
+        throw error;
+      }
+    },
+    async stat(request) {
+      try {
+        const target = await resolveExistingScopedPath(
+          request.root,
+          request.path
+        );
+        const info = await stat(target);
+        return {
+          exists: true,
+          isDirectory: info.isDirectory(),
+          mtimeMs: info.mtimeMs,
+          path: request.path,
+          root: request.root,
+          size: info.size,
+        };
+      } catch (error) {
+        if (isMissingPathError(error)) {
+          return {
+            exists: false,
+            isDirectory: false,
+            mtimeMs: null,
+            path: request.path,
+            root: request.root,
+            size: null,
+          };
+        }
+        throw error;
+      }
     },
   };
 }

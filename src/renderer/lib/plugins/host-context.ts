@@ -16,8 +16,14 @@ import {
 } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
 import { toast } from "sonner";
+import { useZoomStore } from "@/stores/zoom.store.ts";
 import { terminalStatusItemRegistry } from "../../panel-kits/terminal/terminal-status-bar.tsx";
-import { showAppAlert, showAppConfirm } from "../../stores/app-dialog.store.ts";
+import {
+  showAppAlert,
+  showAppChoice,
+  showAppConfirm,
+  showAppPrompt,
+} from "../../stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "../../stores/plugin-registry.store.ts";
 import {
   subscribePluginSettingsChanges,
@@ -31,6 +37,8 @@ import type {
   QuickPickItem,
   QuickPickSection,
 } from "../command-palette/types.ts";
+import { popupContextMenuAt } from "../context-menu/use-context-menu.ts";
+import { cssPointToContentViewPoint } from "../window-zoom/coordinates.ts";
 import {
   interpolateMessage,
   resolvePluginCommandAliases,
@@ -42,6 +50,7 @@ import { createPluginAgentsContext } from "./host-agents-context.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
+import { createHostGroupContentContext } from "./host-group-content-context.tsx";
 import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
@@ -167,7 +176,12 @@ function adaptAction(
 
 function assertDeclaredContribution(
   entry: PluginRegistryEntry | undefined,
-  kind: "action" | "dashboardWidget" | "panel" | "terminalStatusItem",
+  kind:
+    | "action"
+    | "dashboardWidget"
+    | "groupContent"
+    | "panel"
+    | "terminalStatusItem",
   id: string
 ): void {
   if (!entry) {
@@ -181,6 +195,10 @@ function assertDeclaredContribution(
   } else if (kind === "dashboardWidget") {
     declared = entry.manifest.dashboardWidgets.some(
       (widget) => widget.id === id
+    );
+  } else if (kind === "groupContent") {
+    declared = (entry.manifest.groupContent ?? []).some(
+      (contribution) => contribution.id === id
     );
   } else {
     declared = entry.manifest.terminalStatusItems.some(
@@ -314,10 +332,23 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
 }
 
 function toastNotificationOptions(options?: {
+  action?: { label: string; onClick: () => void };
   description?: string;
-}): { description: string } | undefined {
+}):
+  | {
+      action?: { label: string; onClick: () => void };
+      description?: string;
+    }
+  | undefined {
   const description = options?.description?.trim();
-  return description ? { description } : undefined;
+  const action = options?.action;
+  if (!(description || action)) {
+    return;
+  }
+  return {
+    ...(description ? { description } : {}),
+    ...(action ? { action } : {}),
+  };
 }
 
 export function createRendererPluginContext(
@@ -339,10 +370,19 @@ export function createRendererPluginContext(
           .getState()
           .openQuickPick(adaptQuickPick(quickPick)),
     },
+    contextMenu: {
+      popup: (surface, coords, invocation) => {
+        const zoomLevel = useZoomStore.getState().windowZoomLevel;
+        const contentPoint = cssPointToContentViewPoint(coords, zoomLevel);
+        return popupContextMenuAt(surface, contentPoint, invocation);
+      },
+    },
     configuration: createPluginConfiguration(entry),
     dialogs: {
       alert: (options) => showAppAlert(options),
+      choice: (options) => showAppChoice(options),
       confirm: (options) => showAppConfirm(options),
+      prompt: (options) => showAppPrompt(options),
     },
     i18n: createPluginI18n(entry),
     notifications: {
@@ -389,6 +429,10 @@ export function createRendererPluginContext(
         return registerPluginDashboardWidget(registration);
       },
     },
+    groupContent: createHostGroupContentContext(
+      entry,
+      assertDeclaredContribution
+    ),
     files: createPluginFilesContext(entry, assertPluginCapability),
     terminal: createPluginTerminalContext(entry, assertPluginCapability),
     worktrees: createPluginWorktreesContext(entry, assertPluginCapability),

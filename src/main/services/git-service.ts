@@ -125,6 +125,8 @@ export interface GitService {
     cwd: string,
     options: ListBranchesOptions
   ): Promise<GitBranchRef[]>;
+  /** gitignore 命中的路径(相对 gitRoot;目录折叠为 `dir/` 单条)。树的 ignored 变暗用。 */
+  listIgnored(cwd: string): Promise<string[]>;
   listStashes(cwd: string): Promise<GitStashListResult>;
   listTags(cwd: string): Promise<string[]>;
   merge(cwd: string, branch: string): Promise<GitMergeResult>;
@@ -375,6 +377,21 @@ export function createGitService({
     listBranches: (cwd, options) => listGitBranches(execGit, cwd, options),
     searchBranches: (cwd, options = {}) =>
       searchGitBranches(execGit, cwd, options),
+    listIgnored: async (cwd) => {
+      // --directory 让整个被忽略目录折叠为一条 `dir/`,避免枚举 node_modules 全量。
+      const output = await execGit(
+        [
+          "ls-files",
+          "--others",
+          "--ignored",
+          "--exclude-standard",
+          "--directory",
+          "-z",
+        ],
+        cwd
+      );
+      return output.split("\0").filter((entry) => entry.length > 0);
+    },
     listStashes: (cwd) => listStashes(execGit, cwd),
     listTags: async (cwd) => {
       const output = await execGit(

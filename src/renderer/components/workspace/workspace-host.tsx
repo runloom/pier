@@ -320,7 +320,8 @@ export function WorkspaceHost() {
       // 同步 scopeStore + 通过 IPC 通知 swift firstResponder swap. panel 可能为
       // null (无 active panel), 此时 fall back 到 "web" + null panelId 防 terminal
       // 抢 firstResponder. getState() 是 imperative 用法, 不是 React hook.
-      event.api.onDidActivePanelChange((panel) => {
+      event.api.onDidActivePanelChange((change) => {
+        // dockview v7: payload 是 { panel, origin },不再直接传 panel。
         // dockview 是 active 的唯一来源 — 集中推送给 PanelDescriptorStore,
         // 各 sink (DocumentTitle / TitleBar) 据此显示当前聚焦 panel 的呈现信息.
         //
@@ -329,6 +330,7 @@ export function WorkspaceHost() {
         // 有一帧 activeId=new 但 descriptors[new]=undefined, sink 退回 "Pier"
         // 造成闪烁. 先用 panel.title 占位 (panel.title 是 dockview 同步可读的初始值),
         // panel 自己的 useEffect 跑起来时会用真实计算结果覆盖.
+        const panel = change.panel;
         const descriptorStore = usePanelDescriptorStore.getState();
         if (panel && !descriptorStore.descriptors[panel.id]) {
           descriptorStore.upsert(panel.id, {

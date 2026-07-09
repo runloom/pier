@@ -6,8 +6,12 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { LucideIcon } from "lucide-react";
 
 export interface ActionInvocation {
+  // 右键 surface 携带的目标载荷 —— 例如 files/tree-item 里被右键的树节点、
+  // files/editor 里的当前选区。数据结构由具体 surface + action 双方约定。
+  metadata?: Record<string, unknown>;
   sourcePanelComponent?: string;
   sourcePanelContext?: PanelContext;
+  sourcePanelGroupId?: string;
   sourcePanelId?: string;
   surface?: string;
 }

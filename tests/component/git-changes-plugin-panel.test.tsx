@@ -314,7 +314,11 @@ describe("GitChangesPanel (plugin)", () => {
       await tree.findByRole("treeitem", { name: APP_PATH_BUTTON_PATTERN })
     ).toBeVisible();
     const treeHost = getFileTreeHost(container);
-    expect(treeHost).toHaveClass("min-h-0", "flex-1", "w-full");
+    const treeBridge = container.querySelector(
+      '[data-slot="pier-file-tree-bridge"]'
+    );
+    expect(treeBridge).toHaveClass("min-h-0", "flex-1", "w-full");
+    expect(treeHost).toHaveClass("h-full", "min-h-0", "w-full");
     expect(treeHost).not.toHaveClass("overflow-auto");
     expect(
       treeHost.shadowRoot?.querySelector(

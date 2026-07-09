@@ -1,4 +1,7 @@
 export const workspace = {
+  tab: {
+    unsaved: "Unsaved changes",
+  },
   addPanelMenu: {
     trigger: "Add Panel",
     newDashboard: "New Dashboard",

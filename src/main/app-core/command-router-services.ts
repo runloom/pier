@@ -12,7 +12,9 @@ import type {
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { AgentAccountsService } from "../services/agent-accounts/service.ts";
 import type { AiService } from "../services/ai/ai-service.ts";
+import type { FileDraftsService } from "../services/file-drafts-service.ts";
 import type { FileService } from "../services/file-service.ts";
+import type { FileWatchService } from "../services/file-watch-service.ts";
 import type { GitService } from "../services/git-service.ts";
 import type { GitWatchService } from "../services/git-watch-service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
@@ -31,7 +33,9 @@ export interface PierCoreServices {
     read(): Promise<MruState>;
     recordUse(actionId: string): Promise<void>;
   };
+  fileDrafts?: FileDraftsService;
   files?: FileService;
+  fileWatch?: FileWatchService;
   git: GitService;
   gitWatch: GitWatchService;
   panelContexts: {

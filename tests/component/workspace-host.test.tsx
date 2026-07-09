@@ -131,7 +131,10 @@ function createDockviewApi(
   activePanel: ReturnType<typeof createPanel> | null
 ) {
   let activePanelChange:
-    | ((panel: ReturnType<typeof createPanel> | null) => void)
+    | ((change: {
+        origin: "api" | "user";
+        panel: ReturnType<typeof createPanel> | null;
+      }) => void)
     | null = null;
   let layoutChange: (() => void) | null = null;
   let currentActivePanel = activePanel;
@@ -144,7 +147,12 @@ function createDockviewApi(
     fromJSON: vi.fn(),
     hasMaximizedGroup: vi.fn(() => true),
     onDidActivePanelChange: vi.fn(
-      (cb: (panel: ReturnType<typeof createPanel> | null) => void) => {
+      (
+        cb: (change: {
+          origin: "api" | "user";
+          panel: ReturnType<typeof createPanel> | null;
+        }) => void
+      ) => {
         activePanelChange = cb;
         return { dispose: vi.fn() };
       }
@@ -169,7 +177,7 @@ function createDockviewApi(
         throw new Error("onDidActivePanelChange was not registered");
       }
       currentActivePanel = panel;
-      activePanelChange(panel);
+      activePanelChange({ origin: "api", panel });
     },
     emitMaximizedGroupChange: () => {
       if (!maximizedGroupChange) {

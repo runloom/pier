@@ -6,14 +6,22 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_MANIFEST,
+  FILES_TREE_SEARCH_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
 import {
   clearFilesDocumentStore,
   createUntitledMarkdownDocument,
+  ensureDiskDocument,
   getDocument,
+  markDocumentLoaded,
+  updateDocumentContents,
 } from "@plugins/builtin/files/renderer/files-document-store.ts";
+import { clearFileTreeSidebarCache } from "@plugins/builtin/files/renderer/files-tree-registry.ts";
 import { filesRendererPlugin } from "@plugins/builtin/files/renderer/index.tsx";
+import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import type { ComponentType } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const sourcePanelContext: PanelContext = {
@@ -35,10 +43,13 @@ const activePanelContext: PanelContext = {
   projectRootPath: "/repo/active",
   worktreeKey: "/repo/active",
 };
+const PROJECT_ROOT = activePanelContext.projectRootPath;
+const UNTITLED_FILE_PANEL_INSTANCE_RE = /^pier\.files\.filePanel:untitled:/;
 
 interface CapturedRegistrations {
   actionDisposers: ReturnType<typeof vi.fn>[];
   actions: RendererPluginAction[];
+  panelComponents: unknown[];
   panelDisposers: ReturnType<typeof vi.fn>[];
   panelIds: string[];
 }
@@ -54,6 +65,7 @@ function createMockContext(overrides?: {
     actions: [],
     panelDisposers: [],
     panelIds: [],
+    panelComponents: [],
   };
 
   const context = {
@@ -66,8 +78,51 @@ function createMockContext(overrides?: {
       }),
     },
     captured,
+    dialogs: {
+      alert: vi.fn(async () => undefined),
+      choice: vi.fn(async () => "confirm" as const),
+      confirm: vi.fn(async () => true),
+      prompt: vi.fn(async () => null),
+    },
+    configuration: {
+      get: vi.fn(() => false),
+      onDidChange: vi.fn(() => vi.fn()),
+      reset: vi.fn(async () => undefined),
+      set: vi.fn(async () => undefined),
+    },
+    git: {
+      getStatus: vi.fn(async () => ({
+        branch: {
+          ahead: 0,
+          behind: 0,
+          branch: "main",
+          mergedIntoDefault: null,
+          oid: "abc",
+          upstream: null,
+          upstreamGone: false,
+        },
+        counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+        delta: null,
+        files: [],
+        remoteSync: null,
+        repoState: { kind: "clean" },
+        stashCount: 0,
+      })),
+      listIgnored: vi.fn(async () => []),
+      watch: vi.fn(() => () => undefined),
+    },
     files: {
+      exists: vi.fn(async (request) => ({
+        exists: true,
+        path: request.path,
+        root: request.root,
+      })),
       list: vi.fn(async () => []),
+      mkdir: vi.fn(async (request) => ({
+        created: true,
+        path: request.path,
+        root: request.root,
+      })),
       move: vi.fn(async (request) => ({
         moved: true,
         newPath: request.newPath,
@@ -75,15 +130,25 @@ function createMockContext(overrides?: {
         root: request.root,
       })),
       readText: vi.fn(async () => ""),
+      stat: vi.fn(async (request) => ({
+        exists: true,
+        isDirectory: false,
+        mtimeMs: 1,
+        path: request.path,
+        root: request.root,
+        size: 0,
+      })),
       trash: vi.fn(async (request) => ({
         path: request.path,
         root: request.root,
         trashed: true,
       })),
+      watch: vi.fn(() => () => undefined),
       writeText: vi.fn(async (request) => ({
         path: request.path,
         root: request.root,
-        written: true,
+        mtimeMs: 1,
+        written: true as const,
       })),
     },
     i18n: {
@@ -117,14 +182,18 @@ function createMockContext(overrides?: {
     },
     panels: {
       getActiveContext: vi.fn(() => overrides?.activePanelContext ?? null),
+      getActiveInstanceId: vi.fn(() => overrides?.activePanelId ?? null),
+      listInstances: vi.fn(() => []),
       open: vi.fn(),
       openInstance: vi.fn(),
-      register: vi.fn((registration: { id: string }) => {
+      register: vi.fn((registration: { component: unknown; id: string }) => {
         const dispose = vi.fn();
         captured.panelIds.push(registration.id);
+        captured.panelComponents.push(registration.component);
         captured.panelDisposers.push(dispose);
         return dispose;
       }),
+      registerCloseGuard: vi.fn(() => vi.fn()),
     },
     terminal: {
       activePanelId: vi.fn(() => overrides?.activePanelId ?? "terminal-active"),
@@ -148,8 +217,51 @@ function findOpenSelectionAction(context: { captured: CapturedRegistrations }) {
   return action as RendererPluginAction;
 }
 
+function findTreeSearchAction(context: { captured: CapturedRegistrations }) {
+  const action = context.captured.actions.find(
+    (candidate) => candidate.id === FILES_TREE_SEARCH_COMMAND_ID
+  );
+  expect(action).toBeDefined();
+  return action as RendererPluginAction;
+}
+
+function findFileCloseGuard(
+  context: RendererPluginContext
+): NonNullable<
+  Parameters<RendererPluginContext["panels"]["registerCloseGuard"]>[1]
+> {
+  const registerCloseGuard = context.panels.registerCloseGuard as ReturnType<
+    typeof vi.fn
+  >;
+  const guard = registerCloseGuard.mock.calls.find(
+    ([componentId]) => componentId === FILES_FILE_PANEL_ID
+  )?.[1];
+  expect(guard).toBeDefined();
+  return guard as NonNullable<
+    Parameters<RendererPluginContext["panels"]["registerCloseGuard"]>[1]
+  >;
+}
+
+function createFilePanelProps(
+  context: PanelContext
+): IDockviewPanelProps<Record<string, unknown>> {
+  return {
+    containerApi: {},
+    params: { context },
+  } as unknown as IDockviewPanelProps<Record<string, unknown>>;
+}
+
+async function spyOnOpenFilesTreeSearch() {
+  const filesTreeRegistry = await import(
+    "@plugins/builtin/files/renderer/files-tree-registry.ts"
+  );
+  return vi.spyOn(filesTreeRegistry, "openFilesTreeSearch");
+}
+
 afterEach(() => {
+  cleanup();
   clearFilesDocumentStore();
+  clearFileTreeSidebarCache();
   vi.restoreAllMocks();
 });
 
@@ -209,6 +321,7 @@ describe("files terminal selection action", () => {
     await findOpenSelectionAction(context).handler({
       sourcePanelComponent: "terminal",
       sourcePanelContext,
+      sourcePanelGroupId: "group-terminal-source",
       sourcePanelId: "terminal-source",
       surface: "terminal/content",
     });
@@ -227,8 +340,13 @@ describe("files terminal selection action", () => {
 
     const openOptions = vi.mocked(context.panels.openInstance).mock
       .calls[0]?.[0];
-    expect(openOptions?.instanceId).toBe("pier.files.untitled:1");
+    expect(openOptions?.instanceId).toMatch(UNTITLED_FILE_PANEL_INSTANCE_RE);
+    expect(openOptions?.instanceId).not.toBe("pier.files.untitled:1");
+    expect(openOptions?.targetGroupId).toBe("group-terminal-source");
     expect(openOptions?.params).toEqual({
+      // untitled Markdown 面板天然 pinned,防止 preview 语义关掉时把 localStorage
+      // 草稿一起删。
+      pinned: true,
       source: {
         id: "pier.files.untitled:1",
         kind: "untitled",
@@ -296,5 +414,310 @@ describe("files terminal selection action", () => {
     expect(actionDispose?.mock.invocationCallOrder[0]).toBeLessThan(
       filePanelDispose?.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     );
+  });
+
+  it("unmounts rendered file panels when deactivated", async () => {
+    const context = createMockContext();
+    const deactivate = filesRendererPlugin.activate(context);
+    const FilesPanel = context.captured.panelComponents[0] as
+      | ComponentType<IDockviewPanelProps<Record<string, unknown>>>
+      | undefined;
+    expect(FilesPanel).toBeDefined();
+    if (!FilesPanel) {
+      throw new Error("expected Files file-panel registration");
+    }
+
+    const rendered = render(
+      <FilesPanel {...createFilePanelProps(activePanelContext)} />
+    );
+    const filePanelDispose = context.captured.panelDisposers[0];
+    filePanelDispose?.mockImplementation(() => {
+      rendered.unmount();
+    });
+    await waitFor(() => {
+      expect(
+        document.querySelector('[aria-label="Collapse file tree"]')
+      ).not.toBeNull();
+    });
+
+    deactivate();
+
+    expect(filePanelDispose).toHaveBeenCalledOnce();
+    expect(
+      document.querySelector('[aria-label="Collapse file tree"]')
+    ).toBeNull();
+  });
+
+  it("allows closing a dirty disk tab without discarding the shared document while another same-source tab remains", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "README.md",
+      root: PROJECT_ROOT,
+    };
+    const document = ensureDiskDocument(source);
+    updateDocumentContents(document.id, "# dirty shared contents");
+    const context = createMockContext();
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-a",
+        id: "panel-a",
+        params: { source },
+        title: "README.md",
+      },
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-b",
+        id: "panel-b",
+        params: { source },
+        title: "README.md",
+      },
+    ]);
+    filesRendererPlugin.activate(context);
+    const guard = findFileCloseGuard(context);
+
+    const result = await guard({
+      componentId: FILES_FILE_PANEL_ID,
+      panelId: "panel-a",
+      params: { source },
+    });
+
+    expect(result).toBe(true);
+    expect(context.dialogs.choice).not.toHaveBeenCalled();
+    expect(getDocument(document.id)).not.toBeNull();
+  });
+
+  it("prompts once when closeAll closes every same-source dirty disk tab", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "README.md",
+      root: PROJECT_ROOT,
+    };
+    const document = ensureDiskDocument(source);
+    markDocumentLoaded(document.id, "# saved contents", 101);
+    updateDocumentContents(document.id, "# dirty shared contents");
+    const context = createMockContext();
+    (context.dialogs.choice as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "confirm"
+    );
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-a",
+        id: "panel-a",
+        params: { source },
+        title: "README.md",
+      },
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-b",
+        id: "panel-b",
+        params: { source },
+        title: "README.md",
+      },
+    ]);
+    filesRendererPlugin.activate(context);
+    const guard = findFileCloseGuard(context);
+
+    await expect(
+      guard({
+        closingPanelIds: ["panel-a", "panel-b"],
+        componentId: FILES_FILE_PANEL_ID,
+        panelId: "panel-a",
+        params: { source },
+      })
+    ).resolves.toBe(true);
+    await expect(
+      guard({
+        closingPanelIds: ["panel-a", "panel-b"],
+        componentId: FILES_FILE_PANEL_ID,
+        panelId: "panel-b",
+        params: { source },
+      })
+    ).resolves.toBe(true);
+
+    expect(context.dialogs.choice).toHaveBeenCalledTimes(1);
+    expect(context.files.writeText).toHaveBeenCalledTimes(1);
+    expect(getDocument(document.id)?.dirty).toBe(false);
+  });
+
+  it("discards a dirty disk document only when the last same-source tab chooses dont-save", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "README.md",
+      root: PROJECT_ROOT,
+    };
+    const document = ensureDiskDocument(source);
+    updateDocumentContents(document.id, "# dirty shared contents");
+    const context = createMockContext();
+    (context.dialogs.choice as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "alt"
+    );
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-a",
+        id: "panel-a",
+        params: { source },
+        title: "README.md",
+      },
+    ]);
+    filesRendererPlugin.activate(context);
+    const guard = findFileCloseGuard(context);
+
+    const result = await guard({
+      componentId: FILES_FILE_PANEL_ID,
+      panelId: "panel-a",
+      params: { source },
+    });
+
+    expect(result).toBe(true);
+    expect(context.dialogs.choice).toHaveBeenCalledTimes(1);
+    expect(getDocument(document.id)).toBeNull();
+  });
+
+  it("keeps a dirty disk document when the last same-source tab close is canceled", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "README.md",
+      root: PROJECT_ROOT,
+    };
+    const document = ensureDiskDocument(source);
+    updateDocumentContents(document.id, "# dirty shared contents");
+    const context = createMockContext();
+    (context.dialogs.choice as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "cancel"
+    );
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-a",
+        id: "panel-a",
+        params: { source },
+        title: "README.md",
+      },
+    ]);
+    filesRendererPlugin.activate(context);
+    const guard = findFileCloseGuard(context);
+
+    const result = await guard({
+      componentId: FILES_FILE_PANEL_ID,
+      panelId: "panel-a",
+      params: { source },
+    });
+
+    expect(result).toBe(false);
+    expect(context.dialogs.choice).toHaveBeenCalledTimes(1);
+    expect(getDocument(document.id)).not.toBeNull();
+  });
+
+  it("saves a dirty inactive disk tab through the close guard", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "README.md",
+      root: PROJECT_ROOT,
+    };
+    const document = ensureDiskDocument(source);
+    markDocumentLoaded(document.id, "# saved contents", 101);
+    updateDocumentContents(document.id, "# dirty inactive contents");
+    const context = createMockContext();
+    (context.dialogs.choice as ReturnType<typeof vi.fn>).mockResolvedValue(
+      "confirm"
+    );
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-a",
+        id: "panel-a",
+        params: { source },
+        title: "README.md",
+      },
+    ]);
+    filesRendererPlugin.activate(context);
+    const guard = findFileCloseGuard(context);
+
+    const result = await guard({
+      componentId: FILES_FILE_PANEL_ID,
+      panelId: "panel-a",
+      params: { source },
+    });
+
+    expect(result).toBe(true);
+    expect(context.files.writeText).toHaveBeenCalledWith({
+      contents: "# dirty inactive contents",
+      expectedMtimeMs: 101,
+      path: "README.md",
+      root: PROJECT_ROOT,
+    });
+    expect(getDocument(document.id)?.dirty).toBe(false);
+    expect(getDocument(document.id)?.savedContents).toBe(
+      "# dirty inactive contents"
+    );
+  });
+
+  it("opens tree search for the active file panel group instead of root fallback", async () => {
+    const search = await spyOnOpenFilesTreeSearch();
+    const context = createMockContext({
+      activePanelContext,
+      activePanelId: "active-file-panel",
+    });
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-active",
+        id: "active-file-panel",
+        params: { context: activePanelContext },
+        title: "README.md",
+      },
+    ]);
+    filesRendererPlugin.activate(context);
+    const action = findTreeSearchAction(context);
+
+    await action.handler();
+
+    expect(search).toHaveBeenCalledWith({
+      instanceId: "group-active",
+      root: PROJECT_ROOT,
+    });
+  });
+
+  it("does not open tree search by root fallback when no active file panel group exists", async () => {
+    const search = await spyOnOpenFilesTreeSearch();
+    const context = createMockContext({
+      activePanelContext,
+      activePanelId: null,
+    });
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue(
+      []
+    );
+    filesRendererPlugin.activate(context);
+    const action = findTreeSearchAction(context);
+
+    await action.handler();
+
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("does not open tree search when the active file panel has no group snapshot", async () => {
+    const search = await spyOnOpenFilesTreeSearch();
+    const context = createMockContext({
+      activePanelContext,
+      activePanelId: "active-file-panel",
+    });
+    (context.panels.listInstances as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: null,
+        id: "active-file-panel",
+        params: { context: activePanelContext },
+        title: "README.md",
+      },
+    ]);
+    filesRendererPlugin.activate(context);
+    const action = findTreeSearchAction(context);
+
+    await action.handler();
+
+    expect(search).not.toHaveBeenCalled();
   });
 });

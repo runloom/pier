@@ -1,3 +1,4 @@
+import { Button } from "@pier/ui/button.tsx";
 import {
   type PanelContext,
   type PanelTabChrome,
@@ -119,13 +120,32 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const statusItems = useTerminalStatusBarItems();
   const pluginRegistryEntries = usePluginRegistryStore((s) => s.plugins);
   const [error, setError] = useState<string | null>(null);
+  const [errorRetryable, setErrorRetryable] = useState(false);
   const [nativeTerminalReady, setNativeTerminalReady] = useState(false);
+  const [terminalRetryNonce, setTerminalRetryNonce] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
   >(() => (freshPanelRef.current.value ? null : undefined));
   const sessionReadVersionRef = useRef(0);
+  const clearTerminalError = useCallback(() => {
+    setError(null);
+    setErrorRetryable(false);
+  }, []);
+  const showRetryableTerminalError = useCallback((message: string) => {
+    setError(message);
+    setErrorRetryable(true);
+  }, []);
+  const showTerminalError = useCallback((message: string) => {
+    setError(message);
+    setErrorRetryable(false);
+  }, []);
+  const retryTerminalCreate = useCallback(() => {
+    clearTerminalError();
+    setNativeTerminalReady(false);
+    setTerminalRetryNonce((value) => value + 1);
+  }, [clearTerminalError]);
 
   const runtimeContext = usePanelEventState(
     window.pier.terminal.onCwdChange,
@@ -222,7 +242,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     }
     let disposed = false;
     sessionReadVersionRef.current += 1;
-    setError(null);
+    clearTerminalError();
     setNativeTerminalReady(false);
     setSavedSession(null);
     window.pier.terminal
@@ -243,13 +263,19 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       .catch((err: unknown) => {
         console.error(`[terminal-panel] relaunch ${panelId} failed:`, err);
         if (!disposed) {
-          setError(err instanceof Error ? err.message : String(err));
+          showTerminalError(err instanceof Error ? err.message : String(err));
         }
       });
     return () => {
       disposed = true;
     };
-  }, [activeLaunch.sequence, panelId, relaunchRequest]);
+  }, [
+    activeLaunch.sequence,
+    clearTerminalError,
+    panelId,
+    relaunchRequest,
+    showTerminalError,
+  ]);
 
   useTerminalNativeLifecycle({
     api,
@@ -262,8 +288,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     initialTask: activeLaunch.task,
     monoFontFamily,
     panelId,
+    retryNonce: terminalRetryNonce,
     sessionLoaded,
-    setError,
+    setCreateError: showRetryableTerminalError,
     setNativeTerminalReady,
   });
 
@@ -303,6 +330,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         {
           sourcePanelComponent: "terminal",
           ...(effectiveContext ? { sourcePanelContext: effectiveContext } : {}),
+          ...(typeof api.group?.id === "string"
+            ? { sourcePanelGroupId: api.group.id }
+            : {}),
           sourcePanelId: panelId,
         }
       ).catch((err: unknown) => {
@@ -312,7 +342,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     return () => {
       unsubscribe?.();
     };
-  }, [panelId, api.setActive, effectiveContext]);
+  }, [panelId, api, effectiveContext]);
 
   const terminalContentClassName = hasStatusBar
     ? "absolute inset-x-0 top-0 bottom-6"
@@ -351,9 +381,14 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         ) : null}
         {error ? (
           <div
-            className={`${terminalContentClassName} flex items-center justify-center bg-[var(--terminal-background,var(--background))]`}
+            className={`${terminalContentClassName} flex flex-col items-center justify-center gap-3 bg-[var(--terminal-background,var(--background))] px-4 text-center`}
           >
             <p className="text-muted-foreground text-sm">{error}</p>
+            {errorRetryable ? (
+              <Button onClick={retryTerminalCreate} size="sm" type="button">
+                重试
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </>

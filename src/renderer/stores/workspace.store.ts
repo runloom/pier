@@ -6,8 +6,8 @@ import { create } from "zustand";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
-import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   clearFreshTerminalPanel,
@@ -16,6 +16,16 @@ import {
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import { focusWorkspaceGroup } from "@/stores/workspace-focus-group.ts";
+import {
+  clearCurrentWindowLayout,
+  inheritedActiveTerminalContext,
+  panelsInSameGroup,
+  type TerminalPanelParams,
+  terminalPanelContext,
+  terminalPanelParams,
+  uniquePanelId,
+  type WorkspaceGroupRef,
+} from "@/stores/workspace-panel-helpers.ts";
 import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 
 interface WorkspaceState {
@@ -40,10 +50,10 @@ interface WorkspaceState {
     task?: TaskPanelMetadata;
   }) => string | null;
   api: DockviewApi | null;
-  closeActivePanel: () => void;
+  closeActivePanel: () => Promise<boolean>;
   closeAll: () => Promise<void>;
-  closeOthers: (panelId: string) => void;
-  closePanel: (panelId: string) => void;
+  closeOthers: (panelId: string) => Promise<void>;
+  closePanel: (panelId: string) => Promise<boolean>;
   equalizeSplits: () => void;
   focusGroup: (direction: "right" | "down" | "left" | "up") => void;
   hasMaximizedGroup: boolean;
@@ -56,93 +66,6 @@ interface WorkspaceState {
   ) => void;
   syncTabShortcutHints: () => void;
   toggleActivePanelMaximized: () => void;
-}
-
-interface TerminalPanelParams {
-  context?: PanelContext;
-  launchId?: string;
-  tab?: PanelTabChrome;
-  task?: TaskPanelMetadata;
-}
-
-type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
-type WorkspacePanelRef = DockviewApi["panels"][number];
-
-function terminalPanelContext(
-  panelId: string | undefined
-): PanelContext | undefined {
-  if (!panelId) {
-    return;
-  }
-  return usePanelDescriptorStore.getState().descriptors[panelId]?.context;
-}
-
-function terminalPanelParams(args: {
-  context: PanelContext | undefined;
-  launchId: string | undefined;
-  tab: PanelTabChrome | undefined;
-  task: TaskPanelMetadata | undefined;
-}): TerminalPanelParams | undefined {
-  if (!(args.context || args.launchId || args.tab || args.task)) {
-    return;
-  }
-  return {
-    ...(args.context && { context: args.context }),
-    ...(args.launchId && { launchId: args.launchId }),
-    ...(args.tab && { tab: args.tab }),
-    ...(args.task && { task: args.task }),
-  };
-}
-
-function inheritedActiveTerminalContext(
-  api: DockviewApi
-): PanelContext | undefined {
-  if (
-    useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
-    "activeTerminal"
-  ) {
-    return;
-  }
-  const activePanel = api.activePanel;
-  if (activePanel?.view.contentComponent !== "terminal") {
-    return;
-  }
-  return terminalPanelContext(activePanel.id);
-}
-
-function uniquePanelId(api: DockviewApi, prefix: string): string {
-  const base = `${prefix}-${Date.now()}`;
-  const existing = new Set(api.panels.map((panel) => panel.id));
-  if (!existing.has(base)) {
-    return base;
-  }
-  let suffix = 1;
-  while (existing.has(`${base}-${suffix}`)) {
-    suffix += 1;
-  }
-  return `${base}-${suffix}`;
-}
-
-function panelsInSameGroup(
-  api: DockviewApi,
-  panelId: string
-): readonly WorkspacePanelRef[] {
-  const group = api.groups.find((candidate) =>
-    candidate.panels.some((panel) => panel.id === panelId)
-  );
-  if (group) {
-    return group.panels;
-  }
-  const activeGroupPanels = api.activeGroup?.panels;
-  if (activeGroupPanels?.some((panel) => panel.id === panelId)) {
-    return activeGroupPanels;
-  }
-  return api.panels;
-}
-
-async function clearCurrentWindowLayout(): Promise<void> {
-  const context = await window.pier.window.getContext();
-  await window.pier.workspace.clearLayout(context.recordId);
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -282,14 +205,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     scheduleRevealDockviewTabByPanelId(id);
     return id;
   },
-  closeActivePanel: () => {
+  closeActivePanel: async () => {
     const api = get().api;
     if (!api) {
-      return;
+      return false;
     }
     const panel = api.activePanel;
     if (!panel) {
-      return;
+      return false;
+    }
+    const allowed = await runPanelCloseGuards({
+      closingPanelIds: [panel.id],
+      componentId: panel.view.contentComponent,
+      panelId: panel.id,
+      params: panel.params,
+    });
+    if (!allowed) {
+      return false;
     }
     // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
     if (api.totalPanels <= 1) {
@@ -299,7 +231,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       closeCurrentWindow().catch((err) => {
         console.error("[workspace] closeCurrentWindow failed:", err);
       });
-      return;
+      return true;
     }
     // 主动先发 native close IPC, 再 removePanel；不把 React unmount 当显式关闭.
     // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
@@ -307,15 +239,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       closeNativeTerminalPanel(panel.id);
     }
     api.removePanel(panel);
+    return true;
   },
-  closePanel: (panelId) => {
+  closePanel: async (panelId) => {
     const api = get().api;
     if (!api) {
-      return;
+      return false;
     }
     const panel = api.panels.find((p) => p.id === panelId);
     if (!panel) {
-      return;
+      return false;
+    }
+    const allowed = await runPanelCloseGuards({
+      closingPanelIds: [panel.id],
+      componentId: panel.view.contentComponent,
+      panelId: panel.id,
+      params: panel.params,
+    });
+    if (!allowed) {
+      return false;
     }
     // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
     if (api.totalPanels <= 1) {
@@ -325,15 +267,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       closeCurrentWindow().catch((err) => {
         console.error("[workspace] closeCurrentWindow failed:", err);
       });
-      return;
+      return true;
     }
     if (panel.view.contentComponent === "terminal") {
       closeNativeTerminalPanel(panel.id);
     }
     api.removePanel(panel);
+    return true;
   },
 
-  closeOthers: (panelId) => {
+  closeOthers: async (panelId) => {
     const api = get().api;
     if (!api) {
       return;
@@ -345,7 +288,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const toClose = panelsInSameGroup(api, keepPanel.id).filter(
       (p) => p.id !== panelId
     );
+    const closingPanelIds = toClose.map((p) => p.id);
     for (const p of toClose) {
+      const allowed = await runPanelCloseGuards({
+        closingPanelIds,
+        componentId: p.view.contentComponent,
+        panelId: p.id,
+        params: p.params,
+      });
+      if (!allowed) {
+        continue;
+      }
       if (p.view.contentComponent === "terminal") {
         closeNativeTerminalPanel(p.id);
       }
@@ -358,19 +311,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!api) {
       return;
     }
-    // 先清磁盘 layout — 防 removePanel 触发的 debounced save 与 closeCurrentWindow 时序
-    // 竞争把空 layout 写入磁盘 (下次启动 fromJSON 拿到空 panel list 应用为空 workspace).
-    try {
-      await clearCurrentWindowLayout();
-    } catch (err) {
-      console.error("[workspace] clearLayout failed:", err);
-    }
     const all = [...api.panels];
+    const closingPanelIds = all.map((p) => p.id);
     for (const p of all) {
+      const allowed = await runPanelCloseGuards({
+        closingPanelIds,
+        componentId: p.view.contentComponent,
+        panelId: p.id,
+        params: p.params,
+      });
+      if (!allowed) {
+        return;
+      }
       if (p.view.contentComponent === "terminal") {
         closeNativeTerminalPanel(p.id);
       }
       api.removePanel(p);
+    }
+    // 所有 panel 都已通过各自 guard 并提交关闭后,显式清掉 record layout。
+    // 这既避免用户取消时提前破坏持久化布局,也避免全关窗口把空 dockview
+    // JSON 当作可恢复布局写回。
+    try {
+      await clearCurrentWindowLayout();
+    } catch (err) {
+      console.error("[workspace] clearLayout failed:", err);
     }
     // 同 closePanel/closeActivePanel: 全 panel 关闭等价于"想退出当前 workspace",
     // 留空 dockview 用户无路可走 (Cmd+T 才能恢复). 一律 close window 保持对称.

@@ -1,6 +1,10 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import {
+  type PluginRegistryEntry,
+  pluginManifestSchema,
+} from "@shared/contracts/plugin.ts";
 import type { DockviewApi } from "dockview-react";
 import i18next from "i18next";
 import { House } from "lucide-react";
@@ -17,6 +21,8 @@ const WORKTREE_READ_CAPABILITY_PATTERN =
   /plugin capability not granted:.*worktree:read/;
 const WORKTREE_WRITE_CAPABILITY_PATTERN =
   /plugin capability not granted:.*worktree:write/;
+const GROUP_CONTENT_ID_PREFIX_PATTERN =
+  /groupContent id must start with.*sample\.plugin\./;
 
 const toastMocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -42,6 +48,7 @@ import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
+import { clearHostGroupContentForTests } from "@/lib/plugins/host-group-content-context.tsx";
 import {
   clearPluginDashboardWidgetsForTests,
   getPluginDashboardWidgetRegistrations,
@@ -72,7 +79,9 @@ interface ExpectedFilesFacade {
     root: string;
   }): Promise<unknown>;
   readText(request: { path: string; root: string }): Promise<string>;
+  stat(request: { path: string; root: string }): Promise<unknown>;
   trash(request: { path: string; root: string }): Promise<unknown>;
+  watch(root: string, listener: (event: unknown) => void): () => void;
   writeText(request: {
     contents: string;
     path: string;
@@ -183,6 +192,47 @@ const commandPermissionEntry = {
   },
 } satisfies PluginRegistryEntry;
 
+function createMockDockviewGroup(activeComponent = "pier.files.filePanel"): {
+  container: HTMLElement;
+  emitActiveChange: () => void;
+  group: PierDockviewGroupHandle;
+  setActiveComponent: (component: string) => void;
+} {
+  const root = document.createElement("div");
+  const container = document.createElement("div");
+  container.className = "dv-content-container";
+  root.appendChild(container);
+  document.body.appendChild(root);
+  const listeners = new Set<(event: unknown) => void>();
+  const activePanel = {
+    id: "active-panel",
+    view: { contentComponent: activeComponent },
+  };
+  const group: PierDockviewGroupHandle = {
+    activePanel,
+    api: {
+      onDidActivePanelChange: (listener) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      },
+    },
+    element: root,
+    id: "group-a",
+  };
+  return {
+    container,
+    emitActiveChange: () => {
+      for (const listener of listeners) {
+        listener({});
+      }
+    },
+    group,
+    setActiveComponent: (component) => {
+      activePanel.view.contentComponent = component;
+    },
+  };
+}
+
 function createWorktreesFacadeMock() {
   return {
     check: vi.fn(async () => ({
@@ -243,6 +293,8 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  clearHostGroupContentForTests();
+  document.body.replaceChildren();
   clearPluginPanelsForTests();
   terminalStatusItemRegistry.clearForTests();
   useCommandPaletteController.setState({
@@ -257,6 +309,7 @@ afterEach(() => {
   workspaceActivationMocks.activateWorkspacePanel.mockReset();
   vi.restoreAllMocks();
   clearPluginDashboardWidgetsForTests();
+  vi.useRealTimers();
 });
 
 describe("createRendererPluginContext", () => {
@@ -443,6 +496,91 @@ describe("createRendererPluginContext", () => {
     );
 
     dispose();
+  });
+
+  it("claims declared group content through the real host context and releases it after the grace period", async () => {
+    vi.useFakeTimers();
+    const pluginEntryWithGroupContent: PluginRegistryEntry = {
+      ...pluginEntry,
+      manifest: {
+        ...pluginEntry.manifest,
+        groupContent: [
+          {
+            id: "sample.plugin.groupView",
+            title: "Sample Group View",
+          },
+        ],
+      },
+    };
+    const context = createRendererPluginContext(pluginEntryWithGroupContent);
+    const ownerId = Symbol("owner");
+    const { container, emitActiveChange, group, setActiveComponent } =
+      createMockDockviewGroup();
+
+    expect(
+      context.groupContent.claim({
+        group,
+        id: "sample.plugin.groupView",
+        ownerId,
+        render: () => <div data-testid="sample-group-view">Sample</div>,
+        visible: (candidate) =>
+          candidate.activePanel?.view?.contentComponent ===
+          "pier.files.filePanel",
+      })
+    ).toBe(true);
+    expect(
+      container.querySelector('[data-slot="sample.plugin.groupView"]')
+    ).toBeInstanceOf(HTMLElement);
+
+    setActiveComponent("terminal");
+    emitActiveChange();
+    expect(
+      container.querySelector<HTMLElement>(
+        '[data-slot="sample.plugin.groupView"]'
+      )?.style.visibility
+    ).toBe("hidden");
+
+    context.groupContent.release({
+      groupId: "group-a",
+      id: "sample.plugin.groupView",
+      ownerId,
+    });
+    expect(
+      container.querySelector('[data-slot="sample.plugin.groupView"]')
+    ).toBeInstanceOf(HTMLElement);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(
+      container.querySelector('[data-slot="sample.plugin.groupView"]')
+    ).toBeInstanceOf(HTMLElement);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(
+      container.querySelector('[data-slot="sample.plugin.groupView"]')
+    ).toBeNull();
+  });
+
+  it("rejects undeclared group content claims", () => {
+    const context = createRendererPluginContext(pluginEntry);
+    const ownerId = Symbol("owner");
+    const { group } = createMockDockviewGroup();
+
+    expect(() =>
+      context.groupContent.claim({
+        group,
+        id: "sample.plugin.missingGroupView",
+        ownerId,
+        render: () => <div />,
+        visible: () => true,
+      })
+    ).toThrow(undeclaredContributionErrorPattern);
+  });
+
+  it("requires group content contribution ids to use the plugin namespace", () => {
+    expect(() =>
+      pluginManifestSchema.parse({
+        ...pluginEntry.manifest,
+        groupContent: [{ id: "wrong.groupView", title: "Wrong Group View" }],
+      })
+    ).toThrow(GROUP_CONTENT_ID_PREFIX_PATTERN);
   });
 
   it("opens quick-pick through the command palette controller", () => {
@@ -791,13 +929,31 @@ describe("createRendererPluginContext", () => {
       { kind: "file", path: "src/index.ts", root },
     ]);
     const readText = vi.fn(async () => "export const value = 1;\n");
-    const writeText = vi.fn(async () => ({ written: true }));
+    const writeText = vi.fn(async () => ({
+      mtimeMs: 1,
+      written: true as const,
+    }));
     const move = vi.fn(async () => ({ moved: true }));
     const trash = vi.fn(async () => ({ trashed: true }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        files: { list, move, readText, trash, writeText },
+        files: {
+          list,
+          move,
+          readText,
+          stat: vi.fn(async () => ({
+            exists: true,
+            isDirectory: false,
+            mtimeMs: 1,
+            path: "x",
+            root: "/repo",
+            size: 0,
+          })),
+          trash,
+          watch: vi.fn(() => () => undefined),
+          writeText,
+        },
       },
     });
     const context = createRendererPluginContext() as RendererPluginContext & {
@@ -816,7 +972,7 @@ describe("createRendererPluginContext", () => {
         path: "src/index.ts",
         root,
       })
-    ).resolves.toEqual({ written: true });
+    ).resolves.toEqual({ mtimeMs: 1, written: true });
     await expect(
       context.files.move({
         newPath: "packages/app/src/index.ts",
@@ -852,13 +1008,31 @@ describe("createRendererPluginContext", () => {
       { kind: "file", path: "src/index.ts", root },
     ]);
     const readText = vi.fn(async () => "export const value = 1;\n");
-    const writeText = vi.fn(async () => ({ written: true }));
+    const writeText = vi.fn(async () => ({
+      mtimeMs: 1,
+      written: true as const,
+    }));
     const move = vi.fn(async () => ({ moved: true }));
     const trash = vi.fn(async () => ({ trashed: true }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        files: { list, move, readText, trash, writeText },
+        files: {
+          list,
+          move,
+          readText,
+          stat: vi.fn(async () => ({
+            exists: true,
+            isDirectory: false,
+            mtimeMs: 1,
+            path: "x",
+            root: "/repo",
+            size: 0,
+          })),
+          trash,
+          watch: vi.fn(() => () => undefined),
+          writeText,
+        },
       },
     });
     const context = createRendererPluginContext({
@@ -910,13 +1084,31 @@ describe("createRendererPluginContext", () => {
     const root = "/repo";
     const list = vi.fn(async () => []);
     const readText = vi.fn(async () => "");
-    const writeText = vi.fn(async () => ({ written: true }));
+    const writeText = vi.fn(async () => ({
+      mtimeMs: 1,
+      written: true as const,
+    }));
     const move = vi.fn(async () => ({ moved: true }));
     const trash = vi.fn(async () => ({ trashed: true }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        files: { list, move, readText, trash, writeText },
+        files: {
+          list,
+          move,
+          readText,
+          stat: vi.fn(async () => ({
+            exists: true,
+            isDirectory: false,
+            mtimeMs: 1,
+            path: "x",
+            root: "/repo",
+            size: 0,
+          })),
+          trash,
+          watch: vi.fn(() => () => undefined),
+          writeText,
+        },
       },
     });
     const context = createRendererPluginContext({
@@ -932,7 +1124,7 @@ describe("createRendererPluginContext", () => {
         path: "src/index.ts",
         root,
       })
-    ).resolves.toEqual({ written: true });
+    ).resolves.toEqual({ mtimeMs: 1, written: true });
     await expect(
       context.files.move({
         newPath: "packages/app/src/index.ts",
