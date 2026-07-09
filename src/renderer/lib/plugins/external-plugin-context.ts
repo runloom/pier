@@ -13,6 +13,7 @@ import {
   collectEnabledConfigurationProperties,
   effectiveConfigurationValue,
 } from "@shared/plugin-settings.ts";
+import i18next from "i18next";
 import { KeyRound, type LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
+import { resolvePluginMessage } from "./display.ts";
 import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
 import {
   getPluginSettingsPage,
@@ -196,7 +198,15 @@ export function createExternalRendererPluginContext(
       },
     },
     i18n: {
-      t: (key, fallback) => fallback ?? key,
+      language: () => i18next.language || "en",
+      t: (key, fallback) => {
+        const resolved = resolvePluginMessage(
+          entry.manifest,
+          i18next.language || "en",
+          key
+        );
+        return resolved ?? fallback ?? key;
+      },
     },
     notifications: {
       error: (message) => toast.error(message),

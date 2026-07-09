@@ -91,6 +91,7 @@ export interface ExternalRendererPluginContext {
     }): Promise<boolean>;
   };
   i18n: {
+    language(): string;
     t(key: string, fallback?: string): string;
   };
   missionControlWidgets: {
