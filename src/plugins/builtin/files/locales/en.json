@@ -56,8 +56,13 @@
     "filePanel.tree.nameRequired": "Name required",
     "filePanel.tree.nameReserved": "Reserved name",
     "filePanel.tree.nameInvalidChars": "Name cannot contain / \\ or NUL",
+    "filePanel.tree.pathMustBeRelative": "Path must be relative to the parent folder",
+    "filePanel.tree.pathInvalidChars": "Path cannot contain \\ or NUL",
+    "filePanel.tree.pathEmptySegment": "Path cannot contain empty segments",
     "filePanel.tree.nameConflict": "Name already exists",
     "filePanel.tree.createFailed": "Unable to create item",
+    "filePanel.tree.createNeedsProject": "Open a project to create files.",
+    "filePanel.tree.contextMenuFailed": "Unable to open menu",
     "filePanel.tree.renameFailed": "Unable to rename",
     "filePanel.tree.deleteFailed": "Unable to delete",
     "filePanel.tree.copyFailed": "Copy failed",
@@ -109,7 +114,16 @@
     "filePanel.saveOnClose.body": "Your changes will be lost if you don't save them.",
     "filePanel.saveOnClose.saveLabel": "Save",
     "filePanel.saveOnClose.dontSaveLabel": "Don't Save",
-    "filePanel.saveOnClose.cancelLabel": "Cancel"
+    "filePanel.saveOnClose.cancelLabel": "Cancel",
+    "files.projectStatus.openLabel": "Open project files",
+    "files.projectStatus.openTooltip": "Open project files",
+    "files.projectStatus.openFailed": "Unable to open project files"
+  },
+  "terminalStatusItems": {
+    "pier.files.project": {
+      "title": "Project",
+      "description": "Shows the current project and opens its file tree."
+    }
   },
   "name": "Files",
   "panels": {

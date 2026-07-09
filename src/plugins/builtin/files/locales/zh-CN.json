@@ -56,8 +56,13 @@
     "filePanel.tree.nameRequired": "请输入名称",
     "filePanel.tree.nameReserved": "该名称保留",
     "filePanel.tree.nameInvalidChars": "名称不能包含 / \\ 或 NUL",
+    "filePanel.tree.pathMustBeRelative": "路径必须相对于父目录",
+    "filePanel.tree.pathInvalidChars": "路径不能包含 \\ 或 NUL",
+    "filePanel.tree.pathEmptySegment": "路径不能包含空段",
     "filePanel.tree.nameConflict": "名称已存在",
     "filePanel.tree.createFailed": "创建失败",
+    "filePanel.tree.createNeedsProject": "请先打开项目再创建文件。",
+    "filePanel.tree.contextMenuFailed": "无法打开菜单",
     "filePanel.tree.renameFailed": "重命名失败",
     "filePanel.tree.deleteFailed": "删除失败",
     "filePanel.tree.copyFailed": "复制失败",
@@ -109,7 +114,16 @@
     "filePanel.saveOnClose.body": "如果不保存，你的更改将会丢失。",
     "filePanel.saveOnClose.saveLabel": "保存",
     "filePanel.saveOnClose.dontSaveLabel": "不保存",
-    "filePanel.saveOnClose.cancelLabel": "取消"
+    "filePanel.saveOnClose.cancelLabel": "取消",
+    "files.projectStatus.openLabel": "打开项目文件",
+    "files.projectStatus.openTooltip": "打开项目文件",
+    "files.projectStatus.openFailed": "无法打开项目文件"
+  },
+  "terminalStatusItems": {
+    "pier.files.project": {
+      "title": "项目",
+      "description": "显示当前项目并打开其文件树。"
+    }
   },
   "name": "文件",
   "panels": {

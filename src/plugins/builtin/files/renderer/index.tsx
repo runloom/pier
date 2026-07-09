@@ -33,6 +33,7 @@ import { createFilesEditorActions } from "./files-editor-actions.ts";
 import { clearFilesEditorViews } from "./files-editor-view-registry.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
+import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
 import {
   clearFileTreeSidebarCache,
   openFilesTreeSearch,
@@ -315,6 +316,7 @@ export const filesRendererPlugin: RendererPluginModule = {
       ...createFilesEditorActions(context).map((action) =>
         context.actions.register(action)
       ),
+      registerFilesProjectStatusItem(context),
     ];
 
     return () => {

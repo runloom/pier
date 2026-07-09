@@ -42,6 +42,9 @@ export function filePanelProjectRoot(
 export function projectNameFromRoot(root: string): string {
   return root.split("/").filter(Boolean).at(-1) ?? root;
 }
+export function ensureProjectFileTreeExpanded(root: string): void {
+  writeTreeCollapsed(root, false);
+}
 
 export function useProjectFileTreeCollapsed(
   root: string | null
