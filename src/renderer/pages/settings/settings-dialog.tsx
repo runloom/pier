@@ -7,7 +7,7 @@ import {
 } from "@pier/ui/dialog.tsx";
 import i18next from "i18next";
 import type { CSSProperties } from "react";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +20,11 @@ import {
   SidebarProvider,
 } from "@/components/primitives/sidebar.tsx";
 import { useT } from "@/i18n/use-t.ts";
+import {
+  getPluginSettingsPage,
+  getPluginSettingsPageRevision,
+  subscribePluginSettingsPageRegistry,
+} from "@/lib/plugins/plugin-settings-page-registry.ts";
 import { AgentsSection } from "@/pages/settings/components/agents-section.tsx";
 import { AppUpdateSection } from "@/pages/settings/components/app-update-section.tsx";
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
@@ -73,6 +78,15 @@ function NavButton({
   );
 }
 
+function PluginSettingsSection({ pluginId }: { pluginId: string }) {
+  const customSettingsPage = getPluginSettingsPage(pluginId);
+  const CustomSettingsPageComponent = customSettingsPage?.component;
+  if (CustomSettingsPageComponent) {
+    return <CustomSettingsPageComponent />;
+  }
+  return <PluginConfigurationSection pluginId={pluginId} />;
+}
+
 export function SettingsDialog() {
   const t = useT();
   const open = useSettingsDialogStore((s) => s.isOpen);
@@ -112,6 +126,10 @@ export function SettingsDialog() {
   }, [activeSection, pluginItems, setActiveSection]);
 
   const activePluginId = pluginIdFromSectionId(activeSection);
+  useSyncExternalStore(
+    subscribePluginSettingsPageRegistry,
+    getPluginSettingsPageRevision
+  );
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -191,7 +209,7 @@ export function SettingsDialog() {
             {activeSection === "environment" ? <EnvironmentSection /> : null}
             {activeSection === "agents" ? <AgentsSection /> : null}
             {activePluginId ? (
-              <PluginConfigurationSection pluginId={activePluginId} />
+              <PluginSettingsSection pluginId={activePluginId} />
             ) : null}
           </main>
         </SidebarProvider>
