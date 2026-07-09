@@ -149,7 +149,7 @@ export function MissionControlWidgetCard({
           {locked ? null : (
             <span
               aria-hidden="true"
-              className="mission-control-widget-drag-handle -ml-1 flex size-5 cursor-grab items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100"
+              className="mission-control-widget-drag-handle -ml-1 flex size-5 cursor-grab items-center justify-center rounded-md text-muted-foreground/70 opacity-40 transition-opacity active:cursor-grabbing group-hover:opacity-100"
             >
               <GripVertical className="size-3.5" />
             </span>
@@ -168,7 +168,7 @@ export function MissionControlWidgetCard({
               <DropdownMenuTrigger asChild>
                 <Button
                   aria-label={t("missionControl.widget.menu")}
-                  className="text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                  className="text-muted-foreground opacity-40 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                   data-testid="mission-control-widget-menu-trigger"
                   size="icon-xs"
                   variant="ghost"

@@ -182,16 +182,30 @@ describe("MissionControlPanel", () => {
     expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
   });
 
-  it("menu trigger visible on group-hover (focus:opacity-100 assertion)", () => {
+  it("edit affordances stay faintly visible without hover", () => {
     const props = makeProps({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    render(<MissionControlPanel {...props} />);
+    const { container } = render(<MissionControlPanel {...props} />);
+
+    const handle = container.querySelector(
+      ".mission-control-widget-drag-handle"
+    );
+    expect(handle).toBeTruthy();
+    expect(handle?.className).not.toContain("opacity-0");
+    expect(handle?.className).toMatch(/opacity-40|opacity-50|opacity-60/);
 
     const trigger = screen.getByLabelText(MENU_LABEL_RE);
-    expect(trigger.className).toContain("opacity-0");
-    expect(trigger.className).toContain("group-hover:opacity-100");
+    expect(trigger.className).not.toContain("opacity-0");
     expect(trigger.className).toContain("focus-visible:opacity-100");
+
+    const gridRoot = container.firstElementChild;
+    expect(gridRoot?.className).not.toContain(
+      "[&_.react-resizable-handle]:opacity-0"
+    );
+    expect(gridRoot?.className).toMatch(
+      /\[&_\.react-resizable-handle\]:opacity-40|\[&_\.react-resizable-handle\]:opacity-50|\[&_\.react-resizable-handle\]:opacity-60/
+    );
   });
 
   it("card menu does not expose manual resize presets", async () => {
