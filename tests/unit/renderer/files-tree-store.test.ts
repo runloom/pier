@@ -1,5 +1,9 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
+  clearFileTreeSidebarCache,
+  registerPendingCreate,
+} from "@plugins/builtin/files/renderer/files-tree-registry.ts";
+import {
   addFilesTreeEntry,
   applyFilesTreeWatchEvent,
   clearFilesTreeStore,
@@ -73,6 +77,7 @@ async function loadRoot(entries: readonly FileEntry[]): Promise<void> {
 describe("files-tree-store", () => {
   afterEach(() => {
     clearFilesTreeStore();
+    clearFileTreeSidebarCache();
     vi.restoreAllMocks();
   });
 
@@ -190,6 +195,47 @@ describe("files-tree-store", () => {
     expect(snapshot.entriesByPath.get("src/new.ts")).toEqual(
       file("src/new.ts")
     );
+  });
+
+  it("marks a newly added directory entry as empty", () => {
+    addFilesTreeEntry(ROOT, directory("src/components"));
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.get("src/components")).toEqual(
+      directory("src/components")
+    );
+    expect(snapshot.directoryStatesByPath.get("src/components")).toBe("empty");
+  });
+
+  it("retains pending-create placeholders when a directory reload omits them", async () => {
+    await loadRoot([directory("src")]);
+    await loadFilesTreeDirectory(
+      ROOT,
+      "src",
+      listFromResponses({ src: [file("src/keep.ts")] })
+    );
+    addFilesTreeEntry(ROOT, file("src/untitled.ts"));
+    registerPendingCreate({
+      kind: "file",
+      openAfter: true,
+      placeholderPath: "src/untitled.ts",
+      root: ROOT,
+    });
+
+    await loadFilesTreeDirectory(
+      ROOT,
+      "src",
+      listFromResponses({ src: [file("src/keep.ts")] })
+    );
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.get("src/keep.ts")).toEqual(
+      file("src/keep.ts")
+    );
+    expect(snapshot.entriesByPath.get("src/untitled.ts")).toEqual(
+      file("src/untitled.ts")
+    );
+    expect(snapshot.directoryStatesByPath.get("src")).toBe("loaded");
   });
 
   it("marks a loaded parent as empty after removing its last child", async () => {

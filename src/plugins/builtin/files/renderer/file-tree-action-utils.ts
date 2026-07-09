@@ -16,6 +16,11 @@ const treeItemMetadataSchema = z.object({
   treeId: z.string().min(1).optional(),
 });
 
+const treeBackgroundMetadataSchema = z.object({
+  root: z.string().min(1),
+  treeId: z.string().min(1).optional(),
+});
+
 const editorTargetMetadataSchema = z.object({
   path: z.string().min(1),
   projectRoot: z.string().min(1).optional(),
@@ -25,6 +30,9 @@ const editorTargetMetadataSchema = z.object({
 });
 
 export type FilesTreeItemMetadata = z.infer<typeof treeItemMetadataSchema>;
+export type FilesTreeBackgroundMetadata = z.infer<
+  typeof treeBackgroundMetadataSchema
+>;
 export type FilesEditorTargetMetadata = z.infer<
   typeof editorTargetMetadataSchema
 >;
@@ -33,6 +41,13 @@ export function parseTreeMetadata(
   invocation: RendererPluginActionInvocation | undefined
 ): FilesTreeItemMetadata | null {
   const parsed = treeItemMetadataSchema.safeParse(invocation?.metadata);
+  return parsed.success ? parsed.data : null;
+}
+
+export function parseTreeBackgroundMetadata(
+  invocation: RendererPluginActionInvocation | undefined
+): FilesTreeBackgroundMetadata | null {
+  const parsed = treeBackgroundMetadataSchema.safeParse(invocation?.metadata);
   return parsed.success ? parsed.data : null;
 }
 
@@ -98,6 +113,44 @@ export function validateName(name: string, t: FilesTranslate): string | null {
       "filePanel.tree.nameInvalidChars",
       "Name cannot contain / \\ or NUL"
     );
+  }
+  return null;
+}
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: NUL is a required path safeguard.
+const INVALID_PATH_CHAR_PATTERN = /[\u0000\\]/;
+
+/** 允许 `a/b/c.ts` 相对嵌套路径;禁绝对路径、`..`、空段、反斜杠与 NUL。 */
+export function validateRelativePath(
+  path: string,
+  t: FilesTranslate
+): string | null {
+  if (path.length === 0) {
+    return t("filePanel.tree.nameRequired", "Name required");
+  }
+  if (path.startsWith("/") || path.startsWith("~")) {
+    return t(
+      "filePanel.tree.pathMustBeRelative",
+      "Path must be relative to the parent folder"
+    );
+  }
+  if (INVALID_PATH_CHAR_PATTERN.test(path)) {
+    return t(
+      "filePanel.tree.pathInvalidChars",
+      "Path cannot contain \\ or NUL"
+    );
+  }
+  const segments = path.split("/");
+  for (const segment of segments) {
+    if (segment.length === 0) {
+      return t(
+        "filePanel.tree.pathEmptySegment",
+        "Path cannot contain empty segments"
+      );
+    }
+    if (segment === "." || segment === "..") {
+      return t("filePanel.tree.nameReserved", "Reserved name");
+    }
   }
   return null;
 }

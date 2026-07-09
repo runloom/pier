@@ -1,5 +1,6 @@
 import type {
   RendererPluginAction,
+  RendererPluginActionInvocation,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import {
@@ -20,18 +21,28 @@ import {
   joinAbsolutePath,
   notifyMoveWithUndo,
   parseEditorMetadata,
+  parseTreeBackgroundMetadata,
   parseTreeMetadata,
   pluginAction,
   relativeToProjectRoot,
   validateName,
   writeClipboardText,
 } from "./file-tree-action-utils.ts";
+import { filePanelProjectRoot } from "./file-tree-preferences.ts";
 import {
   moveDiskDocumentSource,
   removeDiskDocumentForPath,
 } from "./files-document-store.ts";
 import { createFilesTranslate, type FilesTranslate } from "./files-i18n.ts";
-import { startFilesTreeInlineRename } from "./files-tree-registry.ts";
+import {
+  beginInlineCreate,
+  createViaPrompt,
+  resolveCreateParentDir,
+} from "./files-tree-create.ts";
+import {
+  findFilesTreeInstanceId,
+  startFilesTreeInlineRename,
+} from "./files-tree-registry.ts";
 import {
   addFilesTreeEntry,
   moveFilesTreeEntry,
@@ -39,6 +50,42 @@ import {
   removeFilesTreeEntry,
 } from "./files-tree-store.ts";
 import { showFilesNamePrompt } from "./name-prompt.tsx";
+
+function resolveCreateTarget(
+  context: RendererPluginContext,
+  invocation: RendererPluginActionInvocation | undefined
+): { parentDir: string; root: string; treeId?: string } | null {
+  const treeItem = parseTreeMetadata(invocation);
+  if (treeItem) {
+    return {
+      parentDir: resolveCreateParentDir({
+        kind: treeItem.kind,
+        path: treeItem.path,
+      }),
+      root: treeItem.root,
+      ...(treeItem.treeId ? { treeId: treeItem.treeId } : {}),
+    };
+  }
+  const background = parseTreeBackgroundMetadata(invocation);
+  if (background) {
+    return {
+      parentDir: "",
+      root: background.root,
+      ...(background.treeId ? { treeId: background.treeId } : {}),
+    };
+  }
+  // command-palette:落到当前活动 files 树根。
+  const root = filePanelProjectRoot(context.panels.getActiveContext());
+  if (!root) {
+    return null;
+  }
+  const treeId = findFilesTreeInstanceId(root) ?? undefined;
+  return {
+    parentDir: "",
+    root,
+    ...(treeId ? { treeId } : {}),
+  };
+}
 
 function createNewChildAction(
   kind: "file" | "folder",
@@ -53,72 +100,53 @@ function createNewChildAction(
       group: "1_new",
       sortOrder: kind === "file" ? 1 : 2,
     },
-    surfaces: ["files/tree-item"],
+    surfaces: ["files/tree-item", "files/tree-background", "command-palette"],
     title: () =>
       kind === "file"
         ? t("filePanel.tree.action.newFile", "New File...")
         : t("filePanel.tree.action.newFolder", "New Folder..."),
     handler: async (invocation) => {
-      const target = parseTreeMetadata(invocation);
+      const target = resolveCreateTarget(context, invocation);
       if (!target) {
-        return;
-      }
-      const parentDir =
-        target.kind === "directory"
-          ? target.path
-          : dirnameRelative(target.path);
-      const outcome = await showFilesNamePrompt(context, {
-        title:
-          kind === "file"
-            ? t("filePanel.tree.action.newFile", "New File...")
-            : t("filePanel.tree.action.newFolder", "New Folder..."),
-        placeholder:
-          kind === "file"
-            ? t("filePanel.tree.placeholder.newFile", "example.ts")
-            : t("filePanel.tree.placeholder.newFolder", "components"),
-        validate: async (name) => {
-          const invalid = validateName(name, t);
-          if (invalid) {
-            return invalid;
-          }
-          const targetPath =
-            parentDir.length > 0 ? `${parentDir}/${name}` : name;
-          const { exists } = await context.files.exists({
-            path: targetPath,
-            root: target.root,
-          });
-          return exists
-            ? t("filePanel.tree.nameConflict", "Name already exists")
-            : null;
-        },
-      });
-      if (outcome.cancelled) {
-        return;
-      }
-      const targetPath =
-        parentDir.length > 0 ? `${parentDir}/${outcome.value}` : outcome.value;
-      try {
-        if (kind === "file") {
-          await context.files.writeText({
-            contents: "",
-            path: targetPath,
-            root: target.root,
-          });
-        } else {
-          await context.files.mkdir({ path: targetPath, root: target.root });
-        }
-        addFilesTreeEntry(target.root, {
-          kind: kind === "file" ? "file" : "directory",
-          path: targetPath,
-          root: target.root,
-        });
-      } catch (error) {
-        context.notifications.error(
-          error instanceof Error
-            ? error.message
-            : t("filePanel.tree.createFailed", "Unable to create item")
+        context.notifications.info(
+          t(
+            "filePanel.tree.createNeedsProject",
+            "Open a project to create files."
+          )
         );
+        return;
       }
+      // 命令面板走 prompt,支持 a/b/c.ts 嵌套路径;树内右键优先 inline。
+      if (invocation?.surface === "command-palette") {
+        await createViaPrompt({
+          allowNestedPath: true,
+          context,
+          kind,
+          parentDir: target.parentDir,
+          root: target.root,
+          ...(target.treeId ? { treeId: target.treeId } : {}),
+        });
+        return;
+      }
+      const started = await beginInlineCreate({
+        context,
+        kind,
+        parentDir: target.parentDir,
+        root: target.root,
+        ...(target.treeId ? { treeId: target.treeId } : {}),
+      });
+      if (started) {
+        return;
+      }
+      // 树 API 不可用(面板折叠等):弹窗回退;背景菜单允许嵌套路径。
+      await createViaPrompt({
+        allowNestedPath: invocation?.surface === "files/tree-background",
+        context,
+        kind,
+        parentDir: target.parentDir,
+        root: target.root,
+        ...(target.treeId ? { treeId: target.treeId } : {}),
+      });
     },
   });
 }

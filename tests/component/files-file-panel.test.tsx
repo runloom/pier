@@ -522,14 +522,16 @@ describe("Files file-panel", () => {
     });
   });
 
-  it("swallows tree context menu when the right-click target has no data-item-path", async () => {
+  it("opens files/tree-background context menu when the right-click target has no data-item-path", async () => {
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async () =>
         [
           { kind: "file", path: "README.md", root: PROJECT_ROOT },
         ] satisfies FileEntry[]
     );
-    const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>();
+    const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>(
+      async () => undefined
+    );
     const context = createMockContext({ list });
     context.contextMenu = { popup };
     const Panel = createFilePanel(context);
@@ -541,12 +543,23 @@ describe("Files file-panel", () => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
 
-    // 右键 sidebar 的顶部标题栏(在 aside 内但不属于任何 treeitem),不应弹出。
+    // 右键 sidebar 空白区(aside 内但不属于任何 treeitem) → 根级新建菜单。
     const sidebar = container.querySelector("aside") as HTMLElement;
     const header = sidebar.querySelector("div") as HTMLElement;
     fireEvent.contextMenu(header);
 
-    expect(popup).not.toHaveBeenCalled();
+    expect(popup).toHaveBeenCalledWith(
+      "files/tree-background",
+      expect.objectContaining({
+        x: expect.any(Number),
+        y: expect.any(Number),
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          root: PROJECT_ROOT,
+        }),
+      })
+    );
   });
 
   it("dispatches files/editor context menu with selection ranges", async () => {

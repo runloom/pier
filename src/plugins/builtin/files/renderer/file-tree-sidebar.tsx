@@ -32,6 +32,7 @@ import {
 } from "./files-double-click.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import { FilesSearchBar } from "./files-search-bar.tsx";
+import { cancelInlineCreate, commitInlineCreate } from "./files-tree-create.ts";
 import {
   buildGitStatusByPath,
   EMPTY_GIT_DECORATIONS,
@@ -39,7 +40,11 @@ import {
   ignoredStatusFor,
   splitIgnoredEntries,
 } from "./files-tree-git-decorations.ts";
-import { registerFilesTreeInstance } from "./files-tree-registry.ts";
+import {
+  hasPendingCreatePath,
+  peekPendingCreate,
+  registerFilesTreeInstance,
+} from "./files-tree-registry.ts";
 import {
   getFilesTreeSnapshot,
   loadFilesTreeDirectory,
@@ -305,16 +310,40 @@ export function FileTreeSidebar({
 
   const handleRenamePath = useCallback(
     (move: PierFileTreeMove & { isFolder: boolean }) => {
+      if (peekPendingCreate(root, move.from)) {
+        commitInlineCreate({
+          context,
+          from: move.from,
+          root,
+          to: move.to,
+        }).catch(() => undefined);
+        return;
+      }
       if (move.from !== move.to) {
         performMove(move.from, move.to).catch(() => undefined);
       }
     },
-    [performMove]
+    [context, performMove, root]
+  );
+
+  const handleModelPathsRemoved = useCallback(
+    (paths: readonly string[]) => {
+      for (const path of paths) {
+        if (peekPendingCreate(root, path)) {
+          cancelInlineCreate(root, path);
+        }
+      }
+    },
+    [root]
   );
 
   const lastOpenRef = useRef<DoubleClickTrack | null>(null);
   const openPath = useCallback(
     (path: string) => {
+      // 新建占位尚未落盘,禁止打开以免 readText 失败。
+      if (hasPendingCreatePath(root, path)) {
+        return;
+      }
       const entry = snapshot.entriesByPath.get(path);
       if (entry?.kind !== "file") {
         return;
@@ -328,13 +357,13 @@ export function FileTreeSidebar({
       lastOpenRef.current = nextTrack;
       onOpenFile(entry, isDouble ? { pinned: true } : undefined);
     },
-    [onOpenFile, snapshot.entriesByPath]
+    [onOpenFile, root, snapshot.entriesByPath]
   );
 
   const handleTreeDoubleClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       const path = extractItemPathFromEvent(event.nativeEvent);
-      if (!path) {
+      if (!path || hasPendingCreatePath(root, path)) {
         return;
       }
       const entry = snapshot.entriesByPath.get(path);
@@ -345,13 +374,33 @@ export function FileTreeSidebar({
       event.stopPropagation();
       onOpenFile(entry, { pinned: true });
     },
-    [onOpenFile, snapshot.entriesByPath]
+    [onOpenFile, root, snapshot.entriesByPath]
   );
 
   const handleTreeContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       const path = extractItemPathFromEvent(event.nativeEvent);
       if (!path) {
+        event.preventDefault();
+        event.stopPropagation();
+        Promise.resolve(
+          context.contextMenu.popup(
+            "files/tree-background",
+            { x: event.clientX, y: event.clientY },
+            {
+              metadata: {
+                root,
+                treeId: instanceId,
+              },
+            }
+          )
+        ).catch((err: unknown) => {
+          context.notifications.error(
+            err instanceof Error
+              ? err.message
+              : t("filePanel.tree.contextMenuFailed", "Unable to open menu")
+          );
+        });
         return;
       }
       const entry = snapshot.entriesByPath.get(path);
@@ -365,8 +414,8 @@ export function FileTreeSidebar({
         selection.length > 1 && selection.includes(entry.path)
           ? [...selection]
           : undefined;
-      context.contextMenu
-        .popup(
+      Promise.resolve(
+        context.contextMenu.popup(
           "files/tree-item",
           { x: event.clientX, y: event.clientY },
           {
@@ -379,11 +428,15 @@ export function FileTreeSidebar({
             },
           }
         )
-        .catch((err: unknown) => {
-          console.error("[files] tree context menu failed:", err);
-        });
+      ).catch((err: unknown) => {
+        context.notifications.error(
+          err instanceof Error
+            ? err.message
+            : t("filePanel.tree.contextMenuFailed", "Unable to open menu")
+        );
+      });
     },
-    [context.contextMenu, instanceId, snapshot.entriesByPath]
+    [context, instanceId, root, snapshot.entriesByPath, t]
   );
 
   let content: ReactNode = null;
@@ -430,6 +483,7 @@ export function FileTreeSidebar({
         items={items}
         label={t("panel.tree.label", "Files")}
         onLoadDirectory={loadDirectory}
+        onModelPathsRemoved={handleModelPathsRemoved}
         onMovePaths={handleMovePaths}
         onOpenPath={openPath}
         onRenamePath={handleRenamePath}

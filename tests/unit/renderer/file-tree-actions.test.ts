@@ -140,6 +140,7 @@ function makeContext() {
       async () => ({ shown: true })
     ),
   };
+  const openInstance = vi.fn<RendererPluginContext["panels"]["openInstance"]>();
   const context = {
     dialogs,
     files,
@@ -158,9 +159,17 @@ function makeContext() {
       ),
     },
     notifications,
+    panels: {
+      getActiveContext: vi.fn(() => ({
+        contextId: "c",
+        cwd: ROOT,
+        projectRootPath: ROOT,
+      })),
+      openInstance,
+    },
   } as unknown as RendererPluginContext;
 
-  return { context, dialogs, files, notifications };
+  return { context, dialogs, files, notifications, openInstance };
 }
 
 function installClipboard() {
@@ -190,8 +199,8 @@ afterEach(() => {
 });
 
 describe("file-tree-actions", () => {
-  it("creates a file through the file service and adds it to the tree only after the write succeeds", async () => {
-    const { context, files } = makeContext();
+  it("falls back to the name prompt when inline create is unavailable and opens the new file", async () => {
+    const { context, files, openInstance } = makeContext();
     showFilesNamePromptMock.mockResolvedValueOnce({
       cancelled: false,
       value: "new.ts",
@@ -211,9 +220,17 @@ describe("file-tree-actions", () => {
     expect(getFilesTreeSnapshot(ROOT).entriesByPath.get("src/new.ts")).toEqual(
       file("src/new.ts")
     );
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          pinned: true,
+          source: { kind: "disk", path: "src/new.ts", root: ROOT },
+        }),
+      })
+    );
   });
 
-  it("creates a folder through the file service and adds the directory entry to the tree", async () => {
+  it("creates a folder through the prompt fallback and marks it empty", async () => {
     const { context, files } = makeContext();
     showFilesNamePromptMock.mockResolvedValueOnce({
       cancelled: false,
@@ -233,6 +250,9 @@ describe("file-tree-actions", () => {
     expect(
       getFilesTreeSnapshot(ROOT).entriesByPath.get("src/components")
     ).toEqual(directory("src/components"));
+    expect(
+      getFilesTreeSnapshot(ROOT).directoryStatesByPath.get("src/components")
+    ).toBe("empty");
   });
 
   it("does not patch the tree when file creation fails", async () => {
@@ -252,6 +272,57 @@ describe("file-tree-actions", () => {
     expect(notifications.error).toHaveBeenCalledWith("disk full");
     expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src/new.ts")).toBe(
       false
+    );
+  });
+
+  it("creates under project root from the tree-background surface", async () => {
+    const { context, files, openInstance } = makeContext();
+    showFilesNamePromptMock.mockResolvedValueOnce({
+      cancelled: false,
+      value: "root.ts",
+    });
+    const action = actionById(
+      createFilesTreeActions(context),
+      FILES_NEW_FILE_COMMAND_ID
+    );
+
+    await action.handler({
+      metadata: { root: ROOT, treeId: "group-1" },
+      surface: "files/tree-background",
+    });
+
+    expect(files.writeText).toHaveBeenCalledWith({
+      contents: "",
+      path: "root.ts",
+      root: ROOT,
+    });
+    expect(openInstance).toHaveBeenCalled();
+  });
+
+  it("creates a nested path from the command palette prompt without inline create", async () => {
+    const { context, files } = makeContext();
+    showFilesNamePromptMock.mockResolvedValueOnce({
+      cancelled: false,
+      value: "a/b/nested.ts",
+    });
+    const action = actionById(
+      createFilesTreeActions(context),
+      FILES_NEW_FILE_COMMAND_ID
+    );
+
+    await action.handler({ surface: "command-palette" });
+
+    expect(showFilesNamePromptMock).toHaveBeenCalled();
+    expect(files.writeText).toHaveBeenCalledWith({
+      contents: "",
+      path: "a/b/nested.ts",
+      root: ROOT,
+    });
+    expect(
+      getFilesTreeSnapshot(ROOT).entriesByPath.get("a/b/nested.ts")
+    ).toEqual(file("a/b/nested.ts"));
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.get("a")?.kind).toBe(
+      "directory"
     );
   });
 
