@@ -10,9 +10,19 @@ export type CodexAccountStatus =
   | "login-pending"
   | "error";
 
+export interface CodexUsageWindow {
+  resetsAt?: number;
+  usedPercent: number;
+  windowMinutes?: number;
+}
+
 export interface CodexUsageSnapshot {
+  error?: string;
   fetchedAt: number;
-  raw: unknown;
+  raw?: unknown;
+  session?: CodexUsageWindow;
+  status: "ok" | "error";
+  weekly?: CodexUsageWindow;
 }
 
 export interface CodexAccountSummary {
@@ -31,6 +41,7 @@ export interface CodexLoginState {
 export interface CodexAccountsSnapshot {
   accounts: CodexAccountSummary[];
   activeAccountId: string | null;
+  activeUsage?: CodexUsageSnapshot | null;
   login: CodexLoginState | null;
   revision: number;
   schemaVersion: number;

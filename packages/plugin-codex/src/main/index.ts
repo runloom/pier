@@ -58,6 +58,10 @@ export const plugin: MainPluginModule = {
       await service.select(payload as SelectAccountPayload);
       return null;
     });
+    context.rpc.handle("accounts.selectSystemDefault", async () => {
+      await service.selectSystemDefault();
+      return null;
+    });
     context.rpc.handle("accounts.remove", async (payload) => {
       await service.remove(payload as RemoveAccountPayload);
       return null;
