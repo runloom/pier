@@ -1,7 +1,7 @@
 import { type ChartConfig, ChartContainer } from "@pier/ui/chart.tsx";
 import { formatBytes, formatPercent } from "@pier/ui/format.tsx";
 import { Progress } from "@pier/ui/progress.tsx";
-import { WidgetSkeleton } from "@pier/ui/widget-state.tsx";
+import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
 import i18next from "i18next";
 import { useEffect } from "react";
@@ -9,6 +9,7 @@ import { Area, AreaChart } from "recharts";
 import { useT } from "@/i18n/use-t.ts";
 import {
   acquireSystemStatsPolling,
+  pollSystemStatsOnce,
   useSystemStatsStore,
 } from "@/stores/system-stats.store.ts";
 
@@ -65,8 +66,20 @@ export function SystemResourcesWidget({
   }, [visible]);
 
   const snapshot = useSystemStatsStore((s) => s.snapshot);
+  const error = useSystemStatsStore((s) => s.error);
   const cpuHistory = useSystemStatsStore((s) => s.cpuHistory);
 
+  if (snapshot === null && error) {
+    return (
+      <WidgetError
+        message={t("missionControl.widget.systemResources.error")}
+        onRetry={() => {
+          pollSystemStatsOnce().catch(() => undefined);
+        }}
+        retryLabel={t("missionControl.widget.retry")}
+      />
+    );
+  }
   if (snapshot === null) {
     return <WidgetSkeleton />;
   }

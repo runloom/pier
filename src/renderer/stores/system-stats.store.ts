@@ -13,6 +13,7 @@ export interface SystemStatsHistoryPoint {
 interface SystemStatsState {
   /** 全系统 CPU 占用序列（0-1），趋势图数据源。 */
   cpuHistory: readonly SystemStatsHistoryPoint[];
+  error: string | null;
   snapshot: SystemStatsSnapshot | null;
 }
 
@@ -22,13 +23,14 @@ interface SystemStatsState {
  */
 export const useSystemStatsStore = create<SystemStatsState>(() => ({
   cpuHistory: [],
+  error: null,
   snapshot: null,
 }));
 
 let pollRefCount = 0;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-async function pollOnce(): Promise<void> {
+export async function pollSystemStatsOnce(): Promise<void> {
   try {
     const snapshot = await window.pier.systemStats.snapshot();
     useSystemStatsStore.setState((state) => ({
@@ -39,11 +41,14 @@ async function pollOnce(): Promise<void> {
               ...state.cpuHistory.slice(-(HISTORY_CAP - 1)),
               { ts: snapshot.sampledAt, value: snapshot.cpuUsage },
             ],
+      error: null,
       snapshot,
     }));
-  } catch {
+  } catch (err) {
     // 非用户触发的后台轮询：失败表现为快照停更（UI 保持旧值/占位态），
     // 下一拍自动重试，不产生 toast 噪声。
+    const message = err instanceof Error ? err.message : String(err);
+    useSystemStatsStore.setState({ error: message });
   }
 }
 
@@ -54,10 +59,10 @@ async function pollOnce(): Promise<void> {
 export function acquireSystemStatsPolling(): () => void {
   pollRefCount += 1;
   if (pollRefCount === 1 && pollTimer === null) {
-    // pollOnce 内部全量 try/catch，不会产生未处理 rejection
-    pollOnce();
+    // pollSystemStatsOnce 内部全量 try/catch，不会产生未处理 rejection
+    pollSystemStatsOnce();
     pollTimer = setInterval(() => {
-      pollOnce();
+      pollSystemStatsOnce();
     }, POLL_INTERVAL_MS);
   }
   let released = false;

@@ -308,6 +308,7 @@ describe("MissionControlPanel", () => {
     render(<MissionControlPanel {...props} />);
 
     expect(screen.getByText("widget boom")).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="widget-error"]')).toBeTruthy();
     expect(screen.getByText(/retry/i)).toBeInTheDocument();
 
     spy.mockRestore();

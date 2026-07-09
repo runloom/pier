@@ -122,6 +122,7 @@ export function MissionControlWidgetCard({
     const WidgetComponent = widget.registration.component;
     return (
       <WidgetErrorBoundary
+        fallbackMessage={t("missionControl.widget.errorFallback")}
         key={`${widget.instanceId}:${refreshToken}`}
         onRetry={onRefresh}
         retryLabel={t("missionControl.widget.retry")}
