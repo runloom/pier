@@ -21,6 +21,10 @@ import {
   registerPluginMissionControlWidget,
 } from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
 import { MissionControlPanel } from "@/panel-kits/mission-control/mission-control-panel.tsx";
+import {
+  resetAppDialogForTests,
+  useAppDialogStore,
+} from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 
 const MENU_LABEL_RE = /widget menu/i;
@@ -101,6 +105,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetAppDialogForTests();
   clearPluginMissionControlWidgetsForTests();
   usePluginRegistryStore.setState({
     diagnostics: [],
@@ -163,23 +168,38 @@ describe("MissionControlPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("removes a widget via the card menu", async () => {
+  it("asks for confirmation before removing a widget", async () => {
     const updateParameters = vi.fn();
     const props = makeProps(
-      {
-        widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
-      },
+      { widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }] },
       updateParameters
     );
-
     render(<MissionControlPanel {...props} />);
-
     openWidgetMenu();
     fireEvent.click(
       await screen.findByTestId("mission-control-widget-menu-remove")
     );
 
-    expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
+    const dialog = useAppDialogStore.getState().current;
+    expect(dialog?.kind).toBe("confirm");
+    expect(updateParameters).not.toHaveBeenCalled();
+
+    await act(async () => {
+      dialog?.resolve(false);
+    });
+    expect(updateParameters).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      await screen.findByTestId("mission-control-widget-menu-remove")
+    );
+    const dialog2 = useAppDialogStore.getState().current;
+    await act(async () => {
+      dialog2?.resolve(true);
+    });
+
+    await vi.waitFor(() => {
+      expect(updateParameters).toHaveBeenCalledWith({ widgets: [] });
+    });
   });
 
   it("edit affordances stay faintly visible without hover", () => {

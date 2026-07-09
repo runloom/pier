@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import type { ResolvedMissionControlWidget } from "./mission-control-merge.ts";
 import { WidgetErrorBoundary } from "./mission-control-widget-error-boundary.tsx";
 
@@ -206,7 +207,18 @@ export function MissionControlWidgetCard({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       data-testid="mission-control-widget-menu-remove"
-                      onSelect={onRemove}
+                      onSelect={async (event) => {
+                        event.preventDefault();
+                        const confirmed = await showAppConfirm({
+                          body: t("missionControl.removeConfirmBody"),
+                          intent: "destructive",
+                          size: "sm",
+                          title: t("missionControl.removeConfirmTitle"),
+                        });
+                        if (confirmed) {
+                          onRemove();
+                        }
+                      }}
                       variant="destructive"
                     >
                       <Trash2 className="size-4" />
