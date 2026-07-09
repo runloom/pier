@@ -12,13 +12,18 @@ import { PluginConfigurationSection } from "@/pages/settings/components/plugin-c
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 
-const toastMocks = vi.hoisted(() => ({
-  error: vi.fn(),
+const appDialogMocks = vi.hoisted(() => ({
+  showAppAlert: vi.fn(async () => undefined),
 }));
 
-vi.mock("sonner", () => ({
-  toast: toastMocks,
-}));
+vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/stores/app-dialog.store.ts")>();
+  return {
+    ...actual,
+    showAppAlert: appDialogMocks.showAppAlert,
+  };
+});
 
 function entry(id: string, enabled = true): PluginRegistryEntry {
   return {
@@ -125,6 +130,7 @@ const SETTINGS_INITIAL_STATE = {
 describe("PluginConfigurationSection", () => {
   beforeEach(async () => {
     await initI18n();
+    appDialogMocks.showAppAlert.mockClear();
     usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
     usePluginSettingsStore.setState(SETTINGS_INITIAL_STATE);
     Object.defineProperty(window, "pier", {
@@ -443,7 +449,7 @@ describe("PluginConfigurationSection", () => {
     expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
   });
 
-  it("写入失败时 store.error 非空, 触发 toast.error 提示", async () => {
+  it("写入失败时 store.error 非空, 触发 showAppAlert 提示", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -472,10 +478,10 @@ describe("PluginConfigurationSection", () => {
       expect(usePluginSettingsStore.getState().error).toBe("ipc boom");
     });
     await waitFor(() => {
-      expect(toastMocks.error).toHaveBeenCalledWith(
-        "Failed to update setting",
-        expect.objectContaining({ description: "ipc boom" })
-      );
+      expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
+        body: "ipc boom",
+        title: "Failed to update setting",
+      });
     });
   });
 

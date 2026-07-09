@@ -15,8 +15,8 @@ import type {
 } from "@shared/contracts/tasks.ts";
 import { ExternalLink, ListChecks, Loader2, RotateCcw } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useTaskBackgroundStore } from "@/stores/task-background.store.ts";
 import {
   rememberTerminalTaskRun,
@@ -216,18 +216,21 @@ function TaskStatusItemView({
             ...(result.runId ? { runId: result.runId } : {}),
           });
         } else if (result.status === "unsupported") {
-          toast.error(t("terminal.taskStatus.unsupported"), {
-            description: result.message,
+          showAppAlert({
+            title: t("terminal.taskStatus.unsupported"),
+            body: result.message,
           });
         } else if (result.status === "requires-input") {
-          toast.error(t("terminal.taskStatus.unsupported"), {
-            description: t("terminal.taskStatus.inputsUnsupported"),
+          showAppAlert({
+            title: t("terminal.taskStatus.unsupported"),
+            body: t("terminal.taskStatus.inputsUnsupported"),
           });
         }
       })
       .catch((err: unknown) => {
-        toast.error(t("terminal.taskStatus.startFailed"), {
-          description: err instanceof Error ? err.message : String(err),
+        showAppAlert({
+          title: t("terminal.taskStatus.startFailed"),
+          body: err instanceof Error ? err.message : String(err),
         });
       });
   };

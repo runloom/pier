@@ -162,7 +162,12 @@
     "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular,
     "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace;
 
-  /* === shell layout constants === */
+  /* === Capsule toast (Sonner) ===
+     反差色表面：dark 主题用近白底深字、light 主题用近黑底浅字，
+     保证相对 app chrome 高对比。长错误走 showAppAlert。 */
+  --toast-surface: oklch(0.97 0 0);
+  --toast-foreground: oklch(0.18 0 0);
+  --toast-action-bg: color-mix(in oklab, var(--toast-foreground) 10%, transparent);
 }
 
 :root.light {
@@ -199,6 +204,9 @@
   --overlay-scrim: color-mix(in oklab, var(--foreground) 22%, transparent);
   /* sidebar/titlebar 已在 :root 走 var(--xxx) 引用, .light 模式自动跟 --background/--foreground 翻面,
      无需在此重复定义. */
+  --toast-surface: oklch(0.2 0 0);
+  --toast-foreground: oklch(0.98 0 0);
+  --toast-action-bg: color-mix(in oklab, var(--toast-foreground) 14%, transparent);
 }
 
 :root:not(.light) {
@@ -998,4 +1006,80 @@ body {
     color: currentcolor;
     font-weight: inherit;
   }
+}
+
+/* === Capsule toast (Sonner) ===
+   短反馈胶囊：top-center、色块状态图标、单行 title。
+   表面走反差色（变量定义见 :root / :root.light），保证相对 app chrome 高对比。
+   长错误走 showAppAlert。 */
+[data-sonner-toaster] {
+  font-family: var(--pier-ui-font-family);
+}
+
+/* 轨道居中后，短胶囊用 left/right + margin auto 在轨道内再居中；
+   不碰 transform，避免和 Sonner 的 --y 进出场动画冲突。 */
+[data-sonner-toaster][data-x-position="center"] [data-sonner-toast].pier-toast {
+  left: 0 !important;
+  right: 0 !important;
+  margin-inline: auto !important;
+}
+
+[data-sonner-toast].pier-toast {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  width: max-content !important;
+  max-width: min(420px, calc(100vw - 32px)) !important;
+  height: auto !important;
+  padding: 6px 12px !important;
+  gap: 6px !important;
+  border-radius: 999px !important;
+  border: none !important;
+  background: var(--toast-surface) !important;
+  color: var(--toast-foreground) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--toast-foreground) 8%, transparent),
+    0 10px 28px -8px color-mix(in oklab, black 45%, transparent) !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
+  white-space: nowrap !important;
+}
+
+[data-sonner-toast].pier-toast [data-content] {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  min-width: 0;
+}
+
+[data-sonner-toast].pier-toast [data-title],
+.pier-toast-title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-sonner-toast].pier-toast [data-icon] {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+[data-sonner-toast].pier-toast [data-button],
+.pier-toast-action {
+  height: 24px !important;
+  border-radius: 999px !important;
+  padding-inline: 10px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  background: var(--toast-action-bg) !important;
+  color: var(--toast-foreground) !important;
+  margin-left: 4px !important;
+  flex-shrink: 0 !important;
 }

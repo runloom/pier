@@ -1332,12 +1332,14 @@ describe("createRendererPluginContext", () => {
   it("delegates plain notifications to the host toast layer", () => {
     const context = createRendererPluginContext();
 
-    context.notifications.success("Merged", { description: "1 file changed" });
+    context.notifications.success("Merged", {
+      action: { label: "Undo", onClick: () => undefined },
+    });
     context.notifications.info("Nothing to stash");
     context.notifications.error("No active git panel");
 
     expect(toastMocks.success).toHaveBeenCalledWith("Merged", {
-      description: "1 file changed",
+      action: { label: "Undo", onClick: expect.any(Function) },
     });
     expect(toastMocks.info).toHaveBeenCalledWith("Nothing to stash", undefined);
     expect(toastMocks.error).toHaveBeenCalledWith(

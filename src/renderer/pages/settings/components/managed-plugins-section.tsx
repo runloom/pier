@@ -27,6 +27,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   AvailableManagedRow,
   type CatalogRow,
@@ -293,8 +294,9 @@ export function ManagedPluginsSection({
         toast.success(t("settings.plugins.toast.checkUpdatesSuccess"));
       })
       .catch((err: unknown) => {
-        toast.error(t("settings.plugins.toast.checkUpdatesFailed"), {
-          description: errorDescription(err),
+        showAppAlert({
+          title: t("settings.plugins.toast.checkUpdatesFailed"),
+          body: errorDescription(err),
         });
       });
   }, [checkUpdates, t]);

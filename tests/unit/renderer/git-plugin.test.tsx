@@ -1020,9 +1020,14 @@ describe("git builtin plugin", () => {
 
     await quickPick.onAccept(linked);
 
-    expect(toastMocks.error).toHaveBeenCalledWith("Worktree operation failed", {
-      description: "path is not a known worktree for this repository",
-    });
+    expect(
+      await screen.findByRole("alertdialog", {
+        name: "Worktree operation failed",
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByText("path is not a known worktree for this repository")
+    ).toBeTruthy();
   });
 
   it("Worktree 创建命令打开创建面板 overlay", async () => {

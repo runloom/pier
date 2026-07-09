@@ -17,9 +17,9 @@ import type {
 } from "@shared/contracts/terminal-status-bar.ts";
 import i18next from "i18next";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { toast } from "sonner";
 import { resolvePluginTerminalStatusItemDisplay } from "@/lib/plugins/display.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
@@ -131,7 +131,7 @@ export async function openTerminalStatusBarContextMenu(
       return;
     }
     // 取消勾选 → hidden: true;重新勾选 → 清除 hidden 字段(回落默认可见)。
-    // F9:store 侧 IPC 失败会 rethrow(不再悄悄吞错),这里兜底成 toast 让用户
+    // F9:store 侧 IPC 失败会 rethrow(不再悄悄吞错),这里兜底成 alert 让用户
     // 能感知失败,而不是菜单关闭后状态栏毫无变化却查不出原因。
     try {
       await useTerminalStatusBarPrefsStore
@@ -139,8 +139,9 @@ export async function openTerminalStatusBarContextMenu(
         .patchItemOverride(itemId, { hidden: row.hidden ? null : true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(i18next.t("settings.statusBar.updateFailed"), {
-        description: message,
+      await showAppAlert({
+        title: i18next.t("settings.statusBar.updateFailed"),
+        body: message,
       });
     }
   }

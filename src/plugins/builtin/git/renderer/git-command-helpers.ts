@@ -15,11 +15,6 @@ export function commandTitle(
   return context.i18n.commandTitle(id, fallback);
 }
 
-function toastOptions(detail?: string): { description: string } | undefined {
-  const description = detail?.trim();
-  return description ? { description } : undefined;
-}
-
 export type GitLoadingToast = RendererPluginLoadingNotification;
 export interface GitConfirmDialogOptions {
   intent?: RendererPluginDialogIntent;
@@ -36,19 +31,17 @@ export function showLoading(
 export function showInfo(
   context: RendererPluginContext,
   _title: string,
-  message: string,
-  detail?: string
+  message: string
 ): void {
-  context.notifications.info(message, toastOptions(detail));
+  context.notifications.info(message);
 }
 
 export function showSuccess(
   context: RendererPluginContext,
   _title: string,
-  message: string,
-  detail?: string
+  message: string
 ): void {
-  context.notifications.success(message, toastOptions(detail));
+  context.notifications.success(message);
 }
 
 function errorMessage(error: unknown): string {

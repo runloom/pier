@@ -18,10 +18,15 @@ import { TerminalStatusBarBlock } from "@/pages/settings/components/terminal-sta
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 
-const toastError = vi.fn();
-vi.mock("sonner", () => ({
-  toast: { error: (...args: unknown[]) => toastError(...args) },
-}));
+const showAppAlert = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/stores/app-dialog.store.ts")>();
+  return {
+    ...actual,
+    showAppAlert,
+  };
+});
 
 function statusItem(
   id: string,
@@ -77,7 +82,7 @@ const INITIAL_PREFS_STATE = {
 describe("TerminalStatusBarBlock", () => {
   beforeEach(async () => {
     await initI18n();
-    toastError.mockClear();
+    showAppAlert.mockClear();
     usePluginRegistryStore.setState(INITIAL_PLUGIN_STATE);
     useTerminalStatusBarPrefsStore.setState(INITIAL_PREFS_STATE);
     Object.defineProperty(window, "pier", {
@@ -382,7 +387,7 @@ describe("TerminalStatusBarBlock", () => {
     ).toHaveBeenCalledTimes(1);
   });
 
-  it("F9:批量重排 IPC 失败时 toast 报错(不吞错误)", async () => {
+  it("F9:批量重排 IPC 失败时 showAppAlert 报错(不吞错误)", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -412,14 +417,14 @@ describe("TerminalStatusBarBlock", () => {
     );
 
     await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith(
-        "Failed to update status bar item",
-        expect.objectContaining({ description: "boom" })
-      );
+      expect(showAppAlert).toHaveBeenCalledWith({
+        body: "boom",
+        title: "Failed to update status bar item",
+      });
     });
   });
 
-  it("F9:显示开关 IPC 失败时 toast 报错(不吞错误)", async () => {
+  it("F9:显示开关 IPC 失败时 showAppAlert 报错(不吞错误)", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -444,10 +449,10 @@ describe("TerminalStatusBarBlock", () => {
     fireEvent.click(within(pluginRow).getByRole("switch", { name: "Visible" }));
 
     await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith(
-        "Failed to update status bar item",
-        expect.objectContaining({ description: "switch boom" })
-      );
+      expect(showAppAlert).toHaveBeenCalledWith({
+        body: "switch boom",
+        title: "Failed to update status bar item",
+      });
     });
   });
 

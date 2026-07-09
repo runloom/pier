@@ -26,7 +26,6 @@ import type {
 } from "@shared/contracts/terminal-status-bar.ts";
 import i18next from "i18next";
 import { ArrowDown, ArrowLeftRight, ArrowUp, RotateCcw } from "lucide-react";
-import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginTerminalStatusItemDisplay } from "@/lib/plugins/display.ts";
 import { CORE_TERMINAL_STATUS_ITEMS } from "@/panel-kits/terminal/core-terminal-status-items.ts";
@@ -35,6 +34,7 @@ import {
   normalizedGroupOrders,
   resolveEffectiveTerminalStatusItemConfig,
 } from "@/panel-kits/terminal/terminal-status-bar-merge.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 
@@ -160,10 +160,13 @@ function StatusBarRowView({
   );
   const resetItem = useTerminalStatusBarPrefsStore((s) => s.resetItem);
   // F9:store 的 patch/批量/reset 动作 IPC 失败时会 rethrow(不再悄悄吞错),
-  // 调用方在这里统一兜底成 toast,让用户能感知失败而不是静默无变化。
+  // 调用方在这里统一兜底成 alert,让用户能感知失败而不是静默无变化。
   const reportFailure = (err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
-    toast.error(t("settings.statusBar.updateFailed"), { description: message });
+    showAppAlert({
+      title: t("settings.statusBar.updateFailed"),
+      body: message,
+    });
   };
   return (
     <div

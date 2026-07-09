@@ -13,13 +13,29 @@ import { ManagedPluginsSection } from "@/pages/settings/components/managed-plugi
 
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
+  info: vi.fn(),
+  loading: vi.fn(() => "toast-1"),
   promise: vi.fn(),
   success: vi.fn(),
+  dismiss: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
   toast: toastMocks,
 }));
+
+const appDialogMocks = vi.hoisted(() => ({
+  showAppAlert: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/stores/app-dialog.store.ts")>();
+  return {
+    ...actual,
+    showAppAlert: appDialogMocks.showAppAlert,
+  };
+});
 
 function externalEntry(enabled: boolean): PluginRegistryEntry {
   return {
@@ -96,8 +112,10 @@ describe("ManagedPluginsSection", () => {
   afterEach(() => {
     cleanup();
     toastMocks.error.mockReset();
-    toastMocks.promise.mockReset();
+    toastMocks.dismiss.mockReset();
+    toastMocks.loading.mockReset();
     toastMocks.success.mockReset();
+    appDialogMocks.showAppAlert.mockReset();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -325,10 +343,10 @@ describe("ManagedPluginsSection", () => {
     );
 
     await waitFor(() => {
-      expect(toastMocks.error).toHaveBeenCalledWith(
-        "Failed to check plugin updates",
-        { description: "network down" }
-      );
+      expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
+        body: "network down",
+        title: "Failed to check plugin updates",
+      });
     });
   });
 });

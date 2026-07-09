@@ -63,14 +63,16 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - 已经有**强自然 UI 反馈**（列表新增/删除、导航切换、Modal 关闭、面板打开、表单值即时更新等）→ **不再加 toast**；重复反馈是噪声。
 - 只有**弱 UI 反馈**（Save 按钮从 enabled → disabled、dirty 位清零等）或**完全无 UI 反馈**（写盘、无 refetch 的写请求、后台任务触发） → 成功走 `toast.success(t("..."))`。
-- 任何可能失败的分支 → 必须 `toast.error(t("...Failed"), { description: err instanceof Error ? err.message : String(err) })`。`console.error` 不面向用户，只能作为额外日志。
-- Toast 复用 `sonner`；宿主代码从 `sonner` 直接 `import { toast }`，插件走 `context.notifications.{success,error}`；文案必须走 i18n key，禁止内联字符串。
+- 短失败（用户能从 title 理解、无技术详情）→ `toast.error(t("...Failed"))`。
+- 带技术详情的失败（`Error.message`、IPC 错误串、多行说明）→ **直接** `showAppAlert({ title: t("...Failed"), body: err instanceof Error ? err.message : String(err) })`，禁止 `toast.*(…, { description })`。`console.error` 不面向用户，只能作为额外日志。
+- Toast 复用 `sonner`（胶囊短 title；可选 action 如撤销）；宿主代码从 `sonner` 直接 `import { toast }`，插件走 `context.notifications.{success,error}`；文案必须走 i18n key，禁止内联字符串。
 
 **代码审查检查点**：
 - 每个 `onClick` / `onSubmit` / async mutation 都要能回答"用户怎么知道刚才发生了什么"。答不出 → finding。
-- 遇到 `catch` 里只有 `console.error` / `console.warn` 而没有 `toast.error` → finding，除非注释里明确说明不面向用户的路径（如启动阶段 boot log）。
+- 遇到 `catch` 里只有 `console.error` / `console.warn` 而没有 `toast.error` / `showAppAlert` → finding，除非注释里明确说明不面向用户的路径（如启动阶段 boot log）。
 - 遇到"有明显 UI 变化 + 又加了 toast"的双反馈 → minor finding，建议删掉冗余 toast。
 - 遇到内联 toast 文案字符串（未走 i18n） → finding。
+- 遇到 `toast.*(…, { description })` → finding，详情应走 `showAppAlert`。
 
 ### 前台活动模块 `src/main/services/foreground-activity/`
 

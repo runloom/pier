@@ -9,8 +9,8 @@ import {
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import { Download, RefreshCw, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
 interface AppUpdateApi {
   check(): Promise<AppUpdateSnapshot>;
@@ -39,8 +39,9 @@ export function AppUpdateSection() {
       ?.status()
       .then(setSnapshot)
       .catch((err: unknown) => {
-        toast.error(tRef.current("settings.appUpdate.toast.statusFailed"), {
-          description: err instanceof Error ? err.message : String(err),
+        showAppAlert({
+          title: tRef.current("settings.appUpdate.toast.statusFailed"),
+          body: err instanceof Error ? err.message : String(err),
         });
       });
     return () => {
@@ -56,8 +57,9 @@ export function AppUpdateSection() {
     try {
       setSnapshot(await action());
     } catch (err) {
-      toast.error(t(failureKey), {
-        description: err instanceof Error ? err.message : String(err),
+      await showAppAlert({
+        title: t(failureKey),
+        body: err instanceof Error ? err.message : String(err),
       });
     } finally {
       setPending(false);

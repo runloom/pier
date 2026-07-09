@@ -22,10 +22,15 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
-const toastError = vi.fn();
-vi.mock("sonner", () => ({
-  toast: { error: (...args: unknown[]) => toastError(...args) },
-}));
+const showAppAlert = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/stores/app-dialog.store.ts")>();
+  return {
+    ...actual,
+    showAppAlert,
+  };
+});
 
 const { declaredRows, openTerminalStatusBarContextMenu } = await import(
   "@/panel-kits/terminal/terminal-status-bar-menu.ts"
@@ -233,7 +238,7 @@ describe("openTerminalStatusBarContextMenu", () => {
     popupMock.mockImplementation(async () => ({ actionId: null }));
     setItemOverride.mockClear();
     resetItem.mockClear();
-    toastError.mockClear();
+    showAppAlert.mockClear();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -308,7 +313,7 @@ describe("openTerminalStatusBarContextMenu", () => {
     expect(resetItem).not.toHaveBeenCalled();
   });
 
-  it("F9:显隐切换 IPC 失败时 toast 报错(不吞错误)", async () => {
+  it("F9:显隐切换 IPC 失败时 showAppAlert 报错(不吞错误)", async () => {
     setItemOverride.mockImplementationOnce(() =>
       Promise.reject(new Error("menu toggle boom"))
     );
@@ -320,10 +325,10 @@ describe("openTerminalStatusBarContextMenu", () => {
 
     await openTerminalStatusBarContextMenu(fakeMouseEvent());
 
-    expect(toastError).toHaveBeenCalledWith(
-      "Failed to update status bar item",
-      expect.objectContaining({ description: "menu toggle boom" })
-    );
+    expect(showAppAlert).toHaveBeenCalledWith({
+      body: "menu toggle boom",
+      title: "Failed to update status bar item",
+    });
   });
 
   it("勾选项 checked 态反映当前 hidden 生效值(取反)", async () => {

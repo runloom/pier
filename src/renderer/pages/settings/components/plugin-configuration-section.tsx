@@ -8,7 +8,6 @@ import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
   resolvePluginConfigurationTitle,
@@ -18,6 +17,7 @@ import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { TextareaRow } from "@/pages/settings/components/rows/textarea-row.tsx";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 
@@ -44,7 +44,7 @@ async function writeSetting(
     await usePluginSettingsStore.getState().set(key, value);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    toast.error(failedText, { description: message });
+    await showAppAlert({ title: failedText, body: message });
   }
 }
 

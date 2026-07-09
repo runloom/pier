@@ -9,6 +9,7 @@ import { Loader2, Package } from "lucide-react";
 import { type JSX, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   type ContributionCounts,
   contributionCountItemsFromCounts,
@@ -117,7 +118,7 @@ export function rejectFailedManagedPluginOperation<T>(
 /**
  * Shared across install/uninstall/update/rollback buttons.
  *   - flips `pending` while the promise is in-flight
- *   - drives sonner `toast.promise` (loading → success/error)
+ *   - loading/success toast；失败详情走 showAppAlert（不塞 toast description）
  *   - refreshes the catalog on completion
  */
 export function usePluginOp(
@@ -140,22 +141,30 @@ export function usePluginOp(
   ): void => {
     if (!op) return;
     setPending(true);
-    const p = rejectFailedManagedPluginOperation(op).finally(() => {
-      setPending(false);
-      onRefresh();
-    });
-    toast.promise(p, {
-      loading: t(`settings.plugins.toast.${LOADING_KEY[kind]}`, { name }),
-      success: () =>
-        t(`settings.plugins.toast.${SUCCESS_KEY[kind]}`, {
-          name,
-          ...(values ?? {}),
-        }),
-      error: (err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        return `${t(`settings.plugins.toast.${FAILED_KEY[kind]}`, { name })} — ${msg}`;
-      },
-    });
+    const loadingId = toast.loading(
+      t(`settings.plugins.toast.${LOADING_KEY[kind]}`, { name })
+    );
+    rejectFailedManagedPluginOperation(op)
+      .then(() => {
+        toast.success(
+          t(`settings.plugins.toast.${SUCCESS_KEY[kind]}`, {
+            name,
+            ...(values ?? {}),
+          }),
+          { id: loadingId }
+        );
+      })
+      .catch((err: unknown) => {
+        toast.dismiss(loadingId);
+        showAppAlert({
+          title: t(`settings.plugins.toast.${FAILED_KEY[kind]}`, { name }),
+          body: err instanceof Error ? err.message : String(err),
+        });
+      })
+      .finally(() => {
+        setPending(false);
+        onRefresh();
+      });
   };
   return { pending, run };
 }

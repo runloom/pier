@@ -249,7 +249,6 @@ export interface RendererPluginNotificationOptions {
     label: string;
     onClick: () => void;
   };
-  description?: string;
 }
 
 export type RendererPluginDialogIntent = "default" | "destructive";
@@ -389,10 +388,10 @@ export interface RendererPluginContext {
     ): () => void;
   };
   /**
-   * 通知能力。error/info/success/loading 是应用内 toast(由宿主统一渲染与
-   * 排队,插件不感知具体 toast 库);system 是 OS 级系统通知(走 main 进程
-   * Electron Notification,窗口失焦/最小化时也可见)。需要用户决策的场景用
-   * dialogs;这里只做结果播报。
+   * 通知能力。error/info/success/loading 是应用内短 toast(由宿主统一渲染与
+   * 排队,插件不感知具体 toast 库);可带可选 action(如撤销)。长说明/错误详情
+   * 走 dialogs.alert。system 是 OS 级系统通知(走 main 进程 Electron
+   * Notification,窗口失焦/最小化时也可见)。需要用户决策的场景用 dialogs。
    */
   notifications: {
     error(message: string, options?: RendererPluginNotificationOptions): void;

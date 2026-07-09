@@ -35,7 +35,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
-import { showAppConfirm } from "@/stores/app-dialog.store.ts";
+import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useLocalEnvironmentsStore } from "@/stores/local-environments.store.ts";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 import {
@@ -126,8 +126,9 @@ export function EnvironmentSection() {
       setSelected(dir);
     } catch (err) {
       console.error("[environment-section] addEnvironment failed:", err);
-      toast.error(t("settings.environment.addFailed"), {
-        description: err instanceof Error ? err.message : String(err),
+      await showAppAlert({
+        title: t("settings.environment.addFailed"),
+        body: err instanceof Error ? err.message : String(err),
       });
     }
   }
@@ -160,8 +161,9 @@ export function EnvironmentSection() {
       setSelected(null);
     } catch (err) {
       console.error("[environment-section] delete failed:", err);
-      toast.error(t("settings.environment.deleteFailed"), {
-        description: err instanceof Error ? err.message : String(err),
+      await showAppAlert({
+        title: t("settings.environment.deleteFailed"),
+        body: err instanceof Error ? err.message : String(err),
       });
     }
   }
@@ -171,8 +173,9 @@ export function EnvironmentSection() {
       await editorRef.current?.save();
       toast.success(t("settings.environment.saveSuccess"));
     } catch (err) {
-      toast.error(t("settings.environment.saveFailed"), {
-        description: err instanceof Error ? err.message : String(err),
+      await showAppAlert({
+        title: t("settings.environment.saveFailed"),
+        body: err instanceof Error ? err.message : String(err),
       });
     }
   }

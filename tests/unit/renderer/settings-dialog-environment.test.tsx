@@ -99,6 +99,7 @@ vi.mock("@/stores/local-environments.store.ts", () => ({
 }));
 
 const appDialogMocks = vi.hoisted(() => ({
+  showAppAlert: vi.fn(async () => undefined),
   showAppConfirm: vi
     .fn<
       (options: {
@@ -116,18 +117,17 @@ vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
     await importOriginal<typeof import("@/stores/app-dialog.store.ts")>();
   return {
     ...actual,
+    showAppAlert: appDialogMocks.showAppAlert,
     showAppConfirm: appDialogMocks.showAppConfirm,
   };
 });
 
 const sonnerMocks = vi.hoisted(() => ({
-  error: vi.fn(),
   success: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
   toast: {
-    error: sonnerMocks.error,
     success: sonnerMocks.success,
   },
 }));
@@ -303,9 +303,9 @@ describe("SettingsDialog — Environment section", () => {
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useWorkspaceStore.setState({ api: null });
     setEnvironmentStoreSnapshot(DEFAULT_SNAPSHOT);
+    appDialogMocks.showAppAlert.mockClear();
     appDialogMocks.showAppConfirm.mockResolvedValue(true);
     sonnerMocks.success.mockClear();
-    sonnerMocks.error.mockClear();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: pierMock(),
@@ -500,7 +500,7 @@ describe("SettingsDialog — Environment section", () => {
     });
   });
 
-  it("Save failure surfaces a toast.error with the error message", async () => {
+  it("Save failure surfaces a showAppAlert with the error message", async () => {
     const p1 = projectFixture("/Users/xyz/project-a");
     setEnvironmentStoreSnapshot({
       projects: [p1],
@@ -521,10 +521,10 @@ describe("SettingsDialog — Environment section", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(sonnerMocks.error).toHaveBeenCalledWith(
-        "Save failed",
-        expect.objectContaining({ description: "disk full" })
-      );
+      expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
+        body: "disk full",
+        title: "Save failed",
+      });
     });
   });
 

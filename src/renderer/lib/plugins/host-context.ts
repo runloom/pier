@@ -334,22 +334,12 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
 
 function toastNotificationOptions(options?: {
   action?: { label: string; onClick: () => void };
-  description?: string;
-}):
-  | {
-      action?: { label: string; onClick: () => void };
-      description?: string;
-    }
-  | undefined {
-  const description = options?.description?.trim();
+}): { action: { label: string; onClick: () => void } } | undefined {
   const action = options?.action;
-  if (!(description || action)) {
+  if (!action) {
     return;
   }
-  return {
-    ...(description ? { description } : {}),
-    ...(action ? { action } : {}),
-  };
+  return { action };
 }
 
 export function createRendererPluginContext(

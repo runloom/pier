@@ -195,19 +195,17 @@ export async function openWorktreeListQuickPick(
       if (result.status !== "available") {
         return;
       }
-      try {
-        await context.worktrees.open({ path: worktree.path });
-      } catch (err) {
+      context.worktrees.open({ path: worktree.path }).catch((err: unknown) => {
         // 面板只把 onAccept 的 rejection 记到 console,必须自己给用户反馈。
-        context.notifications.error(
-          pluginText(
+        context.dialogs.alert({
+          title: pluginText(
             context,
             "worktreeOperationFailed",
             "Worktree operation failed"
           ),
-          { description: err instanceof Error ? err.message : String(err) }
-        );
-      }
+          body: err instanceof Error ? err.message : String(err),
+        });
+      });
     },
     placeholder: pluginText(
       context,
