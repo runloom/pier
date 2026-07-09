@@ -151,7 +151,8 @@
   --shell-scrollbar-corner: transparent;
   /* === 字体体系 ===
      UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
-     Mono: JetBrainsMono Nerd Font (全量打包 ttf) + ui-monospace fallback
+     Mono: JetBrainsMono Nerd Font (全量打包 ttf) + HarmonyOS Sans SC (打包 CJK)
+           + ui-monospace / PingFang SC / Menlo fallback
      通过 CSS 变量暴露，后续设置页面可动态修改。 */
   --pier-ui-font-family:
     "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",
@@ -159,7 +160,7 @@
     "PingFang SC", sans-serif;
   --pier-mono-font-family:
     "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular,
-    "JetBrains Mono", Menlo, monospace;
+    "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace;
 
   /* === shell layout constants === */
 }

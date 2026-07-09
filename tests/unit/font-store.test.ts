@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  computeMonoFontFamily,
   computeMonoFontFamilyList,
   useFontStore,
 } from "@/stores/font.store.ts";
@@ -103,5 +104,31 @@ describe("computeMonoFontFamilyList", () => {
       "HarmonyOS Sans SC",
       "Menlo",
     ]);
+  });
+});
+
+describe("computeMonoFontFamily", () => {
+  it("空输入返回内置 fallback 链 (含 CJK 兜底)", () => {
+    expect(computeMonoFontFamily("")).toBe(
+      '"JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace'
+    );
+  });
+
+  it("用户字体置于链首", () => {
+    expect(computeMonoFontFamily("Fira Code")).toBe(
+      '"Fira Code", "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace'
+    );
+  });
+
+  it("不含重复的普通版 JetBrains Mono (仅 Nerd Font 版)", () => {
+    const result = computeMonoFontFamily("");
+    expect(result).not.toContain('"JetBrains Mono"');
+    expect(result).toContain('"JetBrainsMono Nerd Font Mono"');
+  });
+
+  it("CJK 兜底存在 (HarmonyOS Sans SC + PingFang SC)", () => {
+    const result = computeMonoFontFamily("");
+    expect(result).toContain('"HarmonyOS Sans SC"');
+    expect(result).toContain('"PingFang SC"');
   });
 });

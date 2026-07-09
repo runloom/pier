@@ -25,7 +25,8 @@ const MONO_FALLBACK = [
   "JetBrainsMono Nerd Font Mono",
   "ui-monospace",
   "SFMono-Regular",
-  "JetBrains Mono",
+  "HarmonyOS Sans SC",
+  "PingFang SC",
   "Menlo",
   "monospace",
 ];
