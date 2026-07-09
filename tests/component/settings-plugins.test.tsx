@@ -50,6 +50,7 @@ function pluginEntry(overrides: {
       apiVersion: 1,
       commands,
       missionControlWidgets: [],
+      settingsPages: [],
       ...(overrides.description ? { description: overrides.description } : {}),
       engines: { pier: ">=0.1.0" },
       id: overrides.id,

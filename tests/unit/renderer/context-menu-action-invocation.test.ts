@@ -25,6 +25,7 @@ function entryWithCommand(actionId: string): PluginRegistryEntry {
       apiVersion: 1,
       commands: [{ id: actionId, permissions: [], title: "Test" }],
       missionControlWidgets: [],
+      settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.test",
       name: "Test",

@@ -17,6 +17,7 @@ function entryWith(overrides: {
       apiVersion: 1,
       commands: [],
       missionControlWidgets: [],
+      settingsPages: [],
       configuration: {
         properties: {
           "pier.git.statusItem.showDirtyIndicator": {

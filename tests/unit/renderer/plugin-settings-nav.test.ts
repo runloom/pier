@@ -19,6 +19,7 @@ function entry(
       apiVersion: 1,
       commands: [],
       missionControlWidgets: [],
+      settingsPages: [],
       ...(configured
         ? {
             configuration: {

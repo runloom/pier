@@ -16,6 +16,7 @@ function entry(id: string, enabled = true): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       missionControlWidgets: [],
+      settingsPages: [],
       configuration: {
         properties: {
           [`${id}.flag`]: { default: true, type: "boolean" },

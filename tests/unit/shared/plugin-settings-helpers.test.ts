@@ -43,6 +43,7 @@ function entry(
       commands: [],
       configuration: { properties },
       missionControlWidgets: [],
+      settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id,
       name: id,

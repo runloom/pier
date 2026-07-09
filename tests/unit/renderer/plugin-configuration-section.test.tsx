@@ -28,6 +28,7 @@ function entry(id: string, enabled = true): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       missionControlWidgets: [],
+      settingsPages: [],
       configuration: {
         properties: {
           [`${id}.enabledFlag`]: {
@@ -81,6 +82,7 @@ function multilineEntry(id: string): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       missionControlWidgets: [],
+      settingsPages: [],
       configuration: {
         properties: {
           [`${id}.prompt`]: {

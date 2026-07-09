@@ -33,6 +33,7 @@ function entryWithPanel(): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       missionControlWidgets: [],
+      settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.test",
       name: "Test",

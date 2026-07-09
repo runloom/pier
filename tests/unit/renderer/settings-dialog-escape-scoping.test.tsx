@@ -32,6 +32,7 @@ function entry(id: string): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       missionControlWidgets: [],
+      settingsPages: [],
       configuration: {
         properties: {
           [`${id}.limit`]: {

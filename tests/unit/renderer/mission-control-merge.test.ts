@@ -35,6 +35,7 @@ function pluginEntry(
         permissions: [],
         title: w.title ?? w.id,
       })),
+      settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: pluginId,
       name: pluginId,
