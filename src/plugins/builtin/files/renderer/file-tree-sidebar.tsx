@@ -13,7 +13,6 @@ import {
 } from "@pier/ui/file-tree.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { FileEntry } from "@shared/contracts/file.ts";
 import type { GitStatus } from "@shared/contracts/git.ts";
 import {
   type MouseEvent as ReactMouseEvent,
@@ -23,8 +22,13 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
+import {
+  extractItemPathFromEvent,
+  type FileTreeSidebarProps,
+  toTreeItem,
+  useFilesTreeSnapshot,
+} from "./file-tree-sidebar-helpers.ts";
 import { moveDiskDocumentSource } from "./files-document-store.ts";
 import {
   type DoubleClickTrack,
@@ -46,75 +50,12 @@ import {
   registerFilesTreeInstance,
 } from "./files-tree-registry.ts";
 import {
-  getFilesTreeSnapshot,
   loadFilesTreeDirectory,
-  loadFilesTreeRoot,
   moveFilesTreeEntry,
   reloadFilesTreeRoot,
-  subscribeFilesTreeSession,
 } from "./files-tree-store.ts";
-import { ensureFilesTreeWatch } from "./files-tree-watch.ts";
 
 const TREE_DOUBLE_CLICK_WINDOW_MS = 400;
-
-function extractItemPathFromEvent(event: MouseEvent): string | null {
-  const path = event.composedPath();
-  for (const target of path) {
-    if (
-      target instanceof HTMLElement &&
-      typeof target.dataset.itemPath === "string" &&
-      target.dataset.itemPath.length > 0
-    ) {
-      return target.dataset.itemPath;
-    }
-  }
-  return null;
-}
-
-interface FileTreeSidebarProps {
-  activeFilePath?: string | null;
-  context: RendererPluginContext;
-  /** 注册表键:共享 group 视图传 groupId,内联回退传 panelId。 */
-  instanceId: string;
-  onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;
-  root: string;
-}
-
-function toTreeItem(entry: FileEntry): PierFileTreeItem {
-  if (entry.kind === "directory") {
-    return {
-      hasChildren: "unknown",
-      kind: "directory",
-      path: entry.path,
-    };
-  }
-
-  return {
-    kind: "file",
-    path: entry.path,
-  };
-}
-
-function useFilesTreeSnapshot(context: RendererPluginContext, root: string) {
-  const subscribe = useCallback(
-    (listener: () => void) => subscribeFilesTreeSession(root, listener),
-    [root]
-  );
-  const getSnapshot = useCallback(() => getFilesTreeSnapshot(root), [root]);
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const t = useMemo(() => createFilesTranslate(context), [context]);
-
-  useEffect(() => {
-    loadFilesTreeRoot(
-      root,
-      context.files.list,
-      t("panel.loadError.fallback", "Failed to load files")
-    );
-    ensureFilesTreeWatch(context, root);
-  }, [context, root, t]);
-
-  return snapshot;
-}
 
 export function FileTreeSidebar({
   activeFilePath,

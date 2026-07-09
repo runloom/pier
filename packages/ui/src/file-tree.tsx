@@ -5,12 +5,17 @@ import type {
 import { FileTree as PierreFileTree, useFileTree } from "@pierre/trees/react";
 import * as React from "react";
 import {
-  buildRowDecoration,
+  buildFileTreeRefs,
+  EMPTY_REFS,
+  type FileTreeRefs,
+  itemsToGitStatusEntries,
+  readRenameView,
+} from "./file-tree-internal.ts";
+import {
   cloneCompositionForRedraw,
   collectExpandedDirectoryPaths,
   isDirectoryHandle,
   lastSegment,
-  resolveDirectoryLoadState,
   samePaths,
   singlePathMutation,
   stripTrailingSlash,
@@ -20,12 +25,7 @@ import {
 } from "./file-tree-model.ts";
 import { usePierFileTreeScrollController } from "./file-tree-scroll-controller.ts";
 import { pierFileTreeStyle } from "./file-tree-style.ts";
-import type {
-  PierDirectoryLoadState,
-  PierFileTreeItem,
-  PierFileTreeMove,
-  PierFileTreeProps,
-} from "./file-tree-types.ts";
+import type { PierFileTreeProps } from "./file-tree-types.ts";
 import { cn } from "./utils.ts";
 
 export type {
@@ -39,57 +39,6 @@ export type {
   PierFileTreeScrollRestoreOptions,
   PierFileTreeScrollSnapshot,
 } from "./file-tree-types.ts";
-
-interface FileTreeRefs {
-  decorationsByPath: ReadonlyMap<string, React.ReactNode>;
-  directoryLoadStatesByPath: ReadonlyMap<string, PierDirectoryLoadState>;
-  itemsByPath: ReadonlyMap<string, PierFileTreeItem>;
-  loadableDirectoryPaths: ReadonlyMap<string, string>;
-  onLoadDirectory: ((path: string) => Promise<void> | void) | undefined;
-  onModelPathsRemoved: ((paths: readonly string[]) => void) | undefined;
-  onMovePaths: ((moves: readonly PierFileTreeMove[]) => void) | undefined;
-  onOpenPath: ((path: string) => void) | undefined;
-  onRenamePath:
-    | ((move: PierFileTreeMove & { isFolder: boolean }) => void)
-    | undefined;
-  onSelectPaths: ((paths: string[]) => void) | undefined;
-}
-
-const EMPTY_REFS: FileTreeRefs = {
-  decorationsByPath: new Map(),
-  directoryLoadStatesByPath: new Map(),
-  itemsByPath: new Map(),
-  loadableDirectoryPaths: new Map(),
-  onLoadDirectory: undefined,
-  onModelPathsRemoved: undefined,
-  onMovePaths: undefined,
-  onOpenPath: undefined,
-  onRenamePath: undefined,
-  onSelectPaths: undefined,
-};
-
-interface RenameViewState {
-  getPath: () => string | null;
-  isActive: () => boolean;
-}
-
-/** @pierre/trees 用 unique symbol 暴露 rename view,未进包 public exports。 */
-function readRenameView(model: object): RenameViewState | null {
-  const proto = Object.getPrototypeOf(model) as object | null;
-  if (!proto) {
-    return null;
-  }
-  for (const symbol of Object.getOwnPropertySymbols(proto)) {
-    if (String(symbol) !== "Symbol(FILE_TREE_RENAME_VIEW)") {
-      continue;
-    }
-    const getter = (
-      model as Record<symbol, (() => RenameViewState) | undefined>
-    )[symbol];
-    return typeof getter === "function" ? getter.call(model) : null;
-  }
-  return null;
-}
 
 export function PierFileTree({
   directoryStates,
@@ -123,12 +72,7 @@ export function PierFileTree({
   );
   const previousRenderSignatureRef = React.useRef(renderSignature);
   const gitStatus = React.useMemo<GitStatusEntry[]>(
-    () =>
-      items.flatMap((item) =>
-        item.gitStatus == null
-          ? []
-          : [{ path: toOfficialPath(item), status: item.gitStatus }]
-      ),
+    () => itemsToGitStatusEntries(items),
     [items]
   );
   const initialExpandedPaths = React.useMemo(
@@ -136,49 +80,10 @@ export function PierFileTree({
     [directoryStates, items]
   );
 
-  refs.current = React.useMemo<FileTreeRefs>(() => {
-    const decorationsByPath = new Map<string, React.ReactNode>();
-    const directoryLoadStatesByPath = new Map<string, PierDirectoryLoadState>();
-    const itemsByPath = new Map<string, PierFileTreeItem>();
-    const loadableDirectoryPaths = new Map<string, string>();
-
-    for (const item of items) {
-      const officialPath = toOfficialPath(item);
-
-      itemsByPath.set(item.path, item);
-      itemsByPath.set(officialPath, item);
-
-      const directoryLoadState = resolveDirectoryLoadState(
-        item,
-        directoryStates
-      );
-      if (directoryLoadState != null) {
-        directoryLoadStatesByPath.set(item.path, directoryLoadState);
-        directoryLoadStatesByPath.set(officialPath, directoryLoadState);
-        loadableDirectoryPaths.set(officialPath, item.path);
-      }
-
-      const decoration = buildRowDecoration(item, directoryStates);
-      if (decoration != null) {
-        decorationsByPath.set(item.path, decoration);
-        decorationsByPath.set(officialPath, decoration);
-      }
-    }
-
-    return {
-      decorationsByPath,
-      directoryLoadStatesByPath,
-      itemsByPath,
-      loadableDirectoryPaths,
-      onLoadDirectory: undefined,
-      onModelPathsRemoved: undefined,
-      onMovePaths: undefined,
-      onOpenPath: undefined,
-      onRenamePath: undefined,
-      onSelectPaths: undefined,
-    };
-  }, [directoryStates, items]);
-
+  refs.current = React.useMemo<FileTreeRefs>(
+    () => buildFileTreeRefs(items, directoryStates),
+    [directoryStates, items]
+  );
   refs.current.onLoadDirectory = onLoadDirectory;
   refs.current.onModelPathsRemoved = onModelPathsRemoved;
   refs.current.onMovePaths = onMovePaths;

@@ -8,10 +8,20 @@ import type {
   AddAccountPayload,
   CodexAccountSummary,
   CodexAccountsSnapshot,
-  CodexUsageSnapshot,
   RemoveAccountPayload,
   SelectAccountPayload,
 } from "../shared/accounts.ts";
+import {
+  buildAccountRecord,
+  mergeIdentityIntoAccount,
+} from "./accounts-records.ts";
+import {
+  activeUsageCacheKey,
+  toUsageSnapshot,
+  USAGE_MIN_REFETCH_MS,
+  USAGE_POLL_INTERVAL_MS,
+  type UsageCacheEntry,
+} from "./accounts-usage.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
 import {
   type CodexLegacyMigrationAdapter,
@@ -19,13 +29,13 @@ import {
 } from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
 import type { CodexAccountRecord, CodexAccountsStateStore } from "./state.ts";
-import type { AccountUsageResult, AgentAccountProvider } from "./types.ts";
+import type { AgentAccountProvider } from "./types.ts";
 
-const USAGE_MIN_REFETCH_MS = 5 * 60 * 1000;
-const USAGE_POLL_INTERVAL_MS = 15 * 60 * 1000;
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const WATCH_SUPPRESS_MS = 1500;
-export const SYSTEM_USAGE_CACHE_KEY = "__system__";
+
+// re-export: 测试与外部消费者从 service 入口取 usage 缓存键。
+export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
 export interface CodexAccountsServiceOpts {
   ensureUsageEnv?: () => Promise<void>;
   hasVisibleTarget?: () => boolean;
@@ -48,26 +58,6 @@ export interface CodexAccountsService {
   select(payload: SelectAccountPayload): Promise<void>;
   selectSystemDefault(): Promise<void>;
   snapshot(): CodexAccountsSnapshot;
-}
-
-interface UsageCacheEntry {
-  error?: string;
-  fetchedAt: number;
-  raw?: unknown;
-  session?: AccountUsageResult["session"];
-  status: "error" | "ok";
-  weekly?: AccountUsageResult["weekly"];
-}
-
-function toUsageSnapshot(entry: UsageCacheEntry): CodexUsageSnapshot {
-  return {
-    fetchedAt: entry.fetchedAt,
-    status: entry.status,
-    ...(entry.error ? { error: entry.error } : {}),
-    ...(entry.session ? { session: entry.session } : {}),
-    ...(entry.weekly ? { weekly: entry.weekly } : {}),
-    ...(entry.raw === undefined ? {} : { raw: entry.raw }),
-  };
 }
 
 export function createCodexAccountsService(
@@ -122,10 +112,6 @@ export function createCodexAccountsService(
     };
   }
 
-  function activeUsageCacheKey(activeAccountId: string | null): string {
-    return activeAccountId ?? SYSTEM_USAGE_CACHE_KEY;
-  }
-
   function buildSnapshot(): CodexAccountsSnapshot {
     broadcastSeq += 1;
     const state = stateStore.get();
@@ -170,15 +156,7 @@ export function createCodexAccountsService(
         ...s,
         accounts: s.accounts.map((a) =>
           a.id === existing.id
-            ? {
-                ...a,
-                email: identity.email,
-                updatedAt: now(),
-                ...(identity.planType ? { planType: identity.planType } : {}),
-                ...(identity.providerAccountId
-                  ? { providerAccountId: identity.providerAccountId }
-                  : {}),
-              }
+            ? mergeIdentityIntoAccount(a, identity, now())
             : a
         ),
         activeAccountId: existing.id,
@@ -188,17 +166,7 @@ export function createCodexAccountsService(
       const id = randomUUID();
       const dir = await ensureManagedDir(id);
       await provider.syncBack(dir, undefined);
-      const account: CodexAccountRecord = {
-        createdAt: now(),
-        email: identity.email,
-        id,
-        provider: "codex",
-        updatedAt: now(),
-        ...(identity.planType ? { planType: identity.planType } : {}),
-        ...(identity.providerAccountId
-          ? { providerAccountId: identity.providerAccountId }
-          : {}),
-      };
+      const account = buildAccountRecord(identity, id, now());
       stateStore.mutate((s) => ({
         ...s,
         accounts: [...s.accounts, account],
@@ -274,33 +242,13 @@ export function createCodexAccountsService(
           ...s,
           accounts: s.accounts.map((a) =>
             a.id === existing.id
-              ? {
-                  ...a,
-                  email: identity.email,
-                  lastAuthenticatedAt: now(),
-                  updatedAt: now(),
-                  ...(identity.planType ? { planType: identity.planType } : {}),
-                  ...(identity.providerAccountId
-                    ? { providerAccountId: identity.providerAccountId }
-                    : {}),
-                }
+              ? mergeIdentityIntoAccount(a, identity, now(), now())
               : a
           ),
           revision: s.revision + 1,
         }));
       } else {
-        const account: CodexAccountRecord = {
-          createdAt: now(),
-          email: identity.email,
-          id,
-          lastAuthenticatedAt: now(),
-          provider: "codex",
-          updatedAt: now(),
-          ...(identity.planType ? { planType: identity.planType } : {}),
-          ...(identity.providerAccountId
-            ? { providerAccountId: identity.providerAccountId }
-            : {}),
-        };
+        const account = buildAccountRecord(identity, id, now(), now());
         stateStore.mutate((s) => ({
           ...s,
           accounts: [...s.accounts, account],
