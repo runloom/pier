@@ -20,13 +20,13 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     categoryKey: "panel",
     group: "1_new",
     handler: () => {
-      useWorkspaceStore.getState().addDashboard();
+      useWorkspaceStore.getState().addMissionControl();
     },
     iconComponent: LayoutDashboard,
-    id: "pier.panel.newDashboard",
+    id: "pier.panel.newMissionControl",
     sortOrder: 0,
     surfaces: ["command-palette"],
-    titleKey: "commandPalette.action.newDashboard",
+    titleKey: "commandPalette.action.newMissionControl",
     when: "workspace.hasApi",
   },
   {

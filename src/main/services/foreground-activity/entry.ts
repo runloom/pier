@@ -62,22 +62,50 @@ export const SESSION_CREATING_EVENTS = new Set([
 ]);
 /** 子代理事件只做计数, 不改父状态（防 tool→processing 闪跳）。 */
 export const SUBAGENT_EVENTS = new Set(["SubagentStart", "SubagentStop"]);
+/**
+ * 这些集成在 agent 扩展运行时内直接写 JSONL, `pid` 是扩展宿主进程号。
+ * Claude/Codex 等 JSON command hook 里的 `pid` 来自 Pier emit 脚本 `$$`,
+ * 不是 agent 会话进程, 不得放进此表。
+ */
+export const PROCESS_SCOPED_HOOK_AGENTS: ReadonlySet<AgentKind> = new Set([
+  "amp",
+  "kilo",
+  "mimo-code",
+  "omp",
+  "opencode",
+  "pi",
+]);
+export const PANEL_HOOK_SCOPE_KEY = "panel";
 /** Ctrl+Z 悬挂族：128 + {SIGSTOP,SIGTSTP} = 145,146,147,148。 */
 export const SUSPENDED_JOB_EXIT_CODES: ReadonlySet<number> = new Set([
   145, 146, 147, 148,
 ]);
+
+export interface HookScopeIdentity {
+  isolated: boolean;
+  key: string;
+}
+
+export interface HookScope {
+  key: string;
+  stateStartedAt: number;
+  status: ActivityStatus;
+  subagentCount: number;
+  turnEnded: boolean;
+  updatedAt: number;
+}
 
 /** hook 层——agent 会话证据。字段只由 hook 事件（及 TTL 衰减）改写。 */
 export interface HookLayer {
   agentId: AgentKind;
   /** SessionStart 消抖隐藏期为 true——不参与投影。 */
   hidden: boolean;
+  scopes: Map<string, HookScope>;
   spawnedAt: number;
   stateStartedAt: number;
   status: ActivityStatus;
   subagentCount: number;
   ttlTimer: NodeJS.Timeout | null;
-  turnEnded: boolean;
   updatedAt: number;
   visibilityTimer: NodeJS.Timeout | null;
   windowId: string;
@@ -157,6 +185,96 @@ export function clearSlotTimers(slot: PanelSlot): void {
   }
 }
 
+export function hookScopeIdentity(
+  event: AgentHookEventPayload
+): HookScopeIdentity {
+  const sessionId = event.sessionId?.trim();
+  if (sessionId) {
+    return { isolated: true, key: `session:${sessionId}` };
+  }
+  if (
+    PROCESS_SCOPED_HOOK_AGENTS.has(event.agent) &&
+    typeof event.pid === "number"
+  ) {
+    return { isolated: true, key: `process:${event.pid}` };
+  }
+  return { isolated: false, key: PANEL_HOOK_SCOPE_KEY };
+}
+
+export function newHookScope(key: string, at: number): HookScope {
+  return {
+    key,
+    stateStartedAt: at,
+    status: "ready",
+    subagentCount: 0,
+    turnEnded: false,
+    updatedAt: at,
+  };
+}
+
+export function getOrCreateHookScope(
+  hook: HookLayer,
+  identity: HookScopeIdentity,
+  at: number
+): HookScope {
+  const existing = hook.scopes.get(identity.key);
+  if (existing) {
+    return existing;
+  }
+  const scope = newHookScope(identity.key, at);
+  hook.scopes.set(identity.key, scope);
+  return scope;
+}
+
+const STATUS_PRIORITY: Record<ActivityStatus, number> = {
+  error: 4,
+  processing: 2,
+  ready: 1,
+  tool: 3,
+  waiting: 5,
+};
+
+function preferredScope(current: HookScope, candidate: HookScope): HookScope {
+  const currentPriority = STATUS_PRIORITY[current.status];
+  const candidatePriority = STATUS_PRIORITY[candidate.status];
+  if (candidatePriority !== currentPriority) {
+    return candidatePriority > currentPriority ? candidate : current;
+  }
+  return candidate.updatedAt >= current.updatedAt ? candidate : current;
+}
+
+export function refreshHookProjection(hook: HookLayer, at?: number): void {
+  let selected: HookScope | null = null;
+  let maxUpdatedAt = hook.updatedAt;
+  let subagentCount = 0;
+  for (const scope of hook.scopes.values()) {
+    selected = selected ? preferredScope(selected, scope) : scope;
+    maxUpdatedAt = Math.max(maxUpdatedAt, scope.updatedAt);
+    subagentCount += scope.subagentCount;
+  }
+  if (!selected) {
+    return;
+  }
+  hook.status = selected.status;
+  hook.stateStartedAt = selected.stateStartedAt;
+  hook.subagentCount = subagentCount;
+  hook.updatedAt = Math.max(maxUpdatedAt, at ?? 0);
+}
+
+export function setHookScopeStatus(
+  hook: HookLayer,
+  scope: HookScope,
+  status: ActivityStatus,
+  at: number
+): void {
+  if (scope.status !== status) {
+    scope.status = status;
+    scope.stateStartedAt = at;
+  }
+  scope.updatedAt = at;
+  refreshHookProjection(hook, at);
+}
+
 /** hook 静默 30min 后 processing/tool/waiting/error → ready 衰减。 */
 export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
   const hook = ctx.slots.get(key)?.hook;
@@ -173,11 +291,17 @@ export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
       return;
     }
     current.ttlTimer = null;
-    if (current.status !== "ready") {
+    if (
+      current.status !== "ready" ||
+      [...current.scopes.values()].some((scope) => scope.status !== "ready")
+    ) {
       const at = ctx.now();
-      current.status = "ready";
-      current.stateStartedAt = at;
-      current.updatedAt = at;
+      for (const scope of current.scopes.values()) {
+        scope.status = "ready";
+        scope.stateStartedAt = at;
+        scope.updatedAt = at;
+      }
+      refreshHookProjection(current, at);
       ctx.scheduleEmit();
     }
   }, HOOK_FRESH_TTL_MS);
@@ -193,9 +317,9 @@ export function newHookLayer(
     spawnedAt: at,
     stateStartedAt: at,
     status: "ready",
+    scopes: new Map(),
     subagentCount: 0,
     ttlTimer: null,
-    turnEnded: false,
     updatedAt: at,
     visibilityTimer: null,
     windowId: event.windowId,
@@ -254,39 +378,26 @@ export function newTaskLayer(
  * PermissionRequest 豁免吸收——权限弹窗是回合复活的证据。
  */
 export function applyTurnBookkeeping(
-  hook: HookLayer,
+  scope: HookScope,
   eventName: string
 ): boolean {
   if (TURN_BOUNDARY_EVENTS.has(eventName)) {
-    hook.turnEnded = true;
-    hook.subagentCount = 0;
+    scope.turnEnded = true;
+    scope.subagentCount = 0;
   } else if (TURN_RESET_EVENTS.has(eventName)) {
-    hook.turnEnded = false;
-    hook.subagentCount = 0;
+    scope.turnEnded = false;
+    scope.subagentCount = 0;
   } else if (eventName === "PermissionRequest") {
-    hook.turnEnded = false;
-  } else if (hook.turnEnded) {
+    scope.turnEnded = false;
+  } else if (scope.turnEnded) {
     return false;
   }
   if (eventName === "SubagentStart") {
-    hook.subagentCount += 1;
+    scope.subagentCount += 1;
   } else if (eventName === "SubagentStop") {
-    hook.subagentCount = Math.max(0, hook.subagentCount - 1);
+    scope.subagentCount = Math.max(0, scope.subagentCount - 1);
   }
   return true;
-}
-
-/** hook 层设置 status（同 status 内保 stateStartedAt 稳定）。 */
-export function setHookStatus(
-  hook: HookLayer,
-  status: ActivityStatus,
-  at: number
-): void {
-  if (hook.status !== status) {
-    hook.status = status;
-    hook.stateStartedAt = at;
-  }
-  hook.updatedAt = at;
 }
 
 /**

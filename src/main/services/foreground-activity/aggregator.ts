@@ -5,13 +5,16 @@ import type {
 } from "@shared/contracts/foreground-activity.ts";
 import { activityStatusForHookEvent } from "@shared/contracts/foreground-activity.ts";
 import {
+  createHookScopeCoordinator,
+  isInCooldown,
+} from "./aggregator-hook-scopes.ts";
+import {
   logAgentEventDropped,
   logClearForeignHook,
   logCommandFinished,
   logEndHookSession,
   logPtyExitedTaskRetain,
   logRouting,
-  setHookStatusWithLog,
 } from "./aggregator-tracing.ts";
 import {
   type AgentLaunchLayer,
@@ -22,7 +25,9 @@ import {
   clearHookTimers,
   clearSlotTimers,
   EMIT_DEBOUNCE_MS,
+  getOrCreateHookScope,
   type HookLayer,
+  hookScopeIdentity,
   newAgentLaunchLayer,
   newHookLayer,
   newShellLayer,
@@ -31,7 +36,6 @@ import {
   projectSlot,
   SESSION_CREATING_EVENTS,
   SESSION_END_COOLDOWN_MS,
-  SUBAGENT_EVENTS,
   SUSPENDED_JOB_EXIT_CODES,
   type TimerCtx,
   VISIBILITY_DEBOUNCE_MS,
@@ -83,18 +87,6 @@ export function createForegroundActivityAggregator(
 
   const timerCtx: TimerCtx = { now, scheduleEmit, slots };
 
-  function isInCooldown(map: Map<string, number>, key: string): boolean {
-    const until = map.get(key);
-    if (until === undefined) {
-      return false;
-    }
-    if (now() >= until) {
-      map.delete(key);
-      return false;
-    }
-    return true;
-  }
-
   function slotFor(key: string): PanelSlot {
     let slot = slots.get(key);
     if (!slot) {
@@ -121,6 +113,7 @@ export function createForegroundActivityAggregator(
       clearSlotTimers(slot);
       slots.delete(key);
     }
+    hookScopes.clearCooldownsForPanel(key);
     cooldown.map.set(key, now() + cooldown.ms);
     return slot !== undefined;
   }
@@ -133,6 +126,7 @@ export function createForegroundActivityAggregator(
         }
       }
     }
+    hookScopes.pruneExpiredCooldowns();
   }
 
   /** launch 层 250ms 消抖显形（`omp --version` 瞬时命令不闪条）。 */
@@ -196,11 +190,21 @@ export function createForegroundActivityAggregator(
       }
       dropSlotIfEmpty(key);
     }
+    hookScopes.clearCooldownsForPanel(key);
     hookCooldownUntil.set(key, now() + SESSION_END_COOLDOWN_MS);
     if (hook) {
       scheduleEmit();
     }
   }
+
+  const hookScopes = createHookScopeCoordinator({
+    endHookSession,
+    hookCooldownUntil,
+    now,
+    panelCooldownUntil,
+    scheduleEmit,
+    slots,
+  });
 
   /**
    * 取得/新建 hook 层。幽灵门控：终结类迟到事件（Stop/ToolComplete/
@@ -276,7 +280,7 @@ export function createForegroundActivityAggregator(
       const key = panelId;
       // 只查 panel 死亡冷却：命令收尾的 hook 冷却不拦新命令——
       // 相邻命令 <5s 也必须正常呈现（loomdesk ingestCommandStart 同语义）。
-      if (isInCooldown(panelCooldownUntil, key)) {
+      if (isInCooldown(panelCooldownUntil, key, now)) {
         return;
       }
       const slot = slotFor(key);
@@ -317,20 +321,11 @@ export function createForegroundActivityAggregator(
       const key = event.panelId;
       const slotBefore = slots.get(key);
       logRouting(event.event, event.agent, key, slotBefore?.hook ?? null);
-      if (isInCooldown(panelCooldownUntil, key)) {
-        // panel 已死：SessionStart 也不得复活幽灵。
-        logAgentEventDropped("suppressed-panel-cooldown", key, event.event);
+      const identity = hookScopeIdentity(event);
+      if (!hookScopes.allowsAgentEventAfterCooldowns(key, event, identity)) {
         return;
       }
-      if (event.event === "SessionStart") {
-        // 会话开端豁免 hook 收尾冷却。
-        hookCooldownUntil.delete(key);
-      } else if (isInCooldown(hookCooldownUntil, key)) {
-        logAgentEventDropped("suppressed-hook-cooldown", key, event.event);
-        return;
-      }
-      if (event.event === "SessionEnd") {
-        endHookSession(key);
+      if (hookScopes.handleSessionEnd(key, event, identity)) {
         return;
       }
       const status = activityStatusForHookEvent(event.event);
@@ -344,18 +339,14 @@ export function createForegroundActivityAggregator(
         logAgentEventDropped("ghost-rejected", key, event.event);
         return;
       }
-      if (!applyTurnBookkeeping(hook, event.event)) {
+      const scope = getOrCreateHookScope(hook, identity, at);
+      if (!applyTurnBookkeeping(scope, event.event)) {
         logAgentEventDropped("absorbed", key, event.event, {
-          frozenStatus: hook.status,
+          frozenStatus: scope.status,
         });
         return;
       }
-      hook.agentId = event.agent;
-      if (SUBAGENT_EVENTS.has(event.event)) {
-        hook.updatedAt = at;
-      } else {
-        setHookStatusWithLog(key, hook, status, at, event.agent);
-      }
+      hookScopes.noteStatusEvent(key, hook, scope, event, status, at);
       armHookTtlTimer(key, timerCtx);
       scheduleEmit();
     },

@@ -142,7 +142,7 @@ export const FILES_PLUGIN_MANIFEST = {
       },
     },
   },
-  dashboardWidgets: [],
+  missionControlWidgets: [],
   groupContent: [
     {
       id: FILES_GROUP_VIEW_CONTENT_ID,

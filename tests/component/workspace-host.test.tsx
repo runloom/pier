@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
 import {
@@ -8,6 +8,7 @@ import {
   readRegisteredTerminalAnchorFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { resetTerminalPresentationReconcilerForTests } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
+import { usePanelResourceStore } from "@/stores/panel-resource.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("dockview-react", async (importOriginal) => {
@@ -205,6 +206,7 @@ describe("WorkspaceHost", () => {
     resetTerminalPresentationReconcilerForTests();
     installPierWindowApi();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue(null);
+    usePanelResourceStore.setState({ panels: {} });
     useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       cb(performance.now());
@@ -217,6 +219,7 @@ describe("WorkspaceHost", () => {
     Reflect.deleteProperty(window, "pier");
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    usePanelResourceStore.setState({ panels: {} });
     useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
   });
 
@@ -244,6 +247,53 @@ describe("WorkspaceHost", () => {
       "WorkspaceHeaderRightActions"
     );
     expect(DockviewReact).toHaveBeenCalled();
+  });
+
+  it("wraps web panel components in a hidden Activity boundary when their dockview panel is hidden", async () => {
+    const activeTerminal = createPanel({
+      component: "terminal",
+      id: "terminal-1",
+      isActive: true,
+      isVisible: true,
+    });
+    const hiddenWelcome = createPanel({
+      component: "welcome",
+      id: "welcome-hidden",
+      isVisible: false,
+    });
+    const dockview = createDockviewApi(
+      [activeTerminal, hiddenWelcome],
+      activeTerminal
+    );
+    vi.mocked(dockview.api.hasMaximizedGroup).mockReturnValue(false);
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    dockview.emitLayoutChange();
+
+    const WrappedWelcome = props?.components?.welcome;
+    if (!WrappedWelcome) {
+      throw new Error("welcome component missing");
+    }
+
+    const hiddenWelcomeProps = {
+      api: {
+        id: "welcome-hidden",
+        setTitle: vi.fn(),
+      },
+    } as unknown as ComponentProps<typeof WrappedWelcome>;
+
+    render(<WrappedWelcome {...hiddenWelcomeProps} />);
+
+    expect(await screen.findByText("Pier")).not.toBeVisible();
+  });
+
+  it("does not wrap terminal panel components in a React Activity boundary", () => {
+    render(<WorkspaceHost />);
+
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    expect(props?.components?.terminal?.name).toBe("TerminalPanel");
   });
 
   it("marks the workspace root while dockview has a maximized group", () => {
@@ -514,7 +564,7 @@ describe("WorkspaceHost", () => {
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
   });
 
-  it("shows terminal panels with visible anchors when dockview visibility is stale", () => {
+  it("does not show hidden inactive terminal panels only because their anchors are visible", () => {
     const activeWeb = createPanel({
       component: "welcome",
       id: "welcome-1",
@@ -545,13 +595,51 @@ describe("WorkspaceHost", () => {
         terminals: [
           expect.objectContaining({
             panelId: "terminal-stale",
-            visible: true,
+            visible: false,
           }),
         ],
       })
     );
     expect(window.pier.terminal.show).not.toHaveBeenCalled();
     expect(window.pier.terminal.hide).not.toHaveBeenCalled();
+  });
+
+  it("keeps the active terminal visible when dockview visibility lags behind its anchor", () => {
+    const staleActiveTerminal = createPanel({
+      component: "terminal",
+      id: "terminal-stale-active",
+      isActive: true,
+      isVisible: false,
+    });
+    const dockview = createDockviewApi(
+      [staleActiveTerminal],
+      staleActiveTerminal
+    );
+    vi.mocked(dockview.api.hasMaximizedGroup).mockReturnValue(false);
+    vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
+      height: 93,
+      width: 213,
+      x: 0,
+      y: 72,
+    });
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    dockview.emitLayoutChange();
+
+    expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activePanelId: "terminal-stale-active",
+        activeTerminalPanelId: "terminal-stale-active",
+        terminals: [
+          expect.objectContaining({
+            panelId: "terminal-stale-active",
+            visible: true,
+          }),
+        ],
+      })
+    );
   });
 
   it("creates a terminal panel with launchId when main sends terminal.open", () => {

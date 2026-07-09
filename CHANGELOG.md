@@ -6,114 +6,114 @@
 
 ### Added
 
-- **`ForegroundActivityAggregator`** (`src/main/services/foreground-activity/`)
-  统一 agent / task / shell / idle 四态活动模型，per-panel 单一 activity。
-  新广播通道 `pier://foreground-activity:changed`，新 preload API
-  `window.pier.foregroundActivity`，新 renderer store
-  `useForegroundActivityStore` + `<ForegroundActivityBridge />`。
-- **`Project` 实体** (`src/shared/contracts/project.ts` + `src/main/state/project-store.ts`)
-  稳定 `id: uuid` + `rootPath` + `name` (派生自 package.json > deno.json >
-  Cargo.toml [package].name > basename)。`upsertProjectFromPath()` 提供
-  in-flight 去重防并发落两条记录。
-- **`PanelContext.projectId` / `projectRootPath`** 附加可选字段，与老
-  `projectRoot` 并存渐进迁移。
+- `**ForegroundActivityAggregator**` (`src/main/services/foreground-activity/`)
+统一 agent / task / shell / idle 四态活动模型，per-panel 单一 activity。
+新广播通道 `pier://foreground-activity:changed`，新 preload API
+`window.pier.foregroundActivity`，新 renderer store
+`useForegroundActivityStore` + `<ForegroundActivityBridge />`。
+- `**Project` 实体** (`src/shared/contracts/project.ts` + `src/main/state/project-store.ts`)
+稳定 `id: uuid` + `rootPath` + `name` (派生自 package.json > deno.json >
+Cargo.toml [package].name > basename)。`upsertProjectFromPath()` 提供
+in-flight 去重防并发落两条记录。
+- `**PanelContext.projectId` / `projectRootPath`** 附加可选字段，与老
+`projectRoot` 并存渐进迁移。
 
 ### Changed
 
 - **Path B agent hook 通路收敛为 emit 脚本 + JSONL 直写。**
   - emit 脚本升级为 `commandStart` / `commandFinished` / `agentEvent` 三 kind
-    dispatch，`agentHookEventSchema` 变为 zod discriminated union。
+  dispatch，`agentHookEventSchema` 变为 zod discriminated union。
   - 7 个 inline agent 插件 (amp / kilo / mimo-code / opencode / omp / pi /
-    hermes) 从 HTTP `fetch(/agent-event)` 切换到本地 `appendFile` (JS/TS) 或
-    `open(log, "a")` (Python)。
+  hermes) 从 HTTP `fetch(/agent-event)` 切换到本地 `appendFile` (JS/TS) 或
+  `open(log, "a")` (Python)。
   - `pierHookCommand` 输出首位固定 `"agentEvent"` 位置参数。
 
 ### Removed
 
-- **`agent-hook-server`** (HTTP loopback) 与相关 test 文件删除。
+- `**agent-hook-server`** (HTTP loopback) 与相关 test 文件删除。
 - 环境变量 `PIER_AGENT_HOOK_PORT` / `PIER_AGENT_HOOK_TOKEN` 从 PTY hookEnv
-  中删除。`hookEnv()` 变同步（不再等 loopback server 启动）。
+中删除。`hookEnv()` 变同步（不再等 loopback server 启动）。
 - `LEGACY_HOOK_MARK` 常量删除；`isPierHookCommand` 只识别新 marker
-  `PIER_AGENT_HOOKS_DIR`。
+`PIER_AGENT_HOOKS_DIR`。
 
 ### Fixed
 
-- **`ForegroundActivityAggregator.acquireHookAgentEntry`** 迟到的
-  `Stop` / `ToolComplete` / `SubagentStop` / `error` 事件不再销毁已有 task /
-  shell activity（仅 `SESSION_CREATING_EVENTS` 才允许覆盖为 agent kind）。
-- **`agentLaunched`** 覆盖已有 hook agent activity 时清 `hookTtlTimer`，防止
-  30min 后回落 ready 的旧 callback 触发。
+- `**ForegroundActivityAggregator.acquireHookAgentEntry**` 迟到的
+`Stop` / `ToolComplete` / `SubagentStop` / `error` 事件不再销毁已有 task /
+shell activity（仅 `SESSION_CREATING_EVENTS` 才允许覆盖为 agent kind）。
+- `**agentLaunched**` 覆盖已有 hook agent activity 时清 `hookTtlTimer`，防止
+30min 后回落 ready 的旧 callback 触发。
 - **Task tab 退出状态谎报**——任务结束后 tab 永久回落 "Running" 谎报运行中。
-  五处根因一并修复：
+五处根因一并修复：
   - `taskFinished` 终态常驻：移除 5s linger 清理，task activity 保留最终
-    status 直到 panelClosed / rerun / 新命令接管（tab 退出 chrome 的唯一
-    live 来源，消失即回退 mount 时的陈旧 "Running" 基线）。
+  status 直到 panelClosed / rerun / 新命令接管（tab 退出 chrome 的唯一
+  live 来源，消失即回退 mount 时的陈旧 "Running" 基线）。
   - 新增 `ptyExited(panelId)`（native process-close 改走此入口）：pty 进程
-    退出 ≠ 面板关闭——task 面板保留终态 activity，只清 hook 证据；其余面板
-    等同 `panelClosed`。
+  退出 ≠ 面板关闭——task 面板保留终态 activity，只清 hook 证据；其余面板
+  等同 `panelClosed`。
   - `taskLaunched` 门面把内部 windowId（如 `"main"`）换算成 electron
-    BrowserWindow.id 字符串——否则广播路由 `Number("main")=NaN`，task
-    activity 永远到不了 renderer。
+  BrowserWindow.id 字符串——否则广播路由 `Number("main")=NaN`，task
+  activity 永远到不了 renderer。
   - 新共享单源 `taskTabStateForActivityStatus`：renderer 活动 overlay 与
-    main 持久化 `taskExitTabPatch` 输出同一份完整 tab state
-    （指示器+label+色 token），修 label 停留 "Running" 的半更新。
+  main 持久化 `taskExitTabPatch` 输出同一份完整 tab state
+  （指示器+label+色 token），修 label 停留 "Running" 的半更新。
   - `bin/pier-cli-parser.js` `run.list`/`run.spawn` 的 `projectRoot` 字段
-    改回 schema 现名 `projectRootPath`（#53 迁移遗漏，CLI `tasks list/run`
-    与 terminal-task-status e2e 因此全断）。
+  改回 schema 现名 `projectRootPath`（#53 迁移遗漏，CLI `tasks list/run`
+  与 terminal-task-status e2e 因此全断）。
 - **Task 面板 reload/restart 混淆**——renderer reload（main 进程未死）被当作
-  app restart 处理：running task 面板渲染静态 "Cancelled" 结果卡，活 pty 沦为
-  不可见僵尸（reconcile 按 layout 上报而保留）, 完成后 tab 又与卡片矛盾。
-  重设计为「活性单源 + 磁盘不说谎」：
+app restart 处理：running task 面板渲染静态 "Cancelled" 结果卡，活 pty 沦为
+不可见僵尸（reconcile 按 layout 上报而保留）, 完成后 tab 又与卡片矛盾。
+重设计为「活性单源 + 磁盘不说谎」：
   - 新契约字段 `TerminalPanelSessionSnapshot.taskLive`：main 以
-    foreground-activity 的 task slot（终态常驻, 与面板同寿命）担保该 task
-    面板寿命仍在本进程内；`read-session` 注入。
+  foreground-activity 的 task slot（终态常驻, 与面板同寿命）担保该 task
+  面板寿命仍在本进程内；`read-session` 注入。
   - renderer 结果卡只给真死面板（`task && !taskLive`）；live 面板照常渲染
-    终端 → `create` → swift 对已存在 panelId 纯 reattach（PTY/scrollback
-    零销毁, 与 C 方案对齐）。`restoredTaskTabPatch` 推断层删除。
+  终端 → `create` → swift 对已存在 panelId 纯 reattach（PTY/scrollback
+  零销毁, 与 C 方案对齐）。`restoredTaskTabPatch` 推断层删除。
   - `resolveCreateTerminalLaunch` 增 `taskLive` 直通分支：reattach 时 task
-    元数据原样保留, 不再把 running 强转 cancelled 落盘（否则真实退出时
-    `patchTaskStatus` 的 running 守卫失败, 终态永久丢失）。
+  元数据原样保留, 不再把 running 强转 cancelled 落盘（否则真实退出时
+  `patchTaskStatus` 的 running 守卫失败, 终态永久丢失）。
   - 新增启动孤儿清算 `reconcileOrphanedRunningTasks()`（`app.whenReady` 内
-    先于窗口恢复）：上进程遗留的 running 一律 cancelled（exitReason/Source
-    `"restore"`, 该枚举首个消费者）+ Cancelled tab chrome 落盘。
+  先于窗口恢复）：上进程遗留的 running 一律 cancelled（exitReason/Source
+  `"restore"`, 该枚举首个消费者）+ Cancelled tab chrome 落盘。
   - e2e 实证：reload 重挂（终端非卡片, 存活 pty 退出后 tab 仍正确翻
-    succeeded）+ restart 清算（Cancelled 卡 + Cancelled tab）双场景 ×2 稳定。
+  succeeded）+ restart 清算（Cancelled 卡 + Cancelled tab）双场景 ×2 稳定。
 - **上游漏更新的死测试修复**（均在 clean main 上失败）：
   - `workspace-host.test.tsx` 9 例：#53 preload API 改 `pier.window.getContext`
-    命名空间后 mock 仍是平铺 `getWindowContext`。
+  命名空间后 mock 仍是平铺 `getWindowContext`。
   - `terminal-panel-lifecycle.test.tsx` 3 例：#56 状态栏恒挂载（自锁修复）与
-    #57 删除运行时 tab-patch 通路后, 测试仍钉旧契约/不可能值
-    （"old runtime tab" 等无 emitter 的死期望）。
+  #57 删除运行时 tab-patch 通路后, 测试仍钉旧契约/不可能值
+  （"old runtime tab" 等无 emitter 的死期望）。
 - **Layout 保存 500ms debounce 空窗**——面板创建后 <500ms 内 reload 会恢复
-  旧 layout：新面板从 UI 消失, 其活 pty 被 reconcile 判孤儿回收。
-  `workspace-host` 增 `beforeunload` flush：有未落盘变更时立即补发
-  `saveLayout`（invoke 消息投递即达 main, renderer teardown 不影响写盘）。
+旧 layout：新面板从 UI 消失, 其活 pty 被 reconcile 判孤儿回收。
+`workspace-host` 增 `beforeunload` flush：有未落盘变更时立即补发
+`saveLayout`（invoke 消息投递即达 main, renderer teardown 不影响写盘）。
 - **e2e 无人值守可靠性**：
   - `command-palette.spec.ts` 用显式条件等待（`[cmdk-input]` 可见等）替代
-    固定 `waitForTimeout` 睡眠——冷启动慢机上点击不再竞速 UI。
+  固定 `waitForTimeout` 睡眠——冷启动慢机上点击不再竞速 UI。
   - `native-terminal-focus.spec.ts` 五个 osascript System Events keystroke
-    测试增加投递能力探测（首个门控测试内 6s 试写 marker, 模块级缓存判定）：
-    无人值守/缺 Accessibility 权限时显式 SKIP 而非 3×retry 失败。
-- **`pnpm check` 纳入 unit + component 测试套件**——此前门禁不含任何测试,
-  是 12 个死测试烂在 main 的直接原因（AGENTS.md 同步更新）。
-- **`buildBroadcast`** 浅拷贝 `activity` 引用，防同进程 listener 意外
-  mutate 污染 aggregator 内部状态。
-- **`Cargo.toml` name 派生** 用 `[package]` 段锚定正则，修复
-  `[[bin]] name` 排在 `[package] name` 之前时项目名错取的 bug。
-- **`upsertProjectFromPath` 并发**——`Map<rootPath, Promise<Project>>` 去重
-  in-flight 请求 + `mutate` 回调内二次 find 兜底，防止同 rootPath 落两条
-  不同 UUID 的记录。
-- **`resolvePanelContextForPath` 静默 catch**——加一次性 warn 让磁盘故障
-  等失败可见。
+  测试增加投递能力探测（首个门控测试内 6s 试写 marker, 模块级缓存判定）：
+  无人值守/缺 Accessibility 权限时显式 SKIP 而非 3×retry 失败。
+- `**pnpm check` 纳入 unit + component 测试套件**——此前门禁不含任何测试,
+是 12 个死测试烂在 main 的直接原因（AGENTS.md 同步更新）。
+- `**buildBroadcast`** 浅拷贝 `activity` 引用，防同进程 listener 意外
+mutate 污染 aggregator 内部状态。
+- `**Cargo.toml` name 派生** 用 `[package]` 段锚定正则，修复
+`[[bin]] name` 排在 `[package] name` 之前时项目名错取的 bug。
+- `**upsertProjectFromPath` 并发**——`Map<rootPath, Promise<Project>>` 去重
+in-flight 请求 + `mutate` 回调内二次 find 兜底，防止同 rootPath 落两条
+不同 UUID 的记录。
+- `**resolvePanelContextForPath` 静默 catch**——加一次性 warn 让磁盘故障
+等失败可见。
 - **emit `commandStart` sed 转义链**——前置 `head -c 4096` 后置
-  `tr -d '\000-\037\177'` 剥控制字符再 sed 转义 `\` 与 `"`，防命令行含
-  换行/tab/NUL 破坏 JSONL 行结构。
-- **`JsonlObserver.processLine` disposed 守卫**——dispose 后剩余行不派发。
-- **`omp/pi` 生成插件** 从 `require("node:fs/promises")` 改为
-  `await import("node:fs/promises")`，兼容 ESM-only Node 20+ 宿主
-  （原 `require` 在 ESM 环境会 `ReferenceError` 被 catch 静默吞掉，事件全丢）。
-- **`hermes` Python except** 收紧到 `except OSError`，不再宽泛 catch
-  `Exception` 掩盖内部 bug。
+`tr -d '\000-\037\177'` 剥控制字符再 sed 转义 `\` 与 `"`，防命令行含
+换行/tab/NUL 破坏 JSONL 行结构。
+- `**JsonlObserver.processLine` disposed 守卫**——dispose 后剩余行不派发。
+- `**omp/pi` 生成插件** 从 `require("node:fs/promises")` 改为
+`await import("node:fs/promises")`，兼容 ESM-only Node 20+ 宿主
+（原 `require` 在 ESM 环境会 `ReferenceError` 被 catch 静默吞掉，事件全丢）。
+- `**hermes` Python except** 收紧到 `except OSError`，不再宽泛 catch
+`Exception` 掩盖内部 bug。
 
 ### Upgrade notes
 
@@ -125,7 +125,7 @@
 
 - 新 pier 的 `uninstallAllAgentHooks` 不会自动清理这些老条目。
 - 老条目在新 pier 运行时 curl 会因 `PIER_AGENT_HOOK_PORT` 未设导致 EADDRNOTAVAIL
-  静默失败，agent 每次 hook trigger 浪费一次子进程（无功能影响，用户无感）。
+静默失败，agent 每次 hook trigger 浪费一次子进程（无功能影响，用户无感）。
 
 **用户手动清理路径**（可选）：搜索 hooks.json 里包含
 `PIER_AGENT_HOOK_PORT` 的行，手动删除。或者在关闭 pier 的
@@ -163,23 +163,23 @@
 
 - ✅ **删 `TERMINAL_TAB_CHROME_PATCHED` 广播**：main→renderer task exit chrome 通路统一走 `FOREGROUND_ACTIVITY_CHANGED` + `activityTabChromeOverlay`。删 `TerminalTabChromePatchEvent` contract、`onTabChromePatch` preload、`forwardTabPatch` wiring 依赖、renderer `mergeTabChrome` 4 层缩到 3 层（base → restore-patch → activity）。
 - ✅ **删 `foreground-activity` aggregator 中孤儿 `ignoredNativeUserClosePanels` Set + `ignoreNextNativeUserClose` / `consumeIgnoreNativeUserClose` API**：该状态实际由 `terminal-task-lifecycle` 维护并消费（`terminal.ts` 唯一 caller）；aggregator 侧的副本 0 caller，双源同义 collapse 到单源。
-- ✅ **`src/main/ipc/agent-session.ts` 改名 `foreground-activity.ts`**；`agentSessionService` → `foregroundActivityService`，`registerAgentSessionIpc` → `registerForegroundActivityIpc`，`closeAgentSessionResources` → `closeForegroundActivityResources`。5 处 callsite 全更名。共享契约 `src/shared/contracts/agent-session.ts` 保留（仍承担 `agentHookEventSchema` + `agentTabIconId` icon 工具函数）。
-- ✅ **`terminal-task-lifecycle.ts` 职责 JSDoc 清晰化**：native shell 回调协调器（exit hint 排序 / dedupe / ignore-close / 持久化 patchTab+patchTaskStatus）。broadcast 责任明确外包给 `foregroundActivityService.taskFinished` → aggregator 单源。
+- ✅ `**src/main/ipc/agent-session.ts` 改名 `foreground-activity.ts`**；`agentSessionService` → `foregroundActivityService`，`registerAgentSessionIpc` → `registerForegroundActivityIpc`，`closeAgentSessionResources` → `closeForegroundActivityResources`。5 处 callsite 全更名。共享契约 `src/shared/contracts/agent-session.ts` 保留（仍承担 `agentHookEventSchema` + `agentTabIconId` icon 工具函数）。
+- ✅ `**terminal-task-lifecycle.ts` 职责 JSDoc 清晰化**：native shell 回调协调器（exit hint 排序 / dedupe / ignore-close / 持久化 patchTab+patchTaskStatus）。broadcast 责任明确外包给 `foregroundActivityService.taskFinished` → aggregator 单源。
 - ✅ **删陈旧 sync 维护提醒**：`foreground-activity.ts:111-113` 老 `runtimeStatusForHookEvent` 与 `agent-session.ts` 同步注释（引用的函数已删）。`pi.ts:16` / `shared.ts:118` 相同注释同步更新为当前 `activityStatusForHookEvent`。
 
 ### Fixed
 
-- **`task-service.cancelRun` 覆盖已 success activity → cancelled 的回归 bug**：
-  `taskRuns.cancel` 只把 pending/running 节点改状态，但 task-service 遍历 fire
-  `onTaskActivity.onFinished({ status: "cancelled" })` 时不看 `node.status`。
-  多 task DAG 部分完成后 restart 会让已 succeeded 的 tab 在 5s linger 内闪回
-  cancelled。修：filter 只对 `node.status === "cancelled"` 才 fire。
+- `**task-service.cancelRun` 覆盖已 success activity → cancelled 的回归 bug**：
+`taskRuns.cancel` 只把 pending/running 节点改状态，但 task-service 遍历 fire
+`onTaskActivity.onFinished({ status: "cancelled" })` 时不看 `node.status`。
+多 task DAG 部分完成后 restart 会让已 succeeded 的 tab 在 5s linger 内闪回
+cancelled。修：filter 只对 `node.status === "cancelled"` 才 fire。
 - **App quit 500ms debounce 窗口内 mutate 丢失**：`flushProjectStore` +
-  `flushPanelContextState` 从未在 `before-quit` 调用。加入
-  `window-service.flushOpenWindows` / `flushWindowBeforeClose` batch，与已有
-  flush 队列同步落盘。
-- **`upsertProjectFromPath` 失败日志 flood**：`upsertWarned` 一次性 flag 换成
-  30s throttle 窗口，磁盘故障时不再首次 warn 后完全静默。
+`flushPanelContextState` 从未在 `before-quit` 调用。加入
+`window-service.flushOpenWindows` / `flushWindowBeforeClose` batch，与已有
+flush 队列同步落盘。
+- `**upsertProjectFromPath` 失败日志 flood**：`upsertWarned` 一次性 flag 换成
+30s throttle 窗口，磁盘故障时不再首次 warn 后完全静默。
 
 ### Removed
 

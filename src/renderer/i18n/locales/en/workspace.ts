@@ -4,7 +4,7 @@ export const workspace = {
   },
   addPanelMenu: {
     trigger: "Add Panel",
-    newDashboard: "New Dashboard",
+    newMissionControl: "New Mission Control",
     newTerminal: "New Terminal",
     newTask: "New Task",
     newWorktree: "New Worktree",

@@ -53,7 +53,7 @@ const AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE =
 const FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE =
   /if \(event\.api\.totalPanels === 0\)[\s\S]{0,160}?\.clearLayout\(windowContext\.recordId\)/;
 const READY_TO_SHOW_AFTER_LAYOUT_RE =
-  /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\);\s*notifyReadyToShow\(\);/;
+  /reconcileTerminalPanels\(event\.api\);\s*notifyReadyToShow\(\);/;
 const READY_TO_SHOW_WHEN_USER_TOUCHED_RE =
   /if \(userTouched\) \{[\s\S]{0,120}?notifyReadyToShow\(\);[\s\S]{0,80}?return;/;
 const READY_TO_SHOW_USES_HIDDEN_WINDOW_SAFE_TIMER_RE =

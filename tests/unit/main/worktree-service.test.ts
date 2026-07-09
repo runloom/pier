@@ -3,10 +3,8 @@ import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import {
-  createWorktreeService,
-  parseGitWorktreeListPorcelainZ,
-} from "@main/services/worktree-service.ts";
+import { parseGitWorktreeListPorcelainZ } from "@main/services/worktree-parser.ts";
+import { createWorktreeService } from "@main/services/worktree-service.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const execFileAsync = promisify(execFile);
@@ -476,6 +474,121 @@ describe("createWorktreeService", () => {
         },
       ],
     });
+  });
+
+  it("remove 在安全检查通过后、git worktree remove 前调用 beforeRemove hook", async () => {
+    const calls: string[] = [];
+    const repo = "/repo";
+    const linked = "/repo/.worktrees/feature-a";
+    const worktreeListOutput = [
+      "worktree /repo",
+      "HEAD abc123",
+      "branch refs/heads/main",
+      "",
+      "worktree /repo/.worktrees/feature-a",
+      "HEAD def456",
+      "branch refs/heads/feature-a",
+      "",
+    ].join("\0");
+    const service = createWorktreeService({
+      execGit: (args, cwd) => {
+        if (args[0] === "rev-parse") {
+          calls.push(`rev-parse:${cwd}`);
+          return Promise.resolve(`${cwd}\n`);
+        }
+        if (args[0] === "worktree" && args[1] === "list") {
+          calls.push(`list:${cwd}`);
+          return Promise.resolve(worktreeListOutput);
+        }
+        if (args[0] === "worktree" && args[1] === "remove") {
+          calls.push(`git-remove:${args[2]}`);
+          return Promise.resolve("");
+        }
+        return Promise.resolve("");
+      },
+      realpath: (path) => Promise.resolve(path),
+    });
+    const beforeRemove = vi.fn((target) => {
+      calls.push(`before-remove:${target.targetPath}`);
+      expect(target).toEqual({
+        mainPath: repo,
+        targetPath: linked,
+      });
+      return Promise.resolve();
+    });
+
+    await expect(
+      service.remove(
+        {
+          currentPath: repo,
+          path: linked,
+        },
+        { beforeRemove }
+      )
+    ).resolves.toMatchObject({
+      removedPath: linked,
+    });
+
+    expect(calls).toEqual([
+      "rev-parse:/repo/.worktrees/feature-a",
+      "list:/repo/.worktrees/feature-a",
+      "before-remove:/repo/.worktrees/feature-a",
+      "git-remove:/repo/.worktrees/feature-a",
+      "rev-parse:/repo",
+      "list:/repo",
+    ]);
+  });
+
+  it("remove 拒绝当前 worktree 时不调用 beforeRemove hook", async () => {
+    const calls: string[] = [];
+    const linked = "/repo/.worktrees/feature-a";
+    const worktreeListOutput = [
+      "worktree /repo",
+      "HEAD abc123",
+      "branch refs/heads/main",
+      "",
+      "worktree /repo/.worktrees/feature-a",
+      "HEAD def456",
+      "branch refs/heads/feature-a",
+      "",
+    ].join("\0");
+    const service = createWorktreeService({
+      execGit: (args, cwd) => {
+        if (args[0] === "rev-parse") {
+          calls.push(`rev-parse:${cwd}`);
+          return Promise.resolve(`${cwd}\n`);
+        }
+        if (args[0] === "worktree" && args[1] === "list") {
+          calls.push(`list:${cwd}`);
+          return Promise.resolve(worktreeListOutput);
+        }
+        if (args[0] === "worktree" && args[1] === "remove") {
+          calls.push(`git-remove:${args[2]}`);
+          return Promise.resolve("");
+        }
+        return Promise.resolve("");
+      },
+      realpath: (path) => Promise.resolve(path),
+    });
+    const beforeRemove = vi.fn(() => {
+      calls.push("before-remove");
+      return Promise.resolve();
+    });
+
+    await expect(
+      service.remove(
+        {
+          currentPath: linked,
+          path: linked,
+        },
+        { beforeRemove }
+      )
+    ).rejects.toMatchObject({
+      reason: "current_worktree",
+    });
+
+    expect(beforeRemove).not.toHaveBeenCalled();
+    expect(calls).not.toContain("git-remove:/repo/.worktrees/feature-a");
   });
 
   it("remove 拒绝移除 main worktree", async () => {

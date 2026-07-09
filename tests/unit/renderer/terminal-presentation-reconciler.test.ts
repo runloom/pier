@@ -72,7 +72,7 @@ describe("terminal presentation reconciler", () => {
     ]);
   });
 
-  it("uses dockview visibility or a real anchor frame outside maximized mode", () => {
+  it("does not treat a real anchor frame as visible when dockview marks the panel hidden", () => {
     const snapshot = buildTerminalPresentationSnapshot({
       readFrame: (panelId) => (panelId === "terminal-2" ? frame : null),
       reason: "dockview-layout",
@@ -82,6 +82,31 @@ describe("terminal presentation reconciler", () => {
 
     expect(snapshot.terminals).toEqual([
       { focused: false, frame: null, panelId: "terminal-1", visible: false },
+      { focused: false, frame, panelId: "terminal-2", visible: false },
+    ]);
+  });
+
+  it("keeps the active terminal visible during transient dockview visibility lag", () => {
+    const snapshot = buildTerminalPresentationSnapshot({
+      readFrame: (panelId) => (panelId === "terminal-2" ? frame : null),
+      reason: "dockview-layout",
+      rendererSequence: 3,
+      workspace: workspace({
+        activePanelId: "terminal-2",
+        activeTerminalPanelId: "terminal-2",
+        hasMaximizedGroup: false,
+        panels: [
+          {
+            component: "terminal",
+            dockviewActive: false,
+            dockviewVisible: false,
+            id: "terminal-2",
+          },
+        ],
+      }),
+    });
+
+    expect(snapshot.terminals).toEqual([
       { focused: false, frame, panelId: "terminal-2", visible: true },
     ]);
   });

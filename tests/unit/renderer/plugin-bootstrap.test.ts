@@ -19,7 +19,7 @@ function entry(id: string, enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      dashboardWidgets: [],
+      missionControlWidgets: [],
       engines: { pier: ">=0.1.0" },
       id,
       name: id,
@@ -30,6 +30,26 @@ function entry(id: string, enabled: boolean): PluginRegistryEntry {
       version: "1.0.0",
     },
     runtime: { canToggle: true, enabled, kind: "builtin" },
+  };
+}
+
+function externalEntry(
+  id: string,
+  sourceRevision: string
+): PluginRegistryEntry {
+  return {
+    ...entry(id, true),
+    manifest: {
+      ...entry(id, true).manifest,
+      source: { kind: "official" },
+    },
+    runtime: {
+      canToggle: true,
+      enabled: true,
+      kind: "external",
+      rendererEntryUrl: `pier-plugin://${id}/1.0.0/dist/renderer.js`,
+      sourceRevision,
+    },
   };
 }
 
@@ -84,8 +104,18 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     };
     expect(
       activeBuiltinPluginKey([entry("pier.a", true), disabled, manifestOnly])
-    ).toBe("pier.a");
+    ).toBe("pier.a:builtin::");
     expect(activeBuiltinPluginKey([])).toBe("");
+  });
+
+  it("activeBuiltinPluginKey includes external sourceRevision", async () => {
+    const { activeBuiltinPluginKey } = await import(
+      "@/lib/plugins/bootstrap.ts"
+    );
+
+    expect(
+      activeBuiltinPluginKey([externalEntry("pier.codex", "rev-a")])
+    ).not.toBe(activeBuiltinPluginKey([externalEntry("pier.codex", "rev-b")]));
   });
 
   it("初始拉取后 refresh runtime 一次", async () => {

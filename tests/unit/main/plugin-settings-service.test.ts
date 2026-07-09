@@ -41,7 +41,7 @@ function gitEntry(enabled = true): PluginRegistryEntry {
           },
         },
       },
-      dashboardWidgets: [],
+      missionControlWidgets: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.git",
       name: "Git",

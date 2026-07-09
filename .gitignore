@@ -73,3 +73,7 @@ playwright-report/
 
 # Per-worktree vite 依赖优化缓存（见 electron.vite.config.ts cacheDir 注释）
 /.vite/
+
+# Plugin build outputs
+/packages/plugin-*/dist/
+/packages/plugin-*/dist-pkg/

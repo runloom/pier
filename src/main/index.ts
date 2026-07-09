@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import { app, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import {
   type RegisteredLocalControl,
   registerCliLocalControl,
@@ -37,6 +37,10 @@ import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
+import {
+  handlePluginAssetProtocol,
+  registerPluginAssetScheme,
+} from "./plugins/plugin-asset-protocol.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
@@ -211,14 +215,16 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
   }
 
   await Promise.all([
+    appCore.flushExternalPluginsBeforeQuit().catch((error) => {
+      appQuitLog.error("failed to flush external plugins before quit", {
+        error,
+      });
+    }),
     appCore.services.window.flushOpenWindows().catch((error) => {
       windowLog.error("failed to flush windows before quit", { error });
     }),
     appCore.services.secrets.flush().catch((error) => {
       secretsLog.error("failed to flush before quit", { error });
-    }),
-    appCore.services.agentAccounts.flush().catch((error) => {
-      secretsLog.error("failed to flush agent accounts before quit", { error });
     }),
   ]);
 }
@@ -236,9 +242,9 @@ const appQuitController = createAppQuitController({
       summaries,
     }),
   finalCleanup: () => {
+    appCore.services.tasks.dispose();
     windowManager.destroyAllForQuit();
-    // 杀在途 `codex login` 子进程 + 停轮询/watch
-    appCore.services.agentAccounts.dispose();
+    appCore.disposeManagedPluginDevRuntimeWatch();
     appCore.pluginHost.dispose();
     localControl?.close().catch(() => {
       // ignore: app 正在退出
@@ -260,10 +266,15 @@ const appQuitController = createAppQuitController({
 });
 
 registerAssetScheme();
+registerPluginAssetScheme();
 
 app.whenReady().then(async () => {
   installCsp();
   handleAssetProtocol();
+  handlePluginAssetProtocol({
+    getRuntimeSources: () =>
+      appCore.services.managedPlugins.getRuntimeSources(),
+  });
   await appCore.pluginHost.refresh();
   await installAppMenu({
     appName: app.name,
@@ -357,6 +368,21 @@ app.whenReady().then(async () => {
     appQuitRendererTransport.handleDecision(payload);
   });
   registerSecretsIpc(ipcMain, appCore.services.secrets);
+  ipcMain.handle(PIER.ENVIRONMENT_PICK_PROJECT_DIRECTORY, async (event) => {
+    const focusedWindow =
+      BrowserWindow.fromWebContents(event.sender) ??
+      BrowserWindow.getFocusedWindow();
+    if (focusedWindow) {
+      const result = await dialog.showOpenDialog(focusedWindow, {
+        properties: ["openDirectory"],
+      });
+      return result.canceled ? null : (result.filePaths[0] ?? null);
+    }
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
+    });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
   registerRendererCommandIpc(ipcMain);
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
   registerBundledFonts();

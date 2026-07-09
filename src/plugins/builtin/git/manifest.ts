@@ -17,13 +17,18 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     {
       category: "Worktree",
       id: "pier.worktree.create",
-      permissions: ["worktree:read", "worktree:write", "ai:invoke"],
+      permissions: [
+        "worktree:read",
+        "worktree:write",
+        "environment:read",
+        "ai:invoke",
+      ],
       title: "Create Worktree",
     },
     {
       category: "Worktree",
       id: "pier.worktree.delete",
-      permissions: ["worktree:read", "worktree:write"],
+      permissions: ["worktree:read", "worktree:write", "environment:read"],
       title: "Delete Worktrees...",
     },
     {
@@ -133,7 +138,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       },
     },
   },
-  dashboardWidgets: [],
+  missionControlWidgets: [],
   description: "Built-in git command palette and terminal status support.",
   engines: { pier: ">=0.1.0" },
   homepage: "https://github.com/runloom/pier",
@@ -158,6 +163,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     "command:register",
     "worktree:read",
     "worktree:write",
+    "environment:read",
     "workspace:open",
     "panel:register",
     "panel:open",

@@ -3,6 +3,7 @@ import {
   type PierCommandResult,
   pierCommandEnvelopeSchema,
 } from "@shared/contracts/commands.ts";
+import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import {
   type PanelContext,
   panelSnapshotSchema,
@@ -10,10 +11,14 @@ import {
 import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
 import { FileServiceError } from "../services/file-service.ts";
 import { GitExecError } from "../services/git-exec.ts";
+import {
+  isLocalEnvironmentScriptError,
+  LocalEnvironmentScriptError,
+} from "../services/local-environment-scripts.ts";
+import { LocalEnvironmentServiceError } from "../services/local-environments-service.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
 import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
 import { WorktreeServiceError } from "../services/worktree-service.ts";
-import { executeAccountCommand } from "./account-commands.ts";
 import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import {
@@ -21,6 +26,7 @@ import {
   commandSuccess as success,
 } from "./command-results.ts";
 import type { PierCoreServices } from "./command-router-services.ts";
+import { executeEnvironmentCommand } from "./environment-commands.ts";
 import { executeFileCommand } from "./file-commands.ts";
 import { executeGitCommand } from "./git-commands.ts";
 import {
@@ -30,7 +36,9 @@ import {
   executeTerminalOpenCommand,
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
+import { executePluginCommand } from "./plugin-commands.ts";
 import {
+  executeRunBackgroundSnapshotCommand,
   executeRunCancelCommand,
   executeRunListCommand,
   executeRunRecentCommand,
@@ -48,6 +56,7 @@ export interface CommandRouter {
 
 export interface CreateCommandRouterArgs {
   clients: PierClientRegistry;
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void;
   services: PierCoreServices;
 }
 
@@ -93,52 +102,6 @@ async function deriveActivePanelContext(
   return null;
 }
 
-async function executePluginCommand(
-  requestId: string,
-  command: PierCommand,
-  services: PierCoreServices
-): Promise<PierCommandResult | null> {
-  switch (command.type) {
-    case "plugin.list":
-      return success(requestId, await services.plugins.list());
-    case "plugin.disable":
-      return success(
-        requestId,
-        await services.plugins.setEnabled(command.id, false)
-      );
-    case "plugin.enable":
-      return success(
-        requestId,
-        await services.plugins.setEnabled(command.id, true)
-      );
-    case "plugin.inspect": {
-      const plugin = await services.plugins.inspect(command.id);
-      if (!plugin) {
-        return failure(
-          requestId,
-          "not_found",
-          `plugin not found: ${command.id}`
-        );
-      }
-      return success(requestId, plugin);
-    }
-    case "pluginSettings.getAll":
-      return success(requestId, await services.pluginSettings.getAll());
-    case "pluginSettings.set":
-      return success(
-        requestId,
-        await services.pluginSettings.set(command.key, command.value)
-      );
-    case "pluginSettings.reset":
-      return success(
-        requestId,
-        await services.pluginSettings.reset(command.key)
-      );
-    default:
-      return null;
-  }
-}
-
 async function executeAppStateCommand(
   requestId: string,
   command: PierCommand,
@@ -155,6 +118,27 @@ async function executeAppStateCommand(
         },
         protocolVersion: 1,
       });
+    case "appUpdate.status":
+      return success(requestId, services.appUpdates.getStatus());
+    case "appUpdate.check":
+      return success(requestId, await services.appUpdates.check());
+    case "appUpdate.download":
+      return success(requestId, await services.appUpdates.download());
+    case "appUpdate.quitAndInstall":
+      services.appUpdates.quitAndInstall();
+      return success(requestId, services.appUpdates.getStatus());
+    case "app.relaunch": {
+      const { isDevRuntime } = await import("../runtime-mode.ts");
+      const { performDevSoftRelaunch, performProdRelaunch } = await import(
+        "./app-relaunch.ts"
+      );
+      if (isDevRuntime()) {
+        await performDevSoftRelaunch(services.managedPlugins);
+      } else {
+        await performProdRelaunch();
+      }
+      return success(requestId, null);
+    }
     case "commandPaletteMru.clear":
       return success(requestId, await services.commandPaletteMru.clear());
     case "commandPaletteMru.read":
@@ -256,6 +240,8 @@ async function executeRunCommand(
   context: CommandExecutionContext
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
+    case "run.backgroundSnapshot":
+      return executeRunBackgroundSnapshotCommand(requestId, services);
     case "run.list":
       return await executeRunListCommand(requestId, command, services);
     case "run.spawn":
@@ -313,6 +299,15 @@ function mapCommandError(requestId: string, err: unknown): PierCommandResult {
   if (err instanceof WorktreeServiceError) {
     return failure(requestId, err.reason, err.message);
   }
+  if (err instanceof LocalEnvironmentServiceError) {
+    return failure(requestId, "not_found", `${err.reason}: ${err.message}`);
+  }
+  if (
+    err instanceof LocalEnvironmentScriptError ||
+    isLocalEnvironmentScriptError(err)
+  ) {
+    return failure(requestId, "environment_script_failed", err.message);
+  }
   if (err instanceof FileServiceError) {
     return failure(requestId, "invalid_command", err.message);
   }
@@ -324,9 +319,6 @@ function mapCommandError(requestId: string, err: unknown): PierCommandResult {
     return failure(requestId, err.code, err.message);
   }
   if (err instanceof GitExecError) {
-    // 取 stderr 优先,空则 fallback stdout(git 把 "nothing to commit" 之类放 stdout)
-    // 前 3 行作摘要,让插件能按内容分类("already exists"/"not fully merged"/
-    // "dirty worktree"/"nothing to commit" 等)
     const rawSummary = err.stderr.trim() || err.stdout.trim();
     const summary = rawSummary.split("\n").slice(0, 3).join(" | ");
     const detail = summary.length > 0 ? ` -- ${summary}` : "";
@@ -344,12 +336,19 @@ async function executeCommandByDomain(
   command: PierCommand,
   clients: PierClientRegistry,
   services: PierCoreServices,
-  context: CommandExecutionContext
+  context: CommandExecutionContext,
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void
 ): Promise<PierCommandResult | null> {
   const executors = [
-    (cmd: PierCommand) => executeAccountCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executeEnvironmentCommand(
+        requestId,
+        cmd,
+        services,
+        onEnvironmentsChanged
+      ),
     (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeFileCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
@@ -376,7 +375,8 @@ async function executeKnownCommand(
   command: PierCommand,
   clients: PierClientRegistry,
   services: PierCoreServices,
-  context: CommandExecutionContext = {}
+  context: CommandExecutionContext = {},
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void
 ): Promise<PierCommandResult> {
   try {
     const result = await executeCommandByDomain(
@@ -384,7 +384,8 @@ async function executeKnownCommand(
       command,
       clients,
       services,
-      context
+      context,
+      onEnvironmentsChanged
     );
     if (result) {
       return result;
@@ -401,6 +402,7 @@ async function executeKnownCommand(
 
 export function createCommandRouter({
   clients,
+  onEnvironmentsChanged,
   services,
 }: CreateCommandRouterArgs): CommandRouter {
   return {
@@ -422,9 +424,14 @@ export function createCommandRouter({
         return failure(requestId, "permission_denied", auth.reason);
       }
 
-      return await executeKnownCommand(requestId, command, clients, services, {
-        clientEnv,
-      });
+      return await executeKnownCommand(
+        requestId,
+        command,
+        clients,
+        services,
+        { clientEnv },
+        onEnvironmentsChanged
+      );
     },
   };
 }

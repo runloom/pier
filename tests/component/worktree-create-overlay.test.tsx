@@ -29,6 +29,7 @@ import {
   closePluginOverlay,
   openPluginOverlay,
 } from "@/stores/plugin-overlay.store.ts";
+import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 const TASK_LABEL = "Task";
 const BRANCH_LABEL = "Branch";
@@ -112,7 +113,6 @@ function overlayData(
 ): WorktreeCreateOverlayData {
   const defaults: WorktreeCreationDefaults = {
     copyPatterns: [".env*"],
-    setupCommand: "pnpm setup:worktree",
     rootPath: "/repo.worktree",
   };
   return {
@@ -180,16 +180,6 @@ function createLocalizedContext(
 
 function createMockContext(): RendererPluginContext {
   return {
-    accounts: {
-      add: unimplemented("accounts.add"),
-      adoptCurrent: unimplemented("accounts.adoptCurrent"),
-      cancelLogin: unimplemented("accounts.cancelLogin"),
-      onDidChange: unimplemented("accounts.onDidChange"),
-      refreshUsage: unimplemented("accounts.refreshUsage"),
-      remove: unimplemented("accounts.remove"),
-      select: unimplemented("accounts.select"),
-      snapshot: unimplemented("accounts.snapshot"),
-    },
     actions: { register: unimplemented("actions.register") },
     agents: {
       selection: agentSelectionMock,
@@ -210,12 +200,18 @@ function createMockContext(): RendererPluginContext {
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
     },
-    dashboardWidgets: { register: vi.fn(() => vi.fn()) },
+    missionControlWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: unimplemented("dialogs.alert"),
       choice: unimplemented("dialogs.choice"),
       confirm: unimplemented("dialogs.confirm"),
       prompt: unimplemented("dialogs.prompt"),
+    },
+    environments: {
+      projectSnapshot: unimplemented("environments.projectSnapshot"),
+      snapshot: unimplemented("environments.snapshot"),
+      update: unimplemented("environments.update"),
+      worktreeBinding: unimplemented("environments.worktreeBinding"),
     },
     git: {
       abortMerge: unimplemented("git.abortMerge"),
@@ -296,6 +292,10 @@ function createMockContext(): RendererPluginContext {
     terminal: {
       activePanelId: unimplemented("terminal.activePanelId"),
       readSelectionText: unimplemented("terminal.readSelectionText"),
+    },
+    settings: {
+      openSection: (section) =>
+        useSettingsDialogStore.getState().openSection(section),
     },
     terminalStatusItems: {
       register: unimplemented("terminalStatusItems.register"),
@@ -391,6 +391,10 @@ describe("WorktreeCreateOverlay", () => {
       activePanelKind: null,
       overlayStack: [],
     });
+    useSettingsDialogStore.setState({
+      activeSection: "appearance",
+      isOpen: false,
+    });
   });
 
   afterEach(() => {
@@ -403,6 +407,10 @@ describe("WorktreeCreateOverlay", () => {
       activePanelId: null,
       activePanelKind: null,
       overlayStack: [],
+    });
+    useSettingsDialogStore.setState({
+      activeSection: "appearance",
+      isOpen: false,
     });
   });
 
@@ -449,11 +457,13 @@ describe("WorktreeCreateOverlay", () => {
       await generation.promise;
     });
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith({
-        branch: "fix-focus",
-        name: "fix-focus",
-        path: "/repo",
-      });
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: "fix-focus",
+          name: "fix-focus",
+          path: "/repo",
+        })
+      );
     });
   });
 
@@ -478,11 +488,13 @@ describe("WorktreeCreateOverlay", () => {
       await generation.promise;
     });
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith({
-        branch: "fix-focus",
-        name: "fix-focus",
-        path: "/repo",
-      });
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: "fix-focus",
+          name: "fix-focus",
+          path: "/repo",
+        })
+      );
     });
   });
 
@@ -518,16 +530,17 @@ describe("WorktreeCreateOverlay", () => {
       });
     });
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith({
-        branch: "fix-focus",
-        name: "fix-focus",
-        path: "/repo",
-      });
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: "fix-focus",
+          name: "fix-focus",
+          path: "/repo",
+        })
+      );
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
         path: "/repo.worktree/fix-focus",
-        runSetup: true,
       });
     });
     expect(
@@ -549,17 +562,18 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith({
-        branch: "fix-focus",
-        name: "fix-focus",
-        path: "/repo",
-      });
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: "fix-focus",
+          name: "fix-focus",
+          path: "/repo",
+        })
+      );
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
         agentId: "codex",
         path: "/repo.worktree/fix-focus",
-        runSetup: false,
         taskPrompt: "修复终端焦点问题",
       });
     });
@@ -656,19 +670,37 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith({
-        branch: "feature/fix-dialog",
-        name: "feature-fix-dialog",
-        path: "/repo",
-      });
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: "feature/fix-dialog",
+          name: "feature-fix-dialog",
+          path: "/repo",
+        })
+      );
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
         path: "/repo.worktree/fix-dialog",
-        runSetup: true,
       });
     });
     expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
+  it("does not pass environmentId to worktrees.create", async () => {
+    await openOverlay(context);
+    await switchToCustom();
+
+    fireEvent.change(screen.getByRole("textbox", { name: BRANCH_LABEL }), {
+      target: { value: "feature/no-env" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(createMock).toHaveBeenCalled();
+    });
+    const request = createMock.mock.calls[0]?.[0];
+    expect(request).toBeDefined();
+    expect("environmentId" in (request ?? {})).toBe(false);
   });
 
   it("自定义模式:非法字符与已存在分支被校验拦截", async () => {
@@ -704,18 +736,20 @@ describe("WorktreeCreateOverlay", () => {
     const branch = screen.getByRole("textbox", { name: BRANCH_LABEL });
     fireEvent.change(branch, { target: { value: "feature/x" } });
 
-    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByRole("combobox", { name: "Base" }));
     fireEvent.click(await screen.findByRole("option", { name: "develop" }));
 
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith({
-        base: "develop",
-        branch: "feature/x",
-        name: "feature-x",
-        path: "/repo",
-      });
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          base: "develop",
+          branch: "feature/x",
+          name: "feature-x",
+          path: "/repo",
+        })
+      );
     });
   });
 

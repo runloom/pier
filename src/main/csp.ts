@@ -17,19 +17,19 @@ export function installCsp(): void {
   const policy = isDev
     ? [
         "default-src 'self' http://localhost:* ws://localhost:*",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*",
-        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* pier-plugin:",
+        "style-src 'self' 'unsafe-inline' pier-plugin:",
         "connect-src 'self' http://localhost:* ws://localhost:*",
-        "img-src 'self' data: blob:",
-        "font-src 'self' data: pier-asset:",
+        "img-src 'self' data: blob: pier-plugin:",
+        "font-src 'self' data: pier-asset: pier-plugin:",
       ].join("; ")
     : [
         "default-src 'self'",
-        "script-src 'self'",
-        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' pier-plugin:",
+        "style-src 'self' 'unsafe-inline' pier-plugin:",
         "connect-src 'self'",
-        "img-src 'self' data:",
-        "font-src 'self' data: pier-asset:",
+        "img-src 'self' data: pier-plugin:",
+        "font-src 'self' data: pier-asset: pier-plugin:",
       ].join("; ");
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {

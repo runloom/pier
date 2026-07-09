@@ -1,8 +1,8 @@
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
-import type { ProjectPreferencesPatch } from "@shared/contracts/commands.ts";
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type { ProjectPreferencesPatch } from "@shared/contracts/preferences-patch.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type {
   TerminalStatusBarItemOverridePatch,
@@ -10,13 +10,15 @@ import type {
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
-import type { AgentAccountsService } from "../services/agent-accounts/service.ts";
 import type { AiService } from "../services/ai/ai-service.ts";
+import type { AppUpdateService } from "../services/app-updates/app-update-service.ts";
 import type { FileDraftsService } from "../services/file-drafts-service.ts";
 import type { FileService } from "../services/file-service.ts";
 import type { FileWatchService } from "../services/file-watch-service.ts";
 import type { GitService } from "../services/git-service.ts";
 import type { GitWatchService } from "../services/git-watch-service.ts";
+import type { LocalEnvironmentService } from "../services/local-environments-service.ts";
+import type { ManagedPluginInstallService } from "../services/managed-plugins/install-service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
@@ -26,8 +28,8 @@ import type { WorktreeService } from "../services/worktree-service.ts";
 import type { SecretsStore } from "../state/secrets-store.ts";
 
 export interface PierCoreServices {
-  agentAccounts: AgentAccountsService;
   ai: AiService;
+  appUpdates: AppUpdateService;
   commandPaletteMru: {
     clear(): Promise<MruState>;
     read(): Promise<MruState>;
@@ -38,6 +40,8 @@ export interface PierCoreServices {
   fileWatch?: FileWatchService;
   git: GitService;
   gitWatch: GitWatchService;
+  localEnvironments: LocalEnvironmentService;
+  managedPlugins: ManagedPluginInstallService;
   panelContexts: {
     listRecent(): Promise<PanelContext[]>;
     recordRecent(context: PanelContext): Promise<void>;

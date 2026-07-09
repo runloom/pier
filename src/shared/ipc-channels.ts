@@ -17,11 +17,15 @@ export const PIER = {
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
+  // renderer → main plugin RPC invoke channel. Separate from PIER.COMMAND_EXECUTE
+  // so plugin RPC is NEVER reachable from CLI local-control or capability-only
+  // command authorization (design §7.0 / §7.3).
+  PLUGIN_RPC_INVOKE: "pier://plugin-rpc:invoke",
+  ENVIRONMENT_PICK_PROJECT_DIRECTORY:
+    "pier://environment:pick-project-directory",
 } as const;
 
 export const PIER_BROADCAST = {
-  // 账号域变更广播 (main → 所有 renderer, payload AgentAccountsSnapshot).
-  AGENT_ACCOUNTS_CHANGED: "pier://agent-accounts:changed",
   // main 端应用菜单请求 renderer 打开/关闭命令面板.
   COMMAND_PALETTE_TOGGLE_REQUEST: "pier://command-palette:toggle-request",
   // main 端应用菜单请求当前 workspace 新建 terminal panel.
@@ -52,13 +56,23 @@ export const PIER_BROADCAST = {
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
   // 终端状态栏用户覆盖变更后广播完整快照 (main → renderer, payload TerminalStatusBarPrefs).
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
+  // 后台任务状态变更广播 (main → renderer, payload TaskBackgroundSnapshot).
+  TASKS_BACKGROUND_CHANGED: "pier://tasks:background-changed",
   // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
   // 应用退出确认请求 (main → renderer, payload AppQuitConfirmationRequest).
   APP_QUIT_REQUESTED: "pier://app-quit:requested",
+  // 主体更新状态变更广播 (main → renderer, payload AppUpdateSnapshot).
+  APP_UPDATE_CHANGED: "pier://app-update:changed",
   // 前台面板活动统一广播 (main → 所有 renderer, payload ForegroundActivityBroadcast).
   // Unified aggregator: agent/task/shell/idle 四态归一, per-panel 唯一 activity。
   FOREGROUND_ACTIVITY_CHANGED: "pier://foreground-activity:changed",
+  // main → renderer plugin event broadcast. Sent to all Pier windows;
+  // renderer runtime filters by pluginId before dispatching to plugin
+  // subscribers. Payload MUST NOT include secret material (design §7.3).
+  PLUGIN_RPC_EVENT: "pier://plugin-rpc:event",
+  // local environment 域变更广播 (main → 所有 renderer, payload LocalEnvironmentState).
+  ENVIRONMENTS_CHANGED: "pier://environments:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

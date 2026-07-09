@@ -1,6 +1,16 @@
 import { useEffect } from "react";
 import { registerAgentStatusItem } from "@/panel-kits/terminal/agent-status-item.tsx";
+import { registerTaskStatusItem } from "@/panel-kits/terminal/task-status-item.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import { useTerminalTaskHistoryStore } from "@/stores/terminal-task-history.store.ts";
+
+function terminalTaskHistoryPanelsKey(): string {
+  return Object.entries(useTerminalTaskHistoryStore.getState().panels)
+    .filter(([, tasks]) => Object.keys(tasks).length > 0)
+    .map(([panelId]) => panelId)
+    .sort()
+    .join("\n");
+}
 
 /**
  * ForegroundActivity 桥 — 不渲染任何 UI。
@@ -21,7 +31,7 @@ export function ForegroundActivityBridge(): null {
   }, []);
 
   useEffect(() => {
-    let dispose = registerAgentStatusItem();
+    let disposeAgent = registerAgentStatusItem();
     let lastKeys = Object.keys(useForegroundActivityStore.getState().activities)
       .sort()
       .join("\n");
@@ -31,12 +41,30 @@ export function ForegroundActivityBridge(): null {
         return;
       }
       lastKeys = keys;
-      dispose();
-      dispose = registerAgentStatusItem();
+      disposeAgent();
+      disposeAgent = registerAgentStatusItem();
     });
     return () => {
       unsubscribe();
-      dispose();
+      disposeAgent();
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposeTask = registerTaskStatusItem();
+    let lastKeys = terminalTaskHistoryPanelsKey();
+    const unsubscribe = useTerminalTaskHistoryStore.subscribe(() => {
+      const keys = terminalTaskHistoryPanelsKey();
+      if (keys === lastKeys) {
+        return;
+      }
+      lastKeys = keys;
+      disposeTask();
+      disposeTask = registerTaskStatusItem();
+    });
+    return () => {
+      unsubscribe();
+      disposeTask();
     };
   }, []);
 

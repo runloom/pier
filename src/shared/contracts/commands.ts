@@ -1,20 +1,12 @@
 import { z } from "zod";
-import { agentAccountProviderSchema } from "./agent-accounts.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
-  fileCopyRequestSchema,
-  fileDraftsDeleteRequestSchema,
-  fileDraftsSetRequestSchema,
-  fileExistsRequestSchema,
-  fileListRequestSchema,
-  fileMkdirRequestSchema,
-  fileMoveRequestSchema,
-  fileReadTextRequestSchema,
-  fileRevealRequestSchema,
-  fileStatRequestSchema,
-  fileTrashRequestSchema,
-  fileWriteTextRequestSchema,
-} from "./file.ts";
+  environmentProjectRequestSchema,
+  environmentSnapshotRequestSchema,
+  environmentUpdateRequestSchema,
+  environmentWorktreeBindingRequestSchema,
+} from "./environment.ts";
+import { fileCommandSchemas } from "./file-commands.ts";
 import {
   getFileContentOptionsSchema,
   gitCommitOptionsSchema,
@@ -31,8 +23,19 @@ import {
   listBranchesOptionsSchema,
 } from "./git.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
+import {
+  appRelaunchCommandSchema,
+  pluginCatalogListCommandSchema,
+  pluginCheckUpdatesCommandSchema,
+  pluginDevOverrideClearCommandSchema,
+  pluginDevOverrideSetCommandSchema,
+  pluginInstallCommandSchema,
+  pluginRollbackCommandSchema,
+  pluginUninstallCommandSchema,
+  pluginUpdateCommandSchema,
+} from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
-import { projectPreferencesSchema } from "./preferences.ts";
+import { taskSpawnModeSchema } from "./tasks.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
   terminalLaunchEnvKeySchema,
@@ -56,10 +59,7 @@ import {
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
 
-export const projectPreferencesPatchSchema = projectPreferencesSchema.partial();
-export type ProjectPreferencesPatch = z.infer<
-  typeof projectPreferencesPatchSchema
->;
+import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 
 export const pierCommandPlacementSchema = z.enum([
   "active-tab",
@@ -72,6 +72,10 @@ export type PierCommandPlacement = z.infer<typeof pierCommandPlacementSchema>;
 
 export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("app.status") }),
+  z.object({ type: z.literal("appUpdate.status") }),
+  z.object({ type: z.literal("appUpdate.check") }),
+  z.object({ type: z.literal("appUpdate.download") }),
+  z.object({ type: z.literal("appUpdate.quitAndInstall") }),
   z.object({ type: z.literal("preferences.read") }),
   z.object({
     type: z.literal("preferences.update"),
@@ -109,9 +113,13 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("run.list"),
   }),
   z.object({
+    type: z.literal("run.backgroundSnapshot"),
+  }),
+  z.object({
     focus: z.boolean().optional(),
     forceRestart: z.boolean().optional(),
     inputs: z.record(z.string().min(1), z.string()).optional(),
+    mode: taskSpawnModeSchema.optional(),
     placement: pierCommandPlacementSchema.optional(),
     projectRootPath: z.string().min(1),
     taskId: z.string().min(1),
@@ -236,44 +244,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     patches: terminalStatusBarOverridePatchesSchema,
     type: z.literal("terminalStatusBar.prefs.applyOverrides"),
   }),
-  fileListRequestSchema.extend({
-    type: z.literal("file.list"),
-  }),
-  fileReadTextRequestSchema.extend({
-    type: z.literal("file.readText"),
-  }),
-  fileWriteTextRequestSchema.extend({
-    type: z.literal("file.writeText"),
-  }),
-  fileMoveRequestSchema.extend({
-    type: z.literal("file.move"),
-  }),
-  fileTrashRequestSchema.extend({
-    type: z.literal("file.trash"),
-  }),
-  fileMkdirRequestSchema.extend({
-    type: z.literal("file.mkdir"),
-  }),
-  fileExistsRequestSchema.extend({
-    type: z.literal("file.exists"),
-  }),
-  fileStatRequestSchema.extend({
-    type: z.literal("file.stat"),
-  }),
-  fileCopyRequestSchema.extend({
-    type: z.literal("file.copy"),
-  }),
-  fileRevealRequestSchema.extend({
-    type: z.literal("file.reveal"),
-  }),
-  // hot-exit 草稿:renderer 崩溃/重载后可恢复的脏文档缓存(userData JSON)。
-  z.object({ type: z.literal("file.drafts.list") }),
-  fileDraftsSetRequestSchema.extend({
-    type: z.literal("file.drafts.set"),
-  }),
-  fileDraftsDeleteRequestSchema.extend({
-    type: z.literal("file.drafts.delete"),
-  }),
+  ...fileCommandSchemas,
   // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
   z.object({ type: z.literal("git.listIgnored"), cwd: z.string().min(1) }),
@@ -424,31 +395,37 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     cwd: z.string().min(1),
     type: z.literal("git.undoLastCommit"),
   }),
-  // Agent accounts 域命令
-  z.object({ type: z.literal("accounts.snapshot") }),
-  z.object({ type: z.literal("accounts.adoptCurrent") }),
-  z.object({
-    provider: agentAccountProviderSchema,
-    type: z.literal("accounts.add"),
+  // Local environment 域命令
+  environmentSnapshotRequestSchema.extend({
+    type: z.literal("environment.snapshot"),
   }),
-  z.object({
-    provider: agentAccountProviderSchema,
-    type: z.literal("accounts.cancelLogin"),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.add"),
   }),
-  z.object({
-    accountId: z.string().min(1),
-    type: z.literal("accounts.select"),
+  environmentProjectRequestSchema.extend({
+    type: z.literal("environment.project.remove"),
   }),
-  z.object({
-    accountId: z.string().min(1),
-    type: z.literal("accounts.remove"),
+  environmentUpdateRequestSchema.extend({
+    type: z.literal("environment.update"),
   }),
-  z.object({ type: z.literal("accounts.refreshUsage") }),
+  environmentWorktreeBindingRequestSchema.extend({
+    type: z.literal("environment.worktreeBinding"),
+  }),
+  // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
   z.object({ type: z.literal("ai.status") }),
   aiGenerateTextRequestSchema.extend({
     type: z.literal("ai.generateText"),
   }),
+  pluginCatalogListCommandSchema,
+  pluginCheckUpdatesCommandSchema,
+  pluginInstallCommandSchema,
+  pluginUpdateCommandSchema,
+  pluginRollbackCommandSchema,
+  pluginUninstallCommandSchema,
+  pluginDevOverrideSetCommandSchema,
+  pluginDevOverrideClearCommandSchema,
+  appRelaunchCommandSchema,
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;

@@ -108,6 +108,9 @@ export type TaskListResult = z.infer<typeof taskListResultSchema>;
 export const taskRunIdSchema = z.string().min(1);
 export type TaskRunId = z.infer<typeof taskRunIdSchema>;
 
+export const taskSpawnModeSchema = z.enum(["background", "terminal-tab"]);
+export type TaskSpawnMode = z.infer<typeof taskSpawnModeSchema>;
+
 export const taskLaunchPlanSchema = z
   .object({
     command: z.string().min(1),
@@ -134,6 +137,48 @@ export const taskPanelStatusSchema = z.enum([
   "cancelled",
 ]);
 export type TaskPanelStatus = z.infer<typeof taskPanelStatusSchema>;
+
+export const taskBackgroundRunSnapshotSchema = z
+  .object({
+    exitCode: z.number().int().optional(),
+    finishedAt: z.number().int().nonnegative().optional(),
+    label: z.string().min(1),
+    projectRootPath: z.string().min(1),
+    runId: taskRunIdSchema,
+    startedAt: z.number().int().nonnegative(),
+    status: z.enum([
+      "pending",
+      "running",
+      "succeeded",
+      "failed",
+      "blocked",
+      "cancelled",
+    ]),
+    taskId: z.string().min(1),
+    updatedAt: z.number().int().nonnegative(),
+    windowId: z.string().min(1).optional(),
+  })
+  .strict();
+export type TaskBackgroundRunSnapshot = z.infer<
+  typeof taskBackgroundRunSnapshotSchema
+>;
+
+export const taskBackgroundSnapshotSchema = z
+  .object({
+    runs: z.record(
+      z.string().min(1),
+      z.record(z.string().min(1), taskBackgroundRunSnapshotSchema)
+    ),
+    version: z.number().int().nonnegative(),
+  })
+  .strict();
+export type TaskBackgroundSnapshot = z.infer<
+  typeof taskBackgroundSnapshotSchema
+>;
+
+export function emptyTaskBackgroundSnapshot(): TaskBackgroundSnapshot {
+  return { runs: {}, version: 0 };
+}
 
 export const taskExitReasonSchema = z.enum([
   "process",
@@ -249,7 +294,7 @@ export const taskSpawnResultSchema = z.discriminatedUnion("status", [
   }),
   z.object({
     panelIds: z.array(z.string().min(1)),
-    primaryPanelId: z.string().min(1),
+    primaryPanelId: z.string().min(1).optional(),
     runId: taskRunIdSchema.optional(),
     snapshot: taskRunSnapshotSchema.optional(),
     status: z.literal("started"),

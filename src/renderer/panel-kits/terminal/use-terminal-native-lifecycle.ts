@@ -165,8 +165,7 @@ export function useTerminalNativeLifecycle({
       disposed || lifecycleVersionRef.current !== lifecycleVersion;
 
     const shouldCreateNativeTerminal = () =>
-      !createFailureLatched &&
-      (api.isVisible || api.isActive || hasRenderableAnchor());
+      !createFailureLatched && (api.isVisible || api.isActive);
 
     const acceptCreateResult = (result: CreateTerminalResult): boolean => {
       if (isDisposed()) {

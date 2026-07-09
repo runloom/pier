@@ -76,7 +76,10 @@ describe("KeybindingsSection", () => {
       title: () => "新建终端",
     });
 
-    const { unmount } = render(<KeybindingsSection />);
+    const { container, unmount } = render(<KeybindingsSection />);
+    const footer = container.querySelector('[data-slot="card-footer"]');
+    expect(footer).toHaveClass("border-t");
+    expect(footer).not.toHaveClass("py-3");
     fireEvent.click(screen.getByRole("button", { name: "录制 新建终端" }));
     fireEvent.keyDown(window, {
       code: "KeyX",

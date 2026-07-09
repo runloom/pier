@@ -74,11 +74,12 @@ export function buildTerminalPresentationSnapshot({
     const frame = readFrame(panel.id);
     const isActivePanel =
       workspace.activePanelId === panel.id || panel.dockviewActive;
+    const dockviewVisible = panel.dockviewVisible || isActivePanel;
     const visible =
       frame !== null &&
       (workspace.hasMaximizedGroup
         ? workspace.activeTerminalPanelId === panel.id && isActivePanel
-        : panel.dockviewVisible || frame !== null);
+        : dockviewVisible);
     return {
       focused: false,
       frame,

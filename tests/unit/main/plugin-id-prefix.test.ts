@@ -1,7 +1,7 @@
 import type { PluginStateStore } from "@main/services/plugin-service.ts";
 import {
   createPluginService,
-  findDashboardWidgetIdConflict,
+  findMissionControlWidgetIdConflict,
   findPluginIdDotPrefixConflict,
 } from "@main/services/plugin-service.ts";
 import type { PluginRegistryState } from "@shared/contracts/plugin.ts";
@@ -141,7 +141,7 @@ describe("plugin registry — terminalStatusItems id 跨插件唯一性", () => 
 });
 
 function manifestWith(overrides: {
-  dashboardWidgets?: Array<{
+  missionControlWidgets?: Array<{
     id: string;
     permissions: string[];
     title: string;
@@ -150,7 +150,7 @@ function manifestWith(overrides: {
 }) {
   return pluginManifestSchema.parse({
     apiVersion: 1,
-    dashboardWidgets: overrides.dashboardWidgets ?? [],
+    missionControlWidgets: overrides.missionControlWidgets ?? [],
     engines: { pier: ">=0.1.0" },
     id: overrides.id,
     name: overrides.id,
@@ -159,38 +159,40 @@ function manifestWith(overrides: {
   });
 }
 
-describe("findDashboardWidgetIdConflict", () => {
+describe("findMissionControlWidgetIdConflict", () => {
   it("两个插件声明同一 widget id 时返回冲突 id", () => {
     const accepted = manifestWith({
-      dashboardWidgets: [
+      missionControlWidgets: [
         { id: "pier.a.widget", permissions: [], title: "A Widget" },
       ],
       id: "pier.a",
     });
     const candidate = manifestWith({
-      dashboardWidgets: [
+      missionControlWidgets: [
         { id: "pier.a.widget", permissions: [], title: "Steal" },
       ],
       id: "pier.b",
     });
-    expect(findDashboardWidgetIdConflict([accepted], candidate)).toBe(
+    expect(findMissionControlWidgetIdConflict([accepted], candidate)).toBe(
       "pier.a.widget"
     );
   });
 
   it("无重叠 id 时返回 null", () => {
     const accepted = manifestWith({
-      dashboardWidgets: [
+      missionControlWidgets: [
         { id: "pier.a.widget", permissions: [], title: "A Widget" },
       ],
       id: "pier.a",
     });
     const candidate = manifestWith({
-      dashboardWidgets: [
+      missionControlWidgets: [
         { id: "pier.b.widget", permissions: [], title: "B Widget" },
       ],
       id: "pier.b",
     });
-    expect(findDashboardWidgetIdConflict([accepted], candidate)).toBeNull();
+    expect(
+      findMissionControlWidgetIdConflict([accepted], candidate)
+    ).toBeNull();
   });
 });

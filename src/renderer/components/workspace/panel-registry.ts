@@ -2,8 +2,9 @@ import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
-import { dashboardPanelKit } from "@/panel-kits/dashboard/dashboard-panel.tsx";
+import { missionControlPanelKit } from "@/panel-kits/mission-control/mission-control-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { withPanelResourceBoundary } from "./panel-resource-boundary.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
 type PanelKind = "terminal" | "web";
@@ -20,13 +21,24 @@ interface PanelKitMetadata {
  * 见 getPanelComponents()。新增主系统 panel 时在此登记一行。
  */
 export const panelKits = {
-  dashboard: dashboardPanelKit,
+  "mission-control": missionControlPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
 } satisfies Record<string, PanelKitMetadata>;
 
-const corePanelKitByComponent: Readonly<Record<string, PanelKitMetadata>> =
-  panelKits;
+/**
+ * 兼容映射：2026-07 大盘改名指挥中心（"dashboard" → "mission-control"）之前
+ * 持久化的 layout 仍以旧 component id 反序列化，指向同一 kit。只用于恢复，
+ * 新建面板一律走 "mission-control"。
+ */
+const legacyPanelKitAliases: Readonly<Record<string, PanelKitMetadata>> = {
+  dashboard: missionControlPanelKit,
+};
+
+const corePanelKitByComponent: Readonly<Record<string, PanelKitMetadata>> = {
+  ...legacyPanelKitAliases,
+  ...panelKits,
+};
 
 /**
  * dockview component 名 → React 组件。合并 core 静态 panel 与插件动态 panel。
@@ -38,11 +50,17 @@ export function getPanelComponents(): Record<
 > {
   const components: Record<string, FunctionComponent<IDockviewPanelProps>> = {};
   for (const [id, kit] of Object.entries(corePanelKitByComponent)) {
-    components[id] = kit.component;
+    components[id] =
+      kit.kind === "terminal"
+        ? kit.component
+        : withPanelResourceBoundary(kit.component);
   }
   for (const [id, registration] of getPluginPanelRegistrations()) {
     if (!(id in components)) {
-      components[id] = registration.component;
+      components[id] =
+        registration.kind === "terminal"
+          ? registration.component
+          : withPanelResourceBoundary(registration.component);
     }
   }
   return components;

@@ -3,6 +3,7 @@ import type {
   RendererPluginQuickPickItem,
 } from "@plugins/api/renderer.ts";
 import type {
+  GitBranchTipTreeInCurrentHistory,
   GitDiffBranchesResult,
   GitDiffBranchOption,
   GitMergeResult,
@@ -125,7 +126,18 @@ async function openBranchPick(
 
   const branchesById = new Map(items.map((item) => [item.id, item]));
   const defaultLabel = pluginText(context, "branchDefault", "default");
+  const graphCaveatTitle = pluginText(
+    context,
+    "branchGraphCaveatTitle",
+    "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only."
+  );
+  const graphLabel = pluginText(context, "branchGraph", "graph");
   const remoteLabel = pluginText(context, "branchRemote", "remote");
+  const tipTreeInHistoryLabel = pluginText(
+    context,
+    "branchTipTreeInHistory",
+    "seen in history"
+  );
   context.commandPalette.openQuickPick({
     items,
     onAccept: async (selected) => {
@@ -140,7 +152,20 @@ async function openBranchPick(
       createElement(GitBranchQuickPickRow, {
         branch: item.data as GitDiffBranchOption,
         defaultLabel,
+        graphCaveatTitle,
+        graphLabel,
         remoteLabel,
+        tipTreeInHistoryLabel,
+        tipTreeInHistoryTitle: (match: GitBranchTipTreeInCurrentHistory) =>
+          pluginText(
+            context,
+            "branchTipTreeInHistoryTitle",
+            "Branch tip tree matches {{commit}} in the current history; current branch has {{count}} newer commit(s).",
+            {
+              commit: match.commit,
+              count: match.commitsSince,
+            }
+          ),
       }),
     title,
   });

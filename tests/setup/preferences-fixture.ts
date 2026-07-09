@@ -1,8 +1,8 @@
-import type { ProjectPreferencesPatch } from "@shared/contracts/commands.ts";
 import {
   type ProjectPreferences,
   projectPreferencesSchema,
 } from "@shared/contracts/preferences.ts";
+import type { ProjectPreferencesPatch } from "@shared/contracts/preferences-patch.ts";
 
 /**
  * 测试用 preferences 对象工厂:单一真源就是 zod schema 的 `.default()`,

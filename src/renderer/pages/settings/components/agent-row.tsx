@@ -7,7 +7,11 @@ import {
 } from "@pier/ui/collapsible.tsx";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  type AgentKind,
+  resolveEffectiveAgentDefaultArgs,
+  resolveEffectiveAgentDefaultEnv,
+} from "@shared/contracts/agent.ts";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
@@ -23,6 +27,10 @@ function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
     (s) => s.agentCommandOverrides
   );
   const agentDefaultArgs = useAgentPreferencesStore((s) => s.agentDefaultArgs);
+  const agentDefaultEnv = useAgentPreferencesStore((s) => s.agentDefaultEnv);
+  const agentPermissionMode = useAgentPreferencesStore(
+    (s) => s.agentPermissionMode
+  );
   const setAgentCommandOverrides = useAgentPreferencesStore(
     (s) => s.setAgentCommandOverrides
   );
@@ -31,7 +39,19 @@ function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   );
 
   const persistedCmd = agentCommandOverrides[agentId] ?? "";
-  const persistedArgs = agentDefaultArgs[agentId] ?? "";
+  const persistedArgs = resolveEffectiveAgentDefaultArgs(
+    agentId,
+    agentDefaultArgs,
+    agentPermissionMode
+  );
+  const effectiveEnv = resolveEffectiveAgentDefaultEnv(
+    agentId,
+    agentDefaultEnv,
+    agentPermissionMode
+  );
+  const envText = Object.entries(effectiveEnv)
+    .map(([key, value]) => `${key}=${value}`)
+    .join(" ");
 
   // Local edit drafts seeded from the store. Re-sync when the persisted value
   // changes externally while mounted (mirrors terminal-section's scrollback row)
@@ -116,6 +136,21 @@ function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
           onChange={setArgsDraft}
           value={argsDraft}
         />
+        {envText ? (
+          <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+            <div>
+              <div className="font-medium text-sm">
+                {t("settings.agents.row.env")}
+              </div>
+              <div className="text-muted-foreground text-sm">
+                {t("settings.agents.row.envDesc")}
+              </div>
+            </div>
+            <div className="max-w-[240px] truncate rounded-md border bg-muted/40 px-3 py-1.5 font-mono text-xs">
+              {envText}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

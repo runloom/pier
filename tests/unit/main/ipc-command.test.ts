@@ -30,6 +30,31 @@ vi.mock("@main/windows/window-manager.ts", () => ({
   },
 }));
 
+type CommandHandler = (
+  event: { sender: { id: string } },
+  command: unknown
+) => Promise<unknown>;
+
+async function registerTestCommandHandler(): Promise<CommandHandler> {
+  // Dynamic import keeps the mocked app-core/window-manager modules installed
+  // before command.ts captures those dependencies.
+  const { registerCommandIpc } = await import("@main/ipc/command.ts");
+  const handlers = new Map<string, CommandHandler>();
+  const ipcMain = {
+    handle: vi.fn((channel: string, handler: CommandHandler) => {
+      handlers.set(channel, handler);
+    }),
+  };
+
+  registerCommandIpc(ipcMain as never);
+
+  const handler = handlers.get(PIER.COMMAND_EXECUTE);
+  if (!handler) {
+    throw new Error("expected command handler");
+  }
+  return handler;
+}
+
 describe("registerCommandIpc", () => {
   beforeEach(() => {
     executeMock.mockClear();
@@ -243,9 +268,69 @@ describe("registerCommandIpc", () => {
     await expect(
       handler(
         { sender: { id: "web-contents" } },
-        { path: "/repo", runSetup: false, type: "worktree.openTerminal" }
+        { path: "/repo", type: "worktree.openTerminal" }
       )
     ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("environment.* 命令经 PIER.COMMAND_EXECUTE 交给 command router", async () => {
+    const handler = await registerTestCommandHandler();
+    const commands = [
+      { projectRootPath: "/repo", type: "environment.snapshot" },
+      { projectRootPath: "/repo", type: "environment.project.add" },
+      { projectRootPath: "/repo", type: "environment.project.remove" },
+      {
+        cleanupCommand: "pnpm cleanup:worktree",
+        copyPatterns: [".env*"],
+        env: { NODE_ENV: "development" },
+        projectRootPath: "/repo",
+        setupCommand: "pnpm setup:worktree",
+        type: "environment.update",
+      },
+      {
+        type: "environment.worktreeBinding",
+        worktreePath: "/repo/.worktrees/feature-a",
+      },
+    ];
+
+    for (const command of commands) {
+      await expect(
+        handler({ sender: { id: "web-contents" } }, command)
+      ).resolves.toMatchObject({ ok: true });
+    }
+
+    for (const command of commands) {
+      expect(executeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ command })
+      );
+    }
+  });
+
+  it("worktree.create 经 IPC 透传给 command router", async () => {
+    const handler = await registerTestCommandHandler();
+
+    await expect(
+      handler(
+        { sender: { id: "web-contents" } },
+        {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        }
+      )
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+      })
+    );
   });
 
   it("拒绝 renderer 侧任意 command 直通", async () => {

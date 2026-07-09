@@ -1,7 +1,11 @@
 import type {
-  AgentAccountProviderId,
-  AgentAccountsSnapshot,
-} from "@shared/contracts/agent-accounts.ts";
+  EnvironmentSnapshotRequest,
+  EnvironmentUpdateRequest,
+  EnvironmentWorktreeBindingRequest,
+  LocalEnvironmentProject,
+  LocalEnvironmentState,
+  LocalEnvironmentWorktreeBindingSnapshot,
+} from "@shared/contracts/environment.ts";
 import type {
   FileCopyRequest,
   FileCopyResult,
@@ -63,17 +67,6 @@ import type {
   WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
 
-export interface RendererPluginAccountsFacade {
-  add(provider: AgentAccountProviderId): Promise<void>;
-  adoptCurrent(): Promise<void>;
-  cancelLogin(provider: AgentAccountProviderId): Promise<void>;
-  onDidChange(cb: (s: AgentAccountsSnapshot) => void): () => void;
-  refreshUsage(): Promise<void>;
-  remove(accountId: string): Promise<void>;
-  select(accountId: string): Promise<void>;
-  snapshot(): AgentAccountsSnapshot;
-}
-
 export interface RendererPluginFilesFacade {
   copy(request: FileCopyRequest): Promise<FileCopyResult>;
   drafts: {
@@ -98,6 +91,19 @@ export interface RendererPluginFilesFacade {
     options?: { excludes?: readonly string[] }
   ): () => void;
   writeText(request: FileWriteTextRequest): Promise<FileWriteTextResult>;
+}
+
+export interface RendererPluginEnvironmentsFacade {
+  projectSnapshot(
+    projectRootPath: string
+  ): Promise<LocalEnvironmentProject | null>;
+  snapshot(
+    request?: EnvironmentSnapshotRequest
+  ): Promise<LocalEnvironmentState>;
+  update(request: EnvironmentUpdateRequest): Promise<LocalEnvironmentState>;
+  worktreeBinding(
+    request: EnvironmentWorktreeBindingRequest
+  ): Promise<LocalEnvironmentWorktreeBindingSnapshot | null>;
 }
 
 export interface RendererPluginGitFacade {

@@ -3,6 +3,7 @@ import type {
   TaskInputRequest,
   TaskListResult,
   TaskSource,
+  TaskSpawnMode,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
@@ -21,6 +22,7 @@ import type {
   QuickPickSection,
 } from "@/lib/command-palette/types.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { rememberTerminalTaskRun } from "@/stores/terminal-task-history.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const TASK_SPAWN_LOADING_DELAY_MS = 300;
@@ -57,12 +59,15 @@ async function withTaskSpawnLoading<T>(
 }
 
 interface ProjectContext {
+  defaultTaskSpawnMode?: TaskSpawnMode;
   projectRootPath: string;
+  terminalPanelId?: string;
 }
 
 function activeProjectContext(): ProjectContext | null {
   const api = useWorkspaceStore.getState().api;
-  const activePanelId = api?.activePanel?.id;
+  const activePanel = api?.activePanel;
+  const activePanelId = activePanel?.id;
   if (!activePanelId) {
     return null;
   }
@@ -76,7 +81,16 @@ function activeProjectContext(): ProjectContext | null {
   if (!projectRootPath) {
     return null;
   }
-  return { projectRootPath };
+  return {
+    defaultTaskSpawnMode:
+      activePanel?.view.contentComponent === "terminal"
+        ? "background"
+        : "terminal-tab",
+    projectRootPath,
+    ...(activePanel?.view.contentComponent === "terminal"
+      ? { terminalPanelId: activePanel.id }
+      : {}),
+  };
 }
 
 function taskSourceLabel(source: TaskSource): string {
@@ -224,26 +238,44 @@ async function collectTaskInputs(
 async function spawnTask(args: {
   forceRestart: boolean;
   inputs?: Record<string, string>;
+  mode?: TaskSpawnMode;
   project: ProjectContext;
+  taskDetail?: string | undefined;
   terminalPanelId?: string | undefined;
   taskId: string;
   taskLabel?: string | undefined;
 }): Promise<TaskSpawnResult> {
-  return await withTaskSpawnLoading(
-    args.taskLabel,
-    async () =>
-      await window.pier.tasks.spawn({
-        focus: true,
-        forceRestart: args.forceRestart,
-        ...(args.inputs ? { inputs: args.inputs } : {}),
-        placement: "active-tab",
+  return await withTaskSpawnLoading(args.taskLabel, async () => {
+    const result = await window.pier.tasks.spawn({
+      focus: args.mode !== "background",
+      forceRestart: args.forceRestart,
+      ...(args.inputs ? { inputs: args.inputs } : {}),
+      ...(args.mode === "background" ? { mode: args.mode } : {}),
+      placement: "active-tab",
+      projectRootPath: args.project.projectRootPath,
+      ...(args.terminalPanelId
+        ? { terminalPanelId: args.terminalPanelId }
+        : {}),
+      taskId: args.taskId,
+    });
+    if (
+      result.status === "started" &&
+      args.mode === "background" &&
+      args.project.terminalPanelId &&
+      args.taskLabel
+    ) {
+      rememberTerminalTaskRun({
+        label: args.taskLabel,
+        panelId: args.project.terminalPanelId,
         projectRootPath: args.project.projectRootPath,
-        ...(args.terminalPanelId
-          ? { terminalPanelId: args.terminalPanelId }
-          : {}),
+        status: "running",
         taskId: args.taskId,
-      })
-  );
+        ...(args.taskDetail ? { detail: args.taskDetail } : {}),
+        ...(result.runId ? { runId: result.runId } : {}),
+      });
+    }
+    return result;
+  });
 }
 
 async function spawnTaskWithInputFlow(
@@ -251,6 +283,8 @@ async function spawnTaskWithInputFlow(
   taskId: string,
   options: {
     forceRestart: boolean;
+    mode?: TaskSpawnMode;
+    taskDetail?: string | undefined;
     taskLabel?: string | undefined;
     terminalPanelId?: string | undefined;
   }
@@ -272,6 +306,8 @@ async function spawnTaskWithInputFlow(
 function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
   return spawnTaskWithInputFlow(project, item.id, {
     forceRestart: false,
+    mode: project.defaultTaskSpawnMode ?? "terminal-tab",
+    taskDetail: item.detail,
     taskLabel: item.label,
   });
 }
@@ -291,6 +327,7 @@ async function rerunActiveTaskPanel(): Promise<void> {
     activeTask.task.taskId,
     {
       forceRestart: true,
+      mode: "terminal-tab",
       taskLabel: activeTask.task.label,
       terminalPanelId: activeTask.panelId,
     }

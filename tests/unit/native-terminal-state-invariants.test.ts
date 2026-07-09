@@ -49,10 +49,12 @@ const CLOSE_CLEARS_STALE_STATE_RE =
 const TARGETS_DICT_RE = /var targets: \[String: Target\]/;
 const HIT_ITERATES_TARGETS_RE =
   /for \(panelId, target\) in targets \{[\s\S]*?target\.rect\.contains/;
+// 窗口容纳一行 recordHitTest / recordRightMouse 日志调用; 关键不变量 ——
+// containsWebOverlay 检查必须在 terminalTarget 之前 —— 仍被这个非贪婪匹配序列锁死.
 const HIT_TEST_WEB_OVERLAY_FIRST_RE =
-  /if containsWebOverlay\(local\) \{[\s\S]{0,80}?return nil[\s\S]{0,160}?terminalTarget\(at: local\)/;
+  /if containsWebOverlay\(local\) \{[\s\S]{0,160}?return nil[\s\S]{0,240}?terminalTarget\(at: local\)/;
 const RIGHT_MOUSE_WEB_OVERLAY_FIRST_RE =
-  /if containsWebOverlay\(local\) \{[\s\S]{0,80}?return event[\s\S]{0,160}?terminalTarget\(at: local\)/;
+  /if containsWebOverlay\(local\) \{[\s\S]{0,160}?return event[\s\S]{0,240}?terminalTarget\(at: local\)/;
 const FORBIDDEN_HIDE_GUARD_RE =
   /guard panelId != activePanelId else \{ return \}/;
 const FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE =

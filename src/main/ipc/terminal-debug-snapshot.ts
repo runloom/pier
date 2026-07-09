@@ -1,4 +1,4 @@
-import type { TerminalDebugSnapshotArgs } from "@shared/contracts/terminal.ts";
+import type { TerminalDebugSnapshotArgs } from "@shared/contracts/terminal-debug.ts";
 import type { IpcMain } from "electron";
 import {
   findAppWindowByElectronId,

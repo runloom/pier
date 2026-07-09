@@ -13,18 +13,22 @@ set -e
 SOFT_CAP=300
 HARD_CAP=500
 
-# 检查应用与 workspace packages 内 .ts/.tsx (tests/ 内 fixture 可能合理大)
+# 检查 src/ 和 packages/*/src/ 内 .ts/.tsx (tests/ 内 fixture 可能合理大)
 # 排除:
 #   - .d.ts (type 声明)
 #   - *.test.{ts,tsx} / *.spec.{ts,tsx} (test 内可能 inline 大块 fixture)
 #   - components/primitives/** (shadcn add 生成的 vendored 代码, 类似 3rd-party lib)
-FILES=$(find src packages -type f \( -name '*.ts' -o -name '*.tsx' \) \
+#   - packages/*/dist/ 与 packages/*/dist-package/ (生成产物)
+FILES=$(find src packages/*/src \
+  -type f \( -name '*.ts' -o -name '*.tsx' \) \
   -not -name '*.d.ts' \
   -not -name '*.test.ts' \
   -not -name '*.test.tsx' \
   -not -name '*.spec.ts' \
   -not -name '*.spec.tsx' \
   -not -path '*/components/primitives/*' \
+  -not -path '*/dist/*' \
+  -not -path '*/dist-package/*' \
   2>/dev/null)
 
 WARN_LIST=""

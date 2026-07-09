@@ -8,9 +8,9 @@ export const pierClientKindSchema = z.enum([
 ]);
 
 export const pierCapabilitySchema = z.enum([
-  "account:read",
-  "account:write",
   "app:read",
+  "environment:read",
+  "environment:write",
   "preferences:read",
   "preferences:write",
   "workspace:read",
@@ -62,9 +62,9 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
   PierCapability[]
 > = {
   "desktop-renderer": [
-    "account:read",
-    "account:write",
     "app:read",
+    "environment:read",
+    "environment:write",
     "preferences:read",
     "preferences:write",
     "workspace:read",
@@ -89,10 +89,13 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "file:read",
     "file:write",
     "ai:invoke",
+    // network 用于 plugin.checkUpdates / plugin.install / plugin.update
+    // 拉取签名官方索引与下载 GitHub Release asset (design §5)。
+    "network",
   ],
   "cli-local": [
-    "account:read",
     "app:read",
+    "environment:read",
     "preferences:read",
     "workspace:read",
     "workspace:open",
@@ -109,6 +112,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
   ],
   "mcp-local": [
     "app:read",
+    "environment:read",
     "preferences:read",
     "workspace:read",
     "workspace:open",

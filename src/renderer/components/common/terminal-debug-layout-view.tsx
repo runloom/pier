@@ -1,11 +1,13 @@
 import type {
+  TerminalFrame,
+  TerminalWebOverlayRect,
+} from "@shared/contracts/terminal.ts";
+import type {
   TerminalDebugIssue,
   TerminalDebugNativeSurfaceSnapshot,
   TerminalDebugRendererPanelSnapshot,
   TerminalDebugSnapshot,
-  TerminalFrame,
-  TerminalWebOverlayRect,
-} from "@shared/contracts/terminal.ts";
+} from "@shared/contracts/terminal-debug.ts";
 
 type LayoutState = "creating" | "hidden" | "missing" | "rendered";
 

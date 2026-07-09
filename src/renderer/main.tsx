@@ -22,15 +22,16 @@ import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
-import { initAgentAccounts } from "./stores/agent-accounts.store.ts";
 import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
 import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
 import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
+import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
+import { initTaskBackgroundStore } from "./stores/task-background.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
@@ -67,7 +68,9 @@ async function bootstrap() {
       initAppQuitPreferences(),
       initAgentPreferences(),
       initTerminalStatusBarPrefs(),
+      initTaskBackgroundStore(),
       initWorktreePreferences(),
+      initLocalEnvironments(),
     ]);
   } catch (err) {
     console.error("[pier] theme/locale init failed:", err);
@@ -83,9 +86,6 @@ async function bootstrap() {
   installTerminalInputRoutingPointerDownListener();
   installCommandPaletteMenuRequest();
   initCommandPaletteMru().catch(() => undefined);
-  initAgentAccounts().catch((err) => {
-    console.error("[pier] agent accounts init failed:", err);
-  });
 
   registerConfigActions();
   registerCommandPaletteAction();

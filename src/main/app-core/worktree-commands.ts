@@ -8,6 +8,11 @@ import type {
 } from "@shared/contracts/commands.ts";
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { WorktreeCreateResult } from "@shared/contracts/worktree.ts";
+import {
+  isLocalEnvironmentScriptError,
+  LocalEnvironmentScriptError,
+} from "../services/local-environment-scripts.ts";
+import { LocalEnvironmentServiceError } from "../services/local-environments-service.ts";
 import { copyWorktreeIncludes } from "../services/worktree-bootstrap.ts";
 import {
   commandFailure as failure,
@@ -21,20 +26,19 @@ import {
 
 async function copyCreateIncludes(
   result: WorktreeCreateResult,
-  services: PierCoreServices
+  patterns: readonly string[]
 ): Promise<string[]> {
   const mainPath = result.worktrees.find((item) => item.isMain)?.path;
   if (!mainPath) {
     return [];
   }
-  const preferences = await services.preferences.read();
-  if (preferences.worktreeCopyPatterns.length === 0) {
+  if (patterns.length === 0) {
     return [];
   }
   try {
     const copyResult = await copyWorktreeIncludes({
       mainPath,
-      patterns: preferences.worktreeCopyPatterns,
+      patterns: [...patterns],
       targetPath: result.targetPath,
     });
     return copyResult.copied;
@@ -149,15 +153,22 @@ async function executeWorktreeOpenTerminalCommand(
       `path is not a known worktree for this repository: ${command.path}`
     );
   }
-  // setup 命令只来自用户偏好 —— 插件调用方传不了任意命令字符串。
-  const preferences = await services.preferences.read();
-  const setup =
-    command.runSetup && !command.agentId
-      ? preferences.worktreeSetupCommand.trim()
-      : "";
+  let environmentEnv: Record<string, string> = {};
+  try {
+    const binding = await services.localEnvironments.resolveForWorktree(
+      target.path
+    );
+    environmentEnv = binding?.project.env ?? {};
+  } catch (err) {
+    if (!(err instanceof LocalEnvironmentServiceError)) {
+      throw err;
+    }
+  }
+  const launchEnv =
+    Object.keys(environmentEnv).length > 0 ? { env: environmentEnv } : {};
   const launch = command.agentId
-    ? { agentId: command.agentId, cwd: target.path }
-    : { cwd: target.path, ...(setup ? { command: setup } : {}) };
+    ? { agentId: command.agentId, cwd: target.path, ...launchEnv }
+    : { cwd: target.path, ...launchEnv };
   const initialInput = command.agentId
     ? buildAgentInitialInput(command.taskPrompt)
     : undefined;
@@ -176,6 +187,72 @@ async function executeWorktreeOpenTerminalCommand(
   );
 }
 
+async function executeWorktreeCreateCommand(
+  requestId: string,
+  command: Extract<PierCommand, { type: "worktree.create" }>,
+  services: PierCoreServices
+): Promise<PierCommandResult> {
+  const check = await services.worktrees.check({ path: command.path });
+  if (check.status !== "supported") {
+    // unsupported/unavailable — fall through to raw create for compat
+    const created = await services.worktrees.create(command);
+    const copiedFiles = await copyCreateIncludes(created, []);
+    services.gitWatch.pulse(command.path);
+    return success(requestId, { ...created, copiedFiles });
+  }
+
+  const project = await services.localEnvironments.resolveProject(
+    check.mainPath
+  );
+  const shouldRunSetup = project !== null && project.setupCommand.trim() !== "";
+
+  let created: WorktreeCreateResult | null = null;
+  try {
+    created = await services.worktrees.create(command);
+
+    await services.localEnvironments.bindWorktree({
+      projectRootPath: check.mainPath,
+      worktreePath: created.targetPath,
+    });
+
+    const copiedFiles = await copyCreateIncludes(
+      created,
+      project?.copyPatterns ?? []
+    );
+
+    if (shouldRunSetup && project) {
+      await services.localEnvironments.runLifecycle({
+        cwd: created.targetPath,
+        project,
+        phase: "setup",
+      });
+    }
+
+    return success(requestId, { ...created, copiedFiles });
+  } catch (err) {
+    if (
+      err instanceof LocalEnvironmentScriptError ||
+      isLocalEnvironmentScriptError(err) ||
+      err instanceof LocalEnvironmentServiceError
+    ) {
+      const code =
+        err instanceof LocalEnvironmentServiceError
+          ? "environment_not_found"
+          : "environment_script_failed";
+      return failure(
+        requestId,
+        code,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+    throw err;
+  } finally {
+    if (created) {
+      services.gitWatch.pulse(command.path);
+    }
+  }
+}
+
 export async function executeWorktreeCommand(
   requestId: string,
   command: PierCommand,
@@ -186,22 +263,16 @@ export async function executeWorktreeCommand(
       return success(requestId, await services.worktrees.check(command));
     case "worktree.list":
       return success(requestId, await services.worktrees.list(command));
-    case "worktree.create": {
-      const created = await services.worktrees.create(command);
-      const copiedFiles = await copyCreateIncludes(created, services);
-      // 新 worktree 落盘即 pulse 主仓路径：同 commonDir 的活跃 root 立即感知分支增加
-      services.gitWatch.pulse(command.path);
-      return success(requestId, { ...created, copiedFiles });
-    }
+    case "worktree.create":
+      return await executeWorktreeCreateCommand(requestId, command, services);
     case "worktree.creationDefaults": {
-      const [preferences, rootPath] = await Promise.all([
-        services.preferences.read(),
+      const [project, rootPath] = await Promise.all([
+        services.localEnvironments.resolveProject(command.path),
         services.worktrees.resolveRootPath({ path: command.path }),
       ]);
       return success(requestId, {
-        copyPatterns: preferences.worktreeCopyPatterns,
+        copyPatterns: project?.copyPatterns ?? [],
         rootPath,
-        setupCommand: preferences.worktreeSetupCommand,
       });
     }
     case "worktree.open":
@@ -213,7 +284,25 @@ export async function executeWorktreeCommand(
         services
       );
     case "worktree.remove": {
-      const removed = await services.worktrees.remove(command);
+      const removed = await services.worktrees.remove(command, {
+        beforeRemove: async ({ targetPath }) => {
+          const binding =
+            await services.localEnvironments.resolveForWorktree(targetPath);
+          if (!binding) {
+            return;
+          }
+          if (binding.project.cleanupCommand.trim() !== "") {
+            await services.localEnvironments.runLifecycle({
+              cwd: targetPath,
+              project: binding.project,
+              phase: "cleanup",
+            });
+          }
+        },
+      });
+      await services.localEnvironments.clearWorktreeBinding(
+        removed.removedPath
+      );
       services.gitWatch.pulse(command.path);
       return success(requestId, removed);
     }

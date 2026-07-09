@@ -19,6 +19,7 @@ import {
 } from "./panel-commands.ts";
 
 const TASK_ENV_PREWARM_LIMIT = 4;
+const BACKGROUND_PANEL_ID_PREFIX = "background-task:";
 
 class RunTerminalOpenError extends Error {
   readonly code: PierCommandErrorCode;
@@ -63,7 +64,9 @@ function dataWindowId(data: unknown): string | null {
 
 function panelRefsFromSnapshot(snapshot: TaskRunSnapshot): TaskPanelRef[] {
   return Object.values(snapshot.nodes).flatMap((node) =>
-    node.panelId ? [{ panelId: node.panelId, windowId: node.windowId }] : []
+    node.panelId && !node.panelId.startsWith(BACKGROUND_PANEL_ID_PREFIX)
+      ? [{ panelId: node.panelId, windowId: node.windowId }]
+      : []
   );
 }
 
@@ -75,7 +78,11 @@ function reusablePanelsForCommand(
   command: Extract<PierCommand, { type: "run.spawn" }>,
   preparation: Extract<TaskSpawnPreparation, { status: "ready" }>
 ): Record<string, TaskPanelRef> | undefined {
-  const existing = preparation.reusablePanels ?? {};
+  const existing = Object.fromEntries(
+    Object.entries(preparation.reusablePanels ?? {}).filter(
+      ([, ref]) => !ref.panelId.startsWith(BACKGROUND_PANEL_ID_PREFIX)
+    )
+  );
   const existingOrEmpty =
     Object.keys(existing).length > 0 ? existing : undefined;
   const terminalPanelId = command.terminalPanelId;
@@ -246,14 +253,22 @@ export async function executeRunListCommand(
   return commandSuccess(requestId, result);
 }
 
+export function executeRunBackgroundSnapshotCommand(
+  requestId: string,
+  services: PierCoreServices
+): PierCommandResult {
+  return commandSuccess(requestId, services.tasks.backgroundSnapshot());
+}
+
 export async function executeRunSpawnCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "run.spawn" }>,
   services: PierCoreServices,
   options: { clientEnv?: Record<string, string> | undefined } = {}
 ): Promise<PierCommandResult> {
+  const mode = command.mode ?? "terminal-tab";
   const preparation = await services.tasks.prepareSpawn({
-    forceRestart: command.forceRestart ?? true,
+    forceRestart: mode === "background" ? true : (command.forceRestart ?? true),
     inputs: command.inputs,
     projectRootPath: command.projectRootPath,
     taskId: command.taskId,
@@ -281,7 +296,10 @@ export async function executeRunSpawnCommand(
     const snapshot = services.tasks.statusRun(preparation.restartRunId);
     if (snapshot) {
       services.tasks.cancelRun(preparation.restartRunId);
-      const reusablePanels = reusablePanelsForCommand(command, preparation);
+      const reusablePanels =
+        mode === "background"
+          ? undefined
+          : reusablePanelsForCommand(command, preparation);
       const reusablePanelKeys = new Set(
         Object.values(reusablePanels ?? {}).map(taskPanelRefKey)
       );
@@ -297,6 +315,22 @@ export async function executeRunSpawnCommand(
         return closeFailure;
       }
     }
+  }
+
+  if (mode === "background") {
+    const started = await services.tasks.startBackgroundRun({
+      launches: preparation.launches,
+      projectRootPath: command.projectRootPath,
+      rootTaskId: command.taskId,
+      ...(options.clientEnv ? { clientEnv: options.clientEnv } : {}),
+      ...(command.windowId ? { windowId: command.windowId } : {}),
+    });
+    return commandSuccess(requestId, {
+      panelIds: [],
+      runId: started.runId,
+      snapshot: started.snapshot,
+      status: "started",
+    });
   }
 
   let started: Awaited<ReturnType<typeof services.tasks.startRun>>;

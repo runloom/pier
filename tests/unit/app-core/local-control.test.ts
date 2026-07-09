@@ -86,7 +86,7 @@ function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      dashboardWidgets: [],
+      missionControlWidgets: [],
       engines: { pier: ">=0.1.0" },
       id,
       name: id,
@@ -104,9 +104,19 @@ function pluginEntry(id: string, enabled: boolean): PluginRegistryEntry {
   };
 }
 
+function emptyEnvironmentState() {
+  return { projects: [], version: 1 as const, worktreeBindings: [] };
+}
+
 function cliClientServices(): PierCoreServices {
   return {
-    agentAccounts: {} as never,
+    managedPlugins: {} as never,
+    appUpdates: {
+      check: async () => ({ currentVersion: "0.1.0", state: "disabled" }),
+      download: async () => ({ currentVersion: "0.1.0", state: "disabled" }),
+      getStatus: () => ({ currentVersion: "0.1.0", state: "disabled" }),
+      quitAndInstall: () => undefined,
+    },
     ai: {
       generateText: async () => ({
         message: "not configured",
@@ -132,6 +142,19 @@ function cliClientServices(): PierCoreServices {
         updatedAt: 1_772_000_000_000,
         worktreeKey: path,
       }),
+    },
+    localEnvironments: {
+      addProject: async () => emptyEnvironmentState(),
+      bindWorktree: async () => undefined,
+      clearWorktreeBinding: async () => undefined,
+      projectSnapshot: async () => null,
+      removeProject: async () => emptyEnvironmentState(),
+      resolveProject: async () => null,
+      resolveForWorktree: async () => null,
+      runLifecycle: async () => undefined,
+      snapshot: async () => emptyEnvironmentState(),
+      updateProject: async () => emptyEnvironmentState(),
+      worktreeBinding: async () => null,
     },
     secrets: {
       get: async () => null,

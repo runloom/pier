@@ -1,5 +1,6 @@
 import {
   resolveAgentCommand,
+  resolveAgentLaunch,
   resolveOneShotInvocation,
 } from "@main/services/agents/agent-launch.ts";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
@@ -75,6 +76,34 @@ describe("resolveAgentCommand", () => {
         agentDefaultArgs: { kiro: "--trust-all-tools" },
       })
     ).toBe("kiro-cli chat --tui --trust-all-tools");
+  });
+});
+
+describe("resolveAgentLaunch", () => {
+  it("返回 command 和 agent 默认 env", () => {
+    expect(
+      resolveAgentLaunch({
+        agentId: "goose",
+        agentDefaultArgs: {},
+        agentDefaultEnv: { goose: { GOOSE_MODE: "auto" } },
+      })
+    ).toEqual({
+      command: "goose",
+      env: { GOOSE_MODE: "auto" },
+    });
+  });
+
+  it("agentPermissionMode=yolo 时为空参数的 agent 解析出 effective flag", () => {
+    expect(
+      resolveAgentLaunch({
+        agentId: "codex",
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      })
+    ).toEqual({
+      command: "codex --dangerously-bypass-approvals-and-sandbox",
+    });
   });
 });
 

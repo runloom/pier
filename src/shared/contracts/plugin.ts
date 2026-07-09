@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pluginDashboardWidgetContributionSchema } from "./dashboard.ts";
+import { pluginMissionControlWidgetContributionSchema } from "./mission-control.ts";
 import { pierCapabilitySchema } from "./permissions.ts";
 
 export const pluginSourceKindSchema = z.enum([
@@ -7,6 +7,8 @@ export const pluginSourceKindSchema = z.enum([
   "local",
   "git",
   "registry",
+  "official",
+  "devOverride",
 ]);
 export type PluginSourceKind = z.infer<typeof pluginSourceKindSchema>;
 
@@ -17,7 +19,12 @@ export const pluginSourceSchema = z.object({
 });
 export type PluginSource = z.infer<typeof pluginSourceSchema>;
 
-const pluginLocaleCodeSchema = z.string().min(1);
+export const pluginRuntimePolicySchema = z.object({
+  reloadPolicy: z.enum(["restart", "hot"]).optional(),
+});
+export type PluginRuntimePolicy = z.infer<typeof pluginRuntimePolicySchema>;
+
+export const pluginLocaleCodeSchema = z.string().min(1);
 
 export const pluginLocalizedContributionSchema = z.object({
   aliases: z.array(z.string().min(1)).optional(),
@@ -50,11 +57,11 @@ export const pluginLocaleMessagesSchema = z.object({
   commands: z
     .record(z.string().min(1), pluginLocalizedCommandContributionSchema)
     .optional(),
-  dashboardWidgets: z
-    .record(z.string().min(1), pluginLocalizedContributionSchema)
-    .optional(),
   description: z.string().min(1).optional(),
   messages: z.record(z.string().min(1), z.string().min(1)).optional(),
+  missionControlWidgets: z
+    .record(z.string().min(1), pluginLocalizedContributionSchema)
+    .optional(),
   name: z.string().min(1).optional(),
   panels: z
     .record(z.string().min(1), pluginLocalizedContributionSchema)
@@ -262,9 +269,6 @@ export const pluginManifestSchema = z
     apiVersion: z.literal(1),
     commands: z.array(pluginCommandContributionSchema).default([]),
     configuration: pluginConfigurationSchema.optional(),
-    dashboardWidgets: z
-      .array(pluginDashboardWidgetContributionSchema)
-      .default([]),
     description: z.string().min(1).optional(),
     engines: z.object({
       pier: z.string().min(1),
@@ -276,11 +280,15 @@ export const pluginManifestSchema = z
     locales: z
       .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
       .optional(),
+    missionControlWidgets: z
+      .array(pluginMissionControlWidgetContributionSchema)
+      .default([]),
     name: z.string().min(1),
     panels: z.array(pluginPanelContributionSchema).default([]),
     permissions: z.array(pierCapabilitySchema).default([]),
     publisher: z.string().min(1).optional(),
     repository: z.string().min(1).optional(),
+    runtime: pluginRuntimePolicySchema.optional(),
     source: pluginSourceSchema,
     terminalStatusItems: z
       .array(pluginTerminalStatusItemContributionSchema)
@@ -334,7 +342,9 @@ export const pluginRegistryEntrySchema = z.object({
     canToggle: z.boolean(),
     disabledReason: z.string().min(1).optional(),
     enabled: z.boolean(),
-    kind: z.enum(["builtin", "manifest-only"]),
+    kind: z.enum(["builtin", "manifest-only", "external"]),
+    rendererEntryUrl: z.string().min(1).optional(),
+    sourceRevision: z.string().min(1).optional(),
   }),
 });
 export type PluginRegistryEntry = z.infer<typeof pluginRegistryEntrySchema>;

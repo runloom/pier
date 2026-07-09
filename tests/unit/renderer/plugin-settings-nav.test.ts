@@ -18,7 +18,7 @@ function entry(
     manifest: {
       apiVersion: 1,
       commands: [],
-      dashboardWidgets: [],
+      missionControlWidgets: [],
       ...(configured
         ? {
             configuration: {

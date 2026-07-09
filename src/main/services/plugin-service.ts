@@ -61,7 +61,18 @@ export interface PluginService {
   setEnabled(id: string, enabled: boolean): Promise<PluginRegistryEntry>;
 }
 
+export interface ExternalPluginRuntimeSource {
+  readonly enabled: boolean;
+  readonly id: string;
+  readonly manifest: PluginManifest;
+  readonly rendererEntryUrl: string;
+  readonly source: "official" | "devOverride";
+  readonly sourceRevision?: string;
+  readonly version: string;
+}
+
 export interface CreatePluginServiceOptions {
+  externalRuntimeSources?: () => readonly ExternalPluginRuntimeSource[];
   readTextFile?: (path: string) => Promise<string>;
   sources?: PluginDiscoverySourceProvider;
   state?: PluginStateStore;
@@ -98,7 +109,7 @@ export function collectEffectivePermissions(
       permissions.add(permission);
     }
   }
-  for (const widget of manifest.dashboardWidgets) {
+  for (const widget of manifest.missionControlWidgets) {
     for (const permission of widget.permissions) {
       permissions.add(permission);
     }
@@ -141,16 +152,16 @@ export function findTerminalStatusItemIdConflict(
   return null;
 }
 
-export function findDashboardWidgetIdConflict(
+export function findMissionControlWidgetIdConflict(
   acceptedManifests: readonly PluginManifest[],
   candidate: PluginManifest
 ): string | null {
   const acceptedIds = new Set(
     acceptedManifests.flatMap((manifest) =>
-      manifest.dashboardWidgets.map((widget) => widget.id)
+      manifest.missionControlWidgets.map((widget) => widget.id)
     )
   );
-  for (const widget of candidate.dashboardWidgets) {
+  for (const widget of candidate.missionControlWidgets) {
     if (acceptedIds.has(widget.id)) {
       return widget.id;
     }
@@ -294,6 +305,7 @@ async function readSourceManifest(
 }
 
 export function createPluginService({
+  externalRuntimeSources,
   readTextFile = (path) => readFile(path, "utf8"),
   sources = [],
   state = DEFAULT_STATE,
@@ -344,14 +356,14 @@ export function createPluginService({
           });
           continue;
         }
-        const dashboardWidgetConflict = findDashboardWidgetIdConflict(
+        const missionControlWidgetConflict = findMissionControlWidgetIdConflict(
           manifests.map((item) => item.manifest),
           withLocales.manifest
         );
-        if (dashboardWidgetConflict) {
+        if (missionControlWidgetConflict) {
           diagnostics.push({
             code: "invalid_manifest",
-            message: `dashboardWidgets id must be unique across plugins ("${dashboardWidgetConflict}"): ${withLocales.manifest.id}`,
+            message: `missionControlWidgets id must be unique across plugins ("${missionControlWidgetConflict}"): ${withLocales.manifest.id}`,
             source: diagnosticSource(source),
           });
           continue;
@@ -362,15 +374,37 @@ export function createPluginService({
       }
     }
     const registryState = await state.read();
+    const externalEntries: PluginRegistryEntry[] = [];
+    if (externalRuntimeSources) {
+      for (const ext of externalRuntimeSources()) {
+        externalEntries.push({
+          effectivePermissions: collectEffectivePermissions(ext.manifest),
+          enabled: ext.enabled,
+          manifest: ext.manifest,
+          runtime: {
+            canToggle: true,
+            enabled: ext.enabled,
+            kind: "external",
+            rendererEntryUrl: ext.rendererEntryUrl,
+            ...(ext.sourceRevision
+              ? { sourceRevision: ext.sourceRevision }
+              : {}),
+          },
+        });
+      }
+    }
     return {
       diagnostics,
-      entries: manifests.map(({ manifest, source }) =>
-        entryFromManifest(manifest, registryState, {
-          defaultEnabled:
-            source.kind === "builtin" && source.defaultEnabled === true,
-          source,
-        })
-      ),
+      entries: [
+        ...manifests.map(({ manifest, source }) =>
+          entryFromManifest(manifest, registryState, {
+            defaultEnabled:
+              source.kind === "builtin" && source.defaultEnabled === true,
+            source,
+          })
+        ),
+        ...externalEntries,
+      ],
     };
   }
 

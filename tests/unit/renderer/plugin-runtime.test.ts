@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearHostGroupContentForTests } from "@/lib/plugins/host-group-content-context.tsx";
 import { RendererPluginRuntime } from "@/lib/plugins/runtime.ts";
 
-const DISPOSE_FAILED_RE = /dispose failed/;
+const RUNTIME_DISPOSE_FAILED_LOG = "[renderer-plugin-runtime] dispose failed:";
 
 const pluginEntry = {
   effectivePermissions: [],
@@ -17,7 +17,7 @@ const pluginEntry = {
   manifest: {
     apiVersion: 1,
     commands: [],
-    dashboardWidgets: [],
+    missionControlWidgets: [],
     engines: { pier: ">=0.1.0" },
     groupContent: [{ id: "runtime.test.groupView", title: "Group View" }],
     id: "runtime.test",
@@ -129,6 +129,7 @@ describe("RendererPluginRuntime", () => {
 
   it("clears host group content even when the plugin disposer throws", () => {
     const { container, group } = createMockGroup();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const dispose = vi.fn(() => {
       throw new Error("dispose failed");
     });
@@ -152,7 +153,11 @@ describe("RendererPluginRuntime", () => {
       container.querySelector('[data-slot="runtime.test.groupView"]')
     ).toBeInstanceOf(HTMLElement);
 
-    expect(() => runtime.dispose()).toThrow(DISPOSE_FAILED_RE);
+    expect(() => runtime.dispose()).not.toThrow();
+    expect(errorSpy).toHaveBeenCalledWith(
+      RUNTIME_DISPOSE_FAILED_LOG,
+      expect.any(Error)
+    );
     expect(
       container.querySelector('[data-slot="runtime.test.groupView"]')
     ).toBeNull();

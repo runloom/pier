@@ -1,0 +1,55 @@
+name: Publish Plugin Index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/**'
+  workflow_dispatch: {}
+
+# Deploys `plugins/` to GitHub Pages so runtime clients can fetch
+# `https://runloom.github.io/pier/plugins/index.v1.json`.
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp -R plugins _site/plugins
+          # Include a minimal landing page so raw index.json isn't the only
+          # thing served from root.
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head><meta charset="utf-8"><title>Pier plugins</title></head>
+            <body>
+              <h1>Pier plugins</h1>
+              <p>Machine-readable index at
+                <a href="./plugins/index.v1.json">/plugins/index.v1.json</a>.</p>
+            </body>
+          </html>
+          HTML
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

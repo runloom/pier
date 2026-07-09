@@ -2,7 +2,10 @@
  * 主题/风格/语言 preferences schema (运行时 emission)
  */
 import { z } from "zod";
-import { agentKindSchema } from "./agent.ts";
+import {
+  agentKindSchema,
+  agentPermissionModePreferenceSchema,
+} from "./agent.ts";
 
 export const themePreferenceSchema = z.enum(["light", "dark", "system"]);
 export const resolvedThemeSchema = z.enum(["light", "dark"]);
@@ -107,6 +110,7 @@ export const projectPreferencesSchema = z.object({
     .nullable()
     .default(null),
   disabledAgentIds: z.array(agentKindSchema).default([]),
+  agentPermissionMode: agentPermissionModePreferenceSchema.default("manual"),
   agentDefaultArgs: z.partialRecord(agentKindSchema, z.string()).default({}),
   agentDefaultEnv: z
     .partialRecord(agentKindSchema, z.record(z.string(), z.string()))
@@ -114,11 +118,6 @@ export const projectPreferencesSchema = z.object({
   agentCommandOverrides: z
     .partialRecord(agentKindSchema, z.string())
     .default({}),
-  worktreeCopyPatterns: z
-    .array(z.string().min(1).max(256))
-    .max(64)
-    .default([".env*", "*.local", ".claude/settings.local.json"]),
-  worktreeSetupCommand: z.string().max(1024).default(""),
   worktreeRootPath: z.string().max(1024).default(""),
   /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
   agentStatusHooks: z.boolean().default(true),

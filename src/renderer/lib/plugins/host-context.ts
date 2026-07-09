@@ -29,6 +29,7 @@ import {
   subscribePluginSettingsChanges,
   usePluginSettingsStore,
 } from "../../stores/plugin-settings.store.ts";
+import { useSettingsDialogStore } from "../../stores/settings-dialog.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
 import { useCommandPaletteController } from "../command-palette/controller.ts";
@@ -45,16 +46,16 @@ import {
   resolvePluginCommandDisplay,
   resolvePluginMessage,
 } from "./display.ts";
-import { createPluginAccountsContext } from "./host-accounts-context.ts";
 import { createPluginAgentsContext } from "./host-agents-context.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
+import { createPluginEnvironmentsContext } from "./host-environments-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
 import { createHostGroupContentContext } from "./host-group-content-context.tsx";
 import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
-import { registerPluginDashboardWidget } from "./plugin-dashboard-widget-registry.ts";
+import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 
 function createPluginI18n(
@@ -178,8 +179,8 @@ function assertDeclaredContribution(
   entry: PluginRegistryEntry | undefined,
   kind:
     | "action"
-    | "dashboardWidget"
     | "groupContent"
+    | "missionControlWidget"
     | "panel"
     | "terminalStatusItem",
   id: string
@@ -192,8 +193,8 @@ function assertDeclaredContribution(
     declared = entry.manifest.commands.some((command) => command.id === id);
   } else if (kind === "panel") {
     declared = entry.manifest.panels.some((panel) => panel.id === id);
-  } else if (kind === "dashboardWidget") {
-    declared = entry.manifest.dashboardWidgets.some(
+  } else if (kind === "missionControlWidget") {
+    declared = entry.manifest.missionControlWidgets.some(
       (widget) => widget.id === id
     );
   } else if (kind === "groupContent") {
@@ -355,7 +356,6 @@ export function createRendererPluginContext(
   entry?: PluginRegistryEntry
 ): RendererPluginContext {
   return {
-    accounts: createPluginAccountsContext(entry, assertPluginCapability),
     actions: {
       register: (action) => {
         assertDeclaredContribution(entry, "action", action.id);
@@ -417,21 +417,34 @@ export function createRendererPluginContext(
       assertDeclaredContribution,
       assertPluginCapability
     ),
+    settings: {
+      openSection: (section) => {
+        useSettingsDialogStore.getState().openSection(section);
+      },
+    },
     terminalStatusItems: {
       register: (item) => {
         assertDeclaredContribution(entry, "terminalStatusItem", item.id);
         return terminalStatusItemRegistry.register(item);
       },
     },
-    dashboardWidgets: {
+    missionControlWidgets: {
       register: (registration) => {
-        assertDeclaredContribution(entry, "dashboardWidget", registration.id);
-        return registerPluginDashboardWidget(registration);
+        assertDeclaredContribution(
+          entry,
+          "missionControlWidget",
+          registration.id
+        );
+        return registerPluginMissionControlWidget(registration);
       },
     },
     groupContent: createHostGroupContentContext(
       entry,
       assertDeclaredContribution
+    ),
+    environments: createPluginEnvironmentsContext(
+      entry,
+      assertPluginCapability
     ),
     files: createPluginFilesContext(entry, assertPluginCapability),
     terminal: createPluginTerminalContext(entry, assertPluginCapability),

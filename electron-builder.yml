@@ -22,6 +22,12 @@ extraResources:
     to: bin/pier
   - from: resources/fonts
     to: fonts
+  - from: packages/plugin-codex/dist-pkg
+    to: plugin-packages
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
 
 asar: true
 asarUnpack:
@@ -34,12 +40,19 @@ mac:
   target:
     - target: dmg
       arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   forceCodeSigning: true
   gatekeeperAssess: false
   notarize: true
+
+publish:
+  provider: github
+  owner: runloom
+  repo: pier
 
 dmg:
   contents:
