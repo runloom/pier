@@ -1,4 +1,5 @@
 import * as React from "react";
+import { installAutoHideScrollbar } from "./auto-hide-scrollbar.ts";
 import {
   captureFileTreeScrollSnapshot,
   fileTreeHost,
@@ -119,6 +120,7 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     };
 
     let scrollElement: HTMLElement | null = null;
+    let detachAutoHideScrollbar: (() => void) | null = null;
     const syncScrollListener = () => {
       const nextScrollElement = fileTreeScrollElement(host);
       if (nextScrollElement === scrollElement) {
@@ -126,16 +128,21 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
       }
 
       scrollElement?.removeEventListener("scroll", publishSnapshot);
+      detachAutoHideScrollbar?.();
       scrollElement = nextScrollElement;
       scrollElement?.addEventListener("scroll", publishSnapshot, {
         passive: true,
       });
+      detachAutoHideScrollbar = scrollElement
+        ? installAutoHideScrollbar(scrollElement)
+        : null;
     };
 
     syncScrollListener();
 
     if (typeof MutationObserver !== "function" || !host.shadowRoot) {
       return () => {
+        detachAutoHideScrollbar?.();
         scrollElement?.removeEventListener("scroll", publishSnapshot);
       };
     }
@@ -148,6 +155,7 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
 
     return () => {
       observer.disconnect();
+      detachAutoHideScrollbar?.();
       scrollElement?.removeEventListener("scroll", publishSnapshot);
     };
   }, [getHost, onScrollSnapshotChange]);

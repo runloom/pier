@@ -88,6 +88,7 @@ export class FileEditorViewSession {
         extensions: this.#extensions(document),
       });
     this.#view = new EditorView({ parent, state });
+    this.#view.scrollDOM.dataset.scrollbar = "stable";
     this.syncDocument(document);
     this.#restoreScroll();
   }

@@ -3765,6 +3765,24 @@ describe("Files file-panel", () => {
     expect(bodyClass).toMatch(CLASS_FLEX_1);
   });
 
+  it("routes CodeMirror scrolling through the Pier scrollbar policy", () => {
+    const document = createUntitledMarkdownDocument({
+      contents: Array.from(
+        { length: 60 },
+        (_, index) => `line ${index + 1} ${"content ".repeat(30)}`
+      ).join("\n"),
+    });
+    const { container } = renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+
+    expect(findCodeMirrorView(container).scrollDOM).toHaveAttribute(
+      "data-scrollbar",
+      "stable"
+    );
+  });
+
   it("keeps CodeMirror gutters opaque and sticky so horizontal scroll cannot bleed into line numbers", async () => {
     // Regression:CM 把 gutters position:sticky 钉在左边;bg 若为 transparent,
     // 横向滚动时行内代码会穿透 gutter 盖到行号上。锁死主题里 `.cm-gutters`

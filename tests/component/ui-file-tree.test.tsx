@@ -135,6 +135,44 @@ describe("PierFileTree", () => {
     ).toBe("var(--shell-scrollbar-width-legacy)");
   });
 
+  it("uses Pier scrollbar interaction tokens inside the shadow scroller", () => {
+    const { container } = render(
+      <PierFileTree items={items} label="Project files" />
+    );
+
+    const shadowCss =
+      getFileTreeHost(container).shadowRoot?.querySelector(
+        "style[data-file-tree-unsafe-css]"
+      )?.textContent ?? "";
+    expect(shadowCss).toContain("--trees-scrollbar-thumb-current: transparent");
+    expect(shadowCss).toContain('[data-scrollbar-scrolling="true"]');
+    expect(shadowCss).toContain("var(--shell-scrollbar-thumb-active)");
+    expect(shadowCss).toContain("var(--shell-scrollbar-radius)");
+    expect(shadowCss).toContain("var(--shell-scrollbar-track)");
+    expect(shadowCss).toContain(
+      "scrollbar-width: var(--shell-scrollbar-width)"
+    );
+    expect(shadowCss).toContain('[data-file-tree-scrollbar-measure="true"]');
+    expect(shadowCss).not.toContain(
+      '[data-file-tree-virtualized-scroll="true"]:hover {'
+    );
+  });
+
+  it("reveals the shadow scrollbar only while scrolling is active", async () => {
+    const { container } = render(
+      <PierFileTree items={items} label="Project files" />
+    );
+    const scroller = getFileTreeHost(container).shadowRoot?.querySelector(
+      '[data-file-tree-virtualized-scroll="true"]'
+    );
+    expect(scroller).toBeInstanceOf(HTMLElement);
+
+    await waitFor(() => {
+      fireEvent.scroll(scroller as HTMLElement);
+      expect(scroller).toHaveAttribute("data-scrollbar-scrolling", "true");
+    });
+  });
+
   it("renders directory and file rows from path-first items", () => {
     const { container } = render(
       <PierFileTree items={items} label="Project files" />

@@ -26,7 +26,7 @@ import {
   treeRenderSignature,
 } from "./file-tree-model.ts";
 import { usePierFileTreeScrollController } from "./file-tree-scroll-controller.ts";
-import { pierFileTreeStyle } from "./file-tree-style.ts";
+import { pierFileTreeStyle, TREE_SCROLLBAR_CSS } from "./file-tree-style.ts";
 import type { PierFileTreeProps } from "./file-tree-types.ts";
 import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
 import { cn } from "./utils.ts";
@@ -123,6 +123,7 @@ export function PierFileTree({
   const { model } = useFileTree({
     ...fileTreeContextMenuOption(onOpenItemContextMenu != null, refs),
     density: "compact",
+    unsafeCSS: TREE_SCROLLBAR_CSS,
     // 拖拽移动:库在模型层先行 move,onDropComplete 把 official path 折算成
     // caller path 交业务方执行真实 fs move;失败方负责刷新树回滚视觉状态。
     dragAndDrop: {

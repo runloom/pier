@@ -1,3 +1,4 @@
+import { installDocumentAutoHideScrollbars } from "@pier/ui/auto-hide-scrollbar.ts";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
@@ -40,6 +41,7 @@ import { initZoom } from "./stores/zoom.store.ts";
 
 async function bootstrap() {
   installBundledFontFaces();
+  installDocumentAutoHideScrollbars();
   const params = new URLSearchParams(window.location.search);
   const debugMode = params.get("pierDebug");
   const targetBrowserWindowId = Number(params.get("targetBrowserWindowId"));
