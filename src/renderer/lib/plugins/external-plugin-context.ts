@@ -22,7 +22,10 @@ import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { resolvePluginMessage } from "./display.ts";
-import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
+import {
+  assertPluginMissionControlWidgetRegistration,
+  registerPluginMissionControlWidget,
+} from "./plugin-mission-control-widget-registry.ts";
 import {
   getPluginSettingsPage,
   registerPluginSettingsPage,
@@ -44,14 +47,12 @@ export interface RendererPluginRpcBridge {
 
 function assertDeclared(
   entry: PluginRegistryEntry,
-  kind: "action" | "missionControlWidget" | "settingsPage",
+  kind: "action" | "settingsPage",
   id: string
 ): void {
   let declared: ReadonlyArray<{ id: string }>;
   if (kind === "action") {
     declared = entry.manifest.commands;
-  } else if (kind === "missionControlWidget") {
-    declared = entry.manifest.missionControlWidgets;
   } else {
     declared = entry.manifest.settingsPages;
   }
@@ -138,7 +139,7 @@ export function createExternalRendererPluginContext(
     },
     missionControlWidgets: {
       register: (registration: ExternalMissionControlWidgetRegistration) => {
-        assertDeclared(entry, "missionControlWidget", registration.id);
+        assertPluginMissionControlWidgetRegistration(entry, registration);
         const title = registration.title;
         return registerPluginMissionControlWidget({
           component:

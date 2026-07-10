@@ -5,6 +5,7 @@ import {
   type ElectronApplication,
   _electron as electron,
   expect,
+  type Locator,
   type Page,
   test,
 } from "@playwright/test";
@@ -48,6 +49,33 @@ async function openMissionControlViaPalette(win: Page): Promise<void> {
   const item = win.locator("[cmdk-item]").filter({ hasText: "新建指挥中心" });
   await expect(item).toBeVisible({ timeout: 10_000 });
   await item.click();
+}
+
+async function setWindowSize(
+  app: ElectronApplication,
+  win: Page,
+  width: number,
+  height: number
+): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, size) => {
+      BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height);
+    },
+    { height, width }
+  );
+  await expect
+    .poll(() => win.evaluate(() => window.innerWidth), { timeout: 5000 })
+    .toBeGreaterThan(Math.min(width - 120, 800));
+}
+
+async function addWidget(win: Page, widgetId: string): Promise<Locator> {
+  await win.locator('[data-testid="mission-control-add-widget"]').click();
+  await win
+    .locator(`[data-testid="mission-control-widget-picker-item-${widgetId}"]`)
+    .click();
+  const card = win.locator(`[data-widget-id="${widgetId}"]`).last();
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  return card;
 }
 
 test.describe("MissionControl widget persistence e2e", () => {
@@ -102,6 +130,59 @@ test.describe("MissionControl widget persistence e2e", () => {
           '[data-testid="mission-control-widget-core.activity-overview"]'
         );
         await expect(widgetCard).toBeVisible({ timeout: 15_000 });
+      } finally {
+        await restoredApp.close();
+      }
+    } finally {
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("排序和尺寸偏好在重启后恢复，响应式坐标不持久化", async () => {
+    test.setTimeout(120_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-mc-x-e2e-"));
+    try {
+      const firstApp = await launchPierApp(userDataDir);
+      const firstWindow = await firstApp.firstWindow();
+      await waitForAppShellReady(firstWindow);
+      await setWindowSize(firstApp, firstWindow, 1600, 1000);
+      await openMissionControlViaPalette(firstWindow);
+      const activity = await addWidget(firstWindow, "core.activity-overview");
+      await addWidget(firstWindow, "core.system-resources");
+      const handle = activity.locator(".mission-control-widget-drag-handle");
+      await handle.press("ArrowRight");
+      await handle.press("Shift+ArrowRight");
+      await firstApp.close();
+
+      const restoredApp = await launchPierApp(userDataDir);
+      try {
+        const restoredWindow = await restoredApp.firstWindow();
+        await restoredWindow.waitForLoadState("domcontentloaded");
+        await setWindowSize(restoredApp, restoredWindow, 1600, 1000);
+        const grid = restoredWindow.locator(
+          '[data-testid="mission-control-grid-wrapper"]'
+        );
+        const restoredActivity = restoredWindow.locator(
+          '[data-testid="mission-control-widget-core.activity-overview"]'
+        );
+        await expect(restoredActivity).toBeVisible({ timeout: 15_000 });
+        const order = await grid.evaluate((element) =>
+          [
+            ...element.querySelectorAll("[data-mission-control-instance-id]"),
+          ].map((item) => item.getAttribute("data-mission-control-instance-id"))
+        );
+        expect(order).toEqual([
+          "core.system-resources",
+          "core.activity-overview",
+        ]);
+        const size = await restoredActivity.boundingBox();
+        expect(size?.width).toBeGreaterThan(450);
+        const viewport = grid.locator("..");
+        expect(
+          await viewport.evaluate(
+            (element) => element.scrollWidth <= element.clientWidth
+          )
+        ).toBe(true);
       } finally {
         await restoredApp.close();
       }

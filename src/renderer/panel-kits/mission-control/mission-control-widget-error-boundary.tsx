@@ -5,6 +5,7 @@ interface WidgetErrorBoundaryProps {
   children: ReactNode;
   fallbackMessage: string;
   onRetry: () => void;
+  resetKey: number;
   retryLabel: string;
   widgetId: string;
 }
@@ -14,8 +15,8 @@ interface WidgetErrorBoundaryState {
 }
 
 /**
- * per-card 错误边界：物料崩溃不炸整个指挥中心。
- * 调用方用 refreshToken 作 key —— "重试" 递增 token 即重挂载清除崩溃态。
+ * per-card 错误边界：物料崩溃不炸整个指挥中心。refreshToken 变化只清除
+ * 错误态，不重挂载正常物料，确保刷新 effect 能观察到令牌变化。
  */
 export class WidgetErrorBoundary extends Component<
   WidgetErrorBoundaryProps,
@@ -37,6 +38,15 @@ export class WidgetErrorBoundary extends Component<
       error,
       info.componentStack
     );
+  }
+
+  override componentDidUpdate(previousProps: WidgetErrorBoundaryProps): void {
+    if (
+      previousProps.resetKey !== this.props.resetKey &&
+      this.state.error !== null
+    ) {
+      this.setState({ error: null });
+    }
   }
 
   override render(): ReactNode {

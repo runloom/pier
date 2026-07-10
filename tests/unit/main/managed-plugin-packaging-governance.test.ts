@@ -1,6 +1,29 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { managedPluginPackageManifestSchema } from "@shared/contracts/managed-plugin.ts";
 import { describe, expect, it } from "vitest";
+
+const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
+  {
+    defaultSize: { h: 6, w: 4 },
+    maxSize: { h: 10, w: 8 },
+    minSize: { h: 3, w: 3 },
+    pluginId: "pier.codex",
+    widgetId: "pier.codex.accounts",
+  },
+] as const;
+
+const packagesRoot = join(process.cwd(), "packages");
+const bundledPluginManifests = readdirSync(packagesRoot, {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory() && entry.name.startsWith("plugin-"))
+  .map((entry) => join(packagesRoot, entry.name, "plugin.json"))
+  .filter(existsSync)
+  .map((manifestPath) => ({
+    path: relative(process.cwd(), manifestPath),
+    raw: JSON.parse(readFileSync(manifestPath, "utf8")) as unknown,
+  }));
 
 const builderConfig = readFileSync(
   join(process.cwd(), "electron-builder.yml"),
@@ -54,5 +77,25 @@ describe("managed plugin packaging governance", () => {
       "plugins:pack"
     );
     expect(prePushHook).toContain("pnpm check:plugin-index");
+  });
+
+  it("matches every bundled widget to its approved explicit sizing policy", () => {
+    expect(
+      bundledPluginManifests,
+      "packages/plugin-*/plugin.json enumeration must not be empty"
+    ).not.toHaveLength(0);
+
+    const sizingPolicies = bundledPluginManifests.flatMap(({ raw }) => {
+      const manifest = managedPluginPackageManifestSchema.parse(raw);
+      return manifest.missionControlWidgets.map((widget) => ({
+        defaultSize: widget.defaultSize,
+        maxSize: widget.maxSize,
+        minSize: widget.minSize,
+        pluginId: manifest.id,
+        widgetId: widget.id,
+      }));
+    });
+
+    expect(sizingPolicies).toEqual(APPROVED_BUNDLED_WIDGET_SIZE_POLICIES);
   });
 });

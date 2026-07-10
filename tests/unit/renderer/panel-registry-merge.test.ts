@@ -4,6 +4,7 @@ import {
   getPanelComponents,
   panelIconOf,
   panelKindOf,
+  panelKits,
 } from "@/components/workspace/panel-registry.ts";
 import {
   clearPluginPanelsForTests,
@@ -17,6 +18,20 @@ describe("panel-registry dynamic merge", () => {
     const components = getPanelComponents();
     expect(components.terminal).toBeDefined();
     expect(components.welcome).toBeDefined();
+  });
+
+  it("resolves the dashboard alias through the Mission Control panel kit", () => {
+    const components = getPanelComponents();
+
+    expect({
+      componentName: components.dashboard?.displayName,
+      icon: panelIconOf("dashboard"),
+      kind: panelKindOf("dashboard"),
+    }).toEqual({
+      componentName: components["mission-control"]?.displayName,
+      icon: panelKits["mission-control"].icon,
+      kind: panelKits["mission-control"].kind,
+    });
   });
 
   it("merges plugin-registered panels", () => {

@@ -3,13 +3,13 @@ import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
 
-/** 指挥中心网格列数。契约级常量：w/x 的取值域由它决定。 */
+/** 指挥中心网格列数，也是贡献声明尺寸的单轴上限。 */
 export const MISSION_CONTROL_GRID_COLS = 12;
 
 /** 网格尺寸（单位：格）。 */
 export const missionControlGridSizeSchema = z.object({
-  h: z.number().int().min(1).max(24),
-  w: z.number().int().min(1).max(MISSION_CONTROL_GRID_COLS),
+  h: z.number().int().min(2).max(MISSION_CONTROL_GRID_COLS),
+  w: z.number().int().min(2).max(MISSION_CONTROL_GRID_COLS),
 });
 export type MissionControlGridSize = z.infer<
   typeof missionControlGridSizeSchema
@@ -35,7 +35,7 @@ export type MissionControlWidgetCategory = z.infer<
   typeof missionControlWidgetCategorySchema
 >;
 
-/** 自动布局优先级：高优先级物料在同等条件下优先获得额外宽度。 */
+/** @deprecated v1 自动整理兼容字段；v3 响应式有序网格不再消费。 */
 export const missionControlWidgetLayoutPrioritySchema = z.enum([
   "primary",
   "normal",
@@ -45,7 +45,7 @@ export type MissionControlWidgetLayoutPriority = z.infer<
   typeof missionControlWidgetLayoutPrioritySchema
 >;
 
-/** 自动布局候选尺寸：声明经过物料设计验证的可用档位。 */
+/** @deprecated v1 自动整理兼容字段；v3 响应式有序网格不再消费。 */
 export const missionControlWidgetLayoutProfileSchema =
   missionControlGridSizeSchema.extend({
     key: z.string().min(1),
@@ -103,11 +103,11 @@ function validateWidgetSizeBounds(
 /**
  * manifest 贡献点条目 —— widget 接入规范（尺寸部分）：
  * - defaultSize：添加时的初始尺寸；缺省 HOST_DEFAULT_WIDGET_SIZE = { w: 4, h: 3 }。
- * - minSize：尺寸下限；显式声明时表示物料启用自动尺寸，窄容器可缩到该尺寸。
- * - maxSize：尺寸上限；显式声明时表示物料启用自动尺寸，宽容器最多放大到该尺寸。
+ * - minSize：用户调整尺寸与恢复非法历史值时的下限；窄容器内可临时收窄展示。
+ * - maxSize：用户调整尺寸与恢复非法历史值时的上限。
  * superRefine 校验（按生效值，即缺省补齐后）：min.w ≤ default.w ≤ max.w 且
- * min.h ≤ default.h ≤ max.h，违反者 manifest 验证失败。缺省 min/max 只作为
- * schema 兜底参与校验；自动尺寸由显式 minSize / maxSize 声明触发。
+ * min.h ≤ default.h ≤ max.h，违反者 manifest 验证失败。缺省 min/max 是所有物料的
+ * 兜底边界；layoutPriority/layoutProfiles 仅为旧 manifest 保持解析兼容。
  */
 export const pluginMissionControlWidgetContributionSchema = z
   .object({
@@ -118,7 +118,9 @@ export const pluginMissionControlWidgetContributionSchema = z
     defaultSize: missionControlGridSizeSchema.optional(),
     description: z.string().min(1).optional(),
     id: z.string().min(1),
+    /** @deprecated v1 兼容字段；响应式有序网格不再按优先级改写用户尺寸。 */
     layoutPriority: missionControlWidgetLayoutPrioritySchema.optional(),
+    /** @deprecated v1 兼容字段；响应式有序网格只使用连续 w/h 尺寸偏好。 */
     layoutProfiles: z
       .array(missionControlWidgetLayoutProfileSchema)
       .min(1)
@@ -141,9 +143,9 @@ export type PluginMissionControlWidgetContribution = z.infer<
 
 /**
  * 指挥中心单实例组装清单（存 dockview panel params，随 layout 持久化）。
- * 每项即 react-grid-layout 的一个 layout item（i=id，x/y/w/h 同义直存）。
+ * 数组顺序是唯一阅读顺序；w/h 是用户尺寸偏好，x/y 由响应式布局临时派生。
  *
- * v2 语义（零迁移）：
+ * v3 语义（读取时兼容迁移）：
  * - `id` 是实例 id（多实例物料的新实例用 uuid，单实例物料沿用物料 id）。
  * - `widgetId` 是物料 id；旧条目缺席时回退 `id`（v1 条目 id 即物料 id）。
  * - `params` 是物料私有配置，宿主只保证 JSON 可序列化，不解释内容——
@@ -153,27 +155,26 @@ export const missionControlPanelWidgetEntrySchema = z.object({
   h: z.number().int().min(1),
   id: z.string().min(1),
   params: z.record(z.string(), jsonValueSchema).optional(),
-  w: z.number().int().min(1).max(MISSION_CONTROL_GRID_COLS),
+  w: z.number().int().min(1),
   widgetId: z.string().min(1).optional(),
-  x: z
-    .number()
-    .int()
-    .min(0)
-    .max(MISSION_CONTROL_GRID_COLS - 1),
-  y: z.number().int().min(0),
 });
 export type MissionControlPanelWidgetEntry = z.infer<
   typeof missionControlPanelWidgetEntrySchema
 >;
 
 export const missionControlPanelParamsSchema = z.object({
-  /** 锁定布局：拖拽/resize/添加/移除禁用，只读消费。缺省不锁定。 */
-  locked: z.boolean().optional(),
+  layoutVersion: z.literal(3),
   widgets: z.array(missionControlPanelWidgetEntrySchema),
 });
 export type MissionControlPanelParams = z.infer<
   typeof missionControlPanelParamsSchema
 >;
+
+const legacyMissionControlPanelWidgetEntrySchema =
+  missionControlPanelWidgetEntrySchema.extend({
+    x: z.number().int().min(0),
+    y: z.number().int().min(0),
+  });
 
 /** 条目的物料 id：v2 显式 widgetId，v1 条目回退实例 id（历史上两者同值）。 */
 export function widgetEntryWidgetId(entry: {
@@ -184,7 +185,7 @@ export function widgetEntryWidgetId(entry: {
 }
 
 /**
- * params 逐条抢救：整体合法直接返回；否则逐条校验，丢非法项、留合法项。
+ * params 逐条抢救：v3 保持数组顺序；旧版按 y/x/原始顺序转换为阅读顺序。
  * 替代"整体 safeParse 失败 → 空数组"——那条路径会让一条脏数据毁掉整个
  * 指挥中心组装，且用户下一次编辑就把空布局永久写回。
  * 抢救结果只用于渲染，调用方不得主动回写（避免打开面板即触发写盘）。
@@ -192,24 +193,46 @@ export function widgetEntryWidgetId(entry: {
 export function salvageMissionControlPanelParams(
   raw: unknown
 ): MissionControlPanelParams {
-  const full = missionControlPanelParamsSchema.safeParse(raw);
-  if (full.success) {
-    return full.data;
-  }
   const rawObject =
     raw !== null && typeof raw === "object"
       ? (raw as Record<string, unknown>)
       : undefined;
-  const locked = typeof rawObject?.locked === "boolean" && rawObject.locked;
   const widgetsRaw = rawObject?.widgets;
   if (!Array.isArray(widgetsRaw)) {
-    return { widgets: [], ...(locked ? { locked } : {}) };
+    return { layoutVersion: 3, widgets: [] };
   }
-  const widgets = widgetsRaw.flatMap((entry) => {
-    const parsed = missionControlPanelWidgetEntrySchema.safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
+  const isCurrent = rawObject?.layoutVersion === 3;
+  const parsedWidgets = widgetsRaw.flatMap((entry, sourceIndex) => {
+    const parsed = (
+      isCurrent
+        ? missionControlPanelWidgetEntrySchema
+        : legacyMissionControlPanelWidgetEntrySchema
+    ).safeParse(entry);
+    return parsed.success ? [{ entry: parsed.data, sourceIndex }] : [];
   });
-  return { widgets, ...(locked ? { locked } : {}) };
+  if (!isCurrent) {
+    parsedWidgets.sort((a, b) => {
+      const left = a.entry as z.infer<
+        typeof legacyMissionControlPanelWidgetEntrySchema
+      >;
+      const right = b.entry as z.infer<
+        typeof legacyMissionControlPanelWidgetEntrySchema
+      >;
+      return (
+        left.y - right.y || left.x - right.x || a.sourceIndex - b.sourceIndex
+      );
+    });
+  }
+  return {
+    layoutVersion: 3,
+    widgets: parsedWidgets.map(({ entry }) => ({
+      h: entry.h,
+      id: entry.id,
+      ...(entry.params ? { params: entry.params } : {}),
+      w: entry.w,
+      ...(entry.widgetId ? { widgetId: entry.widgetId } : {}),
+    })),
+  };
 }
 
 /**
@@ -220,13 +243,11 @@ export function salvageMissionControlPanelParams(
 export interface CoreMissionControlWidgetDeclaration {
   category?: MissionControlWidgetCategory;
   configurable?: boolean;
-  defaultSize?: MissionControlGridSize;
+  defaultSize: MissionControlGridSize;
   descriptionKey?: string; // 全局 i18next key（可选副标题）
   id: string; // "core." 前缀
-  layoutPriority?: MissionControlWidgetLayoutPriority;
-  layoutProfiles?: readonly MissionControlWidgetLayoutProfile[];
-  maxSize?: MissionControlGridSize;
-  minSize?: MissionControlGridSize;
+  maxSize: MissionControlGridSize;
+  minSize: MissionControlGridSize;
   multiInstance?: boolean;
   refreshable?: boolean;
   searchTerms?: readonly string[];

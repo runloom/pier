@@ -154,6 +154,8 @@
       "defaultSize": { "w": 4, "h": 6 },
       "description": "Monitor Codex usage and switch accounts.",
       "id": "pier.codex.accounts",
+      "maxSize": { "w": 8, "h": 10 },
+      "minSize": { "w": 3, "h": 3 },
       "refreshable": true,
       "searchTerms": ["codex", "usage", "用量"],
       "title": "Codex Usage"

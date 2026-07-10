@@ -4,7 +4,7 @@ import { Progress } from "@pier/ui/progress.tsx";
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
 import i18next from "i18next";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Area, AreaChart } from "recharts";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -48,15 +48,18 @@ function MeterTile({
 
 /**
  * 系统资源物料：CPU / 内存 / 负载 / Pier 自身内存。
- * 拉取式 2s 轮询，面板可见才 acquire（协议红线：不可见必须停表）。
+ * 拉取式 2s 轮询，面板可见才 acquire（协议红线：不可见必须停表）；
+ * refreshToken 变化时立即补采一次，不等待下一拍。
  * 数据全部来自 main 侧 os.* 真实采样，零外部依赖。
  */
 export function SystemResourcesWidget({
+  refreshToken,
   size,
   visible,
 }: MissionControlWidgetComponentProps) {
   const t = useT();
   const locale = i18next.language || "en";
+  const previousRefreshTokenRef = useRef(refreshToken);
 
   useEffect(() => {
     if (!visible) {
@@ -64,6 +67,17 @@ export function SystemResourcesWidget({
     }
     return acquireSystemStatsPolling();
   }, [visible]);
+
+  useEffect(() => {
+    if (previousRefreshTokenRef.current === refreshToken) {
+      return;
+    }
+    previousRefreshTokenRef.current = refreshToken;
+    if (visible) {
+      // pollSystemStatsOnce 内部负责错误落态，不会产生未处理 rejection。
+      pollSystemStatsOnce();
+    }
+  }, [refreshToken, visible]);
 
   const snapshot = useSystemStatsStore((s) => s.snapshot);
   const error = useSystemStatsStore((s) => s.error);
