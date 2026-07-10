@@ -31,11 +31,24 @@ import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
+const feedbackMocks = vi.hoisted(() => ({
+  showAppAlert: vi.fn(async () => undefined),
+  toastError: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: { error: feedbackMocks.toastError },
+}));
+vi.mock("@/stores/app-dialog.store.ts", () => ({
+  showAppAlert: feedbackMocks.showAppAlert,
+}));
+
 let applyInputRouting: ReturnType<typeof vi.fn>;
 let detectAgents: ReturnType<typeof vi.fn>;
 let disposePanelActions: (() => void) | null = null;
 let disposeWorktreeCreateAction: (() => void) | null = null;
 let prepareAgentLaunch: ReturnType<typeof vi.fn>;
+let selectAgents: ReturnType<typeof vi.fn>;
 let originalHasPointerCapture:
   | typeof HTMLElement.prototype.hasPointerCapture
   | undefined;
@@ -127,10 +140,18 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await i18next.changeLanguage("en");
+  feedbackMocks.showAppAlert.mockClear();
+  feedbackMocks.toastError.mockClear();
   disposePanelActions = registerPanelActions();
   applyInputRouting = vi.fn();
   detectAgents = vi.fn(async () => ({ detectedIds: [] as AgentKind[] }));
   prepareAgentLaunch = vi.fn(async () => ({ launchId: null as string | null }));
+  selectAgents = vi.fn(async () => ({
+    detectedIds: [] as AgentKind[],
+    enabledIds: [] as AgentKind[],
+    rankedIds: [] as AgentKind[],
+    selectedId: null as AgentKind | null,
+  }));
   originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
   originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
   originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
@@ -167,6 +188,7 @@ beforeEach(async () => {
       agents: {
         detect: detectAgents,
         prepareLaunch: prepareAgentLaunch,
+        selection: selectAgents,
       },
       onWindowLayoutPulse: vi.fn(() => vi.fn()),
       worktrees: {
@@ -961,6 +983,109 @@ describe("WorkspaceHeaderActions", () => {
           },
         })
       );
+    });
+  });
+
+  it("agent 启动准备返回不可用时展示短失败提示", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    prepareAgentLaunch.mockResolvedValueOnce({ launchId: null });
+    useAgentDetectStore.setState({
+      detectedIds: ["claude"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+    openAddPanelMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Claude" }));
+
+    await waitFor(() => {
+      expect(feedbackMocks.toastError).toHaveBeenCalledWith(
+        "Agent is no longer available"
+      );
+    });
+    expect(props.containerApi.addPanel).not.toHaveBeenCalled();
+  });
+
+  it("agent 启动准备异常时用宿主弹窗展示技术详情", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    prepareAgentLaunch.mockRejectedValueOnce(new Error("prepare IPC failed"));
+    useAgentDetectStore.setState({
+      detectedIds: ["claude"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+    openAddPanelMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Claude" }));
+
+    await waitFor(() => {
+      expect(feedbackMocks.showAppAlert).toHaveBeenCalledWith({
+        body: "prepare IPC failed",
+        title: "Failed to Start Agent",
+      });
+    });
+    expect(props.containerApi.addPanel).not.toHaveBeenCalled();
+  });
+
+  it("按实时探测和禁用快照重新过滤缓存排名", async () => {
+    selectAgents.mockResolvedValue({
+      detectedIds: ["claude", "codex"],
+      enabledIds: ["claude", "codex"],
+      rankedIds: ["codex", "claude"],
+      selectedId: "codex",
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["claude", "codex"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+    useAgentPreferencesStore.setState({
+      defaultAgentId: null,
+      disabledAgentIds: [],
+    });
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+    openAddPanelMenu();
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Codex" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Claude" })
+    ).toBeInTheDocument();
+
+    act(() => {
+      useAgentPreferencesStore.setState({ disabledAgentIds: ["codex"] });
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("menuitem", { name: "Codex" })
+      ).not.toBeInTheDocument();
+    });
+
+    act(() => {
+      useAgentPreferencesStore.setState({ disabledAgentIds: [] });
+      useAgentDetectStore.setState({
+        detectedIds: ["claude", "gemini"],
+        hasDetected: true,
+      });
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("menuitem", { name: "Codex" })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("menuitem", { name: "Gemini" })
+      ).toBeInTheDocument();
     });
   });
 });

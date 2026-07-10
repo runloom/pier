@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   CreateTerminalArgs,
   CreateTerminalResult,
@@ -38,6 +39,9 @@ export async function handleTerminalCreate(args: {
   createArgs: CreateTerminalArgs;
   loadError: string | null;
   processEnvironment: ProcessEnvironmentService;
+  recordAgentLaunch?:
+    | ((agentId: AgentKind) => Promise<unknown> | unknown)
+    | undefined;
   taskLifecycle: RegisteredTerminalTaskLifecycle;
   win: AppWindow | null;
 }): Promise<CreateTerminalResult> {
@@ -46,6 +50,7 @@ export async function handleTerminalCreate(args: {
     createArgs,
     loadError,
     processEnvironment,
+    recordAgentLaunch,
     taskLifecycle,
     win,
   } = args;
@@ -136,6 +141,14 @@ export async function handleTerminalCreate(args: {
         createArgs.panelId,
         launch.launchAgentId
       );
+      if (!launch.restoredAgentLaunch && recordAgentLaunch) {
+        try {
+          await recordAgentLaunch(launch.launchAgentId);
+        } catch (err) {
+          // 使用偏好是非关键记录，不得让已成功创建的终端反向失败。
+          console.warn("[agent-usage] record launch failed:", err);
+        }
+      }
     }
     consumeCreateLaunch(createArgs);
     await persistInitialTerminalContext(

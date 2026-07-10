@@ -75,6 +75,9 @@ export const PIER_BROADCAST = {
   PLUGIN_RPC_EVENT: "pier://plugin-rpc:event",
   // local environment 域变更广播 (main → 所有 renderer, payload LocalEnvironmentState).
   ENVIRONMENTS_CHANGED: "pier://environments:changed",
+  // 工作树创建的真实后台阶段。payload 只含随机操作标识与阶段，
+  // 不广播项目路径、分支名或脚本输出。
+  WORKTREE_CREATE_PROGRESS: "pier://worktree-create:progress",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

@@ -1,8 +1,12 @@
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import { AGENT_AUTO_PICK_ORDER, pickAgent } from "@shared/agent-selection.ts";
+import { rankAgents } from "@shared/agent-selection.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  type AgentUsageState,
+  EMPTY_AGENT_USAGE_STATE,
+} from "@shared/contracts/agent-usage.ts";
 import type {
   AiGenerateTextRequest,
   AiGenerateTextResult,
@@ -32,6 +36,9 @@ export class AgentRunError extends Error {
 export interface CreateAiServiceOptions {
   /** 已安装 agent id 列表(注入 agent-detection 的探测结果)。 */
   detectAgents: () => Promise<readonly AgentKind[]>;
+  failureCooldownMs?: number;
+  now?: () => number;
+  readAgentUsage?: () => Promise<AgentUsageState>;
   readPreferences: () => Promise<ProjectPreferences>;
   /** 一次性运行 agent CLI,resolve stdout;失败抛 AgentRunError。 */
   runOneShot?: (
@@ -48,6 +55,7 @@ export interface RunOneShotOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 45_000;
+const DEFAULT_FAILURE_COOLDOWN_MS = 5 * 60_000;
 const MAX_STDOUT_BYTES = 4 * 1024 * 1024;
 /** one-shot 失败后最多再试几个 agent（含首选，合计上限）。 */
 const MAX_ONE_SHOT_ATTEMPTS = 3;
@@ -93,49 +101,21 @@ export function defaultRunOneShot(
   });
 }
 
-function oneShotEligible(
+function rankOneShotAgents(
   preferences: ProjectPreferences,
-  detected: readonly AgentKind[]
+  detected: readonly AgentKind[],
+  usage: AgentUsageState,
+  now: number,
+  recentSuccessAt: ReadonlyMap<AgentKind, number>
 ): AgentKind[] {
-  const det = new Set(detected.filter((id) => supportsOneShot(id)));
-  const dis = new Set(preferences.disabledAgentIds);
-  return AGENT_AUTO_PICK_ORDER.filter((id) => det.has(id) && !dis.has(id));
-}
-
-/** 与 New Agent 一致:优先 defaultAgentId,否则按 AGENT_AUTO_PICK_ORDER 兜底;仅保留支持 one-shot 的。 */
-function resolveOneShotAgent(
-  preferences: ProjectPreferences,
-  detected: readonly AgentKind[]
-): AgentKind | null {
-  return pickAgent(
-    preferences.defaultAgentId,
-    detected.filter((id) => supportsOneShot(id)),
-    preferences.disabledAgentIds
-  );
-}
-
-/**
- * 生成候选链：默认 agent（若可用）置首，其余按 auto-pick 顺序补足，去重后截断到上限。
- */
-function resolveOneShotFallbackChain(
-  preferences: ProjectPreferences,
-  detected: readonly AgentKind[]
-): AgentKind[] {
-  const eligible = oneShotEligible(preferences, detected);
-  if (eligible.length === 0) {
-    return [];
-  }
-  const preferred = preferences.defaultAgentId;
-  const ordered: AgentKind[] = [];
-  if (preferred && preferred !== "blank" && eligible.includes(preferred)) {
-    ordered.push(preferred);
-  }
-  for (const id of eligible) {
-    if (!ordered.includes(id)) {
-      ordered.push(id);
-    }
-  }
-  return ordered.slice(0, MAX_ONE_SHOT_ATTEMPTS);
+  return rankAgents({
+    detected: detected.filter((id) => supportsOneShot(id)),
+    disabled: preferences.disabledAgentIds,
+    now,
+    preferred: preferences.defaultAgentId,
+    recentSuccessAt,
+    usage: usage.entries,
+  });
 }
 
 function failureResult(
@@ -157,22 +137,52 @@ function failureResult(
 
 export function createAiService({
   detectAgents,
+  failureCooldownMs = DEFAULT_FAILURE_COOLDOWN_MS,
+  now = Date.now,
+  readAgentUsage = async () => EMPTY_AGENT_USAGE_STATE,
   readPreferences,
   runOneShot = defaultRunOneShot,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 }: CreateAiServiceOptions): AiService {
+  const cooldownUntil = new Map<AgentKind, number>();
+  const recentSuccessAt = new Map<AgentKind, number>();
+
   async function resolveContext(): Promise<{
     agents: AgentKind[];
     preferences: ProjectPreferences;
   }> {
-    const [preferences, detected] = await Promise.all([
+    const [preferences, detected, usage] = await Promise.all([
       readPreferences(),
       detectAgents(),
+      readAgentUsage(),
     ]);
+    const currentTime = now();
+    const ranked = rankOneShotAgents(
+      preferences,
+      detected,
+      usage,
+      currentTime,
+      recentSuccessAt
+    );
+    const ready = ranked.filter(
+      (agentId) => (cooldownUntil.get(agentId) ?? 0) <= currentTime
+    );
     return {
-      agents: resolveOneShotFallbackChain(preferences, detected),
+      agents: (ready.length > 0 ? ready : ranked).slice(
+        0,
+        MAX_ONE_SHOT_ATTEMPTS
+      ),
       preferences,
     };
+  }
+
+  function recordFailure(agentId: AgentKind): void {
+    cooldownUntil.set(agentId, now() + failureCooldownMs);
+  }
+
+  function recordSuccess(agentId: AgentKind): void {
+    cooldownUntil.delete(agentId);
+    recentSuccessAt.set(agentId, now());
   }
 
   return {
@@ -213,9 +223,20 @@ export function createAiService({
             cwd,
             timeoutMs,
           });
+          if (text.trim().length === 0) {
+            lastFailure = {
+              message: `agent ${agent} returned empty output`,
+              reason: "request_failed",
+              status: "unavailable",
+            };
+            recordFailure(agent);
+            continue;
+          }
+          recordSuccess(agent);
           return { status: "ok", text };
         } catch (err) {
           lastFailure = failureResult(err);
+          recordFailure(agent);
         }
       }
 
@@ -228,11 +249,9 @@ export function createAiService({
       );
     },
     async status() {
-      const [preferences, detected] = await Promise.all([
-        readPreferences(),
-        detectAgents(),
-      ]);
-      const agent = resolveOneShotAgent(preferences, detected);
+      const { agents, preferences } = await resolveContext();
+      const agent =
+        preferences.defaultAgentId === "blank" ? null : (agents[0] ?? null);
       return {
         agent,
         configured: agent !== null,

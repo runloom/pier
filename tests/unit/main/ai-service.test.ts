@@ -1,4 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { AgentUsageState } from "@shared/contracts/agent-usage.ts";
 import { projectPreferencesSchema } from "@shared/contracts/preferences.ts";
 import { describe, expect, it, vi } from "vitest";
 import { supportsOneShot } from "../../../src/main/services/ai/agent-one-shot.ts";
@@ -21,11 +22,19 @@ type RunOneShot = (
 
 function makeService(options: {
   detected?: AgentKind[];
+  failureCooldownMs?: number;
+  now?: () => number;
   preferences?: Record<string, unknown>;
   runOneShot?: RunOneShot;
+  usage?: AgentUsageState;
 }) {
   return createAiService({
     detectAgents: async () => options.detected ?? [],
+    ...(options.failureCooldownMs === undefined
+      ? {}
+      : { failureCooldownMs: options.failureCooldownMs }),
+    ...(options.now ? { now: options.now } : {}),
+    readAgentUsage: async () => options.usage ?? { entries: [], version: 1 },
     readPreferences: async () => makePreferences(options.preferences ?? {}),
     runOneShot: options.runOneShot ?? (() => Promise.resolve("")),
   });
@@ -164,6 +173,96 @@ describe("createAiService(agent one-shot)", () => {
     expect(runOneShot).toHaveBeenCalledTimes(2);
     expect(runOneShot.mock.calls[0]?.[0]).toBe("claude");
     expect(runOneShot.mock.calls[1]?.[0]).toBe("codex");
+  });
+
+  it("generateText:未设置默认项时优先使用近期常用 agent", async () => {
+    const now = 10_000;
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockResolvedValue("fix/recent-agent\n");
+    const service = makeService({
+      detected: ["claude", "codex"],
+      now: () => now,
+      runOneShot,
+      usage: {
+        entries: [{ agentId: "codex", lastUsedAt: now, useCount: 2 }],
+        version: 1,
+      },
+    });
+
+    await service.generateText({ prompt: "x" });
+
+    expect(runOneShot).toHaveBeenCalledTimes(1);
+    expect(runOneShot.mock.calls[0]?.[0]).toBe("codex");
+  });
+
+  it("generateText:agent 成功退出但输出为空时继续 fallback", async () => {
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockRejectedValueOnce(
+        new AgentRunError("run_failed", "claude not logged in")
+      )
+      .mockResolvedValueOnce("\n")
+      .mockResolvedValueOnce("fix/worktree-smart-naming\n");
+    const service = makeService({
+      detected: ["claude", "codebuddy", "qodercli"],
+      runOneShot,
+    });
+
+    const result = await service.generateText({ prompt: "修复工作树智能命名" });
+
+    expect(result).toEqual({
+      status: "ok",
+      text: "fix/worktree-smart-naming\n",
+    });
+    expect(runOneShot.mock.calls.map((call) => call[0])).toEqual([
+      "claude",
+      "codebuddy",
+      "qodercli",
+    ]);
+  });
+
+  it("generateText:所有 agent 都返回空输出时报告调用失败", async () => {
+    const runOneShot = vi.fn<RunOneShot>().mockResolvedValue(" \n");
+    const service = makeService({ detected: ["codebuddy"], runOneShot });
+
+    expect(await service.generateText({ prompt: "x" })).toEqual({
+      message: "agent codebuddy returned empty output",
+      reason: "request_failed",
+      status: "unavailable",
+    });
+  });
+
+  it("generateText:近期失败的 agent 在冷却期内不重复尝试", async () => {
+    let currentTime = 1000;
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockRejectedValueOnce(
+        new AgentRunError("run_failed", "claude not logged in")
+      )
+      .mockResolvedValue("from-codex\n");
+    const service = makeService({
+      detected: ["claude", "codex"],
+      failureCooldownMs: 5000,
+      now: () => currentTime,
+      runOneShot,
+    });
+
+    expect(await service.generateText({ prompt: "first" })).toEqual({
+      status: "ok",
+      text: "from-codex\n",
+    });
+    currentTime = 2000;
+    expect(await service.generateText({ prompt: "second" })).toEqual({
+      status: "ok",
+      text: "from-codex\n",
+    });
+
+    expect(runOneShot.mock.calls.map((call) => call[0])).toEqual([
+      "claude",
+      "codex",
+      "codex",
+    ]);
   });
 
   it("generateText:最多尝试 3 个 agent，第 3 个成功则返回", async () => {

@@ -4,6 +4,7 @@ import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { TaskBackgroundSnapshot } from "@shared/contracts/tasks.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
@@ -48,4 +49,10 @@ export function broadcastTaskBackgroundSnapshot(
 
 export function broadcastAppUpdateChanged(snapshot: AppUpdateSnapshot): void {
   broadcastToAllWindows(PIER_BROADCAST.APP_UPDATE_CHANGED, snapshot);
+}
+
+export function broadcastWorktreeCreateProgress(
+  progress: WorktreeCreateProgress
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.WORKTREE_CREATE_PROGRESS, progress);
 }

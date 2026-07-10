@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import {
   GitBranchPlus,
@@ -17,7 +18,8 @@ import {
   Plus,
   Terminal,
 } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -26,6 +28,7 @@ import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
@@ -36,6 +39,33 @@ const WORKTREE_CREATE_ACTION_ID = "pier.worktree.create";
 function shortcutLabel(commandId: string): string | null {
   const binding = keybindingRegistry.getBindingsFor(commandId)[0];
   return binding ? formatChord(binding.chord) : null;
+}
+
+function resolveAvailableAgentIds({
+  detectedIds,
+  disabledAgentIds,
+  rankedAgentIds,
+}: {
+  detectedIds: AgentKind[];
+  disabledAgentIds: AgentKind[];
+  rankedAgentIds: AgentKind[] | null;
+}): AgentKind[] {
+  const disabled = new Set(disabledAgentIds);
+  const available = detectedIds.filter((id) => !disabled.has(id));
+  if (!rankedAgentIds) {
+    return available;
+  }
+
+  const availableSet = new Set(available);
+  const seen = new Set<AgentKind>();
+  const ordered: AgentKind[] = [];
+  for (const id of [...rankedAgentIds, ...available]) {
+    if (availableSet.has(id) && !seen.has(id)) {
+      seen.add(id);
+      ordered.push(id);
+    }
+  }
+  return ordered;
 }
 
 /**
@@ -56,6 +86,26 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
   const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
+  const [rankedAgentIds, setRankedAgentIds] = useState<AgentKind[] | null>(
+    null
+  );
+  useEffect(() => {
+    const loadSelection = window.pier.agents.selection;
+    if (typeof loadSelection !== "function") {
+      return;
+    }
+    let disposed = false;
+    loadSelection()
+      .then((selection) => {
+        if (!disposed) {
+          setRankedAgentIds(selection.rankedIds);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, []);
   // 订阅 active panel descriptor 变化以便 New Worktree 菜单项 disabled 状态跟随 (值不使用,纯粹为重渲注册订阅)。
   usePanelDescriptorStore((s) =>
     s.activeId ? s.descriptors[s.activeId] : undefined
@@ -73,9 +123,13 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     () => 0
   );
 
-  const enabledAgents = detectedIds.filter(
-    (id) => !disabledAgentIds.includes(id)
-  );
+  // main 返回的排名只决定顺序；renderer 的实时探测与禁用快照决定当前可用性。
+  // 刷新中新出现、尚未进入缓存排名的 agent 追加在已排名项之后。
+  const enabledAgents = resolveAvailableAgentIds({
+    detectedIds,
+    disabledAgentIds,
+    rankedAgentIds,
+  });
 
   const worktreeCreateAction = actionRegistry.get(WORKTREE_CREATE_ACTION_ID);
   const worktreeCreateEnabled = Boolean(
@@ -92,6 +146,17 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         onOpenChange={(open) => {
           if (open) {
             ensureDetected().catch(() => undefined);
+            const loadSelection = window.pier.agents.selection;
+            if (typeof loadSelection !== "function") {
+              return;
+            }
+            loadSelection()
+              .then((selection) => {
+                setRankedAgentIds(selection.rankedIds);
+              })
+              .catch(() => {
+                setRankedAgentIds(null);
+              });
           }
         }}
       >
@@ -179,19 +244,26 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
               return (
                 <DropdownMenuItem
                   key={agentId}
-                  onClick={() => {
-                    window.pier.agents
-                      .prepareLaunch(agentId)
-                      .then(({ launchId }) => {
-                        if (!launchId) {
-                          return;
-                        }
-                        useWorkspaceStore.getState().addTerminal({
-                          launchId,
-                          referenceGroup: props.group,
-                        });
-                      })
-                      .catch(() => undefined);
+                  onClick={async () => {
+                    try {
+                      const { launchId } =
+                        await window.pier.agents.prepareLaunch(agentId);
+                      if (!launchId) {
+                        toast.error(
+                          t("workspace.addPanelMenu.agentUnavailable")
+                        );
+                        return;
+                      }
+                      useWorkspaceStore.getState().addTerminal({
+                        launchId,
+                        referenceGroup: props.group,
+                      });
+                    } catch (err) {
+                      await showAppAlert({
+                        body: err instanceof Error ? err.message : String(err),
+                        title: t("workspace.addPanelMenu.agentLaunchFailed"),
+                      });
+                    }
                   }}
                 >
                   <AgentIcon agentId={agentId} size={16} />

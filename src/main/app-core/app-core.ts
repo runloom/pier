@@ -21,6 +21,7 @@ import { registerPluginRpcIpc } from "../plugins/plugin-rpc-ipc.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
+import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createAppUpdateService } from "../services/app-updates/app-update-service.ts";
 import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
@@ -85,6 +86,7 @@ import {
   broadcastPluginRegistryChanged,
   broadcastTaskBackgroundSnapshot,
   broadcastTerminalStatusBarPrefs,
+  broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
 
 export interface PierAppCore {
@@ -328,9 +330,15 @@ function createPierAppCore(): PierAppCore {
   const runtimeMode = isDevRuntime() ? "development" : "production";
   // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
   const agentDetection = createAgentDetectionService();
+  const agentUsage = createAgentUsageService({
+    userDataDir: app.getPath("userData"),
+  });
   const services: PierCoreServices = {
+    agentDetection,
+    agentUsage,
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
+      readAgentUsage: () => agentUsage.read(),
       readPreferences: () => preferences.read(),
     }),
     appUpdates: createAppUpdateService({
@@ -445,6 +453,7 @@ function createPierAppCore(): PierAppCore {
     commandRouter: createCommandRouter({
       clients,
       onEnvironmentsChanged: broadcastEnvironmentsChanged,
+      onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
       services,
     }),
     eventBus,

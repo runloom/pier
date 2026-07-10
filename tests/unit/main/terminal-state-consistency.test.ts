@@ -20,7 +20,13 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     vi.clearAllMocks();
   });
 
-  async function setupHarness(opts: { winFocused?: boolean } = {}) {
+  async function setupHarness(
+    opts: {
+      recordAgentLaunch?: (agentId: string) => void;
+      savedSession?: unknown;
+      winFocused?: boolean;
+    } = {}
+  ) {
     const winFocused = opts.winFocused ?? true;
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -95,7 +101,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
-      readTerminalPanelSession: vi.fn(async () => null),
+      readTerminalPanelSession: vi.fn(async () => opts.savedSession ?? null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
       updateTerminalPanelAgent: vi.fn(async () => undefined),
       updateTerminalPanelAgentResume: vi.fn(async () => true),
@@ -125,7 +131,9 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
-    registerTerminalIpc(fakeIpcMain as never);
+    registerTerminalIpc(fakeIpcMain as never, {
+      recordAgentLaunch: opts.recordAgentLaunch as never,
+    });
 
     return { fakeAddon, handlers, invokeHandlers, win };
   }
@@ -270,6 +278,81 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       "terminal-1",
       context
     );
+  });
+
+  it("records agent usage only after native terminal creation succeeds", async () => {
+    const recordAgentLaunch = vi.fn();
+    const { invokeHandlers, win } = await setupHarness({ recordAgentLaunch });
+    const { terminalLaunchRegistry } = await import(
+      "@main/state/terminal-launch-state.ts"
+    );
+    const launchId = terminalLaunchRegistry.register({
+      agentId: "codex",
+      command: "codex",
+    });
+
+    await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: win.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { height: 400, width: 600, x: 0, y: 0 },
+        launchId,
+        panelId: "agent-terminal-1",
+      }
+    );
+
+    expect(recordAgentLaunch).toHaveBeenCalledWith("codex");
+  });
+
+  it("does not fail an already-created terminal when usage recording fails", async () => {
+    const recordAgentLaunch = vi.fn().mockRejectedValue(new Error("disk full"));
+    const { invokeHandlers, win } = await setupHarness({ recordAgentLaunch });
+    const { terminalLaunchRegistry } = await import(
+      "@main/state/terminal-launch-state.ts"
+    );
+    const launchId = terminalLaunchRegistry.register({
+      agentId: "codex",
+      command: "codex",
+    });
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: win.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { height: 400, width: 600, x: 0, y: 0 },
+        launchId,
+        panelId: "agent-terminal-2",
+      }
+    );
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("does not count a restored agent session as a new user launch", async () => {
+    const recordAgentLaunch = vi.fn();
+    const { invokeHandlers, win } = await setupHarness({
+      recordAgentLaunch,
+      savedSession: {
+        agent: {
+          agentId: "codex",
+          launch: { agentId: "codex", command: "codex" },
+          startedAt: 1000,
+          status: "running",
+        },
+        updatedAt: "2026-07-10T00:00:00.000Z",
+      },
+    });
+
+    await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: win.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { height: 400, width: 600, x: 0, y: 0 },
+        panelId: "restored-agent-terminal",
+      }
+    );
+
+    expect(recordAgentLaunch).not.toHaveBeenCalled();
   });
 
   it("maps terminal operation IPC to allowlisted Ghostty binding actions", async () => {

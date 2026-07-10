@@ -8,6 +8,7 @@ import {
   type PanelContext,
   panelSnapshotSchema,
 } from "@shared/contracts/panel.ts";
+import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
 import { FileServiceError } from "../services/file-service.ts";
 import { GitExecError } from "../services/git-exec.ts";
@@ -57,6 +58,7 @@ export interface CommandRouter {
 export interface CreateCommandRouterArgs {
   clients: PierClientRegistry;
   onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void;
+  onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void;
   services: PierCoreServices;
 }
 
@@ -337,7 +339,8 @@ async function executeCommandByDomain(
   clients: PierClientRegistry,
   services: PierCoreServices,
   context: CommandExecutionContext,
-  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void,
+  onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void
 ): Promise<PierCommandResult | null> {
   const executors = [
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
@@ -349,7 +352,13 @@ async function executeCommandByDomain(
         services,
         onEnvironmentsChanged
       ),
-    (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executeWorktreeCommand(
+        requestId,
+        cmd,
+        services,
+        onWorktreeCreateProgress
+      ),
     (cmd: PierCommand) => executeFileCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeRunCommand(requestId, cmd, services, context),
@@ -376,7 +385,8 @@ async function executeKnownCommand(
   clients: PierClientRegistry,
   services: PierCoreServices,
   context: CommandExecutionContext = {},
-  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void
+  onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void,
+  onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void
 ): Promise<PierCommandResult> {
   try {
     const result = await executeCommandByDomain(
@@ -385,7 +395,8 @@ async function executeKnownCommand(
       clients,
       services,
       context,
-      onEnvironmentsChanged
+      onEnvironmentsChanged,
+      onWorktreeCreateProgress
     );
     if (result) {
       return result;
@@ -403,6 +414,7 @@ async function executeKnownCommand(
 export function createCommandRouter({
   clients,
   onEnvironmentsChanged,
+  onWorktreeCreateProgress,
   services,
 }: CreateCommandRouterArgs): CommandRouter {
   return {
@@ -430,7 +442,8 @@ export function createCommandRouter({
         clients,
         services,
         { clientEnv },
-        onEnvironmentsChanged
+        onEnvironmentsChanged,
+        onWorktreeCreateProgress
       );
     },
   };

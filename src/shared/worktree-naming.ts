@@ -5,6 +5,7 @@ const SLASH_PATTERN = /\//g;
 const INVALID_CHARS_PATTERN = /[^A-Za-z0-9._-]+/g;
 const INVALID_BRANCH_CANDIDATE_CHARS_PATTERN = /[^A-Za-z0-9._/-]+/g;
 const CONSECUTIVE_DASH_PATTERN = /-+/g;
+const CONSECUTIVE_DOT_PATTERN = /\.{2,}/g;
 const CONSECUTIVE_SLASH_PATTERN = /\/+/g;
 const LEADING_INVALID_PATTERN = /^[-.]+/;
 const TRAILING_INVALID_PATTERN = /[-.]+$/;
@@ -96,6 +97,14 @@ export function sanitizeWorktreeName(value: string): string {
     .replace(TRAILING_INVALID_PATTERN, "");
 }
 
+function sanitizeBranchSegment(value: string): string {
+  const withoutInvalidDots = value.replace(CONSECUTIVE_DOT_PATTERN, "-");
+  const withoutLockSuffix = withoutInvalidDots.endsWith(".lock")
+    ? `${withoutInvalidDots.slice(0, -5)}-lock`
+    : withoutInvalidDots;
+  return sanitizeWorktreeName(withoutLockSuffix);
+}
+
 export function sanitizeBranchCandidate(value: string): string {
   return value
     .trim()
@@ -104,9 +113,56 @@ export function sanitizeBranchCandidate(value: string): string {
     .replace(CONSECUTIVE_DASH_PATTERN, "-")
     .replace(CONSECUTIVE_SLASH_PATTERN, "/")
     .split("/")
-    .map((segment) => sanitizeWorktreeName(segment))
+    .map(sanitizeBranchSegment)
     .filter((segment) => segment.length > 0)
     .join("/");
+}
+
+const INVALID_GIT_REF_CHARACTERS = new Set([
+  "~",
+  "^",
+  ":",
+  "?",
+  "*",
+  "[",
+  "\\",
+]);
+
+/**
+ * 覆盖 `git check-ref-format --branch` 核心规则的纯函数守卫。
+ * main 侧仍以 Git 本身为最终权威，这里用于在进入后台创建前拦截/修复输入。
+ */
+export function isValidGitBranchName(value: string): boolean {
+  if (
+    value.length === 0 ||
+    value.startsWith("-") ||
+    value.startsWith("/") ||
+    value.endsWith("/") ||
+    value.endsWith(".") ||
+    value.includes("//") ||
+    value.includes("..") ||
+    value.includes("@{")
+  ) {
+    return false;
+  }
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (
+      code <= 0x20 ||
+      code === 0x7f ||
+      INVALID_GIT_REF_CHARACTERS.has(character)
+    ) {
+      return false;
+    }
+  }
+  return value
+    .split("/")
+    .every(
+      (segment) =>
+        segment.length > 0 &&
+        !segment.startsWith(".") &&
+        !segment.endsWith(".lock")
+    );
 }
 
 export function slugifyDescription(input: string): string | null {

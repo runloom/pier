@@ -186,6 +186,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("worktree.check"),
   }),
   worktreeCreateRequestSchema.extend({
+    operationId: z.uuid().optional(),
     type: z.literal("worktree.create"),
   }),
   worktreeCreationDefaultsRequestSchema.extend({

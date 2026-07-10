@@ -228,6 +228,12 @@ function services(
   let recentContexts: PanelContext[] = [];
 
   return {
+    agentDetection: {} as never,
+    agentUsage: {
+      flush: async () => undefined,
+      read: async () => ({ entries: [], version: 1 }),
+      recordSuccessfulLaunch: async () => ({ entries: [], version: 1 }),
+    },
     managedPlugins: {} as never,
     appUpdates: {
       check: async () => ({ currentVersion: "0.1.0", state: "disabled" }),
@@ -2921,6 +2927,7 @@ describe("createCommandRouter", () => {
 
   it("worktree.create 编排 resolveProject、bind、copy 和 setup", async () => {
     const operations: string[] = [];
+    const progress: string[] = [];
     const fakeServices = services();
     const localEnvironments = localEnvironmentsOf(fakeServices);
     const project = pierProject({ projectRootPath: "/repo-main" });
@@ -2991,6 +2998,9 @@ describe("createCommandRouter", () => {
     });
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
+      onWorktreeCreateProgress: (event) => {
+        progress.push(`${event.operationId}:${event.phase}`);
+      },
       services: fakeServices,
     });
 
@@ -3001,6 +3011,7 @@ describe("createCommandRouter", () => {
           base: "origin/main",
           branch: "feature/a",
           name: "feature-a",
+          operationId: "00000000-0000-4000-8000-000000000001",
           path: "/repo",
           type: "worktree.create",
         },
@@ -3033,6 +3044,10 @@ describe("createCommandRouter", () => {
       "bind-worktree",
       "setup",
       "pulse:/repo",
+    ]);
+    expect(progress).toEqual([
+      "00000000-0000-4000-8000-000000000001:creating",
+      "00000000-0000-4000-8000-000000000001:initializing",
     ]);
   });
 

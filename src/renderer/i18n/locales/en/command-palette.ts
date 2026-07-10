@@ -4,7 +4,9 @@ export const commandPalette = {
   emptyQuickPick: "No matching items",
   searchResults: "Results",
   agents: {
+    launchFailed: "Failed to Start Agent",
     noAgentDetected: "No agent CLI detected",
+    unavailable: "Agent is no longer available",
   },
   placeholder: {
     commands: "Search commands…",

@@ -227,6 +227,9 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
     appCore.services.secrets.flush().catch((error) => {
       secretsLog.error("failed to flush before quit", { error });
     }),
+    appCore.services.agentUsage.flush().catch((error) => {
+      appQuitLog.error("failed to flush agent usage before quit", { error });
+    }),
   ]);
 }
 
@@ -389,6 +392,8 @@ app.whenReady().then(async () => {
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
   registerBundledFonts();
   registerTerminalIpc(ipcMain, {
+    recordAgentLaunch: (agentId) =>
+      appCore.services.agentUsage.recordSuccessfulLaunch(agentId),
     processEnvironment: appCore.services.processEnvironment,
   });
   registerTerminalDebugWindowIpc(ipcMain);

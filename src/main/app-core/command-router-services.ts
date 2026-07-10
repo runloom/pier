@@ -10,6 +10,8 @@ import type {
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import type { AgentDetectionService } from "../services/agents/agent-detection-service.ts";
+import type { AgentUsageService } from "../services/agents/agent-usage-service.ts";
 import type { AiService } from "../services/ai/ai-service.ts";
 import type { AppUpdateService } from "../services/app-updates/app-update-service.ts";
 import type { FileDraftsService } from "../services/file-drafts-service.ts";
@@ -28,6 +30,8 @@ import type { WorktreeService } from "../services/worktree-service.ts";
 import type { SecretsStore } from "../state/secrets-store.ts";
 
 export interface PierCoreServices {
+  agentDetection: AgentDetectionService;
+  agentUsage: AgentUsageService;
   ai: AiService;
   appUpdates: AppUpdateService;
   commandPaletteMru: {

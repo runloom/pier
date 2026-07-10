@@ -1,6 +1,8 @@
 import {
   deriveWorktreeCreation,
   deriveWorktreeCreationFromSlug,
+  isValidGitBranchName,
+  sanitizeBranchCandidate,
   sanitizeWorktreeName,
   slugifyDescription,
 } from "@shared/worktree-naming.ts";
@@ -35,6 +37,35 @@ describe("sanitizeWorktreeName", () => {
   it("斜杠转连字符,剔除非法字符,不产生 . / ..", () => {
     expect(sanitizeWorktreeName("feat/panel drag")).toBe("feat-panel-drag");
     expect(sanitizeWorktreeName("../x")).toBe("x");
+  });
+});
+
+describe("Git 分支名规整", () => {
+  it("修复连续点和 .lock 后缀", () => {
+    expect(sanitizeBranchCandidate("feature/fix..dialog")).toBe(
+      "feature/fix-dialog"
+    );
+    expect(sanitizeBranchCandidate("feature/build.lock")).toBe(
+      "feature/build-lock"
+    );
+  });
+
+  it("对齐 git check-ref-format --branch 的核心非法规则", () => {
+    for (const branch of ["feature/fix-dialog", "fix_login", "release/1.2.3"]) {
+      expect(isValidGitBranchName(branch)).toBe(true);
+    }
+    for (const branch of [
+      "-feature",
+      ".hidden",
+      "feature/.hidden",
+      "feature/fix..dialog",
+      "feature/build.lock",
+      "feature//dialog",
+      "feature/dialog.",
+      "feature/@{dialog",
+    ]) {
+      expect(isValidGitBranchName(branch)).toBe(false);
+    }
   });
 });
 

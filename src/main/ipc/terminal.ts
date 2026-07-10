@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   CreateTerminalArgs,
   TerminalCloseOptions,
@@ -67,6 +68,9 @@ export function registerTerminalIpc(
   ipcMain: IpcMain,
   deps: {
     processEnvironment?: ProcessEnvironmentService | undefined;
+    recordAgentLaunch?:
+      | ((agentId: AgentKind) => Promise<unknown> | unknown)
+      | undefined;
   } = {}
 ): void {
   const processEnvironment =
@@ -184,6 +188,7 @@ export function registerTerminalIpc(
       createArgs: args,
       loadError,
       processEnvironment,
+      recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,
       win: windowFromWebContents(event.sender),
     })

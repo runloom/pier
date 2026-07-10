@@ -126,7 +126,6 @@ function StringSettingRow({
           setDraft(committed);
         }}
         onChange={setDraft}
-        onEscape={() => setDraft(effective)}
         {...(placeholder === undefined ? {} : { placeholder })}
         rows={7}
         textareaClassName="min-h-[168px] w-[520px] font-mono text-xs"
@@ -149,7 +148,6 @@ function StringSettingRow({
         setDraft(committed);
       }}
       onChange={setDraft}
-      onEscape={() => setDraft(effective)}
       {...(placeholder === undefined ? {} : { placeholder })}
       type={type}
       value={draft}

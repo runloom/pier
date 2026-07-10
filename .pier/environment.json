@@ -2,7 +2,7 @@
   "cleanupCommand": "",
   "copyPatterns": [".env*", "*.local", ".claude/settings.local.json"],
   "env": {},
-  "setupCommand": "pnpm setup:worktree\npnpm build:native",
-  "updatedAt": 1783413949081,
+  "setupCommand": "pnpm setup:worktree",
+  "updatedAt": 1783623916401,
   "version": 1
 }

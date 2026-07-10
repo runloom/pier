@@ -1,4 +1,5 @@
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
+import type { AgentSelectionResult } from "@shared/contracts/agent-usage.ts";
 import type {
   AppQuitConfirmationRequest,
   AppQuitDecisionPayload,
@@ -97,6 +98,7 @@ export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
+  selection: () => Promise<AgentSelectionResult>;
 }
 
 export interface PierNotificationsAPI {
@@ -274,6 +276,7 @@ const agentsApi: PierAgentsAPI = {
   prepareLaunch: (agentId: AgentKind) =>
     ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
   refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
+  selection: () => ipcRenderer.invoke("pier:agents:selection"),
 };
 
 const appQuitApi: PierAppQuitAPI = {

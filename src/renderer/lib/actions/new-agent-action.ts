@@ -1,33 +1,31 @@
-import { pickAgent } from "@shared/agent-selection.ts";
 import i18next from "i18next";
 import { Bot } from "lucide-react";
 import { toast } from "sonner";
-import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
-import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import type { ActionContribution } from "./contribution-types.ts";
 
 async function handleNewAgent(): Promise<void> {
-  // Startup kicks this off globally; this remains a cheap safety net for tests,
-  // debug windows, or early invocations that race the initial probe.
-  await useAgentDetectStore.getState().ensureDetected();
+  try {
+    const { selectedId: agentId } = await window.pier.agents.selection();
+    if (!agentId) {
+      toast.error(i18next.t("commandPalette.agents.noAgentDetected"));
+      return;
+    }
 
-  const { detectedIds } = useAgentDetectStore.getState();
-  const { defaultAgentId, disabledAgentIds } =
-    useAgentPreferencesStore.getState();
+    const { launchId } = await window.pier.agents.prepareLaunch(agentId);
+    if (!launchId) {
+      toast.error(i18next.t("commandPalette.agents.unavailable"));
+      return;
+    }
 
-  const agentId = pickAgent(defaultAgentId, detectedIds, disabledAgentIds);
-  if (!agentId) {
-    toast.error(i18next.t("commandPalette.agents.noAgentDetected"));
-    return;
+    useWorkspaceStore.getState().addTerminal({ launchId });
+  } catch (err) {
+    await showAppAlert({
+      body: err instanceof Error ? err.message : String(err),
+      title: i18next.t("commandPalette.agents.launchFailed"),
+    });
   }
-
-  const { launchId } = await window.pier.agents.prepareLaunch(agentId);
-  if (!launchId) {
-    return;
-  }
-
-  useWorkspaceStore.getState().addTerminal({ launchId });
 }
 
 export const NEW_AGENT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [

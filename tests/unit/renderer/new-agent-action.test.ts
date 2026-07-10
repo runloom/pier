@@ -1,131 +1,90 @@
-import type { AgentKind } from "@shared/contracts/agent.ts";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { initI18n } from "@/i18n/index.ts";
 import { NEW_AGENT_ACTION_CONTRIBUTIONS } from "@/lib/actions/new-agent-action.ts";
-import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
-import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const toastMocks = vi.hoisted(() => ({ error: vi.fn() }));
+const appDialogMocks = vi.hoisted(() => ({
+  showAppAlert: vi.fn(async () => undefined),
+}));
 
 vi.mock("sonner", () => ({ toast: { error: toastMocks.error } }));
+vi.mock("@/stores/app-dialog.store.ts", () => ({
+  showAppAlert: appDialogMocks.showAppAlert,
+}));
 
 const prepareLaunch = vi.fn();
-const detect = vi.fn(async () => ({ detectedIds: [] as AgentKind[] }));
+const selection = vi.fn();
 const addTerminal = vi.fn(() => "terminal-1");
 
 function runNewAgent(): Promise<void> | void {
   return NEW_AGENT_ACTION_CONTRIBUTIONS[0]?.handler();
 }
 
-function seedStores(opts: {
-  defaultAgentId: AgentKind | "blank" | null;
-  detectedIds: AgentKind[];
-  disabledAgentIds: AgentKind[];
-  hasDetected?: boolean;
-}): void {
-  useAgentDetectStore.setState({
-    detectedIds: opts.detectedIds,
-    hasDetected: opts.hasDetected ?? opts.detectedIds.length > 0,
-    isDetecting: false,
-    isRefreshing: false,
-  });
-  useAgentPreferencesStore.setState({
-    defaultAgentId: opts.defaultAgentId,
-    disabledAgentIds: opts.disabledAgentIds,
-  });
-  useWorkspaceStore.setState({ addTerminal } as never);
-}
-
 describe("new agent action", () => {
+  beforeAll(async () => {
+    await initI18n();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    useWorkspaceStore.setState({ addTerminal } as never);
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { agents: { detect, prepareLaunch } },
+      value: { agents: { prepareLaunch, selection } },
     });
   });
 
   afterEach(() => {
-    useAgentDetectStore.setState({
-      detectedIds: [],
-      hasDetected: false,
-      isDetecting: false,
-      isRefreshing: false,
-    });
-    useAgentPreferencesStore.setState({
-      defaultAgentId: null,
-      disabledAgentIds: [],
-    });
+    vi.restoreAllMocks();
   });
 
-  it("首次调用（detectedIds 为空）→ 先探测再 pickAgent，而非直接 toast", async () => {
-    // 模拟未开设置页：detectedIds 为空。ensureDetected → detect 填充 ["claude"]。
-    seedStores({
-      defaultAgentId: null,
-      detectedIds: [],
-      disabledAgentIds: [],
+  it("使用主进程统一排序结果选择 agent", async () => {
+    selection.mockResolvedValueOnce({
+      detectedIds: ["claude", "codex"],
+      enabledIds: ["claude", "codex"],
+      rankedIds: ["codex", "claude"],
+      selectedId: "codex",
     });
-    detect.mockResolvedValueOnce({ detectedIds: ["claude"] });
     prepareLaunch.mockResolvedValueOnce({ launchId: "launch-1" });
 
     await runNewAgent();
 
-    expect(detect).toHaveBeenCalledTimes(1);
-    expect(prepareLaunch).toHaveBeenCalledWith("claude");
+    expect(selection).toHaveBeenCalledTimes(1);
+    expect(prepareLaunch).toHaveBeenCalledWith("codex");
     expect(addTerminal).toHaveBeenCalledWith({ launchId: "launch-1" });
     expect(toastMocks.error).not.toHaveBeenCalled();
   });
 
-  it("detectedIds 已填充 → 不重复探测（避免每次重跑 which）", async () => {
-    seedStores({
-      defaultAgentId: null,
-      detectedIds: ["claude"],
-      disabledAgentIds: [],
-    });
-    prepareLaunch.mockResolvedValueOnce({ launchId: "launch-2" });
-
-    await runNewAgent();
-
-    expect(detect).not.toHaveBeenCalled();
-    expect(prepareLaunch).toHaveBeenCalledWith("claude");
-  });
-
   it("无可用 agent → toast，且不创建终端", async () => {
-    // disabled 掉唯一探测到的 agent ⇒ pickAgent 返回 null
-    seedStores({
-      defaultAgentId: null,
+    selection.mockResolvedValueOnce({
       detectedIds: ["claude"],
-      disabledAgentIds: ["claude"],
+      enabledIds: [],
+      rankedIds: [],
+      selectedId: null,
     });
 
     await runNewAgent();
 
-    expect(toastMocks.error).toHaveBeenCalledTimes(1);
-    expect(prepareLaunch).not.toHaveBeenCalled();
-    expect(addTerminal).not.toHaveBeenCalled();
-  });
-
-  it("启动探测已完成但结果为空 → 不重复探测，直接 toast", async () => {
-    seedStores({
-      defaultAgentId: null,
-      detectedIds: [],
-      disabledAgentIds: [],
-      hasDetected: true,
-    });
-
-    await runNewAgent();
-
-    expect(detect).not.toHaveBeenCalled();
     expect(toastMocks.error).toHaveBeenCalledTimes(1);
     expect(prepareLaunch).not.toHaveBeenCalled();
     expect(addTerminal).not.toHaveBeenCalled();
   });
 
   it("prepareLaunch 返回 null launchId → 不创建终端", async () => {
-    seedStores({
-      defaultAgentId: null,
+    selection.mockResolvedValueOnce({
       detectedIds: ["claude"],
-      disabledAgentIds: [],
+      enabledIds: ["claude"],
+      rankedIds: ["claude"],
+      selectedId: "claude",
     });
     prepareLaunch.mockResolvedValueOnce({ launchId: null });
 
@@ -133,14 +92,31 @@ describe("new agent action", () => {
 
     expect(prepareLaunch).toHaveBeenCalledWith("claude");
     expect(addTerminal).not.toHaveBeenCalled();
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      "Agent is no longer available"
+    );
+  });
+
+  it("agent 选择失败时用宿主弹窗展示技术详情", async () => {
+    selection.mockRejectedValueOnce(new Error("selection IPC failed"));
+
+    await runNewAgent();
+
+    expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
+      body: "selection IPC failed",
+      title: "Failed to Start Agent",
+    });
+    expect(prepareLaunch).not.toHaveBeenCalled();
+    expect(addTerminal).not.toHaveBeenCalled();
     expect(toastMocks.error).not.toHaveBeenCalled();
   });
 
   it("成功路径 → 用 launchId 创建终端", async () => {
-    seedStores({
-      defaultAgentId: "codex",
+    selection.mockResolvedValueOnce({
       detectedIds: ["claude", "codex"],
-      disabledAgentIds: [],
+      enabledIds: ["claude", "codex"],
+      rankedIds: ["codex", "claude"],
+      selectedId: "codex",
     });
     prepareLaunch.mockResolvedValueOnce({ launchId: "launch-xyz" });
 

@@ -41,10 +41,8 @@ const START_TASK_LABEL = "Start task now";
 const AGENT_LABEL = "Agent";
 
 const ZH_AI_TAB = "智能生成";
-const EN_GENERATING_LABEL = "Generating…";
 const ZH_TASK_LABEL = "任务描述";
 const ZH_CONFIRM_LABEL = "创建";
-const ZH_GENERATING_LABEL = "智能生成中…";
 
 function interpolate(
   template: string | undefined,
@@ -135,8 +133,7 @@ function deferTextGeneration(): {
   return { promise, resolve };
 }
 
-const createMock =
-  vi.fn<(request: WorktreeCreateRequest) => Promise<WorktreeCreateResult>>();
+const createMock = vi.fn<RendererPluginContext["worktrees"]["create"]>();
 const openTerminalMock =
   vi.fn<
     (
@@ -148,8 +145,21 @@ const generateTextMock =
   vi.fn<(request: AiGenerateTextRequest) => Promise<AiGenerateTextResult>>();
 const agentSelectionMock =
   vi.fn<RendererPluginContext["agents"]["selection"]>();
-const notificationsSuccessMock = vi.fn();
-const notificationsErrorMock = vi.fn();
+const dialogAlertMock = vi.fn<RendererPluginContext["dialogs"]["alert"]>(
+  async () => undefined
+);
+const loadingDismissMock = vi.fn();
+const loadingInfoMock = vi.fn();
+const loadingSuccessMock = vi.fn();
+const loadingUpdateMock = vi.fn();
+const notificationsLoadingMock = vi.fn<
+  RendererPluginContext["notifications"]["loading"]
+>(() => ({
+  dismiss: loadingDismissMock,
+  info: loadingInfoMock,
+  success: loadingSuccessMock,
+  update: loadingUpdateMock,
+}));
 const tMock = vi.fn(
   (
     _key: string,
@@ -202,7 +212,7 @@ function createMockContext(): RendererPluginContext {
     },
     missionControlWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
-      alert: unimplemented("dialogs.alert"),
+      alert: dialogAlertMock,
       choice: unimplemented("dialogs.choice"),
       confirm: unimplemented("dialogs.confirm"),
       prompt: unimplemented("dialogs.prompt"),
@@ -270,10 +280,10 @@ function createMockContext(): RendererPluginContext {
       t: tMock,
     },
     notifications: {
-      error: notificationsErrorMock,
+      error: unimplemented("notifications.error"),
       info: unimplemented("notifications.info"),
-      loading: unimplemented("notifications.loading"),
-      success: notificationsSuccessMock,
+      loading: notificationsLoadingMock,
+      success: unimplemented("notifications.success"),
       system: unimplemented("notifications.system"),
     },
     overlays: {
@@ -365,6 +375,12 @@ async function switchToCustom(): Promise<void> {
   await screen.findByRole("textbox", { name: BRANCH_LABEL });
 }
 
+function expectCreateRequest(expected: Partial<WorktreeCreateRequest>): void {
+  const call = createMock.mock.calls.at(-1);
+  expect(call?.[0]).toEqual(expect.objectContaining(expected));
+  expect(call?.[1]).toEqual({ onProgress: expect.any(Function) });
+}
+
 describe("WorktreeCreateOverlay", () => {
   let context: RendererPluginContext;
 
@@ -376,6 +392,7 @@ describe("WorktreeCreateOverlay", () => {
     agentSelectionMock.mockResolvedValue({
       detectedIds: ["claude", "codex"],
       enabledIds: ["claude", "codex"],
+      rankedIds: ["claude", "codex"],
       selectedId: "claude",
     });
     aiStatusMock.mockResolvedValue({
@@ -436,7 +453,7 @@ describe("WorktreeCreateOverlay", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("en locale shows Generating… while branch generation is pending", async () => {
+  it("en locale closes the overlay and shows branch generation in a toast", async () => {
     context = createLocalizedContext("en");
     const generation = deferTextGeneration();
     generateTextMock.mockReturnValueOnce(generation.promise);
@@ -448,26 +465,30 @@ describe("WorktreeCreateOverlay", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
+    await vi.waitFor(() => {
+      expect(notificationsLoadingMock).toHaveBeenCalledWith(
+        "Generating branch name…"
+      );
+    });
     expect(
-      await screen.findByRole("button", { name: EN_GENERATING_LABEL })
-    ).toBeInTheDocument();
+      screen.queryByRole("textbox", { name: TASK_LABEL })
+    ).not.toBeInTheDocument();
 
     await act(async () => {
       generation.resolve({ status: "ok", text: "fix-focus\n" });
       await generation.promise;
     });
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          branch: "fix-focus",
-          name: "fix-focus",
-          path: "/repo",
-        })
-      );
+      expectCreateRequest({
+        branch: "fix-focus",
+        name: "fix-focus",
+        path: "/repo",
+      });
     });
+    expect(loadingUpdateMock).toHaveBeenCalledWith("Creating worktree…");
   });
 
-  it("zh-CN locale shows 智能生成中… while branch generation is pending", async () => {
+  it("zh-CN locale 关闭弹窗并用 toast 展示分支名生成阶段", async () => {
     context = createLocalizedContext("zh-CN");
     const generation = deferTextGeneration();
     generateTextMock.mockReturnValueOnce(generation.promise);
@@ -479,23 +500,25 @@ describe("WorktreeCreateOverlay", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: ZH_CONFIRM_LABEL }));
 
+    await vi.waitFor(() => {
+      expect(notificationsLoadingMock).toHaveBeenCalledWith("正在生成分支名…");
+    });
     expect(
-      await screen.findByRole("button", { name: ZH_GENERATING_LABEL })
-    ).toBeInTheDocument();
+      screen.queryByRole("textbox", { name: ZH_TASK_LABEL })
+    ).not.toBeInTheDocument();
 
     await act(async () => {
       generation.resolve({ status: "ok", text: "fix-focus\n" });
       await generation.promise;
     });
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          branch: "fix-focus",
-          name: "fix-focus",
-          path: "/repo",
-        })
-      );
+      expectCreateRequest({
+        branch: "fix-focus",
+        name: "fix-focus",
+        path: "/repo",
+      });
     });
+    expect(loadingUpdateMock).toHaveBeenCalledWith("工作树创建中…");
   });
 
   it("默认 AI 模式打开时自动聚焦任务描述输入框", async () => {
@@ -514,7 +537,7 @@ describe("WorktreeCreateOverlay", () => {
     ).toHaveFocus();
   });
 
-  it("默认 AI 模式:提交先调 generateText,创建并打开终端后关闭 overlay,且不弹成功通知", async () => {
+  it("默认 AI 模式:提交后立即关闭 overlay，打开终端前关闭 loading toast", async () => {
     await openOverlay(context);
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
@@ -530,13 +553,11 @@ describe("WorktreeCreateOverlay", () => {
       });
     });
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          branch: "fix-focus",
-          name: "fix-focus",
-          path: "/repo",
-        })
-      );
+      expectCreateRequest({
+        branch: "fix-focus",
+        name: "fix-focus",
+        path: "/repo",
+      });
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
@@ -546,7 +567,15 @@ describe("WorktreeCreateOverlay", () => {
     expect(
       screen.queryByRole("textbox", { name: TASK_LABEL })
     ).not.toBeInTheDocument();
-    expect(notificationsSuccessMock).not.toHaveBeenCalled();
+    expect(notificationsLoadingMock).toHaveBeenCalledWith(
+      "Generating branch name…"
+    );
+    expect(loadingUpdateMock).toHaveBeenCalledWith("Creating worktree…");
+    expect(loadingDismissMock).toHaveBeenCalledTimes(1);
+    expect(loadingSuccessMock).not.toHaveBeenCalled();
+    expect(loadingDismissMock.mock.invocationCallOrder[0]).toBeLessThan(
+      openTerminalMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    );
   });
 
   it("AI 模式:勾选开始任务后在新工作树打开所选 agent 对话", async () => {
@@ -562,13 +591,11 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          branch: "fix-focus",
-          name: "fix-focus",
-          path: "/repo",
-        })
-      );
+      expectCreateRequest({
+        branch: "fix-focus",
+        name: "fix-focus",
+        path: "/repo",
+      });
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
@@ -591,7 +618,7 @@ describe("WorktreeCreateOverlay", () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
-  it("AI 生成失败:错误文案渲染、overlay 保留、不创建", async () => {
+  it("AI 调用失败:关闭 loading 并用宿主弹窗展示详情", async () => {
     generateTextMock.mockResolvedValueOnce({
       message: "boom",
       reason: "request_failed",
@@ -603,13 +630,35 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.change(task, { target: { value: "fix focus" } });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
-    expect(
-      await screen.findByText("Agent invocation failed: boom")
-    ).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(dialogAlertMock).toHaveBeenCalledWith({
+        body: "Agent invocation failed: boom",
+        title: "Branch name generation failed",
+      });
+    });
+    expect(loadingDismissMock).toHaveBeenCalled();
     expect(createMock).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("textbox", { name: TASK_LABEL })
-    ).toBeInTheDocument();
+      screen.queryByRole("textbox", { name: TASK_LABEL })
+    ).not.toBeInTheDocument();
+  });
+
+  it("AI 输出不合法时自动修复为语义化分支名", async () => {
+    generateTextMock.mockResolvedValueOnce({ status: "ok", text: "！！！\n" });
+    await openOverlay(context);
+
+    fireEvent.change(screen.getByRole("textbox", { name: TASK_LABEL }), {
+      target: { value: "修复终端焦点问题" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(createMock).toHaveBeenCalled();
+    });
+    const request = createMock.mock.calls[0]?.[0];
+    expect(request?.branch).toBe("fix-focus");
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
+    expect(dialogAlertMock).not.toHaveBeenCalled();
   });
 
   it("AI 未配置:自动切到自定义模式", async () => {
@@ -647,9 +696,12 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.change(task, { target: { value: "fix focus" } });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
-    expect(
-      await screen.findByText("Agent invocation failed: no agent")
-    ).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(dialogAlertMock).toHaveBeenCalledWith({
+        body: "Agent invocation failed: no agent",
+        title: "Branch name generation failed",
+      });
+    });
     expect(createMock).not.toHaveBeenCalled();
   });
 
@@ -670,13 +722,11 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          branch: "feature/fix-dialog",
-          name: "feature-fix-dialog",
-          path: "/repo",
-        })
-      );
+      expectCreateRequest({
+        branch: "feature/fix-dialog",
+        name: "feature-fix-dialog",
+        path: "/repo",
+      });
     });
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
@@ -684,6 +734,52 @@ describe("WorktreeCreateOverlay", () => {
       });
     });
     expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
+  it("提交后立即关闭 overlay，同一条 loading toast 跟随真实阶段更新", async () => {
+    let resolveCreate!: (result: WorktreeCreateResult) => void;
+    const pendingCreate = new Promise<WorktreeCreateResult>((resolve) => {
+      resolveCreate = resolve;
+    });
+    createMock.mockReturnValueOnce(pendingCreate);
+
+    await openOverlay(context);
+    await switchToCustom();
+    fireEvent.change(screen.getByRole("textbox", { name: BRANCH_LABEL }), {
+      target: { value: "feature/background-create" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(createMock).toHaveBeenCalledOnce();
+    });
+    expect(
+      screen.queryByRole("textbox", { name: BRANCH_LABEL })
+    ).not.toBeInTheDocument();
+    expect(notificationsLoadingMock).toHaveBeenCalledWith("Creating worktree…");
+
+    const onProgress = createMock.mock.calls[0]?.[1]?.onProgress;
+    onProgress?.({
+      operationId: "00000000-0000-4000-8000-000000000001",
+      phase: "initializing",
+    });
+    expect(loadingUpdateMock).toHaveBeenCalledWith("Initializing environment…");
+    expect(loadingSuccessMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveCreate(
+        createResultFor("background-create", "feature/background-create")
+      );
+      await pendingCreate;
+    });
+    await vi.waitFor(() => {
+      expect(loadingDismissMock).toHaveBeenCalledTimes(1);
+      expect(openTerminalMock).toHaveBeenCalled();
+    });
+    expect(loadingSuccessMock).not.toHaveBeenCalled();
+    expect(loadingDismissMock.mock.invocationCallOrder[0]).toBeLessThan(
+      openTerminalMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    );
   });
 
   it("does not pass environmentId to worktrees.create", async () => {
@@ -712,7 +808,15 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
     expect(
       await screen.findByText(
-        "Branch names may only contain letters, digits and . _ / -"
+        "Enter a valid Git branch name using letters, digits and . _ / -"
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.change(branch, { target: { value: "feature/fix..dialog" } });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+    expect(
+      await screen.findByText(
+        "Enter a valid Git branch name using letters, digits and . _ / -"
       )
     ).toBeInTheDocument();
 
@@ -742,14 +846,12 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
-      expect(createMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          base: "develop",
-          branch: "feature/x",
-          name: "feature-x",
-          path: "/repo",
-        })
-      );
+      expectCreateRequest({
+        base: "develop",
+        branch: "feature/x",
+        name: "feature-x",
+        path: "/repo",
+      });
     });
   });
 
@@ -766,7 +868,7 @@ describe("WorktreeCreateOverlay", () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
-  it("create 被拒绝:overlay 保留、错误文案渲染", async () => {
+  it("create 被拒绝:关闭 loading 并用宿主弹窗展示错误详情", async () => {
     createMock.mockRejectedValueOnce(new Error("invalid worktree branch"));
     await openOverlay(context);
     await switchToCustom();
@@ -775,16 +877,46 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.change(branch, { target: { value: "feature/x" } });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
+    await vi.waitFor(() => {
+      expect(dialogAlertMock).toHaveBeenCalledWith({
+        body: "invalid worktree branch",
+        title: "Worktree creation failed",
+      });
+    });
+    expect(loadingDismissMock).toHaveBeenCalled();
     expect(
-      await screen.findByText("invalid worktree branch")
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: BRANCH_LABEL })
-    ).not.toBeDisabled();
+      screen.queryByRole("textbox", { name: BRANCH_LABEL })
+    ).not.toBeInTheDocument();
     expect(openTerminalMock).not.toHaveBeenCalled();
   });
 
-  it("openTerminal 被拒绝:notifications.error 被调、overlay 已关闭、不抛出", async () => {
+  it("环境初始化失败时明确说明工作树已创建", async () => {
+    createMock.mockImplementationOnce(async (_request, options) => {
+      options?.onProgress?.({
+        operationId: "00000000-0000-4000-8000-000000000001",
+        phase: "initializing",
+      });
+      throw new Error("setup exited with code 1");
+    });
+    await openOverlay(context);
+    await switchToCustom();
+
+    fireEvent.change(screen.getByRole("textbox", { name: BRANCH_LABEL }), {
+      target: { value: "feature/setup-fails" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(dialogAlertMock).toHaveBeenCalledWith({
+        body: "setup exited with code 1",
+        title: "Worktree created, but environment initialization failed",
+      });
+    });
+    expect(loadingUpdateMock).toHaveBeenCalledWith("Initializing environment…");
+    expect(openTerminalMock).not.toHaveBeenCalled();
+  });
+
+  it("openTerminal 被拒绝:用宿主弹窗展示错误详情", async () => {
     openTerminalMock.mockRejectedValueOnce(new Error("spawn failed"));
     await openOverlay(context);
     await switchToCustom();
@@ -794,9 +926,10 @@ describe("WorktreeCreateOverlay", () => {
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
-      expect(notificationsErrorMock).toHaveBeenCalledWith(
-        expect.stringContaining("spawn failed")
-      );
+      expect(dialogAlertMock).toHaveBeenCalledWith({
+        body: "spawn failed",
+        title: "Terminal launch failed",
+      });
     });
     expect(
       screen.queryByRole("textbox", { name: BRANCH_LABEL })
@@ -819,29 +952,5 @@ describe("WorktreeCreateOverlay", () => {
         screen.queryByRole("textbox", { name: TASK_LABEL })
       ).not.toBeInTheDocument();
     });
-  });
-
-  it("切换标签会清空上一次的提交错误", async () => {
-    generateTextMock.mockResolvedValueOnce({
-      message: "boom",
-      reason: "request_failed",
-      status: "unavailable",
-    });
-    await openOverlay(context);
-
-    const task = screen.getByRole("textbox", { name: TASK_LABEL });
-    fireEvent.change(task, { target: { value: "fix focus" } });
-    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
-    await screen.findByText("Agent invocation failed: boom");
-
-    await switchToCustom();
-    expect(
-      screen.queryByText("Agent invocation failed: boom")
-    ).not.toBeInTheDocument();
-
-    clickTab(AI_TAB);
-    expect(
-      await screen.findByRole("textbox", { name: TASK_LABEL })
-    ).toBeInTheDocument();
   });
 });

@@ -4,7 +4,9 @@ export const commandPalette = {
   emptyQuickPick: "无匹配项",
   searchResults: "搜索结果",
   agents: {
+    launchFailed: "启动智能体失败",
     noAgentDetected: "未检测到可用 agent",
+    unavailable: "智能体当前不可用",
   },
   placeholder: {
     commands: "搜索命令…",

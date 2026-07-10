@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
+import { Field, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import {
   Select,
   SelectContent,
@@ -23,6 +23,7 @@ import type {
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { WorktreeCreatePhase } from "@shared/contracts/worktree.ts";
 import type { WorktreeCreationDraft } from "@shared/worktree-naming.ts";
 import {
   deriveWorktreeCreation,
@@ -33,13 +34,11 @@ import { Controller, useForm } from "react-hook-form";
 import {
   buildFormSchema,
   type CreateMode,
-  confirmButtonContent,
   type FormValues,
   HEAD_SENTINEL,
   PrepareBadges,
   readBranchNamePromptTemplate,
   resolveSubmitDraft,
-  type SubmitPhase,
   type WorktreeCreateOverlayData,
 } from "./worktree-create-form.tsx";
 import {
@@ -59,6 +58,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+type CreateOperationStage = "generating" | WorktreeCreatePhase;
+
+function currentOperationStage(ref: {
+  current: CreateOperationStage;
+}): CreateOperationStage {
+  return ref.current;
+}
+
 function focusActiveModeInput(mode: CreateMode): void {
   const target = document.getElementById(
     mode === "ai" ? "worktree-create-task" : "worktree-create-branch"
@@ -76,11 +83,10 @@ function WorktreeCreateOverlay({
   context,
   data,
 }: WorktreeCreateOverlayProps) {
-  const [phase, setPhase] = useState<SubmitPhase>("idle");
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [agentSelection, setAgentSelection] =
     useState<RendererPluginAgentSelection | null>(null);
-  const closedRef = useRef(false);
+  const operationStageRef = useRef<CreateOperationStage>("creating");
+  const submittedRef = useRef(false);
 
   const text = useCallback(
     (
@@ -154,6 +160,7 @@ function WorktreeCreateOverlay({
           setAgentSelection({
             detectedIds: [],
             enabledIds: [],
+            rankedIds: [],
             selectedId: null,
           });
         }
@@ -178,7 +185,6 @@ function WorktreeCreateOverlay({
   const agentSelectionLoaded = agentSelection !== null;
 
   function closeOverlay(): void {
-    closedRef.current = true;
     close();
   }
 
@@ -194,22 +200,27 @@ function WorktreeCreateOverlay({
         ...(agentId && taskPrompt ? { taskPrompt } : {}),
       });
     } catch (err) {
-      context.notifications.error(
-        text(
-          "launchFailed",
-          { message: errorMessage(err) },
-          "Terminal launch failed: {{message}}"
-        )
-      );
+      await context.dialogs.alert({
+        body: errorMessage(err),
+        title: text("launchFailed", undefined, "Terminal launch failed"),
+      });
     }
   }
 
   async function onSubmit(values: FormValues): Promise<void> {
-    setSubmitError(null);
+    if (submittedRef.current) {
+      return;
+    }
+    submittedRef.current = true;
+    operationStageRef.current =
+      values.mode === "ai" ? "generating" : "creating";
+    closeOverlay();
+    const loading = context.notifications.loading(
+      values.mode === "ai"
+        ? text("generatingBranch", undefined, "Generating branch name…")
+        : text("creatingWorktree", undefined, "Creating worktree…")
+    );
     try {
-      if (values.mode === "ai") {
-        setPhase("generating");
-      }
       const resolved = await resolveSubmitDraft({
         branchNamePromptTemplate: readBranchNamePromptTemplate(
           context.configuration
@@ -219,20 +230,44 @@ function WorktreeCreateOverlay({
         text,
         values,
       });
-      if ("error" in resolved || closedRef.current) {
-        setSubmitError("error" in resolved ? resolved.error : null);
-        setPhase("idle");
+      if ("error" in resolved) {
+        loading.dismiss();
+        await context.dialogs.alert({
+          body: resolved.error,
+          title: text(
+            "generationFailed",
+            undefined,
+            "Branch name generation failed"
+          ),
+        });
         return;
       }
-      setPhase("creating");
       const { draft } = resolved;
-      const result = await context.worktrees.create({
-        ...(values.base === HEAD_SENTINEL ? {} : { base: values.base }),
-        branch: draft.branch,
-        name: draft.name,
-        path: data.mainPath,
-      });
-      closeOverlay();
+      operationStageRef.current = "creating";
+      loading.update(text("creatingWorktree", undefined, "Creating worktree…"));
+      const result = await context.worktrees.create(
+        {
+          ...(values.base === HEAD_SENTINEL ? {} : { base: values.base }),
+          branch: draft.branch,
+          name: draft.name,
+          path: data.mainPath,
+        },
+        {
+          onProgress: ({ phase: nextProgressPhase }) => {
+            operationStageRef.current = nextProgressPhase;
+            loading.update(
+              nextProgressPhase === "initializing"
+                ? text(
+                    "initializingEnvironment",
+                    undefined,
+                    "Initializing environment…"
+                  )
+                : text("creatingWorktree", undefined, "Creating worktree…")
+            );
+          },
+        }
+      );
+      loading.dismiss();
       const agentId =
         values.mode === "ai" && values.startTask && values.agentId !== ""
           ? values.agentId
@@ -243,12 +278,34 @@ function WorktreeCreateOverlay({
         agentId ? values.text.trim() : undefined
       );
     } catch (err) {
-      setSubmitError(errorMessage(err));
-      setPhase("idle");
+      loading.dismiss();
+      const operationStage = currentOperationStage(operationStageRef);
+      let failureTitle: string;
+      if (operationStage === "generating") {
+        failureTitle = text(
+          "generationFailed",
+          undefined,
+          "Branch name generation failed"
+        );
+      } else if (operationStage === "initializing") {
+        failureTitle = text(
+          "initializationFailed",
+          undefined,
+          "Worktree created, but environment initialization failed"
+        );
+      } else {
+        failureTitle = text(
+          "createFailed",
+          undefined,
+          "Worktree creation failed"
+        );
+      }
+      await context.dialogs.alert({
+        body: errorMessage(err),
+        title: failureTitle,
+      });
     }
   }
-
-  const busy = phase !== "idle";
 
   return (
     <Dialog
@@ -285,15 +342,14 @@ function WorktreeCreateOverlay({
               onValueChange={(value) => {
                 form.setValue("mode", value as CreateMode);
                 form.clearErrors();
-                setSubmitError(null);
               }}
               value={mode}
             >
               <TabsList className="w-full">
-                <TabsTrigger disabled={busy} value="ai">
+                <TabsTrigger value="ai">
                   {text("modeAi", undefined, "Smart generation")}
                 </TabsTrigger>
-                <TabsTrigger disabled={busy} value="custom">
+                <TabsTrigger value="custom">
                   {text("modeCustom", undefined, "Manual naming")}
                 </TabsTrigger>
               </TabsList>
@@ -303,7 +359,6 @@ function WorktreeCreateOverlay({
               <AiModeFields
                 agentSelection={agentSelection}
                 agentSelectionLoaded={agentSelectionLoaded}
-                busy={busy}
                 form={form}
                 onSubmit={onSubmit}
                 rootPath={data.defaults.rootPath}
@@ -311,7 +366,6 @@ function WorktreeCreateOverlay({
               />
             ) : (
               <CustomModeField
-                busy={busy}
                 customDraft={customDraft}
                 form={form}
                 rootPath={data.defaults.rootPath}
@@ -327,11 +381,7 @@ function WorktreeCreateOverlay({
                 control={form.control}
                 name="base"
                 render={({ field }) => (
-                  <Select
-                    disabled={busy}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <SelectTrigger
                       className="font-mono"
                       id="worktree-create-base"
@@ -359,21 +409,14 @@ function WorktreeCreateOverlay({
             </Field>
 
             <PrepareBadges defaults={data.defaults} text={text} />
-
-            {submitError ? <FieldError>{submitError}</FieldError> : null}
           </FieldGroup>
 
           <DialogFooter>
-            <Button
-              disabled={phase === "creating"}
-              onClick={closeOverlay}
-              type="button"
-              variant="secondary"
-            >
+            <Button onClick={closeOverlay} type="button" variant="secondary">
               {context.i18n.t("ui.cancel", undefined, "Cancel")}
             </Button>
-            <Button disabled={busy} type="submit" variant="default">
-              {confirmButtonContent(phase, text)}
+            <Button type="submit" variant="default">
+              {text("confirm", undefined, "Create")}
             </Button>
           </DialogFooter>
         </form>
