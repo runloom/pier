@@ -352,6 +352,18 @@ export function getAgentCatalogEntry(
   return byId.get(id);
 }
 
+export function getAgentCatalogAliases(
+  entry: AgentCatalogEntry
+): readonly string[] {
+  return [
+    entry.label,
+    entry.id,
+    entry.launchCmd,
+    entry.detectCmd,
+    ...(entry.detectCmdAliases ?? []),
+  ];
+}
+
 export function getKnownDetectCommands(): string[] {
   const out = new Set<string>();
   for (const entry of AGENT_CATALOG) {

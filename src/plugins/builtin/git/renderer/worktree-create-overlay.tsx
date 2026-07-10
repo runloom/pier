@@ -53,6 +53,7 @@ interface WorktreeCreateOverlayProps {
   close: () => void;
   context: RendererPluginContext;
   data: WorktreeCreateOverlayData;
+  targetGroupId?: string;
 }
 
 function errorMessage(error: unknown): string {
@@ -75,6 +76,7 @@ function WorktreeCreateOverlay({
   close,
   context,
   data,
+  targetGroupId,
 }: WorktreeCreateOverlayProps) {
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -191,6 +193,7 @@ function WorktreeCreateOverlay({
       await context.worktrees.openTerminal({
         ...(agentId ? { agentId } : {}),
         path: targetPath,
+        ...(targetGroupId ? { targetGroupId } : {}),
         ...(agentId && taskPrompt ? { taskPrompt } : {}),
       });
     } catch (err) {
@@ -384,12 +387,18 @@ function WorktreeCreateOverlay({
 
 export function openWorktreeCreateOverlay(
   context: RendererPluginContext,
-  data: WorktreeCreateOverlayData
+  data: WorktreeCreateOverlayData,
+  targetGroupId?: string
 ): void {
   context.overlays.open({
     id: "worktree-create",
     render: ({ close }) => (
-      <WorktreeCreateOverlay close={close} context={context} data={data} />
+      <WorktreeCreateOverlay
+        close={close}
+        context={context}
+        data={data}
+        {...(targetGroupId ? { targetGroupId } : {})}
+      />
     ),
   });
 }

@@ -177,12 +177,16 @@ async function executeWorktreeOpenTerminalCommand(
     {
       focus: true,
       launch,
+      ...(command.windowId ? { windowId: command.windowId } : {}),
       type: "terminal.open",
     },
     services,
     {
       ...(command.agentId ? { tab: agentTerminalTab(command.agentId) } : {}),
       ...(initialInput ? { initialInput } : {}),
+      ...(command.targetGroupId
+        ? { targetGroupId: command.targetGroupId }
+        : {}),
     }
   );
 }

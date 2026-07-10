@@ -14,6 +14,10 @@ export interface ActionGroup {
   category: string;
 }
 
+export function actionCategoryKey(action: Action): string {
+  return action.metadata?.categoryKey ?? action.category;
+}
+
 export function groupActionsForPalette(
   actions: readonly Action[],
   frecencyMap: ReadonlyMap<string, number>,
@@ -36,9 +40,10 @@ export function groupActionsForPalette(
 
   const map = new Map<string, Action[]>();
   for (const action of actions) {
-    const list = map.get(action.category) ?? [];
+    const category = actionCategoryKey(action);
+    const list = map.get(category) ?? [];
     list.push(action);
-    map.set(action.category, list);
+    map.set(category, list);
   }
   const groups = Array.from(map.entries()).map(([category, list]) => ({
     category,

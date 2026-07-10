@@ -341,11 +341,12 @@ function installSelectPolyfills(): void {
 
 async function openOverlay(
   context: RendererPluginContext,
-  data = overlayData()
+  data = overlayData(),
+  targetGroupId?: string
 ): Promise<void> {
   render(<PluginOverlayHost />);
   act(() => {
-    openWorktreeCreateOverlay(context, data);
+    openWorktreeCreateOverlay(context, data, targetGroupId);
   });
   // 等 ai.status 解析,避免模式自动切换与断言竞争
   await act(async () => {
@@ -514,8 +515,8 @@ describe("WorktreeCreateOverlay", () => {
     ).toHaveFocus();
   });
 
-  it("默认 AI 模式:提交先调 generateText,创建并打开终端后关闭 overlay,且不弹成功通知", async () => {
-    await openOverlay(context);
+  it("默认 AI 模式:创建后在来源标签组打开终端,关闭 overlay 且不弹成功通知", async () => {
+    await openOverlay(context, overlayData(), "source-group");
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
     await act(() => {
@@ -541,6 +542,7 @@ describe("WorktreeCreateOverlay", () => {
     await vi.waitFor(() => {
       expect(openTerminalMock).toHaveBeenCalledWith({
         path: "/repo.worktree/fix-focus",
+        targetGroupId: "source-group",
       });
     });
     expect(

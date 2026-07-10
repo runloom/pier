@@ -74,6 +74,19 @@ class KeybindingRegistry extends Notifier {
     return this.defaults.get(commandId) ?? [];
   }
 
+  /** 优先返回动作自身的生效绑定；自身未绑定时再借用回退命令。 */
+  getFirstBindingFor(
+    commandId: string,
+    fallbackCommandId?: string
+  ): Keybinding | undefined {
+    return (
+      this.getBindingsFor(commandId)[0] ??
+      (fallbackCommandId
+        ? this.getBindingsFor(fallbackCommandId)[0]
+        : undefined)
+    );
+  }
+
   getUserBindings(): readonly Keybinding[] {
     return Array.from(this.userOverrides.values()).flat();
   }

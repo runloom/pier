@@ -48,6 +48,11 @@ const listMock = vi.fn();
 const removeMock = vi.fn();
 const worktreeBindingMock = vi.fn();
 const openQuickPickMock = vi.fn();
+const alertMock = vi.fn<RendererPluginContext["dialogs"]["alert"]>(
+  async () => undefined
+);
+const notificationErrorMock =
+  vi.fn<RendererPluginContext["notifications"]["error"]>();
 
 function createMockContext(): {
   actions: Map<string, RendererPluginAction>;
@@ -79,7 +84,7 @@ function createMockContext(): {
       register: unimplemented("missionControlWidgets.register"),
     },
     dialogs: {
-      alert: unimplemented("dialogs.alert"),
+      alert: alertMock,
       confirm: unimplemented("dialogs.confirm"),
     },
     environments: {
@@ -130,7 +135,7 @@ function createMockContext(): {
       ) => interpolate(fallback, values),
     },
     notifications: {
-      error: unimplemented("notifications.error"),
+      error: notificationErrorMock,
       info: unimplemented("notifications.info"),
       loading: unimplemented("notifications.loading"),
       success: unimplemented("notifications.success"),
@@ -167,6 +172,15 @@ function createMockContext(): {
   };
 
   return { actions, context: context as unknown as RendererPluginContext };
+}
+
+function createAction(actions: Map<string, RendererPluginAction>) {
+  const action = actions.get("pier.worktree.create");
+  expect(action).toBeDefined();
+  if (!action) {
+    throw new Error("missing create action");
+  }
+  return action;
 }
 
 function deleteAction(actions: Map<string, RendererPluginAction>) {
@@ -233,6 +247,63 @@ describe("worktree operation actions", () => {
       removedPath: candidate.path,
       worktrees: [],
     });
+  });
+
+  it("passes the invoking panel group into the worktree creator", async () => {
+    const { actions, context } = createMockContext();
+    context.git.listBranches = vi.fn(async () => []);
+    context.worktrees.creationDefaults = vi.fn(async () => ({
+      copyPatterns: [],
+      rootPath: "/repo.worktree",
+    }));
+    const openOverlay = vi.fn();
+    context.overlays.open = openOverlay;
+    registerWorktreeOperationActions(context);
+
+    await createAction(actions).handler({
+      sourcePanelGroupId: "source-group",
+    });
+
+    const registration = openOverlay.mock.calls[0]?.[0];
+    expect(registration?.render({ close: vi.fn() })).toMatchObject({
+      props: { targetGroupId: "source-group" },
+    });
+  });
+
+  it.each([
+    ["not_git_repo", "The current directory is not a Git repository"],
+    ["git_unavailable", "Git is unavailable"],
+    ["invalid_path", "The worktree path is invalid"],
+    ["invalid_name", "The worktree name is invalid"],
+  ] as const)("localizes the %s worktree-unavailable reason", async (reason, expectedBody) => {
+    listMock.mockResolvedValueOnce({
+      reason,
+      status: "unavailable",
+    });
+    const { actions, context } = createMockContext();
+    registerWorktreeOperationActions(context);
+
+    await createAction(actions).handler();
+
+    expect(alertMock).toHaveBeenCalledWith({
+      body: expectedBody,
+      title: "Worktree operation failed",
+    });
+    expect(notificationErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("shows worktree list failures in a dialog when creating a worktree", async () => {
+    listMock.mockRejectedValueOnce(new Error("boom"));
+    const { actions, context } = createMockContext();
+    registerWorktreeOperationActions(context);
+
+    await createAction(actions).handler();
+
+    expect(alertMock).toHaveBeenCalledWith({
+      body: "boom",
+      title: "Worktree operation failed",
+    });
+    expect(notificationErrorMock).not.toHaveBeenCalled();
   });
 
   it("adds cleanup copy to the delete confirmation for a bound worktree with a cleanup script", async () => {

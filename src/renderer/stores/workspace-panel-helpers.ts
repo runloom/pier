@@ -86,6 +86,77 @@ export function panelsInSameGroup(
   return api.panels;
 }
 
+/** Resolve a dockview group by its stable ID. */
+export function findGroupById(
+  api: DockviewApi | null,
+  groupId: string | undefined
+): WorkspaceGroupRef | undefined {
+  if (!(groupId && api)) {
+    return;
+  }
+  return api.groups.find((group) => group.id === groupId);
+}
+
+/**
+ * Build a `{ referenceGroup }` opts object for the requested group ID.
+ * Returns `{}` when the group can't be resolved, so callers can spread it into
+ * addTerminal/addMissionControl opts without tripping exactOptionalPropertyTypes.
+ */
+export function referenceGroupById(
+  api: DockviewApi | null,
+  groupId: string | undefined
+): { referenceGroup?: WorkspaceGroupRef } {
+  const group = findGroupById(api, groupId);
+  return group ? { referenceGroup: group } : {};
+}
+
+export interface WorkspaceSourceInvocation {
+  sourcePanelContext?: PanelContext;
+  sourcePanelGroupId?: string;
+  sourcePanelId?: string;
+}
+
+export interface AnchoredTerminalTarget {
+  context?: PanelContext;
+  groupId?: string;
+}
+
+/** Capture terminal placement and context before an asynchronous launch starts. */
+export function captureAnchoredTerminalTarget(
+  api: DockviewApi | null,
+  invocation?: WorkspaceSourceInvocation
+): AnchoredTerminalTarget {
+  const sourcePanelId = invocation?.sourcePanelId ?? api?.activePanel?.id;
+  const context =
+    useTerminalPreferencesStore.getState().terminalNewCwdPolicy ===
+    "activeTerminal"
+      ? (invocation?.sourcePanelContext ?? terminalPanelContext(sourcePanelId))
+      : undefined;
+  const groupId = invocation?.sourcePanelGroupId ?? api?.activeGroup?.id;
+  return {
+    ...(context ? { context } : {}),
+    ...(groupId ? { groupId } : {}),
+  };
+}
+
+/**
+ * Resolve a previously captured target. A missing captured group is an error:
+ * falling back to the current active group would launch in the wrong project.
+ */
+export function resolveAnchoredTerminalOptions(
+  api: DockviewApi | null,
+  target: AnchoredTerminalTarget
+): { context?: PanelContext; referenceGroup?: WorkspaceGroupRef } | null {
+  const referenceGroup = findGroupById(api, target.groupId);
+  if (target.groupId && !referenceGroup) {
+    return null;
+  }
+  return {
+    ...(target.context ? { context: target.context } : {}),
+    ...(referenceGroup ? { referenceGroup } : {}),
+  };
+}
+
 export async function clearCurrentWindowLayout(): Promise<void> {
   const context = await window.pier.window.getContext();
   await window.pier.workspace.clearLayout(context.recordId);

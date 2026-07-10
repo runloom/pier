@@ -6,7 +6,7 @@
  *   2. 不同 group 之间插 separator
  *   3. 同 group 内按 metadata.sortOrder 升序 (缺省 0), 同 sortOrder 按 title 字典序
  *
- * 快捷键 hint: 反查 keybindingRegistry.getBindingsFor(action.id), 取第一个 chord,
+ * 快捷键 hint: 优先反查 action 自身绑定, 没有时再借用 shortcutSourceId,
  * 用 toElectronAccelerator 转 Electron 格式 (仅显示, 不绑定; 实际触发在 web keymap 路径).
  */
 import type { MenuItem, MenuTemplate } from "@shared/contracts/menu.ts";
@@ -81,8 +81,10 @@ function sortOrderOf(a: Action): number {
 }
 
 function actionToMenuItem(a: Action): MenuItem {
-  const shortcutSourceId = a.metadata?.shortcutSourceId ?? a.id;
-  const binding = keybindingRegistry.getBindingsFor(shortcutSourceId)[0];
+  const binding = keybindingRegistry.getFirstBindingFor(
+    a.id,
+    a.metadata?.shortcutSourceId
+  );
   const accelerator = binding
     ? toElectronAccelerator(binding.chord)
     : undefined;

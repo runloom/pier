@@ -1,6 +1,13 @@
+import {
+  getAgentCatalogAliases,
+  getAgentCatalogEntry,
+} from "@shared/agent-catalog.ts";
+import { pickAgent } from "@shared/agent-selection.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
 import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
+import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
+import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import type {
   ActionContributionRuntime,
@@ -92,7 +99,21 @@ export function resolveI18nAliases(key: string): readonly string[] {
 }
 
 export function resolveActionAliases(actionId: string): readonly string[] {
-  return resolveI18nAliases(`commandPalette.aliases.${actionId}`);
+  const localizedAliases = resolveI18nAliases(
+    `commandPalette.aliases.${actionId}`
+  );
+  if (actionId !== "pier.agent.new") {
+    return localizedAliases;
+  }
+
+  const { detectedIds } = useAgentDetectStore.getState();
+  const { defaultAgentId, disabledAgentIds } =
+    useAgentPreferencesStore.getState();
+  const agentId = pickAgent(defaultAgentId, detectedIds, disabledAgentIds);
+  const entry = agentId ? getAgentCatalogEntry(agentId) : undefined;
+  return entry
+    ? uniqueStrings([...localizedAliases, ...getAgentCatalogAliases(entry)])
+    : localizedAliases;
 }
 
 export const rendererActionContributionRuntime: ActionContributionRuntime = {

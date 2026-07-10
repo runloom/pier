@@ -77,7 +77,10 @@ function useKeybindingLabels(): ReadonlyMap<string, string> {
   );
   const map = new Map<string, string>();
   for (const action of actionRegistry.list("command-palette")) {
-    const first = keybindingRegistry.getBindingsFor(action.id)[0];
+    const first = keybindingRegistry.getFirstBindingFor(
+      action.id,
+      action.metadata?.shortcutSourceId
+    );
     if (first) {
       map.set(action.id, formatChord(first.chord));
     }
@@ -280,7 +283,8 @@ export function CommandPalette() {
     if (action.enabled?.() === false) {
       return;
     }
-    const before = useCommandPaletteController.getState().requestId;
+    const controller = useCommandPaletteController.getState();
+    const before = controller.requestId;
     try {
       await action.handler();
       if (!action.metadata?.excludeFromMru) {
