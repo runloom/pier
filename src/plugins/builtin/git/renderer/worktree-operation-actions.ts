@@ -1,9 +1,34 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { WorktreeItem } from "@shared/contracts/worktree.ts";
+import type {
+  WorktreeItem,
+  WorktreeUnavailableReason,
+} from "@shared/contracts/worktree.ts";
 import { BrushCleaning, FolderGit2, GitBranch, Trash2 } from "lucide-react";
 import { openWorktreeCreateOverlay } from "./worktree-create-overlay.tsx";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
+
+const WORKTREE_UNAVAILABLE_MESSAGES = {
+  git_unavailable: {
+    fallback: "Git is unavailable",
+    key: "worktreeUnavailable.gitUnavailable",
+  },
+  invalid_name: {
+    fallback: "The worktree name is invalid",
+    key: "worktreeUnavailable.invalidName",
+  },
+  invalid_path: {
+    fallback: "The worktree path is invalid",
+    key: "worktreeUnavailable.invalidPath",
+  },
+  not_git_repo: {
+    fallback: "The current directory is not a Git repository",
+    key: "worktreeUnavailable.notGitRepository",
+  },
+} satisfies Record<
+  WorktreeUnavailableReason,
+  { fallback: string; key: string }
+>;
 
 function basename(path: string): string {
   const parts = path.split(PATH_SEPARATOR_RE).filter(Boolean);
@@ -141,7 +166,7 @@ function registerWorktreeCreateAction(
       return target.enabled ? null : target.reason;
     },
     enabled: () => activeWorktreeTarget(context).enabled,
-    handler: async () => {
+    handler: async (invocation) => {
       const target = activeWorktreeTarget(context);
       if (!target.enabled) {
         openUnavailablePick(context, target.reason);
@@ -150,38 +175,35 @@ function registerWorktreeCreateAction(
       try {
         const listResult = await context.worktrees.list({ path: target.path });
         if (listResult.status !== "available") {
-          context.notifications.error(
-            pluginText(
-              context,
-              "worktreeCreate.unavailable",
-              "Worktrees are unavailable: {{message}}",
-              { message: listResult.reason }
-            )
-          );
+          const message = WORKTREE_UNAVAILABLE_MESSAGES[listResult.reason];
+          await context.dialogs.alert({
+            body: pluginText(context, message.key, message.fallback),
+            title: operationFailedReason(context),
+          });
           return;
         }
         const [branches, defaults] = await Promise.all([
           context.git.listBranches(listResult.mainPath, { kind: "all" }),
           context.worktrees.creationDefaults({ path: listResult.mainPath }),
         ]);
-        openWorktreeCreateOverlay(context, {
-          branches,
-          defaults,
-          existingBranches: branches.map((ref) => ref.name),
-          existingNames: listResult.worktrees.map((item) =>
-            basename(item.path)
-          ),
-          mainPath: listResult.mainPath,
-        });
-      } catch (err) {
-        context.notifications.error(
-          pluginText(
-            context,
-            "worktreeCreate.openFailed",
-            "Couldn't open worktree creation: {{message}}",
-            { message: errorMessage(err) }
-          )
+        openWorktreeCreateOverlay(
+          context,
+          {
+            branches,
+            defaults,
+            existingBranches: branches.map((ref) => ref.name),
+            existingNames: listResult.worktrees.map((item) =>
+              basename(item.path)
+            ),
+            mainPath: listResult.mainPath,
+          },
+          invocation?.sourcePanelGroupId
         );
+      } catch (err) {
+        await context.dialogs.alert({
+          body: errorMessage(err),
+          title: operationFailedReason(context),
+        });
       }
     },
     id: "pier.worktree.create",
@@ -191,7 +213,7 @@ function registerWorktreeCreateAction(
       iconComponent: GitBranch,
       sortOrder: 2,
     },
-    surfaces: ["command-palette"],
+    surfaces: ["command-palette", "create-menu"],
     title: () =>
       context.i18n.commandTitle("pier.worktree.create", "Create Worktree"),
   });

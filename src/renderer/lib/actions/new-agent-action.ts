@@ -4,30 +4,74 @@ import { Bot } from "lucide-react";
 import { toast } from "sonner";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import {
+  captureAnchoredTerminalTarget,
+  resolveAnchoredTerminalOptions,
+} from "@/stores/workspace-panel-helpers.ts";
+import { registerActionContributions } from "./contribution-runtime.ts";
 import type { ActionContribution } from "./contribution-types.ts";
+import { rendererActionContributionRuntime } from "./renderer-action-runtime.ts";
+import type { ActionInvocation } from "./types.ts";
 
-async function handleNewAgent(): Promise<void> {
-  // Startup kicks this off globally; this remains a cheap safety net for tests,
-  // debug windows, or early invocations that race the initial probe.
-  await useAgentDetectStore.getState().ensureDetected();
-
+function currentDefaultAgentId() {
   const { detectedIds } = useAgentDetectStore.getState();
   const { defaultAgentId, disabledAgentIds } =
     useAgentPreferencesStore.getState();
+  return pickAgent(defaultAgentId, detectedIds, disabledAgentIds);
+}
 
-  const agentId = pickAgent(defaultAgentId, detectedIds, disabledAgentIds);
+async function handleNewAgent(invocation?: ActionInvocation): Promise<void> {
+  const target = captureAnchoredTerminalTarget(
+    useWorkspaceStore.getState().api,
+    invocation
+  );
+  // Startup kicks this off globally; this remains a cheap safety net for tests,
+  // debug windows, or early invocations that race the initial probe.
+  try {
+    await useAgentDetectStore.getState().ensureDetected();
+  } catch (error) {
+    await showAppAlert({
+      body: error instanceof Error ? error.message : String(error),
+      title: i18next.t("workspace.addPanelMenu.detectAgentsFailed"),
+    });
+    return;
+  }
+
+  const agentId = currentDefaultAgentId();
   if (!agentId) {
     toast.error(i18next.t("commandPalette.agents.noAgentDetected"));
     return;
   }
 
-  const { launchId } = await window.pier.agents.prepareLaunch(agentId);
-  if (!launchId) {
-    return;
+  try {
+    const { launchId } = await window.pier.agents.prepareLaunch(agentId);
+    if (!launchId) {
+      toast.error(i18next.t("workspace.addPanelMenu.startAgentFailed"));
+      return;
+    }
+    const terminalOptions = resolveAnchoredTerminalOptions(
+      useWorkspaceStore.getState().api,
+      target
+    );
+    if (!terminalOptions) {
+      toast.error(i18next.t("workspace.addPanelMenu.startAgentFailed"));
+      return;
+    }
+    const panelId = useWorkspaceStore.getState().addTerminal({
+      ...terminalOptions,
+      launchId,
+    });
+    if (!panelId) {
+      toast.error(i18next.t("workspace.addPanelMenu.startAgentFailed"));
+    }
+  } catch (error) {
+    await showAppAlert({
+      body: error instanceof Error ? error.message : String(error),
+      title: i18next.t("workspace.addPanelMenu.startAgentFailed"),
+    });
   }
-
-  useWorkspaceStore.getState().addTerminal({ launchId });
 }
 
 export const NEW_AGENT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
@@ -38,8 +82,24 @@ export const NEW_AGENT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     iconComponent: Bot,
     id: "pier.agent.new",
     sortOrder: 2,
-    surfaces: ["command-palette"],
+    // 默认智能体动作只作为稳定的快捷键入口存在。可见菜单中的快捷键
+    // 标识由当前默认智能体对应的 pier.agent.start.<id> 动作借用，避免
+    // 与该动作重复显示成两个启动项。
+    surfaces: [],
     titleKey: "commandPalette.action.newAgent",
     when: "workspace.hasApi",
   },
 ];
+
+export function registerNewAgentAction(): () => void {
+  const disposers = registerActionContributions(
+    NEW_AGENT_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
+  );
+
+  return () => {
+    for (const dispose of disposers) {
+      dispose();
+    }
+  };
+}

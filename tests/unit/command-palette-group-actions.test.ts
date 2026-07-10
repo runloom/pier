@@ -60,6 +60,20 @@ describe("groupActionsForPalette", () => {
     expect(groups[0]?.actions.map((a) => a.id)).toEqual(["v2", "v1"]);
   });
 
+  it("uses metadata category keys for shared plugin actions", () => {
+    const action = mk("pier.worktree.create", "Worktree");
+    action.metadata = { categoryKey: "worktree" };
+
+    const groups = groupActionsForPalette([action], new Map(), "");
+
+    expect(groups).toMatchObject([
+      {
+        actions: [{ id: "pier.worktree.create" }],
+        category: "worktree",
+      },
+    ]);
+  });
+
   it("query 空 + 有 frecency → 组间按 max(score) 排, 组内按 score 排", () => {
     const actions = [
       mk("v1", "View"),

@@ -163,4 +163,37 @@ describe("workspace renderer commands", () => {
       requestId: "renderer-close-last-failed",
     });
   });
+
+  it("opens a new terminal in the requested panel group", async () => {
+    const sourceGroup = { id: "source-group", panels: [] };
+    const activeGroup = { id: "active-group", panels: [] };
+    const api = {
+      ...createApi([]),
+      activeGroup,
+      groups: [sourceGroup, activeGroup],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+    const addTerminal = vi
+      .spyOn(useWorkspaceStore.getState(), "addTerminal")
+      .mockReturnValue("terminal-target");
+
+    await runWorkspaceRendererCommand({
+      command: {
+        launchId: "launch-target",
+        targetGroupId: "source-group",
+        type: "terminal.open",
+      },
+      requestId: "renderer-open-target-group",
+    });
+
+    expect(addTerminal).toHaveBeenCalledWith({
+      launchId: "launch-target",
+      referenceGroup: sourceGroup,
+    });
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: { panelId: "terminal-target" },
+      ok: true,
+      requestId: "renderer-open-target-group",
+    });
+  });
 });

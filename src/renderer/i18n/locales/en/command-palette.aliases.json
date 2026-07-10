@@ -1,7 +1,13 @@
 {
   "pier": {
     "agent": {
-      "new": ["agent", "new agent", "ai agent", "start agent"]
+      "new": [
+        "agent",
+        "new agent",
+        "ai agent",
+        "start agent",
+        "start default agent"
+      ]
     },
     "commandPalette": {
       "clearRecent": ["clear history", "reset history", "command history"]
