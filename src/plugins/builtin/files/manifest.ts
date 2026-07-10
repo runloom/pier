@@ -1,5 +1,11 @@
 import type { PluginManifest } from "@shared/contracts/plugin.ts";
-import { FILES_AUTO_SAVE_SETTING_KEY } from "./settings.ts";
+import {
+  FILES_AUTO_SAVE_SETTING_KEY,
+  FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+  FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+  FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
+  FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
+} from "./settings.ts";
 
 export const FILES_PLUGIN_ID = "pier.files";
 export const FILES_FILE_PANEL_ID = "pier.files.filePanel";
@@ -139,6 +145,27 @@ export const FILES_PLUGIN_MANIFEST = {
         description:
           "Automatically save dirty files one second after the last edit. Conflicts with external changes still go through the overwrite/compare dialog.",
         order: 10,
+        type: "boolean",
+      },
+      [FILES_TREE_SHOW_EXCLUDED_SETTING_KEY]: {
+        default: false,
+        description: "Show paths matched by the file tree exclusion patterns.",
+        order: 20,
+        type: "boolean",
+      },
+      [FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY]: {
+        default: FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+        description:
+          "Glob patterns excluded from the file tree when excluded files are not shown. Enter one pattern per line.",
+        multiline: true,
+        order: 21,
+        type: "string",
+      },
+      [FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY]: {
+        default: true,
+        description:
+          "Show files and folders matched by Git ignore rules. This is separate from the file tree exclusion patterns.",
+        order: 30,
         type: "boolean",
       },
     },

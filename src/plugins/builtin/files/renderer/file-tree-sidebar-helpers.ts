@@ -9,6 +9,7 @@ import {
   loadFilesTreeRoot,
   subscribeFilesTreeSession,
 } from "./files-tree-store.ts";
+import type { FilesTreeList } from "./files-tree-visibility.ts";
 import { ensureFilesTreeWatch } from "./files-tree-watch.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 
@@ -55,7 +56,8 @@ export function toTreeItem(entry: FileEntry): PierFileTreeItem {
 export function useFilesTreeSnapshot(
   context: RendererPluginContext,
   root: string,
-  watchHub: FilesWatchHub
+  watchHub: FilesWatchHub,
+  list: FilesTreeList
 ) {
   const subscribe = useCallback(
     (listener: () => void) => subscribeFilesTreeSession(root, listener),
@@ -68,11 +70,11 @@ export function useFilesTreeSnapshot(
   useEffect(() => {
     loadFilesTreeRoot(
       root,
-      context.files.list,
+      list,
       t("panel.loadError.fallback", "Failed to load files")
     );
-    ensureFilesTreeWatch(context, watchHub, root);
-  }, [context, root, t, watchHub]);
+    ensureFilesTreeWatch(context, watchHub, root, list);
+  }, [context, list, root, t, watchHub]);
 
   return snapshot;
 }

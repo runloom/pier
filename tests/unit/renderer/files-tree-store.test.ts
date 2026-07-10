@@ -5,8 +5,8 @@ import {
 } from "@plugins/builtin/files/renderer/files-tree-registry.ts";
 import {
   addFilesTreeEntry,
-  applyFilesTreeWatchEvent,
   clearFilesTreeStore,
+  ensureAncestorDirectoryEntries,
   getFilesTreeSnapshot,
   loadFilesTreeDirectory,
   loadFilesTreeRoot,
@@ -14,6 +14,8 @@ import {
   removeFilesTreeEntry,
   subscribeFilesTreeSession,
 } from "@plugins/builtin/files/renderer/files-tree-store.ts";
+import { reloadFilesTreeVisibility } from "@plugins/builtin/files/renderer/files-tree-visibility-reload.ts";
+import { applyFilesTreeWatchEvent } from "@plugins/builtin/files/renderer/files-tree-watch-events.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -138,13 +140,27 @@ describe("files-tree-store", () => {
       Promise.reject(new Error("Network unavailable"))
     );
 
-    await loadFilesTreeDirectory(ROOT, "src", list);
+    const result = await loadFilesTreeDirectory(ROOT, "src", list);
 
+    expect(result).toEqual({ error: expect.any(Error), ok: false });
     const snapshot = getFilesTreeSnapshot(ROOT);
     expect(snapshot.directoryStatesByPath.get("src")).toBe("error");
     expect(snapshot.entriesByPath.get("README.md")).toBe(readme);
     expect(snapshot.entriesByPath.get("src")).toEqual(directory("src"));
     expect(snapshot.rootError).toBeNull();
+  });
+
+  it("reports a rejected directory load even when the rejection has no value", async () => {
+    await loadRoot([directory("src")]);
+
+    const result = await loadFilesTreeDirectory(ROOT, "src", () =>
+      Promise.reject()
+    );
+
+    expect(result).toEqual({ error: undefined, ok: false });
+    expect(getFilesTreeSnapshot(ROOT).directoryStatesByPath.get("src")).toBe(
+      "error"
+    );
   });
 
   it("transitions a directory from loading to loaded when entries arrive", async () => {
@@ -165,6 +181,40 @@ describe("files-tree-store", () => {
     expect(snapshot.directoryStatesByPath.get("src")).toBe("loaded");
     expect(snapshot.entriesByPath.get("src/index.ts")).toEqual(
       file("src/index.ts")
+    );
+  });
+
+  it("shares one in-flight directory request across tree consumers", async () => {
+    await loadRoot([directory("src")]);
+    const directoryLoad = createDeferred<FileEntry[]>();
+    const list = vi.fn<FilesListApi>(() => directoryLoad.promise);
+
+    const firstLoad = loadFilesTreeDirectory(ROOT, "src", list);
+    const secondLoad = loadFilesTreeDirectory(ROOT, "src", list);
+
+    expect(list).toHaveBeenCalledTimes(1);
+    directoryLoad.resolve([file("src/index.ts")]);
+    await expect(firstLoad).resolves.toEqual({ ok: true });
+    await expect(secondLoad).resolves.toEqual({ ok: true });
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads an isolated directory chain atomically on the first expansion", async () => {
+    await loadRoot([directory("src")]);
+    const list = listFromResponses({
+      src: [directory("src/generated")],
+      "src/generated": [file("src/generated/index.ts")],
+    });
+
+    await loadFilesTreeDirectory(ROOT, "src", list);
+
+    expect(list).toHaveBeenNthCalledWith(1, ROOT, { path: "src" });
+    expect(list).toHaveBeenNthCalledWith(2, ROOT, { path: "src/generated" });
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.directoryStatesByPath.get("src")).toBe("loaded");
+    expect(snapshot.directoryStatesByPath.get("src/generated")).toBe("loaded");
+    expect(snapshot.entriesByPath.get("src/generated/index.ts")).toEqual(
+      file("src/generated/index.ts")
     );
   });
 
@@ -304,6 +354,98 @@ describe("files-tree-store", () => {
       srcIndexEntry
     );
     unsubscribe();
+  });
+
+  it("reloads known directories in parent-first order when visibility changes", async () => {
+    let hideMetadata = false;
+    const responses: Readonly<Record<string, readonly FileEntry[]>> = {
+      "": [directory(".git"), directory("src")],
+      ".git": [file(".git/config")],
+      src: [directory("src/cache"), file("src/index.ts")],
+      "src/cache": [file("src/cache/generated.js")],
+    };
+    const list = vi.fn(async (_root: string, options?: { path?: string }) => {
+      const entries = [...(responses[options?.path ?? ""] ?? [])];
+      return hideMetadata
+        ? entries.filter(
+            (entry) =>
+              !entry.path
+                .split("/")
+                .some((part) => [".git", "cache"].includes(part))
+          )
+        : entries;
+    });
+
+    await loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    await loadFilesTreeDirectory(ROOT, ".git", list);
+    await loadFilesTreeDirectory(ROOT, "src", list);
+    await loadFilesTreeDirectory(ROOT, "src/cache", list);
+    hideMetadata = true;
+
+    await reloadFilesTreeVisibility(ROOT, list, "Failed to load files");
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.has(".git")).toBe(false);
+    expect(snapshot.entriesByPath.has(".git/config")).toBe(false);
+    expect(snapshot.directoryStatesByPath.has(".git")).toBe(false);
+    expect(snapshot.entriesByPath.has("src/cache")).toBe(false);
+    expect(snapshot.entriesByPath.has("src/cache/generated.js")).toBe(false);
+    expect(snapshot.directoryStatesByPath.has("src/cache")).toBe(false);
+    expect(snapshot.entriesByPath.get("src/index.ts")).toEqual(
+      file("src/index.ts")
+    );
+    expect(snapshot.directoryStatesByPath.get("src")).toBe("loaded");
+  });
+
+  it("queues a visibility reload behind an active root load", async () => {
+    const initialRootLoad = createDeferred<void>();
+    let showMetadata = true;
+    let requestCount = 0;
+    const list = vi.fn<FilesListApi>(async () => {
+      requestCount += 1;
+      const showMetadataForRequest = showMetadata;
+      if (requestCount === 1) {
+        await initialRootLoad.promise;
+      }
+      return showMetadataForRequest
+        ? [directory(".git"), directory("src")]
+        : [directory("src")];
+    });
+
+    const initialLoad = loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    showMetadata = false;
+    const visibilityReload = reloadFilesTreeVisibility(
+      ROOT,
+      list,
+      "Failed to load files"
+    );
+    initialRootLoad.resolve();
+    await initialLoad;
+    await visibilityReload;
+
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.has(".git")).toBe(false);
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src")).toBe(true);
+  });
+
+  it("applies the active visibility predicate to optimistic mutations", async () => {
+    const list = Object.assign(async () => [file("README.md")], {
+      isPathVisible: (_root: string, path: string) =>
+        !path.split("/").includes(".git"),
+    });
+    await loadFilesTreeRoot(ROOT, list, "Failed to load files");
+
+    addFilesTreeEntry(ROOT, directory(".git"));
+    ensureAncestorDirectoryEntries(ROOT, ".git/hooks/pre-commit");
+    addFilesTreeEntry(ROOT, file("src/index.ts"));
+    moveFilesTreeEntry(ROOT, "src/index.ts", ".git/index.ts");
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.has(".git")).toBe(false);
+    expect(snapshot.entriesByPath.has(".git/hooks")).toBe(false);
+    expect(snapshot.entriesByPath.has("src/index.ts")).toBe(false);
+    expect(snapshot.entriesByPath.has(".git/index.ts")).toBe(false);
+    expect(snapshot.entriesByPath.get("README.md")).toEqual(file("README.md"));
   });
 
   it("preserves a loaded child directory subtree when reloading its parent", async () => {

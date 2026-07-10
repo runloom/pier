@@ -67,7 +67,10 @@
     "filePanel.tree.createFailed": "Unable to create item",
     "filePanel.tree.createNeedsProject": "Open a project to create files.",
     "filePanel.tree.contextMenuFailed": "Unable to open menu",
+    "filePanel.tree.directoryError": "Error",
+    "filePanel.tree.loadDirectoryFailed": "Unable to load folder",
     "filePanel.tree.renameFailed": "Unable to rename",
+    "filePanel.tree.refreshFailed": "Unable to refresh file tree",
     "filePanel.tree.deleteFailed": "Unable to delete",
     "filePanel.tree.copyFailed": "Copy failed",
     "filePanel.tree.pathCopied": "Path copied",
@@ -133,6 +136,24 @@
   "panels": {
     "pier.files.filePanel": {
       "title": "File"
+    }
+  },
+  "settings": {
+    "pier.files.autoSave": {
+      "description": "Automatically save dirty files one second after the last edit. Conflicts with external changes still open the overwrite or compare dialog.",
+      "label": "Auto save"
+    },
+    "pier.files.tree.showExcludedFiles": {
+      "description": "Show paths matched by the exclusion patterns below.",
+      "label": "Show excluded files"
+    },
+    "pier.files.tree.excludePatterns": {
+      "description": "Glob patterns excluded from the file tree when excluded files are not shown. Enter one pattern per line; blank lines and lines beginning with # are ignored.",
+      "label": "Exclude patterns"
+    },
+    "pier.files.tree.showGitIgnoredFiles": {
+      "description": "Show files and folders matched by .gitignore, .git/info/exclude and other Git ignore sources.",
+      "label": "Show Git-ignored files"
     }
   }
 }

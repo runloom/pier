@@ -67,7 +67,10 @@
     "filePanel.tree.createFailed": "创建失败",
     "filePanel.tree.createNeedsProject": "请先打开项目再创建文件。",
     "filePanel.tree.contextMenuFailed": "无法打开菜单",
+    "filePanel.tree.directoryError": "错误",
+    "filePanel.tree.loadDirectoryFailed": "无法加载文件夹",
     "filePanel.tree.renameFailed": "重命名失败",
+    "filePanel.tree.refreshFailed": "无法刷新目录树",
     "filePanel.tree.deleteFailed": "删除失败",
     "filePanel.tree.copyFailed": "复制失败",
     "filePanel.tree.pathCopied": "已复制路径",
@@ -133,6 +136,24 @@
   "panels": {
     "pier.files.filePanel": {
       "title": "文件"
+    }
+  },
+  "settings": {
+    "pier.files.autoSave": {
+      "description": "最后一次编辑一秒后自动保存未保存的文件。遇到外部变更时仍会打开覆盖或对比弹窗。",
+      "label": "自动保存"
+    },
+    "pier.files.tree.showExcludedFiles": {
+      "description": "显示被下方排除规则命中的路径。",
+      "label": "显示排除项"
+    },
+    "pier.files.tree.excludePatterns": {
+      "description": "未显示排除项时，从目录树中排除这些 glob 规则命中的路径。每行填写一条规则；空行和以 # 开头的行会被忽略。",
+      "label": "排除规则"
+    },
+    "pier.files.tree.showGitIgnoredFiles": {
+      "description": "显示被 .gitignore、.git/info/exclude 和其它 Git 忽略来源命中的文件与文件夹。",
+      "label": "显示 Git 忽略项"
     }
   }
 }

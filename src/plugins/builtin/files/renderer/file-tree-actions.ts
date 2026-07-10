@@ -42,9 +42,10 @@ import {
 } from "./files-tree-registry.ts";
 import {
   moveFilesTreeEntry,
-  reloadFilesTreeRoot,
   removeFilesTreeEntry,
 } from "./files-tree-store.ts";
+import { filesTreeVisibilityForContext } from "./files-tree-visibility.ts";
+import { reloadFilesTreeVisibility } from "./files-tree-visibility-reload.ts";
 import { showFilesNamePrompt } from "./name-prompt.tsx";
 
 function resolveCreateTarget(
@@ -420,12 +421,22 @@ function createTreeRefreshAction(
       if (!target) {
         return;
       }
-      reloadFilesTreeRoot(
-        target.root,
-        context.files.list,
-        t("panel.loadError.fallback", "Failed to load files")
-      );
-      return await Promise.resolve();
+      try {
+        await reloadFilesTreeVisibility(
+          target.root,
+          filesTreeVisibilityForContext(context).list,
+          t("panel.loadError.fallback", "Failed to load files")
+        );
+      } catch (error) {
+        await context.dialogs.alert({
+          body: error instanceof Error ? error.message : String(error),
+          size: "default",
+          title: t(
+            "filePanel.tree.refreshFailed",
+            "Unable to refresh file tree"
+          ),
+        });
+      }
     },
   });
 }

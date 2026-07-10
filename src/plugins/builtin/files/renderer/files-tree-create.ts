@@ -27,6 +27,7 @@ import {
   reloadFilesTreeRoot,
   removeFilesTreeEntry,
 } from "./files-tree-store.ts";
+import { filesTreeVisibilityForContext } from "./files-tree-visibility.ts";
 import { showFilesNamePrompt } from "./name-prompt.tsx";
 
 export type FilesCreateKind = FilesPendingCreateKind;
@@ -97,7 +98,11 @@ async function ensureParentDirectoryReady(
   if (state === "loaded" || state === "empty") {
     return;
   }
-  await loadFilesTreeDirectory(root, parentDir, context.files.list);
+  await loadFilesTreeDirectory(
+    root,
+    parentDir,
+    filesTreeVisibilityForContext(context).list
+  );
 }
 
 function openCreatedDiskFile(
@@ -151,7 +156,7 @@ function discardCreateAttempt(options: {
   const t = createFilesTranslate(context);
   reloadFilesTreeRoot(
     root,
-    context.files.list,
+    filesTreeVisibilityForContext(context).list,
     t("panel.loadError.fallback", "Failed to load files")
   );
 }

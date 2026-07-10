@@ -35,6 +35,7 @@ import {
 } from "./files-double-click.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import { FilesSearchBar } from "./files-search-bar.tsx";
+import { useFilesTreeContextMenus } from "./files-tree-context-menu.ts";
 import { cancelInlineCreate, commitInlineCreate } from "./files-tree-create.ts";
 import {
   buildGitStatusByPath,
@@ -53,6 +54,7 @@ import {
   moveFilesTreeEntry,
   reloadFilesTreeRoot,
 } from "./files-tree-store.ts";
+import { useFilesTreeVisibility } from "./use-files-tree-visibility.ts";
 
 const TREE_DOUBLE_CLICK_WINDOW_MS = 400;
 
@@ -66,8 +68,18 @@ export function FileTreeSidebar({
   watchHub,
 }: FileTreeSidebarProps) {
   const t = useMemo(() => createFilesTranslate(context), [context]);
-  const snapshot = useFilesTreeSnapshot(context, root, watchHub);
-
+  const { controller: treeVisibility, reload: reloadTreeVisibility } =
+    useFilesTreeVisibility(
+      context,
+      root,
+      t("panel.loadError.fallback", "Failed to load files")
+    );
+  const snapshot = useFilesTreeSnapshot(
+    context,
+    root,
+    watchHub,
+    treeVisibility.list
+  );
   // Git 装饰:变更染色(getStatus + git.watch 增量) + ignored 变暗(listIgnored)。
   const [gitDecorations, setGitDecorations] = useState<FilesGitDecorations>(
     EMPTY_GIT_DECORATIONS
@@ -88,14 +100,17 @@ export function FileTreeSidebar({
       }
     };
     const refreshIgnored = () => {
-      gitApi
-        .listIgnored?.(root)
-        .then((entries) => {
-          if (!disposed && entries) {
+      treeVisibility
+        .refreshGitIgnored(root)
+        .then(({ changed, entries }) => {
+          if (!disposed) {
             setGitDecorations((previous) => ({
               ...previous,
               ...splitIgnoredEntries(entries),
             }));
+            if (changed && !treeVisibility.showsGitIgnoredFiles()) {
+              reloadTreeVisibility().catch(() => undefined);
+            }
           }
         })
         .catch(() => undefined);
@@ -125,7 +140,7 @@ export function FileTreeSidebar({
       disposed = true;
       unsubscribe();
     };
-  }, [context, root]);
+  }, [context, reloadTreeVisibility, root, treeVisibility]);
 
   const items = useMemo<PierFileTreeItem[]>(
     () =>
@@ -191,9 +206,29 @@ export function FileTreeSidebar({
 
   const loadDirectory = useCallback(
     async (path: string) => {
-      await loadFilesTreeDirectory(root, path, context.files.list);
+      const result = await loadFilesTreeDirectory(
+        root,
+        path,
+        treeVisibility.list
+      );
+      if (result.ok) {
+        return;
+      }
+      const title = t(
+        "filePanel.tree.loadDirectoryFailed",
+        "Unable to load folder"
+      );
+      if (result.error instanceof Error) {
+        await context.dialogs.alert({
+          body: result.error.message,
+          size: "default",
+          title,
+        });
+      } else {
+        context.notifications.error(title);
+      }
     },
-    [context, root]
+    [context, root, t, treeVisibility]
   );
 
   // 拖拽/inline rename 共用的真实 fs move + 级联;失败刷新树回滚视觉状态。
@@ -226,12 +261,12 @@ export function FileTreeSidebar({
         );
         reloadFilesTreeRoot(
           root,
-          context.files.list,
+          treeVisibility.list,
           t("panel.loadError.fallback", "Failed to load files")
         );
       }
     },
-    [context, controller, root, t]
+    [context, controller, root, t, treeVisibility]
   );
   const performMoveRef = useRef<typeof performMove | null>(null);
   performMoveRef.current = performMove;
@@ -319,67 +354,17 @@ export function FileTreeSidebar({
     [onOpenFile, root, snapshot.entriesByPath]
   );
 
-  const handleTreeContextMenu = useCallback(
-    (event: ReactMouseEvent<HTMLElement>) => {
-      const path = extractItemPathFromEvent(event.nativeEvent);
-      if (!path) {
-        event.preventDefault();
-        event.stopPropagation();
-        Promise.resolve(
-          context.contextMenu.popup(
-            "files/tree-background",
-            { x: event.clientX, y: event.clientY },
-            {
-              metadata: {
-                root,
-                treeId: instanceId,
-              },
-            }
-          )
-        ).catch((err: unknown) => {
-          context.notifications.error(
-            err instanceof Error
-              ? err.message
-              : t("filePanel.tree.contextMenuFailed", "Unable to open menu")
-          );
-        });
-        return;
-      }
-      const entry = snapshot.entriesByPath.get(path);
-      if (!entry) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      const selection = selectedPathsRef.current;
-      const selectedPaths =
-        selection.length > 1 && selection.includes(entry.path)
-          ? [...selection]
-          : undefined;
-      Promise.resolve(
-        context.contextMenu.popup(
-          "files/tree-item",
-          { x: event.clientX, y: event.clientY },
-          {
-            metadata: {
-              kind: entry.kind,
-              path: entry.path,
-              root: entry.root,
-              treeId: instanceId,
-              ...(selectedPaths ? { selectedPaths } : {}),
-            },
-          }
-        )
-      ).catch((err: unknown) => {
-        context.notifications.error(
-          err instanceof Error
-            ? err.message
-            : t("filePanel.tree.contextMenuFailed", "Unable to open menu")
-        );
-      });
-    },
-    [context, instanceId, root, snapshot.entriesByPath, t]
-  );
+  const {
+    openBackgroundContextMenu: handleTreeBackgroundContextMenu,
+    openItemContextMenu: handleItemContextMenu,
+  } = useFilesTreeContextMenus({
+    context,
+    entriesByPath: snapshot.entriesByPath,
+    instanceId,
+    root,
+    selectedPathsRef,
+    t,
+  });
 
   let content: ReactNode = null;
   if (snapshot.rootError) {
@@ -421,12 +406,14 @@ export function FileTreeSidebar({
     content = (
       <PierFileTree
         className="min-h-0 w-full flex-1"
+        directoryErrorLabel={t("filePanel.tree.directoryError", "Error")}
         directoryStates={snapshot.directoryStatesByPath}
         items={items}
         label={t("panel.tree.label", "Files")}
         onLoadDirectory={loadDirectory}
         onModelPathsRemoved={handleModelPathsRemoved}
         onMovePaths={handleMovePaths}
+        onOpenItemContextMenu={handleItemContextMenu}
         onOpenPath={openPath}
         onRenamePath={handleRenamePath}
         onSelectPaths={handleSelectPaths}
@@ -441,7 +428,7 @@ export function FileTreeSidebar({
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: contextmenu bubbles from tree children; aside just captures.
     <aside
       className="flex h-full min-h-0 w-full flex-col bg-sidebar/50"
-      onContextMenu={handleTreeContextMenu}
+      onContextMenu={handleTreeBackgroundContextMenu}
       onDoubleClick={handleTreeDoubleClick}
     >
       {/* 树头行已按目标布局移除(项目名在面包屑首段);搜索条按需出现,

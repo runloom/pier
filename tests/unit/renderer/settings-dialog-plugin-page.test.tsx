@@ -1,5 +1,20 @@
+import { FILES_PLUGIN_LOCALES } from "@plugins/builtin/files/locales/index.ts";
+import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
+import {
+  FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+  FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+  FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
+  FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
+} from "@plugins/builtin/files/settings.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import {
@@ -177,5 +192,57 @@ describe("SettingsDialog — custom plugin settings page", () => {
       screen.getByTestId("custom-plugin-settings-page")
     ).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("renders editable files tree visibility controls from the plugin manifest", async () => {
+    const filesEntry: PluginRegistryEntry = {
+      effectivePermissions: [...FILES_PLUGIN_MANIFEST.permissions],
+      enabled: true,
+      manifest: {
+        ...FILES_PLUGIN_MANIFEST,
+        locales: FILES_PLUGIN_LOCALES,
+      },
+      runtime: { canToggle: true, enabled: true, kind: "builtin" },
+    };
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [filesEntry],
+    });
+    act(() => {
+      useSettingsDialogStore.getState().openSection("plugin:pier.files");
+    });
+
+    render(<SettingsDialog />);
+
+    expect(screen.getByText("Show excluded files")).toBeVisible();
+    expect(screen.getByText("Exclude patterns")).toBeVisible();
+    expect(screen.getByText("Show Git-ignored files")).toBeVisible();
+    expect(
+      document.getElementById(
+        `plugin-setting-${FILES_TREE_SHOW_EXCLUDED_SETTING_KEY}`
+      )
+    ).toHaveAttribute("aria-checked", "false");
+    expect(
+      document.getElementById(
+        `plugin-setting-${FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY}`
+      )
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      document.getElementById(
+        `plugin-setting-${FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY}`
+      )
+    ).toHaveValue(FILES_TREE_DEFAULT_EXCLUDE_PATTERNS);
+
+    const excludePatterns = screen.getByRole("textbox", {
+      name: "Exclude patterns",
+    });
+    fireEvent.change(excludePatterns, { target: { value: "**/generated" } });
+    fireEvent.blur(excludePatterns);
+    await waitFor(() => {
+      expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+        FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+        "**/generated"
+      );
+    });
   });
 });

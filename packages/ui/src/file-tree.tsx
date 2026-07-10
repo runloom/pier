@@ -8,12 +8,14 @@ import {
   buildFileTreeRefs,
   EMPTY_REFS,
   type FileTreeRefs,
+  fileTreeContextMenuOption,
   itemsToGitStatusEntries,
   readRenameView,
 } from "./file-tree-internal.ts";
 import {
   cloneCompositionForRedraw,
   collectExpandedDirectoryPaths,
+  collectPreservedExpandedDirectoryPaths,
   isDirectoryHandle,
   lastSegment,
   samePaths,
@@ -26,11 +28,14 @@ import {
 import { usePierFileTreeScrollController } from "./file-tree-scroll-controller.ts";
 import { pierFileTreeStyle } from "./file-tree-style.ts";
 import type { PierFileTreeProps } from "./file-tree-types.ts";
+import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
 import { cn } from "./utils.ts";
 
 export type {
   PierDirectoryLoadState,
   PierFileTreeApi,
+  PierFileTreeContextMenuItem,
+  PierFileTreeContextMenuPoint,
   PierFileTreeGitStatus,
   PierFileTreeItem,
   PierFileTreeMove,
@@ -41,12 +46,14 @@ export type {
 } from "./file-tree-types.ts";
 
 export function PierFileTree({
+  directoryErrorLabel,
   directoryStates,
   items,
   label,
   onLoadDirectory,
   onModelPathsRemoved,
   onMovePaths,
+  onOpenItemContextMenu,
   onOpenPath,
   onRenamePath,
   onScrollSnapshotChange,
@@ -81,12 +88,13 @@ export function PierFileTree({
   );
 
   refs.current = React.useMemo<FileTreeRefs>(
-    () => buildFileTreeRefs(items, directoryStates),
-    [directoryStates, items]
+    () => buildFileTreeRefs(items, directoryStates, directoryErrorLabel),
+    [directoryErrorLabel, directoryStates, items]
   );
   refs.current.onLoadDirectory = onLoadDirectory;
   refs.current.onModelPathsRemoved = onModelPathsRemoved;
   refs.current.onMovePaths = onMovePaths;
+  refs.current.onOpenItemContextMenu = onOpenItemContextMenu;
   refs.current.onOpenPath = onOpenPath;
   refs.current.onRenamePath = onRenamePath;
   refs.current.onSelectPaths = onSelectPaths;
@@ -113,6 +121,7 @@ export function PierFileTree({
     }, []);
 
   const { model } = useFileTree({
+    ...fileTreeContextMenuOption(onOpenItemContextMenu != null, refs),
     density: "compact",
     // 拖拽移动:库在模型层先行 move,onDropComplete 把 official path 折算成
     // caller path 交业务方执行真实 fs move;失败方负责刷新树回滚视觉状态。
@@ -166,10 +175,10 @@ export function PierFileTree({
       toOfficialDecoration(refs.current.decorationsByPath.get(item.path)),
     ...(stickyFolders ? { stickyFolders: true } : {}),
   });
+  useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
 
   const activeSearchRef = React.useRef<string | null>(null);
-  // 库在 onRename 后会同步 model.move;React paths 尚未更新时记录已应用的 move,
-  // 避免后续 path sync 再 batch 一次造成幽灵节点。
+  // 记录库已同步的 model.move，避免 React paths 后续重复 batch 产生幽灵节点。
   const modelAheadMovesRef = React.useRef(new Map<string, string>());
 
   React.useImperativeHandle(
@@ -298,8 +307,7 @@ export function PierFileTree({
     [model]
   );
 
-  // auto-reveal:active 文件变化时滚动到该行并选中。选中经 model 层,
-  // 不触发 onOpenPath(selection listener 只在用户操作路径 openPath)。
+  // active 文件变化时定位并选中；model 选中不会触发用户路径的 onOpenPath。
   const lastRevealRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!revealPath || revealPath === lastRevealRef.current) {
@@ -329,10 +337,15 @@ export function PierFileTree({
 
   const syncDirectoryExpansionState = React.useCallback(
     (notifyOnExpand: boolean) => {
+      // 搜索展开不是用户意图，不能触发懒加载或覆盖 resetPaths 的显式状态。
+      if (activeSearchRef.current != null) {
+        return;
+      }
+      const directoryPaths = refs.current.directoryPaths;
       const loadableDirectoryPaths = refs.current.loadableDirectoryPaths;
 
       for (const trackedPath of expandedDirectoriesRef.current.keys()) {
-        if (!loadableDirectoryPaths.has(trackedPath)) {
+        if (!directoryPaths.has(trackedPath)) {
           expandedDirectoriesRef.current.delete(trackedPath);
         }
       }
@@ -347,7 +360,7 @@ export function PierFileTree({
         }
       }
 
-      for (const [officialPath, callerPath] of loadableDirectoryPaths) {
+      for (const [officialPath, callerPath] of directoryPaths) {
         const itemHandle = model.getItem(officialPath);
         let isExpanded = false;
 
@@ -367,8 +380,10 @@ export function PierFileTree({
 
         if (
           onLoadDirectory == null ||
-          refs.current.directoryLoadStatesByPath.get(officialPath) !==
-            "unloaded" ||
+          !loadableDirectoryPaths.has(officialPath) ||
+          !["error", "unloaded"].includes(
+            refs.current.directoryLoadStatesByPath.get(officialPath) ?? ""
+          ) ||
           requestedLoadDirectoriesRef.current.has(officialPath)
         ) {
           continue;
@@ -436,16 +451,11 @@ export function PierFileTree({
       return;
     }
 
-    const expandedPaths = new Set(initialExpandedPaths);
-
-    for (const [officialPath, callerPath] of refs.current
-      .loadableDirectoryPaths) {
-      const itemHandle = model.getItem(officialPath);
-
-      if (isDirectoryHandle(itemHandle) && itemHandle.isExpanded()) {
-        expandedPaths.add(callerPath);
-      }
-    }
+    const expandedPaths = collectPreservedExpandedDirectoryPaths(
+      items,
+      expandedDirectoriesRef.current,
+      directoryStates
+    );
 
     // resetPaths 重建内部 store,但控制器的搜索派生投影(匹配集/可见集/
     // 展开快照)不会随之重建 —— 激活中的搜索先清掉,重建后重放,否则
@@ -454,13 +464,13 @@ export function PierFileTree({
     if (activeSearch != null) {
       model.setSearch(null);
     }
-    model.resetPaths(paths, { initialExpandedPaths: [...expandedPaths] });
+    model.resetPaths(paths, { initialExpandedPaths: expandedPaths });
     if (activeSearch != null) {
       model.setSearch(activeSearch);
     }
     previousPathsRef.current = paths;
     previousRenderSignatureRef.current = renderSignature;
-  }, [initialExpandedPaths, model, paths, renderSignature]);
+  }, [directoryStates, items, model, paths, renderSignature]);
 
   usePierFileTreeScrollController({
     containerRef,

@@ -1,8 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import {
-  applyFilesTreeWatchEvent,
-  getFilesTreeSnapshot,
-} from "./files-tree-store.ts";
+import { getFilesTreeSnapshot } from "./files-tree-store.ts";
+import type { FilesTreeList } from "./files-tree-visibility.ts";
+import { applyFilesTreeWatchEvent } from "./files-tree-watch-events.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 
 const activeWatchers = new Map<string, () => void>();
@@ -15,7 +14,8 @@ function normalizeRoot(root: string): string {
 export function ensureFilesTreeWatch(
   context: RendererPluginContext,
   watchHub: FilesWatchHub,
-  root: string
+  root: string,
+  list: FilesTreeList
 ): void {
   const key = normalizeRoot(root);
   if (activeWatchers.has(key)) {
@@ -32,7 +32,7 @@ export function ensureFilesTreeWatch(
     applyFilesTreeWatchEvent(
       root,
       event,
-      context.files.list,
+      list,
       t("panel.loadError.fallback", "Failed to load files")
     );
   });

@@ -11,6 +11,7 @@ import {
   FILES_NEW_FILE_COMMAND_ID,
   FILES_NEW_FOLDER_COMMAND_ID,
   FILES_RENAME_COMMAND_ID,
+  FILES_TREE_REFRESH_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
 import type { FileEditorController } from "@plugins/builtin/files/renderer/file-editor-controller.ts";
 import { createFilesTreeActions } from "@plugins/builtin/files/renderer/file-tree-actions.ts";
@@ -18,6 +19,8 @@ import {
   addFilesTreeEntry,
   clearFilesTreeStore,
   getFilesTreeSnapshot,
+  loadFilesTreeDirectory,
+  loadFilesTreeRoot,
 } from "@plugins/builtin/files/renderer/files-tree-store.ts";
 import type {
   FilesNamePromptOptions,
@@ -208,6 +211,36 @@ afterEach(() => {
 });
 
 describe("file-tree-actions", () => {
+  it("registers a non-empty command set for item and background menus", () => {
+    const { context } = makeContext();
+    const actions = treeActions(context);
+    const itemActionIds = actions
+      .filter((action) => action.surfaces?.includes("files/tree-item") === true)
+      .map((action) => action.id);
+    const backgroundActionIds = actions
+      .filter(
+        (action) => action.surfaces?.includes("files/tree-background") === true
+      )
+      .map((action) => action.id);
+
+    expect(itemActionIds).toEqual(
+      expect.arrayContaining([
+        FILES_NEW_FILE_COMMAND_ID,
+        FILES_NEW_FOLDER_COMMAND_ID,
+        FILES_RENAME_COMMAND_ID,
+        FILES_DELETE_COMMAND_ID,
+        FILES_COPY_PATH_COMMAND_ID,
+        FILES_COPY_RELATIVE_PATH_COMMAND_ID,
+      ])
+    );
+    expect(backgroundActionIds).toEqual(
+      expect.arrayContaining([
+        FILES_NEW_FILE_COMMAND_ID,
+        FILES_NEW_FOLDER_COMMAND_ID,
+      ])
+    );
+  });
+
   it("falls back to the name prompt when inline create is unavailable and opens the new file", async () => {
     const { context, files, openInstance } = makeContext();
     showFilesNamePromptMock.mockResolvedValueOnce({
@@ -421,5 +454,37 @@ describe("file-tree-actions", () => {
     expect(writeClipboardText).toHaveBeenCalledWith(
       "packages/app/src/index.ts:42-58"
     );
+  });
+
+  it("shows child-directory refresh failures in the host alert", async () => {
+    const { context, dialogs, files } = makeContext();
+    let childReadable = true;
+    files.list.mockImplementation(async (_root, options) => {
+      if (options?.path === "") {
+        return [directory("src")];
+      }
+      if (options?.path === "src") {
+        if (!childReadable) {
+          throw new Error("Permission denied");
+        }
+        return [file("src/index.ts")];
+      }
+      return [];
+    });
+    await loadFilesTreeRoot(ROOT, files.list, "Failed to load files");
+    await loadFilesTreeDirectory(ROOT, "src", files.list);
+    childReadable = false;
+    const action = actionById(
+      treeActions(context),
+      FILES_TREE_REFRESH_COMMAND_ID
+    );
+
+    await action.handler(treeInvocation(directory("src")));
+
+    expect(dialogs.alert).toHaveBeenCalledWith({
+      body: "src: Permission denied",
+      size: "default",
+      title: "Unable to refresh file tree",
+    });
   });
 });

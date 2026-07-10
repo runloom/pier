@@ -4,6 +4,7 @@ import {
   type PierFileTreeGitStatus,
   type PierFileTreeItem,
 } from "@pier/ui/file-tree.tsx";
+import { collectPreservedExpandedDirectoryPaths } from "@pier/ui/file-tree-model.ts";
 import {
   act,
   fireEvent,
@@ -18,7 +19,6 @@ const SRC_NAME_PATTERN = /src/;
 const APP_TSX_NAME_PATTERN = /app\.tsx/;
 const README_NAME_PATTERN = /README\.md/;
 const DIRECTORY_LOADING_OR_ERROR_PATTERN = /loading|error/i;
-const DIRECTORY_LOADING_PATTERN = /loading/i;
 const DIRECTORY_ERROR_PATTERN = /error/i;
 
 type PierDirectoryLoadState =
@@ -73,6 +73,26 @@ const items: PierFileTreeItem[] = [
 ];
 
 describe("PierFileTree", () => {
+  it("does not preserve expansion onto an error-state compact-chain leaf", () => {
+    expect(
+      collectPreservedExpandedDirectoryPaths(
+        [
+          { kind: "directory", path: "src", hasChildren: true },
+          {
+            kind: "directory",
+            path: "src/generated",
+            hasChildren: true,
+          },
+        ],
+        new Map([["src/", true]]),
+        new Map([
+          ["src", "loaded"],
+          ["src/generated", "error"],
+        ])
+      )
+    ).toEqual(["src"]);
+  });
+
   it("renders the official file-tree host as the root element", () => {
     const { container } = render(
       <PierFileTree items={items} label="Project files" />
@@ -198,6 +218,13 @@ describe("PierFileTree", () => {
         label="Project files"
         treeApiRef={treeApi}
       />
+    );
+
+    // 用户已经展开 src；后续搜索与路径重建必须恢复这份显式状态。
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: SRC_NAME_PATTERN,
+      })
     );
 
     act(() => {
@@ -455,6 +482,146 @@ describe("PierFileTree", () => {
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
   });
 
+  it("routes item context menus through the tree model with the caller path", async () => {
+    const onOpenItemContextMenu = vi.fn();
+    const { container } = render(
+      <LazyPierFileTree
+        items={[
+          {
+            kind: "directory",
+            path: "src",
+            hasChildren: true,
+            loadState: "unloaded",
+          },
+        ]}
+        label="Project files"
+        onOpenItemContextMenu={onOpenItemContextMenu}
+      />
+    );
+
+    const tree = within(getFileTree(container));
+    const srcRow = tree.getByRole("treeitem", { name: SRC_NAME_PATTERN });
+
+    expect(srcRow).toHaveAttribute("aria-haspopup", "menu");
+    fireEvent.contextMenu(srcRow, { clientX: 24, clientY: 48 });
+
+    await waitFor(() => {
+      expect(onOpenItemContextMenu).toHaveBeenCalledWith(
+        { kind: "directory", path: "src" },
+        { x: 24, y: 48 }
+      );
+    });
+
+    onOpenItemContextMenu.mockClear();
+    srcRow.focus();
+    fireEvent.keyDown(srcRow, { key: "F10", shiftKey: true });
+
+    await waitFor(() => {
+      expect(onOpenItemContextMenu).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("synchronizes context-menu enablement after mount", async () => {
+    const onOpenItemContextMenu = vi.fn();
+    const treeItems: LazyPierFileTreeItem[] = [
+      {
+        kind: "directory",
+        path: "src",
+        hasChildren: true,
+        loadState: "unloaded",
+      },
+    ];
+    const { container, rerender } = render(
+      <LazyPierFileTree items={treeItems} label="Project files" />
+    );
+    let srcRow = within(getFileTree(container)).getByRole("treeitem", {
+      name: SRC_NAME_PATTERN,
+    });
+    expect(srcRow).not.toHaveAttribute("aria-haspopup", "menu");
+
+    rerender(
+      <LazyPierFileTree
+        items={treeItems}
+        label="Project files"
+        onOpenItemContextMenu={onOpenItemContextMenu}
+      />
+    );
+    await waitFor(() => {
+      srcRow = within(getFileTree(container)).getByRole("treeitem", {
+        name: SRC_NAME_PATTERN,
+      });
+      expect(srcRow).toHaveAttribute("aria-haspopup", "menu");
+    });
+    fireEvent.contextMenu(srcRow, { clientX: 12, clientY: 18 });
+    await waitFor(() => {
+      expect(onOpenItemContextMenu).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(<LazyPierFileTree items={treeItems} label="Project files" />);
+    await waitFor(() => {
+      srcRow = within(getFileTree(container)).getByRole("treeitem", {
+        name: SRC_NAME_PATTERN,
+      });
+      expect(srcRow).not.toHaveAttribute("aria-haspopup", "menu");
+    });
+    onOpenItemContextMenu.mockClear();
+    fireEvent.contextMenu(srcRow, { clientX: 20, clientY: 24 });
+    expect(onOpenItemContextMenu).not.toHaveBeenCalled();
+  });
+
+  it("does not automatically retry a failed compact-chain leaf", async () => {
+    const onLoadDirectory = vi.fn<(path: string) => void>();
+    const { container, rerender } = render(
+      <LazyPierFileTree
+        items={[
+          {
+            kind: "directory",
+            path: "src",
+            hasChildren: true,
+            loadState: "unloaded",
+          },
+        ]}
+        label="Project files"
+        onLoadDirectory={onLoadDirectory}
+      />
+    );
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: SRC_NAME_PATTERN,
+      })
+    );
+    expect(onLoadDirectory).toHaveBeenCalledWith("src");
+
+    rerender(
+      <LazyPierFileTree
+        directoryErrorLabel="Error"
+        directoryStates={
+          new Map([
+            ["src", "loaded"],
+            ["src/generated", "error"],
+          ])
+        }
+        items={[
+          { kind: "directory", path: "src", hasChildren: true },
+          {
+            kind: "directory",
+            path: "src/generated",
+            hasChildren: true,
+          },
+        ]}
+        label="Project files"
+        onLoadDirectory={onLoadDirectory}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByText(DIRECTORY_ERROR_PATTERN)
+      ).toBeVisible();
+    });
+    expect(onLoadDirectory).toHaveBeenCalledTimes(1);
+  });
+
   it("does not load a known-empty directory when pointer activation expands it", () => {
     const onLoadDirectory = vi.fn<(path: string) => void>();
     const { container } = render(
@@ -542,7 +709,7 @@ describe("PierFileTree", () => {
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
   });
 
-  it("updates directory state decorations after the initial render", async () => {
+  it("keeps transient directory loading state out of the visible row label", async () => {
     const unloadedItems = [
       {
         kind: "directory",
@@ -574,13 +741,14 @@ describe("PierFileTree", () => {
       expect(
         within(
           tree.getByRole("treeitem", { name: SRC_NAME_PATTERN })
-        ).getByText(DIRECTORY_LOADING_PATTERN)
-      ).toBeVisible();
+        ).queryByText(DIRECTORY_LOADING_OR_ERROR_PATTERN)
+      ).not.toBeInTheDocument();
     });
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
 
     rerender(
       <LazyPierFileTree
+        directoryErrorLabel="Error"
         directoryStates={new Map([["src", "error"]])}
         items={unloadedItems}
         label="Project files"
@@ -600,6 +768,7 @@ describe("PierFileTree", () => {
   it("updates item loadState decorations after the initial render", async () => {
     const { container, rerender } = render(
       <LazyPierFileTree
+        directoryErrorLabel="Error"
         items={[
           {
             kind: "directory",
@@ -615,6 +784,7 @@ describe("PierFileTree", () => {
 
     rerender(
       <LazyPierFileTree
+        directoryErrorLabel="Error"
         items={[
           {
             kind: "directory",

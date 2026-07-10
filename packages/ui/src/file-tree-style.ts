@@ -40,7 +40,7 @@ export function pierFileTreeStyle(
     "--trees-selected-fg-override": "var(--sidebar-accent-foreground)",
     "--trees-search-bg-override": "var(--muted)",
     "--trees-search-fg-override": "var(--foreground)",
-    "--trees-font-family-override": "var(--pier-mono-font-family)",
+    "--trees-font-family-override": "var(--pier-ui-font-family)",
     "--trees-git-added-color-override": "var(--success)",
     "--trees-git-modified-color-override": "var(--info)",
     "--trees-git-deleted-color-override": "var(--destructive)",

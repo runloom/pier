@@ -39,6 +39,12 @@ import {
 } from "@plugins/builtin/files/renderer/files-tree-registry.ts";
 import { clearFilesTreeStore } from "@plugins/builtin/files/renderer/files-tree-store.ts";
 import { FilesWatchHub } from "@plugins/builtin/files/renderer/files-watch-hub.ts";
+import {
+  FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+  FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+  FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
+  FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
+} from "@plugins/builtin/files/settings.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
@@ -137,7 +143,10 @@ interface FilesPanelParams {
 }
 
 function createMockContext(overrides?: {
+  configurationGet?: RendererPluginContext["configuration"]["get"];
+  configurationOnDidChange?: RendererPluginContext["configuration"]["onDidChange"];
   list?: RendererPluginContext["files"]["list"];
+  listIgnored?: RendererPluginContext["git"]["listIgnored"];
   listInstances?: RendererPluginContext["panels"]["listInstances"];
   notifyInfo?: RendererPluginContext["notifications"]["info"];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
@@ -154,8 +163,8 @@ function createMockContext(overrides?: {
       prompt: vi.fn(async () => null),
     },
     configuration: {
-      get: vi.fn(() => false),
-      onDidChange: vi.fn(() => vi.fn()),
+      get: overrides?.configurationGet ?? vi.fn(() => false),
+      onDidChange: overrides?.configurationOnDidChange ?? vi.fn(() => vi.fn()),
       reset: vi.fn(async () => undefined),
       set: vi.fn(async () => undefined),
     },
@@ -177,6 +186,7 @@ function createMockContext(overrides?: {
         repoState: { kind: "clean" },
         stashCount: 0,
       })),
+      listIgnored: overrides?.listIgnored ?? vi.fn(async () => []),
       watch: vi.fn(() => () => undefined),
     },
     files: {
@@ -522,10 +532,297 @@ describe("Files file-panel", () => {
     expect(tree.getByRole("treeitem", { name: "README.md" })).toBeVisible();
   });
 
+  it("hides repository metadata by default while keeping developer dotfiles visible", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: ".git", root: PROJECT_ROOT },
+      { kind: "directory", path: ".svn", root: PROJECT_ROOT },
+      { kind: "file", path: ".DS_Store", root: PROJECT_ROOT },
+      { kind: "file", path: ".env", root: PROJECT_ROOT },
+      { kind: "directory", path: ".github", root: PROJECT_ROOT },
+      { kind: "file", path: ".gitignore", root: PROJECT_ROOT },
+    ]);
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ list })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    const tree = within(getFileTree(container));
+    expect(tree.queryByRole("treeitem", { name: /^\.git$/ })).toBeNull();
+    expect(tree.queryByRole("treeitem", { name: /^\.svn$/ })).toBeNull();
+    expect(tree.queryByRole("treeitem", { name: /^\.DS_Store$/ })).toBeNull();
+    expect(tree.getByRole("treeitem", { name: /^\.env$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.github$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.gitignore$/ })).toBeVisible();
+  });
+
+  it("can hide Git-ignored files independently from default exclusions", async () => {
+    const configurationGet = <T,>(key: string): T =>
+      (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY
+        ? false
+        : undefined) as T;
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: ".env", root: PROJECT_ROOT },
+      { kind: "directory", path: "dist", root: PROJECT_ROOT },
+      { kind: "directory", path: "src", root: PROJECT_ROOT },
+    ]);
+    const listIgnored = vi.fn(async () => ["dist/"]);
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ configurationGet, list, listIgnored })
+    );
+
+    await waitFor(() => {
+      expect(listIgnored).toHaveBeenCalledWith(PROJECT_ROOT);
+    });
+    const tree = within(getFileTree(container));
+    expect(tree.queryByRole("treeitem", { name: /^dist$/ })).toBeNull();
+    expect(tree.getByRole("treeitem", { name: /^src$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.env$/ })).toBeVisible();
+  });
+
+  it("applies customized exclusion patterns instead of hardcoded paths", async () => {
+    const configurationGet = <T,>(key: string): T => {
+      if (key === FILES_TREE_SHOW_EXCLUDED_SETTING_KEY) {
+        return false as T;
+      }
+      if (key === FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY) {
+        return "**/build" as T;
+      }
+      if (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY) {
+        return true as T;
+      }
+      return undefined as T;
+    };
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "directory", path: ".git", root: PROJECT_ROOT },
+      { kind: "directory", path: "build", root: PROJECT_ROOT },
+      { kind: "file", path: ".env", root: PROJECT_ROOT },
+    ]);
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ configurationGet, list })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    const tree = within(getFileTree(container));
+    expect(tree.queryByRole("treeitem", { name: /^build$/ })).toBeNull();
+    expect(tree.getByRole("treeitem", { name: /^\.git$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.env$/ })).toBeVisible();
+  });
+
+  it("applies visibility settings live without reopening a collapsed directory", async () => {
+    let excludePatterns = FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
+    let showExcluded = true;
+    const configurationListeners = new Set<
+      Parameters<RendererPluginContext["configuration"]["onDidChange"]>[0]
+    >();
+    const configurationGet = <T,>(key: string): T => {
+      if (key === FILES_TREE_SHOW_EXCLUDED_SETTING_KEY) {
+        return showExcluded as T;
+      }
+      if (key === FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY) {
+        return excludePatterns as T;
+      }
+      if (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY) {
+        return true as T;
+      }
+      return undefined as T;
+    };
+    const configurationOnDidChange: RendererPluginContext["configuration"]["onDidChange"] =
+      (listener) => {
+        configurationListeners.add(listener);
+        return () => configurationListeners.delete(listener);
+      };
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_root, options) => {
+        switch (options?.path) {
+          case "":
+            return [
+              { kind: "directory", path: ".git", root: PROJECT_ROOT },
+              { kind: "directory", path: "docs", root: PROJECT_ROOT },
+              { kind: "directory", path: "src", root: PROJECT_ROOT },
+            ];
+          case "docs":
+            return [
+              { kind: "file", path: "docs/index.md", root: PROJECT_ROOT },
+            ];
+          case "src":
+            return [{ kind: "file", path: "src/index.ts", root: PROJECT_ROOT }];
+          default:
+            return [];
+        }
+      }
+    );
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({
+        configurationGet,
+        configurationOnDidChange,
+        list,
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /^\.git$/,
+        })
+      ).toBeVisible();
+    });
+    let tree = within(getFileTree(container));
+    fireEvent.click(tree.getByRole("treeitem", { name: /^src$/ }));
+    await waitFor(() => {
+      expect(tree.getByRole("treeitem", { name: "index.ts" })).toBeVisible();
+    });
+    fireEvent.click(tree.getByRole("treeitem", { name: /^src$/ }));
+    fireEvent.click(tree.getByRole("treeitem", { name: /^docs$/ }));
+    await waitFor(() => {
+      expect(tree.getByRole("treeitem", { name: "index.md" })).toBeVisible();
+    });
+
+    showExcluded = false;
+    act(() => {
+      const event = {
+        affectsConfiguration: (prefix: string) =>
+          prefix === FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
+      };
+      for (const listener of configurationListeners) {
+        listener(event);
+      }
+    });
+
+    await waitFor(() => {
+      tree = within(getFileTree(container));
+      expect(tree.queryByRole("treeitem", { name: /^\.git$/ })).toBeNull();
+      expect(tree.getByRole("treeitem", { name: /^src$/ })).toHaveAttribute(
+        "aria-expanded",
+        "false"
+      );
+      expect(tree.getByRole("treeitem", { name: /^docs$/ })).toHaveAttribute(
+        "aria-expanded",
+        "true"
+      );
+      expect(tree.getByRole("treeitem", { name: "index.md" })).toBeVisible();
+    });
+
+    excludePatterns = "**/docs";
+    act(() => {
+      const event = {
+        affectsConfiguration: (prefix: string) =>
+          prefix === FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+      };
+      for (const listener of configurationListeners) {
+        listener(event);
+      }
+    });
+
+    await waitFor(() => {
+      tree = within(getFileTree(container));
+      expect(tree.getByRole("treeitem", { name: /^\.git$/ })).toBeVisible();
+      expect(tree.queryByRole("treeitem", { name: /^docs$/ })).toBeNull();
+      expect(tree.getByRole("treeitem", { name: /^src$/ })).toHaveAttribute(
+        "aria-expanded",
+        "false"
+      );
+    });
+  });
+
+  it("shows the contents of an isolated directory chain on the first expansion", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_root, options) => {
+        switch (options?.path) {
+          case "":
+            return [{ kind: "directory", path: "src", root: PROJECT_ROOT }];
+          case "src":
+            return [
+              {
+                kind: "directory",
+                path: "src/generated",
+                root: PROJECT_ROOT,
+              },
+            ];
+          case "src/generated":
+            return [
+              {
+                kind: "file",
+                path: "src/generated/index.ts",
+                root: PROJECT_ROOT,
+              },
+            ];
+          default:
+            return [];
+        }
+      }
+    );
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ list })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "src" })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, {
+        path: "src/generated",
+      });
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "index.ts",
+        })
+      ).toBeVisible();
+    });
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+  });
+
+  it("shows directory read details in the host alert and leaves the row retryable", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_root, options) => {
+        if (options?.path === "") {
+          return [{ kind: "directory", path: "src", root: PROJECT_ROOT }];
+        }
+        throw new Error("Permission denied");
+      }
+    );
+    const context = createMockContext({ list });
+    const { container } = renderFilePanel({ context: panelContext }, context);
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "src" })
+    );
+
+    await waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "Permission denied",
+        size: "default",
+        title: "Unable to load folder",
+      });
+    });
+    const row = within(getFileTree(container)).getByRole("treeitem", {
+      name: "src",
+    });
+    fireEvent.click(row);
+    fireEvent.click(row);
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(3);
+    });
+  });
+
   it("dispatches files/tree-item context menu with the row's data-item-path metadata", async () => {
-    // 右键树某行 → composedPath 沿 shadow DOM 走回宿主,在最深 [data-item-path]
-    // 上抓 path,拼 metadata 转发 context.contextMenu.popup。这一条实际证明
-    // @pierre/trees 的 data-item-path 契约仍在。
+    // 右键树某行 → @pierre/trees 先解析压缩行的真实目标并维护焦点语义，
+    // Pier 桥接层再把 caller path 与类型转发给宿主原生菜单。
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async () =>
         [
@@ -554,7 +851,9 @@ describe("Files file-panel", () => {
     expect(row.getAttribute("data-item-path")).toBe("README.md");
     fireEvent.contextMenu(row);
 
-    expect(popup).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(popup).toHaveBeenCalledTimes(1);
+    });
     expect(popup.mock.calls[0]?.[0]).toBe("files/tree-item");
     expect(popup.mock.calls[0]?.[2]).toMatchObject({
       metadata: {
@@ -562,6 +861,42 @@ describe("Files file-panel", () => {
         path: "README.md",
         root: PROJECT_ROOT,
       },
+    });
+  });
+
+  it("dispatches the same command surface for directory rows", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "directory", path: "src", root: PROJECT_ROOT },
+    ]);
+    const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>(
+      async () => undefined
+    );
+    const context = createMockContext({ list });
+    context.contextMenu = { popup };
+    const { container } = renderFilePanel({ context: panelContext }, context);
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    fireEvent.contextMenu(
+      within(getFileTree(container)).getByRole("treeitem", { name: "src" })
+    );
+
+    await waitFor(() => {
+      expect(popup).toHaveBeenCalledWith(
+        "files/tree-item",
+        expect.objectContaining({
+          x: expect.any(Number),
+          y: expect.any(Number),
+        }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            kind: "directory",
+            path: "src",
+            root: PROJECT_ROOT,
+          }),
+        })
+      );
     });
   });
 
