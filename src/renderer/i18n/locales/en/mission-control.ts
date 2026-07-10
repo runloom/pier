@@ -1,29 +1,17 @@
 export const missionControl = {
   addWidget: "Add Widget",
   context: {
-    arrangeLayout: "Arrange Layout",
-    lock: "Lock Layout",
+    canvasLabel: "Mission Control grid",
+    menuFailed: "Failed to open Mission Control menu",
     refreshAll: "Refresh All",
-    unlock: "Unlock Layout",
-  },
-  toolbar: {
-    add: "Add Widget",
-    arrangeLayout: "Arrange Layout",
-    lock: "Lock Layout",
-    lockedBadge: "Locked",
-    refreshAll: "Refresh All",
-    unlock: "Unlock Layout",
   },
   empty: "Mission Control is empty",
   emptyDescription:
     "Add widgets to monitor activity and manage your workspace.",
-  lockedEmpty: "Layout is locked",
-  lockedEmptyDescription: "Unlock the layout from the toolbar to add widgets.",
-  lockedBanner: "Layout locked — drag, resize, and add are disabled.",
   removeConfirmTitle: "Remove widget?",
   removeConfirmBody:
     "This removes the widget from Mission Control. You can add it again from the library.",
-  arrangeSuccess: "Layout arranged",
+  refreshAllSuccess: "Widgets refreshed",
   library: {
     added: "Added",
     addedCount: "Added {{count}}",
@@ -98,6 +86,12 @@ export const missionControl = {
       removeBlock: "Remove block",
       title: "Custom Card",
     },
+    layoutHandle: "Reorder or resize {{title}}",
+    layoutInstructions:
+      "Use arrow keys to reorder. Use Shift plus arrow keys to resize.",
+    moved: "Reordered {{title}}",
+    resized: "Resized {{title}}",
+    duplicate: "Duplicate",
     loading: "Loading\u2026",
     errorFallback: "Widget failed to render",
     menu: "Widget menu",
@@ -106,7 +100,7 @@ export const missionControl = {
     remove: "Remove",
     retry: "Retry",
     settings: "Settings\u2026",
-    settingsDescription: "Widget configuration is saved with this layout.",
+    settingsDescription: "Widget configuration is saved with this dashboard.",
     systemResources: {
       appMemory: "Pier Memory",
       cores: "{{count}} cores",
