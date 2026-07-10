@@ -38,8 +38,13 @@ export type FilesTreeDirectoryLoadResult =
   | { ok: true }
   | { error: unknown; ok: false };
 
+export interface FilesTreeDirectoryLoadDetails {
+  discoveredDirectoryPaths: readonly string[];
+  result: FilesTreeDirectoryLoadResult;
+}
+
 interface FilesTreeSession {
-  directoryLoadPromises: Map<string, Promise<FilesTreeDirectoryLoadResult>>;
+  directoryLoadPromises: Map<string, Promise<FilesTreeDirectoryLoadDetails>>;
   listeners: Set<Listener>;
   rootLoadPromise: Promise<void> | null;
   snapshot: FilesTreeSnapshot;
@@ -218,6 +223,14 @@ export async function loadFilesTreeDirectory(
   path: string,
   list: FilesTreeList
 ): Promise<FilesTreeDirectoryLoadResult> {
+  return (await loadFilesTreeDirectoryWithDiscovery(root, path, list)).result;
+}
+
+export async function loadFilesTreeDirectoryWithDiscovery(
+  root: string,
+  path: string,
+  list: FilesTreeList
+): Promise<FilesTreeDirectoryLoadDetails> {
   const session = sessionForRoot(root);
   if (list.isPathVisible) {
     session.visibilityPredicate = (candidatePath) =>
@@ -244,7 +257,7 @@ async function loadFilesTreeDirectoryBranch(
   root: string,
   path: string,
   list: FilesTreeList
-): Promise<FilesTreeDirectoryLoadResult> {
+): Promise<FilesTreeDirectoryLoadDetails> {
   const loadingStates = setDirectoryState(
     session.snapshot.directoryStatesByPath,
     path,
@@ -288,9 +301,18 @@ async function loadFilesTreeDirectoryBranch(
           entriesByPath,
         }
   );
-  return branch.failedPath === undefined
-    ? { ok: true }
-    : { error: branch.error, ok: false };
+  const discoveredDirectoryPaths = branch.listings.flatMap((listing) =>
+    listing.entries
+      .filter((entry) => entry.kind === "directory")
+      .map((entry) => entry.path)
+  );
+  return {
+    discoveredDirectoryPaths,
+    result:
+      branch.failedPath === undefined
+        ? { ok: true }
+        : { error: branch.error, ok: false },
+  };
 }
 
 export function addFilesTreeEntry(root: string, entry: FileEntry): void {

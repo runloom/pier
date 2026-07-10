@@ -3,6 +3,7 @@ import {
   Empty,
   EmptyDescription,
   EmptyHeader,
+  EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import {
@@ -14,7 +15,9 @@ import {
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitStatus } from "@shared/contracts/git.ts";
+import { SearchX } from "lucide-react";
 import {
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useCallback,
@@ -54,9 +57,13 @@ import {
   moveFilesTreeEntry,
   reloadFilesTreeRoot,
 } from "./files-tree-store.ts";
+import { useFilesTreeSearch } from "./use-files-tree-search.ts";
 import { useFilesTreeVisibility } from "./use-files-tree-visibility.ts";
 
 const TREE_DOUBLE_CLICK_WINDOW_MS = 400;
+const FILES_TREE_STYLE: CSSProperties & {
+  "--trees-padding-inline-override": string;
+} = { "--trees-padding-inline-override": "4px" };
 
 export function FileTreeSidebar({
   activeFilePath,
@@ -156,49 +163,26 @@ export function FileTreeSidebar({
   );
 
   const treeApiRef = useRef<PierFileTreeApi | null>(null);
-  const [treeSearchOpen, setTreeSearchOpen] = useState(false);
-  const [treeSearchValue, setTreeSearchValue] = useState("");
-  const [treeSearchFocusSignal, setTreeSearchFocusSignal] = useState(0);
-  const [treeSearchMatches, setTreeSearchMatches] = useState(0);
-
-  const openTreeSearch = useCallback(() => {
-    setTreeSearchOpen(true);
-    setTreeSearchFocusSignal((signal) => signal + 1);
-  }, []);
-  const closeTreeSearch = useCallback(() => {
-    setTreeSearchOpen(false);
-    setTreeSearchValue("");
-    setTreeSearchMatches(0);
-    treeApiRef.current?.setSearch(null);
-  }, []);
-  const handleTreeSearchChange = useCallback((nextValue: string) => {
-    setTreeSearchValue(nextValue);
-    const api = treeApiRef.current;
-    if (!api) {
-      return;
-    }
-    api.setSearch(nextValue.length > 0 ? nextValue : null);
-    setTreeSearchMatches(nextValue.length > 0 ? api.getSearchMatchCount() : 0);
-  }, []);
-  const handleTreeSearchNavigate = useCallback(
-    (direction: "next" | "previous") => {
-      treeApiRef.current?.focusSearchMatch(direction);
-    },
-    []
-  );
+  const treeSearch = useFilesTreeSearch({
+    context,
+    fallbackError: t("panel.loadError.fallback", "Failed to load files"),
+    list: treeVisibility.list,
+    root,
+    searchFailedTitle: t(
+      "filePanel.tree.searchFailed",
+      "Unable to search all folders"
+    ),
+    treeApiRef,
+  });
 
   useEffect(() => {
     const entry = {
       getApi: () => treeApiRef.current,
-      openSearch: openTreeSearch,
+      openSearch: treeSearch.openSearch,
       root,
     };
     return registerFilesTreeInstance(instanceId, entry);
-  }, [instanceId, openTreeSearch, root]);
-  const handleTreeApiRef = useCallback((api: PierFileTreeApi | null) => {
-    treeApiRef.current = api;
-  }, []);
-
+  }, [instanceId, root, treeSearch.openSearch]);
   const selectedPathsRef = useRef<readonly string[]>([]);
   const handleSelectPaths = useCallback((paths: string[]) => {
     selectedPathsRef.current = paths;
@@ -416,13 +400,32 @@ export function FileTreeSidebar({
         onOpenItemContextMenu={handleItemContextMenu}
         onOpenPath={openPath}
         onRenamePath={handleRenamePath}
+        onSearchMatchStateChange={treeSearch.updateMatchState}
         onSelectPaths={handleSelectPaths}
         revealPath={activeFilePath ?? null}
         stickyFolders
-        treeApiRef={handleTreeApiRef}
+        style={FILES_TREE_STYLE}
+        treeApiRef={treeSearch.attachTreeApi}
       />
     );
   }
+
+  let treeSearchMatchText = "";
+  if (treeSearch.value.trim().length > 0) {
+    treeSearchMatchText = treeSearch.loading
+      ? t("filePanel.tree.searching", "Searching…")
+      : String(treeSearch.matchCount);
+  }
+  const searchHasNoResults =
+    snapshot.rootLoaded &&
+    !snapshot.rootError &&
+    treeSearch.open &&
+    treeSearch.value.trim().length > 0 &&
+    !treeSearch.loading &&
+    treeSearch.queryApplied &&
+    treeSearch.matchCount === 0;
+  const searchActionsDisabled =
+    treeSearch.loading || treeSearch.matchCount === 0;
 
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: contextmenu bubbles from tree children; aside just captures.
@@ -433,29 +436,58 @@ export function FileTreeSidebar({
     >
       {/* 树头行已按目标布局移除(项目名在面包屑首段);搜索条按需出现,
           Refresh 走树右键菜单,自动刷新由 watcher 承担。 */}
-      {treeSearchOpen ? (
+      {treeSearch.open ? (
         <div className="shrink-0 px-2 pb-1.5">
           <FilesSearchBar
             className="w-full"
-            focusSignal={treeSearchFocusSignal}
+            focusSignal={treeSearch.focusSignal}
             labels={{
               close: t("filePanel.search.close", "Close"),
               next: t("filePanel.search.next", "Next match"),
+              open: t("filePanel.tree.openSearchResult", "Open selected file"),
               placeholder: t("panel.tree.search", "Find in tree"),
               previous: t("filePanel.search.previous", "Previous match"),
             }}
-            matchText={
-              treeSearchValue.length > 0 ? String(treeSearchMatches) : ""
+            matchText={treeSearchMatchText}
+            navigationDisabled={searchActionsDisabled}
+            onChange={treeSearch.changeSearch}
+            onClose={treeSearch.closeSearch}
+            onNavigate={treeSearch.navigateSearch}
+            onSubmit={treeSearch.openFocusedMatch}
+            submitDisabled={
+              searchActionsDisabled || !treeSearch.focusedMatchOpenable
             }
-            onChange={handleTreeSearchChange}
-            onClose={closeTreeSearch}
-            onNavigate={handleTreeSearchNavigate}
             testId="files-tree-search-bar"
-            value={treeSearchValue}
+            value={treeSearch.value}
           />
         </div>
       ) : null}
-      {content}
+      <div className="relative flex min-h-0 flex-1">
+        {content}
+        {searchHasNoResults ? (
+          <Empty
+            aria-live="polite"
+            className="absolute inset-0 z-10 min-h-0 rounded-none border-0 bg-sidebar/95 p-4"
+            data-testid="files-tree-search-empty"
+            role="status"
+          >
+            <EmptyHeader className="gap-1.5">
+              <EmptyMedia className="mb-1" variant="icon">
+                <SearchX />
+              </EmptyMedia>
+              <EmptyTitle className="text-sm">
+                {t("filePanel.tree.noSearchResults.title", "No matching files")}
+              </EmptyTitle>
+              <EmptyDescription className="text-xs">
+                {t(
+                  "filePanel.tree.noSearchResults.description",
+                  "Try another file name or path."
+                )}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+      </div>
     </aside>
   );
 }

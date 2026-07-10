@@ -188,6 +188,30 @@ describe("PierFileTree", () => {
     ).toBeVisible();
   });
 
+  it("uses trailing ellipsis for ordinary item names", () => {
+    const { container } = render(
+      <PierFileTree
+        items={[
+          {
+            kind: "file",
+            path: "a-very-long-file-name-that-needs-truncation.css",
+          },
+        ]}
+        label="Project files"
+      />
+    );
+
+    const content = getFileTree(container).querySelector(
+      '[data-item-section="content"]'
+    );
+    expect(
+      content?.querySelector('[data-truncate-container="truncate"]')
+    ).toBeInstanceOf(HTMLElement);
+    expect(
+      content?.querySelector('[data-truncate-group-container="middle"]')
+    ).toBeNull();
+  });
+
   it("restores the full tree after clearing or cancelling a search filter", async () => {
     const treeApi = { current: null as PierFileTreeApi | null };
     const { container } = render(
@@ -233,6 +257,127 @@ describe("PierFileTree", () => {
         within(getFileTree(container)).getAllByRole("treeitem")
       ).toHaveLength(3);
     });
+  });
+
+  it("matches path substrings and keeps a non-empty zero-result search empty", async () => {
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const searchItems: PierFileTreeItem[] = [
+      { kind: "file", path: "app.tsx" },
+      { kind: "file", path: "reset.css" },
+      { kind: "file", path: "theme.CSS" },
+    ];
+    const onSearchMatchStateChange = vi.fn();
+    const onOpenPath = vi.fn<(path: string) => void>();
+    const onSelectPaths = vi.fn<(paths: string[]) => void>();
+    const { container } = render(
+      <PierFileTree
+        items={searchItems}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        onSearchMatchStateChange={onSearchMatchStateChange}
+        onSelectPaths={onSelectPaths}
+        treeApiRef={treeApi}
+      />
+    );
+
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "app.tsx" })
+    );
+    expect(onSelectPaths).toHaveBeenLastCalledWith(["app.tsx"]);
+
+    act(() => {
+      treeApi.current?.setSearch(".css");
+    });
+    await waitFor(() => {
+      const tree = getFileTree(container);
+      expect(
+        within(tree).getByRole("treeitem", { name: "reset.css" })
+      ).toBeVisible();
+      expect(
+        within(tree).getByRole("treeitem", { name: "theme.CSS" })
+      ).toBeVisible();
+      expect(
+        within(tree).queryByRole("treeitem", { name: "app.tsx" })
+      ).toBeNull();
+    });
+    expect(treeApi.current?.getSearchMatchCount()).toBe(2);
+    expect(onSearchMatchStateChange).toHaveBeenLastCalledWith({
+      focusedMatchOpenable: true,
+      matchCount: 2,
+    });
+
+    act(() => {
+      expect(treeApi.current?.activateFocusedSearchMatch()).toBe(true);
+    });
+    expect(onOpenPath).toHaveBeenLastCalledWith("reset.css");
+    expect(onSelectPaths).toHaveBeenLastCalledWith(["reset.css"]);
+    act(() => {
+      treeApi.current?.focusSearchMatch("next");
+      expect(treeApi.current?.activateFocusedSearchMatch()).toBe(true);
+    });
+    expect(onOpenPath).toHaveBeenLastCalledWith("theme.CSS");
+
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: "reset.css",
+      })
+    );
+    await waitFor(() => {
+      const tree = getFileTree(container);
+      expect(
+        within(tree).queryByRole("treeitem", { name: "app.tsx" })
+      ).toBeNull();
+      expect(within(tree).getAllByRole("treeitem")).toHaveLength(2);
+    });
+    expect(treeApi.current?.getSearchMatchCount()).toBe(2);
+    expect(onOpenPath).toHaveBeenLastCalledWith("reset.css");
+
+    act(() => {
+      treeApi.current?.setSearch(".missing");
+    });
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).queryAllByRole("treeitem")
+      ).toHaveLength(0);
+    });
+    expect(treeApi.current?.getSearchMatchCount()).toBe(0);
+    expect(onSearchMatchStateChange).toHaveBeenLastCalledWith({
+      focusedMatchOpenable: false,
+      matchCount: 0,
+    });
+
+    act(() => {
+      treeApi.current?.setSearch(null);
+    });
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getAllByRole("treeitem")
+      ).toHaveLength(3);
+    });
+  });
+
+  it("reports directory-only matches as non-openable", async () => {
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const onSearchMatchStateChange = vi.fn();
+    render(
+      <PierFileTree
+        items={[{ kind: "directory", path: "empty-folder" }]}
+        label="Project files"
+        onSearchMatchStateChange={onSearchMatchStateChange}
+        treeApiRef={treeApi}
+      />
+    );
+
+    act(() => {
+      treeApi.current?.setSearch("empty-folder");
+    });
+    await waitFor(() => {
+      expect(onSearchMatchStateChange).toHaveBeenLastCalledWith({
+        focusedMatchOpenable: false,
+        matchCount: 1,
+      });
+    });
+    expect(treeApi.current?.activateFocusedSearchMatch()).toBe(false);
   });
 
   it("restores the full tree after items grew (resetPaths) during an active search", async () => {

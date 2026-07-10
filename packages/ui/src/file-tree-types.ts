@@ -37,6 +37,8 @@ export interface PierFileTreeContextMenuPoint {
 
 /** 树内命令入口(inline rename / 树内查找 / 定位),由业务层经 ref 触发。 */
 export interface PierFileTreeApi {
+  /** 打开当前聚焦的文件搜索匹配；无可打开文件时返回 false。 */
+  activateFocusedSearchMatch: () => boolean;
   focusSearchMatch: (direction: "next" | "previous") => void;
   getSearchMatchCount: () => number;
   /** 从模型移除路径(新建落盘失败回滚幽灵节点用)。 */
@@ -105,6 +107,11 @@ export interface PierFileTreeProps
    */
   onRenamePath?: (move: PierFileTreeMove & { isFolder: boolean }) => void;
   onScrollSnapshotChange?: (snapshot: PierFileTreeScrollSnapshot) => void;
+  /** 回传直接匹配数及当前聚焦项能否作为文件打开。 */
+  onSearchMatchStateChange?: (state: {
+    focusedMatchOpenable: boolean;
+    matchCount: number;
+  }) => void;
   onSelectPaths?: (paths: string[]) => void;
   /** 变化时把该路径滚动进视口并选中(auto-reveal 当前文件)。 */
   revealPath?: string | null;

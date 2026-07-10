@@ -26,6 +26,7 @@ import {
   treeRenderSignature,
 } from "./file-tree-model.ts";
 import { usePierFileTreeScrollController } from "./file-tree-scroll-controller.ts";
+import * as treeSearch from "./file-tree-search.ts";
 import { pierFileTreeStyle, TREE_SCROLLBAR_CSS } from "./file-tree-style.ts";
 import type { PierFileTreeProps } from "./file-tree-types.ts";
 import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
@@ -56,6 +57,7 @@ export function PierFileTree({
   onOpenItemContextMenu,
   onOpenPath,
   onRenamePath,
+  onSearchMatchStateChange,
   onScrollSnapshotChange,
   onSelectPaths,
   revealPath,
@@ -177,14 +179,14 @@ export function PierFileTree({
     ...(stickyFolders ? { stickyFolders: true } : {}),
   });
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
-
+  treeSearch.useSearchMatchState(model, refs.current, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);
-  // 记录库已同步的 model.move，避免 React paths 后续重复 batch 产生幽灵节点。
   const modelAheadMovesRef = React.useRef(new Map<string, string>());
-
   React.useImperativeHandle(
     treeApiRef,
     () => ({
+      activateFocusedSearchMatch: () =>
+        treeSearch.activateFocusedMatch(model, refs.current),
       focusSearchMatch: (direction) => {
         if (direction === "next") {
           model.focusNextSearchMatch();

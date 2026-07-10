@@ -1761,9 +1761,15 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
+    const treeHost = container.querySelector(
+      'file-tree-container[data-slot="pier-file-tree"]'
+    );
+    expect(treeHost).toBeInstanceOf(HTMLElement);
     expect(
-      container.querySelector('file-tree-container[data-slot="pier-file-tree"]')
-    ).toBeInstanceOf(HTMLElement);
+      (treeHost as HTMLElement).style.getPropertyValue(
+        "--trees-padding-inline-override"
+      )
+    ).toBe("4px");
   });
 
   it("never mounts an inline project tree in the thin panel shell when a dockview group is present", async () => {
@@ -2513,6 +2519,257 @@ describe("Files file-panel", () => {
     expect(
       sidebarB?.querySelector('[data-testid="files-tree-search-bar"]')
     ).toBeNull();
+  });
+
+  it("searches partial paths in lazy directories and leaves zero results empty", async () => {
+    const onOpenFile = vi.fn();
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (requestOrRoot, options) => {
+        const path =
+          typeof requestOrRoot === "string"
+            ? (options?.path ?? "")
+            : requestOrRoot.path;
+        const entriesByPath: Readonly<Record<string, readonly FileEntry[]>> = {
+          "": [
+            { kind: "file", path: "README.md", root: PROJECT_ROOT },
+            { kind: "directory", path: "src", root: PROJECT_ROOT },
+          ],
+          src: [
+            { kind: "file", path: "src/app.tsx", root: PROJECT_ROOT },
+            {
+              kind: "directory",
+              path: "src/styles",
+              root: PROJECT_ROOT,
+            },
+          ],
+          "src/styles": [
+            {
+              kind: "file",
+              path: "src/styles/app.css",
+              root: PROJECT_ROOT,
+            },
+            {
+              kind: "file",
+              path: "src/styles/theme.CSS",
+              root: PROJECT_ROOT,
+            },
+          ],
+        };
+        return [...(entriesByPath[path] ?? [])];
+      }
+    );
+    const context = createMockContext({ list });
+    const { container } = render(
+      <FileTreeSidebar
+        context={context}
+        controller={filesRuntimeFor(context).controller}
+        instanceId="tree-search-lazy"
+        onOpenFile={onOpenFile}
+        root={PROJECT_ROOT}
+        watchHub={filesRuntimeFor(context).watchHub}
+      />
+    );
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "README.md",
+        })
+      ).toBeVisible();
+    });
+
+    act(() => {
+      expect(openFilesTreeSearch({ instanceId: "tree-search-lazy" })).toBe(
+        true
+      );
+    });
+    const searchBar = await screen.findByTestId("files-tree-search-bar");
+    const searchInput = within(searchBar).getByRole("textbox", {
+      name: "Find in tree",
+    });
+    expect(searchBar.firstElementChild).toHaveClass("flex-wrap");
+    expect(searchInput.parentElement).toHaveClass("min-w-0");
+    const searchControls = searchBar.querySelector(
+      '[data-slot="files-search-controls"]'
+    );
+    expect(searchControls).toHaveClass("max-w-full", "flex-wrap");
+    expect(
+      within(searchBar).getByRole("button", { name: "Open selected file" })
+    ).toBeVisible();
+    fireEvent.change(searchInput, { target: { value: ".css" } });
+
+    await waitFor(() => {
+      expect(within(searchBar).getByText("2")).toBeVisible();
+      const tree = getFileTree(container);
+      expect(
+        within(tree).getByRole("treeitem", { name: "app.css" })
+      ).toBeVisible();
+      expect(
+        within(tree).getByRole("treeitem", { name: "theme.CSS" })
+      ).toBeVisible();
+      expect(
+        within(tree).queryByRole("treeitem", { name: "README.md" })
+      ).toBeNull();
+    });
+    expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "src" });
+    expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "src/styles" });
+
+    fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+    fireEvent.keyDown(searchInput, { key: "Enter" });
+    expect(onOpenFile).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "src/styles/theme.CSS" }),
+      undefined
+    );
+    expect(searchInput).toHaveValue(".css");
+    expect(
+      within(getFileTree(container)).queryByRole("treeitem", {
+        name: "README.md",
+      })
+    ).toBeNull();
+
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "app.css" })
+    );
+    expect(searchInput).toHaveValue(".css");
+    expect(within(searchBar).getByText("2")).toBeVisible();
+    expect(
+      within(getFileTree(container)).queryByRole("treeitem", {
+        name: "README.md",
+      })
+    ).toBeNull();
+
+    fireEvent.change(searchInput, { target: { value: ".missing" } });
+    await waitFor(() => {
+      expect(within(searchBar).getByText("0")).toBeVisible();
+      expect(
+        within(getFileTree(container)).queryAllByRole("treeitem")
+      ).toHaveLength(0);
+      expect(screen.getByTestId("files-tree-search-empty")).toHaveTextContent(
+        "No matching files"
+      );
+      expect(screen.getByTestId("files-tree-search-empty")).toHaveTextContent(
+        "Try another file name or path."
+      );
+    });
+
+    fireEvent.change(searchInput, { target: { value: "" } });
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "README.md",
+        })
+      ).toBeVisible();
+      expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+    });
+  });
+
+  it("replays a search entered before the tree API mounts", async () => {
+    const rootLoad = Promise.withResolvers<FileEntry[]>();
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_requestOrRoot, options) =>
+        options?.path === "" || options?.path === undefined
+          ? rootLoad.promise
+          : []
+    );
+    const context = createMockContext({ list });
+    const { container } = render(
+      <FileTreeSidebar
+        context={context}
+        controller={filesRuntimeFor(context).controller}
+        instanceId="tree-search-before-mount"
+        onOpenFile={vi.fn()}
+        root={PROJECT_ROOT}
+        watchHub={filesRuntimeFor(context).watchHub}
+      />
+    );
+
+    act(() => {
+      expect(
+        openFilesTreeSearch({ instanceId: "tree-search-before-mount" })
+      ).toBe(true);
+    });
+    const searchBar = await screen.findByTestId("files-tree-search-bar");
+    const searchInput = within(searchBar).getByRole("textbox", {
+      name: "Find in tree",
+    });
+    fireEvent.change(searchInput, { target: { value: ".css" } });
+
+    await act(async () => {
+      rootLoad.resolve([
+        { kind: "file", path: "README.md", root: PROJECT_ROOT },
+        { kind: "file", path: "styles.css", root: PROJECT_ROOT },
+      ]);
+      await rootLoad.promise;
+    });
+    await waitFor(() => {
+      expect(within(searchBar).getByText("1")).toBeVisible();
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "styles.css",
+        })
+      ).toBeVisible();
+      expect(
+        within(getFileTree(container)).queryByRole("treeitem", {
+          name: "README.md",
+        })
+      ).toBeNull();
+      expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+    });
+  });
+
+  it("disables opening when the focused search match is a directory", async () => {
+    const onOpenFile = vi.fn();
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_requestOrRoot, options) =>
+        options?.path
+          ? []
+          : [
+              {
+                kind: "directory",
+                path: "empty-folder",
+                root: PROJECT_ROOT,
+              },
+            ]
+    );
+    const context = createMockContext({ list });
+    const { container } = render(
+      <FileTreeSidebar
+        context={context}
+        controller={filesRuntimeFor(context).controller}
+        instanceId="tree-search-directory"
+        onOpenFile={onOpenFile}
+        root={PROJECT_ROOT}
+        watchHub={filesRuntimeFor(context).watchHub}
+      />
+    );
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "empty-folder",
+        })
+      ).toBeVisible();
+    });
+
+    act(() => {
+      expect(openFilesTreeSearch({ instanceId: "tree-search-directory" })).toBe(
+        true
+      );
+    });
+    const searchBar = await screen.findByTestId("files-tree-search-bar");
+    const searchInput = within(searchBar).getByRole("textbox", {
+      name: "Find in tree",
+    });
+    const openButton = within(searchBar).getByRole("button", {
+      name: "Open selected file",
+    });
+    fireEvent.change(searchInput, { target: { value: "empty-folder" } });
+
+    await waitFor(() => {
+      expect(within(searchBar).getByText("1")).toBeVisible();
+      expect(openButton).toBeDisabled();
+    });
+    fireEvent.keyDown(searchInput, { key: "Enter" });
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
   });
 
   it("does not fall back to another same-root tree when a target tree instance is missing", async () => {

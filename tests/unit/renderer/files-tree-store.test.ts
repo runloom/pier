@@ -9,6 +9,7 @@ import {
   ensureAncestorDirectoryEntries,
   getFilesTreeSnapshot,
   loadFilesTreeDirectory,
+  loadFilesTreeDirectoryWithDiscovery,
   loadFilesTreeRoot,
   moveFilesTreeEntry,
   removeFilesTreeEntry,
@@ -196,6 +197,23 @@ describe("files-tree-store", () => {
     directoryLoad.resolve([file("src/index.ts")]);
     await expect(firstLoad).resolves.toEqual({ ok: true });
     await expect(secondLoad).resolves.toEqual({ ok: true });
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares discovered directories with a search joining an active load", async () => {
+    await loadRoot([directory("src")]);
+    const directoryLoad = createDeferred<FileEntry[]>();
+    const list = vi.fn<FilesListApi>(() => directoryLoad.promise);
+
+    const regularLoad = loadFilesTreeDirectory(ROOT, "src", list);
+    const searchLoad = loadFilesTreeDirectoryWithDiscovery(ROOT, "src", list);
+    directoryLoad.resolve([directory("src/styles"), file("src/index.ts")]);
+
+    await expect(regularLoad).resolves.toEqual({ ok: true });
+    await expect(searchLoad).resolves.toEqual({
+      discoveredDirectoryPaths: ["src/styles"],
+      result: { ok: true },
+    });
     expect(list).toHaveBeenCalledTimes(1);
   });
 
