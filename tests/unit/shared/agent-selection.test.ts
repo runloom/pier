@@ -1,4 +1,8 @@
-import { AGENT_AUTO_PICK_ORDER, pickAgent } from "@shared/agent-selection.ts";
+import {
+  AGENT_AUTO_PICK_ORDER,
+  pickAgent,
+  rankAgents,
+} from "@shared/agent-selection.ts";
 import { agentKindSchema } from "@shared/contracts/agent.ts";
 import { describe, expect, it } from "vitest";
 
@@ -35,5 +39,60 @@ describe("AGENT_AUTO_PICK_ORDER", () => {
   });
   it("claude 首位", () => {
     expect(AGENT_AUTO_PICK_ORDER[0]).toBe("claude");
+  });
+});
+
+describe("rankAgents", () => {
+  const day = 86_400_000;
+  const now = 100 * day;
+
+  it("默认 agent 始终优先于使用历史", () => {
+    expect(
+      rankAgents({
+        detected: ["claude", "codex"],
+        disabled: [],
+        now,
+        preferred: "claude",
+        usage: [{ agentId: "codex", lastUsedAt: now, useCount: 100 }],
+      })
+    ).toEqual(["claude", "codex"]);
+  });
+
+  it("未设置默认项时按使用次数和最近时间的衰减得分排序", () => {
+    expect(
+      rankAgents({
+        detected: ["claude", "codex"],
+        disabled: [],
+        now,
+        preferred: null,
+        usage: [
+          { agentId: "claude", lastUsedAt: now - 70 * day, useCount: 10 },
+          { agentId: "codex", lastUsedAt: now - day, useCount: 1 },
+        ],
+      })
+    ).toEqual(["codex", "claude"]);
+  });
+
+  it("无使用历史时以近期一次性调用成功记录打破平局", () => {
+    expect(
+      rankAgents({
+        detected: ["claude", "codex"],
+        disabled: [],
+        now,
+        preferred: null,
+        recentSuccessAt: new Map([["codex", now - 1000]]),
+      })
+    ).toEqual(["codex", "claude"]);
+  });
+
+  it("过滤未探测和已禁用项，无历史时保持目录顺序", () => {
+    expect(
+      rankAgents({
+        detected: ["gemini", "codex", "claude"],
+        disabled: ["claude"],
+        now,
+        preferred: null,
+      })
+    ).toEqual(["codex", "gemini"]);
   });
 });

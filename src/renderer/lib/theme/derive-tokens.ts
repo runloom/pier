@@ -25,10 +25,7 @@ export interface DerivedUITokens {
   "chart-3": string;
   "chart-4": string;
   "chart-5": string;
-  destructive: string;
-  "destructive-foreground": string;
   foreground: string;
-  info: string;
   input: string;
   muted: string;
   "muted-foreground": string;
@@ -40,13 +37,10 @@ export interface DerivedUITokens {
   ring: string;
   secondary: string;
   "secondary-foreground": string;
-  success: string;
-  warning: string;
-  "warning-foreground": string;
 }
 
-// hardcode fallback 颜色：优先用饱和度更高的 Tailwind 调色板值，确保在低对比度主题
-//（如 min-light）上 info/primary 不退化为灰色。green 改纯绿以防主题缺失 ansiGreen。
+// 编辑器主题只派生 primary 和图表序列色。产品状态色由 globals.css 的稳定语义色板
+// 管理，不再读取终端 ANSI 色，避免同一状态随代码主题改变含义和饱和度。
 const FALLBACKS = {
   redDark: "#cd3131",
   redLight: "#cd3131",
@@ -173,70 +167,6 @@ function derivePrimaryColor(
   }
   primary = readableFilledPrimary(primary);
   return contrast(bg, primary) >= 3 ? primary : visibleColor(bg, primary, 3);
-}
-
-function deriveIndicatorColors(
-  get: ColorGetter,
-  bg: string,
-  mode: "light" | "dark"
-): {
-  destructive: string;
-  info: string;
-  success: string;
-  warning: string;
-} {
-  // 注意: terminal.ansiRed 放 errorForeground 之前。某些 Shiki 主题(如 Solarized Dark)
-  // 的 errorForeground 是 "error 文字色"(深背景上的浅粉),作者意图给文本用,不是 fill bg。
-  // bay 把 destructive 用作 fill (如 SidebarMenuBadge),所以优先取饱和 ansiRed。
-  const destructive = visibleColor(
-    bg,
-    opaqueOn(
-      pickSaturated(
-        get,
-        ["terminal.ansiRed", "errorForeground"],
-        FALLBACKS.redDark
-      ),
-      bg
-    ),
-    3
-  );
-  const success = visibleColor(
-    bg,
-    opaqueOn(
-      pickSaturated(
-        get,
-        ["charts.green", "terminal.ansiGreen", "terminal.ansiBrightGreen"],
-        mode === "dark" ? FALLBACKS.greenDark : FALLBACKS.greenLight
-      ),
-      bg
-    ),
-    3
-  );
-  const info = visibleColor(
-    bg,
-    opaqueOn(
-      pickSaturated(
-        get,
-        ["charts.blue", "terminal.ansiBlue", "terminal.ansiBrightBlue"],
-        mode === "dark" ? FALLBACKS.blueDark : FALLBACKS.blueLight
-      ),
-      bg
-    ),
-    3
-  );
-  const warning = visibleColor(
-    bg,
-    opaqueOn(
-      pickSaturated(
-        get,
-        ["charts.yellow", "terminal.ansiYellow", "terminal.ansiBrightYellow"],
-        mode === "dark" ? FALLBACKS.yellowDark : FALLBACKS.yellowLight
-      ),
-      bg
-    ),
-    3
-  );
-  return { destructive, info, success, warning };
 }
 
 function deriveChartColors(
@@ -387,11 +317,6 @@ export function deriveAppStyleTokens(
   const card = bg;
   const popover = bg;
 
-  const { destructive, success, info, warning } = deriveIndicatorColors(
-    get,
-    bg,
-    mode
-  );
   const { chart1, chart2, chart3, chart4, chart5 } = deriveChartColors(
     get,
     bg,
@@ -408,7 +333,6 @@ export function deriveAppStyleTokens(
     "chart-3": chart3,
     "chart-4": chart4,
     "chart-5": chart5,
-    "destructive-foreground": readableOnFilled(destructive),
     "muted-foreground": mutedFg,
     "popover-foreground": readableText(popover, fg),
     // `--primary-foreground` 是 shadcn / Material 3 / Apple 的"on-primary"语义：落在 `bg-primary`
@@ -420,14 +344,11 @@ export function deriveAppStyleTokens(
       chrome.secondary,
       opaqueOn(get("button.secondaryForeground") ?? fg, chrome.secondary)
     ),
-    "warning-foreground": readableOnFilled(warning),
     accent: chrome.accent,
     background: bg,
     border: chrome.border,
     card,
-    destructive,
     foreground: fg,
-    info,
     input: chrome.input,
     muted: chrome.muted,
     popover,
@@ -435,7 +356,5 @@ export function deriveAppStyleTokens(
     radius: "0.625rem",
     ring: chrome.ring,
     secondary: chrome.secondary,
-    success,
-    warning,
   };
 }

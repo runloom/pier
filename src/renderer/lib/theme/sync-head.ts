@@ -1,9 +1,5 @@
 import type { ResolvedTheme } from "@shared/contracts/preferences.ts";
-
-const FALLBACK_THEME_COLOR: Record<ResolvedTheme, string> = {
-  light: "#ffffff",
-  dark: "#1e1e1e",
-};
+import { NATIVE_CHROME_FALLBACK } from "@shared/theme-colors.ts";
 
 function ensureMetaTag(): HTMLMetaElement {
   let meta = document.querySelector<HTMLMetaElement>(
@@ -41,6 +37,6 @@ export function syncThemeHead({ resolved }: { resolved: ResolvedTheme }): void {
     return;
   }
   const meta = ensureMetaTag();
-  const color = readBackgroundColor() ?? FALLBACK_THEME_COLOR[resolved];
+  const color = readBackgroundColor() ?? NATIVE_CHROME_FALLBACK[resolved];
   meta.setAttribute("content", color);
 }

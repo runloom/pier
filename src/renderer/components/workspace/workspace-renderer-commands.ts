@@ -2,6 +2,10 @@ import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import {
+  rejectTerminalLaunch,
+  waitForTerminalLaunch,
+} from "@/lib/workspace/terminal-launch-confirmation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { requestTerminalRelaunch } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -93,76 +97,90 @@ function addPanelForCommand(
   return panelId;
 }
 
-function addTerminalForCommand(
+async function addTerminalForCommand(
   command: Extract<
     RendererCommandEnvelope["command"],
     { type: "terminal.open" }
   >
-): string {
-  if (!command.panelId) {
-    const workspace = useWorkspaceStore.getState();
-    const referenceGroupOptions = command.targetGroupId
-      ? referenceGroupById(workspace.api, command.targetGroupId)
-      : {};
-    if (command.targetGroupId && !referenceGroupOptions.referenceGroup) {
-      if (!workspace.api) {
+): Promise<string> {
+  const launchConfirmation = waitForTerminalLaunch(command.launchId);
+  let panelId: string | undefined;
+  try {
+    if (command.panelId) {
+      const api = useWorkspaceStore.getState().api;
+      if (!api) {
         throw new Error("workspace api not ready");
       }
-      throw new RendererCommandExecutionError(
-        "not_found",
-        `panel group not found: ${command.targetGroupId}`
+      const panel = api.panels.find(
+        (candidate) => candidate.id === command.panelId
       );
+      if (!panel) {
+        throw new RendererCommandExecutionError(
+          "not_found",
+          `panel not found: ${command.panelId}`
+        );
+      }
+      if (panelKindOf(panel.view.contentComponent) !== "terminal") {
+        throw new RendererCommandExecutionError(
+          "invalid_command",
+          `panel is not a terminal: ${command.panelId}`
+        );
+      }
+      if (command.focus !== false) {
+        focusPanel(command.panelId, "terminal");
+      }
+      requestTerminalRelaunch({
+        panelId: command.panelId,
+        launchId: command.launchId,
+        ...(command.context && { context: command.context }),
+        ...(command.initialInput && { initialInput: command.initialInput }),
+        ...(command.tab && { tab: command.tab }),
+        ...(command.task && { task: command.task }),
+      });
+      panelId = command.panelId;
+    } else {
+      const workspace = useWorkspaceStore.getState();
+      const referenceGroupOptions = command.targetGroupId
+        ? referenceGroupById(workspace.api, command.targetGroupId)
+        : {};
+      if (command.targetGroupId && !referenceGroupOptions.referenceGroup) {
+        if (!workspace.api) {
+          throw new Error("workspace api not ready");
+        }
+        throw new RendererCommandExecutionError(
+          "not_found",
+          `panel group not found: ${command.targetGroupId}`
+        );
+      }
+      panelId =
+        workspace.addTerminal({
+          ...(command.context && {
+            context: command.context,
+          }),
+          ...(command.initialInput && { initialInput: command.initialInput }),
+          launchId: command.launchId,
+          ...(command.placement && {
+            placement: command.placement,
+          }),
+          ...referenceGroupOptions,
+          ...(command.tab && { tab: command.tab }),
+          ...(command.task && { task: command.task }),
+        }) ?? undefined;
+      if (!panelId) {
+        throw new Error("workspace api not ready");
+      }
     }
-    const panelId = workspace.addTerminal({
-      ...(command.context && {
-        context: command.context,
-      }),
-      ...(command.initialInput && { initialInput: command.initialInput }),
-      launchId: command.launchId,
-      ...(command.placement && {
-        placement: command.placement,
-      }),
-      ...referenceGroupOptions,
-      ...(command.tab && { tab: command.tab }),
-      ...(command.task && { task: command.task }),
-    });
-    if (!panelId) {
-      throw new Error("workspace api not ready");
-    }
-    return panelId;
-  }
-
-  const api = useWorkspaceStore.getState().api;
-  if (!api) {
-    throw new Error("workspace api not ready");
-  }
-  const panel = api.panels.find(
-    (candidate) => candidate.id === command.panelId
-  );
-  if (!panel) {
-    throw new RendererCommandExecutionError(
-      "not_found",
-      `panel not found: ${command.panelId}`
+  } catch (error) {
+    rejectTerminalLaunch(
+      command.launchId,
+      error instanceof Error ? error : String(error)
     );
   }
-  if (panelKindOf(panel.view.contentComponent) !== "terminal") {
-    throw new RendererCommandExecutionError(
-      "invalid_command",
-      `panel is not a terminal: ${command.panelId}`
-    );
+  await launchConfirmation;
+  if (!panelId) {
+    throw new Error("terminal panel was not created");
   }
-  if (command.focus !== false) {
-    focusPanel(command.panelId, "terminal");
-  }
-  requestTerminalRelaunch({
-    panelId: command.panelId,
-    launchId: command.launchId,
-    ...(command.context && { context: command.context }),
-    ...(command.initialInput && { initialInput: command.initialInput }),
-    ...(command.tab && { tab: command.tab }),
-    ...(command.task && { task: command.task }),
-  });
-  return command.panelId;
+  return panelId;
 }
 
 export function runWorkspaceRendererCommand(
@@ -215,7 +233,7 @@ async function runWorkspaceRendererCommandAsync(
         return;
       }
       case "terminal.open": {
-        const panelId = addTerminalForCommand(envelope.command);
+        const panelId = await addTerminalForCommand(envelope.command);
         window.pier.rendererCommand.resolve({
           data: {
             ...(envelope.command.context && {

@@ -24,11 +24,13 @@ export type ActionWhenExpression =
 
 export interface ActionContribution {
   categoryKey: ActionCategoryKey;
+  enabled?: (invocation?: ActionInvocation) => boolean;
   excludeFromMru?: boolean;
   group?: string;
   handler: (invocation?: ActionInvocation) => void | Promise<void>;
   iconComponent?: LucideIcon;
   id: string;
+  menuHidden?: (invocation?: ActionInvocation) => boolean;
   /**
    * 为 true 时该 action 从右键菜单整行移除 (非置灰)。只影响 context menu
    * surface;命令面板/快捷键不受影响 (那两处仍走 when → enabled 置灰/拦截)。
@@ -38,6 +40,7 @@ export interface ActionContribution {
   sortOrder?: number;
   submenuKey?: string;
   surfaces: readonly (string & {})[];
+  title?: (invocation?: ActionInvocation) => string;
   titleKey: string;
   titleParams?: Record<string, number | string>;
   when?: ActionWhenExpression;
@@ -45,7 +48,7 @@ export interface ActionContribution {
 
 export interface ActionWhenContext {
   terminal: {
-    /** 当前 active panel 是任务面板 (terminal + 合法 params.task)。 */
+    /** 当前 active panel 是任务终端或任务输出面板。 */
     activeIsTaskPanel: boolean;
     hasActivePanel: boolean;
   };
@@ -59,7 +62,7 @@ export interface ActionWhenContext {
 }
 
 export interface ActionContributionRuntime {
-  getContext: () => ActionWhenContext;
+  getContext: (invocation?: ActionInvocation) => ActionWhenContext;
   resolveAliases: (actionId: string) => readonly string[];
   t: (key: string, params?: Record<string, number | string>) => string;
 }

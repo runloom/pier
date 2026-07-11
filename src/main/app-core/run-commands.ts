@@ -253,13 +253,6 @@ export async function executeRunListCommand(
   return commandSuccess(requestId, result);
 }
 
-export function executeRunBackgroundSnapshotCommand(
-  requestId: string,
-  services: PierCoreServices
-): PierCommandResult {
-  return commandSuccess(requestId, services.tasks.backgroundSnapshot());
-}
-
 export async function executeRunSpawnCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "run.spawn" }>,
@@ -320,6 +313,9 @@ export async function executeRunSpawnCommand(
   if (mode === "background") {
     const started = await services.tasks.startBackgroundRun({
       launches: preparation.launches,
+      ...(command.terminalPanelId
+        ? { originPanelId: command.terminalPanelId }
+        : {}),
       projectRootPath: command.projectRootPath,
       rootTaskId: command.taskId,
       ...(options.clientEnv ? { clientEnv: options.clientEnv } : {}),
@@ -405,6 +401,7 @@ export async function executeRunSpawnCommand(
       },
       projectRootPath: command.projectRootPath,
       rootTaskId: command.taskId,
+      ...(command.windowId ? { windowId: command.windowId } : {}),
     });
   } catch (error) {
     if (error instanceof RunTerminalOpenError) {

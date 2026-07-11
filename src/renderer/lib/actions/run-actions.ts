@@ -1,20 +1,17 @@
 import type {
   TaskCandidate,
-  TaskInputRequest,
   TaskListResult,
   TaskSource,
   TaskSpawnMode,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
-import { List, Play, RotateCcw } from "lucide-react";
+import { List, Play } from "lucide-react";
 import { toast } from "sonner";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
-import {
-  activeTaskPanelRef,
-  rendererActionContributionRuntime,
-} from "@/lib/actions/renderer-action-runtime.ts";
+import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
+import { TASK_RUN_ACTION_CONTRIBUTIONS } from "@/lib/actions/task-run-context-actions.ts";
 import { openTerminalListQuickPick } from "@/lib/actions/terminal-list-quickpick.ts";
 import type { ActionInvocation } from "@/lib/actions/types.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
@@ -24,8 +21,8 @@ import type {
 } from "@/lib/command-palette/types.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { rememberTerminalTaskRun } from "@/stores/terminal-task-history.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { spawnTaskWithInputResolution } from "./task-input-flow.ts";
 
 const TASK_SPAWN_LOADING_DELAY_MS = 300;
 
@@ -198,59 +195,19 @@ function buildTaskSections(result: TaskListResult): QuickPickSection[] {
   return sections;
 }
 
-async function collectTaskInputs(
-  inputs: readonly TaskInputRequest[]
-): Promise<Record<string, string> | null> {
-  const values: Record<string, string> = {};
-  for (const input of inputs) {
-    if (input.type === "promptString") {
-      // biome-ignore lint/suspicious/noAlert: command palette does not yet expose a text-input quick pick.
-      const value = window.prompt(
-        input.description ?? input.id,
-        input.default ?? ""
-      );
-      if (value === null) {
-        return null;
-      }
-      values[input.id] = value;
-      continue;
-    }
-    const selected = await new Promise<string | null>((resolve) => {
-      useCommandPaletteController.getState().openQuickPick({
-        title: input.description ?? input.id,
-        placeholder: input.description ?? input.id,
-        items: input.options.map((option) => ({
-          checked: option === input.default,
-          id: option,
-          label: option,
-        })),
-        onAccept: (item) => {
-          resolve(item.id);
-        },
-        onDismiss: () => {
-          resolve(null);
-        },
-      });
-    });
-    if (selected === null) {
-      return null;
-    }
-    values[input.id] = selected;
-  }
-  return values;
-}
-
 async function spawnTask(args: {
   forceRestart: boolean;
   inputs?: Record<string, string>;
   mode?: TaskSpawnMode;
   project: ProjectContext;
-  taskDetail?: string | undefined;
   terminalPanelId?: string | undefined;
   taskId: string;
   taskLabel?: string | undefined;
 }): Promise<TaskSpawnResult> {
   return await withTaskSpawnLoading(args.taskLabel, async () => {
+    const terminalPanelId =
+      args.terminalPanelId ??
+      (args.mode === "background" ? args.project.terminalPanelId : undefined);
     const result = await window.pier.tasks.spawn({
       focus: args.mode !== "background",
       forceRestart: args.forceRestart,
@@ -258,30 +215,12 @@ async function spawnTask(args: {
       ...(args.mode === "background" ? { mode: args.mode } : {}),
       placement: "active-tab",
       projectRootPath: args.project.projectRootPath,
-      ...(args.terminalPanelId
-        ? { terminalPanelId: args.terminalPanelId }
-        : {}),
+      ...(terminalPanelId ? { terminalPanelId } : {}),
       ...(args.project.targetGroupId
         ? { targetGroupId: args.project.targetGroupId }
         : {}),
       taskId: args.taskId,
     });
-    if (
-      result.status === "started" &&
-      args.mode === "background" &&
-      args.project.terminalPanelId &&
-      args.taskLabel
-    ) {
-      rememberTerminalTaskRun({
-        label: args.taskLabel,
-        panelId: args.project.terminalPanelId,
-        projectRootPath: args.project.projectRootPath,
-        status: "running",
-        taskId: args.taskId,
-        ...(args.taskDetail ? { detail: args.taskDetail } : {}),
-        ...(result.runId ? { runId: result.runId } : {}),
-      });
-    }
     return result;
   });
 }
@@ -292,19 +231,16 @@ async function spawnTaskWithInputFlow(
   options: {
     forceRestart: boolean;
     mode?: TaskSpawnMode;
-    taskDetail?: string | undefined;
     taskLabel?: string | undefined;
     terminalPanelId?: string | undefined;
   }
 ): Promise<void> {
   try {
-    let result = await spawnTask({ project, taskId, ...options });
-    if (result.status === "requires-input") {
-      const inputs = await collectTaskInputs(result.inputs);
-      if (!inputs) {
-        return;
-      }
-      result = await spawnTask({ inputs, project, taskId, ...options });
+    const result = await spawnTaskWithInputResolution((inputs) =>
+      spawnTask({ ...(inputs ? { inputs } : {}), project, taskId, ...options })
+    );
+    if (!result) {
+      return;
     }
     if (result.status === "unsupported") {
       await showAppAlert({
@@ -324,32 +260,10 @@ function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
   return spawnTaskWithInputFlow(project, item.id, {
     forceRestart: false,
     mode: project.defaultTaskSpawnMode ?? "terminal-tab",
-    taskDetail: item.detail,
     taskLabel: item.label,
   });
 }
 
-/**
- * `pier.run.rerunTask`: shared entry point for task-panel context menus,
- * the command palette, and the global rerun shortcut. Unlike Run Task picker
- * selections, this explicitly asks main to restart the active task in place.
- */
-async function rerunActiveTaskPanel(): Promise<void> {
-  const activeTask = activeTaskPanelRef();
-  if (!activeTask) {
-    return;
-  }
-  await spawnTaskWithInputFlow(
-    { projectRootPath: activeTask.task.projectRootPath },
-    activeTask.task.taskId,
-    {
-      forceRestart: true,
-      mode: "terminal-tab",
-      taskLabel: activeTask.task.label,
-      terminalPanelId: activeTask.panelId,
-    }
-  );
-}
 export async function openRunTaskQuickPick(invocation?: ActionInvocation) {
   const project = activeProjectContext(invocation?.sourcePanelGroupId);
   const title = i18next.t("commandPalette.action.runTask");
@@ -441,6 +355,7 @@ export async function openRunTaskQuickPick(invocation?: ActionInvocation) {
 }
 
 export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
+  ...TASK_RUN_ACTION_CONTRIBUTIONS,
   {
     categoryKey: "run",
     group: "1_run",
@@ -450,19 +365,6 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     sortOrder: 0,
     surfaces: ["command-palette", "create-menu"],
     titleKey: "commandPalette.action.runTask",
-  },
-  {
-    categoryKey: "run",
-    // 与 pier.panel.newTerminal 同组同位: 任务面板上二者互斥换位。
-    group: "1_new",
-    handler: rerunActiveTaskPanel,
-    iconComponent: RotateCcw,
-    id: "pier.run.rerunTask",
-    menuHiddenWhen: "!terminal.activeIsTaskPanel",
-    sortOrder: 1,
-    surfaces: ["dockview-tab", "terminal/content", "command-palette"],
-    titleKey: "contextMenu.action.rerunTask",
-    when: "terminal.activeIsTaskPanel",
   },
   {
     categoryKey: "run",

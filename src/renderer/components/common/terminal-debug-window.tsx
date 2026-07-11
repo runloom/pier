@@ -1,3 +1,6 @@
+import { Button } from "@pier/ui/button.tsx";
+import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type {
   TerminalDebugEvent,
   TerminalDebugRouterDecision,
@@ -17,9 +20,14 @@ import {
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { LayoutStateView } from "./terminal-debug-layout-view.tsx";
+import {
+  type TerminalDebugRouteStatus,
+  terminalDebugStatusClass,
+  terminalDebugStatusFill,
+  terminalDebugStatusWord,
+} from "./terminal-debug-status-visual.ts";
 
 type DebugView = "layout" | "routing";
-type RouteStatus = "bad" | "idle" | "ok" | "warn";
 
 interface TerminalDebugWindowProps {
   targetBrowserWindowId: number;
@@ -28,59 +36,7 @@ interface TerminalDebugWindowProps {
 interface RouteHealth {
   id: string;
   label: string;
-  status: RouteStatus;
-}
-
-function statusClass(status: RouteStatus): string {
-  if (status === "ok") {
-    return "border-zinc-300 border-l-4 border-l-emerald-500 bg-white text-emerald-900";
-  }
-  if (status === "warn") {
-    return "border-zinc-300 border-l-4 border-l-amber-500 bg-white text-amber-900";
-  }
-  if (status === "bad") {
-    return "border-zinc-300 border-l-4 border-l-red-500 bg-white text-red-900";
-  }
-  return "border-zinc-300 border-l-4 border-l-zinc-300 bg-white text-zinc-600";
-}
-
-function statusDotClass(status: RouteStatus): string {
-  if (status === "ok") {
-    return "bg-emerald-500";
-  }
-  if (status === "warn") {
-    return "bg-amber-500";
-  }
-  if (status === "bad") {
-    return "bg-red-500";
-  }
-  return "bg-zinc-300";
-}
-
-function lineClass(status: RouteStatus): string {
-  if (status === "ok") {
-    return "bg-emerald-500";
-  }
-  if (status === "warn") {
-    return "bg-amber-500";
-  }
-  if (status === "bad") {
-    return "bg-red-500";
-  }
-  return "bg-zinc-300";
-}
-
-function statusWord(status: RouteStatus): string {
-  if (status === "ok") {
-    return "ok";
-  }
-  if (status === "warn") {
-    return "stale";
-  }
-  if (status === "bad") {
-    return "blocked";
-  }
-  return "idle";
+  status: TerminalDebugRouteStatus;
 }
 
 function hasRecentEvent(
@@ -92,7 +48,7 @@ function hasRecentEvent(
 
 function presentationStatus(
   snapshot: TerminalDebugSnapshot | null
-): RouteStatus {
+): TerminalDebugRouteStatus {
   if (snapshot?.native.error) {
     return "bad";
   }
@@ -106,7 +62,9 @@ function presentationStatus(
   return snapshot ? "ok" : "idle";
 }
 
-function focusStatus(snapshot: TerminalDebugSnapshot | null): RouteStatus {
+function focusStatus(
+  snapshot: TerminalDebugSnapshot | null
+): TerminalDebugRouteStatus {
   if (!snapshot) {
     return "idle";
   }
@@ -130,10 +88,14 @@ function focusStatus(snapshot: TerminalDebugSnapshot | null): RouteStatus {
 function routeHealth(snapshot: TerminalDebugSnapshot | null): RouteHealth[] {
   const events = snapshot?.events.slice(-48) ?? [];
   const presentation = presentationStatus(snapshot);
-  const keyboard: RouteStatus = hasRecentEvent(events, ["key-forward"])
+  const keyboard: TerminalDebugRouteStatus = hasRecentEvent(events, [
+    "key-forward",
+  ])
     ? "ok"
     : "idle";
-  const mouse: RouteStatus = hasRecentEvent(events, ["right-mouse"])
+  const mouse: TerminalDebugRouteStatus = hasRecentEvent(events, [
+    "right-mouse",
+  ])
     ? "ok"
     : "idle";
   const focus = focusStatus(snapshot);
@@ -154,26 +116,26 @@ function NodeCard({
   children: ReactNode;
   icon: ReactNode;
   label: string;
-  status: RouteStatus;
+  status: TerminalDebugRouteStatus;
 }) {
   return (
-    <section className="flex min-h-24 flex-col justify-between border border-[#d0d0d0] bg-white p-3">
-      <div className="flex items-center gap-2 text-[#6f6f6f]">
+    <section className="flex min-h-24 flex-col justify-between border bg-card p-3">
+      <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
-        <div className="min-w-0 flex-1 truncate font-semibold text-[#202124] text-sm">
+        <div className="min-w-0 flex-1 truncate font-semibold text-foreground text-sm">
           {label}
         </div>
-        <span className={`size-2.5 ${statusDotClass(status)}`} />
+        <span className={`size-2.5 ${terminalDebugStatusFill(status)}`} />
       </div>
       <div className="mt-3 truncate font-semibold text-base">{children}</div>
     </section>
   );
 }
 
-function Connector({ status }: { status: RouteStatus }) {
+function Connector({ status }: { status: TerminalDebugRouteStatus }) {
   return (
     <div className="hidden items-center md:flex">
-      <div className={`h-1 w-full ${lineClass(status)}`} />
+      <div className={`h-1 w-full ${terminalDebugStatusFill(status)}`} />
     </div>
   );
 }
@@ -181,10 +143,15 @@ function Connector({ status }: { status: RouteStatus }) {
 function HealthChip({ item }: { item: RouteHealth }) {
   return (
     <div
-      className={`flex min-w-0 items-center justify-between gap-2 border px-3 py-2 text-xs ${statusClass(item.status)}`}
+      className={cn(
+        "flex min-w-0 items-center justify-between gap-2 border px-3 py-2 text-xs",
+        terminalDebugStatusClass(item.status)
+      )}
     >
       <span className="truncate font-medium">{item.label}</span>
-      <span className="shrink-0 font-semibold">{statusWord(item.status)}</span>
+      <span className="shrink-0 font-semibold">
+        {terminalDebugStatusWord(item.status)}
+      </span>
     </div>
   );
 }
@@ -279,14 +246,14 @@ function RouterDecisionsPanel({
   const nowSeconds = Date.now() / 1000;
   const orderedRecent = useMemo(() => decisions.slice().reverse(), [decisions]);
   return (
-    <section className="flex min-h-0 shrink-0 flex-col border border-[#d0d0d0] bg-white">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-[#d0d0d0] border-b bg-[#f3f3f3] px-3">
-        <ListTree className="size-4 text-[#6f6f6f]" />
+    <section className="flex min-h-0 shrink-0 flex-col border bg-card">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-muted px-3">
+        <ListTree className="size-4 text-muted-foreground" />
         <div className="font-semibold text-sm">Recent Router Decisions</div>
-        <div className="ml-auto text-[#6f6f6f] text-xs">
+        <div className="ml-auto text-muted-foreground text-xs">
           {decisions.length} / 64
           {droppedCount > 0 ? (
-            <span className="ml-2 text-amber-700">
+            <span className="ml-2 text-status-warning-fg">
               ({droppedCount} dropped)
             </span>
           ) : null}
@@ -294,22 +261,23 @@ function RouterDecisionsPanel({
       </div>
       <div className="max-h-64 min-h-0 overflow-auto">
         {orderedRecent.length === 0 ? (
-          <div className="p-3 text-[#6f6f6f] text-xs">
+          <div className="p-3 text-muted-foreground text-xs">
             No decisions yet — reproduce the issue (click, press a key, right
             click) to populate.
           </div>
         ) : (
-          <ul className="divide-y divide-[#eaeaea]">
+          <ul className="divide-y divide-border">
             {orderedRecent.map((decision) => {
               const suspicious = isSuspiciousDecision(decision);
               return (
                 <li
-                  className={`flex flex-wrap gap-2 px-3 py-1.5 font-mono text-xs ${
-                    suspicious ? "bg-amber-50 text-amber-900" : "text-[#202124]"
-                  }`}
+                  className={cn(
+                    "flex flex-wrap gap-2 px-3 py-1.5 font-mono text-xs",
+                    suspicious && "bg-status-warning-bg text-status-warning-fg"
+                  )}
                   key={decision.seq}
                 >
-                  <span className="shrink-0 text-[#6f6f6f]">
+                  <span className="shrink-0 text-muted-foreground">
                     {formatDecisionAge(decision.at, nowSeconds)}
                   </span>
                   <span className="shrink-0 font-semibold">
@@ -352,8 +320,8 @@ function RoutingStateView({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden border border-[#d0d0d0] bg-white">
-        <div className="flex h-9 shrink-0 items-center border-[#d0d0d0] border-b bg-[#f3f3f3] px-3 font-medium text-sm">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden border bg-card">
+        <div className="flex h-9 shrink-0 items-center border-b bg-muted px-3 font-medium text-sm">
           Routing State
         </div>
         <div className="min-h-0 flex-1 p-4">
@@ -397,9 +365,9 @@ function RoutingStateView({
           </div>
         </div>
       </section>
-      <aside className="shrink-0 border border-[#d0d0d0] bg-white">
-        <div className="flex h-9 items-center gap-2 border-[#d0d0d0] border-b bg-[#f3f3f3] px-3">
-          <MousePointer2 className="size-4 text-[#6f6f6f]" />
+      <aside className="shrink-0 border bg-card">
+        <div className="flex h-9 items-center gap-2 border-b bg-muted px-3">
+          <MousePointer2 className="size-4 text-muted-foreground" />
           <div className="font-semibold text-sm">Route Health</div>
         </div>
         <div className="grid grid-cols-2 gap-2 p-3 lg:grid-cols-4">
@@ -447,43 +415,49 @@ export function TerminalDebugWindow({
   }, [refresh]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#f3f3f3] text-[#202124]">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-[#cfcfcf] border-b bg-[#f3f3f3] px-3">
+    <div className="flex h-screen flex-col overflow-hidden bg-muted text-foreground">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-muted px-3">
         <div className="min-w-0 flex-1">
           <div className="truncate font-semibold text-sm">Terminal Debug</div>
-          <div className="text-[#6f6f6f] text-xs">
+          <div className="text-muted-foreground text-xs">
             Target window {targetBrowserWindowId}
           </div>
         </div>
-        <div className="inline-flex border border-[#c8c8c8] bg-[#e9e9e9] p-0.5">
-          <button
-            className={`inline-flex h-7 items-center gap-1.5 px-2.5 text-xs ${view === "layout" ? "bg-white text-[#202124]" : "text-[#6f6f6f]"}`}
-            onClick={() => setView("layout")}
-            type="button"
-          >
-            <Columns3 className="size-3.5" />
-            Layout
-          </button>
-          <button
-            className={`inline-flex h-7 items-center gap-1.5 px-2.5 text-xs ${view === "routing" ? "bg-white text-[#202124]" : "text-[#6f6f6f]"}`}
-            onClick={() => setView("routing")}
-            type="button"
-          >
-            <GitBranch className="size-3.5" />
-            Routing
-          </button>
-        </div>
-        <button
-          aria-label="Refresh terminal debug snapshot"
-          className="inline-flex size-8 items-center justify-center text-[#6f6f6f] hover:bg-[#e5e5e5] hover:text-[#202124]"
-          onClick={() => refresh().catch(() => undefined)}
-          type="button"
+        <ToggleGroup
+          aria-label="Terminal debug view"
+          onValueChange={(next) => {
+            if (next === "layout" || next === "routing") {
+              setView(next);
+            }
+          }}
+          size="sm"
+          spacing={0}
+          type="single"
+          value={view}
+          variant="outline"
         >
-          <RefreshCw className="size-4" />
-        </button>
+          <ToggleGroupItem value="layout">
+            <Columns3 data-icon="inline-start" />
+            Layout
+          </ToggleGroupItem>
+          <ToggleGroupItem value="routing">
+            <GitBranch data-icon="inline-start" />
+            Routing
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <Button
+          aria-label="Refresh terminal debug snapshot"
+          onClick={() => refresh().catch(() => undefined)}
+          size="icon"
+          tone="muted"
+          type="button"
+          variant="ghost"
+        >
+          <RefreshCw data-icon="inline-start" />
+        </Button>
       </header>
       {error ? (
-        <div className="shrink-0 border-red-200 border-b bg-red-50 px-4 py-2 text-red-700 text-xs">
+        <div className="shrink-0 border-status-danger-border border-b bg-status-danger-bg px-4 py-2 text-status-danger-fg text-xs">
           {error}
         </div>
       ) : null}

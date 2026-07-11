@@ -3,6 +3,7 @@ import {
   AiFieldDescription,
   buildBranchNamePrompt,
   extractAnswerLine,
+  extractBranchSuggestion,
   type FormValues,
   HEAD_SENTINEL,
   normalizeBranchSuggestion,
@@ -10,6 +11,7 @@ import {
   type TextFn,
   type WorktreeCreateOverlayData,
 } from "@plugins/builtin/git/renderer/worktree-create-form.tsx";
+import { isValidGitBranchName } from "@shared/worktree-naming.ts";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -93,6 +95,19 @@ describe("extractAnswerLine", () => {
   });
 });
 
+describe("extractBranchSuggestion", () => {
+  it("从完整 AI 输出中选取合法分支，不被末尾说明干扰", () => {
+    expect(
+      extractBranchSuggestion(
+        "Here is the branch:\n`feature/fix-terminal-focus`\nDone"
+      )
+    ).toBe("feature/fix-terminal-focus");
+    expect(extractBranchSuggestion("Branch: fix-terminal-focus")).toBe(
+      "fix-terminal-focus"
+    );
+  });
+});
+
 describe("normalizeBranchSuggestion", () => {
   it("小写化、空白与非法字符折叠为连字符、保留分支路径前缀", () => {
     expect(normalizeBranchSuggestion("Fix Dialog UI")).toBe("fix-dialog-ui");
@@ -101,6 +116,12 @@ describe("normalizeBranchSuggestion", () => {
       "feature/fix-dialog"
     );
     expect(normalizeBranchSuggestion("fix_login/flow")).toBe("fix_login/flow");
+    expect(normalizeBranchSuggestion("feature/fix..dialog")).toBe(
+      "feature/fix-dialog"
+    );
+    expect(normalizeBranchSuggestion("feature/build.lock")).toBe(
+      "feature/build-lock"
+    );
   });
 
   it("超长分支候选会截断且不以分隔符结尾", () => {
@@ -147,12 +168,16 @@ describe("resolveSubmitDraft", () => {
     });
   });
 
-  it("AI 输出无可用分支名时由插件返回 invalid_response 错误", async () => {
+  it("AI 首次输出不合法时自动修复为语义化分支名", async () => {
     const generateText = vi
       .fn<RendererPluginContext["ai"]["generateText"]>()
-      .mockResolvedValue({
+      .mockResolvedValueOnce({
         status: "ok",
         text: "！！！\n",
+      })
+      .mockResolvedValueOnce({
+        status: "ok",
+        text: "fix-terminal-focus\n",
       });
 
     const result = await resolveSubmitDraft({
@@ -164,8 +189,36 @@ describe("resolveSubmitDraft", () => {
     });
 
     expect(result).toEqual({
-      error: "AI returned no usable branch name, try again",
+      draft: {
+        branch: "fix-terminal-focus",
+        name: "fix-terminal-focus",
+        source: "description",
+      },
     });
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[1]?.[0].prompt).toContain(
+      "Return exactly one corrected branch name"
+    );
+    expect(isValidGitBranchName("fix-terminal-focus")).toBe(true);
+  });
+
+  it("AI 两次都无法生成合法分支名时停止创建", async () => {
+    const generateText = vi
+      .fn<RendererPluginContext["ai"]["generateText"]>()
+      .mockResolvedValue({ status: "ok", text: "！！！\n" });
+
+    const result = await resolveSubmitDraft({
+      branchNamePromptTemplate: "",
+      data: DATA,
+      generateText,
+      text,
+      values: formValues(),
+    });
+
+    expect(result).toEqual({
+      error: "AI could not generate a valid branch name, try again",
+    });
+    expect(generateText).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -15,7 +15,6 @@ import {
   useAppDialogStore,
 } from "@/stores/app-dialog.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { useTerminalTaskHistoryStore } from "@/stores/terminal-task-history.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("sonner", () => ({
@@ -199,7 +198,6 @@ describe("run actions", () => {
     });
     useWorkspaceStore.getState().setApi(null);
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
-    useTerminalTaskHistoryStore.setState({ panels: {}, version: 0 });
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -209,6 +207,7 @@ describe("run actions", () => {
             async (): Promise<TaskSpawnResult> => ({
               panelIds: ["terminal-task"],
               primaryPanelId: "terminal-task",
+              runId: "run-next",
               status: "started",
             })
           ),
@@ -223,7 +222,6 @@ describe("run actions", () => {
     disposeRunActions = null;
     useWorkspaceStore.getState().setApi(null);
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
-    useTerminalTaskHistoryStore.setState({ panels: {}, version: 0 });
     useCommandPaletteController.setState({
       mode: "commands",
       open: false,
@@ -392,18 +390,7 @@ describe("run actions", () => {
       placement: "active-tab",
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
-    });
-    expect(
-      useTerminalTaskHistoryStore.getState().panels["terminal-current"]?.[
-        "package-script:test"
-      ]
-    ).toMatchObject({
-      detail: "pnpm run test",
-      label: "test",
-      panelId: "terminal-current",
-      projectRootPath: "/Users/xyz/ABC/pier",
-      status: "running",
-      taskId: "package-script:test",
+      terminalPanelId: "terminal-current",
     });
     expect(quickPick.renderItem).toBeUndefined();
   });
@@ -459,7 +446,6 @@ describe("run actions", () => {
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
     });
-    expect(useTerminalTaskHistoryStore.getState().panels).toEqual({});
     expect(quickPick.renderItem).toBeUndefined();
   });
 
@@ -687,6 +673,7 @@ describe("run actions", () => {
       placement: "active-tab",
       projectRootPath: "/Users/xyz/ABC/pier",
       taskId: "package-script:test",
+      terminalPanelId: "terminal-current",
     });
   });
 
@@ -711,6 +698,7 @@ describe("run actions", () => {
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: true,
       forceRestart: true,
+      mode: "terminal-tab",
       placement: "active-tab",
       projectRootPath: "/Users/xyz/ABC/pier",
       terminalPanelId: "terminal-task",

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activateTerminalInputRouting,
+  beginTerminalPanelWebDragCapture,
   getLastTerminalInputRoutingSnapshot,
   installTerminalInputRoutingBlurSuppressor,
   registerTerminalFullscreenWebOverlay,
@@ -115,6 +116,41 @@ describe("terminal input routing store", () => {
     expect(getLastTerminalInputRoutingSnapshot()?.webOverlayRects).toHaveLength(
       0
     );
+  });
+
+  it("routes the whole terminal panel to Web for the duration of a drag", () => {
+    const panel = document.createElement("div");
+    panel.getBoundingClientRect = () =>
+      ({
+        bottom: 220,
+        height: 200,
+        left: 10,
+        right: 410,
+        top: 20,
+        width: 400,
+        x: 10,
+        y: 20,
+      }) as DOMRect;
+
+    const capture = beginTerminalPanelWebDragCapture("terminal-1", panel);
+
+    expect(getLastTerminalInputRoutingSnapshot()).toMatchObject({
+      webOverlayRects: [
+        {
+          id: "terminal-floating-drag:terminal-1",
+          frame: { height: 200, width: 400, x: 10, y: 20 },
+        },
+      ],
+      webRequestCount: 1,
+    });
+
+    capture.dispose();
+    capture.dispose();
+
+    expect(getLastTerminalInputRoutingSnapshot()).toMatchObject({
+      webOverlayRects: [],
+      webRequestCount: 0,
+    });
   });
 });
 

@@ -136,15 +136,10 @@ export function SettingsDialog() {
       <DialogContent
         className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col sm:max-w-[1200px]"
         onEscapeKeyDown={(event) => {
-          // 字段级(InputRow 等)自己处理 Escape(回弹草稿); 避免 Radix
-          // DismissableLayer 的 capture-phase 监听把这次按键也当成"关闭对话框"。
-          // 字段的 stopPropagation 拦不住 capture 阶段已经跑过的这次调用,
-          // 只能在这里按 event.target 判断是否属于可编辑字段来 preventDefault。
-          if (
-            event.target instanceof HTMLInputElement ||
-            event.target instanceof HTMLTextAreaElement
-          ) {
-            event.preventDefault();
+          // 设置项以 blur 作为统一提交入口。Radix 通过 Escape 卸载 Dialog 前
+          // 主动触发 blur，既保留自动保存语义，也不阻止 Dialog 的标准关闭行为。
+          if (event.target instanceof HTMLElement) {
+            event.target.blur();
           }
         }}
       >

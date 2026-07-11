@@ -1,5 +1,8 @@
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
-import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
+import type {
+  TaskOutputPanelParams,
+  TaskPanelMetadata,
+} from "@shared/contracts/tasks.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import {
   act,
@@ -20,11 +23,16 @@ import {
   vi,
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import {
+  resetTerminalLaunchConfirmationsForTest,
+  waitForTerminalLaunch,
+} from "@/lib/workspace/terminal-launch-confirmation.ts";
 import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import {
   resetTerminalOverlayFocusForTests,
   useTerminalStore,
@@ -191,6 +199,7 @@ function createPanelProps(
       launchId?: string;
       tab?: PanelTabChrome;
       task?: TaskPanelMetadata;
+      taskOutput?: TaskOutputPanelParams;
     };
   } = {}
 ): TestPanelProps {
@@ -316,6 +325,7 @@ describe("TerminalPanel lifecycle", () => {
     cwdChangeListeners = [];
     titleChangeListeners = [];
     terminalRelaunchStoreMock.reset();
+    resetTerminalLaunchConfirmationsForTest();
     resetFreshTerminalPanelsForTests();
 
     resetTerminalInputRoutingForTests();
@@ -330,6 +340,11 @@ describe("TerminalPanel lifecycle", () => {
       uiFontFamily: "",
     });
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+    useTaskRunsStore.setState({
+      error: null,
+      initialized: true,
+      snapshot: { runs: {}, version: 0 },
+    });
     useZoomStore.setState({ windowZoomLevel: 0 });
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
@@ -434,6 +449,64 @@ describe("TerminalPanel lifecycle", () => {
     unmount();
 
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
+  });
+
+  it("creates a task output surface without mounting runtime controls", async () => {
+    const taskOutput = {
+      label: "Build",
+      runId: "run-1",
+      taskId: "build",
+    };
+    useTaskRunsStore.setState({
+      error: null,
+      initialized: true,
+      snapshot: {
+        runs: {
+          "run-1": {
+            mode: "background",
+            nodes: {
+              build: {
+                label: "Build",
+                panelId: "background-task-run-1-build",
+                status: "running",
+                taskId: "build",
+              },
+            },
+            originPanelId: "terminal-origin",
+            projectRootPath: "/repo",
+            rootTaskId: "build",
+            runId: "run-1",
+            startedAt: 100,
+            status: "running",
+            updatedAt: 200,
+          },
+        },
+        version: 1,
+      },
+    });
+
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            tab: { title: taskOutput.label },
+            taskOutput,
+          },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "terminal-1",
+          taskOutput,
+        })
+      );
+    });
+    expect(document.querySelector(".terminal-anchor")).not.toBeNull();
+    expect(screen.queryByTestId("task-output-log")).toBeNull();
+    expect(screen.queryByTestId("terminal-runtime-control")).toBeNull();
   });
 
   it("restores the saved tab descriptor before creating a hidden native terminal", async () => {
@@ -690,6 +763,43 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
+  });
+
+  it("confirms a renderer terminal launch only after native creation succeeds", async () => {
+    const confirmation = waitForTerminalLaunch("launch-confirmed");
+    markFreshTerminalPanel("terminal-1");
+
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: { context, launchId: "launch-confirmed" },
+        })}
+      />
+    );
+
+    await expect(confirmation).resolves.toBeUndefined();
+    expect(window.pier.terminal.create).toHaveBeenCalledWith(
+      expect.objectContaining({ launchId: "launch-confirmed" })
+    );
+  });
+
+  it("rejects a renderer terminal launch when native creation fails", async () => {
+    vi.mocked(window.pier.terminal.create).mockResolvedValueOnce({
+      error: "native create failed",
+      ok: false,
+    });
+    const confirmation = waitForTerminalLaunch("launch-failed");
+    markFreshTerminalPanel("terminal-1");
+
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: { context, launchId: "launch-failed" },
+        })}
+      />
+    );
+
+    await expect(confirmation).rejects.toThrow("native create failed");
   });
 
   it("does not replay initial input from persisted panel params", async () => {
@@ -1212,6 +1322,20 @@ describe("TerminalPanel lifecycle", () => {
     expect(result).toHaveTextContent("Statussucceeded");
     expect(result).toHaveTextContent("Commandpnpm run test");
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
+
+    fireEvent.contextMenu(result, { clientX: 18, clientY: 30 });
+    await waitFor(() => {
+      expect(popupContextMenuAtMock).toHaveBeenCalledWith(
+        "terminal/content",
+        { x: 18, y: 30 },
+        {
+          sourcePanelComponent: "terminal",
+          sourcePanelContext: context,
+          sourcePanelGroupId: "group-terminal-1",
+          sourcePanelId: "terminal-1",
+        }
+      );
+    });
   });
 
   it("renders a swept running task as a cancelled result card on app restart", async () => {

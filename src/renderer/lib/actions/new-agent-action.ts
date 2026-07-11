@@ -6,10 +6,8 @@ import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import {
-  captureAnchoredTerminalTarget,
-  resolveAnchoredTerminalOptions,
-} from "@/stores/workspace-panel-helpers.ts";
+import { captureAnchoredTerminalTarget } from "@/stores/workspace-panel-helpers.ts";
+import { startAgentInAnchoredTerminal } from "./agent-start-actions.ts";
 import { registerActionContributions } from "./contribution-runtime.ts";
 import type { ActionContribution } from "./contribution-types.ts";
 import { rendererActionContributionRuntime } from "./renderer-action-runtime.ts";
@@ -45,33 +43,7 @@ async function handleNewAgent(invocation?: ActionInvocation): Promise<void> {
     return;
   }
 
-  try {
-    const { launchId } = await window.pier.agents.prepareLaunch(agentId);
-    if (!launchId) {
-      toast.error(i18next.t("workspace.addPanelMenu.startAgentFailed"));
-      return;
-    }
-    const terminalOptions = resolveAnchoredTerminalOptions(
-      useWorkspaceStore.getState().api,
-      target
-    );
-    if (!terminalOptions) {
-      toast.error(i18next.t("workspace.addPanelMenu.startAgentFailed"));
-      return;
-    }
-    const panelId = useWorkspaceStore.getState().addTerminal({
-      ...terminalOptions,
-      launchId,
-    });
-    if (!panelId) {
-      toast.error(i18next.t("workspace.addPanelMenu.startAgentFailed"));
-    }
-  } catch (error) {
-    await showAppAlert({
-      body: error instanceof Error ? error.message : String(error),
-      title: i18next.t("workspace.addPanelMenu.startAgentFailed"),
-    });
-  }
+  await startAgentInAnchoredTerminal(agentId, target);
 }
 
 export const NEW_AGENT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [

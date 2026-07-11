@@ -812,22 +812,29 @@ describe("createRendererPluginContext", () => {
     const context = createRendererPluginContext();
 
     await context.worktrees.check({ path: "/repo" });
-    await context.worktrees.create({
-      branch: "feature/new",
-      name: "new",
-      path: "/repo",
-    });
+    const onProgress = vi.fn();
+    await context.worktrees.create(
+      {
+        branch: "feature/new",
+        name: "new",
+        path: "/repo",
+      },
+      { onProgress }
+    );
     await context.worktrees.list({ path: "/repo" });
     await context.worktrees.open({ path: "/repo" });
     await context.worktrees.prune({ path: "/repo" });
     await context.worktrees.remove({ path: "/repo/.worktrees/new" });
 
     expect(check).toHaveBeenCalledWith({ path: "/repo" });
-    expect(create).toHaveBeenCalledWith({
-      branch: "feature/new",
-      name: "new",
-      path: "/repo",
-    });
+    expect(create).toHaveBeenCalledWith(
+      {
+        branch: "feature/new",
+        name: "new",
+        path: "/repo",
+      },
+      { onProgress }
+    );
     expect(list).toHaveBeenCalledWith({ path: "/repo" });
     expect(open).toHaveBeenCalledWith({ path: "/repo" });
     expect(prune).toHaveBeenCalledWith({ path: "/repo" });
@@ -1426,6 +1433,12 @@ describe("createRendererPluginContext", () => {
 
     const loading = context.notifications.loading("Rebasing...");
     expect(toastMocks.loading).toHaveBeenCalledWith("Rebasing...");
+
+    loading.update("Resolving dependencies...");
+    expect(toastMocks.loading).toHaveBeenCalledWith(
+      "Resolving dependencies...",
+      { id: "toast-1" }
+    );
 
     loading.info("Rebase stopped at conflict");
     expect(toastMocks.info).toHaveBeenCalledWith("Rebase stopped at conflict", {

@@ -13,6 +13,7 @@ import {
   clearPanelCloseGuards,
   registerPanelCloseGuard,
 } from "@/lib/workspace/panel-close-guards.ts";
+import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import {
   requestTerminalRelaunch,
   useTerminalRelaunchRequest,
@@ -129,6 +130,21 @@ describe("workspace terminal close lifecycle", () => {
     expect(relaunch.result.current).toBeNull();
     expect(window.pier.terminal.close).toHaveBeenCalledWith(panel.id);
     expect(api.removePanel).toHaveBeenCalledWith(panel);
+  });
+
+  it("clears the selected task run when a terminal panel is closed", async () => {
+    const panel = terminalPanel("terminal-run-selection-close");
+    const api = createApi([panel, webPanel("welcome-1")]);
+    useWorkspaceStore.getState().setApi(api as never);
+    useTaskRunSelectionStore
+      .getState()
+      .selectPanelRun(panel.id, "run-selected");
+
+    await useWorkspaceStore.getState().closePanel(panel.id);
+
+    expect(
+      useTaskRunSelectionStore.getState().selectedRunIdsByPanel[panel.id]
+    ).toBeUndefined();
   });
 
   it("stores the requested context in terminal panel params when opening a terminal panel", () => {

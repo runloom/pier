@@ -1,6 +1,6 @@
 import type { AgentKind } from "./agent.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
-import type { TaskPanelMetadata } from "./tasks.ts";
+import type { TaskOutputPanelParams, TaskPanelMetadata } from "./tasks.ts";
 // TerminalAPI 是终端 IPC 契约, 里面 debugSnapshot / openDebugWindow 等 debug 相关
 // 方法需要引用 debug schema. 仅 type-only 循环 import (tsc 会 erase), 不构成运行时环。
 import type {
@@ -115,11 +115,18 @@ export interface CreateTerminalArgs {
   panelId: string;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;
+  /** 后台任务的只读 Ghostty 输出会话；存在时不创建 shell/PTY。 */
+  taskOutput?: TaskOutputPanelParams | undefined;
 }
 
 export interface CreateTerminalResult {
   error?: string;
   ok: boolean;
+}
+
+export interface RebindTaskOutputResult extends CreateTerminalResult {
+  generation?: number;
+  stale?: boolean;
 }
 
 export interface TerminalAgentResumeMetadata {
@@ -313,6 +320,14 @@ export interface TerminalAPI {
    * 标题/cwd, 真正的 native terminal 可以等 panel 可见时再创建.
    */
   readSession(panelId: string): Promise<TerminalPanelSessionSnapshot | null>;
+  /**
+   * 在不更换 dockview panel 的前提下，把只读输出终端切换到另一 TaskRun。
+   * generation 用于拒绝晚到的旧选择；失败时保留原绑定。
+   */
+  rebindTaskOutput(
+    panelId: string,
+    params: TaskOutputPanelParams
+  ): Promise<RebindTaskOutputResult>;
   /**
    * 报告 renderer 当前活跃的 terminal panelId 集合. swift 把不在集合里的 NSView
    * 清掉 — C 方案 reload 零销毁路径的孤儿兜底:reload 前 layout 有但新 layout

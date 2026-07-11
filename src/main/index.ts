@@ -35,7 +35,6 @@ import { registerSecretsIpc } from "./ipc/secrets.ts";
 import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
-import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import {
@@ -59,7 +58,6 @@ const startupLog = createLogger("startup");
 const windowLog = createLogger("window");
 const windowZoomLog = createLogger("window-zoom");
 const cliLog = createLogger("cli");
-const taskRunLog = createLogger("task-run");
 const terminalSessionLog = createLogger("terminal-session");
 const foregroundActivityLog = createLogger("foreground-activity");
 const secretsLog = createLogger("secrets");
@@ -227,6 +225,9 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
     appCore.services.secrets.flush().catch((error) => {
       secretsLog.error("failed to flush before quit", { error });
     }),
+    appCore.services.agentUsage.flush().catch((error) => {
+      appQuitLog.error("failed to flush agent usage before quit", { error });
+    }),
   ]);
 }
 
@@ -389,24 +390,16 @@ app.whenReady().then(async () => {
   // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
   registerBundledFonts();
   registerTerminalIpc(ipcMain, {
+    recordAgentLaunch: (agentId) =>
+      appCore.services.agentUsage.recordSuccessfulLaunch(agentId),
     processEnvironment: appCore.services.processEnvironment,
+    taskService: appCore.services.tasks,
   });
   registerTerminalDebugWindowIpc(ipcMain);
   registerThemeIpc(ipcMain);
   registerNotificationIpc(ipcMain);
   registerGitWatchIpc();
   registerFileWatchIpc();
-  setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
-    if (typeof exitCode === "number") {
-      appCore.services.tasks
-        .completePanel(panelId, exitCode, windowId)
-        .catch((error) => {
-          taskRunLog.error("failed to complete panel", { error });
-        });
-      return;
-    }
-    appCore.services.tasks.markPanelClosed(panelId, windowId);
-  });
   registerCliLocalControl()
     .then((control) => {
       localControl = control;

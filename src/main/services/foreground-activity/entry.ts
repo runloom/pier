@@ -137,6 +137,7 @@ export interface TaskLayer {
   exitCode?: number;
   kind: "task";
   label: string;
+  runId: string;
   spawnedAt: number;
   status: "cancelled" | "failure" | "running" | "success";
   taskId: string;
@@ -360,11 +361,13 @@ export function newTaskLayer(
   windowId: string,
   taskId: string,
   label: string,
+  runId: string,
   at: number
 ): TaskLayer {
   return {
     kind: "task",
     label,
+    runId,
     spawnedAt: at,
     status: "running",
     taskId,
@@ -419,6 +422,7 @@ export function projectSlot(
       spawnedAt: command.spawnedAt,
       status: command.status,
       taskId: command.taskId,
+      runId: command.runId,
       updatedAt: command.updatedAt,
       windowId: command.windowId,
       ...(command.exitCode === undefined ? {} : { exitCode: command.exitCode }),

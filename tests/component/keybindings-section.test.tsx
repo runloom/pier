@@ -1,5 +1,6 @@
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import {
+  act,
   fireEvent,
   type RenderOptions,
   render as renderBase,
@@ -222,6 +223,42 @@ describe("KeybindingsSection", () => {
     expect(within(row).getByTestId("shortcut-input")).not.toHaveAttribute(
       "data-recording"
     );
+    unmount();
+    dispose();
+  });
+
+  it("录制快捷键时由录制状态优先消费 Escape", () => {
+    const dispose = actionRegistry.register({
+      category: "Panel",
+      handler: vi.fn(),
+      id: "pier.panel.closeOthers",
+      surfaces: ["command-palette"],
+      title: () => "关闭其他面板",
+    });
+
+    const { unmount } = render(<KeybindingsSection />);
+    fireEvent.click(screen.getByRole("button", { name: "录制 关闭其他面板" }));
+
+    const row = screen.getByTestId("keybinding-row-pier.panel.closeOthers");
+    expect(within(row).getByTestId("shortcut-input")).toHaveAttribute(
+      "data-recording",
+      "true"
+    );
+
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Escape",
+    });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(within(row).getByTestId("shortcut-input")).not.toHaveAttribute(
+      "data-recording"
+    );
+    expect(window.pier.preferences.update).not.toHaveBeenCalled();
     unmount();
     dispose();
   });

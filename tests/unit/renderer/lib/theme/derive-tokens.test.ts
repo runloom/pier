@@ -6,7 +6,7 @@ import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 const HEX6_RE = /^#[0-9a-f]{6}$/;
 
 describe("renderer/lib/theme/derive-tokens", () => {
-  it("returns all 29 UI token keys", () => {
+  it("returns theme-owned UI tokens without overriding product status colors", () => {
     const theme = getShikiTheme("pierre", "dark");
     const tokens = deriveAppStyleTokens(theme, "dark");
     const expected = [
@@ -24,15 +24,9 @@ describe("renderer/lib/theme/derive-tokens", () => {
       "muted-foreground",
       "accent",
       "accent-foreground",
-      "destructive",
-      "destructive-foreground",
       "border",
       "input",
       "ring",
-      "success",
-      "info",
-      "warning",
-      "warning-foreground",
       "chart-1",
       "chart-2",
       "chart-3",
@@ -98,9 +92,10 @@ describe("renderer/lib/theme/derive-tokens", () => {
     );
     expect(tokens.popover).toBe(tokens.background);
     expect(contrast(tokens.muted, tokens.secondary)).toBeGreaterThan(1);
-    expect(chromaOf(tokens.info)).toBeGreaterThanOrEqual(0.1);
-    expect(chromaOf(tokens.success)).toBeGreaterThanOrEqual(0.1);
-    expect(chromaOf(tokens.warning)).toBeGreaterThanOrEqual(0.1);
+    expect(tokens).not.toHaveProperty("info");
+    expect(tokens).not.toHaveProperty("success");
+    expect(tokens).not.toHaveProperty("warning");
+    expect(tokens).not.toHaveProperty("destructive");
   });
 
   it("derives muted foreground as readable secondary text", () => {

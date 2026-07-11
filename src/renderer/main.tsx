@@ -33,7 +33,7 @@ import { initKeybindingPreferences } from "./stores/keybinding-preferences.store
 import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
-import { initTaskBackgroundStore } from "./stores/task-background.store.ts";
+import { initTaskRunsStore } from "./stores/task-runs.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
@@ -46,6 +46,11 @@ async function bootstrap() {
   const debugMode = params.get("pierDebug");
   const targetBrowserWindowId = Number(params.get("targetBrowserWindowId"));
   if (debugMode === "terminal" && Number.isFinite(targetBrowserWindowId)) {
+    try {
+      await initTheme();
+    } catch (err) {
+      console.error("[pier] terminal debug theme init failed:", err);
+    }
     const rootEl = document.getElementById("root");
     if (rootEl) {
       createRoot(rootEl).render(
@@ -70,7 +75,7 @@ async function bootstrap() {
       initAppQuitPreferences(),
       initAgentPreferences(),
       initTerminalStatusBarPrefs(),
-      initTaskBackgroundStore(),
+      initTaskRunsStore(),
       initWorktreePreferences(),
       initLocalEnvironments(),
     ]);

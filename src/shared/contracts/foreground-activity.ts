@@ -70,6 +70,7 @@ const taskActivitySchema = z
     kind: z.literal("task"),
     ...baseActivityFields,
     taskId: z.string().min(1),
+    runId: z.string().min(1),
     label: z.string().min(1),
     status: z.enum(["running", "success", "failure", "cancelled"]),
     exitCode: z.number().int().optional(),
