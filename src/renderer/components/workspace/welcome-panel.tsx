@@ -2,10 +2,12 @@ import type { IDockviewPanelProps } from "dockview-react";
 import { House } from "lucide-react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 
+const WELCOME_PANEL_DESCRIPTOR = {
+  display: { long: "Welcome", short: "Welcome" },
+} as const;
+
 export function WelcomePanel(props: IDockviewPanelProps) {
-  usePanelDescriptor(props.api, {
-    display: { long: "Welcome", short: "Welcome" },
-  });
+  usePanelDescriptor(props.api, WELCOME_PANEL_DESCRIPTOR);
   return (
     <div className="flex h-full items-center justify-center bg-background p-6">
       <div className="text-center">

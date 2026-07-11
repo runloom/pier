@@ -65,8 +65,10 @@ function contextFor(
       warn: vi.fn(),
     },
     paths: { dataDir: dir, workDir: join(dir, sourceArg.id) },
+    processEnv: {},
     plugin: { id: sourceArg.id, version: sourceArg.version },
     rpc: { handle: vi.fn() },
+    secrets: { delete: vi.fn(), get: vi.fn(), set: vi.fn() },
   };
 }
 
@@ -187,5 +189,62 @@ describe("external main plugin runtime", () => {
 
     expect(importModule).toHaveBeenCalledWith(sourceUrl.href);
     expect(events).toEqual(["activate"]);
+  });
+
+  it("propagates activation failure after clearing partial RPC registration", async () => {
+    const rpcBus = rpcBusMock();
+    const recordActivationResult = vi.fn().mockResolvedValue(undefined);
+    const runtime = createExternalMainPluginRuntime({
+      createContext: contextFor,
+      importModule: async () => ({
+        plugin: {
+          activate(context: ExternalMainPluginContext) {
+            context.rpc.handle("partial", async () => null);
+            throw new Error("activation exploded");
+          },
+          id: "pier.codex",
+        },
+      }),
+      recordActivationResult,
+      rpcBus,
+    });
+
+    await expect(
+      runtime.activate(source("1.0.0", join(dir, "broken.js")))
+    ).rejects.toThrow("activation exploded");
+    expect(rpcBus.clearPlugin).toHaveBeenCalledWith("pier.codex");
+    expect(recordActivationResult).toHaveBeenCalledWith({
+      ok: false,
+      phase: "main",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+    });
+  });
+
+  it("keeps activation live when non-authoritative LKG reporting fails", async () => {
+    const dispose = vi.fn();
+    const rpcBus = rpcBusMock();
+    const recordActivationResult = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("activation state unavailable"))
+      .mockResolvedValueOnce(undefined);
+    const runtime = createExternalMainPluginRuntime({
+      createContext: contextFor,
+      importModule: async () => ({
+        plugin: { activate: () => dispose, id: "pier.codex" },
+      }),
+      recordActivationResult,
+      rpcBus,
+    });
+
+    await expect(
+      runtime.activate(source("1.0.0", join(dir, "main.js")))
+    ).resolves.toBeUndefined();
+    await vi.waitFor(() =>
+      expect(recordActivationResult).toHaveBeenCalledOnce()
+    );
+    expect(dispose).not.toHaveBeenCalled();
+    await runtime.dispose("pier.codex");
+    expect(dispose).toHaveBeenCalledOnce();
   });
 });

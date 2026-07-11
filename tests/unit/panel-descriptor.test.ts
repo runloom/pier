@@ -1,5 +1,6 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { renderHook } from "@testing-library/react";
+import { useMemo } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
@@ -80,5 +81,33 @@ describe("usePanelDescriptor hook", () => {
     expect(stored).toBeDefined();
     expect(stored?.context).toBeUndefined();
     expect(stored?.display.short).toBe("Terminal");
+  });
+
+  it("does not notify for an equivalent rerender and removes only on unmount", () => {
+    const panel = { id: "term-stable", setTitle: vi.fn() };
+    const listener = vi.fn();
+    const unsubscribe = usePanelDescriptorStore.subscribe(listener);
+    const hook = renderHook(
+      ({ short }) => {
+        const descriptor = useMemo(() => ({ display: { short } }), [short]);
+        usePanelDescriptor(panel, descriptor);
+      },
+      { initialProps: { short: "Terminal" } }
+    );
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    hook.rerender({ short: "Terminal" });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(panel.setTitle).toHaveBeenCalledTimes(1);
+    expect(
+      usePanelDescriptorStore.getState().descriptors["term-stable"]
+    ).toBeDefined();
+
+    hook.unmount();
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(
+      usePanelDescriptorStore.getState().descriptors["term-stable"]
+    ).toBeUndefined();
+    unsubscribe();
   });
 });

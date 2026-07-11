@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { copyFile, readFile } from "node:fs/promises";
 import {
   type ManagedPluginInstallIndex,
   managedPluginInstallIndexSchema,
@@ -42,18 +44,26 @@ export function createManagedPluginIndexStore(
 
   return {
     async init(): Promise<ManagedPluginInstallIndex> {
+      if (existsSync(filePath)) {
+        try {
+          JSON.parse(await readFile(filePath, "utf8"));
+        } catch (error) {
+          const backupPath = `${filePath}.invalid-backup`;
+          await copyFile(filePath, backupPath).catch(() => undefined);
+          throw new Error(
+            `managed plugin index JSON is invalid; original preserved at ${backupPath}`,
+            { cause: error }
+          );
+        }
+      }
       const raw = await store.init();
       const result = managedPluginInstallIndexSchema.safeParse(raw);
       if (!result.success) {
-        // Schema mismatch — reset to defaults. Do NOT clobber existing plugins
-        // silently: the caller will observe an empty plugins map and reconcile
-        // from bundled seed on next boot.
-        console.error(
-          "[managed-plugin-index] schema validation failed, resetting to defaults:",
-          result.error.message
+        const backupPath = `${filePath}.invalid-backup`;
+        await copyFile(filePath, backupPath).catch(() => undefined);
+        throw new Error(
+          `managed plugin index schema validation failed; original preserved at ${backupPath}: ${result.error.message}`
         );
-        store.replace(DEFAULTS);
-        return DEFAULTS;
       }
       return result.data;
     },

@@ -23,6 +23,7 @@ export const PIER = {
   // so plugin RPC is NEVER reachable from CLI local-control or capability-only
   // command authorization (design §7.0 / §7.3).
   PLUGIN_RPC_INVOKE: "pier://plugin-rpc:invoke",
+  PLUGIN_RENDERER_ACTIVATION_REPORT: "pier://plugin:renderer-activation-report",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
   // 系统资源快照（renderer 拉取式轮询;指挥中心 system-resources 物料）

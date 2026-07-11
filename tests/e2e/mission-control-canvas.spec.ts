@@ -42,7 +42,7 @@ const MATERIALS: readonly MaterialCase[] = [
   {
     id: "pier.codex.accounts",
     max: { h: 10, w: 8 },
-    min: { h: 3, w: 3 },
+    min: { h: 3, w: 2 },
     name: "Codex accounts",
   },
 ] as const;

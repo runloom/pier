@@ -149,7 +149,6 @@ describe("versionedJsonStore", () => {
     const corrupt = "{{{not valid json!!!";
     await writeFile(filePath, corrupt);
 
-    // biome-ignore lint/suspicious/noEmptyBlockStatements: 静默 console.error
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const store = versionedJsonStore(
@@ -206,7 +205,6 @@ describe("versionedJsonStore", () => {
     // version 对但 name 是 number 而非 string
     await writeFile(filePath, JSON.stringify({ version: 1, name: 42 }));
 
-    // biome-ignore lint/suspicious/noEmptyBlockStatements: 静默 console.error
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const store = versionedJsonStore(
@@ -230,7 +228,6 @@ describe("versionedJsonStore", () => {
     const filePath = join(tempDir, "state.json");
     await writeFile(filePath, JSON.stringify({ label: "boom" }));
 
-    // biome-ignore lint/suspicious/noEmptyBlockStatements: 静默 console.error
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const throwingMigration: Migration = {

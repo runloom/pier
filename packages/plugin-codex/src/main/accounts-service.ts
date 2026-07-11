@@ -1,12 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import type {
   AddAccountPayload,
-  CodexAccountSummary,
   CodexAccountsSnapshot,
   RemoveAccountPayload,
   SelectAccountPayload,
@@ -15,9 +13,9 @@ import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import { buildAccountsSnapshot } from "./accounts-snapshot.ts";
 import {
   activeUsageCacheKey,
-  toUsageSnapshot,
   USAGE_MIN_REFETCH_MS,
   USAGE_POLL_INTERVAL_MS,
   type UsageCacheEntry,
@@ -28,13 +26,18 @@ import {
   migrateLegacyAccountsToState,
 } from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
-import type { CodexAccountRecord, CodexAccountsStateStore } from "./state.ts";
+import {
+  codexAccountHomeDir,
+  ensureManagedAccountDir,
+} from "./managed-account-home.ts";
+import { reconcileManagedCredentials } from "./managed-credential-reconciliation.ts";
+import { createSerialMutationQueue } from "./serial-mutation-queue.ts";
+import type { CodexAccountsStateStore } from "./state.ts";
 import type { AgentAccountProvider } from "./types.ts";
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const WATCH_SUPPRESS_MS = 1500;
 
-// re-export: 测试与外部消费者从 service 入口取 usage 缓存键。
 export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
 export interface CodexAccountsServiceOpts {
   ensureUsageEnv?: () => Promise<void>;
@@ -77,56 +80,26 @@ export function createCodexAccountsService(
   let lastLoginError: { at: number; message: string } | null = null;
   let suppressWatchUntil = 0;
 
-  let mutationQueue: Promise<void> = Promise.resolve();
-
-  function enqueueMutation<T>(fn: () => Promise<T>): Promise<T> {
-    const task = mutationQueue.then(fn, fn);
-    mutationQueue = task.then(
-      () => undefined,
-      () => undefined
-    );
-    return task;
-  }
+  const enqueueMutation = createSerialMutationQueue();
 
   function now(): number {
     return Date.now();
   }
 
   function accountHomeDir(accountId: string): string {
-    return join(managedBaseDir, "codex", accountId);
-  }
-
-  function realCodexHome(): string {
-    return process.env.CODEX_HOME ?? join(homedir(), ".codex");
-  }
-
-  function toSummary(record: CodexAccountRecord): CodexAccountSummary {
-    const usage = usageCache[record.id];
-    return {
-      id: record.id,
-      label: record.email ?? record.id,
-      ...(record.planType ? { planType: record.planType } : {}),
-      status:
-        record.id === stateStore.get().activeAccountId ? "active" : "available",
-      usage: usage ? toUsageSnapshot(usage) : null,
-      error:
-        lastLoginError && loginPending === null ? lastLoginError.message : null,
-    };
+    return codexAccountHomeDir(managedBaseDir, accountId);
   }
 
   function buildSnapshot(): CodexAccountsSnapshot {
     broadcastSeq += 1;
-    const state = stateStore.get();
-    const cacheKey = activeUsageCacheKey(state.activeAccountId);
-    const activeUsageEntry = usageCache[cacheKey];
-    return {
-      accounts: state.accounts.map(toSummary),
-      activeAccountId: state.activeAccountId,
-      activeUsage: activeUsageEntry ? toUsageSnapshot(activeUsageEntry) : null,
-      login: loginPending ? { provider: "codex", startedAt: now() } : null,
+    return buildAccountsSnapshot({
+      lastLoginError,
+      loginPending,
+      now: now(),
       revision: broadcastSeq,
-      schemaVersion: state.schemaVersion,
-    };
+      state: stateStore.get(),
+      usageCache,
+    });
   }
 
   function emitSnapshot(): void {
@@ -134,14 +107,11 @@ export function createCodexAccountsService(
   }
 
   async function ensureManagedDir(accountId: string): Promise<string> {
-    const dir = accountHomeDir(accountId);
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, PIER_MANAGED_HOME_MARKER), "", { mode: 0o600 });
-    return dir;
+    return await ensureManagedAccountDir(managedBaseDir, accountId);
   }
 
   async function doAdoptCurrent(): Promise<void> {
-    const identity = await provider.readIdentity(realCodexHome());
+    const identity = await provider.readCurrentIdentity();
     if (!identity) {
       throw new Error("No valid codex login found at ~/.codex/auth.json");
     }
@@ -176,6 +146,7 @@ export function createCodexAccountsService(
         revision: s.revision + 1,
       }));
     }
+    await stateStore.flush();
     emitSnapshot();
   }
 
@@ -189,6 +160,14 @@ export function createCodexAccountsService(
     });
     if (!result.migrated) {
       return false;
+    }
+    for (const account of stateStore.get().accounts) {
+      const identity = await provider.readIdentity(accountHomeDir(account.id));
+      if (!identity) {
+        throw new Error(
+          `Migrated Codex credential is invalid for account ${account.id}`
+        );
+      }
     }
     if (result.activeAccountId) {
       suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
@@ -216,13 +195,15 @@ export function createCodexAccountsService(
     }, LOGIN_TIMEOUT_MS);
 
     let failure: Error | null = null;
+    const previousState = stateStore.get();
+    let stateMutated = false;
     try {
       await provider.login(dir, abort.signal);
       const identity = await provider.readIdentity(dir);
       if (!identity) {
         throw new Error("Login completed but no identity found");
       }
-      const state = stateStore.get();
+      const state = previousState;
       const existing = identity.providerAccountId
         ? state.accounts.find(
             (a) => a.providerAccountId === identity.providerAccountId
@@ -230,10 +211,14 @@ export function createCodexAccountsService(
         : null;
       if (existing) {
         const existingDir = accountHomeDir(existing.id);
-        const freshAuth = await readFile(join(dir, "auth.json"), "utf-8");
-        await writeFileAtomic(join(existingDir, "auth.json"), freshAuth, {
-          mode: 0o600,
-        });
+        if (provider.moveCredential) {
+          await provider.moveCredential(dir, existingDir);
+        } else {
+          const freshAuth = await readFile(join(dir, "auth.json"), "utf-8");
+          await writeFileAtomic(join(existingDir, "auth.json"), freshAuth, {
+            mode: 0o600,
+          });
+        }
         await rm(dir, { recursive: true, force: true });
         if (stateStore.get().activeAccountId === existing.id) {
           suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
@@ -249,6 +234,7 @@ export function createCodexAccountsService(
           ),
           revision: s.revision + 1,
         }));
+        stateMutated = true;
       } else {
         const account = buildAccountRecord(identity, id, now(), now());
         stateStore.mutate((s) => ({
@@ -256,9 +242,21 @@ export function createCodexAccountsService(
           accounts: [...s.accounts, account],
           revision: s.revision + 1,
         }));
+        stateMutated = true;
       }
+      await stateStore.flush();
       lastLoginError = null;
     } catch (err) {
+      let rollbackError: unknown = null;
+      if (stateMutated) {
+        stateStore.mutate(() => previousState);
+        try {
+          await stateStore.flush();
+        } catch (error) {
+          rollbackError = error;
+        }
+      }
+      await provider.deleteCredential?.(dir);
       await rm(dir, { recursive: true, force: true }).catch(() => {
         /* fire-and-forget */
       });
@@ -268,7 +266,12 @@ export function createCodexAccountsService(
         timedOut,
       });
       lastLoginError = classified.errorState;
-      failure = classified.failure;
+      failure = rollbackError
+        ? new AggregateError(
+            [classified.failure, rollbackError],
+            "Codex account add and metadata rollback failed"
+          )
+        : classified.failure;
     } finally {
       clearTimeout(loginTimeout);
       loginAbort = null;
@@ -313,6 +316,7 @@ export function createCodexAccountsService(
       activeAccountId: accountId,
       revision: s.revision + 1,
     }));
+    await stateStore.flush();
     emitSnapshot();
     doRefreshUsage({ accountId, force: true }).catch(() => {
       /* fire-and-forget */
@@ -324,16 +328,31 @@ export function createCodexAccountsService(
     if (state.activeAccountId === accountId) {
       throw new Error("Cannot remove active account — select another first");
     }
-    const dir = accountHomeDir(accountId);
-    const markerPath = join(dir, PIER_MANAGED_HOME_MARKER);
-    if (existsSync(markerPath)) {
-      await rm(dir, { recursive: true, force: true });
-    }
     stateStore.mutate((s) => ({
       ...s,
       accounts: s.accounts.filter((a) => a.id !== accountId),
       revision: s.revision + 1,
     }));
+    try {
+      await stateStore.flush();
+    } catch (error) {
+      stateStore.mutate(() => state);
+      try {
+        await stateStore.flush();
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "Codex account remove and metadata rollback failed"
+        );
+      }
+      throw error;
+    }
+    const dir = accountHomeDir(accountId);
+    const markerPath = join(dir, PIER_MANAGED_HOME_MARKER);
+    if (existsSync(markerPath)) {
+      await provider.deleteCredential?.(dir);
+      await rm(dir, { recursive: true, force: true });
+    }
     delete usageCache[accountId];
     emitSnapshot();
   }
@@ -376,7 +395,7 @@ export function createCodexAccountsService(
   }
 
   async function handleDrift(): Promise<void> {
-    const identity = await provider.readIdentity(realCodexHome());
+    const identity = await provider.readCurrentIdentity();
     if (!identity) {
       return;
     }
@@ -398,6 +417,7 @@ export function createCodexAccountsService(
         accountHomeDir(match.id),
         match.providerAccountId
       );
+      await stateStore.flush();
     } else {
       await doAdoptCurrent();
       return;
@@ -427,12 +447,20 @@ export function createCodexAccountsService(
       const state = stateStore.get();
       if (state.accounts.length === 0) {
         const migrated = await enqueueMutation(migrateLegacyAccountsIfNeeded);
-        if (!migrated && (await provider.readIdentity(realCodexHome()))) {
+        if (!migrated && (await provider.readCurrentIdentity())) {
           await enqueueMutation(doAdoptCurrent);
         }
       } else {
+        await reconcileManagedCredentials({
+          accounts: state.accounts,
+          ensureManagedDir,
+          managedBaseDir,
+          provider,
+        });
         await enqueueMutation(handleDrift);
       }
+      await stateStore.flush();
+      await stateStore.ensureSchemaMarker();
       setupWatch();
       usagePollTimer = setInterval(() => {
         if (!hasVisibleTarget()) {

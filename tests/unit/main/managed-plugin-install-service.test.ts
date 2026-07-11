@@ -137,6 +137,7 @@ interface CreateServiceOptions {
     size: number;
   };
   readonly bundledVersion?: string;
+  readonly expectedRendererWindowIds?: () => readonly string[];
   readonly officialIndex?: OfficialPluginIndex | null;
   readonly officialIndexProvider?: () => OfficialPluginIndex | null;
   readonly officialIndexRefresh?: (options?: {
@@ -166,6 +167,9 @@ async function createService(options: CreateServiceOptions = {}): Promise<{
           },
         ]
       : [],
+    ...(options.expectedRendererWindowIds
+      ? { expectedRendererWindowIds: options.expectedRendererWindowIds }
+      : {}),
     now: () => 1,
     officialIndexProvider:
       options.officialIndexProvider ?? (() => options.officialIndex ?? null),
@@ -378,6 +382,38 @@ describe("managed plugin install service", () => {
       id: "pier.codex",
       version: "1.0.0",
     });
+    await service.recordActivationResult({
+      ok: true,
+      phase: "main",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+    });
+    await service.recordActivationResult({
+      ok: true,
+      phase: "renderer",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+      windowId: "window-main",
+    });
+    expect(service.getIndex().plugins["pier.codex"]?.lastKnownGoodVersion).toBe(
+      "1.0.0"
+    );
+    await service.recordActivationResult({
+      ok: true,
+      phase: "main",
+      pluginId: "pier.codex",
+      version: "1.0.1",
+    });
+    await service.recordActivationResult({
+      ok: true,
+      phase: "renderer",
+      pluginId: "pier.codex",
+      version: "1.0.1",
+      windowId: "window-main",
+    });
+    expect(service.getIndex().plugins["pier.codex"]?.lastKnownGoodVersion).toBe(
+      "1.0.0"
+    );
     expect(operationLog).toHaveBeenCalledWith(
       expect.objectContaining({
         assetUrl:
@@ -617,6 +653,49 @@ describe("managed plugin install service", () => {
     });
   });
 
+  it("rejects rollback when the recorded installed package was modified", async () => {
+    const seedV1 = await createSeedArchive("1.0.0");
+    const { service: firstSession } = await createService({
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+    await firstSession.install("pier.codex");
+
+    const seedV2 = await createSeedArchive("1.0.1", {
+      reloadPolicy: "hot",
+    });
+    const body = await readFile(seedV2.archivePath);
+    const { service } = await createService({
+      assetFetcher: vi.fn(async (_url: string) => ({
+        body,
+        finalUrl:
+          "https://objects.githubusercontent.com/github-production-release-asset/test/pier.codex.tgz",
+        redirectCount: 0,
+      })),
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      officialIndex: officialIndexFor("1.0.1", seedV2),
+      officialIndexRefresh: vi.fn().mockResolvedValue(undefined),
+      runtimeMode: "production",
+    });
+    await service.update("pier.codex");
+    await writeFile(
+      join(paths.installedDir, "pier.codex", "1.0.0", "dist/main.js"),
+      "export const plugin = { id: 'pier.codex', tampered: true };\n"
+    );
+
+    const result = await service.rollback("pier.codex", "1.0.0");
+
+    expect(result).toMatchObject({
+      error: { code: "invalid_state" },
+      ok: false,
+    });
+    expect(service.getIndex().plugins["pier.codex"]?.activeVersion).toBe(
+      "1.0.1"
+    );
+  });
+
   it("uninstall removes the current runtime source immediately; explicit install clears tombstone", async () => {
     const seed = await createSeedArchive();
     const { service } = await createService({
@@ -815,6 +894,212 @@ describe("managed plugin install service", () => {
     expect(index.plugins["pier.codex"]?.lastKnownGoodVersion).toBe("1.0.0");
   });
 
+  it("refuses to materialize an installed plugin after package content is modified", async () => {
+    const seed = await createSeedArchive();
+    const first = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+    });
+    await first.service.install("pier.codex");
+    await writeFile(
+      join(paths.installedDir, "pier.codex", "1.0.0", "dist/main.js"),
+      "export const plugin = { id: 'tampered' };\n"
+    );
+
+    const second = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+    });
+    await expect(second.service.listRuntimeSources()).resolves.toEqual([]);
+  });
+
+  it("migrates a legacy installed record by rematerializing its trusted bundle", async () => {
+    const seed = await createSeedArchive();
+    const first = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+    });
+    await first.service.install("pier.codex");
+    const legacyIndex = JSON.parse(
+      await readFile(paths.indexFile, "utf8")
+    ) as Record<string, unknown>;
+    const plugins = legacyIndex.plugins as Record<
+      string,
+      { installedVersions: Record<string, { contentHash?: string }> }
+    >;
+    const legacyRecord = plugins["pier.codex"]?.installedVersions["1.0.0"];
+    if (legacyRecord) {
+      const { contentHash: _contentHash, ...withoutContentHash } = legacyRecord;
+      plugins["pier.codex"]!.installedVersions["1.0.0"] = withoutContentHash;
+    }
+    await writeFile(paths.indexFile, JSON.stringify(legacyIndex));
+    await writeFile(
+      join(paths.installedDir, "pier.codex", "1.0.0", "dist/main.js"),
+      "tampered legacy content"
+    );
+
+    const second = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+    });
+    expect(
+      second.service.getIndex().plugins["pier.codex"]?.installedVersions[
+        "1.0.0"
+      ]?.contentHash
+    ).toMatch(/^[a-f0-9]{64}$/);
+    await expect(second.service.listRuntimeSources()).resolves.toHaveLength(1);
+  });
+
+  it("quarantines a legacy official version that cannot be re-established from a trusted bundle", async () => {
+    const seedV1 = await createSeedArchive("1.0.0");
+    const first = await createService({
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+    await first.service.install("pier.codex");
+    const seedV2 = await createSeedArchive("1.0.1", {
+      reloadPolicy: "hot",
+    });
+    const body = await readFile(seedV2.archivePath);
+    const updater = await createService({
+      assetFetcher: vi.fn(async () => ({
+        body,
+        finalUrl:
+          "https://objects.githubusercontent.com/github-production-release-asset/test/pier.codex.tgz",
+        redirectCount: 0,
+      })),
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      officialIndex: officialIndexFor("1.0.1", seedV2),
+      officialIndexRefresh: vi.fn().mockResolvedValue(undefined),
+      runtimeMode: "production",
+    });
+    await updater.service.update("pier.codex");
+    const legacyIndex = JSON.parse(await readFile(paths.indexFile, "utf8")) as {
+      plugins: Record<
+        string,
+        { installedVersions: Record<string, { contentHash?: string }> }
+      >;
+    };
+    const v2 = legacyIndex.plugins["pier.codex"]?.installedVersions["1.0.1"];
+    if (v2) {
+      const { contentHash: _contentHash, ...withoutContentHash } = v2;
+      legacyIndex.plugins["pier.codex"]!.installedVersions["1.0.1"] =
+        withoutContentHash;
+    }
+    await writeFile(paths.indexFile, JSON.stringify(legacyIndex));
+
+    const restarted = await createService({
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+
+    expect(restarted.service.getIndex().plugins["pier.codex"]).toMatchObject({
+      activeVersion: null,
+      effectiveAtStartup: null,
+      enabled: false,
+    });
+    expect(
+      restarted.service.getIndex().plugins["pier.codex"]?.installedVersions[
+        "1.0.1"
+      ]
+    ).toBeUndefined();
+    await expect(
+      readFile(join(paths.installedDir, "pier.codex", "1.0.1", "dist/main.js"))
+    ).rejects.toThrow();
+    await expect(restarted.service.listRuntimeSources()).resolves.toEqual([]);
+  });
+
+  it("repairs a modified current version when install would otherwise be a no-op", async () => {
+    const seed = await createSeedArchive();
+    const { service } = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+    await service.install("pier.codex");
+    const mainEntry = join(
+      paths.installedDir,
+      "pier.codex",
+      "1.0.0",
+      "dist/main.js"
+    );
+    await writeFile(mainEntry, "tampered current version");
+
+    await expect(service.install("pier.codex")).resolves.toMatchObject({
+      ok: true,
+      version: "1.0.0",
+    });
+    await expect(readFile(mainEntry, "utf8")).resolves.toContain(
+      "export const plugin"
+    );
+  });
+
+  it("repairs a modified current version through same-version update", async () => {
+    const seed = await createSeedArchive();
+    const first = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+    await first.service.install("pier.codex");
+    const mainEntry = join(
+      paths.installedDir,
+      "pier.codex",
+      "1.0.0",
+      "dist/main.js"
+    );
+    await writeFile(mainEntry, "tampered current version");
+    const body = await readFile(seed.archivePath);
+    const updater = await createService({
+      assetFetcher: vi.fn(async () => ({
+        body,
+        finalUrl:
+          "https://objects.githubusercontent.com/github-production-release-asset/test/pier.codex.tgz",
+        redirectCount: 0,
+      })),
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+      officialIndex: officialIndexFor("1.0.0", seed),
+      officialIndexRefresh: vi.fn().mockResolvedValue(undefined),
+      runtimeMode: "production",
+    });
+
+    await expect(updater.service.update("pier.codex")).resolves.toMatchObject({
+      ok: true,
+      version: "1.0.0",
+    });
+    await expect(readFile(mainEntry, "utf8")).resolves.toContain(
+      "export const plugin"
+    );
+  });
+
+  it("checks persisted data schema compatibility again at runtime materialization", async () => {
+    const seed = await createSeedArchive();
+    const first = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+    });
+    await first.service.install("pier.codex");
+    const pluginWorkDir = join(paths.workDir, "pier.codex");
+    await mkdir(pluginWorkDir, { recursive: true });
+    await writeFile(
+      join(pluginWorkDir, ".pier-plugin-data-schemas.json"),
+      JSON.stringify({
+        schemas: { "codex.accounts": { version: 2 } },
+        version: 1,
+      })
+    );
+
+    const second = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+    });
+    await expect(second.service.listRuntimeSources()).resolves.toEqual([]);
+  });
+
   it("recordActivationResult does NOT advance lastKnownGoodVersion after any failure", async () => {
     const seed = await createSeedArchive();
     const { service } = await createService({
@@ -846,6 +1131,88 @@ describe("managed plugin install service", () => {
     const index = service.getIndex();
     expect(
       index.plugins["pier.codex"]?.lastKnownGoodVersion ?? null
+    ).toBeNull();
+  });
+
+  it("waits for every expected renderer window before advancing lastKnownGoodVersion", async () => {
+    const seed = await createSeedArchive();
+    const { service } = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+      expectedRendererWindowIds: () => ["window-1", "window-2"],
+    });
+    await service.install("pier.codex");
+    await service.recordActivationResult({
+      ok: true,
+      phase: "main",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+    });
+    await service.recordActivationResult({
+      ok: true,
+      phase: "renderer",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+      windowId: "window-1",
+    });
+    expect(
+      service.getIndex().plugins["pier.codex"]?.lastKnownGoodVersion ?? null
+    ).toBeNull();
+
+    await service.recordActivationResult({
+      ok: true,
+      phase: "renderer",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+      windowId: "window-2",
+    });
+    expect(service.getIndex().plugins["pier.codex"]?.lastKnownGoodVersion).toBe(
+      "1.0.0"
+    );
+
+    await service.recordActivationResult({
+      ok: false,
+      phase: "renderer",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+      windowId: "window-2",
+    });
+    expect(
+      service.getIndex().plugins["pier.codex"]?.lastKnownGoodVersion ?? null
+    ).toBeNull();
+  });
+
+  it("serializes concurrent success and failure activation reports", async () => {
+    const seed = await createSeedArchive();
+    const { service } = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+    });
+    await service.install("pier.codex");
+    await service.recordActivationResult({
+      ok: true,
+      phase: "main",
+      pluginId: "pier.codex",
+      version: "1.0.0",
+    });
+    await Promise.all([
+      service.recordActivationResult({
+        ok: true,
+        phase: "renderer",
+        pluginId: "pier.codex",
+        version: "1.0.0",
+        windowId: "window-1",
+      }),
+      service.recordActivationResult({
+        ok: false,
+        phase: "renderer",
+        pluginId: "pier.codex",
+        version: "1.0.0",
+        windowId: "window-2",
+      }),
+    ]);
+    expect(
+      service.getIndex().plugins["pier.codex"]?.lastKnownGoodVersion ?? null
     ).toBeNull();
   });
 

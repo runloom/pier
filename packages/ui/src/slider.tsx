@@ -1,5 +1,3 @@
-// @ts-nocheck — vendored shadcn radix-nova: 与 tsconfig exactOptionalPropertyTypes:true 不兼容。
-
 import { Slider as SliderPrimitive } from "radix-ui";
 import * as React from "react";
 
@@ -13,15 +11,15 @@ function Slider({
   max = 100,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
-  const _values = React.useMemo(
-    () =>
-      Array.isArray(value)
-        ? value
-        : Array.isArray(defaultValue)
-          ? defaultValue
-          : [min, max],
-    [value, defaultValue, min, max]
-  );
+  const _values = React.useMemo(() => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (Array.isArray(defaultValue)) {
+      return defaultValue;
+    }
+    return [min, max];
+  }, [value, defaultValue, min, max]);
 
   return (
     <SliderPrimitive.Root
@@ -30,10 +28,10 @@ function Slider({
         className
       )}
       data-slot="slider"
-      defaultValue={defaultValue}
       max={max}
       min={min}
-      value={value}
+      {...(defaultValue === undefined ? {} : { defaultValue })}
+      {...(value === undefined ? {} : { value })}
       {...props}
     >
       <SliderPrimitive.Track
@@ -49,6 +47,7 @@ function Slider({
         <SliderPrimitive.Thumb
           className="block size-4 shrink-0 select-none rounded-2xl bg-background not-dark:bg-clip-padding shadow-md ring-1 ring-foreground/10 transition-[color,box-shadow] duration-200 hover:ring-4 hover:ring-ring/30 focus-visible:outline-hidden focus-visible:ring-4 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 dark:bg-primary-foreground"
           data-slot="slider-thumb"
+          // biome-ignore lint/suspicious/noArrayIndexKey: Radix Slider thumbs are positional controls; index is their stable identity.
           key={index}
         />
       ))}

@@ -34,13 +34,18 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import { ActionCommandItem } from "@/components/common/command-palette-action-rows.tsx";
 import { useT } from "@/i18n/use-t.ts";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import {
+  actionRegistry,
+  getActionRegistryVersion,
+  subscribeActionRegistry,
+} from "@/lib/actions/registry.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
 import {
   actionCategoryKey,
@@ -48,7 +53,12 @@ import {
 } from "@/lib/command-palette/action-search.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
-import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import {
+  getKeybindingRegistryVersion,
+  keybindingRegistry,
+  subscribeKeybindingRegistry,
+} from "@/lib/keybindings/registry.ts";
+import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
@@ -173,22 +183,28 @@ function groupCreateActions(
 function useKeybindingLabels(
   actions: readonly Action[]
 ): ReadonlyMap<string, string> {
-  useSyncExternalStore(
-    (cb) => keybindingRegistry.subscribe(cb),
-    () => keybindingRegistry.getVersion(),
+  const keybindingVersion = useSyncExternalStore(
+    subscribeKeybindingRegistry,
+    getKeybindingRegistryVersion,
     () => 0
   );
-  const map = new Map<string, string>();
-  for (const action of actions) {
-    const first = keybindingRegistry.getFirstBindingFor(
-      action.id,
-      action.metadata?.shortcutSourceId
-    );
-    if (first) {
-      map.set(action.id, formatChord(first.chord));
-    }
-  }
-  return map;
+  return useMemo(
+    () =>
+      readVersionedSnapshot(keybindingVersion, () => {
+        const map = new Map<string, string>();
+        for (const action of actions) {
+          const first = keybindingRegistry.getFirstBindingFor(
+            action.id,
+            action.metadata?.shortcutSourceId
+          );
+          if (first) {
+            map.set(action.id, formatChord(first.chord));
+          }
+        }
+        return map;
+      }),
+    [actions, keybindingVersion]
+  );
 }
 
 export function AddPanelAction(props: IDockviewHeaderActionsProps) {
@@ -239,29 +255,41 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   }, [sourcePanelGroupId, sourcePanelId]);
 
   // Subscribe to registry/mru version changes for re-render.
-  useSyncExternalStore(
-    (cb) => actionRegistry.subscribe(cb),
-    () => actionRegistry.getVersion(),
+  const actionVersion = useSyncExternalStore(
+    subscribeActionRegistry,
+    getActionRegistryVersion,
     () => 0
   );
   const frecencyMap = useCommandPaletteMru((s) => s.frecencyMap);
 
-  const allCreateActions = actionRegistry.list("create-menu");
+  const allCreateActions = useMemo(
+    () =>
+      readVersionedSnapshot(actionVersion, () =>
+        actionRegistry.list("create-menu")
+      ),
+    [actionVersion]
+  );
   const keybindingLabels = useKeybindingLabels(allCreateActions);
   const normalizedQuery = query.trim();
-  const groups =
-    normalizedQuery.length === 0
-      ? groupCreateActions(allCreateActions, frecencyMap)
-      : [];
-  const ranked =
-    normalizedQuery.length > 0
-      ? rankActionsForPalette(
-          allCreateActions,
-          frecencyMap,
-          normalizedQuery,
-          keybindingLabels
-        )
-      : [];
+  const groups = useMemo(
+    () =>
+      normalizedQuery.length === 0
+        ? groupCreateActions(allCreateActions, frecencyMap)
+        : [],
+    [allCreateActions, frecencyMap, normalizedQuery]
+  );
+  const ranked = useMemo(
+    () =>
+      normalizedQuery.length > 0
+        ? rankActionsForPalette(
+            allCreateActions,
+            frecencyMap,
+            normalizedQuery,
+            keybindingLabels
+          )
+        : [],
+    [allCreateActions, frecencyMap, keybindingLabels, normalizedQuery]
+  );
 
   useEffect(() => {
     if (!open) {

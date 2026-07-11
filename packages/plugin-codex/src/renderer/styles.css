@@ -29,7 +29,7 @@
 
 .pier-codex-account-table thead {
   color: var(--muted-foreground);
-  background: color-mix(in oklab, var(--muted) 32%, transparent);
+  background: var(--surface-canvas);
 }
 
 .pier-codex-account-table th {
@@ -43,7 +43,7 @@
 }
 
 .pier-codex-account-row[data-current="true"] {
-  background: color-mix(in oklab, var(--accent) 32%, transparent);
+  background: var(--interactive-hover);
 }
 
 .pier-codex-account-cell,
@@ -91,8 +91,8 @@
 .pier-codex-actions-head,
 .pier-codex-actions-cell {
   text-align: right;
-  background: color-mix(in oklab, var(--muted) 16%, transparent);
-  border-left: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+  background: var(--surface-canvas);
+  border-left: 1px solid var(--surface-border);
 }
 
 .pier-codex-account-actions {

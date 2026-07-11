@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, type FSWatcher, mkdirSync, watch } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
@@ -18,6 +18,11 @@ export type SpawnLoginFn = (
 ) => Promise<void>;
 
 export interface CreateCodexProviderOpts {
+  credentials: {
+    delete(key: string): Promise<void>;
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string): Promise<void>;
+  };
   /** ~/.codex 真实路径（默认 `$HOME/.codex`）。 */
   realCodexHome: string;
   /** 可注入的 login spawn 替身（单测用）。 */
@@ -68,6 +73,87 @@ export function createCodexProvider(
 ): AgentAccountProvider {
   const realCodexHome = opts?.realCodexHome ?? defaultRealCodexHome();
   const spawnLogin = opts?.spawnLogin ?? defaultSpawnLogin;
+  const credentials = opts?.credentials;
+  const credentialTails = new Map<string, Promise<void>>();
+
+  async function withCredentialLock<T>(
+    accountHomeDir: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const previous = credentialTails.get(accountHomeDir) ?? Promise.resolve();
+    let release: () => void = () => undefined;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    credentialTails.set(accountHomeDir, current);
+    await previous.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (credentialTails.get(accountHomeDir) === current) {
+        credentialTails.delete(accountHomeDir);
+      }
+    }
+  }
+
+  async function withCredentialLocks<T>(
+    accountHomeDirs: readonly string[],
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const paths = [...new Set(accountHomeDirs)].sort();
+    const acquire = (index: number): Promise<T> => {
+      const path = paths[index];
+      return path
+        ? withCredentialLock(path, () => acquire(index + 1))
+        : operation();
+    };
+    return await acquire(0);
+  }
+
+  function credentialKey(accountHomeDir: string): string {
+    return `accounts/${accountHomeDir.split(/[\\/]/).at(-1)}/auth`;
+  }
+
+  async function readManagedAuth(accountHomeDir: string): Promise<string> {
+    const authPath = join(accountHomeDir, "auth.json");
+    if (!credentials) {
+      return await readFile(authPath, "utf-8");
+    }
+    const stored = await credentials.get(credentialKey(accountHomeDir));
+    if (stored !== null) {
+      return stored;
+    }
+    const legacyContent = await readFile(authPath, "utf-8");
+    await credentials.set(credentialKey(accountHomeDir), legacyContent);
+    await rm(authPath, { force: true });
+    return legacyContent;
+  }
+
+  async function withManagedAuthUnlocked<T>(
+    accountHomeDir: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    if (!credentials) return await fn();
+    const authPath = join(accountHomeDir, "auth.json");
+    const content = await readManagedAuth(accountHomeDir);
+    await mkdir(accountHomeDir, { recursive: true });
+    await writeFileAtomic(authPath, content, { mode: 0o600 });
+    try {
+      return await fn();
+    } finally {
+      await rm(authPath, { force: true });
+    }
+  }
+
+  async function withManagedAuth<T>(
+    accountHomeDir: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    return await withCredentialLock(accountHomeDir, () =>
+      withManagedAuthUnlocked(accountHomeDir, fn)
+    );
+  }
 
   return {
     id: "codex",
@@ -79,41 +165,67 @@ export function createCodexProvider(
       });
     },
 
-    readIdentity(homeDir: string): Promise<AccountIdentity | null> {
-      return readCodexIdentity(homeDir);
+    async readIdentity(homeDir: string): Promise<AccountIdentity | null> {
+      if (!credentials || homeDir === realCodexHome) {
+        return readCodexIdentity(homeDir);
+      }
+      return await withCredentialLock(homeDir, async () => {
+        const authPath = join(homeDir, "auth.json");
+        if (existsSync(authPath)) {
+          const content = await readFile(authPath, "utf-8");
+          await credentials.set(credentialKey(homeDir), content);
+          try {
+            return await readCodexIdentity(homeDir);
+          } finally {
+            await rm(authPath, { force: true });
+          }
+        }
+        return await withManagedAuthUnlocked(homeDir, () =>
+          readCodexIdentity(homeDir)
+        );
+      });
+    },
+
+    readCurrentIdentity(): Promise<AccountIdentity | null> {
+      return readCodexIdentity(realCodexHome);
     },
 
     async materialize(accountHomeDir: string): Promise<void> {
-      const src = join(accountHomeDir, "auth.json");
-      const dest = join(realCodexHome, "auth.json");
-      const content = await readFile(src, "utf-8");
-      // login 全程 CODEX_HOME 指向托管目录，真实 ~/.codex 可能从未被创建
-      // （用户从未直接跑过 codex）——writeFileAtomic 不会自建父目录，故先 mkdir -p，
-      // 否则新机首次切换账号 ENOENT，切号在全新机器上不可用。
-      await mkdir(realCodexHome, { recursive: true });
-      await writeFileAtomic(dest, content, { mode: 0o600 });
+      await withCredentialLock(accountHomeDir, async () => {
+        const dest = join(realCodexHome, "auth.json");
+        const content = await readManagedAuth(accountHomeDir);
+        // login 全程 CODEX_HOME 指向托管目录，真实 ~/.codex 可能从未被创建
+        // （用户从未直接跑过 codex）——writeFileAtomic 不会自建父目录，故先 mkdir -p。
+        await mkdir(realCodexHome, { recursive: true });
+        await writeFileAtomic(dest, content, { mode: 0o600 });
+      });
     },
 
     async syncBack(
       accountHomeDir: string,
       expectedProviderAccountId: string | undefined
     ): Promise<"identity-mismatch" | "ok"> {
-      const src = join(realCodexHome, "auth.json");
-      if (!existsSync(src)) {
-        return "ok";
-      }
-      // 身份校验：expected 不为 undefined 时比对真实 auth 的 providerAccountId
-      if (expectedProviderAccountId !== undefined) {
-        const identity = await readCodexIdentity(realCodexHome);
-        if (identity?.providerAccountId !== expectedProviderAccountId) {
-          return "identity-mismatch";
+      return await withCredentialLock(accountHomeDir, async () => {
+        const src = join(realCodexHome, "auth.json");
+        if (!existsSync(src)) return "ok";
+        // 身份校验：expected 不为 undefined 时比对真实 auth 的 providerAccountId
+        if (expectedProviderAccountId !== undefined) {
+          const identity = await readCodexIdentity(realCodexHome);
+          if (identity?.providerAccountId !== expectedProviderAccountId) {
+            return "identity-mismatch";
+          }
         }
-      }
-      const dest = join(accountHomeDir, "auth.json");
-      // 与 materialize 同等保证：原子写 + 0600（copyFile 非原子且继承源权限）。
-      const content = await readFile(src, "utf-8");
-      await writeFileAtomic(dest, content, { mode: 0o600 });
-      return "ok";
+        const content = await readFile(src, "utf-8");
+        if (credentials) {
+          await credentials.set(credentialKey(accountHomeDir), content);
+          await rm(join(accountHomeDir, "auth.json"), { force: true });
+        } else {
+          await writeFileAtomic(join(accountHomeDir, "auth.json"), content, {
+            mode: 0o600,
+          });
+        }
+        return "ok";
+      });
     },
 
     watchExternalAuth(cb: () => void): () => void {
@@ -152,12 +264,47 @@ export function createCodexProvider(
       };
     },
 
-    fetchUsage(
+    async fetchUsage(
       accountHomeDir: string | undefined,
       signal: AbortSignal
     ): Promise<AccountUsageResult> {
-      return fetchCodexUsage(signal, {
+      if (accountHomeDir && credentials) {
+        return await withManagedAuth(accountHomeDir, () =>
+          fetchCodexUsage(signal, { accountHomeDir })
+        );
+      }
+      return await fetchCodexUsage(signal, {
         ...(accountHomeDir ? { accountHomeDir } : {}),
+      });
+    },
+
+    async deleteCredential(accountHomeDir: string): Promise<void> {
+      await withCredentialLock(accountHomeDir, async () => {
+        await credentials?.delete(credentialKey(accountHomeDir));
+        await rm(join(accountHomeDir, "auth.json"), { force: true });
+      });
+    },
+
+    async moveCredential(
+      fromHomeDir: string,
+      toHomeDir: string
+    ): Promise<void> {
+      await withCredentialLocks([fromHomeDir, toHomeDir], async () => {
+        if (!credentials) {
+          const content = await readFile(
+            join(fromHomeDir, "auth.json"),
+            "utf-8"
+          );
+          await writeFileAtomic(join(toHomeDir, "auth.json"), content, {
+            mode: 0o600,
+          });
+          return;
+        }
+        const content = await readManagedAuth(fromHomeDir);
+        await credentials.set(credentialKey(toHomeDir), content);
+        await credentials.delete(credentialKey(fromHomeDir));
+        await rm(join(fromHomeDir, "auth.json"), { force: true });
+        await rm(join(toHomeDir, "auth.json"), { force: true });
       });
     },
   };

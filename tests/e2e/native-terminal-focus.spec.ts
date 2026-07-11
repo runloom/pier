@@ -351,6 +351,9 @@ async function ensureKeystrokesDeliverable(
   markerDir: string
 ): Promise<void> {
   if (keystrokesDeliverable === false) {
+    if (process.env.CI) {
+      throw new Error(KEYSTROKE_SKIP_REASON);
+    }
     test.skip(true, KEYSTROKE_SKIP_REASON);
   }
   if (keystrokesDeliverable === true) {
@@ -367,6 +370,9 @@ async function ensureKeystrokesDeliverable(
     keystrokesDeliverable = true;
   } catch {
     keystrokesDeliverable = false;
+    if (process.env.CI) {
+      throw new Error(KEYSTROKE_SKIP_REASON);
+    }
     test.skip(true, KEYSTROKE_SKIP_REASON);
   }
 }
@@ -452,7 +458,6 @@ async function dragTopLeftTabIntoBottomLeftRightSplit(win: Page) {
 
 test.describe("Native terminal focus e2e", () => {
   test("initial terminal accepts shell input", async () => {
-    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -479,7 +484,6 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("terminal accepts shell input after tab drag into split group", async () => {
-    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -510,7 +514,6 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("terminal accepts shell input after command palette overlay closes", async () => {
-    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -547,7 +550,6 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("CLI focus reveals a hidden terminal tab and restores native input", async () => {
-    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -613,7 +615,6 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("native terminal content focus does not reveal its hidden tab", async () => {
-    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({
@@ -678,7 +679,6 @@ test.describe("Native terminal focus e2e", () => {
   });
 
   test("auxiliary terminal content click restores native input without revealing its hidden tab", async () => {
-    test.skip(keystrokesDeliverable === false, KEYSTROKE_SKIP_REASON);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
     const app = await electron.launch({

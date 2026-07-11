@@ -6,6 +6,8 @@ import type {
   ManagedPluginInstallIndexEntry,
   ManagedPluginPackageManifest,
 } from "@shared/contracts/managed-plugin.ts";
+import { assertPluginDataSchemaCompatibility } from "./data-schema-compatibility.ts";
+import { computePackageContentHash } from "./package-content-hash.ts";
 import {
   extractTgzSafely,
   validateManagedPluginPackage,
@@ -93,6 +95,21 @@ export async function materializeRuntimeSource(
       expectedSize: null,
       pierVersion: ctx.pierVersion,
     });
+    await assertPluginDataSchemaCompatibility({
+      manifest,
+      pluginId,
+      workDir: ctx.paths.workDir,
+    });
+    if (effective.sourceKind === "official") {
+      const expectedContentHash =
+        entry.installedVersions[effective.version]?.contentHash;
+      if (
+        !expectedContentHash ||
+        (await computePackageContentHash(packageDir)) !== expectedContentHash
+      ) {
+        throw new Error(`installed plugin content hash mismatch: ${pluginId}`);
+      }
+    }
     const sourceRevision = ctx.isDevRuntime
       ? await computeDevSourceRevision(packageDir, manifest)
       : undefined;

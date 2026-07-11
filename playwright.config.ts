@@ -9,7 +9,7 @@ export default defineConfig({
   testMatch: /(e2e)\/.*\.spec\.ts$/,
   fullyParallel: false,
   workers: 1,
-  forbidOnly: !!process.env.CI,
+  forbidOnly: true,
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {

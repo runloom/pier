@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 
 /**
  * 指标目录 —— 自定义组装的数据地基。
@@ -41,6 +42,7 @@ export interface MetricRegistration {
 }
 
 const registrations = new Map<string, MetricRegistration>();
+const metricSnapshots = new WeakMap<MetricRegistration, MetricValue | null>();
 const listeners = new Set<() => void>();
 let revision = 0;
 
@@ -52,6 +54,7 @@ function notify(): void {
 }
 
 export function registerMetric(registration: MetricRegistration): () => void {
+  metricSnapshots.set(registration, registration.read() ?? null);
   registrations.set(registration.descriptor.id, registration);
   notify();
   return () => {
@@ -95,8 +98,10 @@ export function useMetricDescriptors(): MetricDescriptor[] {
     getMetricRegistryRevision,
     getMetricRegistryRevision
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rev is the registry cache-buster
-  return useMemo(() => listMetricDescriptors(), [rev]);
+  return useMemo(
+    () => readVersionedSnapshot(rev, listMetricDescriptors),
+    [rev]
+  );
 }
 
 /**
@@ -112,20 +117,29 @@ export function useMetricValue(
     getMetricRegistryRevision,
     getMetricRegistryRevision
   );
-  const [value, setValue] = useState<MetricValue | null>(null);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rev is the registry cache-buster
-  useEffect(() => {
-    const registration = registrations.get(metricId);
-    if (!(registration && active)) {
-      setValue(registration ? (registration.read() ?? null) : null);
-      return;
-    }
-    setValue(registration.read() ?? null);
-    return registration.subscribe(() => {
-      setValue(registration.read() ?? null);
-    });
-  }, [metricId, active, rev]);
-
-  return value;
+  const registration = useMemo(
+    () => readVersionedSnapshot(rev, () => registrations.get(metricId) ?? null),
+    [metricId, rev]
+  );
+  const getSnapshot = useCallback(
+    () =>
+      active && registration
+        ? (metricSnapshots.get(registration) ?? null)
+        : null,
+    [active, registration]
+  );
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (!(active && registration)) return () => undefined;
+      const refresh = () => {
+        metricSnapshots.set(registration, registration.read() ?? null);
+        listener();
+      };
+      const dispose = registration.subscribe(refresh);
+      refresh();
+      return dispose;
+    },
+    [active, registration]
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

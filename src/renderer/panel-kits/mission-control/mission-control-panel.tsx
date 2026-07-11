@@ -30,6 +30,7 @@ import {
   getPluginMissionControlWidgetRevision,
   subscribePluginMissionControlWidgetRegistry,
 } from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
+import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import {
   CORE_MISSION_CONTROL_WIDGET_COMPONENTS,
@@ -70,12 +71,16 @@ const ADD_TILE_DECLARATION = {
 
 export function MissionControlPanel(props: IDockviewPanelProps) {
   const t = useT();
-  usePanelDescriptor(props.api, {
-    display: {
-      long: t("missionControl.panelTitle"),
-      short: t("missionControl.panelTitleShort"),
-    },
-  });
+  const panelDescriptor = useMemo(
+    () => ({
+      display: {
+        long: t("missionControl.panelTitle"),
+        short: t("missionControl.panelTitleShort"),
+      },
+    }),
+    [t]
+  );
+  usePanelDescriptor(props.api, panelDescriptor);
 
   const widgetRevision = useSyncExternalStore(
     subscribePluginMissionControlWidgetRegistry,
@@ -97,9 +102,12 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
   const visible = usePanelVisible(props.api);
   const gridWrapperRef = useRef<HTMLElement>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: widgetRevision invalidates the registry's mutable Map
   const widgetRegistrations = useMemo(
-    () => new Map(getPluginMissionControlWidgetRegistrations()),
+    () =>
+      readVersionedSnapshot(
+        widgetRevision,
+        () => new Map(getPluginMissionControlWidgetRegistrations())
+      ),
     [widgetRevision]
   );
   const locale = i18next.language || "en";

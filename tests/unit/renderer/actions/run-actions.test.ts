@@ -650,9 +650,6 @@ describe("run actions", () => {
         primaryPanelId: "terminal-task",
         status: "started",
       });
-    const promptSpy = vi
-      .spyOn(window, "prompt")
-      .mockReturnValueOnce("renderer");
     disposeRunActions = registerRunActions();
 
     await actionRegistry.get("pier.run.task")?.handler();
@@ -662,9 +659,21 @@ describe("run actions", () => {
       throw new Error("expected task item");
     }
 
-    await quickPick.onAccept(target);
+    const acceptance = quickPick.onAccept(target);
+    await vi.waitFor(() => {
+      expect(
+        useCommandPaletteController.getState().quickPick?.onAcceptQuery
+      ).toBeTypeOf("function");
+    });
+    const inputPick = useCommandPaletteController.getState().quickPick;
+    expect(inputPick).toMatchObject({
+      initialQuery: "web",
+      placeholder: "Target package",
+      title: "Target package",
+    });
+    await inputPick?.onAcceptQuery?.("renderer");
+    await acceptance;
 
-    expect(promptSpy).toHaveBeenCalledWith("Target package", "web");
     expect(window.pier.tasks.spawn).toHaveBeenLastCalledWith({
       focus: false,
       forceRestart: false,

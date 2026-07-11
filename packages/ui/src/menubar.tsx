@@ -1,5 +1,3 @@
-// @ts-nocheck — vendored shadcn radix-nova: 与 tsconfig exactOptionalPropertyTypes:true 不兼容。
-
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { Menubar as MenubarPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
@@ -126,13 +124,13 @@ function MenubarCheckboxItem({
 }) {
   return (
     <MenubarPrimitive.CheckboxItem
-      checked={checked}
       className={cn(
         "relative flex min-h-7 select-none items-center gap-2 rounded-xl py-1.5 pr-1.5 pl-7 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className
       )}
       data-inset={inset}
       data-slot="menubar-checkbox-item"
+      {...(checked === undefined ? {} : { checked })}
       {...props}
     >
       <span className="pointer-events-none absolute left-1.5 flex size-4 items-center justify-center [&_svg:not([class*='size-'])]:size-4">

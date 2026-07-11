@@ -28,7 +28,6 @@ export interface ExternalMainPluginContext {
     readonly legacyAgentAccountsBaseDir: string;
     readonly legacyAgentAccountsStateFile: string;
     readLegacyAuthJson(accountId: string): Promise<string | null>;
-    readLegacySecretsStoreEntry(key: string): Promise<string | null>;
     readLegacyStateFile(): Promise<string | null>;
   };
   lifecycle: {
@@ -48,11 +47,17 @@ export interface ExternalMainPluginContext {
     id: string;
     version: string;
   };
+  processEnv: Readonly<Record<string, string | undefined>>;
   rpc: {
     handle(
       method: string,
       handler: (payload: unknown) => Promise<unknown>
     ): void;
+  };
+  secrets: {
+    delete(key: string): Promise<void>;
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string): Promise<void>;
   };
 }
 
@@ -145,6 +150,17 @@ export function createExternalMainPluginRuntime(options: {
     return moduleUrl.href;
   }
 
+  function reportActivation(
+    context: ExternalMainPluginContext,
+    input: RecordActivationResultInput
+  ): void {
+    options.recordActivationResult(input).catch((error: unknown) => {
+      context.logger.error(
+        `external main activation report failed for ${input.pluginId}: ${(error as Error).message}`
+      );
+    });
+  }
+
   return {
     async activate(source): Promise<void> {
       const context = options.createContext(source);
@@ -160,6 +176,7 @@ export function createExternalMainPluginRuntime(options: {
             options.rpcBus.handle(source.id, method, handler),
         },
       };
+      let activatedDisposer: (() => void) | null = null;
       try {
         const moduleUrl = moduleUrlForSource(source);
         const mod: unknown = await importModule(moduleUrl);
@@ -182,25 +199,36 @@ export function createExternalMainPluginRuntime(options: {
         }
         // Narrowing above proves shape — this is a well-known contract, not raw input.
         const plugin = pluginExport as ExternalMainPluginModule;
-        const disposer = await plugin.activate(contextWithLifecycle);
-        disposers[source.id] = disposer;
+        activatedDisposer = await plugin.activate(contextWithLifecycle);
+        disposers[source.id] = activatedDisposer;
         flushCallbacks[source.id] = collectedFlushers;
-        await options.recordActivationResult({
+        reportActivation(context, {
           ok: true,
           phase: "main",
           pluginId: source.id,
           version: source.version,
         });
       } catch (err) {
+        try {
+          activatedDisposer?.();
+        } catch (cleanupError) {
+          context.logger.error(
+            `external main activation cleanup failed for ${source.id}: ${(cleanupError as Error).message}`
+          );
+        }
+        options.rpcBus.clearPlugin(source.id);
+        delete disposers[source.id];
+        delete flushCallbacks[source.id];
         context.logger.error(
           `external main activation failed for ${source.id}: ${(err as Error).message}`
         );
-        await options.recordActivationResult({
+        reportActivation(context, {
           ok: false,
           phase: "main",
           pluginId: source.id,
           version: source.version,
         });
+        throw err;
       }
     },
     dispose: (pluginId) => disposePlugin(pluginId),

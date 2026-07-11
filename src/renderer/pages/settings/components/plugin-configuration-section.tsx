@@ -7,7 +7,15 @@ import type {
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
-import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { useCommittedValue } from "@/hooks/use-committed-ref.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
   resolvePluginConfigurationTitle,
@@ -95,24 +103,26 @@ function StringSettingRow({
   // 并随 effective 的外部变化(其它窗口广播/reset 等)同步更新 —— 但只在这类外部
   // 变化时同步, 不能被本地未提交的 draft 变化误清空判定。
   // ref 持最新 draft/effective/onCommit, 因为 cleanup 闭包只在挂载时创建一次。
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
+  const readDraft = useCommittedValue(draft);
   const lastCommittedRef = useRef(effective);
-  const onCommitRef = useRef(onCommit);
-  onCommitRef.current = onCommit;
-  if (effective !== prev) {
+  const lastObservedEffectiveRef = useRef(effective);
+  const readOnCommit = useCommittedValue(onCommit);
+  useLayoutEffect(() => {
+    if (effective === lastObservedEffectiveRef.current) return;
+    lastObservedEffectiveRef.current = effective;
     // effective 的外部变化(非本地 commit 触发)才应同步 lastCommittedRef,
     // 与上面 prev 的判断复用同一次 effective 变化检测, 避免与本地 commit 写入冲突。
     lastCommittedRef.current = effective;
-  }
+  }, [effective]);
   useEffect(() => {
     return () => {
-      if (draftRef.current !== lastCommittedRef.current) {
+      const latestDraft = readDraft();
+      if (latestDraft !== lastCommittedRef.current) {
         // cleanup 里不能 setState, 只发起提交 IPC。
-        onCommitRef.current(draftRef.current);
+        readOnCommit()(latestDraft);
       }
     };
-  }, []);
+  }, [readDraft, readOnCommit]);
 
   if (multiline) {
     return (

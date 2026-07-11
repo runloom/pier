@@ -1,3 +1,4 @@
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearMetricsForTests,
@@ -7,6 +8,7 @@ import {
   type MetricRegistration,
   registerMetric,
   subscribeMetricRegistry,
+  useMetricValue,
 } from "@/lib/mission-control/metric-registry.ts";
 
 function makeRegistration(id: string): MetricRegistration {
@@ -59,5 +61,59 @@ describe("metric registry", () => {
 
     disposeFirst();
     expect(getMetricRegistration("m1")).toBe(second);
+  });
+
+  it("订阅值变化，inactive 停订阅，恢复时立即读取最新值", () => {
+    let value = 1;
+    let emit: () => void = () => undefined;
+    const disposeSource = vi.fn();
+    const subscribe = vi.fn((listener: () => void) => {
+      emit = listener;
+      return disposeSource;
+    });
+    registerMetric({
+      ...makeRegistration("live"),
+      read: () => ({ kind: "instant", value }),
+      subscribe,
+    });
+    const { result, rerender } = renderHook(
+      ({ active }) => useMetricValue("live", active),
+      { initialProps: { active: true } }
+    );
+    expect(result.current).toEqual({ kind: "instant", value: 1 });
+
+    act(() => {
+      value = 2;
+      emit();
+    });
+    expect(result.current).toEqual({ kind: "instant", value: 2 });
+
+    rerender({ active: false });
+    expect(disposeSource).toHaveBeenCalledOnce();
+    expect(result.current).toBeNull();
+    value = 3;
+    rerender({ active: true });
+    expect(result.current).toEqual({ kind: "instant", value: 3 });
+    expect(subscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it("同 id registration 替换后退订旧源并读取新源", () => {
+    const disposeFirst = vi.fn();
+    registerMetric({
+      ...makeRegistration("replace"),
+      read: () => ({ kind: "instant", value: 1 }),
+      subscribe: () => disposeFirst,
+    });
+    const { result } = renderHook(() => useMetricValue("replace", true));
+
+    act(() => {
+      registerMetric({
+        ...makeRegistration("replace"),
+        read: () => ({ kind: "instant", value: 2 }),
+        subscribe: () => () => undefined,
+      });
+    });
+    expect(disposeFirst).toHaveBeenCalledOnce();
+    expect(result.current).toEqual({ kind: "instant", value: 2 });
   });
 });

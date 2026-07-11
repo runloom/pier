@@ -71,7 +71,7 @@ function CommandInput({
         <CommandPrimitive.Input
           className={cn(
             // placeholder 显式绑 --foreground 50% alpha, 绕开 preflight 的
-            // color-mix(currentcolor, …) — Chromium 对该计算在 inline
+            // 浏览器内部混色 — Chromium 对该计算在 inline
             // setProperty 切 CSS var 后不完整 invalidate ::placeholder, 主题
             // preview 时 placeholder 卡旧值, 直到 React re-render 才补。
             "w-full text-sm outline-hidden placeholder:text-foreground/30 disabled:cursor-not-allowed disabled:opacity-50",

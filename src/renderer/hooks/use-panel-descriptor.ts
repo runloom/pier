@@ -38,10 +38,13 @@ export function usePanelDescriptor(
 
   useEffect(() => {
     if (!descriptor) {
+      remove(panel.id);
       return;
     }
     panel.setTitle(descriptor.display.short);
     upsert(panel.id, descriptor);
-    return () => remove(panel.id);
   }, [panel, descriptor, upsert, remove]);
+
+  const panelId = panel.id;
+  useEffect(() => () => remove(panelId), [panelId, remove]);
 }

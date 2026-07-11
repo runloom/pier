@@ -1,6 +1,7 @@
 import { pluginRpcInvokeRequestSchema } from "@shared/contracts/plugin-rpc.ts";
 import { PIER } from "@shared/ipc-channels.ts";
-import { ipcMain, webContents } from "electron";
+import { ipcMain } from "electron";
+import { windowManager } from "../windows/window-manager.ts";
 import type { PluginRpcBus } from "./plugin-rpc-bus.ts";
 
 /**
@@ -15,7 +16,10 @@ export function registerPluginRpcIpc(rpcBus: PluginRpcBus): void {
   ipcMain.handle(PIER.PLUGIN_RPC_INVOKE, async (event, rawPayload: unknown) => {
     // Reject invocations from unauthorized frames.
     const sender = event.sender;
-    if (!webContents.getAllWebContents().includes(sender)) {
+    if (
+      event.senderFrame !== sender.mainFrame ||
+      !windowManager.fromWebContents(sender)
+    ) {
       return {
         error: { code: "invalid_request", message: "unrecognized webContents" },
         ok: false,

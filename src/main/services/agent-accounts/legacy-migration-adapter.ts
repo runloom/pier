@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SecretsStore } from "../../state/secrets-store.ts";
 
 /**
  * Private Codex legacy migration adapter (plan Task 11a).
@@ -20,12 +19,10 @@ export interface CodexLegacyMigrationAdapter {
   readonly legacyAgentAccountsBaseDir: string;
   readonly legacyAgentAccountsStateFile: string;
   readLegacyAuthJson(accountId: string): Promise<string | null>;
-  readLegacySecretsStoreEntry(key: string): Promise<string | null>;
   readLegacyStateFile(): Promise<string | null>;
 }
 
 export function createCodexLegacyMigrationAdapter(opts: {
-  secretsStore: SecretsStore;
   userDataDir: string;
 }): CodexLegacyMigrationAdapter {
   const stateFile = join(opts.userDataDir, "agent-accounts.json");
@@ -41,13 +38,6 @@ export function createCodexLegacyMigrationAdapter(opts: {
       }
       try {
         return await readFile(path, "utf8");
-      } catch {
-        return null;
-      }
-    },
-    async readLegacySecretsStoreEntry(key: string): Promise<string | null> {
-      try {
-        return await opts.secretsStore.get(key);
       } catch {
         return null;
       }

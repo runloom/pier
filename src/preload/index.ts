@@ -180,13 +180,6 @@ export interface PierMenuAPI {
   ) => Promise<MenuPopupResult>;
 }
 
-export interface PierSecretsAPI {
-  delete(key: string): Promise<void>;
-  get(key: string): Promise<string | null>;
-  list(): Promise<string[]>;
-  set(key: string, value: string): Promise<void>;
-}
-
 export interface PierSettingsAPI {
   onOpenRequest: (cb: () => void) => () => void;
 }
@@ -230,7 +223,6 @@ export interface PierWindowAPI {
   plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
   rendererCommand: PierRendererCommandAPI;
-  secrets: PierSecretsAPI;
   settings: PierSettingsAPI;
   systemStats: PierSystemStatsAPI;
   tasks: PierTasksAPI;
@@ -329,13 +321,6 @@ const commandPaletteApi: PierCommandPaletteAPI = {
     subscribeIpc(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST, cb),
 };
 
-const secretsApi: PierSecretsAPI = {
-  get: (key) => ipcRenderer.invoke("pier:secrets:get", key),
-  set: (key, value) => ipcRenderer.invoke("pier:secrets:set", { key, value }),
-  delete: (key) => ipcRenderer.invoke("pier:secrets:delete", key),
-  list: () => ipcRenderer.invoke("pier:secrets:list"),
-};
-
 const pluginsApi: PierPluginsAPI = {
   list: () =>
     invokePierCommand<PluginRegistryListResult>({ type: "plugin.list" }),
@@ -391,7 +376,6 @@ const api: PierWindowAPI = {
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,
   rendererCommand: rendererCommandApi,
-  secrets: secretsApi,
   settings: settingsApi,
   systemStats: systemStatsApi,
   tasks: tasksApi,

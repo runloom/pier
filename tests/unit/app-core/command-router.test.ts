@@ -259,7 +259,9 @@ function services(
     },
     secrets: {
       get: async () => null,
+      getEncrypted: async () => null,
       set: async () => undefined,
+      setEncrypted: async () => undefined,
       delete: async () => undefined,
       list: async () => [],
       flush: async () => undefined,

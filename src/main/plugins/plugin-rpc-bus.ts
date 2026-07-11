@@ -26,24 +26,22 @@ export interface PluginRpcBus {
 export function createPluginRpcBus(options: {
   broadcast: (payload: PluginRpcEventPayload) => void;
 }): PluginRpcBus {
-  const handlers: Record<string, PluginRpcHandler> = {};
+  const handlers = new Map<string, Map<string, PluginRpcHandler>>();
 
   return {
     clearPlugin(pluginId): void {
-      for (const key of Object.keys(handlers)) {
-        if (key.startsWith(`${pluginId}:`)) {
-          delete handlers[key];
-        }
-      }
+      handlers.delete(pluginId);
     },
     emit(pluginId, event, payload): void {
       options.broadcast({ event, payload, pluginId });
     },
     handle(pluginId, method, handler): void {
-      handlers[`${pluginId}:${method}`] = handler;
+      const pluginHandlers = handlers.get(pluginId) ?? new Map();
+      pluginHandlers.set(method, handler);
+      handlers.set(pluginId, pluginHandlers);
     },
     async invoke(request): Promise<PluginRpcInvokeResult> {
-      const handler = handlers[`${request.pluginId}:${request.method}`];
+      const handler = handlers.get(request.pluginId)?.get(request.method);
       if (!handler) {
         return {
           error: {
@@ -60,7 +58,7 @@ export function createPluginRpcBus(options: {
         return {
           error: {
             code: "internal_error",
-            message: (err as Error).message,
+            message: err instanceof Error ? err.message : String(err),
           },
           ok: false,
         };

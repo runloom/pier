@@ -1005,6 +1005,48 @@ describe("RendererPluginRuntime", () => {
     await runtime.dispose();
   });
 
+  it("reports external renderer activation success and failure to main", async () => {
+    const successReport = vi.fn(async () => undefined);
+    const successRuntime = new RendererPluginRuntime([], {
+      loadExternalModule: vi.fn(async () =>
+        externalModule("pier.external.success", () => vi.fn())
+      ),
+      reportExternalActivation: successReport,
+    });
+    await successRuntime.refresh([externalEntry("pier.external.success")]);
+    successRuntime.startExternalActivations();
+    await vi.waitFor(() =>
+      expect(successReport).toHaveBeenCalledWith({
+        ok: true,
+        pluginId: "pier.external.success",
+        version: "1.0.0",
+      })
+    );
+    await successRuntime.dispose();
+
+    const failureReport = vi.fn(async () => undefined);
+    const failureRuntime = new RendererPluginRuntime([], {
+      loadExternalModule: vi.fn(async () => ({
+        activate() {
+          throw new Error("activation failed");
+        },
+        id: "pier.external.failure",
+      })),
+      reportExternalActivation: failureReport,
+    });
+    await failureRuntime.refresh([externalEntry("pier.external.failure")]);
+    failureRuntime.startExternalActivations();
+    await vi.waitFor(() =>
+      expect(failureReport).toHaveBeenCalledWith({
+        error: "activation failed",
+        ok: false,
+        pluginId: "pier.external.failure",
+        version: "1.0.0",
+      })
+    );
+    await failureRuntime.dispose();
+  });
+
   it("times out an external load, reports diagnostics, and ignores a late module", async () => {
     vi.useFakeTimers();
     const pending = deferred<ExternalRendererPluginModule>();

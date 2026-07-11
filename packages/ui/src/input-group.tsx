@@ -52,7 +52,7 @@ function InputGroupAddon({
       className={cn(inputGroupAddonVariants({ align }), className)}
       data-align={align}
       data-slot="input-group-addon"
-      onClick={(e) => {
+      onPointerDown={(e) => {
         if ((e.target as HTMLElement).closest("button")) {
           return;
         }

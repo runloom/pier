@@ -16,8 +16,8 @@
  * Pier UI globals.css
  *
  * shadcn preset b27GcrRo / radix-rhea / neutral。应用 UI chrome 使用中性结构色,
- * 状态色和图表色从主题派生。终端 ANSI / selection 配色由 derive-terminal-colors
- * 独立处理, 不从这些 UI token 反推。
+ * 产品状态色保持稳定；中性外壳、主强调色和图表序列可由主题引擎更新。
+ * 终端 ANSI / selection 配色由 derive-terminal-colors 独立处理。
  *
  * Default = dark; :root.light 触发 light mode.
  */
@@ -109,7 +109,16 @@
   --status-done-bg: color-mix(in oklab, var(--done) 14%, transparent);
   --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
+  --status-solid-foreground: oklch(0.145 0 0);
+  --action-accent: var(--primary);
+  --action-accent-foreground: var(--primary-foreground);
+  --action-danger: var(--destructive);
   --action-muted: var(--muted-foreground);
+  --action-secondary-hover: color-mix(
+    in oklab,
+    var(--secondary),
+    var(--foreground) 10%
+  );
   --debug-grid-line: color-mix(in oklab, var(--foreground) 6%, transparent);
   /* === Sidebar / titlebar chrome elevation 体系 ===
      - sidebar (外壳: titlebar / 侧栏 / workspace gutter) 用 --muted, 比内容卡略亮/略暗
@@ -190,6 +199,7 @@
   --success: #047857;
   --info: #2563eb;
   --done: #7e22ce;
+  --status-solid-foreground: oklch(0.985 0 0);
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -310,7 +320,12 @@
   --color-status-done-bg: var(--status-done-bg);
   --color-status-done-fg: var(--status-done-fg);
   --color-status-done-border: var(--status-done-border);
+  --color-status-solid-foreground: var(--status-solid-foreground);
+  --color-action-accent: var(--action-accent);
+  --color-action-accent-foreground: var(--action-accent-foreground);
+  --color-action-danger: var(--action-danger);
   --color-action-muted: var(--action-muted);
+  --color-action-secondary-hover: var(--action-secondary-hover);
 
   /* Pier 业务 token 按实际功能增量添加；不要继承 Bay 的看板/任务台账命名。 */
 
@@ -912,20 +927,14 @@ body {
  * 组件（agent-shimmer-text.tsx）以 rAF 更新每字符 data-shimmer-tier，
  * CSS 只负责 tier → 颜色/字重映射。高档色来自内联 --pier-agent-status-color
  * （状态色变量, running 长跑时被覆盖为 warning/danger）。
- * Pier 默认 dark（:root），.light 切换——与 loomdesk 的 .dark 方向相反,
- * 故固定灰阶写在基础层, color-mix 写在 .light 覆盖层。
+ * 深浅主题都从 foreground 派生，避免组件状态色与主题分叉。
  */
 [data-agent-status-text][data-agent-status-kind="running"] {
-  --shimmer-low: #5f6673;
-  --shimmer-mid: #777d88;
+  --shimmer-low: color-mix(in oklch, var(--foreground) 58%, transparent);
+  --shimmer-mid: color-mix(in oklch, var(--foreground) 75%, transparent);
   --shimmer-high: var(--pier-agent-status-color, var(--status-info-fg));
 
   color: var(--shimmer-low);
-}
-
-.light [data-agent-status-text][data-agent-status-kind="running"] {
-  --shimmer-low: color-mix(in oklch, var(--foreground) 55%, transparent);
-  --shimmer-mid: color-mix(in oklch, var(--foreground) 75%, transparent);
 }
 
 /*

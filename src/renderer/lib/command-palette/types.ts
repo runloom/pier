@@ -41,9 +41,13 @@ export interface QuickPickSection {
 }
 
 export interface QuickPick {
+  /** 文本输入模式的初始值；仅与 onAcceptQuery 配合使用。 */
+  readonly initialQuery?: string;
   readonly items?: readonly QuickPickItem[];
   readonly loading?: boolean;
   onAccept(item: QuickPickItem): void | Promise<void>;
+  /** 文本输入模式：按 Enter 提交输入框内容，不渲染候选列表。 */
+  onAcceptQuery?(query: string): void | Promise<void>;
   /** 箭头键导航 / 鼠标 hover 时实时 preview。不传 → 无 preview。 */
   onChangeSelection?(item: QuickPickItem): void;
   /** Esc / 点击遮罩关闭时还原到打开前的值。不传 → 关闭即确认。 */

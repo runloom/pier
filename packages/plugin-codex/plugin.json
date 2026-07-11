@@ -138,7 +138,7 @@
   ],
   "name": "Codex Account Management",
   "panels": [],
-  "permissions": ["plugin:read"],
+  "permissions": ["plugin:read", "secret:read", "secret:write"],
   "publisher": "Pier",
   "renderer": "dist/renderer.js",
   "settingsPages": [{ "id": "pier.codex.accounts" }],

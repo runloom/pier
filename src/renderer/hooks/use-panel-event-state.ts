@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * 订阅一个跨进程 panel-scoped 事件流, 按 panelId 过滤后把 extract 出的字段存入
@@ -30,9 +30,11 @@ export function usePanelEventState<E extends { panelId: string }, V>(
   // extract 通常是 inline lambda, 每次渲染新引用. useRef 让 effect 总是用最新的
   // 但不把 extract 放进 deps — 避免每次渲染 re-subscribe + re-add listener.
   const extractRef = useRef(extract);
-  extractRef.current = extract;
   const resetKeyRef = useRef(resetKey);
-  resetKeyRef.current = resetKey;
+  useLayoutEffect(() => {
+    extractRef.current = extract;
+    resetKeyRef.current = resetKey;
+  }, [extract, resetKey]);
 
   const value =
     state.panelId === panelId && Object.is(state.resetKey, resetKey)

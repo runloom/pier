@@ -4,15 +4,14 @@ import type * as React from "react";
 import { Separator } from "./separator.tsx";
 import { cn } from "./utils.ts";
 
-function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
+function ItemGroup({ className, ...props }: React.ComponentProps<"ul">) {
   return (
-    <div
+    <ul
       className={cn(
         "group/item-group flex w-full flex-col gap-4 has-data-[size=sm]:gap-2.5 has-data-[size=xs]:gap-2",
         className
       )}
       data-slot="item-group"
-      role="list"
       {...props}
     />
   );

@@ -8,6 +8,7 @@ import {
   restartTaskRun,
   taskRunActionTargetFromRun,
 } from "@/lib/actions/task-run-operations.ts";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -369,7 +370,6 @@ describe("task run operations", () => {
       initialized: true,
       snapshot: { runs: { [current.runId]: current }, version: 1 },
     });
-    vi.spyOn(window, "prompt").mockReturnValue("staging");
     vi.mocked(window.pier.tasks.spawn)
       .mockResolvedValueOnce({
         inputs: [
@@ -395,7 +395,17 @@ describe("task run operations", () => {
       return;
     }
 
-    await expect(restartTaskRun(target)).resolves.toEqual({
+    const restart = restartTaskRun(target);
+    await vi.waitFor(() => {
+      expect(
+        useCommandPaletteController.getState().quickPick?.onAcceptQuery
+      ).toBeTypeOf("function");
+    });
+    useCommandPaletteController
+      .getState()
+      .quickPick?.onAcceptQuery?.("staging");
+
+    await expect(restart).resolves.toEqual({
       panelRebound: true,
       runId: "run-input",
     });

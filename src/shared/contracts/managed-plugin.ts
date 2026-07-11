@@ -54,6 +54,36 @@ export type ManagedPluginDataSchema = z.infer<
   typeof managedPluginDataSchemaSchema
 >;
 
+export const managedPluginDataSchemaMarkerSchema = z
+  .object({
+    schemas: z.record(
+      z.string().min(1),
+      z
+        .object({
+          updatedByPluginVersion: z.string().min(1),
+          version: z.number().int().nonnegative(),
+        })
+        .strict()
+    ),
+    version: z.literal(1),
+  })
+  .strict();
+export type ManagedPluginDataSchemaMarker = z.infer<
+  typeof managedPluginDataSchemaMarkerSchema
+>;
+
+export const managedPluginRendererActivationReportSchema = z
+  .object({
+    error: z.string().min(1).optional(),
+    ok: z.boolean(),
+    pluginId: z.string().min(1),
+    version: z.string().min(1),
+  })
+  .strict();
+export type ManagedPluginRendererActivationReport = z.infer<
+  typeof managedPluginRendererActivationReportSchema
+>;
+
 export const managedPluginPackageManifestSchema = z.object({
   apiVersion: z.literal(1),
   commands: z.array(pluginCommandContributionSchema).default([]),
@@ -108,6 +138,7 @@ export type ManagedPluginInstallSource = z.infer<
 >;
 
 const installedVersionRecordSchema = z.object({
+  contentHash: z.string().min(1).optional(),
   installedAt: z.number().int().nonnegative(),
   packageUrl: z.string().min(1),
   sha256: z.string().min(1),

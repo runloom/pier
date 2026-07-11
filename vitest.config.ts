@@ -16,6 +16,7 @@ export default defineConfig({
     },
   },
   test: {
+    allowOnly: false,
     globals: true,
     environment: "jsdom",
     setupFiles: ["./tests/setup/jsdom-setup.ts"],
@@ -24,8 +25,38 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "json"],
-      include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.{test,spec}.{ts,tsx}", "src/**/index.html"],
+      include: [
+        "src/**/*.{ts,tsx}",
+        "packages/{plugin-api,plugin-codex,ui}/src/**/*.{ts,tsx}",
+      ],
+      exclude: ["**/*.{test,spec}.{ts,tsx}", "**/*.d.ts", "src/**/index.html"],
+      thresholds: {
+        "packages/plugin-codex/src/main/{accounts-service,codex-provider,state}.ts":
+          {
+            branches: 20,
+            functions: 30,
+            lines: 25,
+            statements: 25,
+          },
+        "src/main/plugins/{external-main-runtime,plugin-activation-ipc,plugin-rpc-bus,plugin-rpc-ipc,plugin-secrets}.ts":
+          {
+            branches: 50,
+            functions: 60,
+            lines: 70,
+            statements: 70,
+          },
+        "src/main/services/managed-plugins/{data-schema-compatibility,index-state,install-runtime,package-content-hash}.ts":
+          {
+            branches: 50,
+            functions: 60,
+            lines: 65,
+            statements: 65,
+          },
+        branches: 69,
+        functions: 76,
+        lines: 77,
+        statements: 77,
+      },
     },
   },
 });

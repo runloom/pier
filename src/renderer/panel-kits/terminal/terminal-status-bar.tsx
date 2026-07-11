@@ -5,6 +5,7 @@ import type {
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { useMemo, useSyncExternalStore } from "react";
 import { Notifier } from "@/lib/util/notifier.ts";
+import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 import { CORE_TERMINAL_STATUS_ITEMS } from "./core-terminal-status-items.ts";
@@ -55,14 +56,22 @@ class TerminalStatusItemRegistry extends Notifier {
 }
 
 export const terminalStatusItemRegistry = new TerminalStatusItemRegistry();
+const subscribeTerminalStatusItems = (listener: () => void): (() => void) =>
+  terminalStatusItemRegistry.subscribe(listener);
+const getTerminalStatusItemsVersion = (): number =>
+  terminalStatusItemRegistry.getVersion();
 
 export function useTerminalStatusItems(): readonly TerminalStatusItem[] {
-  useSyncExternalStore(
-    (cb) => terminalStatusItemRegistry.subscribe(cb),
-    () => terminalStatusItemRegistry.getVersion(),
+  const version = useSyncExternalStore(
+    subscribeTerminalStatusItems,
+    getTerminalStatusItemsVersion,
     () => 0
   );
-  return terminalStatusItemRegistry.list();
+  return useMemo(
+    () =>
+      readVersionedSnapshot(version, () => terminalStatusItemRegistry.list()),
+    [version]
+  );
 }
 
 /**
