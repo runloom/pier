@@ -2,55 +2,24 @@ import type {
   TaskBackgroundRunSnapshot,
   TaskBackgroundSnapshot,
   TaskLaunchPlan,
+  TaskOutputUpdate,
   TaskRunSnapshot,
 } from "@shared/contracts/tasks.ts";
 import type { ProcessEnvironmentService } from "../process-environment-service.ts";
+import {
+  backgroundPanelId,
+  isBackgroundPanelId,
+  panelRefKey,
+} from "./task-background-panel-id.ts";
 import type {
   BackgroundTaskProcess,
   SpawnBackgroundTask,
 } from "./task-background-runner.ts";
+import { signalBackgroundTaskProcess } from "./task-background-runner.ts";
+import type { TaskBackgroundRuns } from "./task-background-runs-contract.ts";
+import { createTaskOutputBuffer } from "./task-output-buffer.ts";
 import type { TaskRunCoordinatorStartResult } from "./task-run-coordinator.ts";
 import { isTerminalRunStatus } from "./task-spawn-restart.ts";
-
-const BACKGROUND_PANEL_ID_PREFIX = "background-task:";
-
-export function panelRefKey(
-  panelId: string,
-  windowId?: string | undefined
-): string {
-  return windowId ? `${windowId}\0${panelId}` : panelId;
-}
-
-function backgroundPanelId(runId: string, taskId: string): string {
-  return `${BACKGROUND_PANEL_ID_PREFIX}${runId}:${taskId}`;
-}
-
-export function isBackgroundPanelId(panelId: string): boolean {
-  return panelId.startsWith(BACKGROUND_PANEL_ID_PREFIX);
-}
-
-export interface TaskBackgroundRuns {
-  cancelPanel(panelId: string, windowId?: string | undefined): void;
-  dispose(): void;
-  finishPanel(
-    panelId: string,
-    exitCode: number,
-    windowId?: string | undefined
-  ): Promise<TaskRunSnapshot | null>;
-  setNodeFromSnapshot(
-    projectRootPath: string,
-    runId: string,
-    node: TaskRunSnapshot["nodes"][string]
-  ): void;
-  snapshot(): TaskBackgroundSnapshot;
-  start(args: {
-    clientEnv?: Record<string, string> | undefined;
-    launches: readonly TaskLaunchPlan[];
-    projectRootPath: string;
-    rootTaskId: string;
-    windowId?: string | undefined;
-  }): Promise<TaskRunCoordinatorStartResult>;
-}
 
 export interface CreateTaskBackgroundRunsOptions {
   completePanel(
@@ -62,21 +31,24 @@ export interface CreateTaskBackgroundRunsOptions {
   isDisposed(): boolean;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
   now(): number;
-  onBackgroundTasksChanged?:
-    | ((snapshot: TaskBackgroundSnapshot) => void)
-    | undefined;
   onRunTerminal(result: TaskRunSnapshot): void;
+  onTaskOutputChanged?:
+    | ((update: TaskOutputUpdate, windowId?: string) => void)
+    | undefined;
   processEnvironment?: ProcessEnvironmentService | undefined;
   recordLaunch(launch: TaskLaunchPlan): void;
   spawnBackgroundTask: SpawnBackgroundTask;
   startRun(args: {
     launches: readonly TaskLaunchPlan[];
+    mode?: "background" | "terminal-tab" | undefined;
     openTerminal(
       launch: TaskLaunchPlan,
       runId: string
     ): Promise<{ panelId: string; windowId?: string | undefined }>;
     projectRootPath: string;
     rootTaskId: string;
+    ownerWindowId?: string | undefined;
+    originPanelId?: string | undefined;
   }): Promise<TaskRunCoordinatorStartResult>;
 }
 
@@ -96,6 +68,7 @@ export function createTaskBackgroundRuns(
     string,
     {
       panelId: string;
+      outputTaskId: string;
       process?: BackgroundTaskProcess | undefined;
       projectRootPath: string;
       runId: string;
@@ -105,6 +78,12 @@ export function createTaskBackgroundRuns(
   >();
   const spawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const cancelledProcessKeys = new Set<string>();
+  const outputs = createTaskOutputBuffer({
+    now,
+    ...(options.onTaskOutputChanged
+      ? { onChanged: options.onTaskOutputChanged }
+      : {}),
+  });
   let version = 0;
 
   function snapshot(): TaskBackgroundSnapshot {
@@ -121,7 +100,6 @@ export function createTaskBackgroundRuns(
 
   function publishSnapshot(): void {
     version += 1;
-    options.onBackgroundTasksChanged?.(snapshot());
   }
 
   function setRun(
@@ -251,6 +229,73 @@ export function createTaskBackgroundRuns(
     options.forgetRunningPanel(panelId, windowId);
   }
 
+  function stopPanel(
+    panelId: string,
+    windowId?: string | undefined
+  ): { message?: string; ok: boolean } {
+    const processKey = panelRefKey(panelId, windowId);
+    const spawnTimer = spawnTimers.get(processKey);
+    if (spawnTimer) {
+      clearTimeout(spawnTimer);
+      spawnTimers.delete(processKey);
+      finishPanel(panelId, 130, windowId).catch((error: unknown) => {
+        console.error("[tasks] pending background stop failed:", error);
+      });
+      return { ok: true };
+    }
+    const processRecord = processes.get(processKey);
+    if (!processRecord) {
+      finishPanel(panelId, 130, windowId).catch((error: unknown) => {
+        console.error("[tasks] background stop reconciliation failed:", error);
+      });
+      return { ok: true };
+    }
+    const accepted = signalBackgroundTaskProcess(processRecord.process, false);
+    if (!accepted) {
+      return { message: "background process rejected interrupt", ok: false };
+    }
+    updateRun(processRecord.projectRootPath, processRecord.taskId, {
+      status: "stopping",
+    });
+    return { ok: true };
+  }
+
+  function forceStopPanel(
+    panelId: string,
+    windowId?: string | undefined
+  ): { message?: string; ok: boolean } {
+    const processKey = panelRefKey(panelId, windowId);
+    const spawnTimer = spawnTimers.get(processKey);
+    if (spawnTimer) {
+      clearTimeout(spawnTimer);
+      spawnTimers.delete(processKey);
+      finishPanel(panelId, 137, windowId).catch((error: unknown) => {
+        console.error("[tasks] pending background force stop failed:", error);
+      });
+      return { ok: true };
+    }
+    const processRecord = processes.get(processKey);
+    if (!processRecord) {
+      finishPanel(panelId, 137, windowId).catch((error: unknown) => {
+        console.error(
+          "[tasks] background force stop reconciliation failed:",
+          error
+        );
+      });
+      return { ok: true };
+    }
+    const accepted = signalBackgroundTaskProcess(processRecord.process, true);
+    if (!accepted) {
+      return { message: "background process rejected force stop", ok: false };
+    }
+    outputs.flush(processRecord.runId, processRecord.outputTaskId);
+    updateRun(processRecord.projectRootPath, processRecord.taskId, {
+      finishedAt: now(),
+      status: "cancelled",
+    });
+    return { ok: true };
+  }
+
   function scheduleSpawn(args: {
     env: Record<string, string>;
     launch: TaskLaunchPlan;
@@ -277,6 +322,13 @@ export function createTaskBackgroundRuns(
         env,
         onError: (error) => {
           completedSynchronously = true;
+          outputs.append(
+            processRecord.runId,
+            processRecord.outputTaskId,
+            "stderr",
+            `${error.message}\n`
+          );
+          outputs.flush(processRecord.runId, processRecord.outputTaskId);
           console.error("[tasks] background task spawn failed:", error);
           finishPanel(panelId, 1, windowId).catch((err: unknown) => {
             console.error(
@@ -287,10 +339,19 @@ export function createTaskBackgroundRuns(
         },
         onExit: (exitCode) => {
           completedSynchronously = true;
+          outputs.flush(processRecord.runId, processRecord.outputTaskId);
           finishPanel(panelId, exitCode ?? 1, windowId).catch(
             (err: unknown) => {
               console.error("[tasks] background task completion failed:", err);
             }
+          );
+        },
+        onOutput: (stream, text) => {
+          outputs.append(
+            processRecord.runId,
+            processRecord.outputTaskId,
+            stream,
+            text
           );
         },
       });
@@ -304,11 +365,19 @@ export function createTaskBackgroundRuns(
   async function start(args: {
     clientEnv?: Record<string, string> | undefined;
     launches: readonly TaskLaunchPlan[];
+    originPanelId?: string | undefined;
     projectRootPath: string;
     rootTaskId: string;
     windowId?: string | undefined;
   }): Promise<TaskRunCoordinatorStartResult> {
-    const { clientEnv, launches, projectRootPath, rootTaskId, windowId } = args;
+    const {
+      clientEnv,
+      launches,
+      originPanelId,
+      projectRootPath,
+      rootTaskId,
+      windowId,
+    } = args;
     const { processEnvironment } = options;
     if (options.isDisposed()) {
       throw new Error("TaskService has been disposed");
@@ -320,6 +389,7 @@ export function createTaskBackgroundRuns(
     }
     return await options.startRun({
       launches,
+      mode: "background",
       openTerminal: async (launch, runId) => {
         const panelId = backgroundPanelId(runId, launch.taskId);
         const processKey = panelRefKey(panelId, windowId);
@@ -339,7 +409,13 @@ export function createTaskBackgroundRuns(
           updatedAt: now(),
           ...(windowId ? { windowId } : {}),
         });
+        outputs.start({
+          runId,
+          taskId: rootTaskId,
+          ...(windowId ? { windowId } : {}),
+        });
         processes.set(processKey, {
+          outputTaskId: rootTaskId,
           panelId,
           projectRootPath: launch.projectRootPath,
           runId,
@@ -361,6 +437,8 @@ export function createTaskBackgroundRuns(
       },
       projectRootPath,
       rootTaskId,
+      ownerWindowId: windowId,
+      ...(originPanelId ? { originPanelId } : {}),
     });
   }
 
@@ -377,14 +455,18 @@ export function createTaskBackgroundRuns(
       cancelPanel(ref.panelId, ref.windowId);
     }
     cancelledProcessKeys.clear();
+    outputs.dispose();
   }
 
   return {
     cancelPanel,
     dispose,
     finishPanel,
+    forceStopPanel,
+    output: (runId, taskId) => outputs.snapshot(runId, taskId),
     setNodeFromSnapshot,
     snapshot,
     start,
+    stopPanel,
   };
 }

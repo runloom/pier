@@ -69,6 +69,17 @@ export type WorktreeCreationDefaultsRequest = z.infer<
 >;
 export type WorktreeCreateRequest = z.infer<typeof worktreeCreateRequestSchema>;
 
+export const worktreeCreatePhaseSchema = z.enum(["creating", "initializing"]);
+export type WorktreeCreatePhase = z.infer<typeof worktreeCreatePhaseSchema>;
+
+export const worktreeCreateProgressSchema = z.object({
+  operationId: z.uuid(),
+  phase: worktreeCreatePhaseSchema,
+});
+export type WorktreeCreateProgress = z.infer<
+  typeof worktreeCreateProgressSchema
+>;
+
 export const worktreeOpenRequestSchema = z.object({
   path: z.string().min(1),
 });
@@ -142,6 +153,7 @@ export type WorktreeCreationDefaults = z.infer<
 export const worktreeOpenTerminalRequestSchema = z.object({
   agentId: agentKindSchema.optional(),
   path: z.string().min(1),
+  targetGroupId: z.string().min(1).optional(),
   taskPrompt: z.string().min(1).max(12_000).optional(),
 });
 export type WorktreeOpenTerminalRequest = z.infer<

@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
@@ -21,6 +20,7 @@ import { registerPluginRpcIpc } from "../plugins/plugin-rpc-ipc.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
+import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createAppUpdateService } from "../services/app-updates/app-update-service.ts";
 import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
@@ -60,7 +60,6 @@ import {
   readTerminalStatusBarPrefs,
   resetTerminalStatusBarItem,
 } from "../state/terminal-status-bar-prefs.ts";
-import type { AppWindow } from "../windows/app-window.ts";
 import { showNativeWindowCloseFailure } from "../windows/native-window-close-failure.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
@@ -82,13 +81,15 @@ import {
 } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
+import { sendRendererCommand } from "./renderer-command-host.ts";
 import {
   broadcastAppUpdateChanged,
   broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
-  broadcastTaskBackgroundSnapshot,
+  broadcastTaskRunsSnapshot,
   broadcastTerminalStatusBarPrefs,
+  broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
 
 export interface PierAppCore {
@@ -100,47 +101,6 @@ export interface PierAppCore {
   pluginHost: MainPluginHostApi;
   ready: Promise<void>;
   services: PierCoreServices;
-}
-
-function focusRendererTarget(win: AppWindow): void {
-  if (win.isMinimized()) {
-    win.restore();
-  }
-  if (process.platform === "darwin") {
-    app.focus({ steal: true });
-  }
-  win.focus();
-  win.webContents.focus();
-}
-
-function sendRendererCommand(
-  envelope: unknown,
-  windowId?: string,
-  options: { focus?: boolean } = {}
-): boolean {
-  if (windowId) {
-    const target = windowManager.get(windowId);
-    if (!target || target.isDestroyed()) {
-      return false;
-    }
-    if (options.focus) {
-      focusRendererTarget(target);
-    }
-    target.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-    return true;
-  }
-  const focused =
-    windowManager.getFocused() ??
-    windowManager.getAll().find((win) => !win.isDestroyed()) ??
-    null;
-  if (!focused || focused.isDestroyed()) {
-    return false;
-  }
-  if (options.focus) {
-    focusRendererTarget(focused);
-  }
-  focused.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-  return true;
 }
 
 function createPierAppCore(): PierAppCore {
@@ -335,9 +295,15 @@ function createPierAppCore(): PierAppCore {
   const runtimeMode = isDevRuntime() ? "development" : "production";
   // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
   const agentDetection = createAgentDetectionService();
+  const agentUsage = createAgentUsageService({
+    userDataDir: app.getPath("userData"),
+  });
   const services: PierCoreServices = {
+    agentDetection,
+    agentUsage,
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
+      readAgentUsage: () => agentUsage.read(),
       readPreferences: () => preferences.read(),
     }),
     appUpdates: createAppUpdateService({
@@ -365,7 +331,7 @@ function createPierAppCore(): PierAppCore {
     panelContexts: createPanelContextService(),
     rendererCommand,
     tasks: createTaskService({
-      onBackgroundTasksChanged: broadcastTaskBackgroundSnapshot,
+      onTaskRunsChanged: broadcastTaskRunsSnapshot,
       onTaskActivity: {
         onLaunched: (panelId, windowId, task) => {
           if (!windowId) {
@@ -478,6 +444,7 @@ function createPierAppCore(): PierAppCore {
     commandRouter: createCommandRouter({
       clients,
       onEnvironmentsChanged: broadcastEnvironmentsChanged,
+      onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
       services,
     }),
     eventBus,

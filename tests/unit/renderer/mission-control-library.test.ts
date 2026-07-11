@@ -16,12 +16,17 @@ const coreWidgets: readonly CoreMissionControlWidgetDeclaration[] = [
     descriptionKey: "desc.activity",
     id: "core.activity-overview",
     searchTerms: ["activity", "会话"],
+    maxSize: { h: 12, w: 12 },
+    minSize: { h: 2, w: 3 },
     titleKey: "title.activity",
   },
   {
     category: "custom",
+    defaultSize: { h: 4, w: 3 },
     id: "core.custom-card",
     multiInstance: true,
+    maxSize: { h: 12, w: 6 },
+    minSize: { h: 2, w: 2 },
     titleKey: "title.custom",
   },
 ];

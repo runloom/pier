@@ -1,15 +1,24 @@
-import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
+import {
+  getAgentCatalogAliases,
+  getAgentCatalogEntry,
+} from "@shared/agent-catalog.ts";
+import { pickAgent } from "@shared/agent-selection.ts";
 import i18next from "i18next";
-import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
+import { isTaskRunPanelParams } from "@/lib/actions/task-run-operations.ts";
+import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
+import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import type {
   ActionContributionRuntime,
   ActionWhenContext,
 } from "./contribution-types.ts";
+import type { ActionInvocation } from "./types.ts";
 
-interface ActiveTaskPanelRef {
-  panelId: string;
-  task: TaskPanelMetadata;
+function actionTargetPanel(invocation?: ActionInvocation) {
+  const api = useWorkspaceStore.getState().api;
+  return invocation?.sourcePanelId
+    ? api?.panels.find((panel) => panel.id === invocation.sourcePanelId)
+    : api?.activePanel;
 }
 
 export function activeTerminalPanelId(): string | null {
@@ -17,30 +26,24 @@ export function activeTerminalPanelId(): string | null {
   return panel?.view.contentComponent === "terminal" ? panel.id : null;
 }
 
-/** active panel 是任务面板时返回其任务元数据, 否则 null。 */
-export function activeTaskPanelMetadata(): TaskPanelMetadata | null {
-  const panel = useWorkspaceStore.getState().api?.activePanel;
-  if (panel?.view.contentComponent !== "terminal") {
-    return null;
-  }
-  return taskPanelMetadataFromParams(panel.params) ?? null;
+/** 任务终端和后台任务输出面板都属于运行菜单的任务面板。 */
+export function activeIsTaskRunPanel(invocation?: ActionInvocation): boolean {
+  const panel = actionTargetPanel(invocation);
+  return Boolean(
+    panel?.view.contentComponent === "terminal" &&
+      isTaskRunPanelParams(panel.params)
+  );
 }
 
-export function activeTaskPanelRef(): ActiveTaskPanelRef | null {
-  const panel = useWorkspaceStore.getState().api?.activePanel;
-  if (panel?.view.contentComponent !== "terminal") {
-    return null;
-  }
-  const task = taskPanelMetadataFromParams(panel.params);
-  return task ? { panelId: panel.id, task } : null;
-}
-
-export function rendererActionContext(): ActionWhenContext {
+export function rendererActionContext(
+  invocation?: ActionInvocation
+): ActionWhenContext {
   const api = useWorkspaceStore.getState().api;
+  const targetPanel = actionTargetPanel(invocation);
   return {
     terminal: {
-      activeIsTaskPanel: activeTaskPanelMetadata() != null,
-      hasActivePanel: activeTerminalPanelId() != null,
+      activeIsTaskPanel: activeIsTaskRunPanel(invocation),
+      hasActivePanel: targetPanel?.view.contentComponent === "terminal",
     },
     workspace: {
       activeGroupPanelCount: api?.activeGroup?.panels?.length ?? 0,
@@ -92,7 +95,21 @@ export function resolveI18nAliases(key: string): readonly string[] {
 }
 
 export function resolveActionAliases(actionId: string): readonly string[] {
-  return resolveI18nAliases(`commandPalette.aliases.${actionId}`);
+  const localizedAliases = resolveI18nAliases(
+    `commandPalette.aliases.${actionId}`
+  );
+  if (actionId !== "pier.agent.new") {
+    return localizedAliases;
+  }
+
+  const { detectedIds } = useAgentDetectStore.getState();
+  const { defaultAgentId, disabledAgentIds } =
+    useAgentPreferencesStore.getState();
+  const agentId = pickAgent(defaultAgentId, detectedIds, disabledAgentIds);
+  const entry = agentId ? getAgentCatalogEntry(agentId) : undefined;
+  return entry
+    ? uniqueStrings([...localizedAliases, ...getAgentCatalogAliases(entry)])
+    : localizedAliases;
 }
 
 export const rendererActionContributionRuntime: ActionContributionRuntime = {

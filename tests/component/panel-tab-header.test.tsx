@@ -25,10 +25,13 @@ import {
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
 import { initI18n } from "@/i18n/index.ts";
+import { actionRegistry } from "@/lib/actions/registry.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 
 type ActiveChangeHandler = (event: { isActive: boolean }) => void;
+
+const contextActionDisposers: Array<() => void> = [];
 
 function render(ui: ReactElement, options?: RenderOptions) {
   return renderBase(
@@ -109,6 +112,9 @@ describe("PanelTabHeader", () => {
   });
 
   afterEach(async () => {
+    for (const dispose of contextActionDisposers.splice(0)) {
+      dispose();
+    }
     vi.useRealTimers();
     vi.unstubAllGlobals();
     await i18next.changeLanguage("en");
@@ -124,6 +130,67 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector('[data-panel-tab-icon="terminal"]')
     ).not.toBeNull();
+  });
+
+  it("routes a tab context-menu action with the source panel identity", async () => {
+    const handler = vi.fn();
+    contextActionDisposers.push(
+      actionRegistry.register({
+        category: "Test",
+        handler,
+        id: "pier.test.tabContext",
+        surfaces: ["dockview-tab"],
+        title: () => "Tab action",
+      })
+    );
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        menu: {
+          popup: vi.fn(async () => ({ actionId: "pier.test.tabContext" })),
+        },
+      },
+    });
+    const props = createHeaderProps(
+      "terminal",
+      "Task",
+      undefined,
+      "terminal-task"
+    );
+    Object.assign(props.api, { group: { id: "group-task" } });
+    usePanelDescriptorStore.setState({
+      activeId: "terminal-task",
+      descriptors: {
+        "terminal-task": {
+          context: {
+            contextId: "ctx-task",
+            projectRootPath: "/repo",
+            updatedAt: 1,
+          },
+          display: { short: "Task" },
+        },
+      },
+    });
+
+    const { container } = render(<PanelTabHeader {...props} />);
+    fireEvent.contextMenu(
+      container.querySelector('[data-panel-tab-id="terminal-task"]') as Element
+    );
+
+    await waitFor(() => {
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourcePanelComponent: "terminal",
+          sourcePanelContext: expect.objectContaining({
+            projectRootPath: "/repo",
+          }),
+          sourcePanelGroupId: "group-task",
+          sourcePanelId: "terminal-task",
+          surface: "dockview-tab",
+        })
+      );
+    });
+    expect(props.api.setActive).toHaveBeenCalledTimes(1);
   });
 
   it("does not reveal its own dockview tab when it becomes active", async () => {
@@ -268,17 +335,12 @@ describe("PanelTabHeader", () => {
   });
 
   it.each([
-    ["running", "Running", "running", "text-primary"],
-    ["succeeded", "Succeeded", "succeeded", "text-[var(--status-success-fg)]"],
-    ["failed", "Failed 1", "failed", "text-[var(--status-danger-fg)]"],
-    [
-      "waiting",
-      "Waiting for input",
-      "waiting",
-      "text-[var(--status-warning-fg)]",
-    ],
-    ["blocked", "Blocked", "blocked", "text-[var(--status-warning-fg)]"],
-    ["cancelled", "Cancelled", "cancelled", "text-[var(--status-warning-fg)]"],
+    ["running", "Running", "running", "text-status-info-fg"],
+    ["succeeded", "Succeeded", "succeeded", "text-status-success-fg"],
+    ["failed", "Failed 1", "failed", "text-status-danger-fg"],
+    ["waiting", "Waiting for input", "waiting", "text-status-warning-fg"],
+    ["blocked", "Blocked", "blocked", "text-status-warning-fg"],
+    ["cancelled", "Cancelled", "cancelled", "text-status-warning-fg"],
   ] as const)("renders the %s tab state as a semantic icon", (status, label, icon, expectedClassName) => {
     usePanelDescriptorStore.setState({
       activeId: null,

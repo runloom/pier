@@ -56,7 +56,10 @@ import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
-import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
+import {
+  assertPluginMissionControlWidgetRegistration,
+  registerPluginMissionControlWidget,
+} from "./plugin-mission-control-widget-registry.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 
 function createPluginI18n(
@@ -178,12 +181,7 @@ function adaptAction(
 
 function assertDeclaredContribution(
   entry: PluginRegistryEntry | undefined,
-  kind:
-    | "action"
-    | "groupContent"
-    | "missionControlWidget"
-    | "panel"
-    | "terminalStatusItem",
+  kind: "action" | "groupContent" | "panel" | "terminalStatusItem",
   id: string
 ): void {
   if (!entry) {
@@ -194,10 +192,6 @@ function assertDeclaredContribution(
     declared = entry.manifest.commands.some((command) => command.id === id);
   } else if (kind === "panel") {
     declared = entry.manifest.panels.some((panel) => panel.id === id);
-  } else if (kind === "missionControlWidget") {
-    declared = entry.manifest.missionControlWidgets.some(
-      (widget) => widget.id === id
-    );
   } else if (kind === "groupContent") {
     declared = (entry.manifest.groupContent ?? []).some(
       (contribution) => contribution.id === id
@@ -401,6 +395,9 @@ export function createRendererPluginContext(
           success: (update) => {
             toast.success(update, { id });
           },
+          update: (update) => {
+            toast.loading(update, { id });
+          },
         };
       },
       success: (message, options) => {
@@ -427,11 +424,7 @@ export function createRendererPluginContext(
     },
     missionControlWidgets: {
       register: (registration) => {
-        assertDeclaredContribution(
-          entry,
-          "missionControlWidget",
-          registration.id
-        );
+        assertPluginMissionControlWidgetRegistration(entry, registration);
         return registerPluginMissionControlWidget(registration);
       },
     },

@@ -1,4 +1,4 @@
-import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { AgentSelectionResult } from "@shared/contracts/agent-usage.ts";
 import type {
   AiGenerateTextRequest,
   AiGenerateTextResult,
@@ -241,6 +241,8 @@ export interface RendererPluginLoadingNotification {
   dismiss(): void;
   info(message: string): void;
   success(message: string): void;
+  /** 更新同一条 toast 文案，并保持 loading 状态。 */
+  update(message: string): void;
 }
 
 export interface RendererPluginNotificationOptions {
@@ -254,11 +256,7 @@ export interface RendererPluginNotificationOptions {
 export type RendererPluginDialogIntent = "default" | "destructive";
 export type RendererPluginDialogSize = "default" | "sm";
 
-export interface RendererPluginAgentSelection {
-  detectedIds: readonly AgentKind[];
-  enabledIds: readonly AgentKind[];
-  selectedId: AgentKind | null;
-}
+export type RendererPluginAgentSelection = AgentSelectionResult;
 
 export interface RendererPluginTerminalContext {
   activePanelId(): string | null;

@@ -12,6 +12,7 @@ import {
   releaseTooltipSuppression,
   suppressTooltips,
 } from "@pier/ui/tooltip.tsx";
+import type { MenuTemplate } from "@shared/contracts/menu.ts";
 import { type MouseEvent, useCallback } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { ActionInvocation } from "@/lib/actions/types.ts";
@@ -60,6 +61,25 @@ export function useContextMenu(
   );
 }
 
+export async function popupMenuTemplateAt(
+  template: MenuTemplate,
+  coords: { x: number; y: number },
+  onPicked: (actionId: string) => Promise<void> | void
+): Promise<void> {
+  if (template.length === 0) {
+    return;
+  }
+  suppressTooltips();
+  try {
+    const result = await window.pier.menu.popup(template, coords);
+    if (result.actionId) {
+      await onPicked(result.actionId);
+    }
+  } finally {
+    releaseTooltipSuppression();
+  }
+}
+
 /**
  * 不在 React tree 内时 (例 swift 转发的右键) 直接调用: 不需要 hook 上下文.
  * coords 必须已经是 BrowserWindow contentView 坐标.
@@ -77,48 +97,30 @@ async function popupAndDispatch(
   coords: { x: number; y: number },
   invocation?: Omit<ActionInvocation, "surface">
 ): Promise<void> {
-  const template = buildMenuEntries(surface);
-  if (template.length === 0) {
-    return;
-  }
-
-  // 原生 Menu.popup 会夺走 pointer 事件流; Radix tooltip 的 delay timer 仍可能
-  // 在菜单打开后 fire. 硬抑制覆盖整个 popup 生命周期, 关闭后 soft-suppress
-  // 到下一次 pointermove (见 @pier/ui/tooltip).
-  suppressTooltips();
-  try {
-    const result = await window.pier.menu
-      .popup(template, coords)
-      .catch((err: unknown) => {
-        console.error(`[menu] popup ${surface} failed:`, err);
-        return null;
-      });
-    if (!result?.actionId) {
-      return;
-    }
-
-    const action = actionRegistry.get(result.actionId);
+  const actionInvocation = { ...invocation, surface };
+  const template = buildMenuEntries(surface, actionInvocation);
+  await popupMenuTemplateAt(template, coords, async (actionId) => {
+    const action = actionRegistry.get(actionId);
     if (!action) {
       console.warn(
-        `[menu] action ${result.actionId} not found (registered after menu open?)`
+        `[menu] action ${actionId} not found (registered after menu open?)`
       );
       return;
     }
     try {
-      if (action.enabled?.() === false) {
+      if (action.enabled?.(actionInvocation) === false) {
         return;
       }
     } catch (err) {
-      console.error(`[menu] action ${result.actionId} enabled() threw:`, err);
+      console.error(`[menu] action ${actionId} enabled() threw:`, err);
       return;
     }
-
-    await Promise.resolve(action.handler({ ...invocation, surface })).catch(
+    await Promise.resolve(action.handler(actionInvocation)).catch(
       (err: unknown) => {
-        console.error(`[menu] action ${result.actionId} threw:`, err);
+        console.error(`[menu] action ${actionId} threw:`, err);
       }
     );
-  } finally {
-    releaseTooltipSuppression();
-  }
+  }).catch((err: unknown) => {
+    console.error(`[menu] popup ${surface} failed:`, err);
+  });
 }

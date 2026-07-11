@@ -1,12 +1,8 @@
+import { NATIVE_CHROME_FALLBACK } from "@shared/theme-colors.ts";
 import { type IpcMain, nativeTheme } from "electron";
 import { windowManager } from "../windows/window-manager.ts";
 
-const NATIVE_CHROME_PALETTE = {
-  light: "#ffffff",
-  dark: "#1e1e1e",
-} as const;
-
-type ResolvedTheme = keyof typeof NATIVE_CHROME_PALETTE;
+type ResolvedTheme = keyof typeof NATIVE_CHROME_FALLBACK;
 
 const isMac = process.platform === "darwin";
 
@@ -16,7 +12,7 @@ export function registerThemeIpc(ipcMain: IpcMain): void {
     (_event, resolved: ResolvedTheme, chromeColor?: string) => {
       nativeTheme.themeSource = resolved;
 
-      const color = chromeColor ?? NATIVE_CHROME_PALETTE[resolved];
+      const color = chromeColor ?? NATIVE_CHROME_FALLBACK[resolved];
 
       if (isMac) {
         // macOS: opaque BaseWindow 只作为兜底 backing; renderer 透明区域仍通过

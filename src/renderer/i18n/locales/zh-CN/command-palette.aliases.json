@@ -1,7 +1,13 @@
 {
   "pier": {
     "agent": {
-      "new": ["新建智能体", "智能体", "xinjian zhili", "zhili"]
+      "new": [
+        "新建智能体",
+        "启动默认智能体",
+        "智能体",
+        "xinjian zhili",
+        "zhili"
+      ]
     },
     "commandPalette": {
       "clearRecent": [

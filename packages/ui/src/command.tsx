@@ -88,16 +88,23 @@ function CommandInput({
   );
 }
 
+type CommandListProps = React.ComponentProps<typeof CommandPrimitive.List> & {
+  scrollbar?: "none" | "overlay" | "stable";
+};
+
 function CommandList({
   className,
+  scrollbar = "none",
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.List>) {
+}: CommandListProps) {
   return (
     <CommandPrimitive.List
       className={cn(
-        "no-scrollbar max-h-72 scroll-py-1 overflow-y-auto overflow-x-hidden outline-none",
+        "max-h-72 scroll-py-1 overflow-y-auto overflow-x-hidden outline-none",
+        scrollbar === "none" && "no-scrollbar",
         className
       )}
+      data-scrollbar={scrollbar}
       data-slot="command-list"
       {...props}
     />

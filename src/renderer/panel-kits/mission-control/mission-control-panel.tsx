@@ -1,37 +1,28 @@
 // RGL v2 CSS（v2 合并了 react-resizable 样式，只需一个 CSS 文件）
 import "react-grid-layout/css/styles.css";
+import type {
+  MissionControlGridSize,
+  MissionControlPanelWidgetEntry,
+} from "@shared/contracts/mission-control.ts";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@pier/ui/context-menu.tsx";
-import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
-import {
-  MISSION_CONTROL_GRID_COLS,
-  salvageMissionControlPanelParams,
+  HOST_MAX_WIDGET_SIZE,
+  HOST_MIN_WIDGET_SIZE,
   widgetEntryWidgetId,
 } from "@shared/contracts/mission-control.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import i18next from "i18next";
+import { LayoutDashboard } from "lucide-react";
 import {
-  LayoutDashboard,
-  LayoutGrid,
-  Lock,
-  LockOpen,
-  Plus,
-  RefreshCw,
-} from "lucide-react";
-import {
+  type KeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
-import GridLayout, { noCompactor, verticalCompactor } from "react-grid-layout";
-import { useContainerWidth } from "@/hooks/use-container-width.ts";
+import GridLayout from "react-grid-layout";
+import { useContainerSize } from "@/hooks/use-container-size.ts";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -45,34 +36,37 @@ import {
   CORE_MISSION_CONTROL_WIDGETS,
 } from "./core-mission-control-widgets.ts";
 import { MissionControlAddCard } from "./mission-control-add-card.tsx";
-import {
-  CELL_WIDTH,
-  computeAvailableCols,
-  deriveLayout,
-  entryToLayoutItem,
-  gridPixelWidth,
-  MARGIN,
-  ROW_HEIGHT,
-  resolveResponsiveGridSize,
-} from "./mission-control-grid-geometry.ts";
+import { useMissionControlContextMenu } from "./mission-control-context-menu.ts";
+import { MARGIN, ROW_HEIGHT } from "./mission-control-grid-geometry.ts";
+import { applyKeyboardLayoutChange } from "./mission-control-keyboard-layout.ts";
 import { buildMissionControlLibraryItems } from "./mission-control-library.ts";
 import { MissionControlLibraryDialog } from "./mission-control-library-dialog.tsx";
 import { resolveMissionControlWidgets } from "./mission-control-merge.ts";
-import { MissionControlSettingsSheet } from "./mission-control-settings-sheet.tsx";
-import { MissionControlToolbar } from "./mission-control-toolbar.tsx";
+import { resolveResponsiveGridCols } from "./mission-control-ordered-layout.ts";
+import {
+  MISSION_CONTROL_GRID_CONTAINER_PADDING,
+  MISSION_CONTROL_ORDERED_GRID_COMPACTOR,
+  missionControlPreviewTransform,
+} from "./mission-control-rgl-adapter.ts";
+import { MissionControlSettingsDialog } from "./mission-control-settings-dialog.tsx";
 import { MissionControlWidgetCard } from "./mission-control-widget-card.tsx";
+import { useMissionControlGridInteractions } from "./use-mission-control-grid-interactions.ts";
 import {
   findWidgetDeclaration,
   useMissionControlPanelState,
 } from "./use-mission-control-panel-state.ts";
 import { usePanelVisible } from "./use-panel-visible.ts";
 
-/** 一格占位（格宽 + 水平间距），添加入口尺寸换算用。 */
-const GRID_UNIT = CELL_WIDTH + MARGIN[0];
-
-/** 添加卡的展示尺寸：和普通中号物料同宽，窄容器可收缩成轻量入口。 */
-const GHOST_PREFERRED_SIZE: MissionControlGridSize = { h: 3, w: 4 };
-const GHOST_MIN_SIZE: MissionControlGridSize = { h: 2, w: 2 };
+const ADD_TILE_ID = "mission-control-add";
+const ADD_TILE_ENTRY: MissionControlPanelWidgetEntry = {
+  h: 1,
+  id: ADD_TILE_ID,
+  w: 2,
+};
+const ADD_TILE_DECLARATION = {
+  maxSize: { h: 1, w: 2 },
+  minSize: { h: 1, w: 1 },
+};
 
 export function MissionControlPanel(props: IDockviewPanelProps) {
   const t = useT();
@@ -83,102 +77,52 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
     },
   });
 
-  const [containerRef, containerWidth] = useContainerWidth();
-  const cols = computeAvailableCols(containerWidth);
-  const isDerived = cols < MISSION_CONTROL_GRID_COLS;
-
-  // 订阅 widget 注册表变化——捕获 revision 数值作为依赖
   const widgetRevision = useSyncExternalStore(
     subscribePluginMissionControlWidgetRegistry,
     getPluginMissionControlWidgetRevision,
     getPluginMissionControlWidgetRevision
   );
-
-  const plugins = usePluginRegistryStore((s) => s.plugins);
-
-  const params = useMemo(
-    () => salvageMissionControlPanelParams(props.params),
-    [props.params]
+  const plugins = usePluginRegistryStore((store) => store.plugins);
+  const state = useMissionControlPanelState(props.params, props.api, plugins);
+  const { optimisticParams } = state;
+  const [containerRef, viewport] = useContainerSize();
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [settingsInstanceId, setSettingsInstanceId] = useState<string | null>(
+    null
   );
-  const locked = params.locked === true;
+  const [layoutAnnouncement, setLayoutAnnouncement] = useState({
+    message: "",
+    sequence: 0,
+  });
+  const visible = usePanelVisible(props.api);
+  const gridWrapperRef = useRef<HTMLElement>(null);
 
-  const sizeDeclarationsByInstanceId = useMemo(() => {
-    const map = new Map<
-      string,
-      ReturnType<typeof findWidgetDeclaration> | undefined
-    >();
-    for (const entry of params.widgets) {
-      map.set(
-        entry.id,
-        findWidgetDeclaration(widgetEntryWidgetId(entry), plugins)
-      );
-    }
-    return map;
-  }, [params.widgets, plugins]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: widgetRevision is the cache-buster for this mutable Map
+  // biome-ignore lint/correctness/useExhaustiveDependencies: widgetRevision invalidates the registry's mutable Map
   const widgetRegistrations = useMemo(
-    // 复制成新 Map：注册表 getter 返回的是同一个被原地修改的实例，直接透传
-    // 会让下游 resolved useMemo 因引用相等永不重算（插件晚于首渲注册时
-    // widget 卡死在 Loading 态）。
     () => new Map(getPluginMissionControlWidgetRegistrations()),
     [widgetRevision]
   );
-
   const locale = i18next.language || "en";
-
   const resolved = useMemo(
     () =>
       resolveMissionControlWidgets(
-        params,
+        optimisticParams,
         CORE_MISSION_CONTROL_WIDGETS,
         plugins,
         widgetRegistrations,
         CORE_MISSION_CONTROL_WIDGET_COMPONENTS,
         locale
       ),
-    [params, plugins, widgetRegistrations, locale]
+    [optimisticParams, plugins, widgetRegistrations, locale]
   );
-
-  const basisLayout = useMemo(
-    () =>
-      params.widgets.map((entry) =>
-        entryToLayoutItem(entry, sizeDeclarationsByInstanceId.get(entry.id))
-      ),
-    [params.widgets, sizeDeclarationsByInstanceId]
-  );
-
-  const getSizeDeclaration = useCallback(
-    (instanceId: string) => sizeDeclarationsByInstanceId.get(instanceId),
-    [sizeDeclarationsByInstanceId]
-  );
-
-  const layout = useMemo(
-    () =>
-      isDerived
-        ? deriveLayout(basisLayout, cols, { getSizeDeclaration })
-        : basisLayout,
-    [basisLayout, cols, getSizeDeclaration, isDerived]
-  );
-
-  const state = useMissionControlPanelState(params, props.api, plugins);
-  const visible = usePanelVisible(props.api);
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [settingsInstanceId, setSettingsInstanceId] = useState<string | null>(
-    null
-  );
-  const settingsWidget =
-    resolved.find((w) => w.instanceId === settingsInstanceId) ?? null;
-
   const addedCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const entry of params.widgets) {
+    for (const entry of optimisticParams.widgets) {
       const widgetId = widgetEntryWidgetId(entry);
       counts.set(widgetId, (counts.get(widgetId) ?? 0) + 1);
     }
     return counts;
-  }, [params.widgets]);
-
+  }, [optimisticParams.widgets]);
   const libraryItems = useMemo(
     () =>
       buildMissionControlLibraryItems({
@@ -192,198 +136,256 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
       }),
     [addedCounts, locale, plugins, t, widgetRegistrations]
   );
+  const settingsWidget =
+    resolved.find((widget) => widget.instanceId === settingsInstanceId) ?? null;
+  const nativeMenu = useMissionControlContextMenu({
+    hasWidgets: resolved.length > 0,
+    onAddWidget: () => setLibraryOpen(true),
+    onRefreshAll: state.refreshAll,
+  });
 
-  // 添加入口尺寸跟随容器列数；位置固定在网格下方，避免承诺自动重排后的落点。
-  const ghostSize = useMemo(
+  const cols = resolveResponsiveGridCols(viewport.width);
+  const declarationsByInstanceId = useMemo(
     () =>
-      resolveResponsiveGridSize(
-        GHOST_PREFERRED_SIZE,
-        { minSize: GHOST_MIN_SIZE },
-        cols
+      new Map(
+        optimisticParams.widgets.map((entry) => [
+          entry.id,
+          findWidgetDeclaration(widgetEntryWidgetId(entry), plugins),
+        ])
       ),
-    [cols]
+    [optimisticParams.widgets, plugins]
   );
-  const addCardStyle = useMemo(
-    () => ({
-      height: ghostSize.h * GRID_UNIT - MARGIN[1],
-      width: gridPixelWidth(ghostSize.w),
-    }),
-    [ghostSize]
+  const getSizeDeclaration = useCallback(
+    (instanceId: string) =>
+      instanceId === ADD_TILE_ID
+        ? ADD_TILE_DECLARATION
+        : declarationsByInstanceId.get(instanceId),
+    [declarationsByInstanceId]
   );
+  const {
+    dragPreviewHeight,
+    dragPreviewOffsets,
+    handleDragMove,
+    handleDragStop,
+    handleResizeMove,
+    handleResizeStop,
+    renderedLayout,
+  } = useMissionControlGridInteractions({
+    cols,
+    getSizeDeclaration,
+    onReorder: state.handleReorder,
+    onResize: state.handleResize,
+    trailingEntry: ADD_TILE_ENTRY,
+    trailingStatic: true,
+    viewportWidth: viewport.width,
+    widgets: optimisticParams.widgets,
+  });
 
-  // 新添加的卡滚动入视口（高亮环由 data-highlighted 样式承载）
   useEffect(() => {
-    if (state.highlightId === null) {
-      return;
-    }
-    const el = document.querySelector(
-      `[data-testid="mission-control-widget-${state.highlightId}"]`
-    );
-    el?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    if (state.highlightId === null) return;
+    const frame = window.requestAnimationFrame(() => {
+      const root = gridWrapperRef.current;
+      if (!root) return;
+      const item = [
+        ...root.querySelectorAll("[data-mission-control-instance-id]"),
+      ].find(
+        (candidate) =>
+          candidate instanceof HTMLElement &&
+          candidate.dataset.missionControlInstanceId === state.highlightId
+      );
+      const card = item?.querySelector("[data-slot='card']");
+      if (card instanceof HTMLElement) {
+        card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [state.highlightId]);
 
-  const showGhost = !locked && resolved.length > 0;
+  const announceLayoutChange = useCallback(
+    (kind: "move" | "resize", title: string) => {
+      setLayoutAnnouncement((current) => ({
+        message: t(
+          kind === "resize"
+            ? "missionControl.widget.resized"
+            : "missionControl.widget.moved",
+          { title }
+        ),
+        sequence: current.sequence + 1,
+      }));
+    },
+    [t]
+  );
+  const handleLayoutKeyDown = useCallback(
+    (
+      event: KeyboardEvent<HTMLButtonElement>,
+      instanceId: string,
+      title: string
+    ) => {
+      const entry = optimisticParams.widgets.find(
+        (candidate) => candidate.id === instanceId
+      );
+      if (!entry) return;
+      const declaration = findWidgetDeclaration(
+        widgetEntryWidgetId(entry),
+        plugins
+      );
+      const change = applyKeyboardLayoutChange(
+        optimisticParams.widgets,
+        instanceId,
+        event.key,
+        event.shiftKey,
+        {
+          max: declaration?.maxSize ?? HOST_MAX_WIDGET_SIZE,
+          min: declaration?.minSize ?? HOST_MIN_WIDGET_SIZE,
+        }
+      );
+      if (!change) return;
+      if (change.kind === "move") {
+        const targetIndex = change.widgets.findIndex(
+          (candidate) => candidate.id === instanceId
+        );
+        state.handleReorder(instanceId, targetIndex);
+      } else {
+        const resized = change.widgets.find(
+          (candidate) => candidate.id === instanceId
+        );
+        if (resized) {
+          state.handleResize(instanceId, { h: resized.h, w: resized.w });
+        }
+      }
+      announceLayoutChange(change.kind, title);
+    },
+    [
+      announceLayoutChange,
+      optimisticParams.widgets,
+      plugins,
+      state.handleReorder,
+      state.handleResize,
+    ]
+  );
 
   return (
     <div
       className={[
-        "flex h-full flex-col bg-surface-canvas",
+        "flex h-full min-h-0 min-w-0 flex-col bg-surface-canvas",
+        "[&_.react-grid-item.react-draggable-dragging]:transition-none [&_.react-grid-item.resizing]:transition-none [&_.react-grid-item]:transition-[transform,width,height] [&_.react-grid-item]:duration-150",
         "[&_.react-grid-placeholder]:rounded-xl! [&_.react-grid-placeholder]:bg-primary/10! [&_.react-grid-placeholder]:opacity-100!",
         "[&_.react-grid-item:hover_.react-resizable-handle]:opacity-100 [&_.react-resizable-handle]:opacity-40",
-        // 拖拽中：卡片抬升（阴影加深 + 提层），落点占位框由上面的 placeholder 样式承载
         "[&_.react-grid-item.react-draggable-dragging]:z-30",
         "[&_.react-grid-item.react-draggable-dragging_[data-slot=card]]:shadow-lg",
-        // 新添加卡的一次性高亮环
         "[&_[data-highlighted=true]_[data-slot=card]]:ring-2 [&_[data-highlighted=true]_[data-slot=card]]:ring-primary/50",
       ].join(" ")}
     >
-      <MissionControlToolbar
-        canArrange={resolved.length > 0}
-        locked={locked}
-        onAdd={() => setLibraryOpen(true)}
-        onArrange={state.handleArrangeLayout}
-        onRefreshAll={state.refreshAll}
-        onToggleLocked={state.handleToggleLocked}
-      />
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <div
-            // 外边距 = 网格 gutter（MARGIN 12px），四边与卡间距同节奏
-            className="flex-1 overflow-auto p-3"
-            data-scrollbar="stable"
-            ref={containerRef}
+      <div
+        className="h-full min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-3 [scrollbar-gutter:stable]"
+        data-scrollbar="stable"
+        ref={containerRef}
+      >
+        {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: the grid captures pointer and keyboard context-menu gestures */}
+        <section
+          aria-label={t("missionControl.context.canvasLabel")}
+          className="min-h-full min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          data-responsive-cols={cols}
+          data-testid="mission-control-grid-wrapper"
+          onContextMenu={nativeMenu.onContextMenu}
+          onKeyDown={nativeMenu.onKeyDown}
+          ref={gridWrapperRef}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: focus is required for the grid Shift+F10 native context-menu contract
+          tabIndex={0}
+        >
+          <GridLayout
+            compactor={MISSION_CONTROL_ORDERED_GRID_COMPACTOR}
+            dragConfig={{
+              cancel:
+                "button:not(.mission-control-widget-drag-handle), a, input, textarea, select, [role='menuitem'], [data-no-drag]",
+              enabled: true,
+              handle: ".mission-control-widget-drag-handle",
+            }}
+            gridConfig={{
+              cols,
+              containerPadding: MISSION_CONTROL_GRID_CONTAINER_PADDING,
+              margin: MARGIN,
+              rowHeight: ROW_HEIGHT,
+            }}
+            layout={renderedLayout}
+            onDrag={handleDragMove}
+            onDragStop={handleDragStop}
+            onLayoutChange={() => undefined}
+            onResize={handleResizeMove}
+            onResizeStop={handleResizeStop}
+            resizeConfig={{ enabled: true, handles: ["se"] }}
+            {...(dragPreviewHeight === null
+              ? {}
+              : { style: { height: `${dragPreviewHeight}px` } })}
+            width={Math.max(1, viewport.width)}
           >
-            {/* 左对齐（用户定）：左/上/下边距恒等于卡间距 12px，不做居中留白 */}
-            <div
-              data-testid="mission-control-grid-wrapper"
-              style={{ width: gridPixelWidth(cols) }}
-            >
-              {resolved.length > 0 ? (
-                <div>
-                  <GridLayout
-                    compactor={isDerived ? noCompactor : verticalCompactor}
-                    dragConfig={{
-                      cancel:
-                        "button, a, input, textarea, select, [role='menuitem'], [data-no-drag]",
-                      enabled: !locked,
-                      handle: ".mission-control-widget-drag-handle",
-                    }}
-                    gridConfig={{
-                      cols,
-                      containerPadding: [0, 0],
-                      margin: MARGIN,
-                      rowHeight: ROW_HEIGHT,
-                    }}
-                    layout={layout}
-                    onLayoutChange={(newLayout) =>
-                      state.handleLayoutChange(newLayout, { isDerived, layout })
-                    }
-                    resizeConfig={{
-                      enabled: !locked,
-                      handles: locked ? [] : ["se"],
-                    }}
-                    width={gridPixelWidth(cols)}
+            {resolved.map((widget) => {
+              const item = renderedLayout.find(
+                (candidate) => candidate.i === widget.instanceId
+              );
+              const size: MissionControlGridSize = {
+                h: item?.h ?? 3,
+                w: item?.w ?? 4,
+              };
+              return (
+                <div
+                  data-highlighted={widget.instanceId === state.highlightId}
+                  data-mission-control-instance-id={widget.instanceId}
+                  key={widget.instanceId}
+                >
+                  <div
+                    className="h-full transition-transform duration-150"
+                    data-mission-control-preview-instance-id={widget.instanceId}
+                    style={missionControlPreviewTransform(
+                      dragPreviewOffsets.get(widget.instanceId)
+                    )}
                   >
-                    {resolved.map((widget) => {
-                      const item = layout.find(
-                        (layoutItem) => layoutItem.i === widget.instanceId
-                      );
-                      const size: MissionControlGridSize = {
-                        h: item?.h ?? 3,
-                        w: item?.w ?? 4,
-                      };
-                      return (
-                        <div
-                          data-highlighted={
-                            widget.instanceId === state.highlightId
-                          }
-                          key={widget.instanceId}
-                        >
-                          <MissionControlWidgetCard
-                            locked={locked}
-                            onDuplicate={() =>
-                              state.handleDuplicate(widget.instanceId)
-                            }
-                            onOpenSettings={() =>
-                              setSettingsInstanceId(widget.instanceId)
-                            }
-                            onRefresh={() =>
-                              state.refreshOne(widget.instanceId)
-                            }
-                            onRemove={() =>
-                              state.handleRemove(widget.instanceId)
-                            }
-                            refreshToken={
-                              state.refreshTokens[widget.instanceId] ?? 0
-                            }
-                            size={size}
-                            updateParams={(patch) =>
-                              state.handleUpdateParams(widget.instanceId, patch)
-                            }
-                            visible={visible}
-                            widget={widget}
-                          />
-                        </div>
-                      );
-                    })}
-                  </GridLayout>
-                  {/* 添加入口只负责打开物料库；新物料落点由持久化基准布局决定。 */}
-                  {showGhost ? (
-                    <div className="mt-3" style={addCardStyle}>
-                      <MissionControlAddCard
-                        isEmpty={false}
-                        onBrowse={() => setLibraryOpen(true)}
-                      />
-                    </div>
-                  ) : null}
+                    <MissionControlWidgetCard
+                      onDuplicate={() =>
+                        state.handleDuplicate(widget.instanceId)
+                      }
+                      onLayoutKeyDown={(event, title) =>
+                        handleLayoutKeyDown(event, widget.instanceId, title)
+                      }
+                      onOpenSettings={() =>
+                        setSettingsInstanceId(widget.instanceId)
+                      }
+                      onRefresh={() => state.refreshOne(widget.instanceId)}
+                      onRemove={() => state.handleRemove(widget.instanceId)}
+                      refreshToken={state.refreshTokens[widget.instanceId] ?? 0}
+                      size={size}
+                      updateParams={(patch) =>
+                        state.handleUpdateParams(widget.instanceId, patch)
+                      }
+                      visible={visible}
+                      widget={widget}
+                    />
+                  </div>
                 </div>
-              ) : (
+              );
+            })}
+            <div className="h-full" key={ADD_TILE_ID}>
+              <div
+                className="h-full transition-transform duration-150"
+                data-mission-control-preview-instance-id={ADD_TILE_ID}
+                style={missionControlPreviewTransform(
+                  dragPreviewOffsets.get(ADD_TILE_ID)
+                )}
+              >
                 <MissionControlAddCard
-                  isEmpty
-                  locked={locked}
+                  isEmpty={resolved.length === 0}
                   onBrowse={() => setLibraryOpen(true)}
-                  showAction={!locked}
                 />
-              )}
+              </div>
             </div>
-          </div>
-        </ContextMenuTrigger>
-        <ContextMenuContent className="w-44">
-          <ContextMenuItem
-            disabled={locked}
-            onSelect={() => setLibraryOpen(true)}
-          >
-            <Plus className="size-4" />
-            {t("missionControl.addWidget")}
-          </ContextMenuItem>
-          <ContextMenuItem onSelect={state.refreshAll}>
-            <RefreshCw className="size-4" />
-            {t("missionControl.context.refreshAll")}
-          </ContextMenuItem>
-          <ContextMenuItem
-            data-testid="mission-control-arrange-layout"
-            disabled={locked || resolved.length === 0}
-            onSelect={state.handleArrangeLayout}
-          >
-            <LayoutGrid className="size-4" />
-            {t("missionControl.context.arrangeLayout")}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            data-testid="mission-control-toggle-lock"
-            onSelect={state.handleToggleLocked}
-          >
-            {locked ? (
-              <LockOpen className="size-4" />
-            ) : (
-              <Lock className="size-4" />
-            )}
-            {locked
-              ? t("missionControl.context.unlock")
-              : t("missionControl.context.lock")}
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+          </GridLayout>
+        </section>
+      </div>
+      <div aria-live="polite" className="sr-only">
+        <span key={layoutAnnouncement.sequence}>
+          {layoutAnnouncement.message}
+        </span>
+      </div>
       <MissionControlLibraryDialog
         items={libraryItems}
         onAdd={(widgetId) => {
@@ -393,11 +395,9 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
         onOpenChange={setLibraryOpen}
         open={libraryOpen}
       />
-      <MissionControlSettingsSheet
+      <MissionControlSettingsDialog
         onOpenChange={(open) => {
-          if (!open) {
-            setSettingsInstanceId(null);
-          }
+          if (!open) setSettingsInstanceId(null);
         }}
         updateParams={(patch) => {
           if (settingsInstanceId !== null) {
@@ -416,6 +416,8 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
 
 export const missionControlPanelKit = {
   component: MissionControlPanel,
+  defaultTitle: "Mission Control",
   icon: LayoutDashboard,
+  id: "mission-control",
   kind: "web",
 } as const;

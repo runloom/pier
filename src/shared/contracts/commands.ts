@@ -116,6 +116,10 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("run.backgroundSnapshot"),
   }),
   z.object({
+    type: z.literal("run.runsSnapshot"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
     focus: z.boolean().optional(),
     forceRestart: z.boolean().optional(),
     inputs: z.record(z.string().min(1), z.string()).optional(),
@@ -123,6 +127,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     placement: pierCommandPlacementSchema.optional(),
     projectRootPath: z.string().min(1),
     taskId: z.string().min(1),
+    targetGroupId: z.string().min(1).optional(),
     terminalPanelId: z.string().min(1).optional(),
     type: z.literal("run.spawn"),
     windowId: z.string().min(1).optional(),
@@ -135,6 +140,11 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     runId: z.string().min(1),
     type: z.literal("run.cancel"),
     windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    force: z.boolean().optional(),
+    runId: z.string().min(1),
+    type: z.literal("run.stop"),
   }),
   z.object({
     type: z.literal("run.recent"),
@@ -186,6 +196,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("worktree.check"),
   }),
   worktreeCreateRequestSchema.extend({
+    operationId: z.uuid().optional(),
     type: z.literal("worktree.create"),
   }),
   worktreeCreationDefaultsRequestSchema.extend({
@@ -198,6 +209,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   worktreeOpenTerminalRequestSchema.extend({
+    windowId: z.string().min(1).optional(),
     type: z.literal("worktree.openTerminal"),
   }),
   worktreeRemoveRequestSchema.extend({

@@ -4,7 +4,9 @@ export const commandPalette = {
   emptyQuickPick: "No matching items",
   searchResults: "Results",
   agents: {
+    launchFailed: "Failed to Start Agent",
     noAgentDetected: "No agent CLI detected",
+    unavailable: "Agent is no longer available",
   },
   placeholder: {
     commands: "Search commands…",
@@ -36,9 +38,12 @@ export const commandPalette = {
     focusTab: "Switch to Tab {{index}}",
     newTab: "New Tab",
     newWindow: "New Window",
-    newAgent: "New Agent",
+    newWindowFailed: "Couldn’t create window",
+    openCreatePanel: "New Panel…",
+    newAgent: "Start Default Agent",
+    startAgent: "Start {{agent}}",
     newMissionControl: "New Mission Control",
-    runTask: "Run Task...",
+    runTask: "Run Task…",
     terminalList: "Terminal List...",
     selectTheme: "Select Theme",
     selectStyle: "Select Style",
@@ -66,6 +71,7 @@ export const commandPalette = {
     loadingTasks: "Finding tasks...",
     loadingTasksDetail: "Scanning supported task sources in the active project",
     startingTask: "Starting task...",
+    startFailed: "Failed to start task",
     startingTaskWithLabel: "Starting {{label}}...",
     noTasks: "No runnable tasks found",
     noTasksDetail:

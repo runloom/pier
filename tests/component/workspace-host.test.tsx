@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
 import { installWorkspaceRendererCommandListener } from "@/components/workspace/workspace-renderer-command-listener.ts";
 import {
+  confirmTerminalLaunch,
+  resetTerminalLaunchConfirmationsForTest,
+} from "@/lib/workspace/terminal-launch-confirmation.ts";
+import { flushWorkspaceLayout } from "@/lib/workspace/workspace-layout-persistence.ts";
+import {
   flushTerminalLayoutFramesTrailing,
   readRegisteredTerminalAnchorFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
@@ -73,11 +78,22 @@ function createPanel(opts: {
   isActive?: boolean;
   isVisible?: boolean;
 }) {
+  let parametersChange: ((params: Record<string, unknown>) => void) | null =
+    null;
   return {
     api: {
       isActive: opts.isActive ?? false,
       isVisible: opts.isVisible ?? false,
+      onDidParametersChange: vi.fn(
+        (listener: (params: Record<string, unknown>) => void) => {
+          parametersChange = listener;
+          return { dispose: vi.fn() };
+        }
+      ),
       setActive: vi.fn(),
+    },
+    emitParametersChange: (params: Record<string, unknown>) => {
+      parametersChange?.(params);
     },
     id: opts.id,
     title: opts.component === "terminal" ? "Terminal" : "Welcome",
@@ -115,13 +131,14 @@ function installPierWindowApi() {
         applyInputRouting: vi.fn(),
         applyPresentation: vi.fn(),
         hide: vi.fn(),
-        onFocusRequest: vi.fn(),
+        onFocusRequest: vi.fn(() => vi.fn()),
         reconcile: vi.fn(),
         show: vi.fn(),
       },
       workspace: {
         clearLayout: vi.fn(async () => undefined),
         loadLayout: vi.fn(async () => null),
+        onNewTerminalRequest: vi.fn(() => vi.fn()),
         saveLayout: vi.fn(async () => undefined),
       },
     },
@@ -159,6 +176,7 @@ function createDockviewApi(
         return { dispose: vi.fn() };
       }
     ),
+    onDidAddPanel: vi.fn(() => ({ dispose: vi.fn() })),
     onDidLayoutChange: vi.fn((cb: () => void) => {
       layoutChange = cb;
       return { dispose: vi.fn() };
@@ -167,6 +185,7 @@ function createDockviewApi(
       maximizedGroupChange = cb;
       return { dispose: vi.fn() };
     }),
+    onDidRemovePanel: vi.fn(() => ({ dispose: vi.fn() })),
     panels,
     toJSON: vi.fn(() => ({ panels: panels.map((panel) => panel.id) })),
     totalPanels: panels.length,
@@ -205,6 +224,7 @@ function waitMs(ms: number): Promise<void> {
 describe("WorkspaceHost", () => {
   beforeEach(() => {
     resetTerminalPresentationReconcilerForTests();
+    resetTerminalLaunchConfirmationsForTest();
     installPierWindowApi();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue(null);
     usePanelResourceStore.setState({ panels: {} });
@@ -664,7 +684,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("creates a terminal panel with launchId when main sends terminal.open", () => {
+  it("creates a terminal panel with launchId when main sends terminal.open", async () => {
     const bridge: {
       listener?: Parameters<typeof window.pier.rendererCommand.onCommand>[0];
     } = {};
@@ -710,8 +730,10 @@ describe("WorkspaceHost", () => {
       activePanel: null,
       addPanel,
       onDidActivePanelChange: vi.fn(),
+      onDidAddPanel: vi.fn(),
       onDidLayoutChange: vi.fn(),
       onDidMaximizedGroupChange: vi.fn(),
+      onDidRemovePanel: vi.fn(),
       panels: [],
       toJSON: vi.fn(() => ({ grid: { root: undefined } })),
       totalPanels: 0,
@@ -743,6 +765,11 @@ describe("WorkspaceHost", () => {
       "initialInput"
     );
     const panelId = addPanel.mock.calls[0]?.[0]?.id;
+    expect(resolve).not.toHaveBeenCalled();
+    await act(async () => {
+      confirmTerminalLaunch("launch-1");
+      await Promise.resolve();
+    });
     expect(resolve).toHaveBeenCalledWith({
       data: {
         context,
@@ -796,8 +823,10 @@ describe("WorkspaceHost", () => {
       activePanel: null,
       addPanel,
       onDidActivePanelChange: vi.fn(),
+      onDidAddPanel: vi.fn(),
       onDidLayoutChange: vi.fn(),
       onDidMaximizedGroupChange: vi.fn(),
+      onDidRemovePanel: vi.fn(),
       panels: [],
       toJSON: vi.fn(() => ({ grid: { root: undefined } })),
       totalPanels: 0,
@@ -818,13 +847,6 @@ describe("WorkspaceHost", () => {
   });
 
   it("flushes the pending debounced layout save on beforeunload", async () => {
-    // beforeunload 监听器注册在 window 上且从不移除, 本文件早前测试可能遗留
-    // pending 的 500ms debounce timer — 先派发一次把它们冲掉, 再清空计数,
-    // 保证下面的断言只观察本测试自己的 flush。
-    window.dispatchEvent(new Event("beforeunload"));
-    await waitMs(0);
-    vi.mocked(window.pier.workspace.saveLayout).mockClear();
-
     const terminal = createPanel({
       component: "terminal",
       id: "terminal-flush",
@@ -886,6 +908,101 @@ describe("WorkspaceHost", () => {
 
     window.dispatchEvent(new Event("beforeunload"));
 
+    expect(window.pier.workspace.saveLayout).not.toHaveBeenCalled();
+  });
+
+  it("persists panel parameter changes through the workspace layout", async () => {
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-params",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    await waitMs(0);
+    vi.mocked(window.pier.workspace.saveLayout).mockClear();
+
+    terminal.emitParametersChange({
+      floatingLayout: {
+        positions: { "runtime-controls": { x: 0.75, y: 0.25 } },
+        version: 1,
+      },
+    });
+    await waitMs(600);
+
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledWith(
+      { panels: ["terminal-params"] },
+      "record-current"
+    );
+  });
+
+  it("settles a pending parameter save at the explicit layout flush barrier", async () => {
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-explicit-flush",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    await waitMs(0);
+    vi.mocked(window.pier.workspace.saveLayout).mockClear();
+
+    terminal.emitParametersChange({ pinned: true });
+    expect(window.pier.workspace.saveLayout).not.toHaveBeenCalled();
+
+    await flushWorkspaceLayout();
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledTimes(1);
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledWith(
+      { panels: ["terminal-explicit-flush"] },
+      "record-current"
+    );
+
+    await waitMs(600);
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it("disposes pending layout and IPC subscriptions on unmount", async () => {
+    const focusDispose = vi.fn();
+    const newTerminalDispose = vi.fn();
+    vi.mocked(window.pier.terminal.onFocusRequest).mockReturnValue(
+      focusDispose
+    );
+    vi.mocked(window.pier.workspace.onNewTerminalRequest).mockReturnValue(
+      newTerminalDispose
+    );
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-unmount",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+
+    const { unmount } = render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    await waitMs(0);
+    vi.mocked(window.pier.workspace.saveLayout).mockClear();
+
+    terminal.emitParametersChange({ pinned: true });
+    unmount();
+
+    expect(focusDispose).toHaveBeenCalledOnce();
+    expect(newTerminalDispose).toHaveBeenCalledOnce();
+    expect(useWorkspaceStore.getState()).toMatchObject({
+      api: null,
+      hasMaximizedGroup: false,
+    });
+    window.dispatchEvent(new Event("beforeunload"));
+    await waitMs(600);
     expect(window.pier.workspace.saveLayout).not.toHaveBeenCalled();
   });
 });

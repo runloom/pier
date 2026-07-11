@@ -38,6 +38,7 @@ export const useAgentDetectStore = create<AgentDetectState>((set, get) => ({
         }
       } catch (err) {
         console.error("[agent-detect.store] detect failed:", err);
+        throw err;
       } finally {
         set({ isDetecting: false });
       }

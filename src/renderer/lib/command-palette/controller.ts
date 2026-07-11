@@ -19,7 +19,6 @@ interface SessionState {
   quickPick: QuickPick | null;
   requestId: number;
 }
-
 interface ControllerState extends SessionState {
   /** 清掉 accept 关闭后暂存的回退栈。 */
   clearPendingAcceptStack: () => void;
@@ -108,10 +107,10 @@ export const useCommandPaletteController = create<ControllerState>(
           state.quickPick.onDismiss();
         }
         set({
-          open: true,
-          requestId: state.requestId + 1,
           mode: "commands",
+          open: true,
           quickPick: null,
+          requestId: state.requestId + 1,
           stack: [],
         });
       },

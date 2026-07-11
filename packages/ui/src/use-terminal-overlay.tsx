@@ -1,10 +1,17 @@
-import { createContext, useCallback, useContext, useId, useRef } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useId,
+  useMemo,
+  useRef,
+} from "react";
 
 /**
  * 浮在终端上的 web 浮层注册契约（IoC 接口）。
  *
  * - `registerElement(id, el)` — 注册浮层几何，用于终端鼠标命中检测。
- *   返回 `{ dispose }` 清理句柄；元素卸载时必须调用。
+ *   返回清理与同步刷新句柄；元素卸载时必须清理，transform 位移后应刷新。
  *
  * 键盘焦点意图不在此契约内：点击打开的浮层由事件路由层的 capture 阶段
  * pointerdown 统一触发（terminal-input-routing store），键盘打开的浮层
@@ -15,10 +22,14 @@ import { createContext, useCallback, useContext, useId, useRef } from "react";
  * 独立使用（如插件 storybook 环境）时默认降级为 noop。
  */
 export interface TerminalOverlayRegistry {
-  registerElement(id: string, el: HTMLElement): { dispose(): void };
+  registerElement(id: string, el: HTMLElement): TerminalOverlayRegistration;
 }
 
-// biome-ignore lint/suspicious/noEmptyBlockStatements: intentional noop
+export interface TerminalOverlayRegistration {
+  dispose(): void;
+  flush(): void;
+}
+
 function noop() {}
 
 /**
@@ -26,7 +37,7 @@ function noop() {}
  * 允许 @pier/ui 组件在脱离终端上下文的环境（插件、storybook）中安全渲染。
  */
 const noopRegistry: TerminalOverlayRegistry = {
-  registerElement: () => ({ dispose: noop }),
+  registerElement: () => ({ dispose: noop, flush: noop }),
 };
 
 export const TerminalOverlayContext =
@@ -38,23 +49,29 @@ export const TerminalOverlayContext =
  *
  * 依赖 `TerminalOverlayContext` 提供的 registry；未提供时降级为 noop。
  */
-export function useTerminalOverlay(): (el: HTMLElement | null) => void {
+export function useTerminalOverlayRegistration(explicitId?: string): {
+  flush(): void;
+  ref(el: HTMLElement | null): void;
+} {
   const registry = useContext(TerminalOverlayContext);
   const id = useId();
-  const cleanupRef = useRef<(() => void) | null>(null);
-  return useCallback(
+  const registrationRef = useRef<TerminalOverlayRegistration | null>(null);
+  const ref = useCallback(
     (el: HTMLElement | null) => {
-      cleanupRef.current?.();
-      cleanupRef.current = null;
+      registrationRef.current?.dispose();
+      registrationRef.current = null;
       if (!el) {
         return;
       }
-      const overlayId = `terminal-overlay:${id}`;
-      const registration = registry.registerElement(overlayId, el);
-      cleanupRef.current = () => {
-        registration.dispose();
-      };
+      const overlayId = explicitId ?? `terminal-overlay:${id}`;
+      registrationRef.current = registry.registerElement(overlayId, el);
     },
-    [id, registry]
+    [explicitId, id, registry]
   );
+  const flush = useCallback(() => registrationRef.current?.flush(), []);
+  return useMemo(() => ({ flush, ref }), [flush, ref]);
+}
+
+export function useTerminalOverlay(): (el: HTMLElement | null) => void {
+  return useTerminalOverlayRegistration().ref;
 }

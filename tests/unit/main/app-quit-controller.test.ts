@@ -78,6 +78,7 @@ function shellActivity(commandLine = "pnpm test"): ShellActivity {
 function taskActivity(status: TaskActivity["status"]): TaskActivity {
   return {
     kind: "task",
+    runId: "run-1",
     ...BASE_ACTIVITY,
     taskId: "task-1",
     label: "Build release",

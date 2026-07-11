@@ -18,9 +18,11 @@ import {
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { installWorkspaceRendererCommandListener } from "./components/workspace/workspace-renderer-command-listener.ts";
 import { initI18n } from "./i18n/index.ts";
+import { registerAgentStartActions } from "./lib/actions/agent-start-actions.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
 import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
 import { registerConfigActions } from "./lib/actions/config-actions.ts";
+import { registerNewAgentAction } from "./lib/actions/new-agent-action.ts";
 import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerRunActions } from "./lib/actions/run-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
@@ -40,7 +42,7 @@ import { initKeybindingPreferences } from "./stores/keybinding-preferences.store
 import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
-import { initTaskBackgroundStore } from "./stores/task-background.store.ts";
+import { initTaskRunsStore } from "./stores/task-runs.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
@@ -76,6 +78,11 @@ async function bootstrap() {
   const debugMode = params.get("pierDebug");
   const targetBrowserWindowId = Number(params.get("targetBrowserWindowId"));
   if (debugMode === "terminal" && Number.isFinite(targetBrowserWindowId)) {
+    try {
+      await initTheme();
+    } catch (err) {
+      console.error("[pier] terminal debug theme init failed:", err);
+    }
     root.render(
       <>
         <RendererBootSignal />
@@ -108,7 +115,7 @@ async function bootstrap() {
       initAppQuitPreferences(),
       initAgentPreferences(),
       initTerminalStatusBarPrefs(),
-      initTaskBackgroundStore(),
+      initTaskRunsStore(),
       initWorktreePreferences(),
       initLocalEnvironments(),
     ]);
@@ -129,6 +136,8 @@ async function bootstrap() {
 
   registerConfigActions();
   registerCommandPaletteAction();
+  registerNewAgentAction();
+  registerAgentStartActions();
   registerRunActions();
   registerPanelActions();
   registerSettingsActions();

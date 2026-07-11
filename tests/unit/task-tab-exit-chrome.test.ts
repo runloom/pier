@@ -1,9 +1,14 @@
 import { createForegroundActivityAggregator } from "@main/services/foreground-activity/aggregator.ts";
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
+import type {
+  TaskPanelMetadata,
+  TaskRunsSnapshot,
+} from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activityTabChromeOverlay,
   mergeTabChrome,
+  taskRunTabChromeOverlay,
 } from "@/panel-kits/terminal/terminal-tab-chrome.ts";
 
 /**
@@ -41,10 +46,57 @@ describe("task exit tab chrome across aggregator → overlay seam", () => {
     };
   }
 
+  function task(runId: string): TaskPanelMetadata {
+    return {
+      cwd: "/repo",
+      label: "npm build",
+      projectRootPath: "/repo",
+      rawCommand: "npm run build",
+      runId,
+      source: "package-script",
+      startedAt: 1,
+      status: "running",
+      taskId: "build",
+    };
+  }
+
+  function runsSnapshot(
+    runId: string,
+    status: "failed" | "running"
+  ): TaskRunsSnapshot {
+    return {
+      runs: {
+        [runId]: {
+          mode: "terminal-tab",
+          nodes: {
+            build: {
+              label: "npm build",
+              panelId: "p1",
+              status,
+              taskId: "build",
+              ...(status === "failed" ? { exitCode: 1 } : {}),
+            },
+          },
+          projectRootPath: "/repo",
+          rootTaskId: "build",
+          runId,
+          startedAt: 1,
+          status,
+          updatedAt: 2,
+        },
+      },
+      version: 2,
+    };
+  }
+
   it("success 退出 60s 后 merged chrome 为 succeeded, 非陈旧 running", () => {
     const agg = createForegroundActivityAggregator({ now });
-    agg.taskLaunched("p1", "1", { taskId: "t1", label: "npm build" });
-    agg.taskFinished("p1", { status: "success", exitCode: 0 });
+    agg.taskLaunched("p1", "1", {
+      taskId: "t1",
+      label: "npm build",
+      runId: "run-1",
+    });
+    agg.taskFinished("p1", { runId: "run-1", status: "success", exitCode: 0 });
     // 远超旧 5s linger——修复前活动在此已被丢弃
     advance(60_000);
 
@@ -69,8 +121,12 @@ describe("task exit tab chrome across aggregator → overlay seam", () => {
 
   it("failure 退出 60s 后 merged chrome 为 failed", () => {
     const agg = createForegroundActivityAggregator({ now });
-    agg.taskLaunched("p1", "1", { taskId: "t1", label: "npm build" });
-    agg.taskFinished("p1", { status: "failure", exitCode: 1 });
+    agg.taskLaunched("p1", "1", {
+      taskId: "t1",
+      label: "npm build",
+      runId: "run-1",
+    });
+    agg.taskFinished("p1", { runId: "run-1", status: "failure", exitCode: 1 });
     advance(60_000);
 
     const activity = agg.snapshot().activities.find((a) => a.panelId === "p1");
@@ -86,5 +142,44 @@ describe("task exit tab chrome across aggregator → overlay seam", () => {
       expect(activity.exitCode).toBe(1);
     }
     agg.dispose();
+  });
+
+  it("keeps a restarted panel on the new run when the old activity finishes late", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("p1", "1", {
+      taskId: "build",
+      label: "npm build",
+      runId: "run-1",
+    });
+    agg.taskFinished("p1", { runId: "run-1", status: "cancelled" });
+    const activity = agg
+      .snapshot()
+      .activities.find((item) => item.panelId === "p1");
+    const currentTask = task("run-new");
+    const snapshot = runsSnapshot("run-new", "running");
+
+    const merged = mergeTabChrome(
+      mergeTabChrome(runningBase(), activityTabChromeOverlay(activity)),
+      taskRunTabChromeOverlay(currentTask, snapshot)
+    );
+
+    expect(activity).toMatchObject({ kind: "task", status: "cancelled" });
+    expect(merged?.state).toMatchObject({
+      label: "Running",
+      status: "running",
+    });
+    agg.dispose();
+  });
+
+  it("uses the new run failure instead of an older activity result", () => {
+    const overlay = taskRunTabChromeOverlay(
+      task("run-new"),
+      runsSnapshot("run-new", "failed")
+    );
+
+    expect(overlay).toMatchObject({
+      state: { label: "Failed 1", status: "failed" },
+      title: "npm build",
+    });
   });
 });

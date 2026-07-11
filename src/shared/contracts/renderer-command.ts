@@ -46,6 +46,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
       panelTabChromeSchema.optional()
     ),
     task: taskPanelMetadataSchema.optional(),
+    targetGroupId: z.string().min(1).optional(),
     windowId: z.string().min(1).optional(),
   }),
   z.object({

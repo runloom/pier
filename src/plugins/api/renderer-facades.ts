@@ -69,6 +69,7 @@ import type {
 import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
+  WorktreeCreateProgress,
   WorktreeCreateRequest,
   WorktreeCreateResult,
   WorktreeCreationDefaults,
@@ -206,7 +207,12 @@ export interface RendererPluginGitFacade {
 
 export interface RendererPluginWorktreesFacade {
   check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
-  create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
+  create(
+    request: WorktreeCreateRequest,
+    options?: {
+      onProgress?: (progress: WorktreeCreateProgress) => void;
+    }
+  ): Promise<WorktreeCreateResult>;
   creationDefaults(
     request: WorktreeCreationDefaultsRequest
   ): Promise<WorktreeCreationDefaults>;

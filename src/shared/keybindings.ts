@@ -39,18 +39,10 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
-    commandId: "pier.window.newWindow",
+    // Cmd+N 打开当前 group 的"新建..."弹层, 不再直开新窗口;
+    // 新窗口通过命令面板 / "新建..." 弹层内的 New Window 条目触发。
+    commandId: "pier.panel.openCreateMenu",
     keys: "Mod+KeyN",
-    scope: "global",
-  },
-  {
-    commandId: "pier.panel.newTerminal",
-    keys: "Mod+Backquote",
-    scope: "global",
-  },
-  {
-    commandId: "pier.run.task",
-    keys: "Mod+Shift+KeyT",
     scope: "global",
   },
   {
@@ -59,8 +51,8 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
-    commandId: "pier.worktree.create",
-    keys: "Mod+Shift+KeyN",
+    commandId: "pier.agent.new",
+    keys: "Mod+Shift+KeyA",
     scope: "global",
   },
   {

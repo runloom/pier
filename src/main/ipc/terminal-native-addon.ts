@@ -26,18 +26,31 @@ export interface NativeAddon {
    */
   applyTerminalTheme(parentHandle: Buffer, colors: TerminalColors): void;
   closeAllTerminals(parentHandle: Buffer): void;
-  closeTerminal(panelId: string): void;
+  closeTerminal(panelId: string): boolean;
+  createOutputTerminal(
+    parentHandle: Buffer,
+    panelId: string,
+    frame: TerminalFrame,
+    fontFamilies: string[],
+    fontSize: number
+  ): boolean;
   createTerminal(
     parentHandle: Buffer,
     panelId: string,
     frame: TerminalFrame,
     fontFamilies: string[],
     fontSize: number,
-    launch: ResolvedTerminalLaunchOptions | undefined
+    launch: ResolvedTerminalLaunchOptions | undefined,
+    lifecycleId: string
   ): boolean;
   debugSnapshot(parentHandle: Buffer): string;
   /** Window 真正销毁时调用一次: closeAll + 卸 EventRouter + 卸 NSEvent monitor */
   detachWindow(parentHandle: Buffer): void;
+  finishTerminalOutput(
+    panelId: string,
+    exitCode: number,
+    runtimeMilliseconds: number
+  ): boolean;
   hideTerminal(panelId: string): void;
   performTerminalBindingAction(panelId: string, action: string): boolean;
   readSelectionText(panelId: string): string | null;
@@ -49,6 +62,8 @@ export interface NativeAddon {
   reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
   /** 把打包字体 ttf 的绝对路径注册给 CoreText (.process scope)，让 ghostty 能找到。启动时调一次。 */
   registerFonts(paths: string[]): void;
+  /** 重建同一 panelId 的 host-managed surface，保留 dockview 几何和可见性。 */
+  resetTerminalOutput(panelId: string): boolean;
   sendText(panelId: string, text: string): boolean;
   setAppShortcutKeys(keys: string[]): void;
   setCommandFinishedForwardCallback?(
@@ -56,6 +71,7 @@ export interface NativeAddon {
       | ((
           browserWindowId: number,
           panelId: string,
+          lifecycleId: string,
           exitCode: number,
           durationNanos: number
         ) => void)
@@ -66,6 +82,7 @@ export interface NativeAddon {
       | ((
           browserWindowId: number,
           panelId: string,
+          lifecycleId: string,
           commandLine: string
         ) => void)
       | null
@@ -98,6 +115,7 @@ export interface NativeAddon {
       | ((
           browserWindowId: number,
           panelId: string,
+          lifecycleId: string,
           processAlive: boolean
         ) => void)
       | null
@@ -137,11 +155,17 @@ export interface NativeAddon {
    */
   setTitleForwardCallback(
     cb:
-      | ((browserWindowId: number, panelId: string, title: string) => void)
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          lifecycleId: string,
+          title: string
+        ) => void)
       | null
   ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
   showTerminal(panelId: string): void;
+  writeTerminalOutput(panelId: string, data: Buffer): boolean;
 }
 
 /**

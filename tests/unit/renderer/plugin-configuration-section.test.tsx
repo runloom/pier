@@ -309,7 +309,7 @@ describe("PluginConfigurationSection", () => {
     });
   });
 
-  it("string 控件 Escape 丢弃草稿, 回弹为 effective, 不提交(F10)", async () => {
+  it("string 控件不消费 Escape，由所属弹层决定关闭行为", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
@@ -318,11 +318,15 @@ describe("PluginConfigurationSection", () => {
 
     const nameInput = screen.getByDisplayValue("default-name");
     fireEvent.change(nameInput, { target: { value: "unsaved-draft" } });
-    fireEvent.keyDown(nameInput, { key: "Escape" });
-
-    await waitFor(() => {
-      expect(nameInput).toHaveValue("default-name");
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Escape",
     });
+    fireEvent(nameInput, event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(nameInput).toHaveValue("unsaved-draft");
     expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
   });
 

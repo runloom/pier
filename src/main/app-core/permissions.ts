@@ -65,10 +65,12 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "preferences.update": { capabilities: ["preferences:write"] },
   "run.cancel": { capabilities: ["workspace:open"] },
   "run.backgroundSnapshot": { capabilities: ["workspace:read"] },
+  "run.runsSnapshot": { capabilities: ["workspace:read"] },
   "run.list": { capabilities: ["workspace:read"] },
   "run.recent": { capabilities: ["workspace:read"] },
   "run.spawn": { capabilities: ["workspace:open"] },
   "run.status": { capabilities: ["workspace:read"] },
+  "run.stop": { capabilities: ["workspace:open"] },
   // terminal.open 静态元数据只记基础 capabilities;launch 存在时的额外
   // 能力由 requiredCapabilitiesForCommand 动态叠加。
   "terminal.open": { capabilities: ["workspace:open"] },

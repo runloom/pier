@@ -15,6 +15,10 @@
 import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
 import {
+  NATIVE_CHROME_FALLBACK,
+  TRANSPARENT_NATIVE_BACKGROUND,
+} from "@shared/theme-colors.ts";
+import {
   app,
   BaseWindow,
   BrowserWindow,
@@ -162,10 +166,6 @@ class WindowManager {
     const resolved: "light" | "dark" = nativeTheme.shouldUseDarkColors
       ? "dark"
       : "light";
-    const bgPalette: Record<"light" | "dark", string> = {
-      light: "#ffffff",
-      dark: "#1e1e1e",
-    };
     const preload = join(import.meta.dirname, "../preload/index.cjs");
     const webPreferences: Electron.WebPreferences = {
       preload,
@@ -179,7 +179,7 @@ class WindowManager {
       height: opts.bounds?.height ?? 800,
       show: false,
       autoHideMenuBar: true,
-      backgroundColor: bgPalette[resolved],
+      backgroundColor: NATIVE_CHROME_FALLBACK[resolved],
       ...(isMac && {
         titleBarStyle: "hiddenInset" as const,
         trafficLightPosition: { x: 12, y: 12 },
@@ -340,7 +340,7 @@ class WindowManager {
   ): AppWindow {
     const host = new BaseWindow(baseOpts);
     const appView = new WebContentsView({ webPreferences });
-    appView.setBackgroundColor("#00000000");
+    appView.setBackgroundColor(TRANSPARENT_NATIVE_BACKGROUND);
     host.contentView.addChildView(appView);
     installMacAppViewGeometry(host, appView);
     return createAppWindow(host, appView.webContents, appView);

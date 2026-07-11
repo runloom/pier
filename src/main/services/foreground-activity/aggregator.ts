@@ -375,14 +375,20 @@ export function createForegroundActivityAggregator(
       // 用户显式操作优先：task 接管 pty，旧会话证据作废。
       clearSlotTimers(slot);
       slot.hook = null;
-      slot.command = newTaskLayer(windowId, task.taskId, task.label, now());
+      slot.command = newTaskLayer(
+        windowId,
+        task.taskId,
+        task.label,
+        task.runId,
+        now()
+      );
       scheduleEmit();
     },
 
     taskFinished(panelId, args) {
       const slot = slots.get(panelId);
       const command = slot?.command;
-      if (command?.kind !== "task") {
+      if (command?.kind !== "task" || command.runId !== args.runId) {
         return;
       }
       command.status = args.status;
@@ -391,9 +397,8 @@ export function createForegroundActivityAggregator(
         command.exitCode = args.exitCode;
       }
       // 终态常驻：task 层保留最终状态直到 panelClosed / rerun(taskLaunched) /
-      // 新命令接管——tab 的退出 chrome 由 activity 单源持续供给, 与持久化
-      // taskExitTabPatch 的 restore 语义一致（否则 renderer 在活动消失后只能
-      // 回退到 mount 时的陈旧 "Running" 基线）。
+      // 新命令接管。activity 只保留任务活动投影和 TaskRuns 不可用时的兼容回退；
+      // 实时任务状态由带 runId 的 TaskRunsSnapshot 负责。
       scheduleEmit();
     },
 

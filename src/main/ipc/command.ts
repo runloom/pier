@@ -45,7 +45,11 @@ function senderWindowContext(sender: Electron.WebContents): {
 }
 
 function commandForSender(command: PierCommand, windowId: string): PierCommand {
-  if (command.type === "run.spawn" && !command.windowId) {
+  if (
+    command.type === "run.spawn" ||
+    command.type === "run.runsSnapshot" ||
+    command.type === "worktree.openTerminal"
+  ) {
     return {
       ...command,
       windowId,

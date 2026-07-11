@@ -5,7 +5,12 @@ import type {
   ActionWhenContext,
 } from "./contribution-types.ts";
 import { actionRegistry } from "./registry.ts";
-import type { Action, ActionCategoryKey, ActionMetadata } from "./types.ts";
+import type {
+  Action,
+  ActionCategoryKey,
+  ActionInvocation,
+  ActionMetadata,
+} from "./types.ts";
 
 /** 用 i18n 解析 category 显示名，key 同时用作 locale 无关的分组键 */
 export function getCategory(key: ActionCategoryKey): string {
@@ -127,14 +132,15 @@ export function createActionFromContribution(
   runtime: ActionContributionRuntime
 ): Action {
   const metadata = createMetadata(contribution, runtime);
-  const isEnabled = () =>
-    evaluateActionWhen(contribution.when, runtime.getContext());
+  const isEnabled = (invocation?: ActionInvocation) =>
+    evaluateActionWhen(contribution.when, runtime.getContext(invocation)) &&
+    (contribution.enabled?.(invocation) ?? true);
 
   return {
     category: contribution.categoryKey,
     enabled: isEnabled,
     handler: async (invocation) => {
-      if (!isEnabled()) {
+      if (!isEnabled(invocation)) {
         return;
       }
       await contribution.handler(invocation);
@@ -142,7 +148,9 @@ export function createActionFromContribution(
     id: contribution.id,
     metadata,
     surfaces: contribution.surfaces,
-    title: () => runtime.t(contribution.titleKey, contribution.titleParams),
+    title: (invocation) =>
+      contribution.title?.(invocation) ??
+      runtime.t(contribution.titleKey, contribution.titleParams),
   };
 }
 
@@ -165,9 +173,13 @@ function createMetadata(
     metadata.iconComponent = contribution.iconComponent;
   }
   const menuHiddenWhen = contribution.menuHiddenWhen;
-  if (menuHiddenWhen) {
-    metadata.menuHidden = () =>
-      evaluateActionWhen(menuHiddenWhen, runtime.getContext());
+  const menuHidden = contribution.menuHidden;
+  if (menuHiddenWhen || menuHidden) {
+    metadata.menuHidden = (invocation) =>
+      (menuHiddenWhen
+        ? evaluateActionWhen(menuHiddenWhen, runtime.getContext(invocation))
+        : false) ||
+      (menuHidden?.(invocation) ?? false);
   }
   if (contribution.shortcutSourceId) {
     metadata.shortcutSourceId = contribution.shortcutSourceId;
@@ -189,4 +201,9 @@ export function registerActionContributions(
   return contributions.map((contribution) =>
     actionRegistry.register(createActionFromContribution(contribution, runtime))
   );
+}
+
+/** Register an action whose identity is discovered at runtime rather than declared statically. */
+export function registerDynamicAction(action: Action): () => void {
+  return actionRegistry.register(action);
 }

@@ -1,9 +1,4 @@
 import {
-  type CoreMissionControlWidgetDeclaration,
-  HOST_DEFAULT_WIDGET_SIZE,
-  HOST_MAX_WIDGET_SIZE,
-  HOST_MIN_WIDGET_SIZE,
-  MISSION_CONTROL_GRID_COLS,
   missionControlGridSizeSchema,
   missionControlPanelParamsSchema,
   pluginMissionControlWidgetContributionSchema,
@@ -13,362 +8,202 @@ import {
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
 
-const W_AXIS_PATTERN = /w axis/;
-const H_AXIS_PATTERN = /h axis/;
-
-describe("missionControlGridSizeSchema", () => {
-  it("accepts valid grid size", () => {
-    const result = missionControlGridSizeSchema.parse({ h: 3, w: 4 });
-    expect(result).toEqual({ h: 3, w: 4 });
+describe("Mission Control size declarations", () => {
+  it.each([
+    { h: 2, w: 2 },
+    { h: 12, w: 12 },
+  ])("accepts the contribution boundary $w×$h", (size) => {
+    expect(missionControlGridSizeSchema.parse(size)).toEqual(size);
   });
 
-  it("rejects w exceeding MISSION_CONTROL_GRID_COLS", () => {
-    expect(() =>
-      missionControlGridSizeSchema.parse({
-        h: 3,
-        w: MISSION_CONTROL_GRID_COLS + 1,
-      })
-    ).toThrow();
+  it.each([
+    { h: 2, w: 1 },
+    { h: 13, w: 12 },
+    { h: 2.5, w: 2 },
+  ])("rejects an invalid contribution size", (size) => {
+    expect(() => missionControlGridSizeSchema.parse(size)).toThrow();
   });
 
-  it("rejects h exceeding 24", () => {
-    expect(() => missionControlGridSizeSchema.parse({ h: 25, w: 4 })).toThrow();
-  });
-
-  it("rejects non-integer w", () => {
-    expect(() =>
-      missionControlGridSizeSchema.parse({ h: 3, w: 4.5 })
-    ).toThrow();
-  });
-
-  it("rejects w < 1", () => {
-    expect(() => missionControlGridSizeSchema.parse({ h: 3, w: 0 })).toThrow();
-  });
-});
-
-describe("pluginMissionControlWidgetContributionSchema", () => {
-  it("parses minimal widget contribution (all sizes use defaults)", () => {
-    const result = pluginMissionControlWidgetContributionSchema.parse({
-      id: "pier.test.widget",
-      title: "Test Widget",
-    });
-    expect(result).toEqual({
-      id: "pier.test.widget",
-      permissions: [],
-      title: "Test Widget",
-    });
-  });
-
-  it("parses full widget contribution with explicit sizes", () => {
-    const result = pluginMissionControlWidgetContributionSchema.parse({
-      defaultSize: { h: 4, w: 6 },
-      description: "A test widget",
+  it("keeps deprecated layout metadata parse-compatible for v1 manifests", () => {
+    const parsed = pluginMissionControlWidgetContributionSchema.parse({
+      defaultSize: { h: 4, w: 4 },
       id: "pier.test.widget",
       layoutPriority: "primary",
-      layoutProfiles: [
-        { h: 3, key: "normal", w: 4 },
-        { h: 3, key: "wide", w: 6 },
+      layoutProfiles: [{ h: 3, key: "compact", w: 3 }],
+      maxSize: { h: 8, w: 8 },
+      minSize: { h: 2, w: 2 },
+      title: "Test",
+    });
+
+    expect(parsed.layoutPriority).toBe("primary");
+    expect(parsed.layoutProfiles).toEqual([{ h: 3, key: "compact", w: 3 }]);
+  });
+
+  it("rejects reversed min/default/max bounds", () => {
+    expect(() =>
+      pluginMissionControlWidgetContributionSchema.parse({
+        defaultSize: { h: 4, w: 4 },
+        id: "pier.test.widget",
+        maxSize: { h: 8, w: 8 },
+        minSize: { h: 2, w: 5 },
+        title: "Test",
+      })
+    ).toThrow(/w axis/);
+  });
+
+  it("keeps new contribution metadata in plugin manifests", () => {
+    const manifest = pluginManifestSchema.parse({
+      apiVersion: 1,
+      engines: { pier: ">=0.1.0" },
+      id: "pier.test",
+      missionControlWidgets: [
+        {
+          category: "analytics",
+          configurable: true,
+          id: "pier.test.widget",
+          multiInstance: true,
+          refreshable: true,
+          searchTerms: ["usage"],
+          title: "Test",
+        },
       ],
-      maxSize: { h: 10, w: 8 },
-      minSize: { h: 3, w: 3 },
-      permissions: ["app:read"],
-      title: "Test Widget",
+      name: "Test",
+      source: { kind: "builtin" },
+      version: "1.0.0",
     });
-    expect(result.defaultSize).toEqual({ h: 4, w: 6 });
-    expect(result.minSize).toEqual({ h: 3, w: 3 });
-    expect(result.maxSize).toEqual({ h: 10, w: 8 });
-    expect(result.description).toBe("A test widget");
-    expect(result.layoutPriority).toBe("primary");
-    expect(result.layoutProfiles).toEqual([
-      { h: 3, key: "normal", w: 4 },
-      { h: 3, key: "wide", w: 6 },
-    ]);
-    expect(result.permissions).toEqual(["app:read"]);
-  });
 
-  it("defaults permissions to empty array", () => {
-    const result = pluginMissionControlWidgetContributionSchema.parse({
-      id: "w",
-      title: "W",
+    expect(manifest.missionControlWidgets[0]).toMatchObject({
+      category: "analytics",
+      configurable: true,
+      multiInstance: true,
+      refreshable: true,
+      searchTerms: ["usage"],
     });
-    expect(result.permissions).toEqual([]);
-  });
-
-  it("rejects when min.w > default.w (superRefine bounds check)", () => {
-    expect(() =>
-      pluginMissionControlWidgetContributionSchema.parse({
-        defaultSize: { h: 3, w: 2 },
-        id: "bad",
-        minSize: { h: 2, w: 5 },
-        title: "Bad",
-      })
-    ).toThrow(W_AXIS_PATTERN);
-  });
-
-  it("rejects when default.h > max.h (superRefine bounds check)", () => {
-    expect(() =>
-      pluginMissionControlWidgetContributionSchema.parse({
-        defaultSize: { h: 10, w: 4 },
-        id: "bad",
-        maxSize: { h: 5, w: 12 },
-        title: "Bad",
-      })
-    ).toThrow(H_AXIS_PATTERN);
-  });
-
-  it("rejects layoutProfiles outside effective size bounds", () => {
-    expect(() =>
-      pluginMissionControlWidgetContributionSchema.parse({
-        defaultSize: { h: 3, w: 4 },
-        id: "bad",
-        layoutProfiles: [{ h: 3, key: "full", w: 12 }],
-        maxSize: { h: 4, w: 6 },
-        title: "Bad",
-      })
-    ).toThrow(/layoutProfiles|maxSize/);
-  });
-
-  it("passes when omitting all sizes (defaults satisfy bounds)", () => {
-    const result = pluginMissionControlWidgetContributionSchema.parse({
-      id: "ok",
-      title: "OK",
-    });
-    // 缺省补齐：min={w:2,h:2}, default={w:4,h:3}, max={w:12,h:12} → 合法
-    expect(result.id).toBe("ok");
-  });
-
-  it("rejects min > default with effective defaults", () => {
-    // minSize.w=5, defaultSize 缺省 HOST_DEFAULT=4 → 5 > 4 违反
-    expect(() =>
-      pluginMissionControlWidgetContributionSchema.parse({
-        id: "bad",
-        minSize: { h: 2, w: 5 },
-        title: "Bad",
-      })
-    ).toThrow(W_AXIS_PATTERN);
   });
 });
 
-describe("missionControlPanelParamsSchema", () => {
-  it("parses empty widgets list", () => {
-    const result = missionControlPanelParamsSchema.parse({ widgets: [] });
-    expect(result.widgets).toEqual([]);
-  });
-
-  it("parses widgets with x/y/w/h", () => {
+describe("missionControlPanelParamsSchema v3", () => {
+  it("persists only ordered instances and preferred sizes", () => {
     const result = missionControlPanelParamsSchema.parse({
-      widgets: [
-        { h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 },
-        { h: 4, id: "pier.codex.accounts", w: 6, x: 4, y: 0 },
-      ],
-    });
-    expect(result.widgets).toHaveLength(2);
-    expect(result.widgets[0]?.x).toBe(0);
-    expect(result.widgets[1]?.w).toBe(6);
-  });
-
-  it("rejects widget without id", () => {
-    expect(() =>
-      missionControlPanelParamsSchema.parse({
-        widgets: [{ h: 3, w: 4, x: 0, y: 0 }],
-      })
-    ).toThrow();
-  });
-
-  it("rejects x exceeding grid bounds", () => {
-    expect(() =>
-      missionControlPanelParamsSchema.parse({
-        widgets: [{ h: 3, id: "w", w: 4, x: 12, y: 0 }],
-      })
-    ).toThrow();
-  });
-
-  it("parses v2 entry with widgetId and params (zero-migration additive)", () => {
-    const result = missionControlPanelParamsSchema.parse({
+      layoutVersion: 3,
       widgets: [
         {
           h: 4,
           id: "uuid-1",
-          params: { blocks: [{ metricId: "core.activity.total" }] },
-          w: 3,
+          params: { metricId: "core.cpu" },
+          w: 6,
           widgetId: "core.custom-card",
-          x: 0,
-          y: 0,
         },
       ],
     });
-    expect(result.widgets[0]?.widgetId).toBe("core.custom-card");
-    expect(result.widgets[0]?.params).toEqual({
-      blocks: [{ metricId: "core.activity.total" }],
+
+    expect(result).toEqual({
+      layoutVersion: 3,
+      widgets: [
+        {
+          h: 4,
+          id: "uuid-1",
+          params: { metricId: "core.cpu" },
+          w: 6,
+          widgetId: "core.custom-card",
+        },
+      ],
     });
   });
 
-  it("parses panel-level locked flag", () => {
-    const result = missionControlPanelParamsSchema.parse({
-      locked: true,
-      widgets: [],
-    });
-    expect(result.locked).toBe(true);
-  });
-
-  it("rejects non-object params on entry", () => {
+  it("requires layoutVersion 3", () => {
     expect(() =>
-      missionControlPanelParamsSchema.parse({
-        widgets: [{ h: 3, id: "w", params: "junk", w: 4, x: 0, y: 0 }],
-      })
+      missionControlPanelParamsSchema.parse({ widgets: [] })
     ).toThrow();
   });
 
-  it("rejects non-JSON params values on entry", () => {
+  it("strips obsolete geometry and layout controls from v3 input", () => {
+    expect(
+      missionControlPanelParamsSchema.parse({
+        layoutVersion: 3,
+        locked: true,
+        placementDirection: "vertical",
+        widgets: [{ h: 3, id: "a", w: 4, x: 9, y: 8 }],
+      })
+    ).toEqual({
+      layoutVersion: 3,
+      widgets: [{ h: 3, id: "a", w: 4 }],
+    });
+  });
+
+  it("rejects non-JSON private params", () => {
     expect(() =>
       missionControlPanelParamsSchema.parse({
+        layoutVersion: 3,
+        widgets: [{ h: 3, id: "a", params: { render: () => null }, w: 4 }],
+      })
+    ).toThrow();
+  });
+});
+
+describe("salvageMissionControlPanelParams", () => {
+  it("keeps v3 array order and drops invalid siblings", () => {
+    expect(
+      salvageMissionControlPanelParams({
+        layoutVersion: 3,
         widgets: [
-          {
-            h: 3,
-            id: "w",
-            params: { render: () => null },
-            w: 4,
-            x: 0,
-            y: 0,
-          },
+          { h: 3, id: "b", w: 4 },
+          { h: 0, id: "bad", w: 4 },
+          { h: 3, id: "a", w: 4 },
         ],
       })
-    ).toThrow();
+    ).toEqual({
+      layoutVersion: 3,
+      widgets: [
+        { h: 3, id: "b", w: 4 },
+        { h: 3, id: "a", w: 4 },
+      ],
+    });
+  });
+
+  it("migrates legacy coordinates to stable y/x/source reading order", () => {
+    expect(
+      salvageMissionControlPanelParams({
+        locked: true,
+        placementDirection: "vertical",
+        widgets: [
+          { h: 3, id: "c", w: 4, x: 4, y: 3 },
+          { h: 3, id: "b", w: 4, x: 4, y: 0 },
+          { h: 3, id: "a", w: 4, x: 0, y: 0 },
+        ],
+      })
+    ).toEqual({
+      layoutVersion: 3,
+      widgets: [
+        { h: 3, id: "a", w: 4 },
+        { h: 3, id: "b", w: 4 },
+        { h: 3, id: "c", w: 4 },
+      ],
+    });
+  });
+
+  it("does not treat a versionless semantic entry as legacy geometry", () => {
+    expect(
+      salvageMissionControlPanelParams({ widgets: [{ h: 3, id: "a", w: 4 }] })
+    ).toEqual({
+      layoutVersion: 3,
+      widgets: [],
+    });
+  });
+
+  it("falls back to an empty v3 layout for invalid input", () => {
+    expect(salvageMissionControlPanelParams(null)).toEqual({
+      layoutVersion: 3,
+      widgets: [],
+    });
   });
 });
 
 describe("widgetEntryWidgetId", () => {
-  it("v2 条目取 widgetId", () => {
-    expect(widgetEntryWidgetId({ id: "uuid-1", widgetId: "core.a" })).toBe(
+  it("uses widgetId for multi-instance entries and falls back to id", () => {
+    expect(widgetEntryWidgetId({ id: "uuid", widgetId: "core.a" })).toBe(
       "core.a"
     );
-  });
-
-  it("v1 条目回退实例 id（历史上两者同值）", () => {
     expect(widgetEntryWidgetId({ id: "core.a" })).toBe("core.a");
-  });
-});
-
-describe("salvageMissionControlPanelParams v2", () => {
-  it("保留 locked 并逐条抢救混合新旧条目", () => {
-    const raw = {
-      locked: true,
-      widgets: [
-        { h: 3, id: "legacy", w: 4, x: 0, y: 0 },
-        {
-          h: 4,
-          id: "uuid-1",
-          params: { blocks: [] },
-          w: 3,
-          widgetId: "core.custom-card",
-          x: 4,
-          y: 0,
-        },
-        { h: 3, id: "bad", params: 42, w: 4, x: 0, y: 3 }, // params 非对象
-      ],
-    };
-    const result = salvageMissionControlPanelParams(raw);
-    expect(result.locked).toBe(true);
-    expect(result.widgets).toHaveLength(2);
-    expect(result.widgets[1]?.widgetId).toBe("core.custom-card");
-  });
-});
-
-describe("contribution schema v2 metadata", () => {
-  it("parses category/searchTerms/multiInstance/configurable/refreshable", () => {
-    const result = pluginMissionControlWidgetContributionSchema.parse({
-      category: "analytics",
-      configurable: true,
-      id: "pier.test.widget",
-      searchTerms: ["usage", "用量"],
-      multiInstance: true,
-      refreshable: true,
-      title: "Test Widget",
-    });
-    expect(result.category).toBe("analytics");
-    expect(result.searchTerms).toEqual(["usage", "用量"]);
-    expect(result.multiInstance).toBe(true);
-    expect(result.configurable).toBe(true);
-    expect(result.refreshable).toBe(true);
-  });
-
-  it("rejects unknown category", () => {
-    expect(() =>
-      pluginMissionControlWidgetContributionSchema.parse({
-        category: "misc",
-        id: "w",
-        title: "W",
-      })
-    ).toThrow();
-  });
-});
-
-describe("CoreMissionControlWidgetDeclaration type", () => {
-  it("is structurally compatible", () => {
-    const declaration: CoreMissionControlWidgetDeclaration = {
-      defaultSize: { h: 3, w: 4 },
-      id: "core.activity-overview",
-      layoutPriority: "primary",
-      layoutProfiles: [
-        { h: 2, key: "compact", w: 3 },
-        { h: 3, key: "normal", w: 4 },
-        { h: 3, key: "wide", w: 6 },
-      ],
-      minSize: { h: 2, w: 3 },
-      titleKey: "missionControl.widget.activityOverview.title",
-    };
-    expect(declaration.id).toBe("core.activity-overview");
-    expect(declaration.titleKey).toBe(
-      "missionControl.widget.activityOverview.title"
-    );
-    expect(declaration.defaultSize).toEqual({ h: 3, w: 4 });
-    expect(declaration.layoutPriority).toBe("primary");
-  });
-});
-
-describe("契约级缺省常量", () => {
-  it("HOST_DEFAULT_WIDGET_SIZE = { h: 3, w: 4 }", () => {
-    expect(HOST_DEFAULT_WIDGET_SIZE).toEqual({ h: 3, w: 4 });
-  });
-
-  it("HOST_MIN_WIDGET_SIZE = { h: 2, w: 2 }", () => {
-    expect(HOST_MIN_WIDGET_SIZE).toEqual({ h: 2, w: 2 });
-  });
-
-  it("HOST_MAX_WIDGET_SIZE = { h: 12, w: 12 }", () => {
-    expect(HOST_MAX_WIDGET_SIZE).toEqual({ h: 12, w: 12 });
-  });
-});
-
-describe("pluginManifestSchema missionControlWidgets field", () => {
-  const baseManifest = {
-    apiVersion: 1,
-    engines: { pier: ">=0.1.0" },
-    id: "test.plugin",
-    name: "Test",
-    source: { kind: "builtin" },
-    version: "1.0.0",
-  };
-
-  it("defaults missionControlWidgets to empty array", () => {
-    const result = pluginManifestSchema.parse(baseManifest);
-    expect(result.missionControlWidgets).toEqual([]);
-  });
-
-  it("parses manifest with missionControlWidgets", () => {
-    const result = pluginManifestSchema.parse({
-      ...baseManifest,
-      missionControlWidgets: [
-        {
-          defaultSize: { h: 4, w: 4 },
-          id: "test.plugin.widget",
-          minSize: { h: 3, w: 3 },
-          permissions: ["app:read"],
-          title: "Test Widget",
-        },
-      ],
-    });
-    expect(result.missionControlWidgets).toHaveLength(1);
-    expect(result.missionControlWidgets[0]?.id).toBe("test.plugin.widget");
   });
 });

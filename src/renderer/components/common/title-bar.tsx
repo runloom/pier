@@ -52,14 +52,14 @@ export function TitleBar() {
           data-testid="titlebar-agent-counts"
         >
           {runningCount > 0 && (
-            <span className="flex items-center gap-1 text-primary">
-              <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+            <span className="flex items-center gap-1 text-status-info-fg">
+              <span className="size-1.5 animate-pulse rounded-full bg-status-info-fg" />
               {runningCount}
             </span>
           )}
           {waitingCount > 0 && (
-            <span className="flex items-center gap-1 text-amber-500">
-              <span className="size-1.5 rounded-full bg-amber-500" />
+            <span className="flex items-center gap-1 text-status-warning-fg">
+              <span className="size-1.5 rounded-full bg-status-warning-fg" />
               {waitingCount}
             </span>
           )}

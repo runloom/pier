@@ -13,6 +13,7 @@ export interface TerminalOpenOptions {
   reusePanel?: TaskPanelRef | undefined;
   source?: ProcessEnvironmentSource | undefined;
   tab?: PanelTabChrome;
+  targetGroupId?: string | undefined;
   task?: TaskPanelMetadata;
 }
 
@@ -36,6 +37,9 @@ export function rendererTerminalOpenCommand(args: {
     ...(args.command.placement && { placement: args.command.placement }),
     ...(args.options.tab && { tab: args.options.tab }),
     ...(args.options.task && { task: args.options.task }),
+    ...(args.options.targetGroupId && {
+      targetGroupId: args.options.targetGroupId,
+    }),
     type: "terminal.open",
     windowId: args.windowId,
   };

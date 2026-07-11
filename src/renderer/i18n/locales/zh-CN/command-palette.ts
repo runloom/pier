@@ -4,7 +4,9 @@ export const commandPalette = {
   emptyQuickPick: "无匹配项",
   searchResults: "搜索结果",
   agents: {
+    launchFailed: "启动智能体失败",
     noAgentDetected: "未检测到可用 agent",
+    unavailable: "智能体当前不可用",
   },
   placeholder: {
     commands: "搜索命令…",
@@ -36,9 +38,12 @@ export const commandPalette = {
     focusTab: "切换到第 {{index}} 个标签",
     newTab: "新建标签",
     newWindow: "新建窗口",
-    newAgent: "新建智能体",
+    newWindowFailed: "无法新建窗口",
+    openCreatePanel: "新建面板...",
+    newAgent: "启动默认智能体",
+    startAgent: "启动 {{agent}}",
     newMissionControl: "新建指挥中心",
-    runTask: "运行任务...",
+    runTask: "运行任务…",
     terminalList: "终端列表...",
     selectTheme: "选择主题",
     selectStyle: "选择风格",
@@ -66,6 +71,7 @@ export const commandPalette = {
     loadingTasks: "正在查找任务...",
     loadingTasksDetail: "正在扫描当前项目支持的任务源",
     startingTask: "正在启动任务...",
+    startFailed: "任务启动失败",
     startingTaskWithLabel: "正在启动 {{label}}...",
     noTasks: "未发现可运行任务",
     noTasksDetail:

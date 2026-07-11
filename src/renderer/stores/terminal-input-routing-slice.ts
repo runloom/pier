@@ -16,9 +16,29 @@ import { useZoomStore } from "@/stores/zoom.store.ts";
 // slice.inputRouting — 模块级变量 + rAF coalesce（高频路径保留原设计）
 // ===========================================================================
 
-interface WebOverlayRegistration {
+export interface WebOverlayRegistration {
   dispose(): void;
   flush(): void;
+}
+
+export function beginTerminalPanelWebDragCapture(
+  panelId: string,
+  panelElement: HTMLElement
+): { dispose(): void } {
+  const id = `terminal-floating-drag:${panelId}`;
+  const route = registerTerminalElementWebOverlay(id, panelElement);
+  const releaseFocus = requestTerminalWebFocus(id);
+  let disposed = false;
+  return {
+    dispose() {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      releaseFocus();
+      route.dispose();
+    },
+  };
 }
 
 const webOverlayRects = new Map<string, TerminalFrame>();

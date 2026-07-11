@@ -1,5 +1,28 @@
 import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { CORE_RESERVED_MISSION_CONTROL_WIDGET_IDS } from "@shared/plugin-core-contribution-ids.ts";
+
+export function assertPluginMissionControlWidgetRegistration(
+  entry: PluginRegistryEntry | undefined,
+  registration: { id: string; settingsComponent?: unknown }
+): void {
+  if (!entry) {
+    return;
+  }
+  const contribution = entry.manifest.missionControlWidgets.find(
+    (widget) => widget.id === registration.id
+  );
+  if (!contribution) {
+    throw new Error(
+      `plugin contribution not declared: ${entry.manifest.id}:missionControlWidget:${registration.id}`
+    );
+  }
+  if (contribution.configurable && !registration.settingsComponent) {
+    throw new Error(
+      `configurable Mission Control widget ${entry.manifest.id}:${registration.id} requires settingsComponent`
+    );
+  }
+}
 
 const registrations = new Map<
   string,

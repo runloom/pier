@@ -49,7 +49,7 @@ describe("task-service background runs", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       spawnBackgroundTask: ({ onExit }) => {
         onExit(0);
-        return { kill: () => undefined };
+        return { kill: () => true };
       },
       writeRecentState: async () => undefined,
     });
@@ -132,6 +132,66 @@ describe("task-service background runs", () => {
     });
   });
 
+  it("interrupts a background process before escalating to kill", async () => {
+    const projectRootPath = "/repo";
+    const interrupt = vi.fn(() => true);
+    const kill = vi.fn(() => true);
+    let exit: ((exitCode: number | null) => void) | undefined;
+    const service = createTaskService({
+      processEnvironment: {
+        resolve: async () => ({
+          diagnostics: {
+            cacheHit: false,
+            pathChanged: false,
+            shellEnvStatus: "skipped",
+            source: "task",
+          },
+          env: {},
+        }),
+      },
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      spawnBackgroundTask: ({ onExit }) => {
+        exit = onExit;
+        return { interrupt, kill };
+      },
+      writeRecentState: async () => undefined,
+    });
+    const started = await service.startBackgroundRun({
+      launches: [taskLaunch(projectRootPath)],
+      originPanelId: "terminal-1",
+      projectRootPath,
+      rootTaskId: "package-script:test",
+      windowId: "main",
+    });
+    await waitFor(() => exit !== undefined);
+
+    const stopping = service.stopRun(started.runId);
+
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(kill).not.toHaveBeenCalled();
+    expect(stopping?.snapshot).toMatchObject({
+      originPanelId: "terminal-1",
+      status: "stopping",
+    });
+
+    exit?.(130);
+    await waitFor(
+      () =>
+        service.runsSnapshot("main").runs[started.runId]?.status ===
+          "cancelled" &&
+        service.backgroundSnapshot().runs[projectRootPath]?.[
+          "package-script:test"
+        ]?.status === "cancelled"
+    );
+    expect(service.backgroundSnapshot()).toMatchObject({
+      runs: {
+        [projectRootPath]: {
+          "package-script:test": { status: "cancelled" },
+        },
+      },
+    });
+  });
+
   it("publishes blocked background roots that never opened a panel", async () => {
     const projectRootPath = "/repo";
     const exits = new Map<string, (exitCode: number | null) => void>();
@@ -150,7 +210,7 @@ describe("task-service background runs", () => {
       readRecentState: async () => ({ entries: [], version: 1 }),
       spawnBackgroundTask: ({ command, onExit }) => {
         exits.set(command, onExit);
-        return { kill: () => undefined };
+        return { kill: () => true };
       },
       writeRecentState: async () => undefined,
     });
@@ -214,5 +274,67 @@ describe("task-service background runs", () => {
         },
       },
     });
+  });
+
+  it("retains dependency and root process output under the same run", async () => {
+    const projectRootPath = "/repo";
+    const processes = new Map<
+      string,
+      {
+        onExit(exitCode: number | null): void;
+        onOutput(stream: "stdout" | "stderr", text: string): void;
+      }
+    >();
+    const service = createTaskService({
+      processEnvironment: {
+        resolve: async () => ({
+          diagnostics: {
+            cacheHit: false,
+            pathChanged: false,
+            shellEnvStatus: "skipped",
+            source: "task",
+          },
+          env: {},
+        }),
+      },
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      spawnBackgroundTask: ({ command, onExit, onOutput }) => {
+        processes.set(command, { onExit, onOutput });
+        return { kill: () => true };
+      },
+      writeRecentState: async () => undefined,
+    });
+    const lint = taskLaunch(projectRootPath, {
+      command: "lint",
+      label: "lint",
+      rawCommand: "lint",
+      taskId: "lint",
+    });
+    const build = taskLaunch(projectRootPath, {
+      command: "build",
+      dependsOn: ["lint"],
+      dependsOrder: "sequence",
+      label: "build",
+      rawCommand: "build",
+      taskId: "build",
+    });
+
+    const started = await service.startBackgroundRun({
+      launches: [lint, build],
+      projectRootPath,
+      rootTaskId: "build",
+      windowId: "main",
+    });
+    await waitFor(() => processes.has("lint"));
+    processes.get("lint")?.onOutput("stdout", "lint output\n");
+    processes.get("lint")?.onExit(0);
+    await waitFor(() => processes.has("build"));
+    processes.get("build")?.onOutput("stderr", "build output\n");
+
+    expect(service.output(started.runId, "build")?.chunks).toMatchObject([
+      { stream: "stdout", text: "lint output\n" },
+      { stream: "stderr", text: "build output\n" },
+    ]);
+    expect(service.output(started.runId, "lint")).toBeNull();
   });
 });

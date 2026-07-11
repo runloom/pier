@@ -10,6 +10,8 @@ import GhosttyKit
 
 public final class InMemoryTerminalSession: @unchecked Sendable {
     private let lock = NSLock()
+    private var pendingData = Data()
+    private var pendingFinish: (exitCode: UInt32, runtimeMilliseconds: UInt64)?
     private var surface: ghostty_surface_t?
     private var lastResize: InMemoryTerminalViewport?
     private let writeHandler: @Sendable (Data) -> Void
@@ -29,6 +31,20 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         self.surface = surface
+        if let surface {
+            if !pendingData.isEmpty {
+                writeLocked(pendingData, to: surface)
+                pendingData.removeAll(keepingCapacity: false)
+            }
+            if let pendingFinish {
+                ghostty_surface_process_exit(
+                    surface,
+                    pendingFinish.exitCode,
+                    pendingFinish.runtimeMilliseconds
+                )
+                self.pendingFinish = nil
+            }
+        }
         TerminalDebugLog.log(
             .lifecycle,
             "in-memory session surface=\(surface == nil ? "nil" : "set")"
@@ -127,9 +143,10 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let surface else {
+            pendingData.append(data)
             TerminalDebugLog.log(
                 .output,
-                "terminal <- host dropped \(TerminalDebugLog.describe(data))"
+                "terminal <- host queued \(TerminalDebugLog.describe(data))"
             )
             return
         }
@@ -139,6 +156,10 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
             "terminal <- host \(TerminalDebugLog.describe(data))"
         )
 
+        writeLocked(data, to: surface)
+    }
+
+    private func writeLocked(_ data: Data, to surface: ghostty_surface_t) {
         data.withUnsafeBytes { buffer in
             guard let ptr = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
                 return
@@ -172,9 +193,10 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let surface else {
+            pendingFinish = (exitCode, runtimeMilliseconds)
             TerminalDebugLog.log(
                 .lifecycle,
-                "process exit ignored: missing surface exitCode=\(exitCode) runtimeMs=\(runtimeMilliseconds)"
+                "process exit queued: missing surface exitCode=\(exitCode) runtimeMs=\(runtimeMilliseconds)"
             )
             return
         }

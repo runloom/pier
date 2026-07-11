@@ -70,6 +70,7 @@ export interface ForegroundActivityAggregator {
   taskFinished(
     panelId: string,
     args: {
+      runId: string;
       status: "success" | "failure" | "cancelled";
       exitCode?: number;
     }
@@ -79,7 +80,7 @@ export interface ForegroundActivityAggregator {
   taskLaunched(
     panelId: string,
     windowId: string,
-    task: { taskId: string; label: string }
+    task: { taskId: string; label: string; runId: string }
   ): void;
   /** 窗口销毁：清该窗口全部活动（含定时器）+ 冷却记录。 */
   windowClosed(windowId: string): void;

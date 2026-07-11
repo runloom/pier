@@ -297,7 +297,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "1",
         }),
-      }
+      },
+      ""
     );
     expect(fakeAddon.createTerminal).toHaveBeenNthCalledWith(
       2,
@@ -311,7 +312,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "2",
         }),
-      }
+      },
+      ""
     );
   });
 
@@ -379,7 +381,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_PANEL_ID: "panel-a",
           PIER_WINDOW_ID: "7",
         }),
-      }
+      },
+      ""
     );
   });
 
@@ -418,7 +421,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_PANEL_ID: "panel-a",
           PIER_WINDOW_ID: "7",
         }),
-      }
+      },
+      ""
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-1");
   });
@@ -456,7 +460,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     mouseFwd?.(win.id, "5::terminal-2", 100, 200);
     focusFwd?.(win.id, "5::terminal-3");
     pwdFwd?.(win.id, "5::terminal-4", "/some/path");
-    titleFwd?.(win.id, "5::terminal-5", "My Terminal");
+    titleFwd?.(win.id, "5::terminal-5", "", "My Terminal");
 
     await new Promise((resolve) => setImmediate(resolve));
 

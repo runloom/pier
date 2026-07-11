@@ -200,6 +200,7 @@ function makeContext() {
       dismiss: vi.fn(),
       info: vi.fn(),
       success: vi.fn(),
+      update: vi.fn(),
     })),
     success: vi.fn<RendererPluginContext["notifications"]["success"]>(),
     system: vi.fn<RendererPluginContext["notifications"]["system"]>(

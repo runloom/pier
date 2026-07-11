@@ -35,7 +35,6 @@ import { registerSecretsIpc } from "./ipc/secrets.ts";
 import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
-import { setTerminalPanelClosedHandler } from "./ipc/terminal-panel-closed.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import {
@@ -58,7 +57,6 @@ const startupLog = createLogger("startup");
 const windowLog = createLogger("window");
 const windowZoomLog = createLogger("window-zoom");
 const cliLog = createLogger("cli");
-const taskRunLog = createLogger("task-run");
 const terminalSessionLog = createLogger("terminal-session");
 const foregroundActivityLog = createLogger("foreground-activity");
 const appQuitLog = createLogger("app-quit");
@@ -230,6 +228,7 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
     await Promise.all([
       appCore.flushExternalPluginsBeforeQuit(),
       appCore.services.secrets.flush(),
+      appCore.services.agentUsage.flush(),
     ]);
   });
   await localControlRegistration.close();
@@ -410,7 +409,10 @@ if (gotTheLock) {
       registerRendererCommandIpc(ipcMain);
       registerBundledFonts();
       registerTerminalIpc(ipcMain, {
+        recordAgentLaunch: (agentId) =>
+          appCore.services.agentUsage.recordSuccessfulLaunch(agentId),
         processEnvironment: appCore.services.processEnvironment,
+        taskService: appCore.services.tasks,
       });
       registerTerminalDebugWindowIpc(ipcMain, {
         isQuitting: () => windowManager.isQuitting(),
@@ -419,17 +421,6 @@ if (gotTheLock) {
       registerNotificationIpc(ipcMain);
       registerGitWatchIpc();
       registerFileWatchIpc();
-      setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
-        if (typeof exitCode === "number") {
-          appCore.services.tasks
-            .completePanel(panelId, exitCode, windowId)
-            .catch((error) => {
-              taskRunLog.error("failed to complete panel", { error });
-            });
-          return;
-        }
-        appCore.services.tasks.markPanelClosed(panelId, windowId);
-      });
       localControlRegistration.start();
       // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
       // 从此不说谎（上进程遗留的 running 一律 cancelled）。

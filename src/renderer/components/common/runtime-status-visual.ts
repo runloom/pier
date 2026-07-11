@@ -1,4 +1,5 @@
 import type { PanelTabStatus } from "@shared/contracts/panel.ts";
+import type { TaskRunNodeStatus } from "@shared/contracts/tasks.ts";
 import {
   BanIcon,
   CircleCheckIcon,
@@ -12,6 +13,31 @@ interface RuntimeStatusVisual {
   Icon: LucideIcon;
   iconClassName: string;
   textClassName: string;
+}
+
+export function runtimeStatusColorClassName(
+  status: PanelTabStatus | TaskRunNodeStatus
+): string {
+  switch (status) {
+    case "pending":
+    case "running":
+      return "text-status-info-fg";
+    case "succeeded":
+      return "text-status-success-fg";
+    case "failed":
+      return "text-status-danger-fg";
+    case "waiting":
+    case "stopping":
+    case "blocked":
+    case "cancelled":
+      return "text-status-warning-fg";
+    case "idle":
+      return "text-status-neutral-fg";
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
 }
 
 export function runtimeStatusLabel(status: PanelTabStatus): string {
@@ -45,38 +71,38 @@ export function runtimeStatusVisual(
       return {
         Icon: Loader2Icon,
         iconClassName: "animate-spin motion-reduce:animate-none",
-        textClassName: "text-primary",
+        textClassName: runtimeStatusColorClassName(status),
       };
     case "succeeded":
       return {
         Icon: CircleCheckIcon,
         iconClassName: "",
-        textClassName: "text-[var(--status-success-fg)]",
+        textClassName: runtimeStatusColorClassName(status),
       };
     case "failed":
       return {
         Icon: OctagonXIcon,
         iconClassName: "",
-        textClassName: "text-[var(--status-danger-fg)]",
+        textClassName: runtimeStatusColorClassName(status),
       };
     case "waiting":
     case "blocked":
       return {
         Icon: TriangleAlertIcon,
         iconClassName: "",
-        textClassName: "text-[var(--status-warning-fg)]",
+        textClassName: runtimeStatusColorClassName(status),
       };
     case "cancelled":
       return {
         Icon: BanIcon,
         iconClassName: "",
-        textClassName: "text-[var(--status-warning-fg)]",
+        textClassName: runtimeStatusColorClassName(status),
       };
     case "idle":
       return {
         Icon: CircleCheckIcon,
         iconClassName: "",
-        textClassName: "text-[var(--status-neutral-fg)]",
+        textClassName: runtimeStatusColorClassName(status),
       };
     default: {
       const exhaustive: never = status;

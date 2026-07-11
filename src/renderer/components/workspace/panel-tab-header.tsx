@@ -28,6 +28,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -314,7 +315,29 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     };
   }, [props.api, props.params]);
 
-  const baseOnContextMenu = useContextMenu("dockview-tab");
+  const contextMenuOptions = useMemo(
+    () => ({
+      invocation: {
+        ...(props.api.component
+          ? { sourcePanelComponent: props.api.component }
+          : {}),
+        ...(descriptor?.context
+          ? { sourcePanelContext: descriptor.context }
+          : {}),
+        ...(typeof props.api.group?.id === "string"
+          ? { sourcePanelGroupId: props.api.group.id }
+          : {}),
+        sourcePanelId: props.api.id,
+      },
+    }),
+    [
+      descriptor?.context,
+      props.api.component,
+      props.api.group?.id,
+      props.api.id,
+    ]
+  );
+  const baseOnContextMenu = useContextMenu("dockview-tab", contextMenuOptions);
   const onContextMenu = useCallback(
     (event: MouseEvent) => {
       props.api.setActive();

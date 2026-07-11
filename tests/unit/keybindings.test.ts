@@ -217,6 +217,57 @@ describe("keybinding engine", () => {
     );
   });
 
+  it("prefers an action binding and borrows the fallback only when needed", () => {
+    keybindingRegistry.registerDefaults([
+      {
+        commandId: "pier.test.fallback",
+        keys: "Mod+Shift+KeyA",
+        scope: "global",
+      },
+    ]);
+    keybindingRegistry.loadUserKeymap([
+      {
+        commandId: "pier.test.action-with-fallback",
+        keys: "Mod+Alt+KeyA",
+        scope: "global",
+      },
+      {
+        commandId: "-pier.test.fallback",
+        keys: "",
+        scope: "global",
+      },
+    ]);
+
+    expect(
+      keybindingRegistry.getFirstBindingFor(
+        "pier.test.action-with-fallback",
+        "pier.test.fallback"
+      )?.commandId
+    ).toBe("pier.test.action-with-fallback");
+
+    keybindingRegistry.loadUserKeymap([]);
+    expect(
+      keybindingRegistry.getFirstBindingFor(
+        "pier.test.action-with-fallback",
+        "pier.test.fallback"
+      )?.commandId
+    ).toBe("pier.test.fallback");
+
+    keybindingRegistry.loadUserKeymap([
+      {
+        commandId: "-pier.test.fallback",
+        keys: "",
+        scope: "global",
+      },
+    ]);
+    expect(
+      keybindingRegistry.getFirstBindingFor(
+        "pier.test.action-with-fallback",
+        "pier.test.fallback"
+      )
+    ).toBeUndefined();
+  });
+
   it("stringifies chords back to the persisted keymap DSL", () => {
     expect(stringifyChord(parseChord("Mod+Alt+Shift+KeyX", true))).toBe(
       "Mod+Alt+Shift+KeyX"

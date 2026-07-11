@@ -1,22 +1,14 @@
 import type {
-  TaskBackgroundSnapshot,
   TaskLaunchPlan,
-  TaskListResult,
-  TaskRecentEntry,
-  TaskRecentState,
   TaskRunSnapshot,
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
-import type { ProcessEnvironmentService } from "../process-environment-service.ts";
 import {
-  type SpawnBackgroundTask,
-  spawnBackgroundTask,
-} from "./task-background-runner.ts";
-import {
-  createTaskBackgroundRuns,
   isBackgroundPanelId,
   panelRefKey,
-} from "./task-background-runs.ts";
+} from "./task-background-panel-id.ts";
+import { spawnBackgroundTask } from "./task-background-runner.ts";
+import { createTaskBackgroundRuns } from "./task-background-runs.ts";
 import { createTaskCatalog } from "./task-catalog.ts";
 import { requiredInputsForTask } from "./task-execution-plan.ts";
 import { createTaskPanelReuseRegistry } from "./task-panel-reuse-registry.ts";
@@ -24,11 +16,14 @@ import {
   createTaskRecentLauncher,
   type TaskRecentLauncher,
 } from "./task-recent-launcher.ts";
-import {
-  createTaskRunCoordinator,
-  type TaskRunCoordinatorStartResult,
-  type TaskRunTerminalOpenResult,
-} from "./task-run-coordinator.ts";
+import { createTaskRunCoordinator } from "./task-run-coordinator.ts";
+import { createTaskRunStopper } from "./task-run-stopper.ts";
+import type {
+  CreateTaskServiceOptions,
+  TaskService,
+  TaskStartedRecord,
+  TaskTerminalProcessController,
+} from "./task-service-types.ts";
 import {
   alreadyRunningPreparation as buildAlreadyRunningPreparation,
   buildReadyPreparation,
@@ -38,87 +33,14 @@ import {
   type RunningTaskInstance,
 } from "./task-spawn-restart.ts";
 
-export interface TaskSpawnRequest {
-  forceRestart?: boolean | undefined;
-  inputs?: Record<string, string> | undefined;
-  projectRootPath: string;
-  taskId: string;
-}
-
-export interface TaskStartedRecord {
-  panelId: string;
-  projectRootPath: string;
-  taskId: string;
-  windowId?: string | undefined;
-}
-
-export interface TaskService {
-  backgroundSnapshot(): TaskBackgroundSnapshot;
-  cancelRun(runId: string): TaskRunSnapshot | null;
-  completePanel(
-    panelId: string,
-    exitCode: number,
-    windowId?: string | undefined
-  ): Promise<TaskRunSnapshot | null>;
-  dispose(): void;
-  list(args: { projectRootPath: string }): Promise<TaskListResult>;
-  markPanelClosed(panelId: string, windowId?: string | undefined): void;
-  prepareSpawn(args: TaskSpawnRequest): Promise<TaskSpawnPreparation>;
-  recentTasks(): readonly TaskRecentEntry[];
-  recordRecent(launch: TaskLaunchPlan): Promise<void>;
-  recordStarted(record: TaskStartedRecord): void;
-  startBackgroundRun(args: {
-    clientEnv?: Record<string, string> | undefined;
-    launches: readonly TaskLaunchPlan[];
-    projectRootPath: string;
-    rootTaskId: string;
-    windowId?: string | undefined;
-  }): Promise<TaskRunCoordinatorStartResult>;
-  startRun(args: {
-    launches: readonly TaskLaunchPlan[];
-    openTerminal(
-      launch: TaskLaunchPlan,
-      runId: string
-    ): Promise<TaskRunTerminalOpenResult>;
-    projectRootPath: string;
-    rootTaskId: string;
-  }): Promise<TaskRunCoordinatorStartResult>;
-  statusRun(runId: string): TaskRunSnapshot | null;
-}
-
-export interface TaskActivityCallbacks {
-  /** panel 上任务收到终结事件（exit code / cancel / kill）。 */
-  onFinished(
-    panelId: string,
-    args: {
-      status: "success" | "failure" | "cancelled";
-      exitCode?: number;
-    }
-  ): void;
-  /** panel 上任务真正开始（terminal opened, launch spec 已提交给 shell）。 */
-  onLaunched(
-    panelId: string,
-    windowId: string | undefined,
-    task: { taskId: string; label: string }
-  ): void;
-}
-
-export interface CreateTaskServiceOptions {
-  homeDir?: string;
-  now?: () => number;
-  onBackgroundTasksChanged?: (snapshot: TaskBackgroundSnapshot) => void;
-  /**
-   * 任务生命周期广播 hook——上层（app-core 层）注入 foregroundActivityService 的
-   * taskLaunched / taskFinished, 让前台活动聚合器收到 task activity。
-   * 未注入时 task 生命周期不产生 activity broadcast (test 场景可省)。
-   */
-  onTaskActivity?: TaskActivityCallbacks;
-  processEnvironment?: ProcessEnvironmentService;
-  readRecentState?: () => Promise<TaskRecentState>;
-  recentLimit?: number;
-  spawnBackgroundTask?: SpawnBackgroundTask;
-  writeRecentState?: (state: TaskRecentState) => Promise<void>;
-}
+export type {
+  CreateTaskServiceOptions,
+  TaskActivityCallbacks,
+  TaskService,
+  TaskSpawnRequest,
+  TaskStartedRecord,
+  TaskTerminalProcessController,
+} from "./task-service-types.ts";
 
 function runKey(projectRootPath: string, taskId: string): string {
   return `${projectRootPath}\0${taskId}`;
@@ -127,7 +49,8 @@ function runKey(projectRootPath: string, taskId: string): string {
 export function createTaskService({
   homeDir,
   now = () => Date.now(),
-  onBackgroundTasksChanged,
+  onTaskOutputChanged,
+  onTaskRunsChanged,
   onTaskActivity,
   processEnvironment,
   readRecentState,
@@ -137,7 +60,22 @@ export function createTaskService({
 }: CreateTaskServiceOptions = {}): TaskService {
   const runningByKey = new Map<string, RunningTaskInstance>();
   const runningByPanel = new Map<string, Set<string>>();
-  const taskRuns = createTaskRunCoordinator({ now });
+  const outputListeners = new Set<
+    NonNullable<CreateTaskServiceOptions["onTaskOutputChanged"]>
+  >();
+  const runListeners = new Set<
+    NonNullable<CreateTaskServiceOptions["onTaskRunsChanged"]>
+  >();
+  const taskRuns = createTaskRunCoordinator({
+    now,
+    onChanged: (snapshot) => {
+      onTaskRunsChanged?.(snapshot);
+      for (const listener of runListeners) {
+        listener(snapshot);
+      }
+    },
+  });
+  let terminalProcessController: TaskTerminalProcessController | null = null;
   let disposed = false;
   const recent: TaskRecentLauncher = createTaskRecentLauncher({
     now,
@@ -218,7 +156,12 @@ export function createTaskService({
       taskRuns.markPanelClosed(panelId, windowId);
     },
     now,
-    onBackgroundTasksChanged,
+    onTaskOutputChanged: (update, windowId) => {
+      onTaskOutputChanged?.(update, windowId);
+      for (const listener of outputListeners) {
+        listener(update, windowId);
+      }
+    },
     onRunTerminal: forgetSnapshotTasks,
     processEnvironment,
     recordLaunch: (launch) => {
@@ -234,6 +177,13 @@ export function createTaskService({
     spawnBackgroundTask: spawnBackgroundTaskOption,
     startRun: (args) => taskRuns.start(args),
   });
+  const stopRun = createTaskRunStopper({
+    backgroundRuns,
+    forgetSnapshotTasks,
+    getTerminalProcessController: () => terminalProcessController,
+    now,
+    taskRuns,
+  });
 
   function dispose(): void {
     if (disposed) {
@@ -241,6 +191,8 @@ export function createTaskService({
     }
     disposed = true;
     backgroundRuns.dispose();
+    outputListeners.clear();
+    runListeners.clear();
   }
 
   function recordStartedRun({
@@ -321,6 +273,9 @@ export function createTaskService({
 
   return {
     backgroundSnapshot: () => backgroundRuns.snapshot(),
+    bindTerminalProcessController(controller) {
+      terminalProcessController = controller;
+    },
     cancelRun(runId) {
       const result = taskRuns.cancel(runId);
       if (!result) {
@@ -347,24 +302,42 @@ export function createTaskService({
         // 只把 pending/running 改为 cancelled；succeeded/failed 节点保留原状态）。
         // 无过滤会把已 success 的 activity 覆盖为 cancelled（终态常驻后即永久谎报）。
         if (node.status === "cancelled") {
-          onTaskActivity?.onFinished(node.panelId, { status: "cancelled" });
+          onTaskActivity?.onFinished(node.panelId, {
+            runId: result.runId,
+            status: "cancelled",
+          });
         }
       }
       return result;
     },
     dispose,
-    async completePanel(panelId, exitCode, windowId) {
+    async completePanel(panelId, exitCode, windowId, expectedRunId) {
       if (isBackgroundPanelId(panelId)) {
         return await backgroundRuns.finishPanel(panelId, exitCode, windowId);
       }
-      const result = await taskRuns.completePanel(panelId, exitCode, windowId);
-      markProcessFinished(panelId, windowId);
+      const stopRequested = taskRuns.isStopRequested(panelId, windowId);
+      const result = await taskRuns.completePanel(
+        panelId,
+        exitCode,
+        windowId,
+        expectedRunId
+      );
+      if (result) {
+        markProcessFinished(panelId, windowId);
+      }
       if (result && isTerminalRunStatus(result.status)) {
         forgetSnapshotTasks(result);
       }
       if (result) {
+        let activityStatus: "cancelled" | "failure" | "success";
+        if (stopRequested) {
+          activityStatus = "cancelled";
+        } else {
+          activityStatus = exitCode === 0 ? "success" : "failure";
+        }
         onTaskActivity?.onFinished(panelId, {
-          status: exitCode === 0 ? "success" : "failure",
+          runId: result.runId,
+          status: activityStatus,
           exitCode,
         });
       }
@@ -373,6 +346,9 @@ export function createTaskService({
     async list({ projectRootPath }) {
       return await collect(projectRootPath);
     },
+    isStopRequested(panelId, windowId) {
+      return taskRuns.isStopRequested(panelId, windowId);
+    },
     markPanelClosed(panelId, windowId) {
       if (isBackgroundPanelId(panelId)) {
         backgroundRuns.cancelPanel(panelId, windowId);
@@ -380,6 +356,7 @@ export function createTaskService({
       }
       markPanelActuallyClosed(panelId, windowId);
     },
+    output: (runId, taskId) => backgroundRuns.output(runId, taskId),
     async prepareSpawn({
       forceRestart = true,
       projectRootPath,
@@ -431,6 +408,7 @@ export function createTaskService({
       };
     },
     recentTasks: () => recent.entries(),
+    runsSnapshot: (windowId) => taskRuns.runsSnapshot(windowId),
     async recordRecent(launch) {
       await recent.recordLaunch(launch);
       invalidateCollectCache(launch.projectRootPath);
@@ -452,9 +430,16 @@ export function createTaskService({
       });
       return result;
     },
-    async startRun({ launches, openTerminal, projectRootPath, rootTaskId }) {
+    async startRun({
+      launches,
+      openTerminal,
+      projectRootPath,
+      rootTaskId,
+      windowId,
+    }) {
       const result = await taskRuns.start({
         launches,
+        mode: "terminal-tab",
         openTerminal: async (launch, runId) => {
           const opened = await openTerminal(launch, runId);
           recordStartedRun({
@@ -468,11 +453,13 @@ export function createTaskService({
           onTaskActivity?.onLaunched(opened.panelId, opened.windowId, {
             taskId: launch.taskId,
             label: launch.label,
+            runId,
           });
           return opened;
         },
         projectRootPath,
         rootTaskId,
+        ...(windowId ? { ownerWindowId: windowId } : {}),
       });
       recordCoordinatorRun({
         projectRootPath,
@@ -483,6 +470,19 @@ export function createTaskService({
     },
     statusRun(runId) {
       return taskRuns.status(runId);
+    },
+    stopRun,
+    subscribeOutput(listener) {
+      outputListeners.add(listener);
+      return () => {
+        outputListeners.delete(listener);
+      };
+    },
+    subscribeRuns(listener) {
+      runListeners.add(listener);
+      return () => {
+        runListeners.delete(listener);
+      };
     },
   };
 }

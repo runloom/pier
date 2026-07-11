@@ -1,4 +1,5 @@
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
+import type { AgentSelectionResult } from "@shared/contracts/agent-usage.ts";
 import type {
   AppQuitConfirmationRequest,
   AppQuitDecisionPayload,
@@ -27,13 +28,6 @@ import {
   RENDERER_COMMAND_CHANNEL,
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
-import type {
-  TaskBackgroundSnapshot,
-  TaskListResult,
-  TaskRunSnapshot,
-  TaskSpawnMode,
-  TaskSpawnResult,
-} from "@shared/contracts/tasks.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type {
   WindowContext,
@@ -73,6 +67,7 @@ import { installRendererBootHandshake } from "./renderer-boot-handshake.ts";
 const signalRendererBoot = installRendererBootHandshake(ipcRenderer);
 
 import { type PierSystemStatsAPI, systemStatsApi } from "./system-stats-api.ts";
+import { type PierTasksAPI, tasksApi } from "./task-api.ts";
 import { terminalApi } from "./terminal-api.ts";
 import {
   type PierTerminalStatusBarPrefsAPI,
@@ -98,6 +93,7 @@ export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
+  selection: () => Promise<AgentSelectionResult>;
 }
 
 export interface PierNotificationsAPI {
@@ -195,31 +191,6 @@ export interface PierSettingsAPI {
   onOpenRequest: (cb: () => void) => () => void;
 }
 
-export interface PierTasksAPI {
-  backgroundSnapshot: () => Promise<TaskBackgroundSnapshot>;
-  cancel: (args: { runId: string }) => Promise<TaskRunSnapshot>;
-  list: (args: { projectRootPath: string }) => Promise<TaskListResult>;
-  onBackgroundChanged: (
-    cb: (snapshot: TaskBackgroundSnapshot) => void
-  ) => () => void;
-  spawn: (args: {
-    focus?: boolean;
-    forceRestart?: boolean;
-    inputs?: Record<string, string>;
-    mode?: TaskSpawnMode;
-    placement?:
-      | "active-tab"
-      | "split-right"
-      | "split-below"
-      | "split-left"
-      | "split-above";
-    projectRootPath: string;
-    terminalPanelId?: string;
-    taskId: string;
-  }) => Promise<TaskSpawnResult>;
-  status: (args: { runId: string }) => Promise<TaskRunSnapshot>;
-}
-
 /** window 子命名空间 — 窗口生命周期与布局事件. */
 export interface PierWindowNsAPI {
   closeCurrent: () => Promise<void>;
@@ -276,6 +247,7 @@ const agentsApi: PierAgentsAPI = {
   prepareLaunch: (agentId: AgentKind) =>
     ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
   refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
+  selection: () => ipcRenderer.invoke("pier:agents:selection"),
 };
 
 const appQuitApi: PierAppQuitAPI = {
@@ -390,46 +362,6 @@ const settingsApi: PierSettingsAPI = {
 const keybindingApi: PierKeybindingAPI = {
   onForward: (cb) => subscribeIpc("pier:keybinding:forward", cb),
   onModifierState: (cb) => subscribeIpc("pier:keybinding:modifier-state", cb),
-};
-
-const tasksApi: PierTasksAPI = {
-  backgroundSnapshot: () =>
-    invokePierCommand<TaskBackgroundSnapshot>({
-      type: "run.backgroundSnapshot",
-    }),
-  cancel: (args) =>
-    invokePierCommand<TaskRunSnapshot>({
-      runId: args.runId,
-      type: "run.cancel",
-    }),
-  list: (args) =>
-    invokePierCommand<TaskListResult>({
-      projectRootPath: args.projectRootPath,
-      type: "run.list",
-    }),
-  onBackgroundChanged: (cb) =>
-    subscribeIpc(PIER_BROADCAST.TASKS_BACKGROUND_CHANGED, cb),
-  spawn: (args) =>
-    invokePierCommand<TaskSpawnResult>({
-      ...(args.focus === undefined ? {} : { focus: args.focus }),
-      ...(args.forceRestart === undefined
-        ? {}
-        : { forceRestart: args.forceRestart }),
-      ...(args.inputs ? { inputs: args.inputs } : {}),
-      ...(args.mode ? { mode: args.mode } : {}),
-      ...(args.placement ? { placement: args.placement } : {}),
-      projectRootPath: args.projectRootPath,
-      ...(args.terminalPanelId
-        ? { terminalPanelId: args.terminalPanelId }
-        : {}),
-      taskId: args.taskId,
-      type: "run.spawn",
-    }),
-  status: (args) =>
-    invokePierCommand<TaskRunSnapshot>({
-      runId: args.runId,
-      type: "run.status",
-    }),
 };
 
 const api: PierWindowAPI = {

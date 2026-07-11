@@ -77,6 +77,11 @@ describe("keybinding-preferences.store", () => {
           keys: "Mod+Shift+KeyX",
           scope: "global",
         },
+        {
+          commandId: "pier.agent.start.claude",
+          keys: "Mod+Alt+KeyA",
+          scope: "global",
+        },
       ],
     });
     const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
@@ -104,7 +109,7 @@ describe("keybinding-preferences.store", () => {
       })
     ).toBe("pier.panel.newTerminal");
     expect(pier.setAppShortcutKeys).toHaveBeenCalledWith(
-      expect.arrayContaining(["Mod+Shift+KeyX"])
+      expect.arrayContaining(["Mod+Alt+KeyA", "Mod+Shift+KeyX"])
     );
   });
 
@@ -155,6 +160,46 @@ describe("keybinding-preferences.store", () => {
     );
     expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
       expect.not.arrayContaining(["Mod+Equal", "Mod+Shift+Equal"])
+    );
+  });
+
+  it("keeps custom run task and worktree shortcuts resolvable and routed to native terminals", async () => {
+    const pier = installPierApi();
+    // These imports must follow the per-test API install because the store owns module state.
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { parseChord } = await import("@/lib/keybindings/parse.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+
+    const runTaskResult = await useKeybindingPreferencesStore
+      .getState()
+      .setBinding("pier.run.task", "Mod+Alt+KeyT", "global");
+    const createWorktreeResult = await useKeybindingPreferencesStore
+      .getState()
+      .setBinding("pier.worktree.create", "Mod+Alt+KeyN", "global");
+
+    expect(runTaskResult.ok).toBe(true);
+    expect(createWorktreeResult.ok).toBe(true);
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Alt+KeyT", false), {
+        activePanelComponent: null,
+        overlayStack: [],
+      })
+    ).toBe("pier.run.task");
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Alt+KeyN", false), {
+        activePanelComponent: null,
+        overlayStack: [],
+      })
+    ).toBe("pier.worktree.create");
+    expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
+      expect.arrayContaining(["Mod+Alt+KeyT", "Mod+Alt+KeyN"])
     );
   });
 
