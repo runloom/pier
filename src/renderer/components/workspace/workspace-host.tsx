@@ -1,4 +1,3 @@
-import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
 import {
   useCallback,
@@ -13,10 +12,16 @@ import { dismissAllTooltips, TooltipProvider } from "@pier/ui/tooltip.tsx";
 import {
   getPluginPanelRevision,
   setPluginPanelCloser,
+  setPluginPanelTitleUpdater,
   subscribePluginPanelRegistry,
 } from "@/lib/plugins/plugin-panel-registry.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
+import {
+  markWorkspaceLayoutPersistenceStarting,
+  markWorkspaceLayoutPersistenceUnavailable,
+  registerWorkspaceLayoutFlusher,
+} from "@/lib/workspace/workspace-layout-persistence.ts";
 import {
   flushTerminalLayoutFramesTrailing,
   setTerminalLayoutPresentationScheduler,
@@ -44,7 +49,10 @@ import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
 } from "./workspace-header-actions.tsx";
-import { runWorkspaceRendererCommand } from "./workspace-renderer-commands.ts";
+import {
+  createPluginPanelCloserForWorkspace,
+  createPluginPanelTitleUpdaterForWorkspace,
+} from "./workspace-plugin-panel-bridge.ts";
 import { pierTheme } from "./workspace-theme.ts";
 
 /**
@@ -134,38 +142,15 @@ function syncTerminalPresentation(
   reconcileTerminalPanels(api);
 }
 
-export function createPluginPanelCloserForWorkspace(
-  api: DockviewReadyEvent["api"]
-): (componentId: string) => void {
-  return (componentId: string) => {
-    const victims = api.panels.filter(
-      (p) => p.view.contentComponent === componentId
-    );
-    if (victims.length === 0) {
-      return;
-    }
-    if (api.totalPanels - victims.length <= 0) {
-      useWorkspaceStore.getState().addTab();
-    }
-    for (const panel of victims) {
-      try {
-        api.removePanel(panel);
-      } catch {
-        // 同 group 内有多个 plugin panel 时,第一个 remove 会触发 removeGroup,
-        // 其后续 panel 的 group 引用已失效,dockview 会 throw。忽略即可 —— 整组
-        // 已随第一个 panel 一起销毁,后续目标已无需再删。
-      }
-    }
-  };
-}
-
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
   const setWorkspaceHasMaximizedGroup = useWorkspaceStore(
     (s) => s.setHasMaximizedGroup
   );
   const [hasMaximizedGroup, setHasMaximizedGroup] = useState(false);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const workspaceLayoutFlushDisposeRef = useRef<() => void>(() => undefined);
   // 插件 panel 在 bootstrapBuiltinPlugins()（main.tsx, App render 前）注册;
   // 首次 render 时已就绪。同时订阅插件注册表变化(revision),Settings 启用/禁用插件后
   // 重算 dockview 组件表,避免 useMemo([]) 留下陈旧 snapshot。
@@ -198,7 +183,21 @@ export function WorkspaceHost() {
 
   // WorkspaceHost unmount 时清掉模块级 panelCloser —— closer 闭包持的是旧
   // event.api,若不清,下次 mount 前的插件 dispose 会 removePanel 到死 api 上。
-  useEffect(() => () => setPluginPanelCloser(null), []);
+  useEffect(
+    () => () => {
+      setPluginPanelCloser(null);
+      setPluginPanelTitleUpdater(null);
+    },
+    []
+  );
+  useEffect(() => {
+    markWorkspaceLayoutPersistenceStarting();
+    return () => {
+      workspaceLayoutFlushDisposeRef.current();
+      workspaceLayoutFlushDisposeRef.current = () => undefined;
+      markWorkspaceLayoutPersistenceUnavailable();
+    };
+  }, []);
 
   const handleReady = useCallback(
     (event: DockviewReadyEvent) => {
@@ -214,6 +213,9 @@ export function WorkspaceHost() {
       // 若关完后会让 workspace 全空,先补一个 welcome 占位,避免空 workspace 被
       // debounce 持久化为空布局(用户视角:禁用插件不应清空整个工作区)。
       setPluginPanelCloser(createPluginPanelCloserForWorkspace(event.api));
+      setPluginPanelTitleUpdater(
+        createPluginPanelTitleUpdaterForWorkspace(event.api)
+      );
 
       // 防 save-loop: fromJSON / 默认 layout 应用期间 onDidLayoutChange 触发的
       // change event 是 program-driven, 不该 save (会 round-trip 存"恢复出来的"
@@ -224,7 +226,6 @@ export function WorkspaceHost() {
       // / 拖 panel 等), userTouched=true. loadLayout 完成时如果 user 已操作, fromJSON
       // 跳过 (不覆盖 user 操作) — user 显式新建的 panel 优先于磁盘旧 layout.
       let userTouched = false;
-      let didNotifyReadyToShow = false;
       const windowContextPromise = window.pier.window.getContext();
       let flushRecordId: string | null = null;
       windowContextPromise
@@ -235,16 +236,8 @@ export function WorkspaceHost() {
           // getContext 失败时 flush 兜底静默失效; 常规 save 路径自会重试并报错。
         });
 
-      const notifyReadyToShow = (): void => {
-        if (didNotifyReadyToShow) {
-          return;
-        }
-        didNotifyReadyToShow = true;
-        // 此时 BrowserWindow 仍是 show:false, 隐藏页面的 requestAnimationFrame 可能
-        // 不推进; 用 macrotask 接在同步 layout restore 后通知 main 显示窗口.
-        setTimeout(() => {
-          window.pier.window.readyToShow();
-        }, 0);
+      const notifyWorkspaceReady = (): void => {
+        setWorkspaceReady(true);
       };
 
       const saveCurrentLayout = async (): Promise<void> => {
@@ -253,34 +246,20 @@ export function WorkspaceHost() {
         await window.pier.workspace.saveLayout(json, windowContext.recordId);
       };
 
-      const flushCurrentLayout = async (
-        envelope: RendererCommandEnvelope
-      ): Promise<void> => {
-        try {
-          const windowContext = await windowContextPromise;
-          if (event.api.totalPanels === 0) {
-            await window.pier.workspace.clearLayout(windowContext.recordId);
-          } else {
-            await window.pier.workspace.saveLayout(
-              event.api.toJSON(),
-              windowContext.recordId
-            );
-          }
-          window.pier.rendererCommand.resolve({
-            data: null,
-            ok: true,
-            requestId: envelope.requestId,
-          });
-        } catch (error) {
-          window.pier.rendererCommand.resolve({
-            error: {
-              message: error instanceof Error ? error.message : String(error),
-            },
-            ok: false,
-            requestId: envelope.requestId,
-          });
+      const persistCurrentLayout = async (): Promise<void> => {
+        const windowContext = await windowContextPromise;
+        if (event.api.totalPanels === 0) {
+          await window.pier.workspace.clearLayout(windowContext.recordId);
+        } else {
+          await window.pier.workspace.saveLayout(
+            event.api.toJSON(),
+            windowContext.recordId
+          );
         }
       };
+      workspaceLayoutFlushDisposeRef.current();
+      workspaceLayoutFlushDisposeRef.current =
+        registerWorkspaceLayoutFlusher(persistCurrentLayout);
 
       const syncDockviewMaximizedState = (): void => {
         const nextHasMaximizedGroup = event.api.hasMaximizedGroup();
@@ -388,16 +367,6 @@ export function WorkspaceHost() {
         useWorkspaceStore.getState().addTerminal();
       });
 
-      window.pier.rendererCommand.onCommand((envelope) => {
-        if (envelope.command.type === "workspace.flushLayout") {
-          flushCurrentLayout(envelope).catch((error) => {
-            console.error("[workspace] flushLayout failed:", error);
-          });
-          return;
-        }
-        runWorkspaceRendererCommand(envelope);
-      });
-
       // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时
       // 用 default. 注意: applyDefaultLayout / fromJSON 都包在 isApplyingPersistedLayout
       // gate 里, 同样防 save-loop.
@@ -413,7 +382,7 @@ export function WorkspaceHost() {
         }
         if (userTouched) {
           // user 已经在 layout 里加了 panel, 不覆盖
-          notifyReadyToShow();
+          notifyWorkspaceReady();
           return;
         }
         isApplyingPersistedLayout = true;
@@ -450,7 +419,7 @@ export function WorkspaceHost() {
         // 清掉. 首次启动 / layout 未变 时是 noop (swift terminals 字典空 / 集合一致),
         // 只有 reload 后 layout 收缩时才真正回收孤儿. fire-and-forget.
         reconcileTerminalPanels(event.api);
-        notifyReadyToShow();
+        notifyWorkspaceReady();
 
         // 给 dockview 一帧时间 flush layout-change 事件, 再放 save gate
         requestAnimationFrame(() => {
@@ -466,6 +435,7 @@ export function WorkspaceHost() {
       className="h-full w-full overflow-hidden"
       data-dockview-maximized={hasMaximizedGroup ? "true" : "false"}
       data-testid="workspace-host-root"
+      data-workspace-ready={workspaceReady ? "true" : "false"}
       ref={rootRef}
     >
       <TooltipProvider skipDelayDuration={0}>

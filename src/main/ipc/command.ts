@@ -5,6 +5,7 @@ import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissio
 import { PIER } from "@shared/ipc-channels.ts";
 import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
+import { findWindowContext } from "../windows/window-identity.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
 function ensureDesktopRendererClient(windowId: string): string {
@@ -24,7 +25,10 @@ function ensureDesktopRendererClient(windowId: string): string {
   return clientId;
 }
 
-function senderWindowId(sender: Electron.WebContents): string {
+function senderWindowContext(sender: Electron.WebContents): {
+  recordId: string;
+  windowId: string;
+} {
   const window = windowManager.fromWebContents(sender);
   if (!window) {
     throw new Error("window not found");
@@ -33,7 +37,11 @@ function senderWindowId(sender: Electron.WebContents): string {
   if (!windowId) {
     throw new Error("window context not found");
   }
-  return windowId;
+  const context = findWindowContext(window);
+  if (!context) {
+    throw new Error("window record context not found");
+  }
+  return { recordId: context.recordId, windowId };
 }
 
 function commandForSender(command: PierCommand, windowId: string): PierCommand {
@@ -53,12 +61,15 @@ export function registerCommandIpc(ipcMain: IpcMain): void {
       throw new Error("invalid command");
     }
     const command: PierCommand = parsed.data;
-    const windowId = senderWindowId(event.sender);
-    return await appCore.commandRouter.execute({
-      clientId: ensureDesktopRendererClient(windowId),
-      command: commandForSender(command, windowId),
-      protocolVersion: 1,
-      requestId: randomUUID(),
-    });
+    const { recordId, windowId } = senderWindowContext(event.sender);
+    return await appCore.commandRouter.execute(
+      {
+        clientId: ensureDesktopRendererClient(windowId),
+        command: commandForSender(command, windowId),
+        protocolVersion: 1,
+        requestId: randomUUID(),
+      },
+      { windowRecordId: recordId }
+    );
   });
 }

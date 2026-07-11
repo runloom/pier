@@ -91,6 +91,18 @@ export function dirnameRelative(path: string): string {
   return slash < 0 ? "" : trimmed.slice(0, slash);
 }
 
+export function resolveCreateParentDir(options: {
+  kind?: "directory" | "file";
+  path?: string;
+}): string {
+  if (!options.path) {
+    return "";
+  }
+  return options.kind === "directory"
+    ? options.path
+    : dirnameRelative(options.path);
+}
+
 export function basename(path: string): string {
   const trimmed = path.replace(TRAILING_SLASHES, "");
   const slash = trimmed.lastIndexOf("/");
@@ -182,25 +194,29 @@ export function notifyMoveWithUndo(
   root: string,
   fromPath: string,
   toPath: string,
-  onDocumentMove: (root: string, fromPath: string, toPath: string) => void
+  onDocumentMove: (
+    root: string,
+    fromPath: string,
+    toPath: string
+  ) => Promise<void> | void
 ): void {
   const name = basename(toPath);
   context.notifications.success(t("filePanel.tree.moved", `Moved "${name}"`), {
     action: {
       label: t("filePanel.tree.undo", "Undo"),
       onClick: () => {
-        context.files
-          .move({ newPath: fromPath, path: toPath, root })
-          .then(() => {
+        Promise.resolve(onDocumentMove(root, toPath, fromPath))
+          .then(async () => {
             moveFilesTreeEntry(root, toPath, fromPath);
-            onDocumentMove(root, toPath, fromPath);
           })
           .catch((error: unknown) => {
-            context.notifications.error(
-              error instanceof Error
-                ? error.message
-                : t("filePanel.tree.renameFailed", "Unable to rename")
-            );
+            context.dialogs
+              .alert({
+                body: error instanceof Error ? error.message : String(error),
+                size: "default",
+                title: t("filePanel.tree.renameFailed", "Unable to rename"),
+              })
+              .catch(() => undefined);
           });
       },
     },

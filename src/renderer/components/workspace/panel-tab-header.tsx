@@ -264,6 +264,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         aria-hidden="true"
         className="pier-panel-tab-icon shrink-0"
         data-panel-tab-icon={iconId}
+        size={14}
       />
     );
   }

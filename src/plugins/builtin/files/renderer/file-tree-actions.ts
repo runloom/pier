@@ -7,12 +7,10 @@ import {
   FILES_COPY_PATH_COMMAND_ID,
   FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
   FILES_COPY_RELATIVE_PATH_COMMAND_ID,
-  FILES_DELETE_COMMAND_ID,
   FILES_NEW_FILE_COMMAND_ID,
   FILES_NEW_FOLDER_COMMAND_ID,
   FILES_RENAME_COMMAND_ID,
   FILES_REVEAL_COMMAND_ID,
-  FILES_TREE_REFRESH_COMMAND_ID,
 } from "../manifest.ts";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import {
@@ -25,27 +23,20 @@ import {
   parseTreeMetadata,
   pluginAction,
   relativeToProjectRoot,
+  resolveCreateParentDir,
   validateName,
   writeClipboardText,
 } from "./file-tree-action-utils.ts";
 import { createDuplicateAction } from "./file-tree-actions-duplicate.ts";
+import { createDeleteAction } from "./file-tree-delete-action.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
 import { createFilesTranslate, type FilesTranslate } from "./files-i18n.ts";
-import {
-  beginInlineCreate,
-  createViaPrompt,
-  resolveCreateParentDir,
-} from "./files-tree-create.ts";
+import { beginInlineCreate, createViaPrompt } from "./files-tree-create.ts";
 import {
   findFilesTreeInstanceId,
   startFilesTreeInlineRename,
 } from "./files-tree-registry.ts";
-import {
-  moveFilesTreeEntry,
-  removeFilesTreeEntry,
-} from "./files-tree-store.ts";
-import { filesTreeVisibilityForContext } from "./files-tree-visibility.ts";
-import { reloadFilesTreeVisibility } from "./files-tree-visibility-reload.ts";
+import { moveFilesTreeEntry } from "./files-tree-store.ts";
 import { showFilesNamePrompt } from "./name-prompt.tsx";
 
 function resolveCreateTarget(
@@ -204,15 +195,10 @@ function createRenameAction(
       const newPath =
         parentDir.length > 0 ? `${parentDir}/${outcome.value}` : outcome.value;
       try {
-        await context.files.move({
-          newPath,
-          path: target.path,
-          root: target.root,
-        });
+        await controller.movePath(target.root, target.path, newPath);
         moveFilesTreeEntry(target.root, target.path, newPath);
-        const moveDocument = (root: string, from: string, to: string) =>
-          controller.moveDiskDocumentSource(root, from, to);
-        moveDocument(target.root, target.path, newPath);
+        const moveDocument = async (root: string, from: string, to: string) =>
+          await controller.movePath(root, from, to);
         notifyMoveWithUndo(
           context,
           t,
@@ -222,66 +208,11 @@ function createRenameAction(
           moveDocument
         );
       } catch (error) {
-        context.notifications.error(
-          error instanceof Error
-            ? error.message
-            : t("filePanel.tree.renameFailed", "Unable to rename")
-        );
-      }
-    },
-  });
-}
-
-function createDeleteAction(
-  context: RendererPluginContext,
-  t: FilesTranslate,
-  controller: FileEditorController
-): RendererPluginAction {
-  return pluginAction({
-    id: FILES_DELETE_COMMAND_ID,
-    category: "file",
-    metadata: { group: "9_close", sortOrder: 1 },
-    surfaces: ["files/tree-item"],
-    title: () => t("filePanel.tree.action.delete", "Move to Trash"),
-    handler: async (invocation) => {
-      const target = parseTreeMetadata(invocation);
-      if (!target) {
-        return;
-      }
-      // 多选批量:右键目标在选中集内时一次确认、逐项进回收站。
-      const paths = target.selectedPaths?.includes(target.path)
-        ? target.selectedPaths
-        : [target.path];
-      const displayName =
-        paths.length === 1
-          ? basename(target.path)
-          : t("filePanel.tree.delete.multi", `${paths.length} items`);
-      const confirmed = await context.dialogs.confirm({
-        title: t("filePanel.tree.delete.title", "Move to Trash"),
-        body: t(
-          "filePanel.tree.delete.body",
-          `Move "${displayName}" to the system trash?`
-        ),
-        confirmLabel: t("filePanel.tree.delete.confirmLabel", "Move to Trash"),
-        cancelLabel: t("filePanel.tree.delete.cancelLabel", "Cancel"),
-        intent: "destructive",
-        size: "sm",
-      });
-      if (!confirmed) {
-        return;
-      }
-      for (const path of paths) {
-        try {
-          await context.files.trash({ path, root: target.root });
-          removeFilesTreeEntry(target.root, path);
-          controller.removeDiskDocumentForPath(target.root, path);
-        } catch (error) {
-          context.notifications.error(
-            error instanceof Error
-              ? error.message
-              : t("filePanel.tree.deleteFailed", "Unable to delete")
-          );
-        }
+        await context.dialogs.alert({
+          body: error instanceof Error ? error.message : String(error),
+          size: "default",
+          title: t("filePanel.tree.renameFailed", "Unable to rename"),
+        });
       }
     },
   });
@@ -322,11 +253,11 @@ function createCopyPathAction(
           t("filePanel.tree.pathCopied", "Path copied")
         );
       } catch (error) {
-        context.notifications.error(
-          error instanceof Error
-            ? error.message
-            : t("filePanel.tree.copyFailed", "Copy failed")
-        );
+        await context.dialogs.alert({
+          body: error instanceof Error ? error.message : String(error),
+          size: "default",
+          title: t("filePanel.tree.copyFailed", "Copy failed"),
+        });
       }
     },
   });
@@ -368,11 +299,11 @@ function createCopyPathWithRangeAction(
           t("filePanel.tree.pathCopied", "Path copied")
         );
       } catch (error) {
-        context.notifications.error(
-          error instanceof Error
-            ? error.message
-            : t("filePanel.tree.copyFailed", "Copy failed")
-        );
+        await context.dialogs.alert({
+          body: error instanceof Error ? error.message : String(error),
+          size: "default",
+          title: t("filePanel.tree.copyFailed", "Copy failed"),
+        });
       }
     },
   });
@@ -396,45 +327,10 @@ function createRevealAction(
       try {
         await context.files.reveal({ path: target.path, root: target.root });
       } catch (error) {
-        context.notifications.error(
-          error instanceof Error
-            ? error.message
-            : t("filePanel.tree.revealFailed", "Unable to reveal item")
-        );
-      }
-    },
-  });
-}
-
-function createTreeRefreshAction(
-  context: RendererPluginContext,
-  t: FilesTranslate
-): RendererPluginAction {
-  return pluginAction({
-    id: FILES_TREE_REFRESH_COMMAND_ID,
-    category: "file",
-    metadata: { group: "7_refresh", sortOrder: 1 },
-    surfaces: ["files/tree-item"],
-    title: () => t("panel.tree.refresh", "Refresh"),
-    handler: async (invocation) => {
-      const target = parseTreeMetadata(invocation);
-      if (!target) {
-        return;
-      }
-      try {
-        await reloadFilesTreeVisibility(
-          target.root,
-          filesTreeVisibilityForContext(context).list,
-          t("panel.loadError.fallback", "Failed to load files")
-        );
-      } catch (error) {
         await context.dialogs.alert({
           body: error instanceof Error ? error.message : String(error),
           size: "default",
-          title: t(
-            "filePanel.tree.refreshFailed",
-            "Unable to refresh file tree"
-          ),
+          title: t("filePanel.tree.revealFailed", "Unable to reveal item"),
         });
       }
     },
@@ -456,6 +352,5 @@ export function createFilesTreeActions(
     createCopyPathAction(context, t, "relative"),
     createCopyPathWithRangeAction(context, t),
     createRevealAction(context, t),
-    createTreeRefreshAction(context, t),
   ];
 }

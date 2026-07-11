@@ -1,7 +1,13 @@
 import type { CoreTerminalStatusItemDeclaration } from "@shared/contracts/terminal-status-bar.ts";
+import {
+  CORE_AGENT_STATUS_ITEM_ID,
+  CORE_TASK_STATUS_ITEM_ID,
+} from "@shared/plugin-core-contribution-ids.ts";
 
-export const CORE_AGENT_STATUS_ITEM_ID = "core.agent-status";
-export const CORE_TASK_STATUS_ITEM_ID = "core.task-status";
+export {
+  CORE_AGENT_STATUS_ITEM_ID,
+  CORE_TASK_STATUS_ITEM_ID,
+} from "@shared/plugin-core-contribution-ids.ts";
 
 /**
  * Core-owned 状态栏项声明。环境不占用终端状态栏；未来任何非插件贡献的核心项

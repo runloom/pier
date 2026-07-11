@@ -62,6 +62,39 @@ export interface RendererPluginAction {
   title: string | (() => string);
 }
 
+export interface RendererPluginPanelRegistration {
+  component: ComponentType<Record<string, unknown>>;
+  icon?: ComponentType<{ size?: number | string }>;
+  id: string;
+  title?: string | (() => string);
+}
+
+export type RendererPluginSuspendReason =
+  | "app-quit"
+  | "plugin-disable"
+  | "plugin-reload"
+  | "runtime-dispose"
+  | "runtime-refresh"
+  | "window-close";
+
+export interface RendererPluginSuspendContext {
+  reason: RendererPluginSuspendReason;
+  signal: AbortSignal;
+  transitionId: string;
+}
+
+export interface RendererPluginSuspendParticipant {
+  abort?(
+    reason: RendererPluginSuspendReason,
+    context: { signal: AbortSignal; transitionId: string }
+  ): Promise<void> | void;
+  commit?(
+    reason: RendererPluginSuspendReason,
+    context: { signal: AbortSignal; transitionId: string }
+  ): Promise<void> | void;
+  prepare(context: RendererPluginSuspendContext): Promise<void> | void;
+}
+
 export interface RendererSettingsPageRegistration {
   component: ComponentType<Record<string, never>>;
   id: string;
@@ -94,6 +127,9 @@ export interface ExternalRendererPluginContext {
     language(): string;
     t(key: string, fallback?: string): string;
   };
+  lifecycle: {
+    beforeSuspend(participant: RendererPluginSuspendParticipant): () => void;
+  };
   missionControlWidgets: {
     register(
       registration: RendererMissionControlWidgetRegistration
@@ -103,6 +139,9 @@ export interface ExternalRendererPluginContext {
     error(message: string): void;
     info(message: string): void;
     success(message: string): void;
+  };
+  panels: {
+    register(registration: RendererPluginPanelRegistration): () => void;
   };
   rpc: {
     invoke<T = unknown>(method: string, payload?: unknown): Promise<T>;

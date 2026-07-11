@@ -1,9 +1,9 @@
-import type { PluginStateStore } from "@main/services/plugin-service.ts";
 import {
-  createPluginService,
   findMissionControlWidgetIdConflict,
   findPluginIdDotPrefixConflict,
-} from "@main/services/plugin-service.ts";
+} from "@main/services/plugin-contribution-conflicts.ts";
+import type { PluginStateStore } from "@main/services/plugin-service.ts";
+import { createPluginService } from "@main/services/plugin-service.ts";
 import type { PluginRegistryState } from "@shared/contracts/plugin.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
@@ -19,6 +19,25 @@ function builtinSource(id: string) {
       source: { kind: "builtin" },
       version: "1.0.0",
     },
+  };
+}
+
+function externalSource(id: string) {
+  const manifest = pluginManifestSchema.parse({
+    apiVersion: 1,
+    engines: { pier: ">=0.1.0" },
+    id,
+    name: id,
+    source: { kind: "official" },
+    version: "1.0.0",
+  });
+  return {
+    enabled: true,
+    id,
+    manifest,
+    rendererEntryUrl: `pier-plugin://${id}/renderer.js`,
+    source: "official" as const,
+    version: manifest.version,
   };
 }
 
@@ -38,6 +57,61 @@ function builtinSourceWithStatusItem(id: string, statusItemId: string) {
           title: statusItemId,
         },
       ],
+      version: "1.0.0",
+    },
+  };
+}
+
+function builtinSourceWithCommands(id: string, commandIds: readonly string[]) {
+  return {
+    kind: "builtin" as const,
+    manifest: {
+      apiVersion: 1,
+      commands: commandIds.map((commandId) => ({
+        id: commandId,
+        permissions: [],
+        title: commandId,
+      })),
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: id,
+      source: { kind: "builtin" },
+      version: "1.0.0",
+    },
+  };
+}
+
+function builtinSourceWithPanels(id: string, panelIds: readonly string[]) {
+  return {
+    kind: "builtin" as const,
+    manifest: {
+      apiVersion: 1,
+      engines: { pier: ">=0.1.0" },
+      id,
+      name: id,
+      panels: panelIds.map((panelId) => ({
+        id: panelId,
+        permissions: [],
+        title: panelId,
+      })),
+      source: { kind: "builtin" },
+      version: "1.0.0",
+    },
+  };
+}
+
+function builtinSourceWithWidget(id: string, widgetId: string) {
+  return {
+    kind: "builtin" as const,
+    manifest: {
+      apiVersion: 1,
+      engines: { pier: ">=0.1.0" },
+      id,
+      missionControlWidgets: [
+        { id: widgetId, permissions: [], title: widgetId },
+      ],
+      name: id,
+      source: { kind: "builtin" },
       version: "1.0.0",
     },
   };
@@ -101,6 +175,213 @@ describe("plugin registry — 插件 id 互为点分前缀拒绝", () => {
       "pier.gitx",
     ]);
     expect(result.diagnostics).toHaveLength(0);
+  });
+
+  it("内置与外部插件进入同一全局 id 冲突校验", async () => {
+    const service = createPluginService({
+      externalRuntimeSources: () => [externalSource("pier.git.extras")],
+      sources: [builtinSource("pier.git")],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.git",
+    ]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "invalid_manifest",
+        message: expect.stringContaining("pier.git.extras"),
+        source: { kind: "official" },
+      }),
+    ]);
+  });
+
+  it("外部插件之间的重复和点分段前缀冲突也拒绝后者", async () => {
+    const service = createPluginService({
+      externalRuntimeSources: () => [
+        externalSource("pier.external"),
+        externalSource("pier.external.child"),
+        externalSource("pier.external"),
+      ],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.external",
+    ]);
+    expect(result.diagnostics).toHaveLength(2);
+    expect(
+      result.diagnostics.every((item) => item.code === "invalid_manifest")
+    ).toBe(true);
+  });
+
+  it("外部插件也参与跨插件状态项唯一性校验", async () => {
+    const external = externalSource("pier.beta");
+    external.manifest.terminalStatusItems = [
+      { id: "shared.status", permissions: [], title: "External status" },
+    ];
+    const service = createPluginService({
+      externalRuntimeSources: () => [external],
+      sources: [builtinSourceWithStatusItem("pier.alpha", "shared.status")],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.alpha",
+    ]);
+    expect(result.diagnostics[0]?.message).toContain("shared.status");
+  });
+
+  it("外部插件也参与跨插件指挥中心物料唯一性校验", async () => {
+    const external = externalSource("pier.beta");
+    external.manifest.missionControlWidgets = [
+      { id: "shared.widget", permissions: [], title: "External widget" },
+    ];
+    const service = createPluginService({
+      externalRuntimeSources: () => [external],
+      sources: [builtinSourceWithWidget("pier.alpha", "shared.widget")],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.alpha",
+    ]);
+    expect(result.diagnostics[0]?.message).toContain("shared.widget");
+  });
+
+  it("同一插件清单内的重复 command id 会被拒绝", async () => {
+    const service = createPluginService({
+      sources: [
+        builtinSourceWithCommands("pier.duplicate", [
+          "shared.command",
+          "shared.command",
+        ]),
+      ],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries).toEqual([]);
+    expect(result.diagnostics[0]?.message).toContain("shared.command");
+  });
+
+  it("插件清单不能占用宿主核心 action id", async () => {
+    const service = createPluginService({
+      sources: [
+        builtinSourceWithCommands("pier.duplicate", ["pier.panel.newTab"]),
+      ],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries).toEqual([]);
+    expect(result.diagnostics[0]?.message).toContain("pier.panel.newTab");
+  });
+
+  it("同一插件清单内的重复 panel id 会被拒绝", async () => {
+    const service = createPluginService({
+      sources: [
+        builtinSourceWithPanels("pier.duplicate", [
+          "shared.panel",
+          "shared.panel",
+        ]),
+      ],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries).toEqual([]);
+    expect(result.diagnostics[0]?.message).toContain("shared.panel");
+  });
+
+  it("插件清单不能占用宿主保留 panel id", async () => {
+    const service = createPluginService({
+      sources: [builtinSourceWithPanels("pier.duplicate", ["terminal"])],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries).toEqual([]);
+    expect(result.diagnostics[0]?.message).toContain("terminal");
+  });
+
+  it("插件清单不能占用宿主核心状态项 id", async () => {
+    const service = createPluginService({
+      sources: [
+        builtinSourceWithStatusItem("pier.duplicate", "core.agent-status"),
+      ],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries).toEqual([]);
+    expect(result.diagnostics[0]?.message).toContain("core.agent-status");
+  });
+
+  it("插件清单不能占用宿主核心指挥中心物料 id", async () => {
+    const service = createPluginService({
+      sources: [builtinSourceWithWidget("pier.duplicate", "core.custom-card")],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries).toEqual([]);
+    expect(result.diagnostics[0]?.message).toContain("core.custom-card");
+  });
+
+  it("内置与外部插件的 command id 冲突时拒绝外部插件", async () => {
+    const external = externalSource("pier.beta");
+    external.manifest.commands = [
+      { id: "shared.command", permissions: [], title: "External command" },
+    ];
+    const service = createPluginService({
+      externalRuntimeSources: () => [external],
+      sources: [builtinSourceWithCommands("pier.alpha", ["shared.command"])],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.alpha",
+    ]);
+    expect(result.diagnostics[0]?.message).toContain("shared.command");
+  });
+
+  it("外部插件之间的 panel id 冲突时拒绝后者", async () => {
+    const first = externalSource("pier.alpha");
+    first.manifest.panels = [
+      { id: "shared.panel", permissions: [], title: "First panel" },
+    ];
+    const second = externalSource("pier.beta");
+    second.manifest.panels = [
+      { id: "shared.panel", permissions: [], title: "Second panel" },
+    ];
+    const service = createPluginService({
+      externalRuntimeSources: () => [first, second],
+      state: memoryState(),
+    });
+
+    const result = await service.list();
+
+    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
+      "pier.alpha",
+    ]);
+    expect(result.diagnostics[0]?.message).toContain("shared.panel");
   });
 });
 

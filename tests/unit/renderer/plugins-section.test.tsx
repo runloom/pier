@@ -9,6 +9,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import {
+  clearRendererPluginRuntimeDiagnosticsForTests,
+  reportRendererPluginRuntimeDiagnostic,
+} from "@/lib/plugins/plugin-runtime-diagnostics.ts";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
@@ -47,6 +51,7 @@ const MISSION_CONTROL_WIDGETS_SUMMARY_RE = /2 Mission Control widgets/i;
 describe("PluginsSection", () => {
   beforeEach(async () => {
     await initI18n();
+    clearRendererPluginRuntimeDiagnosticsForTests();
     usePluginRegistryStore.setState(INITIAL_STORE_STATE);
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -66,6 +71,7 @@ describe("PluginsSection", () => {
 
   afterEach(() => {
     cleanup();
+    clearRendererPluginRuntimeDiagnosticsForTests();
     vi.restoreAllMocks();
     usePluginRegistryStore.setState(INITIAL_STORE_STATE);
     useSettingsDialogStore.setState({ activeSection: "appearance" });
@@ -103,6 +109,24 @@ describe("PluginsSection", () => {
       });
     });
     expect(screen.getByTestId("plugin-row-pier.extra")).toBeInTheDocument();
+  });
+
+  it("shows external renderer activation diagnostics without blocking the plugin list", () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.external", true)],
+    });
+    reportRendererPluginRuntimeDiagnostic({
+      message: "renderer plugin load timed out",
+      pluginId: "pier.external",
+    });
+
+    render(<PluginsSection />);
+
+    expect(screen.getByTestId("plugin-row-pier.external")).toBeVisible();
+    expect(
+      screen.getByText("pier.external: renderer plugin load timed out")
+    ).toBeVisible();
   });
 
   it("toggle 调用 disable 并 refresh store", async () => {

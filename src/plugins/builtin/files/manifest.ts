@@ -22,10 +22,11 @@ export const FILES_COPY_RELATIVE_PATH_COMMAND_ID =
 export const FILES_COPY_PATH_WITH_RANGE_COMMAND_ID =
   "pier.files.copyPathWithRange";
 export const FILES_SAVE_COMMAND_ID = "pier.files.save";
+export const FILES_SAVE_AS_COMMAND_ID = "pier.files.saveAs";
+export const FILES_SAVE_ALL_COMMAND_ID = "pier.files.saveAll";
 export const FILES_REVEAL_COMMAND_ID = "pier.files.revealInFinder";
 export const FILES_DUPLICATE_COMMAND_ID = "pier.files.duplicate";
 export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
-export const FILES_TREE_REFRESH_COMMAND_ID = "pier.files.treeRefresh";
 export const FILES_EDITOR_CUT_COMMAND_ID = "pier.files.editor.cut";
 export const FILES_EDITOR_COPY_COMMAND_ID = "pier.files.editor.copy";
 export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
@@ -63,7 +64,7 @@ export const FILES_PLUGIN_MANIFEST = {
       category: "file",
       id: FILES_DELETE_COMMAND_ID,
       permissions: ["file:write"],
-      title: "Move to Trash",
+      title: "Delete",
     },
     {
       category: "file",
@@ -91,6 +92,18 @@ export const FILES_PLUGIN_MANIFEST = {
     },
     {
       category: "file",
+      id: FILES_SAVE_AS_COMMAND_ID,
+      permissions: ["file:write"],
+      title: "Save As...",
+    },
+    {
+      category: "file",
+      id: FILES_SAVE_ALL_COMMAND_ID,
+      permissions: ["file:write"],
+      title: "Save All",
+    },
+    {
+      category: "file",
       id: FILES_REVEAL_COMMAND_ID,
       permissions: ["file:read"],
       title: "Reveal in Finder",
@@ -106,12 +119,6 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_TREE_SEARCH_COMMAND_ID,
       permissions: [],
       title: "Find in File Tree",
-    },
-    {
-      category: "file",
-      id: FILES_TREE_REFRESH_COMMAND_ID,
-      permissions: ["file:read"],
-      title: "Refresh File Tree",
     },
     {
       category: "file",

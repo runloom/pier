@@ -1,41 +1,65 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import {
-  type EditorSearchOptions,
-  type EditorSearchState,
-  EMPTY_EDITOR_SEARCH_STATE,
+import type {
+  EditorSearchOptions,
+  EditorSearchState,
 } from "./code-mirror-search-state.ts";
 import { FileDocumentLifecycle } from "./file-document-lifecycle.ts";
 import { FileEditorPathMutations } from "./file-editor-path-mutations.ts";
 import { FileEditorSaveCommands } from "./file-editor-save-commands.ts";
-import {
-  type FileEditorCommand,
-  type FileEditorViewPresentation,
-  FileEditorViewSession,
+import { FileEditorSaveCoordinator } from "./file-editor-save-coordinator.ts";
+import { FileEditorViewCoordinator } from "./file-editor-view-coordinator.ts";
+import type {
+  FileEditorCommand,
+  FileEditorViewPresentation,
 } from "./file-editor-view-session.ts";
+import {
+  type FilePathMutationGuard,
+  FilePathMutationGuardCoordinator,
+} from "./file-path-mutation-guard.ts";
 import type { FileSaveFeedback } from "./file-save-feedback.ts";
-import type { FileSaveOutcome } from "./file-save-outcome.ts";
-import { getDocument, updateDocumentContents } from "./files-document-store.ts";
+import type {
+  FileDocumentSettleResult,
+  FileSaveOutcome,
+} from "./file-save-outcome.ts";
+import { isSamePathOrDescendant } from "./files-document-paths.ts";
+import { getDocument, normalizeDocumentEol } from "./files-document-store.ts";
 import type {
   FilesDocument,
   FilesDocumentOrigin,
   FilesDocumentPanelSource,
   FileViewMode,
 } from "./files-document-types.ts";
+import { FilesMutationGate } from "./files-mutation-gate.ts";
+import { moveFilesNavPath } from "./files-nav-history.ts";
+import { preserveDocumentsAsUntitledAndRebind } from "./files-preserve-as-untitled.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
+
+export type { FilePathMutationGuard } from "./file-path-mutation-guard.ts";
+export type { FileDocumentSettleResult } from "./file-save-outcome.ts";
 
 /** file 插件中文档与 CodeMirror 生命周期的唯一公开入口。 */
 export class FileEditorController {
+  readonly #context: RendererPluginContext;
   readonly #documents: FileDocumentLifecycle;
   readonly #modeHandlers = new Map<string, (mode: FileViewMode) => void>();
+  readonly #mutationGate = new FilesMutationGate();
+  readonly #pathMutationGuards: FilePathMutationGuardCoordinator;
   readonly #pathMutations: FileEditorPathMutations;
   readonly #pendingModes = new Map<string, FileViewMode>();
-  readonly #saveCommands: FileEditorSaveCommands;
-  readonly #viewSessions = new Map<string, FileEditorViewSession>();
+  readonly #saveCoordinator: FileEditorSaveCoordinator;
+  readonly #views = new FileEditorViewCoordinator();
+  #editingSuspended = false;
 
   constructor(context: RendererPluginContext, watchHub: FilesWatchHub) {
+    this.#context = context;
+    this.#pathMutationGuards = new FilePathMutationGuardCoordinator({
+      context,
+      isEditingSuspended: () => this.#editingSuspended,
+      sessions: () => this.#views.values(),
+    });
     this.#documents = new FileDocumentLifecycle({
       context,
-      onDocumentsChanged: () => this.#syncViews(),
+      onDocumentsChanged: () => this.#views.syncDocuments(),
       onShowDiff: (documentId, panelId) => {
         this.#showDiff(documentId, panelId);
       },
@@ -45,15 +69,46 @@ export class FileEditorController {
       documents: this.#documents,
       onRemoveDocuments: (documentIds) => {
         for (const documentId of documentIds) {
-          this.#disposeDocumentViews(documentId);
+          this.#views.disposeDocument(documentId);
         }
       },
+      onPreserveAsUntitled: async (documents) =>
+        await preserveDocumentsAsUntitledAndRebind({
+          context: this.#context,
+          documents,
+        }),
     });
-    this.#saveCommands = new FileEditorSaveCommands(context, this.#documents);
+    const saveCommands = new FileEditorSaveCommands(context, this.#documents);
+    this.#saveCoordinator = new FileEditorSaveCoordinator({
+      confirmDurability: async (documentId, feedback) =>
+        await this.confirmDocumentDurability(documentId, feedback),
+      getPanelDocumentId: (panelId) =>
+        this.#documents.getPanelDocumentId(panelId),
+      saveCommands,
+    });
   }
 
   async initialize(): Promise<void> {
     await this.#documents.initialize();
+  }
+
+  async runMutation<T>(operation: () => Promise<T> | T): Promise<T> {
+    return await this.#mutationGate.run(operation);
+  }
+
+  async suspendMutations(signal: AbortSignal): Promise<void> {
+    await this.#mutationGate.suspend(signal);
+    try {
+      await this.#documents.prepareSuspend(signal);
+    } catch (error) {
+      this.#mutationGate.resume();
+      throw error;
+    }
+  }
+
+  resumeMutations(): void {
+    this.#documents.resumeAfterSuspend();
+    this.#mutationGate.resume();
   }
 
   documentId(source: FilesDocumentPanelSource): string {
@@ -68,7 +123,12 @@ export class FileEditorController {
   }
 
   acquirePanel(panelId: string, source: FilesDocumentPanelSource): () => void {
-    return this.#documents.acquirePanel(panelId, source);
+    const release = this.#documents.acquirePanel(panelId, source);
+    const document = getDocument(this.documentId(source));
+    if (document) {
+      this.#pathMutationGuards.syncDocument(document);
+    }
+    return release;
   }
 
   closePanel(input: {
@@ -84,17 +144,67 @@ export class FileEditorController {
   discardDocument(documentId: string): void {
     const document = getDocument(documentId);
     if (document) {
-      this.#disposeDocumentViews(document.id);
+      this.#views.disposeDocument(document.id);
     }
     this.#documents.discardDocument(documentId);
   }
 
-  moveDiskDocumentSource(root: string, oldPath: string, newPath: string): void {
-    this.#pathMutations.move(root, oldPath, newPath);
+  async moveDiskDocumentSource(
+    root: string,
+    oldPath: string,
+    newPath: string,
+    affectedDocuments?: readonly FilesDocument[]
+  ): Promise<void> {
+    await this.#pathMutations.move(root, oldPath, newPath, affectedDocuments);
+    await this.#documents.reconcileMovedPath(root, newPath);
+  }
+
+  async movePath(
+    root: string,
+    oldPath: string,
+    newPath: string
+  ): Promise<void> {
+    const guard = await this.#pathMutationGuards.beginMove(
+      root,
+      oldPath,
+      newPath
+    );
+    try {
+      const affected = guard.currentDocuments();
+      const protectedTarget = affected.find(
+        (document) =>
+          document.source.kind === "disk" &&
+          document.source.root === root &&
+          isSamePathOrDescendant(document.source.path, newPath) &&
+          (document.dirty || document.durabilityUnknown || document.needsSaveAs)
+      );
+      if (protectedTarget) {
+        throw new Error("The move target has protected unsaved changes");
+      }
+      this.#pathMutations.prepare(affected);
+      await this.#context.files.move({
+        newPath,
+        path: oldPath,
+        root,
+      });
+      await this.moveDiskDocumentSource(
+        root,
+        oldPath,
+        newPath,
+        guard.currentDocuments()
+      );
+      moveFilesNavPath(root, oldPath, newPath);
+    } finally {
+      guard.release();
+    }
   }
 
   removeDiskDocumentForPath(root: string, path: string): void {
     this.#pathMutations.remove(root, path);
+  }
+
+  removeDocumentsAfterPathMutation(documents: readonly FilesDocument[]): void {
+    this.#pathMutations.removeAffected(documents);
   }
 
   registerPanelModeHandler(
@@ -114,6 +224,26 @@ export class FileEditorController {
     };
   }
 
+  registerPanelSaveAsHandler(
+    panelId: string,
+    handler: (feedback: FileSaveFeedback) => Promise<FileSaveOutcome>
+  ): () => void {
+    return this.#saveCoordinator.registerHandler(panelId, handler);
+  }
+
+  recordPanelSaveAsDocument(panelId: string, documentId: string): void {
+    this.#saveCoordinator.recordPanelDocument(panelId, documentId);
+  }
+
+  takePanelSaveAsDocument(panelId: string): string | null {
+    return this.#saveCoordinator.takePanelDocument(panelId);
+  }
+
+  setEditingSuspended(suspended: boolean): void {
+    this.#editingSuspended = suspended;
+    this.#pathMutationGuards.syncSessions();
+  }
+
   attachView(input: {
     documentId: string;
     editorSessionId: string;
@@ -124,40 +254,25 @@ export class FileEditorController {
     if (!document) {
       return;
     }
-    let session = this.#viewSessions.get(input.editorSessionId);
-    if (session && getDocument(session.documentId)?.id !== document.id) {
-      session.dispose();
-      this.#viewSessions.delete(input.editorSessionId);
-      session = undefined;
-    }
-    if (session) {
-      session.updatePresentation(input.presentation);
-    } else {
-      session = new FileEditorViewSession({
-        documentId: input.documentId,
-        editorSessionId: input.editorSessionId,
-        onChange: (documentId, contents) => {
-          const latest = getDocument(documentId);
-          if (latest && !latest.readOnly) {
-            updateDocumentContents(latest.id, contents);
-          }
-        },
-        presentation: input.presentation,
-      });
-      this.#viewSessions.set(input.editorSessionId, session);
-    }
-    session.mount(input.parent, document);
+    this.#pathMutationGuards.syncDocument(document);
+    this.#views.attach({
+      document,
+      editorSessionId: input.editorSessionId,
+      parent: input.parent,
+      presentation: input.presentation,
+    });
+    this.#pathMutationGuards.syncSessions();
   }
 
   updateViewPresentation(
     editorSessionId: string,
     presentation: FileEditorViewPresentation
   ): void {
-    this.#viewSessions.get(editorSessionId)?.updatePresentation(presentation);
+    this.#views.updatePresentation(editorSessionId, presentation);
   }
 
   detachView(editorSessionId: string): void {
-    this.#viewSessions.get(editorSessionId)?.detach();
+    this.#views.detach(editorSessionId);
   }
 
   applySearchQuery(
@@ -167,11 +282,12 @@ export class FileEditorController {
     options: EditorSearchOptions,
     navigate = false
   ): EditorSearchState {
-    return (
-      this.#viewSessions
-        .get(editorSessionId)
-        ?.applySearchQuery(search, replace, options, navigate) ??
-      EMPTY_EDITOR_SEARCH_STATE
+    return this.#views.applySearchQuery(
+      editorSessionId,
+      search,
+      replace,
+      options,
+      navigate
     );
   }
 
@@ -180,34 +296,22 @@ export class FileEditorController {
     replace: string,
     options: EditorSearchOptions
   ): EditorSearchState {
-    return (
-      this.#viewSessions.get(editorSessionId)?.clearSearch(replace, options) ??
-      EMPTY_EDITOR_SEARCH_STATE
-    );
+    return this.#views.clearSearch(editorSessionId, replace, options);
   }
 
   navigateSearch(
     editorSessionId: string,
     direction: "next" | "previous"
   ): EditorSearchState {
-    return (
-      this.#viewSessions.get(editorSessionId)?.navigateSearch(direction) ??
-      EMPTY_EDITOR_SEARCH_STATE
-    );
+    return this.#views.navigateSearch(editorSessionId, direction);
   }
 
   replaceSearch(editorSessionId: string, all: boolean): EditorSearchState {
-    return (
-      this.#viewSessions.get(editorSessionId)?.replaceSearch(all) ??
-      EMPTY_EDITOR_SEARCH_STATE
-    );
+    return this.#views.replaceSearch(editorSessionId, all);
   }
 
   selectAllMatches(editorSessionId: string): EditorSearchState {
-    return (
-      this.#viewSessions.get(editorSessionId)?.selectAllMatches() ??
-      EMPTY_EDITOR_SEARCH_STATE
-    );
+    return this.#views.selectAllMatches(editorSessionId);
   }
 
   async executeEditorCommand(
@@ -215,22 +319,14 @@ export class FileEditorController {
     editorSessionId: string,
     command: FileEditorCommand
   ): Promise<void> {
-    const session = this.#viewSessions.get(editorSessionId);
-    const document = getDocument(documentId);
-    if (
-      !(session && document) ||
-      getDocument(session.documentId)?.id !== document.id
-    ) {
-      return;
-    }
-    await session.execute(command);
+    await this.#views.execute(documentId, editorSessionId, command);
   }
 
   async savePanel(
     panelId: string | null,
     feedback: FileSaveFeedback = "all"
   ): Promise<FileSaveOutcome> {
-    return await this.#saveCommands.savePanel(panelId, feedback);
+    return await this.#saveCoordinator.savePanel(panelId, feedback);
   }
 
   async saveDocument(
@@ -238,29 +334,85 @@ export class FileEditorController {
     panelId?: string,
     feedback: FileSaveFeedback = "all"
   ): Promise<FileSaveOutcome> {
-    return await this.#saveCommands.saveDocument(documentId, panelId, feedback);
+    return await this.#saveCoordinator.saveDocument(
+      documentId,
+      panelId,
+      feedback
+    );
+  }
+
+  async saveAsPanel(
+    panelId: string | null,
+    feedback: FileSaveFeedback = "all"
+  ): Promise<FileSaveOutcome> {
+    return await this.#saveCoordinator.saveAsPanel(panelId, feedback);
+  }
+
+  async settleDocument(
+    documentId: string,
+    panelId?: string,
+    feedback: FileSaveFeedback = "all"
+  ): Promise<FileDocumentSettleResult> {
+    return await this.#saveCoordinator.settleDocument(
+      documentId,
+      panelId,
+      feedback
+    );
+  }
+
+  async confirmDocumentDurability(
+    documentId: string,
+    feedback: FileSaveFeedback = "all"
+  ): Promise<boolean> {
+    return await this.#documents.confirmDocumentDurability(
+      documentId,
+      feedback
+    );
+  }
+
+  normalizeDocumentEol(documentId: string, eol: "crlf" | "lf"): void {
+    normalizeDocumentEol(documentId, eol);
+  }
+
+  async showDraftProtectionError(message: string): Promise<void> {
+    await this.#context.dialogs.alert({
+      body: message,
+      size: "default",
+      title: this.#context.i18n.t(
+        "files.draftProtection.failed",
+        undefined,
+        "Draft protection failed"
+      ),
+    });
+  }
+
+  async beginPathMutation(
+    root: string,
+    paths: readonly string[]
+  ): Promise<FilePathMutationGuard> {
+    return await this.#pathMutationGuards.begin(root, paths);
+  }
+
+  async documentsForPathMutation(
+    root: string,
+    paths: readonly string[]
+  ): Promise<FilesDocument[]> {
+    return await this.#pathMutationGuards.documentsFor(root, paths);
+  }
+
+  async preserveDocumentsAsUntitled(
+    documents: readonly FilesDocument[]
+  ): Promise<FilesDocument[]> {
+    return await this.#pathMutations.preserveAsUntitled(documents);
   }
 
   dispose(options: { clearDocuments?: boolean } = {}): void {
     this.#documents.dispose(options);
-    for (const session of this.#viewSessions.values()) {
-      session.dispose();
-    }
-    this.#viewSessions.clear();
+    this.#views.dispose();
     this.#modeHandlers.clear();
+    this.#saveCoordinator.dispose();
     this.#pendingModes.clear();
-  }
-
-  #syncViews(): void {
-    for (const [sessionId, session] of this.#viewSessions) {
-      const document = getDocument(session.documentId);
-      if (document) {
-        session.syncDocument(document);
-      } else {
-        session.dispose();
-        this.#viewSessions.delete(sessionId);
-      }
-    }
+    this.#pathMutationGuards.dispose();
   }
 
   #showDiff(documentId: string, preferredPanelId?: string): void {
@@ -280,18 +432,6 @@ export class FileEditorController {
       ) {
         handler("diff");
         return;
-      }
-    }
-  }
-
-  #disposeDocumentViews(documentId: string): void {
-    for (const [sessionId, session] of this.#viewSessions) {
-      if (
-        getDocument(session.documentId)?.id === documentId ||
-        session.documentId === documentId
-      ) {
-        session.dispose();
-        this.#viewSessions.delete(sessionId);
       }
     }
   }

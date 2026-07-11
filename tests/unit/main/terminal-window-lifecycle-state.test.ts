@@ -10,12 +10,21 @@ const TERMINAL_FOCUS_SOURCE = readFileSync(
   resolve(import.meta.dirname, "../../../src/main/ipc/terminal-focus-state.ts"),
   "utf8"
 );
+const RENDERER_FAILURE_RECOVERY_SOURCE = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../../../src/main/windows/renderer-failure-recovery.ts"
+  ),
+  "utf8"
+);
 
 const IMPORTS_PRESENTATION_CLEANUP_RE =
   /import \{ clearTerminalPresentationWindowById \} from "\.\.\/ipc\/terminal-presentation\.ts";/;
 const IMPORTS_FOCUS_CLEANUP_RE = /clearTerminalFocusWindow/;
 const RENDER_PROCESS_GONE_CLEARS_TERMINAL_STATE_RE =
-  /const electronWindowId = window\.id;[\s\S]*?window\.webContents\.on\("render-process-gone", \(\) => \{[\s\S]*?clearTerminalPresentationWindowById\(electronWindowId\);[\s\S]*?clearTerminalFocusWindowById\(electronWindowId\);[\s\S]*?closeAllTerminals/;
+  /beforeRendererGone: \(\) => \{[\s\S]*?clearTerminalPresentationWindowById\(electronWindowId\);[\s\S]*?clearTerminalFocusWindowById\(electronWindowId\);[\s\S]*?closeAllTerminals/;
+const RENDER_PROCESS_GONE_INVOKES_CLEANUP_RE =
+  /window\.webContents\.on\("render-process-gone",[\s\S]*?beforeRendererGone\(\);/;
 const CLOSE_PATH_CLEARS_TERMINAL_STATE_RE =
   /window\.host\.on\("close",[\s\S]*?clearTerminalPresentationWindowById\(electronWindowId\);[\s\S]*?clearTerminalFocusWindowById\(electronWindowId\);[\s\S]*?detachWindow/;
 const CLOSED_PATH_CLEARS_TERMINAL_STATE_RE =
@@ -29,6 +38,9 @@ describe("terminal window lifecycle state cleanup", () => {
     expect(WINDOW_MANAGER_SOURCE).toMatch(IMPORTS_FOCUS_CLEANUP_RE);
     expect(WINDOW_MANAGER_SOURCE).toMatch(
       RENDER_PROCESS_GONE_CLEARS_TERMINAL_STATE_RE
+    );
+    expect(RENDERER_FAILURE_RECOVERY_SOURCE).toMatch(
+      RENDER_PROCESS_GONE_INVOKES_CLEANUP_RE
     );
     expect(WINDOW_MANAGER_SOURCE).toMatch(CLOSE_PATH_CLEARS_TERMINAL_STATE_RE);
     expect(WINDOW_MANAGER_SOURCE).toMatch(CLOSED_PATH_CLEARS_TERMINAL_STATE_RE);

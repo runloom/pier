@@ -14,6 +14,7 @@ import {
   createCommandRouter,
   type PierCoreServices,
 } from "@main/app-core/command-router.ts";
+import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
 import { execGit } from "@main/services/git-exec.ts";
 import { createGitService } from "@main/services/git-service.ts";
 import { createGitWatchService } from "@main/services/git-watch-service.ts";
@@ -66,6 +67,7 @@ function makeServices(): PierCoreServices {
     panelContexts: trap as never,
     localEnvironments: trap as never,
     plugins: trap as never,
+    pluginDisableTransitions: new PluginDisableTransitionCoordinator(),
     pluginSettings: trap as never,
     preferences: trap as never,
     secrets: trap as never,

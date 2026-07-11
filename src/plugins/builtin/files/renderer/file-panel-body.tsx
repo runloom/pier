@@ -1,4 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
+import { Button } from "@pier/ui/button.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useCallback, useRef } from "react";
@@ -8,6 +9,7 @@ import type { FileEditorController } from "./file-editor-controller.ts";
 import {
   MissingTemporaryState,
   ReadOnlyErrorState,
+  UnsupportedFileState,
 } from "./file-panel-parts.tsx";
 import type {
   EditorRange,
@@ -121,6 +123,68 @@ export function ResolvedFilePanel({
         )}
         t={t}
         title={source.path.split("/").filter(Boolean).at(-1) ?? source.path}
+      />
+    );
+  }
+
+  if (document.readOnlyReason) {
+    const messageByReason = {
+      binary: t(
+        "filePanel.unsupported.binary",
+        "Binary files are not opened in the text editor."
+      ),
+      "mixed-eol": t(
+        "filePanel.unsupported.mixedEol",
+        "Files with mixed line endings are read-only to avoid changing their bytes unexpectedly."
+      ),
+      "not-writable": t(
+        "filePanel.unsupported.notWritable",
+        "Pier does not have permission to write this file."
+      ),
+      "too-large": t(
+        "filePanel.unsupported.tooLarge",
+        "This file is too large to open in the editor."
+      ),
+      "unknown-encoding": t(
+        "filePanel.unsupported.unknownEncoding",
+        "This text encoding is not supported."
+      ),
+      "unsupported-file": t(
+        "filePanel.unsupported.fileType",
+        "This file type is not supported by the editor."
+      ),
+    } satisfies Record<NonNullable<typeof document.readOnlyReason>, string>;
+    return (
+      <UnsupportedFileState
+        actions={
+          document.readOnlyReason === "mixed-eol" ? (
+            <>
+              <Button
+                onClick={() =>
+                  controller.normalizeDocumentEol(document.id, "lf")
+                }
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t("filePanel.unsupported.normalizeLf", "Normalize to LF")}
+              </Button>
+              <Button
+                onClick={() =>
+                  controller.normalizeDocumentEol(document.id, "crlf")
+                }
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t("filePanel.unsupported.normalizeCrlf", "Normalize to CRLF")}
+              </Button>
+            </>
+          ) : undefined
+        }
+        message={messageByReason[document.readOnlyReason]}
+        t={t}
+        title={document.name}
       />
     );
   }

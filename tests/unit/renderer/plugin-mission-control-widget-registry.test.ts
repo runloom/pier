@@ -32,14 +32,17 @@ describe("plugin-mission-control-widget-registry", () => {
     ).toBe(false);
   });
 
-  it("dispose does not remove a replaced registration", () => {
+  it("rejects a duplicate registration without changing the owner", () => {
     const dispose = registerPluginMissionControlWidget(reg);
     const replacement = { ...reg, icon: House };
-    registerPluginMissionControlWidget(replacement);
-    dispose();
+
+    expect(() => registerPluginMissionControlWidget(replacement)).toThrow(
+      "mission control widget id is already registered"
+    );
     expect(
       getPluginMissionControlWidgetRegistrations().get("pier.test.widget")
-    ).toBe(replacement);
+    ).toBe(reg);
+    dispose();
   });
 
   it("increments revision on register and dispose", () => {
@@ -48,6 +51,12 @@ describe("plugin-mission-control-widget-registry", () => {
     expect(getPluginMissionControlWidgetRevision()).toBe(r0 + 1);
     dispose();
     expect(getPluginMissionControlWidgetRevision()).toBe(r0 + 2);
+  });
+
+  it("rejects core-owned widget ids", () => {
+    expect(() =>
+      registerPluginMissionControlWidget({ ...reg, id: "core.custom-card" })
+    ).toThrow("mission control widget id is reserved by core");
   });
 
   it("notifies subscribers on changes", () => {

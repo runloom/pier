@@ -1,6 +1,7 @@
 import type {
   RendererMissionControlWidgetRegistration as ExternalMissionControlWidgetRegistration,
   RendererPluginAction as ExternalPluginAction,
+  RendererPluginPanelRegistration as ExternalPluginPanelRegistration,
   ExternalRendererPluginContext,
   RendererSettingsPageRegistration as ExternalSettingsPageRegistration,
 } from "@pier/plugin-api/renderer";
@@ -22,6 +23,8 @@ import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { resolvePluginMessage } from "./display.ts";
+import type { ExternalRendererActivationScope } from "./external-activation-scope.ts";
+import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
 import { registerPluginMissionControlWidget } from "./plugin-mission-control-widget-registry.ts";
 import {
   getPluginSettingsPage,
@@ -44,7 +47,7 @@ export interface RendererPluginRpcBridge {
 
 function assertDeclared(
   entry: PluginRegistryEntry,
-  kind: "action" | "missionControlWidget" | "settingsPage",
+  kind: "action" | "missionControlWidget" | "panel" | "settingsPage",
   id: string
 ): void {
   let declared: ReadonlyArray<{ id: string }>;
@@ -52,6 +55,8 @@ function assertDeclared(
     declared = entry.manifest.commands;
   } else if (kind === "missionControlWidget") {
     declared = entry.manifest.missionControlWidgets;
+  } else if (kind === "panel") {
+    declared = entry.manifest.panels;
   } else {
     declared = entry.manifest.settingsPages;
   }
@@ -78,9 +83,13 @@ function resolveTitle(title: string | (() => string)): string {
 export function createExternalRendererPluginContext(
   entry: PluginRegistryEntry,
   bridge: RendererPluginRpcBridge,
-  getEntries: () => readonly PluginRegistryEntry[]
+  getEntries: () => readonly PluginRegistryEntry[],
+  scope?: ExternalRendererActivationScope,
+  registerPanel?: (registration: ExternalPluginPanelRegistration) => () => void
 ): ExternalRendererPluginContext {
   const pluginId = entry.manifest.id;
+  const track = (dispose: () => void): (() => void) =>
+    scope?.add(dispose) ?? dispose;
 
   return {
     app: {
@@ -93,16 +102,18 @@ export function createExternalRendererPluginContext(
     actions: {
       register: (action: ExternalPluginAction) => {
         assertDeclared(entry, "action", action.id);
-        return actionRegistry.register({
-          category: action.category ?? "run",
-          id: action.id,
-          title: () => resolveTitle(action.title),
-          handler: () => {
-            Promise.resolve(action.invoke()).catch((err: unknown) => {
-              console.error(`[${pluginId}] action ${action.id} failed:`, err);
-            });
-          },
-        });
+        return track(
+          actionRegistry.register({
+            category: action.category ?? "run",
+            id: action.id,
+            title: () => resolveTitle(action.title),
+            handler: () => {
+              Promise.resolve(action.invoke()).catch((err: unknown) => {
+                console.error(`[${pluginId}] action ${action.id} failed:`, err);
+              });
+            },
+          })
+        );
       },
     },
     configuration: {
@@ -117,15 +128,17 @@ export function createExternalRendererPluginContext(
         ) as T;
       },
       onDidChange: (listener) =>
-        usePluginSettingsStore.subscribe((state, prev) => {
-          const changedKeys: string[] = [];
-          for (const key of Object.keys(state.values)) {
-            if (state.values[key] !== prev.values[key]) changedKeys.push(key);
-          }
-          if (changedKeys.length > 0) {
-            listener({ changedKeys });
-          }
-        }),
+        track(
+          usePluginSettingsStore.subscribe((state, prev) => {
+            const changedKeys: string[] = [];
+            for (const key of Object.keys(state.values)) {
+              if (state.values[key] !== prev.values[key]) changedKeys.push(key);
+            }
+            if (changedKeys.length > 0) {
+              listener({ changedKeys });
+            }
+          })
+        ),
       reset: async (key) => {
         assertOwnedKey(entry, key);
         await usePluginSettingsStore.getState().reset(key);
@@ -140,26 +153,30 @@ export function createExternalRendererPluginContext(
       register: (registration: ExternalMissionControlWidgetRegistration) => {
         assertDeclared(entry, "missionControlWidget", registration.id);
         const title = registration.title;
-        return registerPluginMissionControlWidget({
-          component:
-            registration.component as FunctionComponent<HostMissionControlWidgetComponentProps>,
-          icon: (registration.icon ?? KeyRound) as LucideIcon,
-          id: registration.id,
-          ...(registration.previewComponent
-            ? {
-                previewComponent:
-                  registration.previewComponent as FunctionComponent,
-              }
-            : {}),
-          ...(registration.settingsComponent
-            ? {
-                settingsComponent:
-                  registration.settingsComponent as FunctionComponent<HostMissionControlWidgetSettingsProps>,
-              }
-            : {}),
-          // 省略 title = 用 manifest 本地化标题（宿主 merge 层解析）
-          ...(title === undefined ? {} : { title: () => resolveTitle(title) }),
-        });
+        return track(
+          registerPluginMissionControlWidget({
+            component:
+              registration.component as FunctionComponent<HostMissionControlWidgetComponentProps>,
+            icon: (registration.icon ?? KeyRound) as LucideIcon,
+            id: registration.id,
+            ...(registration.previewComponent
+              ? {
+                  previewComponent:
+                    registration.previewComponent as FunctionComponent,
+                }
+              : {}),
+            ...(registration.settingsComponent
+              ? {
+                  settingsComponent:
+                    registration.settingsComponent as FunctionComponent<HostMissionControlWidgetSettingsProps>,
+                }
+              : {}),
+            // 省略 title = 用 manifest 本地化标题（宿主 merge 层解析）
+            ...(title === undefined
+              ? {}
+              : { title: () => resolveTitle(title) }),
+          })
+        );
       },
     },
     settingsPages: {
@@ -170,7 +187,7 @@ export function createExternalRendererPluginContext(
             `plugin ${pluginId} already registered a settings page`
           );
         }
-        return registerPluginSettingsPage(pluginId, registration);
+        return track(registerPluginSettingsPage(pluginId, registration));
       },
     },
     dialogs: {
@@ -208,10 +225,33 @@ export function createExternalRendererPluginContext(
         return resolved ?? fallback ?? key;
       },
     },
+    lifecycle: {
+      beforeSuspend: (barrier) =>
+        track(pluginLifecycleBarriers.register(pluginId, barrier)),
+    },
     notifications: {
       error: (message) => toast.error(message),
       info: (message) => toast.info(message),
       success: (message) => toast.success(message),
+    },
+    panels: {
+      register: (registration: ExternalPluginPanelRegistration) => {
+        assertDeclared(entry, "panel", registration.id);
+        if (!registration.id.startsWith(`${pluginId}.`)) {
+          throw new Error(
+            `external panel id must start with ${pluginId}.: ${registration.id}`
+          );
+        }
+        if (!entry.effectivePermissions.includes("panel:register")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:panel:register`
+          );
+        }
+        if (!registerPanel) {
+          throw new Error(`external panel host is unavailable: ${pluginId}`);
+        }
+        return track(registerPanel(registration));
+      },
     },
     rpc: {
       invoke: async <T>(method: string, payload?: unknown): Promise<T> => {
@@ -237,7 +277,9 @@ export function createExternalRendererPluginContext(
         return result.data as T;
       },
       on: <T>(event: string, callback: (payload: T) => void): (() => void) =>
-        bridge.subscribe(pluginId, event, (payload) => callback(payload as T)),
+        track(
+          bridge.subscribe(pluginId, event, (payload) => callback(payload as T))
+        ),
     },
   };
 }

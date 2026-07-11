@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -38,6 +38,19 @@ describe("FileEditorController governance", () => {
     expect(source("file-panel-actions.tsx")).not.toContain("setTimeout(");
   });
 
+  it("keeps pier.files on the revision-safe document IO contract", () => {
+    const rendererSources = readdirSync(rendererDir, {
+      encoding: "utf8",
+      recursive: true,
+    })
+      .filter((file) => /\.(?:ts|tsx)$/.test(file))
+      .map(source)
+      .join("\n");
+    expect(rendererSources).not.toMatch(
+      /(?:context|this\.#context)\.files\.(?:readText|writeText)\(/
+    );
+  });
+
   it("keeps the document store independent from React and CodeMirror", () => {
     const store = source("files-document-store.ts");
     expect(store).not.toMatch(/from ["']react["']/);
@@ -46,18 +59,26 @@ describe("FileEditorController governance", () => {
 
   it("keeps file-tree watching independent from open-document mutation", () => {
     const treeWatch = source("files-tree-watch.ts");
+    const sidebarHelpers = source("file-tree-sidebar-helpers.ts");
     expect(treeWatch).not.toContain("files-document-store");
     expect(treeWatch).not.toContain("markDocument");
+    expect(treeWatch).toContain("watchHub.subscribe");
+    expect(treeWatch).toContain("applyFilesTreeWatchEvent");
+    expect(sidebarHelpers).toContain("ensureFilesTreeWatch");
   });
 
   it("routes production path mutations through the controller", () => {
     const sidebar = source("file-tree-sidebar.tsx");
     const treeActions = source("file-tree-actions.ts");
+    const deleteAction = source("file-tree-delete-action.ts");
     const pluginEntry = source("index.tsx");
     expect(sidebar).not.toContain("files-document-store");
-    expect(sidebar).toContain("controller.moveDiskDocumentSource");
+    expect(sidebar).toContain("controller.movePath");
     expect(treeActions).not.toContain("files-document-store");
-    expect(treeActions).toContain("controller.removeDiskDocumentForPath");
+    expect(deleteAction).not.toContain("files-document-store");
+    expect(deleteAction).toContain(
+      "controller.removeDocumentsAfterPathMutation"
+    );
     expect(pluginEntry).toContain(
       "createFilesTreeActions(context, editorController)"
     );

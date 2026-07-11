@@ -65,6 +65,23 @@ describe("window record state", () => {
     await expect(readMostRecentClosedWindowRecordId()).resolves.toBe(second.id);
   });
 
+  it("does not resolve layout save until a fresh store can read it", async () => {
+    const { createWindowRecord, saveWindowRecordLayout } = await import(
+      "@main/state/window-record-state.ts"
+    );
+    const record = await createWindowRecord();
+
+    await saveWindowRecordLayout(record.id, { durable: true });
+    vi.resetModules();
+    const { readWindowRecordLayout } = await import(
+      "@main/state/window-record-state.ts"
+    );
+
+    await expect(readWindowRecordLayout(record.id)).resolves.toEqual({
+      durable: true,
+    });
+  });
+
   it("orders open records by the last focused open window without mutating the open set", async () => {
     const {
       createWindowRecord,

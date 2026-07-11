@@ -39,6 +39,33 @@ export function ReadOnlyErrorState({
   );
 }
 
+export function UnsupportedFileState({
+  actions,
+  message,
+  title,
+  t,
+}: {
+  actions?: ReactNode;
+  message: string;
+  title: string;
+  t: FilesTranslate;
+}) {
+  return (
+    <div className="flex h-full flex-col gap-3 bg-background p-4">
+      <h1 className="font-semibold text-foreground text-sm">{title}</h1>
+      <Alert>
+        <AlertTitle>
+          {t("filePanel.unsupported.title", "This file cannot be edited")}
+        </AlertTitle>
+        <AlertDescription>{message}</AlertDescription>
+      </Alert>
+      {actions ? (
+        <div className="flex items-center gap-2">{actions}</div>
+      ) : null}
+    </div>
+  );
+}
+
 export function MissingTemporaryState({
   name,
   t,
@@ -103,12 +130,8 @@ export function EmptyFileState({
   );
 }
 
-// Cursor 参考:面板整体分「顶部 chrome + 主体（sidebar + editor）」。sidebar
-// 收缩按钮上移到 chrome 里,editor 主体不再被 sidebar 顶部条挤压。sidebar 隐藏
-// (root=null / collapsed) 时 chrome 仍保留 Save/mode 等操作,布局无缝。
-// Cursor 参考:侧栏与主 editor 各自有自己的 top row。sidebar 顶部行有
-// project 名 + 折叠按钮;editor 顶部是我们的 chrome (breadcrumb + actions)。
-// 两条 top row 视觉上齐平,但 CSS 上互相独立,不会因为 bg 相同拼成尴尬的 L。
+// 面板整体分为「顶部 chrome + 主体（sidebar + editor）」。sidebar 收缩按钮
+// 上移到 chrome；sidebar 隐藏时仍保留面包屑、状态和视图切换，布局无缝。
 const TREE_WIDTH_STORAGE_KEY = "pier.files.filePanel.treeWidthPx";
 const TREE_DEFAULT_WIDTH_PX = 256;
 const TREE_MIN_WIDTH_PX = 170;
@@ -184,12 +207,9 @@ export function FilePanelShell({
   );
 }
 
-// Cursor 顶部 chrome:左侧 sidebar toggle + breadcrumb;右侧 mode 切换 + Save
-// + LSP-like 语言徽章。断裂点:breadcrumb 用 flex-1 min-w-0 抢占空间并 truncate,
-// 右侧 actions 用 shrink-0 兜底。整条 chrome 与终端 title-bar 高度对齐(约 40px)。
-// Cursor 顶部 chrome:左侧 sidebar toggle + 搜索/前进后退 + breadcrumb;右侧
-// mode 切换 + Save + LSP-like 语言徽章。整条 chrome 只覆盖 editor 一侧,不
-// 越界到 sidebar 上,与 VSCode/Cursor 的双 top-row 一致。
+// 顶部 chrome 左侧是 sidebar toggle、搜索/前进后退与 breadcrumb，右侧是状态、
+// 语言/格式和视图切换。breadcrumb 用 flex-1 min-w-0 截断，右侧 shrink-0；
+// chrome 横跨整个面板并与终端标题栏高度对齐（约 40px）。
 export function FilePanelChrome({
   center,
   leading,

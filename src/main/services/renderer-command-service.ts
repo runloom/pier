@@ -50,7 +50,14 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
       return command.focus ?? true;
     case "panel.close":
     case "panel.list":
+    case "plugin.finalizeDisable":
+    case "plugin.finalizeReload":
+    case "plugin.prepareDisable":
+    case "plugin.prepareReload":
+    case "workspace.finalizeClose":
     case "workspace.flushLayout":
+    case "workspace.prepareClose":
+    case "workspace.reportCloseFailure":
       return false;
     default: {
       const _exhaustive: never = command;
@@ -62,7 +69,7 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
 export function createRendererCommandService({
   createRequestId = randomUUID,
   host,
-  timeoutMs = 5000,
+  timeoutMs = 15_000,
 }: CreateRendererCommandServiceArgs): RendererCommandService {
   const pending = new Map<string, PendingRequest>();
 

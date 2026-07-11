@@ -51,7 +51,10 @@ import { executeWorktreeCommand } from "./worktree-commands.ts";
 export type { PierCoreServices } from "./command-router-services.ts";
 
 export interface CommandRouter {
-  execute(envelope: unknown): Promise<PierCommandResult>;
+  execute(
+    envelope: unknown,
+    context?: CommandExecutionContext
+  ): Promise<PierCommandResult>;
 }
 
 export interface CreateCommandRouterArgs {
@@ -62,6 +65,7 @@ export interface CreateCommandRouterArgs {
 
 export interface CommandExecutionContext {
   clientEnv?: Record<string, string> | undefined;
+  windowRecordId?: string | undefined;
 }
 
 function requestIdOf(rawEnvelope: unknown): string {
@@ -190,9 +194,29 @@ async function executeWindowWorkspaceCommand(
   services: PierCoreServices
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
-    case "window.close":
-      services.window.close(command.windowId);
-      return success(requestId, null);
+    case "window.close": {
+      const closeResult = await services.window.close(command.windowId);
+      switch (closeResult) {
+        case "closed":
+          return success(requestId, null);
+        case "not-found":
+          return failure(
+            requestId,
+            "not_found",
+            `window not found: ${command.windowId}`
+          );
+        case "veto":
+          return failure(
+            requestId,
+            "internal_error",
+            `window close was vetoed: ${command.windowId}`
+          );
+        default: {
+          const _exhaustive: never = closeResult;
+          return _exhaustive;
+        }
+      }
+    }
     case "window.create":
       return success(requestId, await services.window.create());
     case "window.focus":
@@ -296,6 +320,13 @@ async function executeTerminalCommand(
 }
 
 function mapCommandError(requestId: string, err: unknown): PierCommandResult {
+  if (
+    err instanceof Error &&
+    "code" in err &&
+    (err as NodeJS.ErrnoException).code === "ENOENT"
+  ) {
+    return failure(requestId, "not_found", err.message);
+  }
   if (err instanceof WorktreeServiceError) {
     return failure(requestId, err.reason, err.message);
   }
@@ -350,7 +381,7 @@ async function executeCommandByDomain(
         onEnvironmentsChanged
       ),
     (cmd: PierCommand) => executeWorktreeCommand(requestId, cmd, services),
-    (cmd: PierCommand) => executeFileCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeFileCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeRunCommand(requestId, cmd, services, context),
     (cmd: PierCommand) =>
@@ -406,7 +437,7 @@ export function createCommandRouter({
   services,
 }: CreateCommandRouterArgs): CommandRouter {
   return {
-    async execute(rawEnvelope) {
+    async execute(rawEnvelope, trustedContext = {}) {
       const requestId = requestIdOf(rawEnvelope);
       const parsed = pierCommandEnvelopeSchema.safeParse(rawEnvelope);
       if (!parsed.success) {
@@ -429,7 +460,7 @@ export function createCommandRouter({
         command,
         clients,
         services,
-        { clientEnv },
+        { ...trustedContext, clientEnv },
         onEnvironmentsChanged
       );
     },

@@ -1,8 +1,9 @@
 import { Button } from "@pier/ui/button.tsx";
-import { Save } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import {
+  DocumentFormatBadge,
   DocumentStatusDot,
   LanguageBadge,
   ViewModeButton,
@@ -12,12 +13,11 @@ import type {
   FileViewMode,
 } from "./files-document-types.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
+import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { useFilesDocument } from "./use-files-document.ts";
 
-// 顶部 chrome 的右侧 action 集群:状态圆点 + language 标签 + mode 切换(仅
-// markdown) + Save。逻辑收在专门组件里,是因为需要拿当前 document 才知道
-// save 是否 enabled、是否 markdown 等信息;chrome 布局代码只负责摆位置,
-// 不重复业务判断。
+// 顶部 chrome 的右侧信息与视图集群：状态、语言、格式和视图切换。保存由
+// Cmd+S、自动保存与关闭保护链负责，不在编辑区重复提供按钮。
 export function ResolvedFilePanelActions({
   controller,
   mode,
@@ -36,20 +36,27 @@ export function ResolvedFilePanelActions({
   const documentId = controller.documentId(source);
   const document = useFilesDocument(documentId);
 
-  const canSave =
-    document?.source.kind === "disk" &&
-    document.capabilities.includes("save") &&
-    document.dirty &&
-    !document.readOnly &&
-    document.loadState === "loaded" &&
-    document.saveState === "idle";
-
-  const handleSave = useCallback(async () => {
-    if (!(canSave && document)) {
+  const handleConfirmDurability = useCallback(async () => {
+    if (!document?.durabilityUnknown) {
       return;
     }
-    await controller.saveDocument(document.id, panelId);
-  }, [canSave, controller, document, panelId]);
+    try {
+      await controller.runMutation(() =>
+        controller.confirmDocumentDurability(document.id)
+      );
+    } catch (error) {
+      if (!(error instanceof FilesMutationSuspendedError)) {
+        throw error;
+      }
+    }
+  }, [controller, document]);
+
+  const handleProtectionError = useCallback(
+    (message: string) => {
+      controller.showDraftProtectionError(message).catch(() => undefined);
+    },
+    [controller]
+  );
 
   useEffect(() => {
     if (!panelId) {
@@ -68,8 +75,13 @@ export function ResolvedFilePanelActions({
 
   return (
     <>
-      <DocumentStatusDot document={document} t={t} />
+      <DocumentStatusDot
+        document={document}
+        onProtectionError={handleProtectionError}
+        t={t}
+      />
       <LanguageBadge document={document} t={t} />
+      <DocumentFormatBadge document={document} />
       {isMarkdown || showDiffToggle ? (
         <div className="ml-1 flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5">
           <ViewModeButton
@@ -96,16 +108,15 @@ export function ResolvedFilePanelActions({
           ) : null}
         </div>
       ) : null}
-      {document.source.kind === "disk" ? (
+      {document.source.kind === "disk" && document.durabilityUnknown ? (
         <Button
-          disabled={!canSave}
-          onClick={handleSave}
+          onClick={handleConfirmDurability}
           size="xs"
           type="button"
           variant="outline"
         >
-          <Save data-icon="inline-start" />
-          {t("filePanel.save", "Save")}
+          <ShieldCheck data-icon="inline-start" />
+          {t("filePanel.durability.confirm", "Confirm write")}
         </Button>
       ) : null}
     </>

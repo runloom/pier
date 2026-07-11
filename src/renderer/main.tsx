@@ -1,4 +1,6 @@
 import { installDocumentAutoHideScrollbars } from "@pier/ui/auto-hide-scrollbar.ts";
+import { useEffect } from "react";
+import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
@@ -8,7 +10,13 @@ import {
   installTerminalInputRoutingPointerDownListener,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
+import { AppDialogHost } from "./components/common/app-dialog-host.tsx";
+import {
+  StartupErrorScreen,
+  StartupScreen,
+} from "./components/common/startup-error-screen.tsx";
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
+import { installWorkspaceRendererCommandListener } from "./components/workspace/workspace-renderer-command-listener.ts";
 import { initI18n } from "./i18n/index.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
 import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
@@ -39,21 +47,51 @@ import { initTheme } from "./stores/theme.store.ts";
 import { initWorktreePreferences } from "./stores/worktree-preferences.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
 
+let applicationRoot: Root | null = null;
+
+function RendererBootSignal() {
+  useEffect(() => {
+    window.pier?.window?.readyToShow?.();
+  }, []);
+  return null;
+}
+
+function getApplicationRoot(): Root {
+  if (applicationRoot) {
+    return applicationRoot;
+  }
+  const rootElement = document.getElementById("root");
+  if (!rootElement) {
+    throw new Error("Pier root element is missing");
+  }
+  applicationRoot = createRoot(rootElement);
+  return applicationRoot;
+}
+
 async function bootstrap() {
   installBundledFontFaces();
   installDocumentAutoHideScrollbars();
+  const root = getApplicationRoot();
   const params = new URLSearchParams(window.location.search);
   const debugMode = params.get("pierDebug");
   const targetBrowserWindowId = Number(params.get("targetBrowserWindowId"));
   if (debugMode === "terminal" && Number.isFinite(targetBrowserWindowId)) {
-    const rootEl = document.getElementById("root");
-    if (rootEl) {
-      createRoot(rootEl).render(
+    root.render(
+      <>
+        <RendererBootSignal />
         <TerminalDebugWindow targetBrowserWindowId={targetBrowserWindowId} />
-      );
-    }
+      </>
+    );
     return;
   }
+  root.render(
+    <>
+      <AppDialogHost />
+      <RendererBootSignal />
+      <StartupScreen />
+    </>
+  );
+  installWorkspaceRendererCommandListener();
 
   try {
     await initI18n();
@@ -99,20 +137,30 @@ async function bootstrap() {
   registerTerminalDebugActions();
   registerTerminalActions();
   await initPluginSettingsStore();
-  await bootstrapBuiltinPlugins();
+  const pluginBootstrap = await bootstrapBuiltinPlugins();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
   await initKeybindingPreferences();
 
-  const rootEl = document.getElementById("root");
-  if (rootEl) {
-    // 不包 StrictMode:Pier 终端 panel 是 web React tree + Ghostty native NSView
-    // 协同, native terminal session 生命周期由 workspace 显式 close/reconcile
-    // 管理. dev StrictMode 的诊断性 remount 对 native surface 没有业务含义,
-    // 这里保持 dev/prod 行为一致, 避免给 reload 复用路径引入额外扰动.
-    createRoot(rootEl).render(<App />);
-  }
+  // 不包 StrictMode:Pier 终端 panel 是 web React tree + Ghostty native NSView
+  // 协同, native terminal session 生命周期由 workspace 显式 close/reconcile
+  // 管理. dev StrictMode 的诊断性 remount 对 native surface 没有业务含义,
+  // 这里保持 dev/prod 行为一致, 避免给 reload 复用路径引入额外扰动.
+  root.render(<App />);
+  requestAnimationFrame(() => {
+    setTimeout(() => pluginBootstrap.startExternal(), 0);
+  });
 }
 
 bootstrap().catch((err) => {
   console.error("[pier] bootstrap failed:", err);
+  try {
+    getApplicationRoot().render(
+      <>
+        <AppDialogHost />
+        <StartupErrorScreen error={err} />
+      </>
+    );
+  } catch (renderError) {
+    console.error("[pier] startup error screen failed:", renderError);
+  }
 });

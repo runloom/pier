@@ -4,3 +4,8 @@ export type FileSaveOutcome =
   | "failed"
   | "noop"
   | "saved";
+
+export interface FileDocumentSettleResult {
+  documentId: string;
+  outcome: FileSaveOutcome;
+}

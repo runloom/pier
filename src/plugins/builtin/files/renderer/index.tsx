@@ -8,17 +8,26 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_ID,
+  FILES_SAVE_AS_COMMAND_ID,
   FILES_SAVE_COMMAND_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "../manifest.ts";
 import { FileEditorController } from "./file-editor-controller.ts";
 import { createFilePanel as createFilesFilePanel } from "./file-panel.tsx";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
+import { createSaveAllAction } from "./file-save-all-action.ts";
 import { createFilesTreeActions } from "./file-tree-actions.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
+import {
+  abortFilesDraftSuspend,
+  commitFilesDraftSuspend,
+  prepareFilesDraftSuspend,
+  releaseFilesDraftSuspendAfterDispose,
+} from "./files-document-drafts.ts";
 import { getDocumentForPanelSource } from "./files-document-store.ts";
 import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
 import { createFilesEditorActions } from "./files-editor-actions.ts";
+import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
@@ -29,6 +38,24 @@ import {
 import { clearFilesTreeStore } from "./files-tree-store.ts";
 import { clearFilesTreeWatchers } from "./files-tree-watch.ts";
 import { FilesWatchHub } from "./files-watch-hub.ts";
+
+function withFilesMutationGate(
+  action: RendererPluginAction,
+  controller: FileEditorController
+): RendererPluginAction {
+  return {
+    ...action,
+    handler: async (invocation) => {
+      try {
+        await controller.runMutation(() => action.handler(invocation));
+      } catch (error) {
+        if (!(error instanceof FilesMutationSuspendedError)) {
+          throw error;
+        }
+      }
+    },
+  };
+}
 
 function createOpenSelectionAsMarkdownAction(
   context: RendererPluginContext,
@@ -83,7 +110,7 @@ function createOpenSelectionAsMarkdownAction(
         instanceId: createFileFilePanelInstanceId(source),
         params: {
           // untitled = 用户产生的临时草稿,天然 pinned,不能被 preview 语义
-          // 顶掉,否则 localStorage 草稿会随 panel 关闭一并 remove。
+          // 顶掉,否则受保护草稿会随 panel 关闭一并 remove。
           pinned: true,
           source,
         },
@@ -121,6 +148,26 @@ function createSaveAction(
     // command-palette 里能查到,但主要触发方式是 Cmd+S。
     surfaces: ["command-palette"],
     title: () => t("filePanel.save", "Save"),
+  };
+}
+
+function createSaveAsAction(
+  context: RendererPluginContext,
+  controller: FileEditorController
+): RendererPluginAction {
+  const t = (key: string, fallback?: string) =>
+    context.i18n.t(key, undefined, fallback);
+  return {
+    category: "file",
+    handler: async () => {
+      await controller.saveAsPanel(
+        context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID)
+      );
+    },
+    id: FILES_SAVE_AS_COMMAND_ID,
+    metadata: { group: "5_save", sortOrder: 2 },
+    surfaces: ["command-palette"],
+    title: () => t("filePanel.saveAs", "Save As…"),
   };
 }
 
@@ -168,7 +215,12 @@ function registerDirtyCloseGuard(
         return true;
       }
       const document = getDocumentForPanelSource(source);
-      if (!document?.dirty) {
+      if (
+        !(
+          document &&
+          (document.dirty || document.needsSaveAs || document.durabilityUnknown)
+        )
+      ) {
         return true;
       }
       if (
@@ -222,14 +274,21 @@ function registerDirtyCloseGuard(
         controller.discardDocument(document.id);
         return true;
       }
-      // 保存:untitled 文档无处可存(容量契约),按取消处理保护数据。
-      if (document.source.kind !== "disk") {
-        return false;
+      try {
+        await controller.runMutation(() =>
+          controller.settleDocument(document.id, input.panelId, "failure")
+        );
+      } catch (error) {
+        if (error instanceof FilesMutationSuspendedError) {
+          return false;
+        }
+        throw error;
       }
-      await controller.saveDocument(document.id, input.panelId, "failure");
       const latest = getDocumentForPanelSource(source);
       // 保存失败(冲突取消/IO 错误)时保持面板打开。
-      return latest ? !latest.dirty : true;
+      return latest
+        ? !(latest.dirty || latest.needsSaveAs || latest.durabilityUnknown)
+        : true;
     }
   );
 }
@@ -240,9 +299,34 @@ export const filesRendererPlugin: RendererPluginModule = {
       context.i18n.t(key, undefined, fallback);
     const watchHub = new FilesWatchHub(context.files);
     const editorController = new FileEditorController(context, watchHub);
-    // 后端不可用时草稿模块保留 localStorage 降级路径。
-    editorController.initialize().catch(() => undefined);
+    editorController.initialize().catch((error: unknown) => {
+      console.error("[files] draft backend initialization failed:", error);
+    });
     const disposers = [
+      context.lifecycle.beforeSuspend({
+        abort: async (_reason, { signal }) => {
+          try {
+            await abortFilesDraftSuspend(signal);
+          } finally {
+            editorController.resumeMutations();
+            editorController.setEditingSuspended(false);
+          }
+        },
+        commit: async (_reason, { signal }) => {
+          await commitFilesDraftSuspend(signal);
+        },
+        prepare: async ({ signal }) => {
+          editorController.setEditingSuspended(true);
+          try {
+            await editorController.suspendMutations(signal);
+            await prepareFilesDraftSuspend(signal);
+          } catch (error) {
+            editorController.resumeMutations();
+            editorController.setEditingSuspended(false);
+            throw error;
+          }
+        },
+      }),
       context.panels.register({
         component: createFilesFilePanel(context, editorController, watchHub),
         icon: FileText,
@@ -252,15 +336,41 @@ export const filesRendererPlugin: RendererPluginModule = {
       }),
       registerDirtyCloseGuard(context, editorController),
       context.actions.register(
-        createOpenSelectionAsMarkdownAction(context, editorController)
+        withFilesMutationGate(
+          createOpenSelectionAsMarkdownAction(context, editorController),
+          editorController
+        )
       ),
-      context.actions.register(createSaveAction(context, editorController)),
-      context.actions.register(createTreeSearchAction(context)),
+      context.actions.register(
+        withFilesMutationGate(
+          createSaveAction(context, editorController),
+          editorController
+        )
+      ),
+      context.actions.register(
+        withFilesMutationGate(
+          createSaveAsAction(context, editorController),
+          editorController
+        )
+      ),
+      context.actions.register(
+        withFilesMutationGate(
+          createSaveAllAction(context, editorController),
+          editorController
+        )
+      ),
+      context.actions.register(
+        withFilesMutationGate(createTreeSearchAction(context), editorController)
+      ),
       ...createFilesTreeActions(context, editorController).map((action) =>
-        context.actions.register(action)
+        context.actions.register(
+          withFilesMutationGate(action, editorController)
+        )
       ),
       ...createFilesEditorActions(context, editorController).map((action) =>
-        context.actions.register(action)
+        context.actions.register(
+          withFilesMutationGate(action, editorController)
+        )
       ),
       registerFilesProjectStatusItem(context),
     ];
@@ -271,6 +381,7 @@ export const filesRendererPlugin: RendererPluginModule = {
       }
       clearFilesTreeWatchers();
       editorController.dispose({ clearDocuments: true });
+      releaseFilesDraftSuspendAfterDispose();
       watchHub.dispose();
       clearFilesTreeStore();
       clearFilesNavHistory();

@@ -19,8 +19,9 @@ export type PendingUntitledRestoreSource = Extract<
 export function applyHydratedDraftsToOpenDocuments(input: {
   documents: Map<string, FilesDocument>;
   pendingUntitledRestores: Map<string, PendingUntitledRestoreSource>;
-  syncNextUntitledIndexFromId: (documentId: string) => void;
-}): void {
+  syncNextUntitledIndex: (documentId: string, name: string) => void;
+}): readonly string[] {
+  const hydratedDocumentIds = new Set<string>();
   for (const [id, document] of input.documents) {
     if (document.source.kind !== "disk" || document.dirty) {
       continue;
@@ -42,6 +43,7 @@ export function applyHydratedDraftsToOpenDocuments(input: {
         root: document.source.root,
       })
     );
+    hydratedDocumentIds.add(id);
   }
 
   for (const [id, source] of [...input.pendingUntitledRestores]) {
@@ -61,7 +63,9 @@ export function applyHydratedDraftsToOpenDocuments(input: {
       persisted,
     });
     input.documents.set(id, document);
-    input.syncNextUntitledIndexFromId(id);
+    hydratedDocumentIds.add(id);
+    input.syncNextUntitledIndex(id, name);
     input.pendingUntitledRestores.delete(id);
   }
+  return [...hydratedDocumentIds];
 }

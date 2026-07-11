@@ -27,27 +27,51 @@ export function createPluginFilesContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["files"] {
   return {
+    confirmDurability: (request) => {
+      assertPluginCapability(entry, "file:write");
+      return window.pier.files.confirmDurability(request);
+    },
     copy: (request) => {
       assertPluginCapability(entry, "file:write");
       return window.pier.files.copy(request);
     },
     drafts: {
+      claimLegacy: (key) => {
+        assertPluginCapability(entry, "file:write");
+        return window.pier.files.drafts.claimLegacy(key);
+      },
       delete: (key) => {
         assertPluginCapability(entry, "file:write");
         return window.pier.files.drafts.delete(key);
       },
-      list: () => {
+      get: (key) => {
         assertPluginCapability(entry, "file:read");
-        return window.pier.files.drafts.list();
+        return window.pier.files.drafts.get(key);
       },
-      set: (key, value) => {
+      listKeys: () => {
+        assertPluginCapability(entry, "file:read");
+        return window.pier.files.drafts.listKeys();
+      },
+      listDiagnostics: () => {
+        assertPluginCapability(entry, "file:read");
+        return window.pier.files.drafts.listDiagnostics();
+      },
+      set: (key, generation, value) => {
         assertPluginCapability(entry, "file:write");
-        return window.pier.files.drafts.set(key, value);
+        return window.pier.files.drafts.set(key, generation, value);
       },
     },
     exists: (request) => {
       assertPluginCapability(entry, "file:read");
       return window.pier.files.exists(request);
+    },
+    inspectWriteTarget: (request) => {
+      assertPluginCapability(entry, "file:write");
+      return window.pier.files.inspectWriteTarget(request);
+    },
+    inspectPathImpact: (request) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.inspectPathImpact(request);
     },
     list: (requestOrRoot, options) => {
       assertPluginCapability(entry, "file:read");
@@ -62,6 +86,14 @@ export function createPluginFilesContext(
     move: (request) => {
       assertPluginCapability(entry, "file:write");
       return window.pier.files.move(request);
+    },
+    pickSaveTarget: (request) => {
+      assertPluginCapability(entry, "file:write");
+      return window.pier.files.pickSaveTarget(request);
+    },
+    readDocument: (request) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.readDocument(request);
     },
     readText: (request) => {
       assertPluginCapability(entry, "file:read");
@@ -82,6 +114,10 @@ export function createPluginFilesContext(
     watch: (root, listener, options) => {
       assertPluginCapability(entry, "file:read");
       return window.pier.files.watch(root, listener, options);
+    },
+    writeDocument: (request) => {
+      assertPluginCapability(entry, "file:write");
+      return window.pier.files.writeDocument(request);
     },
     writeText: (request) => {
       assertPluginCapability(entry, "file:write");

@@ -14,3 +14,17 @@ export function isFileConflictError(error: unknown): boolean {
     (error as Error & { code?: unknown }).code === "file_conflict"
   );
 }
+
+export function isFileMissingError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  if (
+    "code" in error &&
+    ((error as Error & { code?: unknown }).code === "ENOENT" ||
+      (error as Error & { code?: unknown }).code === "not_found")
+  ) {
+    return true;
+  }
+  return /ENOENT|no such file|not found/i.test(error.message);
+}

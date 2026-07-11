@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type {
   WindowCreateOptions,
@@ -18,12 +19,18 @@ import {
   readPreferredOpenWindowRecordIds,
 } from "../state/window-record-state.ts";
 import { findWindowContext } from "../windows/window-identity.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import {
+  type WindowCloseDecision,
+  type WindowCloseResult,
+  windowManager,
+} from "../windows/window-manager.ts";
 
 export interface WindowService {
-  close(windowId: string): void;
+  close(windowId: string): Promise<WindowCloseResult>;
   create(options?: WindowCreateOptions): Promise<WindowCreateResult>;
-  flushOpenWindows(): Promise<void>;
+  flushOpenWindows(
+    additionalCriticalFlush?: () => Promise<void>
+  ): Promise<void>;
   flushWindow(windowId: string): Promise<void>;
   focus(windowId: string): void;
   list(): WindowInfo[];
@@ -32,12 +39,67 @@ export interface WindowService {
 }
 
 export interface CreateWindowServiceArgs {
-  flushRendererLayout?: (windowId: string) => Promise<void>;
+  finalizeRendererClose?: (
+    windowId: string,
+    transitionId: string,
+    outcome: "abort" | "commit"
+  ) => Promise<void>;
+  flushCriticalState?: () => Promise<void>;
+  prepareRendererClose?: (
+    windowId: string,
+    reason: "app-quit" | "window-close",
+    transitionId: string
+  ) => Promise<void>;
+  reportCloseFailure?: (windowId: string, error: unknown) => Promise<void>;
+  reportCloseFailureFallback?: (input: {
+    closeError: unknown;
+    feedbackError: unknown;
+    windowId: string;
+  }) => Promise<void> | void;
+  runWhenPluginTransitionsIdle?: <T>(operation: () => Promise<T>) => Promise<T>;
 }
 
 let didRegisterCloseHandler = false;
-let currentFlushRendererLayout: (windowId: string) => Promise<void> =
-  async () => undefined;
+let currentFinalizeRendererClose: (
+  windowId: string,
+  transitionId: string,
+  outcome: "abort" | "commit"
+) => Promise<void> = async () => undefined;
+let currentFlushCriticalState: () => Promise<void> = async () => undefined;
+let currentPrepareRendererClose: (
+  windowId: string,
+  reason: "app-quit" | "window-close",
+  transitionId: string
+) => Promise<void> = async () => undefined;
+let currentRunWindowTransition: <T>(operation: () => Promise<T>) => Promise<T> =
+  async <T>(operation: () => Promise<T>): Promise<T> => await operation();
+let currentReportCloseFailure: (
+  windowId: string,
+  error: unknown
+) => Promise<void> = async () => undefined;
+let currentReportCloseFailureFallback: NonNullable<
+  CreateWindowServiceArgs["reportCloseFailureFallback"]
+> = () => undefined;
+
+async function reportCloseFailure(
+  windowId: string,
+  closeError: unknown
+): Promise<void> {
+  try {
+    await currentReportCloseFailure(windowId, closeError);
+  } catch (feedbackError) {
+    console.error("[window-close-feedback] failed:", feedbackError);
+    try {
+      await currentReportCloseFailureFallback({
+        closeError,
+        feedbackError,
+        windowId,
+      });
+    } catch (fallbackError) {
+      console.error("[window-close-native-feedback] failed:", fallbackError);
+    }
+  }
+}
 
 /**
  * 并发 flush 6 个 debounced store。任何一路失败不能吞其他成功——用 allSettled
@@ -66,16 +128,70 @@ async function flushAllStoresSettled(): Promise<void> {
   }
 }
 
-async function flushWindowBeforeClose(windowId: string): Promise<void> {
+async function prepareWindowBeforeCloseCore(
+  windowId: string
+): Promise<WindowCloseDecision> {
+  const transitionId = `window-close:${windowId}:${randomUUID()}`;
   try {
-    await currentFlushRendererLayout(windowId);
+    await currentPrepareRendererClose(windowId, "window-close", transitionId);
   } catch (err) {
+    await currentFinalizeRendererClose(windowId, transitionId, "abort").catch(
+      (finalizeError: unknown) => {
+        console.error(
+          "[window-close-abort] failed:",
+          finalizeError instanceof Error
+            ? finalizeError.message
+            : String(finalizeError)
+        );
+      }
+    );
     console.error(
-      "[window-layout-flush] failed:",
+      "[window-close-prepare] failed:",
       err instanceof Error ? err.message : String(err)
     );
+    await reportCloseFailure(windowId, err);
+    return "veto";
+  }
+  try {
+    await currentFlushCriticalState();
+  } catch (err) {
+    await currentFinalizeRendererClose(windowId, transitionId, "abort").catch(
+      () => undefined
+    );
+    await reportCloseFailure(windowId, err);
+    return "veto";
+  }
+  try {
+    await currentFinalizeRendererClose(windowId, transitionId, "commit");
+  } catch (err) {
+    await currentFinalizeRendererClose(windowId, transitionId, "abort").catch(
+      (finalizeError: unknown) => {
+        console.error(
+          "[window-close-abort-after-commit-failure] failed:",
+          finalizeError instanceof Error
+            ? finalizeError.message
+            : String(finalizeError)
+        );
+      }
+    );
+    console.error(
+      "[window-close-commit] failed:",
+      err instanceof Error ? err.message : String(err)
+    );
+    await reportCloseFailure(windowId, err);
+    return "veto";
   }
   await flushAllStoresSettled();
+  return "allow";
+}
+
+async function flushWindowBeforeClose(windowId: string): Promise<void> {
+  const decision = await currentRunWindowTransition(() =>
+    prepareWindowBeforeCloseCore(windowId)
+  );
+  if (decision === "veto") {
+    throw new Error(`window close preparation was vetoed: ${windowId}`);
+  }
 }
 
 function ensureCloseHandler(): void {
@@ -84,7 +200,7 @@ function ensureCloseHandler(): void {
   }
   didRegisterCloseHandler = true;
   windowManager.onBeforeClose(({ windowId }) =>
-    flushWindowBeforeClose(windowId)
+    currentRunWindowTransition(() => prepareWindowBeforeCloseCore(windowId))
   );
   windowManager.onClose(({ recordId }) => {
     markWindowRecordClosed(recordId).catch((err) => {
@@ -111,8 +227,30 @@ function isWindowRecordOpenInLiveWindow(recordId: string): boolean {
 export function createWindowService(
   args: CreateWindowServiceArgs = {}
 ): WindowService {
-  currentFlushRendererLayout =
-    args.flushRendererLayout ?? (async () => undefined);
+  currentFlushCriticalState =
+    args.flushCriticalState ?? (async () => undefined);
+  currentFinalizeRendererClose =
+    args.finalizeRendererClose ?? (async () => undefined);
+  currentPrepareRendererClose =
+    args.prepareRendererClose ?? (async () => undefined);
+  currentReportCloseFailure =
+    args.reportCloseFailure ?? (async () => undefined);
+  currentReportCloseFailureFallback =
+    args.reportCloseFailureFallback ?? (() => undefined);
+  const runWhenPluginTransitionsIdle =
+    args.runWhenPluginTransitionsIdle ??
+    (async <T>(operation: () => Promise<T>): Promise<T> => await operation());
+  let transitionTail: Promise<void> = Promise.resolve();
+  let quitSealed = false;
+  const runWindowTransition = <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = transitionTail.then(operation, operation);
+    transitionTail = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  };
+  currentRunWindowTransition = runWindowTransition;
   ensureCloseHandler();
 
   async function create(
@@ -128,39 +266,91 @@ export function createWindowService(
     recordId: string;
     showInactive?: boolean;
   }): Promise<WindowCreateResult> {
-    const { mode, recordId, showInactive } = options;
-    if (isWindowRecordOpenInLiveWindow(recordId)) {
-      throw new Error(`window record already open: ${recordId}`);
-    }
-    const runtimeWindowId = nextRuntimeWindowId();
-    const windowId = windowManager.create({
-      ...(runtimeWindowId ? { id: runtimeWindowId } : {}),
-      mode,
-      recordId,
-      ...(showInactive ? { showInactive: true } : {}),
-    });
-    await markWindowRecordOpen(recordId);
-    return { recordId, windowId };
+    return await runWhenPluginTransitionsIdle(() =>
+      runWindowTransition(async () => {
+        if (quitSealed) {
+          throw new Error("window creation is sealed for app quit");
+        }
+        const { mode, recordId, showInactive } = options;
+        if (isWindowRecordOpenInLiveWindow(recordId)) {
+          throw new Error(`window record already open: ${recordId}`);
+        }
+        const runtimeWindowId = nextRuntimeWindowId();
+        const windowId = windowManager.create({
+          ...(runtimeWindowId ? { id: runtimeWindowId } : {}),
+          mode,
+          recordId,
+          ...(showInactive ? { showInactive: true } : {}),
+        });
+        await markWindowRecordOpen(recordId);
+        return { recordId, windowId };
+      })
+    );
   }
 
   return {
     close: (windowId) => windowManager.close(windowId),
     create,
     focus: (windowId) => windowManager.focus(windowId),
-    flushOpenWindows: async () => {
-      const windows = windowManager.list();
-      for (const windowInfo of windows) {
+    flushOpenWindows: async (additionalCriticalFlush) =>
+      await runWindowTransition(async () => {
+        quitSealed = false;
+        const windows = windowManager.list();
+        const transitionId = `app-quit:${randomUUID()}`;
+        const rendererResults = await Promise.allSettled(
+          windows.map((windowInfo) =>
+            currentPrepareRendererClose(windowInfo.id, "app-quit", transitionId)
+          )
+        );
+        const failures = rendererResults.flatMap((result) =>
+          result.status === "rejected" ? [result.reason] : []
+        );
         try {
-          await currentFlushRendererLayout(windowInfo.id);
-        } catch (err) {
-          console.error(
-            "[window-layout-flush] failed:",
-            err instanceof Error ? err.message : String(err)
-          );
+          await currentFlushCriticalState();
+        } catch (error) {
+          failures.push(error);
         }
-      }
-      await flushAllStoresSettled();
-    },
+        if (additionalCriticalFlush) {
+          try {
+            await additionalCriticalFlush();
+          } catch (error) {
+            failures.push(error);
+          }
+        }
+        const outcome = failures.length === 0 ? "commit" : "abort";
+        const finalizeResults = await Promise.allSettled(
+          windows.map((windowInfo) =>
+            currentFinalizeRendererClose(windowInfo.id, transitionId, outcome)
+          )
+        );
+        const failedFinalizeWindowIds: string[] = [];
+        for (const [index, result] of finalizeResults.entries()) {
+          if (result.status === "rejected") {
+            failures.push(result.reason);
+            const windowId = windows[index]?.id;
+            if (windowId) {
+              failedFinalizeWindowIds.push(windowId);
+            }
+          }
+        }
+        if (outcome === "commit" && failedFinalizeWindowIds.length > 0) {
+          const recoveryResults = await Promise.allSettled(
+            windows.map(({ id: windowId }) =>
+              currentFinalizeRendererClose(windowId, transitionId, "abort")
+            )
+          );
+          for (const result of recoveryResults) {
+            if (result.status === "rejected") {
+              failures.push(result.reason);
+            }
+          }
+        }
+        await flushAllStoresSettled();
+        if (failures.length > 0) {
+          throw new AggregateError(failures, "window close preparation failed");
+        }
+        quitSealed = true;
+      }),
     flushWindow: flushWindowBeforeClose,
     list: () => windowManager.list(),
     restoreMostRecentClosed: async () => {

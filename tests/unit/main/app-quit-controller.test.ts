@@ -339,7 +339,7 @@ describe("createAppQuitController", () => {
     expect(parent.focus).not.toHaveBeenCalled();
   });
 
-  it("allows a repeated before-quit event through during the quitting phase and performs final cleanup only", async () => {
+  it("keeps vetoing repeated before-quit events until asynchronous flush succeeds", async () => {
     const flushGate = deferred<void>();
     const { controller, deps } = createHarness({
       flushBeforeQuit: vi.fn(() => flushGate.promise),
@@ -348,17 +348,25 @@ describe("createAppQuitController", () => {
 
     controller.handleBeforeQuit(quitEvent());
     await vi.waitFor(() => {
-      expect(controller.getPhase()).toBe("quitting");
+      expect(controller.getPhase()).toBe("preparing");
     });
 
     controller.handleBeforeQuit(repeatedEvent);
 
-    expect(repeatedEvent.preventDefault).not.toHaveBeenCalled();
-    expect(deps.finalCleanup).toHaveBeenCalledTimes(1);
+    expect(repeatedEvent.preventDefault).toHaveBeenCalledTimes(1);
+    expect(deps.finalCleanup).not.toHaveBeenCalled();
     expect(deps.readConfirmationMode).toHaveBeenCalledTimes(1);
     expect(deps.confirmQuit).not.toHaveBeenCalled();
     expect(deps.flushBeforeQuit).toHaveBeenCalledTimes(1);
     expect(deps.proceedToQuit).not.toHaveBeenCalled();
+
+    flushGate.resolve();
+    await vi.waitFor(() => expect(controller.getPhase()).toBe("quitting"));
+
+    const committedEvent = quitEvent();
+    controller.handleBeforeQuit(committedEvent);
+    expect(committedEvent.preventDefault).not.toHaveBeenCalled();
+    expect(deps.finalCleanup).toHaveBeenCalledTimes(1);
   });
 
   it.each([

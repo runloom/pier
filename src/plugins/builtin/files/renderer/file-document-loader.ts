@@ -1,15 +1,18 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { fileEditorErrorMessage } from "./file-editor-errors.ts";
+import {
+  fileEditorErrorMessage,
+  isFileMissingError,
+} from "./file-editor-errors.ts";
+import { waitForSettledWithAbort } from "./files-async-drain.ts";
 import {
   getDocument,
+  markDocumentDeletedOnDisk,
   markDocumentDiskConflict,
   markDocumentError,
-  markDocumentLoaded,
   markDocumentLoading,
+  markDocumentReadResult,
 } from "./files-document-store.ts";
 import type { FilesDocument } from "./files-document-types.ts";
-
-const MAX_EDITABLE_FILE_BYTES = 10 * 1024 * 1024;
 
 export class FileDocumentLoader {
   readonly #context: RendererPluginContext;
@@ -78,6 +81,16 @@ export class FileDocumentLoader {
     this.#documentEpochs.clear();
   }
 
+  async waitForIdle(signal: AbortSignal): Promise<void> {
+    while (this.#operations.size > 0) {
+      await waitForSettledWithAbort(
+        this.#operations.values(),
+        signal,
+        "File load drain aborted"
+      );
+    }
+  }
+
   async #read(input: {
     documentId: string;
     epoch: number;
@@ -86,43 +99,20 @@ export class FileDocumentLoader {
     root: string;
   }): Promise<void> {
     try {
-      const stat = await this.#context.files.stat({
+      const result = await this.#context.files.readDocument({
         path: input.path,
         root: input.root,
       });
-      if (!stat.exists || stat.isDirectory) {
-        throw new Error(
-          this.#t("filePanel.errors.deleted", "File no longer exists on disk.")
-        );
-      }
-      if (stat.size != null && stat.size > MAX_EDITABLE_FILE_BYTES) {
-        throw new Error(
-          this.#t(
-            "filePanel.errors.tooLarge",
-            "File is too large to open in the editor (>10 MB)."
-          )
-        );
-      }
-      const contents = await this.#context.files.readText({
-        path: input.path,
-        root: input.root,
-      });
-      if (contents.slice(0, 8000).includes("\u0000")) {
-        throw new Error(
-          this.#t(
-            "filePanel.errors.binary",
-            "Binary files cannot be opened in the text editor."
-          )
-        );
-      }
       const latest = getDocument(input.documentId);
       if (this.#disposed || !this.#isCurrent(latest, input)) {
         return;
       }
-      if (input.reload && latest.dirty) {
-        markDocumentDiskConflict(latest.id);
+      if (input.reload && (latest.dirty || latest.durabilityUnknown)) {
+        if (!("revision" in result && result.revision === latest.revision)) {
+          markDocumentDiskConflict(latest.id);
+        }
       } else {
-        markDocumentLoaded(latest.id, contents, stat.mtimeMs);
+        markDocumentReadResult(latest.id, result);
       }
     } catch (error) {
       const latest = getDocument(input.documentId);
@@ -131,6 +121,10 @@ export class FileDocumentLoader {
         latest &&
         (this.#documentEpochs.get(input.documentId) ?? 0) === input.epoch
       ) {
+        if (isFileMissingError(error)) {
+          markDocumentDeletedOnDisk(latest.id);
+          return;
+        }
         markDocumentError(
           latest.id,
           fileEditorErrorMessage(

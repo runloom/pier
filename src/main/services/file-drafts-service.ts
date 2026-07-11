@@ -1,80 +1,267 @@
-import { join } from "node:path";
-import type { FileDraftsListResult } from "@shared/contracts/file.ts";
 import {
-  type DebouncedJsonStore,
-  debouncedJsonStore,
-} from "../state/debounced-store.ts";
+  assertDraftOwner,
+  FileDraftsStorage,
+  LEGACY_DRAFT_OWNER,
+  ownerEntries,
+  type StoredDraftDiagnostic,
+  type StoredDraftEntries,
+  type StoredDraftEntry,
+} from "./file-drafts-storage.ts";
+import type {
+  CreateFileDraftsServiceOptions,
+  FileDraftClaimResult,
+  FileDraftSnapshot,
+  FileDraftsService,
+  FileDraftWriteResult,
+} from "./file-drafts-types.ts";
 
-/**
- * hot-exit 草稿存储(userData/file-drafts.json)。
- * renderer 侧脏文档(disk + untitled)的序列化快照挂在这里,
- * 崩溃/重载后重开文件时恢复为 dirty 态。
- * localStorage 不可靠(随 webContents 清缓存丢失),故落 userData。
- */
-export interface FileDraftsService {
-  delete(key: string): Promise<void>;
-  flush(): Promise<void>;
-  list(): Promise<FileDraftsListResult>;
-  set(key: string, value: string): Promise<void>;
-}
+const DEFAULT_MAX_DRAFT_VALUE_BYTES = 32 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 
-const MAX_DRAFT_VALUE_BYTES = 2 * 1024 * 1024;
-const MAX_DRAFT_ENTRIES = 200;
+export { LEGACY_DRAFT_OWNER } from "./file-drafts-storage.ts";
+export type {
+  CreateFileDraftsServiceOptions,
+  FileDraftClaimResult,
+  FileDraftSnapshot,
+  FileDraftsService,
+  FileDraftWriteResult,
+} from "./file-drafts-types.ts";
 
-export function createFileDraftsService(options: {
-  userDataDir: string;
-}): FileDraftsService {
-  const store: DebouncedJsonStore<FileDraftsListResult> = debouncedJsonStore({
-    defaults: {},
-    filePath: join(options.userDataDir, "file-drafts.json"),
-  });
-  let ready: Promise<unknown> | null = null;
+class FileDraftsServiceImpl implements FileDraftsService {
+  readonly #maxDraftValueBytes: number;
+  readonly #maxTotalBytes: number;
+  readonly #storage: FileDraftsStorage;
+  #entries: StoredDraftEntries = new Map();
+  #diagnostics: readonly StoredDraftDiagnostic[] = [];
+  #initPromise: Promise<void> | null = null;
+  #operationQueue: Promise<void> = Promise.resolve();
+  #totalBytes = 0;
 
-  function ensureInit(): Promise<unknown> {
-    ready ??= store.init();
-    return ready;
+  constructor(options: CreateFileDraftsServiceOptions) {
+    this.#storage = new FileDraftsStorage(options.userDataDir);
+    this.#maxDraftValueBytes =
+      options.maxDraftValueBytes ?? DEFAULT_MAX_DRAFT_VALUE_BYTES;
+    this.#maxTotalBytes = options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
+    assertPositiveLimit("maxDraftValueBytes", this.#maxDraftValueBytes);
+    assertPositiveLimit("maxTotalBytes", this.#maxTotalBytes);
   }
 
-  return {
-    async delete(key) {
-      await ensureInit();
-      store.mutate((state) => {
-        if (!(key in state)) {
-          return state;
-        }
-        const { [key]: _removed, ...rest } = state;
-        return rest;
-      });
-    },
-    async flush() {
-      await ensureInit();
-      await store.flush();
-    },
-    async list() {
-      await ensureInit();
-      return store.get();
-    },
-    async set(key, value) {
-      if (Buffer.byteLength(value, "utf8") > MAX_DRAFT_VALUE_BYTES) {
-        // 超大草稿直接拒绝落盘:hot-exit 是兜底不是备份系统,
-        // 巨型缓冲会拖慢每次 flush 且极少是用户想要的。
-        return;
+  claimLegacy(owner: string, key: string): Promise<FileDraftClaimResult> {
+    return this.#enqueue(async () => {
+      assertDraftOwner(owner);
+      assertDraftKey(key);
+      if (owner === LEGACY_DRAFT_OWNER) {
+        throw new Error("A legacy draft must be claimed by a window owner");
       }
-      await ensureInit();
-      store.mutate((state) => {
-        const next = { ...state, [key]: value };
-        const keys = Object.keys(next);
-        if (keys.length > MAX_DRAFT_ENTRIES) {
-          // 简单 FIFO 淘汰:草稿键含创建顺序无保障,删最早枚举的多余项。
-          for (const staleKey of keys.slice(
-            0,
-            keys.length - MAX_DRAFT_ENTRIES
-          )) {
-            delete next[staleKey];
-          }
-        }
-        return next;
+      const legacy = this.#entry(LEGACY_DRAFT_OWNER, key);
+      const target = this.#entry(owner, key);
+      if (!legacy) {
+        return target
+          ? { draft: snapshot(target), kind: "already-claimed" }
+          : { kind: "not-found" };
+      }
+      if (target) {
+        return { draft: snapshot(target), kind: "conflict" };
+      }
+
+      await this.#storage.claimLegacy(owner, key);
+      ownerEntries(this.#entries, LEGACY_DRAFT_OWNER).delete(key);
+      ownerEntries(this.#entries, owner).set(key, legacy);
+      await this.#storage.refreshIndexCache(this.#entries);
+      return { draft: snapshot(legacy), kind: "claimed" };
+    });
+  }
+
+  delete(owner: string, key: string): Promise<boolean> {
+    return this.#enqueue(() => this.#deleteEntry(owner, key));
+  }
+
+  async flush(): Promise<void> {
+    await this.#ensureInit();
+    await this.#operationQueue;
+  }
+
+  async get(owner: string, key: string): Promise<FileDraftSnapshot | null> {
+    assertDraftOwner(owner);
+    assertDraftKey(key);
+    await this.#awaitReads();
+    const entry = this.#entry(owner, key);
+    return entry ? snapshot(entry) : null;
+  }
+
+  async listKeys(owner: string): Promise<readonly string[]> {
+    assertDraftOwner(owner);
+    await this.#awaitReads();
+    return [...ownerEntries(this.#entries, owner).keys()].sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }
+
+  async listDiagnostics(owner: string) {
+    assertDraftOwner(owner);
+    await this.#awaitReads();
+    return this.#diagnostics
+      .filter((diagnostic) => diagnostic.owner === owner)
+      .map(({ id, message, quarantinedAt }) => ({
+        id,
+        message,
+        quarantinedAt,
+      }));
+  }
+
+  set(
+    owner: string,
+    key: string,
+    generation: number,
+    value: string
+  ): Promise<FileDraftWriteResult> {
+    return this.#enqueue(() =>
+      this.#setEntry(owner, key, generation, value)
+    ).catch(
+      (error: unknown): FileDraftWriteResult => ({
+        kind: "failed",
+        message: error instanceof Error ? error.message : String(error),
+      })
+    );
+  }
+
+  async #awaitReads(): Promise<void> {
+    await this.#ensureInit();
+    await this.#operationQueue;
+  }
+
+  async #deleteEntry(owner: string, key: string): Promise<boolean> {
+    assertDraftOwner(owner);
+    assertDraftKey(key);
+    const entry = this.#entry(owner, key);
+    if (!entry) {
+      return false;
+    }
+    await this.#storage.delete(owner, key);
+    ownerEntries(this.#entries, owner).delete(key);
+    this.#totalBytes -= entry.bytes;
+    await this.#storage.refreshIndexCache(this.#entries);
+    return true;
+  }
+
+  #enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#operationQueue
+      .catch(() => undefined)
+      .then(async () => {
+        await this.#ensureInit();
+        return operation();
       });
-    },
+    this.#operationQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  }
+
+  #ensureInit(): Promise<void> {
+    this.#initPromise ??= this.#initialize();
+    return this.#initPromise;
+  }
+
+  #entry(owner: string, key: string): StoredDraftEntry | undefined {
+    return this.#entries.get(owner)?.get(key);
+  }
+
+  async #initialize(): Promise<void> {
+    const snapshot = await this.#storage.initialize();
+    this.#entries = snapshot.entries;
+    this.#diagnostics = snapshot.diagnostics;
+    this.#totalBytes = [...this.#entries.values()].reduce(
+      (total, entries) =>
+        total +
+        [...entries.values()].reduce((sum, entry) => sum + entry.bytes, 0),
+      0
+    );
+  }
+
+  async #setEntry(
+    owner: string,
+    key: string,
+    generation: number,
+    value: string
+  ): Promise<FileDraftWriteResult> {
+    assertDraftOwner(owner);
+    assertDraftKey(key);
+    assertGeneration(generation);
+    const bytes = Buffer.byteLength(value, "utf8");
+    if (bytes > this.#maxDraftValueBytes) {
+      return { kind: "rejected", reason: "entry-too-large" };
+    }
+    const current = this.#entry(owner, key);
+    if (current && generation <= current.generation) {
+      if (generation === current.generation && value === current.value) {
+        return storedResult(current);
+      }
+      return { kind: "rejected", reason: "stale-generation" };
+    }
+    if (
+      this.#totalBytes - (current?.bytes ?? 0) + bytes >
+      this.#maxTotalBytes
+    ) {
+      return { kind: "rejected", reason: "quota-exceeded" };
+    }
+
+    const entry: StoredDraftEntry = {
+      bytes,
+      generation,
+      key,
+      updatedAt: Date.now(),
+      value,
+      version: 1,
+    };
+    await this.#storage.write(owner, entry);
+    ownerEntries(this.#entries, owner).set(key, entry);
+    this.#totalBytes = this.#totalBytes - (current?.bytes ?? 0) + bytes;
+    await this.#storage.refreshIndexCache(this.#entries);
+    return storedResult(entry);
+  }
+}
+
+export function createFileDraftsService(
+  options: CreateFileDraftsServiceOptions
+): FileDraftsService {
+  return new FileDraftsServiceImpl(options);
+}
+
+function assertDraftKey(key: string): void {
+  if (!key) {
+    throw new Error("Draft key must not be empty");
+  }
+}
+
+function assertGeneration(generation: number): void {
+  if (!(Number.isSafeInteger(generation) && generation >= 0)) {
+    throw new Error("Draft generation must be a non-negative safe integer");
+  }
+}
+
+function assertPositiveLimit(name: string, value: number): void {
+  if (!(Number.isSafeInteger(value) && value > 0)) {
+    throw new Error(`${name} must be a positive safe integer`);
+  }
+}
+
+function snapshot(entry: StoredDraftEntry): FileDraftSnapshot {
+  return {
+    bytes: entry.bytes,
+    generation: entry.generation,
+    key: entry.key,
+    updatedAt: entry.updatedAt,
+    value: entry.value,
+  };
+}
+
+function storedResult(entry: StoredDraftEntry): FileDraftWriteResult {
+  return {
+    bytes: entry.bytes,
+    generation: entry.generation,
+    key: entry.key,
+    kind: "stored",
+    updatedAt: entry.updatedAt,
   };
 }

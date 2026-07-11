@@ -85,6 +85,24 @@ afterEach(() => {
 });
 
 describe("terminal status bar grouped rendering", () => {
+  it("rejects duplicate runtime ownership and preserves the first item", () => {
+    const first = {
+      id: "test.duplicate",
+      render: () => <span>First</span>,
+    };
+    const dispose = terminalStatusItemRegistry.register(first);
+
+    expect(() =>
+      terminalStatusItemRegistry.register({
+        id: first.id,
+        render: () => <span>Second</span>,
+      })
+    ).toThrow("terminal status item id is already registered");
+
+    expect(terminalStatusItemRegistry.list()).toContain(first);
+    dispose();
+  });
+
   it("无声明无覆盖时全部落左组,order 0 下按 id 字典序", () => {
     terminalStatusItemRegistry.register({
       id: "test.second",

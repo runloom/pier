@@ -37,6 +37,7 @@ import {
   detectDoubleClick,
 } from "./files-double-click.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
+import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { FilesSearchBar } from "./files-search-bar.tsx";
 import { useFilesTreeContextMenus } from "./files-tree-context-menu.ts";
 import { cancelInlineCreate, commitInlineCreate } from "./files-tree-create.ts";
@@ -220,29 +221,33 @@ export function FileTreeSidebar({
   const performMove = useCallback(
     async (from: string, to: string, options?: { silent?: boolean }) => {
       try {
-        await context.files.move({ newPath: to, path: from, root });
-        moveFilesTreeEntry(root, from, to);
-        controller.moveDiskDocumentSource(root, from, to);
-        if (!options?.silent) {
-          const name = to.split("/").at(-1) ?? to;
-          context.notifications.success(
-            t("filePanel.tree.moved", `Moved "${name}"`),
-            {
-              action: {
-                label: t("filePanel.tree.undo", "Undo"),
-                onClick: () => {
-                  performMoveRef.current?.(to, from, { silent: true });
+        await controller.runMutation(async () => {
+          await controller.movePath(root, from, to);
+          moveFilesTreeEntry(root, from, to);
+          if (!options?.silent) {
+            const name = to.split("/").at(-1) ?? to;
+            context.notifications.success(
+              t("filePanel.tree.moved", `Moved "${name}"`),
+              {
+                action: {
+                  label: t("filePanel.tree.undo", "Undo"),
+                  onClick: () => {
+                    performMoveRef.current?.(to, from, { silent: true });
+                  },
                 },
-              },
-            }
-          );
-        }
+              }
+            );
+          }
+        });
       } catch (error) {
-        context.notifications.error(
-          error instanceof Error
-            ? error.message
-            : t("filePanel.tree.renameFailed", "Unable to rename")
-        );
+        if (error instanceof FilesMutationSuspendedError) {
+          return;
+        }
+        await context.dialogs.alert({
+          body: error instanceof Error ? error.message : String(error),
+          size: "default",
+          title: t("filePanel.tree.renameFailed", "Unable to rename"),
+        });
         reloadFilesTreeRoot(
           root,
           treeVisibility.list,
@@ -434,8 +439,8 @@ export function FileTreeSidebar({
       onContextMenu={handleTreeBackgroundContextMenu}
       onDoubleClick={handleTreeDoubleClick}
     >
-      {/* 树头行已按目标布局移除(项目名在面包屑首段);搜索条按需出现,
-          Refresh 走树右键菜单,自动刷新由 watcher 承担。 */}
+      {/* 树头行已按目标布局移除（项目名在面包屑首段）；搜索条按需出现，
+          文件新鲜度统一由 watcher 维护，不提供手动刷新入口。 */}
       {treeSearch.open ? (
         <div className="shrink-0 px-2 pb-1.5">
           <FilesSearchBar

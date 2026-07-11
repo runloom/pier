@@ -1,15 +1,18 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import {
-  fileEditorErrorMessage,
-  isFileConflictError,
-} from "./file-editor-errors.ts";
+import type {
+  FileDocumentExpectedState,
+  FileDocumentWriteResult,
+  FileWritableDocumentEol,
+} from "@shared/contracts/file.ts";
+import { fileEditorErrorMessage } from "./file-editor-errors.ts";
 import type { FileSaveOutcome } from "./file-save-outcome.ts";
+import { waitForSettledWithAbort } from "./files-async-drain.ts";
 import {
   getDocument,
-  markDocumentSaved,
   markDocumentSaveError,
   markDocumentSaveIdle,
   markDocumentSaving,
+  markDocumentWritten,
   setDocumentConflictContents,
 } from "./files-document-store.ts";
 import type { FilesDocument } from "./files-document-types.ts";
@@ -70,6 +73,16 @@ export class FileDocumentSaver {
     this.#documentEpochs.clear();
   }
 
+  async waitForIdle(signal: AbortSignal): Promise<void> {
+    while (this.#operations.size > 0) {
+      await waitForSettledWithAbort(
+        this.#operations.values(),
+        signal,
+        "File save drain aborted"
+      );
+    }
+  }
+
   async #perform(
     documentId: string,
     panelId?: string
@@ -82,19 +95,14 @@ export class FileDocumentSaver {
     const epoch = this.#documentEpochs.get(document.id) ?? 0;
     markDocumentSaving(document.id);
     try {
-      const mtimeMs = await this.#write(
-        document,
-        savedContents,
-        epoch,
-        panelId
-      );
-      if (typeof mtimeMs !== "number") {
-        return mtimeMs;
+      const result = await this.#write(document, savedContents, epoch, panelId);
+      if (typeof result === "string") {
+        return result;
       }
       if (!this.#isCurrent(document.id, epoch)) {
         return "noop";
       }
-      markDocumentSaved(document.id, savedContents, mtimeMs);
+      markDocumentWritten(document.id, savedContents, result);
       return "saved";
     } catch (error) {
       if (this.#isCurrent(document.id, epoch)) {
@@ -122,7 +130,11 @@ export class FileDocumentSaver {
       document?.source.kind === "disk" &&
         document.capabilities.includes("save") &&
         document.dirty &&
+        !document.durabilityUnknown &&
         !document.readOnly &&
+        document.format !== null &&
+        document.eol !== null &&
+        document.eol !== "mixed" &&
         document.loadState === "loaded"
     );
   }
@@ -132,21 +144,24 @@ export class FileDocumentSaver {
     contents: string,
     epoch: number,
     panelId?: string
-  ): Promise<number | "cancelled" | "compare" | "noop"> {
-    try {
-      const result = await this.#context.files.writeText({
-        contents,
-        ...(document.baseMtimeMs == null
-          ? {}
-          : { expectedMtimeMs: document.baseMtimeMs }),
-        path: document.source.path,
-        root: document.source.root,
-      });
-      return result.mtimeMs;
-    } catch (error) {
-      if (!isFileConflictError(error)) {
-        throw error;
-      }
+  ): Promise<
+    | Extract<FileDocumentWriteResult, { kind: "written" }>
+    | "cancelled"
+    | "compare"
+    | "noop"
+  > {
+    const initial = await this.#writeExpected(
+      document,
+      contents,
+      document.revision
+        ? { kind: "revision", revision: document.revision }
+        : { kind: "absent" }
+    );
+    if (initial.kind === "written") {
+      return initial;
+    }
+    if (initial.kind === "not-writable") {
+      throw new Error(initial.message);
     }
     if (!this.#isCurrent(document.id, epoch)) {
       return "noop";
@@ -159,23 +174,80 @@ export class FileDocumentSaver {
       return "cancelled";
     }
     if (choice === "compare") {
-      const diskContents = await this.#context.files.readText({
+      const disk = await this.#context.files.readDocument({
         path: document.source.path,
         root: document.source.root,
       });
       if (!this.#isCurrent(document.id, epoch)) {
         return "noop";
       }
-      setDocumentConflictContents(document.id, diskContents);
+      if (disk.kind !== "text") {
+        throw new Error(
+          this.#t(
+            "filePanel.conflict.compareUnavailable",
+            "The changed file is not readable text."
+          )
+        );
+      }
+      setDocumentConflictContents(document.id, disk.contents);
       this.#onShowDiff(document.id, panelId);
       return "compare";
     }
-    const result = await this.#context.files.writeText({
-      contents,
+    const inspection = await this.#context.files.inspectWriteTarget({
       path: document.source.path,
       root: document.source.root,
     });
-    return result.mtimeMs;
+    let expected: FileDocumentExpectedState;
+    if (inspection.kind === "absent") {
+      expected = { kind: "absent" };
+    } else if (inspection.kind === "existing") {
+      expected = { kind: "revision", revision: inspection.revision };
+    } else {
+      throw new Error(
+        inspection.kind === "not-writable"
+          ? inspection.message
+          : this.#t(
+              "filePanel.errors.unsupportedOverwrite",
+              "This file type cannot be overwritten safely."
+            )
+      );
+    }
+    const overwritten = await this.#writeExpected(document, contents, expected);
+    if (overwritten.kind === "written") {
+      return overwritten;
+    }
+    if (overwritten.kind === "not-writable") {
+      throw new Error(overwritten.message);
+    }
+    throw new Error(
+      this.#t(
+        "filePanel.conflict.changedAgain",
+        "The file changed again before it could be overwritten."
+      )
+    );
+  }
+
+  #writeExpected(
+    document: DiskDocument,
+    contents: string,
+    expected: FileDocumentExpectedState
+  ): Promise<FileDocumentWriteResult> {
+    if (!document.format) {
+      throw new Error("Document format is unavailable");
+    }
+    if (!document.eol || document.eol === "mixed") {
+      throw new Error("Document line ending is not writable");
+    }
+    const eol: FileWritableDocumentEol =
+      document.eol === "none" ? "lf" : document.eol;
+    return this.#context.files.writeDocument({
+      contents,
+      eol,
+      expected,
+      format: document.format,
+      path: document.source.path,
+      root: document.source.root,
+    });
   }
 
   #isCurrent(documentId: string, epoch: number): boolean {

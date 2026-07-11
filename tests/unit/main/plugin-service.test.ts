@@ -258,8 +258,23 @@ describe("createPluginService", () => {
       localPath,
       JSON.stringify({
         ...builtinManifest,
+        commands: [
+          {
+            id: "sample.local.sayHello",
+            permissions: ["workspace:open"],
+            title: "Say Hello",
+          },
+        ],
         id: "sample.local",
         name: "Sample Local",
+        panels: [
+          {
+            component: "sample.local.panel",
+            id: "sample.local.panel",
+            permissions: ["panel:register"],
+            title: "Sample Local Panel",
+          },
+        ],
         permissions: ["plugin:read"],
         source: { kind: "local", url: localPath },
         // terminalStatusItems id 须跨插件唯一，避免与 sample.builtin 的 "sample.status" 冲突。
@@ -319,9 +334,9 @@ describe("createPluginService", () => {
       enabled: true,
       effectivePermissions: expect.arrayContaining(["plugin:read"]),
       manifest: {
-        commands: [{ id: "sample.sayHello" }],
+        commands: [{ id: "sample.local.sayHello" }],
         id: "sample.local",
-        panels: [{ id: "sample.panel" }],
+        panels: [{ id: "sample.local.panel" }],
       },
       runtime: {
         canToggle: false,

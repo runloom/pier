@@ -58,6 +58,8 @@ export class FileEditorViewSession {
   #configuredLanguage: FilesDocumentLanguage | null = null;
   #configuredPath: string | undefined;
   #configuredReadOnly: boolean | null = null;
+  #documentReadOnly = false;
+  #hostReadOnly = false;
   #savedState: EditorState | null = null;
   #scroll: ScrollSnapshot = { left: 0, top: 0 };
   #syncingDocument = false;
@@ -107,6 +109,21 @@ export class FileEditorViewSession {
     }
   }
 
+  setHostReadOnly(readOnly: boolean): void {
+    if (this.#hostReadOnly === readOnly) {
+      return;
+    }
+    this.#hostReadOnly = readOnly;
+    const view = this.#view;
+    if (view) {
+      view.dispatch({
+        effects: this.#editableCompartment.reconfigure(
+          EditorView.editable.of(!(readOnly || this.#documentReadOnly))
+        ),
+      });
+    }
+  }
+
   syncDocument(document: FilesDocument): void {
     const view = this.#view;
     if (!view) {
@@ -116,7 +133,10 @@ export class FileEditorViewSession {
     const language = document.language;
     const path =
       document.source.kind === "disk" ? document.source.path : undefined;
-    const readOnly = document.readOnly || document.loadState === "loading";
+    const documentReadOnly =
+      document.readOnly || document.loadState === "loading";
+    this.#documentReadOnly = documentReadOnly;
+    const readOnly = this.#hostReadOnly || documentReadOnly;
     const languageExtension = cmLanguageExtension(language, path);
     const effects: StateEffect<unknown>[] = [];
     if (this.#configuredReadOnly !== readOnly) {
@@ -221,7 +241,10 @@ export class FileEditorViewSession {
     const language = document.language;
     const path =
       document.source.kind === "disk" ? document.source.path : undefined;
-    const readOnly = document.readOnly || document.loadState === "loading";
+    const documentReadOnly =
+      document.readOnly || document.loadState === "loading";
+    this.#documentReadOnly = documentReadOnly;
+    const readOnly = this.#hostReadOnly || documentReadOnly;
     const languageExtension = cmLanguageExtension(language, path);
     this.#configuredLanguage = language;
     this.#configuredPath = path;

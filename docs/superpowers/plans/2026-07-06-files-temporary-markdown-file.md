@@ -1,6 +1,9 @@
 # 文件面板与终端选区临时 Markdown 文件实施计划
 
-> **给执行 agent：** 必须使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans` 按任务执行本计划。步骤使用 checkbox（`- [ ]`）跟踪状态。
+> **历史文档：请勿继续执行。** 本计划已被
+> `docs/superpowers/plans/2026-07-10-files-core-stability.md` 取代，仅保留早期设计背景。
+> 其中关于顶部保存按钮、暂不支持另存为和暂不实现关闭保护的步骤不再代表当前需求；
+> 当前实现与验收一律以后者为准。
 
 **目标：** 让 `pier.files` 插件把终端选区作为临时 Markdown 文件打开，并建立后续项目文件管理、文件编辑、差异视图和类 Notion Markdown 体验共用的 `file-panel` 架构。
 

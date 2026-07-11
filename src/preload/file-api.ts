@@ -4,17 +4,28 @@ import type {
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
 import type {
+  FileConfirmDurabilityRequest,
+  FileConfirmDurabilityResult,
   FileCopyRequest,
   FileCopyResult,
-  FileDraftsListResult,
+  FileDocumentReadResult,
+  FileDocumentWriteResult,
+  FileDraftClaimResult,
+  FileDraftDiagnostic,
+  FileDraftSnapshot,
+  FileDraftWriteResult,
   FileExistsRequest,
   FileExistsResult,
+  FileInspectPathImpactRequest,
+  FileInspectWriteTargetRequest,
   FileListRequest,
   FileListResult,
   FileMkdirRequest,
   FileMkdirResult,
   FileMoveRequest,
   FileMoveResult,
+  FilePathImpact,
+  FileReadDocumentRequest,
   FileReadTextRequest,
   FileRevealRequest,
   FileRevealResult,
@@ -22,24 +33,62 @@ import type {
   FileStatResult,
   FileTrashRequest,
   FileTrashResult,
+  FileWriteDocumentRequest,
+  FileWriteTargetInspection,
   FileWriteTextRequest,
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
+import {
+  fileConfirmDurabilityResultSchema,
+  fileDocumentReadResultSchema,
+  fileDocumentWriteResultSchema,
+  fileDraftClaimResultSchema,
+  fileDraftDiagnosticSchema,
+  fileDraftSnapshotSchema,
+  fileDraftWriteResultSchema,
+  filePathImpactSchema,
+  fileWriteTargetInspectionSchema,
+} from "@shared/contracts/file.ts";
 import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
-import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
+import {
+  fileSaveTargetApi,
+  type PierFileSaveTargetAPI,
+} from "./file-save-target-api.ts";
+import { subscribeFileWatch } from "./file-watch-subscription.ts";
 
-export interface PierFilesAPI {
+export interface PierFilesAPI extends PierFileSaveTargetAPI {
+  confirmDurability: (
+    request: FileConfirmDurabilityRequest
+  ) => Promise<FileConfirmDurabilityResult>;
   copy: (request: FileCopyRequest) => Promise<FileCopyResult>;
   drafts: {
-    delete: (key: string) => Promise<void>;
-    list: () => Promise<FileDraftsListResult>;
-    set: (key: string, value: string) => Promise<void>;
+    claimLegacy: (key: string) => Promise<FileDraftClaimResult>;
+    delete: (key: string) => Promise<boolean>;
+    get: (key: string) => Promise<FileDraftSnapshot | null>;
+    listKeys: () => Promise<readonly string[]>;
+    listDiagnostics: () => Promise<readonly FileDraftDiagnostic[]>;
+    set: (
+      key: string,
+      generation: number,
+      value: string
+    ) => Promise<FileDraftWriteResult>;
   };
   exists: (request: FileExistsRequest) => Promise<FileExistsResult>;
+  inspectPathImpact: (
+    request: FileInspectPathImpactRequest
+  ) => Promise<FilePathImpact>;
+  inspectWriteTarget: (
+    request: FileInspectWriteTargetRequest
+  ) => Promise<FileWriteTargetInspection>;
   list: (request: FileListRequest) => Promise<FileListResult>;
   mkdir: (request: FileMkdirRequest) => Promise<FileMkdirResult>;
   move: (request: FileMoveRequest) => Promise<FileMoveResult>;
+  readDocument: (
+    request: FileReadDocumentRequest
+  ) => Promise<FileDocumentReadResult>;
+  /** @deprecated 新代码使用 readDocument。 */
   readText: (request: FileReadTextRequest) => Promise<string>;
   reveal: (request: FileRevealRequest) => Promise<FileRevealResult>;
   stat: (request: FileStatRequest) => Promise<FileStatResult>;
@@ -49,10 +98,12 @@ export interface PierFilesAPI {
     listener: (event: FileWatchEvent) => void,
     options?: { excludes?: readonly string[] }
   ) => () => void;
+  writeDocument: (
+    request: FileWriteDocumentRequest
+  ) => Promise<FileDocumentWriteResult>;
+  /** @deprecated 新代码使用 writeDocument。 */
   writeText: (request: FileWriteTextRequest) => Promise<FileWriteTextResult>;
 }
-
-const TRAILING_SLASHES_PATTERN = /\/+$/;
 
 async function invokePierCommand<T>(command: PierCommand): Promise<T> {
   const result = (await ipcRenderer.invoke(
@@ -70,6 +121,14 @@ async function invokePierCommand<T>(command: PierCommand): Promise<T> {
 }
 
 export const filesApi: PierFilesAPI = {
+  ...fileSaveTargetApi,
+  confirmDurability: (request) =>
+    invokePierCommand<FileConfirmDurabilityResult>({
+      expectedRevision: request.expectedRevision,
+      path: request.path,
+      root: request.root,
+      type: "file.confirmDurability",
+    }).then((result) => fileConfirmDurabilityResultSchema.parse(result)),
   copy: (request) =>
     invokePierCommand<FileCopyResult>({
       newPath: request.newPath,
@@ -78,19 +137,40 @@ export const filesApi: PierFilesAPI = {
       type: "file.copy",
     }),
   drafts: {
+    claimLegacy: (key) =>
+      invokePierCommand<FileDraftClaimResult>({
+        key,
+        type: "file.drafts.claimLegacy",
+      }).then((result) => fileDraftClaimResultSchema.parse(result)),
     delete: (key) =>
-      invokePierCommand<{ ok: true }>({
+      invokePierCommand<boolean>({
         key,
         type: "file.drafts.delete",
-      }).then(() => undefined),
-    list: () =>
-      invokePierCommand<FileDraftsListResult>({ type: "file.drafts.list" }),
-    set: (key, value) =>
-      invokePierCommand<{ ok: true }>({
+      }),
+    get: (key) =>
+      invokePierCommand<FileDraftSnapshot | null>({
+        key,
+        type: "file.drafts.get",
+      }).then((result) =>
+        result === null ? null : fileDraftSnapshotSchema.parse(result)
+      ),
+    listKeys: () =>
+      invokePierCommand<readonly string[]>({ type: "file.drafts.listKeys" }),
+    listDiagnostics: () =>
+      invokePierCommand<readonly FileDraftDiagnostic[]>({
+        type: "file.drafts.listDiagnostics",
+      }).then((diagnostics) =>
+        diagnostics.map((diagnostic) =>
+          fileDraftDiagnosticSchema.parse(diagnostic)
+        )
+      ),
+    set: (key, generation, value) =>
+      invokePierCommand<FileDraftWriteResult>({
+        generation,
         key,
         type: "file.drafts.set",
         value,
-      }).then(() => undefined),
+      }).then((result) => fileDraftWriteResultSchema.parse(result)),
   },
   exists: (request) =>
     invokePierCommand<FileExistsResult>({
@@ -98,6 +178,18 @@ export const filesApi: PierFilesAPI = {
       root: request.root,
       type: "file.exists",
     }),
+  inspectWriteTarget: (request) =>
+    invokePierCommand<FileWriteTargetInspection>({
+      path: request.path,
+      root: request.root,
+      type: "file.inspectWriteTarget",
+    }).then((result) => fileWriteTargetInspectionSchema.parse(result)),
+  inspectPathImpact: (request) =>
+    invokePierCommand<FilePathImpact>({
+      path: request.path,
+      root: request.root,
+      type: "file.inspectPathImpact",
+    }).then((result) => filePathImpactSchema.parse(result)),
   list: (request) =>
     invokePierCommand<FileListResult>({
       path: request.path,
@@ -117,6 +209,12 @@ export const filesApi: PierFilesAPI = {
       root: request.root,
       type: "file.move",
     }),
+  readDocument: (request) =>
+    invokePierCommand<FileDocumentReadResult>({
+      path: request.path,
+      root: request.root,
+      type: "file.readDocument",
+    }).then((result) => fileDocumentReadResultSchema.parse(result)),
   readText: (request) =>
     invokePierCommand<string>({
       path: request.path,
@@ -141,34 +239,13 @@ export const filesApi: PierFilesAPI = {
       root: request.root,
       type: "file.trash",
     }),
-  watch: (root, listener, options) => {
-    const normalize = (value: string): string =>
-      value.replace(TRAILING_SLASHES_PATTERN, "");
-    const expectedRoot = normalize(root);
-    const handler = (_event: unknown, payload: FileWatchEvent): void => {
-      if (normalize(payload.root) === expectedRoot) {
-        listener(payload);
-      }
-    };
-    ipcRenderer.on(PIER_BROADCAST.FILE_CHANGED, handler);
-    const started = ipcRenderer
-      .invoke(
-        PIER.FILE_WATCH_START,
-        options?.excludes?.length
-          ? { excludes: [...options.excludes], root }
-          : root
-      )
-      .then((ok: unknown) => ok === true)
-      .catch(() => false);
-    return () => {
-      ipcRenderer.off(PIER_BROADCAST.FILE_CHANGED, handler);
-      started
-        .then((ok) =>
-          ok ? ipcRenderer.invoke(PIER.FILE_WATCH_STOP, root) : undefined
-        )
-        .catch(() => undefined);
-    };
-  },
+  watch: (root, listener, options) =>
+    subscribeFileWatch({
+      ...(options?.excludes?.length ? { excludes: [...options.excludes] } : {}),
+      ipcRenderer,
+      listener,
+      root,
+    }),
   writeText: (request) =>
     invokePierCommand<FileWriteTextResult>({
       contents: request.contents,
@@ -179,4 +256,15 @@ export const filesApi: PierFilesAPI = {
       root: request.root,
       type: "file.writeText",
     }),
+  writeDocument: (request) =>
+    invokePierCommand<FileDocumentWriteResult>({
+      contents: request.contents,
+      eol: request.eol,
+      expected: request.expected,
+      format: request.format,
+      ...(request.operationId ? { operationId: request.operationId } : {}),
+      path: request.path,
+      root: request.root,
+      type: "file.writeDocument",
+    }).then((result) => fileDocumentWriteResultSchema.parse(result)),
 };

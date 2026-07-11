@@ -11,6 +11,7 @@ import { usePanelDescriptorStore } from "../../stores/panel-descriptor.store.ts"
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
+import { flushWorkspaceLayout } from "../workspace/workspace-layout-persistence.ts";
 import {
   pluginPanelDescriptor,
   resolveRegistrationTitle,
@@ -80,6 +81,10 @@ export function createPluginPanelsContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["panels"] {
   return {
+    flushLayout: async () => {
+      assertPluginCapability(entry, "panel:open");
+      await flushWorkspaceLayout();
+    },
     getActiveContext: () => {
       const state = usePanelDescriptorStore.getState();
       return state.activeId
@@ -115,6 +120,27 @@ export function createPluginPanelsContext(
           );
           return params === undefined ? snapshot : { ...snapshot, params };
         });
+    },
+    updateInstanceParams: (componentId, instanceId, patch) => {
+      assertDeclaredContribution(entry, "panel", componentId);
+      assertPluginCapability(entry, "panel:open");
+      const panel = useWorkspaceStore
+        .getState()
+        .api?.panels.find(
+          (candidate) =>
+            candidate.id === instanceId &&
+            candidate.view.contentComponent === componentId
+        );
+      if (!panel) {
+        return false;
+      }
+      panel.api.updateParameters({
+        ...(clonePanelParams(
+          panel.params as Record<string, unknown> | undefined
+        ) ?? {}),
+        ...patch,
+      });
+      return true;
     },
     open: (panelId, options) => {
       // 与 register 对称:必须在自己 manifest 声明的 panel 才能打开,

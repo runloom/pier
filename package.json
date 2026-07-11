@@ -43,7 +43,7 @@
     "cli:dev": "node ./bin/pier.mjs",
     "electron:dev": "node ./scripts/dev-profile.mjs electron-dev",
     "electron:preview": "electron-vite preview",
-    "build:electron": "electron-vite build",
+    "build:electron": "electron-vite build && node scripts/check-preload-bundle.mjs",
     "build:native:universal": "NATIVE_ARCHS=\"arm64 x86_64\" pnpm build:native",
     "build:dist": "bash scripts/build-dist.sh",
     "build": "pnpm build:electron",

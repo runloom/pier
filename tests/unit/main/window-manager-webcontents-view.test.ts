@@ -8,6 +8,8 @@ const electronMock = vi.hoisted(() => {
   const state = {
     throwWhenReadingWindowId: false,
   };
+  const mainFrame = {};
+  const showMessageBox = vi.fn(async () => ({ response: 0 }));
 
   const webContents = {
     close: vi.fn(),
@@ -15,8 +17,11 @@ const electronMock = vi.hoisted(() => {
     isDestroyed: vi.fn(() => false),
     loadFile: vi.fn(async () => undefined),
     loadURL: vi.fn(async () => undefined),
+    mainFrame,
+    reload: vi.fn(),
     off: vi.fn((event: string) => {
       webListeners.delete(event);
+      webOnceListeners.delete(event);
       return webContents;
     }),
     on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
@@ -42,6 +47,7 @@ const electronMock = vi.hoisted(() => {
     contentView: {
       addChildView: vi.fn(),
     },
+    destroy: vi.fn(),
     focus: vi.fn(),
     getContentSize: vi.fn(() => [1280, 800]),
     getNativeWindowHandle: vi.fn(() => Buffer.from("window")),
@@ -75,6 +81,8 @@ const electronMock = vi.hoisted(() => {
     browserWindowCtor,
     hostListeners,
     ipcMainListeners,
+    mainFrame,
+    showMessageBox,
     state,
     webContents,
     webListeners,
@@ -84,6 +92,7 @@ const electronMock = vi.hoisted(() => {
 
 vi.mock("electron", () => ({
   app: {
+    getLocale: vi.fn(() => "en"),
     isPackaged: false,
   },
   BaseWindow: vi.fn(function BaseWindow() {
@@ -94,6 +103,9 @@ vi.mock("electron", () => ({
     getAllWindows: vi.fn(() => []),
     getFocusedWindow: vi.fn(() => null),
   }),
+  dialog: {
+    showMessageBox: electronMock.showMessageBox,
+  },
   ipcMain: {
     off: vi.fn((event: string) => {
       electronMock.ipcMainListeners.delete(event);
@@ -116,12 +128,33 @@ vi.mock("electron", () => ({
 describe.runIf(process.platform === "darwin")(
   "macOS window manager WebContentsView hosting",
   () => {
+    const bootChallenge = (): unknown => {
+      electronMock.webOnceListeners.get("dom-ready")?.();
+      return [...electronMock.webContents.send.mock.calls]
+        .reverse()
+        .find(
+          ([channel]) => channel === "pier://window:renderer-boot-challenge"
+        )?.[1];
+    };
+    const signalRendererBoot = (): void => {
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
+        { sender: electronMock.webContents },
+        bootChallenge()
+      );
+    };
+
     beforeEach(() => {
       vi.resetModules();
       vi.clearAllMocks();
       electronMock.hostListeners.clear();
       electronMock.ipcMainListeners.clear();
       electronMock.state.throwWhenReadingWindowId = false;
+      electronMock.showMessageBox.mockResolvedValue({ response: 0 });
+      Reflect.set(
+        electronMock.webContents,
+        "mainFrame",
+        electronMock.mainFrame
+      );
       electronMock.webListeners.clear();
       electronMock.webOnceListeners.clear();
       vi.stubEnv("ELECTRON_RENDERER_URL", "http://127.0.0.1:5173");
@@ -255,6 +288,49 @@ describe.runIf(process.platform === "darwin")(
       expect(electronMock.webContents.close).toHaveBeenCalledOnce();
     });
 
+    it("retries a vetoed close and only closes after every barrier allows it", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      const decisions: Array<"allow" | "veto"> = ["veto", "allow"];
+      const beforeClose = vi.fn(async () => decisions.shift() ?? "veto");
+      windowManager.onBeforeClose(beforeClose);
+      windowManager.create({ id: "main", recordId: "record-main" });
+      const close = electronMock.hostListeners.get("close");
+      const firstEvent = { preventDefault: vi.fn() };
+
+      close?.(firstEvent);
+      await vi.waitFor(() => expect(beforeClose).toHaveBeenCalledTimes(1));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(firstEvent.preventDefault).toHaveBeenCalledOnce();
+      expect(electronMock.baseWindow.close).not.toHaveBeenCalled();
+
+      const secondEvent = { preventDefault: vi.fn() };
+      close?.(secondEvent);
+      await vi.waitFor(() =>
+        expect(electronMock.baseWindow.close).toHaveBeenCalledOnce()
+      );
+
+      expect(secondEvent.preventDefault).toHaveBeenCalledOnce();
+      expect(beforeClose).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps the window open when a before-close barrier throws", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.onBeforeClose(async () => {
+        throw new Error("draft flush failed");
+      });
+      windowManager.create({ id: "main", recordId: "record-main" });
+      const event = { preventDefault: vi.fn() };
+
+      electronMock.hostListeners.get("close")?.(event);
+      await vi.waitFor(() => expect(error).toHaveBeenCalled());
+
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(electronMock.baseWindow.close).not.toHaveBeenCalled();
+    });
+
     it("does not read the Electron id after a destroyed BaseWindow emits closed", async () => {
       const { windowManager } = await import("@main/windows/window-manager.ts");
       const { findAppWindowByElectronId } = await import(
@@ -311,9 +387,7 @@ describe.runIf(process.platform === "darwin")(
 
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
 
-      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.({
-        sender: electronMock.webContents,
-      });
+      signalRendererBoot();
 
       expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
       expect(electronMock.baseWindow.showInactive).not.toHaveBeenCalled();
@@ -323,38 +397,424 @@ describe.runIf(process.platform === "darwin")(
       const { windowManager } = await import("@main/windows/window-manager.ts");
 
       windowManager.create({ id: "main", showInactive: true });
-      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.({
-        sender: electronMock.webContents,
-      });
+      signalRendererBoot();
 
       expect(electronMock.baseWindow.showInactive).toHaveBeenCalledOnce();
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
     });
 
-    it("falls back to showing and warns when renderer ready never arrives", async () => {
+    it("reports a renderer navigation that never reaches the boot signal", async () => {
       vi.useFakeTimers();
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {
         // test spy
       });
       const { windowManager } = await import("@main/windows/window-manager.ts");
 
       windowManager.create({ id: "main", recordId: "record-main" });
-      electronMock.webOnceListeners.get("did-finish-load")?.();
-
-      vi.advanceTimersByTime(2999);
+      vi.advanceTimersByTime(14_999);
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(1);
+      await Promise.resolve();
 
-      expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
-      expect(warn).toHaveBeenCalledWith(
-        "[window-startup] readyToShow fallback",
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+      expect(electronMock.showMessageBox).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalledWith(
+        "[window-startup] renderer boot timed out",
         expect.objectContaining({
           recordId: "record-main",
           showMode: "active",
           windowId: "main",
         })
       );
+    });
+
+    it("shows the startup shell without waiting for slow workspace initialization", async () => {
+      vi.useFakeTimers();
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main" });
+      vi.advanceTimersByTime(3001);
+      expect(electronMock.showMessageBox).not.toHaveBeenCalled();
+
+      signalRendererBoot();
+
+      expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
+      expect(electronMock.showMessageBox).not.toHaveBeenCalled();
+    });
+
+    it("reports a boot challenge delivery failure", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      electronMock.webContents.send.mockImplementationOnce(() => {
+        throw new Error("renderer unavailable");
+      });
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+
+      electronMock.webOnceListeners.get("dom-ready")?.();
+
+      await vi.waitFor(() =>
+        expect(electronMock.showMessageBox).toHaveBeenCalledOnce()
+      );
+      expect(error).toHaveBeenCalledWith(
+        "[window-startup] boot challenge failed:",
+        expect.any(Error)
+      );
+    });
+
+    it("keeps a failed renderer hidden and offers repeatable native retry", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+
+      electronMock.webListeners.get("did-fail-load")?.(
+        {},
+        -6,
+        "ERR_FILE_NOT_FOUND",
+        "file:///missing/index.html",
+        true
+      );
+
+      await vi.waitFor(() =>
+        expect(electronMock.showMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            buttons: ["Retry", "Close window"],
+            type: "error",
+          })
+        )
+      );
+      await vi.waitFor(() =>
+        expect(electronMock.webContents.reload).toHaveBeenCalledOnce()
+      );
+      electronMock.webListeners.get("did-fail-load")?.(
+        {},
+        -6,
+        "ERR_FILE_NOT_FOUND",
+        "file:///missing/index.html",
+        true
+      );
+      await vi.waitFor(() =>
+        expect(electronMock.showMessageBox).toHaveBeenCalledTimes(2)
+      );
+      await vi.waitFor(() =>
+        expect(electronMock.webContents.reload).toHaveBeenCalledTimes(2)
+      );
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+    });
+
+    it("ignores an aborted navigation instead of reporting renderer failure", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+
+      electronMock.webListeners.get("did-fail-load")?.(
+        {},
+        -3,
+        "ERR_ABORTED",
+        "http://127.0.0.1:5173",
+        true
+      );
+      await Promise.resolve();
+
+      expect(electronMock.showMessageBox).not.toHaveBeenCalled();
+    });
+
+    it("ignores load promise rejection with ERR_ABORTED", async () => {
+      electronMock.webContents.loadURL.mockRejectedValueOnce(
+        Object.assign(new Error("navigation aborted"), { code: "ERR_ABORTED" })
+      );
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main" });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(electronMock.showMessageBox).not.toHaveBeenCalled();
+    });
+
+    it("coalesces global renderer resource failures across windows", async () => {
+      const { RendererResourceFailureCoordinator } = await import(
+        "@main/windows/renderer-failure-recovery.ts"
+      );
+      const first = {
+        destroy: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        webContents: { reload: vi.fn() },
+      };
+      const second = {
+        destroy: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        webContents: { reload: vi.fn() },
+      };
+      const coordinator = new RendererResourceFailureCoordinator(async () => ({
+        checkboxChecked: false,
+        ...(await electronMock.showMessageBox()),
+      }));
+
+      coordinator.report(
+        {
+          isQuitting: () => false,
+          retry: () => first.webContents.reload(),
+          window: first as never,
+        },
+        { detail: "missing renderer bundle", kind: "load" }
+      );
+      coordinator.report(
+        {
+          isQuitting: () => false,
+          retry: () => second.webContents.reload(),
+          window: second as never,
+        },
+        { detail: "missing renderer bundle", kind: "load" }
+      );
+
+      expect(electronMock.showMessageBox).toHaveBeenCalledOnce();
+      await vi.waitFor(() => {
+        expect(first.webContents.reload).toHaveBeenCalledOnce();
+        expect(second.webContents.reload).toHaveBeenCalledOnce();
+      });
+    });
+
+    it("isolates per-window recovery failures in a coalesced decision", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { RendererResourceFailureCoordinator } = await import(
+        "@main/windows/renderer-failure-recovery.ts"
+      );
+      const first = {
+        destroy: vi.fn(() => {
+          throw new Error("destroy failed");
+        }),
+        isDestroyed: vi.fn(() => false),
+        webContents: { reload: vi.fn() },
+      };
+      const second = {
+        destroy: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        webContents: { reload: vi.fn() },
+      };
+      const coordinator = new RendererResourceFailureCoordinator(async () => ({
+        checkboxChecked: false,
+        response: 0,
+      }));
+
+      coordinator.report(
+        {
+          isQuitting: () => false,
+          retry: () => {
+            throw new Error("reload failed");
+          },
+          window: first as never,
+        },
+        { detail: "missing renderer bundle", kind: "load" }
+      );
+      coordinator.report(
+        {
+          isQuitting: () => false,
+          retry: () => second.webContents.reload(),
+          window: second as never,
+        },
+        { detail: "missing renderer bundle", kind: "load" }
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(second.webContents.reload).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalledWith(
+        "[renderer-failure-target] recovery failed:",
+        expect.any(Error)
+      );
+      expect(error).toHaveBeenCalledWith(
+        "[renderer-failure-target] destroy fallback failed:",
+        expect.any(Error)
+      );
+    });
+
+    it("reports preload failures through the same native recovery prompt", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+
+      electronMock.webListeners.get("preload-error")?.(
+        undefined,
+        "/missing/preload.cjs",
+        new Error("preload failed")
+      );
+
+      await vi.waitFor(() =>
+        expect(electronMock.showMessageBox).toHaveBeenCalledOnce()
+      );
+      expect(error).toHaveBeenCalledWith(
+        "[pier-preload-error]",
+        "/missing/preload.cjs",
+        "preload failed"
+      );
+    });
+
+    it("keeps a preload-failed window hidden until retry installs a new show gate", async () => {
+      vi.useFakeTimers();
+      let resolvePrompt: ((value: { response: number }) => void) | undefined;
+      electronMock.showMessageBox.mockImplementationOnce(
+        async () =>
+          await new Promise<{ response: number }>((resolve) => {
+            resolvePrompt = resolve;
+          })
+      );
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+
+      electronMock.webListeners.get("preload-error")?.(
+        undefined,
+        "/missing/preload.cjs",
+        new Error("preload failed")
+      );
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+
+      resolvePrompt?.({ response: 0 });
+      await vi.waitFor(() =>
+        expect(electronMock.webContents.reload).toHaveBeenCalledOnce()
+      );
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
+        { sender: electronMock.webContents },
+        "stale-challenge"
+      );
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+
+      electronMock.webListeners.get("did-start-navigation")?.(
+        {},
+        "about:blank#ignored",
+        true,
+        true
+      );
+      electronMock.webListeners.get("did-start-navigation")?.(
+        {},
+        "https://iframe.invalid",
+        false,
+        false
+      );
+      expect(
+        electronMock.ipcMainListeners.has("pier://window:renderer-ready")
+      ).toBe(false);
+      electronMock.webListeners.get("did-start-navigation")?.(
+        {},
+        "http://127.0.0.1:5173",
+        false,
+        true
+      );
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
+        { sender: electronMock.webContents },
+        "stale-challenge"
+      );
+      electronMock.webOnceListeners.get("dom-ready")?.();
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+      const challenge = [...electronMock.webContents.send.mock.calls]
+        .reverse()
+        .find(
+          ([channel]) => channel === "pier://window:renderer-boot-challenge"
+        )?.[1];
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
+        { sender: electronMock.webContents },
+        challenge
+      );
+
+      expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
+    });
+
+    it("keeps a pre-show renderer crash hidden until the retry navigation is ready", async () => {
+      vi.useFakeTimers();
+      let resolvePrompt: ((value: { response: number }) => void) | undefined;
+      electronMock.showMessageBox.mockImplementationOnce(
+        async () =>
+          await new Promise<{ response: number }>((resolve) => {
+            resolvePrompt = resolve;
+          })
+      );
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+      electronMock.webListeners.get("render-process-gone")?.(undefined, {
+        exitCode: 9,
+        reason: "crashed",
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+
+      resolvePrompt?.({ response: 0 });
+      await vi.waitFor(() =>
+        expect(electronMock.webContents.reload).toHaveBeenCalledOnce()
+      );
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
+        { sender: electronMock.webContents },
+        "stale-challenge"
+      );
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+
+      electronMock.webListeners.get("did-start-navigation")?.(
+        {},
+        "http://127.0.0.1:5173",
+        false,
+        true
+      );
+      const challenge = bootChallenge();
+      expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+      electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
+        { sender: electronMock.webContents },
+        challenge
+      );
+      expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
+    });
+
+    it("does not report preload failure while the application is quitting", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+      Reflect.set(windowManager, "isDestroyingAllForQuit", true);
+
+      electronMock.webListeners.get("preload-error")?.(
+        undefined,
+        "/missing/preload.cjs",
+        new Error("preload failed")
+      );
+      await Promise.resolve();
+
+      expect(electronMock.showMessageBox).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it("reports an unexpected renderer exit through native recovery", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+
+      electronMock.webListeners.get("render-process-gone")?.(undefined, {
+        exitCode: 9,
+        reason: "crashed",
+      });
+
+      await vi.waitFor(() =>
+        expect(electronMock.showMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            detail: "crashed (exit 9)",
+            type: "error",
+          })
+        )
+      );
+    });
+
+    it("destroys the unusable window when native recovery chooses close", async () => {
+      electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 });
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      windowManager.create({ id: "main" });
+
+      electronMock.webListeners.get("did-fail-load")?.(
+        {},
+        -6,
+        "ERR_FILE_NOT_FOUND",
+        "file:///missing/index.html",
+        true
+      );
+
+      await vi.waitFor(() =>
+        expect(electronMock.baseWindow.destroy).toHaveBeenCalledOnce()
+      );
+      expect(electronMock.webContents.reload).not.toHaveBeenCalled();
     });
   }
 );

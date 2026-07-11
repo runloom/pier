@@ -33,6 +33,7 @@ import {
   clearFilesNavHistory,
   pushFilesNavEntry,
 } from "@plugins/builtin/files/renderer/files-nav-history.ts";
+import { saveAsJournalForDocument } from "@plugins/builtin/files/renderer/files-save-as-journal.ts";
 import {
   clearFileTreeSidebarCache,
   openFilesTreeSearch,
@@ -145,16 +146,94 @@ interface FilesPanelParams {
 function createMockContext(overrides?: {
   configurationGet?: RendererPluginContext["configuration"]["get"];
   configurationOnDidChange?: RendererPluginContext["configuration"]["onDidChange"];
+  flushLayout?: RendererPluginContext["panels"]["flushLayout"];
+  inspectWriteTarget?: RendererPluginContext["files"]["inspectWriteTarget"];
   list?: RendererPluginContext["files"]["list"];
   listIgnored?: RendererPluginContext["git"]["listIgnored"];
   listInstances?: RendererPluginContext["panels"]["listInstances"];
   notifyInfo?: RendererPluginContext["notifications"]["info"];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
+  pickSaveTarget?: RendererPluginContext["files"]["pickSaveTarget"];
+  readDocument?: RendererPluginContext["files"]["readDocument"];
   readText?: RendererPluginContext["files"]["readText"];
   translate?: RendererPluginContext["i18n"]["t"];
   watch?: RendererPluginContext["files"]["watch"];
+  writeDocument?: RendererPluginContext["files"]["writeDocument"];
   writeText?: RendererPluginContext["files"]["writeText"];
 }): RendererPluginContext {
+  const drafts = new Map<
+    string,
+    { generation: number; updatedAt: number; value: string }
+  >();
+  const readText = overrides?.readText ?? vi.fn(async () => "");
+  const writeText =
+    overrides?.writeText ??
+    vi.fn(async (request) => ({
+      mtimeMs: 1,
+      path: request.path,
+      root: request.root,
+      written: true as const,
+    }));
+  const stat = vi.fn(async (request: { path: string; root: string }) => ({
+    exists: true,
+    isDirectory: false,
+    mtimeMs: 1,
+    path: request.path,
+    root: request.root,
+    size: 0,
+  }));
+  const readDocument =
+    overrides?.readDocument ??
+    vi.fn(async (request: { path: string; root: string }) => {
+      const metadata = await stat(request);
+      const contents = await readText(request);
+      return {
+        canonicalPath: request.path,
+        contents,
+        eol: "lf" as const,
+        format: { bom: false as const, encoding: "utf8" as const },
+        kind: "text" as const,
+        mode: 0o644,
+        path: request.path,
+        revision: `revision-${metadata.mtimeMs}`,
+        root: request.root,
+        size: contents.length,
+        writable: true,
+      };
+    });
+  const writeDocument =
+    overrides?.writeDocument ??
+    vi.fn(async (request) => {
+      try {
+        const result = await writeText({
+          contents: request.contents,
+          path: request.path,
+          root: request.root,
+        });
+        return {
+          committed: true as const,
+          durability: "confirmed" as const,
+          kind: "written" as const,
+          mode: 0o644,
+          mtimeMs: result.mtimeMs,
+          revision: `revision-${result.mtimeMs}`,
+          size: request.contents.length,
+        };
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "file_conflict"
+        ) {
+          return {
+            kind: "conflict" as const,
+            reason: "revision-mismatch" as const,
+          };
+        }
+        throw error;
+      }
+    });
   return {
     dialogs: {
       alert: vi.fn(async () => undefined),
@@ -190,6 +269,35 @@ function createMockContext(overrides?: {
       watch: vi.fn(() => () => undefined),
     },
     files: {
+      drafts: {
+        claimLegacy: vi.fn(async () => ({ kind: "missing" as const })),
+        delete: vi.fn(async (key: string) => drafts.delete(key)),
+        get: vi.fn(async (key: string) => {
+          const draft = drafts.get(key);
+          return draft
+            ? {
+                generation: draft.generation,
+                key,
+                updatedAt: draft.updatedAt,
+                value: draft.value,
+              }
+            : null;
+        }),
+        listKeys: vi.fn(async () => [...drafts.keys()]),
+        set: vi.fn(async (key: string, generation: number, value: string) => {
+          const current = drafts.get(key);
+          if (current && current.generation > generation) {
+            return {
+              currentGeneration: current.generation,
+              kind: "rejected" as const,
+              reason: "stale-generation" as const,
+            };
+          }
+          const updatedAt = Date.now();
+          drafts.set(key, { generation, updatedAt, value });
+          return { generation, kind: "stored" as const, updatedAt };
+        }),
+      },
       exists: vi.fn(async (request) => ({
         exists: true,
         path: request.path,
@@ -207,29 +315,26 @@ function createMockContext(overrides?: {
         oldPath: request.path,
         root: request.root,
       })),
-      readText: overrides?.readText ?? vi.fn(async () => ""),
-      stat: vi.fn(async (request) => ({
-        exists: true,
-        isDirectory: false,
-        mtimeMs: 1,
-        path: request.path,
-        root: request.root,
-        size: 0,
-      })),
+      inspectWriteTarget:
+        overrides?.inspectWriteTarget ??
+        vi.fn(async () => ({
+          fileType: "text" as const,
+          kind: "existing" as const,
+          revision: "revision-current",
+          size: 0,
+        })),
+      pickSaveTarget: overrides?.pickSaveTarget ?? vi.fn(async () => null),
+      readDocument,
+      readText,
+      stat,
       trash: vi.fn(async (request) => ({
         path: request.path,
         root: request.root,
         trashed: true,
       })),
       watch: overrides?.watch ?? vi.fn(() => () => undefined),
-      writeText:
-        overrides?.writeText ??
-        vi.fn(async (request) => ({
-          mtimeMs: 1,
-          path: request.path,
-          root: request.root,
-          written: true as const,
-        })),
+      writeDocument,
+      writeText,
     },
     groupContent: createHostGroupContentContext(undefined, () => undefined),
     i18n: {
@@ -250,6 +355,7 @@ function createMockContext(overrides?: {
       system: vi.fn(async () => ({ shown: true })),
     },
     panels: {
+      flushLayout: overrides?.flushLayout ?? vi.fn(async () => undefined),
       getActiveContext: vi.fn(() => panelContext),
       getActiveInstanceId: vi.fn(() => null),
       listInstances: overrides?.listInstances ?? vi.fn(() => []),
@@ -271,6 +377,7 @@ function filesRuntimeFor(context: RendererPluginContext): TestFilesRuntime {
     controller: new FileEditorController(context, watchHub),
     watchHub,
   };
+  runtime.controller.initialize().catch(() => undefined);
   testFilesRuntimes.add(runtime);
   testFilesRuntimesByContext.set(context, runtime);
   return runtime;
@@ -438,6 +545,7 @@ function getFileTree(container: HTMLElement): HTMLElement {
 beforeEach(() => {
   clearHostGroupContentForTests();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   clearFilesDocumentStore();
   clearFilesNavHistory();
   clearFilesTreeStore();
@@ -452,6 +560,7 @@ afterEach(() => {
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   vi.useRealTimers();
   vi.restoreAllMocks();
   filesGroupViewRootProbe.reset();
@@ -463,7 +572,7 @@ afterEach(() => {
 });
 
 describe("Files file-panel", () => {
-  it("localizes file-panel chrome through plugin i18n messages", () => {
+  it("localizes file-panel chrome through plugin i18n messages", async () => {
     const translations = new Map<string, string>([
       ["filePanel.empty.title", "[未选择文件]"],
       ["filePanel.editor.sourceLabel", "[源码编辑器]"],
@@ -496,7 +605,7 @@ describe("Files file-panel", () => {
       />
     );
 
-    expect(screen.getByText("[临时]")).toBeVisible();
+    expect(await screen.findByText("[临时]")).toBeVisible();
     expect(screen.getByRole("button", { name: "[源码]" })).toBeVisible();
     expect(screen.getByRole("button", { name: "[预览]" })).toBeVisible();
     expect(screen.getByLabelText("[源码编辑器]")).toBeVisible();
@@ -3057,7 +3166,7 @@ describe("Files file-panel", () => {
     ).toBeVisible();
   });
 
-  it("opens an untitled Markdown document with title, unsaved status, and source editor", () => {
+  it("opens an untitled Markdown document without redundant save toolbar buttons", async () => {
     const document = createUntitledMarkdownDocument({
       contents: "# Terminal notes\n\n- keep this local",
     });
@@ -3068,15 +3177,157 @@ describe("Files file-panel", () => {
     });
 
     expect(screen.getByRole("heading", { name: document.name })).toBeVisible();
-    expect(screen.getByText("Temporary file")).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "Save" })
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("Temporary file")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save As…" })).toBeNull();
     expect(container.querySelector(".cm-editor")).toBeInstanceOf(HTMLElement);
     expect(screen.getByRole("button", { name: "Source" })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
+  });
+
+  it("saves an untitled document to a selected target and rebinds the panel", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# Save this\n",
+    });
+    const pickSaveTarget = vi.fn(async () => ({
+      context: panelContext,
+      path: "notes/saved.md",
+      root: PROJECT_ROOT,
+    }));
+    const inspectWriteTarget = vi.fn(async () => ({
+      kind: "absent" as const,
+    }));
+    const writeDocument = vi.fn(async (request) => ({
+      canonicalPath: "notes/saved.md",
+      committed: true as const,
+      durability: "confirmed" as const,
+      kind: "written" as const,
+      mode: 0o644,
+      mtimeMs: 2,
+      revision: "revision-saved-as",
+      size: request.contents.length,
+    }));
+    const openInstance = vi.fn();
+    const flushLayout = vi.fn(async () => undefined);
+    const context = createMockContext({
+      flushLayout,
+      inspectWriteTarget,
+      openInstance,
+      pickSaveTarget,
+      writeDocument,
+    });
+    const close = vi.fn();
+    const Panel = createFilePanel(context);
+    const panelId = "pier.files.filePanel:untitled:save-as-test";
+
+    render(
+      <Panel
+        {...makeProps(
+          {
+            context: panelContext,
+            source: { id: document.id, kind: "untitled", name: document.name },
+          },
+          { close, id: panelId }
+        )}
+      />
+    );
+
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(panelId);
+    });
+
+    await waitFor(() => {
+      expect(writeDocument).toHaveBeenCalledWith({
+        contents: "# Save this\n",
+        eol: "lf",
+        expected: { kind: "absent" },
+        format: { bom: false, encoding: "utf8" },
+        operationId: expect.any(String),
+        path: "notes/saved.md",
+        root: PROJECT_ROOT,
+      });
+    });
+    expect(pickSaveTarget).toHaveBeenCalledWith({
+      context: panelContext,
+      suggestedName: document.name,
+    });
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentId: FILES_FILE_PANEL_ID,
+        context: panelContext,
+        params: {
+          pinned: true,
+          source: {
+            kind: "disk",
+            path: "notes/saved.md",
+            root: PROJECT_ROOT,
+          },
+        },
+      })
+    );
+    expect(close).toHaveBeenCalledOnce();
+    expect(flushLayout).toHaveBeenCalledOnce();
+    expect(close.mock.invocationCallOrder[0]).toBeLessThan(
+      flushLayout.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(getDocument(document.id)).toBeNull();
+  });
+
+  it("keeps Save As recovery state when the panel layout cannot be persisted", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# Keep recovery state\n",
+    });
+    const flushLayout = vi.fn(async () => {
+      throw new Error("layout disk full");
+    });
+    const context = createMockContext({
+      flushLayout,
+      inspectWriteTarget: vi.fn(async () => ({ kind: "absent" as const })),
+      pickSaveTarget: vi.fn(async () => ({
+        context: panelContext,
+        path: "notes/recover.md",
+        root: PROJECT_ROOT,
+      })),
+      writeDocument: vi.fn(async (request) => ({
+        canonicalPath: request.path,
+        committed: true as const,
+        durability: "confirmed" as const,
+        kind: "written" as const,
+        mode: 0o644,
+        mtimeMs: 2,
+        revision: "revision-recovery",
+        size: request.contents.length,
+      })),
+    });
+    const close = vi.fn();
+    const panelId = "pier.files.filePanel:untitled:save-as-layout-failure";
+    const Panel = createFilePanel(context);
+    render(
+      <Panel
+        {...makeProps(
+          {
+            context: panelContext,
+            source: { id: document.id, kind: "untitled", name: document.name },
+          },
+          { close, id: panelId }
+        )}
+      />
+    );
+
+    await expect(
+      filesRuntimeFor(context).controller.savePanel(panelId, "none")
+    ).resolves.toBe("failed");
+
+    expect(close).toHaveBeenCalledOnce();
+    expect(flushLayout).toHaveBeenCalledOnce();
+    expect(getDocument(document.id)).not.toBeNull();
+    expect(saveAsJournalForDocument(document.id)).toMatchObject({
+      phase: "written",
+      sourceDocumentId: document.id,
+      writtenResult: { revision: "revision-recovery" },
+    });
   });
 
   it("renders a no-project-context Markdown document without mounting or loading the sidebar", () => {
@@ -3163,7 +3414,7 @@ describe("Files file-panel", () => {
     expect(restoredView.state.doc.toString()).toBe("# Before\n\n- draft");
   });
 
-  it("preserves the view session when an open disk document is renamed", () => {
+  it("preserves the view session when an open disk document is renamed", async () => {
     const source = {
       kind: "disk" as const,
       path: "before.md",
@@ -3187,7 +3438,9 @@ describe("Files file-panel", () => {
         selection: { anchor: 2, head: 4 },
       });
       originalView.scrollDOM.scrollTop = 91;
-      filesRuntimeFor(pluginContext).controller.moveDiskDocumentSource(
+    });
+    await act(async () => {
+      await filesRuntimeFor(pluginContext).controller.moveDiskDocumentSource(
         PROJECT_ROOT,
         "before.md",
         "after.md"
@@ -3362,7 +3615,7 @@ describe("Files file-panel", () => {
     expect(readText).not.toHaveBeenCalled();
   });
 
-  it("updates the document contents from CodeMirror and shows dirty state", () => {
+  it("updates the document contents from CodeMirror and protects dirty state", async () => {
     const document = createUntitledMarkdownDocument({ contents: "# Before\n" });
     const { container } = renderFilePanel({
       context: panelContext,
@@ -3372,7 +3625,7 @@ describe("Files file-panel", () => {
     replaceEditorText(container, "# After\n");
 
     expect(getDocument(document.id)?.currentContents).toBe("# After\n");
-    expect(screen.getByText("Unsaved changes")).toBeVisible();
+    expect(await screen.findByText("Protected")).toBeVisible();
   });
 
   it("saves dirty disk documents through writeText", async () => {
@@ -3384,25 +3637,29 @@ describe("Files file-panel", () => {
         written: true as const,
       })
     );
+    const context = createMockContext({
+      readText: vi.fn(async () => "# Before\n"),
+      writeText,
+    });
     renderFilePanel(
       {
         context: panelContext,
         source: { kind: "disk", path: "README.md", root: PROJECT_ROOT },
       },
-      createMockContext({
-        readText: vi.fn(async () => "# Before\n"),
-        writeText,
-      })
+      context
     );
 
     await screen.findByText("Saved");
     replaceEditorText(document.body, "# After\n");
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(
+        "pier.files.filePanel:test"
+      );
+    });
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith({
         contents: "# After\n",
-        expectedMtimeMs: 1,
         path: "README.md",
         root: PROJECT_ROOT,
       });
@@ -3410,7 +3667,7 @@ describe("Files file-panel", () => {
     expect(await screen.findByText("Saved")).toBeVisible();
   });
 
-  it("triggers save via pier.files.save action when the file panel is active", async () => {
+  it("saves the active disk panel through the shared controller path", async () => {
     const writeText = vi.fn<RendererPluginContext["files"]["writeText"]>(
       async (request) => ({
         mtimeMs: 1,
@@ -3424,7 +3681,6 @@ describe("Files file-panel", () => {
       readText: vi.fn(async () => "# Before\n"),
       writeText,
     });
-    // pier.files.save action 解析活动 panelId 后统一转发给控制器。
     (
       context.panels.getActiveInstanceId as ReturnType<typeof vi.fn>
     ).mockReturnValue(panelId);
@@ -3444,8 +3700,6 @@ describe("Files file-panel", () => {
     await screen.findByText("Saved");
     replaceEditorText(document.body, "# After\n");
 
-    // 直接调用 action.handler 是 Cmd+S 命中 keybinding → dispatch 的
-    // renderer 侧终点。此处等价于快捷键触发,不需要跑 jsdom KeyboardEvent。
     await act(async () => {
       await filesRuntimeFor(context).controller.savePanel(panelId);
     });
@@ -3453,7 +3707,6 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith({
         contents: "# After\n",
-        expectedMtimeMs: 1,
         path: "README.md",
         root: PROJECT_ROOT,
       });
@@ -3503,7 +3756,7 @@ describe("Files file-panel", () => {
     expect(await screen.findByText("Saved")).toBeVisible();
   });
 
-  it("keeps Save enabled after a failed disk write so retry can succeed", async () => {
+  it("keeps manual save retryable after a failed disk write", async () => {
     let shouldFail = true;
     const writeText = vi.fn<RendererPluginContext["files"]["writeText"]>(
       (request) => {
@@ -3518,27 +3771,35 @@ describe("Files file-panel", () => {
         });
       }
     );
+    const context = createMockContext({
+      readText: vi.fn(async () => "# Before\n"),
+      writeText,
+    });
     renderFilePanel(
       {
         context: panelContext,
         source: { kind: "disk", path: "README.md", root: PROJECT_ROOT },
       },
-      createMockContext({
-        readText: vi.fn(async () => "# Before\n"),
-        writeText,
-      })
+      context
     );
 
     await screen.findByText("Saved");
     replaceEditorText(document.body, "# After\n");
-    const saveButton = screen.getByRole("button", { name: "Save" });
-    fireEvent.click(saveButton);
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(
+        "pier.files.filePanel:test"
+      );
+    });
 
     expect(await screen.findByText("Unable to save file")).toBeVisible();
     expect(screen.getByText("disk full")).toBeVisible();
-    expect(saveButton).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     shouldFail = false;
-    fireEvent.click(saveButton);
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(
+        "pier.files.filePanel:test"
+      );
+    });
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledTimes(2);

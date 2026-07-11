@@ -6,6 +6,7 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_MANIFEST,
+  FILES_SAVE_COMMAND_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
 import {
@@ -13,7 +14,7 @@ import {
   createUntitledMarkdownDocument,
   ensureDiskDocument,
   getDocument,
-  markDocumentLoaded,
+  markDocumentReadResult,
   updateDocumentContents,
 } from "@plugins/builtin/files/renderer/files-document-store.ts";
 import { clearFileTreeSidebarCache } from "@plugins/builtin/files/renderer/files-tree-registry.ts";
@@ -44,6 +45,22 @@ const activePanelContext: PanelContext = {
   worktreeKey: "/repo/active",
 };
 const PROJECT_ROOT = activePanelContext.projectRootPath;
+
+function markLoadedText(documentId: string, contents: string): void {
+  markDocumentReadResult(documentId, {
+    canonicalPath: "README.md",
+    contents,
+    eol: "lf",
+    format: { bom: false, encoding: "utf8" },
+    kind: "text",
+    mode: 0o644,
+    path: "README.md",
+    revision: "revision-1",
+    root: PROJECT_ROOT,
+    size: contents.length,
+    writable: true,
+  });
+}
 const UNTITLED_FILE_PANEL_INSTANCE_RE = /^pier\.files\.filePanel:untitled:/;
 
 interface CapturedRegistrations {
@@ -52,6 +69,11 @@ interface CapturedRegistrations {
   panelComponents: unknown[];
   panelDisposers: ReturnType<typeof vi.fn>[];
   panelIds: string[];
+  suspendParticipants: RendererPluginContext["lifecycle"]["beforeSuspend"] extends (
+    participant: infer P
+  ) => unknown
+    ? P[]
+    : never;
 }
 
 function createMockContext(overrides?: {
@@ -66,7 +88,27 @@ function createMockContext(overrides?: {
     panelDisposers: [],
     panelIds: [],
     panelComponents: [],
+    suspendParticipants: [],
   };
+  const drafts = new Map<
+    string,
+    { generation: number; updatedAt: number; value: string }
+  >();
+  const readText = vi.fn(async () => "");
+  const stat = vi.fn(async (request: { path: string; root: string }) => ({
+    exists: true,
+    isDirectory: false,
+    mtimeMs: 1,
+    path: request.path,
+    root: request.root,
+    size: 0,
+  }));
+  const writeText = vi.fn(async (request) => ({
+    path: request.path,
+    root: request.root,
+    mtimeMs: 1,
+    written: true as const,
+  }));
 
   const context = {
     actions: {
@@ -112,6 +154,30 @@ function createMockContext(overrides?: {
       watch: vi.fn(() => () => undefined),
     },
     files: {
+      confirmDurability: vi.fn(async (request) => ({
+        kind: "confirmed" as const,
+        revision: request.expectedRevision,
+      })),
+      drafts: {
+        claimLegacy: vi.fn(async () => ({ kind: "not-found" as const })),
+        delete: vi.fn(async (key: string) => drafts.delete(key)),
+        get: vi.fn(async (key: string) => {
+          const draft = drafts.get(key);
+          return draft ? { ...draft, bytes: draft.value.length, key } : null;
+        }),
+        listKeys: vi.fn(async () => [...drafts.keys()]),
+        set: vi.fn(async (key: string, generation: number, value: string) => {
+          const updatedAt = Date.now();
+          drafts.set(key, { generation, updatedAt, value });
+          return {
+            bytes: value.length,
+            generation,
+            key,
+            kind: "stored" as const,
+            updatedAt,
+          };
+        }),
+      },
       exists: vi.fn(async (request) => ({
         exists: true,
         path: request.path,
@@ -129,27 +195,46 @@ function createMockContext(overrides?: {
         oldPath: request.path,
         root: request.root,
       })),
-      readText: vi.fn(async () => ""),
-      stat: vi.fn(async (request) => ({
-        exists: true,
-        isDirectory: false,
-        mtimeMs: 1,
-        path: request.path,
-        root: request.root,
+      inspectWriteTarget: vi.fn(async () => ({
+        fileType: "text" as const,
+        kind: "existing" as const,
+        revision: "revision-1",
         size: 0,
       })),
+      readDocument: vi.fn(async (request) => ({
+        canonicalPath: request.path,
+        contents: await readText(),
+        eol: "lf" as const,
+        format: { bom: false as const, encoding: "utf8" as const },
+        kind: "text" as const,
+        mode: 0o644,
+        path: request.path,
+        revision: "revision-1",
+        root: request.root,
+        size: 0,
+        writable: true,
+      })),
+      readText,
+      stat,
       trash: vi.fn(async (request) => ({
         path: request.path,
         root: request.root,
         trashed: true,
       })),
       watch: vi.fn(() => () => undefined),
-      writeText: vi.fn(async (request) => ({
-        path: request.path,
-        root: request.root,
-        mtimeMs: 1,
-        written: true as const,
-      })),
+      writeDocument: vi.fn(async (request) => {
+        await writeText(request);
+        return {
+          committed: true as const,
+          durability: "confirmed" as const,
+          kind: "written" as const,
+          mode: 0o644,
+          mtimeMs: 2,
+          revision: "revision-2",
+          size: request.contents.length,
+        };
+      }),
+      writeText,
     },
     i18n: {
       commandDescription: vi.fn(() => undefined),
@@ -168,6 +253,12 @@ function createMockContext(overrides?: {
           }
           return fallback ?? key;
         }),
+    },
+    lifecycle: {
+      beforeSuspend: vi.fn((participant) => {
+        captured.suspendParticipants.push(participant);
+        return vi.fn();
+      }),
     },
     notifications: {
       error: vi.fn(),
@@ -228,6 +319,14 @@ function findTreeSearchAction(context: { captured: CapturedRegistrations }) {
   return action as RendererPluginAction;
 }
 
+function findSaveAction(context: { captured: CapturedRegistrations }) {
+  const action = context.captured.actions.find(
+    (candidate) => candidate.id === FILES_SAVE_COMMAND_ID
+  );
+  expect(action).toBeDefined();
+  return action as RendererPluginAction;
+}
+
 function findFileCloseGuard(
   context: RendererPluginContext
 ): NonNullable<
@@ -246,11 +345,24 @@ function findFileCloseGuard(
 }
 
 function createFilePanelProps(
-  context: PanelContext
+  context: PanelContext,
+  options: {
+    panelId?: string;
+    source?: { kind: "disk"; path: string; root: string };
+  } = {}
 ): IDockviewPanelProps<Record<string, unknown>> {
   return {
+    api: {
+      id: options.panelId ?? "panel-test",
+      isActive: true,
+      isVisible: true,
+      onDidActiveChange: () => ({ dispose: () => undefined }),
+      onDidVisibilityChange: () => ({ dispose: () => undefined }),
+      setTitle: () => undefined,
+      updateParameters: () => undefined,
+    },
     containerApi: {},
-    params: { context },
+    params: { context, ...(options.source ? { source: options.source } : {}) },
   } as unknown as IDockviewPanelProps<Record<string, unknown>>;
 }
 
@@ -351,15 +463,18 @@ describe("files terminal selection action", () => {
       // 草稿一起删。
       pinned: true,
       source: {
-        id: "pier.files.untitled:1",
+        id: expect.stringMatching(/^pier\.files\.untitled:[0-9a-f-]{36}$/),
         kind: "untitled",
         name: "Untitled-1.md",
       },
     });
     expect(JSON.stringify(openOptions?.params)).not.toContain(selection);
-    expect(getDocument("pier.files.untitled:1")?.currentContents).toBe(
-      selection
-    );
+    const source = openOptions?.params?.source;
+    expect(
+      source && typeof source === "object" && "id" in source
+        ? getDocument(String(source.id))?.currentContents
+        : null
+    ).toBe(selection);
   });
 
   it.each([
@@ -497,7 +612,7 @@ describe("files terminal selection action", () => {
       root: PROJECT_ROOT,
     };
     const document = ensureDiskDocument(source);
-    markDocumentLoaded(document.id, "# saved contents", 101);
+    markLoadedText(document.id, "# saved contents");
     updateDocumentContents(document.id, "# dirty shared contents");
     const context = createMockContext();
     (context.dialogs.choice as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -540,7 +655,7 @@ describe("files terminal selection action", () => {
     ).resolves.toBe(true);
 
     expect(context.dialogs.choice).toHaveBeenCalledTimes(1);
-    expect(context.files.writeText).toHaveBeenCalledTimes(1);
+    expect(context.files.writeDocument).toHaveBeenCalledTimes(1);
     expect(getDocument(document.id)?.dirty).toBe(false);
   });
 
@@ -621,7 +736,7 @@ describe("files terminal selection action", () => {
       root: PROJECT_ROOT,
     };
     const document = ensureDiskDocument(source);
-    markDocumentLoaded(document.id, "# saved contents", 101);
+    markLoadedText(document.id, "# saved contents");
     updateDocumentContents(document.id, "# dirty inactive contents");
     const context = createMockContext();
     (context.dialogs.choice as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -646,15 +761,59 @@ describe("files terminal selection action", () => {
     });
 
     expect(result).toBe(true);
-    expect(context.files.writeText).toHaveBeenCalledWith({
+    expect(context.files.writeDocument).toHaveBeenCalledWith({
       contents: "# dirty inactive contents",
-      expectedMtimeMs: 101,
+      eol: "lf",
+      expected: { kind: "revision", revision: "revision-1" },
+      format: { bom: false, encoding: "utf8" },
       path: "README.md",
       root: PROJECT_ROOT,
     });
     expect(getDocument(document.id)?.dirty).toBe(false);
     expect(getDocument(document.id)?.savedContents).toBe(
       "# dirty inactive contents"
+    );
+  });
+
+  it("routes the registered save action to the active file panel", async () => {
+    const panelId = "panel-save-action";
+    const source = {
+      kind: "disk" as const,
+      path: "README.md",
+      root: PROJECT_ROOT,
+    };
+    const context = createMockContext({
+      activePanelContext,
+      activePanelId: panelId,
+    });
+    filesRendererPlugin.activate(context);
+    const FilesPanel = context.captured.panelComponents[0] as
+      | ComponentType<IDockviewPanelProps<Record<string, unknown>>>
+      | undefined;
+    expect(FilesPanel).toBeDefined();
+    if (!FilesPanel) throw new Error("expected Files panel registration");
+    render(
+      <FilesPanel
+        {...createFilePanelProps(activePanelContext, { panelId, source })}
+      />
+    );
+    const document = ensureDiskDocument(source);
+    await waitFor(() =>
+      expect(getDocument(document.id)?.loadState).toBe("loaded")
+    );
+    updateDocumentContents(document.id, "# saved through action");
+
+    await findSaveAction(context).handler();
+
+    expect(context.panels.getActiveInstanceId).toHaveBeenCalledWith(
+      FILES_FILE_PANEL_ID
+    );
+    expect(context.files.writeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contents: "# saved through action",
+        path: "README.md",
+        root: PROJECT_ROOT,
+      })
     );
   });
 

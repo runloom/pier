@@ -29,6 +29,7 @@ import {
 import {
   asGroupHandle,
   breadcrumbSegmentsForSource,
+  panelSourceForDocument,
   parseSourceState,
   sourceTitle,
 } from "./file-panel-source.ts";
@@ -52,6 +53,7 @@ import {
 import { createFilesTranslate } from "./files-i18n.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
+import { useFilePanelSaveAs } from "./use-file-panel-save-as.ts";
 import { useFilesDocument } from "./use-files-document.ts";
 
 let nextInlinePanelSessionId = 1;
@@ -120,6 +122,13 @@ function FilePanelContent({
       disposable?.dispose?.();
     };
   }, [props.api]);
+  useFilePanelSaveAs({
+    controller,
+    group,
+    props,
+    runtimeContext,
+    stableSource,
+  });
   const ownerIdRef = useRef<symbol | null>(null);
   if (ownerIdRef.current === null) {
     ownerIdRef.current = Symbol(props.api?.id ?? "inline");
@@ -211,7 +220,27 @@ function FilePanelContent({
     ? controller.documentId(sourceFromParams)
     : null;
   const trackedDocument = useFilesDocument(trackedDocumentId ?? "");
+  const trackedSource = panelSourceForDocument(trackedDocument);
   const trackedDirty = trackedDocument?.dirty === true;
+  useEffect(() => {
+    if (
+      !(props.api && sourceFromParams && trackedSource) ||
+      sameFilesDocumentPanelSource(sourceFromParams, trackedSource)
+    ) {
+      return;
+    }
+    props.api.updateParameters({
+      ...(props.params ?? {}),
+      source: trackedSource,
+    });
+    props.api.setTitle(trackedDocument?.name ?? trackedSource.kind);
+  }, [
+    props.api,
+    props.params,
+    sourceFromParams,
+    trackedDocument,
+    trackedSource,
+  ]);
   useEffect(() => {
     if (!props.api) {
       return;

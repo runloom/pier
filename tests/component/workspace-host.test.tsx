@@ -3,6 +3,7 @@ import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
+import { installWorkspaceRendererCommandListener } from "@/components/workspace/workspace-renderer-command-listener.ts";
 import {
   flushTerminalLayoutFramesTrailing,
   readRegisteredTerminalAnchorFrame,
@@ -99,7 +100,7 @@ function installPierWindowApi() {
     configurable: true,
     value: {
       rendererCommand: {
-        onCommand: vi.fn(),
+        onCommand: vi.fn(() => vi.fn()),
         resolve: vi.fn(),
       },
       window: {
@@ -247,6 +248,27 @@ describe("WorkspaceHost", () => {
       "WorkspaceHeaderRightActions"
     );
     expect(DockviewReact).toHaveBeenCalled();
+  });
+
+  it("marks lifecycle readiness only after dockview layout restoration", async () => {
+    const dockview = createDockviewApi([], null);
+    render(<WorkspaceHost />);
+    expect(screen.getByTestId("workspace-host-root")).toHaveAttribute(
+      "data-workspace-ready",
+      "false"
+    );
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+
+    await act(async () => {
+      props?.onReady?.({ api: dockview.api });
+      await Promise.resolve();
+      await waitMs(0);
+    });
+
+    expect(screen.getByTestId("workspace-host-root")).toHaveAttribute(
+      "data-workspace-ready",
+      "true"
+    );
   });
 
   it("wraps web panel components in a hidden Activity boundary when their dockview panel is hidden", async () => {
@@ -677,6 +699,7 @@ describe("WorkspaceHost", () => {
       } as never,
     });
 
+    const disposeRendererCommands = installWorkspaceRendererCommandListener();
     render(<WorkspaceHost />);
     const props = vi.mocked(DockviewReact).mock.calls.at(-1)?.[0];
     if (!props) {
@@ -728,6 +751,7 @@ describe("WorkspaceHost", () => {
       ok: true,
       requestId: "req-terminal-open",
     });
+    disposeRendererCommands();
   });
 
   it("creates a terminal panel when main sends the native menu request", () => {
@@ -745,7 +769,7 @@ describe("WorkspaceHost", () => {
           readyToShow: vi.fn(),
         },
         rendererCommand: {
-          onCommand: vi.fn(),
+          onCommand: vi.fn(() => vi.fn()),
           resolve: vi.fn(),
         },
         terminal: {

@@ -97,7 +97,10 @@ function shouldRemoveEntryOnDirectoryMerge(
     directoryPath,
     entryPath
   );
-  return directChildPath === null || !loadedEntriesByPath.has(directChildPath);
+  const directChild = directChildPath
+    ? loadedEntriesByPath.get(directChildPath)
+    : undefined;
+  return directChildPath === null || directChild?.kind !== "directory";
 }
 
 export function pruneDirectoryStatesForMissingEntries(
@@ -110,7 +113,7 @@ export function pruneDirectoryStatesForMissingEntries(
     if (
       statePath === directoryPath ||
       !isDirectoryDescendant(statePath, directoryPath) ||
-      entries.has(statePath)
+      entries.get(statePath)?.kind === "directory"
     ) {
       continue;
     }

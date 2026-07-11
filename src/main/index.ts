@@ -2,16 +2,15 @@ import { join } from "node:path";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
-import {
-  type RegisteredLocalControl,
-  registerCliLocalControl,
-} from "./adapters/cli/register-local-control.ts";
+import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control-registration.ts";
+import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { appCore } from "./app-core/app-core.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { showAppQuitConfirmation } from "./app-quit/quit-confirmation.ts";
 import { createAppQuitController } from "./app-quit/quit-controller.ts";
 import { createAppQuitRendererTransport } from "./app-quit/quit-renderer-transport.ts";
 import { shouldBypassQuitConfirmationForTests } from "./app-quit/quit-test-runtime.ts";
+import { handleMainStartupFailure } from "./app-startup-failure.ts";
 import { installCsp } from "./csp.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
 import {
@@ -21,6 +20,7 @@ import {
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
+import { registerFileSaveTargetIpc } from "./ipc/file-save-target.ts";
 import { registerFileWatchIpc } from "./ipc/file-watch.ts";
 import {
   closeForegroundActivityResources,
@@ -54,7 +54,6 @@ import { createWindowZoomController } from "./windows/window-zoom.ts";
 const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const DEV_USER_DATA_ROOT = "Pier-dev";
-let localControl: RegisteredLocalControl | null = null;
 const startupLog = createLogger("startup");
 const windowLog = createLogger("window");
 const windowZoomLog = createLogger("window-zoom");
@@ -62,8 +61,13 @@ const cliLog = createLogger("cli");
 const taskRunLog = createLogger("task-run");
 const terminalSessionLog = createLogger("terminal-session");
 const foregroundActivityLog = createLogger("foreground-activity");
-const secretsLog = createLogger("secrets");
 const appQuitLog = createLogger("app-quit");
+const localControlRegistration = createLocalControlRegistrationOwner({
+  logError: (error) => {
+    cliLog.error("failed to start or close local control server", { error });
+  },
+  register: (signal) => registerCliLocalControl({ signal }),
+});
 const windowZoom = createWindowZoomController({
   listWindows: () => windowManager.getAll(),
   readPreferences: () => appCore.services.preferences.read(),
@@ -76,8 +80,7 @@ windowManager.onCreate(({ window }) => {
   });
 });
 
-// dev mode silence "Insecure CSP (unsafe-eval)" warning: dev CSP 必须含 'unsafe-eval'
-// (vite HMR + react-refresh 依赖 eval).
+// dev 的 Vite HMR 需要 unsafe-eval，因此关闭 Electron 的对应安全警告。
 if (isDev) {
   process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 }
@@ -206,28 +209,30 @@ function prepareQuitDialogWindow(target: AppWindow): void {
   target.webContents.focus();
 }
 
-async function flushBeforeQuitConfirmed(): Promise<void> {
-  try {
-    closeForegroundActivityResources();
-  } catch (error) {
-    foregroundActivityLog.error("failed to close resources before quit", {
-      error,
-    });
+function formatQuitFailure(error: unknown): string {
+  const isChinese = app.getLocale().toLowerCase().startsWith("zh");
+  if (!(error instanceof Error)) return String(error);
+  let summary = error.message;
+  if (summary === "window close preparation failed") {
+    summary = isChinese
+      ? "窗口关闭准备失败"
+      : "Window close preparation failed";
   }
+  if (!(error instanceof AggregateError)) return summary;
+  const details = error.errors.map((item) =>
+    item instanceof Error ? item.message : String(item)
+  );
+  return [summary, ...details].join("\n");
+}
 
-  await Promise.all([
-    appCore.flushExternalPluginsBeforeQuit().catch((error) => {
-      appQuitLog.error("failed to flush external plugins before quit", {
-        error,
-      });
-    }),
-    appCore.services.window.flushOpenWindows().catch((error) => {
-      windowLog.error("failed to flush windows before quit", { error });
-    }),
-    appCore.services.secrets.flush().catch((error) => {
-      secretsLog.error("failed to flush before quit", { error });
-    }),
-  ]);
+async function flushBeforeQuitConfirmed(): Promise<void> {
+  await appCore.services.window.flushOpenWindows(async () => {
+    await Promise.all([
+      appCore.flushExternalPluginsBeforeQuit(),
+      appCore.services.secrets.flush(),
+    ]);
+  });
+  await localControlRegistration.close();
 }
 
 const appQuitRendererTransport = createAppQuitRendererTransport({
@@ -243,20 +248,34 @@ const appQuitController = createAppQuitController({
       summaries,
     }),
   finalCleanup: () => {
+    try {
+      closeForegroundActivityResources();
+    } catch (error) {
+      foregroundActivityLog.error("failed to close resources before quit", {
+        error,
+      });
+    }
     appCore.services.tasks.dispose();
     windowManager.destroyAllForQuit();
     appCore.disposeManagedPluginDevRuntimeWatch();
     appCore.pluginHost.dispose();
-    localControl?.close().catch(() => {
-      // ignore: app 正在退出
+    localControlRegistration.close().catch((error: unknown) => {
+      appQuitLog.error("failed to close local control before quit", { error });
     });
-    localControl = null;
   },
   flushBeforeQuit: flushBeforeQuitConfirmed,
   getActivities: () => foregroundActivityService.snapshot().activities,
   getDialogParent: getQuitDialogParentWindow,
   logFailure: (error) => {
     appQuitLog.error("failed before quit", { error });
+  },
+  reportFailure: (error) => {
+    dialog.showErrorBox(
+      app.getLocale().toLowerCase().startsWith("zh")
+        ? "无法退出 Pier"
+        : "Unable to quit Pier",
+      formatQuitFailure(error)
+    );
   },
   proceedToQuit: () => app.quit(),
   readConfirmationMode: async () => {
@@ -266,181 +285,206 @@ const appQuitController = createAppQuitController({
   shouldBypassQuitConfirmationForTests,
 });
 
-registerAssetScheme();
-registerPluginAssetScheme();
-
-app.whenReady().then(async () => {
-  installCsp();
-  handleAssetProtocol();
-  handlePluginAssetProtocol({
-    getRuntimeSources: () =>
-      appCore.services.managedPlugins.getRuntimeSources(),
-  });
-  await appCore.pluginHost.refresh();
-  await installAppMenu({
-    appName: app.name,
-    eventBus: appCore.eventBus,
-    getSystemLocale: () => app.getLocale(),
-    getTargetWindow: getMenuTargetWindow,
-    isDev,
-    isMac,
-    onFindInTerminal: openTerminalSearchFromMenu,
-    onNewTerminal: openTerminalFromMenu,
-    onNewWindow: createFreshWindowFromMenu,
-    onOpenCommandPalette: toggleCommandPaletteFromMenu,
-    onResetZoom: () => {
-      windowZoom.resetZoom().catch((error) => {
-        windowZoomLog.error("reset failed", { error });
-      });
-    },
-    onZoomIn: () => {
-      windowZoom.zoomIn().catch((error) => {
-        windowZoomLog.error("zoom in failed", { error });
-      });
-    },
-    onZoomOut: () => {
-      windowZoom.zoomOut().catch((error) => {
-        windowZoomLog.error("zoom out failed", { error });
-      });
-    },
-    readPreferences: () => appCore.services.preferences.read(),
-  });
-  appCore.eventBus.subscribe((event) => {
-    if (event.type === "preferences.changed") {
-      handlePreferencesChangedForWindows({
-        applyZoomLevel: (level) => windowZoom.applyZoomLevel(level),
-        changedKeys: event.changedKeys,
-        listWindows: () => windowManager.getAll(),
-        snapshot: event.snapshot,
-      });
-    }
-  });
-
-  // git autofetch：只写 git、经 watch 签名广播进入既有数据流（spec §4）
-  const initialPrefs = await appCore.services.preferences.read();
-  let autofetchConfig = {
-    enabled: initialPrefs.gitAutoFetchEnabled,
-    intervalMinutes: initialPrefs.gitAutoFetchIntervalMinutes,
-  };
-  appCore.eventBus.subscribe((event) => {
-    if (event.type === "preferences.changed") {
-      autofetchConfig = {
-        enabled: event.snapshot.gitAutoFetchEnabled,
-        intervalMinutes: event.snapshot.gitAutoFetchIntervalMinutes,
-      };
-    }
-  });
-  const gitAutofetch = createGitAutofetchService({
-    activeRoots: () => appCore.services.gitWatch.activeRoots(),
-    getConfig: () => autofetchConfig,
-    isFocused: () => windowManager.getFocused() !== null,
-    pulse: (gitRoot) => {
-      appCore.services.gitWatch.pulse(gitRoot);
-    },
-  });
-  gitAutofetch.start();
-  app.on("browser-window-focus", () => {
-    gitAutofetch.onFocusGained();
-    // 聚焦补课：后台 poll 被门控跳过（A5），聚焦瞬间对活跃仓库全量重算一次签名，
-    // 弥补后台错过的 poll，走既有 watch 广播管道。
-    for (const root of appCore.services.gitWatch.activeRoots()) {
-      appCore.services.gitWatch.pulse(root);
-    }
-  });
-  app.on("will-quit", () => {
-    gitAutofetch.dispose();
-  });
-
-  // mac dev: dock icon 默认是 Electron 紫色; 显式设成 Pier 图标.
-  if (isMac && isDev && app.dock) {
-    app.dock.setIcon(
-      nativeImage.createFromPath(
-        join(import.meta.dirname, "../../build/icon.png")
-      )
-    );
-  }
-
-  registerWindowIpc(ipcMain);
-  registerCommandIpc(ipcMain);
-  registerMenuIpc(ipcMain);
-  registerAgentsIpc(ipcMain);
-  registerForegroundActivityIpc(ipcMain);
-  registerSystemStatsIpc(ipcMain);
-  ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
-    appQuitRendererTransport.handleDecision(payload);
-  });
-  registerSecretsIpc(ipcMain, appCore.services.secrets);
-  ipcMain.handle(PIER.ENVIRONMENT_PICK_PROJECT_DIRECTORY, async (event) => {
-    const focusedWindow =
-      BrowserWindow.fromWebContents(event.sender) ??
-      BrowserWindow.getFocusedWindow();
-    if (focusedWindow) {
-      const result = await dialog.showOpenDialog(focusedWindow, {
-        properties: ["openDirectory"],
-      });
-      return result.canceled ? null : (result.filePaths[0] ?? null);
-    }
-    const result = await dialog.showOpenDialog({
-      properties: ["openDirectory"],
-    });
-    return result.canceled ? null : (result.filePaths[0] ?? null);
-  });
-  registerRendererCommandIpc(ipcMain);
-  // 注册打包字体给 CoreText, 必须早于任何 terminal 创建, 否则 ghostty 找不到非系统字体.
-  registerBundledFonts();
-  registerTerminalIpc(ipcMain, {
-    processEnvironment: appCore.services.processEnvironment,
-  });
-  registerTerminalDebugWindowIpc(ipcMain);
-  registerThemeIpc(ipcMain);
-  registerNotificationIpc(ipcMain);
-  registerGitWatchIpc();
-  registerFileWatchIpc();
-  setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
-    if (typeof exitCode === "number") {
-      appCore.services.tasks
-        .completePanel(panelId, exitCode, windowId)
-        .catch((error) => {
-          taskRunLog.error("failed to complete panel", { error });
-        });
-      return;
-    }
-    appCore.services.tasks.markPanelClosed(panelId, windowId);
-  });
-  registerCliLocalControl()
-    .then((control) => {
-      localControl = control;
+if (gotTheLock) {
+  Promise.resolve()
+    .then(() => {
+      registerAssetScheme();
+      registerPluginAssetScheme();
+      return app.whenReady();
     })
-    .catch((error: unknown) => {
-      cliLog.error("failed to start local control server", { error });
-    });
+    .then(async () => {
+      installCsp();
+      handleAssetProtocol();
+      handlePluginAssetProtocol({
+        getRuntimeSources: () =>
+          appCore.services.managedPlugins.getRuntimeSources(),
+      });
+      await appCore.ready;
+      await appCore.pluginHost.refresh();
+      await installAppMenu({
+        appName: app.name,
+        eventBus: appCore.eventBus,
+        getSystemLocale: () => app.getLocale(),
+        getTargetWindow: getMenuTargetWindow,
+        isDev,
+        isMac,
+        onFindInTerminal: openTerminalSearchFromMenu,
+        onNewTerminal: openTerminalFromMenu,
+        onNewWindow: createFreshWindowFromMenu,
+        onOpenCommandPalette: toggleCommandPaletteFromMenu,
+        onResetZoom: () => {
+          windowZoom.resetZoom().catch((error) => {
+            windowZoomLog.error("reset failed", { error });
+          });
+        },
+        onZoomIn: () => {
+          windowZoom.zoomIn().catch((error) => {
+            windowZoomLog.error("zoom in failed", { error });
+          });
+        },
+        onZoomOut: () => {
+          windowZoom.zoomOut().catch((error) => {
+            windowZoomLog.error("zoom out failed", { error });
+          });
+        },
+        readPreferences: () => appCore.services.preferences.read(),
+      });
+      appCore.eventBus.subscribe((event) => {
+        if (event.type === "preferences.changed") {
+          handlePreferencesChangedForWindows({
+            applyZoomLevel: (level) => windowZoom.applyZoomLevel(level),
+            changedKeys: event.changedKeys,
+            listWindows: () => windowManager.getAll(),
+            snapshot: event.snapshot,
+          });
+        }
+      });
 
-  // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
-  // 从此不说谎（上进程遗留的 running 一律 cancelled）。
-  await reconcileOrphanedRunningTasks().catch((error: unknown) => {
-    terminalSessionLog.error("orphan task sweep failed", { error });
-  });
+      const initialPrefs = await appCore.services.preferences.read();
+      let autofetchConfig = {
+        enabled: initialPrefs.gitAutoFetchEnabled,
+        intervalMinutes: initialPrefs.gitAutoFetchIntervalMinutes,
+      };
+      appCore.eventBus.subscribe((event) => {
+        if (event.type === "preferences.changed") {
+          autofetchConfig = {
+            enabled: event.snapshot.gitAutoFetchEnabled,
+            intervalMinutes: event.snapshot.gitAutoFetchIntervalMinutes,
+          };
+        }
+      });
+      const gitAutofetch = createGitAutofetchService({
+        activeRoots: () => appCore.services.gitWatch.activeRoots(),
+        getConfig: () => autofetchConfig,
+        isFocused: () => windowManager.getFocused() !== null,
+        pulse: (gitRoot) => {
+          appCore.services.gitWatch.pulse(gitRoot);
+        },
+      });
+      gitAutofetch.start();
+      app.on("browser-window-focus", () => {
+        gitAutofetch.onFocusGained();
+        // 聚焦时重算活跃仓库签名，补回后台门控跳过的 poll。
+        for (const root of appCore.services.gitWatch.activeRoots()) {
+          appCore.services.gitWatch.pulse(root);
+        }
+      });
+      app.on("will-quit", () => {
+        gitAutofetch.dispose();
+      });
 
-  const restored = await appCore.services.window.restoreOpenWindows();
-  if (restored.length === 0) {
-    await appCore.services.window.create({ mode: "fresh" });
-  }
+      if (isMac && isDev && app.dock) {
+        app.dock.setIcon(
+          nativeImage.createFromPath(
+            join(import.meta.dirname, "../../build/icon.png")
+          )
+        );
+      }
 
-  app.on("activate", () => {
-    if (windowManager.getAll().length === 0) {
-      appCore.services.window
-        .restoreMostRecentClosed()
-        .then(async (restoredWindow) => {
-          if (!restoredWindow) {
-            await appCore.services.window.create({ mode: "fresh" });
-          }
-        })
-        .catch((error) => {
-          windowLog.error("failed to restore window on activate", { error });
+      registerWindowIpc(ipcMain);
+      registerCommandIpc(ipcMain);
+      registerFileSaveTargetIpc(ipcMain);
+      registerMenuIpc(ipcMain);
+      registerAgentsIpc(ipcMain);
+      registerForegroundActivityIpc(ipcMain);
+      registerSystemStatsIpc(ipcMain);
+      ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
+        appQuitRendererTransport.handleDecision(payload);
+      });
+      registerSecretsIpc(ipcMain, appCore.services.secrets);
+      ipcMain.handle(PIER.ENVIRONMENT_PICK_PROJECT_DIRECTORY, async (event) => {
+        const focusedWindow =
+          BrowserWindow.fromWebContents(event.sender) ??
+          BrowserWindow.getFocusedWindow();
+        if (focusedWindow) {
+          const result = await dialog.showOpenDialog(focusedWindow, {
+            properties: ["openDirectory"],
+          });
+          return result.canceled ? null : (result.filePaths[0] ?? null);
+        }
+        const result = await dialog.showOpenDialog({
+          properties: ["openDirectory"],
         });
-    }
-  });
-});
+        return result.canceled ? null : (result.filePaths[0] ?? null);
+      });
+      registerRendererCommandIpc(ipcMain);
+      registerBundledFonts();
+      registerTerminalIpc(ipcMain, {
+        processEnvironment: appCore.services.processEnvironment,
+      });
+      registerTerminalDebugWindowIpc(ipcMain, {
+        isQuitting: () => windowManager.isQuitting(),
+      });
+      registerThemeIpc(ipcMain);
+      registerNotificationIpc(ipcMain);
+      registerGitWatchIpc();
+      registerFileWatchIpc();
+      setTerminalPanelClosedHandler((panelId, exitCode, windowId) => {
+        if (typeof exitCode === "number") {
+          appCore.services.tasks
+            .completePanel(panelId, exitCode, windowId)
+            .catch((error) => {
+              taskRunLog.error("failed to complete panel", { error });
+            });
+          return;
+        }
+        appCore.services.tasks.markPanelClosed(panelId, windowId);
+      });
+      localControlRegistration.start();
+      // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
+      // 从此不说谎（上进程遗留的 running 一律 cancelled）。
+      await reconcileOrphanedRunningTasks().catch((error: unknown) => {
+        terminalSessionLog.error("orphan task sweep failed", { error });
+      });
+      const restored = await appCore.services.window.restoreOpenWindows();
+      if (restored.length === 0) {
+        await appCore.services.window.create({ mode: "fresh" });
+      }
+
+      app.on("activate", () => {
+        if (windowManager.getAll().length === 0) {
+          appCore.services.window
+            .restoreMostRecentClosed()
+            .then(async (restoredWindow) => {
+              if (!restoredWindow) {
+                await appCore.services.window.create({ mode: "fresh" });
+              }
+            })
+            .catch((error) => {
+              windowLog.error("failed to restore window on activate", {
+                error,
+              });
+            });
+        }
+      });
+    })
+    .catch((error: unknown) =>
+      handleMainStartupFailure({
+        cleanupTasks: [
+          {
+            label: "foreground activity",
+            run: () => closeForegroundActivityResources(),
+          },
+          { label: "tasks", run: () => appCore.services.tasks.dispose() },
+          { label: "windows", run: () => windowManager.destroyAllForQuit() },
+          {
+            label: "managed plugin watcher",
+            run: () => appCore.disposeManagedPluginDevRuntimeWatch(),
+          },
+          { label: "plugin host", run: () => appCore.pluginHost.dispose() },
+          {
+            label: "local control",
+            run: () => localControlRegistration.close(),
+          },
+        ],
+        error,
+        exit: (code) => app.exit(code),
+        isChinese: app.getLocale().toLowerCase().startsWith("zh"),
+        log: (message, cause) => startupLog.error(message, { error: cause }),
+        showError: (title, body) => dialog.showErrorBox(title, body),
+      })
+    );
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

@@ -29,6 +29,7 @@ export const commandPalette = {
   action: {
     toggleCommandPalette: "Show Command Palette",
     openTerminalDebugWindow: "Open Terminal Debug Window",
+    openTerminalDebugWindowFailed: "Unable to Open Terminal Debug Window",
     openSettings: "Open Settings",
     openEnvironment: "Open Environment Settings",
     closeActivePanel: "Close Active Panel",

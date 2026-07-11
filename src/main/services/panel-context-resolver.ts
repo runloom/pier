@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { realpath as fsRealpath, stat as fsStat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import type { FileSaveTarget } from "@shared/contracts/file-save-target.ts";
 import type {
   PanelContext,
   PanelContextSource,
@@ -14,6 +15,7 @@ export interface ResolvePanelContextOptions {
     cwd: string
   ) => Promise<string | { stdout: string }>;
   now?: () => number;
+  pathKind?: "auto" | "file";
   realpath?: (path: string) => Promise<string>;
   source?: PanelContextSource;
   stat?: (path: string) => Promise<Stats>;
@@ -98,6 +100,7 @@ export async function resolvePanelContextForPath(
   {
     execGit = defaultExecGit,
     now = Date.now,
+    pathKind = "auto",
     realpath = fsRealpath,
     source = "command",
     stat = fsStat,
@@ -105,7 +108,10 @@ export async function resolvePanelContextForPath(
 ): Promise<PanelContext> {
   const openedPath = await safeRealpath(inputPath, realpath);
   const pathStats = await safeStat(openedPath, stat);
-  const cwd = pathStats?.isFile() ? dirname(openedPath) : openedPath;
+  const cwd =
+    pathKind === "file" || pathStats?.isFile()
+      ? dirname(openedPath)
+      : openedPath;
 
   const gitRoot = await realGitPath(
     await safeGit(["rev-parse", "--show-toplevel"], cwd, execGit),
@@ -142,4 +148,58 @@ export async function resolvePanelContextForPath(
     ...(worktreeRoot ? { worktreeRoot } : {}),
     ...(worktreeSupported == null ? {} : { worktreeSupported }),
   };
+}
+
+function relativePathWithinRoot(root: string, target: string): string | null {
+  const pathFromRoot = relative(root, target);
+  if (
+    pathFromRoot.length === 0 ||
+    pathFromRoot === ".." ||
+    pathFromRoot.startsWith(`..${sep}`) ||
+    isAbsolute(pathFromRoot)
+  ) {
+    return null;
+  }
+  return pathFromRoot;
+}
+
+/**
+ * 把原生保存对话框返回的绝对路径转换为文件服务可持久恢复的路径锚点。
+ * 当前项目内沿用调用方的工作区上下文；项目外以目标文件父目录或 Git 根建立新上下文。
+ */
+export async function resolveFileSaveTargetForPath(
+  selectedPath: string,
+  currentContext: PanelContext,
+  options: Omit<ResolvePanelContextOptions, "pathKind" | "source"> = {}
+): Promise<FileSaveTarget> {
+  if (!isAbsolute(selectedPath)) {
+    throw new Error("save target must be an absolute path");
+  }
+
+  const absoluteTarget = resolve(selectedPath);
+  const currentRoot = resolve(currentContext.projectRootPath);
+  const currentRelativePath = relativePathWithinRoot(
+    currentRoot,
+    absoluteTarget
+  );
+  if (currentRelativePath) {
+    return {
+      context: currentContext,
+      path: currentRelativePath,
+      root: currentContext.projectRootPath,
+    };
+  }
+
+  const context = await resolvePanelContextForPath(absoluteTarget, {
+    ...options,
+    pathKind: "file",
+    source: "panel",
+  });
+  const target = context.openedPath ?? absoluteTarget;
+  const root = context.projectRootPath;
+  const path = relativePathWithinRoot(root, target);
+  if (!path) {
+    throw new Error("save target could not be anchored to its panel context");
+  }
+  return { context, path, root };
 }

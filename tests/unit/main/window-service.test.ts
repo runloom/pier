@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 const mocks = vi.hoisted(() => {
   let closeCallback:
     | ((payload: { recordId: string; windowId: string }) => void)
@@ -8,7 +16,10 @@ const mocks = vi.hoisted(() => {
     | ((payload: { recordId: string; windowId: string }) => void)
     | null = null;
   let beforeCloseCallback:
-    | ((payload: { recordId: string; windowId: string }) => void)
+    | ((payload: {
+        recordId: string;
+        windowId: string;
+      }) => Promise<"allow" | "veto"> | "allow" | "veto")
     | null = null;
   const liveWindowContexts: Array<{ recordId: string }> = [];
   return {
@@ -41,7 +52,12 @@ const mocks = vi.hoisted(() => {
     markWindowRecordFocused: vi.fn(async () => undefined),
     markWindowRecordOpen: vi.fn(async () => undefined),
     onBeforeClose: vi.fn(
-      (callback: (payload: { recordId: string; windowId: string }) => void) => {
+      (
+        callback: (payload: {
+          recordId: string;
+          windowId: string;
+        }) => Promise<"allow" | "veto"> | "allow" | "veto"
+      ) => {
         beforeCloseCallback = callback;
       }
     ),
@@ -161,6 +177,30 @@ describe("WindowService", () => {
     expect(mocks.markWindowRecordOpen).not.toHaveBeenCalled();
   });
 
+  it("creates a new window inside the plugin transition gate", async () => {
+    const events: string[] = [];
+    const runWhenPluginTransitionsIdle = async <T>(
+      operation: () => Promise<T>
+    ): Promise<T> => {
+      events.push("gate-enter");
+      const result = await operation();
+      events.push("gate-exit");
+      return result;
+    };
+    mocks.create.mockImplementationOnce(() => {
+      events.push("window-create");
+      return "w-1";
+    });
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+
+    const service = createWindowService({ runWhenPluginTransitionsIdle });
+    await service.create();
+
+    expect(events).toEqual(["gate-enter", "window-create", "gate-exit"]);
+  });
+
   it("rejects restoring a durable record that is already open in a live window", async () => {
     mocks.setLiveWindowRecords(["record-closed"]);
     const { createWindowService } = await import(
@@ -205,18 +245,23 @@ describe("WindowService", () => {
   });
 
   it("flushes renderer layout and debounced main state before a user close completes", async () => {
-    const flushRendererLayout = vi.fn(async () => undefined);
+    const prepareRendererClose = vi.fn(async () => undefined);
     const { createWindowService } = await import(
       "@main/services/window-service.ts"
     );
 
-    createWindowService({ flushRendererLayout });
-    await mocks.getBeforeCloseCallback()?.({
+    createWindowService({ prepareRendererClose });
+    const decision = await mocks.getBeforeCloseCallback()?.({
       recordId: "record-1",
       windowId: "main",
     });
 
-    expect(flushRendererLayout).toHaveBeenCalledWith("main");
+    expect(decision).toBe("allow");
+    expect(prepareRendererClose).toHaveBeenCalledWith(
+      "main",
+      "window-close",
+      expect.stringMatching(/^window-close:main:/)
+    );
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
@@ -226,7 +271,7 @@ describe("WindowService", () => {
   });
 
   it("flushes every live window before Cmd+Q destroys windows", async () => {
-    const flushRendererLayout = vi.fn(async () => undefined);
+    const prepareRendererClose = vi.fn(async () => undefined);
     mocks.list.mockReturnValueOnce([
       { focused: true, id: "main", recordId: "record-main" },
       { focused: false, id: "w-1", recordId: "record-w-1" },
@@ -235,17 +280,175 @@ describe("WindowService", () => {
       "@main/services/window-service.ts"
     );
 
-    const service = createWindowService({ flushRendererLayout });
+    const service = createWindowService({ prepareRendererClose });
     await service.flushOpenWindows();
 
-    expect(flushRendererLayout).toHaveBeenCalledWith("main");
-    expect(flushRendererLayout).toHaveBeenCalledWith("w-1");
+    expect(prepareRendererClose).toHaveBeenCalledWith(
+      "main",
+      "app-quit",
+      expect.stringMatching(/^app-quit:/)
+    );
+    expect(prepareRendererClose).toHaveBeenCalledWith(
+      "w-1",
+      "app-quit",
+      expect.stringMatching(/^app-quit:/)
+    );
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushTerminalStatusBarPrefs).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
     expect(mocks.flushPanelContextState).toHaveBeenCalled();
+  });
+
+  it("aborts every committed renderer when one app-quit finalizer fails", async () => {
+    mocks.list.mockReturnValue([
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "w-1", recordId: "record-w-1" },
+    ]);
+    const finalizeRendererClose = vi.fn(
+      async (
+        windowId: string,
+        _transitionId: string,
+        outcome: "abort" | "commit"
+      ) => {
+        if (windowId === "w-1" && outcome === "commit") {
+          throw new Error("renderer commit failed");
+        }
+      }
+    );
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService({ finalizeRendererClose });
+
+    await expect(service.flushOpenWindows()).rejects.toThrow(
+      "window close preparation failed"
+    );
+
+    expect(finalizeRendererClose).toHaveBeenCalledWith(
+      "main",
+      expect.stringMatching(/^app-quit:/),
+      "abort"
+    );
+    expect(finalizeRendererClose).toHaveBeenCalledWith(
+      "w-1",
+      expect.stringMatching(/^app-quit:/),
+      "abort"
+    );
+  });
+
+  it("does not create a window after app-quit preparation has sealed the cohort", async () => {
+    const gate = deferred<void>();
+    mocks.list.mockReturnValue([
+      { focused: true, id: "main", recordId: "record-main" },
+    ]);
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService({
+      prepareRendererClose: async () => await gate.promise,
+    });
+    const quitting = service.flushOpenWindows();
+    await vi.waitFor(() => expect(mocks.list).toHaveBeenCalled());
+    const creating = service.create();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    gate.resolve();
+    await expect(quitting).resolves.toBeUndefined();
+    await expect(creating).rejects.toThrow(
+      "window creation is sealed for app quit"
+    );
+  });
+
+  it("vetoes a user close when renderer preparation fails", async () => {
+    const prepareRendererClose = vi.fn(async () => {
+      throw new Error("draft flush failed");
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reportCloseFailure = vi.fn(async () => undefined);
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+
+    createWindowService({ prepareRendererClose, reportCloseFailure });
+    const decision = await mocks.getBeforeCloseCallback()?.({
+      recordId: "record-1",
+      windowId: "main",
+    });
+
+    expect(decision).toBe("veto");
+    expect(mocks.flushWindowRecordState).not.toHaveBeenCalled();
+    expect(reportCloseFailure).toHaveBeenCalledOnce();
+    expect(reportCloseFailure).toHaveBeenCalledWith("main", expect.any(Error));
+    expect(error).toHaveBeenCalledWith(
+      "[window-close-prepare] failed:",
+      "draft flush failed"
+    );
+  });
+
+  it("falls back to native feedback when the renderer report fails", async () => {
+    const prepareRendererClose = vi.fn(async () => {
+      throw new Error("draft flush failed");
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const reportCloseFailure = vi.fn(async () => {
+      throw new Error("renderer feedback failed");
+    });
+    const reportCloseFailureFallback = vi.fn();
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+
+    createWindowService({
+      prepareRendererClose,
+      reportCloseFailure,
+      reportCloseFailureFallback,
+    });
+    const decision = await mocks.getBeforeCloseCallback()?.({
+      recordId: "record-1",
+      windowId: "main",
+    });
+
+    expect(decision).toBe("veto");
+    expect(reportCloseFailureFallback).toHaveBeenCalledOnce();
+    expect(reportCloseFailureFallback).toHaveBeenCalledWith({
+      closeError: expect.any(Error),
+      feedbackError: expect.objectContaining({
+        message: "renderer feedback failed",
+      }),
+      windowId: "main",
+    });
+  });
+
+  it("rejects app quit only after attempting every renderer and critical flush", async () => {
+    const prepareRendererClose = vi.fn(async (windowId: string) => {
+      if (windowId === "main") {
+        throw new Error("main renderer failed");
+      }
+    });
+    const flushCriticalState = vi.fn(async () => {
+      throw new Error("draft fsync failed");
+    });
+    mocks.list.mockReturnValueOnce([
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "w-1", recordId: "record-w-1" },
+    ]);
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService({
+      flushCriticalState,
+      prepareRendererClose,
+    });
+
+    await expect(service.flushOpenWindows()).rejects.toThrow(
+      "window close preparation failed"
+    );
+
+    expect(prepareRendererClose).toHaveBeenCalledTimes(2);
+    expect(flushCriticalState).toHaveBeenCalledOnce();
+    expect(mocks.flushWindowRecordState).toHaveBeenCalledOnce();
   });
 
   it("restores the last user-closed window when the app is activated with no live windows", async () => {

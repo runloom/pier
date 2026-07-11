@@ -11,7 +11,6 @@ import {
   FILES_NEW_FILE_COMMAND_ID,
   FILES_NEW_FOLDER_COMMAND_ID,
   FILES_RENAME_COMMAND_ID,
-  FILES_TREE_REFRESH_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
 import type { FileEditorController } from "@plugins/builtin/files/renderer/file-editor-controller.ts";
 import { createFilesTreeActions } from "@plugins/builtin/files/renderer/file-tree-actions.ts";
@@ -19,8 +18,6 @@ import {
   addFilesTreeEntry,
   clearFilesTreeStore,
   getFilesTreeSnapshot,
-  loadFilesTreeDirectory,
-  loadFilesTreeRoot,
 } from "@plugins/builtin/files/renderer/files-tree-store.ts";
 import type {
   FilesNamePromptOptions,
@@ -56,15 +53,49 @@ function directory(path: string): FileEntry {
   return { kind: "directory", path, root: ROOT };
 }
 
-function treeActions(context: RendererPluginContext): RendererPluginAction[] {
+function treeActions(
+  context: RendererPluginContext,
+  overrides: Partial<FileEditorController> = {}
+): RendererPluginAction[] {
+  const documentsForPathMutation =
+    overrides.documentsForPathMutation ?? vi.fn(async () => []);
+  const moveDiskDocumentSource =
+    overrides.moveDiskDocumentSource ?? vi.fn(async () => undefined);
+  const removeDocumentsAfterPathMutation =
+    overrides.removeDocumentsAfterPathMutation ?? vi.fn();
   const controller = {
-    moveDiskDocumentSource: vi.fn(),
+    beginPathMutation: vi.fn(async (root: string, paths: readonly string[]) => {
+      const documents = await documentsForPathMutation(root, paths);
+      return {
+        currentDocuments: () => documents,
+        documents,
+        release: vi.fn(),
+      };
+    }),
+    confirmDocumentDurability: vi.fn(async () => true),
+    documentsForPathMutation,
+    moveDiskDocumentSource,
+    movePath: vi.fn(async (root: string, oldPath: string, newPath: string) => {
+      await context.files.move({ newPath, path: oldPath, root });
+      await moveDiskDocumentSource(root, oldPath, newPath);
+    }),
+    preserveDocumentsAsUntitled: vi.fn(async () => []),
+    removeDocumentsAfterPathMutation,
     removeDiskDocumentForPath: vi.fn(),
+    saveDocument: vi.fn(async () => "saved" as const),
+    settleDocument: vi.fn(async (documentId: string) => ({
+      documentId,
+      outcome: "saved" as const,
+    })),
+    suspendDocumentEditing: vi.fn(() => () => undefined),
+    ...overrides,
   } as unknown as FileEditorController;
   return createFilesTreeActions(context, controller);
 }
 
-function treeInvocation(metadata: FileEntry): RendererPluginActionInvocation {
+function treeInvocation(
+  metadata: FileEntry & { selectedPaths?: string[] }
+): RendererPluginActionInvocation {
   return { metadata, surface: "files/tree-item" };
 }
 
@@ -86,6 +117,14 @@ function actionById(
 }
 
 function makeContext() {
+  const writeText = vi.fn<RendererPluginContext["files"]["writeText"]>(
+    async (request) => ({
+      path: request.path,
+      root: request.root,
+      mtimeMs: 1,
+      written: true as const,
+    })
+  );
   const files = {
     exists: vi.fn<RendererPluginContext["files"]["exists"]>(
       async (request) => ({
@@ -121,14 +160,26 @@ function makeContext() {
       size: 0,
     })),
     watch: vi.fn(() => () => undefined),
-    writeText: vi.fn<RendererPluginContext["files"]["writeText"]>(
-      async (request) => ({
-        path: request.path,
-        root: request.root,
-        mtimeMs: 1,
-        written: true as const,
-      })
+    writeDocument: vi.fn<RendererPluginContext["files"]["writeDocument"]>(
+      async (request) => {
+        await writeText({
+          contents: request.contents,
+          path: request.path,
+          root: request.root,
+        });
+        return {
+          canonicalPath: request.path,
+          committed: true as const,
+          durability: "confirmed" as const,
+          kind: "written" as const,
+          mode: 0o644,
+          mtimeMs: 1,
+          revision: "revision-created",
+          size: request.contents.length,
+        };
+      }
     ),
+    writeText,
   };
   const dialogs = {
     alert: vi.fn<RendererPluginContext["dialogs"]["alert"]>(
@@ -136,6 +187,9 @@ function makeContext() {
     ),
     confirm: vi.fn<RendererPluginContext["dialogs"]["confirm"]>(
       async () => true
+    ),
+    choice: vi.fn<RendererPluginContext["dialogs"]["choice"]>(
+      async () => "confirm"
     ),
     prompt: vi.fn<RendererPluginContext["dialogs"]["prompt"]>(async () => null),
   };
@@ -251,8 +305,11 @@ describe("file-tree-actions", () => {
 
     await action.handler(treeInvocation(directory("src")));
 
-    expect(files.writeText).toHaveBeenCalledWith({
+    expect(files.writeDocument).toHaveBeenCalledWith({
       contents: "",
+      eol: "lf",
+      expected: { kind: "absent" },
+      format: { bom: false, encoding: "utf8" },
       path: "src/new.ts",
       root: ROOT,
     });
@@ -295,7 +352,7 @@ describe("file-tree-actions", () => {
   });
 
   it("does not patch the tree when file creation fails", async () => {
-    const { context, files, notifications } = makeContext();
+    const { context, dialogs, files } = makeContext();
     files.writeText.mockRejectedValueOnce(new Error("disk full"));
     showFilesNamePromptMock.mockResolvedValueOnce({
       cancelled: false,
@@ -305,7 +362,11 @@ describe("file-tree-actions", () => {
 
     await action.handler(treeInvocation(directory("src")));
 
-    expect(notifications.error).toHaveBeenCalledWith("disk full");
+    expect(dialogs.alert).toHaveBeenCalledWith({
+      body: "disk full",
+      size: "default",
+      title: "Unable to create item",
+    });
     expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src/new.ts")).toBe(
       false
     );
@@ -324,8 +385,11 @@ describe("file-tree-actions", () => {
       surface: "files/tree-background",
     });
 
-    expect(files.writeText).toHaveBeenCalledWith({
+    expect(files.writeDocument).toHaveBeenCalledWith({
       contents: "",
+      eol: "lf",
+      expected: { kind: "absent" },
+      format: { bom: false, encoding: "utf8" },
       path: "root.ts",
       root: ROOT,
     });
@@ -343,8 +407,11 @@ describe("file-tree-actions", () => {
     await action.handler({ surface: "command-palette" });
 
     expect(showFilesNamePromptMock).toHaveBeenCalled();
-    expect(files.writeText).toHaveBeenCalledWith({
+    expect(files.writeDocument).toHaveBeenCalledWith({
       contents: "",
+      eol: "lf",
+      expected: { kind: "absent" },
+      format: { bom: false, encoding: "utf8" },
       path: "a/b/nested.ts",
       root: ROOT,
     });
@@ -379,6 +446,37 @@ describe("file-tree-actions", () => {
     );
   });
 
+  it("shows undo-move technical failures in one detailed alert", async () => {
+    const { context, dialogs, files, notifications } = makeContext();
+    addFilesTreeEntry(ROOT, file("src/old.ts"));
+    showFilesNamePromptMock.mockResolvedValueOnce({
+      cancelled: false,
+      value: "new.ts",
+    });
+    files.move.mockResolvedValueOnce({
+      moved: true,
+      newPath: "src/new.ts",
+      oldPath: "src/old.ts",
+      root: ROOT,
+    });
+    files.move.mockRejectedValueOnce(new Error("undo permission denied"));
+    const action = actionById(treeActions(context), FILES_RENAME_COMMAND_ID);
+    await action.handler(treeInvocation(file("src/old.ts")));
+    const undo = notifications.success.mock.calls[0]?.[1]?.action?.onClick;
+    expect(undo).toBeTypeOf("function");
+
+    undo?.();
+
+    await vi.waitFor(() =>
+      expect(dialogs.alert).toHaveBeenCalledWith({
+        body: "undo permission denied",
+        size: "default",
+        title: "Unable to rename",
+      })
+    );
+    expect(notifications.error).not.toHaveBeenCalled();
+  });
+
   it("confirms delete with a destructive small dialog, trashes the file, and removes it from the tree", async () => {
     const { context, dialogs, files } = makeContext();
     addFilesTreeEntry(ROOT, file("src/delete-me.ts"));
@@ -387,12 +485,12 @@ describe("file-tree-actions", () => {
     await action.handler(treeInvocation(file("src/delete-me.ts")));
 
     expect(dialogs.confirm).toHaveBeenCalledWith({
-      body: 'Move "delete-me.ts" to the system trash?',
+      body: 'Delete "delete-me.ts"? You can restore it from the system Trash.',
       cancelLabel: "Cancel",
-      confirmLabel: "Move to Trash",
+      confirmLabel: "Delete",
       intent: "destructive",
       size: "sm",
-      title: "Move to Trash",
+      title: "Delete",
     });
     expect(files.trash).toHaveBeenCalledWith({
       path: "src/delete-me.ts",
@@ -415,6 +513,180 @@ describe("file-tree-actions", () => {
     expect(getFilesTreeSnapshot(ROOT).entriesByPath.get("src/keep.ts")).toEqual(
       file("src/keep.ts")
     );
+  });
+
+  it("collapses selected descendants when their parent directory is deleted", async () => {
+    const { context, dialogs, files } = makeContext();
+    addFilesTreeEntry(ROOT, directory("src"));
+    addFilesTreeEntry(ROOT, file("src/child.ts"));
+    const action = actionById(treeActions(context), FILES_DELETE_COMMAND_ID);
+
+    await action.handler(
+      treeInvocation({
+        ...file("src/child.ts"),
+        selectedPaths: ["src", "src/child.ts", "src"],
+      })
+    );
+
+    expect(dialogs.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: 'Delete "src"? You can restore it from the system Trash.',
+      })
+    );
+    expect(files.trash).toHaveBeenCalledOnce();
+    expect(files.trash).toHaveBeenCalledWith({ path: "src", root: ROOT });
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src/child.ts")).toBe(
+      false
+    );
+  });
+
+  it("does not trash a dirty open document when protection is cancelled", async () => {
+    const { context, dialogs, files } = makeContext();
+    dialogs.choice.mockResolvedValueOnce("cancel");
+    addFilesTreeEntry(ROOT, file("src/dirty.ts"));
+    const action = actionById(
+      treeActions(context, {
+        documentsForPathMutation: vi.fn(async () => [
+          {
+            dirty: true,
+            durabilityUnknown: false,
+            id: "dirty-document",
+            needsSaveAs: false,
+          },
+        ]) as unknown as FileEditorController["documentsForPathMutation"],
+      }),
+      FILES_DELETE_COMMAND_ID
+    );
+
+    await action.handler(treeInvocation(file("src/dirty.ts")));
+
+    expect(files.trash).not.toHaveBeenCalled();
+    expect(dialogs.choice).toHaveBeenCalledOnce();
+  });
+
+  it("saves protected documents before moving their path to Trash", async () => {
+    const { context, files } = makeContext();
+    addFilesTreeEntry(ROOT, file("src/dirty.ts"));
+    const dirtyDocument = {
+      dirty: true,
+      durabilityUnknown: false,
+      id: "dirty-document",
+      needsSaveAs: false,
+    };
+    const settleDocument = vi.fn(async (documentId: string) => {
+      dirtyDocument.dirty = false;
+      return { documentId, outcome: "saved" as const };
+    });
+    const action = actionById(
+      treeActions(context, {
+        documentsForPathMutation: vi.fn(async () => [dirtyDocument]),
+        settleDocument,
+      } as unknown as Partial<FileEditorController>),
+      FILES_DELETE_COMMAND_ID
+    );
+
+    await action.handler(treeInvocation(file("src/dirty.ts")));
+
+    expect(settleDocument).toHaveBeenCalledWith(
+      "dirty-document",
+      undefined,
+      "failure"
+    );
+    expect(files.trash).toHaveBeenCalledWith({
+      path: "src/dirty.ts",
+      root: ROOT,
+    });
+  });
+
+  it("preserves a dirty buffer as untitled before deleting its disk path", async () => {
+    const { context, dialogs, files } = makeContext();
+    dialogs.choice
+      .mockResolvedValueOnce("alt")
+      .mockResolvedValueOnce("confirm");
+    const document = {
+      dirty: true,
+      durabilityUnknown: false,
+      id: "dirty-document",
+      needsSaveAs: false,
+      source: { kind: "disk" as const, path: "src/dirty.ts", root: ROOT },
+    };
+    const preserveDocumentsAsUntitled = vi.fn(async () => {
+      document.source = {
+        id: "untitled-1",
+        kind: "untitled",
+        name: "Untitled-1.md",
+      } as never;
+      return [document];
+    });
+    const removeDocumentsAfterPathMutation = vi.fn();
+    const action = actionById(
+      treeActions(context, {
+        documentsForPathMutation: vi.fn(async () => [document]),
+        preserveDocumentsAsUntitled,
+        removeDocumentsAfterPathMutation,
+      } as unknown as Partial<FileEditorController>),
+      FILES_DELETE_COMMAND_ID
+    );
+
+    await action.handler(treeInvocation(file("src/dirty.ts")));
+
+    expect(preserveDocumentsAsUntitled).toHaveBeenCalledWith([document]);
+    expect(files.trash).toHaveBeenCalledWith({
+      path: "src/dirty.ts",
+      root: ROOT,
+    });
+    expect(
+      preserveDocumentsAsUntitled.mock.invocationCallOrder[0]
+    ).toBeLessThan(files.trash.mock.invocationCallOrder[0] ?? 0);
+    expect(removeDocumentsAfterPathMutation).toHaveBeenCalledWith([]);
+  });
+
+  it("removes documents discovered by the live path guard after it was acquired", async () => {
+    const { context } = makeContext();
+    const discovered = {
+      dirty: false,
+      durabilityUnknown: false,
+      id: "late-document",
+      needsSaveAs: false,
+      source: { kind: "disk" as const, path: "src/late.ts", root: ROOT },
+    };
+    const removeDocumentsAfterPathMutation = vi.fn();
+    const action = actionById(
+      treeActions(context, {
+        beginPathMutation: vi.fn(async () => ({
+          currentDocuments: () => [discovered],
+          documents: [],
+          release: vi.fn(),
+        })),
+        removeDocumentsAfterPathMutation,
+      } as unknown as Partial<FileEditorController>),
+      FILES_DELETE_COMMAND_ID
+    );
+
+    await action.handler(treeInvocation(file("src/late.ts")));
+
+    expect(removeDocumentsAfterPathMutation).toHaveBeenCalledWith([discovered]);
+  });
+
+  it("reports multi-path trash failures once with per-path details", async () => {
+    const { context, dialogs, files } = makeContext();
+    files.trash.mockRejectedValueOnce(new Error("first denied"));
+    files.trash.mockRejectedValueOnce(new Error("second denied"));
+    const action = actionById(treeActions(context), FILES_DELETE_COMMAND_ID);
+
+    await action.handler(
+      treeInvocation({
+        ...file("src/a.ts"),
+        selectedPaths: ["src/a.ts", "src/b.ts"],
+      })
+    );
+
+    expect(dialogs.alert).toHaveBeenCalledOnce();
+    expect(dialogs.alert).toHaveBeenCalledWith({
+      body: "src/a.ts: first denied\nsrc/b.ts: second denied",
+      size: "default",
+      title: "Unable to delete",
+    });
   });
 
   it("copies absolute and relative tree paths to the clipboard", async () => {
@@ -456,35 +728,11 @@ describe("file-tree-actions", () => {
     );
   });
 
-  it("shows child-directory refresh failures in the host alert", async () => {
-    const { context, dialogs, files } = makeContext();
-    let childReadable = true;
-    files.list.mockImplementation(async (_root, options) => {
-      if (options?.path === "") {
-        return [directory("src")];
-      }
-      if (options?.path === "src") {
-        if (!childReadable) {
-          throw new Error("Permission denied");
-        }
-        return [file("src/index.ts")];
-      }
-      return [];
-    });
-    await loadFilesTreeRoot(ROOT, files.list, "Failed to load files");
-    await loadFilesTreeDirectory(ROOT, "src", files.list);
-    childReadable = false;
-    const action = actionById(
-      treeActions(context),
-      FILES_TREE_REFRESH_COMMAND_ID
+  it("does not expose a manual tree refresh action", () => {
+    const { context } = makeContext();
+
+    expect(treeActions(context).map((action) => action.id)).not.toContain(
+      "pier.files.treeRefresh"
     );
-
-    await action.handler(treeInvocation(directory("src")));
-
-    expect(dialogs.alert).toHaveBeenCalledWith({
-      body: "src: Permission denied",
-      size: "default",
-      title: "Unable to refresh file tree",
-    });
   });
 });

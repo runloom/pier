@@ -82,4 +82,60 @@ describe("shared file contract", () => {
       }).success
     ).toBe(false);
   });
+
+  it("validates revision-safe document commands as discriminated contracts", () => {
+    expect(
+      pierCommandSchema.parse({
+        path: "src/index.ts",
+        root,
+        type: "file.readDocument",
+      })
+    ).toMatchObject({ type: "file.readDocument" });
+    expect(
+      pierCommandSchema.parse({
+        contents: "const value = 1;\n",
+        eol: "lf",
+        expected: { kind: "revision", revision: "opaque-revision" },
+        format: { bom: false, encoding: "utf8" },
+        path: "src/index.ts",
+        root,
+        type: "file.writeDocument",
+      })
+    ).toMatchObject({ type: "file.writeDocument" });
+    expect(
+      pierCommandSchema.parse({
+        path: "src/index.ts",
+        root,
+        type: "file.inspectWriteTarget",
+      })
+    ).toMatchObject({ type: "file.inspectWriteTarget" });
+    expect(
+      pierCommandSchema.parse({
+        expectedRevision: "opaque-revision",
+        path: "src/index.ts",
+        root,
+        type: "file.confirmDurability",
+      })
+    ).toMatchObject({ type: "file.confirmDurability" });
+
+    for (const command of [
+      {
+        contents: "x",
+        eol: "mixed",
+        expected: { kind: "absent" },
+        format: { bom: false, encoding: "utf16le" },
+        path: "src/index.ts",
+        root,
+        type: "file.writeDocument",
+      },
+      {
+        expectedRevision: "",
+        path: "src/index.ts",
+        root,
+        type: "file.confirmDurability",
+      },
+    ]) {
+      expect(pierCommandSchema.safeParse(command).success).toBe(false);
+    }
+  });
 });

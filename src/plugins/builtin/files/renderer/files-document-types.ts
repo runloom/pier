@@ -1,4 +1,8 @@
-import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
+import {
+  type FileDocumentEol,
+  type FileDocumentFormat,
+  nonEmptyFileRootRelativePathSchema,
+} from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
 
@@ -112,21 +116,39 @@ export type FilesDocumentCapability =
 export interface FilesDocument {
   /** Disk mtime captured at last successful load/save; used for write conflict checks. */
   baseMtimeMs: number | null;
+  canonicalPath: string | null;
   capabilities: readonly FilesDocumentCapability[];
   /** 冲突 Compare 拉取的磁盘快照;非冲突态为 null。 */
   conflictDiskContents: string | null;
   currentContents: string;
+  deletedOnDisk: boolean;
   dirty: boolean;
   /** True when disk changed under an unsaved (dirty) document. */
   diskConflict: boolean;
+  durabilityUnknown: boolean;
+  eol: FileDocumentEol | null;
   error: string | null;
+  format: FileDocumentFormat | null;
+  hasBackingStore: boolean;
   id: string;
   language: FilesDocumentLanguage;
   loadState: "error" | "idle" | "loaded" | "loading";
+  mode: number | null;
   name: string;
+  needsSaveAs: boolean;
   readOnly: boolean;
+  readOnlyReason:
+    | "binary"
+    | "mixed-eol"
+    | "not-writable"
+    | "too-large"
+    | "unknown-encoding"
+    | "unsupported-file"
+    | null;
+  revision: string | null;
   savedContents: string;
   saveState: "idle" | "saving";
+  size: number | null;
   source: FilesDocumentSource;
 }
 

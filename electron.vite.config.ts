@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import { resolveDevProfile } from "./scripts/dev-profile.mjs";
+import { createSandboxedPreloadConfig } from "./scripts/preload-build-config.ts";
 
 // 当前 worktree dev profile (端口/HMR/userData). 多 worktree 并存时按 worktree
 // 路径派生不同端口, 避免抢用. 详 scripts/dev-profile.mjs.
@@ -22,23 +23,7 @@ export default defineConfig({
       },
     },
   },
-  preload: {
-    plugins: [externalizeDepsPlugin()],
-    build: {
-      // Electron sandboxed preload 必须是 CJS (sandbox 不支持 ESM dynamic import).
-      // formats: ['cjs'] 让 vite 输出 out/preload/index.cjs (main/index.ts 据此 join).
-      lib: {
-        entry: resolve(import.meta.dirname, "src/preload/index.ts"),
-        formats: ["cjs"],
-      },
-    },
-    resolve: {
-      alias: {
-        "@shared": resolve(import.meta.dirname, "src/shared"),
-        "@preload": resolve(import.meta.dirname, "src/preload"),
-      },
-    },
-  },
+  preload: createSandboxedPreloadConfig(import.meta.dirname),
   renderer: {
     root: resolve(import.meta.dirname, "src/renderer"),
     // 依赖优化缓存必须 worktree 本地：node_modules 是软链到主仓的

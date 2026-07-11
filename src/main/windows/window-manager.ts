@@ -14,11 +14,10 @@
  */
 import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
-import { PIER } from "@shared/ipc-channels.ts";
 import {
+  app,
   BaseWindow,
   BrowserWindow,
-  ipcMain,
   nativeTheme,
   shell,
   WebContentsView,
@@ -35,6 +34,16 @@ import { clearTerminalPresentationWindowById } from "../ipc/terminal-presentatio
 import { isDevRuntime } from "../runtime-mode.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
 import { installMacAppViewGeometry } from "./mac-app-view-geometry.ts";
+import {
+  installRendererFailureRecovery,
+  reportRendererLoadError,
+} from "./renderer-failure-recovery.ts";
+import { createRendererShowGate } from "./renderer-show-gate.ts";
+import {
+  WindowCloseCoordinator,
+  type WindowCloseDecision,
+  type WindowCloseResult,
+} from "./window-close-coordinator.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
 import {
   findAppWindowByWebContents,
@@ -70,7 +79,11 @@ export interface WindowInfo {
 
 const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
-const RENDERER_READY_SHOW_TIMEOUT_MS = 3000;
+
+export type {
+  WindowCloseDecision,
+  WindowCloseResult,
+} from "./window-close-coordinator.ts";
 
 function resolveDevIcon(): string | undefined {
   return isDev ? join(import.meta.dirname, "../../build/icon.png") : undefined;
@@ -79,9 +92,7 @@ function resolveDevIcon(): string | undefined {
 class WindowManager {
   private readonly windows = new Map<string, AppWindow>();
   private readonly allocator = new WindowIdAllocator();
-  private readonly onBeforeCloseCallbacks: Array<
-    (payload: { recordId: string; windowId: string }) => Promise<void> | void
-  > = [];
+  private readonly closeCoordinator = new WindowCloseCoordinator();
   private readonly onCloseCallbacks: Array<
     (payload: { recordId: string; windowId: string }) => void
   > = [];
@@ -91,8 +102,6 @@ class WindowManager {
   private focusSequence = 0;
   private readonly lastFocusedAtByWindowId = new Map<string, number>();
   private isDestroyingAllForQuit = false;
-  private readonly closeFlushDone = new WeakSet<AppWindow>();
-  private readonly closeFlushPending = new WeakSet<AppWindow>();
   private readonly onCreateCallbacks: Array<
     (payload: { recordId: string; window: AppWindow; windowId: string }) => void
   > = [];
@@ -129,9 +138,9 @@ class WindowManager {
     callback: (payload: {
       recordId: string;
       windowId: string;
-    }) => Promise<void> | void
+    }) => Promise<WindowCloseDecision> | WindowCloseDecision
   ): void {
-    this.onBeforeCloseCallbacks.push(callback);
+    this.closeCoordinator.onBeforeClose(callback);
   }
 
   private rememberFocusedWindow(windowId: string): number {
@@ -193,70 +202,34 @@ class WindowManager {
       windowId: id,
     });
 
-    let didShow = false;
-    let showFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-    const traceStartup = (
-      event: "did-finish-load" | "fallback" | "readyToShow" | "show",
-      extra: Record<string, unknown> = {}
-    ) => {
-      if (process.env.PIER_STARTUP_TRACE !== "1") {
-        return;
-      }
-      console.info("[window-startup]", {
-        event,
-        recordId: opts.recordId ?? id,
-        windowId: id,
-        ...extra,
-      });
-    };
-    const cleanupShowWait = () => {
-      if (showFallbackTimer) {
-        clearTimeout(showFallbackTimer);
-        showFallbackTimer = null;
-      }
-      ipcMain.off(PIER.WINDOW_RENDERER_READY, handleRendererReady);
-    };
-    const showOnce = () => {
-      if (didShow) {
-        return;
-      }
-      didShow = true;
-      cleanupShowWait();
-      if (!window.isDestroyed()) {
-        const showMode = opts.showInactive ? "inactive" : "active";
-        traceStartup("show", { showMode });
-        if (opts.showInactive) {
-          window.host.showInactive();
-        } else {
-          window.host.show();
+    const rendererShowGate = createRendererShowGate({
+      recordId: opts.recordId ?? id,
+      showInactive: opts.showInactive ?? false,
+      window,
+      windowId: id,
+    });
+    const rendererFailure = installRendererFailureRecovery({
+      beforeLoadFailure: rendererShowGate.cancel,
+      beforeRendererGone: () => {
+        rendererShowGate.cancel();
+        clearTerminalPresentationWindowById(electronWindowId);
+        clearTerminalFocusWindowById(electronWindowId);
+        try {
+          getTerminalAddon()?.closeAllTerminals(window.getNativeWindowHandle());
+        } catch {
+          // ignore: window 即将销毁/已销毁
         }
-      }
-    };
-    const handleRendererReady = (event: Electron.IpcMainEvent) => {
-      if (event.sender !== window.webContents) {
-        return;
-      }
-      traceStartup("readyToShow");
-      showOnce();
-    };
-    const scheduleReadyFallback = () => {
-      traceStartup("did-finish-load");
-      if (!showFallbackTimer) {
-        showFallbackTimer = setTimeout(() => {
-          const payload = {
-            recordId: opts.recordId ?? id,
-            showMode: opts.showInactive ? "inactive" : "active",
-            windowId: id,
-          };
-          console.warn("[window-startup] readyToShow fallback", payload);
-          traceStartup("fallback", payload);
-          showOnce();
-        }, RENDERER_READY_SHOW_TIMEOUT_MS);
-      }
-    };
-    ipcMain.on(PIER.WINDOW_RENDERER_READY, handleRendererReady);
-    window.webContents.once("did-finish-load", scheduleReadyFallback);
-    window.webContents.once("did-fail-load", showOnce);
+      },
+      isQuitting: () => this.isDestroyingAllForQuit,
+      retryRenderer: rendererShowGate.retry,
+      window,
+    });
+    rendererShowGate.setReadyTimeoutHandler(() => {
+      rendererFailure.report({
+        detail: "renderer did not signal readiness before the startup deadline",
+        kind: "load",
+      });
+    });
     window.host.on("blur", () => {
       blurActivePanelFocus(window);
     });
@@ -291,44 +264,17 @@ class WindowManager {
       });
     }
 
-    window.webContents.on("render-process-gone", () => {
-      clearTerminalPresentationWindowById(electronWindowId);
-      clearTerminalFocusWindowById(electronWindowId);
-      try {
-        getTerminalAddon()?.closeAllTerminals(window.getNativeWindowHandle());
-      } catch {
-        // ignore: window 即将销毁/已销毁
-      }
-    });
-    window.webContents.on("preload-error", (_event, preloadPath, error) => {
-      console.error(
-        "[pier-preload-error]",
-        preloadPath,
-        error instanceof Error ? error.message : String(error)
-      );
-    });
-
     window.host.on("close", (event: Electron.Event) => {
       const context = findWindowContext(window);
       if (
         !this.isDestroyingAllForQuit &&
         context &&
-        !this.closeFlushDone.has(window)
+        this.closeCoordinator.intercept(window, id, {
+          recordId: context.recordId,
+          windowId: id,
+        })
       ) {
         event.preventDefault();
-        if (!this.closeFlushPending.has(window)) {
-          this.closeFlushPending.add(window);
-          this.flushBeforeClose(window, {
-            recordId: context.recordId,
-            windowId: id,
-          }).finally(() => {
-            this.closeFlushPending.delete(window);
-            this.closeFlushDone.add(window);
-            if (!window.isDestroyed()) {
-              window.close();
-            }
-          });
-        }
         return;
       }
       clearTerminalPresentationWindowById(electronWindowId);
@@ -341,19 +287,20 @@ class WindowManager {
     });
 
     window.host.on("closed", () => {
+      rendererShowGate.cancel();
       clearTerminalPresentationWindowById(electronWindowId);
       clearTerminalFocusWindowById(electronWindowId);
       // 整窗关闭绕过 renderer 逐 panel 关闭 IPC——在此兜底清理 agent 会话,
       // 否则条目永久残留（幽灵 TitleBar 计数）。BaseWindow 不触发
       // app "browser-window-created"/BrowserWindow 事件, 只能挂在这里。
       foregroundActivityService.windowClosed(String(electronWindowId));
-      cleanupShowWait();
       if (window.appView && !window.webContents.isDestroyed()) {
         window.webContents.close();
       }
       const context = findWindowContext(window);
       forgetAppWindow(window);
       this.windows.delete(id);
+      this.closeCoordinator.resolve(id, "closed");
       this.lastFocusedAtByWindowId.delete(id);
       this.allocator.release(id);
       if (!this.isDestroyingAllForQuit && context) {
@@ -365,14 +312,14 @@ class WindowManager {
 
     const rendererUrl = process.env.ELECTRON_RENDERER_URL;
     if (isDev && rendererUrl) {
-      window.webContents.loadURL(rendererUrl).catch(() => {
-        // ignore: load 失败由 ready-to-show / did-fail-load 兜底
+      window.webContents.loadURL(rendererUrl).catch((error: unknown) => {
+        reportRendererLoadError(rendererFailure, error);
       });
     } else {
       window.webContents
         .loadFile(join(import.meta.dirname, "../renderer/index.html"))
-        .catch(() => {
-          // ignore: load 失败由 ready-to-show / did-fail-load 兜底
+        .catch((error: unknown) => {
+          reportRendererLoadError(rendererFailure, error);
         });
     }
 
@@ -385,22 +332,6 @@ class WindowManager {
       });
     }
     return id;
-  }
-
-  private async flushBeforeClose(
-    window: AppWindow,
-    payload: { recordId: string; windowId: string }
-  ): Promise<void> {
-    try {
-      await Promise.all(this.onBeforeCloseCallbacks.map((cb) => cb(payload)));
-    } catch (err) {
-      console.error(
-        "[window-before-close] failed:",
-        err instanceof Error ? err.message : String(err)
-      );
-    } finally {
-      this.closeFlushPending.delete(window);
-    }
   }
 
   private createMacWindow(
@@ -449,12 +380,20 @@ class WindowManager {
     if (w.isMinimized()) {
       w.restore();
     }
+    if (process.platform === "darwin") {
+      app.focus?.({ steal: true });
+    }
     this.rememberFocusedWindow(id);
     w.focus();
+    w.webContents.focus();
   }
 
-  close(id: string): void {
-    this.windows.get(id)?.close();
+  close(id: string): Promise<WindowCloseResult> {
+    const window = this.windows.get(id);
+    if (!window) {
+      return Promise.resolve("not-found");
+    }
+    return this.closeCoordinator.wait(id, window);
   }
 
   destroyAllForQuit(): void {
@@ -472,6 +411,10 @@ class WindowManager {
         window.destroy();
       }
     }
+  }
+
+  isQuitting(): boolean {
+    return this.isDestroyingAllForQuit;
   }
 
   get(id: string): AppWindow | undefined {
