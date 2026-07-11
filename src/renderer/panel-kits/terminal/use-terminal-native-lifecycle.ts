@@ -1,11 +1,18 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
+import type {
+  TaskOutputPanelParams,
+  TaskPanelMetadata,
+} from "@shared/contracts/tasks.ts";
 import type {
   CreateTerminalArgs,
   CreateTerminalResult,
 } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { type RefObject, useEffect, useRef } from "react";
+import {
+  confirmTerminalLaunch,
+  rejectTerminalLaunch,
+} from "@/lib/workspace/terminal-launch-confirmation.ts";
 import { computeMonoFontFamilyList } from "@/stores/font.store.ts";
 import {
   registerTerminalLayoutAnchor,
@@ -28,6 +35,7 @@ interface UseTerminalNativeLifecycleArgs {
   initialLaunchId: string | undefined;
   initialTab: CreateTerminalArgs["tab"] | undefined;
   initialTask: TaskPanelMetadata | undefined;
+  initialTaskOutput: TaskOutputPanelParams | undefined;
   monoFontFamily: string;
   panelId: string;
   retryNonce: number;
@@ -68,6 +76,7 @@ export function useTerminalNativeLifecycle({
   initialLaunchId,
   initialTab,
   initialTask,
+  initialTaskOutput,
   monoFontFamily,
   panelId,
   retryNonce,
@@ -146,6 +155,7 @@ export function useTerminalNativeLifecycle({
 
     const markCreateFailure = (message: string) => {
       createFailureLatched = true;
+      rejectTerminalLaunch(initialLaunchId, message);
       setCreateError(message);
       markLifecycle({
         createPending: false,
@@ -213,12 +223,14 @@ export function useTerminalNativeLifecycle({
           ...(initialLaunchId && { launchId: initialLaunchId }),
           ...(initialTab && { tab: initialTab }),
           ...(initialTask && { task: initialTask }),
+          ...(initialTaskOutput && { taskOutput: initialTaskOutput }),
         });
         if (!acceptCreateResult(result)) {
           return;
         }
 
         didCreateNativeTerminal = true;
+        confirmTerminalLaunch(initialLaunchId);
         setNativeTerminalReady(true);
         markLifecycle({
           createPending: false,
@@ -319,6 +331,12 @@ export function useTerminalNativeLifecycle({
 
     return () => {
       disposed = true;
+      if (!didCreateNativeTerminal) {
+        rejectTerminalLaunch(
+          initialLaunchId,
+          "terminal panel closed before creation completed"
+        );
+      }
       disposeTerminalPanelLifecycleDebug(panelId);
       for (const s of subscriptions) {
         s.dispose();
@@ -334,6 +352,7 @@ export function useTerminalNativeLifecycle({
     initialLaunchId,
     initialTab,
     initialTask,
+    initialTaskOutput,
     panelId,
     retryNonce,
     sessionLoaded,

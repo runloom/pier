@@ -77,7 +77,8 @@ async function popupAndDispatch(
   coords: { x: number; y: number },
   invocation?: Omit<ActionInvocation, "surface">
 ): Promise<void> {
-  const template = buildMenuEntries(surface);
+  const actionInvocation = { ...invocation, surface };
+  const template = buildMenuEntries(surface, actionInvocation);
   if (template.length === 0) {
     return;
   }
@@ -105,7 +106,7 @@ async function popupAndDispatch(
       return;
     }
     try {
-      if (action.enabled?.() === false) {
+      if (action.enabled?.(actionInvocation) === false) {
         return;
       }
     } catch (err) {
@@ -113,7 +114,7 @@ async function popupAndDispatch(
       return;
     }
 
-    await Promise.resolve(action.handler({ ...invocation, surface })).catch(
+    await Promise.resolve(action.handler(actionInvocation)).catch(
       (err: unknown) => {
         console.error(`[menu] action ${result.actionId} threw:`, err);
       }

@@ -69,6 +69,7 @@ function taskActivity(
 ): TaskActivity {
   return {
     kind: "task",
+    runId: "run-1",
     ...BASE_ACTIVITY,
     taskId: "task-1",
     label: "Build release",

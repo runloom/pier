@@ -13,7 +13,15 @@ extern "C" {
                                          const char* command,
                                          const char** envKeys,
                                          const char** envValues,
-                                         long envCount);
+                                         long envCount,
+                                         const char* lifecycleId);
+    bool ghostty_bridge_create_output_terminal(void* nsWindow, const char* panelId,
+                                                double x, double y, double w, double h,
+                                                const char* fontFamily, float fontSize);
+    bool ghostty_bridge_write_output(const char* panelId, const uint8_t* bytes, long count);
+    bool ghostty_bridge_finish_output(const char* panelId, uint32_t exitCode,
+                                      uint64_t runtimeMilliseconds);
+    bool ghostty_bridge_reset_output(const char* panelId);
     void ghostty_bridge_set_font_config(void* nsWindow, const char* fontFamily, float fontSize);
     // 打包字体注册给当前进程 CoreText. 多路径用 '\n' join 成单个 C 字符串, swift 端 split 还原.
     void ghostty_bridge_register_fonts(const char* pathsJoined);
@@ -24,7 +32,7 @@ extern "C" {
                                    double x, double y, double w, double h);
     void ghostty_bridge_show(const char* panelId);
     void ghostty_bridge_hide(const char* panelId);
-    void ghostty_bridge_close(const char* panelId);
+    bool ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     bool ghostty_bridge_send_text(const char* panelId, const char* text);
     char* ghostty_bridge_read_selection_text(const char* panelId);
@@ -59,22 +67,24 @@ extern "C" {
     void ghostty_bridge_set_search_forward_callback(SearchForwardFn cb);
     // Title forward: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 → 此 trampoline → JS.
     // 签名 (browserWindowId, panelId UTF-8, title UTF-8). 与 PWD 同模式.
-    typedef void (*TitleForwardFn)(long browserWindowId, const char* panelId, const char* title);
+    typedef void (*TitleForwardFn)(long browserWindowId, const char* panelId,
+                                   const char* lifecycleId, const char* title);
     void ghostty_bridge_set_title_forward_callback(TitleForwardFn cb);
     // Command finished forward: swift shell integration command_finished → JS.
     // 签名 (browserWindowId, panelId UTF-8, exitCode, durationNanos).
     typedef void (*CommandFinishedForwardFn)(long browserWindowId, const char* panelId,
-                                             long exitCode, unsigned long long durationNanos);
+                                             const char* lifecycleId, long exitCode,
+                                             unsigned long long durationNanos);
     void ghostty_bridge_set_command_finished_forward_callback(CommandFinishedForwardFn cb);
     // Command started forward: swift shell integration command_started → JS.
     // 签名 (browserWindowId, panelId UTF-8, commandLine UTF-8).
     typedef void (*CommandStartedForwardFn)(long browserWindowId, const char* panelId,
-                                            const char* commandLine);
+                                            const char* lifecycleId, const char* commandLine);
     void ghostty_bridge_set_command_started_forward_callback(CommandStartedForwardFn cb);
     // Process closed forward: swift TerminalSurfaceCloseDelegate → JS.
     // 签名 (browserWindowId, panelId UTF-8, processAlive).
     typedef void (*ProcessClosedForwardFn)(long browserWindowId, const char* panelId,
-                                           bool processAlive);
+                                           const char* lifecycleId, bool processAlive);
     void ghostty_bridge_set_process_closed_forward_callback(ProcessClosedForwardFn cb);
     void ghostty_bridge_apply_presentation(void* nsWindow, const char* json);
     void ghostty_bridge_apply_input_routing(void* nsWindow, const char* json);
@@ -152,6 +162,7 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     std::vector<std::string> envValueHolders;
     std::vector<const char*> envKeys;
     std::vector<const char*> envValues;
+    std::string lifecycleId;
     if (info.Length() > 5 && info[5].IsString()) {
         cwdHolder = info[5].As<Napi::String>().Utf8Value();
         if (!cwdHolder.empty()) cwdPtr = cwdHolder.c_str();
@@ -182,6 +193,9 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
             }
         }
     }
+    if (info.Length() > 6 && info[6].IsString()) {
+        lifecycleId = info[6].As<Napi::String>().Utf8Value();
+    }
     bool ok = ghostty_bridge_create_terminal(
         (__bridge void*)win, panelId.c_str(),
         x, y, w, h,
@@ -190,9 +204,65 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
         commandPtr,
         envKeys.empty() ? nullptr : envKeys.data(),
         envValues.empty() ? nullptr : envValues.data(),
-        static_cast<long>(envKeys.size())
+        static_cast<long>(envKeys.size()),
+        lifecycleId.c_str()
     );
     return Napi::Boolean::New(info.Env(), ok);
+}
+
+static Napi::Value JsCreateOutputTerminal(const Napi::CallbackInfo& info) {
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return Napi::Boolean::New(info.Env(), false);
+    std::string panelId = info[1].As<Napi::String>().Utf8Value();
+    Napi::Object frame = info[2].As<Napi::Object>();
+    double x = frame.Get("x").As<Napi::Number>().DoubleValue();
+    double y = frame.Get("y").As<Napi::Number>().DoubleValue();
+    double w = frame.Get("width").As<Napi::Number>().DoubleValue();
+    double h = frame.Get("height").As<Napi::Number>().DoubleValue();
+    std::string fontFamily;
+    if (info[3].IsArray()) {
+        Napi::Array arr = info[3].As<Napi::Array>();
+        for (uint32_t i = 0; i < arr.Length(); i++) {
+            if (!arr.Get(i).IsString()) continue;
+            if (!fontFamily.empty()) fontFamily += "\n";
+            fontFamily += arr.Get(i).As<Napi::String>().Utf8Value();
+        }
+    }
+    float fontSize = info[4].As<Napi::Number>().FloatValue();
+    bool ok = ghostty_bridge_create_output_terminal(
+        (__bridge void*)win, panelId.c_str(), x, y, w, h,
+        fontFamily.c_str(), fontSize
+    );
+    return Napi::Boolean::New(info.Env(), ok);
+}
+
+static Napi::Value JsWriteTerminalOutput(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    if (!info[1].IsBuffer()) return Napi::Boolean::New(info.Env(), false);
+    auto bytes = info[1].As<Napi::Buffer<uint8_t>>();
+    bool ok = ghostty_bridge_write_output(
+        panelId.c_str(), bytes.Data(), static_cast<long>(bytes.Length())
+    );
+    return Napi::Boolean::New(info.Env(), ok);
+}
+
+static Napi::Value JsFinishTerminalOutput(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    uint32_t exitCode = info[1].As<Napi::Number>().Uint32Value();
+    uint64_t runtimeMilliseconds = static_cast<uint64_t>(
+        info[2].As<Napi::Number>().Int64Value()
+    );
+    bool ok = ghostty_bridge_finish_output(
+        panelId.c_str(), exitCode, runtimeMilliseconds
+    );
+    return Napi::Boolean::New(info.Env(), ok);
+}
+
+static Napi::Value JsResetTerminalOutput(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    return Napi::Boolean::New(
+        info.Env(), ghostty_bridge_reset_output(panelId.c_str())
+    );
 }
 
 static Napi::Value JsSetFrame(const Napi::CallbackInfo& info) {
@@ -220,8 +290,8 @@ static Napi::Value JsHide(const Napi::CallbackInfo& info) {
 
 static Napi::Value JsClose(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
-    ghostty_bridge_close(panelId.c_str());
-    return info.Env().Undefined();
+    bool ok = ghostty_bridge_close(panelId.c_str());
+    return Napi::Boolean::New(info.Env(), ok);
 }
 
 static Napi::Value JsPerformBindingAction(const Napi::CallbackInfo& info) {
@@ -522,18 +592,22 @@ static Napi::Value JsSetSearchForwardCallback(const Napi::CallbackInfo& info) {
 struct TitleForwardPayload {
     long windowId;
     std::string panelId;
+    std::string lifecycleId;
     std::string title;
     void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
             Napi::Number::New(env, static_cast<double>(windowId)),
             Napi::String::New(env, panelId),
+            Napi::String::New(env, lifecycleId),
             Napi::String::New(env, title),
         });
     }
 };
 static ForwardChannel<TitleForwardPayload> g_titleChannel("PierTitleForward");
-static void g_titleForwardTrampoline(long windowId, const char* panelId, const char* title) {
-    g_titleChannel.emit({ windowId, std::string(panelId), std::string(title) });
+static void g_titleForwardTrampoline(long windowId, const char* panelId,
+                                     const char* lifecycleId, const char* title) {
+    g_titleChannel.emit({ windowId, std::string(panelId),
+                          std::string(lifecycleId), std::string(title) });
 }
 static Napi::Value JsSetTitleForwardCallback(const Napi::CallbackInfo& info) {
     return JsSetForwardCallback(info, g_titleChannel,
@@ -545,12 +619,14 @@ static Napi::Value JsSetTitleForwardCallback(const Napi::CallbackInfo& info) {
 struct CommandFinishedForwardPayload {
     long windowId;
     std::string panelId;
+    std::string lifecycleId;
     long exitCode;
     unsigned long long durationNanos;
     void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
             Napi::Number::New(env, static_cast<double>(windowId)),
             Napi::String::New(env, panelId),
+            Napi::String::New(env, lifecycleId),
             Napi::Number::New(env, static_cast<double>(exitCode)),
             Napi::Number::New(env, static_cast<double>(durationNanos)),
         });
@@ -560,12 +636,14 @@ static ForwardChannel<CommandFinishedForwardPayload> g_commandFinishedChannel("P
 static void g_commandFinishedForwardTrampoline(
     long windowId,
     const char* panelId,
+    const char* lifecycleId,
     long exitCode,
     unsigned long long durationNanos
 ) {
     g_commandFinishedChannel.emit({
         windowId,
         std::string(panelId),
+        std::string(lifecycleId),
         exitCode,
         durationNanos,
     });
@@ -580,11 +658,13 @@ static Napi::Value JsSetCommandFinishedForwardCallback(const Napi::CallbackInfo&
 struct CommandStartedForwardPayload {
     long windowId;
     std::string panelId;
+    std::string lifecycleId;
     std::string commandLine;
     void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
             Napi::Number::New(env, static_cast<double>(windowId)),
             Napi::String::New(env, panelId),
+            Napi::String::New(env, lifecycleId),
             Napi::String::New(env, commandLine),
         });
     }
@@ -593,11 +673,13 @@ static ForwardChannel<CommandStartedForwardPayload> g_commandStartedChannel("Pie
 static void g_commandStartedForwardTrampoline(
     long windowId,
     const char* panelId,
+    const char* lifecycleId,
     const char* commandLine
 ) {
     g_commandStartedChannel.emit({
         windowId,
         std::string(panelId),
+        std::string(lifecycleId),
         std::string(commandLine),
     });
 }
@@ -611,11 +693,13 @@ static Napi::Value JsSetCommandStartedForwardCallback(const Napi::CallbackInfo& 
 struct ProcessClosedForwardPayload {
     long windowId;
     std::string panelId;
+    std::string lifecycleId;
     bool processAlive;
     void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
             Napi::Number::New(env, static_cast<double>(windowId)),
             Napi::String::New(env, panelId),
+            Napi::String::New(env, lifecycleId),
             Napi::Boolean::New(env, processAlive),
         });
     }
@@ -624,11 +708,13 @@ static ForwardChannel<ProcessClosedForwardPayload> g_processClosedChannel("PierP
 static void g_processClosedForwardTrampoline(
     long windowId,
     const char* panelId,
+    const char* lifecycleId,
     bool processAlive
 ) {
     g_processClosedChannel.emit({
         windowId,
         std::string(panelId),
+        std::string(lifecycleId),
         processAlive,
     });
 }
@@ -793,12 +879,16 @@ static Napi::Value JsApplyTerminalInputRouting(const Napi::CallbackInfo& info) {
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setupWindow",     Napi::Function::New(env, JsSetupWindow));
     exports.Set("createTerminal",  Napi::Function::New(env, JsCreateTerminal));
+    exports.Set("createOutputTerminal", Napi::Function::New(env, JsCreateOutputTerminal));
     exports.Set("setFrame",        Napi::Function::New(env, JsSetFrame));
     exports.Set("showTerminal",    Napi::Function::New(env, JsShow));
     exports.Set("hideTerminal",    Napi::Function::New(env, JsHide));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("sendText", Napi::Function::New(env, JsSendText));
+    exports.Set("writeTerminalOutput", Napi::Function::New(env, JsWriteTerminalOutput));
+    exports.Set("finishTerminalOutput", Napi::Function::New(env, JsFinishTerminalOutput));
+    exports.Set("resetTerminalOutput", Napi::Function::New(env, JsResetTerminalOutput));
     exports.Set("readSelectionText", Napi::Function::New(env, JsReadSelectionText));
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
     exports.Set("reconcileTerminals", Napi::Function::New(env, JsReconcile));

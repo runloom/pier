@@ -41,7 +41,8 @@ const DETACH_FORGETS_RE =
   /windowToBrowserWindowId\.removeValue\(forKey: windowId\)/;
 
 const EVENT_DELEGATE_HOLDS_BROWSER_ID_RE = /let browserWindowId: Int/;
-const EVENT_DELEGATE_INIT_RE = /init\(panelId: String, browserWindowId: Int\)/;
+const EVENT_DELEGATE_INIT_RE =
+  /init\(panelId: String, browserWindowId: Int, lifecycleId: String\)/;
 
 const CLOSE_CLEARS_STALE_STATE_RE =
   /if state\.basePanel\.panelId == panelId \{\s*state\.basePanel = \.web/;

@@ -2,13 +2,12 @@ import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import type { TerminalSearchStateEvent } from "@shared/contracts/terminal.ts";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import {
   useTerminalOverlayFocus,
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
-import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing-slice.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
@@ -48,7 +47,6 @@ export function TerminalSearchBar({
   visible,
 }: TerminalSearchBarProps) {
   const t = useT();
-  const rootRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [searchState, setSearchState] =
@@ -76,23 +74,6 @@ export function TerminalSearchBar({
       inputRef.current?.blur();
     }
   }, [visible, activeOverlayId, searchId]);
-
-  useLayoutEffect(() => {
-    if (!visible) {
-      return;
-    }
-    const root = rootRef.current;
-    if (!root) {
-      return;
-    }
-    const registration = registerTerminalElementWebOverlay(
-      `terminal-search:${panelId}`,
-      root
-    );
-    return () => {
-      registration.dispose();
-    };
-  }, [visible, panelId]);
 
   useEffect(() => {
     if (!visible) {
@@ -185,10 +166,9 @@ export function TerminalSearchBar({
   return (
     <search
       aria-label={t("terminal.search.label")}
-      className="pointer-events-auto absolute top-3 right-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-border bg-popover p-1 text-popover-foreground shadow-background/40 shadow-lg"
+      className="flex max-w-full items-center gap-1.5 rounded-full border border-border bg-popover p-1 text-popover-foreground shadow-background/40 shadow-lg"
       data-terminal-search-bar=""
       data-testid="terminal-search-bar"
-      ref={rootRef}
     >
       <div className="relative w-52 min-w-0">
         <Search

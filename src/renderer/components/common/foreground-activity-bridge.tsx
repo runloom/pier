@@ -1,16 +1,6 @@
 import { useEffect } from "react";
 import { registerAgentStatusItem } from "@/panel-kits/terminal/agent-status-item.tsx";
-import { registerTaskStatusItem } from "@/panel-kits/terminal/task-status-item.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
-import { useTerminalTaskHistoryStore } from "@/stores/terminal-task-history.store.ts";
-
-function terminalTaskHistoryPanelsKey(): string {
-  return Object.entries(useTerminalTaskHistoryStore.getState().panels)
-    .filter(([, tasks]) => Object.keys(tasks).length > 0)
-    .map(([panelId]) => panelId)
-    .sort()
-    .join("\n");
-}
 
 /**
  * ForegroundActivity 桥 — 不渲染任何 UI。
@@ -19,6 +9,7 @@ function terminalTaskHistoryPanelsKey(): string {
  * 3. 注册终端状态栏 agent item(核心项, 不走 plugin host); activity key 集合
  *    变化时重新 register 触发 registry notify → TerminalStatusBar 重跑 isVisible,
  *    让空条不再为无 agent activity 面板保留高度。
+ * 任务运行状态只由终端 panel 内浮层呈现，不再进入底部状态栏。
  */
 export function ForegroundActivityBridge(): null {
   useEffect(() => {
@@ -47,24 +38,6 @@ export function ForegroundActivityBridge(): null {
     return () => {
       unsubscribe();
       disposeAgent();
-    };
-  }, []);
-
-  useEffect(() => {
-    let disposeTask = registerTaskStatusItem();
-    let lastKeys = terminalTaskHistoryPanelsKey();
-    const unsubscribe = useTerminalTaskHistoryStore.subscribe(() => {
-      const keys = terminalTaskHistoryPanelsKey();
-      if (keys === lastKeys) {
-        return;
-      }
-      lastKeys = keys;
-      disposeTask();
-      disposeTask = registerTaskStatusItem();
-    });
-    return () => {
-      unsubscribe();
-      disposeTask();
     };
   }, []);
 

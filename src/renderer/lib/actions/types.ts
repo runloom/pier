@@ -37,7 +37,7 @@ export interface ActionMetadata {
    * 返回 true 时该 action 从右键菜单整行移除 (非置灰)。只在 buildMenuEntries
    * 投影 context menu 时生效;命令面板/快捷键路径不读此字段。
    */
-  menuHidden?: () => boolean;
+  menuHidden?: (invocation?: ActionInvocation) => boolean;
   /**
    * 菜单 accelerator 展示可借用另一条 command 的 keybinding.
    * 用于菜单 action 与快捷键 action 分离, 但用户需要看到同一个快捷键提示的场景.
@@ -69,12 +69,12 @@ export type ActionCategoryKey =
 export interface Action {
   category: string;
   disabledReason?: () => string | null | undefined;
-  enabled?: () => boolean;
+  enabled?: (invocation?: ActionInvocation) => boolean;
   handler: (invocation?: ActionInvocation) => void | Promise<void>;
   id: string;
   metadata?: ActionMetadata;
   /** 命令面板 / 右键菜单 surface 列表。空数组 = 仅快捷键触发，不在任何 surface 展示。 */
   surfaces?: readonly (string & {})[];
   /** 返回当前 locale 下的显示文本; 函数式以便随 i18n 实时更新。 */
-  title: () => string;
+  title: (invocation?: ActionInvocation) => string;
 }

@@ -116,6 +116,10 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("run.backgroundSnapshot"),
   }),
   z.object({
+    type: z.literal("run.runsSnapshot"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
     focus: z.boolean().optional(),
     forceRestart: z.boolean().optional(),
     inputs: z.record(z.string().min(1), z.string()).optional(),
@@ -135,6 +139,11 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     runId: z.string().min(1),
     type: z.literal("run.cancel"),
     windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    force: z.boolean().optional(),
+    runId: z.string().min(1),
+    type: z.literal("run.stop"),
   }),
   z.object({
     type: z.literal("run.recent"),

@@ -1,4 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { taskOutputPanelParamsSchema } from "@shared/contracts/tasks.ts";
 import type {
   CreateTerminalArgs,
   CreateTerminalResult,
@@ -32,6 +33,7 @@ import type { NativeAddon } from "./terminal-native-addon.ts";
 import { toNativePanelKey } from "./terminal-panel-id.ts";
 import { persistInitialTerminalTab } from "./terminal-tab-chrome.ts";
 import type { RegisteredTerminalTaskLifecycle } from "./terminal-task-lifecycle-wiring.ts";
+import type { TaskOutputTerminalBindings } from "./terminal-task-output-bindings.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
 export async function handleTerminalCreate(args: {
@@ -43,6 +45,7 @@ export async function handleTerminalCreate(args: {
     | ((agentId: AgentKind) => Promise<unknown> | unknown)
     | undefined;
   taskLifecycle: RegisteredTerminalTaskLifecycle;
+  taskOutputBindings: TaskOutputTerminalBindings | null;
   win: AppWindow | null;
 }): Promise<CreateTerminalResult> {
   const {
@@ -52,6 +55,7 @@ export async function handleTerminalCreate(args: {
     processEnvironment,
     recordAgentLaunch,
     taskLifecycle,
+    taskOutputBindings,
     win,
   } = args;
   if (!addon) {
@@ -61,13 +65,57 @@ export async function handleTerminalCreate(args: {
   if (!win) {
     return { ok: false, error: "window not found" };
   }
+  if (createArgs.taskOutput) {
+    const parsed = taskOutputPanelParamsSchema.safeParse(createArgs.taskOutput);
+    if (!parsed.success) {
+      return { ok: false, error: "invalid task output parameters" };
+    }
+    if (!taskOutputBindings) {
+      return { ok: false, error: "task output service is unavailable" };
+    }
+    try {
+      const nativePanelId = toNativePanelKey(win, createArgs.panelId);
+      recordRendererTerminalRoute(win, "create", createArgs.panelId, {
+        height: createArgs.frame.height,
+        width: createArgs.frame.width,
+        x: createArgs.frame.x,
+        y: createArgs.frame.y,
+      });
+      const ok = addon.createOutputTerminal(
+        win.getNativeWindowHandle(),
+        nativePanelId,
+        createArgs.frame,
+        createArgs.font.family,
+        createArgs.font.size
+      );
+      if (!ok) {
+        return { ok: false, error: "createOutputTerminal returned false" };
+      }
+      const attached = taskOutputBindings.attach({
+        browserWindowId: win.id,
+        nativePanelId,
+        ownerWindowId: findInternalWindowId(win) ?? undefined,
+        params: parsed.data,
+      });
+      if (!attached.ok) {
+        addon.closeTerminal(nativePanelId);
+        return {
+          ok: false,
+          error: attached.error ?? "task output binding failed",
+        };
+      }
+      conformTerminalPresentationAfterCreate(win, addon);
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
   const sessionScope = windowRecordIdFor(win);
   try {
     const handle = win.getNativeWindowHandle();
-    taskLifecycle.resetPanel(
-      createArgs.panelId,
-      findInternalWindowId(win) ?? undefined
-    );
     const saved = await readTerminalPanelSession(
       sessionScope,
       createArgs.panelId
@@ -79,6 +127,12 @@ export async function handleTerminalCreate(args: {
           activity.kind === "task" && activity.panelId === createArgs.panelId
       );
     const launch = resolveCreateTerminalLaunch(createArgs, saved, { taskLive });
+    const lifecycleId = launch.task?.runId ?? "";
+    taskLifecycle.resetPanel(
+      createArgs.panelId,
+      lifecycleId,
+      findInternalWindowId(win) ?? undefined
+    );
     await persistInitialTerminalTask(
       sessionScope,
       createArgs.panelId,
@@ -122,7 +176,8 @@ export async function handleTerminalCreate(args: {
         createArgs.panelId,
         String(win.id),
         foregroundActivityService.hookEnv()
-      )
+      ),
+      lifecycleId
     );
     if (!ok) {
       foregroundActivityService.panelClosed(createArgs.panelId);

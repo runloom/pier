@@ -1,9 +1,20 @@
 import type {
   TaskLaunchPlan,
-  TaskRunNodeSnapshot,
+  TaskRunControlEntry,
   TaskRunNodeStatus,
   TaskRunSnapshot,
+  TaskRunsSnapshot,
+  TaskSpawnMode,
 } from "@shared/contracts/tasks.ts";
+import {
+  aggregateStatus,
+  controlSnapshot,
+  panelNodeKey,
+  rejectStopForTasks,
+  snapshot,
+  type TaskRunNodeState,
+  type TaskRunState,
+} from "./task-run-state.ts";
 
 export type TaskRunLaunchPlan = TaskLaunchPlan;
 
@@ -19,7 +30,10 @@ type TaskRunTerminalOpen = (
 
 export interface TaskRunCoordinatorStartArgs {
   launches: readonly TaskRunLaunchPlan[];
+  mode?: TaskSpawnMode | undefined;
   openTerminal?: TaskRunTerminalOpen;
+  originPanelId?: string | undefined;
+  ownerWindowId?: string | undefined;
   projectRootPath: string;
   rootTaskId: string;
 }
@@ -36,9 +50,22 @@ export interface TaskRunCoordinator {
   completePanel(
     panelId: string,
     exitCode: number,
-    windowId?: string | undefined
+    windowId?: string | undefined,
+    expectedRunId?: string | undefined
   ): Promise<TaskRunSnapshot | null>;
+  controlStatus(runId: string): TaskRunControlEntry | null;
+  forceStop(
+    runId: string,
+    taskIds?: ReadonlySet<string> | undefined
+  ): TaskRunControlEntry | null;
+  isStopRequested(panelId: string, windowId?: string | undefined): boolean;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
+  rejectStop(
+    runId: string,
+    taskIds: ReadonlySet<string>
+  ): TaskRunControlEntry | null;
+  requestStop(runId: string): TaskRunControlEntry | null;
+  runsSnapshot(windowId?: string | undefined): TaskRunsSnapshot;
   start(
     args: TaskRunCoordinatorStartArgs
   ): Promise<TaskRunCoordinatorStartResult>;
@@ -47,25 +74,9 @@ export interface TaskRunCoordinator {
 
 export interface CreateTaskRunCoordinatorOptions {
   now?: () => number;
+  onChanged?: ((snapshot: TaskRunsSnapshot) => void) | undefined;
   openTerminal?: TaskRunTerminalOpen;
   retainedRunLimit?: number;
-}
-
-interface TaskRunNodeState {
-  blockedBy?: string | undefined;
-  exitCode?: number | undefined;
-  launch: TaskRunLaunchPlan;
-  panelId?: string | undefined;
-  status: TaskRunNodeStatus;
-  windowId?: string | undefined;
-}
-
-interface TaskRunState {
-  nodes: Map<string, TaskRunNodeState>;
-  panelIds: string[];
-  projectRootPath: string;
-  rootTaskId: string;
-  runId: string;
 }
 
 type DependencyScheduleState = "blocked" | "ready" | "waiting";
@@ -74,87 +85,9 @@ function taskRunId(now: number, sequence: number): string {
   return `run-${now.toString(36)}-${sequence.toString(36)}`;
 }
 
-function panelNodeKey(panelId: string, windowId?: string | undefined): string {
-  return windowId ? `${windowId}\0${panelId}` : panelId;
-}
-
-function nodeSnapshot(
-  taskId: string,
-  node: TaskRunNodeState
-): TaskRunNodeSnapshot {
-  return {
-    label: node.launch.label,
-    status: node.status,
-    taskId,
-    ...(node.blockedBy ? { blockedBy: node.blockedBy } : {}),
-    ...(node.exitCode === undefined ? {} : { exitCode: node.exitCode }),
-    ...(node.panelId ? { panelId: node.panelId } : {}),
-    ...(node.windowId ? { windowId: node.windowId } : {}),
-  };
-}
-
-function statusRank(status: TaskRunNodeStatus): number {
-  switch (status) {
-    case "failed":
-      return 6;
-    case "blocked":
-      return 5;
-    case "cancelled":
-      return 4;
-    case "running":
-      return 3;
-    case "pending":
-      return 2;
-    case "succeeded":
-      return 1;
-    default:
-      return 0;
-  }
-}
-
-function aggregateStatus(run: TaskRunState): TaskRunNodeStatus {
-  const root = run.nodes.get(run.rootTaskId);
-  if (root && root.status !== "pending") {
-    return root.status;
-  }
-  return (
-    [...run.nodes.values()]
-      .map((node) => node.status)
-      .sort((a, b) => statusRank(b) - statusRank(a))[0] ?? "pending"
-  );
-}
-
-function snapshot(run: TaskRunState): TaskRunSnapshot {
-  return {
-    nodes: Object.fromEntries(
-      [...run.nodes.entries()].map(([taskId, node]) => [
-        taskId,
-        nodeSnapshot(taskId, node),
-      ])
-    ),
-    projectRootPath: run.projectRootPath,
-    rootTaskId: run.rootTaskId,
-    runId: run.runId,
-    status: aggregateStatus(run),
-  };
-}
-
-function dependencyStatus(
-  node: TaskRunNodeState | undefined
-): TaskRunNodeStatus {
-  return node?.status ?? "blocked";
-}
-
-function dependencyReady(status: TaskRunNodeStatus): boolean {
-  return status === "succeeded";
-}
-
-function dependencyFailed(status: TaskRunNodeStatus): boolean {
-  return status === "failed" || status === "blocked" || status === "cancelled";
-}
-
 export function createTaskRunCoordinator({
   now = () => Date.now(),
+  onChanged,
   openTerminal: defaultOpenTerminal,
   retainedRunLimit = 100,
 }: CreateTaskRunCoordinatorOptions = {}): TaskRunCoordinator {
@@ -162,6 +95,26 @@ export function createTaskRunCoordinator({
   const runOpenTerminal = new Map<string, TaskRunTerminalOpen>();
   const panelToRunNode = new Map<string, { runId: string; taskId: string }>();
   let sequence = 0;
+  let snapshotVersion = 0;
+
+  const runsSnapshot = (windowId?: string | undefined): TaskRunsSnapshot => ({
+    runs: Object.fromEntries(
+      [...runs.entries()]
+        .filter(([, run]) => !windowId || run.ownerWindowId === windowId)
+        .map(([runId, run]) => [runId, controlSnapshot(run)])
+    ),
+    version: snapshotVersion,
+  });
+
+  const publish = (): void => {
+    snapshotVersion += 1;
+    onChanged?.(runsSnapshot());
+  };
+
+  const touch = (run: TaskRunState): void => {
+    run.updatedAt = now();
+    publish();
+  };
 
   const isTerminalStatus = (status: TaskRunNodeStatus): boolean =>
     status === "blocked" ||
@@ -206,17 +159,21 @@ export function createTaskRunCoordinator({
       return;
     }
     node.status = "running";
+    touch(run);
     try {
       const opened = await openTerminal(node.launch, run.runId);
       node.panelId = opened.panelId;
       node.windowId = opened.windowId;
+      run.ownerWindowId ??= opened.windowId;
       panelToRunNode.set(panelNodeKey(opened.panelId, opened.windowId), {
         runId: run.runId,
         taskId,
       });
       run.panelIds = [...run.panelIds, opened.panelId];
+      touch(run);
     } catch (error) {
       node.status = "failed";
+      touch(run);
       throw error;
     }
   };
@@ -233,11 +190,11 @@ export function createTaskRunCoordinator({
     run: TaskRunState,
     dependencyId: string
   ): DependencyScheduleState => {
-    const status = dependencyStatus(run.nodes.get(dependencyId));
-    if (dependencyFailed(status)) {
+    const status = run.nodes.get(dependencyId)?.status ?? "blocked";
+    if (status === "failed" || status === "blocked" || status === "cancelled") {
       return "blocked";
     }
-    return dependencyReady(status) ? "ready" : "waiting";
+    return status === "succeeded" ? "ready" : "waiting";
   };
 
   const ensureSequenceDependencies = async (
@@ -331,19 +288,31 @@ export function createTaskRunCoordinator({
         return null;
       }
       for (const node of run.nodes.values()) {
-        if (node.status === "pending" || node.status === "running") {
+        if (
+          node.status === "pending" ||
+          node.status === "running" ||
+          node.status === "stopping"
+        ) {
           node.status = "cancelled";
+          if (node.stopRequestedAt !== undefined) {
+            node.termination ??= "interrupt";
+          }
           if (node.panelId) {
             panelToRunNode.delete(panelNodeKey(node.panelId, node.windowId));
           }
         }
       }
       sweepFinishedRuns();
+      touch(run);
       return snapshot(run);
     },
-    async completePanel(panelId, exitCode, windowId) {
+    controlStatus(runId) {
+      const run = runs.get(runId);
+      return run ? controlSnapshot(run) : null;
+    },
+    async completePanel(panelId, exitCode, windowId, expectedRunId) {
       const ref = panelToRunNode.get(panelNodeKey(panelId, windowId));
-      if (!ref) {
+      if (!ref || (expectedRunId && ref.runId !== expectedRunId)) {
         return null;
       }
       const run = runs.get(ref.runId);
@@ -352,7 +321,14 @@ export function createTaskRunCoordinator({
         return null;
       }
       node.exitCode = exitCode;
-      node.status = exitCode === 0 ? "succeeded" : "failed";
+      if (node.status === "cancelled") {
+        // Force-stop / panel-close already established the terminal state.
+      } else if (node.status === "stopping") {
+        node.status = "cancelled";
+        node.termination ??= "interrupt";
+      } else {
+        node.status = exitCode === 0 ? "succeeded" : "failed";
+      }
       panelToRunNode.delete(panelNodeKey(panelId, node.windowId));
       const openTerminal = runOpenTerminal.get(run.runId);
       if (openTerminal) {
@@ -363,26 +339,109 @@ export function createTaskRunCoordinator({
         }
       }
       sweepFinishedRuns();
+      touch(run);
       return snapshot(run);
+    },
+    forceStop(runId, taskIds) {
+      const run = runs.get(runId);
+      if (!run) {
+        return null;
+      }
+      let changed = false;
+      for (const [taskId, node] of run.nodes) {
+        if (
+          (!taskIds || taskIds.has(taskId)) &&
+          (node.status === "pending" ||
+            node.status === "running" ||
+            node.status === "stopping")
+        ) {
+          node.status = "cancelled";
+          node.termination = "force";
+          changed = true;
+        }
+      }
+      if (changed) {
+        sweepFinishedRuns();
+        touch(run);
+      }
+      return controlSnapshot(run);
+    },
+    isStopRequested(panelId, windowId) {
+      const ref = panelToRunNode.get(panelNodeKey(panelId, windowId));
+      const node = ref ? runs.get(ref.runId)?.nodes.get(ref.taskId) : undefined;
+      return (
+        node?.status === "stopping" ||
+        (node?.status === "cancelled" && node.termination === "force")
+      );
     },
     markPanelClosed(panelId, windowId) {
       const ref = panelToRunNode.get(panelNodeKey(panelId, windowId));
       const run = ref ? runs.get(ref.runId) : undefined;
       const node = ref && run ? run.nodes.get(ref.taskId) : undefined;
-      if (node?.status === "running") {
+      if (node?.status === "running" || node?.status === "stopping") {
         node.status = "cancelled";
+        if (node.stopRequestedAt !== undefined) {
+          node.termination ??= "interrupt";
+        }
       }
       panelToRunNode.delete(panelNodeKey(panelId, node?.windowId ?? windowId));
       sweepFinishedRuns();
+      if (run) {
+        touch(run);
+      }
     },
-    async start({ launches, openTerminal, projectRootPath, rootTaskId }) {
+    rejectStop(runId, taskIds) {
+      const run = runs.get(runId);
+      if (!run) {
+        return null;
+      }
+      if (rejectStopForTasks(run, taskIds)) {
+        touch(run);
+      }
+      return controlSnapshot(run);
+    },
+    requestStop(runId) {
+      const run = runs.get(runId);
+      if (!run) {
+        return null;
+      }
+      const requestedAt = now();
+      let changed = false;
+      for (const node of run.nodes.values()) {
+        if (node.status === "pending") {
+          node.status = "cancelled";
+          node.stopRequestedAt = requestedAt;
+          changed = true;
+        } else if (node.status === "running") {
+          node.status = "stopping";
+          node.stopRequestedAt = requestedAt;
+          changed = true;
+        }
+      }
+      if (changed) {
+        touch(run);
+      }
+      return controlSnapshot(run);
+    },
+    runsSnapshot,
+    async start({
+      launches,
+      mode = "terminal-tab",
+      openTerminal,
+      originPanelId,
+      ownerWindowId,
+      projectRootPath,
+      rootTaskId,
+    }) {
       const terminalOpen = openTerminal ?? defaultOpenTerminal;
       if (!terminalOpen) {
         throw new Error("TaskRunCoordinator requires an openTerminal callback");
       }
       sequence += 1;
-      const runId = taskRunId(now(), sequence);
+      const startedAt = now();
+      const runId = taskRunId(startedAt, sequence);
       const run: TaskRunState = {
+        mode,
         nodes: new Map(
           launches.map((launch) => [
             launch.taskId,
@@ -396,9 +455,14 @@ export function createTaskRunCoordinator({
         projectRootPath,
         rootTaskId,
         runId,
+        startedAt,
+        updatedAt: startedAt,
+        ...(originPanelId ? { originPanelId } : {}),
+        ...(ownerWindowId ? { ownerWindowId } : {}),
       };
       runs.set(runId, run);
       runOpenTerminal.set(runId, terminalOpen);
+      publish();
       try {
         await schedule(run, terminalOpen);
       } catch (error) {
@@ -410,6 +474,7 @@ export function createTaskRunCoordinator({
         }
         runs.delete(runId);
         runOpenTerminal.delete(runId);
+        publish();
         throw error;
       }
       return {

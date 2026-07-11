@@ -39,13 +39,17 @@ import {
 import { authorizeCommand } from "./permissions.ts";
 import { executePluginCommand } from "./plugin-commands.ts";
 import {
-  executeRunBackgroundSnapshotCommand,
   executeRunCancelCommand,
   executeRunListCommand,
   executeRunRecentCommand,
   executeRunSpawnCommand,
   executeRunStatusCommand,
 } from "./run-commands.ts";
+import {
+  executeRunBackgroundSnapshotCommand,
+  executeRunRunsSnapshotCommand,
+  executeRunStopCommand,
+} from "./run-control-commands.ts";
 import { orderedWindows } from "./window-routing.ts";
 import { executeWorktreeCommand } from "./worktree-commands.ts";
 
@@ -244,6 +248,8 @@ async function executeRunCommand(
   switch (command.type) {
     case "run.backgroundSnapshot":
       return executeRunBackgroundSnapshotCommand(requestId, services);
+    case "run.runsSnapshot":
+      return executeRunRunsSnapshotCommand(requestId, command, services);
     case "run.list":
       return await executeRunListCommand(requestId, command, services);
     case "run.spawn":
@@ -254,6 +260,8 @@ async function executeRunCommand(
       return executeRunStatusCommand(requestId, command, services);
     case "run.cancel":
       return executeRunCancelCommand(requestId, command, services);
+    case "run.stop":
+      return executeRunStopCommand(requestId, command, services);
     case "run.recent":
       return executeRunRecentCommand(requestId, services);
     default:

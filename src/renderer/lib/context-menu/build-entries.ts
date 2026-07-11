@@ -11,7 +11,7 @@
  */
 import type { MenuItem, MenuTemplate } from "@shared/contracts/menu.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
-import type { Action } from "@/lib/actions/types.ts";
+import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import type { KeyChord } from "@/lib/keybindings/types.ts";
 
@@ -80,17 +80,17 @@ function sortOrderOf(a: Action): number {
   return a.metadata?.sortOrder ?? 0;
 }
 
-function actionToMenuItem(a: Action): MenuItem {
+function actionToMenuItem(a: Action, invocation?: ActionInvocation): MenuItem {
   const shortcutSourceId = a.metadata?.shortcutSourceId ?? a.id;
   const binding = keybindingRegistry.getBindingsFor(shortcutSourceId)[0];
   const accelerator = binding
     ? toElectronAccelerator(binding.chord)
     : undefined;
-  const enabled = a.enabled?.() ?? true;
+  const enabled = a.enabled?.(invocation) ?? true;
   return {
     type: "action",
     id: a.id,
-    label: a.title(),
+    label: a.title(invocation),
     enabled,
     ...(accelerator !== undefined && { accelerator }),
   };
@@ -101,7 +101,10 @@ function actionToMenuItem(a: Action): MenuItem {
  * 子菜单聚合: 同 submenu() key 合并; 没 submenu 字段平铺.
  * 子菜单位置 = 该 key 第一个 action 在桶里的相对位置.
  */
-function buildBucketItems(bucket: readonly Action[]): MenuItem[] {
+function buildBucketItems(
+  bucket: readonly Action[],
+  invocation?: ActionInvocation
+): MenuItem[] {
   type Placeholder =
     | { kind: "action"; a: Action }
     | { kind: "submenu"; key: string };
@@ -123,23 +126,26 @@ function buildBucketItems(bucket: readonly Action[]): MenuItem[] {
   }
   return placeholders.map((p) => {
     if (p.kind === "action") {
-      return actionToMenuItem(p.a);
+      return actionToMenuItem(p.a, invocation);
     }
     // submenuMap.get(p.key) 此时一定非空 (placeholder push 时已确保).
     const subActions = submenuMap.get(p.key) ?? [];
     return {
       type: "submenu",
       label: p.key,
-      submenu: subActions.map(actionToMenuItem),
+      submenu: subActions.map((action) => actionToMenuItem(action, invocation)),
     };
   });
 }
 
-export function buildMenuEntries(surface: string): MenuTemplate {
+export function buildMenuEntries(
+  surface: string,
+  invocation?: ActionInvocation
+): MenuTemplate {
   // menuHidden = 整行移除 (如任务面板隐藏"新建终端"); enabled=false 仅置灰。
   const actions = actionRegistry
     .list(surface)
-    .filter((a) => a.metadata?.menuHidden?.() !== true);
+    .filter((a) => a.metadata?.menuHidden?.(invocation) !== true);
   if (actions.length === 0) {
     return [];
   }
@@ -167,9 +173,9 @@ export function buildMenuEntries(surface: string): MenuTemplate {
       if (so !== 0) {
         return so;
       }
-      return a.title().localeCompare(b.title());
+      return a.title(invocation).localeCompare(b.title(invocation));
     });
-    items.push(...buildBucketItems(bucket));
+    items.push(...buildBucketItems(bucket, invocation));
   }
 
   return items;

@@ -1,24 +1,25 @@
 import { Button } from "@pier/ui/button.tsx";
 import {
-  type PanelContext,
-  type PanelTabChrome,
-  panelContextSchema,
-} from "@shared/contracts/panel.ts";
-import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
+  type PanelFloatingPosition,
+  panelFloatingLayoutFromParams,
+} from "@shared/contracts/panel-floating.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { SquareTerminal } from "lucide-react";
 import {
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
 import {
   computeMonoFontFamily,
@@ -27,6 +28,10 @@ import {
 } from "@/stores/font.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
+import {
+  taskRunsForPanel,
+  useTaskRunsStore,
+} from "@/stores/task-runs.store.ts";
 import { useTerminalResizeStore } from "@/stores/terminal.store.ts";
 import {
   consumeFreshTerminalInitialInput,
@@ -35,6 +40,13 @@ import {
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+import { TerminalPanelFloatingHost } from "./terminal-panel-floating-host.tsx";
+import {
+  type ActiveTerminalLaunch,
+  launchIdFromParams,
+  panelContextFromParams,
+  taskOutputFromParams,
+} from "./terminal-panel-params.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import {
   RestoredAgentResultView,
@@ -42,6 +54,7 @@ import {
   restoredAgentResultFromSession,
   restoredTaskResultFromSession,
 } from "./terminal-restored-result-view.tsx";
+import { TerminalRuntimeControl } from "./terminal-runtime-control.tsx";
 import { TerminalSearchBar } from "./terminal-search-bar.tsx";
 import {
   shouldMountTerminalStatusBar,
@@ -53,37 +66,15 @@ import {
   activityTabChromeOverlay,
   mergeTabChrome,
   tabChromeFromParams,
+  taskOutputTabChromeOverlay,
+  taskRunTabChromeOverlay,
   terminalPanelDescriptor,
 } from "./terminal-tab-chrome.ts";
+import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layout-revision.ts";
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
+import { useTerminalRelaunch } from "./use-terminal-relaunch.ts";
+import { useTerminalRuntimeControlPresentation } from "./use-terminal-runtime-control-presentation.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
-
-function panelContextFromParams(params: unknown): PanelContext | undefined {
-  if (!params || typeof params !== "object" || !("context" in params)) {
-    return;
-  }
-  const parsed = panelContextSchema.safeParse(params.context);
-  return parsed.success ? parsed.data : undefined;
-}
-
-function launchIdFromParams(params: unknown): string | undefined {
-  if (!params || typeof params !== "object" || !("launchId" in params)) {
-    return;
-  }
-  const launchId = params.launchId;
-  return typeof launchId === "string" && launchId.length > 0
-    ? launchId
-    : undefined;
-}
-
-interface ActiveTerminalLaunch {
-  context?: PanelContext | undefined;
-  initialInput?: string | undefined;
-  launchId?: string | undefined;
-  sequence: number;
-  tab?: PanelTabChrome | undefined;
-  task?: TaskPanelMetadata | undefined;
-}
 
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
@@ -103,6 +94,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       sequence: 0,
       tab: tabChromeFromParams(props.params),
       task: taskPanelMetadataFromParams(props.params),
+      taskOutput: taskOutputFromParams(props.params),
     })
   );
   const relaunchRequest = useTerminalRelaunchRequest(panelId);
@@ -116,6 +108,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     monoFontSize,
     windowZoomLevel
   );
+  const panelRootRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
   const statusItems = useTerminalStatusBarItems();
   const pluginRegistryEntries = usePluginRegistryStore((s) => s.plugins);
@@ -125,6 +118,11 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [terminalRetryNonce, setTerminalRetryNonce] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  const floatingLayoutRevision = useTerminalFloatingLayoutRevision(api);
+  const floatingLayout = useMemo(
+    () => panelFloatingLayoutFromParams(props.params),
+    [props.params]
+  );
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
   >(() => (freshPanelRef.current.value ? null : undefined));
@@ -141,6 +139,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     setError(message);
     setErrorRetryable(false);
   }, []);
+
   const retryTerminalCreate = useCallback(() => {
     clearTerminalError();
     setNativeTerminalReady(false);
@@ -168,14 +167,34 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const effectiveCwd = effectiveContext?.cwd ?? null;
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
+  const taskRunsSnapshot = useTaskRunsStore((state) => state.snapshot);
+  const currentTaskOutput =
+    taskOutputFromParams(props.params) ?? activeLaunch.taskOutput;
+  const runtimeControl = useTerminalRuntimeControlPresentation(panelId);
+  const forceStoppedRun = taskRunsForPanel(taskRunsSnapshot, panelId).find(
+    (run) =>
+      run.runId === activeLaunch.task?.runId &&
+      Object.values(run.nodes).some(
+        (node) =>
+          node.panelId === panelId &&
+          node.status === "cancelled" &&
+          node.termination === "force"
+      )
+  );
   // agent 会话呈现 overlay 叠在最外层：icon/status 换 agent, title 保留 agent
   // TUI 设置的终端标题；会话消失自动回退。
-  // 2 层：base(持久化 tab, main 启动清算保证 restore 真相) → activity
-  // overlay(task 终态常驻单源)。老 TERMINAL_TAB_CHROME_PATCHED 与
-  // restore-patch 推断层均已下线。
   const effectiveTab = mergeTabChrome(
-    savedSession?.tab ?? activeLaunch.tab,
-    activityTabChromeOverlay(activity, effectiveTitle)
+    mergeTabChrome(
+      mergeTabChrome(
+        savedSession?.tab ?? activeLaunch.tab,
+        activityTabChromeOverlay(activity, effectiveTitle)
+      ),
+      taskRunTabChromeOverlay(
+        savedSession?.task ?? activeLaunch.task,
+        taskRunsSnapshot
+      )
+    ),
+    taskOutputTabChromeOverlay(currentTaskOutput, taskRunsSnapshot)
   );
   const statusContext = {
     context: effectiveContext,
@@ -189,6 +208,34 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     statusItems,
     statusContext,
     pluginRegistryEntries
+  );
+  const openTaskResultContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      api.setActive();
+      popupContextMenuAt(
+        "terminal/content",
+        cssPointToContentViewPoint(
+          { x: event.clientX, y: event.clientY },
+          windowZoomLevel
+        ),
+        {
+          sourcePanelComponent: "terminal",
+          ...(effectiveContext ? { sourcePanelContext: effectiveContext } : {}),
+          ...(typeof api.group?.id === "string"
+            ? { sourcePanelGroupId: api.group.id }
+            : {}),
+          sourcePanelId: panelId,
+        }
+      ).catch((err: unknown) => {
+        console.error(
+          `[terminal-panel] popup restored task ${panelId} failed:`,
+          err
+        );
+      });
+    },
+    [api, effectiveContext, panelId, windowZoomLevel]
   );
 
   usePanelDescriptor(
@@ -233,49 +280,17 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     };
   }, [panelId]);
 
-  useEffect(() => {
-    if (
-      !relaunchRequest ||
-      relaunchRequest.sequence === activeLaunch.sequence
-    ) {
-      return;
-    }
-    let disposed = false;
-    sessionReadVersionRef.current += 1;
-    clearTerminalError();
-    setNativeTerminalReady(false);
-    setSavedSession(null);
-    window.pier.terminal
-      .close(panelId, { reason: "relaunch" })
-      .then(() => {
-        if (disposed) {
-          return;
-        }
-        setActiveLaunch({
-          context: relaunchRequest.context,
-          initialInput: relaunchRequest.initialInput,
-          launchId: relaunchRequest.launchId,
-          sequence: relaunchRequest.sequence,
-          tab: relaunchRequest.tab,
-          task: relaunchRequest.task,
-        });
-      })
-      .catch((err: unknown) => {
-        console.error(`[terminal-panel] relaunch ${panelId} failed:`, err);
-        if (!disposed) {
-          showTerminalError(err instanceof Error ? err.message : String(err));
-        }
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [
-    activeLaunch.sequence,
+  useTerminalRelaunch({
+    activeSequence: activeLaunch.sequence,
     clearTerminalError,
     panelId,
     relaunchRequest,
+    sessionReadVersionRef,
+    setActiveLaunch,
+    setNativeTerminalReady,
+    setSavedSession,
     showTerminalError,
-  ]);
+  });
 
   useTerminalNativeLifecycle({
     api,
@@ -286,6 +301,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     initialLaunchId: activeLaunch.launchId,
     initialTab: activeLaunch.tab,
     initialTask: activeLaunch.task,
+    initialTaskOutput: activeLaunch.taskOutput,
     monoFontFamily,
     panelId,
     retryNonce: terminalRetryNonce,
@@ -351,12 +367,27 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const showPlaceholder =
     !error && (!nativeTerminalReady || resizePlaceholderVisible);
   let terminalBody: ReactNode;
-  if (restoredTaskResult) {
+  if (forceStoppedRun && activeLaunch.task) {
     terminalBody = (
       <RestoredTaskResultView
         className={terminalContentClassName}
         fontFamily={computeMonoFontFamily(monoFontFamily)}
         fontSize={effectiveMonoFontSize}
+        onContextMenu={openTaskResultContextMenu}
+        task={{
+          ...activeLaunch.task,
+          finishedAt: forceStoppedRun.updatedAt,
+          status: "cancelled",
+        }}
+      />
+    );
+  } else if (restoredTaskResult) {
+    terminalBody = (
+      <RestoredTaskResultView
+        className={terminalContentClassName}
+        fontFamily={computeMonoFontFamily(monoFontFamily)}
+        fontSize={effectiveMonoFontSize}
+        onContextMenu={openTaskResultContextMenu}
         task={restoredTaskResult}
       />
     );
@@ -398,13 +429,59 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     <div
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-testid="terminal-panel-root"
+      ref={panelRootRef}
     >
       {terminalBody}
-      <TerminalSearchBar
-        focusRequest={searchFocusRequest}
-        onClose={closeTerminalSearch}
+      <TerminalPanelFloatingHost
+        layout={floatingLayout}
+        layoutRevision={floatingLayoutRevision}
+        onPositionCommit={(itemId: string, position: PanelFloatingPosition) => {
+          api.updateParameters({
+            ...((props.params as Record<string, unknown> | undefined) ?? {}),
+            floatingLayout: {
+              positions: {
+                ...floatingLayout.positions,
+                [itemId]: position,
+              },
+              version: 1,
+            },
+          });
+        }}
         panelId={panelId}
-        visible={searchOpen}
+        panelRootRef={panelRootRef}
+        primary={
+          runtimeControl.mounted
+            ? {
+                content: (
+                  <TerminalRuntimeControl
+                    now={runtimeControl.now}
+                    onDismissRun={runtimeControl.dismissRun}
+                    panelId={panelId}
+                    runs={runtimeControl.runs}
+                  />
+                ),
+                id: "runtime-controls",
+                phase: runtimeControl.phase,
+              }
+            : undefined
+        }
+        utility={
+          searchOpen
+            ? [
+                {
+                  content: (
+                    <TerminalSearchBar
+                      focusRequest={searchFocusRequest}
+                      onClose={closeTerminalSearch}
+                      panelId={panelId}
+                      visible
+                    />
+                  ),
+                  id: "terminal-search",
+                },
+              ]
+            : []
+        }
       />
       <TerminalStatusBar
         context={effectiveContext}

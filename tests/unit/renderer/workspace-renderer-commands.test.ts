@@ -9,6 +9,11 @@ vi.mock("@/lib/ipc/window-ipc.ts", () => ({
 
 import { runWorkspaceRendererCommand } from "@/components/workspace/workspace-renderer-commands.ts";
 import {
+  confirmTerminalLaunch,
+  rejectTerminalLaunch,
+  resetTerminalLaunchConfirmationsForTest,
+} from "@/lib/workspace/terminal-launch-confirmation.ts";
+import {
   requestTerminalRelaunch,
   useTerminalRelaunchRequest,
 } from "@/stores/terminal-relaunch.store.ts";
@@ -63,6 +68,7 @@ describe("workspace renderer commands", () => {
       },
     });
     useWorkspaceStore.getState().setApi(null);
+    resetTerminalLaunchConfirmationsForTest();
   });
 
   it("closes an existing panel and resolves the renderer command", async () => {
@@ -161,6 +167,55 @@ describe("workspace renderer commands", () => {
       },
       ok: false,
       requestId: "renderer-close-last-failed",
+    });
+  });
+
+  it("resolves terminal.open only after native terminal creation is confirmed", async () => {
+    const terminal = terminalPanel("terminal-1");
+    const api = createApi([terminal]);
+    useWorkspaceStore.getState().setApi(api as never);
+
+    const command = runWorkspaceRendererCommand({
+      command: {
+        launchId: "launch-confirmed",
+        panelId: terminal.id,
+        type: "terminal.open",
+      },
+      requestId: "renderer-terminal-open-confirmed",
+    });
+    await Promise.resolve();
+
+    expect(window.pier.rendererCommand.resolve).not.toHaveBeenCalled();
+    confirmTerminalLaunch("launch-confirmed");
+    await command;
+
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: { panelId: terminal.id },
+      ok: true,
+      requestId: "renderer-terminal-open-confirmed",
+    });
+  });
+
+  it("rejects terminal.open when native terminal creation fails", async () => {
+    const terminal = terminalPanel("terminal-1");
+    const api = createApi([terminal]);
+    useWorkspaceStore.getState().setApi(api as never);
+
+    const command = runWorkspaceRendererCommand({
+      command: {
+        launchId: "launch-failed",
+        panelId: terminal.id,
+        type: "terminal.open",
+      },
+      requestId: "renderer-terminal-open-failed",
+    });
+    rejectTerminalLaunch("launch-failed", "native create failed");
+    await command;
+
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      error: { message: "native create failed" },
+      ok: false,
+      requestId: "renderer-terminal-open-failed",
     });
   });
 });

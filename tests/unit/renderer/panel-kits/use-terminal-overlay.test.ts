@@ -1,6 +1,7 @@
 import {
   TerminalOverlayContext,
   useTerminalOverlay,
+  useTerminalOverlayRegistration,
 } from "@pier/ui/use-terminal-overlay.tsx";
 import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -109,6 +110,34 @@ describe("useTerminalOverlay", () => {
 
     // 旧注册被释放，只保留一个几何矩形。
     expect(snapshot()?.webOverlayRects).toHaveLength(1);
+  });
+
+  it("flushes registered geometry synchronously after transform movement", () => {
+    const registerElement = vi.fn(() => ({
+      dispose: vi.fn(),
+      flush: vi.fn(),
+    }));
+    const customWrapper = ({ children }: { children: ReactNode }) =>
+      createElement(
+        TerminalOverlayContext.Provider,
+        { value: { registerElement } },
+        children
+      );
+    const { result } = renderHook(
+      () => useTerminalOverlayRegistration("runtime-control"),
+      { wrapper: customWrapper }
+    );
+
+    result.current.ref(makeSizedElement());
+    result.current.flush();
+
+    expect(registerElement).toHaveBeenCalledWith(
+      "runtime-control",
+      expect.any(HTMLElement)
+    );
+    expect(registerElement.mock.results[0]?.value.flush).toHaveBeenCalledTimes(
+      1
+    );
   });
 
   it("degrades to noop without a Provider — no throw, store state unchanged", () => {

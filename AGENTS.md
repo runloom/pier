@@ -74,6 +74,23 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 遇到内联 toast 文案字符串（未走 i18n） → finding。
 - 遇到 `toast.*(…, { description })` → finding，详情应走 `showAppAlert`。
 
+### 颜色使用规范
+
+产品界面颜色按“主题原色 → 语义令牌 → 组件变体 → 业务映射”单向使用：
+
+- `src/renderer/app/globals.css` 是产品 UI 调色板和语义令牌的唯一所有者。`info`、
+  `success`、`warning`、`destructive`、`done` 不随编辑器或终端主题改变。
+- `src/renderer/lib/theme/` 只负责中性外壳、主强调色、图表序列和终端 ANSI 色派生，
+  不得重新派生产品状态色。
+- `packages/ui` 组件只消费 `background`、`foreground`、`status-*`、`action-*` 等
+  语义令牌；业务代码只选择语义，不持有具体颜色值。
+- 普通动作使用 `action-accent`，破坏性动作使用 `action-danger`，结构性控件使用
+  `action-muted`；不要用成功绿表达导航或普通按钮。
+- 业务源码禁止新增十六进制、`rgb()`、`hsl()`、`oklch()` 和 Tailwind 固定色阶。
+  允许的例外只有主题/终端颜色引擎、原生窗口启动兜底、第三方图表选择器和品牌图标。
+- 检查点在 `tests/unit/renderer/color-token-governance.test.ts`，新增颜色例外必须同时说明
+  所有权和无法使用现有语义令牌的原因。
+
 ### 前台活动模块 `src/main/services/foreground-activity/`
 
 统一 agent / task / shell / idle 四态活动聚合器：

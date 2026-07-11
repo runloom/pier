@@ -89,41 +89,41 @@ function panelState(
 
 function stateClass(state: LayoutState): string {
   if (state === "rendered") {
-    return "border-emerald-500 bg-white text-emerald-950";
+    return "border-success bg-card text-status-success-fg";
   }
   if (state === "creating") {
-    return "border-sky-500 bg-white text-sky-950";
+    return "border-info bg-card text-status-info-fg";
   }
   if (state === "missing") {
-    return "border-red-500 bg-red-50/40 text-red-950";
+    return "border-destructive bg-status-danger-bg text-status-danger-fg";
   }
-  return "border-zinc-400 bg-zinc-50 text-zinc-600";
+  return "border-border bg-muted text-muted-foreground";
 }
 
 function stateChipClass(state: LayoutState): string {
   if (state === "rendered") {
-    return "text-emerald-300";
+    return "text-status-success-fg";
   }
   if (state === "creating") {
-    return "text-sky-300";
+    return "text-status-info-fg";
   }
   if (state === "missing") {
-    return "text-red-300";
+    return "text-status-danger-fg";
   }
-  return "text-zinc-300";
+  return "text-muted-foreground";
 }
 
 function stateDotClass(state: LayoutState): string {
   if (state === "rendered") {
-    return "bg-emerald-500";
+    return "bg-success";
   }
   if (state === "creating") {
-    return "bg-sky-500";
+    return "bg-info";
   }
   if (state === "missing") {
-    return "bg-red-500";
+    return "bg-destructive";
   }
-  return "bg-zinc-400";
+  return "bg-muted-foreground/40";
 }
 
 function boundsFor(frames: TerminalFrame[]): Bounds | null {
@@ -210,7 +210,7 @@ function shortId(panelId: string): string {
 
 function LegendChip({ state }: { state: LayoutState }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600">
+    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
       <span className={`size-2 ${stateDotClass(state)}`} />
       {state}
     </span>
@@ -224,8 +224,8 @@ function StateLegend() {
       <LegendChip state="creating" />
       <LegendChip state="hidden" />
       <LegendChip state="missing" />
-      <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600">
-        <span className="size-2 border border-purple-500 border-dashed bg-purple-500/20" />
+      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className="size-2 border border-status-done-border border-dashed bg-status-done-bg" />
         overlay
       </span>
     </div>
@@ -241,11 +241,11 @@ function OverlayBox({
 }) {
   return (
     <div
-      className="pointer-events-none absolute z-20 flex flex-col items-start border-2 border-purple-500 border-dashed bg-purple-500/15"
+      className="pointer-events-none absolute z-20 flex flex-col items-start border-2 border-status-done-border border-dashed bg-status-done-bg"
       style={boxStyle(rect.frame, bounds)}
       title="web overlay"
     >
-      <span className="m-0.5 inline-flex max-w-full items-center gap-1 bg-purple-600 px-1 py-0.5 font-medium text-[10px] text-white">
+      <span className="m-0.5 inline-flex max-w-full items-center gap-1 bg-done px-1 py-0.5 font-medium text-[10px] text-background">
         <span className="truncate">{shortId(rect.id)}</span>
         <span className="shrink-0 opacity-80">
           {Math.round(rect.frame.width)}×{Math.round(rect.frame.height)}
@@ -262,8 +262,8 @@ function AlignmentDots({
   isAligned: boolean;
   surface: TerminalDebugNativeSurfaceSnapshot | undefined;
 }) {
-  const domClass = isAligned ? "bg-emerald-500" : "bg-amber-500";
-  const nativeClass = visibleSurface(surface) ? "bg-emerald-500" : "bg-red-500";
+  const domClass = isAligned ? "bg-success" : "bg-warning";
+  const nativeClass = visibleSurface(surface) ? "bg-success" : "bg-destructive";
   return (
     <div className="flex items-center gap-1" title="DOM / native">
       <span className={`h-1.5 w-5 ${domClass}`} />
@@ -274,7 +274,7 @@ function AlignmentDots({
 
 function EmptyCanvas() {
   return (
-    <div className="flex h-full items-center justify-center bg-white text-muted-foreground text-sm">
+    <div className="flex h-full items-center justify-center bg-background text-muted-foreground text-sm">
       No terminal layout frames
     </div>
   );
@@ -301,24 +301,24 @@ function TerminalStateStrip({
     .filter(({ state }) => state !== "rendered");
 
   return (
-    <div className="flex min-h-10 shrink-0 items-center gap-2 border-[#d0d0d0] border-b bg-white px-3 py-2">
-      <div className="shrink-0 font-medium text-[#6f6f6f] text-xs">
+    <div className="flex min-h-10 shrink-0 items-center gap-2 border-b bg-card px-3 py-2">
+      <div className="shrink-0 font-medium text-muted-foreground text-xs">
         Non-rendered
       </div>
       <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
         {entries.length === 0 ? (
-          <span className="text-[#6f6f6f] text-xs">none</span>
+          <span className="text-muted-foreground text-xs">none</span>
         ) : (
           entries.map(({ panel, state }) => (
             <span
-              className="inline-flex h-6 min-w-0 items-center gap-1.5 border border-zinc-300 bg-[#f7f7f7] px-2 text-xs"
+              className="inline-flex h-6 min-w-0 items-center gap-1.5 border bg-muted px-2 text-xs"
               key={panel.panelId}
             >
               <span className={`size-2 ${stateDotClass(state)}`} />
               <span className="max-w-40 truncate">
                 {shortId(panel.panelId)}
               </span>
-              <span className="text-[#6f6f6f]">{state}</span>
+              <span className="text-muted-foreground">{state}</span>
             </span>
           ))
         )}
@@ -339,8 +339,8 @@ export function LayoutStateView({
   const bounds = mergedLayoutBounds(snapshotBounds(snapshot), overlays);
 
   return (
-    <section className="flex h-full min-h-[520px] flex-col overflow-hidden border border-[#d0d0d0] bg-white">
-      <div className="flex h-9 shrink-0 items-center justify-between border-[#d0d0d0] border-b bg-[#f3f3f3] px-3">
+    <section className="flex h-full min-h-[520px] flex-col overflow-hidden border bg-card">
+      <div className="flex h-9 shrink-0 items-center justify-between border-b bg-muted px-3">
         <div className="font-medium text-sm">Layout State</div>
         <StateLegend />
       </div>
@@ -349,8 +349,8 @@ export function LayoutStateView({
         panels={panels}
         surfaces={surfaces}
       />
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(24,24,27,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(24,24,27,0.055)_1px,transparent_1px)] bg-[size:44px_44px]" />
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--debug-grid-line)_1px,transparent_1px),linear-gradient(to_bottom,var(--debug-grid-line)_1px,transparent_1px)] bg-[size:44px_44px]" />
         {bounds ? (
           <>
             {panels.map((panel) => {
@@ -369,7 +369,7 @@ export function LayoutStateView({
                   key={panel.panelId}
                   style={boxStyle(panel.anchorFrame, bounds)}
                 >
-                  <div className="flex h-7 items-center gap-2 border-black/10 border-b bg-zinc-900 px-2 text-white">
+                  <div className="flex h-7 items-center gap-2 border-background/10 border-b bg-foreground px-2 text-background">
                     <span className="min-w-0 flex-1 truncate font-semibold text-xs">
                       {shortId(panel.panelId)}
                     </span>
@@ -387,31 +387,31 @@ export function LayoutStateView({
                     <div className="flex gap-1">
                       {surface?.hasRouterTarget ? (
                         <span
-                          className="size-2 bg-violet-500"
+                          className="size-2 bg-done"
                           title="router target"
                         />
                       ) : null}
                       {surface?.isFirstResponder ? (
                         <span
-                          className="size-2 bg-emerald-500"
+                          className="size-2 bg-success"
                           title="first responder"
                         />
                       ) : null}
                       {surface?.isSurfaceFocused ? (
                         <span
-                          className="size-2 bg-sky-500"
+                          className="size-2 bg-info"
                           title="surface focused"
                         />
                       ) : null}
                       {surface?.hostKeyboardActive ? (
                         <span
-                          className="size-2 bg-cyan-500"
+                          className="size-2 bg-warning"
                           title="host keyboard active"
                         />
                       ) : null}
                       {surface?.cursorSuppressed ? (
                         <span
-                          className="size-2 bg-zinc-400"
+                          className="size-2 bg-muted-foreground/40"
                           title="cursor suppressed"
                         />
                       ) : null}

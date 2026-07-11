@@ -84,7 +84,7 @@ import {
   broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
-  broadcastTaskBackgroundSnapshot,
+  broadcastTaskRunsSnapshot,
   broadcastTerminalStatusBarPrefs,
   broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
@@ -367,7 +367,7 @@ function createPierAppCore(): PierAppCore {
     panelContexts: createPanelContextService(),
     rendererCommand,
     tasks: createTaskService({
-      onBackgroundTasksChanged: broadcastTaskBackgroundSnapshot,
+      onTaskRunsChanged: broadcastTaskRunsSnapshot,
       onTaskActivity: {
         onLaunched: (panelId, windowId, task) => {
           if (!windowId) {

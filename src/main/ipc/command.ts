@@ -37,7 +37,10 @@ function senderWindowId(sender: Electron.WebContents): string {
 }
 
 function commandForSender(command: PierCommand, windowId: string): PierCommand {
-  if (command.type === "run.spawn" && !command.windowId) {
+  if (
+    (command.type === "run.spawn" || command.type === "run.runsSnapshot") &&
+    !command.windowId
+  ) {
     return {
       ...command,
       windowId,

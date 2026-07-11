@@ -62,18 +62,18 @@ export function statusColorVar(
 ): string {
   if (shouldShimmer(status)) {
     if (level === "danger") {
-      return "--destructive";
+      return "--status-danger-fg";
     }
     if (level === "warn") {
-      return "--color-amber-500";
+      return "--status-warning-fg";
     }
-    return "--primary";
+    return "--status-info-fg";
   }
   if (status === "waiting") {
-    return "--color-amber-500";
+    return "--status-warning-fg";
   }
   if (status === "error") {
-    return "--destructive";
+    return "--status-danger-fg";
   }
   return "--foreground";
 }

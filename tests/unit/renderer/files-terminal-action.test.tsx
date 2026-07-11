@@ -204,6 +204,9 @@ function createMockContext(overrides?: {
           text: "# Selected\n\nfrom terminal",
         })),
     },
+    terminalStatusItems: {
+      register: vi.fn(() => vi.fn()),
+    },
   } as unknown as RendererPluginContext & { captured: CapturedRegistrations };
 
   return context;

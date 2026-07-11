@@ -25,6 +25,106 @@ function launch(
 }
 
 describe("task run coordinator", () => {
+  it("rejects a completion carrying the run id replaced in the same panel", async () => {
+    const coordinator = createTaskRunCoordinator({
+      openTerminal: async () => ({
+        panelId: "terminal-reused",
+        windowId: "window-main",
+      }),
+    });
+    const first = await coordinator.start({
+      launches: [launch("test", "test")],
+      mode: "terminal-tab",
+      projectRootPath: "/repo",
+      rootTaskId: "test",
+    });
+    const second = await coordinator.start({
+      launches: [launch("test", "test")],
+      mode: "terminal-tab",
+      projectRootPath: "/repo",
+      rootTaskId: "test",
+    });
+
+    await expect(
+      coordinator.completePanel(
+        "terminal-reused",
+        143,
+        "window-main",
+        first.runId
+      )
+    ).resolves.toBeNull();
+    expect(coordinator.status(second.runId)?.status).toBe("running");
+  });
+
+  it("publishes a versioned control snapshot with panel ownership", async () => {
+    const snapshots: unknown[] = [];
+    const coordinator = createTaskRunCoordinator({
+      onChanged: (snapshot) => snapshots.push(snapshot),
+      openTerminal: async () => ({
+        panelId: "terminal-test",
+        windowId: "window-main",
+      }),
+    });
+
+    const result = await coordinator.start({
+      launches: [launch("test", "test")],
+      mode: "terminal-tab",
+      projectRootPath: "/repo",
+      rootTaskId: "test",
+    });
+
+    expect(coordinator.runsSnapshot("window-main")).toMatchObject({
+      runs: {
+        [result.runId]: {
+          mode: "terminal-tab",
+          nodes: {
+            test: { panelId: "terminal-test", status: "running" },
+          },
+          ownerWindowId: "window-main",
+        },
+      },
+    });
+    expect(coordinator.runsSnapshot("window-other").runs).toEqual({});
+    expect(
+      snapshots.map((snapshot) => (snapshot as { version: number }).version)
+    ).toEqual([1, 2, 3]);
+  });
+
+  it("marks pending nodes cancelled and running nodes stopping on stop request", async () => {
+    const coordinator = createTaskRunCoordinator({
+      now: () => 1234,
+      openTerminal: async (plan) => ({ panelId: `panel-${plan.taskId}` }),
+    });
+    const result = await coordinator.start({
+      launches: [
+        launch("build", "build"),
+        launch("verify", "verify", {
+          dependsOn: ["build"],
+          dependsOrder: "sequence",
+        }),
+      ],
+      projectRootPath: "/repo",
+      rootTaskId: "verify",
+    });
+
+    expect(coordinator.requestStop(result.runId)).toMatchObject({
+      nodes: {
+        build: { status: "stopping", stopRequestedAt: 1234 },
+        verify: { status: "cancelled", stopRequestedAt: 1234 },
+      },
+      status: "stopping",
+    });
+    expect(await coordinator.completePanel("panel-build", 130)).toMatchObject({
+      nodes: {
+        build: { status: "cancelled" },
+        verify: { status: "cancelled" },
+      },
+      status: "cancelled",
+    });
+    expect(coordinator.controlStatus(result.runId)?.nodes.build).toMatchObject({
+      termination: "interrupt",
+    });
+  });
   it("runs sequence dependencies one at a time and starts the target after all succeed", async () => {
     const opened: TaskRunLaunchPlan[] = [];
     const coordinator = createTaskRunCoordinator({

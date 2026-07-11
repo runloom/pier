@@ -387,10 +387,15 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     const { fakeAddon, win } = await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
     const callback = fakeAddon.setTitleForwardCallback.mock.calls[0]?.[0] as
-      | ((windowId: number, panelId: string, title: string) => void)
+      | ((
+          windowId: number,
+          panelId: string,
+          lifecycleId: string,
+          title: string
+        ) => void)
       | undefined;
 
-    callback?.(win.id, "7::terminal-1", "Claude Code");
+    callback?.(win.id, "7::terminal-1", "", "Claude Code");
 
     await new Promise((resolve) => setImmediate(resolve));
 

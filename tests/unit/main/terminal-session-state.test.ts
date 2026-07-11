@@ -156,7 +156,7 @@ describe("terminal session state", () => {
     );
 
     await expect(
-      patchTerminalPanelTaskStatus("main", "terminal-1", {
+      patchTerminalPanelTaskStatus("main", "terminal-1", "run-1", {
         exitCode: 1,
         finishedAt: 1_772_000_001_000,
         status: "failed",
@@ -463,7 +463,7 @@ describe("terminal session state", () => {
     );
 
     await expect(
-      patchTerminalPanelTaskStatus("main", "terminal-1", {
+      patchTerminalPanelTaskStatus("main", "terminal-1", "run-1", {
         exitCode: 0,
         exitReason: "process",
         exitSource: "native-process-close",
@@ -499,7 +499,7 @@ describe("terminal session state", () => {
     );
 
     await expect(
-      patchTerminalPanelTaskStatus("main", "terminal-1", {
+      patchTerminalPanelTaskStatus("main", "terminal-1", "run-1", {
         exitReason: "process",
         exitSource: "native-process-close",
         finishedAt: 1_772_000_001_000,
@@ -537,7 +537,7 @@ describe("terminal session state", () => {
     );
 
     await expect(
-      patchTerminalPanelTaskStatus("main", "terminal-1", {
+      patchTerminalPanelTaskStatus("main", "terminal-1", "run-1", {
         exitCode: 1,
         finishedAt: 1_772_000_002_000,
         status: "failed",
@@ -554,6 +554,28 @@ describe("terminal session state", () => {
     });
   });
 
+  it("recognizes an already-applied completion for tab-patch retries", async () => {
+    const { patchTerminalPanelTaskStatus, updateTerminalPanelTask } =
+      await loadTerminalSessionState();
+    await updateTerminalPanelTask(
+      "main",
+      "terminal-1",
+      taskMetadata({
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      })
+    );
+
+    await expect(
+      patchTerminalPanelTaskStatus("main", "terminal-1", "run-1", {
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "succeeded",
+      })
+    ).resolves.toBe(true);
+  });
+
   it("does not patch task status for plain terminal sessions", async () => {
     const {
       patchTerminalPanelTaskStatus,
@@ -568,7 +590,7 @@ describe("terminal session state", () => {
     );
 
     await expect(
-      patchTerminalPanelTaskStatus("main", "terminal-1", {
+      patchTerminalPanelTaskStatus("main", "terminal-1", "run-1", {
         exitCode: 0,
         finishedAt: 1_772_000_001_000,
         status: "succeeded",

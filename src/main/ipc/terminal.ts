@@ -12,6 +12,7 @@ import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
+import type { TaskService } from "../services/tasks/task-service.ts";
 import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
@@ -19,6 +20,7 @@ import {
 import type { AppWindow } from "../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
+  findAppWindowByInternalId,
   findAppWindowByWebContents,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
@@ -42,7 +44,6 @@ import {
   performTerminalOperation,
   readTerminalSelectionText,
 } from "./terminal-operations.ts";
-import { terminalPanelClosed } from "./terminal-panel-closed.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 import {
   applyRendererTerminalInputRouting,
@@ -53,6 +54,8 @@ import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalSearchIpc } from "./terminal-search.ts";
 import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import { registerTerminalTaskLifecycleForwarding } from "./terminal-task-lifecycle-wiring.ts";
+import { createTaskOutputTerminalBindings } from "./terminal-task-output-bindings.ts";
+import { registerTerminalTaskOutputRebindIpc } from "./terminal-task-output-rebind.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
 let cachedAddon: NativeAddon | null = null;
@@ -71,16 +74,57 @@ export function registerTerminalIpc(
     recordAgentLaunch?:
       | ((agentId: AgentKind) => Promise<unknown> | unknown)
       | undefined;
+    taskService?: TaskService | undefined;
   } = {}
 ): void {
   const processEnvironment =
     deps.processEnvironment ?? createProcessEnvironmentService();
   const { addon, error: loadError } = loadNativeAddon();
+  const taskOutputBindings =
+    addon && deps.taskService
+      ? createTaskOutputTerminalBindings({
+          addon,
+          taskService: deps.taskService,
+        })
+      : null;
   cachedAddon = addon;
   setTerminalFocusAddonProvider(() => cachedAddon);
   registerTerminalDebugSnapshotIpc(ipcMain, addon);
   registerTerminalKeybindingForward(addon);
-  const taskLifecycle = registerTerminalTaskLifecycleForwarding(addon);
+  deps.taskService?.bindTerminalProcessController({
+    forceStop: (panelId, windowId) => {
+      const win = windowId ? findAppWindowByInternalId(windowId) : null;
+      if (!(addon && win && !win.isDestroyed())) {
+        return { message: "terminal process is unavailable", ok: false };
+      }
+      return addon.closeTerminal(toNativePanelKey(win, panelId))
+        ? { ok: true }
+        : { message: "terminal process was not found", ok: false };
+    },
+    interrupt: (panelId, windowId) => {
+      const win = windowId ? findAppWindowByInternalId(windowId) : null;
+      if (!(addon && win && !win.isDestroyed())) {
+        return { message: "terminal process is unavailable", ok: false };
+      }
+      const ok = addon.sendText(toNativePanelKey(win, panelId), "\u0003");
+      return ok
+        ? { ok: true }
+        : { message: "terminal rejected the interrupt", ok: false };
+    },
+  });
+  const taskLifecycle = registerTerminalTaskLifecycleForwarding(addon, {
+    completeTaskPanel: (panelId, exitCode, lifecycleId, windowId) =>
+      deps.taskService?.completePanel(
+        panelId,
+        exitCode,
+        windowId,
+        lifecycleId || undefined
+      ) ?? Promise.resolve(null),
+    isTaskStopRequested: (panelId, windowId) =>
+      deps.taskService?.isStopRequested(panelId, windowId) ?? false,
+    markTaskPanelClosed: (panelId, windowId) =>
+      deps.taskService?.markPanelClosed(panelId, windowId),
+  });
   // Swift 收到 scoped panelId, renderer 使用 raw panel id.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
     recordNativeTerminalRoute(id, "right-mouse", panelId, { x, y });
@@ -190,9 +234,17 @@ export function registerTerminalIpc(
       processEnvironment,
       recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,
+      taskOutputBindings,
       win: windowFromWebContents(event.sender),
     })
   );
+
+  registerTerminalTaskOutputRebindIpc({
+    addon,
+    ipcMain,
+    taskOutputBindings,
+    windowFromSender: windowFromWebContents,
+  });
 
   ipcMain.on(
     "pier:terminal:apply-presentation",
@@ -320,18 +372,19 @@ export function registerTerminalIpc(
       recordRendererTerminalRoute(win, "close", panelId);
       if (options?.reason === "relaunch") {
         // relaunch = 同 panel 换 pty, 不是面板死亡——activity slot 不清。
-        // rerun 时序：terminal.open 的 renderer 命令 resolve 后, main 侧
-        // onLaunched → taskLaunched 先登记新 running task 层, renderer 的
-        // relaunch effect 随后才发本 close。这里清掉会连根拔走该层：任务
-        // 真退出时 taskFinished 落空（kind 守卫）, tab 永远停在 create 时
-        // 持久化的 Running 基线。旧 pty 的收尾由 native process-closed →
-        // ptyExited 按层语义处理（task 层保留, 其余照清）。
+        // rerun 时序：renderer 先关闭旧 PTY，再创建并确认新 PTY，最后才 resolve
+        // terminal.open。这个间隙必须保留 task activity slot；否则新 PTY 确认前
+        // 浮层和 tab 会短暂丢失，后续 taskFinished 也可能因 kind 守卫落空。
+        // 旧 PTY 的收尾由 native process-closed → ptyExited 按层语义处理。
         taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
       } else {
         foregroundActivityService.panelClosed(panelId);
-        terminalPanelClosed.notifyTerminalPanelClosed(panelId, windowId);
+        deps.taskService?.markPanelClosed(panelId, windowId);
+        taskLifecycle.releasePanel(panelId, windowId);
       }
-      addon?.closeTerminal(toNativePanelKey(win, panelId));
+      const nativePanelId = toNativePanelKey(win, panelId);
+      taskOutputBindings?.detach(nativePanelId);
+      addon?.closeTerminal(nativePanelId);
       try {
         await removeTerminalPanelSession(sessionScope, panelId);
       } catch (err) {
@@ -369,10 +422,9 @@ export function registerTerminalIpc(
     });
     foregroundActivityService.retainPanels(String(win.id), activeIds);
     try {
-      addon.reconcileTerminals(
-        win.getNativeWindowHandle(),
-        activeIds.map((id) => toNativePanelKey(win, id))
-      );
+      const activeNativeIds = activeIds.map((id) => toNativePanelKey(win, id));
+      taskOutputBindings?.retainWindow(win.id, activeNativeIds);
+      addon.reconcileTerminals(win.getNativeWindowHandle(), activeNativeIds);
     } catch (err) {
       console.error("[pier-terminal-reconcile] failed:", err);
     }

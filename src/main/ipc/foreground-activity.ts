@@ -164,7 +164,7 @@ export const foregroundActivityService = {
   taskLaunched(
     panelId: string,
     windowId: string,
-    task: { taskId: string; label: string }
+    task: { taskId: string; label: string; runId: string }
   ): void {
     // task 生命周期回调携带内部 windowId（WindowContext.windowId, 如
     // "main"）；聚合器与广播/快照/清理全链统一 electron BrowserWindow.id
@@ -179,6 +179,7 @@ export const foregroundActivityService = {
   taskFinished(
     panelId: string,
     args: {
+      runId: string;
       status: "success" | "failure" | "cancelled";
       exitCode?: number;
     }

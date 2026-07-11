@@ -348,7 +348,7 @@ function services(
         resolve: resolveEnvironment,
       },
       readRecentState: () => Promise.resolve({ entries: [], version: 1 }),
-      spawnBackgroundTask: () => ({ kill: () => undefined }),
+      spawnBackgroundTask: () => ({ kill: () => true }),
       writeRecentState: () => Promise.resolve(),
     }),
     terminalLaunches: {
