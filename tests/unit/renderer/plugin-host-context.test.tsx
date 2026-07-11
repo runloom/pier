@@ -25,6 +25,7 @@ const WORKTREE_WRITE_CAPABILITY_PATTERN =
 const GROUP_CONTENT_ID_PREFIX_PATTERN =
   /groupContent id must start with.*sample\.plugin\./;
 const ENVIRONMENT_READ_CAPABILITY_PATTERN = /environment:read/;
+const CONFIGURABLE_WIDGET_SETTINGS_PATTERN = /settingsComponent/i;
 
 const toastMocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -177,6 +178,24 @@ const pluginEntry = {
     canToggle: true,
     enabled: true,
     kind: "builtin",
+  },
+} satisfies PluginRegistryEntry;
+
+const configurableWidgetEntry = {
+  ...pluginEntry,
+  manifest: {
+    ...pluginEntry.manifest,
+    missionControlWidgets: [
+      {
+        configurable: true,
+        defaultSize: { h: 4, w: 4 },
+        id: "sample.configurableWidget",
+        maxSize: { h: 12, w: 12 },
+        minSize: { h: 2, w: 2 },
+        permissions: [],
+        title: "Configurable Widget",
+      },
+    ],
   },
 } satisfies PluginRegistryEntry;
 
@@ -484,6 +503,42 @@ describe("createRendererPluginContext", () => {
     expect(
       getPluginMissionControlWidgetRegistrations().has("sample.widget")
     ).toBe(false);
+  });
+
+  it("rejects a configurable builtin widget without a settings component", () => {
+    const context = createRendererPluginContext(configurableWidgetEntry);
+
+    expect(() =>
+      context.missionControlWidgets.register({
+        component: () => null,
+        icon: House,
+        id: "sample.configurableWidget",
+      })
+    ).toThrow(CONFIGURABLE_WIDGET_SETTINGS_PATTERN);
+    expect(
+      getPluginMissionControlWidgetRegistrations().has(
+        "sample.configurableWidget"
+      )
+    ).toBe(false);
+  });
+
+  it("registers a configurable builtin widget with its settings component", () => {
+    const context = createRendererPluginContext(configurableWidgetEntry);
+    const registration = {
+      component: () => null,
+      icon: House,
+      id: "sample.configurableWidget",
+      settingsComponent: () => null,
+    };
+
+    const dispose = context.missionControlWidgets.register(registration);
+
+    expect(
+      getPluginMissionControlWidgetRegistrations().get(
+        "sample.configurableWidget"
+      )
+    ).toBe(registration);
+    dispose();
   });
 
   it("rejects Mission Control widget registration not declared by the plugin manifest", () => {

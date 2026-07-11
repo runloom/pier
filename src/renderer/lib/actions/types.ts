@@ -39,7 +39,7 @@ export interface ActionMetadata {
    */
   menuHidden?: (invocation?: ActionInvocation) => boolean;
   /**
-   * 菜单 accelerator 展示可借用另一条 command 的 keybinding.
+   * 自身没有生效的 keybinding 时，菜单和命令面板展示可借用另一条 command。
    * 用于菜单 action 与快捷键 action 分离, 但用户需要看到同一个快捷键提示的场景.
    */
   shortcutSourceId?: string;

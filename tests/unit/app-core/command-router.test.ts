@@ -1466,6 +1466,7 @@ describe("createCommandRouter", () => {
         focus: true,
         projectRootPath: process.cwd(),
         taskId: "package-script:test",
+        targetGroupId: "source-group",
         type: "run.spawn",
         windowId: "main",
       },
@@ -1508,6 +1509,7 @@ describe("createCommandRouter", () => {
     const runId = spawnData.runId;
     expect(rendererCommands.at(-1)).toMatchObject({
       launchId: "launch-1",
+      targetGroupId: "source-group",
       placement: "active-tab",
       tab: {
         badge: { label: "package.json" },
@@ -3245,6 +3247,8 @@ describe("createCommandRouter", () => {
           agentId: "codex",
           path: "/repo/.worktrees/feature-a",
           taskPrompt: "修复终端焦点问题",
+          targetGroupId: "source-group",
+          windowId: "main",
           type: "worktree.openTerminal",
         },
         protocolVersion: 1,
@@ -3276,6 +3280,7 @@ describe("createCommandRouter", () => {
         icon: { id: agentTabIconId("codex") },
         title: "Codex",
       },
+      targetGroupId: "source-group",
       type: "terminal.open",
       windowId: "main",
     });

@@ -11,7 +11,6 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Ctrl+Shift+ArrowUp",
   "Ctrl+Shift+KeyD",
   "Mod+Alt+KeyR",
-  "Mod+Backquote",
   "Mod+Comma",
   "Mod+Digit0",
   "Mod+Digit1",
@@ -42,29 +41,43 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Numpad9",
   "Mod+Shift+Enter",
   "Mod+Shift+Equal",
+  "Mod+Shift+KeyA",
   "Mod+Shift+KeyD",
-  "Mod+Shift+KeyN",
   "Mod+Shift+KeyP",
-  "Mod+Shift+KeyT",
 ];
 
 describe("DEFAULT_KEYMAP", () => {
-  it("keeps tab/window panel shortcuts wired", () => {
-    expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.panel.newTerminal",
-      keys: "Mod+KeyT",
-      scope: "global",
-    });
+  it("only defaults new terminals to Mod+KeyT", () => {
+    expect(
+      DEFAULT_KEYMAP.filter(
+        (binding) => binding.commandId === "pier.panel.newTerminal"
+      )
+    ).toEqual([
+      {
+        commandId: "pier.panel.newTerminal",
+        keys: "Mod+KeyT",
+        scope: "global",
+      },
+    ]);
+  });
+
+  it("keeps close and create-menu shortcuts wired", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.closeActive",
       keys: "Mod+KeyW",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.window.newWindow",
+      commandId: "pier.panel.openCreateMenu",
       keys: "Mod+KeyN",
       scope: "global",
     });
+    // New Window 不再直接绑快捷键; 通过命令面板 / "新建..." 弹层触发。
+    expect(
+      DEFAULT_KEYMAP.filter(
+        (binding) => binding.commandId === "pier.window.newWindow"
+      )
+    ).toEqual([]);
   });
 
   it("contains split / focus shortcuts", () => {
@@ -172,20 +185,47 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
-  it("contains run task and worktree create shortcuts", () => {
-    expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.run.task",
-      keys: "Mod+Shift+KeyT",
-      scope: "global",
-    });
+  it("does not default run task or worktree create shortcuts", () => {
+    expect(
+      DEFAULT_KEYMAP.filter(
+        (binding) =>
+          binding.commandId === "pier.run.task" ||
+          binding.commandId === "pier.worktree.create"
+      )
+    ).toEqual([]);
+  });
+
+  it("leaves retired run task and worktree shortcuts unbound", () => {
+    keybindingRegistry.loadUserKeymap([]);
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+
+    for (const keys of ["Mod+Backquote", "Mod+Shift+KeyT", "Mod+Shift+KeyN"]) {
+      expect(
+        keybindingRegistry.resolve(parseChord(keys, false), {
+          activePanelComponent: null,
+          overlayStack: [],
+        })
+      ).toBeNull();
+    }
+  });
+
+  it("keeps rerun task and command palette shortcuts", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.run.rerunTask",
       keys: "Mod+Alt+KeyR",
       scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.worktree.create",
-      keys: "Mod+Shift+KeyN",
+      commandId: "pier.commandPalette.toggle",
+      keys: "Mod+Shift+KeyP",
+      scope: "global",
+    });
+  });
+
+  it("keeps the start default agent shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.agent.new",
+      keys: "Mod+Shift+KeyA",
       scope: "global",
     });
   });

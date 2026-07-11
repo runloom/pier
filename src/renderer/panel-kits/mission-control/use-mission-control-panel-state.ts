@@ -1,267 +1,346 @@
 import type {
+  MissionControlGridSize,
   MissionControlPanelParams,
   MissionControlPanelWidgetEntry,
 } from "@shared/contracts/mission-control.ts";
 import {
-  MISSION_CONTROL_GRID_COLS,
+  HOST_DEFAULT_WIDGET_SIZE,
+  HOST_MAX_WIDGET_SIZE,
+  HOST_MIN_WIDGET_SIZE,
   widgetEntryWidgetId,
 } from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import i18next from "i18next";
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Layout, LayoutItem } from "react-grid-layout";
-import { toast } from "sonner";
-import { CORE_MISSION_CONTROL_WIDGETS } from "./core-mission-control-widgets.ts";
-import { deriveOptimalAutoLayout } from "./mission-control-auto-layout.ts";
 import {
-  appendEntry,
-  applyDerivedLayoutChange,
-  entryToLayoutItem,
-  findAddSlot,
-  type SizeDeclaration as GridSizeDeclaration,
-  layoutToEntries,
-} from "./mission-control-grid-geometry.ts";
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { toast } from "sonner";
+import { clampSize } from "./mission-control-grid-geometry.ts";
+import { moveMissionControlEntry } from "./mission-control-ordered-layout.ts";
+import {
+  canonicalizeMissionControlPanelParams,
+  findWidgetDeclaration as resolveWidgetDeclaration,
+  type SizeDeclaration,
+} from "./mission-control-panel-state-normalization.ts";
+
+export type { SizeDeclaration } from "./mission-control-panel-state-normalization.ts";
+export { findWidgetDeclaration } from "./mission-control-panel-state-normalization.ts";
 
 interface PanelParamsApi {
   updateParameters(params: Record<string, unknown>): void;
 }
 
-type SizeDeclaration = GridSizeDeclaration & {
-  multiInstance?: boolean | undefined;
-};
-
-/** 声明查找：core / 插件 manifest 中找 widget 的尺寸与实例语义。 */
-export function findWidgetDeclaration(
-  widgetId: string,
-  plugins: readonly PluginRegistryEntry[]
-): SizeDeclaration | undefined {
-  const core = CORE_MISSION_CONTROL_WIDGETS.find((w) => w.id === widgetId);
-  if (core) {
-    return core;
-  }
-  for (const entry of plugins) {
-    const widget = entry.manifest.missionControlWidgets.find(
-      (w) => w.id === widgetId
-    );
-    if (widget) {
-      return widget;
-    }
-  }
-  return;
-}
-
-/**
- * 几何结果合并回完整条目：geometry 纯函数只吐 {id,x,y,w,h}，
- * widgetId/params 等非几何字段必须从源条目带回，否则每次拖拽都会丢配置。
- */
-function mergeGeometry(
-  entries: readonly MissionControlPanelWidgetEntry[],
-  geometry: readonly {
-    h: number;
-    id: string;
-    w: number;
-    x: number;
-    y: number;
-  }[]
-): MissionControlPanelWidgetEntry[] {
-  const byId = new Map(entries.map((e) => [e.id, e]));
-  return geometry.map((g) => {
-    const source = byId.get(g.id);
-    return source
-      ? { ...source, h: g.h, w: g.w, x: g.x, y: g.y }
-      : { h: g.h, id: g.id, w: g.w, x: g.x, y: g.y };
-  });
-}
-
 function newInstanceEntry(
-  entries: readonly MissionControlPanelWidgetEntry[],
   widgetId: string,
-  decl: SizeDeclaration | undefined
+  declaration: SizeDeclaration | undefined
 ): MissionControlPanelWidgetEntry {
-  const geometry = appendEntry(entries, widgetId, decl);
-  const instanceId =
-    decl?.multiInstance === true ? crypto.randomUUID() : widgetId;
+  const size = clampSize(
+    declaration?.defaultSize ?? HOST_DEFAULT_WIDGET_SIZE,
+    declaration?.minSize ?? HOST_MIN_WIDGET_SIZE,
+    declaration?.maxSize ?? HOST_MAX_WIDGET_SIZE
+  );
   return {
-    h: geometry.h,
-    id: instanceId,
-    w: geometry.w,
+    ...size,
+    id: declaration?.multiInstance === true ? crypto.randomUUID() : widgetId,
     widgetId,
-    x: geometry.x,
-    y: geometry.y,
   };
 }
 
-/**
- * 指挥中心面板的组装状态收口：所有 params 变更（添加/移除/复制/尺寸预设/
- * 物料配置/锁定/布局写回）与刷新信号都经此 hook，面板组件只做渲染。
- */
+interface LocalEchoState {
+  latestVersion: number;
+  nextVersion: number;
+  versionsByWidgets: WeakMap<
+    readonly unknown[],
+    { paramsHash: string; version: number }
+  >;
+}
+
+function resetLocalEchoState(state: LocalEchoState): void {
+  state.latestVersion = 0;
+  state.nextVersion = 0;
+  state.versionsByWidgets = new WeakMap();
+}
+
+function getRawWidgetsIdentity(raw: unknown): readonly unknown[] | null {
+  if (
+    raw === null ||
+    typeof raw !== "object" ||
+    !("widgets" in raw) ||
+    !Array.isArray(raw.widgets)
+  ) {
+    return null;
+  }
+  return raw.widgets;
+}
+
 export function useMissionControlPanelState(
-  params: MissionControlPanelParams,
+  params: unknown,
   api: PanelParamsApi,
   plugins: readonly PluginRegistryEntry[]
 ) {
-  const prevEntriesRef = useRef(JSON.stringify(params.widgets));
+  const [initialState] = useState(() => {
+    const canonical = canonicalizeMissionControlPanelParams(params, plugins);
+    const echoState: LocalEchoState = {
+      latestVersion: 0,
+      nextVersion: 0,
+      versionsByWidgets: new WeakMap(),
+    };
+    return { canonical, echoState };
+  });
+  const authoritativeParamsRef = useRef(initialState.canonical);
+  const optimisticParamsRef = useRef(initialState.canonical);
+  const [storedParams, setStoredParams] = useState(initialState.canonical);
+  let renderedParams = storedParams;
   const [refreshTokens, setRefreshTokens] = useState<Record<string, number>>(
     {}
   );
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const localEchoStateRef = useRef(initialState.echoState);
+  const apiRef = useRef(api);
+  const pluginsRef = useRef(plugins);
+  const observedApiRef = useRef(api);
+  const observedParamsRef = useRef(params);
+  const observedPluginsRef = useRef(plugins);
+  const apiChanged = observedApiRef.current !== api;
+  const paramsChanged = observedParamsRef.current !== params;
+  const pluginsChanged = observedPluginsRef.current !== plugins;
+  const incoming =
+    apiChanged || paramsChanged
+      ? canonicalizeMissionControlPanelParams(params, plugins)
+      : null;
+  const widgetsIdentity = paramsChanged ? getRawWidgetsIdentity(params) : null;
+  const echoState = localEchoStateRef.current;
+  const marker = widgetsIdentity
+    ? echoState.versionsByWidgets.get(widgetsIdentity)
+    : undefined;
+  const isLocalEcho =
+    !apiChanged &&
+    paramsChanged &&
+    incoming !== null &&
+    marker?.paramsHash === JSON.stringify(incoming);
+  const replacesFromProps = apiChanged || (paramsChanged && !isLocalEcho);
+  if (replacesFromProps && incoming) {
+    renderedParams = incoming;
+  } else if (pluginsChanged) {
+    renderedParams = canonicalizeMissionControlPanelParams(
+      authoritativeParamsRef.current,
+      plugins
+    );
+  }
 
-  useEffect(() => {
-    if (highlightId === null) {
+  const applyParamsInMemory = useCallback((next: MissionControlPanelParams) => {
+    optimisticParamsRef.current = next;
+    setStoredParams(next);
+  }, []);
+  const clearLocalEchoes = useCallback(() => {
+    resetLocalEchoState(localEchoStateRef.current);
+  }, []);
+  const commitParams = useCallback(
+    (nextParams: MissionControlPanelParams): boolean => {
+      const committed = canonicalizeMissionControlPanelParams(
+        nextParams,
+        pluginsRef.current
+      );
+      const current = canonicalizeMissionControlPanelParams(
+        authoritativeParamsRef.current,
+        pluginsRef.current
+      );
+      const paramsHash = JSON.stringify(committed);
+      if (paramsHash === JSON.stringify(current)) return false;
+      authoritativeParamsRef.current = committed;
+      applyParamsInMemory(committed);
+      const localEchoState = localEchoStateRef.current;
+      localEchoState.nextVersion += 1;
+      localEchoState.latestVersion = localEchoState.nextVersion;
+      localEchoState.versionsByWidgets.set(committed.widgets, {
+        paramsHash,
+        version: localEchoState.latestVersion,
+      });
+      apiRef.current.updateParameters(committed);
+      return true;
+    },
+    [applyParamsInMemory]
+  );
+  const commitUserParams = useCallback(
+    (
+      reduce: (current: MissionControlPanelParams) => MissionControlPanelParams
+    ): boolean => {
+      const current = canonicalizeMissionControlPanelParams(
+        authoritativeParamsRef.current,
+        pluginsRef.current
+      );
+      return commitParams(reduce(current));
+    },
+    [commitParams]
+  );
+
+  useLayoutEffect(() => {
+    observedApiRef.current = api;
+    observedParamsRef.current = params;
+    observedPluginsRef.current = plugins;
+    apiRef.current = api;
+    pluginsRef.current = plugins;
+
+    if (replacesFromProps && incoming) {
+      authoritativeParamsRef.current = incoming;
+      clearLocalEchoes();
+      applyParamsInMemory(renderedParams);
       return;
     }
+    if (isLocalEcho && marker?.version === echoState.latestVersion) {
+      clearLocalEchoes();
+    }
+    if (pluginsChanged) applyParamsInMemory(renderedParams);
+  }, [
+    api,
+    applyParamsInMemory,
+    clearLocalEchoes,
+    echoState.latestVersion,
+    incoming,
+    isLocalEcho,
+    marker,
+    params,
+    plugins,
+    pluginsChanged,
+    renderedParams,
+    replacesFromProps,
+  ]);
+
+  useEffect(() => {
+    if (highlightId === null) return;
     const timer = setTimeout(() => setHighlightId(null), 1600);
     return () => clearTimeout(timer);
   }, [highlightId]);
 
-  const persist = useCallback(
-    (next: readonly MissionControlPanelWidgetEntry[]) => {
-      prevEntriesRef.current = JSON.stringify(next);
-      api.updateParameters({ ...params, widgets: next });
-    },
-    [api, params]
-  );
-
-  const handleLayoutChange = useCallback(
-    (
-      newLayout: Layout,
-      derived: { isDerived: boolean; layout: readonly LayoutItem[] }
-    ) => {
-      if (!derived.isDerived) {
-        const next = mergeGeometry(params.widgets, layoutToEntries(newLayout));
-        const newJson = JSON.stringify(next);
-        if (newJson !== prevEntriesRef.current) {
-          persist(next);
-        }
-        return;
-      }
-
-      const geometry = applyDerivedLayoutChange(
-        params.widgets,
-        derived.layout,
-        newLayout
-      );
-      if (geometry) {
-        persist(mergeGeometry(params.widgets, geometry));
-      }
-    },
-    [params.widgets, persist]
-  );
-
-  const handleArrangeLayout = useCallback(() => {
-    const declarationsByInstanceId = new Map<
-      string,
-      SizeDeclaration | undefined
-    >();
-    const basis = params.widgets.map((entry) => {
-      const decl = findWidgetDeclaration(widgetEntryWidgetId(entry), plugins);
-      declarationsByInstanceId.set(entry.id, decl);
-      return entryToLayoutItem(entry, decl);
-    });
-    const arranged = deriveOptimalAutoLayout(basis, MISSION_CONTROL_GRID_COLS, {
-      getSizeDeclaration: (instanceId) =>
-        declarationsByInstanceId.get(instanceId),
-    });
-    const next = mergeGeometry(params.widgets, layoutToEntries(arranged));
-    const newJson = JSON.stringify(next);
-    if (newJson !== prevEntriesRef.current) {
-      persist(next);
-      toast.success(i18next.t("missionControl.arrangeSuccess"));
-    }
-  }, [params.widgets, persist, plugins]);
-
   const handleAdd = useCallback(
     (widgetId: string) => {
-      const decl = findWidgetDeclaration(widgetId, plugins);
-      const entry = newInstanceEntry(params.widgets, widgetId, decl);
-      persist([...params.widgets, entry]);
-      setHighlightId(entry.id);
+      const entry = newInstanceEntry(
+        widgetId,
+        resolveWidgetDeclaration(widgetId, pluginsRef.current)
+      );
+      const committed = commitUserParams((current) => ({
+        ...current,
+        widgets: [...current.widgets, entry],
+      }));
+      if (committed) setHighlightId(entry.id);
     },
-    [params.widgets, plugins, persist]
+    [commitUserParams]
   );
-
   const handleRemove = useCallback(
     (instanceId: string) => {
-      persist(params.widgets.filter((w) => w.id !== instanceId));
+      commitUserParams((current) => ({
+        ...current,
+        widgets: current.widgets.filter((entry) => entry.id !== instanceId),
+      }));
     },
-    [params.widgets, persist]
+    [commitUserParams]
   );
-
   const handleDuplicate = useCallback(
     (instanceId: string) => {
-      const source = params.widgets.find((w) => w.id === instanceId);
-      if (!source) {
-        return;
-      }
-      const slot = findAddSlot(
-        params.widgets,
-        MISSION_CONTROL_GRID_COLS,
-        source.w,
-        source.h
+      const source = optimisticParamsRef.current.widgets.find(
+        (entry) => entry.id === instanceId
       );
+      if (!source) return;
       const entry: MissionControlPanelWidgetEntry = {
         h: source.h,
         id: crypto.randomUUID(),
-        ...(source.params
-          ? {
-              params: structuredClone(source.params),
-            }
-          : {}),
+        ...(source.params ? { params: structuredClone(source.params) } : {}),
         w: source.w,
         widgetId: widgetEntryWidgetId(source),
-        x: slot.x,
-        y: slot.y,
       };
-      persist([...params.widgets, entry]);
-      setHighlightId(entry.id);
+      const committed = commitUserParams((current) => ({
+        ...current,
+        widgets: [...current.widgets, entry],
+      }));
+      if (committed) setHighlightId(entry.id);
     },
-    [params.widgets, persist]
+    [commitUserParams]
   );
-
+  const handleReorder = useCallback(
+    (instanceId: string, targetIndex: number) => {
+      commitUserParams((current) => ({
+        ...current,
+        widgets: moveMissionControlEntry(
+          current.widgets,
+          instanceId,
+          targetIndex
+        ),
+      }));
+    },
+    [commitUserParams]
+  );
+  const handleResize = useCallback(
+    (instanceId: string, size: MissionControlGridSize) => {
+      commitUserParams((current) => ({
+        ...current,
+        widgets: current.widgets.map((entry) => {
+          if (entry.id !== instanceId) return entry;
+          const declaration = resolveWidgetDeclaration(
+            widgetEntryWidgetId(entry),
+            pluginsRef.current
+          );
+          const constrained = clampSize(
+            size,
+            declaration?.minSize ?? HOST_MIN_WIDGET_SIZE,
+            declaration?.maxSize ?? HOST_MAX_WIDGET_SIZE
+          );
+          return { ...entry, ...constrained };
+        }),
+      }));
+    },
+    [commitUserParams]
+  );
   const handleUpdateParams = useCallback(
     (instanceId: string, patch: Record<string, JsonValue>) => {
-      persist(
-        params.widgets.map((w) =>
-          w.id === instanceId
-            ? { ...w, params: { ...(w.params ?? {}), ...patch } }
-            : w
-        )
-      );
+      commitUserParams((current) => ({
+        ...current,
+        widgets: current.widgets.map((entry) =>
+          entry.id === instanceId
+            ? {
+                ...entry,
+                params: { ...(entry.params ?? {}), ...patch },
+              }
+            : entry
+        ),
+      }));
     },
-    [params.widgets, persist]
+    [commitUserParams]
   );
-
-  const handleToggleLocked = useCallback(() => {
-    api.updateParameters({ ...params, locked: params.locked !== true });
-  }, [api, params]);
-
   const refreshOne = useCallback((instanceId: string) => {
     setRefreshTokens((tokens) => ({
       ...tokens,
       [instanceId]: (tokens[instanceId] ?? 0) + 1,
     }));
   }, []);
-
   const refreshAll = useCallback(() => {
+    const instanceIds = optimisticParamsRef.current.widgets.map(
+      (entry) => entry.id
+    );
+    if (instanceIds.length === 0) return;
     setRefreshTokens((tokens) => {
-      const next: Record<string, number> = { ...tokens };
-      for (const entry of params.widgets) {
-        next[entry.id] = (next[entry.id] ?? 0) + 1;
+      const next = { ...tokens };
+      for (const instanceId of instanceIds) {
+        next[instanceId] = (next[instanceId] ?? 0) + 1;
       }
       return next;
     });
-  }, [params.widgets]);
+    toast.success(i18next.t("missionControl.refreshAllSuccess"));
+  }, []);
 
   return {
     handleAdd,
-    handleArrangeLayout,
     handleDuplicate,
-    handleLayoutChange,
     handleRemove,
-    handleToggleLocked,
+    handleReorder,
+    handleResize,
     handleUpdateParams,
     highlightId,
+    optimisticParams: renderedParams,
     refreshAll,
     refreshOne,
     refreshTokens,

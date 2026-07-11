@@ -10,6 +10,10 @@ import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { registerRunActions } from "@/lib/actions/run-actions.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import {
+  resetAppDialogForTests,
+  useAppDialogStore,
+} from "@/stores/app-dialog.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
@@ -184,6 +188,7 @@ describe("run actions", () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.mocked(toast.loading).mockReturnValue("task-spawn-loading");
+    resetAppDialogForTests();
     useCommandPaletteController.setState({
       mode: "commands",
       open: false,
@@ -224,6 +229,7 @@ describe("run actions", () => {
       requestId: 0,
       stack: [],
     });
+    resetAppDialogForTests();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -271,7 +277,7 @@ describe("run actions", () => {
           },
         ],
         placeholder: "Search tasks or commands…",
-        title: "Run Task...",
+        title: "Run Task…",
       },
     });
     expect(window.pier.tasks.list).not.toHaveBeenCalled();
@@ -346,20 +352,19 @@ describe("run actions", () => {
     });
   });
 
-  it("replaces the Run Task loading picker with a disabled load error row", async () => {
+  it("shows an alert and closes Run Task when task discovery fails", async () => {
     installWorkspaceApi();
     vi.mocked(window.pier.tasks.list).mockRejectedValueOnce(new Error("boom"));
     disposeRunActions = registerRunActions();
 
     await runTaskAction();
 
-    const state = useCommandPaletteController.getState();
-    expect(state.stack).toHaveLength(0);
-    expect(state.quickPick?.items?.[0]).toMatchObject({
-      detail: "boom",
-      disabled: true,
-      id: "task-load-error",
+    expect(useAppDialogStore.getState().current).toMatchObject({
+      body: "boom",
+      kind: "alert",
+      title: "Failed to load tasks",
     });
+    expect(useCommandPaletteController.getState().open).toBe(false);
   });
 
   it("spawns the selected task in the background when Run Task is invoked from a terminal panel", async () => {
@@ -388,6 +393,34 @@ describe("run actions", () => {
       terminalPanelId: "terminal-current",
     });
     expect(quickPick.renderItem).toBeUndefined();
+  });
+
+  it("pins a task terminal to the panel group that opened Run Task", async () => {
+    installWebWorkspaceApi();
+    disposeRunActions = registerRunActions();
+
+    await actionRegistry.get("pier.run.task")?.handler({
+      sourcePanelGroupId: "group-source",
+    });
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const target = quickPick?.sections
+      ?.flatMap((section) => section.items)
+      .find((item) => item.id === "package-script:test");
+    if (!(quickPick && target)) {
+      throw new Error("expected task item");
+    }
+
+    await quickPick.onAccept(target);
+
+    expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
+      focus: true,
+      forceRestart: false,
+      placement: "active-tab",
+      projectRootPath: "/Users/xyz/ABC/pier",
+      targetGroupId: "group-source",
+      taskId: "package-script:test",
+    });
   });
 
   it("falls back to a terminal tab when Run Task is invoked from a non-terminal project panel", async () => {
@@ -522,9 +555,16 @@ describe("run actions", () => {
     await vi.advanceTimersByTimeAsync(TASK_SPAWN_LOADING_DELAY_MS);
     expect(toast.loading).toHaveBeenCalledTimes(1);
 
-    const rejected = expect(accepted).rejects.toThrow("boom");
     spawn.reject(new Error("boom"));
-    await rejected;
+    await vi.waitFor(() => {
+      expect(useAppDialogStore.getState().current).toMatchObject({
+        body: "boom",
+        kind: "alert",
+        title: "Failed to start task",
+      });
+    });
+    resetAppDialogForTests();
+    await accepted;
 
     expect(toast.dismiss).toHaveBeenCalledWith("task-spawn-loading");
     vi.useRealTimers();
@@ -546,12 +586,48 @@ describe("run actions", () => {
       throw new Error("expected task item");
     }
 
-    await expect(quickPick.onAccept(target)).rejects.toThrow("boom");
+    const accepted = quickPick.onAccept(target);
+    await vi.waitFor(() => {
+      expect(useAppDialogStore.getState().current).toMatchObject({
+        body: "boom",
+        kind: "alert",
+        title: "Failed to start task",
+      });
+    });
+    resetAppDialogForTests();
+    await accepted;
     await vi.advanceTimersByTimeAsync(TASK_SPAWN_LOADING_DELAY_MS);
 
     expect(toast.loading).not.toHaveBeenCalled();
     expect(toast.dismiss).not.toHaveBeenCalled();
     vi.useRealTimers();
+  });
+
+  it("shows an alert when main reports that a selected task is unsupported", async () => {
+    installWorkspaceApi();
+    vi.mocked(window.pier.tasks.spawn).mockResolvedValueOnce({
+      message: "Unsupported task type",
+      status: "unsupported",
+    });
+    disposeRunActions = registerRunActions();
+
+    await runTaskAction();
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const target = quickPick?.sections?.[0]?.items[0];
+    if (!(quickPick && target)) {
+      throw new Error("expected task item");
+    }
+
+    const accepted = quickPick.onAccept(target);
+    await vi.waitFor(() => {
+      expect(useAppDialogStore.getState().current).toMatchObject({
+        body: "Unsupported task type",
+        kind: "alert",
+        title: "Failed to start task",
+      });
+    });
+    resetAppDialogForTests();
+    await accepted;
   });
 
   it("prompts for missing task inputs and retries spawn", async () => {
@@ -561,6 +637,7 @@ describe("run actions", () => {
         inputs: [
           {
             default: "web",
+
             description: "Target package",
             id: "pkg",
             type: "promptString",

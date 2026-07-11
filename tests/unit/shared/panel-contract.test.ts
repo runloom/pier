@@ -257,6 +257,20 @@ describe("shared panel contract", () => {
     });
   });
 
+  it("allows task spawns to pin their source panel group", () => {
+    expect(
+      pierCommandSchema.parse({
+        projectRootPath: "/Users/xyz/ABC/pier",
+        targetGroupId: "group-source",
+        taskId: "package-script:test",
+        type: "run.spawn",
+      })
+    ).toMatchObject({
+      targetGroupId: "group-source",
+      type: "run.spawn",
+    });
+  });
+
   it("allows local command envelopes to carry CLI environment", () => {
     expect(
       pierCommandEnvelopeSchema.parse({
@@ -298,6 +312,7 @@ describe("shared panel contract", () => {
           icon: { id: "pier.task" },
           title: "test",
         },
+        targetGroupId: "group-source",
         type: "terminal.open",
       })
     ).toMatchObject({
@@ -307,6 +322,7 @@ describe("shared panel contract", () => {
         icon: { id: "pier.task" },
         title: "test",
       },
+      targetGroupId: "group-source",
       type: "terminal.open",
     });
   });

@@ -218,4 +218,68 @@ describe("workspace renderer commands", () => {
       requestId: "renderer-terminal-open-failed",
     });
   });
+
+  it("opens a new terminal in the requested panel group", async () => {
+    const sourceGroup = { id: "source-group", panels: [] };
+    const activeGroup = { id: "active-group", panels: [] };
+    const api = {
+      ...createApi([]),
+      activeGroup,
+      groups: [sourceGroup, activeGroup],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+    const addTerminal = vi
+      .spyOn(useWorkspaceStore.getState(), "addTerminal")
+      .mockReturnValue("terminal-target");
+
+    const command = runWorkspaceRendererCommand({
+      command: {
+        launchId: "launch-target",
+        targetGroupId: "source-group",
+        type: "terminal.open",
+      },
+      requestId: "renderer-open-target-group",
+    });
+    confirmTerminalLaunch("launch-target");
+    await command;
+
+    expect(addTerminal).toHaveBeenCalledWith({
+      launchId: "launch-target",
+      referenceGroup: sourceGroup,
+    });
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: { panelId: "terminal-target" },
+      ok: true,
+      requestId: "renderer-open-target-group",
+    });
+  });
+
+  it("rejects terminal.open when the requested panel group no longer exists", async () => {
+    const api = {
+      ...createApi([]),
+      activeGroup: { id: "active-group", panels: [] },
+      groups: [{ id: "active-group", panels: [] }],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+    const addTerminal = vi.spyOn(useWorkspaceStore.getState(), "addTerminal");
+
+    await runWorkspaceRendererCommand({
+      command: {
+        launchId: "launch-missing-group",
+        targetGroupId: "removed-group",
+        type: "terminal.open",
+      },
+      requestId: "renderer-open-missing-group",
+    });
+
+    expect(addTerminal).not.toHaveBeenCalled();
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      error: {
+        code: "not_found",
+        message: "panel group not found: removed-group",
+      },
+      ok: false,
+      requestId: "renderer-open-missing-group",
+    });
+  });
 });

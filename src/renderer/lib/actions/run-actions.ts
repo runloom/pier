@@ -13,11 +13,13 @@ import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { TASK_RUN_ACTION_CONTRIBUTIONS } from "@/lib/actions/task-run-context-actions.ts";
 import { openTerminalListQuickPick } from "@/lib/actions/terminal-list-quickpick.ts";
+import type { ActionInvocation } from "@/lib/actions/types.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type {
   QuickPickItem,
   QuickPickSection,
 } from "@/lib/command-palette/types.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { spawnTaskWithInputResolution } from "./task-input-flow.ts";
@@ -58,10 +60,11 @@ async function withTaskSpawnLoading<T>(
 interface ProjectContext {
   defaultTaskSpawnMode?: TaskSpawnMode;
   projectRootPath: string;
+  targetGroupId?: string;
   terminalPanelId?: string;
 }
 
-function activeProjectContext(): ProjectContext | null {
+function activeProjectContext(targetGroupId?: string): ProjectContext | null {
   const api = useWorkspaceStore.getState().api;
   const activePanel = api?.activePanel;
   const activePanelId = activePanel?.id;
@@ -78,6 +81,7 @@ function activeProjectContext(): ProjectContext | null {
   if (!projectRootPath) {
     return null;
   }
+  const resolvedTargetGroupId = targetGroupId ?? api?.activeGroup?.id;
   return {
     defaultTaskSpawnMode:
       activePanel?.view.contentComponent === "terminal"
@@ -87,6 +91,7 @@ function activeProjectContext(): ProjectContext | null {
     ...(activePanel?.view.contentComponent === "terminal"
       ? { terminalPanelId: activePanel.id }
       : {}),
+    ...(resolvedTargetGroupId ? { targetGroupId: resolvedTargetGroupId } : {}),
   };
 }
 
@@ -211,6 +216,9 @@ async function spawnTask(args: {
       placement: "active-tab",
       projectRootPath: args.project.projectRootPath,
       ...(terminalPanelId ? { terminalPanelId } : {}),
+      ...(args.project.targetGroupId
+        ? { targetGroupId: args.project.targetGroupId }
+        : {}),
       taskId: args.taskId,
     });
     return result;
@@ -227,15 +235,24 @@ async function spawnTaskWithInputFlow(
     terminalPanelId?: string | undefined;
   }
 ): Promise<void> {
-  const result = await spawnTaskWithInputResolution((inputs) =>
-    spawnTask({ ...(inputs ? { inputs } : {}), project, taskId, ...options })
-  );
-  if (!result) {
-    return;
-  }
-  if (result.status === "unsupported") {
-    console.error("[run-actions] task unsupported:", result.message);
-    return;
+  try {
+    const result = await spawnTaskWithInputResolution((inputs) =>
+      spawnTask({ ...(inputs ? { inputs } : {}), project, taskId, ...options })
+    );
+    if (!result) {
+      return;
+    }
+    if (result.status === "unsupported") {
+      await showAppAlert({
+        body: result.message,
+        title: i18next.t("commandPalette.run.startFailed"),
+      });
+    }
+  } catch (error) {
+    await showAppAlert({
+      body: error instanceof Error ? error.message : String(error),
+      title: i18next.t("commandPalette.run.startFailed"),
+    });
   }
 }
 
@@ -247,8 +264,8 @@ function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
   });
 }
 
-export async function openRunTaskQuickPick() {
-  const project = activeProjectContext();
+export async function openRunTaskQuickPick(invocation?: ActionInvocation) {
+  const project = activeProjectContext(invocation?.sourcePanelGroupId);
   const title = i18next.t("commandPalette.action.runTask");
   const placeholder = i18next.t("commandPalette.placeholder.runTask");
   if (!project) {
@@ -329,19 +346,11 @@ export async function openRunTaskQuickPick() {
     if (!shouldReplaceLoadingPick()) {
       return;
     }
-    useCommandPaletteController.getState().replaceQuickPick({
-      title,
-      placeholder,
-      items: [
-        {
-          detail: error instanceof Error ? error.message : String(error),
-          disabled: true,
-          id: "task-load-error",
-          label: i18next.t("commandPalette.run.loadFailed"),
-        },
-      ],
-      onAccept: () => undefined,
+    showAppAlert({
+      body: error instanceof Error ? error.message : String(error),
+      title: i18next.t("commandPalette.run.loadFailed"),
     });
+    return;
   }
 }
 
@@ -354,7 +363,7 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     iconComponent: Play,
     id: "pier.run.task",
     sortOrder: 0,
-    surfaces: ["command-palette"],
+    surfaces: ["command-palette", "create-menu"],
     titleKey: "commandPalette.action.runTask",
   },
   {

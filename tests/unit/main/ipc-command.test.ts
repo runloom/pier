@@ -131,6 +131,7 @@ describe("registerCommandIpc", () => {
         projectRootPath: "/repo",
         taskId: "package-script:test",
         type: "run.spawn",
+        windowId: "secondary",
       }
     );
 
@@ -268,9 +269,18 @@ describe("registerCommandIpc", () => {
     await expect(
       handler(
         { sender: { id: "web-contents" } },
-        { path: "/repo", type: "worktree.openTerminal" }
+        { path: "/repo", type: "worktree.openTerminal", windowId: "secondary" }
       )
     ).resolves.toMatchObject({ ok: true });
+    expect(executeMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: {
+          path: "/repo",
+          type: "worktree.openTerminal",
+          windowId: "main",
+        },
+      })
+    );
   });
 
   it("environment.* 命令经 PIER.COMMAND_EXECUTE 交给 command router", async () => {

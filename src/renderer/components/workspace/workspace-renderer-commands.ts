@@ -9,6 +9,7 @@ import {
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { requestTerminalRelaunch } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { referenceGroupById } from "@/stores/workspace-panel-helpers.ts";
 import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 import { panelKindOf } from "./panel-registry.ts";
 import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
@@ -138,8 +139,21 @@ async function addTerminalForCommand(
       });
       panelId = command.panelId;
     } else {
+      const workspace = useWorkspaceStore.getState();
+      const referenceGroupOptions = command.targetGroupId
+        ? referenceGroupById(workspace.api, command.targetGroupId)
+        : {};
+      if (command.targetGroupId && !referenceGroupOptions.referenceGroup) {
+        if (!workspace.api) {
+          throw new Error("workspace api not ready");
+        }
+        throw new RendererCommandExecutionError(
+          "not_found",
+          `panel group not found: ${command.targetGroupId}`
+        );
+      }
       panelId =
-        useWorkspaceStore.getState().addTerminal({
+        workspace.addTerminal({
           ...(command.context && {
             context: command.context,
           }),
@@ -148,6 +162,7 @@ async function addTerminalForCommand(
           ...(command.placement && {
             placement: command.placement,
           }),
+          ...referenceGroupOptions,
           ...(command.tab && { tab: command.tab }),
           ...(command.task && { task: command.task }),
         }) ?? undefined;

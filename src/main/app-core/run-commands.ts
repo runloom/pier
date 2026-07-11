@@ -353,6 +353,9 @@ export async function executeRunSpawnCommand(
         source: "task",
         tab: launch.tab,
         task,
+        ...(command.targetGroupId
+          ? { targetGroupId: command.targetGroupId }
+          : {}),
       }
     );
     if (!result.ok) {

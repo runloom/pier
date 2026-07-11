@@ -80,7 +80,7 @@ test.describe("Command Palette e2e", () => {
 
       // 验证主题/风格/语言 action 都在面板中
       const items = win.locator("[cmdk-item]");
-      await expect(items.filter({ hasText: "运行任务..." })).toBeVisible();
+      await expect(items.filter({ hasText: "运行任务…" })).toBeVisible();
       await expect(items.filter({ hasText: "新建终端" })).toBeVisible();
       await expect(items.filter({ hasText: "终端列表..." })).toBeVisible();
       await expect(items.filter({ hasText: "选择主题" })).toBeVisible();

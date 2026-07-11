@@ -1,283 +1,460 @@
+/**
+ * Tab 栏 add 按钮 — 同源锚定创建器.
+ *
+ * 数据源: actionRegistry.list("create-menu"), 与命令面板共享同一套
+ * action 注册、frecency 排序、搜索算法和行渲染.
+ *
+ * 与 Cmd+Shift+P 的唯一区别:
+ *   - 位置: 锚定在 "+" 按钮旁, 而非屏幕中央
+ *   - 范围: 只显示 create-menu surface 的动作
+ *   - 上下文: 执行时传 sourcePanelGroupId, 让新标签落到被点击的 group
+ *
+ * 打开时后台触发 agent 检测; 检测失败只影响智能体行, 不关闭整个创建器.
+ */
+
 import { Button } from "@pier/ui/button.tsx";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "@pier/ui/dropdown-menu.tsx";
-import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import type { AgentKind } from "@shared/contracts/agent.ts";
-import type { IDockviewHeaderActionsProps } from "dockview-react";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandList,
+} from "@pier/ui/command.tsx";
 import {
-  GitBranchPlus,
-  LayoutDashboard,
-  Play,
-  Plus,
-  Terminal,
-} from "lucide-react";
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { toast } from "sonner";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@pier/ui/popover.tsx";
+import type { IDockviewHeaderActionsProps } from "dockview-react";
+import i18next from "i18next";
+import { Plus } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { ActionCommandItem } from "@/components/common/command-palette-action-rows.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
-import { openRunTaskQuickPick } from "@/lib/actions/run-actions.ts";
+import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
+import {
+  actionCategoryKey,
+  rankActionsForPalette,
+} from "@/lib/command-palette/action-search.ts";
+import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
-import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
+import { useCreateMenuRequestStore } from "@/stores/create-menu-request.store.ts";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import {
+  registerTerminalFullscreenWebOverlay,
+  requestTerminalWebFocus,
+} from "@/stores/terminal-input-routing-slice.ts";
 
-const NEW_TERMINAL_ACTION_ID = "pier.panel.newTerminal";
-const RUN_TASK_ACTION_ID = "pier.run.task";
-const WORKTREE_CREATE_ACTION_ID = "pier.worktree.create";
+const CREATE_MENU_SCOPE = "overlay:add-panel";
+const IME_PENDING_KEYCODE = 229;
 
-function shortcutLabel(commandId: string): string | null {
-  const binding = keybindingRegistry.getBindingsFor(commandId)[0];
-  return binding ? formatChord(binding.chord) : null;
+interface CreateActionGroup {
+  actions: Action[];
+  category: string;
 }
 
-function resolveAvailableAgentIds({
-  detectedIds,
-  disabledAgentIds,
-  rankedAgentIds,
-}: {
-  detectedIds: AgentKind[];
-  disabledAgentIds: AgentKind[];
-  rankedAgentIds: AgentKind[] | null;
-}): AgentKind[] {
-  const disabled = new Set(disabledAgentIds);
-  const available = detectedIds.filter((id) => !disabled.has(id));
-  if (!rankedAgentIds) {
-    return available;
-  }
+const CREATE_MENU_CATEGORY_ORDER: Readonly<Record<string, number>> = {
+  run: 0,
+  panel: 1,
+  worktree: 2,
+};
 
-  const availableSet = new Set(available);
-  const seen = new Set<AgentKind>();
-  const ordered: AgentKind[] = [];
-  for (const id of [...rankedAgentIds, ...available]) {
-    if (availableSet.has(id) && !seen.has(id)) {
-      seen.add(id);
-      ordered.push(id);
-    }
+function createMenuFallbackPriority(action: Action): number {
+  if (action.id === "pier.panel.newTerminal") {
+    return 0;
   }
-  return ordered;
+  if (action.id === "pier.agent.new") {
+    return 1;
+  }
+  if (action.id.startsWith("pier.agent.start.")) {
+    return action.metadata?.sortOrder ?? 10;
+  }
+  if (action.id === "pier.run.task") {
+    return 100;
+  }
+  return 200 + (action.metadata?.sortOrder ?? 0);
 }
 
-/**
- * Tab 栏 add 按钮 — dockview leftHeaderActionsComponent 模式.
- *
- * 点击 "+" 弹出下拉菜单:
- *   1. 新终端 (在当前 group 内创建 terminal panel)
- *   2. 新任务 (打开任务 quick pick)
- *   3. --- 分隔线 ---
- *   4. 已检测到的 agent 列表 (点击创建对应 agent 终端)
- *
- * dockview header DOM 顺序: preActions → tabs → leftActions → void → rightActions.
- * leftHeaderActionsComponent 渲染在 tabs 之后 (tab 后), 用 direction:"within"
- * 把新 panel 作为当前 group 的新 tab 插入, 而非新建 group.
- */
-export function AddPanelAction(props: IDockviewHeaderActionsProps) {
-  const t = useT();
-  const detectedIds = useAgentDetectStore((s) => s.detectedIds);
-  const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
-  const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
-  const [rankedAgentIds, setRankedAgentIds] = useState<AgentKind[] | null>(
-    null
-  );
-  useEffect(() => {
-    const loadSelection = window.pier.agents.selection;
-    if (typeof loadSelection !== "function") {
-      return;
+function compareCreateActions(
+  a: Action,
+  b: Action,
+  frecencyMap: ReadonlyMap<string, number>
+): number {
+  const aScore = frecencyMap.get(a.id);
+  const bScore = frecencyMap.get(b.id);
+  if (aScore != null && bScore != null) {
+    return bScore - aScore;
+  }
+  if (aScore != null) {
+    return -1;
+  }
+  if (bScore != null) {
+    return 1;
+  }
+  return createMenuFallbackPriority(a) - createMenuFallbackPriority(b);
+}
+
+function maxGroupFrecency(
+  actions: readonly Action[],
+  frecencyMap: ReadonlyMap<string, number>
+): number | undefined {
+  let max: number | undefined;
+  for (const action of actions) {
+    const score = frecencyMap.get(action.id);
+    if (score != null && (max == null || score > max)) {
+      max = score;
     }
-    let disposed = false;
-    loadSelection()
-      .then((selection) => {
-        if (!disposed) {
-          setRankedAgentIds(selection.rankedIds);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      disposed = true;
-    };
-  }, []);
-  // 订阅 active panel descriptor 变化以便 New Worktree 菜单项 disabled 状态跟随 (值不使用,纯粹为重渲注册订阅)。
-  usePanelDescriptorStore((s) =>
-    s.activeId ? s.descriptors[s.activeId] : undefined
+  }
+  return max;
+}
+
+function compareCreateGroups(
+  a: CreateActionGroup,
+  b: CreateActionGroup,
+  frecencyMap: ReadonlyMap<string, number>
+): number {
+  const aScore = maxGroupFrecency(a.actions, frecencyMap);
+  const bScore = maxGroupFrecency(b.actions, frecencyMap);
+  if (aScore != null && bScore != null) {
+    return bScore - aScore;
+  }
+  if (aScore != null) {
+    return -1;
+  }
+  if (bScore != null) {
+    return 1;
+  }
+  const aOrder =
+    CREATE_MENU_CATEGORY_ORDER[a.category] ??
+    100 + (CATEGORY_META[a.category]?.order ?? 100);
+  const bOrder =
+    CREATE_MENU_CATEGORY_ORDER[b.category] ??
+    100 + (CATEGORY_META[b.category]?.order ?? 100);
+  return aOrder - bOrder;
+}
+
+function groupCreateActions(
+  actions: readonly Action[],
+  frecencyMap: ReadonlyMap<string, number>
+): CreateActionGroup[] {
+  const byCategory = new Map<string, Action[]>();
+  for (const action of actions) {
+    const category = actionCategoryKey(action);
+    const categoryActions = byCategory.get(category) ?? [];
+    categoryActions.push(action);
+    byCategory.set(category, categoryActions);
+  }
+  const groups = Array.from(byCategory.entries()).map(
+    ([category, categoryActions]) => ({
+      actions: categoryActions.sort((a, b) =>
+        compareCreateActions(a, b, frecencyMap)
+      ),
+      category,
+    })
   );
-  // 订阅 actionRegistry 版本变化:插件卸载/重装会替换 action, enabled()/handler 引用随之变化。
-  useSyncExternalStore(
-    (cb) => actionRegistry.subscribe(cb),
-    () => actionRegistry.getVersion(),
-    () => 0
-  );
-  // 订阅 keybindingRegistry 版本变化:用户在设置里改快捷键后菜单提示要跟着刷新。
+  return groups.sort((a, b) => compareCreateGroups(a, b, frecencyMap));
+}
+
+function useKeybindingLabels(
+  actions: readonly Action[]
+): ReadonlyMap<string, string> {
   useSyncExternalStore(
     (cb) => keybindingRegistry.subscribe(cb),
     () => keybindingRegistry.getVersion(),
     () => 0
   );
+  const map = new Map<string, string>();
+  for (const action of actions) {
+    const first = keybindingRegistry.getFirstBindingFor(
+      action.id,
+      action.metadata?.shortcutSourceId
+    );
+    if (first) {
+      map.set(action.id, formatChord(first.chord));
+    }
+  }
+  return map;
+}
 
-  // main 返回的排名只决定顺序；renderer 的实时探测与禁用快照决定当前可用性。
-  // 刷新中新出现、尚未进入缓存排名的 agent 追加在已排名项之后。
-  const enabledAgents = resolveAvailableAgentIds({
-    detectedIds,
-    disabledAgentIds,
-    rankedAgentIds,
-  });
-
-  const worktreeCreateAction = actionRegistry.get(WORKTREE_CREATE_ACTION_ID);
-  const worktreeCreateEnabled = Boolean(
-    worktreeCreateAction && (worktreeCreateAction.enabled?.() ?? true)
+export function AddPanelAction(props: IDockviewHeaderActionsProps) {
+  const t = useT();
+  // Contextual action thunks use getState(); this subscription keeps their
+  // enabled state and disabled reason current while the creator stays open.
+  usePanelDescriptorStore((state) =>
+    props.activePanel ? state.descriptors[props.activePanel.id] : undefined
+  );
+  const titleId = useId();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const detectionGenerationRef = useRef(0);
+  const invocationRef = useRef<ActionInvocation | null>(null);
+  const sourcePanelId = props.activePanel?.id;
+  const sourcePanelGroupId = props.group?.id;
+  const consumedRequestIdRef = useRef(0);
+  const createMenuRequestId = useCreateMenuRequestStore((s) => s.requestId);
+  const createMenuTargetGroupId = useCreateMenuRequestStore(
+    (s) => s.targetGroupId
   );
 
-  const newTerminalShortcut = shortcutLabel(NEW_TERMINAL_ACTION_ID);
-  const runTaskShortcut = shortcutLabel(RUN_TASK_ACTION_ID);
-  const worktreeCreateShortcut = shortcutLabel(WORKTREE_CREATE_ACTION_ID);
+  // pier.panel.openCreateMenu (默认 Cmd+N) 把 targetGroupId 写进 store,
+  // 各 group 的 AddPanelAction 自查 id 匹配则打开本地 Popover。
+  useEffect(() => {
+    if (
+      createMenuRequestId === consumedRequestIdRef.current ||
+      !sourcePanelGroupId ||
+      createMenuTargetGroupId !== sourcePanelGroupId
+    ) {
+      return;
+    }
+    consumedRequestIdRef.current = createMenuRequestId;
+    useCreateMenuRequestStore.getState().markConsumed(createMenuRequestId);
+    setOpen(true);
+  }, [createMenuRequestId, createMenuTargetGroupId, sourcePanelGroupId]);
 
+  const sourceActionInvocation = useCallback((): ActionInvocation => {
+    const sourcePanelContext = sourcePanelId
+      ? usePanelDescriptorStore.getState().descriptors[sourcePanelId]?.context
+      : undefined;
+    return {
+      ...(sourcePanelContext ? { sourcePanelContext } : {}),
+      ...(sourcePanelGroupId ? { sourcePanelGroupId } : {}),
+      ...(sourcePanelId ? { sourcePanelId } : {}),
+    };
+  }, [sourcePanelGroupId, sourcePanelId]);
+
+  // Subscribe to registry/mru version changes for re-render.
+  useSyncExternalStore(
+    (cb) => actionRegistry.subscribe(cb),
+    () => actionRegistry.getVersion(),
+    () => 0
+  );
+  const frecencyMap = useCommandPaletteMru((s) => s.frecencyMap);
+
+  const allCreateActions = actionRegistry.list("create-menu");
+  const keybindingLabels = useKeybindingLabels(allCreateActions);
+  const normalizedQuery = query.trim();
+  const groups =
+    normalizedQuery.length === 0
+      ? groupCreateActions(allCreateActions, frecencyMap)
+      : [];
+  const ranked =
+    normalizedQuery.length > 0
+      ? rankActionsForPalette(
+          allCreateActions,
+          frecencyMap,
+          normalizedQuery,
+          keybindingLabels
+        )
+      : [];
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    // Activate the clicked panel so worktree/task actions resolve the right context.
+    props.activePanel?.api.setActive();
+    // Carry the clicked group for action handlers.
+    invocationRef.current = sourceActionInvocation();
+    // A reopened creator may share the same in-flight probe; only its current
+    // generation reports a rejection.
+    const detectionGeneration = detectionGenerationRef.current + 1;
+    detectionGenerationRef.current = detectionGeneration;
+    useAgentDetectStore
+      .getState()
+      .ensureDetected()
+      .catch(async (error) => {
+        if (detectionGenerationRef.current !== detectionGeneration) {
+          return;
+        }
+        await showAppAlert({
+          body: error instanceof Error ? error.message : String(error),
+          title: i18next.t("workspace.addPanelMenu.detectAgentsFailed"),
+        });
+      });
+    // Block global keybindings while the popover is open.
+    useKeybindingScope.getState().pushBlockingScope(CREATE_MENU_SCOPE);
+    const releaseWebFocus = requestTerminalWebFocus("add-panel");
+    // Popover 非 modal, Radix DismissableLayer 靠 document pointerdown 侦测
+    // 外部点击。终端是原生 NSView, 点击默认被 native 消费, web 收不到 →
+    // 弹层不会关。挂一个全屏 web overlay rect, 让弹层打开期间所有点击 (包括
+    // 落在终端 NSView 之上的) 都路由到 web, dismissable-layer 才能触发。
+    // 见 app-dialog-host.tsx / plugin-overlay-host.tsx 同款模式。
+    const releaseOverlayRoute =
+      registerTerminalFullscreenWebOverlay(CREATE_MENU_SCOPE);
+    return () => {
+      if (detectionGenerationRef.current === detectionGeneration) {
+        detectionGenerationRef.current += 1;
+      }
+      useKeybindingScope.getState().popBlockingScope(CREATE_MENU_SCOPE);
+      releaseOverlayRoute.dispose();
+      releaseWebFocus();
+      invocationRef.current = null;
+    };
+  }, [open, props.activePanel, sourceActionInvocation]);
+
+  const executeAction = async (action: Action) => {
+    props.activePanel?.api.setActive();
+    const invocation = sourceActionInvocation();
+    invocationRef.current = invocation;
+    if (action.enabled?.(invocation) === false) {
+      return;
+    }
+    setOpen(false);
+    setQuery("");
+    try {
+      await action.handler(invocation);
+      if (!action.metadata?.excludeFromMru) {
+        useCommandPaletteMru.getState().recordUse(action.id);
+      }
+    } catch (error) {
+      console.error(`[add-panel-action] ${action.id} threw:`, error);
+      await showAppAlert({
+        body: error instanceof Error ? error.message : String(error),
+        title: t("workspace.addPanelMenu.actionFailed"),
+      });
+    }
+  };
+
+  const categoryHeading = (category: string) => {
+    const meta = CATEGORY_META[category];
+    return meta ? t(`commandPalette.category.${meta.labelKey}`) : category;
+  };
+
+  const renderListBody = () => {
+    if (normalizedQuery.length > 0) {
+      if (ranked.length === 0) {
+        return (
+          <CommandEmpty>{t("workspace.addPanelMenu.noMatches")}</CommandEmpty>
+        );
+      }
+      return (
+        <CommandGroup heading={t("commandPalette.searchResults")}>
+          {ranked.map((action) => (
+            <ActionCommandItem
+              action={action}
+              key={action.id}
+              keybindingLabels={keybindingLabels}
+              onExecute={executeAction}
+            />
+          ))}
+        </CommandGroup>
+      );
+    }
+    return groups.map((group) => (
+      <CommandGroup
+        heading={categoryHeading(group.category)}
+        key={group.category}
+      >
+        {group.actions.map((action) => (
+          <ActionCommandItem
+            action={action}
+            key={action.id}
+            keybindingLabels={keybindingLabels}
+            onExecute={executeAction}
+          />
+        ))}
+      </CommandGroup>
+    ));
+  };
   return (
     <div className="flex h-full items-center justify-center px-1">
-      <DropdownMenu
-        onOpenChange={(open) => {
-          if (open) {
-            ensureDetected().catch(() => undefined);
-            const loadSelection = window.pier.agents.selection;
-            if (typeof loadSelection !== "function") {
-              return;
-            }
-            loadSelection()
-              .then((selection) => {
-                setRankedAgentIds(selection.rankedIds);
-              })
-              .catch(() => {
-                setRankedAgentIds(null);
-              });
+      <Popover
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) {
+            setQuery("");
           }
         }}
+        open={open}
       >
-        <DropdownMenuTrigger asChild>
+        <PopoverTrigger asChild>
           <Button
             aria-label={t("workspace.addPanelMenu.trigger")}
-            className="bg-transparent"
             size="icon-xs"
             title={t("workspace.addPanelMenu.trigger")}
             type="button"
             variant="secondary"
           >
-            <Plus className="size-4" />
+            <Plus />
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
+        </PopoverTrigger>
+        <PopoverContent
           align="start"
-          className="max-h-[min(var(--radix-dropdown-menu-content-available-height),480px)] w-56"
-          data-scrollbar="none"
+          aria-labelledby={titleId}
+          className="w-80 gap-1 p-1"
+          onEscapeKeyDown={(event) => {
+            if (event.isComposing || event.keyCode === IME_PENDING_KEYCODE) {
+              event.preventDefault();
+            }
+          }}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            inputRef.current?.focus();
+          }}
+          style={{
+            maxWidth:
+              "calc(var(--radix-popover-content-available-width) - 0.5rem)",
+          }}
         >
-          <DropdownMenuItem
-            onClick={() => {
-              useWorkspaceStore.getState().addMissionControl({
-                referenceGroup: props.group,
-              });
-            }}
-          >
-            <LayoutDashboard className="size-4" />
-            <span>{t("workspace.addPanelMenu.newMissionControl")}</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              useWorkspaceStore.getState().addTerminal({
-                referenceGroup: props.group,
-              });
-            }}
-          >
-            <Terminal className="size-4" />
-            <span>{t("workspace.addPanelMenu.newTerminal")}</span>
-            {newTerminalShortcut ? (
-              <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-            ) : null}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              openRunTaskQuickPick().catch(() => undefined);
-            }}
-          >
-            <Play className="size-4" />
-            <span>{t("workspace.addPanelMenu.newTask")}</span>
-            {runTaskShortcut ? (
-              <DropdownMenuShortcut>{runTaskShortcut}</DropdownMenuShortcut>
-            ) : null}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!worktreeCreateEnabled}
-            onClick={() => {
-              const action = actionRegistry.get(WORKTREE_CREATE_ACTION_ID);
-              if (!action) {
+          {/* Popover 已经锚定在 "+" 按钮旁, 视觉上不需要重复标题;
+              保留 sr-only 标题给 aria-labelledby 引用, 保 a11y。 */}
+          <PopoverHeader className="sr-only">
+            <PopoverTitle id={titleId}>
+              {t("workspace.addPanelMenu.title")}
+            </PopoverTitle>
+          </PopoverHeader>
+          <Command
+            className="h-auto"
+            label={t("workspace.addPanelMenu.title")}
+            onKeyDown={(event) => {
+              if (
+                event.nativeEvent.isComposing ||
+                event.nativeEvent.keyCode === IME_PENDING_KEYCODE
+              ) {
                 return;
               }
-              Promise.resolve(action.handler()).catch((err) => {
-                console.error(
-                  `[add-panel-action] action ${action.id} failed:`,
-                  err
-                );
-              });
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setOpen(false);
+                setQuery("");
+              }
             }}
+            shouldFilter={false}
           >
-            <GitBranchPlus className="size-4" />
-            <span>{t("workspace.addPanelMenu.newWorktree")}</span>
-            {worktreeCreateShortcut ? (
-              <DropdownMenuShortcut>
-                {worktreeCreateShortcut}
-              </DropdownMenuShortcut>
-            ) : null}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>
-            {t("workspace.addPanelMenu.agentSection")}
-          </DropdownMenuLabel>
-          {enabledAgents.length > 0 ? (
-            enabledAgents.map((agentId) => {
-              const entry = getAgentCatalogEntry(agentId);
-              return (
-                <DropdownMenuItem
-                  key={agentId}
-                  onClick={async () => {
-                    try {
-                      const { launchId } =
-                        await window.pier.agents.prepareLaunch(agentId);
-                      if (!launchId) {
-                        toast.error(
-                          t("workspace.addPanelMenu.agentUnavailable")
-                        );
-                        return;
-                      }
-                      useWorkspaceStore.getState().addTerminal({
-                        launchId,
-                        referenceGroup: props.group,
-                      });
-                    } catch (err) {
-                      await showAppAlert({
-                        body: err instanceof Error ? err.message : String(err),
-                        title: t("workspace.addPanelMenu.agentLaunchFailed"),
-                      });
-                    }
-                  }}
-                >
-                  <AgentIcon agentId={agentId} size={16} />
-                  <span>{entry?.label ?? agentId}</span>
-                </DropdownMenuItem>
-              );
-            })
-          ) : (
-            <DropdownMenuItem disabled>
-              {t("workspace.addPanelMenu.noAgentDetected")}
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <CommandInput
+              aria-label={t("workspace.addPanelMenu.searchPlaceholder")}
+              onValueChange={setQuery}
+              placeholder={t("workspace.addPanelMenu.searchPlaceholder")}
+              ref={inputRef}
+              value={query}
+            />
+            <CommandList
+              aria-labelledby={titleId}
+              className="max-h-[min(60vh,400px)]"
+              label={t("workspace.addPanelMenu.title")}
+              scrollbar="overlay"
+            >
+              {renderListBody()}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

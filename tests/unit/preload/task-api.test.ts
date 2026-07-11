@@ -54,4 +54,25 @@ describe("tasks preload API", () => {
       listener
     );
   });
+
+  it("forwards the target panel group when spawning a task", async () => {
+    ipcInvokeMock.mockResolvedValueOnce({
+      data: { runId: "run-1", status: "started" },
+      ok: true,
+      requestId: "request-2",
+    });
+
+    await tasksApi.spawn({
+      projectRootPath: "/repo",
+      targetGroupId: "group-source",
+      taskId: "package-script:test",
+    });
+
+    expect(ipcInvokeMock).toHaveBeenCalledWith(PIER.COMMAND_EXECUTE, {
+      projectRootPath: "/repo",
+      targetGroupId: "group-source",
+      taskId: "package-script:test",
+      type: "run.spawn",
+    });
+  });
 });

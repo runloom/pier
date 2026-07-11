@@ -202,3 +202,8 @@ export function registerActionContributions(
     actionRegistry.register(createActionFromContribution(contribution, runtime))
   );
 }
+
+/** Register an action whose identity is discovered at runtime rather than declared statically. */
+export function registerDynamicAction(action: Action): () => void {
+  return actionRegistry.register(action);
+}
