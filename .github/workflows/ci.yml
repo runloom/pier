@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,9 +23,46 @@ jobs:
           cache: pnpm
           node-version: 22
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm check:static
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
       - run: pnpm test:coverage
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+  check:
+    if: always()
+    needs: [static, coverage, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful quality jobs
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          STATIC_RESULT: ${{ needs.static.result }}
+        run: |
+          test "$STATIC_RESULT" = "success"
+          test "$COVERAGE_RESULT" = "success"
+          test "$BUILD_RESULT" = "success"
 
   e2e-macos:
     # Dedicated ephemeral GUI runner: Accessibility permission is pre-granted;
