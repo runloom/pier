@@ -4,13 +4,13 @@ export function terminalDebugStatusClass(
   status: TerminalDebugRouteStatus
 ): string {
   if (status === "ok") {
-    return "border-border border-l-4 border-l-success bg-card text-status-success-fg";
+    return "border-border border-l-4 border-l-status-success-border bg-card text-status-success-fg";
   }
   if (status === "warn") {
-    return "border-border border-l-4 border-l-warning bg-card text-status-warning-fg";
+    return "border-border border-l-4 border-l-status-warning-border bg-card text-status-warning-fg";
   }
   if (status === "bad") {
-    return "border-border border-l-4 border-l-destructive bg-card text-status-danger-fg";
+    return "border-border border-l-4 border-l-status-danger-border bg-card text-status-danger-fg";
   }
   return "border-border border-l-4 border-l-border bg-card text-muted-foreground";
 }

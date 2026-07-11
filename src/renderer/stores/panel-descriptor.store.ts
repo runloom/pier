@@ -31,7 +31,13 @@ export const usePanelDescriptorStore = create<PanelDescriptorState>((set) => ({
   descriptors: {},
   activeId: null,
   upsert: (id, descriptor) =>
-    set((s) => ({ descriptors: { ...s.descriptors, [id]: descriptor } })),
+    set((s) => {
+      const current = s.descriptors[id];
+      if (current && JSON.stringify(current) === JSON.stringify(descriptor)) {
+        return s;
+      }
+      return { descriptors: { ...s.descriptors, [id]: descriptor } };
+    }),
   remove: (id) =>
     set((s) => {
       if (!(id in s.descriptors)) {

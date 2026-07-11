@@ -10,11 +10,17 @@ export async function collectTaskInputs(
   const values: Record<string, string> = {};
   for (const input of inputs) {
     if (input.type === "promptString") {
-      // biome-ignore lint/suspicious/noAlert: command palette does not yet expose a text-input quick pick.
-      const value = window.prompt(
-        input.description ?? input.id,
-        input.default ?? ""
-      );
+      const value = await new Promise<string | null>((resolve) => {
+        useCommandPaletteController.getState().openQuickPick({
+          initialQuery: input.default ?? "",
+          items: [],
+          onAccept: () => undefined,
+          onAcceptQuery: resolve,
+          onDismiss: () => resolve(null),
+          placeholder: input.description ?? input.id,
+          title: input.description ?? input.id,
+        });
+      });
       if (value === null) {
         return null;
       }

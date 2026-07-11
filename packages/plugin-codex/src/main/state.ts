@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import writeFileAtomic from "write-file-atomic";
+import { z } from "zod/mini";
 
 /**
  * Plugin-local Codex account state store — persists non-sensitive metadata
@@ -11,12 +13,12 @@ export type AgentAccountProviderId = "codex";
 
 export interface CodexAccountRecord {
   createdAt: number;
-  email?: string;
+  email?: string | undefined;
   id: string;
-  lastAuthenticatedAt?: number;
-  planType?: string;
+  lastAuthenticatedAt?: number | undefined;
+  planType?: string | undefined;
   provider: AgentAccountProviderId;
-  providerAccountId?: string;
+  providerAccountId?: string | undefined;
   updatedAt: number;
 }
 
@@ -34,7 +36,38 @@ const DEFAULTS: CodexAccountsFileState = {
   schemaVersion: 1,
 };
 
+const nonEmptyStringSchema = z.string().check(z.minLength(1));
+
+const accountRecordSchema = z.strictObject({
+  createdAt: z.number(),
+  email: z.optional(z.string()),
+  id: nonEmptyStringSchema,
+  lastAuthenticatedAt: z.optional(z.number()),
+  planType: z.optional(z.string()),
+  provider: z.literal("codex"),
+  providerAccountId: z.optional(z.string()),
+  updatedAt: z.number(),
+});
+
+const accountsStateSchema = z.strictObject({
+  accounts: z.array(accountRecordSchema),
+  activeAccountId: z.nullable(nonEmptyStringSchema),
+  revision: z.int().check(z.nonnegative()),
+  schemaVersion: z.literal(1),
+});
+
+const dataSchemaMarkerSchema = z.strictObject({
+  schemas: z.strictObject({
+    "codex.accounts": z.strictObject({
+      updatedByPluginVersion: nonEmptyStringSchema,
+      version: z.literal(1),
+    }),
+  }),
+  version: z.literal(1),
+});
+
 export interface CodexAccountsStateStore {
+  ensureSchemaMarker(): Promise<void>;
   flush(): Promise<void>;
   get(): CodexAccountsFileState;
   init(): Promise<CodexAccountsFileState>;
@@ -44,57 +77,77 @@ export interface CodexAccountsStateStore {
 }
 
 export function createCodexAccountsStateStore(
-  filePath: string
+  filePath: string,
+  pluginVersion = "0.0.0"
 ): CodexAccountsStateStore {
   let state: CodexAccountsFileState = DEFAULTS;
   let dirty = false;
   let flushInFlight: Promise<void> | null = null;
+  const markerPath = join(dirname(filePath), ".pier-plugin-data-schemas.json");
+
+  async function persistMarker(): Promise<void> {
+    const marker = dataSchemaMarkerSchema.parse({
+      schemas: {
+        "codex.accounts": {
+          updatedByPluginVersion: pluginVersion,
+          version: 1,
+        },
+      },
+      version: 1,
+    });
+    await mkdir(dirname(markerPath), { recursive: true });
+    await writeFileAtomic(markerPath, JSON.stringify(marker), { mode: 0o600 });
+  }
 
   async function persist(): Promise<void> {
+    const snapshot = state;
     await mkdir(dirname(filePath), { recursive: true });
-    const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-    await writeFile(tmp, JSON.stringify(state));
-    await rename(tmp, filePath);
-    dirty = false;
+    const validated = accountsStateSchema.parse(snapshot);
+    await writeFileAtomic(filePath, JSON.stringify(validated), { mode: 0o600 });
+    await persistMarker();
+    dirty = state !== snapshot;
   }
 
   return {
+    ensureSchemaMarker: persistMarker,
     async flush(): Promise<void> {
-      if (!dirty) {
-        return;
-      }
-      if (flushInFlight) {
-        await flushInFlight;
-        return;
-      }
-      flushInFlight = persist();
-      try {
-        await flushInFlight;
-      } finally {
-        flushInFlight = null;
+      while (dirty) {
+        if (flushInFlight) {
+          await flushInFlight;
+          continue;
+        }
+        flushInFlight = persist();
+        try {
+          await flushInFlight;
+        } finally {
+          flushInFlight = null;
+        }
       }
     },
     get: () => state,
     async init(): Promise<CodexAccountsFileState> {
       if (existsSync(filePath)) {
-        try {
-          const raw = await readFile(filePath, "utf8");
-          const parsed = JSON.parse(raw) as Partial<CodexAccountsFileState>;
-          if (
-            parsed &&
-            typeof parsed === "object" &&
-            Array.isArray(parsed.accounts)
-          ) {
-            state = {
-              accounts: parsed.accounts as CodexAccountRecord[],
-              activeAccountId: parsed.activeAccountId ?? null,
-              revision: parsed.revision ?? 0,
-              schemaVersion: parsed.schemaVersion ?? 1,
-            };
-          }
-        } catch {
-          state = DEFAULTS;
+        const raw = await readFile(filePath, "utf8");
+        state = accountsStateSchema.parse(JSON.parse(raw));
+      }
+      if (
+        state.activeAccountId !== null &&
+        !state.accounts.some((account) => account.id === state.activeAccountId)
+      ) {
+        throw new Error(
+          "active Codex account is missing from accounts metadata"
+        );
+      }
+      const ids = new Set<string>();
+      for (const account of state.accounts) {
+        if (ids.has(account.id)) {
+          throw new Error(`duplicate Codex account id: ${account.id}`);
         }
+        ids.add(account.id);
+      }
+      if (existsSync(markerPath)) {
+        const markerRaw = await readFile(markerPath, "utf8");
+        dataSchemaMarkerSchema.parse(JSON.parse(markerRaw));
       }
       return state;
     },

@@ -9,12 +9,14 @@ import {
 } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { dismissAllTooltips, TooltipProvider } from "@pier/ui/tooltip.tsx";
+import { useCommittedValue } from "@/hooks/use-committed-ref.ts";
 import {
   getPluginPanelRevision,
   setPluginPanelCloser,
   setPluginPanelTitleUpdater,
   subscribePluginPanelRegistry,
 } from "@/lib/plugins/plugin-panel-registry.ts";
+import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import {
@@ -166,13 +168,14 @@ export function WorkspaceHost() {
     getPluginPanelRevision,
     getPluginPanelRevision
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: panelRevision 是 useSyncExternalStore 暴露的版本号,用作 refresh trigger — getPanelComponents() 读全局可变插件 panel 注册表,需在 revision 变化时重算。
-  const panelComponents = useMemo(() => getPanelComponents(), [panelRevision]);
+  const panelComponents = useMemo(
+    () => readVersionedSnapshot(panelRevision, getPanelComponents),
+    [panelRevision]
+  );
   // 给 handleReady 闭包用:sanitize 需要"当前已注册的 component 名集合",
   // 但 handleReady 是稳定 useCallback,不应把 panelComponents 加进 deps
   // (否则 dockview re-init); ref 让 onReady 时读到最新值。
-  const panelComponentsRef = useRef(panelComponents);
-  panelComponentsRef.current = panelComponents;
+  const readPanelComponents = useCommittedValue(panelComponents);
 
   useEffect(() => {
     setDockviewTabRevealRoot(rootRef.current);
@@ -422,7 +425,7 @@ export function WorkspaceHost() {
             // 把用户的终端等也丢了。先 sanitize 保住其它 panel。
             const sanitized = sanitizeSavedLayout(
               saved,
-              new Set(Object.keys(panelComponentsRef.current))
+              new Set(Object.keys(readPanelComponents()))
             );
             if (sanitized) {
               event.api.fromJSON(sanitized);
@@ -470,7 +473,7 @@ export function WorkspaceHost() {
         window.removeEventListener("beforeunload", handleBeforeUnload);
       };
     },
-    [setApi, setWorkspaceHasMaximizedGroup]
+    [readPanelComponents, setApi, setWorkspaceHasMaximizedGroup]
   );
 
   return (

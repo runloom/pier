@@ -116,8 +116,8 @@ export function readRenameView(model: object): RenameViewState | null {
 
 /**
  * 从 items + directoryStates 构造 FileTreeRefs 的派生索引(decorations /
- * loadStates / itemsByPath / loadableDirectoryPaths)。回调字段留 undefined,
- * 由组件在每次 render 直接赋值最新 props。
+ * loadStates / itemsByPath / loadableDirectoryPaths)。回调字段留 undefined，
+ * 由组件在 layout effect 提交完整快照，避免并发 render 改写已提交对象。
  */
 export function buildFileTreeRefs(
   items: readonly PierFileTreeItem[],

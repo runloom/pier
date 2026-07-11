@@ -4,6 +4,7 @@ export type AgentAccountProviderId = "codex";
 
 /** provider 内部接口. */
 export interface AgentAccountProvider {
+  deleteCredential?(accountHomeDir: string): Promise<void>;
   fetchUsage(
     accountHomeDir: string | undefined,
     signal: AbortSignal
@@ -11,6 +12,8 @@ export interface AgentAccountProvider {
   readonly id: AgentAccountProviderId;
   login(homeDir: string, signal: AbortSignal): Promise<void>;
   materialize(accountHomeDir: string): Promise<void>;
+  moveCredential?(fromHomeDir: string, toHomeDir: string): Promise<void>;
+  readCurrentIdentity(): Promise<AccountIdentity | null>;
   readIdentity(homeDir: string): Promise<AccountIdentity | null>;
   syncBack(
     accountHomeDir: string,

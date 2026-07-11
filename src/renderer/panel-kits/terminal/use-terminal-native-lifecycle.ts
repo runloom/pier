@@ -8,7 +8,7 @@ import type {
   CreateTerminalResult,
 } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 import {
   confirmTerminalLaunch,
   rejectTerminalLaunch,
@@ -86,8 +86,10 @@ export function useTerminalNativeLifecycle({
 }: UseTerminalNativeLifecycleArgs): void {
   const monoFontFamilyRef = useRef(monoFontFamily);
   const effectiveMonoFontSizeRef = useRef(effectiveMonoFontSize);
-  monoFontFamilyRef.current = monoFontFamily;
-  effectiveMonoFontSizeRef.current = effectiveMonoFontSize;
+  useLayoutEffect(() => {
+    monoFontFamilyRef.current = monoFontFamily;
+    effectiveMonoFontSizeRef.current = effectiveMonoFontSize;
+  }, [effectiveMonoFontSize, monoFontFamily]);
   const lifecycleVersionRef = useRef(0);
 
   useEffect(() => {

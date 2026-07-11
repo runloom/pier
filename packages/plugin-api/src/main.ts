@@ -25,11 +25,17 @@ export interface MainPluginContext {
     id: string;
     version: string;
   };
+  processEnv: Readonly<Record<string, string | undefined>>;
   rpc: {
     handle(
       method: string,
       handler: (payload: unknown) => Promise<unknown>
     ): void;
+  };
+  secrets: {
+    delete(key: string): Promise<void>;
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string): Promise<void>;
   };
 }
 

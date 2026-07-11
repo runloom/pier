@@ -18,7 +18,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutStateView } from "./terminal-debug-layout-view.tsx";
 import {
   type TerminalDebugRouteStatus,
@@ -391,20 +391,17 @@ export function TerminalDebugWindow({
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<DebugView>("layout");
 
-  const refresh = useMemo(
-    () => async () => {
-      try {
-        const next = await window.pier.terminal.debugSnapshot({
-          targetBrowserWindowId,
-        });
-        setSnapshot(next);
-        setError(next.native.error ?? null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [targetBrowserWindowId]
-  );
+  const refresh = useCallback(async () => {
+    try {
+      const next = await window.pier.terminal.debugSnapshot({
+        targetBrowserWindowId,
+      });
+      setSnapshot(next);
+      setError(next.native.error ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [targetBrowserWindowId]);
 
   useEffect(() => {
     refresh().catch(() => undefined);

@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
@@ -390,6 +391,28 @@ describe("PluginConfigurationSection", () => {
       "pier.demo.name",
       "committed-name"
     );
+  });
+
+  it("外部 effective 更新后卸载不会重复提交已同步值", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    const { unmount } = render(
+      <PluginConfigurationSection pluginId="pier.demo" />
+    );
+
+    act(() => {
+      usePluginSettingsStore.setState({
+        error: null,
+        initialized: true,
+        values: { "pier.demo.name": "external-name" },
+      });
+    });
+    await screen.findByDisplayValue("external-name");
+    unmount();
+
+    expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
   });
 
   it("string 控件 blur 提交原始值", async () => {

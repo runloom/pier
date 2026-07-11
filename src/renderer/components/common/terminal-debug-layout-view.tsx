@@ -89,28 +89,15 @@ function panelState(
 
 function stateClass(state: LayoutState): string {
   if (state === "rendered") {
-    return "border-success bg-card text-status-success-fg";
+    return "border-status-success-border bg-card text-status-success-fg";
   }
   if (state === "creating") {
-    return "border-info bg-card text-status-info-fg";
+    return "border-status-info-border bg-card text-status-info-fg";
   }
   if (state === "missing") {
-    return "border-destructive bg-status-danger-bg text-status-danger-fg";
+    return "border-status-danger-border bg-status-danger-bg text-status-danger-fg";
   }
   return "border-border bg-muted text-muted-foreground";
-}
-
-function stateChipClass(state: LayoutState): string {
-  if (state === "rendered") {
-    return "text-status-success-fg";
-  }
-  if (state === "creating") {
-    return "text-status-info-fg";
-  }
-  if (state === "missing") {
-    return "text-status-danger-fg";
-  }
-  return "text-muted-foreground";
 }
 
 function stateDotClass(state: LayoutState): string {
@@ -245,7 +232,7 @@ function OverlayBox({
       style={boxStyle(rect.frame, bounds)}
       title="web overlay"
     >
-      <span className="m-0.5 inline-flex max-w-full items-center gap-1 bg-done px-1 py-0.5 font-medium text-[10px] text-background">
+      <span className="m-0.5 inline-flex max-w-full items-center gap-1 bg-done px-1 py-0.5 font-medium text-[10px] text-status-solid-foreground">
         <span className="truncate">{shortId(rect.id)}</span>
         <span className="shrink-0 opacity-80">
           {Math.round(rect.frame.width)}×{Math.round(rect.frame.height)}
@@ -373,9 +360,7 @@ export function LayoutStateView({
                     <span className="min-w-0 flex-1 truncate font-semibold text-xs">
                       {shortId(panel.panelId)}
                     </span>
-                    <span
-                      className={`shrink-0 font-medium text-[10px] uppercase ${stateChipClass(state)}`}
-                    >
+                    <span className="shrink-0 font-medium text-[10px] text-background uppercase">
                       {state}
                     </span>
                   </div>

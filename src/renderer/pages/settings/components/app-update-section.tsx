@@ -8,7 +8,8 @@ import {
 } from "@pier/ui/card.tsx";
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import { Download, RefreshCw, RotateCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useCommittedValue } from "@/hooks/use-committed-ref.ts";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
@@ -27,8 +28,7 @@ function appUpdateApi(): AppUpdateApi | undefined {
 
 export function AppUpdateSection() {
   const t = useT();
-  const tRef = useRef(t);
-  tRef.current = t;
+  const readT = useCommittedValue(t);
   const [snapshot, setSnapshot] = useState<AppUpdateSnapshot | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -40,14 +40,14 @@ export function AppUpdateSection() {
       .then(setSnapshot)
       .catch((err: unknown) => {
         showAppAlert({
-          title: tRef.current("settings.appUpdate.toast.statusFailed"),
+          title: readT()("settings.appUpdate.toast.statusFailed"),
           body: err instanceof Error ? err.message : String(err),
         });
       });
     return () => {
       unsubscribe?.();
     };
-  }, []);
+  }, [readT]);
 
   async function run(
     action: () => Promise<AppUpdateSnapshot>,

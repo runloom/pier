@@ -3,11 +3,12 @@ import type {
   MainPluginContext,
   MainPluginModule,
 } from "@pier/plugin-api/main";
-import type {
-  AddAccountPayload,
-  RefreshUsagePayload,
-  RemoveAccountPayload,
-  SelectAccountPayload,
+import {
+  addAccountPayloadSchema,
+  emptyRpcPayloadSchema,
+  refreshUsagePayloadSchema,
+  removeAccountPayloadSchema,
+  selectAccountPayloadSchema,
 } from "../shared/accounts.ts";
 import { createCodexAccountsService } from "./accounts-service.ts";
 import { createCodexProvider } from "./codex-provider.ts";
@@ -18,19 +19,19 @@ interface CodexPrivateMainPluginContext extends MainPluginContext {
     readonly legacyAgentAccountsBaseDir: string;
     readonly legacyAgentAccountsStateFile: string;
     readLegacyAuthJson(accountId: string): Promise<string | null>;
-    readLegacySecretsStoreEntry(key: string): Promise<string | null>;
     readLegacyStateFile(): Promise<string | null>;
   };
 }
 
 export const plugin: MainPluginModule = {
   id: "pier.codex",
-  activate(context: MainPluginContext): () => void {
+  async activate(context: MainPluginContext): Promise<() => void> {
     const codexContext = context as CodexPrivateMainPluginContext;
     const stateStore = createCodexAccountsStateStore(
-      join(context.paths.workDir, "accounts.json")
+      join(context.paths.workDir, "accounts.json"),
+      context.plugin.version
     );
-    const provider = createCodexProvider();
+    const provider = createCodexProvider({ credentials: context.secrets });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
     const service = createCodexAccountsService({
       managedBaseDir,
@@ -42,29 +43,31 @@ export const plugin: MainPluginModule = {
       onChanged: (snapshot) =>
         context.events.emit("accounts.changed", snapshot),
     });
-    service.init().catch((err: unknown) => {
-      context.logger.error("[pier.codex] service init failed", err);
-    });
+    await service.init();
 
-    context.rpc.handle("accounts.snapshot", async () => service.snapshot());
+    context.rpc.handle("accounts.snapshot", async (payload) => {
+      emptyRpcPayloadSchema.parse(payload);
+      return service.snapshot();
+    });
     context.rpc.handle("accounts.add", async (payload) => {
-      await service.add((payload ?? {}) as AddAccountPayload);
+      await service.add(addAccountPayloadSchema.parse(payload));
       return null;
     });
-    context.rpc.handle("accounts.cancelLogin", async () => {
+    context.rpc.handle("accounts.cancelLogin", async (payload) => {
+      emptyRpcPayloadSchema.parse(payload);
       await service.cancelLogin();
       return null;
     });
     context.rpc.handle("accounts.select", async (payload) => {
-      await service.select(payload as SelectAccountPayload);
+      await service.select(selectAccountPayloadSchema.parse(payload));
       return null;
     });
     context.rpc.handle("accounts.remove", async (payload) => {
-      await service.remove(payload as RemoveAccountPayload);
+      await service.remove(removeAccountPayloadSchema.parse(payload));
       return null;
     });
     context.rpc.handle("accounts.refreshUsage", async (payload) => {
-      const request = (payload ?? {}) as RefreshUsagePayload;
+      const request = refreshUsagePayloadSchema.parse(payload ?? {});
       await service.refreshUsage({
         ...(request.accountId ? { accountId: request.accountId } : {}),
         force: true,

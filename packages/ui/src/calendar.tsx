@@ -1,7 +1,3 @@
-// @ts-nocheck — vendored shadcn radix-nova: spread props 与 tsconfig
-// exactOptionalPropertyTypes:true 不兼容 (T | undefined 不可赋给 T)。
-// 升级走 `pnpm dlx shadcn@latest add <name> --overwrite` 重 emit, 该 pragma 需重打。
-
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -9,13 +5,51 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import {
+  type CustomComponents,
   type DayButton,
   DayPicker,
   getDefaultClassNames,
-  type Locale,
 } from "react-day-picker";
 import { Button, buttonVariants } from "./button.tsx";
 import { cn } from "./utils.ts";
+
+const CalendarRoot: CustomComponents["Root"] = ({
+  className,
+  rootRef,
+  ...props
+}) => (
+  <div
+    className={cn(className)}
+    data-slot="calendar"
+    ref={rootRef}
+    {...props}
+  />
+);
+
+const CalendarChevron: CustomComponents["Chevron"] = ({
+  className,
+  orientation,
+  ...props
+}) => {
+  if (orientation === "left") {
+    return <ChevronLeftIcon className={cn("size-4", className)} {...props} />;
+  }
+  if (orientation === "right") {
+    return <ChevronRightIcon className={cn("size-4", className)} {...props} />;
+  }
+  return <ChevronDownIcon className={cn("size-4", className)} {...props} />;
+};
+
+const CalendarWeekNumber: CustomComponents["WeekNumber"] = ({
+  children,
+  ...props
+}) => (
+  <td {...props}>
+    <div className="flex size-(--cell-size) items-center justify-center text-center">
+      {children}
+    </div>
+  </td>
+);
 
 function Calendar({
   className,
@@ -132,44 +166,10 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Root: ({ className, rootRef, ...props }) => (
-          <div
-            className={cn(className)}
-            data-slot="calendar"
-            ref={rootRef}
-            {...props}
-          />
-        ),
-        Chevron: ({ className, orientation, ...props }) => {
-          if (orientation === "left") {
-            return (
-              <ChevronLeftIcon className={cn("size-4", className)} {...props} />
-            );
-          }
-
-          if (orientation === "right") {
-            return (
-              <ChevronRightIcon
-                className={cn("size-4", className)}
-                {...props}
-              />
-            );
-          }
-
-          return (
-            <ChevronDownIcon className={cn("size-4", className)} {...props} />
-          );
-        },
-        DayButton: ({ ...props }) => (
-          <CalendarDayButton locale={locale} {...props} />
-        ),
-        WeekNumber: ({ children, ...props }) => (
-          <td {...props}>
-            <div className="flex size-(--cell-size) items-center justify-center text-center">
-              {children}
-            </div>
-          </td>
-        ),
+        Chevron: CalendarChevron,
+        DayButton: CalendarDayButton,
+        Root: CalendarRoot,
+        WeekNumber: CalendarWeekNumber,
         ...components,
       }}
       formatters={{
@@ -177,7 +177,7 @@ function Calendar({
           date.toLocaleString(locale?.code, { month: "short" }),
         ...formatters,
       }}
-      locale={locale}
+      {...(locale === undefined ? {} : { locale })}
       showOutsideDays={showOutsideDays}
       {...props}
     />
@@ -188,9 +188,8 @@ function CalendarDayButton({
   className,
   day,
   modifiers,
-  locale,
   ...props
-}: React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> }) {
+}: React.ComponentProps<typeof DayButton>) {
   const defaultClassNames = getDefaultClassNames();
 
   const ref = React.useRef<HTMLButtonElement>(null);
@@ -207,7 +206,7 @@ function CalendarDayButton({
         defaultClassNames.day,
         className
       )}
-      data-day={day.date.toLocaleDateString(locale?.code)}
+      data-day={day.date.toISOString().slice(0, 10)}
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       data-range-start={modifiers.range_start}

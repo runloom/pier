@@ -5,6 +5,10 @@ import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import {
+  resetAppDialogForTests,
+  useAppDialogStore,
+} from "@/stores/app-dialog.store.ts";
 
 class TestResizeObserver {
   observe = vi.fn();
@@ -19,6 +23,7 @@ describe("CommandPalette quick pick rows", () => {
     await initI18n();
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     Element.prototype.scrollIntoView = vi.fn();
+    resetAppDialogForTests();
     useCommandPaletteController.setState({
       mode: "commands",
       open: false,
@@ -36,6 +41,79 @@ describe("CommandPalette quick pick rows", () => {
     });
   });
 
+  it("submits a text-input quick pick without using a browser prompt", async () => {
+    const onAcceptQuery = vi.fn();
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        initialQuery: "default value",
+        items: [],
+        onAccept: vi.fn(),
+        onAcceptQuery,
+        title: "Task input",
+      });
+    });
+
+    const input = await screen.findByPlaceholderText("Task input");
+    expect(input).toHaveValue("default value");
+    fireEvent.change(input, { target: { value: "resolved value" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(onAcceptQuery).toHaveBeenCalledWith("resolved value");
+      expect(useCommandPaletteController.getState().open).toBe(false);
+    });
+  });
+
+  it("does not submit text input while an IME composition is active", async () => {
+    const onAcceptQuery = vi.fn();
+    render(<CommandPalette />);
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        items: [],
+        onAccept: vi.fn(),
+        onAcceptQuery,
+        title: "Task input",
+      });
+    });
+
+    const input = await screen.findByPlaceholderText("Task input");
+    fireEvent.keyDown(input, { isComposing: true, key: "Enter" });
+    expect(onAcceptQuery).not.toHaveBeenCalled();
+    expect(useCommandPaletteController.getState().open).toBe(true);
+  });
+
+  it("contains synchronous text-input callback failures", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<CommandPalette />);
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        items: [],
+        onAccept: vi.fn(),
+        onAcceptQuery: () => {
+          throw new Error("input callback failed");
+        },
+        title: "Task input",
+      });
+    });
+
+    fireEvent.keyDown(await screen.findByPlaceholderText("Task input"), {
+      key: "Enter",
+    });
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[command-palette] onAcceptQuery threw:",
+        expect.objectContaining({ message: "input callback failed" })
+      );
+      expect(useAppDialogStore.getState().current).toMatchObject({
+        body: "input callback failed",
+        kind: "alert",
+        title: "Unable to Submit Input",
+      });
+    });
+  });
+
   afterEach(() => {
     useCommandPaletteController.setState({
       mode: "commands",
@@ -45,6 +123,7 @@ describe("CommandPalette quick pick rows", () => {
       stack: [],
     });
     vi.restoreAllMocks();
+    resetAppDialogForTests();
     vi.unstubAllGlobals();
     if (originalScrollIntoView) {
       Element.prototype.scrollIntoView = originalScrollIntoView;

@@ -17,6 +17,7 @@ export const pluginPermissions = {
   "preferences:write": "Change preferences",
   "profile:read": "Read profiles",
   "secret:read": "Read secrets",
+  "secret:write": "Write secrets",
   "terminal:control": "Control terminals",
   "terminal:read": "Read terminal state",
   "transcript:read": "Read transcripts",

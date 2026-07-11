@@ -98,11 +98,11 @@ export function ShortcutInput({
           >
             {keyParts.length > 0 ? (
               <KbdGroup className="min-w-0">
-                {keyParts.map((part, index) => (
+                {keyParts.map((part) => (
                   <Kbd
                     className="h-5 min-w-5 rounded-md border border-border bg-muted/70 px-2 text-xs shadow-xs"
                     data-testid="shortcut-input-key"
-                    key={`${part}-${index}`}
+                    key={part}
                   >
                     {part}
                   </Kbd>

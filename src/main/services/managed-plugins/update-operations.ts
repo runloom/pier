@@ -3,7 +3,11 @@ import type { ManagedPluginOperationResult } from "@shared/contracts/managed-plu
 import type { OperationsContext } from "./install-operations.ts";
 import { promoteArchiveToInstalled } from "./install-runtime.ts";
 import { resolveOfficialUpdateSource } from "./install-source-resolver.ts";
-import { validateManagedPluginPackage } from "./package-validation.ts";
+import {
+  removeNewCandidate,
+  validateInstalledCandidate,
+} from "./installed-candidate-validation.ts";
+import { computePackageContentHash } from "./package-content-hash.ts";
 
 export async function performUpdate(
   ctx: OperationsContext,
@@ -45,13 +49,31 @@ export async function performUpdate(
     };
   }
   const source = resolved.source;
+  const candidateAlreadyInstalled = Boolean(
+    existing.installedVersions[source.version]
+  );
   if (source.version === existing.activeVersion) {
-    return {
-      ok: true as const,
-      pluginId: id,
-      requiresRestart: false,
-      version: source.version,
-    };
+    try {
+      const expectedContentHash =
+        existing.installedVersions[source.version]?.contentHash;
+      await validateInstalledCandidate({
+        ...(expectedContentHash ? { expectedContentHash } : {}),
+        id,
+        paths: ctx.paths,
+        pierVersion: ctx.pierVersion,
+        version: source.version,
+      });
+      return {
+        ok: true as const,
+        pluginId: id,
+        requiresRestart: false,
+        version: source.version,
+      };
+    } catch {
+      // A verified archive is already staged by resolveOfficialUpdateSource;
+      // continue through the normal overwrite/validation transaction to heal
+      // the installed candidate instead of reporting a false no-op success.
+    }
   }
   try {
     await promoteArchiveToInstalled(
@@ -63,7 +85,7 @@ export async function performUpdate(
       {
         archivePath: source.archivePath,
         id,
-        overwrite: ctx.isDevRuntime,
+        overwrite: true,
         sha256: source.sha256,
         size: source.size,
         version: source.version,
@@ -87,20 +109,42 @@ export async function performUpdate(
       ok: false as const,
     };
   }
-  let hotReload = false;
+  let hotReload: boolean;
+  let contentHash: string;
   try {
-    const validated = await validateManagedPluginPackage({
-      archivePath: null,
-      expectedId: id,
-      expectedSha256: null,
-      expectedSize: null,
-      expectedVersion: source.version,
-      packageDir: join(ctx.paths.installedDir, id, source.version),
+    const manifest = await validateInstalledCandidate({
+      id,
+      paths: ctx.paths,
       pierVersion: ctx.pierVersion,
+      version: source.version,
     });
-    hotReload = validated.manifest.runtime?.reloadPolicy === "hot";
-  } catch {
-    hotReload = false;
+    hotReload = manifest.runtime?.reloadPolicy === "hot";
+    contentHash = await computePackageContentHash(
+      join(ctx.paths.installedDir, id, source.version)
+    );
+  } catch (error) {
+    await removeNewCandidate(
+      ctx.paths,
+      id,
+      source.version,
+      candidateAlreadyInstalled
+    );
+    await ctx.appendOperationLog({
+      actorKind: "desktop-renderer",
+      fromVersion: existing.activeVersion,
+      operation: "update",
+      pluginId: id,
+      result: "failed",
+      timestamp: ctx.now(),
+      toVersion: source.version,
+    });
+    return {
+      error: {
+        code: "invalid_state" as const,
+        message: error instanceof Error ? error.message : String(error),
+      },
+      ok: false as const,
+    };
   }
   ctx.store.mutate((s) => ({
     ...s,
@@ -121,6 +165,7 @@ export async function performUpdate(
         installedVersions: {
           ...existing.installedVersions,
           [source.version]: {
+            contentHash,
             installedAt: ctx.now(),
             packageUrl: source.packageUrl,
             sha256: source.sha256,

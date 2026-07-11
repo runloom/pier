@@ -70,6 +70,7 @@ export function windowFromWebContents(
 export function registerTerminalIpc(
   ipcMain: IpcMain,
   deps: {
+    loadNativeAddon?: () => ReturnType<typeof loadNativeAddon>;
     processEnvironment?: ProcessEnvironmentService | undefined;
     recordAgentLaunch?:
       | ((agentId: AgentKind) => Promise<unknown> | unknown)
@@ -79,7 +80,8 @@ export function registerTerminalIpc(
 ): void {
   const processEnvironment =
     deps.processEnvironment ?? createProcessEnvironmentService();
-  const { addon, error: loadError } = loadNativeAddon();
+  const loadAddon = deps.loadNativeAddon ?? loadNativeAddon;
+  const { addon, error: loadError } = loadAddon();
   const taskOutputBindings =
     addon && deps.taskService
       ? createTaskOutputTerminalBindings({

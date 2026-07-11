@@ -31,7 +31,6 @@ import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerNotificationIpc } from "./ipc/notification.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
-import { registerSecretsIpc } from "./ipc/secrets.ts";
 import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
@@ -390,7 +389,6 @@ if (gotTheLock) {
       ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
         appQuitRendererTransport.handleDecision(payload);
       });
-      registerSecretsIpc(ipcMain, appCore.services.secrets);
       ipcMain.handle(PIER.ENVIRONMENT_PICK_PROJECT_DIRECTORY, async (event) => {
         const focusedWindow =
           BrowserWindow.fromWebContents(event.sender) ??

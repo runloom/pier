@@ -77,8 +77,7 @@ function WarningGlyph(): ReactElement {
         viewBox="0 0 18 18"
       >
         <path d="M8.05 2.6c.4-.72 1.5-.72 1.9 0l6.2 11.05c.4.72-.1 1.6-.95 1.6H2.8c-.85 0-1.35-.88-.95-1.6L8.05 2.6Z" />
-        {/* glyph 挖空色跟 toast 表面走，亮主题深底 / 暗主题浅底 */}
-        <g fill="var(--toast-surface)">
+        <g fill="var(--status-solid-foreground)">
           <rect height="5" rx="0.8" width="1.6" x="8.2" y="6.2" />
           <circle cx="9" cy="13.1" r="0.95" />
         </g>
@@ -97,18 +96,18 @@ const Toaster = ({ ...props }: ToasterProps) => {
       gap={10}
       icons={{
         success: (
-          <StatusGlyph className="bg-[color:var(--success)] text-[color:var(--toast-surface)]">
+          <StatusGlyph className="bg-[color:var(--success)] text-status-solid-foreground">
             <CheckGlyph />
           </StatusGlyph>
         ),
         info: (
-          <StatusGlyph className="bg-[color:var(--info)] text-[color:var(--toast-surface)]">
+          <StatusGlyph className="bg-[color:var(--info)] text-status-solid-foreground">
             <InfoGlyph />
           </StatusGlyph>
         ),
         warning: <WarningGlyph />,
         error: (
-          <StatusGlyph className="bg-[color:var(--destructive)] text-[color:var(--toast-surface)]">
+          <StatusGlyph className="bg-[color:var(--destructive)] text-status-solid-foreground">
             <BangGlyph />
           </StatusGlyph>
         ),

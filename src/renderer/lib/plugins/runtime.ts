@@ -1,7 +1,13 @@
 import type { RendererPluginModule } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { closeOverlaysForPlugin } from "../../stores/plugin-overlay.store.ts";
+import { activateBuiltinRendererPlugin } from "./builtin-activation.ts";
 import { BUILTIN_RENDERER_PLUGIN_MODULES } from "./builtin-catalog.ts";
+import { queueExternalActivation } from "./external-activation-queue.ts";
+import {
+  defaultExternalActivationReporter,
+  type ExternalActivationReporter,
+  safelyReportExternalActivation,
+} from "./external-activation-reporter.ts";
 import { createExternalRendererActivationScope } from "./external-activation-scope.ts";
 import { loadExternalModuleWithTimeout } from "./external-module-load.ts";
 import { ExternalPanelPlaceholderRegistry } from "./external-panel-placeholders.tsx";
@@ -11,8 +17,6 @@ import {
 } from "./external-plugin-context.ts";
 import { loadExternalRendererModule } from "./external-renderer-loader.ts";
 import { ExternalTransitionGate } from "./external-transition-gate.ts";
-import { createRendererPluginContext } from "./host-context.ts";
-import { clearHostGroupContentForPlugin } from "./host-group-content-context.tsx";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
 import type { RendererPluginSuspendReason } from "./plugin-lifecycle-types.ts";
 import {
@@ -45,6 +49,7 @@ export class RendererPluginRuntime {
   private readonly rpcBridge: RendererPluginRpcBridge;
   private readonly externalLoader: typeof loadExternalRendererModule;
   private readonly externalLoadTimeoutMs: number;
+  private readonly reportExternalActivation: ExternalActivationReporter;
   private readonly externalPanelPlaceholders =
     new ExternalPanelPlaceholderRegistry();
   private readonly externalDiagnosticPluginIds = new Set<string>();
@@ -67,6 +72,7 @@ export class RendererPluginRuntime {
     options: {
       externalLoadTimeoutMs?: number;
       loadExternalModule?: typeof loadExternalRendererModule;
+      reportExternalActivation?: ExternalActivationReporter;
     } = {}
   ) {
     this.modules = indexRendererPluginModules(modules);
@@ -74,6 +80,8 @@ export class RendererPluginRuntime {
     this.externalLoader =
       options.loadExternalModule ?? loadExternalRendererModule;
     this.externalLoadTimeoutMs = options.externalLoadTimeoutMs ?? 10_000;
+    this.reportExternalActivation =
+      options.reportExternalActivation ?? defaultExternalActivationReporter;
   }
   diagnostics(): {
     lastTransitionError: Error | null;
@@ -145,20 +153,6 @@ export class RendererPluginRuntime {
     }
     return coreReady;
   }
-  private activateBuiltin(entry: PluginRegistryEntry): (() => void) | null {
-    const module = this.modules.get(entry.manifest.id);
-    if (!module) return null;
-    const context = createRendererPluginContext(entry);
-    const dispose = module.activate(context);
-    return () => {
-      try {
-        dispose();
-      } finally {
-        clearHostGroupContentForPlugin(entry.manifest.id);
-        closeOverlaysForPlugin(entry.manifest.id);
-      }
-    };
-  }
   startExternalActivations(): void {
     if (this.disposed) {
       return;
@@ -174,7 +168,12 @@ export class RendererPluginRuntime {
       ) {
         continue;
       }
-      this.startExternalActivation(entry);
+      queueExternalActivation({
+        activate: (signature, token) =>
+          this.activateExternalAttempt(entry, signature, token),
+        entry,
+        pending: this.pendingExternal,
+      });
     }
   }
   prepareExternalTransition(
@@ -275,6 +274,11 @@ export class RendererPluginRuntime {
         this.externalPanelPlaceholders.sync(this.desired);
         return;
       }
+      await safelyReportExternalActivation(this.reportExternalActivation, {
+        ok: true,
+        pluginId,
+        version: entry.manifest.version,
+      });
       this.active.set(pluginId, {
         dispose: () => scope.dispose(),
         kind: "external",
@@ -307,6 +311,12 @@ export class RendererPluginRuntime {
       }
       const message =
         failure instanceof Error ? failure.message : String(failure);
+      await safelyReportExternalActivation(this.reportExternalActivation, {
+        error: message,
+        ok: false,
+        pluginId,
+        version: entry.manifest.version,
+      });
       this.externalDiagnosticPluginIds.add(pluginId);
       reportRendererPluginRuntimeDiagnostic({
         message,
@@ -419,7 +429,10 @@ export class RendererPluginRuntime {
         continue;
       }
       try {
-        const dispose = this.activateBuiltin(entry);
+        const module = this.modules.get(entry.manifest.id);
+        const dispose = module
+          ? activateBuiltinRendererPlugin(module, entry)
+          : null;
         if (dispose) {
           if (!this.isCurrentRefresh(generation)) {
             dispose();
@@ -460,23 +473,6 @@ export class RendererPluginRuntime {
       desired?.runtime.kind === "external" &&
       runtimeEntrySignature(desired) === signature
     );
-  }
-
-  private startExternalActivation(entry: PluginRegistryEntry): void {
-    const pluginId = entry.manifest.id;
-    const signature = runtimeEntrySignature(entry);
-    const token = Symbol(pluginId);
-    this.pendingExternal.set(pluginId, {
-      abortController: new AbortController(),
-      signature,
-      token,
-    });
-    this.activateExternalAttempt(entry, signature, token).catch((error) => {
-      console.error(
-        `[renderer-plugin-runtime] external ${pluginId} attempt failed:`,
-        error
-      );
-    });
   }
 
   private async suspendAndDispose(

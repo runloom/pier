@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   ManagedPluginOperationResult,
@@ -7,8 +6,12 @@ import type {
 import type { ManagedPluginIndexStore } from "./index-state.ts";
 import { promoteArchiveToInstalled } from "./install-runtime.ts";
 import { resolveInstallSource } from "./install-source-resolver.ts";
+import {
+  removeNewCandidate,
+  validateInstalledCandidate,
+} from "./installed-candidate-validation.ts";
 import type { ManagedPluginOperationLogRecord } from "./operation-log.ts";
-import { validateManagedPluginPackage } from "./package-validation.ts";
+import { computePackageContentHash } from "./package-content-hash.ts";
 import type { ManagedPluginPaths } from "./paths.ts";
 
 /**
@@ -93,18 +96,35 @@ export async function performInstall(
       existing.activeVersion !== source.version &&
       !existing.uninstalledAt
   );
+  const candidateAlreadyInstalled = Boolean(
+    existing?.installedVersions[source.version]
+  );
+  let targetNeedsRepair = false;
   // Already at the target version and not tombstoned — no-op in prod.
   if (
     existing?.activeVersion === source.version &&
     !existing.uninstalledAt &&
     !ctx.isDevRuntime
   ) {
-    return {
-      ok: true as const,
-      pluginId: id,
-      requiresRestart: false,
-      version: source.version,
-    };
+    try {
+      const expectedContentHash =
+        existing.installedVersions[source.version]?.contentHash;
+      await validateInstalledCandidate({
+        ...(expectedContentHash ? { expectedContentHash } : {}),
+        id,
+        paths: ctx.paths,
+        pierVersion: ctx.pierVersion,
+        version: source.version,
+      });
+      return {
+        ok: true as const,
+        pluginId: id,
+        requiresRestart: false,
+        version: source.version,
+      };
+    } catch {
+      targetNeedsRepair = true;
+    }
   }
   await promoteArchiveToInstalled(
     {
@@ -117,12 +137,46 @@ export async function performInstall(
       id,
       overwrite:
         ctx.isDevRuntime ||
+        targetNeedsRepair ||
         Boolean(existing?.uninstalledAt) ||
         existing?.activeVersion !== source.version,
       sha256: source.sha256,
       ...(source.size ? { size: source.size } : {}),
       version: source.version,
     }
+  );
+  try {
+    await validateInstalledCandidate({
+      id,
+      paths: ctx.paths,
+      pierVersion: ctx.pierVersion,
+      version: source.version,
+    });
+  } catch (error) {
+    await removeNewCandidate(
+      ctx.paths,
+      id,
+      source.version,
+      candidateAlreadyInstalled
+    );
+    await ctx.appendOperationLog({
+      actorKind: "desktop-renderer",
+      operation: source.logKind,
+      pluginId: id,
+      result: "failed",
+      timestamp: ctx.now(),
+      toVersion: source.version,
+    });
+    return {
+      error: {
+        code: "invalid_state" as const,
+        message: error instanceof Error ? error.message : String(error),
+      },
+      ok: false as const,
+    };
+  }
+  const contentHash = await computePackageContentHash(
+    join(ctx.paths.installedDir, id, source.version)
   );
   ctx.store.mutate((s) => ({
     ...s,
@@ -141,9 +195,11 @@ export async function performInstall(
         installedVersions: {
           ...(existing?.installedVersions ?? {}),
           [source.version]: {
+            contentHash,
             installedAt: ctx.now(),
             packageUrl: source.packageUrl,
             sha256: source.sha256,
+            verifiedHash: source.sha256,
           },
         },
         pendingRestart: isInstalledUpdate
@@ -311,6 +367,27 @@ export async function performRollback(
       ok: false as const,
     };
   }
+  try {
+    await validateInstalledCandidate({
+      ...(entry.installedVersions[version]?.contentHash
+        ? {
+            expectedContentHash: entry.installedVersions[version].contentHash,
+          }
+        : {}),
+      id,
+      paths: ctx.paths,
+      pierVersion: ctx.pierVersion,
+      version,
+    });
+  } catch (error) {
+    return {
+      error: {
+        code: "invalid_state" as const,
+        message: error instanceof Error ? error.message : String(error),
+      },
+      ok: false as const,
+    };
+  }
   const fromVersion = entry.activeVersion;
   ctx.store.mutate((s) => ({
     ...s,
@@ -339,129 +416,4 @@ export async function performRollback(
     requiresRestart: true,
     version,
   };
-}
-
-export async function performSetDevOverride(
-  ctx: OperationsContext,
-  id: string,
-  path: string
-): Promise<ManagedPluginOperationResult> {
-  if (!ctx.isDevRuntime) {
-    await ctx.appendOperationLog({
-      actorKind: "desktop-renderer",
-      operation: "devOverride.set",
-      pluginId: id,
-      result: "denied",
-      timestamp: ctx.now(),
-    });
-    return {
-      error: {
-        code: "denied" as const,
-        message: "dev override is not permitted in production runtime",
-      },
-      ok: false as const,
-    };
-  }
-  let devVersion: string;
-  try {
-    const rawManifest = await readFile(join(path, "plugin.json"), "utf8");
-    const parsed = JSON.parse(rawManifest) as { version?: string };
-    if (typeof parsed.version !== "string") {
-      throw new Error("plugin.json missing string version");
-    }
-    devVersion = parsed.version;
-    await validateManagedPluginPackage({
-      packageDir: path,
-      archivePath: null,
-      expectedId: id,
-      expectedVersion: devVersion,
-      expectedSha256: null,
-      expectedSize: null,
-      pierVersion: ctx.pierVersion,
-    });
-  } catch (err) {
-    return {
-      error: {
-        code: "invalid_state" as const,
-        message: `dev override package invalid: ${(err as Error).message}`,
-      },
-      ok: false as const,
-    };
-  }
-  const state = ctx.store.get();
-  const entry = state.plugins[id];
-  const registeredAt = ctx.now();
-  ctx.store.mutate((s) => ({
-    ...s,
-    plugins: {
-      ...s.plugins,
-      [id]: {
-        activeVersion: entry?.activeVersion ?? null,
-        devOverride: { path, registeredAt, version: devVersion },
-        effectiveAtStartup: entry?.effectiveAtStartup ?? null,
-        enabled: entry?.enabled ?? true,
-        id,
-        installedVersions: entry?.installedVersions ?? {},
-        lastKnownGoodVersion: entry?.lastKnownGoodVersion ?? null,
-        pendingRestart: { kind: "devOverride" },
-        pendingUpdate: entry?.pendingUpdate ?? null,
-        source: entry?.source ?? { kind: "devOverride" },
-      },
-    },
-  }));
-  await ctx.store.flush();
-  await ctx.appendOperationLog({
-    actorKind: "desktop-renderer",
-    operation: "devOverride.set",
-    pluginId: id,
-    result: "success",
-    timestamp: registeredAt,
-  });
-  return { ok: true as const, pluginId: id, requiresRestart: true };
-}
-
-export async function performClearDevOverride(
-  ctx: OperationsContext,
-  id: string
-): Promise<ManagedPluginOperationResult> {
-  if (!ctx.isDevRuntime) {
-    return {
-      error: {
-        code: "denied" as const,
-        message: "dev override is not permitted in production runtime",
-      },
-      ok: false as const,
-    };
-  }
-  const state = ctx.store.get();
-  const entry = state.plugins[id];
-  if (!entry) {
-    return {
-      error: {
-        code: "not_found" as const,
-        message: `plugin ${id} not installed`,
-      },
-      ok: false as const,
-    };
-  }
-  ctx.store.mutate((s) => ({
-    ...s,
-    plugins: {
-      ...s.plugins,
-      [id]: {
-        ...entry,
-        devOverride: null,
-        pendingRestart: { kind: "devOverride" },
-      },
-    },
-  }));
-  await ctx.store.flush();
-  await ctx.appendOperationLog({
-    actorKind: "desktop-renderer",
-    operation: "devOverride.clear",
-    pluginId: id,
-    result: "success",
-    timestamp: ctx.now(),
-  });
-  return { ok: true as const, pluginId: id, requiresRestart: true };
 }

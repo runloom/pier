@@ -11,14 +11,23 @@ import { ShortcutInput } from "@pier/ui/shortcut-input.tsx";
 import { Fragment, useEffect, useMemo, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import {
+  actionRegistry,
+  getActionRegistryVersion,
+  subscribeActionRegistry,
+} from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import {
   formatChordParts,
   stringifyChord,
 } from "@/lib/keybindings/formatter.ts";
 import { chordFromEvent } from "@/lib/keybindings/matcher.ts";
-import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import {
+  getKeybindingRegistryVersion,
+  keybindingRegistry,
+  subscribeKeybindingRegistry,
+} from "@/lib/keybindings/registry.ts";
+import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import { useKeybindingPreferencesStore } from "@/stores/keybinding-preferences.store.ts";
 
 const MODIFIER_CODES = new Set([
@@ -40,25 +49,31 @@ function hasModifier(chord: ReturnType<typeof chordFromEvent>): boolean {
 }
 
 function useActions(): readonly Action[] {
-  useSyncExternalStore(
-    (cb) => actionRegistry.subscribe(cb),
-    () => actionRegistry.getVersion(),
+  const actionVersion = useSyncExternalStore(
+    subscribeActionRegistry,
+    getActionRegistryVersion,
     () => 0
   );
-  useSyncExternalStore(
-    (cb) => keybindingRegistry.subscribe(cb),
-    () => keybindingRegistry.getVersion(),
+  const keybindingVersion = useSyncExternalStore(
+    subscribeKeybindingRegistry,
+    getKeybindingRegistryVersion,
     () => 0
   );
-  return actionRegistry
-    .list()
-    .filter((action) => action.id.startsWith("pier."))
-    .sort(
-      (a, b) =>
-        a.category.localeCompare(b.category) ||
-        a.title().localeCompare(b.title()) ||
-        a.id.localeCompare(b.id)
-    );
+  return useMemo(
+    () =>
+      readVersionedSnapshot(actionVersion + keybindingVersion, () =>
+        actionRegistry
+          .list()
+          .filter((action) => action.id.startsWith("pier."))
+          .sort(
+            (a, b) =>
+              a.category.localeCompare(b.category) ||
+              a.title().localeCompare(b.title()) ||
+              a.id.localeCompare(b.id)
+          )
+      ),
+    [actionVersion, keybindingVersion]
+  );
 }
 
 function currentShortcutParts(actionId: string): readonly string[] {

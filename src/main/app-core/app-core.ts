@@ -12,11 +12,13 @@ import {
   createMainPluginHostApi,
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
+import { registerPluginActivationIpc } from "../plugins/plugin-activation-ipc.ts";
 import {
   createPluginRpcBus,
   type PluginRpcBus,
 } from "../plugins/plugin-rpc-bus.ts";
 import { registerPluginRpcIpc } from "../plugins/plugin-rpc-ipc.ts";
+import { createPluginSecretsFacade } from "../plugins/plugin-secrets.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
@@ -174,10 +176,13 @@ function createPierAppCore(): PierAppCore {
         }
       },
       paths: managedPluginPaths,
+      expectedRendererWindowIds: () =>
+        windowManager.list().map((item) => item.id),
       pierVersion: "0.1.0",
       runtimeMode: isDevRuntime() ? "development" : "production",
       store: managedPluginIndexStore,
     });
+  registerPluginActivationIpc(managedPlugins);
   const basePlugins = createPluginService({
     sources: createDefaultPluginSources,
     externalRuntimeSources: () =>
@@ -232,7 +237,6 @@ function createPierAppCore(): PierAppCore {
         ...(source.id === "pier.codex"
           ? {
               legacyCodexAccounts: createCodexLegacyMigrationAdapter({
-                secretsStore: secrets,
                 userDataDir: app.getPath("userData"),
               }),
             }
@@ -242,11 +246,20 @@ function createPierAppCore(): PierAppCore {
           dataDir: managedPluginPaths.workDir,
           workDir: join(managedPluginPaths.workDir, source.id),
         },
+        processEnv: {
+          CODEX_HOME: process.env.CODEX_HOME,
+          HOME: process.env.HOME,
+          PATH: process.env.PATH,
+        },
         plugin: { id: source.id, version: source.version },
         rpc: {
           handle: (method, handler) =>
             pluginRpcBus.handle(source.id, method, handler),
         },
+        secrets: createPluginSecretsFacade(secrets, source.id, {
+          read: source.manifest.permissions.includes("secret:read"),
+          write: source.manifest.permissions.includes("secret:write"),
+        }),
       }),
       recordActivationResult: (input) =>
         managedPlugins.recordActivationResult(input),

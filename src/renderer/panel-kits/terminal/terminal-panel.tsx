@@ -16,7 +16,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { usePanelEventState } from "@/hooks/use-panel-event-state.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
@@ -68,10 +67,10 @@ import {
   tabChromeFromParams,
   taskOutputTabChromeOverlay,
   taskRunTabChromeOverlay,
-  terminalPanelDescriptor,
 } from "./terminal-tab-chrome.ts";
 import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layout-revision.ts";
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
+import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
 import { useTerminalRelaunch } from "./use-terminal-relaunch.ts";
 import { useTerminalRuntimeControlPresentation } from "./use-terminal-runtime-control-presentation.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
@@ -79,13 +78,10 @@ import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
-  const freshPanelRef = useRef<{ panelId: string; value: boolean }>({
-    panelId,
-    value: isFreshTerminalPanel(panelId),
-  });
-  if (freshPanelRef.current.panelId !== panelId) {
-    freshPanelRef.current = { panelId, value: isFreshTerminalPanel(panelId) };
-  }
+  const freshPanel = useMemo(
+    () => ({ panelId, value: isFreshTerminalPanel(panelId) }),
+    [panelId]
+  );
   const [activeLaunch, setActiveLaunch] = useState<ActiveTerminalLaunch>(
     () => ({
       context: panelContextFromParams(props.params),
@@ -125,7 +121,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
   const [savedSession, setSavedSession] = useState<
     TerminalPanelSessionSnapshot | null | undefined
-  >(() => (freshPanelRef.current.value ? null : undefined));
+  >(() => (freshPanel.value ? null : undefined));
   const sessionReadVersionRef = useRef(0);
   const clearTerminalError = useCallback(() => {
     setError(null);
@@ -238,22 +234,16 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     [api, effectiveContext, panelId, windowZoomLevel]
   );
 
-  usePanelDescriptor(
-    api,
-    terminalPanelDescriptor({
-      effectiveContext,
-      effectiveCwd,
-      effectiveTab,
-      effectiveTitle,
-      sessionLoaded,
-    })
-  );
+  useTerminalPanelDescriptor(api, {
+    effectiveContext,
+    effectiveCwd,
+    effectiveTab,
+    effectiveTitle,
+    sessionLoaded,
+  });
 
   useEffect(() => {
-    if (
-      freshPanelRef.current.panelId === panelId &&
-      freshPanelRef.current.value
-    ) {
+    if (freshPanel.panelId === panelId && freshPanel.value) {
       consumeFreshTerminalPanel(panelId);
       setSavedSession(null);
       return;
@@ -278,7 +268,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     return () => {
       disposed = true;
     };
-  }, [panelId]);
+  }, [freshPanel, panelId]);
 
   useTerminalRelaunch({
     activeSequence: activeLaunch.sequence,

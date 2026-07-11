@@ -5,6 +5,7 @@ import type {
 } from "@shared/contracts/app-quit.ts";
 import type { TFunction } from "i18next";
 import { useEffect, useRef } from "react";
+import { useCommittedValue } from "@/hooks/use-committed-ref.ts";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 
@@ -81,8 +82,7 @@ function toDecisionPayload(
 export function AppQuitDialogBridge() {
   const t = useT();
   const currentQuitIdRef = useRef<string | null>(null);
-  const tRef = useRef(t);
-  tRef.current = t;
+  const readT = useCommittedValue(t);
 
   useEffect(() => {
     function sendDecision(
@@ -109,10 +109,10 @@ export function AppQuitDialogBridge() {
       currentQuitIdRef.current = request.quitId;
 
       const confirmed = await showAppConfirm({
-        title: tRef.current("dialog.appQuit.title"),
-        body: formatQuitDialogBody(tRef.current, request.summaries),
-        cancelLabel: tRef.current("dialog.appQuit.cancel"),
-        confirmLabel: tRef.current("dialog.appQuit.quit"),
+        title: readT()("dialog.appQuit.title"),
+        body: formatQuitDialogBody(readT(), request.summaries),
+        cancelLabel: readT()("dialog.appQuit.cancel"),
+        confirmLabel: readT()("dialog.appQuit.quit"),
         intent: request.summaries.length > 0 ? "destructive" : "default",
         size: "sm",
       });
@@ -133,7 +133,7 @@ export function AppQuitDialogBridge() {
         );
       });
     });
-  }, []);
+  }, [readT]);
 
   return null;
 }

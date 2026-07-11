@@ -41,7 +41,6 @@ function stripCommonEdges(left: string[], right: string[]) {
 }
 
 /** 行级 LCS diff;超大输入退化为「整块替换」避免 O(n·m) 爆内存。 */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 教科书 LCS 回溯,拆函数需共享 table/游标,反而更难读。
 function diffLines(original: string, current: string): DiffRow[] {
   const left = original.split("\n");
   const right = current.split("\n");
@@ -166,13 +165,13 @@ export function FilesLineDiff({
               // biome-ignore lint/suspicious/noArrayIndexKey: 行序即身份,列表只读且整体重建。
               key={index}
             >
-              <td className="w-10 select-none border-border/40 border-r px-2 text-right text-muted-foreground/70">
+              <td className="w-10 select-none border-border/40 border-r px-2 text-right text-muted-foreground">
                 {row.leftNo ?? ""}
               </td>
-              <td className="w-10 select-none border-border/40 border-r px-2 text-right text-muted-foreground/70">
+              <td className="w-10 select-none border-border/40 border-r px-2 text-right text-muted-foreground">
                 {row.rightNo ?? ""}
               </td>
-              <td className="w-5 select-none text-center text-muted-foreground/80">
+              <td className="w-5 select-none text-center text-muted-foreground">
                 {diffMarker(row.kind)}
               </td>
               <td className="whitespace-pre-wrap break-all px-2">{row.text}</td>

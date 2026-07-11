@@ -79,18 +79,6 @@ describe("terminal selection text IPC", () => {
     vi.doMock("electron", () => ({
       app: { getPath: vi.fn((k: string) => `/tmp/pier-test-${k}`) },
     }));
-    vi.doMock("node:module", () => {
-      const fakeRequire = Object.assign(
-        vi.fn(() => fakeAddon),
-        {
-          resolve: vi.fn((p: string) => p),
-        }
-      );
-      return {
-        createRequire: vi.fn(() => fakeRequire),
-        default: { createRequire: vi.fn(() => fakeRequire) },
-      };
-    });
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       clearTerminalPanelAgent: vi.fn(async () => undefined),
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
@@ -140,7 +128,9 @@ describe("terminal selection text IPC", () => {
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
-    registerTerminalIpc(fakeIpcMain as never);
+    registerTerminalIpc(fakeIpcMain as never, {
+      loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
+    });
 
     const readSelection = invokeHandlers.get(
       "pier:terminal:read-selection-text"

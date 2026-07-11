@@ -37,7 +37,6 @@ const baseManifest = pluginManifestSchema.parse({
 }) as PluginManifest;
 
 describe("resolvePluginMissionControlWidgetDisplay", () => {
-  // biome-ignore lint/style/noNonNullAssertion: test fixture — known length
   const widget = baseManifest.missionControlWidgets[0]!;
 
   it("resolves localized title and description for matching locale", () => {
@@ -84,7 +83,6 @@ describe("resolvePluginMissionControlWidgetDisplay", () => {
 
     const display = resolvePluginMissionControlWidgetDisplay(
       noDescManifest,
-      // biome-ignore lint/style/noNonNullAssertion: test fixture — known length
       noDescManifest.missionControlWidgets[0]!,
       "en"
     );

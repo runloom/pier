@@ -80,7 +80,9 @@ export function useSearchMatchState(
   onChange: ((state: SearchMatchState) => void) | undefined
 ): void {
   const onChangeRef = React.useRef(onChange);
-  onChangeRef.current = onChange;
+  React.useLayoutEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   React.useEffect(() => {
     const notify = () => {

@@ -5,9 +5,6 @@ import type {
 import { FileTree as PierreFileTree, useFileTree } from "@pierre/trees/react";
 import * as React from "react";
 import {
-  buildFileTreeRefs,
-  EMPTY_REFS,
-  type FileTreeRefs,
   fileTreeContextMenuOption,
   itemsToGitStatusEntries,
   readRenameView,
@@ -30,6 +27,7 @@ import * as treeSearch from "./file-tree-search.ts";
 import { pierFileTreeStyle, TREE_SCROLLBAR_CSS } from "./file-tree-style.ts";
 import type { PierFileTreeProps } from "./file-tree-types.ts";
 import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
+import { useFileTreeRefs } from "./use-file-tree-refs.ts";
 import { cn } from "./utils.ts";
 
 export type {
@@ -69,7 +67,6 @@ export function PierFileTree({
   ...props
 }: PierFileTreeProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const refs = React.useRef<FileTreeRefs>(EMPTY_REFS);
   const expandedDirectoriesRef = React.useRef(new Map<string, boolean>());
   const requestedLoadDirectoriesRef = React.useRef(new Set<string>());
   const didMountRef = React.useRef(false);
@@ -89,38 +86,42 @@ export function PierFileTree({
     [directoryStates, items]
   );
 
-  refs.current = React.useMemo<FileTreeRefs>(
-    () => buildFileTreeRefs(items, directoryStates, directoryErrorLabel),
-    [directoryErrorLabel, directoryStates, items]
-  );
-  refs.current.onLoadDirectory = onLoadDirectory;
-  refs.current.onModelPathsRemoved = onModelPathsRemoved;
-  refs.current.onMovePaths = onMovePaths;
-  refs.current.onOpenItemContextMenu = onOpenItemContextMenu;
-  refs.current.onOpenPath = onOpenPath;
-  refs.current.onRenamePath = onRenamePath;
-  refs.current.onSelectPaths = onSelectPaths;
+  const { nextRefs, readRefs, refs } = useFileTreeRefs({
+    directoryErrorLabel,
+    directoryStates,
+    items,
+    onLoadDirectory,
+    onModelPathsRemoved,
+    onMovePaths,
+    onOpenItemContextMenu,
+    onOpenPath,
+    onRenamePath,
+    onSelectPaths,
+  });
 
   const fileTreeStyle = React.useMemo(() => pierFileTreeStyle(style), [style]);
 
   const handleSelectionChange =
-    React.useCallback<FileTreeSelectionChangeListener>((selectedPaths) => {
-      const nextSelectedPaths = [...selectedPaths];
-      const selectedPath = nextSelectedPaths.at(-1);
-      const selectedItem =
-        selectedPath == null
-          ? undefined
-          : refs.current.itemsByPath.get(selectedPath);
-      const outwardSelectedPaths = nextSelectedPaths.map(
-        (path) => refs.current.itemsByPath.get(path)?.path ?? path
-      );
+    React.useCallback<FileTreeSelectionChangeListener>(
+      (selectedPaths) => {
+        const nextSelectedPaths = [...selectedPaths];
+        const selectedPath = nextSelectedPaths.at(-1);
+        const selectedItem =
+          selectedPath == null
+            ? undefined
+            : readRefs().itemsByPath.get(selectedPath);
+        const outwardSelectedPaths = nextSelectedPaths.map(
+          (path) => readRefs().itemsByPath.get(path)?.path ?? path
+        );
 
-      refs.current.onSelectPaths?.(outwardSelectedPaths);
+        readRefs().onSelectPaths?.(outwardSelectedPaths);
 
-      if (selectedItem?.kind === "file") {
-        refs.current.onOpenPath?.(selectedItem.path);
-      }
-    }, []);
+        if (selectedItem?.kind === "file") {
+          readRefs().onOpenPath?.(selectedItem.path);
+        }
+      },
+      [readRefs]
+    );
 
   const { model } = useFileTree({
     ...fileTreeContextMenuOption(onOpenItemContextMenu != null, refs),
@@ -130,7 +131,7 @@ export function PierFileTree({
     // caller path 交业务方执行真实 fs move;失败方负责刷新树回滚视觉状态。
     dragAndDrop: {
       onDropComplete: (event) => {
-        const handler = refs.current.onMovePaths;
+        const handler = readRefs().onMovePaths;
         if (!handler) {
           return;
         }
@@ -165,7 +166,7 @@ export function PierFileTree({
         if (from !== to) {
           modelAheadMovesRef.current.set(from, to);
         }
-        refs.current.onRenamePath?.({
+        readRefs().onRenamePath?.({
           from,
           isFolder: event.isFolder,
           to,
@@ -175,18 +176,18 @@ export function PierFileTree({
     // 搜索走 setSearch 编程驱动 + 业务层自绘搜索栏;不渲染库内置搜索头。
     fileTreeSearchMode: "hide-non-matches",
     renderRowDecoration: ({ item }) =>
-      toOfficialDecoration(refs.current.decorationsByPath.get(item.path)),
+      toOfficialDecoration(readRefs().decorationsByPath.get(item.path)),
     ...(stickyFolders ? { stickyFolders: true } : {}),
   });
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
-  treeSearch.useSearchMatchState(model, refs.current, onSearchMatchStateChange);
+  treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);
   const modelAheadMovesRef = React.useRef(new Map<string, string>());
   React.useImperativeHandle(
     treeApiRef,
     () => ({
       activateFocusedSearchMatch: () =>
-        treeSearch.activateFocusedMatch(model, refs.current),
+        treeSearch.activateFocusedMatch(model, readRefs()),
       focusSearchMatch: (direction) => {
         if (direction === "next") {
           model.focusNextSearchMatch();
@@ -208,7 +209,7 @@ export function PierFileTree({
         // 逐级展开祖先目录,再滚动定位目标本身。
         for (let index = 1; index < segments.length; index += 1) {
           const ancestorPath = segments.slice(0, index).join("/");
-          const ancestorItem = refs.current.itemsByPath.get(ancestorPath);
+          const ancestorItem = readRefs().itemsByPath.get(ancestorPath);
           if (!ancestorItem) {
             continue;
           }
@@ -217,7 +218,7 @@ export function PierFileTree({
             handle.expand();
           }
         }
-        const item = refs.current.itemsByPath.get(path);
+        const item = readRefs().itemsByPath.get(path);
         const officialPath = item ? toOfficialPath(item) : path;
         try {
           model.scrollToPath(officialPath, {
@@ -231,7 +232,7 @@ export function PierFileTree({
       },
       removePaths: (pathsToRemove) => {
         for (const path of pathsToRemove) {
-          const item = refs.current.itemsByPath.get(path);
+          const item = readRefs().itemsByPath.get(path);
           const officialPath = item ? toOfficialPath(item) : path;
           const directory =
             item?.kind === "directory" || officialPath.endsWith("/");
@@ -246,7 +247,7 @@ export function PierFileTree({
         }
       },
       startRenaming: (path, options) => {
-        const item = refs.current.itemsByPath.get(path);
+        const item = readRefs().itemsByPath.get(path);
         const officialPath = item ? toOfficialPath(item) : path;
         const callerPath = item?.path ?? stripTrailingSlash(path);
         const removeIfCanceled = options?.removeIfCanceled === true;
@@ -261,17 +262,17 @@ export function PierFileTree({
         // Esc/空提交走 removeIfCanceled → onMutation(remove) → onModelPathsRemoved。
         let settled = false;
         let renameDelivered = false;
-        const previousOnRename = refs.current.onRenamePath;
+        const previousOnRename = readRefs().onRenamePath;
         const settle = () => {
           if (settled) {
             return;
           }
           settled = true;
-          refs.current.onRenamePath = previousOnRename;
+          readRefs().onRenamePath = previousOnRename;
           unsubscribeMutation();
           unsubscribeSubscribe();
         };
-        refs.current.onRenamePath = (move) => {
+        readRefs().onRenamePath = (move) => {
           renameDelivered = true;
           previousOnRename?.(move);
           settle();
@@ -285,7 +286,7 @@ export function PierFileTree({
             return;
           }
           settle();
-          refs.current.onModelPathsRemoved?.([callerPath]);
+          readRefs().onModelPathsRemoved?.([callerPath]);
         });
         const unsubscribeSubscribe = model.subscribe(() => {
           const renameView = readRenameView(model);
@@ -307,7 +308,7 @@ export function PierFileTree({
         return started;
       },
     }),
-    [model]
+    [model, readRefs]
   );
 
   // active 文件变化时定位并选中；model 选中不会触发用户路径的 onOpenPath。
@@ -319,7 +320,7 @@ export function PierFileTree({
       }
       return;
     }
-    const item = refs.current.itemsByPath.get(revealPath);
+    const item = readRefs().itemsByPath.get(revealPath);
     if (!item) {
       return;
     }
@@ -332,7 +333,7 @@ export function PierFileTree({
       // 路径尚未在可见投影中(父目录未展开):静默忽略,下一次 items 变化重试。
       lastRevealRef.current = null;
     }
-  }, [model, revealPath]);
+  }, [model, readRefs, revealPath]);
 
   React.useEffect(() => {
     model.setGitStatus(gitStatus);
@@ -344,8 +345,8 @@ export function PierFileTree({
       if (activeSearchRef.current != null) {
         return;
       }
-      const directoryPaths = refs.current.directoryPaths;
-      const loadableDirectoryPaths = refs.current.loadableDirectoryPaths;
+      const directoryPaths = readRefs().directoryPaths;
+      const loadableDirectoryPaths = readRefs().loadableDirectoryPaths;
 
       for (const trackedPath of expandedDirectoriesRef.current.keys()) {
         if (!directoryPaths.has(trackedPath)) {
@@ -356,8 +357,7 @@ export function PierFileTree({
       for (const requestedPath of requestedLoadDirectoriesRef.current) {
         if (
           !loadableDirectoryPaths.has(requestedPath) ||
-          refs.current.directoryLoadStatesByPath.get(requestedPath) !==
-            "unloaded"
+          readRefs().directoryLoadStatesByPath.get(requestedPath) !== "unloaded"
         ) {
           requestedLoadDirectoriesRef.current.delete(requestedPath);
         }
@@ -379,13 +379,13 @@ export function PierFileTree({
           continue;
         }
 
-        const onLoadDirectory = refs.current.onLoadDirectory;
+        const onLoadDirectory = readRefs().onLoadDirectory;
 
         if (
           onLoadDirectory == null ||
           !loadableDirectoryPaths.has(officialPath) ||
           !["error", "unloaded"].includes(
-            refs.current.directoryLoadStatesByPath.get(officialPath) ?? ""
+            readRefs().directoryLoadStatesByPath.get(officialPath) ?? ""
           ) ||
           requestedLoadDirectoriesRef.current.has(officialPath)
         ) {
@@ -396,7 +396,7 @@ export function PierFileTree({
         onLoadDirectory(callerPath);
       }
     },
-    [model]
+    [model, readRefs]
   );
 
   React.useEffect(() => {

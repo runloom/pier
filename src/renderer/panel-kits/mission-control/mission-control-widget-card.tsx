@@ -24,7 +24,7 @@ import {
   Settings2,
   Trash2,
 } from "lucide-react";
-import { type KeyboardEvent, useId, useMemo, useState } from "react";
+import { type KeyboardEvent, useId, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import type { ResolvedMissionControlWidget } from "./mission-control-merge.ts";
@@ -79,22 +79,11 @@ export function MissionControlWidgetCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const layoutInstructionsId = useId();
 
-  const title = useMemo(() => {
-    if (widget.status === "core") {
-      return t(widget.title);
-    }
-    return widget.title;
-  }, [widget.status, widget.title, t]);
-
-  const description = useMemo(() => {
-    if (!widget.description) {
-      return;
-    }
-    if (widget.status === "core") {
-      return t(widget.description);
-    }
-    return widget.description;
-  }, [widget.status, widget.description, t]);
+  const title = widget.status === "core" ? t(widget.title) : widget.title;
+  const description =
+    widget.description && widget.status === "core"
+      ? t(widget.description)
+      : widget.description;
 
   const Icon = widget.registration?.icon;
 
@@ -173,7 +162,7 @@ export function MissionControlWidgetCard({
             aria-describedby={layoutInstructionsId}
             aria-keyshortcuts={LAYOUT_KEY_SHORTCUTS}
             aria-label={t("missionControl.widget.layoutHandle", { title })}
-            className="mission-control-widget-drag-handle -ml-1 flex size-5 cursor-grab items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground/70 opacity-40 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:cursor-grabbing group-hover:opacity-100"
+            className="mission-control-widget-drag-handle -ml-1 flex size-5 cursor-grab items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground opacity-40 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:cursor-grabbing group-hover:opacity-100"
             onKeyDown={(event) => {
               if (
                 event.key !== "ArrowLeft" &&

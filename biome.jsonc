@@ -65,12 +65,11 @@
       "formatter": { "enabled": false },
       "linter": { "enabled": false }
     },
-    // shadcn primitives + hooks 由 CLI 生成, 放宽其固有的 lint 规则
+    // 仅宿主 shadcn primitives + 生成 hook 放宽固有规则；共享 UI 包含手写业务组件，不在此豁免。
     {
       "includes": [
         "src/renderer/components/primitives/**",
-        "src/renderer/hooks/use-mobile.ts",
-        "packages/ui/src/**"
+        "src/renderer/hooks/use-mobile.ts"
       ],
       "linter": {
         "rules": {
@@ -90,6 +89,20 @@
           "security": { "noDangerouslySetInnerHtml": "off" },
           "complexity": { "noExcessiveCognitiveComplexity": "off" },
           "style": { "noNestedTernary": "off" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/ui/src/carousel.tsx",
+        "packages/ui/src/field.tsx",
+        "packages/ui/src/input-group.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
         }
       }
     }

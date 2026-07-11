@@ -47,3 +47,7 @@ class ActionRegistry extends Notifier {
 }
 
 export const actionRegistry = new ActionRegistry();
+export const subscribeActionRegistry = (listener: () => void): (() => void) =>
+  actionRegistry.subscribe(listener);
+export const getActionRegistryVersion = (): number =>
+  actionRegistry.getVersion();

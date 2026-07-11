@@ -2,6 +2,7 @@ import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type {
   ManagedPluginCatalogSnapshot,
   ManagedPluginOperationResult,
+  ManagedPluginRendererActivationReport,
 } from "@shared/contracts/managed-plugin.ts";
 import type { PluginRpcEventPayload } from "@shared/contracts/plugin-rpc.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
@@ -21,6 +22,9 @@ export interface ManagedPluginsPreloadApi {
   enable(id: string): Promise<ManagedPluginOperationResult>;
   install(id: string): Promise<ManagedPluginOperationResult>;
   list(): Promise<ManagedPluginCatalogSnapshot>;
+  reportRendererActivation(
+    report: ManagedPluginRendererActivationReport
+  ): Promise<void>;
   rollback(id: string, version: string): Promise<ManagedPluginOperationResult>;
   setDevOverride(
     id: string,
@@ -77,6 +81,8 @@ export function createManagedPluginsPreloadApi(): ManagedPluginsPreloadApi {
       invokePierCommand<ManagedPluginCatalogSnapshot>({
         type: "plugin.catalog.list",
       }),
+    reportRendererActivation: (report) =>
+      ipcRenderer.invoke(PIER.PLUGIN_RENDERER_ACTIVATION_REPORT, report),
     rollback: (id, version) =>
       invokePierCommand<ManagedPluginOperationResult>({
         id,

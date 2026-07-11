@@ -1,4 +1,9 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import {
+  type ChildProcess,
+  execFile,
+  execFileSync,
+  spawn,
+} from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -8,6 +13,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import {
   type ElectronApplication,
   _electron as electron,
@@ -24,6 +30,9 @@ const OUT_MAIN = join(
   "main",
   "index.js"
 );
+const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
+const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
+const execFileAsync = promisify(execFile);
 
 const APP_CLOSE_TIMEOUT_MS = 20_000;
 
@@ -32,6 +41,44 @@ async function waitForWorkspaceReady(page: Page): Promise<void> {
   await page
     .locator('[data-testid="workspace-host-root"][data-workspace-ready="true"]')
     .waitFor({ state: "visible", timeout: 30_000 });
+}
+
+async function openProjectTerminal(userDataDir: string): Promise<void> {
+  let lastFailure = "CLI did not return a result";
+  try {
+    await expect
+      .poll(
+        async () => {
+          try {
+            const { stdout } = await execFileAsync(
+              process.execPath,
+              [PIER_CLI, "terminal", "open", "--cwd", PROJECT_ROOT, "--json"],
+              {
+                cwd: PROJECT_ROOT,
+                env: { ...process.env, PIER_USER_DATA_DIR: userDataDir },
+              }
+            );
+            const result = JSON.parse(stdout) as {
+              error?: { message?: string };
+              ok?: boolean;
+            };
+            lastFailure = result.error?.message ?? stdout;
+            return result.ok === true;
+          } catch (error) {
+            lastFailure =
+              error instanceof Error ? error.message : String(error);
+            return false;
+          }
+        },
+        { timeout: 20_000 }
+      )
+      .toBe(true);
+  } catch (error) {
+    throw new Error(
+      `Pier CLI could not open the project terminal: ${lastFailure}`,
+      { cause: error }
+    );
+  }
 }
 
 async function killAndWait(child: ChildProcess): Promise<void> {
@@ -139,7 +186,9 @@ test.describe("Startup stability e2e", () => {
       );
       execFileSync("mkfifo", [localEnvironmentsFifo]);
       application = await electron.launch({
-        args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+        args: [OUT_MAIN],
+        cwd: PROJECT_ROOT,
+        env: { ...process.env, ELECTRON_USER_DATA_DIR: userDataDir },
       });
       const page = await application.firstWindow();
       await page.waitForLoadState("domcontentloaded");
@@ -175,10 +224,13 @@ test.describe("Startup stability e2e", () => {
     let draftOwnerDir = "";
     try {
       application = await electron.launch({
-        args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+        args: [OUT_MAIN],
+        cwd: PROJECT_ROOT,
+        env: { ...process.env, ELECTRON_USER_DATA_DIR: userDataDir },
       });
       const page = await application.firstWindow();
       await waitForWorkspaceReady(page);
+      await openProjectTerminal(userDataDir);
       await page
         .locator('[data-testid="files-project-status-trigger"]')
         .click();

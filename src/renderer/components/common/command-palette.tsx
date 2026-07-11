@@ -19,6 +19,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -33,7 +34,11 @@ import {
   quickPickItems,
 } from "@/components/common/command-palette-quick-pick-view.tsx";
 import { useT } from "@/i18n/use-t.ts";
-import { actionRegistry } from "@/lib/actions/registry.ts";
+import {
+  actionRegistry,
+  getActionRegistryVersion,
+  subscribeActionRegistry,
+} from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import {
   groupActionsForPalette as groupActionsForPaletteImpl,
@@ -43,49 +48,64 @@ import { useCommandPaletteController } from "@/lib/command-palette/controller.ts
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import type { QuickPickItem } from "@/lib/command-palette/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
-import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
+import {
+  getKeybindingRegistryVersion,
+  keybindingRegistry,
+  subscribeKeybindingRegistry,
+} from "@/lib/keybindings/registry.ts";
+import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 
 function useActions(): readonly Action[] {
-  // version 变 → snapshot 变 → useSyncExternalStore 通知 React 重渲,
-  // 重渲时 list() 取到最新数组。React Compiler 自动按 version 依赖 memo。
-  useSyncExternalStore(
-    (cb) => actionRegistry.subscribe(cb),
-    () => actionRegistry.getVersion(),
+  const version = useSyncExternalStore(
+    subscribeActionRegistry,
+    getActionRegistryVersion,
     () => 0
   );
-  return actionRegistry.list("command-palette");
+  return useMemo(
+    () =>
+      readVersionedSnapshot(version, () =>
+        actionRegistry.list("command-palette")
+      ),
+    [version]
+  );
 }
 
 /**
  * 反查每个 actionId 当前生效的 keybinding 文案. 订阅两个 registry 的 version
- * 触发重渲, 重渲时拉两边最新数据 build map. React Compiler 自动按 version
- * 依赖 memo, 避免每 render churn map 引用。
+ * 触发重渲；只有任一 registry 版本变化时才重建映射。
  */
 function useKeybindingLabels(): ReadonlyMap<string, string> {
-  useSyncExternalStore(
-    (cb) => actionRegistry.subscribe(cb),
-    () => actionRegistry.getVersion(),
+  const actionVersion = useSyncExternalStore(
+    subscribeActionRegistry,
+    getActionRegistryVersion,
     () => 0
   );
-  useSyncExternalStore(
-    (cb) => keybindingRegistry.subscribe(cb),
-    () => keybindingRegistry.getVersion(),
+  const keybindingVersion = useSyncExternalStore(
+    subscribeKeybindingRegistry,
+    getKeybindingRegistryVersion,
     () => 0
   );
-  const map = new Map<string, string>();
-  for (const action of actionRegistry.list("command-palette")) {
-    const first = keybindingRegistry.getFirstBindingFor(
-      action.id,
-      action.metadata?.shortcutSourceId
-    );
-    if (first) {
-      map.set(action.id, formatChord(first.chord));
-    }
-  }
-  return map;
+  return useMemo(
+    () =>
+      readVersionedSnapshot(actionVersion + keybindingVersion, () => {
+        const map = new Map<string, string>();
+        for (const action of actionRegistry.list("command-palette")) {
+          const first = keybindingRegistry.getFirstBindingFor(
+            action.id,
+            action.metadata?.shortcutSourceId
+          );
+          if (first) {
+            map.set(action.id, formatChord(first.chord));
+          }
+        }
+        return map;
+      }),
+    [actionVersion, keybindingVersion]
+  );
 }
 
 export function CommandPalette() {
@@ -98,19 +118,25 @@ export function CommandPalette() {
   // 本地 UI 态: 与 controller 保持同步, 但 cmdk 需要 controlled value/query 引用稳定。
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim();
-  const groups =
-    normalizedQuery.length === 0
-      ? groupActionsForPaletteImpl(actions, frecencyMap, normalizedQuery)
-      : [];
-  const rankedActions =
-    normalizedQuery.length > 0
-      ? rankActionsForPaletteImpl(
-          actions,
-          frecencyMap,
-          normalizedQuery,
-          keybindingLabels
-        )
-      : [];
+  const groups = useMemo(
+    () =>
+      normalizedQuery.length === 0
+        ? groupActionsForPaletteImpl(actions, frecencyMap, normalizedQuery)
+        : [],
+    [actions, frecencyMap, normalizedQuery]
+  );
+  const rankedActions = useMemo(
+    () =>
+      normalizedQuery.length > 0
+        ? rankActionsForPaletteImpl(
+            actions,
+            frecencyMap,
+            normalizedQuery,
+            keybindingLabels
+          )
+        : [],
+    [actions, frecencyMap, keybindingLabels, normalizedQuery]
+  );
   const [selectedValue, setSelectedValue] = useState("");
   const lastRequestIdRef = useRef(-1);
   // null = 未 accept; 非 null = 已 accept (值是 item id)。
@@ -146,7 +172,9 @@ export function CommandPalette() {
       return;
     }
     lastRequestIdRef.current = requestId;
-    setQuery("");
+    setQuery(
+      mode === "quick-pick" && quickPick ? (quickPick.initialQuery ?? "") : ""
+    );
     acceptedItemIdRef.current = null;
     if (mode === "quick-pick" && quickPick) {
       const items = quickPickItems(quickPick);
@@ -220,6 +248,39 @@ export function CommandPalette() {
 
   // Backspace 在空 query + quick-pick 模式时回退一层 (VS Code 行为)。
   const handleCommandKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (
+      e.key === "Enter" &&
+      !e.nativeEvent.isComposing &&
+      quickPick?.onAcceptQuery
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      const before = useCommandPaletteController.getState().requestId;
+      acceptedItemIdRef.current = `query:${before}`;
+      const onAcceptQuery = quickPick.onAcceptQuery;
+      const accepted = Promise.resolve().then(() => onAcceptQuery(query));
+      const afterAccept = useCommandPaletteController.getState();
+      if (afterAccept.requestId === before && afterAccept.open) {
+        afterAccept.closeAfterAccept();
+      }
+      accepted
+        .catch((error: unknown) => {
+          acceptedItemIdRef.current = null;
+          console.error("[command-palette] onAcceptQuery threw:", error);
+          showAppAlert({
+            body: error instanceof Error ? error.message : String(error),
+            title: t("commandPalette.inputFailed"),
+          }).catch((alertError: unknown) => {
+            console.error("[command-palette] input alert failed:", alertError);
+          });
+        })
+        .finally(() => {
+          useCommandPaletteController
+            .getState()
+            .schedulePendingAcceptStackClear();
+        });
+      return;
+    }
     if (e.key === "Backspace" && !query && controller.mode === "quick-pick") {
       e.preventDefault();
       e.stopPropagation();
@@ -358,14 +419,16 @@ export function CommandPalette() {
           placeholder={dialogPlaceholder}
           value={query}
         />
-        <CommandList className="max-h-[min(60vh,520px)]">
-          <CommandEmpty>
-            {mode === "quick-pick"
-              ? t("commandPalette.emptyQuickPick")
-              : t("commandPalette.empty")}
-          </CommandEmpty>
-          {commandContent ?? actionContent}
-        </CommandList>
+        {quickPick?.onAcceptQuery ? null : (
+          <CommandList className="max-h-[min(60vh,520px)]">
+            <CommandEmpty>
+              {mode === "quick-pick"
+                ? t("commandPalette.emptyQuickPick")
+                : t("commandPalette.empty")}
+            </CommandEmpty>
+            {commandContent ?? actionContent}
+          </CommandList>
+        )}
       </Command>
     </CommandDialog>
   );

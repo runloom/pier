@@ -1,5 +1,5 @@
 import i18next, { type TFunction } from "i18next";
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { FALLBACK_LOCALE } from "./language.ts";
 
 function subscribe(cb: () => void): () => void {
@@ -16,6 +16,10 @@ function getServerSnapshot(): string {
 }
 
 export function useT(): TFunction {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  return i18next.t.bind(i18next);
+  const language = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
+  return useMemo(() => i18next.getFixedT(language), [language]);
 }

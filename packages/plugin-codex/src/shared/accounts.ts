@@ -1,3 +1,5 @@
+import { z } from "zod/mini";
+
 /**
  * Plugin-local Codex account DTOs (plan Task 9). Duplicated intentionally
  * from `@shared/contracts/agent-accounts.ts` so the plugin does not import
@@ -61,7 +63,7 @@ export interface CodexAccountsState {
 }
 
 export interface AddAccountPayload {
-  label?: string;
+  label?: string | undefined;
 }
 
 export interface SelectAccountPayload {
@@ -73,5 +75,19 @@ export interface RemoveAccountPayload {
 }
 
 export interface RefreshUsagePayload {
-  accountId?: string;
+  accountId?: string | undefined;
 }
+
+const nonEmptyStringSchema = z.string().check(z.minLength(1));
+
+export const addAccountPayloadSchema = z.strictObject({
+  label: z.optional(nonEmptyStringSchema),
+});
+export const selectAccountPayloadSchema = z.strictObject({
+  accountId: nonEmptyStringSchema,
+});
+export const removeAccountPayloadSchema = selectAccountPayloadSchema;
+export const refreshUsagePayloadSchema = z.strictObject({
+  accountId: z.optional(nonEmptyStringSchema),
+});
+export const emptyRpcPayloadSchema = z.null();

@@ -125,9 +125,11 @@ vi.mock("electron", () => ({
   }),
 }));
 
-describe.runIf(process.platform === "darwin")(
+const describeMockedMacOSWindowManager = describe.each(["darwin"] as const);
+
+describeMockedMacOSWindowManager(
   "macOS window manager WebContentsView hosting",
-  () => {
+  (platform) => {
     const bootChallenge = (): unknown => {
       electronMock.webOnceListeners.get("dom-ready")?.();
       return [...electronMock.webContents.send.mock.calls]
@@ -146,6 +148,7 @@ describe.runIf(process.platform === "darwin")(
     beforeEach(() => {
       vi.resetModules();
       vi.clearAllMocks();
+      vi.spyOn(process, "platform", "get").mockReturnValue(platform);
       electronMock.hostListeners.clear();
       electronMock.ipcMainListeners.clear();
       electronMock.state.throwWhenReadingWindowId = false;
@@ -161,6 +164,7 @@ describe.runIf(process.platform === "darwin")(
     });
 
     afterEach(() => {
+      vi.restoreAllMocks();
       vi.useRealTimers();
     });
 

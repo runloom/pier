@@ -177,3 +177,8 @@ class KeybindingRegistry extends Notifier {
 }
 
 export const keybindingRegistry = new KeybindingRegistry();
+export const subscribeKeybindingRegistry = (
+  listener: () => void
+): (() => void) => keybindingRegistry.subscribe(listener);
+export const getKeybindingRegistryVersion = (): number =>
+  keybindingRegistry.getVersion();

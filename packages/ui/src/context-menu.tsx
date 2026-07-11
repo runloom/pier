@@ -1,5 +1,3 @@
-// @ts-nocheck — vendored shadcn radix-nova: 与 tsconfig exactOptionalPropertyTypes:true 不兼容。
-
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { ContextMenu as ContextMenuPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
@@ -159,13 +157,13 @@ function ContextMenuCheckboxItem({
 }) {
   return (
     <ContextMenuPrimitive.CheckboxItem
-      checked={checked}
       className={cn(
         "relative flex min-h-7 select-none items-center gap-2 rounded-xl py-1.5 pr-8 pl-2 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 data-disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className
       )}
       data-inset={inset}
       data-slot="context-menu-checkbox-item"
+      {...(checked === undefined ? {} : { checked })}
       {...props}
     >
       <span className="pointer-events-none absolute right-2">

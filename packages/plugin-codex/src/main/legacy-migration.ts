@@ -6,7 +6,6 @@ export interface CodexLegacyMigrationAdapter {
   readonly legacyAgentAccountsBaseDir: string;
   readonly legacyAgentAccountsStateFile: string;
   readLegacyAuthJson(accountId: string): Promise<string | null>;
-  readLegacySecretsStoreEntry(key: string): Promise<string | null>;
   readLegacyStateFile(): Promise<string | null>;
 }
 

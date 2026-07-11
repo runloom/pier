@@ -3,19 +3,29 @@ import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
-const SOURCE_FILE_RE = /\.(css|ts|tsx)$/;
+const SOURCE_FILE_RE = /\.(css|html|js|jsx|mjs|scss|svg|ts|tsx)$/;
 const RAW_COLOR_RE =
-  /(?<![\w])#(?:[\da-fA-F]{8}|[\da-fA-F]{6}|[\da-fA-F]{4}|[\da-fA-F]{3})(?![\da-fA-F\w])|\b(?:hsl|hsla|oklab|oklch|rgb|rgba)\(/;
+  /(?<![\w])#(?:[\da-f]{8}|[\da-f]{6}|[\da-f]{4}|[\da-f]{3})(?![\da-f\w])|\b(?:hsl|hsla|oklab|oklch|rgb|rgba)\s*\(/i;
 const FIXED_TAILWIND_COLOR_RE =
-  /\b(?:bg|border|fill|ring|stroke|text)-(?:black|white|(?:amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)-\d{2,3})\b/;
+  /\b(?:accent|bg|border|caret|decoration|divide|fill|from|outline|placeholder|ring|shadow|stroke|text|to|via)-(?:black|white|(?:amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)-\d{2,3})\b/;
 const FIXED_TAILWIND_COLOR_VAR_RE =
   /--color-(?:amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)-\d{2,3}\b/;
 const SKIPPED_DIRECTORIES = new Set(["build", "dist", "node_modules", "out"]);
-const RAW_COLOR_OWNERS = new Set([
-  "packages/ui/src/chart.tsx",
+const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
   "src/renderer/app/globals.css",
   "src/renderer/components/agent-icons/glyphs.tsx",
+  "src/renderer/lib/theme/derive-terminal-colors.ts",
+  "src/renderer/lib/theme/derive-tokens.ts",
+  "src/renderer/lib/theme/oklch.ts",
   "src/shared/theme-colors.ts",
+]);
+const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
+  ["packages/ui/src/chart.tsx", /#(?:ccc|fff)\b/gi],
+  ["src/renderer/index.html", /#1e1e1e\b/gi],
+]);
+const COLOR_MIX_OWNERS = new Set([
+  "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
+  "src/renderer/app/globals.css",
 ]);
 
 function sourceFiles(dir: string): string[] {
@@ -40,12 +50,66 @@ function projectRelative(filePath: string): string {
   return relative(ROOT, filePath).split(sep).join("/");
 }
 
-function isRawColorOwner(filePath: string): boolean {
+function containsUnauthorizedRawColor(filePath: string): boolean {
   const relativePath = projectRelative(filePath);
-  return (
-    RAW_COLOR_OWNERS.has(relativePath) ||
-    relativePath.startsWith("src/renderer/lib/theme/")
+  if (RAW_COLOR_WHOLE_FILE_OWNERS.has(relativePath)) {
+    return false;
+  }
+  const allowance = RAW_COLOR_LITERAL_ALLOWANCES.get(relativePath);
+  const source = readFileSync(filePath, "utf8");
+  return RAW_COLOR_RE.test(allowance ? source.replace(allowance, "") : source);
+}
+
+function relativeLuminance(hex: string): number {
+  const channels = hex
+    .slice(1)
+    .match(/.{2}/g)
+    ?.map((channel) => Number.parseInt(channel, 16) / 255);
+  if (channels?.length !== 3) {
+    throw new Error(`invalid RGB color: ${hex}`);
+  }
+  const linear = channels.map((channel) =>
+    channel <= 0.040_45 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
   );
+  return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+}
+
+function contrastRatio(a: number, b: number): number {
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function cssBlock(source: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(source);
+  if (!match?.[1]) throw new Error(`missing CSS block: ${selector}`);
+  return match[1];
+}
+
+function cssVariable(block: string, name: string): string {
+  const match = new RegExp(`--${name}:\\s*([^;]+);`).exec(block);
+  if (!match?.[1]) throw new Error(`missing CSS variable: --${name}`);
+  return match[1].trim();
+}
+
+function neutralOklchLightness(value: string): number {
+  const match = /^oklch\(([\d.]+)\s+0\s+0\)$/.exec(value);
+  if (!match?.[1]) throw new Error(`expected neutral OKLCH value: ${value}`);
+  return Number.parseFloat(match[1]);
+}
+
+function encodedNeutralChannel(lightness: number): number {
+  const linear = lightness ** 3;
+  return linear <= 0.003_130_8
+    ? 12.92 * linear
+    : 1.055 * linear ** (1 / 2.4) - 0.055;
+}
+
+function linearChannel(encoded: number): number {
+  return encoded <= 0.040_45
+    ? encoded / 12.92
+    : ((encoded + 0.055) / 1.055) ** 2.4;
 }
 
 describe("color token governance", () => {
@@ -62,8 +126,18 @@ describe("color token governance", () => {
 
   it("keeps raw colors inside explicit palette, theme, native, or brand owners", () => {
     const offenders = files
-      .filter((filePath) => !isRawColorOwner(filePath))
-      .filter((filePath) => RAW_COLOR_RE.test(readFileSync(filePath, "utf8")))
+      .filter(containsUnauthorizedRawColor)
+      .map(projectRelative);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps color derivation inside the palette or an explicit editor engine", () => {
+    const offenders = files
+      .filter((filePath) => !COLOR_MIX_OWNERS.has(projectRelative(filePath)))
+      .filter((filePath) =>
+        /\bcolor-mix\s*\(/i.test(readFileSync(filePath, "utf8"))
+      )
       .map(projectRelative);
 
     expect(offenders).toEqual([]);
@@ -93,11 +167,96 @@ describe("color token governance", () => {
       "utf8"
     );
 
-    expect(globals).not.toContain("--action-accent:");
-    expect(globals).not.toContain("--action-danger:");
+    expect(globals).toContain("--action-accent: var(--primary)");
+    expect(globals).toContain("--action-danger: var(--destructive)");
     expect(globals).toContain("--action-muted: var(--muted-foreground)");
-    expect(button).not.toContain("text-action-accent");
-    expect(button).not.toContain("text-action-danger");
+    expect(button).toContain("bg-action-accent");
+    expect(button).toContain("text-action-danger");
     expect(button).not.toContain("text-status-info-fg");
+  });
+
+  it("keeps solid status text above the WCAG text contrast floor", () => {
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    for (const block of [
+      cssBlock(globals, ":root"),
+      cssBlock(globals, ":root.light"),
+    ]) {
+      const foregroundLuminance =
+        neutralOklchLightness(cssVariable(block, "status-solid-foreground")) **
+        3;
+      for (const token of [
+        "destructive",
+        "warning",
+        "success",
+        "info",
+        "done",
+      ]) {
+        expect(
+          contrastRatio(
+            relativeLuminance(cssVariable(block, token)),
+            foregroundLuminance
+          )
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("keeps the lowest shimmer text step readable in both themes", () => {
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const shimmerMix = cssVariable(globals, "shimmer-low");
+    const alphaMatch = /var\(--foreground\)\s+([\d.]+)%/.exec(shimmerMix);
+    if (!alphaMatch?.[1]) throw new Error("missing shimmer foreground weight");
+    const alpha = Number.parseFloat(alphaMatch[1]) / 100;
+    for (const block of [
+      cssBlock(globals, ":root"),
+      cssBlock(globals, ":root.light"),
+    ]) {
+      const foreground = encodedNeutralChannel(
+        neutralOklchLightness(cssVariable(block, "foreground"))
+      );
+      const background = encodedNeutralChannel(
+        neutralOklchLightness(cssVariable(block, "background"))
+      );
+      const composited = foreground * alpha + background * (1 - alpha);
+      expect(
+        contrastRatio(linearChannel(composited), linearChannel(background))
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("binds toast surfaces and glyphs to contrast-safe semantic tokens", () => {
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const sonner = readFileSync(
+      join(ROOT, "src/renderer/components/primitives/sonner.tsx"),
+      "utf8"
+    );
+    for (const block of [
+      cssBlock(globals, ":root"),
+      cssBlock(globals, ":root.light"),
+    ]) {
+      const surface = neutralOklchLightness(
+        cssVariable(block, "toast-surface")
+      );
+      const foreground = neutralOklchLightness(
+        cssVariable(block, "toast-foreground")
+      );
+      expect(
+        contrastRatio(surface ** 3, foreground ** 3)
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(globals).toContain("--toast-action-bg:");
+    expect(sonner).toContain('"--normal-bg": "var(--toast-surface)"');
+    expect(sonner).toContain('"--normal-text": "var(--toast-foreground)"');
+    expect(sonner).toContain("text-status-solid-foreground");
+    expect(sonner).not.toContain("text-[color:var(--toast-surface)]");
   });
 });

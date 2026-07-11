@@ -27,8 +27,10 @@ export interface SecretsStore {
   delete(key: string): Promise<void>;
   flush(): Promise<void>;
   get(key: string): Promise<string | null>;
+  getEncrypted(key: string): Promise<string | null>;
   list(): Promise<string[]>;
   set(key: string, value: string): Promise<void>;
+  setEncrypted(key: string, value: string): Promise<void>;
 }
 
 // --- safeStorage helpers (file-scope, not exported) ---
@@ -121,6 +123,20 @@ export function createSecretsStore(): SecretsStore {
       return null;
     },
 
+    async getEncrypted(key) {
+      const s = await ready;
+      const entry = s.get().entries[key];
+      if (!entry) return null;
+      if (!(entry.keyVersion === 1 && entry.encrypted)) {
+        throw new Error("plugin secret is not encrypted");
+      }
+      const plaintext = decrypt(entry.encrypted);
+      if (plaintext === null) {
+        throw new Error("plugin secret decryption failed");
+      }
+      return plaintext;
+    },
+
     async set(key, value) {
       const s = await ready;
       let entry: SecretEntry;
@@ -139,6 +155,24 @@ export function createSecretsStore(): SecretsStore {
       s.mutate((state) => ({
         ...state,
         entries: { ...state.entries, [key]: entry },
+      }));
+    },
+
+    async setEncrypted(key, value) {
+      const s = await ready;
+      if (!isAvailable()) {
+        throw new Error("secure storage is unavailable");
+      }
+      const encrypted = encrypt(value);
+      if (encrypted === null) {
+        throw new Error("secure storage encryption failed");
+      }
+      s.mutate((state) => ({
+        ...state,
+        entries: {
+          ...state.entries,
+          [key]: { encrypted, keyVersion: 1 },
+        },
       }));
     },
 

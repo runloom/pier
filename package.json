@@ -1,7 +1,7 @@
 {
   "name": "pier",
   "version": "0.1.0",
-  "description": "Pier \u2014 \u672c\u5730 AI \u5f00\u53d1\u5de5\u4f5c\u53f0\uff08dockview panel \u5e03\u5c40 + \u7ec8\u7aef + \u4ee3\u7801\u53d8\u66f4\u9884\u89c8 + \u591a agent \u72b6\u6001\u53ef\u89c1\u6027\uff09",
+  "description": "Pier — 本地 AI 开发工作台（dockview panel 布局 + 终端 + 代码变更预览 + 多 agent 状态可见性）",
   "type": "module",
   "main": "out/main/index.js",
   "private": true,
@@ -15,7 +15,9 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm typecheck:host && pnpm typecheck:packages",
+    "typecheck:host": "tsc --noEmit",
+    "typecheck:packages": "tsc -p packages/ui/tsconfig.json --noEmit && tsc -p packages/plugin-api/tsconfig.json --noEmit && tsc -p packages/plugin-codex/tsconfig.json --noEmit",
     "lint": "ultracite check",
     "lint:fix": "ultracite fix",
     "format": "ultracite fix",
@@ -30,12 +32,15 @@
     "plugins:pack": "pnpm -r --filter '@pier/plugin-*' --workspace-concurrency=1 run build:package",
     "plugins:index": "node ./scripts/generate-plugin-index.mjs",
     "check:plugin-index": "pnpm plugins:pack && node scripts/verify-plugin-index-assets.mjs",
-    "check": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size && pnpm test:unit && pnpm test:component",
+    "check:static": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size",
+    "check": "pnpm check:static && pnpm test:unit && pnpm test:component && pnpm test:integration",
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:component": "vitest run tests/component",
+    "test:integration": "vitest run tests/integration",
+    "pretest:e2e": "pnpm plugin:codex:pack",
     "test:e2e": "playwright test --config playwright.config.ts",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --no-file-parallelism",
     "predev": "pnpm plugin:codex:pack && node ./scripts/dev-profile.mjs predev",
     "dev": "node ./scripts/dev-with-plugins.mjs",
     "dev:host": "node ./scripts/dev-profile.mjs electron-dev",
@@ -119,7 +124,7 @@
     "@types/tar-stream": "3.1.3",
     "@types/write-file-atomic": "^4.0.3",
     "@vitejs/plugin-react": "6.0.2",
-    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/coverage-v8": "4.1.10",
     "dependency-cruiser": "17.4.3",
     "electron": "42.4.0",
     "electron-builder": "26.15.2",
@@ -134,7 +139,8 @@
     "typescript": "6.0.3",
     "ultracite": "7.8.3",
     "vite": "8.0.16",
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   },
-  "$pin-policy": "exact pin \u5230 install \u5f53\u65e5 latest stable; \u4e0d\u7528 latest \u5b57\u9762; \u5347\u7ea7\u8d70 plan unlock"
+  "$pin-policy": "exact pin 到 install 当日 latest stable; 不用 latest 字面; 升级走 plan unlock",
+  "$peer-policy": "electron-vite 5 已通过本仓 build 验证可配 Vite 8；上游 peer range 尚未包含 Vite 8，按包对精确放行并由 pnpm build 守护。"
 }
