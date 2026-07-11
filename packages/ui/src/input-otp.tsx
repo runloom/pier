@@ -1,6 +1,7 @@
 import { OTPInput, OTPInputContext } from "input-otp";
 import { MinusIcon } from "lucide-react";
 import * as React from "react";
+import { CONTROL_ICON_SIZE_CLASS } from "./interactive-density.ts";
 import { cn } from "./utils.ts";
 
 function InputOTP({
@@ -50,7 +51,8 @@ function InputOTPSlot({
   return (
     <div
       className={cn(
-        "relative flex size-8 items-center justify-center border-input border-y border-r bg-input/50 text-sm outline-none transition-[color,box-shadow] duration-200 first:rounded-l-2xl first:border-l last:rounded-r-2xl aria-invalid:border-destructive data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-3 data-[active=true]:ring-ring/30 data-[active=true]:aria-invalid:ring-destructive/20 dark:data-[active=true]:aria-invalid:ring-destructive/40",
+        CONTROL_ICON_SIZE_CLASS,
+        "relative flex items-center justify-center border-input border-y border-r bg-input/50 text-sm outline-none transition-[color,box-shadow] duration-200 first:rounded-l-2xl first:border-l last:rounded-r-2xl aria-invalid:border-destructive data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-3 data-[active=true]:ring-ring/30 data-[active=true]:aria-invalid:ring-destructive/20 dark:data-[active=true]:aria-invalid:ring-destructive/40",
         className
       )}
       data-active={isActive}

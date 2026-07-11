@@ -33,7 +33,7 @@ function AccountsTableSkeleton(): JSX.Element {
     <div className="px-4 pb-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <Skeleton className="h-7 w-28 rounded-lg" />
-        <Skeleton className="h-8 w-24 rounded-full" />
+        <Skeleton className="h-7 w-24 rounded-full" />
       </div>
       <div className="pier-codex-account-table-shell">
         <Table className="pier-codex-account-table">
