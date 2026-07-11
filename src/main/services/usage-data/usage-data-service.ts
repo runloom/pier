@@ -13,7 +13,7 @@ import { versionedJsonStore } from "../../state/versioned-store.ts";
 import { estimateObservationCostMicrousd } from "./pricing.ts";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_OBSERVATIONS = 20_000;
+const MAX_OBSERVATIONS = 250_000;
 
 const tokenTotalsSchema = z.object({
   cachedInputTokens: z.number().int().nonnegative(),

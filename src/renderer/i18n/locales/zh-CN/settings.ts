@@ -229,7 +229,10 @@ export const settings = {
       enabled: "已启用",
       disabled: "已停用",
       manifestOnly: "仅清单预览",
+      runtimeUnavailable: "未加载",
     },
+    runtimeUnavailableDescription:
+      "插件已安装，但未进入当前运行态。请重启 Pier；如问题持续，请重新安装插件。",
     action: {
       enable: "启用",
       disable: "停用",

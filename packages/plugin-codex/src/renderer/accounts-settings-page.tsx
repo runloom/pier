@@ -23,7 +23,7 @@ import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { CircleUserRound, Plus, RefreshCw } from "lucide-react";
-import { Fragment, type JSX, useState } from "react";
+import { Fragment, type JSX } from "react";
 import {
   AccountAvatar,
   OtherAccount,
@@ -32,6 +32,7 @@ import {
 } from "./account-display.tsx";
 import { CostCard } from "./cost-card.tsx";
 import type { Translate } from "./usage-meter.tsx";
+import { useAccountsRefresh } from "./use-accounts-refresh.ts";
 import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
 
 export interface AccountsSettingsPageProps {
@@ -56,9 +57,6 @@ export function AccountsSettingsPage({
   context,
 }: AccountsSettingsPageProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
-  const [refreshingAccountIds, setRefreshingAccountIds] = useState<
-    ReadonlySet<string>
-  >(new Set());
   const t: Translate = (key, fallback) => context.i18n.t(key, fallback);
   const reportError = (err: unknown): void => {
     context.dialogs
@@ -74,23 +72,8 @@ export function AccountsSettingsPage({
   const invoke = (method: string, payload: unknown = null): void => {
     context.rpc.invoke(method, payload).catch(reportError);
   };
-  const refreshUsage = async (accountId: string): Promise<void> => {
-    setRefreshingAccountIds((current) => new Set(current).add(accountId));
-    try {
-      await context.rpc.invoke("accounts.refreshUsage", { accountId });
-      context.notifications.success(
-        t("pier.codex.accounts.settings.usageRefreshSuccess", "Usage refreshed")
-      );
-    } catch (error) {
-      reportError(error);
-    } finally {
-      setRefreshingAccountIds((current) => {
-        const next = new Set(current);
-        next.delete(accountId);
-        return next;
-      });
-    }
-  };
+  const { costRefreshing, refreshCost, refreshingAccountIds, refreshUsage } =
+    useAccountsRefresh({ context, onAccountError: reportError, t });
   const handleRemove = async (accountId: string): Promise<void> => {
     const ok = await context.dialogs.confirm({
       body: t(
@@ -229,7 +212,13 @@ export function AccountsSettingsPage({
               </Button>
             </CardFooter>
           </Card>
-          <CostCard language={language} snapshot={snapshot.costUsage} t={t} />
+          <CostCard
+            language={language}
+            onRefresh={() => refreshCost()}
+            refreshing={costRefreshing}
+            snapshot={snapshot.costUsage}
+            t={t}
+          />
         </>
       ) : (
         <Empty>

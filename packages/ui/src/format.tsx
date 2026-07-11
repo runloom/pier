@@ -42,6 +42,7 @@ export function formatCurrency(
   if (!Number.isFinite(value)) return "—";
   return safeNumberFormat(locale, {
     currency,
+    currencyDisplay: "narrowSymbol",
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
     style: "currency",

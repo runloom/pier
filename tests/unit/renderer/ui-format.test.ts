@@ -2,6 +2,7 @@ import {
   formatBytes,
   formatCompactNumber,
   formatCount,
+  formatCurrency,
   formatDurationShort,
   formatPercent,
   formatRelativeTime,
@@ -27,6 +28,12 @@ describe("formatCompactNumber", () => {
 describe("formatCount", () => {
   it("千分位整数", () => {
     expect(formatCount(4190, "en")).toBe("4,190");
+  });
+});
+
+describe("formatCurrency", () => {
+  it("使用窄货币符号避免中文界面出现冗余币种前缀", () => {
+    expect(formatCurrency(86.62, "zh-CN")).toBe("$86.62");
   });
 });
 

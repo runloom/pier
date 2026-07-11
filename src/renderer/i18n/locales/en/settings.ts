@@ -235,7 +235,10 @@ export const settings = {
       enabled: "Enabled",
       disabled: "Disabled",
       manifestOnly: "Manifest preview",
+      runtimeUnavailable: "Not loaded",
     },
+    runtimeUnavailableDescription:
+      "This plugin is installed but did not enter the current runtime. Restart Pier; if the issue persists, reinstall the plugin.",
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",

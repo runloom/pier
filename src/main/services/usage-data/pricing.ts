@@ -11,6 +11,36 @@ interface ModelPricing {
 // API 等价成本估算目录。费率单位为每 token 的微美元，集中在宿主持有，
 // 数据采集插件只发布原始 token，避免各插件产生不可聚合的金额口径。
 const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
+  "gpt-5.6-sol": {
+    cachedInputMicrousd: 0.5,
+    inputMicrousd: 5,
+    outputMicrousd: 30,
+    priority: {
+      cachedInputMicrousd: 1,
+      inputMicrousd: 10,
+      outputMicrousd: 60,
+    },
+  },
+  "gpt-5.6-terra": {
+    cachedInputMicrousd: 0.25,
+    inputMicrousd: 2.5,
+    outputMicrousd: 15,
+    priority: {
+      cachedInputMicrousd: 0.5,
+      inputMicrousd: 5,
+      outputMicrousd: 30,
+    },
+  },
+  "gpt-5.6-luna": {
+    cachedInputMicrousd: 0.1,
+    inputMicrousd: 1,
+    outputMicrousd: 6,
+    priority: {
+      cachedInputMicrousd: 0.2,
+      inputMicrousd: 2,
+      outputMicrousd: 12,
+    },
+  },
   "gpt-5": {
     cachedInputMicrousd: 0.125,
     inputMicrousd: 1.25,

@@ -66,6 +66,17 @@ export interface CodexCostUsageSnapshot {
     };
   }>;
   coverage: { complete: boolean; from: string; to: string };
+  diagnostics?: {
+    candidateFiles: number;
+    deduplicatedEvents: number;
+    failedFiles: number;
+    forkedFiles: number;
+    malformedLines: number;
+    parsedFiles: number;
+    reusedFiles: number;
+    truncatedFiles: number;
+    uniqueEvents: number;
+  };
   observedAt: number;
   summary: {
     estimatedCostMicrousd: number | null;

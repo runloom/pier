@@ -114,20 +114,22 @@
   margin-top: 0.875rem;
 }
 
-.pier-codex-cost-bars i {
+.pier-codex-cost-bars [data-cost-bar] {
   display: block;
   height: var(--pier-cost-height);
   min-height: 0.1875rem;
+  padding: 0;
   background: var(--chart-2);
+  border: 0;
   border-radius: 0.1875rem 0.1875rem 0.09375rem 0.09375rem;
   opacity: 0.86;
 }
 
-.pier-codex-cost-bars i:last-child {
+.pier-codex-cost-bars [data-cost-bar]:last-child {
   opacity: 1;
 }
 
-.pier-codex-cost-bars i.is-empty {
+.pier-codex-cost-bars [data-cost-bar].is-empty {
   height: 0.1875rem;
   background: var(--muted);
   opacity: 0.55;

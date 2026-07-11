@@ -260,6 +260,67 @@ describe("ManagedPluginsSection", () => {
     );
   });
 
+  it("keeps an installed managed plugin visible when its runtime entry is absent", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        managedPlugins: {
+          checkUpdates: vi.fn(async () => catalog(true)),
+          disable: vi.fn(),
+          enable: vi.fn(),
+          install: vi.fn(),
+          list: vi.fn(async () => catalog(true)),
+          rollback: vi.fn(),
+          uninstall: vi.fn(),
+          update: vi.fn(),
+        },
+      },
+    });
+
+    render(
+      <ManagedPluginsSection
+        builtinEntries={[]}
+        builtinInitialized
+        onToggleBuiltin={vi.fn()}
+        pendingBuiltinId={null}
+      />
+    );
+
+    expect(await screen.findByText("Codex")).toBeInTheDocument();
+    expect(screen.getByText("Not loaded")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Disable Codex" })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Install" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows catalog load failures instead of an empty managed list", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        managedPlugins: {
+          checkUpdates: vi.fn(),
+          list: vi.fn(async () => {
+            throw new Error("catalog unavailable");
+          }),
+        },
+      },
+    });
+
+    render(
+      <ManagedPluginsSection
+        builtinEntries={[]}
+        builtinInitialized
+        onToggleBuiltin={vi.fn()}
+        pendingBuiltinId={null}
+      />
+    );
+
+    expect(await screen.findByText("catalog unavailable")).toBeInTheDocument();
+  });
+
   it("spins the check updates icon while pending and shows a success toast", async () => {
     let resolveCheck:
       | ((snapshot: ManagedPluginCatalogSnapshot) => void)

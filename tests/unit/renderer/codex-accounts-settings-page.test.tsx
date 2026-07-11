@@ -130,9 +130,9 @@ describe("AccountsSettingsPage", () => {
     expect(screen.getByTestId("codex-cost-card")).toBeDefined();
     expect(screen.getByText("PRO · Resets unavailable")).toBeDefined();
     expect(screen.getByText("Last 31 days cost")).toBeDefined();
-    expect(container.querySelectorAll(".pier-codex-cost-bars i")).toHaveLength(
-      31
-    );
+    expect(
+      container.querySelectorAll(".pier-codex-cost-bars [data-cost-bar]")
+    ).toHaveLength(31);
     expect(
       screen.queryByText(
         "Manage Codex accounts and compare session and weekly remaining limits."
@@ -244,9 +244,128 @@ describe("AccountsSettingsPage", () => {
     expect(screen.getByText("62%")).toBeDefined();
     expect(screen.getByText("36%")).toBeDefined();
     expect(screen.getAllByText("$1.25")).toHaveLength(2);
-    expect(container.querySelectorAll(".pier-codex-cost-bars i")).toHaveLength(
-      31
+    expect(
+      container.querySelectorAll(".pier-codex-cost-bars [data-cost-bar]")
+    ).toHaveLength(31);
+    const pricedBar = container.querySelector(
+      '.pier-codex-cost-bars [data-cost-bar][aria-label*="$1.25"]'
     );
+    expect(pricedBar).not.toBeNull();
+    await act(async () => {
+      fireEvent.focus(pricedBar as Element);
+    });
+    await vi.waitFor(() => {
+      const tooltip = document.querySelector('[data-slot="tooltip-content"]');
+      expect(tooltip).toHaveTextContent("2026-07-11");
+      expect(tooltip).toHaveTextContent("Cost: $1.25");
+      expect(tooltip).toHaveTextContent("Tokens: 100");
+    });
+  });
+
+  it("refreshes cost independently with loading and success feedback", async () => {
+    const snapshot = snapshotWithAccount();
+    const { context } = contextWithSnapshot(snapshot);
+    let resolveRefresh: (() => void) | undefined;
+    const refreshPending = new Promise<void>((resolvePromise) => {
+      resolveRefresh = resolvePromise;
+    });
+    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
+      if (method === "accounts.snapshot") return snapshot as T;
+      if (method === "usage.refreshCost") await refreshPending;
+      return null as T;
+    };
+    render(<AccountsSettingsPage context={context} />);
+
+    const refreshButton = await screen.findByRole("button", {
+      name: "Refresh cost",
+    });
+    await act(async () => {
+      fireEvent.click(refreshButton);
+    });
+
+    await vi.waitFor(() => {
+      expect(refreshButton).toBeDisabled();
+      expect(refreshButton).toHaveAttribute("aria-busy", "true");
+      expect(refreshButton.querySelector("svg")).toHaveClass("animate-spin");
+    });
+
+    await act(async () => {
+      resolveRefresh?.();
+      await refreshPending;
+    });
+    await vi.waitFor(() => {
+      expect(refreshButton).not.toBeDisabled();
+      expect(context.notifications.success).toHaveBeenCalledWith(
+        "Cost data refreshed"
+      );
+    });
+  });
+
+  it("explains incomplete cost coverage with scan diagnostics", async () => {
+    const { context } = contextWithSnapshot(
+      snapshotWithAccount({
+        costUsage: {
+          buckets: [],
+          coverage: { complete: false, from: "2026-06-11", to: "2026-07-11" },
+          diagnostics: {
+            candidateFiles: 3,
+            deduplicatedEvents: 2,
+            failedFiles: 1,
+            forkedFiles: 1,
+            malformedLines: 4,
+            parsedFiles: 3,
+            reusedFiles: 0,
+            truncatedFiles: 0,
+            uniqueEvents: 2,
+          },
+          observedAt: Date.now(),
+          summary: {
+            estimatedCostMicrousd: null,
+            latestDayTokens: 0,
+            periodTokens: 0,
+            todayEstimatedCostMicrousd: null,
+          },
+        },
+      })
+    );
+    render(<AccountsSettingsPage context={context} />);
+
+    const partial = await screen.findByText("Partial data");
+    fireEvent.focus(partial);
+
+    await vi.waitFor(() => {
+      const tooltip = document.querySelector('[data-slot="tooltip-content"]');
+      expect(tooltip).toHaveTextContent("1 files could not be read");
+      expect(tooltip).toHaveTextContent("4 malformed log lines");
+      expect(tooltip).not.toHaveTextContent("repeated fork events");
+    });
+  });
+
+  it("restores the cost refresh button and shows details after failure", async () => {
+    const snapshot = snapshotWithAccount();
+    const { context } = contextWithSnapshot(snapshot);
+    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
+      if (method === "accounts.snapshot") return snapshot as T;
+      if (method === "usage.refreshCost") throw new Error("scan failed");
+      return null as T;
+    };
+    render(<AccountsSettingsPage context={context} />);
+
+    const refreshButton = await screen.findByRole("button", {
+      name: "Refresh cost",
+    });
+    await act(async () => {
+      fireEvent.click(refreshButton);
+    });
+
+    await vi.waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "scan failed",
+        title: "Could not refresh cost data",
+      });
+      expect(refreshButton).not.toBeDisabled();
+    });
+    expect(context.notifications.success).not.toHaveBeenCalled();
   });
 
   it("renders a team account's single quota without an invented empty lane", async () => {

@@ -1,5 +1,11 @@
+import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
-import { Item, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@pier/ui/item.tsx";
 import type {
   ManagedPluginCatalogSnapshot,
   ManagedPluginOperationResult,
@@ -326,6 +332,75 @@ export function AvailableManagedRow({
             <Spinner pending={pending} />
             {t("settings.plugins.action.install")}
           </Button>
+        </div>
+      </ItemContent>
+    </Item>
+  );
+}
+
+/** Installed catalog entry whose runtime registry entry is currently absent. */
+export function UnavailableManagedRow({
+  onRefresh,
+  onToggle,
+  pending,
+  row,
+  win,
+}: {
+  onRefresh: () => void;
+  onToggle: () => void;
+  pending: boolean;
+  row: CatalogRow;
+  win: ManagedPluginsWindowShim | undefined;
+}): JSX.Element {
+  const t = useT();
+  const display = resolveRowDisplay(row);
+  const statusKey = row.desired.enabled ? "runtimeUnavailable" : "disabled";
+  const actionKey = row.desired.enabled ? "disable" : "enable";
+  const version = row.desired.version ?? row.effective?.version;
+  return (
+    <Item
+      className="rounded-none border-0 px-(--card-spacing)"
+      data-testid={`plugin-row-${row.id}`}
+      role="listitem"
+    >
+      <ItemContent className="min-w-0 gap-1.5">
+        <div className="flex w-full items-center justify-between gap-2">
+          <ItemTitle className="min-w-0">
+            <Package
+              aria-hidden
+              className="size-4 shrink-0 text-muted-foreground"
+            />
+            <span className="truncate">{display.name}</span>
+            <Badge variant={row.desired.enabled ? "destructive" : "outline"}>
+              {t(`settings.plugins.status.${statusKey}`)}
+            </Badge>
+          </ItemTitle>
+          <span className="shrink-0 text-muted-foreground text-xs">
+            {version ? `v${version}` : "—"}
+          </span>
+        </div>
+        <ItemDescription className="text-xs">
+          {row.desired.enabled
+            ? t("settings.plugins.runtimeUnavailableDescription")
+            : display.description}
+        </ItemDescription>
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <ContributionCountsInline counts={row.contributionCounts} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ManagedRowExtraActions onRefresh={onRefresh} row={row} win={win} />
+            <Button
+              aria-label={t(`settings.plugins.action.${actionKey}Plugin`, {
+                name: display.name,
+              })}
+              disabled={pending}
+              onClick={onToggle}
+              size="sm"
+              type="button"
+              variant={row.desired.enabled ? "outline" : "default"}
+            >
+              {t(`settings.plugins.action.${actionKey}`)}
+            </Button>
+          </div>
         </div>
       </ItemContent>
     </Item>

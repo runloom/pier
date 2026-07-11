@@ -85,6 +85,66 @@ describe("usage data service", () => {
     });
   });
 
+  it("prices GPT-5.6 model variants using the official standard rates", async () => {
+    const service = createUsageDataService({ userDataDir: await tempDir() });
+    await service.init();
+    const snapshot = service.publish("pier.codex", {
+      coverage: { complete: true, from: "2026-07-11", to: "2026-07-11" },
+      observations: [
+        {
+          cachedInputTokens: 200,
+          date: "2026-07-11",
+          inputTokens: 1000,
+          modelId: "gpt-5.6-sol",
+          outputTokens: 100,
+        },
+        {
+          cachedInputTokens: 100,
+          date: "2026-07-11",
+          inputTokens: 500,
+          modelId: "gpt-5.6-terra",
+          outputTokens: 50,
+        },
+      ],
+      observedAt: 1,
+      scope: { kind: "machine" },
+      sourceId: "local-sessions",
+    });
+
+    expect(snapshot.summary.estimatedCostMicrousd).toBe(8875);
+    expect(snapshot.buckets[0]?.pricingStatus).toBe("complete");
+  });
+
+  it("applies long-context pricing per request rather than per daily total", async () => {
+    const service = createUsageDataService({ userDataDir: await tempDir() });
+    await service.init();
+
+    const snapshot = service.publish("pier.codex", {
+      coverage: { complete: true, from: "2026-07-11", to: "2026-07-11" },
+      observations: [
+        {
+          cachedInputTokens: 0,
+          date: "2026-07-11",
+          inputTokens: 200_000,
+          modelId: "gpt-5.4",
+          outputTokens: 0,
+        },
+        {
+          cachedInputTokens: 0,
+          date: "2026-07-11",
+          inputTokens: 200_000,
+          modelId: "gpt-5.4",
+          outputTokens: 0,
+        },
+      ],
+      observedAt: 1,
+      scope: { kind: "machine" },
+      sourceId: "local-sessions",
+    });
+
+    expect(snapshot.summary.estimatedCostMicrousd).toBe(1_000_000);
+  });
+
   it("permission-gates publication while allowing own-data reads", async () => {
     const service = createUsageDataService({ userDataDir: await tempDir() });
     await service.init();
