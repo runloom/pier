@@ -75,16 +75,33 @@ const panelContext: PanelContext = {
 };
 
 interface ExpectedFilesFacade {
+  confirmDurability(request: {
+    expectedRevision: string;
+    path: string;
+    root: string;
+  }): Promise<unknown>;
+  inspectWriteTarget(request: { path: string; root: string }): Promise<unknown>;
   list(request: { path: string; root: string }): Promise<unknown>;
   move(request: {
     newPath: string;
     path: string;
     root: string;
   }): Promise<unknown>;
+  readDocument(request: { path: string; root: string }): Promise<unknown>;
   readText(request: { path: string; root: string }): Promise<string>;
   stat(request: { path: string; root: string }): Promise<unknown>;
   trash(request: { path: string; root: string }): Promise<unknown>;
   watch(root: string, listener: (event: unknown) => void): () => void;
+  writeDocument(request: {
+    contents: string;
+    eol: "cr" | "crlf" | "lf";
+    expected: { kind: "absent" } | { kind: "revision"; revision: string };
+    format:
+      | { bom: boolean; encoding: "utf8" }
+      | { bom: true; encoding: "utf16be" | "utf16le" };
+    path: string;
+    root: string;
+  }): Promise<unknown>;
   writeText(request: {
     contents: string;
     path: string;
@@ -760,6 +777,43 @@ describe("createRendererPluginContext", () => {
     expect(addPanel).not.toHaveBeenCalled();
   });
 
+  it("merges params into an owned plugin panel instance", () => {
+    const panelId = "sample.panel";
+    const pluginEntryWithPanel: PluginRegistryEntry = {
+      ...pluginEntry,
+      effectivePermissions: ["panel:open"],
+      manifest: {
+        ...pluginEntry.manifest,
+        panels: [{ id: panelId, permissions: [], title: "Sample Panel" }],
+        permissions: ["panel:open"],
+      },
+    };
+    const updateParameters = vi.fn();
+    useWorkspaceStore.setState({
+      api: {
+        panels: [
+          {
+            api: { updateParameters },
+            id: "sample-instance",
+            params: { retained: true, source: { kind: "disk" } },
+            view: { contentComponent: panelId },
+          },
+        ],
+      } as unknown as DockviewApi,
+    });
+    const context = createRendererPluginContext(pluginEntryWithPanel);
+
+    expect(
+      context.panels.updateInstanceParams(panelId, "sample-instance", {
+        source: { id: "untitled-1", kind: "untitled" },
+      })
+    ).toBe(true);
+    expect(updateParameters).toHaveBeenCalledWith({
+      retained: true,
+      source: { id: "untitled-1", kind: "untitled" },
+    });
+  });
+
   it("delegates worktree methods to the preload facade", async () => {
     const check = vi.fn(async () => ({
       mainPath: "/repo",
@@ -1006,6 +1060,21 @@ describe("createRendererPluginContext", () => {
       { kind: "file", path: "src/index.ts", root },
     ]);
     const readText = vi.fn(async () => "export const value = 1;\n");
+    const readDocument = vi.fn(async () => ({
+      contents: "export const value = 1;\n",
+      kind: "text" as const,
+      revision: "revision-1",
+    }));
+    const inspectWriteTarget = vi.fn(async () => ({ kind: "absent" as const }));
+    const confirmDurability = vi.fn(async () => ({
+      kind: "confirmed" as const,
+      revision: "revision-2",
+    }));
+    const writeDocument = vi.fn(async () => ({
+      durability: "confirmed" as const,
+      kind: "written" as const,
+      revision: "revision-2",
+    }));
     const writeText = vi.fn(async () => ({
       mtimeMs: 1,
       written: true as const,
@@ -1016,8 +1085,11 @@ describe("createRendererPluginContext", () => {
       configurable: true,
       value: {
         files: {
+          confirmDurability,
+          inspectWriteTarget,
           list,
           move,
+          readDocument,
           readText,
           stat: vi.fn(async () => ({
             exists: true,
@@ -1029,6 +1101,7 @@ describe("createRendererPluginContext", () => {
           })),
           trash,
           watch: vi.fn(() => () => undefined),
+          writeDocument,
           writeText,
         },
       },
@@ -1040,6 +1113,29 @@ describe("createRendererPluginContext", () => {
     await expect(context.files.list({ path: "src", root })).resolves.toEqual([
       { kind: "file", path: "src/index.ts", root },
     ]);
+    await expect(
+      context.files.readDocument({ path: "src/index.ts", root })
+    ).resolves.toMatchObject({ kind: "text", revision: "revision-1" });
+    await expect(
+      context.files.inspectWriteTarget({ path: "src/new.ts", root })
+    ).resolves.toEqual({ kind: "absent" });
+    await expect(
+      context.files.writeDocument({
+        contents: "export const value = 2;\n",
+        eol: "lf",
+        expected: { kind: "revision", revision: "revision-1" },
+        format: { bom: false, encoding: "utf8" },
+        path: "src/index.ts",
+        root,
+      })
+    ).resolves.toMatchObject({ kind: "written", revision: "revision-2" });
+    await expect(
+      context.files.confirmDurability({
+        expectedRevision: "revision-2",
+        path: "src/index.ts",
+        root,
+      })
+    ).resolves.toEqual({ kind: "confirmed", revision: "revision-2" });
     await expect(
       context.files.readText({ path: "src/index.ts", root })
     ).resolves.toBe("export const value = 1;\n");
@@ -1063,6 +1159,24 @@ describe("createRendererPluginContext", () => {
 
     expect(list).toHaveBeenCalledWith({ path: "src", root });
     expect(readText).toHaveBeenCalledWith({ path: "src/index.ts", root });
+    expect(readDocument).toHaveBeenCalledWith({ path: "src/index.ts", root });
+    expect(inspectWriteTarget).toHaveBeenCalledWith({
+      path: "src/new.ts",
+      root,
+    });
+    expect(writeDocument).toHaveBeenCalledWith({
+      contents: "export const value = 2;\n",
+      eol: "lf",
+      expected: { kind: "revision", revision: "revision-1" },
+      format: { bom: false, encoding: "utf8" },
+      path: "src/index.ts",
+      root,
+    });
+    expect(confirmDurability).toHaveBeenCalledWith({
+      expectedRevision: "revision-2",
+      path: "src/index.ts",
+      root,
+    });
     expect(writeText).toHaveBeenCalledWith({
       contents: "export const value = 2;\n",
       path: "src/index.ts",
@@ -1155,6 +1269,71 @@ describe("createRendererPluginContext", () => {
     expect(writeText).not.toHaveBeenCalled();
     expect(move).not.toHaveBeenCalled();
     expect(trash).not.toHaveBeenCalled();
+  });
+
+  it("guards revision-safe file methods with read/write capabilities", async () => {
+    const root = "/repo";
+    const readDocument = vi.fn(async () => ({
+      contents: "value\n",
+      kind: "text" as const,
+      revision: "revision-1",
+    }));
+    const inspectWriteTarget = vi.fn(async () => ({ kind: "absent" as const }));
+    const writeDocument = vi.fn(async () => ({ kind: "written" as const }));
+    const confirmDurability = vi.fn(async () => ({
+      kind: "confirmed" as const,
+      revision: "revision-1",
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        files: {
+          confirmDurability,
+          inspectWriteTarget,
+          readDocument,
+          writeDocument,
+        },
+      },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["file:read"],
+    });
+
+    await expect(
+      context.files.readDocument({ path: "notes.txt", root })
+    ).resolves.toMatchObject({ kind: "text", revision: "revision-1" });
+    await expect(
+      Promise.resolve().then(() =>
+        context.files.inspectWriteTarget({ path: "notes.txt", root })
+      )
+    ).rejects.toThrow(FILE_WRITE_CAPABILITY_PATTERN);
+    await expect(
+      Promise.resolve().then(() =>
+        context.files.writeDocument({
+          contents: "new\n",
+          eol: "lf",
+          expected: { kind: "revision", revision: "revision-1" },
+          format: { bom: false, encoding: "utf8" },
+          path: "notes.txt",
+          root,
+        })
+      )
+    ).rejects.toThrow(FILE_WRITE_CAPABILITY_PATTERN);
+    await expect(
+      Promise.resolve().then(() =>
+        context.files.confirmDurability({
+          expectedRevision: "revision-1",
+          path: "notes.txt",
+          root,
+        })
+      )
+    ).rejects.toThrow(FILE_WRITE_CAPABILITY_PATTERN);
+
+    expect(readDocument).toHaveBeenCalledTimes(1);
+    expect(inspectWriteTarget).not.toHaveBeenCalled();
+    expect(writeDocument).not.toHaveBeenCalled();
+    expect(confirmDurability).not.toHaveBeenCalled();
   });
 
   it("allows file plugins with write permission to invoke mutation methods", async () => {

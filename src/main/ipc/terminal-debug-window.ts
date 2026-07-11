@@ -2,6 +2,12 @@ import { join } from "node:path";
 import type { TerminalDebugWindowOpenResult } from "@shared/contracts/terminal-debug.ts";
 import { BrowserWindow, type IpcMain } from "electron";
 import { isDevRuntime } from "../runtime-mode.ts";
+import { createAppWindow } from "../windows/app-window.ts";
+import {
+  installRendererFailureRecovery,
+  reportRendererLoadError,
+} from "../windows/renderer-failure-recovery.ts";
+import { createRendererShowGate } from "../windows/renderer-show-gate.ts";
 import { windowFromWebContents } from "./terminal.ts";
 
 const isDev = isDevRuntime();
@@ -18,7 +24,10 @@ function debugRendererUrl(targetBrowserWindowId: number): string | null {
   return url.toString();
 }
 
-export function registerTerminalDebugWindowIpc(ipcMain: IpcMain): void {
+export function registerTerminalDebugWindowIpc(
+  ipcMain: IpcMain,
+  options: { isQuitting(): boolean }
+): void {
   ipcMain.handle(
     "pier:terminal-debug:open-window",
     (event): TerminalDebugWindowOpenResult => {
@@ -46,17 +55,41 @@ export function registerTerminalDebugWindowIpc(ipcMain: IpcMain): void {
         width: 1120,
       });
       openDebugWindows.add(debugWindow);
-      debugWindow.on("closed", () => {
-        openDebugWindows.delete(debugWindow);
+      const appWindow = createAppWindow(
+        debugWindow,
+        debugWindow.webContents,
+        null
+      );
+      const showGate = createRendererShowGate({
+        recordId: `terminal-debug-${debugWindow.id}`,
+        showInactive: true,
+        window: appWindow,
+        windowId: `terminal-debug-${debugWindow.id}`,
       });
-
-      debugWindow.once("ready-to-show", () => {
-        debugWindow.showInactive();
+      const recovery = installRendererFailureRecovery({
+        beforeLoadFailure: showGate.cancel,
+        beforeRendererGone: showGate.cancel,
+        isQuitting: options.isQuitting,
+        retryRenderer: showGate.retry,
+        window: appWindow,
+      });
+      showGate.setReadyTimeoutHandler(() => {
+        recovery.report({
+          detail:
+            "terminal debug renderer did not boot before the startup deadline",
+          kind: "load",
+        });
+      });
+      debugWindow.on("closed", () => {
+        showGate.cancel();
+        openDebugWindows.delete(debugWindow);
       });
 
       const url = isDev ? debugRendererUrl(targetWindow.id) : null;
       if (url) {
-        debugWindow.loadURL(url).catch(() => undefined);
+        debugWindow.loadURL(url).catch((error: unknown) => {
+          reportRendererLoadError(recovery, error);
+        });
       } else {
         debugWindow
           .loadFile(join(import.meta.dirname, "../renderer/index.html"), {
@@ -65,7 +98,9 @@ export function registerTerminalDebugWindowIpc(ipcMain: IpcMain): void {
               targetBrowserWindowId: String(targetWindow.id),
             },
           })
-          .catch(() => undefined);
+          .catch((error: unknown) => {
+            reportRendererLoadError(recovery, error);
+          });
       }
 
       return {

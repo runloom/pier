@@ -1,5 +1,6 @@
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import {
+  type FilesDocument,
   type FilesDocumentPanelSource,
   parseFilesDocumentPanelSource,
 } from "./files-document-types.ts";
@@ -9,6 +10,17 @@ export type ParsedPanelSourceState =
   | { kind: "empty" }
   | { kind: "invalid"; message: string; title: string }
   | { kind: "source"; source: FilesDocumentPanelSource };
+
+export function panelSourceForDocument(
+  document: FilesDocument | null
+): FilesDocumentPanelSource | null {
+  if (!document) {
+    return null;
+  }
+  return document.source.kind === "disk"
+    ? document.source
+    : { id: document.source.id, kind: "untitled", name: document.name };
+}
 
 export function sourceTitle(source: FilesDocumentPanelSource): string {
   if (source.kind === "untitled") {

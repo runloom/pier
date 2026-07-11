@@ -13,9 +13,9 @@ import {
   useState,
 } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
+import type { FileEditorController } from "./file-editor-controller.ts";
 import { ResolvedFilePanelActions } from "./file-panel-actions.tsx";
 import { ResolvedFilePanel } from "./file-panel-body.tsx";
-import { useDocumentId } from "./file-panel-hooks.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import {
   EmptyFileState,
@@ -29,6 +29,7 @@ import {
 import {
   asGroupHandle,
   breadcrumbSegmentsForSource,
+  panelSourceForDocument,
   parseSourceState,
   sourceTitle,
 } from "./file-panel-source.ts";
@@ -40,15 +41,10 @@ import {
 } from "./file-tree-preferences.ts";
 import { FileTreeSidebar } from "./file-tree-sidebar.tsx";
 import {
-  ensureDiskDocument,
-  getDocument,
-  removeDocument,
-  useFilesDocument,
-} from "./files-document-store.ts";
-import {
   type FilesDocumentPanelSource,
   type FileViewMode,
   isDiskSourceRootAllowed,
+  sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
 import {
   claimFilesGroupView,
@@ -56,13 +52,19 @@ import {
 } from "./files-group-view-host.tsx";
 import { createFilesTranslate } from "./files-i18n.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
+import type { FilesWatchHub } from "./files-watch-hub.ts";
+import { useFilePanelSaveAs } from "./use-file-panel-save-as.ts";
+import { useFilesDocument } from "./use-files-document.ts";
+
+let nextInlinePanelSessionId = 1;
 
 function FilePanelContent({
+  runtimeController,
   runtimeContext,
-  runtimeFiles,
+  runtimeWatchHub,
   ...props
 }: FilePanelRuntimeProps) {
-  const files = runtimeContext?.files ?? runtimeFiles;
+  const controller = runtimeController;
   const t = useMemo(
     () => createFilesTranslate(runtimeContext),
     [runtimeContext]
@@ -73,12 +75,37 @@ function FilePanelContent({
   );
   const sourceFromParams =
     sourceState.kind === "source" ? sourceState.source : null;
+  const stableSourceRef = useRef<FilesDocumentPanelSource | null>(null);
+  if (
+    sourceFromParams &&
+    !sameFilesDocumentPanelSource(stableSourceRef.current, sourceFromParams)
+  ) {
+    stableSourceRef.current = sourceFromParams;
+  } else if (!sourceFromParams) {
+    stableSourceRef.current = null;
+  }
+  const stableSource = stableSourceRef.current;
   const [mode, setMode] = useState<FileViewMode>("source");
-  const [saving, setSaving] = useState(false);
   const [searchRequest, setSearchRequest] = useState(0);
   const root = filePanelProjectRoot(props.params?.context);
   const [treeCollapsed, setTreeCollapsed] = useProjectFileTreeCollapsed(root);
   const projectName = root ? projectNameFromRoot(root) : null;
+  const panelSessionIdRef = useRef<string | null>(null);
+  if (panelSessionIdRef.current === null) {
+    panelSessionIdRef.current = `inline-panel:${nextInlinePanelSessionId}`;
+    nextInlinePanelSessionId += 1;
+  }
+  const panelSessionId = props.api?.id ?? panelSessionIdRef.current;
+  const sourceAllowed =
+    stableSource?.kind === "untitled" ||
+    (stableSource?.kind === "disk" &&
+      isDiskSourceRootAllowed(stableSource.root, props.params?.context));
+  useLayoutEffect(() => {
+    if (!(stableSource && sourceAllowed)) {
+      return;
+    }
+    return controller.acquirePanel(panelSessionId, stableSource);
+  }, [controller, panelSessionId, sourceAllowed, stableSource]);
   // group 绑定必须是「活的」:dockview 拖拽跨组不 remount 组件,只 reparent
   // 内容 DOM。render 期快照会指向旧 group(薄壳空白 + 旧组视图泄漏),
   // 所以经 onDidGroupChange 把 groupId 提升为 state,变化时靠下方 effect 的
@@ -95,6 +122,13 @@ function FilePanelContent({
       disposable?.dispose?.();
     };
   }, [props.api]);
+  useFilePanelSaveAs({
+    controller,
+    group,
+    props,
+    runtimeContext,
+    stableSource,
+  });
   const ownerIdRef = useRef<symbol | null>(null);
   if (ownerIdRef.current === null) {
     ownerIdRef.current = Symbol(props.api?.id ?? "inline");
@@ -104,6 +138,18 @@ function FilePanelContent({
   const prefersSharedGroupView = Boolean(
     runtimeContext && group && props.api?.id && ownerIdRef.current
   );
+  const inlineUntitledDocumentId =
+    !prefersSharedGroupView && sourceFromParams?.kind === "untitled"
+      ? sourceFromParams.id
+      : null;
+  useEffect(() => {
+    if (!inlineUntitledDocumentId) {
+      return;
+    }
+    return () => {
+      controller.discardDocument(inlineUntitledDocumentId);
+    };
+  }, [controller, inlineUntitledDocumentId]);
 
   // 薄壳唯一的共享视图职责:claim/release(owner 计数)。数据(active/
   // params/source)由 FilesGroupView 直读 dockview,薄壳不再镜像任何状态,
@@ -132,8 +178,10 @@ function FilePanelContent({
       }
       const claimed = claimFilesGroupView({
         context: runtimeContext,
+        controller,
         group,
         ownerId,
+        watchHub: runtimeWatchHub,
       });
       if (claimed || attempts >= 10) {
         if (!claimed) {
@@ -155,15 +203,44 @@ function FilePanelContent({
       }
       releaseFilesGroupView({ context: runtimeContext, groupId, ownerId });
     };
-  }, [group, prefersSharedGroupView, props.api?.id, runtimeContext]);
+  }, [
+    controller,
+    group,
+    prefersSharedGroupView,
+    props.api?.id,
+    runtimeContext,
+    runtimeWatchHub,
+  ]);
 
   // tab 未保存圆点:document.dirty 变化时写进 params(与 preview 斜体同通道),
   // panel-tab-header 经 onDidParametersChange 收到后渲染。dirty 同时并入
   // preview→pinned promote(写在同一次 updateParameters,避免两个 effect
   // 各自 spread 旧 params 相互覆盖)。
-  const trackedDocumentId = useDocumentId(sourceFromParams);
+  const trackedDocumentId = sourceFromParams
+    ? controller.documentId(sourceFromParams)
+    : null;
   const trackedDocument = useFilesDocument(trackedDocumentId ?? "");
+  const trackedSource = panelSourceForDocument(trackedDocument);
   const trackedDirty = trackedDocument?.dirty === true;
+  useEffect(() => {
+    if (
+      !(props.api && sourceFromParams && trackedSource) ||
+      sameFilesDocumentPanelSource(sourceFromParams, trackedSource)
+    ) {
+      return;
+    }
+    props.api.updateParameters({
+      ...(props.params ?? {}),
+      source: trackedSource,
+    });
+    props.api.setTitle(trackedDocument?.name ?? trackedSource.kind);
+  }, [
+    props.api,
+    props.params,
+    sourceFromParams,
+    trackedDocument,
+    trackedSource,
+  ]);
   useEffect(() => {
     if (!props.api) {
       return;
@@ -180,10 +257,7 @@ function FilePanelContent({
     });
   }, [props.api, props.params, trackedDirty]);
 
-  // 「真关闭」信号:dockview 的 onDidRemovePanel 只在面板真正被移除时触发;
-  // 组件 remount(布局恢复/组件重建)与跨组拖拽都不会。unmount 本身不可靠
-  // (remount 也走 unmount),必须以该信号门控会话清理。
-  const closedViaRemoveRef = useRef(false);
+  // 真关闭由 dockview 明确信号转发给控制器;普通 remount 不结束会话。
   useEffect(() => {
     const panelId = props.api?.id;
     const containerApi = (
@@ -199,60 +273,28 @@ function FilePanelContent({
       return;
     }
     const disposable = containerApi.onDidRemovePanel((panel) => {
-      if (panel?.id === panelId) {
-        closedViaRemoveRef.current = true;
+      if (panel?.id === panelId && stableSource) {
+        controller.closePanel({
+          hasOtherOpenInstance: hasOtherOpenFilesSourceInstance({
+            context: runtimeContext,
+            panelId,
+            source: stableSource,
+          }),
+          panelId,
+          source: stableSource,
+        });
       }
     });
     return () => {
       disposable?.dispose?.();
     };
-  }, [props.api?.id, props.containerApi]);
-
-  // 关闭 tab = 结束会话(VS Code 语义):真关闭时丢弃干净的 disk 文档
-  // (内容/undo/光标缓存),下次打开从磁盘新读。脏文档不在此清 —— 关闭守卫
-  // 的 保存/不保存 分支各自处置;崩溃场景无关闭信号,hot-exit 草稿仍生效。
-  const diskDocumentId =
-    sourceFromParams?.kind === "disk" ? trackedDocumentId : null;
-  useEffect(() => {
-    if (!(diskDocumentId && sourceFromParams?.kind === "disk")) {
-      return;
-    }
-    const source = sourceFromParams;
-    const panelId = props.api?.id;
-    return () => {
-      if (!closedViaRemoveRef.current) {
-        return;
-      }
-      if (
-        hasOtherOpenFilesSourceInstance({
-          context: runtimeContext,
-          panelId,
-          source,
-        })
-      ) {
-        return;
-      }
-      const latest = getDocument(diskDocumentId);
-      if (latest && !latest.dirty) {
-        removeDocument(diskDocumentId);
-      }
-    };
-  }, [diskDocumentId, props.api?.id, runtimeContext, sourceFromParams]);
-
-  // untitled 文档生命周期跟随 panel 真关闭,不跟随共享视图的 body 或组件
-  // remount:body 卸载/重建时删文档会丢 undo 历史,只能靠草稿部分恢复。
-  const untitledSourceId =
-    sourceFromParams?.kind === "untitled" ? sourceFromParams.id : null;
-  useEffect(() => {
-    if (!(untitledSourceId && prefersSharedGroupView)) {
-      return;
-    }
-    return () => {
-      if (closedViaRemoveRef.current) {
-        removeDocument(untitledSourceId);
-      }
-    };
-  }, [prefersSharedGroupView, untitledSourceId]);
+  }, [
+    controller,
+    props.api?.id,
+    props.containerApi,
+    runtimeContext,
+    stableSource,
+  ]);
 
   const handleOpenFileFromTree = useCallback(
     (entry: FileEntry, options?: { pinned?: boolean }) => {
@@ -265,11 +307,6 @@ function FilePanelContent({
         root: entry.root,
       };
       const nextName = entry.path.split("/").at(-1) ?? entry.path;
-      ensureDiskDocument({
-        name: nextName,
-        path: entry.path,
-        root: entry.root,
-      });
       const panelContext = props.params?.context;
       const pinned = options?.pinned === true;
       runtimeContext.panels.openInstance({
@@ -300,9 +337,11 @@ function FilePanelContent({
     runtimeContext && root && !treeCollapsed ? (
       <FileTreeSidebar
         context={runtimeContext}
+        controller={controller}
         instanceId={props.api?.id ?? "pier.files.inlineFilePanel"}
         onOpenFile={handleOpenFileFromTree}
         root={root}
+        watchHub={runtimeWatchHub}
       />
     ) : null;
 
@@ -416,50 +455,10 @@ function FilePanelContent({
           leading={chromeLeading}
           trailing={
             <ResolvedFilePanelActions
-              {...(runtimeContext
-                ? {
-                    configuration: runtimeContext.configuration,
-                    resolveConflict: async () => {
-                      const choice = await runtimeContext.dialogs.choice({
-                        altLabel: t(
-                          "filePanel.conflict.compareLabel",
-                          "Compare"
-                        ),
-                        body: t(
-                          "filePanel.conflict.body",
-                          "The file has been modified outside Pier. Overwrite it anyway?"
-                        ),
-                        cancelLabel: t(
-                          "filePanel.conflict.cancelLabel",
-                          "Cancel"
-                        ),
-                        confirmLabel: t(
-                          "filePanel.conflict.confirmLabel",
-                          "Overwrite"
-                        ),
-                        intent: "destructive" as const,
-                        size: "sm" as const,
-                        title: t(
-                          "filePanel.conflict.title",
-                          "File changed on disk"
-                        ),
-                      });
-                      if (choice === "confirm") {
-                        return "overwrite" as const;
-                      }
-                      if (choice === "alt") {
-                        return "compare" as const;
-                      }
-                      return "cancel" as const;
-                    },
-                  }
-                : {})}
-              files={files}
+              controller={controller}
               mode={mode}
               onModeChange={setMode}
-              onSavingChange={setSaving}
               panelId={props.api?.id}
-              saving={saving}
               source={selectedSource}
               t={t}
             />
@@ -470,13 +469,10 @@ function FilePanelContent({
     >
       <ResolvedFilePanel
         context={runtimeContext}
-        files={files}
-        manageUntitledLifecycle
+        controller={controller}
         mode={mode}
-        panelApi={props.api}
         panelContext={props.params?.context}
         panelId={props.api?.id}
-        panelParams={props.params as Record<string, unknown> | undefined}
         searchRequest={searchRequest}
         source={selectedSource}
         t={t}
@@ -485,12 +481,18 @@ function FilePanelContent({
   );
 }
 
-export function createFilePanel(context: RendererPluginContext) {
+export function createFilePanel(
+  context: RendererPluginContext,
+  controller: FileEditorController,
+  watchHub: FilesWatchHub
+) {
   return function FilesFilePanel(props: IDockviewPanelProps) {
     return (
       <FilePanelContent
         {...(props as FilePanelRuntimeProps)}
         runtimeContext={context}
+        runtimeController={controller}
+        runtimeWatchHub={watchHub}
       />
     );
   };

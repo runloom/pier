@@ -1,20 +1,22 @@
-import { useSyncExternalStore } from "react";
-import { clearCodeMirrorDocumentState } from "./code-mirror-editor.tsx";
 import {
+  claimLegacyDraft,
   clearPersistedDiskDrafts,
   clearPersistedUntitledDocuments,
   configureFilesDraftBackend as configureDraftBackend,
+  diskDraftStorageKey,
   type FilesDraftBackend,
-  hasPersistedUntitledDocument,
+  flushFilesDraftWrites,
   isUntitledDocumentId,
   persistDiskDraft,
   persistUntitledDocument,
+  quarantineCorruptDocumentDrafts,
   readPersistedDiskDraft,
   readPersistedUntitledDocument,
   removePersistedDiskDraft,
   removePersistedUntitledDocument,
   resetFilesDraftBackendForTests as resetDraftBackendForTests,
-  UNTITLED_DOCUMENT_ID_PREFIX,
+  resetFilesDraftRecoveryDiagnosticsForTests,
+  untitledDraftStorageKey,
 } from "./files-document-drafts.ts";
 import {
   createDiskDocumentRecord,
@@ -31,84 +33,81 @@ import {
   isSamePathOrDescendant,
   rewriteDescendantPath,
 } from "./files-document-paths.ts";
-import {
-  withDocumentConflictContents,
-  withDocumentContents,
-  withDocumentDiskConflict,
-  withDocumentError,
-  withDocumentLoaded,
-  withDocumentLoading,
-  withDocumentSaved,
-  withDocumentSaveError,
-} from "./files-document-reducers.ts";
+import { createFilesDocumentSaveAsActions } from "./files-document-save-as.ts";
+import { createFilesDocumentStateActions } from "./files-document-state-actions.ts";
 import type {
   FilesDocument,
   FilesDocumentOrigin,
   FilesDocumentPanelSource,
 } from "./files-document-types.ts";
+import {
+  nextUntitledIdentity as allocateUntitledIdentity,
+  resetUntitledIdentityForTests,
+  syncNextUntitledIndex,
+} from "./files-untitled-identity.ts";
 
 const documents = new Map<string, FilesDocument>();
 const documentAliases = new Map<string, string>();
 const pendingUntitledRestores = new Map<string, PendingUntitledRestoreSource>();
 const listeners = new Set<() => void>();
-
-let nextUntitledIndex = 1;
 let revision = 0;
-
 function notify(): void {
   revision += 1;
   for (const listener of listeners) {
     listener();
   }
 }
-
 export async function configureFilesDraftBackend(
   backend: FilesDraftBackend
-): Promise<void> {
-  if (await configureDraftBackend(backend)) {
-    applyHydratedDraftsToOpenDocuments({
-      documents,
-      pendingUntitledRestores,
-      syncNextUntitledIndexFromId,
-    });
-    notify();
-  }
+): Promise<readonly string[]> {
+  await configureDraftBackend(backend);
+  await quarantineCorruptDocumentDrafts();
+  const hydratedDocumentIds = applyHydratedDraftsToOpenDocuments({
+    documents,
+    pendingUntitledRestores,
+    syncNextUntitledIndex,
+  });
+  notify();
+  return hydratedDocumentIds;
 }
-
 export function resetFilesDraftBackendForTests(): void {
   resetDraftBackendForTests();
+  resetFilesDraftRecoveryDiagnosticsForTests();
 }
-
-function syncNextUntitledIndexFromId(documentId: string): void {
-  if (!isUntitledDocumentId(documentId)) {
-    return;
+export async function claimLegacyDraftForPanelSource(
+  source: FilesDocumentPanelSource
+): Promise<boolean> {
+  const key =
+    source.kind === "untitled"
+      ? untitledDraftStorageKey(source.id)
+      : diskDraftStorageKey(source.root, source.path);
+  if (!(await claimLegacyDraft(key))) {
+    return false;
   }
-  const suffix = documentId.slice(UNTITLED_DOCUMENT_ID_PREFIX.length);
-  const index = Number.parseInt(suffix, 10);
-  if (Number.isInteger(index) && index >= nextUntitledIndex) {
-    nextUntitledIndex = index + 1;
-  }
+  applyHydratedDraftsToOpenDocuments({
+    documents,
+    pendingUntitledRestores,
+    syncNextUntitledIndex,
+  });
+  notify();
+  return true;
 }
-
 function nextUntitledIdentity(): { id: string; index: number; name: string } {
-  let index = nextUntitledIndex;
-  let id = `${UNTITLED_DOCUMENT_ID_PREFIX}${index}`;
-  while (
-    documents.has(id) ||
-    pendingUntitledRestores.has(id) ||
-    hasPersistedUntitledDocument(id)
-  ) {
-    index += 1;
-    id = `${UNTITLED_DOCUMENT_ID_PREFIX}${index}`;
-  }
-  nextUntitledIndex = index + 1;
-  return { id, index, name: `Untitled-${index}.md` };
+  return allocateUntitledIdentity({
+    idExists: (id) =>
+      documents.has(id) ||
+      pendingUntitledRestores.has(id) ||
+      readPersistedUntitledDocument(id) !== null,
+    nameExists: (name) =>
+      [...documents.values()].some((document) => document.name === name) ||
+      [...pendingUntitledRestores.values()].some(
+        (source) => source.name === name
+      ),
+  });
 }
-
 function resolveDocumentId(documentId: string): string {
   let currentId = documentId;
   const seenIds = new Set<string>();
-
   while (true) {
     const nextId = documentAliases.get(currentId);
     if (!nextId || seenIds.has(currentId)) {
@@ -194,7 +193,7 @@ function replaceDocument(
   documents.set(resolvedDocumentId, nextDocument);
   persistUntitledDocument(nextDocument);
   if (nextDocument.source.kind === "disk") {
-    if (nextDocument.dirty) {
+    if (nextDocument.dirty || nextDocument.durabilityUnknown) {
       persistDiskDraft(nextDocument);
     } else {
       removePersistedDiskDraft(
@@ -205,6 +204,26 @@ function replaceDocument(
   }
   notify();
 }
+
+export const {
+  markDocumentDeletedOnDisk,
+  markDocumentDiskConflict,
+  markDocumentDurabilityConfirmed,
+  markDocumentDurabilityError,
+  markDocumentError,
+  markDocumentLoaded,
+  markDocumentLoading,
+  markDocumentPathReconciled,
+  markDocumentReadResult,
+  markDocumentSaved,
+  markDocumentSaveError,
+  markDocumentSaveIdle,
+  markDocumentSaving,
+  markDocumentWritten,
+  normalizeDocumentEol,
+  setDocumentConflictContents,
+  updateDocumentContents,
+} = createFilesDocumentStateActions(replaceDocument);
 
 export function createUntitledMarkdownDocument(input: {
   contents: string;
@@ -224,6 +243,53 @@ export function createUntitledMarkdownDocument(input: {
   return document;
 }
 
+export async function preserveDiskDocumentAsUntitled(
+  documentId: string
+): Promise<FilesDocument> {
+  const resolvedId = resolveDocumentId(documentId);
+  const document = documents.get(resolvedId);
+  if (!document) {
+    throw new Error("The document is no longer open");
+  }
+  if (document.source.kind === "untitled") {
+    return document;
+  }
+  const { id, name } = nextUntitledIdentity();
+  const preserved = createUntitledMarkdownRecord({
+    contents: document.currentContents,
+    id,
+    name,
+    origin: { source: "project-file-tree" },
+  });
+  persistUntitledDocument(preserved);
+  try {
+    await flushFilesDraftWrites();
+  } catch (error) {
+    removePersistedUntitledDocument(id);
+    throw error;
+  }
+  documents.delete(resolvedId);
+  documents.set(id, preserved);
+  documentAliases.set(resolvedId, id);
+  notify();
+  return preserved;
+}
+
+export function rollbackPreservedDiskDocument(input: {
+  original: FilesDocument;
+  preserved: FilesDocument;
+  removeUntitledDraft: boolean;
+}): void {
+  documents.delete(input.preserved.id);
+  removeDocumentAliasesFor(input.preserved.id);
+  documents.set(input.original.id, input.original);
+  if (input.removeUntitledDraft) {
+    removePersistedUntitledDocument(input.preserved.id);
+  }
+  persistDiskDraft(input.original);
+  notify();
+}
+
 export function restoreUntitledDocumentFromPanelSource(
   source: Extract<FilesDocumentPanelSource, { kind: "untitled" }>
 ): FilesDocument | null {
@@ -236,7 +302,7 @@ export function restoreUntitledDocumentFromPanelSource(
   const persisted = readPersistedUntitledDocument(source.id);
   if (!persisted) {
     pendingUntitledRestores.set(source.id, source);
-    syncNextUntitledIndexFromId(source.id);
+    syncNextUntitledIndex(source.id, source.name);
     return null;
   }
 
@@ -248,7 +314,7 @@ export function restoreUntitledDocumentFromPanelSource(
   });
 
   documents.set(source.id, document);
-  syncNextUntitledIndexFromId(source.id);
+  syncNextUntitledIndex(source.id, name);
   pendingUntitledRestores.delete(source.id);
   notify();
   return document;
@@ -301,11 +367,11 @@ export function listOpenDiskDocuments(): FilesDocument[] {
   );
 }
 
-export function moveDiskDocumentSource(
+export async function moveDiskDocumentSource(
   root: string,
   oldPath: string,
   newPath: string
-): void {
+): Promise<void> {
   if (oldPath === newPath) {
     return;
   }
@@ -315,6 +381,7 @@ export function moveDiskDocumentSource(
     return;
   }
 
+  const previousDraftPaths: string[] = [];
   for (const entry of entries) {
     if (entry.document.source.kind !== "disk") {
       continue;
@@ -331,16 +398,24 @@ export function moveDiskDocumentSource(
     if (entry.id !== nextId) {
       documents.delete(entry.id);
       documentAliases.set(entry.id, nextId);
-      clearCodeMirrorDocumentState(entry.id);
     }
     documentAliases.set(diskDocumentId(root, previousPath), nextId);
     documents.set(nextId, nextDocument);
-    removePersistedDiskDraft(root, previousPath);
-    if (nextDocument.dirty) {
+    if (nextDocument.dirty || nextDocument.durabilityUnknown) {
       persistDiskDraft(nextDocument);
+      previousDraftPaths.push(previousPath);
+    } else {
+      removePersistedDiskDraft(root, previousPath);
     }
   }
   notify();
+  if (previousDraftPaths.length > 0) {
+    await flushFilesDraftWrites();
+    for (const previousPath of previousDraftPaths) {
+      removePersistedDiskDraft(root, previousPath);
+    }
+    await flushFilesDraftWrites();
+  }
 }
 
 export function removeDiskDocumentForPath(root: string, path: string): void {
@@ -363,71 +438,17 @@ export function removeDiskDocumentForPath(root: string, path: string): void {
           : path
       )
     );
-    clearCodeMirrorDocumentState(entry.id);
   }
   notify();
 }
 
-export function updateDocumentContents(
-  documentId: string,
-  contents: string
-): void {
-  replaceDocument(documentId, (document) =>
-    withDocumentContents(document, contents)
-  );
-}
-
-export function markDocumentLoading(documentId: string): void {
-  replaceDocument(documentId, withDocumentLoading);
-}
-
-export function markDocumentLoaded(
-  documentId: string,
-  contents: string,
-  baseMtimeMs: number | null = null
-): void {
-  replaceDocument(documentId, (document) =>
-    withDocumentLoaded(document, contents, baseMtimeMs)
-  );
-}
-
-export function markDocumentSaved(
-  documentId: string,
-  savedContents: string,
-  baseMtimeMs?: number | null
-): void {
-  replaceDocument(documentId, (document) =>
-    withDocumentSaved(document, savedContents, baseMtimeMs)
-  );
-}
-
-export function markDocumentError(documentId: string, message: string): void {
-  replaceDocument(documentId, (document) =>
-    withDocumentError(document, message)
-  );
-}
-
-export function markDocumentSaveError(
-  documentId: string,
-  message: string
-): void {
-  replaceDocument(documentId, (document) =>
-    withDocumentSaveError(document, message)
-  );
-}
-
-export function setDocumentConflictContents(
-  documentId: string,
-  contents: string | null
-): void {
-  replaceDocument(documentId, (document) =>
-    withDocumentConflictContents(document, contents)
-  );
-}
-
-export function markDocumentDiskConflict(documentId: string): void {
-  replaceDocument(documentId, withDocumentDiskConflict);
-}
+export const { adoptDocumentSaveAsTarget } = createFilesDocumentSaveAsActions({
+  getDocument,
+  notify,
+  setDocument: (documentId, document) => {
+    documents.set(documentId, document);
+  },
+});
 
 export function removeDocument(documentId: string): void {
   const resolvedDocumentId = resolveDocumentId(documentId);
@@ -449,17 +470,12 @@ export function removeDocument(documentId: string): void {
 
   removeDocumentAliasesFor(documentId);
   removeDocumentAliasesFor(resolvedDocumentId);
-  clearCodeMirrorDocumentState(resolvedDocumentId);
   notify();
 }
 
 export function clearFilesDocumentStore(
   options: { persisted?: boolean } = {}
 ): void {
-  for (const documentId of documents.keys()) {
-    clearCodeMirrorDocumentState(documentId);
-  }
-  clearCodeMirrorDocumentState();
   documents.clear();
   documentAliases.clear();
   pendingUntitledRestores.clear();
@@ -467,7 +483,7 @@ export function clearFilesDocumentStore(
     clearPersistedUntitledDocuments();
     clearPersistedDiskDrafts();
   }
-  nextUntitledIndex = 1;
+  resetUntitledIdentityForTests();
   notify();
 }
 
@@ -480,13 +496,4 @@ export function subscribeFilesDocumentStore(listener: () => void): () => void {
   return () => {
     listeners.delete(listener);
   };
-}
-
-export function useFilesDocument(documentId: string): FilesDocument | null {
-  useSyncExternalStore(
-    subscribeFilesDocumentStore,
-    getFilesDocumentStoreRevision,
-    getFilesDocumentStoreRevision
-  );
-  return getDocument(documentId);
 }

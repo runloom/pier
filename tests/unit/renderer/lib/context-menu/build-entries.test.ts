@@ -3,12 +3,14 @@
 // Test isolation 策略: actionRegistry 是单例无 clear() — 每个用例用 **唯一 surface
 // 字符串** (test/empty, test/single, ...) 让 list(surface) 只返回本用例的 actions.
 // 测试间 register 残留不互相影响.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 
 describe("buildMenuEntries", () => {
+  beforeEach(() => actionRegistry.clearForTests());
+
   it("空 surface 返回空数组", () => {
     expect(buildMenuEntries("test/empty")).toEqual([]);
   });

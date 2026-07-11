@@ -1,98 +1,58 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
+import { Button } from "@pier/ui/button.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useCallback, useRef } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { FileEditorAdapter } from "./file-editor-adapter.tsx";
-import {
-  type FilePanelFilesApi,
-  useDiskDocumentLoader,
-  useDocumentId,
-  usePromoteOnDirty,
-  useRemoveUntitledOnUnmount,
-  useRestoreUntitledDocument,
-} from "./file-panel-hooks.ts";
+import type { FileEditorController } from "./file-editor-controller.ts";
 import {
   MissingTemporaryState,
   ReadOnlyErrorState,
+  UnsupportedFileState,
 } from "./file-panel-parts.tsx";
-import {
-  updateDocumentContents,
-  useFilesDocument,
-} from "./files-document-store.ts";
 import type {
   EditorRange,
   FilesDocumentPanelSource,
   FileViewMode,
 } from "./files-document-types.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
+import { useFilesDocument } from "./use-files-document.ts";
 
 let nextInlineEditorOwnerId = 1;
 
-function createEditorSessionId(ownerId: string, documentId: string): string {
-  return JSON.stringify([ownerId, documentId]);
+function createEditorSessionId(ownerId: string): string {
+  return JSON.stringify([ownerId]);
 }
 
 export function ResolvedFilePanel({
   context,
-  files,
-  manageUntitledLifecycle,
+  controller,
   mode,
-  panelApi,
   panelContext,
   panelId,
-  panelParams,
   searchRequest,
   source,
   t,
 }: {
   context: RendererPluginContext | undefined;
-  files: FilePanelFilesApi | undefined;
-  /**
-   * body 卸载是否等于 panel 关闭。内联回退 true;共享 group 视图 false
-   * (切 tab 卸载 body 但 panel 仍在,untitled 文档由薄壳按 panel 生命周期清理)。
-   */
-  manageUntitledLifecycle: boolean;
+  controller: FileEditorController;
   mode: FileViewMode;
-  panelApi:
-    | { updateParameters: (params: Record<string, unknown>) => void }
-    | undefined;
   panelContext: PanelContext | undefined;
   panelId: string | undefined;
-  panelParams: Record<string, unknown> | undefined;
   searchRequest: number;
   source: FilesDocumentPanelSource;
   t: FilesTranslate;
 }) {
-  const documentId = useDocumentId(source);
-  useRestoreUntitledDocument(source);
-  const document = useFilesDocument(documentId ?? "");
+  const documentId = controller.documentId(source);
+  const document = useFilesDocument(documentId);
   const inlineEditorOwnerIdRef = useRef<string | null>(null);
   if (inlineEditorOwnerIdRef.current === null) {
     inlineEditorOwnerIdRef.current = `inline:${nextInlineEditorOwnerId}`;
     nextInlineEditorOwnerId += 1;
   }
   const editorOwnerId = panelId ?? inlineEditorOwnerIdRef.current;
-  const editorSessionId = document
-    ? createEditorSessionId(editorOwnerId, document.id)
-    : "";
-
-  useDiskDocumentLoader(document, files, t);
-  useRemoveUntitledOnUnmount(
-    manageUntitledLifecycle ? source : null,
-    manageUntitledLifecycle ? document : null
-  );
-  usePromoteOnDirty(document, panelApi, panelParams);
-
-  const handleChange = useCallback(
-    (contents: string) => {
-      if (!document || document.readOnly) {
-        return;
-      }
-      updateDocumentContents(document.id, contents);
-    },
-    [document]
-  );
+  const editorSessionId = document ? createEditorSessionId(editorOwnerId) : "";
 
   // 编辑器右键 → 走宿主 contextMenu.popup, source 塞进 metadata。source 层
   // (files/editor) 与 tree (files/tree-item) 分开,权限声明和菜单顺序也各自
@@ -137,10 +97,18 @@ export function ResolvedFilePanel({
           }
         )
         .catch((err: unknown) => {
-          console.error("[files] editor context menu failed:", err);
+          context.dialogs
+            .alert({
+              body: err instanceof Error ? err.message : String(err),
+              title: t(
+                "filePanel.editor.contextMenuFailed",
+                "Unable to open editor menu"
+              ),
+            })
+            .catch(() => undefined);
         });
     },
-    [context, document, editorSessionId, panelContext]
+    [context, document, editorSessionId, panelContext, t]
   );
 
   if (!document) {
@@ -159,10 +127,67 @@ export function ResolvedFilePanel({
     );
   }
 
-  // filePath 让 CodeMirror 语言解析能区分 tsx/jsx / .c 与 .cpp。untitled 文档没
-  // 有物理路径,直接不传。
-  const filePath =
-    document.source.kind === "disk" ? document.source.path : undefined;
+  if (document.readOnlyReason) {
+    const messageByReason = {
+      binary: t(
+        "filePanel.unsupported.binary",
+        "Binary files are not opened in the text editor."
+      ),
+      "mixed-eol": t(
+        "filePanel.unsupported.mixedEol",
+        "Files with mixed line endings are read-only to avoid changing their bytes unexpectedly."
+      ),
+      "not-writable": t(
+        "filePanel.unsupported.notWritable",
+        "Pier does not have permission to write this file."
+      ),
+      "too-large": t(
+        "filePanel.unsupported.tooLarge",
+        "This file is too large to open in the editor."
+      ),
+      "unknown-encoding": t(
+        "filePanel.unsupported.unknownEncoding",
+        "This text encoding is not supported."
+      ),
+      "unsupported-file": t(
+        "filePanel.unsupported.fileType",
+        "This file type is not supported by the editor."
+      ),
+    } satisfies Record<NonNullable<typeof document.readOnlyReason>, string>;
+    return (
+      <UnsupportedFileState
+        actions={
+          document.readOnlyReason === "mixed-eol" ? (
+            <>
+              <Button
+                onClick={() =>
+                  controller.normalizeDocumentEol(document.id, "lf")
+                }
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t("filePanel.unsupported.normalizeLf", "Normalize to LF")}
+              </Button>
+              <Button
+                onClick={() =>
+                  controller.normalizeDocumentEol(document.id, "crlf")
+                }
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t("filePanel.unsupported.normalizeCrlf", "Normalize to CRLF")}
+              </Button>
+            </>
+          ) : undefined
+        }
+        message={messageByReason[document.readOnlyReason]}
+        t={t}
+        title={document.name}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
@@ -182,6 +207,7 @@ export function ResolvedFilePanel({
       ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <FileEditorAdapter
+          controller={controller}
           documentId={document.id}
           editorSessionId={editorSessionId}
           labels={{
@@ -195,9 +221,7 @@ export function ResolvedFilePanel({
             ),
             sourceEditor: t("filePanel.editor.sourceLabel", "Source editor"),
           }}
-          language={document.language}
           mode={mode}
-          onChange={handleChange}
           onEditorContextMenu={handleEditorContextMenu}
           readOnly={document.readOnly || document.loadState === "loading"}
           searchLabels={{
@@ -225,7 +249,6 @@ export function ResolvedFilePanel({
                   document.conflictDiskContents ?? document.savedContents,
               }
             : {})}
-          {...(filePath ? { filePath } : {})}
         />
       </main>
     </div>

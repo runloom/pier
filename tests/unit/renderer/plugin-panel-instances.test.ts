@@ -4,14 +4,20 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { DockviewApi } from "dockview-react";
 import { FileText } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPluginPanelCloserForWorkspace } from "@/components/workspace/workspace-host.tsx";
+import {
+  createPluginPanelCloserForWorkspace,
+  createPluginPanelTitleUpdaterForWorkspace,
+} from "@/components/workspace/workspace-plugin-panel-bridge.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
 import {
   clearPluginPanelsForTests,
   closePanelsByPluginComponent,
+  getPluginPanelRegistrations,
   registerPluginPanel,
   setPluginPanelCloser,
+  setPluginPanelTitleUpdater,
+  updatePluginPanelTitles,
 } from "@/lib/plugins/plugin-panel-registry.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
@@ -129,7 +135,11 @@ function entryWithoutRegisterCapabilities(): PluginRegistryEntry {
 function createMockApi(
   initialPanels: readonly MockPanel[] = [],
   initialGroups?: readonly MockGroup[],
-  options: { activeGroupId?: string | null; throwOnAddPanel?: boolean } = {}
+  options: {
+    activeGroupId?: string | null;
+    throwOnAddPanel?: boolean;
+    throwOnRemovePanel?: boolean;
+  } = {}
 ) {
   const groups: MockGroup[] = initialGroups?.map((group) => ({
     id: group.id,
@@ -248,6 +258,9 @@ function createMockApi(
       return allPanels().length;
     },
     removePanel: vi.fn((panel: MockPanel) => {
+      if (options.throwOnRemovePanel) {
+        throw new Error("mock removePanel failed");
+      }
       removePanelFromAllGroups(panel);
     }),
   } as unknown as DockviewApi;
@@ -927,6 +940,72 @@ describe("plugin panel instances", () => {
         .getState()
         .api?.panels.some((panel) => panel.view.contentComponent === "welcome")
     ).toBe(true);
+  });
+
+  it("keeps registration and live panel when Dockview removal fails", () => {
+    const livePanel = mockPanel(
+      "pier.files.untitled:1",
+      "pier.files.filePanel"
+    );
+    const { api } = createMockApi([livePanel], undefined, {
+      throwOnRemovePanel: true,
+    });
+    useWorkspaceStore.setState({ api });
+    setPluginPanelCloser(createPluginPanelCloserForWorkspace(api));
+    const dispose = registerPluginPanel(testPanelRegistration);
+
+    expect(dispose).toThrow("mock removePanel failed");
+
+    expect(getPluginPanelRegistrations().has(testPanelRegistration.id)).toBe(
+      true
+    );
+    expect(api.panels.some((panel) => panel.id === livePanel.id)).toBe(true);
+  });
+
+  it("updates every live panel title and preserves descriptor context", () => {
+    const first = mockPanel("pier.external.panel:1", "pier.external.panel");
+    const second = mockPanel("pier.external.panel:2", "pier.external.panel");
+    const unrelated = mockPanel("welcome-1", "welcome");
+    const { api } = createMockApi([first, second, unrelated]);
+    usePanelDescriptorStore.getState().upsert(first.id, {
+      context: terminalPanelContext,
+      display: { long: "Old long", short: "Old" },
+    });
+    setPluginPanelTitleUpdater(createPluginPanelTitleUpdaterForWorkspace(api));
+
+    updatePluginPanelTitles("pier.external.panel", "Updated");
+
+    expect(first.api.setTitle).toHaveBeenCalledWith("Updated");
+    expect(second.api.setTitle).toHaveBeenCalledWith("Updated");
+    expect(unrelated.api.setTitle).not.toHaveBeenCalled();
+    expect(
+      usePanelDescriptorStore.getState().descriptors[first.id]
+    ).toMatchObject({
+      context: terminalPanelContext,
+      display: { long: "Old long", short: "Updated" },
+    });
+    expect(
+      usePanelDescriptorStore.getState().descriptors[second.id]
+    ).toMatchObject({ display: { short: "Updated" } });
+  });
+
+  it("isolates a stale panel handle while updating sibling titles", () => {
+    const stale = mockPanel("pier.external.panel:stale", "pier.external.panel");
+    stale.api.setTitle.mockImplementation(() => {
+      throw new Error("stale dockview handle");
+    });
+    const live = mockPanel("pier.external.panel:live", "pier.external.panel");
+    const { api } = createMockApi([stale, live]);
+    setPluginPanelTitleUpdater(createPluginPanelTitleUpdaterForWorkspace(api));
+
+    expect(() =>
+      updatePluginPanelTitles("pier.external.panel", "Updated")
+    ).not.toThrow();
+
+    expect(live.api.setTitle).toHaveBeenCalledWith("Updated");
+    expect(
+      usePanelDescriptorStore.getState().descriptors[live.id]
+    ).toMatchObject({ display: { short: "Updated" } });
   });
 
   it("requires panel:open for both singleton and instance panel open", () => {

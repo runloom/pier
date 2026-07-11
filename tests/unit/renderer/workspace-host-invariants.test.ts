@@ -12,6 +12,17 @@ const PATH = resolve(
   "../../../src/renderer/components/workspace/workspace-host.tsx"
 );
 const SOURCE = readFileSync(PATH, "utf8");
+const RENDERER_MAIN_SOURCE = readFileSync(
+  resolve(import.meta.dirname, "../../../src/renderer/main.tsx"),
+  "utf8"
+);
+const LIFECYCLE_SOURCE = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../../../src/renderer/components/workspace/workspace-lifecycle-commands.ts"
+  ),
+  "utf8"
+);
 
 const USER_TOUCHED_FLAG_RE = /let userTouched = false/;
 const USER_TOUCHED_SET_TRUE_RE = /userTouched = true/;
@@ -24,9 +35,9 @@ const IS_APPLYING_GUARDS_SAVE_RE = /if \(isApplyingPersistedLayout\) \{/;
 const ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE =
   /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,200}?if \(!panel\) \{/;
 const ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE =
-  /event\.api\.onDidActivePanelChange\(\(change\) => \{[\s\S]{0,1200}?const panel = change\.panel;[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
+  /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1200}?const panel = change\.panel;[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
 const ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE =
-  /event\.api\.onDidActivePanelChange\(\(change\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
+  /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
 const ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE =
   /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,900}?setTerminalBasePanel/;
 const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
@@ -52,14 +63,12 @@ const AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE =
   /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
 const FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE =
   /if \(event\.api\.totalPanels === 0\)[\s\S]{0,160}?\.clearLayout\(windowContext\.recordId\)/;
-const READY_TO_SHOW_AFTER_LAYOUT_RE =
-  /reconcileTerminalPanels\(event\.api\);\s*notifyReadyToShow\(\);/;
-const READY_TO_SHOW_WHEN_USER_TOUCHED_RE =
-  /if \(userTouched\) \{[\s\S]{0,120}?notifyReadyToShow\(\);[\s\S]{0,80}?return;/;
-const READY_TO_SHOW_USES_HIDDEN_WINDOW_SAFE_TIMER_RE =
-  /setTimeout\(\(\) => \{[\s\S]{0,80}?window\.pier\.window\.readyToShow\(\);[\s\S]{0,40}?\}, 0\)/;
-const READY_TO_SHOW_DOES_NOT_WAIT_FOR_RAF_RE =
-  /requestAnimationFrame\([\s\S]{0,160}?window\.pier\.window\.readyToShow\(\)/;
+const WORKSPACE_READY_AFTER_LAYOUT_RE =
+  /reconcileTerminalPanels\(event\.api\);\s*notifyWorkspaceReady\(\);/;
+const WORKSPACE_READY_WHEN_USER_TOUCHED_RE =
+  /if \(userTouched\) \{[\s\S]{0,120}?notifyWorkspaceReady\(\);[\s\S]{0,80}?return;/;
+const BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE =
+  /function RendererBootSignal\(\)[\s\S]{0,180}?useEffect\(\(\) => \{\s*window\.pier\?\.window\?\.readyToShow\?\.\(\)/;
 
 describe("workspace-host invariants (#17 #19)", () => {
   it("declares userTouched flag and uses it to gate fromJSON (防 user 操作被 saved layout 覆盖)", () => {
@@ -123,7 +132,7 @@ describe("workspace-host invariants (#17 #19)", () => {
   it("handles renderer flushLayout command by saving the current dockview layout", () => {
     // window close / Cmd+Q 不能等 debounced save, main 会请求 renderer 立刻把
     // 当前 dockview 布局写入当前 window record.
-    expect(SOURCE).toMatch(FLUSH_LAYOUT_COMMAND_RE);
+    expect(LIFECYCLE_SOURCE).toMatch(FLUSH_LAYOUT_COMMAND_RE);
     expect(SOURCE).toMatch(FLUSH_SAVES_CURRENT_LAYOUT_RE);
   });
 
@@ -133,12 +142,12 @@ describe("workspace-host invariants (#17 #19)", () => {
     expect(SOURCE).toMatch(FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE);
   });
 
-  it("notifies main after workspace layout has reached a stable first paint point", () => {
-    // main 侧等 readyToShow 再展示窗口, 避免 did-finish-load 后把 theme/layout/terminal
-    // 恢复中的中间态暴露给用户.
-    expect(SOURCE).toMatch(READY_TO_SHOW_AFTER_LAYOUT_RE);
-    expect(SOURCE).toMatch(READY_TO_SHOW_WHEN_USER_TOUCHED_RE);
-    expect(SOURCE).toMatch(READY_TO_SHOW_USES_HIDDEN_WINDOW_SAFE_TIMER_RE);
-    expect(SOURCE).not.toMatch(READY_TO_SHOW_DOES_NOT_WAIT_FOR_RAF_RE);
+  it("separates the visible startup shell from workspace readiness", () => {
+    // 启动壳挂载即可显示窗口；布局恢复只更新 workspace ready 状态，慢初始化不应
+    // 被 main 的 renderer boot watchdog 当成致命失败。
+    expect(RENDERER_MAIN_SOURCE).toMatch(BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE);
+    expect(SOURCE).toMatch(WORKSPACE_READY_AFTER_LAYOUT_RE);
+    expect(SOURCE).toMatch(WORKSPACE_READY_WHEN_USER_TOUCHED_RE);
+    expect(SOURCE).not.toContain("readyToShow");
   });
 });

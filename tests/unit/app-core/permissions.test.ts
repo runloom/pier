@@ -237,6 +237,7 @@ describe("authorizeCommand", () => {
 
     const commands = [
       { path: "src", root: "/repo", type: "file.list" },
+      { path: "src/index.ts", root: "/repo", type: "file.readDocument" },
       { path: "src/index.ts", root: "/repo", type: "file.readText" },
     ] satisfies PierCommand[];
 
@@ -256,6 +257,26 @@ describe("authorizeCommand", () => {
     const readOnlyClient = client("desktop-renderer", ["file:read"]);
 
     const commands = [
+      {
+        contents: "export const value = 1;\n",
+        eol: "lf",
+        expected: { kind: "absent" },
+        format: { bom: false, encoding: "utf8" },
+        path: "src/new.ts",
+        root: "/repo",
+        type: "file.writeDocument",
+      },
+      {
+        path: "src/index.ts",
+        root: "/repo",
+        type: "file.inspectWriteTarget",
+      },
+      {
+        expectedRevision: "opaque-revision",
+        path: "src/index.ts",
+        root: "/repo",
+        type: "file.confirmDurability",
+      },
       {
         contents: "export const value = 1;\n",
         path: "src/index.ts",

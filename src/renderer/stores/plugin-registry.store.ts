@@ -24,6 +24,9 @@ interface PluginRegistryStoreState {
   refresh: () => Promise<void>;
 }
 
+let broadcastGeneration = 0;
+let latestRefreshId = 0;
+
 function snapshotPatch(result: PluginRegistryListResult) {
   return {
     diagnostics: result.diagnostics,
@@ -41,13 +44,26 @@ export const usePluginRegistryStore = create<PluginRegistryStoreState>(
     plugins: [],
 
     async refresh() {
+      const expectedBroadcastGeneration = broadcastGeneration;
+      const refreshId = ++latestRefreshId;
       try {
-        set(snapshotPatch(await window.pier.plugins.list()));
+        const result = await window.pier.plugins.list();
+        if (
+          refreshId === latestRefreshId &&
+          expectedBroadcastGeneration === broadcastGeneration
+        ) {
+          set(snapshotPatch(result));
+        }
       } catch (err) {
-        set({
-          error: err instanceof Error ? err.message : String(err),
-          initialized: true,
-        });
+        if (
+          refreshId === latestRefreshId &&
+          expectedBroadcastGeneration === broadcastGeneration
+        ) {
+          set({
+            error: err instanceof Error ? err.message : String(err),
+            initialized: true,
+          });
+        }
       }
     },
   })
@@ -59,6 +75,7 @@ export const usePluginRegistryStore = create<PluginRegistryStoreState>(
  */
 export async function initPluginRegistry(): Promise<() => void> {
   const unsubscribe = window.pier.plugins.onChanged((snapshot) => {
+    broadcastGeneration += 1;
     usePluginRegistryStore.setState(snapshotPatch(snapshot));
   });
   await usePluginRegistryStore.getState().refresh();

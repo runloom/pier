@@ -81,11 +81,15 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         language: () => "en",
         t: vi.fn((_key: string, fallback?: string) => fallback ?? _key),
       },
+      lifecycle: {
+        beforeSuspend: vi.fn(() => () => undefined),
+      },
       notifications: {
         error: vi.fn(),
         info: vi.fn(),
         success: vi.fn(),
       },
+      panels: { register: vi.fn(() => () => undefined) },
       rpc: {
         invoke,
         on: vi.fn(() => () => undefined),

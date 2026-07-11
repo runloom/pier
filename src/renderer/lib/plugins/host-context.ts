@@ -55,6 +55,7 @@ import { createHostGroupContentContext } from "./host-group-content-context.tsx"
 import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
+import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
 import {
   assertPluginMissionControlWidgetRegistration,
   registerPluginMissionControlWidget,
@@ -369,6 +370,12 @@ export function createRendererPluginContext(
       prompt: (options) => showAppPrompt(options),
     },
     i18n: createPluginI18n(entry),
+    lifecycle: {
+      beforeSuspend: (barrier) =>
+        entry
+          ? pluginLifecycleBarriers.register(entry.manifest.id, barrier)
+          : () => undefined,
+    },
     notifications: {
       error: (message, options) => {
         toast.error(message, toastNotificationOptions(options));

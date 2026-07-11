@@ -22,10 +22,16 @@ class TerminalStatusItemRegistry extends Notifier {
   private readonly items = new Map<string, TerminalStatusItem>();
 
   register(item: TerminalStatusItem): () => void {
+    if (this.items.has(item.id)) {
+      throw new Error(
+        `terminal status item id is already registered: ${item.id}`
+      );
+    }
     this.items.set(item.id, item);
     this.notify();
     return () => {
-      if (this.items.delete(item.id)) {
+      if (this.items.get(item.id) === item) {
+        this.items.delete(item.id);
         this.notify();
       }
     };

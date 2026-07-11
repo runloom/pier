@@ -3,7 +3,10 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { resolvePanelContextForPath } from "@main/services/panel-context-resolver.ts";
+import {
+  resolveFileSaveTargetForPath,
+  resolvePanelContextForPath,
+} from "@main/services/panel-context-resolver.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
@@ -178,5 +181,88 @@ describe("resolvePanelContextForPath", () => {
       worktreeRoot: project,
       worktreeSupported: false,
     });
+  });
+});
+
+describe("resolveFileSaveTargetForPath", () => {
+  it("preserves the current context for a target inside the same Git root", async () => {
+    const project = await initRepo();
+    const context = await resolvePanelContextForPath(project, {
+      now: () => NOW,
+    });
+
+    await expect(
+      resolveFileSaveTargetForPath(join(project, "src", "notes.md"), context)
+    ).resolves.toEqual({
+      context,
+      path: join("src", "notes.md"),
+      root: project,
+    });
+  });
+
+  it("uses a different Git root as the recoverable anchor outside the current project", async () => {
+    const sourceProject = await initRepo();
+    const targetProject = await initRepo();
+    const sourceContext = await resolvePanelContextForPath(sourceProject, {
+      now: () => NOW,
+    });
+    const targetPath = join(targetProject, "notes.md");
+
+    const target = await resolveFileSaveTargetForPath(
+      targetPath,
+      sourceContext,
+      { now: () => NOW }
+    );
+
+    expect(target).toMatchObject({
+      context: {
+        gitRoot: targetProject,
+        openedPath: targetPath,
+        projectRootPath: targetProject,
+        source: "panel",
+      },
+      path: "notes.md",
+      root: targetProject,
+    });
+  });
+
+  it("anchors a new target outside the project to its parent directory", async () => {
+    const project = await makeTempDir("pier-save-target-source-");
+    const outside = await makeTempDir("pier-save-target-outside-");
+    const sourceContext = await resolvePanelContextForPath(project, {
+      now: () => NOW,
+    });
+    const targetPath = join(outside, "notes.md");
+
+    const target = await resolveFileSaveTargetForPath(
+      targetPath,
+      sourceContext,
+      {
+        execGit: () => {
+          throw new Error("not a git repository");
+        },
+        now: () => NOW,
+      }
+    );
+
+    expect(target).toMatchObject({
+      context: {
+        cwd: outside,
+        openedPath: targetPath,
+        projectRootPath: outside,
+        source: "panel",
+      },
+      path: "notes.md",
+      root: outside,
+    });
+  });
+
+  it("rejects non-absolute save targets", async () => {
+    const project = await makeTempDir("pier-save-target-invalid-");
+    const context = await resolvePanelContextForPath(project);
+
+    await expect(
+      resolveFileSaveTargetForPath("notes.md", context)
+    ).rejects.toThrow("absolute path");
   });
 });

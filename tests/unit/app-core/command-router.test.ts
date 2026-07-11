@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
+import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
+import { createFileService } from "@main/services/file-service.ts";
 import { createGitService } from "@main/services/git-service.ts";
 import { createGitWatchService } from "@main/services/git-watch-service.ts";
 import { LocalEnvironmentServiceError } from "@main/services/local-environments-service.ts";
@@ -15,6 +17,7 @@ import type {
 import { createTaskService } from "@main/services/tasks/task-service.ts";
 import { WorktreeServiceError } from "@main/services/worktree-service.ts";
 import { agentTabIconId } from "@shared/contracts/agent-session.ts";
+import { fileWriteCommitReceiptStorageKey } from "@shared/contracts/file.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
@@ -293,6 +296,7 @@ function services(
       }),
       setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
+    pluginDisableTransitions: new PluginDisableTransitionCoordinator(),
     pluginSettings: {
       getAll: async () => ({ values: {}, version: 1 }),
       getValues: () => ({}),
@@ -374,7 +378,7 @@ function services(
       setItemOverride: () => Promise.resolve({ items: {}, version: 1 }),
     },
     window: {
-      close: () => undefined,
+      close: async () => "closed" as const,
       create: async () => ({ recordId: "record-1", windowId: "w-1" }),
       focus: () => undefined,
       flushOpenWindows: async () => undefined,
@@ -470,6 +474,161 @@ function services(
 }
 
 describe("createCommandRouter", () => {
+  it("routes revision-safe file document commands", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-file-router-"));
+    try {
+      await writeFile(join(root, "notes.txt"), "old\n");
+      const fakeServices = services();
+      fakeServices.files = createFileService();
+      const storeCommitReceipt = vi.fn(async () => ({
+        generation: 1,
+        kind: "stored" as const,
+      }));
+      fakeServices.fileDrafts = {
+        set: storeCommitReceipt,
+      } as never;
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: fakeServices,
+      });
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            path: "missing.txt",
+            root,
+            type: "file.readDocument",
+          },
+          protocolVersion: 1,
+          requestId: "req-file-missing-document",
+        })
+      ).resolves.toMatchObject({
+        error: { code: "not_found" },
+        ok: false,
+      });
+      const read = await router.execute({
+        clientId: "desktop-1",
+        command: { path: "notes.txt", root, type: "file.readDocument" },
+        protocolVersion: 1,
+        requestId: "req-file-read-document",
+      });
+      expect(read).toMatchObject({
+        data: { contents: "old\n", kind: "text" },
+        ok: true,
+      });
+      if (!(read.ok && typeof read.data === "object" && read.data)) {
+        throw new Error("expected file document result");
+      }
+      const revision = Reflect.get(read.data, "revision");
+      if (typeof revision !== "string") {
+        throw new Error("expected file revision");
+      }
+
+      const write = await router.execute(
+        {
+          clientId: "desktop-1",
+          command: {
+            contents: "new\n",
+            eol: "lf",
+            expected: { kind: "revision", revision },
+            format: { bom: false, encoding: "utf8" },
+            operationId: "00000000-0000-4000-8000-000000000001",
+            path: "notes.txt",
+            root,
+            type: "file.writeDocument",
+          },
+          protocolVersion: 1,
+          requestId: "req-file-write-document",
+        },
+        { windowRecordId: "record-main" }
+      );
+      expect(write).toMatchObject({
+        data: { durability: "confirmed", kind: "written" },
+        ok: true,
+      });
+      if (!(write.ok && typeof write.data === "object" && write.data)) {
+        throw new Error("expected file write result");
+      }
+      const writtenRevision = Reflect.get(write.data, "revision");
+      if (typeof writtenRevision !== "string") {
+        throw new Error("expected written file revision");
+      }
+      expect(storeCommitReceipt).toHaveBeenCalledWith(
+        "record-main",
+        fileWriteCommitReceiptStorageKey(
+          "00000000-0000-4000-8000-000000000001"
+        ),
+        1,
+        expect.stringContaining(writtenRevision)
+      );
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            path: "notes.txt",
+            root,
+            type: "file.inspectWriteTarget",
+          },
+          protocolVersion: 1,
+          requestId: "req-file-inspect-target",
+        })
+      ).resolves.toMatchObject({
+        data: { kind: "existing", revision: writtenRevision },
+        ok: true,
+      });
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            expectedRevision: writtenRevision,
+            path: "notes.txt",
+            root,
+            type: "file.confirmDurability",
+          },
+          protocolVersion: 1,
+          requestId: "req-file-confirm-durability",
+        })
+      ).resolves.toMatchObject({
+        data: { kind: "confirmed", revision: writtenRevision },
+        ok: true,
+      });
+
+      const receiptError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      storeCommitReceipt.mockRejectedValueOnce(new Error("receipt disk full"));
+      await expect(
+        router.execute(
+          {
+            clientId: "desktop-1",
+            command: {
+              contents: "committed despite receipt failure\n",
+              eol: "lf",
+              expected: { kind: "revision", revision: writtenRevision },
+              format: { bom: false, encoding: "utf8" },
+              operationId: "00000000-0000-4000-8000-000000000002",
+              path: "notes.txt",
+              root,
+              type: "file.writeDocument",
+            },
+            protocolVersion: 1,
+            requestId: "req-file-write-receipt-failure",
+          },
+          { windowRecordId: "record-main" }
+        )
+      ).resolves.toMatchObject({
+        data: { committed: true, kind: "written" },
+        ok: true,
+      });
+      expect(receiptError).toHaveBeenCalledWith(
+        "[files] file write committed, but its recovery receipt failed:",
+        expect.objectContaining({ message: "receipt disk full" })
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it("分发通过授权的命令", async () => {
     const router = createCommandRouter({
       clients: registryWith(desktopClient),

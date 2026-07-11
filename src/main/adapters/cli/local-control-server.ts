@@ -7,7 +7,7 @@ import type { PierCommandResult } from "@shared/contracts/commands.ts";
 
 export interface PierLocalControlServer {
   close(): Promise<void>;
-  start(): Promise<void>;
+  start(signal?: AbortSignal): Promise<void>;
 }
 
 export interface CreatePierLocalControlServerArgs {
@@ -83,29 +83,61 @@ export function createPierLocalControlServer({
   handleRequest,
   socketPath,
 }: CreatePierLocalControlServerArgs): PierLocalControlServer {
+  const sockets = new Set<Socket>();
   let server: Server | null = null;
+  let closePromise: Promise<void> | null = null;
 
   return {
     close() {
-      return new Promise((resolve, reject) => {
-        if (!server) {
+      if (closePromise) {
+        return closePromise;
+      }
+      const current = server;
+      server = null;
+      closePromise = new Promise((resolve, reject) => {
+        if (!current) {
           resolve();
           return;
         }
-        server.close((error) => {
-          if (error) {
+        current.close((error) => {
+          if (
+            error &&
+            (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING"
+          ) {
             reject(error);
             return;
           }
-          server = null;
+          if (process.platform !== "win32" && existsSync(socketPath)) {
+            try {
+              unlinkSync(socketPath);
+            } catch (unlinkError) {
+              if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") {
+                reject(unlinkError);
+                return;
+              }
+            }
+          }
           resolve();
         });
+        for (const socket of sockets) {
+          socket.destroy();
+        }
+        sockets.clear();
       });
+      return closePromise;
     },
-    start() {
+    start(signal) {
       return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(
+            new DOMException("Local control startup aborted", "AbortError")
+          );
+          return;
+        }
         removeStaleSocket(socketPath);
         server = createServer((socket) => {
+          sockets.add(socket);
+          socket.once("close", () => sockets.delete(socket));
           let body = "";
           socket.setEncoding("utf8");
           socket.on("data", (chunk) => {
@@ -140,7 +172,7 @@ export function createPierLocalControlServer({
           });
         });
         server.once("error", reject);
-        server.listen(socketPath, () => {
+        server.listen({ path: socketPath, signal }, () => {
           server?.off("error", reject);
           resolve();
         });

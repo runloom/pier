@@ -1,8 +1,12 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import {
+  getRendererPluginRuntimeDiagnostics,
+  subscribeRendererPluginRuntimeDiagnostics,
+} from "@/lib/plugins/plugin-runtime-diagnostics.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { ManagedPluginsSection } from "./managed-plugins-section.tsx";
 
@@ -10,6 +14,11 @@ export function PluginsSection() {
   const t = useT();
   const plugins = usePluginRegistryStore((state) => state.plugins);
   const diagnostics = usePluginRegistryStore((state) => state.diagnostics);
+  const runtimeDiagnostics = useSyncExternalStore(
+    subscribeRendererPluginRuntimeDiagnostics,
+    getRendererPluginRuntimeDiagnostics,
+    getRendererPluginRuntimeDiagnostics
+  );
   const initialized = usePluginRegistryStore((state) => state.initialized);
   const storeError = usePluginRegistryStore((state) => state.error);
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -50,7 +59,7 @@ export function PluginsSection() {
               </Alert>
             </div>
           ) : null}
-          {diagnostics.length ? (
+          {diagnostics.length || runtimeDiagnostics.length ? (
             <div className="px-(--card-spacing)">
               <Alert>
                 <AlertTitle>
@@ -63,6 +72,11 @@ export function PluginsSection() {
                         key={`${diagnostic.source.kind}:${diagnostic.message}`}
                       >
                         {diagnostic.message}
+                      </div>
+                    ))}
+                    {runtimeDiagnostics.map((diagnostic) => (
+                      <div key={`runtime:${diagnostic.pluginId}`}>
+                        {diagnostic.pluginId}: {diagnostic.message}
                       </div>
                     ))}
                   </div>

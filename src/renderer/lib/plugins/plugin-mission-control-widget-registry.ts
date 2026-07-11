@@ -1,5 +1,6 @@
 import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { CORE_RESERVED_MISSION_CONTROL_WIDGET_IDS } from "@shared/plugin-core-contribution-ids.ts";
 
 export function assertPluginMissionControlWidgetRegistration(
   entry: PluginRegistryEntry | undefined,
@@ -40,6 +41,20 @@ function notify(): void {
 export function registerPluginMissionControlWidget(
   registration: RendererMissionControlWidgetRegistration
 ): () => void {
+  if (
+    (CORE_RESERVED_MISSION_CONTROL_WIDGET_IDS as readonly string[]).includes(
+      registration.id
+    )
+  ) {
+    throw new Error(
+      `mission control widget id is reserved by core: ${registration.id}`
+    );
+  }
+  if (registrations.has(registration.id)) {
+    throw new Error(
+      `mission control widget id is already registered: ${registration.id}`
+    );
+  }
   registrations.set(registration.id, registration);
   notify();
   return () => {

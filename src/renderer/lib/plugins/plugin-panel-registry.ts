@@ -10,6 +10,9 @@ let revision = 0;
  * 重启时 fromJSON 找不到 component(因 component 已 unregister)。
  */
 let panelCloser: ((componentId: string) => void) | null = null;
+let panelTitleUpdater: ((componentId: string, title: string) => void) | null =
+  null;
+let panelTitleUpdaterRevision = 0;
 
 export function setPluginPanelCloser(
   closer: ((componentId: string) => void) | null
@@ -17,8 +20,28 @@ export function setPluginPanelCloser(
   panelCloser = closer;
 }
 
+export function setPluginPanelTitleUpdater(
+  updater: ((componentId: string, title: string) => void) | null
+): void {
+  panelTitleUpdater = updater;
+  panelTitleUpdaterRevision += 1;
+}
+
+export function getPluginPanelTitleUpdaterRevision(): number | null {
+  return panelTitleUpdater ? panelTitleUpdaterRevision : null;
+}
+
 export function closePanelsByPluginComponent(componentId: string): void {
   panelCloser?.(componentId);
+}
+
+export function updatePluginPanelTitles(
+  componentId: string,
+  title: string
+): boolean {
+  if (!panelTitleUpdater) return false;
+  panelTitleUpdater(componentId, title);
+  return true;
 }
 
 function notify(): void {
@@ -31,6 +54,11 @@ function notify(): void {
 export function registerPluginPanel(
   registration: PluginPanelRegistration
 ): () => void {
+  if (registrations.has(registration.id)) {
+    throw new Error(
+      `plugin panel id is already registered: ${registration.id}`
+    );
+  }
   registrations.set(registration.id, registration);
   notify();
   return () => {
@@ -76,5 +104,6 @@ export function subscribePluginPanelRegistry(listener: () => void): () => void {
 export function clearPluginPanelsForTests(): void {
   registrations.clear();
   panelCloser = null;
+  panelTitleUpdater = null;
   notify();
 }

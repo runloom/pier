@@ -24,6 +24,39 @@ export type PierFileTreeStyle = React.CSSProperties & {
   "--trees-selected-fg-override"?: string;
 };
 
+// @pierre/trees 在 Shadow DOM 内自行绘制滚动条，只暴露基础宽度和颜色。
+// 通过其官方 unsafeCSS 入口补齐 Pier 的常态、悬停、按下和轨道视觉。
+export const TREE_SCROLLBAR_CSS = `
+[data-file-tree-virtualized-scroll="true"],
+[data-file-tree-scrollbar-measure="true"] {
+  --trees-scrollbar-thumb-current: transparent;
+  scrollbar-color: var(--trees-scrollbar-thumb-current) var(--shell-scrollbar-track);
+  scrollbar-width: var(--shell-scrollbar-width);
+}
+
+[data-file-tree-virtualized-scroll="true"][data-scrollbar-scrolling="true"],
+[data-file-tree-virtualized-scroll="true"][data-scrollbar-hovering="true"] {
+  --trees-scrollbar-thumb-current: var(--shell-scrollbar-thumb);
+}
+
+[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-thumb {
+  border-radius: var(--shell-scrollbar-radius);
+  transition: background-color 160ms ease-out;
+}
+
+[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-thumb:active {
+  background-color: var(--shell-scrollbar-thumb-active);
+}
+
+[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-track {
+  background: var(--shell-scrollbar-track);
+}
+
+[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-corner {
+  background: var(--shell-scrollbar-corner);
+}
+`;
+
 export function pierFileTreeStyle(
   style: React.CSSProperties | undefined
 ): PierFileTreeStyle {

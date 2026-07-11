@@ -14,6 +14,7 @@ import {
   createCommandRouter,
   type PierCoreServices,
 } from "@main/app-core/command-router.ts";
+import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
 import { createGitService } from "@main/services/git-service.ts";
 import { createGitWatchService } from "@main/services/git-watch-service.ts";
 import { createTaskService } from "@main/services/tasks/task-service.ts";
@@ -175,6 +176,7 @@ function cliClientServices(): PierCoreServices {
       list: async () => ({ diagnostics: [], entries: [] }),
       setEnabled: async (id, enabled) => pluginEntry(id, enabled),
     },
+    pluginDisableTransitions: new PluginDisableTransitionCoordinator(),
     pluginSettings: {
       getAll: async () => ({ values: {}, version: 1 }),
       getValues: () => ({}),
@@ -239,7 +241,7 @@ function cliClientServices(): PierCoreServices {
       setItemOverride: () => Promise.resolve({ items: {}, version: 1 }),
     },
     window: {
-      close: () => undefined,
+      close: async () => "closed" as const,
       create: async () => ({ recordId: "record-main", windowId: "main" }),
       flushOpenWindows: async () => undefined,
       flushWindow: async () => undefined,
@@ -288,6 +290,25 @@ describe("resolveLocalControlSocketPath", () => {
 });
 
 describe("local control socket", () => {
+  it("aborts startup cleanly and leaves close idempotent", async () => {
+    const userDataDir = await makeTempDir();
+    const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
+    const server = createPierLocalControlServer({
+      handleRequest: async () => ({
+        data: null,
+        ok: true,
+        requestId: "unused",
+      }),
+      socketPath,
+    });
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(server.start(abortController.signal)).rejects.toThrow();
+    await expect(server.close()).resolves.toBeUndefined();
+    await expect(server.close()).resolves.toBeUndefined();
+  });
+
   it("CLI transport 能向本机控制 server 发送命令信封并读取结果", async () => {
     const userDataDir = await makeTempDir();
     const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
@@ -330,6 +351,34 @@ describe("local control socket", () => {
     ]);
 
     await server.close();
+  });
+
+  it("close 会主动终止未发送换行的半开连接", async () => {
+    const userDataDir = await makeTempDir();
+    const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
+    const server = createPierLocalControlServer({
+      handleRequest: async () => ({
+        data: null,
+        ok: true,
+        requestId: "unused",
+      }),
+      socketPath,
+    });
+    await server.start();
+    const net = await import("node:net");
+    const socket = net.createConnection(socketPath);
+    await new Promise<void>((resolve, reject) => {
+      socket.once("connect", resolve);
+      socket.once("error", reject);
+    });
+    socket.write('{"requestId":"half-open"');
+    const socketClosed = new Promise<void>((resolve) => {
+      socket.once("close", () => resolve());
+    });
+
+    await expect(server.close()).resolves.toBeUndefined();
+    await socketClosed;
+    expect(socket.destroyed).toBe(true);
   });
 
   it("通过 socket 执行 worktree list/create/remove 的真实 Git 闭环", async () => {

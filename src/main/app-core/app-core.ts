@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
@@ -61,8 +60,9 @@ import {
   readTerminalStatusBarPrefs,
   resetTerminalStatusBarItem,
 } from "../state/terminal-status-bar-prefs.ts";
-import type { AppWindow } from "../windows/app-window.ts";
+import { showNativeWindowCloseFailure } from "../windows/native-window-close-failure.ts";
 import { windowManager } from "../windows/window-manager.ts";
+import { requireAppCoreInitialization } from "./app-core-readiness.ts";
 import { readBundledPlugin } from "./bundled-plugin-reader.ts";
 import {
   createClientRegistry,
@@ -74,11 +74,14 @@ import {
   type PierCoreServices,
 } from "./command-router.ts";
 import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
+import { createLazyAppCore } from "./lazy-app-core.ts";
 import {
   type ManagedPluginDevRuntimeWatch,
   startManagedPluginDevRuntimeWatch,
 } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
+import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
+import { sendRendererCommand } from "./renderer-command-host.ts";
 import {
   broadcastAppUpdateChanged,
   broadcastEnvironmentsChanged,
@@ -96,48 +99,8 @@ export interface PierAppCore {
   eventBus: PierEventBus;
   flushExternalPluginsBeforeQuit(): Promise<void>;
   pluginHost: MainPluginHostApi;
+  ready: Promise<void>;
   services: PierCoreServices;
-}
-
-function focusRendererTarget(win: AppWindow): void {
-  if (win.isMinimized()) {
-    win.restore();
-  }
-  if (process.platform === "darwin") {
-    app.focus({ steal: true });
-  }
-  win.focus();
-  win.webContents.focus();
-}
-
-function sendRendererCommand(
-  envelope: unknown,
-  windowId?: string,
-  options: { focus?: boolean } = {}
-): boolean {
-  if (windowId) {
-    const target = windowManager.get(windowId);
-    if (!target || target.isDestroyed()) {
-      return false;
-    }
-    if (options.focus) {
-      focusRendererTarget(target);
-    }
-    target.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-    return true;
-  }
-  const focused =
-    windowManager.getFocused() ??
-    windowManager.getAll().find((win) => !win.isDestroyed()) ??
-    null;
-  if (!focused || focused.isDestroyed()) {
-    return false;
-  }
-  if (options.focus) {
-    focusRendererTarget(focused);
-  }
-  focused.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-  return true;
 }
 
 function createPierAppCore(): PierAppCore {
@@ -146,6 +109,7 @@ function createPierAppCore(): PierAppCore {
   const rendererCommand = createRendererCommandService({
     host: { send: sendRendererCommand },
   });
+  const pluginDisableTransitions = new PluginDisableTransitionCoordinator();
   const managedPluginPaths = createManagedPluginPaths(app.getPath("userData"));
   const managedPluginIndexStore = createManagedPluginIndexStore(
     managedPluginPaths.indexFile
@@ -291,42 +255,43 @@ function createPierAppCore(): PierAppCore {
   externalMainRuntimeReconciler =
     createManagedPluginRuntimeReconciler(externalMainRuntime);
   pluginHostRef = pluginHost;
-  managedPlugins
-    .init()
-    .then(async () => {
-      // Kick off async official-index refresh — non-blocking. Cache hit
-      // becomes catalog immediately; network response updates on arrival.
-      httpIndex.refresh().catch((err: unknown) => {
-        console.error("[managed-plugins] official-index refresh failed:", err);
-      });
-      // Dev-only: if a bundled plugin is already installed at the same version,
-      // point runtime at the source package and watch built dist entries.
-      if (isDevRuntime() && codexSeedAvailable) {
-        const codexDevPackageDir = join(process.cwd(), "packages/plugin-codex");
-        const index = managedPlugins.getIndex();
-        const codex = index.plugins["pier.codex"];
-        if (
-          codex?.activeVersion === codexBundle?.version &&
-          !codex.uninstalledAt
-        ) {
-          await managedPlugins
-            .setDevOverride("pier.codex", codexDevPackageDir)
-            .then(() => managedPlugins.simulateRestartForTests())
-            .catch((err: unknown) => {
-              console.error("[managed-plugins] dev override sync failed:", err);
-            });
-          managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
-            logger: createLogger("managed-plugins"),
-            packageDir: codexDevPackageDir,
-            refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
-          });
-        }
-      }
-    })
-    .catch((err: unknown) => {
-      console.error("[managed-plugins] init failed:", err);
+  const managedPluginsReady = requireAppCoreInitialization(
+    managedPlugins.init(),
+    (err) => console.error("[managed-plugins] init failed:", err)
+  ).then(async () => {
+    // Kick off async official-index refresh — non-blocking. Cache hit
+    // becomes catalog immediately; network response updates on arrival.
+    httpIndex.refresh().catch((err: unknown) => {
+      console.error("[managed-plugins] official-index refresh failed:", err);
     });
+    // Dev-only: if a bundled plugin is already installed at the same version,
+    // point runtime at the source package and watch built dist entries.
+    if (isDevRuntime() && codexSeedAvailable) {
+      const codexDevPackageDir = join(process.cwd(), "packages/plugin-codex");
+      const index = managedPlugins.getIndex();
+      const codex = index.plugins["pier.codex"];
+      if (
+        codex?.activeVersion === codexBundle?.version &&
+        !codex.uninstalledAt
+      ) {
+        await managedPlugins
+          .setDevOverride("pier.codex", codexDevPackageDir)
+          .then(() => managedPlugins.simulateRestartForTests())
+          .catch((err: unknown) => {
+            console.error("[managed-plugins] dev override sync failed:", err);
+          });
+        managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
+          logger: createLogger("managed-plugins"),
+          packageDir: codexDevPackageDir,
+          refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
+        });
+      }
+    }
+  });
   const processEnvironment = createProcessEnvironmentService();
+  const fileDrafts = createFileDraftsService({
+    userDataDir: app.getPath("userData"),
+  });
   const runtimeMode = isDevRuntime() ? "development" : "production";
   // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
   const agentDetection = createAgentDetectionService();
@@ -352,9 +317,7 @@ function createPierAppCore(): PierAppCore {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
-    fileDrafts: createFileDraftsService({
-      userDataDir: app.getPath("userData"),
-    }),
+    fileDrafts,
     files: createFileService(),
     fileWatch: createFileWatchService(),
     preferences,
@@ -363,6 +326,7 @@ function createPierAppCore(): PierAppCore {
     localEnvironments: createLocalEnvironmentService({ processEnvironment }),
     plugins: pluginHost.plugins,
     managedPlugins,
+    pluginDisableTransitions,
     pluginSettings,
     panelContexts: createPanelContextService(),
     rendererCommand,
@@ -416,15 +380,42 @@ function createPierAppCore(): PierAppCore {
     },
     terminalLaunches: terminalLaunchRegistry,
     window: createWindowService({
-      flushRendererLayout: async (windowId) => {
+      finalizeRendererClose: async (windowId, transitionId, outcome) => {
         const result = await rendererCommand.execute({
-          type: "workspace.flushLayout",
+          outcome,
+          transitionId,
+          type: "workspace.finalizeClose",
           windowId,
         });
         if (!result.ok) {
           throw new Error(result.error.message);
         }
       },
+      flushCriticalState: () => fileDrafts.flush(),
+      prepareRendererClose: async (windowId, reason, transitionId) => {
+        const result = await rendererCommand.execute({
+          reason,
+          transitionId,
+          type: "workspace.prepareClose",
+          windowId,
+        });
+        if (!result.ok) {
+          throw new Error(result.error.message);
+        }
+      },
+      reportCloseFailure: async (windowId, error) => {
+        const result = await rendererCommand.execute({
+          body: error instanceof Error ? error.message : String(error),
+          type: "workspace.reportCloseFailure",
+          windowId,
+        });
+        if (!result.ok) {
+          throw new Error(result.error.message);
+        }
+      },
+      reportCloseFailureFallback: showNativeWindowCloseFailure,
+      runWhenPluginTransitionsIdle: (operation) =>
+        pluginDisableTransitions.runWindowCreation(operation),
     }),
     workspace: createWorkspaceService(),
     worktrees: createWorktreeService({
@@ -464,8 +455,9 @@ function createPierAppCore(): PierAppCore {
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),
     pluginHost,
+    ready: managedPluginsReady,
     services,
   };
 }
 
-export const appCore = createPierAppCore();
+export const appCore = createLazyAppCore(createPierAppCore);

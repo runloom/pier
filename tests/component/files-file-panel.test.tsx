@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { getSearchQuery } from "@codemirror/search";
 import type {
   RendererPluginActionInvocation,
   RendererPluginContext,
@@ -9,12 +10,12 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_GROUP_VIEW_CONTENT_ID,
 } from "@plugins/builtin/files/manifest.ts";
-import { createFilePanel } from "@plugins/builtin/files/renderer/file-panel.tsx";
+import { FileEditorController } from "@plugins/builtin/files/renderer/file-editor-controller.ts";
+import { createFilePanel as createFilePanelWithController } from "@plugins/builtin/files/renderer/file-panel.tsx";
 import {
   createFileFilePanelInstanceId,
   fileFilePanelIdentityKey,
 } from "@plugins/builtin/files/renderer/file-panel-id.ts";
-import { triggerFilePanelSave } from "@plugins/builtin/files/renderer/file-panel-save-registry.ts";
 import { FileTreeSidebar } from "@plugins/builtin/files/renderer/file-tree-sidebar.tsx";
 import {
   clearFilesDocumentStore,
@@ -24,6 +25,7 @@ import {
   markDocumentLoaded,
   removeDocument,
   restoreUntitledDocumentFromPanelSource,
+  updateDocumentContents,
 } from "@plugins/builtin/files/renderer/files-document-store.ts";
 import type { FilesDocumentPanelSource } from "@plugins/builtin/files/renderer/files-document-types.ts";
 import { createFilesEditorActions } from "@plugins/builtin/files/renderer/files-editor-actions.ts";
@@ -31,11 +33,19 @@ import {
   clearFilesNavHistory,
   pushFilesNavEntry,
 } from "@plugins/builtin/files/renderer/files-nav-history.ts";
+import { saveAsJournalForDocument } from "@plugins/builtin/files/renderer/files-save-as-journal.ts";
 import {
   clearFileTreeSidebarCache,
   openFilesTreeSearch,
 } from "@plugins/builtin/files/renderer/files-tree-registry.ts";
 import { clearFilesTreeStore } from "@plugins/builtin/files/renderer/files-tree-store.ts";
+import { FilesWatchHub } from "@plugins/builtin/files/renderer/files-watch-hub.ts";
+import {
+  FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+  FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+  FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
+  FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
+} from "@plugins/builtin/files/settings.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
@@ -104,6 +114,17 @@ const FILE_PANEL_DISK_INSTANCE_ID =
   /^pier\.files\.filePanel:disk:[a-z0-9]+:[A-Za-z0-9_-]+$/;
 const FILES_GROUP_VIEW_SELECTOR = `[data-slot="${FILES_GROUP_VIEW_CONTENT_ID}"]`;
 
+interface TestFilesRuntime {
+  controller: FileEditorController;
+  watchHub: FilesWatchHub;
+}
+
+const testFilesRuntimes = new Set<TestFilesRuntime>();
+const testFilesRuntimesByContext = new WeakMap<
+  RendererPluginContext,
+  TestFilesRuntime
+>();
+
 const panelContext: PanelContext = {
   branch: "main",
   contextId: "ctx-pier",
@@ -123,15 +144,96 @@ interface FilesPanelParams {
 }
 
 function createMockContext(overrides?: {
+  configurationGet?: RendererPluginContext["configuration"]["get"];
+  configurationOnDidChange?: RendererPluginContext["configuration"]["onDidChange"];
+  flushLayout?: RendererPluginContext["panels"]["flushLayout"];
+  inspectWriteTarget?: RendererPluginContext["files"]["inspectWriteTarget"];
   list?: RendererPluginContext["files"]["list"];
+  listIgnored?: RendererPluginContext["git"]["listIgnored"];
   listInstances?: RendererPluginContext["panels"]["listInstances"];
   notifyInfo?: RendererPluginContext["notifications"]["info"];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
+  pickSaveTarget?: RendererPluginContext["files"]["pickSaveTarget"];
+  readDocument?: RendererPluginContext["files"]["readDocument"];
   readText?: RendererPluginContext["files"]["readText"];
   translate?: RendererPluginContext["i18n"]["t"];
   watch?: RendererPluginContext["files"]["watch"];
+  writeDocument?: RendererPluginContext["files"]["writeDocument"];
   writeText?: RendererPluginContext["files"]["writeText"];
 }): RendererPluginContext {
+  const drafts = new Map<
+    string,
+    { generation: number; updatedAt: number; value: string }
+  >();
+  const readText = overrides?.readText ?? vi.fn(async () => "");
+  const writeText =
+    overrides?.writeText ??
+    vi.fn(async (request) => ({
+      mtimeMs: 1,
+      path: request.path,
+      root: request.root,
+      written: true as const,
+    }));
+  const stat = vi.fn(async (request: { path: string; root: string }) => ({
+    exists: true,
+    isDirectory: false,
+    mtimeMs: 1,
+    path: request.path,
+    root: request.root,
+    size: 0,
+  }));
+  const readDocument =
+    overrides?.readDocument ??
+    vi.fn(async (request: { path: string; root: string }) => {
+      const metadata = await stat(request);
+      const contents = await readText(request);
+      return {
+        canonicalPath: request.path,
+        contents,
+        eol: "lf" as const,
+        format: { bom: false as const, encoding: "utf8" as const },
+        kind: "text" as const,
+        mode: 0o644,
+        path: request.path,
+        revision: `revision-${metadata.mtimeMs}`,
+        root: request.root,
+        size: contents.length,
+        writable: true,
+      };
+    });
+  const writeDocument =
+    overrides?.writeDocument ??
+    vi.fn(async (request) => {
+      try {
+        const result = await writeText({
+          contents: request.contents,
+          path: request.path,
+          root: request.root,
+        });
+        return {
+          committed: true as const,
+          durability: "confirmed" as const,
+          kind: "written" as const,
+          mode: 0o644,
+          mtimeMs: result.mtimeMs,
+          revision: `revision-${result.mtimeMs}`,
+          size: request.contents.length,
+        };
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "file_conflict"
+        ) {
+          return {
+            kind: "conflict" as const,
+            reason: "revision-mismatch" as const,
+          };
+        }
+        throw error;
+      }
+    });
   return {
     dialogs: {
       alert: vi.fn(async () => undefined),
@@ -140,8 +242,8 @@ function createMockContext(overrides?: {
       prompt: vi.fn(async () => null),
     },
     configuration: {
-      get: vi.fn(() => false),
-      onDidChange: vi.fn(() => vi.fn()),
+      get: overrides?.configurationGet ?? vi.fn(() => false),
+      onDidChange: overrides?.configurationOnDidChange ?? vi.fn(() => vi.fn()),
       reset: vi.fn(async () => undefined),
       set: vi.fn(async () => undefined),
     },
@@ -163,9 +265,39 @@ function createMockContext(overrides?: {
         repoState: { kind: "clean" },
         stashCount: 0,
       })),
+      listIgnored: overrides?.listIgnored ?? vi.fn(async () => []),
       watch: vi.fn(() => () => undefined),
     },
     files: {
+      drafts: {
+        claimLegacy: vi.fn(async () => ({ kind: "missing" as const })),
+        delete: vi.fn(async (key: string) => drafts.delete(key)),
+        get: vi.fn(async (key: string) => {
+          const draft = drafts.get(key);
+          return draft
+            ? {
+                generation: draft.generation,
+                key,
+                updatedAt: draft.updatedAt,
+                value: draft.value,
+              }
+            : null;
+        }),
+        listKeys: vi.fn(async () => [...drafts.keys()]),
+        set: vi.fn(async (key: string, generation: number, value: string) => {
+          const current = drafts.get(key);
+          if (current && current.generation > generation) {
+            return {
+              currentGeneration: current.generation,
+              kind: "rejected" as const,
+              reason: "stale-generation" as const,
+            };
+          }
+          const updatedAt = Date.now();
+          drafts.set(key, { generation, updatedAt, value });
+          return { generation, kind: "stored" as const, updatedAt };
+        }),
+      },
       exists: vi.fn(async (request) => ({
         exists: true,
         path: request.path,
@@ -183,29 +315,26 @@ function createMockContext(overrides?: {
         oldPath: request.path,
         root: request.root,
       })),
-      readText: overrides?.readText ?? vi.fn(async () => ""),
-      stat: vi.fn(async (request) => ({
-        exists: true,
-        isDirectory: false,
-        mtimeMs: 1,
-        path: request.path,
-        root: request.root,
-        size: 0,
-      })),
+      inspectWriteTarget:
+        overrides?.inspectWriteTarget ??
+        vi.fn(async () => ({
+          fileType: "text" as const,
+          kind: "existing" as const,
+          revision: "revision-current",
+          size: 0,
+        })),
+      pickSaveTarget: overrides?.pickSaveTarget ?? vi.fn(async () => null),
+      readDocument,
+      readText,
+      stat,
       trash: vi.fn(async (request) => ({
         path: request.path,
         root: request.root,
         trashed: true,
       })),
       watch: overrides?.watch ?? vi.fn(() => () => undefined),
-      writeText:
-        overrides?.writeText ??
-        vi.fn(async (request) => ({
-          mtimeMs: 1,
-          path: request.path,
-          root: request.root,
-          written: true as const,
-        })),
+      writeDocument,
+      writeText,
     },
     groupContent: createHostGroupContentContext(undefined, () => undefined),
     i18n: {
@@ -226,6 +355,7 @@ function createMockContext(overrides?: {
       system: vi.fn(async () => ({ shown: true })),
     },
     panels: {
+      flushLayout: overrides?.flushLayout ?? vi.fn(async () => undefined),
       getActiveContext: vi.fn(() => panelContext),
       getActiveInstanceId: vi.fn(() => null),
       listInstances: overrides?.listInstances ?? vi.fn(() => []),
@@ -235,6 +365,31 @@ function createMockContext(overrides?: {
       registerCloseGuard: vi.fn(() => vi.fn()),
     },
   } as unknown as RendererPluginContext;
+}
+
+function filesRuntimeFor(context: RendererPluginContext): TestFilesRuntime {
+  const existing = testFilesRuntimesByContext.get(context);
+  if (existing) {
+    return existing;
+  }
+  const watchHub = new FilesWatchHub(context.files);
+  const runtime = {
+    controller: new FileEditorController(context, watchHub),
+    watchHub,
+  };
+  runtime.controller.initialize().catch(() => undefined);
+  testFilesRuntimes.add(runtime);
+  testFilesRuntimesByContext.set(context, runtime);
+  return runtime;
+}
+
+function createFilePanel(context: RendererPluginContext) {
+  const runtime = filesRuntimeFor(context);
+  return createFilePanelWithController(
+    context,
+    runtime.controller,
+    runtime.watchHub
+  );
 }
 
 function makeProps(
@@ -390,6 +545,7 @@ function getFileTree(container: HTMLElement): HTMLElement {
 beforeEach(() => {
   clearHostGroupContentForTests();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   clearFilesDocumentStore();
   clearFilesNavHistory();
   clearFilesTreeStore();
@@ -404,13 +560,19 @@ afterEach(() => {
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   vi.useRealTimers();
   vi.restoreAllMocks();
   filesGroupViewRootProbe.reset();
+  for (const runtime of testFilesRuntimes) {
+    runtime.controller.dispose();
+    runtime.watchHub.dispose();
+  }
+  testFilesRuntimes.clear();
 });
 
 describe("Files file-panel", () => {
-  it("localizes file-panel chrome through plugin i18n messages", () => {
+  it("localizes file-panel chrome through plugin i18n messages", async () => {
     const translations = new Map<string, string>([
       ["filePanel.empty.title", "[未选择文件]"],
       ["filePanel.editor.sourceLabel", "[源码编辑器]"],
@@ -443,7 +605,7 @@ describe("Files file-panel", () => {
       />
     );
 
-    expect(screen.getByText("[临时]")).toBeVisible();
+    expect(await screen.findByText("[临时]")).toBeVisible();
     expect(screen.getByRole("button", { name: "[源码]" })).toBeVisible();
     expect(screen.getByRole("button", { name: "[预览]" })).toBeVisible();
     expect(screen.getByLabelText("[源码编辑器]")).toBeVisible();
@@ -479,10 +641,297 @@ describe("Files file-panel", () => {
     expect(tree.getByRole("treeitem", { name: "README.md" })).toBeVisible();
   });
 
+  it("hides repository metadata by default while keeping developer dotfiles visible", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: ".git", root: PROJECT_ROOT },
+      { kind: "directory", path: ".svn", root: PROJECT_ROOT },
+      { kind: "file", path: ".DS_Store", root: PROJECT_ROOT },
+      { kind: "file", path: ".env", root: PROJECT_ROOT },
+      { kind: "directory", path: ".github", root: PROJECT_ROOT },
+      { kind: "file", path: ".gitignore", root: PROJECT_ROOT },
+    ]);
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ list })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    const tree = within(getFileTree(container));
+    expect(tree.queryByRole("treeitem", { name: /^\.git$/ })).toBeNull();
+    expect(tree.queryByRole("treeitem", { name: /^\.svn$/ })).toBeNull();
+    expect(tree.queryByRole("treeitem", { name: /^\.DS_Store$/ })).toBeNull();
+    expect(tree.getByRole("treeitem", { name: /^\.env$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.github$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.gitignore$/ })).toBeVisible();
+  });
+
+  it("can hide Git-ignored files independently from default exclusions", async () => {
+    const configurationGet = <T,>(key: string): T =>
+      (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY
+        ? false
+        : undefined) as T;
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: ".env", root: PROJECT_ROOT },
+      { kind: "directory", path: "dist", root: PROJECT_ROOT },
+      { kind: "directory", path: "src", root: PROJECT_ROOT },
+    ]);
+    const listIgnored = vi.fn(async () => ["dist/"]);
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ configurationGet, list, listIgnored })
+    );
+
+    await waitFor(() => {
+      expect(listIgnored).toHaveBeenCalledWith(PROJECT_ROOT);
+    });
+    const tree = within(getFileTree(container));
+    expect(tree.queryByRole("treeitem", { name: /^dist$/ })).toBeNull();
+    expect(tree.getByRole("treeitem", { name: /^src$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.env$/ })).toBeVisible();
+  });
+
+  it("applies customized exclusion patterns instead of hardcoded paths", async () => {
+    const configurationGet = <T,>(key: string): T => {
+      if (key === FILES_TREE_SHOW_EXCLUDED_SETTING_KEY) {
+        return false as T;
+      }
+      if (key === FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY) {
+        return "**/build" as T;
+      }
+      if (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY) {
+        return true as T;
+      }
+      return undefined as T;
+    };
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "directory", path: ".git", root: PROJECT_ROOT },
+      { kind: "directory", path: "build", root: PROJECT_ROOT },
+      { kind: "file", path: ".env", root: PROJECT_ROOT },
+    ]);
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ configurationGet, list })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    const tree = within(getFileTree(container));
+    expect(tree.queryByRole("treeitem", { name: /^build$/ })).toBeNull();
+    expect(tree.getByRole("treeitem", { name: /^\.git$/ })).toBeVisible();
+    expect(tree.getByRole("treeitem", { name: /^\.env$/ })).toBeVisible();
+  });
+
+  it("applies visibility settings live without reopening a collapsed directory", async () => {
+    let excludePatterns = FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
+    let showExcluded = true;
+    const configurationListeners = new Set<
+      Parameters<RendererPluginContext["configuration"]["onDidChange"]>[0]
+    >();
+    const configurationGet = <T,>(key: string): T => {
+      if (key === FILES_TREE_SHOW_EXCLUDED_SETTING_KEY) {
+        return showExcluded as T;
+      }
+      if (key === FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY) {
+        return excludePatterns as T;
+      }
+      if (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY) {
+        return true as T;
+      }
+      return undefined as T;
+    };
+    const configurationOnDidChange: RendererPluginContext["configuration"]["onDidChange"] =
+      (listener) => {
+        configurationListeners.add(listener);
+        return () => configurationListeners.delete(listener);
+      };
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_root, options) => {
+        switch (options?.path) {
+          case "":
+            return [
+              { kind: "directory", path: ".git", root: PROJECT_ROOT },
+              { kind: "directory", path: "docs", root: PROJECT_ROOT },
+              { kind: "directory", path: "src", root: PROJECT_ROOT },
+            ];
+          case "docs":
+            return [
+              { kind: "file", path: "docs/index.md", root: PROJECT_ROOT },
+            ];
+          case "src":
+            return [{ kind: "file", path: "src/index.ts", root: PROJECT_ROOT }];
+          default:
+            return [];
+        }
+      }
+    );
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({
+        configurationGet,
+        configurationOnDidChange,
+        list,
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /^\.git$/,
+        })
+      ).toBeVisible();
+    });
+    let tree = within(getFileTree(container));
+    fireEvent.click(tree.getByRole("treeitem", { name: /^src$/ }));
+    await waitFor(() => {
+      expect(tree.getByRole("treeitem", { name: "index.ts" })).toBeVisible();
+    });
+    fireEvent.click(tree.getByRole("treeitem", { name: /^src$/ }));
+    fireEvent.click(tree.getByRole("treeitem", { name: /^docs$/ }));
+    await waitFor(() => {
+      expect(tree.getByRole("treeitem", { name: "index.md" })).toBeVisible();
+    });
+
+    showExcluded = false;
+    act(() => {
+      const event = {
+        affectsConfiguration: (prefix: string) =>
+          prefix === FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
+      };
+      for (const listener of configurationListeners) {
+        listener(event);
+      }
+    });
+
+    await waitFor(() => {
+      tree = within(getFileTree(container));
+      expect(tree.queryByRole("treeitem", { name: /^\.git$/ })).toBeNull();
+      expect(tree.getByRole("treeitem", { name: /^src$/ })).toHaveAttribute(
+        "aria-expanded",
+        "false"
+      );
+      expect(tree.getByRole("treeitem", { name: /^docs$/ })).toHaveAttribute(
+        "aria-expanded",
+        "true"
+      );
+      expect(tree.getByRole("treeitem", { name: "index.md" })).toBeVisible();
+    });
+
+    excludePatterns = "**/docs";
+    act(() => {
+      const event = {
+        affectsConfiguration: (prefix: string) =>
+          prefix === FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+      };
+      for (const listener of configurationListeners) {
+        listener(event);
+      }
+    });
+
+    await waitFor(() => {
+      tree = within(getFileTree(container));
+      expect(tree.getByRole("treeitem", { name: /^\.git$/ })).toBeVisible();
+      expect(tree.queryByRole("treeitem", { name: /^docs$/ })).toBeNull();
+      expect(tree.getByRole("treeitem", { name: /^src$/ })).toHaveAttribute(
+        "aria-expanded",
+        "false"
+      );
+    });
+  });
+
+  it("shows the contents of an isolated directory chain on the first expansion", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_root, options) => {
+        switch (options?.path) {
+          case "":
+            return [{ kind: "directory", path: "src", root: PROJECT_ROOT }];
+          case "src":
+            return [
+              {
+                kind: "directory",
+                path: "src/generated",
+                root: PROJECT_ROOT,
+              },
+            ];
+          case "src/generated":
+            return [
+              {
+                kind: "file",
+                path: "src/generated/index.ts",
+                root: PROJECT_ROOT,
+              },
+            ];
+          default:
+            return [];
+        }
+      }
+    );
+    const { container } = renderFilePanel(
+      { context: panelContext },
+      createMockContext({ list })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "src" })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, {
+        path: "src/generated",
+      });
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "index.ts",
+        })
+      ).toBeVisible();
+    });
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+  });
+
+  it("shows directory read details in the host alert and leaves the row retryable", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_root, options) => {
+        if (options?.path === "") {
+          return [{ kind: "directory", path: "src", root: PROJECT_ROOT }];
+        }
+        throw new Error("Permission denied");
+      }
+    );
+    const context = createMockContext({ list });
+    const { container } = renderFilePanel({ context: panelContext }, context);
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "src" })
+    );
+
+    await waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "Permission denied",
+        size: "default",
+        title: "Unable to load folder",
+      });
+    });
+    const row = within(getFileTree(container)).getByRole("treeitem", {
+      name: "src",
+    });
+    fireEvent.click(row);
+    fireEvent.click(row);
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(3);
+    });
+  });
+
   it("dispatches files/tree-item context menu with the row's data-item-path metadata", async () => {
-    // 右键树某行 → composedPath 沿 shadow DOM 走回宿主,在最深 [data-item-path]
-    // 上抓 path,拼 metadata 转发 context.contextMenu.popup。这一条实际证明
-    // @pierre/trees 的 data-item-path 契约仍在。
+    // 右键树某行 → @pierre/trees 先解析压缩行的真实目标并维护焦点语义，
+    // Pier 桥接层再把 caller path 与类型转发给宿主原生菜单。
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async () =>
         [
@@ -511,7 +960,9 @@ describe("Files file-panel", () => {
     expect(row.getAttribute("data-item-path")).toBe("README.md");
     fireEvent.contextMenu(row);
 
-    expect(popup).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(popup).toHaveBeenCalledTimes(1);
+    });
     expect(popup.mock.calls[0]?.[0]).toBe("files/tree-item");
     expect(popup.mock.calls[0]?.[2]).toMatchObject({
       metadata: {
@@ -519,6 +970,42 @@ describe("Files file-panel", () => {
         path: "README.md",
         root: PROJECT_ROOT,
       },
+    });
+  });
+
+  it("dispatches the same command surface for directory rows", async () => {
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "directory", path: "src", root: PROJECT_ROOT },
+    ]);
+    const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>(
+      async () => undefined
+    );
+    const context = createMockContext({ list });
+    context.contextMenu = { popup };
+    const { container } = renderFilePanel({ context: panelContext }, context);
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    fireEvent.contextMenu(
+      within(getFileTree(container)).getByRole("treeitem", { name: "src" })
+    );
+
+    await waitFor(() => {
+      expect(popup).toHaveBeenCalledWith(
+        "files/tree-item",
+        expect.objectContaining({
+          x: expect.any(Number),
+          y: expect.any(Number),
+        }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            kind: "directory",
+            path: "src",
+            root: PROJECT_ROOT,
+          }),
+        })
+      );
     });
   });
 
@@ -706,11 +1193,11 @@ describe("Files file-panel", () => {
         | undefined;
       expect(metadata?.documentId).toBe(document.id);
       expect(metadata?.editorSessionId).toContain("left-file-panel");
-      expect(metadata?.editorSessionId).toContain(document.id);
 
-      const copyAction = createFilesEditorActions(context).find(
-        (action) => action.id === FILES_EDITOR_COPY_COMMAND_ID
-      );
+      const copyAction = createFilesEditorActions(
+        context,
+        filesRuntimeFor(context).controller
+      ).find((action) => action.id === FILES_EDITOR_COPY_COMMAND_ID);
       if (!copyAction) {
         throw new Error("copy action was not registered");
       }
@@ -825,9 +1312,10 @@ describe("Files file-panel", () => {
       expect(metadata?.documentId).toBe(document.id);
       expect(metadata?.editorSessionId).toContain("same-file-panel-a");
 
-      const copyAction = createFilesEditorActions(context).find(
-        (action) => action.id === FILES_EDITOR_COPY_COMMAND_ID
-      );
+      const copyAction = createFilesEditorActions(
+        context,
+        filesRuntimeFor(context).controller
+      ).find((action) => action.id === FILES_EDITOR_COPY_COMMAND_ID);
       if (!copyAction) {
         throw new Error("copy action was not registered");
       }
@@ -908,9 +1396,10 @@ describe("Files file-panel", () => {
         removeDocument(document.id);
       });
 
-      const copyAction = createFilesEditorActions(context).find(
-        (action) => action.id === FILES_EDITOR_COPY_COMMAND_ID
-      );
+      const copyAction = createFilesEditorActions(
+        context,
+        filesRuntimeFor(context).controller
+      ).find((action) => action.id === FILES_EDITOR_COPY_COMMAND_ID);
       if (!copyAction) {
         throw new Error("copy action was not registered");
       }
@@ -1381,9 +1870,15 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
+    const treeHost = container.querySelector(
+      'file-tree-container[data-slot="pier-file-tree"]'
+    );
+    expect(treeHost).toBeInstanceOf(HTMLElement);
     expect(
-      container.querySelector('file-tree-container[data-slot="pier-file-tree"]')
-    ).toBeInstanceOf(HTMLElement);
+      (treeHost as HTMLElement).style.getPropertyValue(
+        "--trees-padding-inline-override"
+      )
+    ).toBe("4px");
   });
 
   it("never mounts an inline project tree in the thin panel shell when a dockview group is present", async () => {
@@ -2098,17 +2593,21 @@ describe("Files file-panel", () => {
         <div data-testid="sidebar-a">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-a"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
         <div data-testid="sidebar-b">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-b"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
       </>
@@ -2131,6 +2630,257 @@ describe("Files file-panel", () => {
     ).toBeNull();
   });
 
+  it("searches partial paths in lazy directories and leaves zero results empty", async () => {
+    const onOpenFile = vi.fn();
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (requestOrRoot, options) => {
+        const path =
+          typeof requestOrRoot === "string"
+            ? (options?.path ?? "")
+            : requestOrRoot.path;
+        const entriesByPath: Readonly<Record<string, readonly FileEntry[]>> = {
+          "": [
+            { kind: "file", path: "README.md", root: PROJECT_ROOT },
+            { kind: "directory", path: "src", root: PROJECT_ROOT },
+          ],
+          src: [
+            { kind: "file", path: "src/app.tsx", root: PROJECT_ROOT },
+            {
+              kind: "directory",
+              path: "src/styles",
+              root: PROJECT_ROOT,
+            },
+          ],
+          "src/styles": [
+            {
+              kind: "file",
+              path: "src/styles/app.css",
+              root: PROJECT_ROOT,
+            },
+            {
+              kind: "file",
+              path: "src/styles/theme.CSS",
+              root: PROJECT_ROOT,
+            },
+          ],
+        };
+        return [...(entriesByPath[path] ?? [])];
+      }
+    );
+    const context = createMockContext({ list });
+    const { container } = render(
+      <FileTreeSidebar
+        context={context}
+        controller={filesRuntimeFor(context).controller}
+        instanceId="tree-search-lazy"
+        onOpenFile={onOpenFile}
+        root={PROJECT_ROOT}
+        watchHub={filesRuntimeFor(context).watchHub}
+      />
+    );
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "README.md",
+        })
+      ).toBeVisible();
+    });
+
+    act(() => {
+      expect(openFilesTreeSearch({ instanceId: "tree-search-lazy" })).toBe(
+        true
+      );
+    });
+    const searchBar = await screen.findByTestId("files-tree-search-bar");
+    const searchInput = within(searchBar).getByRole("textbox", {
+      name: "Find in tree",
+    });
+    expect(searchBar.firstElementChild).toHaveClass("flex-wrap");
+    expect(searchInput.parentElement).toHaveClass("min-w-0");
+    const searchControls = searchBar.querySelector(
+      '[data-slot="files-search-controls"]'
+    );
+    expect(searchControls).toHaveClass("max-w-full", "flex-wrap");
+    expect(
+      within(searchBar).getByRole("button", { name: "Open selected file" })
+    ).toBeVisible();
+    fireEvent.change(searchInput, { target: { value: ".css" } });
+
+    await waitFor(() => {
+      expect(within(searchBar).getByText("2")).toBeVisible();
+      const tree = getFileTree(container);
+      expect(
+        within(tree).getByRole("treeitem", { name: "app.css" })
+      ).toBeVisible();
+      expect(
+        within(tree).getByRole("treeitem", { name: "theme.CSS" })
+      ).toBeVisible();
+      expect(
+        within(tree).queryByRole("treeitem", { name: "README.md" })
+      ).toBeNull();
+    });
+    expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "src" });
+    expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "src/styles" });
+
+    fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+    fireEvent.keyDown(searchInput, { key: "Enter" });
+    expect(onOpenFile).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "src/styles/theme.CSS" }),
+      undefined
+    );
+    expect(searchInput).toHaveValue(".css");
+    expect(
+      within(getFileTree(container)).queryByRole("treeitem", {
+        name: "README.md",
+      })
+    ).toBeNull();
+
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "app.css" })
+    );
+    expect(searchInput).toHaveValue(".css");
+    expect(within(searchBar).getByText("2")).toBeVisible();
+    expect(
+      within(getFileTree(container)).queryByRole("treeitem", {
+        name: "README.md",
+      })
+    ).toBeNull();
+
+    fireEvent.change(searchInput, { target: { value: ".missing" } });
+    await waitFor(() => {
+      expect(within(searchBar).getByText("0")).toBeVisible();
+      expect(
+        within(getFileTree(container)).queryAllByRole("treeitem")
+      ).toHaveLength(0);
+      expect(screen.getByTestId("files-tree-search-empty")).toHaveTextContent(
+        "No matching files"
+      );
+      expect(screen.getByTestId("files-tree-search-empty")).toHaveTextContent(
+        "Try another file name or path."
+      );
+    });
+
+    fireEvent.change(searchInput, { target: { value: "" } });
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "README.md",
+        })
+      ).toBeVisible();
+      expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+    });
+  });
+
+  it("replays a search entered before the tree API mounts", async () => {
+    const rootLoad = Promise.withResolvers<FileEntry[]>();
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_requestOrRoot, options) =>
+        options?.path === "" || options?.path === undefined
+          ? rootLoad.promise
+          : []
+    );
+    const context = createMockContext({ list });
+    const { container } = render(
+      <FileTreeSidebar
+        context={context}
+        controller={filesRuntimeFor(context).controller}
+        instanceId="tree-search-before-mount"
+        onOpenFile={vi.fn()}
+        root={PROJECT_ROOT}
+        watchHub={filesRuntimeFor(context).watchHub}
+      />
+    );
+
+    act(() => {
+      expect(
+        openFilesTreeSearch({ instanceId: "tree-search-before-mount" })
+      ).toBe(true);
+    });
+    const searchBar = await screen.findByTestId("files-tree-search-bar");
+    const searchInput = within(searchBar).getByRole("textbox", {
+      name: "Find in tree",
+    });
+    fireEvent.change(searchInput, { target: { value: ".css" } });
+
+    await act(async () => {
+      rootLoad.resolve([
+        { kind: "file", path: "README.md", root: PROJECT_ROOT },
+        { kind: "file", path: "styles.css", root: PROJECT_ROOT },
+      ]);
+      await rootLoad.promise;
+    });
+    await waitFor(() => {
+      expect(within(searchBar).getByText("1")).toBeVisible();
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "styles.css",
+        })
+      ).toBeVisible();
+      expect(
+        within(getFileTree(container)).queryByRole("treeitem", {
+          name: "README.md",
+        })
+      ).toBeNull();
+      expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+    });
+  });
+
+  it("disables opening when the focused search match is a directory", async () => {
+    const onOpenFile = vi.fn();
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_requestOrRoot, options) =>
+        options?.path
+          ? []
+          : [
+              {
+                kind: "directory",
+                path: "empty-folder",
+                root: PROJECT_ROOT,
+              },
+            ]
+    );
+    const context = createMockContext({ list });
+    const { container } = render(
+      <FileTreeSidebar
+        context={context}
+        controller={filesRuntimeFor(context).controller}
+        instanceId="tree-search-directory"
+        onOpenFile={onOpenFile}
+        root={PROJECT_ROOT}
+        watchHub={filesRuntimeFor(context).watchHub}
+      />
+    );
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: "empty-folder",
+        })
+      ).toBeVisible();
+    });
+
+    act(() => {
+      expect(openFilesTreeSearch({ instanceId: "tree-search-directory" })).toBe(
+        true
+      );
+    });
+    const searchBar = await screen.findByTestId("files-tree-search-bar");
+    const searchInput = within(searchBar).getByRole("textbox", {
+      name: "Find in tree",
+    });
+    const openButton = within(searchBar).getByRole("button", {
+      name: "Open selected file",
+    });
+    fireEvent.change(searchInput, { target: { value: "empty-folder" } });
+
+    await waitFor(() => {
+      expect(within(searchBar).getByText("1")).toBeVisible();
+      expect(openButton).toBeDisabled();
+    });
+    fireEvent.keyDown(searchInput, { key: "Enter" });
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+  });
+
   it("does not fall back to another same-root tree when a target tree instance is missing", async () => {
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async () =>
@@ -2144,17 +2894,21 @@ describe("Files file-panel", () => {
         <div data-testid="sidebar-a">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-a"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
         <div data-testid="sidebar-b">
           <FileTreeSidebar
             context={context}
+            controller={filesRuntimeFor(context).controller}
             instanceId="tree-instance-b"
             onOpenFile={vi.fn()}
             root={PROJECT_ROOT}
+            watchHub={filesRuntimeFor(context).watchHub}
           />
         </div>
       </>
@@ -2412,7 +3166,7 @@ describe("Files file-panel", () => {
     ).toBeVisible();
   });
 
-  it("opens an untitled Markdown document with title, unsaved status, and source editor", () => {
+  it("opens an untitled Markdown document without redundant save toolbar buttons", async () => {
     const document = createUntitledMarkdownDocument({
       contents: "# Terminal notes\n\n- keep this local",
     });
@@ -2423,15 +3177,157 @@ describe("Files file-panel", () => {
     });
 
     expect(screen.getByRole("heading", { name: document.name })).toBeVisible();
-    expect(screen.getByText("Temporary file")).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "Save" })
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("Temporary file")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save As…" })).toBeNull();
     expect(container.querySelector(".cm-editor")).toBeInstanceOf(HTMLElement);
     expect(screen.getByRole("button", { name: "Source" })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
+  });
+
+  it("saves an untitled document to a selected target and rebinds the panel", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# Save this\n",
+    });
+    const pickSaveTarget = vi.fn(async () => ({
+      context: panelContext,
+      path: "notes/saved.md",
+      root: PROJECT_ROOT,
+    }));
+    const inspectWriteTarget = vi.fn(async () => ({
+      kind: "absent" as const,
+    }));
+    const writeDocument = vi.fn(async (request) => ({
+      canonicalPath: "notes/saved.md",
+      committed: true as const,
+      durability: "confirmed" as const,
+      kind: "written" as const,
+      mode: 0o644,
+      mtimeMs: 2,
+      revision: "revision-saved-as",
+      size: request.contents.length,
+    }));
+    const openInstance = vi.fn();
+    const flushLayout = vi.fn(async () => undefined);
+    const context = createMockContext({
+      flushLayout,
+      inspectWriteTarget,
+      openInstance,
+      pickSaveTarget,
+      writeDocument,
+    });
+    const close = vi.fn();
+    const Panel = createFilePanel(context);
+    const panelId = "pier.files.filePanel:untitled:save-as-test";
+
+    render(
+      <Panel
+        {...makeProps(
+          {
+            context: panelContext,
+            source: { id: document.id, kind: "untitled", name: document.name },
+          },
+          { close, id: panelId }
+        )}
+      />
+    );
+
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(panelId);
+    });
+
+    await waitFor(() => {
+      expect(writeDocument).toHaveBeenCalledWith({
+        contents: "# Save this\n",
+        eol: "lf",
+        expected: { kind: "absent" },
+        format: { bom: false, encoding: "utf8" },
+        operationId: expect.any(String),
+        path: "notes/saved.md",
+        root: PROJECT_ROOT,
+      });
+    });
+    expect(pickSaveTarget).toHaveBeenCalledWith({
+      context: panelContext,
+      suggestedName: document.name,
+    });
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentId: FILES_FILE_PANEL_ID,
+        context: panelContext,
+        params: {
+          pinned: true,
+          source: {
+            kind: "disk",
+            path: "notes/saved.md",
+            root: PROJECT_ROOT,
+          },
+        },
+      })
+    );
+    expect(close).toHaveBeenCalledOnce();
+    expect(flushLayout).toHaveBeenCalledOnce();
+    expect(close.mock.invocationCallOrder[0]).toBeLessThan(
+      flushLayout.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(getDocument(document.id)).toBeNull();
+  });
+
+  it("keeps Save As recovery state when the panel layout cannot be persisted", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# Keep recovery state\n",
+    });
+    const flushLayout = vi.fn(async () => {
+      throw new Error("layout disk full");
+    });
+    const context = createMockContext({
+      flushLayout,
+      inspectWriteTarget: vi.fn(async () => ({ kind: "absent" as const })),
+      pickSaveTarget: vi.fn(async () => ({
+        context: panelContext,
+        path: "notes/recover.md",
+        root: PROJECT_ROOT,
+      })),
+      writeDocument: vi.fn(async (request) => ({
+        canonicalPath: request.path,
+        committed: true as const,
+        durability: "confirmed" as const,
+        kind: "written" as const,
+        mode: 0o644,
+        mtimeMs: 2,
+        revision: "revision-recovery",
+        size: request.contents.length,
+      })),
+    });
+    const close = vi.fn();
+    const panelId = "pier.files.filePanel:untitled:save-as-layout-failure";
+    const Panel = createFilePanel(context);
+    render(
+      <Panel
+        {...makeProps(
+          {
+            context: panelContext,
+            source: { id: document.id, kind: "untitled", name: document.name },
+          },
+          { close, id: panelId }
+        )}
+      />
+    );
+
+    await expect(
+      filesRuntimeFor(context).controller.savePanel(panelId, "none")
+    ).resolves.toBe("failed");
+
+    expect(close).toHaveBeenCalledOnce();
+    expect(flushLayout).toHaveBeenCalledOnce();
+    expect(getDocument(document.id)).not.toBeNull();
+    expect(saveAsJournalForDocument(document.id)).toMatchObject({
+      phase: "written",
+      sourceDocumentId: document.id,
+      writtenResult: { revision: "revision-recovery" },
+    });
   });
 
   it("renders a no-project-context Markdown document without mounting or loading the sidebar", () => {
@@ -2479,7 +3375,7 @@ describe("Files file-panel", () => {
     expect(screen.getByText("const value = 1;")).toBeVisible();
   });
 
-  it("preserves edited Markdown contents across source to preview to source mode switches", () => {
+  it("preserves editor state, selection, scroll, and undo history across view mode switches", () => {
     const document = createUntitledMarkdownDocument({
       contents: "# Before\n\n- draft",
     });
@@ -2489,18 +3385,77 @@ describe("Files file-panel", () => {
     });
 
     replaceEditorText(container, "# After\n\n- kept through preview\n");
+    const editedView = findCodeMirrorView(container);
+    act(() => {
+      editedView.dispatch({ selection: { anchor: 2, head: 7 } });
+      editedView.scrollDOM.scrollLeft = 17;
+      editedView.scrollDOM.scrollTop = 143;
+    });
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     expect(screen.getByRole("heading", { name: "After" })).toBeVisible();
     expect(screen.getByText("kept through preview")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Source" }));
 
-    expect(findCodeMirrorView(container).state.doc.toString()).toBe(
+    const restoredView = findCodeMirrorView(container);
+    expect(restoredView.state.doc.toString()).toBe(
       "# After\n\n- kept through preview\n"
     );
+    expect(restoredView.state.selection.main).toMatchObject({
+      anchor: 2,
+      head: 7,
+    });
+    expect(restoredView.scrollDOM.scrollLeft).toBe(17);
+    expect(restoredView.scrollDOM.scrollTop).toBe(143);
     expect(getDocument(document.id)?.currentContents).toBe(
       "# After\n\n- kept through preview\n"
     );
+    fireEvent.keyDown(restoredView.contentDOM, { ctrlKey: true, key: "z" });
+    expect(restoredView.state.doc.toString()).toBe("# Before\n\n- draft");
+  });
+
+  it("preserves the view session when an open disk document is renamed", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "before.md",
+      root: PROJECT_ROOT,
+    };
+    const document = ensureDiskDocument(source);
+    markDocumentLoaded(document.id, "before\n", 1);
+    const pluginContext = createMockContext();
+    const { container } = renderFilePanel(
+      { context: panelContext, source },
+      pluginContext
+    );
+    const originalView = findCodeMirrorView(container);
+    act(() => {
+      originalView.dispatch({
+        changes: {
+          from: 0,
+          insert: "edited",
+          to: originalView.state.doc.length,
+        },
+        selection: { anchor: 2, head: 4 },
+      });
+      originalView.scrollDOM.scrollTop = 91;
+    });
+    await act(async () => {
+      await filesRuntimeFor(pluginContext).controller.moveDiskDocumentSource(
+        PROJECT_ROOT,
+        "before.md",
+        "after.md"
+      );
+    });
+
+    const renamedView = findCodeMirrorView(container);
+    expect(renamedView.state.doc.toString()).toBe("edited");
+    expect(renamedView.state.selection.main).toMatchObject({
+      anchor: 2,
+      head: 4,
+    });
+    expect(renamedView.scrollDOM.scrollTop).toBe(91);
+    fireEvent.keyDown(renamedView.contentDOM, { ctrlKey: true, key: "z" });
+    expect(renamedView.state.doc.toString()).toBe("before\n");
   });
 
   it("does not render raw HTML or allow link clicks to navigate the current window", () => {
@@ -2660,7 +3615,7 @@ describe("Files file-panel", () => {
     expect(readText).not.toHaveBeenCalled();
   });
 
-  it("updates the document contents from CodeMirror and shows dirty state", () => {
+  it("updates the document contents from CodeMirror and protects dirty state", async () => {
     const document = createUntitledMarkdownDocument({ contents: "# Before\n" });
     const { container } = renderFilePanel({
       context: panelContext,
@@ -2670,7 +3625,7 @@ describe("Files file-panel", () => {
     replaceEditorText(container, "# After\n");
 
     expect(getDocument(document.id)?.currentContents).toBe("# After\n");
-    expect(screen.getByText("Unsaved changes")).toBeVisible();
+    expect(await screen.findByText("Protected")).toBeVisible();
   });
 
   it("saves dirty disk documents through writeText", async () => {
@@ -2682,25 +3637,29 @@ describe("Files file-panel", () => {
         written: true as const,
       })
     );
+    const context = createMockContext({
+      readText: vi.fn(async () => "# Before\n"),
+      writeText,
+    });
     renderFilePanel(
       {
         context: panelContext,
         source: { kind: "disk", path: "README.md", root: PROJECT_ROOT },
       },
-      createMockContext({
-        readText: vi.fn(async () => "# Before\n"),
-        writeText,
-      })
+      context
     );
 
     await screen.findByText("Saved");
     replaceEditorText(document.body, "# After\n");
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(
+        "pier.files.filePanel:test"
+      );
+    });
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith({
         contents: "# After\n",
-        expectedMtimeMs: 1,
         path: "README.md",
         root: PROJECT_ROOT,
       });
@@ -2708,7 +3667,7 @@ describe("Files file-panel", () => {
     expect(await screen.findByText("Saved")).toBeVisible();
   });
 
-  it("triggers save via pier.files.save action when the file panel is active", async () => {
+  it("saves the active disk panel through the shared controller path", async () => {
     const writeText = vi.fn<RendererPluginContext["files"]["writeText"]>(
       async (request) => ({
         mtimeMs: 1,
@@ -2722,8 +3681,6 @@ describe("Files file-panel", () => {
       readText: vi.fn(async () => "# Before\n"),
       writeText,
     });
-    // pier.files.save action.handler 里读 getActiveInstanceId 命中此 panelId,
-    // 走 registry → 触发面板注册的 save。
     (
       context.panels.getActiveInstanceId as ReturnType<typeof vi.fn>
     ).mockReturnValue(panelId);
@@ -2743,16 +3700,13 @@ describe("Files file-panel", () => {
     await screen.findByText("Saved");
     replaceEditorText(document.body, "# After\n");
 
-    // 直接调用 action.handler 是 Cmd+S 命中 keybinding → dispatch 的
-    // renderer 侧终点。此处等价于快捷键触发,不需要跑 jsdom KeyboardEvent。
     await act(async () => {
-      await triggerFilePanelSave(panelId);
+      await filesRuntimeFor(context).controller.savePanel(panelId);
     });
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith({
         contents: "# After\n",
-        expectedMtimeMs: 1,
         path: "README.md",
         root: PROJECT_ROOT,
       });
@@ -2802,7 +3756,7 @@ describe("Files file-panel", () => {
     expect(await screen.findByText("Saved")).toBeVisible();
   });
 
-  it("keeps Save enabled after a failed disk write so retry can succeed", async () => {
+  it("keeps manual save retryable after a failed disk write", async () => {
     let shouldFail = true;
     const writeText = vi.fn<RendererPluginContext["files"]["writeText"]>(
       (request) => {
@@ -2817,27 +3771,35 @@ describe("Files file-panel", () => {
         });
       }
     );
+    const context = createMockContext({
+      readText: vi.fn(async () => "# Before\n"),
+      writeText,
+    });
     renderFilePanel(
       {
         context: panelContext,
         source: { kind: "disk", path: "README.md", root: PROJECT_ROOT },
       },
-      createMockContext({
-        readText: vi.fn(async () => "# Before\n"),
-        writeText,
-      })
+      context
     );
 
     await screen.findByText("Saved");
     replaceEditorText(document.body, "# After\n");
-    const saveButton = screen.getByRole("button", { name: "Save" });
-    fireEvent.click(saveButton);
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(
+        "pier.files.filePanel:test"
+      );
+    });
 
     expect(await screen.findByText("Unable to save file")).toBeVisible();
     expect(screen.getByText("disk full")).toBeVisible();
-    expect(saveButton).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     shouldFail = false;
-    fireEvent.click(saveButton);
+    await act(async () => {
+      await filesRuntimeFor(context).controller.savePanel(
+        "pier.files.filePanel:test"
+      );
+    });
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledTimes(2);
@@ -3078,6 +4040,23 @@ describe("Files file-panel", () => {
     expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
   });
 
+  it("does not render a restoration error while acquiring a disk document", () => {
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "src/pending.ts", root: PROJECT_ROOT },
+      },
+      createMockContext({
+        readText: vi.fn(() => new Promise<string>(() => undefined)),
+      })
+    );
+
+    expect(
+      screen.queryByText("This disk file document could not be restored.")
+    ).toBeNull();
+    expect(screen.getByRole("status", { name: "Loading…" })).toBeVisible();
+  });
+
   it("renders the search button in the chrome for CodeMirror find widget", async () => {
     // Search 按钮始终存在;back/forward 属于宿主级全局导航,不在文件面板里。
     renderFilePanel(
@@ -3162,11 +4141,69 @@ describe("Files file-panel", () => {
     expect(container.querySelector(".cm-search")).toBeNull();
   });
 
+  it("recomputes search results after local and external document changes", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "foo foo\n",
+    });
+    const { container } = renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Find in file" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Find" }), {
+      target: { value: "foo" },
+    });
+    expect(screen.getByText("1/2")).toBeVisible();
+
+    const view = findCodeMirrorView(container);
+    act(() => {
+      view.dispatch({
+        changes: { from: view.state.doc.length, insert: "foo" },
+      });
+    });
+    expect(screen.getByText("1/3")).toBeVisible();
+
+    act(() => updateDocumentContents(document.id, "foo"));
+    expect(screen.getByText("1/1")).toBeVisible();
+  });
+
+  it("clears retained search decorations when returning from preview", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# foo\n\nfoo\n",
+    });
+    const { container } = renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Find in file" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Find" }), {
+      target: { value: "foo" },
+    });
+    expect(getSearchQuery(findCodeMirrorView(container).state).valid).toBe(
+      true
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Source" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".cm-editor")).toBeInstanceOf(HTMLElement);
+    });
+    expect(screen.queryByTestId("files-editor-search-bar")).toBeNull();
+    expect(getSearchQuery(findCodeMirrorView(container).state).valid).toBe(
+      false
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Find in file" }));
+    expect(await screen.findByRole("textbox", { name: "Find" })).toHaveValue(
+      ""
+    );
+  });
+
   it("installs a high-priority CodeMirror DOM handler before basicSetup can open the default search panel", async () => {
     const editorSource = await readFile(
       join(
         process.cwd(),
-        "src/plugins/builtin/files/renderer/code-mirror-editor.tsx"
+        "src/plugins/builtin/files/renderer/file-editor-view-session.ts"
       ),
       "utf8"
     );
@@ -3178,7 +4215,7 @@ describe("Files file-panel", () => {
     expect(setupIndex).toBeGreaterThanOrEqual(0);
     expect(overrideIndex).toBeLessThan(setupIndex);
     expect(editorSource).toContain("keydown: (event)");
-    expect(editorSource).toContain("openSearchRef.current()");
+    expect(editorSource).toContain("this.#presentation.onOpenSearch()");
   });
 
   it("promotes a preview panel to pinned when the user first modifies the document", async () => {
@@ -3244,6 +4281,24 @@ describe("Files file-panel", () => {
     const bodyClass = (bodyRoot as HTMLElement).className;
     expect(bodyClass).not.toMatch(CLASS_H_FULL);
     expect(bodyClass).toMatch(CLASS_FLEX_1);
+  });
+
+  it("routes CodeMirror scrolling through the Pier scrollbar policy", () => {
+    const document = createUntitledMarkdownDocument({
+      contents: Array.from(
+        { length: 60 },
+        (_, index) => `line ${index + 1} ${"content ".repeat(30)}`
+      ).join("\n"),
+    });
+    const { container } = renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+
+    expect(findCodeMirrorView(container).scrollDOM).toHaveAttribute(
+      "data-scrollbar",
+      "stable"
+    );
   });
 
   it("keeps CodeMirror gutters opaque and sticky so horizontal scroll cannot bleed into line numbers", async () => {

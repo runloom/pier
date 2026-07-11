@@ -6,7 +6,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import type { IDockviewPanelHeaderProps } from "dockview-react";
+import {
+  DockviewReact,
+  type DockviewReadyEvent,
+  type IDockviewPanelHeaderProps,
+} from "dockview-react";
 import i18next from "i18next";
 import { act, type ReactElement } from "react";
 import {
@@ -837,24 +841,64 @@ describe("PanelTabHeader", () => {
       { pinned: false, uri: "file:///workspace/README.md" }
     );
     Object.assign(fileProps.api, { updateParameters: fileUpdateParameters });
-    const fileDoubleClickBubble = vi.fn();
     const { container: fileContainer } = render(
-      <button onDoubleClick={fileDoubleClickBubble} type="button">
-        <PanelTabHeader {...fileProps} />
-      </button>
+      <PanelTabHeader {...fileProps} />
     );
 
     const fileTab = fileContainer.querySelector(
       '[data-panel-tab-id="pier.files.filePanel:disk:abc"]'
     );
     expect(fileTab).not.toBeNull();
+    fireEvent.pointerDown(fileTab as HTMLElement, { button: 0, detail: 2 });
     fireEvent.doubleClick(fileTab as HTMLElement);
 
     expect(fileUpdateParameters).toHaveBeenCalledTimes(1);
-    expect(fileUpdateParameters).toHaveBeenCalledWith({
-      pinned: true,
-      uri: "file:///workspace/README.md",
+    expect(fileUpdateParameters).toHaveBeenCalledWith({ pinned: true });
+  });
+
+  it("pins a preview through the real dockview parameter channel", async () => {
+    const panelId = "pier.files.filePanel:disk:real-dockview";
+    let readyApi: DockviewReadyEvent["api"] | null = null;
+    const { container } = render(
+      <div style={{ height: 240, width: 640 }}>
+        <DockviewReact
+          components={{
+            "pier.files.filePanel": () => <div data-testid="real-file-panel" />,
+          }}
+          defaultTabComponent={PanelTabHeader}
+          onReady={(event) => {
+            readyApi = event.api;
+            event.api.addPanel({
+              component: "pier.files.filePanel",
+              id: panelId,
+              params: {
+                pinned: false,
+                source: "file:///workspace/README.md",
+              },
+              title: "README.md",
+            });
+          }}
+        />
+      </div>
+    );
+
+    const tab = await waitFor(() => {
+      const element = container.querySelector(
+        `[data-panel-tab-id="${panelId}"]`
+      );
+      expect(element).toBeInstanceOf(HTMLElement);
+      return element as HTMLElement;
     });
-    expect(fileDoubleClickBubble).not.toHaveBeenCalled();
+    expect(tab).toHaveAttribute("data-pier-tab-preview", "true");
+
+    fireEvent.doubleClick(tab);
+
+    await waitFor(() => {
+      expect(readyApi?.getPanel(panelId)?.params).toMatchObject({
+        pinned: true,
+        source: "file:///workspace/README.md",
+      });
+      expect(tab).not.toHaveAttribute("data-pier-tab-preview");
+    });
   });
 });

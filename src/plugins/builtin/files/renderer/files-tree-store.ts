@@ -1,42 +1,44 @@
-import type { PierDirectoryLoadState } from "@pier/ui/file-tree.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
-import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
-import { listPendingCreatePaths } from "./files-tree-registry.ts";
+import {
+  loadCompactDirectoryBranch,
+  mergeLoadedDirectoryBranch,
+} from "./files-tree-directory-loader.ts";
+import {
+  type FilesTreeDirectoryLoadDetails,
+  type FilesTreeDirectoryLoadResult,
+  type FilesTreeSnapshot,
+  invalidateDirectoryLoadsIntersectingPath,
+  invalidateSupersededDirectoryLoads,
+  pendingRetainPathSet,
+} from "./files-tree-load-support.ts";
+import { beginFilesTreeRootLoad } from "./files-tree-root-loader.ts";
 import {
   addEntry,
-  entriesByPath,
   markParentEmptyAfterChildRemove,
   markParentLoadedAfterChildAdd,
-  mergeDirectoryEntries,
   moveDirectoryStatesSubtree,
   moveEntrySubtree,
-  parentDirectoryPath,
-  pruneDirectoryStatesForMissingEntries,
   removeDirectoryStatesSubtree,
   removeEntrySubtree,
   setDirectoryState,
 } from "./files-tree-store-ops.ts";
+import type { FilesTreeList } from "./files-tree-visibility.ts";
 
-function pendingRetainPathSet(root: string): ReadonlySet<string> {
-  return new Set(listPendingCreatePaths(root));
-}
-
-interface FilesTreeSnapshot {
-  directoryStatesByPath: ReadonlyMap<string, PierDirectoryLoadState>;
-  entriesByPath: ReadonlyMap<string, FileEntry>;
-  rootError: string | null;
-  rootLoaded: boolean;
-  rootLoading: boolean;
-}
-
-type FilesListApi = RendererPluginContext["files"]["list"];
 type Listener = () => void;
 
+export type {
+  FilesTreeDirectoryLoadDetails,
+  FilesTreeDirectoryLoadResult,
+} from "./files-tree-load-support.ts";
+
 interface FilesTreeSession {
+  directoryLoadGenerations: Map<string, number>;
+  directoryLoadPromises: Map<string, Promise<FilesTreeDirectoryLoadDetails>>;
   listeners: Set<Listener>;
+  rootLoadGeneration: number;
   rootLoadPromise: Promise<void> | null;
   snapshot: FilesTreeSnapshot;
+  visibilityPredicate: ((path: string) => boolean) | null;
 }
 
 const EMPTY_SNAPSHOT: FilesTreeSnapshot = {
@@ -51,9 +53,13 @@ const sessions = new Map<string, FilesTreeSession>();
 
 function createSession(): FilesTreeSession {
   return {
+    directoryLoadGenerations: new Map(),
+    directoryLoadPromises: new Map(),
     listeners: new Set(),
     rootLoadPromise: null,
+    rootLoadGeneration: 0,
     snapshot: EMPTY_SNAPSHOT,
+    visibilityPredicate: null,
   };
 }
 
@@ -86,10 +92,18 @@ function emitSnapshotIfChanged(
   emit(session);
 }
 
-function toErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message.length > 0
-    ? error.message
-    : fallback;
+function invalidateLoadsForPathMutation(
+  session: FilesTreeSession,
+  path: string
+): void {
+  invalidateDirectoryLoadsIntersectingPath(
+    session.directoryLoadPromises.keys(),
+    session.directoryLoadGenerations,
+    path
+  );
+  if (session.rootLoadPromise) {
+    session.rootLoadGeneration += 1;
+  }
 }
 
 export function getFilesTreeSnapshot(root: string | null): FilesTreeSnapshot {
@@ -116,87 +130,86 @@ export function subscribeFilesTreeSession(
 
 function beginRootLoad(
   root: string,
-  list: FilesListApi,
+  list: FilesTreeList,
   fallbackError: string,
   force: boolean
-): void {
+): Promise<void> {
   const session = sessionForRoot(root);
-  if (
-    (!force &&
-      ((session.snapshot.rootLoaded && !session.snapshot.rootError) ||
-        session.snapshot.rootLoading ||
-        session.rootLoadPromise)) ||
-    (force && (session.snapshot.rootLoading || session.rootLoadPromise))
-  ) {
-    return;
-  }
-
-  session.snapshot = {
-    ...session.snapshot,
-    rootError: null,
-    rootLoading: true,
-  };
-  emit(session);
-
-  session.rootLoadPromise = list(root, { path: "" })
-    .then((entries) => {
-      session.snapshot = {
-        directoryStatesByPath: force
-          ? session.snapshot.directoryStatesByPath
-          : new Map(),
-        entriesByPath: force
-          ? mergeDirectoryEntries(
-              session.snapshot.entriesByPath,
-              "",
-              entries,
-              pendingRetainPathSet(root)
-            )
-          : entriesByPath(entries),
-        rootError: null,
-        rootLoaded: true,
-        rootLoading: false,
-      };
-      emit(session);
-    })
-    .catch((error: unknown) => {
-      session.snapshot = {
-        directoryStatesByPath: force
-          ? session.snapshot.directoryStatesByPath
-          : new Map(),
-        entriesByPath: force ? session.snapshot.entriesByPath : new Map(),
-        rootError: toErrorMessage(error, fallbackError),
-        rootLoaded: true,
-        rootLoading: false,
-      };
-      emit(session);
-    })
-    .finally(() => {
-      session.rootLoadPromise = null;
-    });
+  return beginFilesTreeRootLoad(session, root, list, fallbackError, force, () =>
+    emit(session)
+  );
 }
 
 export function loadFilesTreeRoot(
   root: string,
-  list: FilesListApi,
+  list: FilesTreeList,
   fallbackError: string
-): void {
-  beginRootLoad(root, list, fallbackError, false);
+): Promise<void> {
+  return beginRootLoad(root, list, fallbackError, false);
 }
 
 export function reloadFilesTreeRoot(
   root: string,
-  list: FilesListApi,
+  list: FilesTreeList,
   fallbackError: string
-): void {
-  beginRootLoad(root, list, fallbackError, true);
+): Promise<void> {
+  return beginRootLoad(root, list, fallbackError, true);
+}
+
+export function getPendingFilesTreeRootLoad(
+  root: string
+): Promise<void> | null {
+  return sessionForRoot(root).rootLoadPromise;
 }
 
 export async function loadFilesTreeDirectory(
   root: string,
   path: string,
-  list: FilesListApi
-): Promise<void> {
+  list: FilesTreeList
+): Promise<FilesTreeDirectoryLoadResult> {
+  return (await loadFilesTreeDirectoryWithDiscovery(root, path, list)).result;
+}
+
+export function getPendingFilesTreeDirectoryLoad(
+  root: string,
+  path: string
+): Promise<FilesTreeDirectoryLoadDetails> | undefined {
+  return sessionForRoot(root).directoryLoadPromises.get(path);
+}
+
+export async function loadFilesTreeDirectoryWithDiscovery(
+  root: string,
+  path: string,
+  list: FilesTreeList
+): Promise<FilesTreeDirectoryLoadDetails> {
   const session = sessionForRoot(root);
+  if (list.isPathVisible) {
+    session.visibilityPredicate = (candidatePath) =>
+      list.isPathVisible?.(root, candidatePath) ?? true;
+  }
+  const activeLoad = session.directoryLoadPromises.get(path);
+  if (activeLoad) {
+    return await activeLoad;
+  }
+
+  const loadPromise = loadFilesTreeDirectoryBranch(session, root, path, list);
+  session.directoryLoadPromises.set(path, loadPromise);
+  try {
+    return await loadPromise;
+  } finally {
+    if (session.directoryLoadPromises.get(path) === loadPromise) {
+      session.directoryLoadPromises.delete(path);
+    }
+  }
+}
+
+async function loadFilesTreeDirectoryBranch(
+  session: FilesTreeSession,
+  root: string,
+  path: string,
+  list: FilesTreeList
+): Promise<FilesTreeDirectoryLoadDetails> {
+  const loadGeneration = session.directoryLoadGenerations.get(path) ?? 0;
   const loadingStates = setDirectoryState(
     session.snapshot.directoryStatesByPath,
     path,
@@ -214,73 +227,80 @@ export async function loadFilesTreeDirectory(
     emit(session);
   }
 
-  try {
-    const entries = await list(root, { path });
-    const retainPaths = pendingRetainPathSet(root);
-    const mergedEntriesByPath = mergeDirectoryEntries(
-      session.snapshot.entriesByPath,
-      path,
-      entries,
-      retainPaths
-    );
-    const hasVisibleChildren =
-      entries.length > 0 ||
-      [...retainPaths].some(
-        (retainPath) =>
-          retainPath === path ||
-          (path === ""
-            ? retainPath.length > 0
-            : retainPath.startsWith(`${path}/`))
+  const branch = await loadCompactDirectoryBranch({
+    isKnownLoaded: (candidatePath) => {
+      const state = session.snapshot.directoryStatesByPath.get(candidatePath);
+      return state === "loaded" || state === "empty";
+    },
+    list,
+    path,
+    root,
+  });
+  const discoveredDirectoryPaths = branch.listings.flatMap((listing) =>
+    listing.entries
+      .filter((entry) => entry.kind === "directory")
+      .map((entry) => entry.path)
+  );
+  const result: FilesTreeDirectoryLoadResult =
+    branch.failedPath === undefined
+      ? { ok: true }
+      : { error: branch.error, ok: false };
+  if ((session.directoryLoadGenerations.get(path) ?? 0) !== loadGeneration) {
+    if (session.snapshot.directoryStatesByPath.get(path) === "loading") {
+      const hasDescendant = [...session.snapshot.entriesByPath.keys()].some(
+        (entryPath) => entryPath.startsWith(`${path}/`)
       );
-    const loadedDirectoryStatesByPath = setDirectoryState(
-      session.snapshot.directoryStatesByPath,
-      path,
-      hasVisibleChildren ? "loaded" : "empty"
-    );
-    const directoryStatesByPath = pruneDirectoryStatesForMissingEntries(
-      loadedDirectoryStatesByPath,
-      mergedEntriesByPath,
-      path
-    );
-    const entriesByPath = mergedEntriesByPath;
-
-    emitSnapshotIfChanged(
-      session,
-      directoryStatesByPath === session.snapshot.directoryStatesByPath &&
-        entriesByPath === session.snapshot.entriesByPath
-        ? session.snapshot
-        : {
-            ...session.snapshot,
-            directoryStatesByPath,
-            entriesByPath,
-          }
-    );
-  } catch {
-    const directoryStatesByPath = setDirectoryState(
-      session.snapshot.directoryStatesByPath,
-      path,
-      "error"
-    );
-    emitSnapshotIfChanged(
-      session,
-      directoryStatesByPath === session.snapshot.directoryStatesByPath
-        ? session.snapshot
-        : {
-            ...session.snapshot,
-            directoryStatesByPath,
-          }
-    );
+      session.snapshot = {
+        ...session.snapshot,
+        directoryStatesByPath: setDirectoryState(
+          session.snapshot.directoryStatesByPath,
+          path,
+          hasDescendant ? "loaded" : "unloaded"
+        ),
+      };
+      emit(session);
+    }
+    return { discoveredDirectoryPaths, result };
   }
+  const { directoryStatesByPath, entriesByPath } = mergeLoadedDirectoryBranch({
+    branch,
+    directoryStatesByPath: session.snapshot.directoryStatesByPath,
+    entriesByPath: session.snapshot.entriesByPath,
+    retainPaths: pendingRetainPathSet(root),
+  });
+  invalidateSupersededDirectoryLoads(
+    session.directoryLoadPromises.keys(),
+    session.directoryLoadGenerations,
+    entriesByPath,
+    path
+  );
+  emitSnapshotIfChanged(
+    session,
+    directoryStatesByPath === session.snapshot.directoryStatesByPath &&
+      entriesByPath === session.snapshot.entriesByPath
+      ? session.snapshot
+      : {
+          ...session.snapshot,
+          directoryStatesByPath,
+          entriesByPath,
+        }
+  );
+  return {
+    discoveredDirectoryPaths,
+    result,
+  };
 }
 
 export function addFilesTreeEntry(root: string, entry: FileEntry): void {
   const session = sessionForRoot(root);
+  if (session.visibilityPredicate?.(entry.path) === false) {
+    return;
+  }
   const entriesByPath = addEntry(session.snapshot.entriesByPath, entry);
   let directoryStatesByPath = markParentLoadedAfterChildAdd(
     session.snapshot.directoryStatesByPath,
     entry.path
   );
-  // 新建空目录:直接 empty,避免 hasChildren:unknown → unloaded 再点一次才 Empty。
   if (entry.kind === "directory") {
     directoryStatesByPath = setDirectoryState(
       directoryStatesByPath,
@@ -301,7 +321,6 @@ export function addFilesTreeEntry(root: string, entry: FileEntry): void {
   );
 }
 
-/** 嵌套创建时补齐缺失的中间目录节点,并标为 loaded(已知有子项)。 */
 export function ensureAncestorDirectoryEntries(
   root: string,
   relativePath: string
@@ -316,6 +335,9 @@ export function ensureAncestorDirectoryEntries(
   let changed = false;
   for (let index = 1; index < segments.length; index += 1) {
     const ancestorPath = segments.slice(0, index).join("/");
+    if (session.visibilityPredicate?.(ancestorPath) === false) {
+      continue;
+    }
     if (!entriesByPath.has(ancestorPath)) {
       entriesByPath = addEntry(entriesByPath, {
         kind: "directory",
@@ -346,6 +368,7 @@ export function ensureAncestorDirectoryEntries(
 
 export function removeFilesTreeEntry(root: string, path: string): void {
   const session = sessionForRoot(root);
+  invalidateLoadsForPathMutation(session, path);
   const entriesByPath = removeEntrySubtree(
     session.snapshot.entriesByPath,
     path
@@ -378,6 +401,12 @@ export function moveFilesTreeEntry(
   newPath: string
 ): void {
   const session = sessionForRoot(root);
+  invalidateLoadsForPathMutation(session, oldPath);
+  invalidateLoadsForPathMutation(session, newPath);
+  if (session.visibilityPredicate?.(newPath) === false) {
+    removeFilesTreeEntry(root, oldPath);
+    return;
+  }
   const entriesByPath = moveEntrySubtree(
     session.snapshot.entriesByPath,
     oldPath,
@@ -400,7 +429,13 @@ export function moveFilesTreeEntry(
   const movedEntry = entriesByPath.get(newPath);
   if (movedEntry?.kind === "directory") {
     const prior = directoryStatesByPath.get(newPath);
-    if (prior == null || prior === "unloaded") {
+    if (prior === "loading") {
+      directoryStatesByPath = setDirectoryState(
+        directoryStatesByPath,
+        newPath,
+        "unloaded"
+      );
+    } else if (prior == null || prior === "unloaded") {
       directoryStatesByPath = setDirectoryState(
         directoryStatesByPath,
         newPath,
@@ -419,72 +454,6 @@ export function moveFilesTreeEntry(
           entriesByPath,
         }
   );
-}
-
-function parentPathLoaded(snapshot: FilesTreeSnapshot, path: string): boolean {
-  const parentPath = parentDirectoryPath(path);
-  if (parentPath === null) {
-    return snapshot.rootLoaded && !snapshot.rootError;
-  }
-  const state = snapshot.directoryStatesByPath.get(parentPath);
-  return state === "loaded" || state === "empty";
-}
-
-export function applyFilesTreeWatchEvent(
-  root: string,
-  event: FileWatchEvent,
-  list: FilesListApi,
-  fallbackError: string
-): void {
-  if (event.root !== root) {
-    return;
-  }
-
-  const session = sessionForRoot(root);
-  let needsRootReload = false;
-  const parentsToRefresh = new Set<string>();
-
-  for (const change of event.changes) {
-    if (change.path === ".") {
-      needsRootReload = true;
-      continue;
-    }
-
-    if (change.kind === "deleted") {
-      if (
-        session.snapshot.entriesByPath.has(change.path) ||
-        parentPathLoaded(session.snapshot, change.path)
-      ) {
-        removeFilesTreeEntry(root, change.path);
-      }
-      continue;
-    }
-
-    // created / changed:
-    // - 已知 entry 一律不动。macOS fs.watch 会把「目录内子文件写入」上报为
-    //   目录自身的 rename/change,若据此覆盖 entry,批次里没有子路径时会把
-    //   目录猜成 file,行 remount、展开态丢失(用户看到"展开后没有内容")。
-    // - 未知新路径不猜 kind:重新 list 已加载的父目录,kind 来自真实 listing。
-    if (session.snapshot.entriesByPath.has(change.path)) {
-      continue;
-    }
-    if (!parentPathLoaded(session.snapshot, change.path)) {
-      continue;
-    }
-    const parentPath = parentDirectoryPath(change.path);
-    if (parentPath === null) {
-      needsRootReload = true;
-    } else {
-      parentsToRefresh.add(parentPath);
-    }
-  }
-
-  for (const parentPath of parentsToRefresh) {
-    loadFilesTreeDirectory(root, parentPath, list).catch(() => undefined);
-  }
-  if (needsRootReload) {
-    reloadFilesTreeRoot(root, list, fallbackError);
-  }
 }
 
 export function clearFilesTreeStore(): void {

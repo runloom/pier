@@ -1,5 +1,10 @@
 import type { RendererMissionControlWidgetRegistration } from "@plugins/api/renderer.ts";
 import type { CoreMissionControlWidgetDeclaration } from "@shared/contracts/mission-control.ts";
+import {
+  CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
+  CORE_CUSTOM_CARD_WIDGET_ID,
+  CORE_SYSTEM_RESOURCES_WIDGET_ID,
+} from "@shared/plugin-core-contribution-ids.ts";
 import { Activity, Blocks, Cpu } from "lucide-react";
 import { ActivityWidget } from "./core-widgets/activity-widget.tsx";
 import { CustomCardSettings } from "./core-widgets/custom-card/custom-card-settings.tsx";
@@ -17,7 +22,7 @@ export const CORE_MISSION_CONTROL_WIDGETS: readonly CoreMissionControlWidgetDecl
       category: "agent",
       defaultSize: { h: 3, w: 4 },
       descriptionKey: "missionControl.widget.activityOverview.description",
-      id: "core.activity-overview",
+      id: CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
       searchTerms: ["activity", "agent", "session", "活动", "会话"],
       maxSize: { h: 12, w: 12 },
       minSize: { h: 2, w: 3 },
@@ -27,7 +32,7 @@ export const CORE_MISSION_CONTROL_WIDGETS: readonly CoreMissionControlWidgetDecl
       category: "system",
       defaultSize: { h: 4, w: 4 },
       descriptionKey: "missionControl.widget.systemResources.description",
-      id: "core.system-resources",
+      id: CORE_SYSTEM_RESOURCES_WIDGET_ID,
       searchTerms: ["cpu", "memory", "load", "内存", "负载", "系统"],
       maxSize: { h: 12, w: 12 },
       minSize: { h: 2, w: 3 },
@@ -39,7 +44,7 @@ export const CORE_MISSION_CONTROL_WIDGETS: readonly CoreMissionControlWidgetDecl
       configurable: true,
       defaultSize: { h: 4, w: 3 },
       descriptionKey: "missionControl.widget.customCard.description",
-      id: "core.custom-card",
+      id: CORE_CUSTOM_CARD_WIDGET_ID,
       searchTerms: ["custom", "kpi", "metric", "自定义", "指标", "组装"],
       maxSize: { h: 12, w: 6 },
       minSize: { h: 2, w: 2 },
@@ -57,29 +62,29 @@ export const CORE_MISSION_CONTROL_WIDGET_COMPONENTS: ReadonlyMap<
   RendererMissionControlWidgetRegistration
 > = new Map([
   [
-    "core.activity-overview",
+    CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
     {
       component: ActivityWidget,
       icon: Activity,
-      id: "core.activity-overview",
+      id: CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
       previewComponent: ActivityWidgetPreview,
     },
   ],
   [
-    "core.system-resources",
+    CORE_SYSTEM_RESOURCES_WIDGET_ID,
     {
       component: SystemResourcesWidget,
       icon: Cpu,
-      id: "core.system-resources",
+      id: CORE_SYSTEM_RESOURCES_WIDGET_ID,
       previewComponent: SystemResourcesWidgetPreview,
     },
   ],
   [
-    "core.custom-card",
+    CORE_CUSTOM_CARD_WIDGET_ID,
     {
       component: CustomCardWidget,
       icon: Blocks,
-      id: "core.custom-card",
+      id: CORE_CUSTOM_CARD_WIDGET_ID,
       previewComponent: CustomCardWidgetPreview,
       settingsComponent: CustomCardSettings,
     },

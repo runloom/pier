@@ -30,6 +30,10 @@ vi.mock("@main/windows/window-manager.ts", () => ({
   },
 }));
 
+vi.mock("@main/windows/window-identity.ts", () => ({
+  findWindowContext: vi.fn(() => ({ recordId: "record-main" })),
+}));
+
 type CommandHandler = (
   event: { sender: { id: string } },
   command: unknown
@@ -100,7 +104,8 @@ describe("registerCommandIpc", () => {
         command: { path: "/repo", type: "worktree.check" },
         protocolVersion: 1,
         requestId: expect.any(String),
-      })
+      }),
+      { windowRecordId: "record-main" }
     );
   });
 
@@ -143,7 +148,8 @@ describe("registerCommandIpc", () => {
           type: "run.spawn",
           windowId: "main",
         },
-      })
+      }),
+      { windowRecordId: "record-main" }
     );
   });
 
@@ -220,7 +226,8 @@ describe("registerCommandIpc", () => {
           options: { limit: 50, query: "" },
           type: "git.searchBranches",
         },
-      })
+      }),
+      { windowRecordId: "record-main" }
     );
   });
 
@@ -279,7 +286,8 @@ describe("registerCommandIpc", () => {
           type: "worktree.openTerminal",
           windowId: "main",
         },
-      })
+      }),
+      { windowRecordId: "record-main" }
     );
   });
 
@@ -311,7 +319,8 @@ describe("registerCommandIpc", () => {
 
     for (const command of commands) {
       expect(executeMock).toHaveBeenCalledWith(
-        expect.objectContaining({ command })
+        expect.objectContaining({ command }),
+        { windowRecordId: "record-main" }
       );
     }
   });
@@ -339,7 +348,8 @@ describe("registerCommandIpc", () => {
           path: "/repo",
           type: "worktree.create",
         },
-      })
+      }),
+      { windowRecordId: "record-main" }
     );
   });
 

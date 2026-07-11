@@ -7,17 +7,28 @@ import type {
   LocalEnvironmentWorktreeBindingSnapshot,
 } from "@shared/contracts/environment.ts";
 import type {
+  FileConfirmDurabilityRequest,
+  FileConfirmDurabilityResult,
   FileCopyRequest,
   FileCopyResult,
-  FileDraftsListResult,
+  FileDocumentReadResult,
+  FileDocumentWriteResult,
+  FileDraftClaimResult,
+  FileDraftDiagnostic,
+  FileDraftSnapshot,
+  FileDraftWriteResult,
   FileExistsRequest,
   FileExistsResult,
+  FileInspectPathImpactRequest,
+  FileInspectWriteTargetRequest,
   FileListRequest,
   FileListResult,
   FileMkdirRequest,
   FileMkdirResult,
   FileMoveRequest,
   FileMoveResult,
+  FilePathImpact,
+  FileReadDocumentRequest,
   FileReadTextRequest,
   FileRevealRequest,
   FileRevealResult,
@@ -25,9 +36,15 @@ import type {
   FileStatResult,
   FileTrashRequest,
   FileTrashResult,
+  FileWriteDocumentRequest,
+  FileWriteTargetInspection,
   FileWriteTextRequest,
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
+import type {
+  FileSaveTargetRequest,
+  FileSaveTargetResult,
+} from "@shared/contracts/file-save-target.ts";
 import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
 import type {
   GitBranchRef,
@@ -69,19 +86,40 @@ import type {
 } from "@shared/contracts/worktree.ts";
 
 export interface RendererPluginFilesFacade {
+  confirmDurability(
+    request: FileConfirmDurabilityRequest
+  ): Promise<FileConfirmDurabilityResult>;
   copy(request: FileCopyRequest): Promise<FileCopyResult>;
   drafts: {
-    delete(key: string): Promise<void>;
-    list(): Promise<FileDraftsListResult>;
-    set(key: string, value: string): Promise<void>;
+    claimLegacy(key: string): Promise<FileDraftClaimResult>;
+    delete(key: string): Promise<boolean>;
+    get(key: string): Promise<FileDraftSnapshot | null>;
+    listKeys(): Promise<readonly string[]>;
+    listDiagnostics(): Promise<readonly FileDraftDiagnostic[]>;
+    set(
+      key: string,
+      generation: number,
+      value: string
+    ): Promise<FileDraftWriteResult>;
   };
   exists(request: FileExistsRequest): Promise<FileExistsResult>;
+  inspectPathImpact(
+    request: FileInspectPathImpactRequest
+  ): Promise<FilePathImpact>;
+  inspectWriteTarget(
+    request: FileInspectWriteTargetRequest
+  ): Promise<FileWriteTargetInspection>;
   list(
     requestOrRoot: FileListRequest | string,
     options?: { path?: string }
   ): Promise<FileListResult>;
   mkdir(request: FileMkdirRequest): Promise<FileMkdirResult>;
   move(request: FileMoveRequest): Promise<FileMoveResult>;
+  pickSaveTarget(request: FileSaveTargetRequest): Promise<FileSaveTargetResult>;
+  readDocument(
+    request: FileReadDocumentRequest
+  ): Promise<FileDocumentReadResult>;
+  /** @deprecated 新代码使用 readDocument。 */
   readText(request: FileReadTextRequest): Promise<string>;
   reveal(request: FileRevealRequest): Promise<FileRevealResult>;
   stat(request: FileStatRequest): Promise<FileStatResult>;
@@ -91,6 +129,10 @@ export interface RendererPluginFilesFacade {
     listener: (event: FileWatchEvent) => void,
     options?: { excludes?: readonly string[] }
   ): () => void;
+  writeDocument(
+    request: FileWriteDocumentRequest
+  ): Promise<FileDocumentWriteResult>;
+  /** @deprecated 新代码使用 writeDocument。 */
   writeText(request: FileWriteTextRequest): Promise<FileWriteTextResult>;
 }
 

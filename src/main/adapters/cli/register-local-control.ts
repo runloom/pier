@@ -18,6 +18,7 @@ export interface RegisteredLocalControl {
 
 export interface RegisterCliLocalControlArgs {
   core?: PierAppCore;
+  signal?: AbortSignal;
   userDataDir?: string;
 }
 
@@ -46,6 +47,7 @@ function clientIdOf(envelope: unknown): string | null {
 
 export async function registerCliLocalControl({
   core = appCore,
+  signal,
   userDataDir = app.getPath("userData"),
 }: RegisterCliLocalControlArgs = {}): Promise<RegisteredLocalControl> {
   registerCliClient(core);
@@ -60,9 +62,20 @@ export async function registerCliLocalControl({
     },
     socketPath,
   });
-  await server.start();
-  return {
-    close: () => server.close(),
-    socketPath,
-  };
+  try {
+    await server.start(signal);
+    if (signal?.aborted) {
+      throw new DOMException(
+        "Local control registration aborted",
+        "AbortError"
+      );
+    }
+    return {
+      close: () => server.close(),
+      socketPath,
+    };
+  } catch (error) {
+    await server.close().catch(() => undefined);
+    throw error;
+  }
 }

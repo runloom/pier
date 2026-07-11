@@ -3,13 +3,14 @@ import { Button } from "@pier/ui/button.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import { Toggle } from "@pier/ui/toggle.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CornerDownLeft, Search, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 export interface FilesSearchBarLabels {
   close: string;
   matchCase?: string;
   next: string;
+  open?: string;
   placeholder: string;
   previous: string;
   regexp?: string;
@@ -38,6 +39,7 @@ export function FilesSearchBar({
   focusSignal,
   labels,
   matchText,
+  navigationDisabled = false,
   onChange,
   onClose,
   onNavigate,
@@ -46,10 +48,12 @@ export function FilesSearchBar({
   onReplaceAll,
   onReplaceChange,
   onSelectAll,
+  onSubmit,
   options,
   readOnly = false,
   replaceValue = "",
   testId,
+  submitDisabled = false,
   value,
 }: {
   className?: string;
@@ -58,6 +62,7 @@ export function FilesSearchBar({
   labels: FilesSearchBarLabels;
   /** 空字符串 = 不显示计数。 */
   matchText: string;
+  navigationDisabled?: boolean;
   onChange: (value: string) => void;
   onClose: () => void;
   onNavigate: (direction: "next" | "previous") => void;
@@ -66,10 +71,13 @@ export function FilesSearchBar({
   onReplaceAll?: () => void;
   onReplaceChange?: (value: string) => void;
   onSelectAll?: () => void;
+  /** 提供时，Enter/回车按钮提交当前匹配；方向键负责切换匹配。 */
+  onSubmit?: () => void;
   options?: FilesSearchOptions;
   readOnly?: boolean;
   replaceValue?: string;
   testId?: string;
+  submitDisabled?: boolean;
   value: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,8 +104,8 @@ export function FilesSearchBar({
       )}
       {...(testId ? { "data-testid": testId } : {})}
     >
-      <div className="flex min-w-0 items-center gap-1">
-        <div className="relative min-w-36 flex-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-1">
+        <div className="relative min-w-0 flex-1 basis-36">
           <Search
             aria-hidden="true"
             className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -109,7 +117,27 @@ export function FilesSearchBar({
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                onNavigate(event.shiftKey ? "previous" : "next");
+                if (onSubmit) {
+                  if (!submitDisabled) {
+                    onSubmit();
+                  }
+                } else {
+                  onNavigate(event.shiftKey ? "previous" : "next");
+                }
+              } else if (
+                onSubmit &&
+                !navigationDisabled &&
+                event.key === "ArrowDown"
+              ) {
+                event.preventDefault();
+                onNavigate("next");
+              } else if (
+                onSubmit &&
+                !navigationDisabled &&
+                event.key === "ArrowUp"
+              ) {
+                event.preventDefault();
+                onNavigate("previous");
               } else if (event.key === "Escape") {
                 event.preventDefault();
                 onClose();
@@ -121,44 +149,65 @@ export function FilesSearchBar({
             value={value}
           />
         </div>
-        {matchText ? (
-          <Badge
-            className="h-6 shrink-0 rounded-lg px-2 text-muted-foreground tabular-nums"
-            variant="secondary"
+        <div
+          className="ml-auto flex min-w-0 max-w-full shrink-0 flex-wrap items-center justify-end gap-1"
+          data-slot="files-search-controls"
+        >
+          {matchText ? (
+            <Badge
+              className="h-6 min-w-0 max-w-24 shrink rounded-lg px-2 text-muted-foreground tabular-nums"
+              title={matchText}
+              variant="secondary"
+            >
+              <span className="truncate">{matchText}</span>
+            </Badge>
+          ) : null}
+          <Button
+            aria-label={labels.previous}
+            className="shrink-0 rounded-lg"
+            disabled={navigationDisabled}
+            onClick={() => onNavigate("previous")}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
           >
-            {matchText}
-          </Badge>
-        ) : null}
-        <Button
-          aria-label={labels.previous}
-          className="shrink-0 rounded-lg"
-          onClick={() => onNavigate("previous")}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ArrowUp />
-        </Button>
-        <Button
-          aria-label={labels.next}
-          className="shrink-0 rounded-lg"
-          onClick={() => onNavigate("next")}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ArrowDown />
-        </Button>
-        <Button
-          aria-label={labels.close}
-          className="shrink-0 rounded-lg"
-          onClick={onClose}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <X />
-        </Button>
+            <ArrowUp />
+          </Button>
+          <Button
+            aria-label={labels.next}
+            className="shrink-0 rounded-lg"
+            disabled={navigationDisabled}
+            onClick={() => onNavigate("next")}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <ArrowDown />
+          </Button>
+          {onSubmit ? (
+            <Button
+              aria-label={labels.open ?? "Open match"}
+              className="shrink-0 rounded-lg"
+              disabled={submitDisabled}
+              onClick={onSubmit}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <CornerDownLeft />
+            </Button>
+          ) : null}
+          <Button
+            aria-label={labels.close}
+            className="shrink-0 rounded-lg"
+            onClick={onClose}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <X />
+          </Button>
+        </div>
       </div>
       {supportsReplace ? (
         <div className="flex min-w-0 flex-wrap items-center gap-1">

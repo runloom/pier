@@ -5,7 +5,13 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { runtimeMock } = vi.hoisted(() => ({
-  runtimeMock: { dispose: vi.fn(), refresh: vi.fn() },
+  runtimeMock: {
+    dispose: vi.fn(async () => undefined),
+    refresh: vi.fn(
+      async (_entries: readonly PluginRegistryEntry[]) => undefined
+    ),
+    startExternalActivations: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/plugins/runtime.ts", () => ({
@@ -92,6 +98,7 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     vi.resetModules();
     runtimeMock.dispose.mockClear();
     runtimeMock.refresh.mockClear();
+    runtimeMock.startExternalActivations.mockClear();
   });
 
   it("activeBuiltinPluginKey 只统计运行态 builtin 插件", async () => {
@@ -105,7 +112,7 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     };
     expect(
       activeBuiltinPluginKey([entry("pier.a", true), disabled, manifestOnly])
-    ).toBe("pier.a:builtin::");
+    ).toBe("pier.a:1.0.0:builtin::");
     expect(activeBuiltinPluginKey([])).toBe("");
   });
 
@@ -119,19 +126,43 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     ).not.toBe(activeBuiltinPluginKey([externalEntry("pier.codex", "rev-b")]));
   });
 
-  it("初始拉取后 refresh runtime 一次", async () => {
+  it("activeBuiltinPluginKey includes the manifest version", async () => {
+    const { activeBuiltinPluginKey } = await import(
+      "@/lib/plugins/bootstrap.ts"
+    );
+    const current = externalEntry("pier.codex", "rev-a");
+    const updated: PluginRegistryEntry = {
+      ...current,
+      manifest: { ...current.manifest, version: "2.0.0" },
+    };
+
+    expect(activeBuiltinPluginKey([updated])).not.toBe(
+      activeBuiltinPluginKey([current])
+    );
+  });
+
+  it("初始拉取只等待核心刷新，外部阶段由显式句柄启动", async () => {
     installPierMock(async () => listResult(entry("pier.git", true)));
     const { bootstrapBuiltinPlugins } = await import(
       "@/lib/plugins/bootstrap.ts"
     );
 
-    await bootstrapBuiltinPlugins();
+    const handle = await bootstrapBuiltinPlugins();
 
     expect(runtimeMock.refresh).toHaveBeenCalledTimes(1);
     const passed = runtimeMock.refresh.mock.calls[0]?.[0] as
       | PluginRegistryEntry[]
       | undefined;
     expect(passed?.map((e) => e.manifest.id)).toEqual(["pier.git"]);
+    expect(runtimeMock.refresh).toHaveBeenCalledWith(expect.any(Array), {
+      startExternal: false,
+    });
+    expect(runtimeMock.startExternalActivations).not.toHaveBeenCalled();
+
+    handle.startExternal();
+    handle.startExternal();
+
+    expect(runtimeMock.startExternalActivations).toHaveBeenCalledOnce();
   });
 
   it("广播运行态集合变化才 refresh runtime, 无实质变化去重", async () => {
@@ -141,7 +172,7 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     const { bootstrapBuiltinPlugins } = await import(
       "@/lib/plugins/bootstrap.ts"
     );
-    await bootstrapBuiltinPlugins();
+    const handle = await bootstrapBuiltinPlugins();
     runtimeMock.refresh.mockClear();
 
     // 新数组引用、相同运行态集合 → 去重, 不 dispose+reactivate
@@ -151,6 +182,35 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     // 运行态集合变化 → refresh
     pier.emit(listResult(entry("pier.git", false)));
     expect(runtimeMock.refresh).toHaveBeenCalledTimes(1);
+    expect(runtimeMock.refresh).toHaveBeenLastCalledWith(expect.any(Array), {
+      startExternal: false,
+    });
+
+    handle.startExternal();
+    pier.emit(listResult(entry("pier.git", true)));
+    expect(runtimeMock.refresh).toHaveBeenLastCalledWith(expect.any(Array), {
+      startExternal: true,
+    });
+  });
+
+  it("does not let an older initial list overwrite a newer broadcast", async () => {
+    const pending = Promise.withResolvers<PluginRegistryListResult>();
+    const pier = installPierMock(async () => await pending.promise);
+    const { bootstrapBuiltinPlugins } = await import(
+      "@/lib/plugins/bootstrap.ts"
+    );
+    const bootstrapping = bootstrapBuiltinPlugins();
+    await Promise.resolve();
+
+    pier.emit(listResult(externalEntry("pier.codex", "rev-new")));
+    pending.resolve(listResult(externalEntry("pier.codex", "rev-stale")));
+    const handle = await bootstrapping;
+
+    const lastEntries = runtimeMock.refresh.mock.lastCall?.[0] as
+      | readonly PluginRegistryEntry[]
+      | undefined;
+    expect(lastEntries?.[0]?.runtime.sourceRevision).toBe("rev-new");
+    await handle.dispose();
   });
 
   it("返回的清理函数注销订阅并 dispose runtime", async () => {
@@ -160,13 +220,35 @@ describe("bootstrapBuiltinPlugins (store 驱动)", () => {
     const { bootstrapBuiltinPlugins } = await import(
       "@/lib/plugins/bootstrap.ts"
     );
-    const cleanup = await bootstrapBuiltinPlugins();
+    const handle = await bootstrapBuiltinPlugins();
     runtimeMock.refresh.mockClear();
 
-    cleanup();
+    await handle.dispose();
 
     expect(runtimeMock.dispose).toHaveBeenCalledTimes(1);
     pier.emit(listResult(entry("pier.git", false)));
     expect(runtimeMock.refresh).not.toHaveBeenCalled();
+  });
+
+  it("初始化订阅失败时清理 store 订阅和 runtime", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        plugins: {
+          list: vi.fn(async () => listResult()),
+          onChanged: vi.fn(() => {
+            throw new Error("broadcast subscription failed");
+          }),
+        },
+      },
+    });
+    const { bootstrapBuiltinPlugins } = await import(
+      "@/lib/plugins/bootstrap.ts"
+    );
+
+    await expect(bootstrapBuiltinPlugins()).rejects.toThrow(
+      "broadcast subscription failed"
+    );
+    expect(runtimeMock.dispose).toHaveBeenCalledOnce();
   });
 });

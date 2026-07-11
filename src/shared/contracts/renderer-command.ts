@@ -53,6 +53,53 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("workspace.flushLayout"),
     windowId: z.string().min(1).optional(),
   }),
+  z.object({
+    body: z.string().min(1),
+    type: z.literal("workspace.reportCloseFailure"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    reason: z.enum(["app-quit", "window-close"]),
+    transitionId: z.string().min(1),
+    type: z.literal("workspace.prepareClose"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    outcome: z.enum(["abort", "commit"]),
+    transitionId: z.string().min(1),
+    type: z.literal("workspace.finalizeClose"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    generation: z.number().int().positive(),
+    pluginId: z.string().min(1),
+    transitionId: z.string().min(1),
+    type: z.literal("plugin.prepareDisable"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    generation: z.number().int().positive(),
+    outcome: z.enum(["abort", "commit"]),
+    pluginId: z.string().min(1),
+    transitionId: z.string().min(1),
+    type: z.literal("plugin.finalizeDisable"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    generation: z.number().int().positive(),
+    pluginId: z.string().min(1),
+    transitionId: z.string().min(1),
+    type: z.literal("plugin.prepareReload"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
+    generation: z.number().int().positive(),
+    outcome: z.enum(["abort", "commit"]),
+    pluginId: z.string().min(1),
+    transitionId: z.string().min(1),
+    type: z.literal("plugin.finalizeReload"),
+    windowId: z.string().min(1).optional(),
+  }),
 ]);
 
 export type RendererCommand = z.infer<typeof rendererCommandSchema>;

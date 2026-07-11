@@ -1,3 +1,7 @@
+import {
+  isSamePathOrDescendant,
+  rewriteDescendantPath,
+} from "./files-document-paths.ts";
 import type { FilesDocumentPanelSource } from "./files-document-types.ts";
 
 /**
@@ -68,6 +72,53 @@ export function pushFilesNavEntry(
   session.entries = [...session.entries.slice(0, session.index + 1), source];
   session.index = session.entries.length - 1;
   emit(session);
+}
+
+export function replaceFilesNavSource(
+  groupId: string,
+  previous: FilesDocumentPanelSource,
+  next: FilesDocumentPanelSource
+): void {
+  const session = sessions.get(groupId);
+  if (!session) {
+    return;
+  }
+  const entries: FilesDocumentPanelSource[] = [];
+  let index = -1;
+  for (const [entryIndex, entry] of session.entries.entries()) {
+    const replaced = sameSource(entry, previous) ? next : entry;
+    if (!sameSource(entries.at(-1), replaced)) {
+      entries.push(replaced);
+    }
+    if (entryIndex <= session.index) {
+      index = entries.length - 1;
+    }
+  }
+  session.entries = entries;
+  session.index = index;
+  emit(session);
+}
+
+export function moveFilesNavPath(
+  root: string,
+  oldPath: string,
+  newPath: string
+): void {
+  for (const [groupId, session] of sessions) {
+    for (const entry of [...session.entries]) {
+      if (
+        entry.kind === "disk" &&
+        entry.root === root &&
+        isSamePathOrDescendant(entry.path, oldPath)
+      ) {
+        replaceFilesNavSource(groupId, entry, {
+          kind: "disk",
+          path: rewriteDescendantPath(entry.path, oldPath, newPath),
+          root,
+        });
+      }
+    }
+  }
 }
 
 export function filesNavBack(groupId: string): FilesDocumentPanelSource | null {

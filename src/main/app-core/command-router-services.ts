@@ -28,6 +28,7 @@ import type { RendererCommandService } from "../services/renderer-command-servic
 import type { TaskService } from "../services/tasks/task-service.ts";
 import type { WorktreeService } from "../services/worktree-service.ts";
 import type { SecretsStore } from "../state/secrets-store.ts";
+import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
 
 export interface PierCoreServices {
   agentDetection: AgentDetectionService;
@@ -51,6 +52,7 @@ export interface PierCoreServices {
     recordRecent(context: PanelContext): Promise<void>;
     resolveForPath(path: string): Promise<PanelContext>;
   };
+  pluginDisableTransitions: PluginDisableTransitionCoordinator;
   pluginSettings: PluginSettingsService;
   plugins: PluginService;
   preferences: {
@@ -105,13 +107,15 @@ export interface PierCoreServices {
     ): Promise<TerminalStatusBarPrefs>;
   };
   window: {
-    close(windowId: string): void;
+    close(windowId: string): Promise<"closed" | "not-found" | "veto">;
     create(options?: WindowCreateOptions): Promise<{
       recordId: string;
       windowId: string;
     }>;
     focus(windowId: string): void;
-    flushOpenWindows(): Promise<void>;
+    flushOpenWindows(
+      additionalCriticalFlush?: () => Promise<void>
+    ): Promise<void>;
     flushWindow(windowId: string): Promise<void>;
     list(): WindowInfo[];
     restoreMostRecentClosed(): Promise<{

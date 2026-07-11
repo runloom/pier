@@ -9,6 +9,11 @@ export interface EditorSearchState {
   total: number;
 }
 
+export const EMPTY_EDITOR_SEARCH_STATE: EditorSearchState = {
+  currentIndex: 0,
+  total: 0,
+};
+
 export interface EditorSearchOptions {
   caseSensitive: boolean;
   regexp: boolean;

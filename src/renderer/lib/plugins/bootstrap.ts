@@ -21,9 +21,14 @@ export function activeBuiltinPluginKey(
     )
     .map(
       (entry) =>
-        `${entry.manifest.id}:${entry.runtime.kind}:${entry.runtime.rendererEntryUrl ?? ""}:${entry.runtime.sourceRevision ?? ""}`
+        `${entry.manifest.id}:${entry.manifest.version}:${entry.runtime.kind}:${entry.runtime.rendererEntryUrl ?? ""}:${entry.runtime.sourceRevision ?? ""}`
     )
     .join("\n");
+}
+
+export interface RendererPluginBootstrapHandle {
+  dispose(): Promise<void>;
+  startExternal(): void;
 }
 
 /**
@@ -31,23 +36,76 @@ export function activeBuiltinPluginKey(
  * store 变化(初始拉取 / PLUGINS_CHANGED 广播 / 手动 refresh)且运行态
  * 集合有实质变化时刷新 runtime。返回解绑 + dispose 的清理函数。
  *
- * 注: Zustand set() 同步通知订阅者, 所以 await 返回时初始拉取对应的
- * runtime.refresh(含插件 panel 注册)已完成, main.tsx 在 App render 前
- * await 本函数的时序约束不变。
+ * 首屏只等待 builtin 贡献注册完成，保证布局恢复时 panel component 已存在。
+ * external 插件在首屏渲染后各自独立加载，不进入 builtin 生命周期串行队列；
+ * 单个外部包超时或失败只产生该插件的诊断。
  */
-export async function bootstrapBuiltinPlugins(): Promise<() => void> {
+export async function bootstrapBuiltinPlugins(): Promise<RendererPluginBootstrapHandle> {
+  let bootstrapping = true;
+  let externalStarted = false;
+  let pendingEntries: readonly PluginRegistryEntry[] | null = null;
+  const refresh = (entries: readonly PluginRegistryEntry[]): void => {
+    const operation = rendererPluginRuntime.refresh(entries, {
+      startExternal: externalStarted,
+    });
+    operation.catch((error: unknown) => {
+      console.error("[renderer-plugin-bootstrap] refresh failed:", error);
+    });
+  };
   const unsubscribeStore = usePluginRegistryStore.subscribe((state, prev) => {
     if (
       activeBuiltinPluginKey(state.plugins) !==
       activeBuiltinPluginKey(prev.plugins)
     ) {
-      rendererPluginRuntime.refresh(state.plugins);
+      if (bootstrapping) {
+        pendingEntries = state.plugins;
+      } else {
+        refresh(state.plugins);
+      }
     }
   });
-  const unsubscribeBroadcast = await initPluginRegistry();
-  return () => {
+  let unsubscribeBroadcast: () => void = () => undefined;
+  try {
+    unsubscribeBroadcast = await initPluginRegistry();
+    const initialEntries =
+      pendingEntries ?? usePluginRegistryStore.getState().plugins;
+    await rendererPluginRuntime.refresh(initialEntries, {
+      startExternal: false,
+    });
+    bootstrapping = false;
+    const latestEntries =
+      pendingEntries ?? usePluginRegistryStore.getState().plugins;
+    if (
+      activeBuiltinPluginKey(latestEntries) !==
+      activeBuiltinPluginKey(initialEntries)
+    ) {
+      await rendererPluginRuntime.refresh(latestEntries, {
+        startExternal: false,
+      });
+    }
+  } catch (error) {
     unsubscribeBroadcast();
     unsubscribeStore();
-    rendererPluginRuntime.dispose();
+    await rendererPluginRuntime.dispose().catch((disposeError: unknown) => {
+      console.error(
+        "[renderer-plugin-bootstrap] failed bootstrap cleanup:",
+        disposeError
+      );
+    });
+    throw error;
+  }
+  return {
+    async dispose() {
+      unsubscribeBroadcast();
+      unsubscribeStore();
+      await rendererPluginRuntime.dispose();
+    },
+    startExternal() {
+      if (externalStarted) {
+        return;
+      }
+      externalStarted = true;
+      rendererPluginRuntime.startExternalActivations();
+    },
   };
 }

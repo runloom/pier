@@ -92,27 +92,30 @@ export function createExternalMainPluginRuntime(options: {
     pluginId: string,
     callbacks: ReadonlyArray<() => Promise<void> | void>
   ): Promise<void> {
-    const tasks = callbacks.map((cb) =>
-      (async () => {
-        try {
-          await Promise.race([
-            Promise.resolve(cb()),
-            new Promise<void>((_, reject) =>
-              setTimeout(
-                () => reject(new Error("before-quit flush timeout")),
-                PLUGIN_BEFORE_QUIT_TIMEOUT_MS
-              )
-            ),
-          ]);
-        } catch (err) {
-          console.error(
-            `[external-main-runtime] before-quit flush failed for ${pluginId}:`,
-            err
-          );
-        }
-      })()
+    const results = await Promise.allSettled(
+      callbacks.map(
+        (cb) =>
+          new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(
+              () => reject(new Error("before-quit flush timeout")),
+              PLUGIN_BEFORE_QUIT_TIMEOUT_MS
+            );
+            Promise.resolve()
+              .then(cb)
+              .then(resolve, reject)
+              .finally(() => clearTimeout(timer));
+          })
+      )
     );
-    await Promise.all(tasks);
+    const failures = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : []
+    );
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        `external plugin flush failed: ${pluginId}`
+      );
+    }
   }
 
   async function disposePlugin(pluginId: string): Promise<void> {

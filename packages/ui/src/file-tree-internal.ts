@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from "@pierre/trees";
+import type { FileTreeCompositionOptions, GitStatusEntry } from "@pierre/trees";
 import type * as React from "react";
 import {
   buildRowDecoration,
@@ -14,11 +14,18 @@ import type {
 export interface FileTreeRefs {
   decorationsByPath: ReadonlyMap<string, React.ReactNode>;
   directoryLoadStatesByPath: ReadonlyMap<string, PierDirectoryLoadState>;
+  directoryPaths: ReadonlyMap<string, string>;
   itemsByPath: ReadonlyMap<string, PierFileTreeItem>;
   loadableDirectoryPaths: ReadonlyMap<string, string>;
   onLoadDirectory: ((path: string) => Promise<void> | void) | undefined;
   onModelPathsRemoved: ((paths: readonly string[]) => void) | undefined;
   onMovePaths: ((moves: readonly PierFileTreeMove[]) => void) | undefined;
+  onOpenItemContextMenu:
+    | ((
+        item: { kind: "directory" | "file"; path: string },
+        point: { x: number; y: number }
+      ) => void)
+    | undefined;
   onOpenPath: ((path: string) => void) | undefined;
   onRenamePath:
     | ((move: PierFileTreeMove & { isFolder: boolean }) => void)
@@ -28,16 +35,61 @@ export interface FileTreeRefs {
 
 export const EMPTY_REFS: FileTreeRefs = {
   decorationsByPath: new Map(),
+  directoryPaths: new Map(),
   directoryLoadStatesByPath: new Map(),
   itemsByPath: new Map(),
   loadableDirectoryPaths: new Map(),
   onLoadDirectory: undefined,
   onModelPathsRemoved: undefined,
   onMovePaths: undefined,
+  onOpenItemContextMenu: undefined,
   onOpenPath: undefined,
   onRenamePath: undefined,
   onSelectPaths: undefined,
 };
+
+function fileTreeContextMenuComposition(refs: {
+  current: FileTreeRefs;
+}): NonNullable<FileTreeCompositionOptions["contextMenu"]> {
+  return {
+    enabled: true,
+    onOpen: (item, context) => {
+      const callerItem = refs.current.itemsByPath.get(item.path);
+      context.close({ restoreFocus: false });
+      if (!callerItem) {
+        return;
+      }
+      refs.current.onOpenItemContextMenu?.(
+        { kind: callerItem.kind, path: callerItem.path },
+        { x: context.anchorRect.x, y: context.anchorRect.y }
+      );
+    },
+    triggerMode: "right-click",
+  };
+}
+
+export function updateFileTreeContextMenuComposition(
+  composition: FileTreeCompositionOptions | undefined,
+  enabled: boolean,
+  refs: { current: FileTreeRefs }
+): FileTreeCompositionOptions {
+  return {
+    ...(enabled ? { contextMenu: fileTreeContextMenuComposition(refs) } : {}),
+    ...(composition?.header ? { header: { ...composition.header } } : {}),
+  };
+}
+
+export function fileTreeContextMenuOption(
+  enabled: boolean,
+  refs: { current: FileTreeRefs }
+): { composition: FileTreeCompositionOptions } | Record<string, never> {
+  if (!enabled) {
+    return {};
+  }
+  return {
+    composition: updateFileTreeContextMenuComposition(undefined, true, refs),
+  };
+}
 
 export interface RenameViewState {
   getPath: () => string | null;
@@ -69,9 +121,11 @@ export function readRenameView(model: object): RenameViewState | null {
  */
 export function buildFileTreeRefs(
   items: readonly PierFileTreeItem[],
-  directoryStates: ReadonlyMap<string, PierDirectoryLoadState> | undefined
+  directoryStates: ReadonlyMap<string, PierDirectoryLoadState> | undefined,
+  directoryErrorLabel?: string
 ): FileTreeRefs {
   const decorationsByPath = new Map<string, React.ReactNode>();
+  const directoryPaths = new Map<string, string>();
   const directoryLoadStatesByPath = new Map<string, PierDirectoryLoadState>();
   const itemsByPath = new Map<string, PierFileTreeItem>();
   const loadableDirectoryPaths = new Map<string, string>();
@@ -82,6 +136,10 @@ export function buildFileTreeRefs(
     itemsByPath.set(item.path, item);
     itemsByPath.set(officialPath, item);
 
+    if (item.kind === "directory") {
+      directoryPaths.set(officialPath, item.path);
+    }
+
     const directoryLoadState = resolveDirectoryLoadState(item, directoryStates);
     if (directoryLoadState != null) {
       directoryLoadStatesByPath.set(item.path, directoryLoadState);
@@ -89,7 +147,11 @@ export function buildFileTreeRefs(
       loadableDirectoryPaths.set(officialPath, item.path);
     }
 
-    const decoration = buildRowDecoration(item, directoryStates);
+    const decoration = buildRowDecoration(
+      item,
+      directoryStates,
+      directoryErrorLabel
+    );
     if (decoration != null) {
       decorationsByPath.set(item.path, decoration);
       decorationsByPath.set(officialPath, decoration);
@@ -98,12 +160,14 @@ export function buildFileTreeRefs(
 
   return {
     decorationsByPath,
+    directoryPaths,
     directoryLoadStatesByPath,
     itemsByPath,
     loadableDirectoryPaths,
     onLoadDirectory: undefined,
     onModelPathsRemoved: undefined,
     onMovePaths: undefined,
+    onOpenItemContextMenu: undefined,
     onOpenPath: undefined,
     onRenamePath: undefined,
     onSelectPaths: undefined,

@@ -10,10 +10,14 @@ class ActionRegistry extends Notifier {
   private readonly actions = new Map<string, Action>();
 
   register(action: Action): () => void {
+    if (this.actions.has(action.id)) {
+      throw new Error(`action id is already registered: ${action.id}`);
+    }
     this.actions.set(action.id, action);
     this.notify();
     return () => {
-      if (this.actions.delete(action.id)) {
+      if (this.actions.get(action.id) === action) {
+        this.actions.delete(action.id);
         this.notify();
       }
     };
@@ -21,6 +25,12 @@ class ActionRegistry extends Notifier {
 
   get(id: string): Action | undefined {
     return this.actions.get(id);
+  }
+
+  clearForTests(): void {
+    if (this.actions.size === 0) return;
+    this.actions.clear();
+    this.notify();
   }
 
   list(surface?: string): readonly Action[] {

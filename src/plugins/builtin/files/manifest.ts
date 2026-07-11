@@ -1,5 +1,11 @@
 import type { PluginManifest } from "@shared/contracts/plugin.ts";
-import { FILES_AUTO_SAVE_SETTING_KEY } from "./settings.ts";
+import {
+  FILES_AUTO_SAVE_SETTING_KEY,
+  FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+  FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+  FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
+  FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
+} from "./settings.ts";
 
 export const FILES_PLUGIN_ID = "pier.files";
 export const FILES_FILE_PANEL_ID = "pier.files.filePanel";
@@ -16,10 +22,11 @@ export const FILES_COPY_RELATIVE_PATH_COMMAND_ID =
 export const FILES_COPY_PATH_WITH_RANGE_COMMAND_ID =
   "pier.files.copyPathWithRange";
 export const FILES_SAVE_COMMAND_ID = "pier.files.save";
+export const FILES_SAVE_AS_COMMAND_ID = "pier.files.saveAs";
+export const FILES_SAVE_ALL_COMMAND_ID = "pier.files.saveAll";
 export const FILES_REVEAL_COMMAND_ID = "pier.files.revealInFinder";
 export const FILES_DUPLICATE_COMMAND_ID = "pier.files.duplicate";
 export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
-export const FILES_TREE_REFRESH_COMMAND_ID = "pier.files.treeRefresh";
 export const FILES_EDITOR_CUT_COMMAND_ID = "pier.files.editor.cut";
 export const FILES_EDITOR_COPY_COMMAND_ID = "pier.files.editor.copy";
 export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
@@ -57,7 +64,7 @@ export const FILES_PLUGIN_MANIFEST = {
       category: "file",
       id: FILES_DELETE_COMMAND_ID,
       permissions: ["file:write"],
-      title: "Move to Trash",
+      title: "Delete",
     },
     {
       category: "file",
@@ -85,6 +92,18 @@ export const FILES_PLUGIN_MANIFEST = {
     },
     {
       category: "file",
+      id: FILES_SAVE_AS_COMMAND_ID,
+      permissions: ["file:write"],
+      title: "Save As...",
+    },
+    {
+      category: "file",
+      id: FILES_SAVE_ALL_COMMAND_ID,
+      permissions: ["file:write"],
+      title: "Save All",
+    },
+    {
+      category: "file",
       id: FILES_REVEAL_COMMAND_ID,
       permissions: ["file:read"],
       title: "Reveal in Finder",
@@ -100,12 +119,6 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_TREE_SEARCH_COMMAND_ID,
       permissions: [],
       title: "Find in File Tree",
-    },
-    {
-      category: "file",
-      id: FILES_TREE_REFRESH_COMMAND_ID,
-      permissions: ["file:read"],
-      title: "Refresh File Tree",
     },
     {
       category: "file",
@@ -139,6 +152,27 @@ export const FILES_PLUGIN_MANIFEST = {
         description:
           "Automatically save dirty files one second after the last edit. Conflicts with external changes still go through the overwrite/compare dialog.",
         order: 10,
+        type: "boolean",
+      },
+      [FILES_TREE_SHOW_EXCLUDED_SETTING_KEY]: {
+        default: false,
+        description: "Show paths matched by the file tree exclusion patterns.",
+        order: 20,
+        type: "boolean",
+      },
+      [FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY]: {
+        default: FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+        description:
+          "Glob patterns excluded from the file tree when excluded files are not shown. Enter one pattern per line.",
+        multiline: true,
+        order: 21,
+        type: "string",
+      },
+      [FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY]: {
+        default: true,
+        description:
+          "Show files and folders matched by Git ignore rules. This is separate from the file tree exclusion patterns.",
+        order: 30,
         type: "boolean",
       },
     },

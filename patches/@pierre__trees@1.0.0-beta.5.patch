@@ -2,6 +2,19 @@ diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
 index 3d02080ad553347e7fe95e261c993b607b4134c2..1b7a2af82f39eb4998198f9c3ddcdbb942ff7f6e 100644
 --- a/dist/render/FileTreeView.js
 +++ b/dist/render/FileTreeView.js
+@@ -6 +6 @@
+-import { MiddleTruncate, Truncate } from "../components/OverflowText.js";
++import { Truncate } from "../components/OverflowText.js";
+@@ -370,5 +370 @@ function renderFileTreeRowContent(row, resolveIcon, { actionLaneEnabled = false,
+-			children: row.isFlattened ? formatFlattenedSegments(row, renameInput, dragTargetFlattenedSegmentPath) : renameInput ?? /* @__PURE__ */ jsx(MiddleTruncate, {
+-				minimumLength: 5,
+-				split: "extension",
+-				children: row.name
+-			})
++			children: row.isFlattened ? formatFlattenedSegments(row, renameInput, dragTargetFlattenedSegmentPath) : renameInput ?? /* @__PURE__ */ jsx(Truncate, { children: row.name })
+@@ -1054 +1054 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+-		if (isSearchOpen) {
++		if (isSearchOpen && searchEnabled) {
 @@ -1692,7 +1692,11 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			setActiveItemPath((previousPath) => previousPath === actionTargetPath ? previousPath : actionTargetPath);
  			setLastContextMenuInteraction("focus");
@@ -12,6 +25,47 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..1b7a2af82f39eb4998198f9c3ddcdbb9
 +			const toggledItem = controller.getItem(actionTargetPath);
 +			if (clickedElement != null && toggledItem?.isDirectory() === true) clickedElement.setAttribute("aria-expanded", String(toggledItem.isExpanded()));
 +		}
- 		if (plan.closeSearch) controller.closeSearch();
+-		if (plan.closeSearch) controller.closeSearch();
++		if (plan.closeSearch && searchEnabled) controller.closeSearch();
  		if (plan.revealCanonical) revealCanonicalRowAtStickyOffset(actionTargetPath, { targetOffset: "sticky-parents" });
  	}, [
+@@ -1707 +1711,2 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+-		revealCanonicalRowAtStickyOffset
++		revealCanonicalRowAtStickyOffset,
++		searchEnabled
+diff --git a/dist/model/FileTreeController.js b/dist/model/FileTreeController.js
+--- a/dist/model/FileTreeController.js
++++ b/dist/model/FileTreeController.js
+@@ -946 +946 @@ class FileTreeController {
+-		if (this.#searchMode !== "hide-non-matches" || this.#searchMatchPathSet.size === 0) {
++		if (this.#searchMode !== "hide-non-matches") {
+@@ -1045 +1045 @@ class FileTreeController {
+-		const searchVisiblePathSet = this.#searchMode === "hide-non-matches" && matchingPaths.length > 0 ? /* @__PURE__ */ new Set() : null;
++		const searchVisiblePathSet = this.#searchMode === "hide-non-matches" ? /* @__PURE__ */ new Set() : null;
+diff --git a/dist/render/FileTree.d.ts b/dist/render/FileTree.d.ts
+--- a/dist/render/FileTree.d.ts
++++ b/dist/render/FileTree.d.ts
+@@ -20,3 +20,4 @@ declare class FileTree implements FileTreeMutationHandle, FileTreeSearchSessionH
+   focusPath(path: string): void;
+   scrollToPath(path: FileTreePublicId, options?: FileTreeScrollToPathOptions): void;
+   focusNearestPath(path: string | null): string | null;
++  selectOnlyPath(path: string): void;
+diff --git a/dist/render/FileTree.js b/dist/render/FileTree.js
+--- a/dist/render/FileTree.js
++++ b/dist/render/FileTree.js
+@@ -177,6 +177,9 @@ class FileTree {
+-	focusNearestPath(path) {
+-		return this.#controller.focusNearestPath(path);
+-	}
+-	add(path) {
+-		this.#controller.add(path);
+-	}
++	focusNearestPath(path) {
++		return this.#controller.focusNearestPath(path);
++	}
++	selectOnlyPath(path) {
++		this.#controller.selectOnlyPath(path);
++	}
++	add(path) {
++		this.#controller.add(path);
++	}

@@ -5,6 +5,7 @@ import type {
   AppQuitDecisionPayload,
 } from "@shared/contracts/app-quit.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
+import type { WindowInfo as SharedWindowInfo } from "@shared/contracts/events.ts";
 import type {
   MenuPopupOptions,
   MenuPopupResult,
@@ -61,6 +62,10 @@ import {
   type PierPluginSettingsAPI,
   pluginSettingsApi,
 } from "./plugin-settings-api.ts";
+import { installRendererBootHandshake } from "./renderer-boot-handshake.ts";
+
+const signalRendererBoot = installRendererBootHandshake(ipcRenderer);
+
 import { type PierSystemStatsAPI, systemStatsApi } from "./system-stats-api.ts";
 import { type PierTasksAPI, tasksApi } from "./task-api.ts";
 import { terminalApi } from "./terminal-api.ts";
@@ -70,11 +75,7 @@ import {
 } from "./terminal-status-bar-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
-export interface WindowInfo {
-  focused: boolean;
-  id: string;
-  recordId: string;
-}
+export type WindowInfo = SharedWindowInfo;
 
 export type PreferencesSnapshot = ProjectPreferences;
 
@@ -153,6 +154,7 @@ export interface PierPluginsAPI {
 
 export type { PierAiAPI } from "./ai-api.ts";
 export type { PierFilesAPI } from "./file-api.ts";
+export type { PierFileSaveTargetAPI } from "./file-save-target-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
 export type { PierTerminalStatusBarPrefsAPI } from "./terminal-status-bar-api.ts";
@@ -404,7 +406,7 @@ const api: PierWindowAPI = {
     closeCurrent: () => ipcRenderer.invoke("pier://window:close-current"),
     getContext: () => ipcRenderer.invoke("pier://window:context"),
     onLayoutPulse: (cb) => subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
-    readyToShow: () => ipcRenderer.send(PIER.WINDOW_RENDERER_READY),
+    readyToShow: signalRendererBoot,
   },
   workspace: workspaceApi,
   worktrees: worktreesApi,

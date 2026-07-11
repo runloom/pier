@@ -1,5 +1,5 @@
 import { CodeMirrorEditor } from "./code-mirror-editor.tsx";
-import type { FileEditorAdapterProps } from "./files-document-types.ts";
+import type { FileEditorAdapterProps } from "./file-editor-adapter-types.ts";
 import { FilesLineDiff } from "./files-line-diff.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
 

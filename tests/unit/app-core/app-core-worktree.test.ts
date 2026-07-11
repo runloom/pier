@@ -99,9 +99,9 @@ describe("createPierAppCore worktree service graph", () => {
     const configuredRoot = await makeTempDir("pier-configured-worktree-root-");
     mockElectron(userDataDir);
 
-    // The app core module constructs a singleton at import time, so this test must
-    // install the per-test Electron userData mock before loading that boundary.
+    // 惰性 app core 首次属性访问才构造，因此先安装每例独立的 Electron mock。
     const { appCore } = await import("@main/app-core/app-core.ts");
+    await appCore.ready;
     const now = 1_772_000_000_000;
     const clientId = "app-core-worktree-test";
     appCore.clients.register({

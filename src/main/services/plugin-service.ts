@@ -16,6 +16,13 @@ import {
   readPluginState,
   setPluginEnabledState,
 } from "../state/plugin-state.ts";
+import {
+  findCommandIdConflict,
+  findMissionControlWidgetIdConflict,
+  findPanelIdConflict,
+  findPluginIdDotPrefixConflict,
+  findTerminalStatusItemIdConflict,
+} from "./plugin-contribution-conflicts.ts";
 import { loadManifestLocaleFiles } from "./plugin-localization.ts";
 
 export type PluginServiceErrorCode =
@@ -117,56 +124,6 @@ export function collectEffectivePermissions(
   return Array.from(permissions).sort(
     (a, b) => (CAPABILITY_ORDER.get(a) ?? 0) - (CAPABILITY_ORDER.get(b) ?? 0)
   );
-}
-
-export function findPluginIdDotPrefixConflict(
-  acceptedIds: readonly string[],
-  candidateId: string
-): string | null {
-  for (const id of acceptedIds) {
-    if (
-      id === candidateId ||
-      id.startsWith(`${candidateId}.`) ||
-      candidateId.startsWith(`${id}.`)
-    ) {
-      return id;
-    }
-  }
-  return null;
-}
-
-export function findTerminalStatusItemIdConflict(
-  acceptedManifests: readonly PluginManifest[],
-  candidate: PluginManifest
-): string | null {
-  const acceptedIds = new Set(
-    acceptedManifests.flatMap((manifest) =>
-      manifest.terminalStatusItems.map((item) => item.id)
-    )
-  );
-  for (const item of candidate.terminalStatusItems) {
-    if (acceptedIds.has(item.id)) {
-      return item.id;
-    }
-  }
-  return null;
-}
-
-export function findMissionControlWidgetIdConflict(
-  acceptedManifests: readonly PluginManifest[],
-  candidate: PluginManifest
-): string | null {
-  const acceptedIds = new Set(
-    acceptedManifests.flatMap((manifest) =>
-      manifest.missionControlWidgets.map((widget) => widget.id)
-    )
-  );
-  for (const widget of candidate.missionControlWidgets) {
-    if (acceptedIds.has(widget.id)) {
-      return widget.id;
-    }
-  }
-  return null;
 }
 
 function isExecutableSource(source: PluginDiscoverySource): boolean {
@@ -344,6 +301,30 @@ export function createPluginService({
           });
           continue;
         }
+        const commandConflict = findCommandIdConflict(
+          manifests.map((item) => item.manifest),
+          withLocales.manifest
+        );
+        if (commandConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `commands id must be unique across plugins and within one manifest ("${commandConflict}"): ${withLocales.manifest.id}`,
+            source: diagnosticSource(source),
+          });
+          continue;
+        }
+        const panelConflict = findPanelIdConflict(
+          manifests.map((item) => item.manifest),
+          withLocales.manifest
+        );
+        if (panelConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `panels id must be unique across plugins and within one manifest ("${panelConflict}"): ${withLocales.manifest.id}`,
+            source: diagnosticSource(source),
+          });
+          continue;
+        }
         const statusItemConflict = findTerminalStatusItemIdConflict(
           manifests.map((item) => item.manifest),
           withLocales.manifest
@@ -377,6 +358,70 @@ export function createPluginService({
     const externalEntries: PluginRegistryEntry[] = [];
     if (externalRuntimeSources) {
       for (const ext of externalRuntimeSources()) {
+        const acceptedManifests = [
+          ...manifests.map((item) => item.manifest),
+          ...externalEntries.map((item) => item.manifest),
+        ];
+        const conflict = findPluginIdDotPrefixConflict(
+          acceptedManifests.map((manifest) => manifest.id),
+          ext.manifest.id
+        );
+        if (conflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `plugin id must not be a dot-separated prefix of another plugin id ("${conflict}"): ${ext.manifest.id}`,
+            source: { kind: ext.source },
+          });
+          continue;
+        }
+        const commandConflict = findCommandIdConflict(
+          acceptedManifests,
+          ext.manifest
+        );
+        if (commandConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `commands id must be unique across plugins and within one manifest ("${commandConflict}"): ${ext.manifest.id}`,
+            source: { kind: ext.source },
+          });
+          continue;
+        }
+        const panelConflict = findPanelIdConflict(
+          acceptedManifests,
+          ext.manifest
+        );
+        if (panelConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `panels id must be unique across plugins and within one manifest ("${panelConflict}"): ${ext.manifest.id}`,
+            source: { kind: ext.source },
+          });
+          continue;
+        }
+        const statusItemConflict = findTerminalStatusItemIdConflict(
+          acceptedManifests,
+          ext.manifest
+        );
+        if (statusItemConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `terminalStatusItems id must be unique across plugins ("${statusItemConflict}"): ${ext.manifest.id}`,
+            source: { kind: ext.source },
+          });
+          continue;
+        }
+        const missionControlWidgetConflict = findMissionControlWidgetIdConflict(
+          acceptedManifests,
+          ext.manifest
+        );
+        if (missionControlWidgetConflict) {
+          diagnostics.push({
+            code: "invalid_manifest",
+            message: `missionControlWidgets id must be unique across plugins ("${missionControlWidgetConflict}"): ${ext.manifest.id}`,
+            source: { kind: ext.source },
+          });
+          continue;
+        }
         externalEntries.push({
           effectivePermissions: collectEffectivePermissions(ext.manifest),
           enabled: ext.enabled,

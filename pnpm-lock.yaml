@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@pierre/trees@1.0.0-beta.5': 0f316ff752770e4607d35ac65884fb14ec00f0f932978a2f4029794ebffdd885
+  '@pierre/trees@1.0.0-beta.5': 77c0d1365144961ba5d074f333d65b2b1817a082e36477491e6827e462b4855b
 
 importers:
 
@@ -110,6 +110,9 @@ importers:
       lucide-react:
         specifier: 1.21.0
         version: 1.21.0(react@19.2.7)
+      minimatch:
+        specifier: 10.2.5
+        version: 10.2.5
       radix-ui:
         specifier: ^1.6.0
         version: 1.6.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -281,7 +284,7 @@ importers:
     dependencies:
       '@pierre/trees':
         specifier: 1.0.0-beta.5
-        version: 1.0.0-beta.5(patch_hash=0f316ff752770e4607d35ac65884fb14ec00f0f932978a2f4029794ebffdd885)(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.0.0-beta.5(patch_hash=77c0d1365144961ba5d074f333d65b2b1817a082e36477491e6827e462b4855b)(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -6157,7 +6160,7 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@pierre/trees@1.0.0-beta.5(patch_hash=0f316ff752770e4607d35ac65884fb14ec00f0f932978a2f4029794ebffdd885)(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@pierre/trees@1.0.0-beta.5(patch_hash=77c0d1365144961ba5d074f333d65b2b1817a082e36477491e6827e462b4855b)(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@pierre/theming': 0.0.2(@pierre/theme@1.1.0)(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       preact: 11.0.0-beta.0

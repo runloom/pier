@@ -29,7 +29,7 @@ import {
   clearPluginPanelsForTests,
   getPluginPanelRegistrations,
 } from "@/lib/plugins/plugin-panel-registry.ts";
-import { rendererPluginRuntime } from "@/lib/plugins/runtime.ts";
+import { RendererPluginRuntime } from "@/lib/plugins/runtime.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
@@ -501,6 +501,7 @@ function renderFilesFilePanel(list: RendererPluginContext["files"]["list"]) {
 
 describe("git builtin plugin", () => {
   let dispose: (() => void) | null = null;
+  let rendererPluginRuntime: RendererPluginRuntime;
 
   function activateWorktreePlugin(): () => void {
     render(<AppDialogHost />);
@@ -510,6 +511,7 @@ describe("git builtin plugin", () => {
   }
 
   beforeEach(async () => {
+    rendererPluginRuntime = new RendererPluginRuntime();
     vi.clearAllMocks();
     resetTerminalInputRoutingForTests();
     await initI18n();
@@ -765,14 +767,14 @@ describe("git builtin plugin", () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => {
       resetAppDialogForTests();
     });
     cleanup();
     dispose?.();
     dispose = null;
-    rendererPluginRuntime.dispose();
+    await rendererPluginRuntime.dispose();
     terminalStatusItemRegistry.clearForTests();
     clearPluginPanelsForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
@@ -857,8 +859,8 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("禁用时不注册任何 renderer 贡献", () => {
-    rendererPluginRuntime.refresh([pluginEntry(false)]);
+  it("禁用时不注册任何 renderer 贡献", async () => {
+    await rendererPluginRuntime.refresh([pluginEntry(false)]);
 
     expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
     expect(actionRegistry.get("pier.worktree.create")).toBeUndefined();
@@ -2246,18 +2248,18 @@ describe("git builtin plugin", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("runtime 刷新会替换贡献而不会误删新注册的 action", () => {
-    rendererPluginRuntime.refresh([pluginEntry(true)]);
+  it("runtime 刷新会替换贡献而不会误删新注册的 action", async () => {
+    await rendererPluginRuntime.refresh([pluginEntry(true)]);
     expect(actionRegistry.get("pier.worktree.list")).toBeDefined();
 
-    rendererPluginRuntime.refresh([pluginEntry(true)]);
+    await rendererPluginRuntime.refresh([pluginEntry(true)]);
     expect(actionRegistry.get("pier.worktree.list")).toBeDefined();
 
-    rendererPluginRuntime.refresh([pluginEntry(false)]);
+    await rendererPluginRuntime.refresh([pluginEntry(false)]);
     expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
   });
 
-  it("不会激活 enabled local 插件的 renderer 代码", () => {
+  it("不会激活 enabled local 插件的 renderer 代码", async () => {
     const localEntry: PluginRegistryEntry = {
       ...pluginEntry(true),
       enabled: true,
@@ -2272,7 +2274,7 @@ describe("git builtin plugin", () => {
         kind: "manifest-only",
       },
     };
-    rendererPluginRuntime.refresh([localEntry]);
+    await rendererPluginRuntime.refresh([localEntry]);
 
     expect(actionRegistry.get("pier.worktree.list")).toBeUndefined();
     expect(terminalStatusItemRegistry.list()).toEqual([]);

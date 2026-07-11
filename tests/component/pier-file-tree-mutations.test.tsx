@@ -53,6 +53,14 @@ function getFileTreeScrollElement(container: HTMLElement): HTMLElement {
   return scrollElement as HTMLElement;
 }
 
+function getTreeItem(container: HTMLElement, name: string): HTMLElement {
+  const item = getFileTreeHost(container).shadowRoot?.querySelector(
+    `[role="treeitem"][data-item-path="${name}"]`
+  );
+  expect(item).toBeInstanceOf(HTMLElement);
+  return item as HTMLElement;
+}
+
 function mockFileTreeRows(
   container: HTMLElement,
   path: string,
@@ -218,6 +226,39 @@ describe("PierFileTree path synchronization", () => {
     expect(resetPathsSpy).toHaveBeenCalledWith(["src/", "README.md"], {
       initialExpandedPaths: ["src"],
     });
+  });
+
+  it("does not reopen a collapsed directory when a different directory loads", async () => {
+    const initialItems = [
+      directory("src"),
+      file("src/one.ts"),
+      file("src/two.ts"),
+      directory("docs"),
+    ];
+    const { container, rerender } = await renderMountedTree(initialItems);
+    const src = getTreeItem(container, "src/");
+    const docs = getTreeItem(container, "docs/");
+    expect(src).toHaveAttribute("aria-expanded", "true");
+
+    src.click();
+    docs.click();
+    expect(src).toHaveAttribute("aria-expanded", "false");
+    expect(docs).toHaveAttribute("aria-expanded", "true");
+
+    rerender(
+      <PierFileTree
+        items={[...initialItems, file("docs/guide.md"), file("docs/notes.md")]}
+        label="Project files"
+      />
+    );
+    await flushEffects();
+
+    const resetCall = resetPathsSpy.mock.calls.at(-1) as unknown as
+      | [readonly string[], { initialExpandedPaths?: readonly string[] }]
+      | undefined;
+    const resetOptions = resetCall?.[1];
+    expect(resetOptions?.initialExpandedPaths).toContain("docs");
+    expect(resetOptions?.initialExpandedPaths).not.toContain("src");
   });
 
   it("restores by anchor row when inserted rows change the raw scroll offset", async () => {

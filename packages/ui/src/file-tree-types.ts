@@ -25,8 +25,20 @@ export interface PierFileTreeMove {
   to: string;
 }
 
+export interface PierFileTreeContextMenuItem {
+  kind: "directory" | "file";
+  path: string;
+}
+
+export interface PierFileTreeContextMenuPoint {
+  x: number;
+  y: number;
+}
+
 /** 树内命令入口(inline rename / 树内查找 / 定位),由业务层经 ref 触发。 */
 export interface PierFileTreeApi {
+  /** 打开当前聚焦的文件搜索匹配；无可打开文件时返回 false。 */
+  activateFocusedSearchMatch: () => boolean;
   focusSearchMatch: (direction: "next" | "previous") => void;
   getSearchMatchCount: () => number;
   /** 从模型移除路径(新建落盘失败回滚幽灵节点用)。 */
@@ -73,6 +85,8 @@ export interface PierFileTreeScrollController {
 
 export interface PierFileTreeProps
   extends Omit<React.ComponentProps<"div">, "children" | "onSelect"> {
+  /** 目录读取失败时的本地化行内标记；详细错误仍由业务层反馈。 */
+  directoryErrorLabel?: string;
   directoryStates?: ReadonlyMap<string, PierDirectoryLoadState>;
   items: readonly PierFileTreeItem[];
   label: string;
@@ -81,6 +95,11 @@ export interface PierFileTreeProps
   onModelPathsRemoved?: (paths: readonly string[]) => void;
   /** 树内拖拽完成(模型层已移动);业务方执行真实 fs move,失败自行刷新回滚。 */
   onMovePaths?: (moves: readonly PierFileTreeMove[]) => void;
+  /** 由树模型解析真实行目标后触发，兼容压缩目录、Shadow DOM 与键盘菜单键。 */
+  onOpenItemContextMenu?: (
+    item: PierFileTreeContextMenuItem,
+    point: PierFileTreeContextMenuPoint
+  ) => void;
   onOpenPath?: (path: string) => void;
   /**
    * inline rename 提交;业务方执行 fs move 或新建落盘。
@@ -88,6 +107,11 @@ export interface PierFileTreeProps
    */
   onRenamePath?: (move: PierFileTreeMove & { isFolder: boolean }) => void;
   onScrollSnapshotChange?: (snapshot: PierFileTreeScrollSnapshot) => void;
+  /** 回传直接匹配数及当前聚焦项能否作为文件打开。 */
+  onSearchMatchStateChange?: (state: {
+    focusedMatchOpenable: boolean;
+    matchCount: number;
+  }) => void;
   onSelectPaths?: (paths: string[]) => void;
   /** 变化时把该路径滚动进视口并选中(auto-reveal 当前文件)。 */
   revealPath?: string | null;

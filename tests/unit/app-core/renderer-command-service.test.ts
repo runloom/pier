@@ -144,6 +144,50 @@ describe("createRendererCommandService", () => {
     });
   });
 
+  it.each([
+    {
+      command: {
+        reason: "window-close" as const,
+        transitionId: "close-1",
+        type: "workspace.prepareClose" as const,
+        windowId: "main",
+      },
+      requestId: "renderer-req-prepare-close",
+    },
+    {
+      command: {
+        generation: 1,
+        pluginId: "pier.files",
+        transitionId: "disable-1",
+        type: "plugin.prepareDisable" as const,
+        windowId: "main",
+      },
+      requestId: "renderer-req-prepare-disable",
+    },
+  ])("$command.type 不主动聚焦窗口", async ({ command, requestId }) => {
+    let focus: boolean | undefined;
+    const service = createRendererCommandService({
+      createRequestId: () => requestId,
+      host: {
+        send(_envelope, _windowId, options) {
+          focus = options?.focus;
+          return true;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute(command);
+    expect(focus).toBe(false);
+    service.resolve({ data: null, ok: true, requestId });
+
+    await expect(promise).resolves.toEqual({
+      data: null,
+      ok: true,
+      requestId,
+    });
+  });
+
   it("显式 focus=false 时不主动聚焦窗口", async () => {
     let focus: boolean | undefined;
     const service = createRendererCommandService({

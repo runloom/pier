@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   cp,
+  lstat,
   mkdir,
   readdir,
   readFile,
@@ -12,17 +13,25 @@ import {
 } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type {
+  FileConfirmDurabilityRequest,
+  FileConfirmDurabilityResult,
   FileCopyRequest,
   FileCopyResult,
+  FileDocumentReadResult,
+  FileDocumentWriteResult,
   FileEntry,
   FileExistsRequest,
   FileExistsResult,
+  FileInspectPathImpactRequest,
+  FileInspectWriteTargetRequest,
   FileListRequest,
   FileListResult,
   FileMkdirRequest,
   FileMkdirResult,
   FileMoveRequest,
   FileMoveResult,
+  FilePathImpact,
+  FileReadDocumentRequest,
   FileReadTextRequest,
   FileRevealRequest,
   FileRevealResult,
@@ -30,9 +39,29 @@ import type {
   FileStatResult,
   FileTrashRequest,
   FileTrashResult,
+  FileWriteDocumentRequest,
+  FileWriteTargetInspection,
   FileWriteTextRequest,
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
+import {
+  encodeFileDocument,
+  FileDocumentEncodingError,
+} from "./file-document-codec.ts";
+import {
+  inspectFileWriteTarget,
+  readFileDocument,
+} from "./file-document-reader.ts";
+import { movePathNoReplace } from "./file-move-no-replace.ts";
+import { resolveExistingFileIdentity } from "./file-path-identity.ts";
+import { FilePathTransactionLock } from "./file-path-transaction-lock.ts";
+import {
+  createFileSafeWriter,
+  type FileSafeWriter,
+  type FileSafeWriterOptions,
+} from "./file-safe-writer.ts";
+
+export { MAX_EDITABLE_FILE_BYTES } from "./file-document-reader.ts";
 
 export class FileServiceError extends Error {
   readonly code?: "file_conflict" | "internal_error";
@@ -54,14 +83,6 @@ function isMissingPathError(error: unknown): boolean {
     error instanceof Error &&
     "code" in error &&
     (error as NodeJS.ErrnoException).code === "ENOENT"
-  );
-}
-
-function isCrossDeviceError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    (error as NodeJS.ErrnoException).code === "EXDEV"
   );
 }
 
@@ -139,23 +160,42 @@ async function resolveWritableScopedPath(
 }
 
 export interface FileService {
+  confirmDurability(
+    request: FileConfirmDurabilityRequest
+  ): Promise<FileConfirmDurabilityResult>;
   copy(request: FileCopyRequest): Promise<FileCopyResult>;
   exists(request: FileExistsRequest): Promise<FileExistsResult>;
+  inspectPathImpact(
+    request: FileInspectPathImpactRequest
+  ): Promise<FilePathImpact>;
+  inspectWriteTarget(
+    request: FileInspectWriteTargetRequest
+  ): Promise<FileWriteTargetInspection>;
   list(request: FileListRequest): Promise<FileListResult>;
   mkdir(request: FileMkdirRequest): Promise<FileMkdirResult>;
   move(request: FileMoveRequest): Promise<FileMoveResult>;
+  readDocument(
+    request: FileReadDocumentRequest
+  ): Promise<FileDocumentReadResult>;
   readText(request: FileReadTextRequest): Promise<string>;
   reveal(request: FileRevealRequest): Promise<FileRevealResult>;
   stat(request: FileStatRequest): Promise<FileStatResult>;
   trash(request: FileTrashRequest): Promise<FileTrashResult>;
+  writeDocument(
+    request: FileWriteDocumentRequest
+  ): Promise<FileDocumentWriteResult>;
   writeText(request: FileWriteTextRequest): Promise<FileWriteTextResult>;
 }
 
 export interface FileServiceOptions {
   // 测试注入点:vitest 单测环境没有 electron runtime,也无法稳定制造
-  // 跨设备文件系统,注入 fake 才能覆盖 trash 与 move 的 EXDEV 降级分支。
+  // 跨设备文件系统,注入 fake 才能覆盖 trash 与 move 的降级分支。
+  moveLinkFile?: (source: string, target: string) => Promise<void>;
   renameFile?: (source: string, target: string) => Promise<void>;
   revealItem?: (path: string) => void;
+  safeWriter?: FileSafeWriter;
+  safeWriterOptions?: FileSafeWriterOptions;
+  transactionLock?: FilePathTransactionLock;
   trashItem?: (path: string) => Promise<void>;
 }
 
@@ -180,7 +220,38 @@ export function createFileService(
   const renameFile = options.renameFile ?? rename;
   const revealItem = options.revealItem ?? revealViaElectronShell;
   const trashItem = options.trashItem ?? trashViaElectronShell;
+  const transactionLock =
+    options.transactionLock ?? new FilePathTransactionLock();
+  const safeWriter =
+    options.safeWriter ??
+    createFileSafeWriter({
+      ...options.safeWriterOptions,
+      renameFile: options.safeWriterOptions?.renameFile ?? renameFile,
+      transactionLock,
+    });
   return {
+    confirmDurability: (request) => safeWriter.confirmDurability(request),
+    async inspectPathImpact(request) {
+      const { target } = resolveLexicallyScopedPath(request.root, request.path);
+      const lexicalInfo = await lstat(target);
+      if (lexicalInfo.isSymbolicLink()) {
+        return {
+          kind: "symlink-entry",
+          locatorPrefix: request.path,
+          root: request.root,
+        };
+      }
+      const identity = await resolveExistingFileIdentity(
+        request.root,
+        request.path
+      );
+      return {
+        canonicalBackingPrefix: identity.canonicalPath,
+        kind: "regular",
+        locatorPrefix: request.path,
+        root: request.root,
+      };
+    },
     async list(request) {
       const target = await resolveExistingScopedPath(
         request.root,
@@ -200,6 +271,9 @@ export function createFileService(
         })
         .sort((left, right) => left.path.localeCompare(right.path));
     },
+    inspectWriteTarget: (request) =>
+      inspectFileWriteTarget(request, safeWriter),
+    readDocument: readFileDocument,
     async readText(request) {
       return await readFile(
         await resolveExistingScopedPath(request.root, request.path),
@@ -248,61 +322,90 @@ export function createFileService(
         written: true,
       };
     },
+    async writeDocument(request) {
+      try {
+        return await safeWriter.write({
+          bytes: encodeFileDocument(
+            request.contents,
+            request.format,
+            request.eol
+          ),
+          expected: request.expected,
+          path: request.path,
+          root: request.root,
+        });
+      } catch (error) {
+        if (error instanceof FileDocumentEncodingError) {
+          return { kind: "not-writable", message: error.message };
+        }
+        throw error;
+      }
+    },
     async move(request) {
-      const source = await resolveExistingScopedPath(
+      const source = resolveLexicallyScopedPath(
         request.root,
         request.path
-      );
-      const target = await resolveWritableScopedPath(
+      ).target;
+      const target = resolveLexicallyScopedPath(
         request.root,
         request.newPath
-      );
-      await mkdir(dirname(target), { recursive: true });
-      try {
-        await renameFile(source, target);
-      } catch (error) {
-        if (!isCrossDeviceError(error)) {
-          throw error;
-        }
-        // root 内存在 bind-mount / 跨设备子目录时 rename 会抛 EXDEV,
-        // 此时降级为「复制 + 删除源」等效完成移动;errorOnExist + force:false
-        // 保持与 rename 一致的"不覆盖已存在目标"语义。
-        await cp(source, target, {
+      ).target;
+      return await transactionLock.run([source, target], async () => {
+        const lockedSource = await resolveExistingScopedPath(
+          request.root,
+          request.path
+        );
+        const lockedTarget = await resolveWritableScopedPath(
+          request.root,
+          request.newPath
+        );
+        await mkdir(dirname(lockedTarget), { recursive: true });
+        await movePathNoReplace(lockedSource, lockedTarget, {
+          ...(options.moveLinkFile ? { linkFile: options.moveLinkFile } : {}),
+        });
+        return {
+          moved: true,
+          newPath: relative(resolve(request.root), lockedTarget)
+            .split(sep)
+            .join("/"),
+          oldPath: request.path,
+          root: request.root,
+        };
+      });
+    },
+    async copy(request) {
+      const source = resolveLexicallyScopedPath(
+        request.root,
+        request.path
+      ).target;
+      const target = resolveLexicallyScopedPath(
+        request.root,
+        request.newPath
+      ).target;
+      return await transactionLock.run([source, target], async () => {
+        const lockedSource = await resolveExistingScopedPath(
+          request.root,
+          request.path
+        );
+        const lockedTarget = await resolveWritableScopedPath(
+          request.root,
+          request.newPath
+        );
+        await mkdir(dirname(lockedTarget), { recursive: true });
+        await cp(lockedSource, lockedTarget, {
           errorOnExist: true,
           force: false,
           recursive: true,
         });
-        await rm(source, { recursive: true });
-      }
-      return {
-        moved: true,
-        newPath: relative(resolve(request.root), target).split(sep).join("/"),
-        oldPath: request.path,
-        root: request.root,
-      };
-    },
-    async copy(request) {
-      const source = await resolveExistingScopedPath(
-        request.root,
-        request.path
-      );
-      const target = await resolveWritableScopedPath(
-        request.root,
-        request.newPath
-      );
-      await mkdir(dirname(target), { recursive: true });
-      // 与 move 一致的"不覆盖已存在目标"语义;目录递归复制。
-      await cp(source, target, {
-        errorOnExist: true,
-        force: false,
-        recursive: true,
+        return {
+          copied: true,
+          newPath: relative(resolve(request.root), lockedTarget)
+            .split(sep)
+            .join("/"),
+          oldPath: request.path,
+          root: request.root,
+        };
       });
-      return {
-        copied: true,
-        newPath: relative(resolve(request.root), target).split(sep).join("/"),
-        oldPath: request.path,
-        root: request.root,
-      };
     },
     async reveal(request) {
       const target = await resolveExistingScopedPath(
@@ -317,18 +420,22 @@ export function createFileService(
       };
     },
     async trash(request) {
-      const target = await resolveExistingScopedPath(
+      const target = resolveLexicallyScopedPath(
         request.root,
         request.path
-      );
-      // 命令名为 trash 就应进系统回收站:直接 rm 是不可恢复的永久删除,
-      // 与语义不符;shell.trashItem 让用户可以从回收站找回误删内容。
-      await trashItem(target);
-      return {
-        path: request.path,
-        root: request.root,
-        trashed: true,
-      };
+      ).target;
+      return await transactionLock.run([target], async () => {
+        const lockedTarget = await resolveExistingScopedPath(
+          request.root,
+          request.path
+        );
+        await trashItem(lockedTarget);
+        return {
+          path: request.path,
+          root: request.root,
+          trashed: true,
+        };
+      });
     },
     async mkdir(request) {
       const target = await resolveWritableScopedPath(

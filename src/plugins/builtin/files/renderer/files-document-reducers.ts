@@ -1,4 +1,22 @@
+import type {
+  FileDocumentReadResult,
+  FileDocumentWriteResult,
+} from "@shared/contracts/file.ts";
 import type { FilesDocument } from "./files-document-types.ts";
+
+const DISK_SAVE_CAPABILITIES = ["save", "saveAs"] as const;
+
+function unsupportedReadOnlyReason(
+  result: Exclude<FileDocumentReadResult, { kind: "text" }>
+): NonNullable<FilesDocument["readOnlyReason"]> {
+  if (result.kind === "binary") {
+    return "binary";
+  }
+  if (result.kind === "unsupported-encoding") {
+    return "unknown-encoding";
+  }
+  return result.kind === "too-large" ? "too-large" : "unsupported-file";
+}
 
 export function withDocumentContents(
   document: FilesDocument,
@@ -50,6 +68,128 @@ export function withDocumentLoaded(
   };
 }
 
+export function withDocumentReadResult(
+  document: FilesDocument,
+  result: FileDocumentReadResult
+): FilesDocument {
+  if (result.kind !== "text") {
+    const readOnlyReason = unsupportedReadOnlyReason(result);
+    if (document.dirty || document.durabilityUnknown) {
+      return {
+        ...document,
+        capabilities: [],
+        diskConflict: true,
+        error: null,
+        loadState: "loaded",
+        readOnly: true,
+        readOnlyReason,
+        size: "size" in result ? result.size : document.size,
+      };
+    }
+    return {
+      ...document,
+      capabilities: [],
+      canonicalPath: null,
+      currentContents: "",
+      dirty: false,
+      eol: null,
+      error: null,
+      format: null,
+      loadState: "loaded",
+      mode: null,
+      readOnly: true,
+      readOnlyReason,
+      revision: "revision" in result ? result.revision : null,
+      savedContents: "",
+      size: "size" in result ? result.size : null,
+    };
+  }
+  let readOnlyReason: FilesDocument["readOnlyReason"] = null;
+  if (!result.writable) {
+    readOnlyReason = "not-writable";
+  } else if (result.eol === "mixed") {
+    readOnlyReason = "mixed-eol";
+  }
+  const protectedFromDiskReplacement =
+    document.dirty || document.durabilityUnknown;
+  if (protectedFromDiskReplacement && document.revision !== result.revision) {
+    return {
+      ...document,
+      canonicalPath: result.canonicalPath,
+      diskConflict: true,
+      error: null,
+      loadState: "loaded",
+      mode: result.mode,
+      size: result.size,
+    };
+  }
+  const metadata = {
+    capabilities: readOnlyReason ? [] : DISK_SAVE_CAPABILITIES,
+    canonicalPath: result.canonicalPath,
+    deletedOnDisk: false,
+    eol: result.eol,
+    error: null,
+    format: result.format,
+    hasBackingStore: true,
+    loadState: "loaded" as const,
+    mode: result.mode,
+    readOnly: readOnlyReason !== null,
+    readOnlyReason,
+    revision: result.revision,
+    size: result.size,
+  };
+  if (protectedFromDiskReplacement) {
+    return { ...document, ...metadata };
+  }
+  return {
+    ...document,
+    ...metadata,
+    currentContents: result.contents,
+    dirty: false,
+    savedContents: result.contents,
+  };
+}
+
+export function withDocumentPathReconciled(
+  document: FilesDocument,
+  result: FileDocumentReadResult
+): FilesDocument {
+  if (result.kind !== "text") {
+    return withDocumentReadResult(document, result);
+  }
+  const protectedContents = document.dirty || document.durabilityUnknown;
+  const diskConflict =
+    protectedContents && document.savedContents !== result.contents;
+  let readOnlyReason: FilesDocument["readOnlyReason"] = null;
+  if (!result.writable) {
+    readOnlyReason = "not-writable";
+  } else if (result.eol === "mixed") {
+    readOnlyReason = "mixed-eol";
+  }
+  return {
+    ...document,
+    canonicalPath: result.canonicalPath,
+    capabilities: readOnlyReason ? [] : DISK_SAVE_CAPABILITIES,
+    ...(protectedContents
+      ? {}
+      : {
+          currentContents: result.contents,
+          dirty: false,
+          savedContents: result.contents,
+        }),
+    diskConflict,
+    eol: result.eol,
+    error: null,
+    format: result.format,
+    loadState: "loaded",
+    mode: result.mode,
+    readOnly: readOnlyReason !== null,
+    readOnlyReason,
+    revision: result.revision,
+    size: result.size,
+  };
+}
+
 export function withDocumentSaved(
   document: FilesDocument,
   savedContents: string,
@@ -71,10 +211,75 @@ export function withDocumentSaved(
     ...document,
     baseMtimeMs: nextBaseMtime,
     dirty,
+    deletedOnDisk: false,
     conflictDiskContents: null,
     diskConflict: false,
     error: null,
+    saveState: "idle",
     savedContents,
+  };
+}
+
+export function withDocumentWritten(
+  document: FilesDocument,
+  savedContents: string,
+  result: Extract<FileDocumentWriteResult, { kind: "written" }>
+): FilesDocument {
+  const dirty = document.currentContents !== savedContents;
+  return {
+    ...document,
+    baseMtimeMs: result.mtimeMs,
+    conflictDiskContents: null,
+    dirty,
+    deletedOnDisk: false,
+    diskConflict: false,
+    durabilityUnknown: result.durability === "unknown",
+    error: null,
+    hasBackingStore: true,
+    mode: result.mode,
+    revision: result.revision,
+    saveState: "idle",
+    savedContents,
+    size: result.size,
+  };
+}
+
+export function withDocumentDurabilityConfirmed(
+  document: FilesDocument,
+  revision: string
+): FilesDocument {
+  return {
+    ...document,
+    durabilityUnknown: false,
+    error: null,
+    revision,
+  };
+}
+
+export function withDocumentDurabilityError(
+  document: FilesDocument,
+  message: string
+): FilesDocument {
+  return {
+    ...document,
+    error: message,
+  };
+}
+
+export function withDocumentNormalizedEol(
+  document: FilesDocument,
+  eol: "crlf" | "lf"
+): FilesDocument {
+  if (document.readOnlyReason !== "mixed-eol") {
+    return document;
+  }
+  return {
+    ...document,
+    capabilities: DISK_SAVE_CAPABILITIES,
+    dirty: true,
+    eol,
+    readOnly: false,
+    readOnlyReason: null,
   };
 }
 
@@ -98,7 +303,20 @@ export function withDocumentSaveError(
     dirty: true,
     error: message,
     loadState: document.loadState === "loading" ? "loading" : "loaded",
+    saveState: "idle",
   };
+}
+
+export function withDocumentSaving(document: FilesDocument): FilesDocument {
+  return document.saveState === "saving"
+    ? document
+    : { ...document, error: null, saveState: "saving" };
+}
+
+export function withDocumentSaveIdle(document: FilesDocument): FilesDocument {
+  return document.saveState === "idle"
+    ? document
+    : { ...document, saveState: "idle" };
 }
 
 export function withDocumentConflictContents(
@@ -123,5 +341,20 @@ export function withDocumentDiskConflict(
   return {
     ...document,
     diskConflict: true,
+  };
+}
+
+export function withDocumentDeletedOnDisk(
+  document: FilesDocument
+): FilesDocument {
+  return {
+    ...document,
+    deletedOnDisk: true,
+    dirty: true,
+    diskConflict: true,
+    error: null,
+    hasBackingStore: false,
+    loadState: "loaded",
+    saveState: "idle",
   };
 }

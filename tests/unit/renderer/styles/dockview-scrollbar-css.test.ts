@@ -57,4 +57,27 @@ describe("Pier scrollbar policy CSS", () => {
       selectorItemsForPseudo(webkitRules, "::-webkit-scrollbar-track")
     ).toContain(regularScrollbarSelector);
   });
+
+  it("keeps thumbs hidden at idle and never reveals them from container hover", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    expect(css).toContain('data-scrollbar-scrolling="true"');
+    expect(css).toContain('data-scrollbar-hovering="true"');
+    expect(css).toContain("background: transparent");
+    expect(css).not.toContain("):hover::-webkit-scrollbar-thumb");
+    expect(css).not.toContain("::-webkit-scrollbar-thumb:hover");
+  });
+
+  it("requires scrollable primitives to declare the shared overlay policy", () => {
+    for (const file of ["dropdown-menu.tsx", "popover.tsx", "select.tsx"]) {
+      const source = readFileSync(
+        join(process.cwd(), "packages/ui/src", file),
+        "utf8"
+      );
+      expect(source, file).toContain('data-scrollbar="overlay"');
+    }
+  });
 });

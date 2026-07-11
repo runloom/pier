@@ -8,29 +8,26 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_ID,
+  FILES_SAVE_AS_COMMAND_ID,
   FILES_SAVE_COMMAND_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "../manifest.ts";
-import { clearCodeMirrorDocumentState } from "./code-mirror-editor.tsx";
+import { FileEditorController } from "./file-editor-controller.ts";
 import { createFilePanel as createFilesFilePanel } from "./file-panel.tsx";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
-import {
-  type FileConflictChoice,
-  saveDiskDocument,
-} from "./file-panel-save.ts";
-import { triggerFilePanelSave } from "./file-panel-save-registry.ts";
+import { createSaveAllAction } from "./file-save-all-action.ts";
 import { createFilesTreeActions } from "./file-tree-actions.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
 import {
-  clearFilesDocumentStore,
-  configureFilesDraftBackend,
-  createUntitledMarkdownDocument,
-  getDocumentForPanelSource,
-  removeDocument,
-} from "./files-document-store.ts";
+  abortFilesDraftSuspend,
+  commitFilesDraftSuspend,
+  prepareFilesDraftSuspend,
+  releaseFilesDraftSuspendAfterDispose,
+} from "./files-document-drafts.ts";
+import { getDocumentForPanelSource } from "./files-document-store.ts";
 import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
 import { createFilesEditorActions } from "./files-editor-actions.ts";
-import { clearFilesEditorViews } from "./files-editor-view-registry.ts";
+import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
@@ -40,9 +37,29 @@ import {
 } from "./files-tree-registry.ts";
 import { clearFilesTreeStore } from "./files-tree-store.ts";
 import { clearFilesTreeWatchers } from "./files-tree-watch.ts";
+import { FilesWatchHub } from "./files-watch-hub.ts";
+
+function withFilesMutationGate(
+  action: RendererPluginAction,
+  controller: FileEditorController
+): RendererPluginAction {
+  return {
+    ...action,
+    handler: async (invocation) => {
+      try {
+        await controller.runMutation(() => action.handler(invocation));
+      } catch (error) {
+        if (!(error instanceof FilesMutationSuspendedError)) {
+          throw error;
+        }
+      }
+    },
+  };
+}
 
 function createOpenSelectionAsMarkdownAction(
-  context: RendererPluginContext
+  context: RendererPluginContext,
+  controller: FileEditorController
 ): RendererPluginAction {
   const t = (key: string, fallback?: string) =>
     context.i18n.t(key, undefined, fallback);
@@ -72,7 +89,7 @@ function createOpenSelectionAsMarkdownAction(
         return;
       }
 
-      const document = createUntitledMarkdownDocument({
+      const document = controller.createUntitledDocument({
         contents: result.text,
         origin: { panelId: sourcePanelId, source: "terminal-selection" },
       });
@@ -93,7 +110,7 @@ function createOpenSelectionAsMarkdownAction(
         instanceId: createFileFilePanelInstanceId(source),
         params: {
           // untitled = 用户产生的临时草稿,天然 pinned,不能被 preview 语义
-          // 顶掉,否则 localStorage 草稿会随 panel 关闭一并 remove。
+          // 顶掉,否则受保护草稿会随 panel 关闭一并 remove。
           pinned: true,
           source,
         },
@@ -112,7 +129,8 @@ function createOpenSelectionAsMarkdownAction(
 }
 
 function createSaveAction(
-  context: RendererPluginContext
+  context: RendererPluginContext,
+  controller: FileEditorController
 ): RendererPluginAction {
   const t = (key: string, fallback?: string) =>
     context.i18n.t(key, undefined, fallback);
@@ -123,13 +141,33 @@ function createSaveAction(
       // 但 command-palette 也能触发 —— 那种场景下 activeInstanceId 可能为 null
       // (用户在别的 panel 里),此时静默 no-op。
       const panelId = context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
-      await triggerFilePanelSave(panelId);
+      await controller.savePanel(panelId);
     },
     id: FILES_SAVE_COMMAND_ID,
     metadata: { group: "5_save", sortOrder: 1 },
     // command-palette 里能查到,但主要触发方式是 Cmd+S。
     surfaces: ["command-palette"],
     title: () => t("filePanel.save", "Save"),
+  };
+}
+
+function createSaveAsAction(
+  context: RendererPluginContext,
+  controller: FileEditorController
+): RendererPluginAction {
+  const t = (key: string, fallback?: string) =>
+    context.i18n.t(key, undefined, fallback);
+  return {
+    category: "file",
+    handler: async () => {
+      await controller.saveAsPanel(
+        context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID)
+      );
+    },
+    id: FILES_SAVE_AS_COMMAND_ID,
+    metadata: { group: "5_save", sortOrder: 2 },
+    surfaces: ["command-palette"],
+    title: () => t("filePanel.saveAs", "Save As…"),
   };
 }
 
@@ -165,48 +203,10 @@ function createTreeSearchAction(
   };
 }
 
-async function resolveFileSaveConflict(
-  context: RendererPluginContext
-): Promise<FileConflictChoice> {
-  const choice = await context.dialogs.choice({
-    altLabel: context.i18n.t(
-      "filePanel.conflict.compareLabel",
-      undefined,
-      "Compare"
-    ),
-    body: context.i18n.t(
-      "filePanel.conflict.body",
-      undefined,
-      "The file has been modified outside Pier. Overwrite it anyway?"
-    ),
-    cancelLabel: context.i18n.t(
-      "filePanel.conflict.cancelLabel",
-      undefined,
-      "Cancel"
-    ),
-    confirmLabel: context.i18n.t(
-      "filePanel.conflict.confirmLabel",
-      undefined,
-      "Overwrite"
-    ),
-    intent: "destructive",
-    size: "sm",
-    title: context.i18n.t(
-      "filePanel.conflict.title",
-      undefined,
-      "File changed on disk"
-    ),
-  });
-  if (choice === "confirm") {
-    return "overwrite";
-  }
-  if (choice === "alt") {
-    return "compare";
-  }
-  return "cancel";
-}
-
-function registerDirtyCloseGuard(context: RendererPluginContext): () => void {
+function registerDirtyCloseGuard(
+  context: RendererPluginContext,
+  controller: FileEditorController
+): () => void {
   return context.panels.registerCloseGuard(
     FILES_FILE_PANEL_ID,
     async (input) => {
@@ -215,7 +215,12 @@ function registerDirtyCloseGuard(context: RendererPluginContext): () => void {
         return true;
       }
       const document = getDocumentForPanelSource(source);
-      if (!document?.dirty) {
+      if (
+        !(
+          document &&
+          (document.dirty || document.needsSaveAs || document.durabilityUnknown)
+        )
+      ) {
         return true;
       }
       if (
@@ -266,27 +271,24 @@ function registerDirtyCloseGuard(context: RendererPluginContext): () => void {
       }
       if (choice === "alt") {
         // 不保存 = 丢弃本次会话:移除文档与 hot-exit 草稿,重开时从磁盘新读。
-        removeDocument(document.id);
+        controller.discardDocument(document.id);
         return true;
       }
-      // 保存:untitled 文档无处可存(容量契约),按取消处理保护数据。
-      if (document.source.kind !== "disk") {
-        return false;
-      }
-      const panelSave = triggerFilePanelSave(input.panelId);
-      if (panelSave) {
-        await panelSave;
-      } else {
-        await saveDiskDocument({
-          documentId: document.id,
-          files: context.files,
-          resolveConflict: () => resolveFileSaveConflict(context),
-          t: (key, fallback) => context.i18n.t(key, undefined, fallback),
-        });
+      try {
+        await controller.runMutation(() =>
+          controller.settleDocument(document.id, input.panelId, "failure")
+        );
+      } catch (error) {
+        if (error instanceof FilesMutationSuspendedError) {
+          return false;
+        }
+        throw error;
       }
       const latest = getDocumentForPanelSource(source);
       // 保存失败(冲突取消/IO 错误)时保持面板打开。
-      return latest ? !latest.dirty : true;
+      return latest
+        ? !(latest.dirty || latest.needsSaveAs || latest.durabilityUnknown)
+        : true;
     }
   );
 }
@@ -295,40 +297,94 @@ export const filesRendererPlugin: RendererPluginModule = {
   activate: (context) => {
     const t = (key: string, fallback?: string) =>
       context.i18n.t(key, undefined, fallback);
-    // hot-exit 草稿切到 userData 后端(main file-drafts-service);
-    // 失败(测试/降权环境)静默退回 localStorage 行为。
-    configureFilesDraftBackend(context.files.drafts).catch(() => undefined);
+    const watchHub = new FilesWatchHub(context.files);
+    const editorController = new FileEditorController(context, watchHub);
+    editorController.initialize().catch((error: unknown) => {
+      console.error("[files] draft backend initialization failed:", error);
+    });
     const disposers = [
+      context.lifecycle.beforeSuspend({
+        abort: async (_reason, { signal }) => {
+          try {
+            await abortFilesDraftSuspend(signal);
+          } finally {
+            editorController.resumeMutations();
+            editorController.setEditingSuspended(false);
+          }
+        },
+        commit: async (_reason, { signal }) => {
+          await commitFilesDraftSuspend(signal);
+        },
+        prepare: async ({ signal }) => {
+          editorController.setEditingSuspended(true);
+          try {
+            await editorController.suspendMutations(signal);
+            await prepareFilesDraftSuspend(signal);
+          } catch (error) {
+            editorController.resumeMutations();
+            editorController.setEditingSuspended(false);
+            throw error;
+          }
+        },
+      }),
       context.panels.register({
-        component: createFilesFilePanel(context),
+        component: createFilesFilePanel(context, editorController, watchHub),
         icon: FileText,
         id: FILES_FILE_PANEL_ID,
         kind: "web",
         title: () => t("filePanel.title", "File"),
       }),
-      registerDirtyCloseGuard(context),
-      context.actions.register(createOpenSelectionAsMarkdownAction(context)),
-      context.actions.register(createSaveAction(context)),
-      context.actions.register(createTreeSearchAction(context)),
-      ...createFilesTreeActions(context).map((action) =>
-        context.actions.register(action)
+      registerDirtyCloseGuard(context, editorController),
+      context.actions.register(
+        withFilesMutationGate(
+          createOpenSelectionAsMarkdownAction(context, editorController),
+          editorController
+        )
       ),
-      ...createFilesEditorActions(context).map((action) =>
-        context.actions.register(action)
+      context.actions.register(
+        withFilesMutationGate(
+          createSaveAction(context, editorController),
+          editorController
+        )
+      ),
+      context.actions.register(
+        withFilesMutationGate(
+          createSaveAsAction(context, editorController),
+          editorController
+        )
+      ),
+      context.actions.register(
+        withFilesMutationGate(
+          createSaveAllAction(context, editorController),
+          editorController
+        )
+      ),
+      context.actions.register(
+        withFilesMutationGate(createTreeSearchAction(context), editorController)
+      ),
+      ...createFilesTreeActions(context, editorController).map((action) =>
+        context.actions.register(
+          withFilesMutationGate(action, editorController)
+        )
+      ),
+      ...createFilesEditorActions(context, editorController).map((action) =>
+        context.actions.register(
+          withFilesMutationGate(action, editorController)
+        )
       ),
       registerFilesProjectStatusItem(context),
     ];
 
     return () => {
-      clearFilesDocumentStore();
-      clearFilesTreeStore();
-      clearFilesTreeWatchers();
-      clearFilesNavHistory();
-      clearFilesEditorViews();
-      clearCodeMirrorDocumentState();
       for (const dispose of disposers.toReversed()) {
         dispose();
       }
+      clearFilesTreeWatchers();
+      editorController.dispose({ clearDocuments: true });
+      releaseFilesDraftSuspendAfterDispose();
+      watchHub.dispose();
+      clearFilesTreeStore();
+      clearFilesNavHistory();
       clearFileTreeSidebarCache();
     };
   },

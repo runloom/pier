@@ -90,6 +90,7 @@ function SelectContent({
           className
         )}
         data-align-trigger={position === "item-aligned"}
+        data-scrollbar="overlay"
         data-slot="select-content"
         position={position}
         {...props}

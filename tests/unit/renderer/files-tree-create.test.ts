@@ -33,6 +33,14 @@ function makeContext(overrides?: {
   const openInstance =
     overrides?.openInstance ??
     vi.fn<RendererPluginContext["panels"]["openInstance"]>();
+  const writeText =
+    overrides?.writeText ??
+    vi.fn<RendererPluginContext["files"]["writeText"]>(async (request) => ({
+      mtimeMs: 1,
+      path: request.path,
+      root: request.root,
+      written: true as const,
+    }));
 
   const files = {
     exists: vi.fn<RendererPluginContext["files"]["exists"]>(
@@ -50,14 +58,26 @@ function makeContext(overrides?: {
         path: request.path,
         root: request.root,
       })),
-    writeText:
-      overrides?.writeText ??
-      vi.fn<RendererPluginContext["files"]["writeText"]>(async (request) => ({
-        mtimeMs: 1,
-        path: request.path,
-        root: request.root,
-        written: true as const,
-      })),
+    writeDocument: vi.fn<RendererPluginContext["files"]["writeDocument"]>(
+      async (request) => {
+        const result = await writeText({
+          contents: request.contents,
+          path: request.path,
+          root: request.root,
+        });
+        return {
+          canonicalPath: request.path,
+          committed: true,
+          durability: "confirmed",
+          kind: "written",
+          mode: 0o644,
+          mtimeMs: result.mtimeMs,
+          revision: `revision-${result.mtimeMs}`,
+          size: request.contents.length,
+        };
+      }
+    ),
+    writeText,
   };
   const notifications = {
     error: vi.fn(),
@@ -71,6 +91,9 @@ function makeContext(overrides?: {
     system: vi.fn(async () => ({ shown: true })),
   };
   const context = {
+    dialogs: {
+      alert: vi.fn(async () => undefined),
+    },
     files,
     i18n: {
       commandDescription: vi.fn(() => undefined),
@@ -136,8 +159,11 @@ describe("commitCreatedPath", () => {
       treeId: "group-1",
     });
     expect(ok).toBe(true);
-    expect(files.writeText).toHaveBeenCalledWith({
+    expect(files.writeDocument).toHaveBeenCalledWith({
       contents: "",
+      eol: "lf",
+      expected: { kind: "absent" },
+      format: { bom: false, encoding: "utf8" },
       path: "a/b/c.ts",
       root: ROOT,
     });
@@ -197,8 +223,11 @@ describe("inline create commit/cancel", () => {
       to: "src/new.ts",
     });
     expect(handled).toBe(true);
-    expect(files.writeText).toHaveBeenCalledWith({
+    expect(files.writeDocument).toHaveBeenCalledWith({
       contents: "",
+      eol: "lf",
+      expected: { kind: "absent" },
+      format: { bom: false, encoding: "utf8" },
       path: "src/new.ts",
       root: ROOT,
     });

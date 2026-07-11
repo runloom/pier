@@ -1,7 +1,8 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import type { FilePanelFilesApi } from "./file-panel-hooks.ts";
+import type { FileEditorController } from "./file-editor-controller.ts";
+import type { FilesWatchHub } from "./files-watch-hub.ts";
 
 export interface FilesFilePanelParams {
   context?: PanelContext;
@@ -16,5 +17,6 @@ export interface FilesFilePanelParams {
 export interface FilePanelRuntimeProps
   extends IDockviewPanelProps<FilesFilePanelParams> {
   runtimeContext?: RendererPluginContext;
-  runtimeFiles?: FilePanelFilesApi;
+  runtimeController: FileEditorController;
+  runtimeWatchHub: FilesWatchHub;
 }

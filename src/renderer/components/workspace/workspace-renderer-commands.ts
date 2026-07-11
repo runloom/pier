@@ -249,6 +249,35 @@ async function runWorkspaceRendererCommandAsync(
       case "workspace.flushLayout": {
         throw new Error("workspace.flushLayout requires workspace api context");
       }
+      case "workspace.prepareClose": {
+        throw new Error(
+          "workspace.prepareClose requires workspace api context"
+        );
+      }
+      case "workspace.finalizeClose": {
+        throw new Error(
+          "workspace.finalizeClose requires workspace api context"
+        );
+      }
+      case "workspace.reportCloseFailure": {
+        throw new Error(
+          "workspace.reportCloseFailure requires workspace api context"
+        );
+      }
+      case "plugin.prepareDisable": {
+        throw new Error("plugin.prepareDisable requires workspace api context");
+      }
+      case "plugin.finalizeDisable": {
+        throw new Error(
+          "plugin.finalizeDisable requires workspace api context"
+        );
+      }
+      case "plugin.prepareReload": {
+        throw new Error("plugin.prepareReload requires workspace api context");
+      }
+      case "plugin.finalizeReload": {
+        throw new Error("plugin.finalizeReload requires workspace api context");
+      }
       default: {
         const _exhaustive: never = envelope.command;
         throw new Error(`unsupported renderer command: ${String(_exhaustive)}`);

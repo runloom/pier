@@ -1,4 +1,8 @@
-import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
+import {
+  type FileDocumentEol,
+  type FileDocumentFormat,
+  nonEmptyFileRootRelativePathSchema,
+} from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
 
@@ -112,65 +116,40 @@ export type FilesDocumentCapability =
 export interface FilesDocument {
   /** Disk mtime captured at last successful load/save; used for write conflict checks. */
   baseMtimeMs: number | null;
+  canonicalPath: string | null;
   capabilities: readonly FilesDocumentCapability[];
   /** 冲突 Compare 拉取的磁盘快照;非冲突态为 null。 */
   conflictDiskContents: string | null;
   currentContents: string;
+  deletedOnDisk: boolean;
   dirty: boolean;
   /** True when disk changed under an unsaved (dirty) document. */
   diskConflict: boolean;
+  durabilityUnknown: boolean;
+  eol: FileDocumentEol | null;
   error: string | null;
+  format: FileDocumentFormat | null;
+  hasBackingStore: boolean;
   id: string;
   language: FilesDocumentLanguage;
   loadState: "error" | "idle" | "loaded" | "loading";
+  mode: number | null;
   name: string;
+  needsSaveAs: boolean;
   readOnly: boolean;
+  readOnlyReason:
+    | "binary"
+    | "mixed-eol"
+    | "not-writable"
+    | "too-large"
+    | "unknown-encoding"
+    | "unsupported-file"
+    | null;
+  revision: string | null;
   savedContents: string;
+  saveState: "idle" | "saving";
+  size: number | null;
   source: FilesDocumentSource;
-}
-
-export interface FileEditorAdapterLabels {
-  diffUnsupported: string;
-  richUnsupported: string;
-  sourceEditor: string;
-}
-
-export interface FilesEditorSearchLabels {
-  close: string;
-  matchCase?: string;
-  next: string;
-  noMatches: string;
-  placeholder: string;
-  previous: string;
-  regexp?: string;
-  replace?: string;
-  replaceAll?: string;
-  replacePlaceholder?: string;
-  selectAll?: string;
-  wholeWord?: string;
-}
-
-export interface FileEditorAdapterProps {
-  documentId?: string;
-  editorSessionId?: string;
-  filePath?: string;
-  labels?: FileEditorAdapterLabels;
-  language: FilesDocumentLanguage | string;
-  mode: FileViewMode;
-  onChange?: (value: string) => void;
-  // 编辑器右键宿主级 popup 的钩子。source 层 (CodeMirror) 拿 selection 再拼
-  // metadata,rich/preview mode 不需要 —— 上层传 undefined 即可。
-  onEditorContextMenu?: (
-    event: MouseEvent,
-    ranges: readonly EditorRange[]
-  ) => void;
-  originalValue?: string;
-  readOnly?: boolean;
-  searchLabels?: FilesEditorSearchLabels;
-  // Monotonic counter: bumping it opens the project search bar.
-  // Value 0 (default) means never triggered.
-  searchRequest?: number;
-  value: string;
 }
 
 export interface EditorRange {

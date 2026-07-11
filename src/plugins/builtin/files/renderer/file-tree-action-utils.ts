@@ -4,7 +4,6 @@ import type {
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import { z } from "zod";
-import { moveDiskDocumentSource } from "./files-document-store.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
 import { moveFilesTreeEntry } from "./files-tree-store.ts";
 
@@ -90,6 +89,18 @@ export function dirnameRelative(path: string): string {
   const trimmed = path.replace(TRAILING_SLASHES, "");
   const slash = trimmed.lastIndexOf("/");
   return slash < 0 ? "" : trimmed.slice(0, slash);
+}
+
+export function resolveCreateParentDir(options: {
+  kind?: "directory" | "file";
+  path?: string;
+}): string {
+  if (!options.path) {
+    return "";
+  }
+  return options.kind === "directory"
+    ? options.path
+    : dirnameRelative(options.path);
 }
 
 export function basename(path: string): string {
@@ -182,25 +193,30 @@ export function notifyMoveWithUndo(
   t: FilesTranslate,
   root: string,
   fromPath: string,
-  toPath: string
+  toPath: string,
+  onDocumentMove: (
+    root: string,
+    fromPath: string,
+    toPath: string
+  ) => Promise<void> | void
 ): void {
   const name = basename(toPath);
   context.notifications.success(t("filePanel.tree.moved", `Moved "${name}"`), {
     action: {
       label: t("filePanel.tree.undo", "Undo"),
       onClick: () => {
-        context.files
-          .move({ newPath: fromPath, path: toPath, root })
-          .then(() => {
+        Promise.resolve(onDocumentMove(root, toPath, fromPath))
+          .then(async () => {
             moveFilesTreeEntry(root, toPath, fromPath);
-            moveDiskDocumentSource(root, toPath, fromPath);
           })
           .catch((error: unknown) => {
-            context.notifications.error(
-              error instanceof Error
-                ? error.message
-                : t("filePanel.tree.renameFailed", "Unable to rename")
-            );
+            context.dialogs
+              .alert({
+                body: error instanceof Error ? error.message : String(error),
+                size: "default",
+                title: t("filePanel.tree.renameFailed", "Unable to rename"),
+              })
+              .catch(() => undefined);
           });
       },
     },

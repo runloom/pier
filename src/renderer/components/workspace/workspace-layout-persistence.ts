@@ -6,7 +6,7 @@ type WorkspacePanel = DockviewReadyEvent["api"]["panels"][number];
 export function subscribeWorkspacePanelParameterChanges(
   api: DockviewReadyEvent["api"],
   onChange: () => void
-): void {
+): () => void {
   const subscriptions = new Map<string, { dispose(): void }>();
   const subscribe = (panel: WorkspacePanel) => {
     subscriptions.get(panel.id)?.dispose();
@@ -16,11 +16,19 @@ export function subscribeWorkspacePanelParameterChanges(
   for (const panel of api.panels) {
     subscribe(panel);
   }
-  api.onDidAddPanel(subscribe);
-  api.onDidRemovePanel((panel) => {
+  const addSubscription = api.onDidAddPanel(subscribe);
+  const removeSubscription = api.onDidRemovePanel((panel) => {
     subscriptions.get(panel.id)?.dispose();
     subscriptions.delete(panel.id);
   });
+  return () => {
+    addSubscription?.dispose();
+    removeSubscription?.dispose();
+    for (const subscription of subscriptions.values()) {
+      subscription.dispose();
+    }
+    subscriptions.clear();
+  };
 }
 
 export function createWorkspaceLayoutSaveScheduler({

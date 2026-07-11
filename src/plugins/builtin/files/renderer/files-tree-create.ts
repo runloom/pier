@@ -3,11 +3,9 @@ import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import {
   basename,
-  dirnameRelative,
   validateName,
   validateRelativePath,
 } from "./file-tree-action-utils.ts";
-import { ensureDiskDocument } from "./files-document-store.ts";
 import type { FilesDocumentPanelSource } from "./files-document-types.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import {
@@ -28,6 +26,7 @@ import {
   reloadFilesTreeRoot,
   removeFilesTreeEntry,
 } from "./files-tree-store.ts";
+import { filesTreeVisibilityForContext } from "./files-tree-visibility.ts";
 import { showFilesNamePrompt } from "./name-prompt.tsx";
 
 export type FilesCreateKind = FilesPendingCreateKind;
@@ -98,7 +97,11 @@ async function ensureParentDirectoryReady(
   if (state === "loaded" || state === "empty") {
     return;
   }
-  await loadFilesTreeDirectory(root, parentDir, context.files.list);
+  await loadFilesTreeDirectory(
+    root,
+    parentDir,
+    filesTreeVisibilityForContext(context).list
+  );
 }
 
 function openCreatedDiskFile(
@@ -108,7 +111,6 @@ function openCreatedDiskFile(
   treeId: string | undefined
 ): void {
   const name = basename(path);
-  ensureDiskDocument({ name, path, root });
   const source: FilesDocumentPanelSource = { kind: "disk", path, root };
   const panelContext = context.panels.getActiveContext();
   context.panels.openInstance({
@@ -153,8 +155,55 @@ function discardCreateAttempt(options: {
   const t = createFilesTranslate(context);
   reloadFilesTreeRoot(
     root,
-    context.files.list,
+    filesTreeVisibilityForContext(context).list,
     t("panel.loadError.fallback", "Failed to load files")
+  );
+}
+
+async function createEmptyFile(
+  context: RendererPluginContext,
+  root: string,
+  path: string
+): Promise<void> {
+  const result = await context.files.writeDocument({
+    contents: "",
+    eol: "lf",
+    expected: { kind: "absent" },
+    format: { bom: false, encoding: "utf8" },
+    path,
+    root,
+  });
+  if (result.kind === "written") {
+    if (result.durability === "unknown") {
+      const confirmation = await context.files.confirmDurability({
+        expectedRevision: result.revision,
+        path,
+        root,
+      });
+      if (confirmation.kind !== "confirmed") {
+        const t = createFilesTranslate(context);
+        await context.dialogs.alert({
+          body:
+            confirmation.kind === "failed"
+              ? confirmation.message
+              : t(
+                  "filePanel.tree.createDurabilityMismatch",
+                  "The new file changed before its write could be confirmed."
+                ),
+          size: "default",
+          title: t(
+            "filePanel.tree.createDurabilityUnknown",
+            "File created, but durability is not confirmed"
+          ),
+        });
+      }
+    }
+    return;
+  }
+  throw new Error(
+    result.kind === "not-writable"
+      ? result.message
+      : `File creation conflict: ${result.reason}`
   );
 }
 
@@ -170,16 +219,16 @@ export async function commitCreatedPath(options: {
   const t = createFilesTranslate(context);
   try {
     if (kind === "file") {
-      await context.files.writeText({ contents: "", path, root });
+      await createEmptyFile(context, root, path);
     } else {
       await context.files.mkdir({ path, root });
     }
   } catch (error) {
-    context.notifications.error(
-      error instanceof Error
-        ? error.message
-        : t("filePanel.tree.createFailed", "Unable to create item")
-    );
+    await context.dialogs.alert({
+      body: error instanceof Error ? error.message : String(error),
+      size: "default",
+      title: t("filePanel.tree.createFailed", "Unable to create item"),
+    });
     return false;
   }
 
@@ -232,33 +281,27 @@ export async function commitInlineCreate(options: {
     return true;
   }
 
-  const { exists } = await options.context.files.exists({
-    path: options.to,
-    root: options.root,
-  });
-  // 同名确认时磁盘尚无该文件;改名到已存在路径才算冲突。
-  if (exists && options.to !== options.from) {
-    options.context.notifications.error(
-      t("filePanel.tree.nameConflict", "Name already exists")
-    );
-    discardCreateAttempt({
-      context: options.context,
-      destinationAlreadyInStore,
-      from: options.from,
-      root: options.root,
-      to: options.to,
-      ...(pending.treeId ? { treeId: pending.treeId } : {}),
-    });
-    return true;
-  }
-
   try {
-    if (pending.kind === "file") {
-      await options.context.files.writeText({
-        contents: "",
-        path: options.to,
+    const { exists } = await options.context.files.exists({
+      path: options.to,
+      root: options.root,
+    });
+    if (exists && options.to !== options.from) {
+      options.context.notifications.error(
+        t("filePanel.tree.nameConflict", "Name already exists")
+      );
+      discardCreateAttempt({
+        context: options.context,
+        destinationAlreadyInStore,
+        from: options.from,
         root: options.root,
+        to: options.to,
+        ...(pending.treeId ? { treeId: pending.treeId } : {}),
       });
+      return true;
+    }
+    if (pending.kind === "file") {
+      await createEmptyFile(options.context, options.root, options.to);
     } else {
       await options.context.files.mkdir({
         path: options.to,
@@ -266,11 +309,11 @@ export async function commitInlineCreate(options: {
       });
     }
   } catch (error) {
-    options.context.notifications.error(
-      error instanceof Error
-        ? error.message
-        : t("filePanel.tree.createFailed", "Unable to create item")
-    );
+    await options.context.dialogs.alert({
+      body: error instanceof Error ? error.message : String(error),
+      size: "default",
+      title: t("filePanel.tree.createFailed", "Unable to create item"),
+    });
     discardCreateAttempt({
       context: options.context,
       destinationAlreadyInStore,
@@ -439,17 +482,4 @@ export async function createViaPrompt(options: {
     root,
     ...(treeId ? { treeId } : {}),
   });
-}
-
-export function resolveCreateParentDir(options: {
-  kind?: "directory" | "file";
-  path?: string;
-}): string {
-  if (!options.path) {
-    return "";
-  }
-  if (options.kind === "directory") {
-    return options.path;
-  }
-  return dirnameRelative(options.path);
 }

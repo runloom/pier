@@ -1,35 +1,27 @@
-import type {
-  ExternalRendererPluginContext,
-  ExternalRendererPluginModule,
-} from "@pier/plugin-api/renderer";
+import type { ExternalRendererPluginModule } from "@pier/plugin-api/renderer";
 
-/**
- * Loads an external renderer plugin from a `pier-plugin://` URL, calls
- * `activate(context)`, and returns the disposer + activation result.
- * If activation throws, the caller renders the "Plugin panel unavailable"
- * fallback (plan Task 6 step 5).
- */
-
-export interface LoadExternalRendererPluginOptions {
-  context: ExternalRendererPluginContext;
+export interface LoadExternalRendererModuleOptions {
   expectedPluginId: string;
   rendererEntryUrl: string;
 }
 
-export interface LoadExternalRendererPluginResult {
-  disposer: () => void;
-  error?: string;
-  ok: boolean;
+export type ExternalRendererModuleImporter = (url: string) => Promise<unknown>;
+
+function dynamicImportExternalRenderer(url: string): Promise<unknown> {
+  return import(/* @vite-ignore */ url);
 }
 
-export async function loadExternalRendererPlugin(
-  options: LoadExternalRendererPluginOptions
-): Promise<LoadExternalRendererPluginResult> {
-  try {
-    // Dynamic import from pier-plugin:// URL — path is runtime-selected.
-    const mod: unknown = await import(
-      /* @vite-ignore */ options.rendererEntryUrl
-    );
+/**
+ * 只负责加载并校验 renderer 模块。激活、超时、代次和销毁全部归 runtime；
+ * 动态 import 无法真正取消，因此 loader 绝不能产生注册副作用。
+ */
+export function createExternalRendererModuleLoader(
+  importModule: ExternalRendererModuleImporter = dynamicImportExternalRenderer
+) {
+  return async function loadExternalRendererModuleWithImporter(
+    options: LoadExternalRendererModuleOptions
+  ): Promise<ExternalRendererPluginModule> {
+    const mod = await importModule(options.rendererEntryUrl);
     if (!mod || typeof mod !== "object" || !("plugin" in mod)) {
       throw new Error("renderer module missing `plugin` export");
     }
@@ -49,14 +41,8 @@ export async function loadExternalRendererPlugin(
         `renderer plugin id mismatch: expected ${options.expectedPluginId}, got ${pluginExport.id}`
       );
     }
-    const plugin = pluginExport as ExternalRendererPluginModule;
-    const disposer = plugin.activate(options.context);
-    return { disposer, ok: true };
-  } catch (err) {
-    return {
-      disposer: () => {},
-      error: (err as Error).message,
-      ok: false,
-    };
-  }
+    return pluginExport as ExternalRendererPluginModule;
+  };
 }
+
+export const loadExternalRendererModule = createExternalRendererModuleLoader();

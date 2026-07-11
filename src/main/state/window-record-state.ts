@@ -203,6 +203,7 @@ export async function saveWindowRecordLayout(
     record.updatedAt = now();
     return state;
   });
+  await s.flush();
 }
 
 export async function clearWindowRecordLayout(recordId: string): Promise<void> {
@@ -220,6 +221,7 @@ export async function clearWindowRecordLayout(recordId: string): Promise<void> {
     }
     return state;
   });
+  await s.flush();
 }
 
 export async function flushWindowRecordState(): Promise<void> {

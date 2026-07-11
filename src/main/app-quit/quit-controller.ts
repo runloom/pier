@@ -7,7 +7,7 @@ import {
   summarizeDangerousQuitActivities,
 } from "./quit-decision.ts";
 
-export type QuitPhase = "idle" | "confirming" | "quitting";
+export type QuitPhase = "idle" | "confirming" | "preparing" | "quitting";
 
 export interface PreventableQuitEvent {
   preventDefault(): void;
@@ -25,6 +25,7 @@ export interface AppQuitControllerDeps {
   logFailure: (error: unknown) => void;
   proceedToQuit: () => void;
   readConfirmationMode: () => Promise<AppQuitConfirmationMode>;
+  reportFailure?: (error: unknown) => void;
   shouldBypassQuitConfirmationForTests?: () => boolean;
 }
 
@@ -65,11 +66,13 @@ export function createAppQuitController(
         }
       }
 
-      phase = "quitting";
+      phase = "preparing";
       await deps.flushBeforeQuit();
+      phase = "quitting";
       deps.proceedToQuit();
     } catch (error) {
       deps.logFailure(error);
+      deps.reportFailure?.(error);
       phase = "idle";
     }
   }
@@ -84,7 +87,7 @@ export function createAppQuitController(
 
       event.preventDefault();
 
-      if (phase === "confirming") {
+      if (phase === "confirming" || phase === "preparing") {
         const parent = deps.getDialogParent();
         if (parent && !parent.isDestroyed()) {
           parent.focus();

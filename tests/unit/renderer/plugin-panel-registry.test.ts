@@ -27,13 +27,13 @@ describe("plugin-panel-registry", () => {
     expect(getPluginPanelRegistrations().has("pier.test.panel")).toBe(false);
   });
 
-  it("dispose does not remove a replaced registration", () => {
-    const dispose = registerPluginPanel(reg);
+  it("rejects a duplicate registration instead of replacing its owner", () => {
+    registerPluginPanel(reg);
     const replacement = { ...reg, icon: House };
-    registerPluginPanel(replacement);
-    dispose();
-    expect(getPluginPanelRegistrations().get("pier.test.panel")).toBe(
-      replacement
+
+    expect(() => registerPluginPanel(replacement)).toThrow(
+      "plugin panel id is already registered"
     );
+    expect(getPluginPanelRegistrations().get("pier.test.panel")).toBe(reg);
   });
 });

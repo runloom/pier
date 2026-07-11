@@ -4,7 +4,10 @@ import {
   readFile,
   rename,
   rm,
+  stat,
   symlink,
+  truncate,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -35,6 +38,186 @@ afterEach(async () => {
 });
 
 describe("createFileService", () => {
+  it("reads supported text formats into a revisioned canonical document", async () => {
+    const utf16 = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from("第一行\r\n第二行\r\n", "utf16le"),
+    ]);
+    await writeFile(join(root, "target.txt"), utf16);
+    await symlink("target.txt", join(root, "alias.txt"));
+    const service = createFileService();
+
+    const opened = await service.readDocument({ path: "alias.txt", root });
+    expect(opened).toMatchObject({
+      canonicalPath: "target.txt",
+      contents: "第一行\n第二行\n",
+      eol: "crlf",
+      format: { bom: true, encoding: "utf16le" },
+      kind: "text",
+      path: "alias.txt",
+      root,
+      writable: true,
+    });
+    if (opened.kind !== "text") {
+      throw new Error("expected text document");
+    }
+    await expect(
+      service.writeDocument({
+        contents: opened.contents,
+        eol: "crlf",
+        expected: { kind: "revision", revision: opened.revision },
+        format: opened.format,
+        path: "alias.txt",
+        root,
+      })
+    ).resolves.toMatchObject({ kind: "written" });
+    await expect(readFile(join(root, "target.txt"))).resolves.toEqual(utf16);
+  });
+
+  it("classifies binary, unsupported encoding, oversized, and directory targets", async () => {
+    await writeFile(join(root, "image.png"), Buffer.from([0x89, 0x50, 0, 1]));
+    await writeFile(
+      join(root, "legacy.txt"),
+      Buffer.from([0x63, 0x61, 0x66, 0xe9])
+    );
+    await writeFile(join(root, "large.txt"), "");
+    await truncate(join(root, "large.txt"), 10 * 1024 * 1024 + 1);
+    await mkdir(join(root, "folder"));
+    const service = createFileService();
+
+    await expect(
+      service.readDocument({ path: "image.png", root })
+    ).resolves.toMatchObject({
+      kind: "binary",
+      mime: "image/png",
+    });
+    await expect(
+      service.readDocument({ path: "legacy.txt", root })
+    ).resolves.toMatchObject({ kind: "unsupported-encoding" });
+    await expect(
+      service.readDocument({ path: "large.txt", root })
+    ).resolves.toMatchObject({
+      kind: "too-large",
+      limit: 10 * 1024 * 1024,
+      size: 10 * 1024 * 1024 + 1,
+    });
+    await expect(
+      service.readDocument({ path: "folder", root })
+    ).resolves.toMatchObject({
+      fileType: "directory",
+      kind: "unsupported-file",
+    });
+  });
+
+  it("detects same-mtime content changes through opaque revisions", async () => {
+    const target = join(root, "notes.txt");
+    await writeFile(target, "one\n");
+    const service = createFileService();
+    const original = await service.readDocument({ path: "notes.txt", root });
+    if (original.kind !== "text") {
+      throw new Error("expected text document");
+    }
+    const baseline = await stat(target);
+    await writeFile(target, "two\n");
+    await utimes(target, baseline.atime, baseline.mtime);
+
+    await expect(
+      service.writeDocument({
+        contents: "pier\n",
+        eol: "lf",
+        expected: { kind: "revision", revision: original.revision },
+        format: { bom: false, encoding: "utf8" },
+        path: "notes.txt",
+        root,
+      })
+    ).resolves.toEqual({
+      kind: "conflict",
+      reason: "revision-mismatch",
+    });
+    await expect(readFile(target, "utf8")).resolves.toBe("two\n");
+  });
+
+  it("detects a symlink repoint even when both targets have equal contents", async () => {
+    await writeFile(join(root, "first.txt"), "same\n");
+    await writeFile(join(root, "second.txt"), "same\n");
+    await symlink("first.txt", join(root, "alias.txt"));
+    const service = createFileService();
+    const original = await service.readDocument({ path: "alias.txt", root });
+    if (original.kind !== "text") {
+      throw new Error("expected text document");
+    }
+    await rm(join(root, "alias.txt"));
+    await symlink("second.txt", join(root, "alias.txt"));
+
+    await expect(
+      service.writeDocument({
+        contents: "changed\n",
+        eol: "lf",
+        expected: { kind: "revision", revision: original.revision },
+        format: { bom: false, encoding: "utf8" },
+        path: "alias.txt",
+        root,
+      })
+    ).resolves.toEqual({
+      kind: "conflict",
+      reason: "revision-mismatch",
+    });
+  });
+
+  it("distinguishes a symlink entry from its canonical path impact", async () => {
+    await mkdir(join(root, "real"));
+    await writeFile(join(root, "real", "notes.md"), "notes\n");
+    await symlink("real", join(root, "linked"));
+    const service = createFileService();
+
+    await expect(
+      service.inspectPathImpact({ path: "linked", root })
+    ).resolves.toEqual({
+      kind: "symlink-entry",
+      locatorPrefix: "linked",
+      root,
+    });
+    await expect(
+      service.inspectPathImpact({ path: "linked/notes.md", root })
+    ).resolves.toEqual({
+      canonicalBackingPrefix: "real/notes.md",
+      kind: "regular",
+      locatorPrefix: "linked/notes.md",
+      root,
+    });
+  });
+
+  it("inspects arbitrary overwrite targets without returning their contents", async () => {
+    await writeFile(join(root, "binary.dat"), Buffer.from([0, 1, 2, 3]));
+    await writeFile(join(root, "large.dat"), "");
+    await truncate(join(root, "large.dat"), 10 * 1024 * 1024 + 1);
+    await mkdir(join(root, "folder"));
+    const service = createFileService();
+
+    await expect(
+      service.inspectWriteTarget({ path: "missing.txt", root })
+    ).resolves.toEqual({ kind: "absent" });
+    await expect(
+      service.inspectWriteTarget({ path: "binary.dat", root })
+    ).resolves.toMatchObject({
+      fileType: "binary",
+      kind: "existing",
+      size: 4,
+    });
+    await expect(
+      service.inspectWriteTarget({ path: "large.dat", root })
+    ).resolves.toMatchObject({
+      fileType: "too-large",
+      kind: "existing",
+    });
+    await expect(
+      service.inspectWriteTarget({ path: "folder", root })
+    ).resolves.toEqual({
+      fileType: "directory",
+      kind: "unsupported-file",
+    });
+  });
+
   it("rejects listing a symlinked directory that resolves outside the declared root", async () => {
     const outsideDir = join(outsideRoot, "external-dir");
     await mkdir(outsideDir);
@@ -126,14 +309,14 @@ describe("createFileService", () => {
 
     // 真实测试环境无法稳定制造跨设备目录,注入抛 EXDEV 的 rename
     // 以覆盖降级分支;cp/rm 走真实文件系统验证复制+删源效果。
-    const renameFile = vi.fn(() =>
+    const moveLinkFile = vi.fn(() =>
       Promise.reject(
         Object.assign(new Error("EXDEV: cross-device link not permitted"), {
           code: "EXDEV",
         })
       )
     );
-    const service = createFileService({ renameFile });
+    const service = createFileService({ moveLinkFile });
 
     await expect(
       service.move({ newPath: "dest/main.ts", path: "src/index.ts", root })
@@ -143,7 +326,7 @@ describe("createFileService", () => {
       oldPath: "src/index.ts",
       root,
     });
-    expect(renameFile).toHaveBeenCalledWith(
+    expect(moveLinkFile).toHaveBeenCalledWith(
       join(root, "src", "index.ts"),
       join(root, "dest", "main.ts")
     );
@@ -155,12 +338,32 @@ describe("createFileService", () => {
     ).rejects.toThrow();
   });
 
+  it("does not overwrite a move target that appears concurrently", async () => {
+    await mkdir(join(root, "src"));
+    const source = join(root, "src", "index.ts");
+    const target = join(root, "dest", "main.ts");
+    await writeFile(source, "source\n");
+    const moveLinkFile = vi.fn(async () => {
+      await writeFile(target, "external\n");
+      throw Object.assign(new Error("EEXIST: target exists"), {
+        code: "EEXIST",
+      });
+    });
+    const service = createFileService({ moveLinkFile });
+
+    await expect(
+      service.move({ newPath: "dest/main.ts", path: "src/index.ts", root })
+    ).rejects.toThrow("target exists");
+    await expect(readFile(source, "utf8")).resolves.toBe("source\n");
+    await expect(readFile(target, "utf8")).resolves.toBe("external\n");
+  });
+
   it("rethrows non-EXDEV rename errors without the copy fallback", async () => {
     await mkdir(join(root, "src"));
     await writeFile(join(root, "src", "index.ts"), "export {};\n");
 
     const service = createFileService({
-      renameFile: () =>
+      moveLinkFile: () =>
         Promise.reject(
           Object.assign(new Error("EPERM: operation not permitted"), {
             code: "EPERM",

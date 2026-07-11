@@ -24,10 +24,12 @@ import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
 import {
   type MouseEvent,
+  type PointerEvent,
   type ReactNode,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
@@ -180,10 +182,6 @@ interface PanelPreviewParams {
   pinned?: unknown;
 }
 
-interface PanelTabApiWithParameters {
-  updateParameters?: (params: Record<string, unknown>) => void;
-}
-
 function paramsIsPreview(
   component: string | undefined,
   params: PanelPreviewParams | undefined
@@ -215,6 +213,8 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       props.params as PanelPreviewParams | undefined
     )
   );
+  const isPreviewRef = useRef(isPreview);
+  const suppressNextDoubleClickRef = useRef(false);
   const descriptor = usePanelDescriptorStore(
     (state) => state.descriptors[props.api.id]
   );
@@ -265,6 +265,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         aria-hidden="true"
         className="pier-panel-tab-icon shrink-0"
         data-panel-tab-icon={iconId}
+        size={14}
       />
     );
   }
@@ -284,12 +285,12 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     // params 变更时同步 preview 视觉 —— 文件面板 preview→pinned 就地 promote
     // 时通过 updateParameters 覆盖 pinned:true,tab 头收到事件后取消斜体。
     const disposable = props.api.onDidParametersChange((next) => {
-      setIsPreview(
-        paramsIsPreview(
-          props.api.component,
-          next as PanelPreviewParams | undefined
-        )
+      const nextIsPreview = paramsIsPreview(
+        props.api.component,
+        next as PanelPreviewParams | undefined
       );
+      isPreviewRef.current = nextIsPreview;
+      setIsPreview(nextIsPreview);
       setIsDirty(
         paramsIsDirty(
           props.api.component,
@@ -297,12 +298,12 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         )
       );
     });
-    setIsPreview(
-      paramsIsPreview(
-        props.api.component,
-        props.params as PanelPreviewParams | undefined
-      )
+    const nextIsPreview = paramsIsPreview(
+      props.api.component,
+      props.params as PanelPreviewParams | undefined
     );
+    isPreviewRef.current = nextIsPreview;
+    setIsPreview(nextIsPreview);
     setIsDirty(
       paramsIsDirty(
         props.api.component,
@@ -344,25 +345,40 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     },
     [baseOnContextMenu, props.api]
   );
+  const promotePreview = useCallback(() => {
+    if (!isPreviewRef.current) {
+      return false;
+    }
+    isPreviewRef.current = false;
+    props.api.updateParameters({ pinned: true });
+    setIsPreview(false);
+    return true;
+  }, [props.api]);
   const onDoubleClick = useCallback(
     (event: MouseEvent) => {
-      if (!isPreview) {
-        return;
-      }
-      const updateParameters = (props.api as PanelTabApiWithParameters)
-        .updateParameters;
-      if (!updateParameters) {
+      const shouldSuppress =
+        suppressNextDoubleClickRef.current || promotePreview();
+      suppressNextDoubleClickRef.current = false;
+      if (!shouldSuppress) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      updateParameters({
-        ...((props.params as Record<string, unknown> | undefined) ?? {}),
-        pinned: true,
-      });
-      setIsPreview(false);
     },
-    [isPreview, props.api, props.params]
+    [promotePreview]
+  );
+  const onPointerDownCapture = useCallback(
+    (event: PointerEvent) => {
+      if (!(event.button === 0 && event.detail >= 2 && promotePreview())) {
+        return;
+      }
+      suppressNextDoubleClickRef.current = true;
+      // 第二次主键按下时先于 dockview 拖拽状态机固定 preview，避免 dblclick
+      // 在 tab 激活/拖拽重排期间丢失；后续 dblclick 由幂等 ref 安全忽略。
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    [promotePreview]
   );
   // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
   // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
@@ -377,6 +393,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       data-tab-status={status}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
+      onPointerDownCapture={onPointerDownCapture}
       role="tab"
       tabIndex={0}
     >

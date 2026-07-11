@@ -13,9 +13,11 @@ export const PIER = {
   // file watch (订阅/退订;事件本身经 PIER_BROADCAST.FILE_CHANGED 广播)
   FILE_WATCH_START: "pier://file:watch-start",
   FILE_WATCH_STOP: "pier://file:watch-stop",
+  FILE_PICK_SAVE_TARGET: "pier://file:pick-save-target",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
+  WINDOW_RENDERER_BOOT_CHALLENGE: "pier://window:renderer-boot-challenge",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
   // renderer → main plugin RPC invoke channel. Separate from PIER.COMMAND_EXECUTE
   // so plugin RPC is NEVER reachable from CLI local-control or capability-only
