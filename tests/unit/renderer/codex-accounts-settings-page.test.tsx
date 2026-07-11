@@ -80,7 +80,7 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         register: vi.fn(() => () => undefined),
       },
       dialogs: {
-        alert: vi.fn(),
+        alert: vi.fn(async () => undefined),
         confirm: vi.fn(async () => true),
       },
       i18n: {
@@ -459,12 +459,36 @@ describe("AccountsSettingsPage", () => {
     expect(screen.queryByText("System default")).toBeNull();
   });
 
-  it('calls accounts.add when "Add account" is clicked', async () => {
+  it("opens account authorization before starting the browser login", async () => {
     const { context, invokeCalls } = contextWithSnapshot(emptySnapshot());
     render(<AccountsSettingsPage context={context} />);
 
-    fireEvent.click(await screen.findByText("Add account"));
+    const addAccountButton = await screen.findByText("Add account");
+    await act(async () => {
+      fireEvent.click(addAccountButton);
+    });
+    expect(screen.getByText("Add Codex account")).toBeDefined();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.classList.contains("sm:max-w-md")).toBe(true);
+    expect(
+      screen
+        .getByText("Credentials are stored only on this device")
+        .closest('[data-slot="item"]')
+    ).not.toBeNull();
+    expect(invokeCalls).not.toContainEqual({
+      method: "accounts.add",
+      payload: {},
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Continue in browser" })
+      );
+    });
     expect(invokeCalls).toContainEqual({ method: "accounts.add", payload: {} });
+    await vi.waitFor(() => {
+      expect(screen.queryByText("Add Codex account")).toBeNull();
+    });
   });
 
   it("shows destructive confirm before removing an account", async () => {
@@ -619,15 +643,122 @@ describe("AccountsSettingsPage", () => {
     });
   });
 
-  it("renders login alert with cancel when login is pending", async () => {
+  it("renders the waiting dialog with cancel when login is pending", async () => {
     const snap = snapshotWithAccount({
       login: { provider: "codex", startedAt: Date.now() },
     });
     const { context } = contextWithSnapshot(snap);
     render(<AccountsSettingsPage context={context} />);
 
-    expect(await screen.findByText("Login in progress")).toBeDefined();
+    expect(
+      await screen.findByText("Waiting for browser authorization")
+    ).toBeDefined();
+    expect(screen.getByText("Waiting for Codex authorization…")).toBeDefined();
     expect(screen.getByText("Cancel login")).toBeDefined();
+  });
+
+  it("cancels a pending browser login", async () => {
+    const snap = snapshotWithAccount({
+      login: { provider: "codex", startedAt: Date.now() },
+    });
+    const { context, invokeCalls } = contextWithSnapshot(snap);
+    render(<AccountsSettingsPage context={context} />);
+
+    const cancelButton = await screen.findByRole("button", {
+      name: "Cancel login",
+    });
+    await act(async () => {
+      fireEvent.click(cancelButton);
+    });
+
+    expect(invokeCalls).toContainEqual({
+      method: "accounts.cancelLogin",
+      payload: null,
+    });
+  });
+
+  it("keeps pending login controls usable when cancellation fails", async () => {
+    const snap = snapshotWithAccount({
+      login: { provider: "codex", startedAt: Date.now() },
+    });
+    const { context } = contextWithSnapshot(snap);
+    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
+      if (method === "accounts.snapshot") return snap as T;
+      if (method === "accounts.cancelLogin") {
+        throw new Error("cancel login failed");
+      }
+      return null as T;
+    };
+    render(<AccountsSettingsPage context={context} />);
+
+    const cancelButton = await screen.findByRole("button", {
+      name: "Cancel login",
+    });
+    await act(async () => {
+      fireEvent.click(cancelButton);
+    });
+
+    await vi.waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "cancel login failed",
+        title: "Account action failed",
+      });
+      expect(cancelButton).not.toBeDisabled();
+    });
+  });
+
+  it("cancels the current login before reopening the browser", async () => {
+    const snap = snapshotWithAccount({
+      login: { provider: "codex", startedAt: Date.now() },
+    });
+    const { context, invokeCalls } = contextWithSnapshot(snap);
+    render(<AccountsSettingsPage context={context} />);
+
+    const reopenButton = await screen.findByRole("button", {
+      name: "Reopen browser",
+    });
+    await act(async () => {
+      fireEvent.click(reopenButton);
+    });
+
+    await vi.waitFor(() => {
+      const cancelIndex = invokeCalls.findIndex(
+        ({ method }) => method === "accounts.cancelLogin"
+      );
+      const addIndex = invokeCalls.findIndex(
+        ({ method }) => method === "accounts.add"
+      );
+      expect(cancelIndex).toBeGreaterThanOrEqual(0);
+      expect(cancelIndex).toBeLessThan(addIndex);
+    });
+  });
+
+  it("shows account login failures through the plugin dialog facade", async () => {
+    const snap = emptySnapshot();
+    const { context } = contextWithSnapshot(snap);
+    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
+      if (method === "accounts.snapshot") return snap as T;
+      if (method === "accounts.add") throw new Error("browser login failed");
+      return null as T;
+    };
+    render(<AccountsSettingsPage context={context} />);
+
+    const addAccountButton = await screen.findByText("Add account");
+    await act(async () => {
+      fireEvent.click(addAccountButton);
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Continue in browser" })
+      );
+    });
+
+    await vi.waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "browser login failed",
+        title: "Account action failed",
+      });
+    });
   });
 
   it("shows usage for system default and every managed account", async () => {

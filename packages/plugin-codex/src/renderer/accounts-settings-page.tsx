@@ -22,7 +22,7 @@ import { formatRelativeTime } from "@pier/ui/format.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { CircleUserRound, Plus, RefreshCw } from "lucide-react";
+import { CircleUserRound, RefreshCw } from "lucide-react";
 import { Fragment, type JSX } from "react";
 import {
   AccountAvatar,
@@ -30,6 +30,7 @@ import {
   QuotaGroup,
   resetCredits,
 } from "./account-display.tsx";
+import { AddAccountDialog } from "./add-account-dialog.tsx";
 import { CostCard } from "./cost-card.tsx";
 import type { Translate } from "./usage-meter.tsx";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
@@ -115,40 +116,13 @@ export function AccountsSettingsPage({
     <div className="pier-codex-settings">
       <header className="pier-codex-page-header">
         <h1>{t("pier.codex.accounts.settings.title", "Codex Accounts")}</h1>
-        <Button
-          disabled={snapshot.login !== null}
-          onClick={() => invoke("accounts.add", {})}
-          type="button"
-        >
-          <Plus data-icon="inline-start" />
-          {t("pier.codex.accounts.settings.addAccount", "Add account")}
-        </Button>
+        <AddAccountDialog
+          context={context}
+          login={snapshot.login}
+          onError={reportError}
+          t={t}
+        />
       </header>
-      {snapshot.login ? (
-        <Alert>
-          <AlertTitle>
-            {t(
-              "pier.codex.accounts.settings.loginPending",
-              "Login in progress"
-            )}
-          </AlertTitle>
-          <AlertDescription>
-            {t(
-              "pier.codex.accounts.settings.loginPendingDesc",
-              "Finish the Codex login flow in your browser."
-            )}
-          </AlertDescription>
-          <Button
-            className="mt-3"
-            onClick={() => invoke("accounts.cancelLogin")}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {t("pier.codex.accounts.settings.cancelLogin", "Cancel login")}
-          </Button>
-        </Alert>
-      ) : null}
       {active ? (
         <>
           <Card data-testid="codex-active-account">
