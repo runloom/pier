@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@pier/ui/utils.ts";
 import { Loader2Icon } from "lucide-react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
@@ -15,7 +16,10 @@ function StatusGlyph({
   return (
     <span
       aria-hidden="true"
-      className={`flex size-4 shrink-0 items-center justify-center rounded-full ${className}`}
+      className={cn(
+        "flex size-4 shrink-0 items-center justify-center rounded-full",
+        className
+      )}
     >
       {children}
     </span>

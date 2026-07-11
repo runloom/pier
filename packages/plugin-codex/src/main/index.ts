@@ -12,6 +12,7 @@ import {
 } from "../shared/accounts.ts";
 import { createCodexAccountsService } from "./accounts-service.ts";
 import { createCodexProvider } from "./codex-provider.ts";
+import { scanLocalCodexUsage } from "./local-usage-scanner.ts";
 import { createCodexAccountsStateStore } from "./state.ts";
 
 interface CodexPrivateMainPluginContext extends MainPluginContext {
@@ -33,6 +34,9 @@ export const plugin: MainPluginModule = {
     );
     const provider = createCodexProvider({ credentials: context.secrets });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
+    const codexHome =
+      context.processEnv.CODEX_HOME ??
+      join(context.processEnv.HOME ?? context.paths.workDir, ".codex");
     const service = createCodexAccountsService({
       managedBaseDir,
       provider,
@@ -44,6 +48,22 @@ export const plugin: MainPluginModule = {
         context.events.emit("accounts.changed", snapshot),
     });
     await service.init();
+
+    const cachedCostUsage = await context.usageData.read(
+      "codex-local-sessions",
+      { kind: "machine" }
+    );
+    if (cachedCostUsage) service.setCostUsage(cachedCostUsage);
+
+    async function refreshLocalUsage(): Promise<void> {
+      const snapshot = await context.usageData.publish(
+        await scanLocalCodexUsage(codexHome)
+      );
+      service.setCostUsage(snapshot);
+    }
+    refreshLocalUsage().catch((error: unknown) => {
+      context.logger.warn("[pier.codex] local usage scan failed", error);
+    });
 
     context.rpc.handle("accounts.snapshot", async (payload) => {
       emptyRpcPayloadSchema.parse(payload);
@@ -72,6 +92,7 @@ export const plugin: MainPluginModule = {
         ...(request.accountId ? { accountId: request.accountId } : {}),
         force: true,
       });
+      await refreshLocalUsage();
       return null;
     });
     context.lifecycle.onBeforeQuit(() => service.flush());

@@ -125,7 +125,7 @@ function NodeCard({
         <div className="min-w-0 flex-1 truncate font-semibold text-foreground text-sm">
           {label}
         </div>
-        <span className={`size-2.5 ${terminalDebugStatusFill(status)}`} />
+        <span className={cn("size-2.5", terminalDebugStatusFill(status))} />
       </div>
       <div className="mt-3 truncate font-semibold text-base">{children}</div>
     </section>
@@ -135,7 +135,7 @@ function NodeCard({
 function Connector({ status }: { status: TerminalDebugRouteStatus }) {
   return (
     <div className="hidden items-center md:flex">
-      <div className={`h-1 w-full ${terminalDebugStatusFill(status)}`} />
+      <div className={cn("h-1 w-full", terminalDebugStatusFill(status))} />
     </div>
   );
 }

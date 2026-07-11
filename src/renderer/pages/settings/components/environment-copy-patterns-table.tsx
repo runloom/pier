@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { Field, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import { Plus, Trash2 } from "lucide-react";
 import type { ChangeEvent } from "react";
@@ -70,17 +71,23 @@ export function EnvironmentCopyPatternsTable({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <FieldGroup className="gap-2">
       {rows.map((row, i) => (
-        <div className="grid grid-cols-[1fr_auto] gap-2" key={row.id}>
-          <Input
-            className="font-mono"
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              updateRow(i, e.target.value)
-            }
-            placeholder={t("settings.environment.copyPatterns.placeholder")}
-            value={row.pattern}
-          />
+        <FieldGroup className="grid grid-cols-[1fr_auto] gap-2" key={row.id}>
+          <Field>
+            <FieldLabel className="sr-only" htmlFor={row.id}>
+              {t("settings.environment.copyPatterns.patternLabel")}
+            </FieldLabel>
+            <Input
+              className="font-mono"
+              id={row.id}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                updateRow(i, e.target.value)
+              }
+              placeholder={t("settings.environment.copyPatterns.placeholder")}
+              value={row.pattern}
+            />
+          </Field>
           <Button
             aria-label={t("settings.environment.copyPatterns.remove")}
             disabled={rows.length === 1}
@@ -89,9 +96,9 @@ export function EnvironmentCopyPatternsTable({
             type="button"
             variant="ghost"
           >
-            <Trash2 />
+            <Trash2 data-icon="inline-start" />
           </Button>
-        </div>
+        </FieldGroup>
       ))}
       <Button
         className="w-fit"
@@ -100,9 +107,9 @@ export function EnvironmentCopyPatternsTable({
         type="button"
         variant="outline"
       >
-        <Plus data-icon />
+        <Plus data-icon="inline-start" />
         {t("settings.environment.copyPatterns.addPattern")}
       </Button>
-    </div>
+    </FieldGroup>
   );
 }

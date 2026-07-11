@@ -6,6 +6,7 @@ import {
   CollapsibleTrigger,
 } from "@pier/ui/collapsible.tsx";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
+import { Separator } from "@pier/ui/separator.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import {
   type AgentKind,
@@ -75,7 +76,8 @@ function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   }
 
   return (
-    <div className="basis-full space-y-4 border-border/60 border-t pt-3 text-xs">
+    <div className="flex basis-full flex-col gap-4 text-xs">
+      <Separator />
       <div className="grid gap-2 sm:grid-cols-3">
         <div className="min-w-0">
           <div className="font-medium text-muted-foreground">
@@ -102,7 +104,7 @@ function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
           </div>
         </div>
       </div>
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <InputRow
           description={t("settings.agents.row.commandOverrideDesc")}
           id={`agent-cmd-override-${agentId}`}
@@ -244,7 +246,11 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
                 type="button"
                 variant="ghost"
               >
-                {open ? <ChevronDown /> : <ChevronRight />}
+                {open ? (
+                  <ChevronDown data-icon="inline-start" />
+                ) : (
+                  <ChevronRight data-icon="inline-start" />
+                )}
                 {t("settings.agents.action.expand")}
               </Button>
             </CollapsibleTrigger>
@@ -257,7 +263,7 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
                 rel="noreferrer"
                 target="_blank"
               >
-                <ExternalLink />
+                <ExternalLink data-icon="inline-start" />
               </a>
             </Button>
           ) : null}

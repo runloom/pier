@@ -10,6 +10,7 @@ import { Input } from "@pier/ui/input.tsx";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -84,7 +85,7 @@ function BlockRow({
           size="icon-xs"
           variant="ghost"
         >
-          <ArrowUp className="size-3.5" />
+          <ArrowUp data-icon="inline-start" />
         </Button>
         <Button
           aria-label={t("missionControl.widget.customCard.moveDown")}
@@ -93,16 +94,15 @@ function BlockRow({
           size="icon-xs"
           variant="ghost"
         >
-          <ArrowDown className="size-3.5" />
+          <ArrowDown data-icon="inline-start" />
         </Button>
         <Button
           aria-label={t("missionControl.widget.customCard.removeBlock")}
-          className="text-muted-foreground hover:text-destructive"
           onClick={onRemove}
           size="icon-xs"
-          variant="ghost"
+          variant="destructive"
         >
-          <Trash2 className="size-3.5" />
+          <Trash2 data-icon="inline-start" />
         </Button>
       </div>
     </div>
@@ -225,11 +225,13 @@ export function CustomCardSettings({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {customCardBlockTypeSchema.options.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {blockTypeLabel(option)}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {customCardBlockTypeSchema.options.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {blockTypeLabel(option)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
@@ -253,11 +255,13 @@ export function CustomCardSettings({
                 />
               </SelectTrigger>
               <SelectContent>
-                {compatibleMetrics.map((descriptor) => (
-                  <SelectItem key={descriptor.id} value={descriptor.id}>
-                    {t(descriptor.titleKey)}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {compatibleMetrics.map((descriptor) => (
+                    <SelectItem key={descriptor.id} value={descriptor.id}>
+                      {t(descriptor.titleKey)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
@@ -266,7 +270,6 @@ export function CustomCardSettings({
               {t("missionControl.widget.customCard.labelLabel")}
             </FieldLabel>
             <Input
-              className="h-8"
               id="custom-card-label"
               onChange={(e) => setLabel(e.target.value)}
               placeholder={t(
@@ -283,7 +286,7 @@ export function CustomCardSettings({
             size="sm"
             variant="secondary"
           >
-            <Plus className="mr-1 size-3.5" />
+            <Plus data-icon="inline-start" />
             {t("missionControl.widget.customCard.addBlock")}
           </Button>
         </FieldGroup>

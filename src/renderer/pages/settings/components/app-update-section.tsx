@@ -111,7 +111,7 @@ export function AppUpdateSection() {
               type="button"
               variant="outline"
             >
-              <RefreshCw aria-hidden className="size-3.5" />
+              <RefreshCw aria-hidden data-icon="inline-start" />
               {t("settings.appUpdate.action.check")}
             </Button>
             <Button
@@ -127,7 +127,7 @@ export function AppUpdateSection() {
               type="button"
               variant="outline"
             >
-              <Download aria-hidden className="size-3.5" />
+              <Download aria-hidden data-icon="inline-start" />
               {t("settings.appUpdate.action.download")}
             </Button>
             <Button
@@ -144,7 +144,7 @@ export function AppUpdateSection() {
               type="button"
               variant="default"
             >
-              <RotateCw aria-hidden className="size-3.5" />
+              <RotateCw aria-hidden data-icon="inline-start" />
               {t("settings.appUpdate.action.restart")}
             </Button>
           </div>

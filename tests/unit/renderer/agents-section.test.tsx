@@ -83,9 +83,13 @@ describe("AgentsSection", () => {
   });
 
   it("renders the Auto chip", () => {
-    render(<AgentsSection />);
-    const autoBtn = screen.getByRole("button", { name: "Auto" });
+    const { container } = render(<AgentsSection />);
+    const autoBtn = screen.getByRole("radio", { name: "Auto" });
     expect(autoBtn).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-slot="toggle-group"]')
+    ).not.toBeNull();
+    expect(autoBtn).toHaveAttribute("data-slot", "toggle-group-item");
   });
 
   it("Auto pressed and Blank not pressed when defaultAgentId is null", () => {
@@ -94,13 +98,13 @@ describe("AgentsSection", () => {
       defaultAgentId: null,
     });
     render(<AgentsSection />);
-    expect(screen.getByRole("button", { name: "Auto" })).toHaveAttribute(
-      "aria-pressed",
+    expect(screen.getByRole("radio", { name: "Auto" })).toHaveAttribute(
+      "aria-checked",
       "true"
     );
     expect(
-      screen.getByRole("button", { name: "Blank terminal" })
-    ).toHaveAttribute("aria-pressed", "false");
+      screen.getByRole("radio", { name: "Blank terminal" })
+    ).toHaveAttribute("aria-checked", "false");
   });
 
   it("Blank pressed and Auto not pressed when defaultAgentId is blank", () => {
@@ -113,10 +117,10 @@ describe("AgentsSection", () => {
     });
     render(<AgentsSection />);
     expect(
-      screen.getByRole("button", { name: "Blank terminal" })
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Auto" })).toHaveAttribute(
-      "aria-pressed",
+      screen.getByRole("radio", { name: "Blank terminal" })
+    ).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Auto" })).toHaveAttribute(
+      "aria-checked",
       "false"
     );
   });
@@ -206,7 +210,7 @@ describe("AgentsSection", () => {
 
   it("Blank chip sets defaultAgentId to blank", async () => {
     render(<AgentsSection />);
-    const blankBtn = screen.getByRole("button", { name: "Blank terminal" });
+    const blankBtn = screen.getByRole("radio", { name: "Blank terminal" });
     fireEvent.click(blankBtn);
     await waitFor(() => {
       expect(window.pier.preferences.update).toHaveBeenCalledWith(

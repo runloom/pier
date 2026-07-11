@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExternalRendererPluginContext } from "../../../packages/plugin-api/src/renderer.ts";
 import pluginManifest from "../../../packages/plugin-codex/plugin.json" with {
@@ -107,7 +113,7 @@ describe("AccountsSettingsPage", () => {
     cleanup();
   });
 
-  it("uses a semantic account table and has no redundant description or switch setting", async () => {
+  it("uses the active account and cost card without redundant copy", async () => {
     const { context } = contextWithSnapshot(snapshotWithAccount());
     const { container } = render(<AccountsSettingsPage context={context} />);
 
@@ -115,27 +121,18 @@ describe("AccountsSettingsPage", () => {
       await screen.findByRole("heading", { level: 1, name: "Codex Accounts" })
     ).toBeDefined();
     expect(screen.getByRole("button", { name: "Add account" })).toBeDefined();
-    expect(container.querySelector('[data-slot="table"]')).not.toBeNull();
-    expect(screen.getByRole("columnheader", { name: "Account" })).toBeDefined();
+    expect(screen.getByTestId("codex-active-account")).toBeDefined();
+    expect(container.querySelector('[data-slot="avatar"]')).not.toBeNull();
     expect(
-      screen.getByRole("columnheader", { name: "Subscription" })
-    ).toBeDefined();
-    expect(
-      screen.getByRole("columnheader", { name: "Quota status" })
-    ).toBeDefined();
-    expect(screen.getByRole("columnheader", { name: "Actions" })).toBeDefined();
-    expect(screen.getAllByRole("columnheader")).toHaveLength(4);
-    expect(container.querySelector("colgroup")?.children).toHaveLength(4);
-    expect(container.querySelector("table")?.className).toContain(
-      "pier-codex-account-table"
+      container.querySelector('[data-slot="avatar-fallback"]')
+    ).toHaveTextContent("T");
+    expect(container.querySelector(".pier-codex-avatar")).toBeNull();
+    expect(screen.getByTestId("codex-cost-card")).toBeDefined();
+    expect(screen.getByText("PRO · Resets unavailable")).toBeDefined();
+    expect(screen.getByText("Last 31 days cost")).toBeDefined();
+    expect(container.querySelectorAll(".pier-codex-cost-bars i")).toHaveLength(
+      31
     );
-    expect(
-      screen
-        .getByText("test@codex.dev")
-        .closest("tr")
-        ?.querySelectorAll("[data-account-action]")
-    ).toHaveLength(3);
-    expect(screen.getByText("PRO")).toBeDefined();
     expect(
       screen.queryByText(
         "Manage Codex accounts and compare session and weekly remaining limits."
@@ -144,19 +141,16 @@ describe("AccountsSettingsPage", () => {
     expect("configuration" in pluginManifest).toBe(false);
   });
 
-  it("uses fixed responsive columns without legacy widths or account icons", () => {
+  it("uses responsive grids and semantic design tokens", () => {
     const styles = readFileSync(
       resolve(process.cwd(), "packages/plugin-codex/src/renderer/styles.css"),
       "utf8"
     );
 
-    expect(styles).toContain("table-layout: fixed");
-    expect(styles).toContain("container-type: inline-size");
-    expect(styles).toContain("@container (min-width: 28rem)");
-    expect(styles).toContain("@container (max-width: 40rem)");
-    expect(styles).not.toContain("min-width: 15rem");
-    expect(styles).not.toContain("min-width: 18rem");
-    expect(styles).not.toContain("pier-codex-account-icon");
+    expect(styles).toContain("grid-template-columns: repeat(31");
+    expect(styles).toContain("@media (max-width: 48rem)");
+    expect(styles).toContain("var(--chart-2)");
+    expect(styles).not.toMatch(/#[0-9a-f]{3,8}/i);
   });
 
   it("renders the active account once with a system-default badge", async () => {
@@ -167,6 +161,175 @@ describe("AccountsSettingsPage", () => {
     expect(screen.getAllByText("System default")).toHaveLength(1);
     expect(screen.queryByText("Current")).toBeNull();
     expect(screen.queryByText("Active")).toBeNull();
+  });
+
+  it("centers account avatars against the complete identity block", async () => {
+    const { context } = contextWithSnapshot(
+      snapshotWithAccount({
+        accounts: [
+          {
+            id: "acc-1",
+            label: "active@codex.dev",
+            status: "active",
+            error: null,
+          },
+          {
+            id: "acc-2",
+            label: "other@codex.dev",
+            status: "available",
+            error: null,
+          },
+        ],
+        activeAccountId: "acc-1",
+      })
+    );
+    const { container } = render(<AccountsSettingsPage context={context} />);
+
+    await screen.findByText("other@codex.dev");
+    const media = container.querySelector(
+      '[data-testid="codex-account-usage-row"] [data-slot="item-media"]'
+    );
+    expect(media).toHaveAttribute("data-align", "center");
+    expect(media).toHaveClass("self-center");
+  });
+
+  it("shows reset credits, remaining quota and host-computed cost history", async () => {
+    const { context } = contextWithSnapshot(
+      snapshotWithAccount({
+        accounts: [
+          {
+            error: null,
+            id: "acc-1",
+            label: "test@codex.dev",
+            planType: "plus",
+            status: "active",
+            usage: {
+              fetchedAt: Date.now(),
+              resetCreditsAvailable: 3,
+              session: { usedPercent: 38 },
+              status: "ok",
+              weekly: { usedPercent: 64 },
+            },
+          },
+        ],
+        costUsage: {
+          buckets: [
+            {
+              date: "2026-07-11",
+              estimatedCostMicrousd: 1_250_000,
+              pricingStatus: "complete",
+              tokens: {
+                cachedInputTokens: 10,
+                inputTokens: 80,
+                outputTokens: 20,
+                reasoningTokens: 0,
+                totalTokens: 100,
+              },
+            },
+          ],
+          coverage: { complete: true, from: "2026-06-11", to: "2026-07-11" },
+          observedAt: Date.now(),
+          summary: {
+            estimatedCostMicrousd: 1_250_000,
+            latestDayTokens: 100,
+            periodTokens: 100,
+            todayEstimatedCostMicrousd: 1_250_000,
+          },
+        },
+      })
+    );
+    const { container } = render(<AccountsSettingsPage context={context} />);
+
+    expect(await screen.findByText("PLUS · 3 resets")).toBeDefined();
+    expect(screen.getByText("62%")).toBeDefined();
+    expect(screen.getByText("36%")).toBeDefined();
+    expect(screen.getAllByText("$1.25")).toHaveLength(2);
+    expect(container.querySelectorAll(".pier-codex-cost-bars i")).toHaveLength(
+      31
+    );
+  });
+
+  it("renders a team account's single quota without an invented empty lane", async () => {
+    const { context } = contextWithSnapshot(
+      snapshotWithAccount({
+        accounts: [
+          {
+            error: null,
+            id: "acc-1",
+            label: "team@codex.dev",
+            planType: "team",
+            status: "active",
+            usage: {
+              fetchedAt: Date.now(),
+              resetCreditsAvailable: 0,
+              session: { usedPercent: 5, windowMinutes: 300 },
+              status: "ok",
+            },
+          },
+        ],
+      })
+    );
+    const { container } = render(<AccountsSettingsPage context={context} />);
+
+    expect(await screen.findByText("TEAM · 0 resets")).toBeDefined();
+    expect(screen.getByText("5-hour remaining")).toBeDefined();
+    expect(screen.getByText("95%")).toBeDefined();
+    expect(screen.queryByText("Weekly remaining")).toBeNull();
+    expect(screen.queryByText("No usage data")).toBeNull();
+    expect(
+      container.querySelector('.pier-codex-quota-grid[data-count="1"]')
+    ).not.toBeNull();
+  });
+
+  it("labels a normalized weekly-only account as weekly", async () => {
+    const { context } = contextWithSnapshot(
+      snapshotWithAccount({
+        accounts: [
+          {
+            error: null,
+            id: "acc-1",
+            label: "weekly@codex.dev",
+            planType: "team",
+            status: "active",
+            usage: {
+              fetchedAt: Date.now(),
+              status: "ok",
+              weekly: { usedPercent: 5, windowMinutes: 10_080 },
+            },
+          },
+        ],
+      })
+    );
+    render(<AccountsSettingsPage context={context} />);
+
+    expect(await screen.findByText("Weekly remaining")).toBeDefined();
+    expect(screen.queryByText("5-hour remaining")).toBeNull();
+    expect(screen.queryByText("No usage data")).toBeNull();
+  });
+
+  it("shows a per-account usage error instead of an empty quota", async () => {
+    const { context } = contextWithSnapshot(
+      snapshotWithAccount({
+        accounts: [
+          {
+            error: null,
+            id: "acc-1",
+            label: "failed@codex.dev",
+            planType: "plus",
+            status: "active",
+            usage: {
+              error: "refresh token expired",
+              fetchedAt: Date.now(),
+              status: "error",
+            },
+          },
+        ],
+      })
+    );
+    render(<AccountsSettingsPage context={context} />);
+
+    expect(await screen.findByText("Usage update failed")).toBeDefined();
+    expect(screen.queryByText("No usage data")).toBeNull();
   });
 
   it("renders dashed empty state when no managed accounts", async () => {
@@ -282,11 +445,13 @@ describe("AccountsSettingsPage", () => {
     render(<AccountsSettingsPage context={context} />);
 
     await screen.findByText("other@codex.dev");
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Refresh usage: other@codex.dev",
-      })
-    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Refresh usage: other@codex.dev",
+        })
+      );
+    });
 
     expect(invokeCalls).toContainEqual({
       method: "accounts.refreshUsage",
@@ -295,6 +460,43 @@ describe("AccountsSettingsPage", () => {
     expect(invokeCalls).not.toContainEqual({
       method: "accounts.select",
       payload: { accountId: "acc-2" },
+    });
+  });
+
+  it("shows a spinning refresh state and success notification", async () => {
+    const snapshot = snapshotWithAccount();
+    const { context } = contextWithSnapshot(snapshot);
+    let resolveRefresh: (() => void) | undefined;
+    const refreshPending = new Promise<void>((resolvePromise) => {
+      resolveRefresh = resolvePromise;
+    });
+    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
+      if (method === "accounts.snapshot") return snapshot as T;
+      if (method === "accounts.refreshUsage") await refreshPending;
+      return null as T;
+    };
+    render(<AccountsSettingsPage context={context} />);
+
+    const refreshButton = await screen.findByRole("button", {
+      name: "Refresh usage",
+    });
+    fireEvent.click(refreshButton);
+
+    await vi.waitFor(() => {
+      expect(refreshButton).toBeDisabled();
+      expect(refreshButton).toHaveAttribute("aria-busy", "true");
+      expect(refreshButton.querySelector("svg")).toHaveClass("animate-spin");
+    });
+
+    await act(async () => {
+      resolveRefresh?.();
+      await refreshPending;
+    });
+    await vi.waitFor(() => {
+      expect(refreshButton).not.toBeDisabled();
+      expect(context.notifications.success).toHaveBeenCalledWith(
+        "Usage refreshed"
+      );
     });
   });
 
@@ -350,9 +552,9 @@ describe("AccountsSettingsPage", () => {
     expect(
       container.querySelector('[data-risk="normal"] [data-slot="progress"]')
     ).toHaveAttribute("data-variant", "default");
-    expect(container.textContent).toContain("32%");
     expect(container.textContent).toContain("68%");
-    expect(container.textContent).not.toContain("remaining");
+    expect(container.textContent).toContain("32%");
+    expect(container.textContent).toContain("5-hour remaining");
   });
 
   it("uses semantic progress variants at warning and critical thresholds", async () => {
@@ -385,16 +587,16 @@ describe("AccountsSettingsPage", () => {
     ).toHaveAttribute("data-variant", "destructive");
     expect(
       screen.getByRole("progressbar", {
-        name: "Session: Used 75%, Warning",
+        name: "5-hour remaining 25%",
       })
     ).toBeDefined();
     expect(
       screen.getByRole("progressbar", {
-        name: "Weekly: Used 90%, Critical",
+        name: "Weekly remaining 10%",
       })
     ).toBeDefined();
-    expect(container.textContent).toContain("75% · Warning");
-    expect(container.textContent).toContain("90% · Critical");
+    expect(container.textContent).toContain("25%");
+    expect(container.textContent).toContain("10%");
   });
 
   it("renders one compact state for missing and failed usage", async () => {

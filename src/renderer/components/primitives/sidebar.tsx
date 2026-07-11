@@ -251,7 +251,7 @@ function SidebarTrigger({
       variant="ghost"
       {...props}
     >
-      <PanelLeftIcon />
+      <PanelLeftIcon data-icon="inline-start" />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   );

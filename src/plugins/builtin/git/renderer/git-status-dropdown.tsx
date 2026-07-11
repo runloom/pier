@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
@@ -96,20 +97,14 @@ const STATUS_LABELS: Record<
   },
 };
 
-const STATUS_BADGE_CLASSES: Record<GitStatusDropdownModel["variant"], string> =
-  {
-    active: "border-status-info-border bg-status-info-bg text-status-info-fg",
-    clean:
-      "border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg",
-    completed:
-      "border-status-done-border bg-status-done-bg text-status-done-fg",
-    dirty:
-      "border-status-warning-border bg-status-warning-bg text-status-warning-fg",
-    loading:
-      "border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg",
-    unavailable:
-      "border-status-danger-border bg-status-danger-bg text-status-danger-fg",
-  };
+const STATUS_BADGE_VARIANTS = {
+  active: "info",
+  clean: "neutral",
+  completed: "done",
+  dirty: "warning",
+  loading: "neutral",
+  unavailable: "danger",
+} as const satisfies Record<GitStatusDropdownModel["variant"], string>;
 
 const SUMMARY_TONE_CLASSES: Record<GitStatusDropdownSummaryTone, string> = {
   danger: "text-status-danger-fg",
@@ -174,12 +169,15 @@ function SummaryPart({
   const Icon = iconSpec?.Icon ?? null;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 tabular-nums ${SUMMARY_TONE_CLASSES[part.tone]}`}
+      className={cn(
+        "inline-flex items-center gap-0.5 tabular-nums",
+        SUMMARY_TONE_CLASSES[part.tone]
+      )}
     >
       {Icon && (
         <Icon
           aria-hidden="true"
-          className="h-3 w-3 shrink-0"
+          className="size-3 shrink-0"
           data-git-icon={iconSpec?.gitIcon}
           data-testid={`git-status-summary-icon-${part.icon}`}
         />
@@ -272,8 +270,8 @@ export function GitStatusDropdown({
               </span>
             </div>
             <Badge
-              className={`shrink-0 ${STATUS_BADGE_CLASSES[model.variant]}`}
-              variant="outline"
+              className="shrink-0"
+              variant={STATUS_BADGE_VARIANTS[model.variant]}
             >
               {pluginText(
                 pluginContext,

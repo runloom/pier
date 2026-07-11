@@ -1,3 +1,4 @@
+import { cn } from "@pier/ui/utils.ts";
 import type {
   TerminalFrame,
   TerminalWebOverlayRect,
@@ -198,7 +199,7 @@ function shortId(panelId: string): string {
 function LegendChip({ state }: { state: LayoutState }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-      <span className={`size-2 ${stateDotClass(state)}`} />
+      <span className={cn("size-2", stateDotClass(state))} />
       {state}
     </span>
   );
@@ -253,8 +254,8 @@ function AlignmentDots({
   const nativeClass = visibleSurface(surface) ? "bg-success" : "bg-destructive";
   return (
     <div className="flex items-center gap-1" title="DOM / native">
-      <span className={`h-1.5 w-5 ${domClass}`} />
-      <span className={`h-1.5 w-5 ${nativeClass}`} />
+      <span className={cn("h-1.5 w-5", domClass)} />
+      <span className={cn("h-1.5 w-5", nativeClass)} />
     </div>
   );
 }
@@ -301,7 +302,7 @@ function TerminalStateStrip({
               className="inline-flex h-6 min-w-0 items-center gap-1.5 border bg-muted px-2 text-xs"
               key={panel.panelId}
             >
-              <span className={`size-2 ${stateDotClass(state)}`} />
+              <span className={cn("size-2", stateDotClass(state))} />
               <span className="max-w-40 truncate">
                 {shortId(panel.panelId)}
               </span>
@@ -352,7 +353,10 @@ export function LayoutStateView({
               );
               return (
                 <div
-                  className={`absolute min-h-12 overflow-hidden border-2 ${stateClass(state)}`}
+                  className={cn(
+                    "absolute min-h-12 overflow-hidden border-2",
+                    stateClass(state)
+                  )}
                   key={panel.panelId}
                   style={boxStyle(panel.anchorFrame, bounds)}
                 >

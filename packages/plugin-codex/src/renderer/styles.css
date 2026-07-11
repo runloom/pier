@@ -1,105 +1,163 @@
-.pier-codex-account-table-shell {
-  container-type: inline-size;
-  overflow: hidden;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-}
-
-.pier-codex-account-table {
-  width: 100%;
-  table-layout: fixed;
-}
-
-.pier-codex-account-column {
-  width: 30%;
-}
-
-.pier-codex-plan-column {
-  width: 12%;
-}
-
-.pier-codex-usage-column {
-  width: auto;
-}
-
-.pier-codex-actions-column {
-  width: 7rem;
-}
-
-.pier-codex-account-table thead {
-  color: var(--muted-foreground);
-  background: var(--surface-canvas);
-}
-
-.pier-codex-account-table th {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-
-.pier-codex-account-row > td {
-  height: 5.5rem;
-}
-
-.pier-codex-account-row[data-current="true"] {
-  background: var(--interactive-hover);
-}
-
-.pier-codex-account-cell,
-.pier-codex-account-usage-cell {
-  min-width: 0;
-  white-space: normal;
-}
-
-.pier-codex-account-copy,
-.pier-codex-account-title {
-  min-width: 0;
-}
-
-.pier-codex-account-title {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  max-width: 100%;
-  font-weight: 500;
-}
-
-.pier-codex-account-title > span:first-child {
-  min-width: 0;
-}
-
-.pier-codex-account-usage {
+.pier-codex-settings {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 1rem;
+  width: min(100%, 62rem);
+  padding: 0 1rem 2rem;
+}
+
+.pier-codex-page-header {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.25rem;
+}
+
+.pier-codex-page-header h1 {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+}
+
+.pier-codex-quota-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.pier-codex-quota-grid[data-count="1"],
+.pier-codex-mini-quotas[data-count="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pier-codex-quota {
   min-width: 0;
-  container-type: inline-size;
 }
 
-.pier-codex-plan-cell {
-  text-align: center;
+.pier-codex-quota-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.625rem;
 }
 
-.pier-codex-account-updated {
+.pier-codex-quota-heading span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.pier-codex-quota-heading strong {
+  font-size: 1.0625rem;
+  font-weight: 670;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.pier-codex-quota-meta {
+  min-height: 1rem;
+  margin-top: 0.5rem;
   font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground);
   text-align: right;
 }
 
-.pier-codex-actions-head,
-.pier-codex-actions-cell {
-  text-align: right;
-  background: var(--surface-canvas);
-  border-left: 1px solid var(--surface-border);
+.pier-codex-quota-empty {
+  display: grid;
+  place-items: center;
+  min-height: 4.75rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
 }
 
-.pier-codex-account-actions {
-  display: flex;
+.pier-codex-updated-at {
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.pier-codex-cost-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.pier-codex-cost-metrics span {
+  display: block;
+  margin-bottom: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.pier-codex-cost-metrics strong {
+  display: block;
+  font-size: 1.0625rem;
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.pier-codex-cost-bars {
+  display: grid;
+  grid-template-columns: repeat(31, minmax(0.1875rem, 1fr));
   gap: 0.25rem;
+  align-items: end;
+  height: 3.75rem;
+  padding-top: 0.375rem;
+  margin-top: 0.875rem;
+}
+
+.pier-codex-cost-bars i {
+  display: block;
+  height: var(--pier-cost-height);
+  min-height: 0.1875rem;
+  background: var(--chart-2);
+  border-radius: 0.1875rem 0.1875rem 0.09375rem 0.09375rem;
+  opacity: 0.86;
+}
+
+.pier-codex-cost-bars i:last-child {
+  opacity: 1;
+}
+
+.pier-codex-cost-bars i.is-empty {
+  height: 0.1875rem;
+  background: var(--muted);
+  opacity: 0.55;
+}
+
+.pier-codex-account-row {
+  display: grid;
+  grid-template-columns: auto minmax(11rem, 1.1fr) minmax(17rem, 1.5fr) auto;
+  gap: 1.25rem;
   align-items: center;
-  justify-content: flex-end;
+}
+
+.pier-codex-mini-quotas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.pier-codex-mini-quota .pier-codex-quota-heading {
+  margin-bottom: 0.4375rem;
+}
+
+.pier-codex-mini-quota .pier-codex-quota-heading span,
+.pier-codex-mini-quota .pier-codex-quota-heading strong {
+  font-size: 0.625rem;
+}
+
+.pier-codex-mini-quota .pier-codex-quota-meta {
+  margin-top: 0.375rem;
+  font-size: 0.5625rem;
 }
 
 .pier-codex-usage-meter {
@@ -132,16 +190,29 @@
   white-space: nowrap;
 }
 
-@container (min-width: 28rem) {
-  .pier-codex-usage-meter {
+@media (max-width: 48rem) {
+  .pier-codex-cost-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.875rem;
+  }
+
+  .pier-codex-account-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .pier-codex-mini-quotas {
+    grid-row: 2;
+    grid-column: 1 / -1;
   }
 }
 
-@container (max-width: 40rem) {
-  .pier-codex-account-title {
-    flex-direction: column;
-    gap: 0.25rem;
-    align-items: flex-start;
+@media (max-width: 36rem) {
+  .pier-codex-quota-grid,
+  .pier-codex-mini-quotas {
+    grid-template-columns: 1fr;
+  }
+
+  .pier-codex-cost-bars {
+    gap: 0.125rem;
   }
 }

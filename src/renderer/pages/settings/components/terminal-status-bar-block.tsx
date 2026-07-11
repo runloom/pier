@@ -209,7 +209,7 @@ function StatusBarRowView({
         type="button"
         variant="ghost"
       >
-        <ArrowUp />
+        <ArrowUp data-icon="inline-start" />
       </Button>
       <Button
         aria-disabled={index === rows.length - 1}
@@ -225,7 +225,7 @@ function StatusBarRowView({
         type="button"
         variant="ghost"
       >
-        <ArrowDown />
+        <ArrowDown data-icon="inline-start" />
       </Button>
       <Button
         aria-label={
@@ -247,7 +247,7 @@ function StatusBarRowView({
         type="button"
         variant="ghost"
       >
-        <ArrowLeftRight />
+        <ArrowLeftRight data-icon="inline-start" />
       </Button>
       <Button
         aria-disabled={!row.hasOverride}
@@ -263,7 +263,7 @@ function StatusBarRowView({
         type="button"
         variant="ghost"
       >
-        <RotateCcw />
+        <RotateCcw data-icon="inline-start" />
       </Button>
     </div>
   );

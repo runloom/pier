@@ -52,7 +52,11 @@ function FilesProjectStatusItem({
       type="button"
       variant="outline"
     >
-      <Folder aria-hidden="true" className="size-3 shrink-0 opacity-70" />
+      <Folder
+        aria-hidden="true"
+        className="opacity-70"
+        data-icon="inline-start"
+      />
       <span className="min-w-0 truncate" dir="rtl">
         <span dir="ltr" style={{ unicodeBidi: "isolate" }}>
           {label}

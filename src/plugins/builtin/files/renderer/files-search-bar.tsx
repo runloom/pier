@@ -171,7 +171,7 @@ export function FilesSearchBar({
             type="button"
             variant="ghost"
           >
-            <ArrowUp />
+            <ArrowUp data-icon="inline-start" />
           </Button>
           <Button
             aria-label={labels.next}
@@ -182,7 +182,7 @@ export function FilesSearchBar({
             type="button"
             variant="ghost"
           >
-            <ArrowDown />
+            <ArrowDown data-icon="inline-start" />
           </Button>
           {onSubmit ? (
             <Button
@@ -194,7 +194,7 @@ export function FilesSearchBar({
               type="button"
               variant="ghost"
             >
-              <CornerDownLeft />
+              <CornerDownLeft data-icon="inline-start" />
             </Button>
           ) : null}
           <Button
@@ -205,7 +205,7 @@ export function FilesSearchBar({
             type="button"
             variant="ghost"
           >
-            <X />
+            <X data-icon="inline-start" />
           </Button>
         </div>
       </div>

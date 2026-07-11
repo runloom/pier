@@ -349,6 +349,7 @@ export function ManagedPluginsSection({
                     <RefreshCw
                       aria-hidden
                       className={cn(checkingUpdates && "animate-spin")}
+                      data-icon="inline-start"
                     />
                   </Button>
                 </TooltipTrigger>

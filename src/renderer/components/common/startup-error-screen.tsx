@@ -1,4 +1,13 @@
+import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@pier/ui/card.tsx";
+import { Spinner } from "@pier/ui/spinner.tsx";
 import i18next from "i18next";
 import { CircleAlert, RotateCcw } from "lucide-react";
 
@@ -32,10 +41,7 @@ export function StartupScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
       <div className="flex items-center gap-3 text-muted-foreground text-sm">
-        <span
-          aria-hidden
-          className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent"
-        />
+        <Spinner aria-hidden />
         <span>{isChinese ? "正在启动 Pier…" : "Starting Pier…"}</span>
       </div>
     </main>
@@ -91,34 +97,40 @@ export function StartupErrorScreen({
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
-      <section className="w-full max-w-xl rounded-xl border bg-card p-6 shadow-sm">
-        <div className="flex items-start gap-3">
-          <CircleAlert
-            aria-hidden
-            className="mt-0.5 size-5 shrink-0 text-destructive"
-          />
-          <div className="min-w-0 flex-1">
-            <h1 className="font-semibold text-base">{copy.title}</h1>
-            <p className="mt-2 text-muted-foreground text-sm leading-6">
-              {copy.description}
-            </p>
+      <Card className="w-full max-w-xl">
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <CircleAlert
+              aria-hidden
+              className="mt-0.5 size-5 shrink-0 text-destructive"
+            />
+            <div className="min-w-0 flex-1">
+              <CardTitle>
+                <h1>{copy.title}</h1>
+              </CardTitle>
+              <p className="mt-2 text-muted-foreground text-sm leading-6">
+                {copy.description}
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="mt-5 rounded-md border bg-muted/40 p-3">
-          <div className="mb-1 font-medium text-muted-foreground text-xs">
-            {copy.details}
-          </div>
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs">
-            {detail}
-          </pre>
-        </div>
-        <div className="mt-5 flex justify-end">
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertTitle>{copy.details}</AlertTitle>
+            <AlertDescription>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs">
+                {detail}
+              </pre>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+        <CardFooter className="justify-end">
           <Button onClick={onRetry} size="sm" type="button">
-            <RotateCcw aria-hidden className="size-4" />
+            <RotateCcw aria-hidden data-icon="inline-start" />
             {copy.retry}
           </Button>
-        </div>
-      </section>
+        </CardFooter>
+      </Card>
     </main>
   );
 }

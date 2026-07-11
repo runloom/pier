@@ -9,6 +9,7 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@pier/ui/alert-dialog.tsx";
+import { Field, FieldError, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import { LogOutIcon } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useState } from "react";
@@ -225,20 +226,25 @@ function PromptDialog({
             ) : null}
           </AlertDialogHeader>
           <div className="px-6 pt-2 pb-4">
-            <Input
-              autoFocus
-              onChange={(event) => {
-                setValue(event.target.value);
-                if (error) {
-                  setError(null);
-                }
-              }}
-              placeholder={dialog.placeholder}
-              value={value}
-            />
-            {error ? (
-              <p className="mt-2 text-destructive text-xs">{error}</p>
-            ) : null}
+            <Field data-invalid={Boolean(error)}>
+              <FieldLabel className="sr-only" htmlFor="app-dialog-prompt">
+                {dialog.title}
+              </FieldLabel>
+              <Input
+                aria-invalid={Boolean(error)}
+                autoFocus
+                id="app-dialog-prompt"
+                onChange={(event) => {
+                  setValue(event.target.value);
+                  if (error) {
+                    setError(null);
+                  }
+                }}
+                placeholder={dialog.placeholder}
+                value={value}
+              />
+              {error ? <FieldError>{error}</FieldError> : null}
+            </Field>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel

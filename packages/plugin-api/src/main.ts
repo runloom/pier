@@ -37,6 +37,72 @@ export interface MainPluginContext {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
   };
+  usageData: MainPluginUsageData;
+}
+
+export type UsageDataScope =
+  | { kind: "machine" }
+  | { key: string; kind: "account" };
+
+export interface UsageTokenObservation {
+  cachedInputTokens: number;
+  date: string;
+  inputTokens: number;
+  modelId: string | null;
+  outputTokens: number;
+  reasoningTokens?: number;
+  serviceTier?: string;
+  totalTokens?: number;
+}
+
+export interface UsageDataPublishInput {
+  coverage: {
+    complete: boolean;
+    from: string;
+    to: string;
+  };
+  observations: UsageTokenObservation[];
+  observedAt: number;
+  scope: UsageDataScope;
+  sourceId: string;
+}
+
+export interface UsageTokenTotals {
+  cachedInputTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+}
+
+export interface UsageDataDailyBucket {
+  date: string;
+  estimatedCostMicrousd: number | null;
+  pricingStatus: "complete" | "partial" | "unpriced";
+  tokens: UsageTokenTotals;
+}
+
+export interface UsageDataSnapshot {
+  buckets: UsageDataDailyBucket[];
+  coverage: UsageDataPublishInput["coverage"];
+  observedAt: number;
+  pluginId: string;
+  scope: UsageDataScope;
+  sourceId: string;
+  summary: {
+    estimatedCostMicrousd: number | null;
+    latestDayTokens: number;
+    periodTokens: number;
+    todayEstimatedCostMicrousd: number | null;
+  };
+}
+
+export interface MainPluginUsageData {
+  publish(input: UsageDataPublishInput): Promise<UsageDataSnapshot>;
+  read(
+    sourceId: string,
+    scope: UsageDataScope
+  ): Promise<UsageDataSnapshot | null>;
 }
 
 export interface MainPluginModule {

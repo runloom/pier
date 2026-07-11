@@ -51,6 +51,7 @@ import { createProcessEnvironmentService } from "../services/process-environment
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTaskService } from "../services/tasks/task-service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
+import { createUsageDataService } from "../services/usage-data/usage-data-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
@@ -216,6 +217,12 @@ function createPierAppCore(): PierAppCore {
   });
   const preferences = createPreferencesService({ eventBus });
   const secrets = createSecretsStore();
+  const usageData = createUsageDataService({
+    userDataDir: app.getPath("userData"),
+  });
+  const usageDataReady = requireAppCoreInitialization(usageData.init(), (err) =>
+    console.error("[usage-data] init failed:", err)
+  );
   const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
     broadcast: (payload) => {
       for (const win of windowManager.getAll()) {
@@ -260,6 +267,10 @@ function createPierAppCore(): PierAppCore {
           read: source.manifest.permissions.includes("secret:read"),
           write: source.manifest.permissions.includes("secret:write"),
         }),
+        usageData: usageData.createPluginFacade(
+          source.id,
+          source.manifest.permissions.includes("usage:publish")
+        ),
       }),
       recordActivationResult: (input) =>
         managedPlugins.recordActivationResult(input),
@@ -268,39 +279,40 @@ function createPierAppCore(): PierAppCore {
   externalMainRuntimeReconciler =
     createManagedPluginRuntimeReconciler(externalMainRuntime);
   pluginHostRef = pluginHost;
-  const managedPluginsReady = requireAppCoreInitialization(
-    managedPlugins.init(),
-    (err) => console.error("[managed-plugins] init failed:", err)
-  ).then(async () => {
-    // Kick off async official-index refresh — non-blocking. Cache hit
-    // becomes catalog immediately; network response updates on arrival.
-    httpIndex.refresh().catch((err: unknown) => {
-      console.error("[managed-plugins] official-index refresh failed:", err);
-    });
-    // Dev-only: if a bundled plugin is already installed at the same version,
-    // point runtime at the source package and watch built dist entries.
-    if (isDevRuntime() && codexSeedAvailable) {
-      const codexDevPackageDir = join(process.cwd(), "packages/plugin-codex");
-      const index = managedPlugins.getIndex();
-      const codex = index.plugins["pier.codex"];
-      if (
-        codex?.activeVersion === codexBundle?.version &&
-        !codex.uninstalledAt
-      ) {
-        await managedPlugins
-          .setDevOverride("pier.codex", codexDevPackageDir)
-          .then(() => managedPlugins.simulateRestartForTests())
-          .catch((err: unknown) => {
-            console.error("[managed-plugins] dev override sync failed:", err);
+  const managedPluginsReady = usageDataReady
+    .then(() =>
+      requireAppCoreInitialization(managedPlugins.init(), (err) =>
+        console.error("[managed-plugins] init failed:", err)
+      )
+    )
+    .then(async () => {
+      // Kick off async official-index refresh — non-blocking. Cache hit
+      // becomes catalog immediately; network response updates on arrival.
+      httpIndex.refresh().catch((err: unknown) => {
+        console.error("[managed-plugins] official-index refresh failed:", err);
+      });
+      // Dev-only: an installed bundled plugin always runs from the source package.
+      // The dev override owns its own manifest version, so a version bump must not
+      // strand the runtime on the previously installed immutable version.
+      if (isDevRuntime() && codexSeedAvailable) {
+        const codexDevPackageDir = join(process.cwd(), "packages/plugin-codex");
+        const index = managedPlugins.getIndex();
+        const codex = index.plugins["pier.codex"];
+        if (codex?.activeVersion && !codex.uninstalledAt) {
+          await managedPlugins
+            .setDevOverride("pier.codex", codexDevPackageDir)
+            .then(() => managedPlugins.simulateRestartForTests())
+            .catch((err: unknown) => {
+              console.error("[managed-plugins] dev override sync failed:", err);
+            });
+          managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
+            logger: createLogger("managed-plugins"),
+            packageDir: codexDevPackageDir,
+            refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
           });
-        managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
-          logger: createLogger("managed-plugins"),
-          packageDir: codexDevPackageDir,
-          refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
-        });
+        }
       }
-    }
-  });
+    });
   const processEnvironment = createProcessEnvironmentService();
   const fileDrafts = createFileDraftsService({
     userDataDir: app.getPath("userData"),
@@ -335,6 +347,7 @@ function createPierAppCore(): PierAppCore {
     fileWatch: createFileWatchService(),
     preferences,
     secrets,
+    usageData,
     processEnvironment,
     localEnvironments: createLocalEnvironmentService({ processEnvironment }),
     plugins: pluginHost.plugins,

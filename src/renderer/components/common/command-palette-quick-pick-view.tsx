@@ -56,7 +56,6 @@ function QuickPickDefaultRow({ item }: { item: QuickPickItem }): ReactNode {
           </span>
           {item.badges?.map((badge) => (
             <Badge
-              className="h-4 shrink-0 rounded-sm px-1.5 text-[10px]"
               key={`${item.id}:${badge.label}`}
               variant={badge.variant ?? "secondary"}
             >

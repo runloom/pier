@@ -49,9 +49,50 @@ function mapRpcWindow(
   return result;
 }
 
+type UsageWindow = NonNullable<AccountUsageResult["session"]>;
+
+function windowRole(window: UsageWindow): "session" | "unknown" | "weekly" {
+  if (window.windowMinutes === 300) return "session";
+  if (window.windowMinutes === 10_080) return "weekly";
+  return "unknown";
+}
+
+/**
+ * App Server 的 primary / secondary 是位置，不保证等同于会话 / 每周语义。
+ * 例如只有每周额度的账号会把 10080 分钟窗口放在 primary。这里在数据边界
+ * 按周期归一化，renderer 无需按套餐名称猜测额度类型。
+ */
+function normalizeRateLimitWindows(
+  primary: UsageWindow | undefined,
+  secondary: UsageWindow | undefined
+): Pick<AccountUsageResult, "session" | "weekly"> {
+  if (primary && secondary) {
+    const primaryRole = windowRole(primary);
+    const secondaryRole = windowRole(secondary);
+    if (
+      primaryRole === "weekly" &&
+      (secondaryRole === "session" || secondaryRole === "unknown")
+    ) {
+      return { session: secondary, weekly: primary };
+    }
+    return { session: primary, weekly: secondary };
+  }
+  if (primary) {
+    return windowRole(primary) === "weekly"
+      ? { weekly: primary }
+      : { session: primary };
+  }
+  if (secondary) {
+    return windowRole(secondary) === "weekly"
+      ? { weekly: secondary }
+      : { session: secondary };
+  }
+  return {};
+}
+
 /**
  * 解析 account/rateLimits/read 的 result 字段。纯函数，单测主体。
- * primary → session（5h 窗口），secondary → weekly（7d 窗口）。
+ * primary / secondary 先按窗口周期归一化，再映射为 session / weekly。
  */
 export function parseRateLimitsResult(result: unknown): AccountUsageResult {
   if (result === null || result === undefined || typeof result !== "object") {
@@ -64,14 +105,19 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
   }
   const rl = rateLimits as Record<string, unknown>;
   const out: AccountUsageResult = { status: "ok" };
-  const session = mapRpcWindow(rl.primary as RpcWindow | null | undefined);
-  if (session) {
-    out.session = session;
+  const resetCredits = rl.rateLimitResetCredits ?? obj.rateLimitResetCredits;
+  if (resetCredits && typeof resetCredits === "object") {
+    const available = (resetCredits as Record<string, unknown>).availableCount;
+    if (typeof available === "number" && Number.isFinite(available)) {
+      out.resetCreditsAvailable = available;
+    }
   }
-  const weekly = mapRpcWindow(rl.secondary as RpcWindow | null | undefined);
-  if (weekly) {
-    out.weekly = weekly;
-  }
+  const windows = normalizeRateLimitWindows(
+    mapRpcWindow(rl.primary as RpcWindow | null | undefined),
+    mapRpcWindow(rl.secondary as RpcWindow | null | undefined)
+  );
+  if (windows.session) out.session = windows.session;
+  if (windows.weekly) out.weekly = windows.weekly;
   return out;
 }
 

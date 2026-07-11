@@ -419,7 +419,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
             type="button"
             variant="secondary"
           >
-            <Plus />
+            <Plus data-icon="inline-start" />
           </Button>
         </PopoverTrigger>
         <PopoverContent

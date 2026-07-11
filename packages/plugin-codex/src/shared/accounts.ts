@@ -22,6 +22,7 @@ export interface CodexUsageSnapshot {
   error?: string;
   fetchedAt: number;
   raw?: unknown;
+  resetCreditsAvailable?: number;
   session?: CodexUsageWindow;
   status: "ok" | "error";
   weekly?: CodexUsageWindow;
@@ -45,9 +46,33 @@ export interface CodexAccountsSnapshot {
   accounts: CodexAccountSummary[];
   activeAccountId: string | null;
   activeUsage?: CodexUsageSnapshot | null;
+  costUsage?: CodexCostUsageSnapshot | null;
   login: CodexLoginState | null;
   revision: number;
   schemaVersion: number;
+}
+
+export interface CodexCostUsageSnapshot {
+  buckets: Array<{
+    date: string;
+    estimatedCostMicrousd: number | null;
+    pricingStatus: "complete" | "partial" | "unpriced";
+    tokens: {
+      cachedInputTokens: number;
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens: number;
+      totalTokens: number;
+    };
+  }>;
+  coverage: { complete: boolean; from: string; to: string };
+  observedAt: number;
+  summary: {
+    estimatedCostMicrousd: number | null;
+    latestDayTokens: number;
+    periodTokens: number;
+    todayEstimatedCostMicrousd: number | null;
+  };
 }
 
 export interface CodexAccountsState {

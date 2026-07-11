@@ -1,5 +1,6 @@
 import { type ChartConfig, ChartContainer } from "@pier/ui/chart.tsx";
 import { Progress } from "@pier/ui/progress.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import i18next from "i18next";
 import { Area, AreaChart } from "recharts";
 import { useT } from "@/i18n/use-t.ts";
@@ -27,7 +28,10 @@ function KpiBlockBody({
   const raw = value.kind === "instant" ? value.value : null;
   return (
     <p
-      className={`font-semibold text-2xl tabular-nums leading-tight ${raw === 0 || raw === null ? "text-muted-foreground" : "text-foreground"}`}
+      className={cn(
+        "font-semibold text-2xl tabular-nums leading-tight",
+        raw === 0 || raw === null ? "text-muted-foreground" : "text-foreground"
+      )}
     >
       {formatMetricNumber(format, raw, locale)}
     </p>

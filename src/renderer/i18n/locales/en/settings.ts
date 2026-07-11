@@ -34,6 +34,7 @@ export const settings = {
     copyPatterns: {
       addPattern: "Add pattern",
       hint: "Glob patterns matched against gitignored files in the main worktree — matches are copied into new worktrees on creation.",
+      patternLabel: "File pattern",
       placeholder: ".env*",
       remove: "Remove",
       title: "Copy on create",
@@ -53,8 +54,10 @@ export const settings = {
     emptyTitle: "No environment settings",
     envVars: {
       addVariable: "Add variable",
+      keyLabel: "Variable name",
       remove: "Remove",
       title: "Variables",
+      valueLabel: "Variable value",
     },
     save: "Save",
     setupCommand: "Setup command",
@@ -250,6 +253,13 @@ export const settings = {
     emptyTitle: "No plugins found",
     emptyDescription: "Built-in and local plugins will appear here.",
     diagnosticsTitle: "Plugin diagnostics",
+    diagnostics: {
+      invalidManifest: "Plugin manifest could not be read",
+      occurrences: "{{count}} reports",
+      runtime: "Plugin failed to load",
+      summary: "Plugin issues",
+      unsupported: "Plugin is not supported",
+    },
     errorTitle: "Unable to load plugins",
     openSettings: "Settings",
     openSettingsPlugin: "Open {{name}} settings",

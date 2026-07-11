@@ -171,7 +171,7 @@ export function usePluginOp(
 
 function Spinner({ pending }: { pending: boolean }): JSX.Element | null {
   return pending ? (
-    <Loader2 aria-hidden className="size-3.5 animate-spin" />
+    <Loader2 aria-hidden className="animate-spin" data-icon="inline-start" />
   ) : null;
 }
 

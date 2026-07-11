@@ -1,4 +1,5 @@
 import type { RendererPluginPanelRegistration as ExternalPluginPanelRegistration } from "@pier/plugin-api/renderer";
+import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import type { PluginPanelRegistration } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
@@ -124,23 +125,23 @@ function ExternalPluginPanelSlot({
   const unavailable = failure || !snapshot.hasRendererEntry;
   return (
     <div className="flex h-full items-center justify-center p-6 text-foreground">
-      <div className="max-w-md rounded-lg border bg-card p-5">
-        <h3 className="font-medium text-sm">
+      <Alert className="max-w-md">
+        <AlertTitle>
           {t(
             unavailable
               ? "workspace.pluginPanel.unavailableTitle"
               : "workspace.pluginPanel.loadingTitle"
           )}
-        </h3>
-        <p className="mt-2 text-muted-foreground text-sm leading-6">
+        </AlertTitle>
+        <AlertDescription>
           {failure?.message ??
             t(
               snapshot.hasRendererEntry
                 ? "workspace.pluginPanel.loadingDescription"
                 : "workspace.pluginPanel.missingRendererDescription"
             )}
-        </p>
-      </div>
+        </AlertDescription>
+      </Alert>
     </div>
   );
 }

@@ -1,10 +1,19 @@
 import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@pier/ui/card.tsx";
-import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
+import {
+  Field,
+  FieldLabel,
+  FieldSeparator,
+  FieldSet,
+} from "@pier/ui/field.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
+import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
 import { AGENT_CATALOG, getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import { applyPermissionMode } from "@shared/contracts/agent.ts";
+import {
+  type AgentKind,
+  applyPermissionMode,
+} from "@shared/contracts/agent.ts";
 import { RefreshCw } from "lucide-react";
 import { Fragment, useEffect } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
@@ -47,41 +56,48 @@ function DefaultAgentPicker() {
       (!detectedIds.includes(defaultAgentId) ||
         disabledAgentIds.includes(defaultAgentId)));
 
+  let selectedValue: AgentKind | "auto" | "blank" = "auto";
+  if (isBlank) {
+    selectedValue = "blank";
+  } else if (!autoIsActive && defaultAgentId) {
+    selectedValue = defaultAgentId;
+  }
+
   return (
-    <fieldset className="flex flex-wrap gap-2">
+    <fieldset>
       <legend className="sr-only">{t("settings.row.defaultAgent")}</legend>
-      <button
-        aria-pressed={autoIsActive}
-        className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
-        onClick={() => setDefaultAgentId(null).catch(() => undefined)}
-        type="button"
+      <ToggleGroup
+        className="flex-wrap"
+        onValueChange={(value) => {
+          if (!value) return;
+          let nextValue: AgentKind | "blank" | null = value as AgentKind;
+          if (value === "auto") {
+            nextValue = null;
+          } else if (value === "blank") {
+            nextValue = "blank";
+          }
+          setDefaultAgentId(nextValue).catch(() => undefined);
+        }}
+        type="single"
+        value={selectedValue ?? "auto"}
+        variant="outline"
       >
-        {t("settings.agents.defaultPick.auto")}
-      </button>
-      <button
-        aria-pressed={isBlank}
-        className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
-        onClick={() => setDefaultAgentId("blank").catch(() => undefined)}
-        type="button"
-      >
-        {t("settings.agents.defaultPick.blank")}
-      </button>
-      {activeDetectedIds.map((id) => {
-        const entry = getAgentCatalogEntry(id);
-        const isActive = defaultAgentId === id;
-        return (
-          <button
-            aria-pressed={isActive}
-            className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary"
-            key={id}
-            onClick={() => setDefaultAgentId(id).catch(() => undefined)}
-            type="button"
-          >
-            <AgentIcon agentId={id} size={14} />
-            {entry?.label ?? id}
-          </button>
-        );
-      })}
+        <ToggleGroupItem value="auto">
+          {t("settings.agents.defaultPick.auto")}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="blank">
+          {t("settings.agents.defaultPick.blank")}
+        </ToggleGroupItem>
+        {activeDetectedIds.map((id) => {
+          const entry = getAgentCatalogEntry(id);
+          return (
+            <ToggleGroupItem key={id} value={id}>
+              <AgentIcon agentId={id} />
+              {entry?.label ?? id}
+            </ToggleGroupItem>
+          );
+        })}
+      </ToggleGroup>
     </fieldset>
   );
 }
@@ -170,9 +186,9 @@ function AgentListCard() {
           variant="ghost"
         >
           {isRefreshing ? (
-            <Spinner className="size-3.5" />
+            <Spinner data-icon="inline-start" />
           ) : (
-            <RefreshCw className="size-3.5" />
+            <RefreshCw data-icon="inline-start" />
           )}
           {t("settings.agents.list.refresh")}
         </Button>
@@ -208,12 +224,10 @@ export function AgentsSection() {
         <Card>
           <CardContent>
             <FieldSet>
-              <div>
-                <div className="mb-2 font-medium text-sm">
-                  {t("settings.row.defaultAgent")}
-                </div>
+              <Field>
+                <FieldLabel>{t("settings.row.defaultAgent")}</FieldLabel>
                 <DefaultAgentPicker />
-              </div>
+              </Field>
               <FieldSeparator />
               <PermissionModeRow />
               <FieldSeparator />

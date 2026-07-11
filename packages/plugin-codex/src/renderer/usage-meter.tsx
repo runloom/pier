@@ -5,12 +5,12 @@ import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { JSX } from "react";
 import type { CodexUsageWindow } from "../shared/accounts.ts";
 import {
-  normalizedUsedPercent,
+  remainingPercent,
   type UsageRisk,
   usageRisk,
 } from "../shared/usage.ts";
 
-type Translate = (key: string, fallback: string) => string;
+export type Translate = (key: string, fallback: string) => string;
 
 export interface UsageProgressProps {
   label: string;
@@ -54,8 +54,8 @@ export function UsageProgress({
   t,
   window,
 }: UsageProgressProps): JSX.Element {
-  const used = normalizedUsedPercent(window.usedPercent);
-  const usedLabel = formatPercent(used / 100, language);
+  const remaining = remainingPercent(window.usedPercent);
+  const remainingLabel = formatPercent(remaining / 100, language);
   const risk = usageRisk(window.usedPercent);
   const reset = resetsLabel(window, Date.now(), language);
 
@@ -70,7 +70,7 @@ export function UsageProgress({
           <span className="font-medium text-xs">{label}</span>
         ) : null}
         <span className="text-xs tabular-nums">
-          {usedLabel}
+          {remainingLabel}
           {risk === "normal" ? null : (
             <span className="text-muted-foreground">
               {" "}
@@ -80,9 +80,9 @@ export function UsageProgress({
         </span>
       </div>
       <Progress
-        aria-label={`${label}: ${t("pier.codex.usage.used", "Used")} ${usedLabel}, ${riskLabel(risk, t)}`}
+        aria-label={`${label}: ${t("pier.codex.widget.remaining", "remaining")} ${remainingLabel}, ${riskLabel(risk, t)}`}
         className="h-1.5"
-        value={used}
+        value={remaining}
         variant={progressVariant(risk)}
       />
       {reset ? (

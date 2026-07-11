@@ -10,6 +10,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
@@ -207,45 +208,47 @@ export function MissionControlWidgetCard({
                   size="icon-xs"
                   variant="ghost"
                 >
-                  <EllipsisVertical className="size-3.5" />
+                  <EllipsisVertical data-icon="inline-start" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
-                {menu.canRefresh ? (
-                  <DropdownMenuItem onSelect={onRefresh}>
-                    <RefreshCw className="size-4" />
-                    {t("missionControl.widget.refresh")}
-                  </DropdownMenuItem>
-                ) : null}
-                {menu.canConfigure ? (
+                <DropdownMenuGroup>
+                  {menu.canRefresh ? (
+                    <DropdownMenuItem onSelect={onRefresh}>
+                      <RefreshCw />
+                      {t("missionControl.widget.refresh")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {menu.canConfigure ? (
+                    <DropdownMenuItem
+                      data-testid="mission-control-widget-menu-settings"
+                      onSelect={onOpenSettings}
+                    >
+                      <Settings2 />
+                      {t("missionControl.widget.settings")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {widget.multiInstance ? (
+                    <DropdownMenuItem
+                      data-testid="mission-control-widget-menu-duplicate"
+                      onSelect={onDuplicate}
+                    >
+                      <Copy />
+                      {t("missionControl.widget.duplicate")}
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem
-                    data-testid="mission-control-widget-menu-settings"
-                    onSelect={onOpenSettings}
+                    data-testid="mission-control-widget-menu-remove"
+                    onSelect={async (event) => {
+                      event.preventDefault();
+                      await confirmRemove();
+                    }}
+                    variant="destructive"
                   >
-                    <Settings2 className="size-4" />
-                    {t("missionControl.widget.settings")}
+                    <Trash2 />
+                    {t("missionControl.widget.remove")}
                   </DropdownMenuItem>
-                ) : null}
-                {widget.multiInstance ? (
-                  <DropdownMenuItem
-                    data-testid="mission-control-widget-menu-duplicate"
-                    onSelect={onDuplicate}
-                  >
-                    <Copy className="size-4" />
-                    {t("missionControl.widget.duplicate")}
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem
-                  data-testid="mission-control-widget-menu-remove"
-                  onSelect={async (event) => {
-                    event.preventDefault();
-                    await confirmRemove();
-                  }}
-                  variant="destructive"
-                >
-                  <Trash2 className="size-4" />
-                  {t("missionControl.widget.remove")}
-                </DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </CardAction>

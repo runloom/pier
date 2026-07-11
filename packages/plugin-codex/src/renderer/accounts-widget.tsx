@@ -2,6 +2,7 @@ import type {
   ExternalRendererPluginContext,
   MissionControlWidgetComponentProps,
 } from "@pier/plugin-api/renderer";
+import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
 import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   WidgetEmpty,
@@ -106,12 +107,11 @@ export function AccountsWidget({
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <Orbit
-              aria-hidden="true"
-              className="size-4 text-muted-foreground"
-            />
-          </span>
+          <Avatar>
+            <AvatarFallback>
+              <Orbit aria-hidden="true" />
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0">
             <p className="font-medium text-sm">Codex</p>
             <p className="@min-[340px]:hidden truncate text-[11px] text-muted-foreground">

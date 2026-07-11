@@ -1,3 +1,4 @@
+import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { useSyncExternalStore } from "react";
@@ -23,13 +24,16 @@ export function DocumentStatusDot({
   const { label, tone } = statusToneForDocument(document, protection, t);
   if (protection.status === "failed") {
     return (
-      <button
+      <Button
         aria-label={label}
-        className={cn("size-2 rounded-full", tone)}
         onClick={() => onProtectionError(protection.message)}
+        size="icon-xs"
         title={`${label}: ${protection.message}`}
         type="button"
-      />
+        variant="ghost"
+      >
+        <span aria-hidden className={cn("size-2 rounded-full", tone)} />
+      </Button>
     );
   }
   return (
@@ -51,13 +55,15 @@ export function LanguageBadge({
 }) {
   const label = LANGUAGE_LABELS[document.language] ?? LANGUAGE_LABELS.text;
   return (
-    <span
-      className="rounded-md border border-transparent px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground uppercase tracking-wide"
+    <Badge
+      className="font-mono uppercase tracking-wide"
       data-language={document.language}
+      size="xs"
+      variant="ghost"
     >
       {label}
       <StatusLabel document={document} hidden t={t} />
-    </span>
+    </Badge>
   );
 }
 
@@ -68,9 +74,9 @@ export function DocumentFormatBadge({ document }: { document: FilesDocument }) {
   const encoding = formatEncodingLabel(document.format);
   const eol = document.eol === "none" ? "—" : document.eol.toUpperCase();
   return (
-    <span className="rounded-md px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground tabular-nums">
+    <Badge className="font-mono tabular-nums" size="xs" variant="ghost">
       {encoding} · {eol}
-    </span>
+    </Badge>
   );
 }
 
@@ -94,10 +100,8 @@ export function StatusLabel({
 }) {
   const protection = useDraftProtection(document);
   const text = statusTextForDocument(document, protection, t);
-  const className = hidden
-    ? "sr-only"
-    : "ml-1 rounded-md border border-border bg-muted px-2 py-1 text-muted-foreground text-xs";
-  return <span className={className}>{text}</span>;
+  if (hidden) return <span className="sr-only">{text}</span>;
+  return <Badge variant="secondary">{text}</Badge>;
 }
 
 function statusTextForDocument(
@@ -223,27 +227,5 @@ function useDraftProtection(
     subscribeFilesDraftProtection,
     () => filesDraftProtectionForDocument(document),
     () => filesDraftProtectionForDocument(document)
-  );
-}
-
-export function ViewModeButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      aria-pressed={active}
-      onClick={onClick}
-      size="xs"
-      type="button"
-      variant={active ? "secondary" : "ghost"}
-    >
-      {children}
-    </Button>
   );
 }

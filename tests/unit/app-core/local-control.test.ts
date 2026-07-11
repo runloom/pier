@@ -118,6 +118,7 @@ function cliClientServices(): PierCoreServices {
       read: async () => ({ entries: [], version: 1 }),
       recordSuccessfulLaunch: async () => ({ entries: [], version: 1 }),
     },
+    usageData: {} as never,
     managedPlugins: {} as never,
     appUpdates: {
       check: async () => ({ currentVersion: "0.1.0", state: "disabled" }),

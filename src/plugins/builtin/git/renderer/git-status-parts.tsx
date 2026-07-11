@@ -1,3 +1,6 @@
+import { Badge } from "@pier/ui/badge.tsx";
+import { Separator } from "@pier/ui/separator.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type {
   GitBranchInfo,
@@ -25,7 +28,9 @@ function shortHead(head: string | undefined): string | undefined {
 }
 
 export function SdDivider(): React.ReactElement {
-  return <span aria-hidden="true" className="mx-1 h-3 w-px bg-border" />;
+  return (
+    <Separator aria-hidden="true" className="mx-1 h-3" orientation="vertical" />
+  );
 }
 
 /** 图标 + 数字。sr-only 尾逗号让 WorkingTreeCounts 里多个 IconNum 连读有停顿。 */
@@ -46,8 +51,10 @@ function IconNum({
     return null;
   }
   return (
-    <span className={`inline-flex items-center gap-0.5 tabular-nums ${color}`}>
-      <Icon aria-hidden="true" className="h-3 w-3" data-git-icon={iconId} />
+    <span
+      className={cn("inline-flex items-center gap-0.5 tabular-nums", color)}
+    >
+      <Icon aria-hidden="true" className="size-3" data-git-icon={iconId} />
       {n}
       <span className="sr-only"> {label},</span>
     </span>
@@ -58,16 +65,14 @@ function IconNum({
  * 状态级（detached）与操作级（进行中）用扁平化文字胶囊（仅 text 色无底色边框）。
  * 信息级 / 需注意级走内联图标，见 UpstreamPill。
  */
-const PILL_BASE =
-  "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0 text-[10px] leading-4";
 const PILL_VARIANT = {
-  progress: "text-status-info-fg",
-  danger: "text-status-danger-fg",
-  warning: "text-status-warning-fg",
-  neutral: "text-foreground",
-  muted: "text-muted-foreground",
-  success: "text-status-success-fg",
-  done: "text-status-done-fg",
+  danger: "danger",
+  done: "done",
+  muted: "ghost",
+  neutral: "outline",
+  progress: "info",
+  success: "success",
+  warning: "warning",
 } as const;
 
 function Pill({
@@ -84,22 +89,17 @@ function Pill({
   variant: keyof typeof PILL_VARIANT;
 }): React.ReactElement {
   return (
-    <span
-      className={`${PILL_BASE} ${PILL_VARIANT[variant]}`}
-      data-testid={testId}
-    >
-      {Icon && (
-        <Icon aria-hidden="true" className="h-3 w-3" data-git-icon={iconId} />
-      )}
+    <Badge data-testid={testId} size="xs" variant={PILL_VARIANT[variant]}>
+      {Icon && <Icon aria-hidden="true" data-git-icon={iconId} />}
       {children}
-    </span>
+    </Badge>
   );
 }
 
 export function WorktreeBadge({ name }: { name: string }): React.ReactElement {
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
-      <FolderGit2 aria-hidden="true" className="h-3 w-3 shrink-0" />
+      <FolderGit2 aria-hidden="true" className="size-3 shrink-0" />
       <span className="truncate">{name}</span>
     </span>
   );
@@ -123,7 +123,7 @@ export function BranchLabel({
   if (effectiveBranch) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1">
-        <GitBranch aria-hidden="true" className="h-3 w-3 shrink-0" />
+        <GitBranch aria-hidden="true" className="size-3 shrink-0" />
         <span className="truncate">{effectiveBranch}</span>
       </span>
     );

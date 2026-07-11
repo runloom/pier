@@ -1,4 +1,10 @@
-import { FieldSet } from "@pier/ui/field.tsx";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+} from "@pier/ui/field.tsx";
 import { Textarea } from "@pier/ui/textarea.tsx";
 import type { LocalEnvironmentProject } from "@shared/contracts/environment.ts";
 import {
@@ -85,11 +91,11 @@ export function EnvironmentEditor({
 
   return (
     <FieldSet>
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="font-medium text-sm" htmlFor={setupId}>
+      <FieldGroup className="gap-4">
+        <Field>
+          <FieldLabel htmlFor={setupId}>
             {t("settings.environment.setupCommand")}
-          </label>
+          </FieldLabel>
           <Textarea
             className="min-h-32 w-full font-mono"
             id={setupId}
@@ -99,12 +105,12 @@ export function EnvironmentEditor({
             placeholder={t("settings.environment.setupHint")}
             value={setupCommand}
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1">
-          <label className="font-medium text-sm" htmlFor={cleanupId}>
+        <Field>
+          <FieldLabel htmlFor={cleanupId}>
             {t("settings.environment.cleanupCommand")}
-          </label>
+          </FieldLabel>
           <Textarea
             className="min-h-32 w-full font-mono"
             id={cleanupId}
@@ -114,30 +120,26 @@ export function EnvironmentEditor({
             placeholder={t("settings.environment.cleanupHint")}
             value={cleanupCommand}
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-0.5">
-            <span className="font-medium text-sm">
-              {t("settings.environment.copyPatterns.title")}
-            </span>
-            <span className="text-muted-foreground text-xs">
-              {t("settings.environment.copyPatterns.hint")}
-            </span>
-          </div>
+        <Field>
+          <FieldLabel>
+            {t("settings.environment.copyPatterns.title")}
+          </FieldLabel>
+          <FieldDescription>
+            {t("settings.environment.copyPatterns.hint")}
+          </FieldDescription>
           <EnvironmentCopyPatternsTable
             onChange={setPatternRows}
             rows={patternRows}
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-2">
-          <span className="font-medium text-sm">
-            {t("settings.environment.envVars.title")}
-          </span>
+        <Field>
+          <FieldLabel>{t("settings.environment.envVars.title")}</FieldLabel>
           <EnvironmentVarsTable onChange={setEnvRows} rows={envRows} />
-        </div>
-      </div>
+        </Field>
+      </FieldGroup>
     </FieldSet>
   );
 }

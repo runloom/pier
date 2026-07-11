@@ -191,7 +191,7 @@ export function EnvironmentSection() {
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <FolderPlus />
+              <FolderPlus data-icon="inline-start" />
             </EmptyMedia>
             <EmptyTitle>{t("settings.environment.emptyTitle")}</EmptyTitle>
             <EmptyDescription>
@@ -208,7 +208,7 @@ export function EnvironmentSection() {
               size="sm"
               type="button"
             >
-              <FolderPlus />
+              <FolderPlus data-icon="inline-start" />
               {t("settings.environment.addEnvironment")}
             </Button>
           </EmptyContent>
@@ -233,7 +233,7 @@ export function EnvironmentSection() {
               type="button"
               variant="ghost"
             >
-              <ArrowLeft />
+              <ArrowLeft data-icon="inline-start" />
             </Button>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <h1 className="truncate text-xl">
@@ -248,7 +248,6 @@ export function EnvironmentSection() {
                 <TooltipTrigger asChild>
                   <Button
                     aria-label={t("settings.environment.deleteProject")}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => {
                       requestDelete().catch(() => {
                         // handled inside requestDelete
@@ -256,9 +255,9 @@ export function EnvironmentSection() {
                     }}
                     size="icon-lg"
                     type="button"
-                    variant="ghost"
+                    variant="destructive"
                   >
-                    <Trash2 />
+                    <Trash2 data-icon="inline-start" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -278,7 +277,7 @@ export function EnvironmentSection() {
                     size="icon-lg"
                     type="button"
                   >
-                    <Check />
+                    <Check data-icon="inline-start" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -310,7 +309,7 @@ export function EnvironmentSection() {
           }}
           type="button"
         >
-          <Plus />
+          <Plus data-icon="inline-start" />
           {t("settings.environment.addEnvironment")}
         </Button>
       </div>
@@ -318,7 +317,7 @@ export function EnvironmentSection() {
         {projects.map((p) => (
           <Item asChild key={p.projectRootPath} variant="outline">
             <button
-              className="cursor-pointer text-left hover:bg-muted"
+              className="text-left"
               onClick={() => {
                 openProject(p.projectRootPath);
               }}
@@ -332,7 +331,7 @@ export function EnvironmentSection() {
                 <ItemDescription>{p.projectRootPath}</ItemDescription>
               </ItemContent>
               <ItemActions>
-                <ChevronRight className="size-4 text-muted-foreground" />
+                <ChevronRight className="text-muted-foreground" />
               </ItemActions>
             </button>
           </Item>

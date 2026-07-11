@@ -228,6 +228,7 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
       appCore.flushExternalPluginsBeforeQuit(),
       appCore.services.secrets.flush(),
       appCore.services.agentUsage.flush(),
+      appCore.services.usageData.flush(),
     ]);
   });
   await localControlRegistration.close();

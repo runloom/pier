@@ -1,3 +1,5 @@
+import { cn } from "@pier/ui/utils.ts";
+
 interface TerminalSurfacePlaceholderProps {
   className: string;
 }
@@ -12,7 +14,10 @@ export function TerminalSurfacePlaceholder({
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none bg-[var(--terminal-background,var(--background))] ${className}`}
+      className={cn(
+        "pointer-events-none bg-[var(--terminal-background,var(--background))]",
+        className
+      )}
       data-testid="terminal-placeholder"
     />
   );

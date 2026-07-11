@@ -9,9 +9,34 @@ export interface UsageCacheEntry {
   error?: string;
   fetchedAt: number;
   raw?: unknown;
+  resetCreditsAvailable?: number;
   session?: AccountUsageResult["session"];
   status: "error" | "ok";
   weekly?: AccountUsageResult["weekly"];
+}
+
+export function createUsageCacheEntry(
+  result: AccountUsageResult,
+  cached: UsageCacheEntry | undefined,
+  fetchedAt: number
+): UsageCacheEntry {
+  const retained = result.status === "error" ? cached : undefined;
+  return {
+    fetchedAt,
+    raw: result,
+    status: result.status,
+    ...(retained?.session ? { session: retained.session } : {}),
+    ...(retained?.weekly ? { weekly: retained.weekly } : {}),
+    ...(retained?.resetCreditsAvailable === undefined
+      ? {}
+      : { resetCreditsAvailable: retained.resetCreditsAvailable }),
+    ...(result.error ? { error: result.error } : {}),
+    ...(result.resetCreditsAvailable === undefined
+      ? {}
+      : { resetCreditsAvailable: result.resetCreditsAvailable }),
+    ...(result.session ? { session: result.session } : {}),
+    ...(result.weekly ? { weekly: result.weekly } : {}),
+  };
 }
 
 export function toUsageSnapshot(entry: UsageCacheEntry): CodexUsageSnapshot {
@@ -20,6 +45,9 @@ export function toUsageSnapshot(entry: UsageCacheEntry): CodexUsageSnapshot {
     status: entry.status,
     ...(entry.error ? { error: entry.error } : {}),
     ...(entry.session ? { session: entry.session } : {}),
+    ...(entry.resetCreditsAvailable === undefined
+      ? {}
+      : { resetCreditsAvailable: entry.resetCreditsAvailable }),
     ...(entry.weekly ? { weekly: entry.weekly } : {}),
     ...(entry.raw === undefined ? {} : { raw: entry.raw }),
   };

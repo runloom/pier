@@ -1,0 +1,302 @@
+import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
+import { Badge } from "@pier/ui/badge.tsx";
+import { Button } from "@pier/ui/button.tsx";
+import { formatDurationShort, formatPercent } from "@pier/ui/format.tsx";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@pier/ui/item.tsx";
+import { Progress } from "@pier/ui/progress.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
+import { RefreshCw, Trash2 } from "lucide-react";
+import type { JSX } from "react";
+import type {
+  CodexAccountSummary,
+  CodexUsageWindow,
+} from "../shared/accounts.ts";
+import { remainingPercent, usageRisk } from "../shared/usage.ts";
+import type { Translate } from "./usage-meter.tsx";
+
+export function AccountAvatar({
+  label,
+  size = "default",
+}: {
+  label: string;
+  size?: "default" | "lg" | "sm";
+}): JSX.Element {
+  return (
+    <Avatar size={size}>
+      <AvatarFallback>
+        {label.trim().charAt(0).toUpperCase() || "C"}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+function Quota({
+  compact = false,
+  label,
+  language,
+  t,
+  window,
+}: {
+  compact?: boolean;
+  label: string;
+  language: string;
+  t: Translate;
+  window: CodexUsageWindow;
+}): JSX.Element {
+  const remaining = remainingPercent(window.usedPercent);
+  const reset =
+    window.resetsAt && window.resetsAt > Date.now()
+      ? formatDurationShort(window.resetsAt - Date.now(), language)
+      : null;
+  const risk = usageRisk(window.usedPercent);
+  let variant: "default" | "destructive" | "warning" = "default";
+  if (risk === "critical") variant = "destructive";
+  else if (risk === "warning") variant = "warning";
+  return (
+    <div
+      className={compact ? "pier-codex-mini-quota" : "pier-codex-quota"}
+      data-risk={risk}
+      data-slot="codex-usage-progress"
+    >
+      <div className="pier-codex-quota-heading">
+        <span>{label}</span>
+        <strong>{formatPercent(remaining / 100, language)}</strong>
+      </div>
+      <Progress
+        aria-label={`${label} ${formatPercent(remaining / 100, language)}`}
+        className={compact ? "h-1" : "h-1.5"}
+        value={remaining}
+        variant={variant}
+      />
+      <div className="pier-codex-quota-meta">
+        {reset
+          ? `${t("pier.codex.widget.resetsIn", "Resets in")} ${reset}`
+          : "—"}
+      </div>
+    </div>
+  );
+}
+
+export function QuotaGroup({
+  compact = false,
+  error,
+  language,
+  session,
+  t,
+  weekly,
+}: {
+  compact?: boolean;
+  error: string | undefined;
+  language: string;
+  session: CodexUsageWindow | undefined;
+  t: Translate;
+  weekly: CodexUsageWindow | undefined;
+}): JSX.Element {
+  const windows = [
+    session
+      ? {
+          id: "session",
+          label: t(
+            "pier.codex.accounts.settings.sessionRemaining",
+            "5-hour remaining"
+          ),
+          window: session,
+        }
+      : null,
+    weekly
+      ? {
+          id: "weekly",
+          label: t(
+            "pier.codex.accounts.settings.weeklyRemaining",
+            "Weekly remaining"
+          ),
+          window: weekly,
+        }
+      : null,
+  ].filter((entry) => entry !== null);
+
+  const errorState = error ? (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            className="col-span-full justify-self-start"
+            role="status"
+            tabIndex={0}
+            variant="danger"
+          >
+            {t(
+              "pier.codex.accounts.settings.usageFailed",
+              "Usage update failed"
+            )}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-80">{error}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : null;
+
+  if (windows.length === 0) {
+    return (
+      <div className="pier-codex-quota-empty">
+        {errorState ??
+          t("pier.codex.accounts.settings.noUsage", "No usage data")}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={compact ? "pier-codex-mini-quotas" : "pier-codex-quota-grid"}
+      data-count={windows.length}
+    >
+      {windows.map((entry) => (
+        <Quota
+          compact={compact}
+          key={entry.id}
+          label={entry.label}
+          language={language}
+          t={t}
+          window={entry.window}
+        />
+      ))}
+      {errorState}
+    </div>
+  );
+}
+
+export function resetCredits(
+  account: CodexAccountSummary,
+  t: Translate
+): string {
+  const value = account.usage?.resetCreditsAvailable;
+  return value === undefined
+    ? t(
+        "pier.codex.accounts.settings.resetCreditsUnknown",
+        "Resets unavailable"
+      )
+    : t("pier.codex.accounts.settings.resetCredits", "{count} resets").replace(
+        "{count}",
+        String(value)
+      );
+}
+
+function IconAction({
+  disabled = false,
+  icon: Icon,
+  label,
+  onClick,
+  spinning = false,
+}: {
+  disabled?: boolean;
+  icon: typeof RefreshCw;
+  label: string;
+  onClick: () => void;
+  spinning?: boolean;
+}): JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          aria-busy={spinning || undefined}
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <Icon
+            className={cn(
+              spinning && "animate-spin motion-reduce:animate-none"
+            )}
+            data-icon="inline-start"
+          />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function OtherAccount({
+  account,
+  language,
+  onRefresh,
+  onRemove,
+  onSelect,
+  refreshing,
+  t,
+}: {
+  account: CodexAccountSummary;
+  language: string;
+  onRefresh: () => void;
+  onRemove: () => void;
+  onSelect: () => void;
+  refreshing: boolean;
+  t: Translate;
+}): JSX.Element {
+  return (
+    <Item asChild className="pier-codex-account-row" size="sm">
+      <li data-testid="codex-account-usage-row">
+        <ItemMedia align="center">
+          <AccountAvatar label={account.label} />
+        </ItemMedia>
+        <ItemContent className="min-w-0">
+          <ItemTitle title={account.label}>{account.label}</ItemTitle>
+          <ItemDescription>
+            {[account.planType?.toUpperCase(), resetCredits(account, t)]
+              .filter(Boolean)
+              .join(" · ")}
+          </ItemDescription>
+        </ItemContent>
+        <QuotaGroup
+          compact
+          error={account.usage?.error}
+          language={language}
+          session={account.usage?.session}
+          t={t}
+          weekly={account.usage?.weekly}
+        />
+        <TooltipProvider delayDuration={200}>
+          <ItemActions>
+            <Button
+              aria-label={`${t("pier.codex.accounts.settings.switch", "Switch")}: ${account.label}`}
+              onClick={onSelect}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {t("pier.codex.accounts.settings.switch", "Switch")}
+            </Button>
+            <IconAction
+              disabled={refreshing}
+              icon={RefreshCw}
+              label={`${t("pier.codex.accounts.settings.refreshUsage", "Refresh usage")}: ${account.label}`}
+              onClick={onRefresh}
+              spinning={refreshing}
+            />
+            <IconAction
+              icon={Trash2}
+              label={`${t("pier.codex.accounts.settings.remove", "Remove")}: ${account.label}`}
+              onClick={onRemove}
+            />
+          </ItemActions>
+        </TooltipProvider>
+      </li>
+    </Item>
+  );
+}

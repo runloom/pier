@@ -102,6 +102,53 @@ describe("pier.codex credential lifecycle", () => {
     expect(existsSync(join(managedHome, "auth.json"))).toBe(false);
   });
 
+  it("writes refreshed scoped auth back to secure storage", async () => {
+    const values = new Map<string, string>();
+    const managedHome = join(dir, "runtime-homes", "codex", "account-a");
+    const initial = authJson();
+    const refreshed = JSON.stringify({
+      tokens: {
+        ...JSON.parse(initial).tokens,
+        access_token: "refreshed-access-token",
+      },
+    });
+    const observed: string[] = [];
+    await mkdir(managedHome, { recursive: true });
+    await writeFile(join(managedHome, "auth.json"), initial, { mode: 0o600 });
+    const provider = createCodexProvider({
+      credentials: {
+        delete: vi.fn(async (key: string) => {
+          values.delete(key);
+        }),
+        get: vi.fn(async (key: string) => values.get(key) ?? null),
+        set: vi.fn(async (key: string, value: string) => {
+          values.set(key, value);
+        }),
+      },
+      fetchUsageImpl: async (_signal, options) => {
+        const home = options?.accountHomeDir;
+        if (!home) throw new Error("managed CODEX_HOME missing");
+        const current = await readFile(join(home, "auth.json"), "utf8");
+        observed.push(current);
+        if (observed.length === 1) {
+          await writeFile(join(home, "auth.json"), refreshed, {
+            mode: 0o600,
+          });
+        }
+        return { status: "ok" };
+      },
+      realCodexHome: join(dir, "real-codex"),
+    });
+
+    await provider.readIdentity(managedHome);
+    await provider.fetchUsage(managedHome, new AbortController().signal);
+    await provider.fetchUsage(managedHome, new AbortController().signal);
+
+    expect(observed).toEqual([initial, refreshed]);
+    expect([...values.values()]).toEqual([refreshed]);
+    expect(existsSync(join(managedHome, "auth.json"))).toBe(false);
+  });
+
   it("fails closed when secure storage rejects a login credential", async () => {
     const managedBaseDir = join(dir, "runtime-homes");
     const provider = createCodexProvider({

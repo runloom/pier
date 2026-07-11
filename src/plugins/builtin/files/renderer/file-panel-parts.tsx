@@ -263,17 +263,17 @@ export function FilePanelBreadcrumb({
                   className="size-3 shrink-0 text-muted-foreground/60"
                 />
               ) : null}
-              <button
-                className={cn(
-                  "min-w-0 truncate rounded px-0.5 hover:bg-muted hover:text-foreground",
-                  isLast ? "text-foreground" : "text-muted-foreground"
-                )}
+              <Button
+                aria-current={isLast ? "page" : undefined}
+                className="min-w-0 truncate"
                 onClick={() => onSegmentClick(index)}
+                size="xs"
                 title={segment}
                 type="button"
+                variant="ghost"
               >
                 {segment}
-              </button>
+              </Button>
             </span>
           );
         }
@@ -330,9 +330,9 @@ export function SidebarToggleButton({
       variant="ghost"
     >
       {collapsed ? (
-        <PanelLeftOpen aria-hidden="true" />
+        <PanelLeftOpen aria-hidden="true" data-icon="inline-start" />
       ) : (
-        <PanelLeftClose aria-hidden="true" />
+        <PanelLeftClose aria-hidden="true" data-icon="inline-start" />
       )}
       <span className="sr-only">{label}</span>
     </Button>
@@ -366,7 +366,7 @@ export function FilePanelNavButtons({
         type="button"
         variant="ghost"
       >
-        <ArrowLeft aria-hidden="true" />
+        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
         <span className="sr-only">{backLabel}</span>
       </Button>
       <Button
@@ -377,7 +377,7 @@ export function FilePanelNavButtons({
         type="button"
         variant="ghost"
       >
-        <ArrowRight aria-hidden="true" />
+        <ArrowRight aria-hidden="true" data-icon="inline-start" />
         <span className="sr-only">{forwardLabel}</span>
       </Button>
     </>
@@ -406,7 +406,7 @@ export function FilePanelSearchButton({
       type="button"
       variant="ghost"
     >
-      <Search aria-hidden="true" />
+      <Search aria-hidden="true" data-icon="inline-start" />
       <span className="sr-only">{resolvedLabel}</span>
     </Button>
   );

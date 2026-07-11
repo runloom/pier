@@ -33,6 +33,21 @@ export function formatCount(value: number, locale: string): string {
   return safeNumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
 }
 
+/** 货币金额：$86.62 / US$86.62，按 locale 展示。 */
+export function formatCurrency(
+  value: number,
+  locale: string,
+  currency = "USD"
+): string {
+  if (!Number.isFinite(value)) return "—";
+  return safeNumberFormat(locale, {
+    currency,
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency",
+  }).format(value);
+}
+
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
 /** 字节数：38 GB / 812 MB（1024 进制，最多 1 位小数）。 */
