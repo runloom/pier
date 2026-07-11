@@ -2,8 +2,10 @@ name: Release Plugin
 
 on:
   push:
-    tags:
-      - 'plugin-*-v*.*.*'
+    branches:
+      - main
+    paths:
+      - 'packages/plugin-*/package.json'
   workflow_dispatch:
     inputs:
       plugin:
@@ -13,10 +15,11 @@ on:
         description: 'Version to release'
         required: true
 
-# `plugin-<tail>-v<version>` → build `packages/plugin-<tail>`, upload the tgz
-# as a GitHub Release asset, then re-generate `plugins/index.v1.json` and
-# commit it on `main`. The published tgz becomes fetchable at the
-# `RELEASE_BASE` URL used by `scripts/generate-plugin-index.mjs`.
+# A plugin package version change merged to `main` automatically builds
+# `packages/plugin-<tail>`, publishes the tgz under
+# `plugin-<tail>-v<version>`, then regenerates `plugins/index.v1.json`.
+# `workflow_dispatch` remains available for recovery. Each automatic run must
+# contain exactly one plugin package version change so releases stay atomic.
 
 permissions:
   contents: write
@@ -31,20 +34,32 @@ jobs:
           # We need write access to commit the regenerated index back to main.
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Parse tag
+      - name: Resolve plugin release
         id: parse
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAIL="${{ github.event.inputs.plugin }}"
             VERSION="${{ github.event.inputs.version }}"
-            TAG="plugin-${TAIL}-v${VERSION}"
           else
-            TAG="${GITHUB_REF_NAME}"
-            # plugin-<tail>-v<version>
-            REST="${TAG#plugin-}"
-            VERSION="${REST##*-v}"
-            TAIL="${REST%-v${VERSION}}"
+            CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'packages/plugin-*/package.json')
+            COUNT=$(printf '%s\n' "$CHANGED" | awk 'NF { count++ } END { print count + 0 }')
+            if [ "$COUNT" -ne 1 ]; then
+              echo "expected exactly one changed plugin package.json, found $COUNT" >&2
+              printf '%s\n' "$CHANGED" >&2
+              exit 1
+            fi
+            PACKAGE_JSON="$CHANGED"
+            REST="${PACKAGE_JSON#packages/plugin-}"
+            TAIL="${REST%/package.json}"
+            VERSION=$(node -p "require('./${PACKAGE_JSON}').version")
           fi
+          PACKAGE_JSON="packages/plugin-${TAIL}/package.json"
+          ACTUAL_VERSION=$(node -p "require('./${PACKAGE_JSON}').version")
+          if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
+            echo "requested ${TAIL}@${VERSION}, but ${PACKAGE_JSON} declares ${ACTUAL_VERSION}" >&2
+            exit 1
+          fi
+          TAG="plugin-${TAIL}-v${VERSION}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "tail=$TAIL" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -73,7 +88,39 @@ jobs:
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
           echo "size=$SIZE" >> "$GITHUB_OUTPUT"
 
+      - name: Check existing release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.parse.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify existing release asset is immutable
+        if: steps.existing.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.parse.outputs.tag }}
+          TGZ: ${{ steps.locate.outputs.tgz }}
+          SHA256: ${{ steps.locate.outputs.sha256 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/existing-plugin-release"
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$(basename "$TGZ")" \
+            --dir "$RUNNER_TEMP/existing-plugin-release"
+          EXISTING_SHA=$(shasum -a 256 "$RUNNER_TEMP/existing-plugin-release/$(basename "$TGZ")" | awk '{print $1}')
+          if [ "$EXISTING_SHA" != "$SHA256" ]; then
+            echo "same-version hash drift for $TAG: release=$EXISTING_SHA local=$SHA256" >&2
+            exit 1
+          fi
+
       - name: Publish GitHub Release
+        if: steps.existing.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.parse.outputs.tag }}

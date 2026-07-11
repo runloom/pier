@@ -1,15 +1,5 @@
 {
   "apiVersion": 1,
-  "configuration": {
-    "properties": {
-      "pier.codex.confirmSwitch": {
-        "default": true,
-        "description": "Show a confirmation dialog before switching the active Codex account.",
-        "order": 10,
-        "type": "boolean"
-      }
-    }
-  },
   "dataSchemas": {
     "codex.accounts": { "read": ">=1 <=1", "write": 1 }
   },
@@ -31,43 +21,35 @@
           "description": "View Codex usage and quickly switch accounts."
         }
       },
-      "settings": {
-        "pier.codex.confirmSwitch": {
-          "label": "Confirm before switching",
-          "description": "Show a confirmation dialog before switching to another Codex account."
-        }
-      },
       "messages": {
         "pier.codex.accounts.settings.title": "Codex Accounts",
-        "pier.codex.accounts.settings.description1": "Manage your Codex accounts. The active account is used for AI conversations.",
-        "pier.codex.accounts.settings.description2": "Your login stays on this device. Accounts are materialized from your local Codex installation.",
-        "pier.codex.accounts.settings.accounts": "Accounts",
+        "pier.codex.accounts.settings.account": "Account",
+        "pier.codex.accounts.settings.subscription": "Subscription",
+        "pier.codex.accounts.settings.usage": "Quota status",
+        "pier.codex.accounts.settings.actions": "Actions",
         "pier.codex.accounts.settings.addAccount": "Add account",
         "pier.codex.accounts.settings.loginPending": "Login in progress",
         "pier.codex.accounts.settings.loginPendingDesc": "Finish the Codex login flow in your browser or cancel it before adding another account.",
         "pier.codex.accounts.settings.cancelLogin": "Cancel login",
         "pier.codex.accounts.settings.systemDefault": "System default",
-        "pier.codex.accounts.settings.currentBadge": "Current",
-        "pier.codex.accounts.settings.systemDefaultDesc": "Uses your local Codex installation. No additional configuration needed.",
         "pier.codex.accounts.settings.switch": "Switch",
+        "pier.codex.accounts.settings.refreshUsage": "Refresh usage",
         "pier.codex.accounts.settings.actionFailed": "Account action failed",
-        "pier.codex.accounts.settings.confirmSwitchSystemDefaultTitle": "Switch to system default?",
-        "pier.codex.accounts.settings.confirmSwitchSystemDefaultBody": "This will switch to the system default Codex installation.",
-        "pier.codex.accounts.settings.confirmSwitchAccountTitle": "Switch account?",
         "pier.codex.accounts.settings.removeConfirmTitle": "Remove account?",
         "pier.codex.accounts.settings.removeConfirmBody": "This account will be removed from Pier. Your Codex login on this device is not affected.",
-        "pier.codex.accounts.settings.status.active": "Active",
-        "pier.codex.accounts.settings.status.available": "Available",
         "pier.codex.accounts.settings.status.login-pending": "Login pending",
         "pier.codex.accounts.settings.status.error": "Error",
         "pier.codex.accounts.settings.remove": "Remove",
         "pier.codex.accounts.settings.emptyTitle": "No managed accounts",
-        "pier.codex.accounts.settings.emptyDesc": "Add a Codex account or adopt the current login to get started.",
-        "pier.codex.accounts.settings.adoptCurrent": "Adopt current login",
-        "pier.codex.accounts.settings.confirmSwitchLabel": "Confirm before switching",
-        "pier.codex.accounts.settings.confirmSwitchDesc": "Show a confirmation dialog before switching to another account.",
+        "pier.codex.accounts.settings.emptyDesc": "Add a Codex account to get started.",
         "pier.codex.accounts.settings.loadFailed": "Could not load Codex accounts",
-        "pier.codex.accounts.settings.loading": "Loading...",
+        "pier.codex.accounts.settings.updated": "Updated",
+        "pier.codex.accounts.settings.noUsage": "No usage data",
+        "pier.codex.accounts.settings.usageFailed": "Usage update failed",
+        "pier.codex.usage.risk.normal": "Normal",
+        "pier.codex.usage.risk.warning": "Warning",
+        "pier.codex.usage.risk.critical": "Critical",
+        "pier.codex.usage.used": "Used",
         "pier.codex.widget.loadFailed": "Could not load Codex accounts",
         "pier.codex.widget.noUsageData": "No usage data",
         "pier.codex.widget.noUsageHint": "Usage will appear after the next refresh.",
@@ -76,10 +58,10 @@
         "pier.codex.widget.remaining": "remaining",
         "pier.codex.widget.resetsIn": "Resets in",
         "pier.codex.widget.weekly": "Weekly",
-        "pier.codex.widget.systemDefault": "System default",
-        "pier.codex.widget.current": "Current",
+        "pier.codex.widget.noActiveAccount": "No active account",
         "pier.codex.widget.manageAccounts": "Manage accounts...",
-        "pier.codex.widget.actionFailed": "Account action failed"
+        "pier.codex.widget.actionFailed": "Account action failed",
+        "pier.codex.widget.refreshFailed": "Could not refresh Codex usage"
       }
     },
     "zh-CN": {
@@ -96,42 +78,35 @@
           "description": "查看 Codex 用量和快速切换账号。"
         }
       },
-      "settings": {
-        "pier.codex.confirmSwitch": {
-          "label": "切换账号前弹窗确认",
-          "description": "切换到其他 Codex 账号前先弹一个确认对话框。"
-        }
-      },
       "messages": {
         "pier.codex.accounts.settings.title": "Codex 账号",
-        "pier.codex.accounts.settings.description1": "管理你的 Codex 账号，活跃账号将用于 AI 对话。",
-        "pier.codex.accounts.settings.description2": "登录信息仅保留在本设备。账号从本地 Codex 安装物化而来。",
-        "pier.codex.accounts.settings.accounts": "账号",
+        "pier.codex.accounts.settings.account": "账号",
+        "pier.codex.accounts.settings.subscription": "订阅",
+        "pier.codex.accounts.settings.usage": "配额状态",
+        "pier.codex.accounts.settings.actions": "操作",
         "pier.codex.accounts.settings.addAccount": "添加账号",
         "pier.codex.accounts.settings.loginPending": "登录进行中",
         "pier.codex.accounts.settings.loginPendingDesc": "请在浏览器中完成 Codex 登录流程，或取消后再添加其他账号。",
         "pier.codex.accounts.settings.cancelLogin": "取消登录",
         "pier.codex.accounts.settings.systemDefault": "系统默认",
-        "pier.codex.accounts.settings.currentBadge": "当前",
-        "pier.codex.accounts.settings.systemDefaultDesc": "使用本地 Codex 安装，无需额外配置。",
         "pier.codex.accounts.settings.switch": "切换",
+        "pier.codex.accounts.settings.refreshUsage": "刷新配额",
         "pier.codex.accounts.settings.actionFailed": "账号操作失败",
-        "pier.codex.accounts.settings.confirmSwitchSystemDefaultTitle": "切换到系统默认？",
-        "pier.codex.accounts.settings.confirmSwitchSystemDefaultBody": "将切换到系统默认的 Codex 安装。",
-        "pier.codex.accounts.settings.confirmSwitchAccountTitle": "切换账号？",
         "pier.codex.accounts.settings.removeConfirmBody": "该账号将从 Pier 中移除，不影响本设备上的 Codex 登录。",
-        "pier.codex.accounts.settings.status.active": "活跃",
-        "pier.codex.accounts.settings.status.available": "可用",
         "pier.codex.accounts.settings.status.login-pending": "登录中",
         "pier.codex.accounts.settings.status.error": "异常",
         "pier.codex.accounts.settings.remove": "移除",
         "pier.codex.accounts.settings.removeConfirmTitle": "移除账号？",
-        "pier.codex.accounts.settings.emptyDesc": "添加一个 Codex 账号，或采用当前登录以开始使用。",
-        "pier.codex.accounts.settings.adoptCurrent": "采用当前登录",
-        "pier.codex.accounts.settings.confirmSwitchLabel": "切换前确认",
-        "pier.codex.accounts.settings.confirmSwitchDesc": "切换到其他账号前弹出确认对话框。",
+        "pier.codex.accounts.settings.emptyTitle": "暂无受管账号",
+        "pier.codex.accounts.settings.emptyDesc": "添加一个 Codex 账号以开始使用。",
         "pier.codex.accounts.settings.loadFailed": "无法加载 Codex 账号",
-        "pier.codex.accounts.settings.loading": "加载中...",
+        "pier.codex.accounts.settings.updated": "更新于",
+        "pier.codex.accounts.settings.noUsage": "暂无用量",
+        "pier.codex.accounts.settings.usageFailed": "用量更新失败",
+        "pier.codex.usage.risk.normal": "正常",
+        "pier.codex.usage.risk.warning": "注意",
+        "pier.codex.usage.risk.critical": "紧张",
+        "pier.codex.usage.used": "已使用",
         "pier.codex.widget.loadFailed": "无法加载 Codex 账号",
         "pier.codex.widget.noUsageData": "暂无用量数据",
         "pier.codex.widget.noUsageHint": "用量数据将在下次刷新后显示。",
@@ -140,10 +115,10 @@
         "pier.codex.widget.remaining": "剩余",
         "pier.codex.widget.resetsIn": "重置于",
         "pier.codex.widget.weekly": "本周",
-        "pier.codex.widget.systemDefault": "系统默认",
-        "pier.codex.widget.current": "当前",
+        "pier.codex.widget.noActiveAccount": "暂无活跃账号",
         "pier.codex.widget.manageAccounts": "管理账号...",
-        "pier.codex.widget.actionFailed": "账号操作失败"
+        "pier.codex.widget.actionFailed": "账号操作失败",
+        "pier.codex.widget.refreshFailed": "无法刷新 Codex 用量"
       }
     }
   },
@@ -155,7 +130,7 @@
       "description": "Monitor Codex usage and switch accounts.",
       "id": "pier.codex.accounts",
       "maxSize": { "w": 8, "h": 10 },
-      "minSize": { "w": 3, "h": 3 },
+      "minSize": { "w": 2, "h": 3 },
       "refreshable": true,
       "searchTerms": ["codex", "usage", "用量"],
       "title": "Codex Usage"

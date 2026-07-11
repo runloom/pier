@@ -5,6 +5,7 @@ import type {
   MissionControlWidgetComponentProps,
 } from "../../../packages/plugin-api/src/renderer.ts";
 import { AccountsWidget } from "../../../packages/plugin-codex/src/renderer/accounts-widget.tsx";
+import { plugin } from "../../../packages/plugin-codex/src/renderer/index.tsx";
 import type { CodexAccountsSnapshot } from "../../../packages/plugin-codex/src/shared/accounts.ts";
 
 function baseProps(
@@ -42,7 +43,7 @@ function usageSnapshot(
   };
 }
 
-function systemDefaultSnapshot(): CodexAccountsSnapshot {
+function noActiveAccountSnapshot(): CodexAccountsSnapshot {
   return {
     accounts: [],
     activeAccountId: null,
@@ -113,7 +114,7 @@ describe("AccountsWidget (usage)", () => {
     cleanup();
   });
 
-  it("renders remaining percent for session and weekly usage", async () => {
+  it("renders used percent for session and weekly usage", async () => {
     const snap = usageSnapshot();
     const { context } = contextWithSnapshot(snap);
     const { container } = render(
@@ -121,8 +122,9 @@ describe("AccountsWidget (usage)", () => {
     );
 
     await screen.findByText("Session");
-    expect(container.textContent).toContain("68% remaining");
-    expect(container.textContent).toContain("32% remaining");
+    expect(container.textContent).toContain("32%");
+    expect(container.textContent).toContain("68%");
+    expect(container.textContent).not.toContain("remaining");
   });
 
   it("calls accounts.select when managed account is selected", async () => {
@@ -156,25 +158,6 @@ describe("AccountsWidget (usage)", () => {
       expect(invokeCalls).toContainEqual({
         method: "accounts.select",
         payload: { accountId: "acc-2" },
-      });
-    });
-  });
-
-  it("calls accounts.selectSystemDefault when system default is selected", async () => {
-    const snap = usageSnapshot();
-    const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsWidget context={context} {...baseProps()} />);
-
-    await screen.findByText("test@codex.dev");
-    openDropdown("test@codex.dev");
-
-    const sysOption = await screen.findByText("System default");
-    fireEvent.click(sysOption);
-
-    await vi.waitFor(() => {
-      expect(invokeCalls).toContainEqual({
-        method: "accounts.selectSystemDefault",
-        payload: null,
       });
     });
   });
@@ -216,11 +199,68 @@ describe("AccountsWidget (usage)", () => {
     });
   });
 
-  it("renders system default as current label when no active account", async () => {
-    const snap = systemDefaultSnapshot();
+  it("renders an explicit fallback when no account is active", async () => {
+    const snap = noActiveAccountSnapshot();
     const { context } = contextWithSnapshot(snap);
     render(<AccountsWidget context={context} {...baseProps()} />);
 
-    expect(await screen.findByText("System default")).toBeDefined();
+    expect(await screen.findByText("No active account")).toBeDefined();
+  });
+
+  it("uses container-query layouts for narrow and wider widget spaces", async () => {
+    const { context } = contextWithSnapshot(usageSnapshot());
+    const { container } = render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 2, h: 3 } })}
+      />
+    );
+
+    await screen.findByText("Session");
+    const meter = container.querySelector('[data-slot="codex-usage-meter"]');
+    const progressBars = container.querySelectorAll(
+      '[data-slot="codex-usage-progress"] [data-slot="progress"]'
+    );
+    expect(meter?.className).toContain("pier-codex-usage-meter");
+    expect(progressBars).toHaveLength(2);
+    expect(progressBars[0]?.className).toContain("h-1.5");
+  });
+
+  it("mounts and removes the plugin-owned responsive stylesheet", () => {
+    const { context } = contextWithSnapshot(usageSnapshot());
+    const dispose = plugin.activate(context);
+    const style = document.head.querySelector(
+      'style[data-plugin-id="pier.codex"]'
+    );
+
+    expect(style).not.toBeNull();
+
+    dispose();
+    expect(
+      document.head.querySelector('style[data-plugin-id="pier.codex"]')
+    ).toBeNull();
+  });
+
+  it("does not refresh while the widget is hidden", async () => {
+    const { context, invokeCalls } = contextWithSnapshot(usageSnapshot());
+    const { rerender } = render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ refreshToken: 0, visible: false })}
+      />
+    );
+
+    await screen.findByText("Session");
+    rerender(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ refreshToken: 1, visible: false })}
+      />
+    );
+
+    await Promise.resolve();
+    expect(
+      invokeCalls.some((call) => call.method === "accounts.refreshUsage")
+    ).toBe(false);
   });
 });

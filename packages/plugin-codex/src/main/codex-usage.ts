@@ -86,7 +86,7 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
  */
 export function fetchCodexUsage(
   signal: AbortSignal,
-  opts?: { spawnImpl?: SpawnFn }
+  opts?: { accountHomeDir?: string; spawnImpl?: SpawnFn }
 ): Promise<AccountUsageResult> {
   if (signal.aborted) {
     return Promise.resolve({ status: "error", error: "Aborted" });
@@ -104,7 +104,9 @@ export function fetchCodexUsage(
       {
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
-        env: process.env,
+        env: opts?.accountHomeDir
+          ? { ...process.env, CODEX_HOME: opts.accountHomeDir }
+          : process.env,
       }
     );
 

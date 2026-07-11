@@ -1,13 +1,30 @@
+import { cva, type VariantProps } from "class-variance-authority";
 import { Progress as ProgressPrimitive } from "radix-ui";
 import type * as React from "react";
 
 import { cn } from "./utils.ts";
 
+const progressIndicatorVariants = cva("size-full flex-1 transition-all", {
+  defaultVariants: {
+    variant: "default",
+  },
+  variants: {
+    variant: {
+      default: "bg-primary",
+      destructive: "bg-destructive",
+      success: "bg-success",
+      warning: "bg-warning",
+    },
+  },
+});
+
 function Progress({
   className,
   value,
+  variant = "default",
   ...props
-}: React.ComponentProps<typeof ProgressPrimitive.Root>) {
+}: React.ComponentProps<typeof ProgressPrimitive.Root> &
+  VariantProps<typeof progressIndicatorVariants>) {
   return (
     <ProgressPrimitive.Root
       className={cn(
@@ -15,10 +32,11 @@ function Progress({
         className
       )}
       data-slot="progress"
+      data-variant={variant}
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="size-full flex-1 bg-primary transition-all"
+        className={cn(progressIndicatorVariants({ variant }))}
         data-slot="progress-indicator"
         style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       />
@@ -26,4 +44,4 @@ function Progress({
   );
 }
 
-export { Progress };
+export { Progress, progressIndicatorVariants };

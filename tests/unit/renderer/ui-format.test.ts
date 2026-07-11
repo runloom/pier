@@ -54,6 +54,15 @@ describe("formatDurationShort", () => {
     expect(formatDurationShort(12 * 60_000 + 3000)).toBe("12m 3s");
     expect(formatDurationShort(45_000)).toBe("45s");
   });
+
+  it("中文使用自然时长单位", () => {
+    expect(formatDurationShort(159 * 3_600_000 + 18 * 60_000, "zh-CN")).toBe(
+      "6天 15小时"
+    );
+    expect(formatDurationShort(58 * 60_000 + 32_000, "zh-CN")).toBe(
+      "58分钟 32秒"
+    );
+  });
 });
 
 describe("formatRelativeTime", () => {

@@ -3,11 +3,12 @@ import { Button } from "@pier/ui/button.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Settings } from "lucide-react";
 import type { JSX } from "react";
 import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
 
@@ -22,28 +23,21 @@ export function AccountPicker({
   snapshot,
   t,
 }: AccountPickerProps): JSX.Element {
-  const isSystemDefault = snapshot.activeAccountId === null;
   const activeAccount = snapshot.accounts.find(
     (a) => a.id === snapshot.activeAccountId
   );
 
   const invoke = (method: string, payload: unknown = null): void => {
     context.rpc.invoke(method, payload).catch((err: unknown) => {
-      context.notifications.error(
-        `${t(
-          "pier.codex.widget.actionFailed",
-          "Account action failed"
-        )}: ${err instanceof Error ? err.message : String(err)}`
-      );
+      context.dialogs.alert({
+        title: t("pier.codex.widget.actionFailed", "Account action failed"),
+        body: err instanceof Error ? err.message : String(err),
+      });
     });
   };
 
   const handleSelect = (accountId: string): void => {
     invoke("accounts.select", { accountId });
-  };
-
-  const handleSelectSystemDefault = (): void => {
-    invoke("accounts.selectSystemDefault", null);
   };
 
   return (
@@ -55,69 +49,38 @@ export function AccountPicker({
           variant="outline"
         >
           <span className="truncate">
-            {isSystemDefault
-              ? t("pier.codex.widget.systemDefault", "System default")
-              : (activeAccount?.label ??
-                t("pier.codex.widget.systemDefault", "System default"))}
+            {activeAccount?.label ??
+              t("pier.codex.widget.noActiveAccount", "No active account")}
           </span>
-          <ChevronDown className="ml-1 size-3.5 shrink-0 opacity-50" />
+          <ChevronDown data-icon="inline-end" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[--trigger-width]">
-        {/* System default option */}
-        <DropdownMenuItem
-          className={isSystemDefault ? "font-medium" : ""}
-          onClick={handleSelectSystemDefault}
-        >
-          <div className="flex w-full items-center justify-between gap-2">
-            <span>
-              {t("pier.codex.widget.systemDefault", "System default")}
-            </span>
-            {isSystemDefault ? (
-              <span className="text-muted-foreground text-xs">
-                {t("pier.codex.widget.current", "Current")}
-              </span>
-            ) : null}
-          </div>
-        </DropdownMenuItem>
-
-        {snapshot.accounts.length > 0 ? <DropdownMenuSeparator /> : null}
-
-        {/* Managed accounts */}
-        {snapshot.accounts.map((account) => (
-          <DropdownMenuItem
-            className={
-              account.id === snapshot.activeAccountId ? "font-medium" : ""
-            }
-            key={account.id}
-            onClick={() => {
-              if (account.id !== snapshot.activeAccountId) {
-                handleSelect(account.id);
-              }
-            }}
-          >
-            <div className="flex w-full items-center justify-between gap-2">
+        <DropdownMenuGroup>
+          {snapshot.accounts.map((account) => (
+            <DropdownMenuItem
+              disabled={account.id === snapshot.activeAccountId}
+              key={account.id}
+              onClick={() => handleSelect(account.id)}
+            >
+              {account.id === snapshot.activeAccountId ? <Check /> : null}
               <span className="truncate">{account.label}</span>
-              {account.id === snapshot.activeAccountId ? (
-                <span className="text-muted-foreground text-xs">
-                  {t("pier.codex.widget.current", "Current")}
-                </span>
-              ) : null}
-            </div>
-          </DropdownMenuItem>
-        ))}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={() => {
-            context.app.openSettings({ section: "plugin:pier.codex" });
-          }}
-        >
-          <span className="text-muted-foreground">
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            onClick={() => {
+              context.app.openSettings({ section: "plugin:pier.codex" });
+            }}
+          >
+            <Settings />
             {t("pier.codex.widget.manageAccounts", "Manage accounts...")}
-          </span>
-        </DropdownMenuItem>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -4,7 +4,10 @@ export type AgentAccountProviderId = "codex";
 
 /** provider 内部接口. */
 export interface AgentAccountProvider {
-  fetchUsage(signal: AbortSignal): Promise<AccountUsageResult>;
+  fetchUsage(
+    accountHomeDir: string | undefined,
+    signal: AbortSignal
+  ): Promise<AccountUsageResult>;
   readonly id: AgentAccountProviderId;
   login(homeDir: string, signal: AbortSignal): Promise<void>;
   materialize(accountHomeDir: string): Promise<void>;

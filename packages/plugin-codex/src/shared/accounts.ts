@@ -29,6 +29,7 @@ export interface CodexAccountSummary {
   error?: string | null;
   id: string;
   label: string;
+  planType?: string;
   status: CodexAccountStatus;
   usage?: CodexUsageSnapshot | null;
 }
@@ -69,4 +70,8 @@ export interface SelectAccountPayload {
 
 export interface RemoveAccountPayload {
   accountId: string;
+}
+
+export interface RefreshUsagePayload {
+  accountId?: string;
 }

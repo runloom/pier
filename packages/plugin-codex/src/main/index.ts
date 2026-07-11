@@ -5,6 +5,7 @@ import type {
 } from "@pier/plugin-api/main";
 import type {
   AddAccountPayload,
+  RefreshUsagePayload,
   RemoveAccountPayload,
   SelectAccountPayload,
 } from "../shared/accounts.ts";
@@ -58,20 +59,16 @@ export const plugin: MainPluginModule = {
       await service.select(payload as SelectAccountPayload);
       return null;
     });
-    context.rpc.handle("accounts.selectSystemDefault", async () => {
-      await service.selectSystemDefault();
-      return null;
-    });
     context.rpc.handle("accounts.remove", async (payload) => {
       await service.remove(payload as RemoveAccountPayload);
       return null;
     });
-    context.rpc.handle("accounts.refreshUsage", async () => {
-      await service.refreshUsage(true);
-      return null;
-    });
-    context.rpc.handle("accounts.adoptCurrent", async () => {
-      await service.adoptCurrent();
+    context.rpc.handle("accounts.refreshUsage", async (payload) => {
+      const request = (payload ?? {}) as RefreshUsagePayload;
+      await service.refreshUsage({
+        ...(request.accountId ? { accountId: request.accountId } : {}),
+        force: true,
+      });
       return null;
     });
     context.lifecycle.onBeforeQuit(() => service.flush());

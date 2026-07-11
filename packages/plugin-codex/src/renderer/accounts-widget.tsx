@@ -8,6 +8,7 @@ import {
   WidgetError,
   WidgetSkeleton,
 } from "@pier/ui/widget-state.tsx";
+import { Orbit } from "lucide-react";
 import type { JSX } from "react";
 import { useEffect, useRef } from "react";
 import { AccountPicker } from "./account-picker.tsx";
@@ -28,7 +29,7 @@ export interface AccountsWidgetProps
 export function AccountsWidget({
   context,
   refreshToken,
-  visible: _visible,
+  visible,
 }: AccountsWidgetProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
   const prevRefresh = useRef(refreshToken);
@@ -37,13 +38,21 @@ export function AccountsWidget({
 
   // Refresh usage when refreshToken increments
   useEffect(() => {
-    if (refreshToken !== prevRefresh.current) {
+    if (visible && refreshToken !== prevRefresh.current) {
       prevRefresh.current = refreshToken;
-      context.rpc.invoke("accounts.refreshUsage", null).catch(() => {
-        // Silently ignore — the snapshot subscription will pick up changes
-      });
+      context.rpc
+        .invoke("accounts.refreshUsage", null)
+        .catch((err: unknown) => {
+          context.dialogs.alert({
+            title: context.i18n.t(
+              "pier.codex.widget.refreshFailed",
+              "Could not refresh Codex usage"
+            ),
+            body: err instanceof Error ? err.message : String(err),
+          });
+        });
     }
-  }, [refreshToken, context]);
+  }, [refreshToken, visible, context]);
 
   // Error state
   if (loadError) {
@@ -68,7 +77,8 @@ export function AccountsWidget({
     return (
       <div className="flex h-full min-h-0 flex-col gap-3 p-3 text-sm">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm">Codex</span>
+          <Orbit aria-hidden="true" className="size-4 text-muted-foreground" />
+          <span className="font-medium text-sm">Codex</span>
         </div>
         <WidgetEmpty
           hint={t(
@@ -89,15 +99,38 @@ export function AccountsWidget({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 p-3 text-sm">
+    <div
+      className="flex h-full min-h-0 flex-col gap-3 p-3 text-sm"
+      data-slot="codex-accounts-widget"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-sm">Codex</span>
-        <span className="text-muted-foreground text-xs">{fetchedLabel}</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <Orbit
+              aria-hidden="true"
+              className="size-4 text-muted-foreground"
+            />
+          </span>
+          <div className="min-w-0">
+            <p className="font-medium text-sm">Codex</p>
+            <p className="@min-[340px]:hidden truncate text-[11px] text-muted-foreground">
+              {fetchedLabel}
+            </p>
+          </div>
+        </div>
+        <span className="@min-[340px]:block hidden text-muted-foreground text-xs tabular-nums">
+          {fetchedLabel}
+        </span>
       </div>
 
       {/* Usage meters */}
-      <UsageMeter session={usage.session} t={t} weekly={usage.weekly} />
+      <UsageMeter
+        language={context.i18n.language()}
+        session={usage.session}
+        t={t}
+        weekly={usage.weekly}
+      />
 
       {/* Account picker */}
       <AccountPicker context={context} snapshot={snapshot} t={t} />

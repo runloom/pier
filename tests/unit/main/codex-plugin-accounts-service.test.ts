@@ -211,49 +211,6 @@ describe("pier.codex accounts service", () => {
     expect(readLegacyStateFile).not.toHaveBeenCalled();
   });
 
-  it("selectSystemDefault clears activeAccountId after syncBack", async () => {
-    const { provider, service } = await seedManagedActiveAccount(dir);
-    vi.mocked(provider.syncBack).mockClear();
-
-    await service.selectSystemDefault();
-
-    expect(service.snapshot().activeAccountId).toBeNull();
-    expect(provider.syncBack).toHaveBeenCalled();
-    service.dispose();
-  });
-
-  it("selectSystemDefault is a no-op when already on system default", async () => {
-    const stateFile = join(dir, "accounts.json");
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      stateFile,
-      JSON.stringify({
-        activeAccountId: null,
-        accounts: [],
-        revision: 1,
-        schemaVersion: 1,
-      }),
-      "utf8"
-    );
-    const provider = createProvider({
-      readIdentity: vi.fn(async () => null),
-    });
-    const service = createCodexAccountsService({
-      managedBaseDir: join(dir, "managed"),
-      onChanged: vi.fn(),
-      provider,
-      stateStore: createCodexAccountsStateStore(stateFile),
-    });
-    await service.init();
-    vi.mocked(provider.syncBack).mockClear();
-
-    await service.selectSystemDefault();
-
-    expect(service.snapshot().activeAccountId).toBeNull();
-    expect(provider.syncBack).not.toHaveBeenCalled();
-    service.dispose();
-  });
-
   it("refreshUsage fetches for system default into activeUsage", async () => {
     const stateFile = join(dir, "accounts.json");
     await mkdir(dir, { recursive: true });
@@ -287,7 +244,7 @@ describe("pier.codex accounts service", () => {
 
     expect(service.snapshot().activeAccountId).toBeNull();
 
-    await service.refreshUsage(true);
+    await service.refreshUsage({ force: true });
 
     const snap = service.snapshot();
     expect(snap.activeAccountId).toBeNull();
@@ -305,7 +262,7 @@ describe("pier.codex accounts service", () => {
       status: "ok",
     });
 
-    await service.refreshUsage(true);
+    await service.refreshUsage({ force: true });
 
     const snap = service.snapshot();
     const activeAccount = snap.accounts.find(
@@ -313,6 +270,70 @@ describe("pier.codex accounts service", () => {
     );
     expect(activeAccount?.usage?.session?.usedPercent).toBe(55);
     expect(snap.activeUsage?.session?.usedPercent).toBe(55);
+    service.dispose();
+  });
+
+  it("refreshes a non-active account through its managed CODEX_HOME", async () => {
+    const stateFile = join(dir, "accounts.json");
+    const managedBaseDir = join(dir, "managed");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        activeAccountId: "account-1",
+        accounts: [
+          {
+            createdAt: 1,
+            email: "active@example.com",
+            id: "account-1",
+            provider: "codex",
+            providerAccountId: "current-provider",
+            updatedAt: 1,
+          },
+          {
+            createdAt: 1,
+            email: "other@example.com",
+            id: "account-2",
+            planType: "pro",
+            provider: "codex",
+            providerAccountId: "other-provider",
+            updatedAt: 1,
+          },
+        ],
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const provider = createProvider({
+      fetchUsage: vi.fn(async () => ({
+        session: { usedPercent: 42 },
+        status: "ok" as const,
+      })),
+    });
+    const service = createCodexAccountsService({
+      managedBaseDir,
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+
+    await service.refreshUsage({ accountId: "account-2", force: true });
+
+    expect(provider.fetchUsage).toHaveBeenCalledWith(
+      join(managedBaseDir, "codex", "account-2"),
+      expect.any(AbortSignal)
+    );
+    const snapshot = service.snapshot();
+    expect(snapshot.activeAccountId).toBe("account-1");
+    expect(
+      snapshot.accounts.find((account) => account.id === "account-2")?.usage
+        ?.session?.usedPercent
+    ).toBe(42);
+    expect(
+      snapshot.accounts.find((account) => account.id === "account-2")?.planType
+    ).toBe("pro");
     service.dispose();
   });
 

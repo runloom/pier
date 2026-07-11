@@ -63,8 +63,8 @@ export function formatPercent(ratio: number, locale: string): string {
   }).format(ratio);
 }
 
-/** 时长（毫秒 → 94h 47m / 12m 3s / 45s）。 */
-export function formatDurationShort(ms: number): string {
+/** 时长（毫秒 → 94h 47m / 12m 3s / 45s；中文按天、小时、分钟、秒展示）。 */
+export function formatDurationShort(ms: number, locale = "en"): string {
   if (!Number.isFinite(ms) || ms < 0) {
     return "—";
   }
@@ -72,6 +72,19 @@ export function formatDurationShort(ms: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+  if (locale.toLowerCase().startsWith("zh")) {
+    const days = Math.floor(hours / 24);
+    if (days > 0) {
+      return `${days}天 ${hours % 24}小时`;
+    }
+    if (hours > 0) {
+      return `${hours}小时 ${minutes}分钟`;
+    }
+    if (minutes > 0) {
+      return `${minutes}分钟 ${seconds}秒`;
+    }
+    return `${seconds}秒`;
+  }
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   }

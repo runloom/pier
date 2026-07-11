@@ -48,15 +48,16 @@ export interface CodexAccountsServiceOpts {
 
 export interface CodexAccountsService {
   add(payload: AddAccountPayload): Promise<void>;
-  adoptCurrent(): Promise<void>;
   cancelLogin(): Promise<void>;
   dispose(): void;
   flush(): Promise<void>;
   init(): Promise<void>;
-  refreshUsage(force?: boolean): Promise<void>;
+  refreshUsage(options?: {
+    accountId?: string;
+    force?: boolean;
+  }): Promise<void>;
   remove(payload: RemoveAccountPayload): Promise<void>;
   select(payload: SelectAccountPayload): Promise<void>;
-  selectSystemDefault(): Promise<void>;
   snapshot(): CodexAccountsSnapshot;
 }
 
@@ -104,6 +105,7 @@ export function createCodexAccountsService(
     return {
       id: record.id,
       label: record.email ?? record.id,
+      ...(record.planType ? { planType: record.planType } : {}),
       status:
         record.id === stateStore.get().activeAccountId ? "active" : "available",
       usage: usage ? toUsageSnapshot(usage) : null,
@@ -312,7 +314,7 @@ export function createCodexAccountsService(
       revision: s.revision + 1,
     }));
     emitSnapshot();
-    doRefreshUsage(true).catch(() => {
+    doRefreshUsage({ accountId, force: true }).catch(() => {
       /* fire-and-forget */
     });
   }
@@ -336,49 +338,32 @@ export function createCodexAccountsService(
     emitSnapshot();
   }
 
-  async function doSelectSystemDefault(): Promise<void> {
+  async function doRefreshUsage(
+    options: { accountId?: string; force?: boolean } = {}
+  ): Promise<void> {
     const state = stateStore.get();
-    if (state.activeAccountId === null) {
-      return;
+    const targetId = options.accountId ?? state.activeAccountId;
+    if (
+      targetId &&
+      !state.accounts.some((account) => account.id === targetId)
+    ) {
+      throw new Error(`Account not found: ${targetId}`);
     }
-
-    const activeAccount = state.accounts.find(
-      (a) => a.id === state.activeAccountId
-    );
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-    const syncResult = await provider.syncBack(
-      accountHomeDir(state.activeAccountId),
-      activeAccount?.providerAccountId
-    );
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-    if (syncResult === "identity-mismatch") {
-      await handleDrift();
-    }
-
-    stateStore.mutate((s) => ({
-      ...s,
-      activeAccountId: null,
-      revision: s.revision + 1,
-    }));
-    emitSnapshot();
-    doRefreshUsage(true).catch(() => {
-      /* fire-and-forget */
-    });
-  }
-
-  async function doRefreshUsage(force = false): Promise<void> {
-    const capturedId = stateStore.get().activeAccountId;
-    const cacheKey = activeUsageCacheKey(capturedId);
+    const cacheKey = activeUsageCacheKey(targetId);
     const cached = usageCache[cacheKey];
-    if (!force && cached && now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS) {
+    if (
+      !options.force &&
+      cached &&
+      now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS
+    ) {
       return;
     }
     await ensureUsageEnv();
     const abort = new AbortController();
-    const result = await provider.fetchUsage(abort.signal);
-    if (stateStore.get().activeAccountId !== capturedId) {
-      return;
-    }
+    const result = await provider.fetchUsage(
+      targetId ? accountHomeDir(targetId) : undefined,
+      abort.signal
+    );
     usageCache[cacheKey] = {
       fetchedAt: now(),
       raw: result,
@@ -457,7 +442,7 @@ export function createCodexAccountsService(
           /* fire-and-forget */
         });
       }, USAGE_POLL_INTERVAL_MS);
-      doRefreshUsage(false).catch(() => {
+      doRefreshUsage().catch(() => {
         /* fire-and-forget */
       });
     },
@@ -470,7 +455,6 @@ export function createCodexAccountsService(
     },
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
-    adoptCurrent: () => enqueueMutation(doAdoptCurrent),
     add: (_payload) => enqueueMutation(doAdd),
     cancelLogin: () => {
       loginAbort?.abort();
@@ -482,8 +466,7 @@ export function createCodexAccountsService(
       });
     },
     select: (payload) => enqueueMutation(() => doSelect(payload.accountId)),
-    selectSystemDefault: () => enqueueMutation(doSelectSystemDefault),
     remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
-    refreshUsage: (force) => doRefreshUsage(force),
+    refreshUsage: (options) => doRefreshUsage(options),
   };
 }

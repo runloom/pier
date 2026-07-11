@@ -152,8 +152,13 @@ export function createCodexProvider(
       };
     },
 
-    fetchUsage(signal: AbortSignal): Promise<AccountUsageResult> {
-      return fetchCodexUsage(signal);
+    fetchUsage(
+      accountHomeDir: string | undefined,
+      signal: AbortSignal
+    ): Promise<AccountUsageResult> {
+      return fetchCodexUsage(signal, {
+        ...(accountHomeDir ? { accountHomeDir } : {}),
+      });
     },
   };
 }
