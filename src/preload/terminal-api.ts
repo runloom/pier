@@ -73,6 +73,8 @@ export const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:read-selection-text", panelId),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
+  rebindTaskOutput: (panelId, params) =>
+    ipcRenderer.invoke("pier:terminal:rebind-task-output", panelId, params),
   search: (panelId, query) =>
     ipcRenderer.invoke("pier:terminal:search", panelId, query),
   setAppShortcutKeys: (keys) =>

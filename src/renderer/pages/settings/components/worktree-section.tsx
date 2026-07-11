@@ -32,7 +32,6 @@ function WorktreeRootPathRow() {
         }
       }}
       onChange={setDraft}
-      onEscape={() => setDraft(persisted)}
       placeholder={t("settings.row.worktreeRootPathPlaceholder")}
       value={draft}
     />

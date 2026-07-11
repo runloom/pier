@@ -38,13 +38,14 @@
   --muted-foreground: oklch(0.65 0 0);
   --accent: oklch(0.25 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.72 0.18 70);
-  --warning-foreground: oklch(0.13 0 0);
-  --success: oklch(0.65 0.15 145);
-  --info: oklch(0.65 0.18 230);
-  --done: oklch(0.71 0.16 305); /* Primer done/merged 紫 (≈#a371f7) */
+  /* 稳定语义色板：不随编辑器 / 终端主题漂移。原始值只在本文件维护。 */
+  --destructive: #f87171;
+  --destructive-foreground: oklch(0.145 0 0);
+  --warning: #fbbf24;
+  --warning-foreground: oklch(0.145 0 0);
+  --success: #34d399;
+  --info: #60a5fa;
+  --done: #c084fc;
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -108,6 +109,8 @@
   --status-done-bg: color-mix(in oklab, var(--done) 14%, transparent);
   --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
+  --action-muted: var(--muted-foreground);
+  --debug-grid-line: color-mix(in oklab, var(--foreground) 6%, transparent);
   /* === Sidebar / titlebar chrome elevation 体系 ===
      - sidebar (外壳: titlebar / 侧栏 / workspace gutter) 用 --muted, 比内容卡略亮/略暗
      - 内容卡 bg-card = var(--background), 与 sidebar 形成视觉层次 (类似 VSCode)
@@ -186,13 +189,13 @@
   --muted-foreground: oklch(0.55 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.58 0.245 27.325);
+  --destructive: #dc2626;
   --destructive-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.65 0.18 70);
+  --warning: #b45309;
   --warning-foreground: oklch(0.985 0 0);
-  --success: oklch(0.55 0.15 145);
-  --info: oklch(0.55 0.2 230);
-  --done: oklch(0.53 0.2 300); /* Primer done/merged 紫 (≈#8250df) */
+  --success: #047857;
+  --info: #2563eb;
+  --done: #7e22ce;
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -268,6 +271,7 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
   --color-info: var(--info);
+  --color-done: var(--done);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -312,6 +316,7 @@
   --color-status-done-bg: var(--status-done-bg);
   --color-status-done-fg: var(--status-done-fg);
   --color-status-done-border: var(--status-done-border);
+  --color-action-muted: var(--action-muted);
 
   /* Pier 业务 token 按实际功能增量添加；不要继承 Bay 的看板/任务台账命名。 */
 
@@ -942,14 +947,14 @@ body {
  * Agent 状态 shimmer —— loomdesk/OMP classic 扫带的逐字符移植。
  * 组件（agent-shimmer-text.tsx）以 rAF 更新每字符 data-shimmer-tier，
  * CSS 只负责 tier → 颜色/字重映射。高档色来自内联 --pier-agent-status-color
- * （状态色变量, running 长跑时被覆盖为 amber/destructive）。
+ * （状态色变量, running 长跑时被覆盖为 warning/danger）。
  * Pier 默认 dark（:root），.light 切换——与 loomdesk 的 .dark 方向相反,
  * 故固定灰阶写在基础层, color-mix 写在 .light 覆盖层。
  */
 [data-agent-status-text][data-agent-status-kind="running"] {
   --shimmer-low: #5f6673;
   --shimmer-mid: #777d88;
-  --shimmer-high: var(--pier-agent-status-color, var(--primary));
+  --shimmer-high: var(--pier-agent-status-color, var(--status-info-fg));
 
   color: var(--shimmer-low);
 }

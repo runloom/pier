@@ -37,7 +37,7 @@ describe("Dialog initial focus", () => {
 
   it("registers the dialog overlay for terminal hit testing", () => {
     const dispose = vi.fn();
-    const registerElement = vi.fn(() => ({ dispose }));
+    const registerElement = vi.fn(() => ({ dispose, flush: vi.fn() }));
     const { unmount } = render(
       <TerminalOverlayContext.Provider value={{ registerElement }}>
         <Dialog open>

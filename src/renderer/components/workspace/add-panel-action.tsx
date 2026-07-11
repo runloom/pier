@@ -312,7 +312,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     props.activePanel?.api.setActive();
     const invocation = sourceActionInvocation();
     invocationRef.current = invocation;
-    if (action.enabled?.() === false) {
+    if (action.enabled?.(invocation) === false) {
       return;
     }
     setOpen(false);

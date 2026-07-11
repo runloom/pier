@@ -4,16 +4,19 @@ import type {
   TerminalAgentPanelMetadata,
   TerminalPanelSessionSnapshot,
 } from "@shared/contracts/terminal.ts";
+import type { MouseEventHandler } from "react";
 
 export function RestoredTaskResultView({
   className,
   fontFamily,
   fontSize,
+  onContextMenu,
   task,
 }: {
   className: string;
   fontFamily: string;
   fontSize: number;
+  onContextMenu?: MouseEventHandler<HTMLDivElement>;
   task: TaskPanelMetadata;
 }) {
   const rows = [
@@ -24,10 +27,12 @@ export function RestoredTaskResultView({
   ] as const;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: 恢复后的终端结果是原生右键菜单触发面，没有准确的交互 ARIA role
     <div
       className={`${className} overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]`}
       data-scrollbar="stable"
       data-testid="terminal-task-result"
+      onContextMenu={onContextMenu}
       style={{ fontFamily, fontSize }}
     >
       <p className="mb-1 text-muted-foreground">[pier] restored task</p>

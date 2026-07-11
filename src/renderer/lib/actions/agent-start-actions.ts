@@ -27,11 +27,12 @@ import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
+  type AnchoredTerminalTarget,
   captureAnchoredTerminalTarget,
   resolveAnchoredTerminalOptions,
 } from "@/stores/workspace-panel-helpers.ts";
 import { registerDynamicAction } from "./contribution-runtime.ts";
-import type { Action, ActionInvocation } from "./types.ts";
+import type { Action } from "./types.ts";
 
 function agentStartId(agentId: AgentKind): string {
   return `${AGENT_START_COMMAND_PREFIX}${agentId}`;
@@ -42,14 +43,10 @@ function startAgentSortOrder(agentId: AgentKind): number {
   return 10 + (order >= 0 ? order : 99);
 }
 
-async function handleStartAgent(
+export async function startAgentInAnchoredTerminal(
   agentId: AgentKind,
-  invocation?: ActionInvocation
+  target: AnchoredTerminalTarget
 ): Promise<void> {
-  const target = captureAnchoredTerminalTarget(
-    useWorkspaceStore.getState().api,
-    invocation
-  );
   try {
     const { launchId } = await window.pier.agents.prepareLaunch(agentId);
     if (!launchId) {
@@ -86,7 +83,14 @@ function createAgentStartAction(
   return {
     category: "run",
     enabled: () => visible && useWorkspaceStore.getState().api !== null,
-    handler: (invocation) => handleStartAgent(entry.id, invocation),
+    handler: (invocation) =>
+      startAgentInAnchoredTerminal(
+        entry.id,
+        captureAnchoredTerminalTarget(
+          useWorkspaceStore.getState().api,
+          invocation
+        )
+      ),
     id: agentStartId(entry.id),
     metadata: {
       aliases: () => getAgentCatalogAliases(entry),

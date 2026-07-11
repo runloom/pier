@@ -6,9 +6,10 @@
  * 安全: 任何 schema 不合法的 template 立即 reject, 不调 Menu.popup; role 仅允许
  * ALLOWED_ROLES 白名单, 防 renderer 注入 quit 等高权限操作.
  *
- * 时序: Menu.popup 是同步弹出 + 异步响应, 用 menu-will-close 事件标识菜单消失,
- * 通过 click 闭包捕获选中的 actionId. setImmediate resolve 让 close 后的 OS
- * 焦点回归先完成, 再 resolve renderer 端 Promise.
+ * 时序: MenuItem.click 记录选择，popup.callback 记录原生菜单已关闭；两者经幂等
+ * 完成器汇合。不能在 click 内立即完成 IPC：macOS 菜单此时仍处于 tracking loop，
+ * renderer 立即重入命令执行会出现点击成功但界面不更新。关闭但尚未观察到选择时
+ * 延后一轮 Node 事件循环结算取消，以兼容平台回调先后差异，不使用毫秒计时猜测。
  */
 import type {
   MenuPopupOptions,
@@ -22,6 +23,7 @@ import {
   Menu,
   type MenuItem,
   type MenuItemConstructorOptions,
+  type PopupOptions,
 } from "electron";
 import { MenuTemplateSchema } from "../menu/template-schema.ts";
 import { windowManager } from "../windows/window-manager.ts";
@@ -98,24 +100,37 @@ export function registerMenuIpc(ipcMain: IpcMain): void {
 
       return new Promise<MenuPopupResult>((resolve) => {
         let pickedId: string | null = null;
+        let closed = false;
+        let settled = false;
+        const settle = (actionId: string | null) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve({ actionId });
+        };
         const items = template.map((item) =>
           toMenuItem(item, (id) => {
             pickedId = id;
+            if (closed) {
+              settle(id);
+            }
           })
         );
         const menu = Menu.buildFromTemplate(items);
-        // menu-will-close 在用户选中 (click 已经 fire) 或关闭 (Esc / 外部点击) 后触发.
-        // setImmediate 让 click handler 先 run 完, pickedId 才反映真实选择.
-        // 用 once: single-fire 语义显式 — 即使某些 Electron 版本对嵌套 submenu 多 fire,
-        // resolve 也只发一次, 不留 setImmediate 余炮.
-        menu.once("menu-will-close", () => {
-          setImmediate(() => resolve({ actionId: pickedId }));
-        });
-        const popupOpts: { window: BaseWindow; x?: number; y?: number } = {
+        const popupOpts: PopupOptions & { window: BaseWindow } = {
+          callback: () => {
+            closed = true;
+            if (pickedId) {
+              settle(pickedId);
+              return;
+            }
+            setImmediate(() => settle(pickedId));
+          },
           window: win.host,
         };
         // 必须 isFinite 否则 NaN/Infinity 通过 typeof 守卫, Math.round(NaN)=NaN 传给
-        // Menu.popup 行为未定义 (部分平台让 popup 永不弹出, menu-will-close 不 fire,
+        // Menu.popup 行为未定义 (部分平台让 popup 永不弹出, popup.callback 不执行,
         // 这个 IPC promise 永久挂起).
         if (Number.isFinite(options.x) && Number.isFinite(options.y)) {
           popupOpts.x = Math.round(options.x as number);

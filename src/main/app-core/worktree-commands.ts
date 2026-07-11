@@ -7,7 +7,10 @@ import type {
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
-import type { WorktreeCreateResult } from "@shared/contracts/worktree.ts";
+import type {
+  WorktreeCreateProgress,
+  WorktreeCreateResult,
+} from "@shared/contracts/worktree.ts";
 import {
   isLocalEnvironmentScriptError,
   LocalEnvironmentScriptError,
@@ -194,8 +197,16 @@ async function executeWorktreeOpenTerminalCommand(
 async function executeWorktreeCreateCommand(
   requestId: string,
   command: Extract<PierCommand, { type: "worktree.create" }>,
-  services: PierCoreServices
+  services: PierCoreServices,
+  onProgress?: (progress: WorktreeCreateProgress) => void
 ): Promise<PierCommandResult> {
+  const reportProgress = (phase: WorktreeCreateProgress["phase"]): void => {
+    if (command.operationId) {
+      onProgress?.({ operationId: command.operationId, phase });
+    }
+  };
+
+  reportProgress("creating");
   const check = await services.worktrees.check({ path: command.path });
   if (check.status !== "supported") {
     // unsupported/unavailable — fall through to raw create for compat
@@ -213,6 +224,8 @@ async function executeWorktreeCreateCommand(
   let created: WorktreeCreateResult | null = null;
   try {
     created = await services.worktrees.create(command);
+
+    reportProgress("initializing");
 
     await services.localEnvironments.bindWorktree({
       projectRootPath: check.mainPath,
@@ -260,7 +273,8 @@ async function executeWorktreeCreateCommand(
 export async function executeWorktreeCommand(
   requestId: string,
   command: PierCommand,
-  services: PierCoreServices
+  services: PierCoreServices,
+  onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
     case "worktree.check":
@@ -268,7 +282,12 @@ export async function executeWorktreeCommand(
     case "worktree.list":
       return success(requestId, await services.worktrees.list(command));
     case "worktree.create":
-      return await executeWorktreeCreateCommand(requestId, command, services);
+      return await executeWorktreeCreateCommand(
+        requestId,
+        command,
+        services,
+        onWorktreeCreateProgress
+      );
     case "worktree.creationDefaults": {
       const [project, rootPath] = await Promise.all([
         services.localEnvironments.resolveProject(command.path),

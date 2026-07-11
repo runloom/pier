@@ -23,6 +23,7 @@ vi.mock("@main/ipc/terminal-task-lifecycle.ts", () => ({
   createTerminalTaskLifecycle: () => ({
     completeFromExitCodeHint: completeFromExitCodeHintMock,
     completeFromNativeProcessClose: completeFromNativeProcessCloseMock,
+    isCurrentLifecycle: () => true,
     recordExitCodeHint: recordExitCodeHintMock,
     resetPanel: resetPanelMock,
   }),
@@ -46,9 +47,24 @@ vi.mock("@main/windows/window-identity.ts", () => ({
 }));
 
 interface NativeAddonCallbackHarness {
-  commandFinished?: (id: number, panelId: string, exitCode: number) => void;
-  processClosed?: (id: number, panelId: string, processAlive: boolean) => void;
-  title?: (id: number, panelId: string, title: string) => void;
+  commandFinished?: (
+    id: number,
+    panelId: string,
+    lifecycleId: string,
+    exitCode: number
+  ) => void;
+  processClosed?: (
+    id: number,
+    panelId: string,
+    lifecycleId: string,
+    processAlive: boolean
+  ) => void;
+  title?: (
+    id: number,
+    panelId: string,
+    lifecycleId: string,
+    title: string
+  ) => void;
 }
 
 function addonHarness(callbacks: NativeAddonCallbackHarness) {
@@ -83,10 +99,11 @@ describe("terminal task lifecycle wiring", () => {
     completeFromNativeProcessCloseMock.mockResolvedValue(true);
     registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
 
-    callbacks.processClosed?.(42, "native::terminal-1", false);
+    callbacks.processClosed?.(42, "native::terminal-1", "", false);
 
     expect(completeFromNativeProcessCloseMock).toHaveBeenCalledWith({
       browserWindowId: 42,
+      lifecycleId: "",
       panelId: "terminal-1",
       processAlive: false,
       windowId: "window-main",
@@ -102,11 +119,12 @@ describe("terminal task lifecycle wiring", () => {
     const callbacks: NativeAddonCallbackHarness = {};
     registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
 
-    callbacks.commandFinished?.(42, "native::terminal-1", -9);
+    callbacks.commandFinished?.(42, "native::terminal-1", "", -9);
 
     expect(recordExitCodeHintMock).toHaveBeenCalledWith({
       browserWindowId: 42,
       code: 1,
+      lifecycleId: "",
       panelId: "terminal-1",
       source: "shell-command-finished",
       windowId: "window-main",
@@ -118,11 +136,12 @@ describe("terminal task lifecycle wiring", () => {
     completeFromExitCodeHintMock.mockResolvedValue(true);
     registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
 
-    callbacks.commandFinished?.(42, "native::terminal-1", 0);
+    callbacks.commandFinished?.(42, "native::terminal-1", "", 0);
 
     expect(completeFromExitCodeHintMock).toHaveBeenCalledWith({
       browserWindowId: 42,
       code: 0,
+      lifecycleId: "",
       panelId: "terminal-1",
       source: "shell-command-finished",
       windowId: "window-main",
@@ -140,11 +159,17 @@ describe("terminal task lifecycle wiring", () => {
     completeFromExitCodeHintMock.mockResolvedValue(true);
     registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
 
-    callbacks.title?.(42, "native::terminal-1", `${TASK_EXIT_TITLE_PREFIX}-99`);
+    callbacks.title?.(
+      42,
+      "native::terminal-1",
+      "run-1",
+      `${TASK_EXIT_TITLE_PREFIX}-99`
+    );
 
     expect(completeFromExitCodeHintMock).toHaveBeenCalledWith({
       browserWindowId: 42,
       code: 1,
+      lifecycleId: "run-1",
       panelId: "terminal-1",
       source: "task-exit-marker",
       windowId: "window-main",

@@ -111,6 +111,12 @@ function emptyEnvironmentState() {
 
 function cliClientServices(): PierCoreServices {
   return {
+    agentDetection: {} as never,
+    agentUsage: {
+      flush: async () => undefined,
+      read: async () => ({ entries: [], version: 1 }),
+      recordSuccessfulLaunch: async () => ({ entries: [], version: 1 }),
+    },
     managedPlugins: {} as never,
     appUpdates: {
       check: async () => ({ currentVersion: "0.1.0", state: "disabled" }),

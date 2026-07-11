@@ -58,8 +58,8 @@ export const PIER_BROADCAST = {
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
   // 终端状态栏用户覆盖变更后广播完整快照 (main → renderer, payload TerminalStatusBarPrefs).
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
-  // 后台任务状态变更广播 (main → renderer, payload TaskBackgroundSnapshot).
-  TASKS_BACKGROUND_CHANGED: "pier://tasks:background-changed",
+  // 全部 task run 的窗口级控制快照（运行控制浮层唯一数据源）。
+  TASKS_RUNS_CHANGED: "pier://tasks:runs-changed",
   // 插件设置变更广播 (main → renderer, payload PluginSettingsChangedPayload).
   PLUGIN_SETTINGS_CHANGED: "pier://plugin-settings:changed",
   // 应用退出确认请求 (main → renderer, payload AppQuitConfirmationRequest).
@@ -75,6 +75,9 @@ export const PIER_BROADCAST = {
   PLUGIN_RPC_EVENT: "pier://plugin-rpc:event",
   // local environment 域变更广播 (main → 所有 renderer, payload LocalEnvironmentState).
   ENVIRONMENTS_CHANGED: "pier://environments:changed",
+  // 工作树创建的真实后台阶段。payload 只含随机操作标识与阶段，
+  // 不广播项目路径、分支名或脚本输出。
+  WORKTREE_CREATE_PROGRESS: "pier://worktree-create:progress",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

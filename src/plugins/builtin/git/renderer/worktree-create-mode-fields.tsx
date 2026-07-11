@@ -30,7 +30,6 @@ function worktreeChildPath(rootPath: string, name: string): string {
 export function AiModeFields({
   agentSelection,
   agentSelectionLoaded,
-  busy,
   form,
   onSubmit,
   rootPath,
@@ -38,13 +37,12 @@ export function AiModeFields({
 }: {
   agentSelection: RendererPluginAgentSelection | null;
   agentSelectionLoaded: boolean;
-  busy: boolean;
   form: UseFormReturn<FormValues>;
   onSubmit: (values: FormValues) => Promise<void>;
   rootPath: string;
   text: TextFn;
 }) {
-  const enabledAgentIds = agentSelection?.enabledIds ?? [];
+  const enabledAgentIds = agentSelection?.rankedIds ?? [];
   const canStartAgentTask = enabledAgentIds.length > 0;
   const defaultAgentId = agentSelection?.selectedId ?? null;
   const agentId = useWatch({ control: form.control, name: "agentId" });
@@ -57,7 +55,6 @@ export function AiModeFields({
           {text("taskLabel", undefined, "Task")}
         </FieldLabel>
         <Textarea
-          disabled={busy}
           id="worktree-create-task"
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -82,7 +79,7 @@ export function AiModeFields({
       </Field>
       <Field
         className="!items-center"
-        data-disabled={busy || !canStartAgentTask || undefined}
+        data-disabled={!canStartAgentTask || undefined}
         orientation="horizontal"
       >
         <FieldContent>
@@ -109,7 +106,7 @@ export function AiModeFields({
           render={({ field }) => (
             <Switch
               checked={field.value}
-              disabled={busy || !agentSelectionLoaded || !canStartAgentTask}
+              disabled={!(agentSelectionLoaded && canStartAgentTask)}
               id="worktree-create-start-task"
               onCheckedChange={(checked) => {
                 field.onChange(checked);
@@ -138,7 +135,7 @@ export function AiModeFields({
               </FieldLabel>
               <AgentSelect
                 agentIds={enabledAgentIds}
-                disabled={busy || !canStartAgentTask}
+                disabled={!canStartAgentTask}
                 emptyLabel={text("agentEmpty", undefined, "No enabled agents")}
                 id="worktree-create-agent"
                 onValueChange={(next) => field.onChange(next)}
@@ -161,13 +158,11 @@ export function AiModeFields({
 }
 
 export function CustomModeField({
-  busy,
   customDraft,
   form,
   rootPath,
   text,
 }: {
-  busy: boolean;
   customDraft: WorktreeCreationDraft | null;
   form: UseFormReturn<FormValues>;
   rootPath: string;
@@ -180,7 +175,6 @@ export function CustomModeField({
       </FieldLabel>
       <Input
         className="font-mono"
-        disabled={busy}
         id="worktree-create-branch"
         placeholder={text("branchPlaceholder", undefined, "feature/fix-dialog")}
         {...form.register("branch")}

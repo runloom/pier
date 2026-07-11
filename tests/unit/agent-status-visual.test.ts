@@ -43,21 +43,21 @@ describe("shouldShimmer (loomdesk SHIMMERING_AGENT_STATUSES)", () => {
 
 describe("statusColorVar (loomdesk AGENT_STATUS_PULSE + 长跑覆盖)", () => {
   it.each([
-    ["processing", null, "--primary"],
-    ["tool", null, "--primary"],
-    ["waiting", null, "--color-amber-500"],
+    ["processing", null, "--status-info-fg"],
+    ["tool", null, "--status-info-fg"],
+    ["waiting", null, "--status-warning-fg"],
     ["ready", null, "--foreground"],
-    ["error", null, "--destructive"],
+    ["error", null, "--status-danger-fg"],
   ] as const)("%s (level=%s) → %s", (status, level, cssVar) => {
     expect(statusColorVar(status, level)).toBe(cssVar);
   });
 
   it("长跑覆盖只作用于 running 态", () => {
-    expect(statusColorVar("processing", "warn")).toBe("--color-amber-500");
-    expect(statusColorVar("tool", "danger")).toBe("--destructive");
+    expect(statusColorVar("processing", "warn")).toBe("--status-warning-fg");
+    expect(statusColorVar("tool", "danger")).toBe("--status-danger-fg");
     // 非 running 态不受长跑影响（调用方本就不会传 level, 防御性断言）
-    expect(statusColorVar("waiting", "danger")).toBe("--color-amber-500");
-    expect(statusColorVar("error", "warn")).toBe("--destructive");
+    expect(statusColorVar("waiting", "danger")).toBe("--status-warning-fg");
+    expect(statusColorVar("error", "warn")).toBe("--status-danger-fg");
   });
 });
 

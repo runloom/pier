@@ -1,16 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("terminal close IPC reason semantics", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-  });
-
-  afterEach(async () => {
-    const { setTerminalPanelClosedHandler } = await import(
-      "@main/ipc/terminal-panel-closed.ts"
-    );
-    setTerminalPanelClosedHandler(null);
   });
 
   async function setupHarness() {
@@ -30,7 +23,7 @@ describe("terminal close IPC reason semantics", () => {
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
-      closeTerminal: vi.fn(),
+      closeTerminal: vi.fn(() => true),
       createTerminal: vi.fn(() => true),
       debugSnapshot: vi.fn(() => "{}"),
       detachWindow: vi.fn(),
@@ -80,6 +73,16 @@ describe("terminal close IPC reason semantics", () => {
       on: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
         handlers.set(channel, handler);
       }),
+    };
+    const taskService = {
+      bindTerminalProcessController: vi.fn(),
+      completePanel: vi.fn(async () => null),
+      isStopRequested: vi.fn(() => false),
+      markPanelClosed: vi.fn(),
+      output: vi.fn(() => null),
+      runsSnapshot: vi.fn(() => ({ runs: {}, version: 0 })),
+      subscribeOutput: vi.fn(() => vi.fn()),
+      subscribeRuns: vi.fn(() => vi.fn()),
     };
 
     vi.doMock("electron", () => ({
@@ -146,34 +149,32 @@ describe("terminal close IPC reason semantics", () => {
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
-    registerTerminalIpc(fakeIpcMain as never);
+    registerTerminalIpc(fakeIpcMain as never, {
+      taskService: taskService as never,
+    });
 
     return {
       fakeAddon,
       invokeHandlers,
       processClosedForwardCallback: () => processClosedForwardCallback,
+      taskService,
       win,
     };
   }
 
   it("keeps task panel mapping alive when relaunch close only stops the native session", async () => {
-    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+    const { fakeAddon, invokeHandlers, taskService, win } =
+      await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
-    const { setTerminalPanelClosedHandler } = await import(
-      "@main/ipc/terminal-panel-closed.ts"
-    );
-    const taskPanelClosed = vi.fn();
-    setTerminalPanelClosedHandler(taskPanelClosed);
     const close = invokeHandlers.get("pier:terminal:close");
 
     await close?.({ sender: win.webContents }, "terminal-1");
 
-    expect(taskPanelClosed).toHaveBeenCalledWith(
+    expect(taskService.markPanelClosed).toHaveBeenCalledWith(
       "terminal-1",
-      undefined,
       "window-main"
     );
-    taskPanelClosed.mockClear();
+    taskService.markPanelClosed.mockClear();
 
     await close?.({ sender: win.webContents }, "terminal-1", {
       reason: "relaunch",
@@ -184,18 +185,41 @@ describe("terminal close IPC reason semantics", () => {
       "window-main",
       "terminal-1"
     );
-    expect(taskPanelClosed).not.toHaveBeenCalled();
+    expect(taskService.markPanelClosed).not.toHaveBeenCalled();
+  });
+
+  it("reports force stop failure when the native terminal does not exist", async () => {
+    const { fakeAddon, taskService } = await setupHarness();
+    fakeAddon.closeTerminal.mockReturnValue(false);
+    const controller = taskService.bindTerminalProcessController.mock
+      .calls[0]?.[0] as
+      | {
+          forceStop(
+            panelId: string,
+            windowId?: string
+          ): {
+            message?: string;
+            ok: boolean;
+          };
+        }
+      | undefined;
+
+    expect(controller?.forceStop("terminal-1", "window-main")).toEqual({
+      message: "terminal process was not found",
+      ok: false,
+    });
+    expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::terminal-1");
   });
 
   it("ignores the native process-close callback caused by a relaunch close", async () => {
-    const { fakeAddon, invokeHandlers, processClosedForwardCallback, win } =
-      await setupHarness();
+    const {
+      fakeAddon,
+      invokeHandlers,
+      processClosedForwardCallback,
+      taskService,
+      win,
+    } = await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
-    const { setTerminalPanelClosedHandler } = await import(
-      "@main/ipc/terminal-panel-closed.ts"
-    );
-    const taskPanelClosed = vi.fn();
-    setTerminalPanelClosedHandler(taskPanelClosed);
     const close = invokeHandlers.get("pier:terminal:close");
     const processClosed = processClosedForwardCallback();
 
@@ -210,13 +234,13 @@ describe("terminal close IPC reason semantics", () => {
       "window-main",
       "terminal-1"
     );
-    expect(taskPanelClosed).not.toHaveBeenCalled();
+    expect(taskService.markPanelClosed).not.toHaveBeenCalled();
 
     processClosed?.(win.id, "7::terminal-1", true);
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(taskPanelClosed).not.toHaveBeenCalled();
+    expect(taskService.markPanelClosed).not.toHaveBeenCalled();
   });
 
   it("preserves the running task activity across a relaunch close so the exit lands", async () => {
@@ -232,6 +256,7 @@ describe("terminal close IPC reason semantics", () => {
     // relaunch close。
     foregroundActivityService.taskLaunched("terminal-1", "window-main", {
       label: "dev",
+      runId: "run-1",
       taskId: "task-dev",
     });
     await close?.({ sender: win.webContents }, "terminal-1", {
@@ -261,6 +286,7 @@ describe("terminal close IPC reason semantics", () => {
 
     foregroundActivityService.taskFinished("terminal-1", {
       exitCode: 0,
+      runId: "run-1",
       status: "success",
     });
 
@@ -287,6 +313,7 @@ describe("terminal close IPC reason semantics", () => {
 
     foregroundActivityService.taskLaunched("terminal-1", "window-main", {
       label: "dev",
+      runId: "run-1",
       taskId: "task-dev",
     });
     await close?.({ sender: win.webContents }, "terminal-1");
@@ -306,6 +333,7 @@ describe("terminal close IPC reason semantics", () => {
     // 层, renderer 随后才 create。create 失败 = pty 从未活过, 层必须撤。
     foregroundActivityService.taskLaunched("terminal-1", "window-main", {
       label: "dev",
+      runId: "run-1",
       taskId: "task-dev",
     });
     fakeAddon.createTerminal.mockReturnValueOnce(false);

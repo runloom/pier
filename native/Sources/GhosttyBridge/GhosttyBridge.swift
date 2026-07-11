@@ -488,6 +488,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 {
     let panelId: String
     let browserWindowId: Int
+    let lifecycleId: String
     weak var scrollbarSink: TerminalScrollbarStateSink?
     private(set) var isSurfaceFocused = false
     private var searchSelected: Int = -1
@@ -500,7 +501,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// 全局 callback: 收到 OSC 0/2 title 时调用, 把 (browserWindowId, panelId, title)
     /// 转给 main process. TUI 应用 (claude / vim / aider) 主动通过 OSC 0/2 写自定义
     /// title — descriptor.long 的最高优先级来源.
-    static var forwardTitleCallback: ((Int, String, String) -> Void)?
+    static var forwardTitleCallback: ((Int, String, String, String) -> Void)?
 
     /// 全局 callback: Ghostty search result update → main process.
     /// selected 使用 Ghostty 原始 0-based 序号；无匹配时为 -1。
@@ -508,19 +509,20 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 
     /// 全局 callback: Ghostty shell integration command_finished → main process.
     /// exitCode 为 nil 时在 C ABI 边界统一转成 -1。
-    static var forwardCommandFinishedCallback: ((Int, String, Int, UInt64) -> Void)?
+    static var forwardCommandFinishedCallback: ((Int, String, String, Int, UInt64) -> Void)?
 
     /// 全局 callback: Ghostty shell integration command_started → main process.
     /// commandLine 可能为空字符串（shell 未提供 OSC 133 C/633 E cmdline 时）.
-    static var forwardCommandStartedCallback: ((Int, String, String) -> Void)?
+    static var forwardCommandStartedCallback: ((Int, String, String, String) -> Void)?
 
     /// 全局 callback: Ghostty surface close → main process.
     /// processAlive=false 表示底层进程已自然退出；true 表示 surface 关闭时进程仍存活。
-    static var forwardProcessClosedCallback: ((Int, String, Bool) -> Void)?
+    static var forwardProcessClosedCallback: ((Int, String, String, Bool) -> Void)?
 
-    init(panelId: String, browserWindowId: Int) {
+    init(panelId: String, browserWindowId: Int, lifecycleId: String) {
         self.panelId = panelId
         self.browserWindowId = browserWindowId
+        self.lifecycleId = lifecycleId
     }
 
     func terminalDidChangeWorkingDirectory(_ path: String) {
@@ -528,13 +530,14 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     }
 
     func terminalDidChangeTitle(_ title: String) {
-        TerminalEventDelegate.forwardTitleCallback?(browserWindowId, panelId, title)
+        TerminalEventDelegate.forwardTitleCallback?(browserWindowId, panelId, lifecycleId, title)
     }
 
     func terminalDidFinishCommand(exitCode: Int?, durationNanos: UInt64) {
         TerminalEventDelegate.forwardCommandFinishedCallback?(
             browserWindowId,
             panelId,
+            lifecycleId,
             exitCode ?? -1,
             durationNanos
         )
@@ -544,6 +547,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
         TerminalEventDelegate.forwardCommandStartedCallback?(
             browserWindowId,
             panelId,
+            lifecycleId,
             commandLine
         )
     }
@@ -552,6 +556,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
         TerminalEventDelegate.forwardProcessClosedCallback?(
             browserWindowId,
             panelId,
+            lifecycleId,
             processAlive
         )
     }
@@ -593,6 +598,7 @@ private struct Terminal {
     let containerView: TerminalContainerView
     let terminalView: TerminalView
     let parentWindow: NSWindow
+    let outputSession: InMemoryTerminalSession?
     /// EventDelegate adapter (strong-hold — terminalView.delegate 是 weak).
     /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
     /// weak ref 自动 nil, 不留 dangling.
@@ -1235,7 +1241,9 @@ final class GhosttyBridgeImpl {
         fontSize: Float,
         workingDirectory: String?,
         command: String?,
-        environment: [String: String]
+        environment: [String: String],
+        lifecycleId: String,
+        hostManaged: Bool = false
     ) -> Bool {
         guard let contentView = parent.contentView else { return false }
 
@@ -1248,7 +1256,9 @@ final class GhosttyBridgeImpl {
         // TerminalEventDelegate 注释), 退回到原 defensive 行为:先 close 旧的
         // 再创建, 避免把别 window 的 terminalView frame 拽到当前 window.
         if let existing = terminals[panelId] {
-            if existing.parentWindow === parent {
+            let existingHostManaged = existing.outputSession != nil
+            if existing.parentWindow === parent,
+               existingHostManaged == hostManaged {
                 let frame = computeFrame(in: contentView, viewport: viewport)
                 existing.containerView.applyHostFrame(frame)
                 rememberLayout(
@@ -1274,8 +1284,14 @@ final class GhosttyBridgeImpl {
         let terminalView = TerminalView(frame: .zero)
         terminalView.focusesOnMouseDown = false
         terminalView.hostKeyboardActive = false
+        let outputSession = hostManaged
+            ? InMemoryTerminalSession(write: { _ in }, resize: { _ in })
+            : nil
+        let backend: TerminalSessionBackend = outputSession.map {
+            .inMemory($0)
+        } ?? .exec
         terminalView.configuration = TerminalSurfaceOptions(
-            backend: .exec,
+            backend: backend,
             command: command,
             environment: environment,
             workingDirectory: workingDirectory
@@ -1301,7 +1317,8 @@ final class GhosttyBridgeImpl {
         let browserWindowId = windowToBrowserWindowId[parentWindowId] ?? -1
         let eventDelegate = TerminalEventDelegate(
             panelId: panelId,
-            browserWindowId: browserWindowId
+            browserWindowId: browserWindowId,
+            lifecycleId: lifecycleId
         )
         terminalView.delegate = eventDelegate
 
@@ -1336,6 +1353,7 @@ final class GhosttyBridgeImpl {
             containerView: container,
             terminalView: terminalView,
             parentWindow: parent,
+            outputSession: outputSession,
             eventDelegate: eventDelegate,
             surfaceVisible: false
         )
@@ -1348,6 +1366,78 @@ final class GhosttyBridgeImpl {
         applyLatestPresentationIfAvailable(parent: parent)
 
         return true
+    }
+
+    func writeOutput(panelId: String, data: Data) -> Bool {
+        guard let session = terminals[panelId]?.outputSession else {
+            return false
+        }
+        session.receive(data)
+        return true
+    }
+
+    func finishOutput(
+        panelId: String,
+        exitCode: UInt32,
+        runtimeMilliseconds: UInt64
+    ) -> Bool {
+        guard let session = terminals[panelId]?.outputSession else {
+            return false
+        }
+        session.finish(
+            exitCode: exitCode,
+            runtimeMilliseconds: runtimeMilliseconds
+        )
+        return true
+    }
+
+    /// 为同一个逻辑 Task Output panel 创建全新的 host-managed surface。
+    ///
+    /// Ghostty 的 process-exit 状态不可逆，因此重新运行不能继续向已 finish 的
+    /// InMemoryTerminalSession 追加。这里在 MainActor 的同一次调用中替换原生视图，
+    /// 并恢复原几何与可见性；dockview panel 本身不销毁、不换组、不换位置。
+    func resetOutput(panelId: String) -> Bool {
+        guard let term = terminals[panelId],
+              term.outputSession != nil,
+              let contentView = term.parentWindow.contentView,
+              let layout = terminalLayouts[panelId]
+        else {
+            return false
+        }
+
+        let parent = term.parentWindow
+        let nativeFrame = layout.authoritativeFrame
+        let viewport = NSRect(
+            x: nativeFrame.minX,
+            y: contentView.bounds.height - nativeFrame.maxY,
+            width: nativeFrame.width,
+            height: nativeFrame.height
+        )
+        let preferences = terminalRuntimePreferences[ObjectIdentifier(parent)]
+            ?? TerminalRuntimePreferences()
+        let fontFamily = preferences.fontFamilies.isEmpty
+            ? "Menlo"
+            : preferences.fontFamilies.joined(separator: "\n")
+        let fontSize = preferences.fontSize > 0 ? preferences.fontSize : 13
+        let wasVisible = term.surfaceVisible
+
+        close(panelId: panelId)
+        let created = createTerminal(
+            parent: parent,
+            panelId: panelId,
+            viewport: viewport,
+            fontFamily: fontFamily,
+            fontSize: fontSize,
+            workingDirectory: nil,
+            command: nil,
+            environment: [:],
+            lifecycleId: "",
+            hostManaged: true
+        )
+        if created && wasVisible {
+            show(panelId: panelId)
+        }
+        return created
     }
 
     func setFrame(panelId: String, viewport: NSRect) {
@@ -1431,11 +1521,13 @@ final class GhosttyBridgeImpl {
         eventRouters[windowId]?.targets.removeValue(forKey: panelId)
     }
 
-    func close(panelId: String) {
-        guard let term = terminals[panelId] else { return }
+    @discardableResult
+    func close(panelId: String) -> Bool {
+        guard let term = terminals[panelId] else { return false }
         let parent = term.parentWindow
         term.containerView.removeFromSuperview()
         terminals.removeValue(forKey: panelId)
+        terminalLayouts.removeValue(forKey: panelId)
 
         let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets.removeValue(forKey: panelId)
@@ -1449,6 +1541,7 @@ final class GhosttyBridgeImpl {
             }
         }
         applyFirstResponder(for: parent)
+        return true
     }
 
     func performBindingAction(panelId: String, action: String) -> Bool {
@@ -1754,7 +1847,8 @@ public func ghosttyBridgeCreateTerminal(
     _ commandPtr: UnsafePointer<CChar>?,
     _ envKeysPtr: UnsafePointer<UnsafePointer<CChar>?>?,
     _ envValuesPtr: UnsafePointer<UnsafePointer<CChar>?>?,
-    _ envCount: Int
+    _ envCount: Int,
+    _ lifecycleIdPtr: UnsafePointer<CChar>
 ) -> Bool {
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
@@ -1780,7 +1874,75 @@ public func ghosttyBridgeCreateTerminal(
             fontSize: fontSize,
             workingDirectory: workingDirectory,
             command: command,
-            environment: environment
+            environment: environment,
+            lifecycleId: String(cString: lifecycleIdPtr)
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_create_output_terminal")
+public func ghosttyBridgeCreateOutputTerminal(
+    _ nsWindowPtr: UnsafeMutableRawPointer,
+    _ panelIdPtr: UnsafePointer<CChar>,
+    _ x: Double, _ y: Double, _ w: Double, _ h: Double,
+    _ fontFamilyPtr: UnsafePointer<CChar>,
+    _ fontSize: Float
+) -> Bool {
+    MainActor.assumeIsolated {
+        let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
+        return GhosttyBridgeImpl.shared.createTerminal(
+            parent: window,
+            panelId: String(cString: panelIdPtr),
+            viewport: NSRect(x: x, y: y, width: w, height: h),
+            fontFamily: String(cString: fontFamilyPtr),
+            fontSize: fontSize,
+            workingDirectory: nil,
+            command: nil,
+            environment: [:],
+            lifecycleId: "",
+            hostManaged: true
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_write_output")
+public func ghosttyBridgeWriteOutput(
+    _ panelIdPtr: UnsafePointer<CChar>,
+    _ bytes: UnsafePointer<UInt8>?,
+    _ count: Int
+) -> Bool {
+    guard let bytes, count > 0 else { return true }
+    let data = Data(bytes: bytes, count: count)
+    return MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.writeOutput(
+            panelId: String(cString: panelIdPtr),
+            data: data
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_finish_output")
+public func ghosttyBridgeFinishOutput(
+    _ panelIdPtr: UnsafePointer<CChar>,
+    _ exitCode: UInt32,
+    _ runtimeMilliseconds: UInt64
+) -> Bool {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.finishOutput(
+            panelId: String(cString: panelIdPtr),
+            exitCode: exitCode,
+            runtimeMilliseconds: runtimeMilliseconds
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_reset_output")
+public func ghosttyBridgeResetOutput(
+    _ panelIdPtr: UnsafePointer<CChar>
+) -> Bool {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.resetOutput(
+            panelId: String(cString: panelIdPtr)
         )
     }
 }
@@ -1873,9 +2035,9 @@ public func ghosttyBridgeHide(_ panelId: UnsafePointer<CChar>) {
 }
 
 @_cdecl("ghostty_bridge_close")
-public func ghosttyBridgeClose(_ panelId: UnsafePointer<CChar>) {
+public func ghosttyBridgeClose(_ panelId: UnsafePointer<CChar>) -> Bool {
     MainActor.assumeIsolated {
-        GhosttyBridgeImpl.shared.close(panelId: String(cString: panelId))
+        return GhosttyBridgeImpl.shared.close(panelId: String(cString: panelId))
     }
 }
 
@@ -1972,16 +2134,16 @@ public func ghosttyBridgeFreeString(_ ptr: UnsafeMutablePointer<CChar>?) {
 // C 函数指针 typealias 集中放在一起 — addon.mm 通过 ThreadSafeFunction 包装让
 // JS 端能安全接收. C string 在 @_cdecl 内 withCString 取临时指针调用 cb, cb 返回
 // 后字符串生命周期结束 (addon.mm 端 trampoline 已 std::string 拷贝, 不会 dangling).
-public typealias CommandStartedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+public typealias CommandStartedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
 public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
 public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, Int) -> Void
-public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
-public typealias CommandFinishedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, UInt64) -> Void
-public typealias ProcessClosedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Bool) -> Void
+public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+public typealias CommandFinishedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, Int, UInt64) -> Void
+public typealias ProcessClosedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, Bool) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
 public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallback?) {
@@ -2089,10 +2251,12 @@ public func ghosttyBridgeSetSearchForwardCallback(_ cb: SearchForwardCallback?) 
 public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            TerminalEventDelegate.forwardTitleCallback = { wid, panelId, title in
+            TerminalEventDelegate.forwardTitleCallback = { wid, panelId, lifecycleId, title in
                 panelId.withCString { pidPtr in
-                    title.withCString { titlePtr in
-                        cb(wid, pidPtr, titlePtr)
+                    lifecycleId.withCString { lifecyclePtr in
+                        title.withCString { titlePtr in
+                            cb(wid, pidPtr, lifecyclePtr, titlePtr)
+                        }
                     }
                 }
             }
@@ -2106,9 +2270,11 @@ public func ghosttyBridgeSetTitleForwardCallback(_ cb: TitleForwardCallback?) {
 public func ghosttyBridgeSetCommandFinishedForwardCallback(_ cb: CommandFinishedForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            TerminalEventDelegate.forwardCommandFinishedCallback = { wid, panelId, exitCode, durationNanos in
+            TerminalEventDelegate.forwardCommandFinishedCallback = { wid, panelId, lifecycleId, exitCode, durationNanos in
                 panelId.withCString { pidPtr in
-                    cb(wid, pidPtr, exitCode, durationNanos)
+                    lifecycleId.withCString { lifecyclePtr in
+                        cb(wid, pidPtr, lifecyclePtr, exitCode, durationNanos)
+                    }
                 }
             }
         } else {
@@ -2121,10 +2287,12 @@ public func ghosttyBridgeSetCommandFinishedForwardCallback(_ cb: CommandFinished
 public func ghosttyBridgeSetCommandStartedForwardCallback(_ cb: CommandStartedForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            TerminalEventDelegate.forwardCommandStartedCallback = { wid, panelId, commandLine in
+            TerminalEventDelegate.forwardCommandStartedCallback = { wid, panelId, lifecycleId, commandLine in
                 panelId.withCString { pidPtr in
-                    commandLine.withCString { cmdPtr in
-                        cb(wid, pidPtr, cmdPtr)
+                    lifecycleId.withCString { lifecyclePtr in
+                        commandLine.withCString { cmdPtr in
+                            cb(wid, pidPtr, lifecyclePtr, cmdPtr)
+                        }
                     }
                 }
             }
@@ -2138,9 +2306,11 @@ public func ghosttyBridgeSetCommandStartedForwardCallback(_ cb: CommandStartedFo
 public func ghosttyBridgeSetProcessClosedForwardCallback(_ cb: ProcessClosedForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
-            TerminalEventDelegate.forwardProcessClosedCallback = { wid, panelId, processAlive in
+            TerminalEventDelegate.forwardProcessClosedCallback = { wid, panelId, lifecycleId, processAlive in
                 panelId.withCString { pidPtr in
-                    cb(wid, pidPtr, processAlive)
+                    lifecycleId.withCString { lifecyclePtr in
+                        cb(wid, pidPtr, lifecyclePtr, processAlive)
+                    }
                 }
             }
         } else {

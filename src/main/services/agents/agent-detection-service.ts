@@ -62,6 +62,8 @@ export function createAgentDetectionService({
 }: CreateAgentDetectionServiceArgs = {}): AgentDetectionService {
   let pathHydrated = false;
   let hydrateInFlight: Promise<string[]> | null = null;
+  let cachedResult: DetectAgentsResult | null = null;
+  let detectInFlight: Promise<DetectAgentsResult> | null = null;
 
   async function hydratePathOnce(): Promise<void> {
     if (pathHydrated) {
@@ -88,22 +90,40 @@ export function createAgentDetectionService({
 
   async function detect(): Promise<DetectAgentsResult> {
     await hydratePathOnce();
-    const checks = await Promise.all(
-      AGENT_CATALOG.map(async (entry) => {
-        const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
-        const hits = await Promise.all(cmds.map((c) => probe(c)));
-        return hits.some(Boolean) ? entry.id : null;
-      })
-    );
-    const detectedIds = checks.filter((id): id is AgentKind => id !== null);
-    return { detectedIds };
+    if (cachedResult) {
+      return cachedResult;
+    }
+    if (!detectInFlight) {
+      detectInFlight = Promise.all(
+        AGENT_CATALOG.map(async (entry) => {
+          const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
+          const hits = await Promise.all(cmds.map((c) => probe(c)));
+          return hits.some(Boolean) ? entry.id : null;
+        })
+      )
+        .then((checks) => {
+          const detectedIds = checks.filter(
+            (id): id is AgentKind => id !== null
+          );
+          cachedResult = { detectedIds };
+          return cachedResult;
+        })
+        .finally(() => {
+          detectInFlight = null;
+        });
+    }
+    return await detectInFlight;
   }
 
   return {
     detect,
     ensurePath: hydratePathOnce,
     async refresh() {
+      if (detectInFlight) {
+        await detectInFlight;
+      }
       const added = await hydratePathNow();
+      cachedResult = null;
       const detectResult = await detect();
       return { ...detectResult, addedPathSegments: added };
     },

@@ -356,7 +356,8 @@ describe("terminal focus restoration", () => {
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",
         }),
-      }
+      },
+      ""
     );
   });
 
@@ -468,7 +469,8 @@ describe("terminal focus restoration", () => {
         env: expect.objectContaining({
           OPENAI_API_KEY: "sk-restored",
         }),
-      })
+      }),
+      ""
     );
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
       "main",
@@ -531,7 +533,8 @@ describe("terminal focus restoration", () => {
       expect.anything(),
       expect.objectContaining({
         command: "claude --dangerously-skip-permissions --resume session-123",
-      })
+      }),
+      ""
     );
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
       "main",
@@ -608,7 +611,8 @@ describe("terminal focus restoration", () => {
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",
         }),
-      }
+      },
+      ""
     );
   });
 
@@ -650,7 +654,8 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
           SECRET: "token",
         }),
-      }
+      },
+      ""
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-rerun");
   });
@@ -684,7 +689,8 @@ describe("terminal focus restoration", () => {
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",
         }),
-      }
+      },
+      ""
     );
   });
 

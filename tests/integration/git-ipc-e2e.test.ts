@@ -57,6 +57,8 @@ function makeServices(): PierCoreServices {
     { get: () => () => Promise.reject(new Error("not stubbed")) }
   );
   return {
+    agentDetection: trap as never,
+    agentUsage: trap as never,
     managedPlugins: trap as never,
     appUpdates: trap as never,
     ai: trap as never,

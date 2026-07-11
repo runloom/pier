@@ -3,7 +3,6 @@
  */
 import { Badge } from "@pier/ui/badge.tsx";
 import { FieldDescription } from "@pier/ui/field.tsx";
-import { Spinner } from "@pier/ui/spinner.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "@plugins/builtin/git/settings.ts";
 import { type AgentKind, agentKindSchema } from "@shared/contracts/agent.ts";
@@ -13,12 +12,12 @@ import type { WorktreeCreationDraft } from "@shared/worktree-naming.ts";
 import {
   deriveWorktreeCreation,
   deriveWorktreeCreationFromSlug,
+  isValidGitBranchName,
   sanitizeBranchCandidate,
 } from "@shared/worktree-naming.ts";
 import { z } from "zod";
 
 export const HEAD_SENTINEL = "__head__";
-const BRANCH_LIKE_PATTERN = /^[A-Za-z0-9._/-]+$/;
 const TASK_PLACEHOLDER = "{{task}}";
 const PROJECT_ROOT_PLACEHOLDER = "{{projectRootPath}}";
 const MAX_BRANCH_CANDIDATE_CHARS = 64;
@@ -36,7 +35,6 @@ export const FALLBACK_BRANCH_NAME_PROMPT = [
 ].join("\n");
 
 export type CreateMode = "ai" | "custom";
-export type SubmitPhase = "creating" | "generating" | "idle";
 
 export interface WorktreeCreateOverlayData {
   branches: readonly GitBranchRef[];
@@ -70,11 +68,11 @@ function validateCustomBranch(
   if (!branch) {
     return text("errorBranchRequired", undefined, "Enter a branch name");
   }
-  if (!BRANCH_LIKE_PATTERN.test(branch)) {
+  if (!isValidGitBranchName(branch)) {
     return text(
       "errorBranchInvalid",
       undefined,
-      "Branch names may only contain letters, digits and . _ / -"
+      "Enter a valid Git branch name using letters, digits and . _ / -"
     );
   }
   if (existingBranches.includes(branch)) {
@@ -196,7 +194,52 @@ export function normalizeBranchSuggestion(raw: string): string {
   if (!cleaned) {
     return "";
   }
-  return truncateBranchCandidate(cleaned);
+  const truncated = truncateBranchCandidate(cleaned);
+  return isValidGitBranchName(truncated) ? truncated : "";
+}
+
+const BRANCH_LABEL_PATTERN = /^branch(?:\s+name)?\s*:\s*/i;
+const LEADING_LIST_MARKER_PATTERN = /^[-*]\s+/;
+const SURROUNDING_MARKUP_PATTERN = /^[`"']+|[`"'.,;:]+$/g;
+
+export function extractBranchSuggestion(stdout: string): string {
+  const lines = stdout
+    .replace(ANSI_PATTERN, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  for (const line of [...lines].reverse()) {
+    const unwrapped = line
+      .replace(LEADING_LIST_MARKER_PATTERN, "")
+      .replace(BRANCH_LABEL_PATTERN, "")
+      .replace(SURROUNDING_MARKUP_PATTERN, "")
+      .trim()
+      .toLowerCase();
+    if (
+      isValidGitBranchName(unwrapped) &&
+      (lines.length === 1 || /[-_/.]/.test(unwrapped))
+    ) {
+      return normalizeBranchSuggestion(unwrapped);
+    }
+  }
+  return lines.length === 1 ? normalizeBranchSuggestion(lines[0] ?? "") : "";
+}
+
+function buildBranchRepairPrompt({
+  previousOutput,
+  task,
+}: {
+  previousOutput: string;
+  task: string;
+}): string {
+  return [
+    "The previous response was not a valid Git branch name.",
+    "Return exactly one corrected branch name and nothing else.",
+    "Use 2-5 semantic lowercase English words with ASCII letters and digits.",
+    "Only . _ / - separators are allowed. Do not use spaces, .., @{, a leading dash, a dot-prefixed path segment, or a .lock suffix.",
+    `Task: ${task}`,
+    `Previous response: ${previousOutput.replaceAll("\0", "").slice(0, 1000)}`,
+  ].join("\n");
 }
 
 /** custom 模式同步派生;ai 模式先调通用 AI 文本生成,再由 Git 插件规整/去重。 */
@@ -233,16 +276,33 @@ export async function resolveSubmitDraft({
       ),
     };
   }
-  const branchCandidate = normalizeBranchSuggestion(
-    extractAnswerLine(generation.text)
-  );
-  const draft = deriveWorktreeCreationFromSlug(branchCandidate, shared);
+  let generatedCandidate = extractBranchSuggestion(generation.text);
+  if (!generatedCandidate) {
+    const repair = await generateText({
+      projectRootPath: data.mainPath,
+      prompt: buildBranchRepairPrompt({
+        previousOutput: generation.text,
+        task: values.text.trim(),
+      }),
+    });
+    if (repair.status !== "ok") {
+      return {
+        error: text(
+          `generateFailed.${repair.reason}`,
+          { message: repair.message },
+          "Agent invocation failed: {{message}}"
+        ),
+      };
+    }
+    generatedCandidate = extractBranchSuggestion(repair.text);
+  }
+  const draft = deriveWorktreeCreationFromSlug(generatedCandidate, shared);
   if (!draft) {
     return {
       error: text(
         "generateFailed.invalid_response",
         undefined,
-        "AI returned no usable branch name, try again"
+        "AI could not generate a valid branch name, try again"
       ),
     };
   }
@@ -298,24 +358,4 @@ export function PrepareBadges({
       </Badge>
     </FieldDescription>
   );
-}
-
-export function confirmButtonContent(phase: SubmitPhase, text: TextFn) {
-  if (phase === "generating") {
-    return (
-      <>
-        <Spinner aria-hidden="true" />
-        {text("aiGenerating", undefined, "Generating…")}
-      </>
-    );
-  }
-  if (phase === "creating") {
-    return (
-      <>
-        <Spinner aria-hidden="true" />
-        {text("creating", undefined, "Creating…")}
-      </>
-    );
-  }
-  return text("confirm", undefined, "Create");
 }

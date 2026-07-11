@@ -22,9 +22,9 @@ describe("settings navigation metadata", () => {
       "workspace",
       "environment",
       "keybindings",
-      "updates",
       "agents",
       "plugins",
+      "updates",
     ]);
   });
 });

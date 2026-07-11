@@ -22,9 +22,11 @@ export function createPluginWorktreesContext(
       assertPluginCapability(entry, "worktree:read");
       return window.pier.worktrees.check(request);
     },
-    create: (request) => {
+    create: (request, options) => {
       assertPluginCapability(entry, "worktree:write");
-      return window.pier.worktrees.create(request);
+      return options
+        ? window.pier.worktrees.create(request, options)
+        : window.pier.worktrees.create(request);
     },
     creationDefaults: (request) => {
       assertPluginCapability(entry, "worktree:read");

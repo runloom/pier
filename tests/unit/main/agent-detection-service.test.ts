@@ -35,6 +35,26 @@ describe("agent detection", () => {
     expect(result.detectedIds).toContain("claude");
   });
 
+  it("detect 复用探测快照，只有 refresh 才重新 probe", async () => {
+    let probeCount = 0;
+    const service = createAgentDetectionService({
+      hydratePath: () => Promise.resolve([]),
+      probe: (cmd) => {
+        probeCount += 1;
+        return Promise.resolve(cmd === "codex");
+      },
+    });
+
+    const first = await service.detect();
+    const countAfterFirst = probeCount;
+    const second = await service.detect();
+    expect(second).toBe(first);
+    expect(probeCount).toBe(countAfterFirst);
+
+    await service.refresh();
+    expect(probeCount).toBeGreaterThan(countAfterFirst);
+  });
+
   it("refresh 强制重新水合 PATH 再探测", async () => {
     let hydrateCount = 0;
     const service = createAgentDetectionService({

@@ -318,6 +318,7 @@ export async function clearTerminalPanelAgent(
 export async function patchTerminalPanelTaskStatus(
   windowId: string,
   panelId: string,
+  expectedRunId: string,
   patch: {
     exitCode?: number | undefined;
     exitReason?: TaskExitReason | undefined;
@@ -334,7 +335,13 @@ export async function patchTerminalPanelTaskStatus(
   s.mutate((state) => {
     const windowState = state.windows[windowId];
     const current = windowState?.panels[panelId];
-    if (!(windowState && current?.task && current.task.status === "running")) {
+    if (!(windowState && current?.task?.runId === expectedRunId)) {
+      return state;
+    }
+    if (current.task.status !== "running") {
+      if (current.task.status === patch.status) {
+        patched = true;
+      }
       return state;
     }
     const nextTask = {

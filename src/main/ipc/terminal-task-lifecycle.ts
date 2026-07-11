@@ -13,8 +13,10 @@ export interface TerminalTaskLifecycleDeps {
   completePanel(
     panelId: string,
     exitCode: number,
+    lifecycleId: string,
     windowId?: string | undefined
   ): Promise<unknown>;
+  isStopRequested?(panelId: string, windowId?: string | undefined): boolean;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
   now(): number;
   patchTab(
@@ -25,6 +27,7 @@ export interface TerminalTaskLifecycleDeps {
   patchTaskStatus(
     sessionScope: string,
     panelId: string,
+    lifecycleId: string,
     patch: {
       exitCode?: number | undefined;
       exitReason?: TaskExitReason | undefined;
@@ -39,6 +42,7 @@ export interface TerminalTaskLifecycleDeps {
 export interface ExitCodeHintArgs {
   browserWindowId: number;
   code: number;
+  lifecycleId: string;
   panelId: string;
   source: Extract<
     TaskExitSource,
@@ -56,6 +60,7 @@ type ImmediateExitCodeHintArgs = ExitCodeHintArgs & {
 
 export interface NativeProcessCloseArgs {
   browserWindowId: number;
+  lifecycleId: string;
   panelId: string;
   processAlive: boolean;
   windowId?: string | undefined;
@@ -64,6 +69,7 @@ export interface NativeProcessCloseArgs {
 interface FinishArgs {
   browserWindowId: number;
   code?: number | undefined;
+  lifecycleId: string;
   panelId: string;
   reason: TaskExitReason;
   source: TaskExitSource;
@@ -72,6 +78,14 @@ interface FinishArgs {
 
 function panelKey(panelId: string, windowId?: string | undefined): string {
   return windowId ? `${windowId}\0${panelId}` : panelId;
+}
+
+function lifecycleKey(
+  panelId: string,
+  lifecycleId: string,
+  windowId?: string | undefined
+): string {
+  return `${panelKey(panelId, windowId)}\0${lifecycleId}`;
 }
 
 function statusForExit(exit: TerminalTaskExitStatus): TaskPanelStatus {
@@ -93,64 +107,117 @@ function normalizedCompletionCode(code: number | undefined): number {
  * - 终结时把状态写入 terminal-session-state.json（`patchTaskStatus` + `patchTab`，
  *   restore-on-restart 单源）。
  *
- * 不负责活动 broadcast：那走 `foregroundActivityService.taskFinished`
- * → `ForegroundActivityAggregator` 单源。
+ * 不负责活动 broadcast：任务活动投影统一走
+ * `foregroundActivityService.taskFinished` → `ForegroundActivityAggregator`。
  */
 export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
   const exitCodeHints = new Map<string, ExitCodeHintArgs>();
   const finishedPanels = new Set<string>();
+  const inFlightPanels = new Set<string>();
   const ignoredNativeUserClosePanels = new Set<string>();
+  const currentLifecycleIds = new Map<string, string>();
+
+  const clearPanelLifecycleState = (
+    panelId: string,
+    windowId?: string | undefined
+  ): void => {
+    const panel = panelKey(panelId, windowId);
+    const prefix = `${panel}\0`;
+    for (const collection of [
+      exitCodeHints,
+      finishedPanels,
+      inFlightPanels,
+      ignoredNativeUserClosePanels,
+    ]) {
+      for (const key of collection.keys()) {
+        if (key.startsWith(prefix)) {
+          collection.delete(key);
+        }
+      }
+    }
+  };
+
+  const isCurrentLifecycle = (args: {
+    lifecycleId: string;
+    panelId: string;
+    windowId?: string | undefined;
+  }): boolean => {
+    const current = currentLifecycleIds.get(
+      panelKey(args.panelId, args.windowId)
+    );
+    return current === undefined
+      ? args.lifecycleId === ""
+      : current === args.lifecycleId;
+  };
 
   const finish = async (args: FinishArgs): Promise<boolean> => {
-    const key = panelKey(args.panelId, args.windowId);
-    if (finishedPanels.has(key)) {
+    if (!isCurrentLifecycle(args)) {
       return false;
     }
-
-    const sessionScope = deps.sessionScopeForBrowserWindow(
-      args.browserWindowId
-    );
-    if (!sessionScope) {
+    const key = lifecycleKey(args.panelId, args.lifecycleId, args.windowId);
+    if (finishedPanels.has(key) || inFlightPanels.has(key)) {
       return false;
     }
-    finishedPanels.add(key);
+    inFlightPanels.add(key);
+    try {
+      const stopRequested =
+        deps.isStopRequested?.(args.panelId, args.windowId) ?? false;
+      const exit: TerminalTaskExitStatus = {
+        ...(args.code === undefined ? {} : { code: args.code }),
+        reason: stopRequested ? "user" : args.reason,
+        source: args.source,
+      };
+      const status = statusForExit(exit);
 
-    const exit: TerminalTaskExitStatus = {
-      ...(args.code === undefined ? {} : { code: args.code }),
-      reason: args.reason,
-      source: args.source,
-    };
-    const status = statusForExit(exit);
-    const taskPatched = await deps.patchTaskStatus(sessionScope, args.panelId, {
-      ...(args.code === undefined ? {} : { exitCode: args.code }),
-      exitReason: args.reason,
-      exitSource: args.source,
-      finishedAt: deps.now(),
-      status,
-    });
+      // 进程完成是 TaskRun 的权威事实，不能受 terminal session 投影是否存在影响。
+      // 停止请求只改变终态语义（cancelled），不改变完成事件的路由。
+      if (args.reason === "process") {
+        await deps.completePanel(
+          args.panelId,
+          normalizedCompletionCode(args.code),
+          args.lifecycleId,
+          args.windowId
+        );
+      } else {
+        deps.markPanelClosed(args.panelId, args.windowId);
+      }
 
-    if (!taskPatched) {
-      finishedPanels.delete(key);
-      return false;
-    }
-
-    if (args.reason === "process") {
-      await deps.completePanel(
-        args.panelId,
-        normalizedCompletionCode(args.code),
-        args.windowId
+      const sessionScope = deps.sessionScopeForBrowserWindow(
+        args.browserWindowId
       );
-    } else {
-      deps.markPanelClosed(args.panelId, args.windowId);
+      if (sessionScope) {
+        const taskPatched = await deps.patchTaskStatus(
+          sessionScope,
+          args.panelId,
+          args.lifecycleId,
+          {
+            ...(args.code === undefined ? {} : { exitCode: args.code }),
+            exitReason: exit.reason,
+            exitSource: args.source,
+            finishedAt: deps.now(),
+            status,
+          }
+        );
+        if (taskPatched) {
+          await deps.patchTab(
+            sessionScope,
+            args.panelId,
+            taskExitTabPatch(exit)
+          );
+        }
+      }
+      finishedPanels.add(key);
+      return true;
+    } finally {
+      inFlightPanels.delete(key);
     }
-
-    const tab = taskExitTabPatch(exit);
-    await deps.patchTab(sessionScope, args.panelId, tab);
-    return true;
   };
 
   const recordExitCodeHint = (args: ExitCodeHintArgs): void => {
-    const key = panelKey(args.panelId, args.windowId);
+    if (!isCurrentLifecycle(args)) {
+      return;
+    }
+    const key = lifecycleKey(args.panelId, args.lifecycleId, args.windowId);
     if (finishedPanels.has(key)) {
       return;
     }
@@ -175,47 +242,64 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       const completed = await finish({
         browserWindowId: args.browserWindowId,
         code: args.code,
+        lifecycleId: args.lifecycleId,
         panelId: args.panelId,
         reason: "process",
         source: args.source,
         windowId: args.windowId,
       });
       if (completed) {
-        exitCodeHints.delete(panelKey(args.panelId, args.windowId));
+        exitCodeHints.delete(
+          lifecycleKey(args.panelId, args.lifecycleId, args.windowId)
+        );
       }
       return completed;
     },
-    resetPanel(panelId: string, windowId?: string | undefined): void {
-      const key = panelKey(panelId, windowId);
-      exitCodeHints.delete(key);
-      finishedPanels.delete(key);
+    isCurrentLifecycle,
+    resetPanel(
+      panelId: string,
+      lifecycleId: string,
+      windowId?: string | undefined
+    ): void {
+      const panel = panelKey(panelId, windowId);
+      clearPanelLifecycleState(panelId, windowId);
+      currentLifecycleIds.set(panel, lifecycleId);
+    },
+    releasePanel(panelId: string, windowId?: string | undefined): void {
+      clearPanelLifecycleState(panelId, windowId);
+      currentLifecycleIds.delete(panelKey(panelId, windowId));
     },
     /**
      * relaunch close 前置臂旗标, 由下一个 processAlive=true 的 native
-     * process-close 消费。dead-pty relaunch 无 native echo（bridge close
-     * 不发事件）, 旗标会悬挂——无害：alive=true 的消费场景都发生在面板
-     * 真关闭/reconcile 之后, 被 skip 的 finish 产物彼时已随 session 移除
-     * 失效；Set 按 panelKey 去重, 无泄漏增长。**勿在 resetPanel 里清它**：
-     * create 之后迟到的旧 pane echo 会把新 run 误 finalize 成 cancelled。
+     * process-close 消费。resetPanel 后旧 pane 事件会由 lifecycleId 守卫拒绝，
+     * 因此可同时清理未被 native 消费的 dead-pty 标记，避免重复 relaunch 累积。
      */
     ignoreNextNativeUserClose(
       panelId: string,
       windowId?: string | undefined
     ): void {
-      ignoredNativeUserClosePanels.add(panelKey(panelId, windowId));
+      const lifecycleId =
+        currentLifecycleIds.get(panelKey(panelId, windowId)) ?? "";
+      ignoredNativeUserClosePanels.add(
+        lifecycleKey(panelId, lifecycleId, windowId)
+      );
     },
     async completeFromNativeProcessClose(
       args: NativeProcessCloseArgs
     ): Promise<boolean> {
-      const key = panelKey(args.panelId, args.windowId);
-      const hint = exitCodeHints.get(key);
-      exitCodeHints.delete(key);
+      const key = lifecycleKey(args.panelId, args.lifecycleId, args.windowId);
       if (args.processAlive && ignoredNativeUserClosePanels.delete(key)) {
         return false;
       }
+      if (!isCurrentLifecycle(args)) {
+        return false;
+      }
+      const hint = exitCodeHints.get(key);
+      exitCodeHints.delete(key);
       if (args.processAlive) {
         return await finish({
           browserWindowId: args.browserWindowId,
+          lifecycleId: args.lifecycleId,
           panelId: args.panelId,
           reason: "user",
           source: "panel-close",
@@ -224,6 +308,7 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       }
       return await finish({
         browserWindowId: args.browserWindowId,
+        lifecycleId: args.lifecycleId,
         ...(hint ? { code: hint.code } : {}),
         panelId: args.panelId,
         reason: "process",

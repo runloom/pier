@@ -1,12 +1,7 @@
 /**
- * M1: Escape 作用域限定 —— settings-dialog.tsx 的 DialogContent.onEscapeKeyDown
- * 只在焦点落在非表单字段(空白/其它元素)时才关闭对话框; 焦点在 InputRow 等可编辑
- * 字段上时, Escape 应交给字段自己处理(回弹草稿), 不应连带关闭整个 SettingsDialog。
- *
- * 之所以要在真实 <SettingsDialog>(而非裸 InputRow)下测试: bug 根因是 Radix
- * DismissableLayer 用 capture 阶段监听 document keydown, 字段级 stopPropagation
- * 拦不住 —— 必须有真实的 Dialog + DismissableLayer 参与, 才能验证这条 capture
- * 阶段的 preventDefault 修复真的生效。
+ * SettingsDialog 使用 Radix Dialog 的标准 Escape 关闭语义。测试必须挂载真实
+ * Dialog + DismissableLayer，才能覆盖 document capture 阶段的键盘处理；同时验证
+ * 关闭前会先 blur 当前字段，让设置项沿用既有提交入口且不会丢草稿。
  */
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
@@ -42,6 +37,12 @@ function entry(id: string): PluginRegistryEntry {
             minimum: 1,
             type: "number",
           },
+          [`${id}.prompt`]: {
+            default: "initial prompt",
+            description: "Prompt template",
+            multiline: true,
+            type: "string",
+          },
         },
         title: `${id} Settings`,
       },
@@ -76,7 +77,7 @@ const DIALOG_INITIAL_STATE = {
   isOpen: false,
 };
 
-describe("SettingsDialog — Escape 作用域限定在字段级(M1)", () => {
+describe("SettingsDialog — Escape 关闭与字段提交", () => {
   beforeEach(async () => {
     await initI18n();
     usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
@@ -123,7 +124,7 @@ describe("SettingsDialog — Escape 作用域限定在字段级(M1)", () => {
     useSettingsDialogStore.setState(DIALOG_INITIAL_STATE);
   });
 
-  it("聚焦插件配置数字输入框改动草稿后按 Escape: 对话框不关闭, 输入框回弹为 effective, 不提交", async () => {
+  it("聚焦输入框按 Escape 会先提交草稿再关闭对话框", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
@@ -141,18 +142,49 @@ describe("SettingsDialog — Escape 作用域限定在字段级(M1)", () => {
     fireEvent.change(limitInput, { target: { value: "999" } });
     fireEvent.keyDown(limitInput, { key: "Escape" });
 
-    // (a) dialog 仍开着(open state 未变)
-    expect(useSettingsDialogStore.getState().isOpen).toBe(true);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    // (b) 输入框回弹为 effective
     await waitFor(() => {
-      expect(limitInput).toHaveValue(10);
+      expect(useSettingsDialogStore.getState().isOpen).toBe(false);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    // (c) 无 set 调用
-    expect(window.pier.pluginSettings.set).not.toHaveBeenCalled();
+    expect(window.pier.pluginSettings.set).toHaveBeenCalledTimes(1);
+    expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+      "pier.demo.limit",
+      20
+    );
   });
 
-  it("对照组: 焦点不在输入字段时按 Escape 仍可关闭对话框", () => {
+  it("聚焦文本域按 Escape 会先提交草稿再关闭对话框", async () => {
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [entry("pier.demo")],
+    });
+    act(() => {
+      useSettingsDialogStore.setState({
+        activeSection: "plugin:pier.demo",
+        isOpen: true,
+      });
+    });
+    render(<SettingsDialog />);
+
+    const promptTextarea = screen.getByDisplayValue("initial prompt");
+    promptTextarea.focus();
+    fireEvent.change(promptTextarea, {
+      target: { value: "updated prompt" },
+    });
+    fireEvent.keyDown(promptTextarea, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(useSettingsDialogStore.getState().isOpen).toBe(false);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(window.pier.pluginSettings.set).toHaveBeenCalledTimes(1);
+    expect(window.pier.pluginSettings.set).toHaveBeenCalledWith(
+      "pier.demo.prompt",
+      "updated prompt"
+    );
+  });
+
+  it("焦点不在输入字段时按 Escape 仍可关闭对话框", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],

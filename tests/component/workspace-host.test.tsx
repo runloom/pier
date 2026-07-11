@@ -4,6 +4,10 @@ import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
 import {
+  confirmTerminalLaunch,
+  resetTerminalLaunchConfirmationsForTest,
+} from "@/lib/workspace/terminal-launch-confirmation.ts";
+import {
   flushTerminalLayoutFramesTrailing,
   readRegisteredTerminalAnchorFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
@@ -72,11 +76,22 @@ function createPanel(opts: {
   isActive?: boolean;
   isVisible?: boolean;
 }) {
+  let parametersChange: ((params: Record<string, unknown>) => void) | null =
+    null;
   return {
     api: {
       isActive: opts.isActive ?? false,
       isVisible: opts.isVisible ?? false,
+      onDidParametersChange: vi.fn(
+        (listener: (params: Record<string, unknown>) => void) => {
+          parametersChange = listener;
+          return { dispose: vi.fn() };
+        }
+      ),
       setActive: vi.fn(),
+    },
+    emitParametersChange: (params: Record<string, unknown>) => {
+      parametersChange?.(params);
     },
     id: opts.id,
     title: opts.component === "terminal" ? "Terminal" : "Welcome",
@@ -158,6 +173,7 @@ function createDockviewApi(
         return { dispose: vi.fn() };
       }
     ),
+    onDidAddPanel: vi.fn(() => ({ dispose: vi.fn() })),
     onDidLayoutChange: vi.fn((cb: () => void) => {
       layoutChange = cb;
       return { dispose: vi.fn() };
@@ -166,6 +182,7 @@ function createDockviewApi(
       maximizedGroupChange = cb;
       return { dispose: vi.fn() };
     }),
+    onDidRemovePanel: vi.fn(() => ({ dispose: vi.fn() })),
     panels,
     toJSON: vi.fn(() => ({ panels: panels.map((panel) => panel.id) })),
     totalPanels: panels.length,
@@ -204,6 +221,7 @@ function waitMs(ms: number): Promise<void> {
 describe("WorkspaceHost", () => {
   beforeEach(() => {
     resetTerminalPresentationReconcilerForTests();
+    resetTerminalLaunchConfirmationsForTest();
     installPierWindowApi();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue(null);
     usePanelResourceStore.setState({ panels: {} });
@@ -642,7 +660,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("creates a terminal panel with launchId when main sends terminal.open", () => {
+  it("creates a terminal panel with launchId when main sends terminal.open", async () => {
     const bridge: {
       listener?: Parameters<typeof window.pier.rendererCommand.onCommand>[0];
     } = {};
@@ -687,8 +705,10 @@ describe("WorkspaceHost", () => {
       activePanel: null,
       addPanel,
       onDidActivePanelChange: vi.fn(),
+      onDidAddPanel: vi.fn(),
       onDidLayoutChange: vi.fn(),
       onDidMaximizedGroupChange: vi.fn(),
+      onDidRemovePanel: vi.fn(),
       panels: [],
       toJSON: vi.fn(() => ({ grid: { root: undefined } })),
       totalPanels: 0,
@@ -720,6 +740,11 @@ describe("WorkspaceHost", () => {
       "initialInput"
     );
     const panelId = addPanel.mock.calls[0]?.[0]?.id;
+    expect(resolve).not.toHaveBeenCalled();
+    await act(async () => {
+      confirmTerminalLaunch("launch-1");
+      await Promise.resolve();
+    });
     expect(resolve).toHaveBeenCalledWith({
       data: {
         context,
@@ -772,8 +797,10 @@ describe("WorkspaceHost", () => {
       activePanel: null,
       addPanel,
       onDidActivePanelChange: vi.fn(),
+      onDidAddPanel: vi.fn(),
       onDidLayoutChange: vi.fn(),
       onDidMaximizedGroupChange: vi.fn(),
+      onDidRemovePanel: vi.fn(),
       panels: [],
       toJSON: vi.fn(() => ({ grid: { root: undefined } })),
       totalPanels: 0,
@@ -863,5 +890,34 @@ describe("WorkspaceHost", () => {
     window.dispatchEvent(new Event("beforeunload"));
 
     expect(window.pier.workspace.saveLayout).not.toHaveBeenCalled();
+  });
+
+  it("persists panel parameter changes through the workspace layout", async () => {
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-params",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+
+    render(<WorkspaceHost />);
+    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
+    props?.onReady?.({ api: dockview.api });
+    await waitMs(0);
+    vi.mocked(window.pier.workspace.saveLayout).mockClear();
+
+    terminal.emitParametersChange({
+      floatingLayout: {
+        positions: { "runtime-controls": { x: 0.75, y: 0.25 } },
+        version: 1,
+      },
+    });
+    await waitMs(600);
+
+    expect(window.pier.workspace.saveLayout).toHaveBeenCalledWith(
+      { panels: ["terminal-params"] },
+      "record-current"
+    );
   });
 });

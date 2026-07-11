@@ -13,7 +13,6 @@ export interface TextareaRowProps {
   label: string;
   onBlur?: (value: string) => void;
   onChange?: (value: string) => void;
-  onEscape?: () => void;
   placeholder?: string;
   rows?: number;
   textareaClassName?: string;
@@ -30,12 +29,9 @@ export function TextareaRow({
   value,
   onBlur,
   onChange,
-  onEscape,
 }: TextareaRowProps) {
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Escape") {
-      onEscape?.();
-    } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.currentTarget.blur();
     }
   };

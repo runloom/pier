@@ -388,6 +388,9 @@ export function createRendererPluginContext(
           success: (update) => {
             toast.success(update, { id });
           },
+          update: (update) => {
+            toast.loading(update, { id });
+          },
         };
       },
       success: (message, options) => {

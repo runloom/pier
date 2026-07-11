@@ -17,7 +17,6 @@ export interface InputRowProps {
   min?: number;
   onBlur?: (value: string) => void;
   onChange?: (value: string) => void;
-  onEscape?: () => void;
   placeholder?: string;
   step?: number;
   type?: "text" | "number";
@@ -38,14 +37,11 @@ export function InputRow({
   value,
   onChange,
   onBlur,
-  onEscape,
 }: InputRowProps) {
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       // Enter 走与 blur 相同的提交路径。
       e.currentTarget.blur();
-    } else if (e.key === "Escape") {
-      onEscape?.();
     }
   };
   return (

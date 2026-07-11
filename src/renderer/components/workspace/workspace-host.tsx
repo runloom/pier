@@ -44,6 +44,10 @@ import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
 } from "./workspace-header-actions.tsx";
+import {
+  createWorkspaceLayoutSaveScheduler,
+  subscribeWorkspacePanelParameterChanges,
+} from "./workspace-layout-persistence.ts";
 import { runWorkspaceRendererCommand } from "./workspace-renderer-commands.ts";
 import { pierTheme } from "./workspace-theme.ts";
 
@@ -252,6 +256,12 @@ export function WorkspaceHost() {
         const windowContext = await windowContextPromise;
         await window.pier.workspace.saveLayout(json, windowContext.recordId);
       };
+      const layoutSave = createWorkspaceLayoutSaveScheduler({
+        delayMs: SAVE_DEBOUNCE_MS,
+        onError: (error) =>
+          console.error("[workspace] saveLayout failed:", error),
+        save: saveCurrentLayout,
+      });
 
       const flushCurrentLayout = async (
         envelope: RendererCommandEnvelope
@@ -292,23 +302,23 @@ export function WorkspaceHost() {
         setWorkspaceHasMaximizedGroup(nextHasMaximizedGroup);
       };
 
-      // onDidLayoutChange 双责任: 标记 userTouched (防 fromJSON 覆盖) + debounced save
-      let saveTimer: ReturnType<typeof setTimeout> | null = null;
+      // 结构变化与 panel params 变化都属于 layout JSON 的组成部分。dockview 的
+      // onDidLayoutChange 不包含 updateParameters，因此两条事件必须汇入同一个
+      // debounce 保存入口，否则浮层位置、指挥中心物料等参数只能活到本次渲染。
       event.api.onDidLayoutChange(() => {
         if (isApplyingPersistedLayout) {
           return; // program-driven, 不算 user touched
         }
         userTouched = true;
         syncTerminalPresentation(event.api, "dockview-layout");
-        if (saveTimer) {
-          clearTimeout(saveTimer);
+        layoutSave.schedule();
+      });
+      subscribeWorkspacePanelParameterChanges(event.api, () => {
+        if (isApplyingPersistedLayout) {
+          return;
         }
-        saveTimer = setTimeout(() => {
-          saveTimer = null;
-          saveCurrentLayout().catch((err) => {
-            console.error("[workspace] saveLayout failed:", err);
-          });
-        }, SAVE_DEBOUNCE_MS);
+        userTouched = true;
+        layoutSave.schedule();
       });
 
       // 关 500ms debounce 空窗：reload/关窗时若有未落盘的 layout 变更, 立即
@@ -316,12 +326,7 @@ export function WorkspaceHost() {
       // 写盘（否则面板创建后 <500ms 内 reload 会恢复到旧 layout——新面板
       // 从 UI 消失, 其活 pty 被 reconcile 判孤儿回收）。
       window.addEventListener("beforeunload", () => {
-        if (!saveTimer) {
-          return;
-        }
-        clearTimeout(saveTimer);
-        saveTimer = null;
-        if (!flushRecordId) {
+        if (!(layoutSave.cancelPending() && flushRecordId)) {
           return;
         }
         window.pier.workspace
