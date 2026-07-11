@@ -2,6 +2,10 @@ import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { Menubar as MenubarPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import {
+  CONTROL_HEIGHT_CLASS,
+  MENU_ITEM_DENSITY_CLASS,
+} from "./interactive-density.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -12,7 +16,8 @@ function Menubar({
   return (
     <MenubarPrimitive.Root
       className={cn(
-        "flex h-8 items-center rounded-2xl border p-[3px]",
+        CONTROL_HEIGHT_CLASS,
+        "flex items-center rounded-2xl border p-[3px]",
         className
       )}
       data-slot="menubar"
@@ -102,7 +107,8 @@ function MenubarItem({
   return (
     <MenubarPrimitive.Item
       className={cn(
-        "group/menubar-item relative flex min-h-7 select-none items-center gap-2 rounded-xl px-2 py-1.5 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 data-[variant=destructive]:text-destructive data-disabled:opacity-50 data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-[variant=destructive]:*:[svg]:text-destructive!",
+        MENU_ITEM_DENSITY_CLASS,
+        "group/menubar-item relative flex select-none items-center gap-2 rounded-xl px-2 outline-hidden focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 data-[variant=destructive]:text-destructive data-disabled:opacity-50 data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-[variant=destructive]:*:[svg]:text-destructive!",
         className
       )}
       data-inset={inset}
@@ -125,7 +131,8 @@ function MenubarCheckboxItem({
   return (
     <MenubarPrimitive.CheckboxItem
       className={cn(
-        "relative flex min-h-7 select-none items-center gap-2 rounded-xl py-1.5 pr-1.5 pl-7 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        MENU_ITEM_DENSITY_CLASS,
+        "relative flex select-none items-center gap-2 rounded-xl pr-1.5 pl-7 outline-hidden focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className
       )}
       data-inset={inset}
@@ -154,7 +161,8 @@ function MenubarRadioItem({
   return (
     <MenubarPrimitive.RadioItem
       className={cn(
-        "relative flex min-h-7 select-none items-center gap-2 rounded-xl py-1.5 pr-1.5 pl-7 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 data-disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        MENU_ITEM_DENSITY_CLASS,
+        "relative flex select-none items-center gap-2 rounded-xl pr-1.5 pl-7 outline-hidden focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-disabled:pointer-events-none data-inset:pl-7 data-disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className
       )}
       data-inset={inset}
@@ -237,7 +245,8 @@ function MenubarSubTrigger({
   return (
     <MenubarPrimitive.SubTrigger
       className={cn(
-        "flex min-h-7 select-none items-center gap-2 rounded-xl px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-open:bg-accent data-inset:pl-7 data-open:text-accent-foreground [&_svg:not([class*='size-'])]:size-4",
+        MENU_ITEM_DENSITY_CLASS,
+        "flex select-none items-center gap-2 rounded-xl px-2 outline-none focus:bg-accent focus:text-accent-foreground data-open:bg-accent data-inset:pl-7 data-open:text-accent-foreground [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       data-inset={inset}

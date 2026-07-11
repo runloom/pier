@@ -2,6 +2,10 @@ import { cva } from "class-variance-authority";
 import { ChevronDownIcon } from "lucide-react";
 import { NavigationMenu as NavigationMenuPrimitive } from "radix-ui";
 import type * as React from "react";
+import {
+  CONTROL_HEIGHT_CLASS,
+  MENU_ITEM_DENSITY_CLASS,
+} from "./interactive-density.ts";
 import { cn } from "./utils.ts";
 
 function NavigationMenu({
@@ -58,7 +62,10 @@ function NavigationMenuItem({
 }
 
 const navigationMenuTriggerStyle = cva(
-  "group/navigation-menu-trigger inline-flex h-9 w-max items-center justify-center rounded-2xl px-2.5 py-1.5 font-medium text-sm outline-none transition-all hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 data-open:bg-muted/50 data-popup-open:bg-muted/50 data-open:focus:bg-muted data-open:hover:bg-muted data-popup-open:hover:bg-muted"
+  cn(
+    CONTROL_HEIGHT_CLASS,
+    "group/navigation-menu-trigger inline-flex w-max items-center justify-center rounded-2xl px-2.5 font-medium text-sm outline-none transition-all hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 data-open:bg-muted/50 data-popup-open:bg-muted/50 data-open:focus:bg-muted data-open:hover:bg-muted data-popup-open:hover:bg-muted"
+  )
 );
 
 function NavigationMenuTrigger({
@@ -126,7 +133,8 @@ function NavigationMenuLink({
   return (
     <NavigationMenuPrimitive.Link
       className={cn(
-        "flex in-data-[slot=navigation-menu-content]:w-full items-center gap-2 in-data-[slot=navigation-menu-content]:rounded-xl rounded-2xl in-data-[slot=navigation-menu-content]:p-2 px-2.5 py-1.5 font-medium in-data-[slot=navigation-menu-content]:font-normal text-sm outline-none transition-all hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 data-[active=true]:bg-muted/50 data-[active=true]:focus:bg-muted data-[active=true]:hover:bg-muted [&_svg:not([class*='size-'])]:size-4",
+        MENU_ITEM_DENSITY_CLASS,
+        "flex in-data-[slot=navigation-menu-content]:w-full items-center gap-2 in-data-[slot=navigation-menu-content]:rounded-xl rounded-2xl px-2.5 font-medium in-data-[slot=navigation-menu-content]:font-normal outline-none transition-all hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 data-[active=true]:bg-muted/50 data-[active=true]:focus:bg-muted data-[active=true]:hover:bg-muted [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       data-slot="navigation-menu-link"

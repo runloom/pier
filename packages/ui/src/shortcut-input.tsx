@@ -6,6 +6,7 @@ import {
   InputGroupAddon,
   InputGroupButton,
 } from "./input-group.tsx";
+import { CONTROL_HEIGHT_CLASS } from "./interactive-density.ts";
 import { Kbd, KbdGroup } from "./kbd.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.tsx";
 import { cn } from "./utils.ts";
@@ -59,7 +60,8 @@ export function ShortcutInput({
         aria-label={recordLabel}
         aria-pressed="true"
         className={cn(
-          "h-8 w-44 rounded-2xl border-1 border-muted-foreground/40 bg-background px-4 text-muted-foreground shadow-[0_0_0_4px_var(--muted)] hover:bg-background hover:text-muted-foreground",
+          CONTROL_HEIGHT_CLASS,
+          "w-44 rounded-2xl border-1 border-muted-foreground/40 bg-background px-4 text-muted-foreground shadow-[0_0_0_4px_var(--muted)] hover:bg-background hover:text-muted-foreground",
           className
         )}
         data-recording="true"
@@ -79,7 +81,8 @@ export function ShortcutInput({
   return (
     <InputGroup
       className={cn(
-        "h-8 w-56 rounded-2xl border-input bg-background/90 p-1 shadow-xs",
+        CONTROL_HEIGHT_CLASS,
+        "w-56 rounded-2xl border-input bg-background/90 p-1 shadow-xs",
         className
       )}
       data-testid="shortcut-input"

@@ -143,5 +143,5 @@
   "renderer": "dist/renderer.js",
   "settingsPages": [{ "id": "pier.codex.accounts" }],
   "terminalStatusItems": [],
-  "version": "1.0.4"
+  "version": "1.0.5"
 }
