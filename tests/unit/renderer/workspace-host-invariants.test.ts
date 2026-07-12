@@ -69,6 +69,8 @@ const WORKSPACE_READY_WHEN_USER_TOUCHED_RE =
   /if \(userTouched\) \{[\s\S]{0,120}?notifyWorkspaceReady\(\);[\s\S]{0,80}?return;/;
 const BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE =
   /function RendererBootSignal\(\)[\s\S]{0,180}?useEffect\(\(\) => \{\s*window\.pier\?\.window\?\.readyToShow\?\.\(\)/;
+const FINAL_APP_RETAINS_BOOT_SIGNAL_RE =
+  /root\.render\(\s*<>\s*<RendererBootSignal key="application" \/>\s*<App \/>/;
 
 describe("workspace-host invariants (#17 #19)", () => {
   it("declares userTouched flag and uses it to gate fromJSON (防 user 操作被 saved layout 覆盖)", () => {
@@ -146,6 +148,7 @@ describe("workspace-host invariants (#17 #19)", () => {
     // 启动壳挂载即可显示窗口；布局恢复只更新 workspace ready 状态，慢初始化不应
     // 被 main 的 renderer boot watchdog 当成致命失败。
     expect(RENDERER_MAIN_SOURCE).toMatch(BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE);
+    expect(RENDERER_MAIN_SOURCE).toMatch(FINAL_APP_RETAINS_BOOT_SIGNAL_RE);
     expect(SOURCE).toMatch(WORKSPACE_READY_AFTER_LAYOUT_RE);
     expect(SOURCE).toMatch(WORKSPACE_READY_WHEN_USER_TOUCHED_RE);
     expect(SOURCE).not.toContain("readyToShow");

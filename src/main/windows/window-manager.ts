@@ -172,6 +172,7 @@ class WindowManager {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
       additionalArguments: [`--window-id=${id}`],
     };
     const baseOpts: Electron.BaseWindowConstructorOptions = {
@@ -181,6 +182,7 @@ class WindowManager {
       autoHideMenuBar: true,
       backgroundColor: NATIVE_CHROME_FALLBACK[resolved],
       ...(isMac && {
+        opacity: 0,
         titleBarStyle: "hiddenInset" as const,
         trafficLightPosition: { x: 12, y: 12 },
       }),
@@ -224,6 +226,11 @@ class WindowManager {
       retryRenderer: rendererShowGate.retry,
       window,
     });
+    if (isMac) {
+      // BaseWindow + WebContentsView 在完全隐藏时不会激活首个 renderer。
+      // 以透明、非激活窗口启动进程，真正可见性仍由 rendererShowGate 掌控。
+      window.host.showInactive();
+    }
     rendererShowGate.setReadyTimeoutHandler(() => {
       rendererFailure.report({
         detail: "renderer did not signal readiness before the startup deadline",

@@ -28,9 +28,8 @@ export function createRendererShowGate(input: {
     console.info("[window-startup]", { event, recordId, windowId, ...extra });
   };
   const clearListeners = () => {
+    ipcMain.off(PIER.WINDOW_RENDERER_BOOT_REQUEST, handleRendererBootRequest);
     ipcMain.off(PIER.WINDOW_RENDERER_READY, handleRendererReady);
-    window.webContents.off("did-start-navigation", handleNavigationStart);
-    window.webContents.off("dom-ready", handleDomReady);
   };
   const cancel = () => {
     if (bootTimer) clearTimeout(bootTimer);
@@ -43,6 +42,8 @@ export function createRendererShowGate(input: {
     didShow = true;
     cancel();
     if (window.isDestroyed()) return;
+    window.webContents.setBackgroundThrottling(true);
+    window.host.setOpacity(1);
     trace("show", { showMode: showInactive ? "inactive" : "active" });
     if (showInactive) window.host.showInactive();
     else {
@@ -66,7 +67,8 @@ export function createRendererShowGate(input: {
     trace("boot-ready");
     showOnce();
   }
-  function handleDomReady(): void {
+  function handleRendererBootRequest(event: Electron.IpcMainEvent): void {
+    if (event.sender !== window.webContents || bootChallenge !== null) return;
     bootChallenge = randomUUID();
     try {
       window.webContents.send(
@@ -81,19 +83,11 @@ export function createRendererShowGate(input: {
     }
     trace("boot-challenge");
   }
-  function handleNavigationStart(
-    _event: Electron.Event,
-    _url: string,
-    isInPlace: boolean,
-    isMainFrame: boolean
-  ): void {
-    if (!isMainFrame || isInPlace) return;
-    window.webContents.off("did-start-navigation", handleNavigationStart);
+  const arm = () => {
     bootChallenge = null;
+    ipcMain.on(PIER.WINDOW_RENDERER_BOOT_REQUEST, handleRendererBootRequest);
     ipcMain.on(PIER.WINDOW_RENDERER_READY, handleRendererReady);
-    window.webContents.once("dom-ready", handleDomReady);
-    trace("retry-navigation-start");
-  }
+  };
   const startBootDeadline = () => {
     bootTimer = setTimeout(() => {
       const payload = {
@@ -107,15 +101,17 @@ export function createRendererShowGate(input: {
       onReadyTimeout();
     }, RENDERER_BOOT_TIMEOUT_MS);
   };
-  ipcMain.on(PIER.WINDOW_RENDERER_READY, handleRendererReady);
-  window.webContents.once("dom-ready", handleDomReady);
+  // renderer 首个可用界面挂载后主动请求 challenge。窗口可见性的依据是实际
+  // UI 挂载，而不是 WebContentsView 初始 about:blank 与目标文档之间存在竞态的
+  // dom-ready 事件。每次重试重新 arm，旧 challenge 无法通过新一轮校验。
+  arm();
   startBootDeadline();
   return {
     cancel,
     retry: () => {
       if (!didShow) {
         cancel();
-        window.webContents.on("did-start-navigation", handleNavigationStart);
+        arm();
         startBootDeadline();
       }
       window.webContents.reload();

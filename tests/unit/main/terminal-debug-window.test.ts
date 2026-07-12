@@ -33,6 +33,7 @@ const electronMock = vi.hoisted(() => {
       }),
       reload: vi.fn(),
       send: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
     };
     const instance = {
       close: vi.fn(),
@@ -49,6 +50,7 @@ const electronMock = vi.hoisted(() => {
       on: vi.fn(() => instance),
       restore: vi.fn(),
       setBackgroundColor: vi.fn(),
+      setOpacity: vi.fn(),
       show: vi.fn(),
       showInactive: vi.fn(),
       webContents,
@@ -132,7 +134,9 @@ describe("terminal debug window IPC", () => {
     expect(window?.on).toHaveBeenCalledWith("closed", expect.any(Function));
     expect(window?.showInactive).not.toHaveBeenCalled();
 
-    window?.webOnceListeners.get("dom-ready")?.();
+    electronMock.ipcListeners.get("pier://window:renderer-boot-request")?.({
+      sender: window?.webContents,
+    });
     const challenge = window?.webContents.send.mock.calls.find(
       ([channel]) => channel === "pier://window:renderer-boot-challenge"
     )?.[1];

@@ -20,7 +20,9 @@ export function installRendererBootHandshake(
     }
   );
   return () => {
+    if (mounted) return;
     mounted = true;
+    ipcRenderer.send(PIER.WINDOW_RENDERER_BOOT_REQUEST);
     acknowledge();
   };
 }

@@ -23,6 +23,9 @@ describe("renderer boot handshake", () => {
   it("acknowledges a challenge that arrives after the shell mounts", () => {
     const { challenge, ipcRenderer, mounted } = fixture();
     mounted();
+    expect(ipcRenderer.send).toHaveBeenCalledWith(
+      "pier://window:renderer-boot-request"
+    );
     challenge("navigation-2");
 
     expect(ipcRenderer.send).toHaveBeenCalledWith(
@@ -38,6 +41,10 @@ describe("renderer boot handshake", () => {
 
     mounted();
 
+    expect(ipcRenderer.send).toHaveBeenNthCalledWith(
+      1,
+      "pier://window:renderer-boot-request"
+    );
     expect(ipcRenderer.send).toHaveBeenCalledWith(
       "pier://window:renderer-ready",
       "navigation-2"
@@ -52,6 +59,6 @@ describe("renderer boot handshake", () => {
     challenge("navigation-2");
     mounted();
 
-    expect(ipcRenderer.send).toHaveBeenCalledTimes(1);
+    expect(ipcRenderer.send).toHaveBeenCalledTimes(2);
   });
 });

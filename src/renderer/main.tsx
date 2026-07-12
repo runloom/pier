@@ -85,7 +85,7 @@ async function bootstrap() {
     }
     root.render(
       <>
-        <RendererBootSignal />
+        <RendererBootSignal key="terminal-debug" />
         <TerminalDebugWindow targetBrowserWindowId={targetBrowserWindowId} />
       </>
     );
@@ -94,7 +94,7 @@ async function bootstrap() {
   root.render(
     <>
       <AppDialogHost />
-      <RendererBootSignal />
+      <RendererBootSignal key="startup" />
       <StartupScreen />
     </>
   );
@@ -154,7 +154,12 @@ async function bootstrap() {
   // 协同, native terminal session 生命周期由 workspace 显式 close/reconcile
   // 管理. dev StrictMode 的诊断性 remount 对 native surface 没有业务含义,
   // 这里保持 dev/prod 行为一致, 避免给 reload 复用路径引入额外扰动.
-  root.render(<App />);
+  root.render(
+    <>
+      <RendererBootSignal key="application" />
+      <App />
+    </>
+  );
   requestAnimationFrame(() => {
     setTimeout(() => pluginBootstrap.startExternal(), 0);
   });
@@ -166,6 +171,7 @@ bootstrap().catch((err) => {
     getApplicationRoot().render(
       <>
         <AppDialogHost />
+        <RendererBootSignal key="startup-error" />
         <StartupErrorScreen error={err} />
       </>
     );

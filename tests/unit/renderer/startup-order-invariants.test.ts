@@ -30,8 +30,9 @@ describe("renderer startup ordering", () => {
   });
 
   it("renders App before starting external plugins", () => {
-    expect(source.indexOf("root.render(<App />)")).toBeGreaterThan(-1);
-    expect(source.indexOf("root.render(<App />)")).toBeLessThan(
+    const appRender = source.indexOf("<App />");
+    expect(appRender).toBeGreaterThan(-1);
+    expect(appRender).toBeLessThan(
       source.indexOf("pluginBootstrap.startExternal()")
     );
     expect(source.indexOf("requestAnimationFrame(() =>")).toBeLessThan(
@@ -42,5 +43,8 @@ describe("renderer startup ordering", () => {
   it("renders a visible fatal state when bootstrap rejects", () => {
     expect(source).toContain("<StartupErrorScreen error={err} />");
     expect(source).toContain("window.pier?.window?.readyToShow?.()");
+    expect(source).toMatch(
+      /<RendererBootSignal key="startup-error" \/>\s*<StartupErrorScreen error=\{err\} \/>/
+    );
   });
 });

@@ -19,6 +19,7 @@ const electronMock = vi.hoisted(() => {
     loadURL: vi.fn(async () => undefined),
     mainFrame,
     reload: vi.fn(),
+    setBackgroundThrottling: vi.fn(),
     off: vi.fn((event: string) => {
       webListeners.delete(event);
       webOnceListeners.delete(event);
@@ -67,6 +68,7 @@ const electronMock = vi.hoisted(() => {
     }),
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
+    setOpacity: vi.fn(),
     show: vi.fn(),
     showInactive: vi.fn(),
   };
@@ -131,7 +133,9 @@ describeMockedMacOSWindowManager(
   "macOS window manager WebContentsView hosting",
   (platform) => {
     const bootChallenge = (): unknown => {
-      electronMock.webOnceListeners.get("dom-ready")?.();
+      electronMock.ipcMainListeners.get(
+        "pier://window:renderer-boot-request"
+      )?.({ sender: electronMock.webContents });
       return [...electronMock.webContents.send.mock.calls]
         .reverse()
         .find(
@@ -181,6 +185,7 @@ describeMockedMacOSWindowManager(
       expect(electron.BaseWindow).toHaveBeenCalledWith(
         expect.objectContaining({
           backgroundColor: "#1e1e1e",
+          opacity: 0,
           show: false,
           titleBarStyle: "hiddenInset",
         })
@@ -190,6 +195,7 @@ describeMockedMacOSWindowManager(
         expect.objectContaining({
           webPreferences: expect.objectContaining({
             additionalArguments: ["--window-id=main"],
+            backgroundThrottling: false,
             contextIsolation: true,
             nodeIntegration: false,
             preload: expect.stringContaining("preload/index.cjs"),
@@ -390,11 +396,38 @@ describeMockedMacOSWindowManager(
       windowManager.create({ id: "main" });
 
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
+      expect(electronMock.baseWindow.showInactive).toHaveBeenCalledOnce();
 
       signalRendererBoot();
 
       expect(electronMock.baseWindow.show).toHaveBeenCalledOnce();
-      expect(electronMock.baseWindow.showInactive).not.toHaveBeenCalled();
+      expect(electronMock.baseWindow.showInactive).toHaveBeenCalledOnce();
+      expect(electronMock.baseWindow.setOpacity).toHaveBeenCalledWith(1);
+      expect(
+        electronMock.webContents.setBackgroundThrottling
+      ).toHaveBeenCalledWith(true);
+    });
+
+    it("issues the boot challenge only to the requesting renderer", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main" });
+
+      electronMock.ipcMainListeners.get(
+        "pier://window:renderer-boot-request"
+      )?.({ sender: {} });
+      expect(electronMock.webContents.send).not.toHaveBeenCalledWith(
+        "pier://window:renderer-boot-challenge",
+        expect.anything()
+      );
+
+      electronMock.ipcMainListeners.get(
+        "pier://window:renderer-boot-request"
+      )?.({ sender: electronMock.webContents });
+      expect(electronMock.webContents.send).toHaveBeenCalledWith(
+        "pier://window:renderer-boot-challenge",
+        expect.any(String)
+      );
     });
 
     it("shows restored background windows without stealing focus", async () => {
@@ -403,7 +436,7 @@ describeMockedMacOSWindowManager(
       windowManager.create({ id: "main", showInactive: true });
       signalRendererBoot();
 
-      expect(electronMock.baseWindow.showInactive).toHaveBeenCalledOnce();
+      expect(electronMock.baseWindow.showInactive).toHaveBeenCalledTimes(2);
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
     });
 
@@ -455,7 +488,9 @@ describeMockedMacOSWindowManager(
       const { windowManager } = await import("@main/windows/window-manager.ts");
       windowManager.create({ id: "main" });
 
-      electronMock.webOnceListeners.get("dom-ready")?.();
+      electronMock.ipcMainListeners.get(
+        "pier://window:renderer-boot-request"
+      )?.({ sender: electronMock.webContents });
 
       await vi.waitFor(() =>
         expect(electronMock.showMessageBox).toHaveBeenCalledOnce()
@@ -683,32 +718,13 @@ describeMockedMacOSWindowManager(
       );
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
 
-      electronMock.webListeners.get("did-start-navigation")?.(
-        {},
-        "about:blank#ignored",
-        true,
-        true
-      );
-      electronMock.webListeners.get("did-start-navigation")?.(
-        {},
-        "https://iframe.invalid",
-        false,
-        false
-      );
-      expect(
-        electronMock.ipcMainListeners.has("pier://window:renderer-ready")
-      ).toBe(false);
-      electronMock.webListeners.get("did-start-navigation")?.(
-        {},
-        "http://127.0.0.1:5173",
-        false,
-        true
-      );
+      electronMock.ipcMainListeners.get(
+        "pier://window:renderer-boot-request"
+      )?.({ sender: electronMock.webContents });
       electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
         { sender: electronMock.webContents },
         "stale-challenge"
       );
-      electronMock.webOnceListeners.get("dom-ready")?.();
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
       const challenge = [...electronMock.webContents.send.mock.calls]
         .reverse()
@@ -751,12 +767,9 @@ describeMockedMacOSWindowManager(
       );
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
 
-      electronMock.webListeners.get("did-start-navigation")?.(
-        {},
-        "http://127.0.0.1:5173",
-        false,
-        true
-      );
+      electronMock.ipcMainListeners.get(
+        "pier://window:renderer-boot-request"
+      )?.({ sender: electronMock.webContents });
       const challenge = bootChallenge();
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
       electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
