@@ -8,7 +8,10 @@ const POLL_INTERVAL_MS = 250;
 const MAX_READ_BYTES = 1024 * 1024;
 const MAX_TRANSCRIPTS = 32;
 const MAX_TURN_CONTEXTS = 64;
+const MAX_PENDING_TERMINALS = 64;
 const MAX_SEEN_TERMINALS = 256;
+
+type TerminalType = "task_complete" | "turn_aborted";
 
 interface TranscriptEntry {
   contextsByTurnId: Map<string, AgentHookEventPayload>;
@@ -16,6 +19,7 @@ interface TranscriptEntry {
   offset: number;
   owners: Map<string, AgentHookEventPayload>;
   pending: boolean;
+  pendingTerminalsByTurnId: Map<string, TerminalType>;
   processing: boolean;
   seenTerminalEvents: Set<string>;
   watcher: (curr: Stats, prev: Stats) => void;
@@ -125,34 +129,52 @@ export function createCodexTranscriptReconciler(
       }
       const turnId =
         typeof payload?.turn_id === "string" ? payload.turn_id : "";
-      if (turnId) {
-        const dedupeKey = `${terminalType}:${turnId}`;
-        if (entry.seenTerminalEvents.has(dedupeKey)) return;
-        entry.seenTerminalEvents.add(dedupeKey);
-        if (entry.seenTerminalEvents.size > MAX_SEEN_TERMINALS) {
-          entry.seenTerminalEvents.delete(
-            entry.seenTerminalEvents.values().next().value ?? ""
-          );
-        }
-      }
       let context: AgentHookEventPayload | undefined;
       if (turnId) context = entry.contextsByTurnId.get(turnId);
       else if (entry.owners.size === 1) {
         context = entry.owners.values().next().value;
       }
-      if (!context) return;
-      if (turnId) {
-        entry.contextsByTurnId.delete(turnId);
+      if (!context) {
+        if (turnId && !entry.pendingTerminalsByTurnId.has(turnId)) {
+          entry.pendingTerminalsByTurnId.set(turnId, terminalType);
+          if (entry.pendingTerminalsByTurnId.size > MAX_PENDING_TERMINALS) {
+            entry.pendingTerminalsByTurnId.delete(
+              entry.pendingTerminalsByTurnId.keys().next().value ?? ""
+            );
+          }
+        }
+        return;
       }
-      opts.onTerminalEvent({
-        ...context,
-        event:
-          terminalType === "turn_aborted" ? "TurnInterrupted" : "TurnCompleted",
-        ...(turnId ? { turnId } : {}),
-      });
+      emitTerminalEvent(entry, context, terminalType, turnId);
     } catch {
       // transcript 是兼容性对账源；坏行和格式升级不得影响主 hook 通路。
     }
+  }
+
+  function emitTerminalEvent(
+    entry: TranscriptEntry,
+    context: AgentHookEventPayload,
+    terminalType: TerminalType,
+    turnId: string
+  ): void {
+    if (turnId) {
+      const dedupeKey = `${terminalType}:${turnId}`;
+      if (entry.seenTerminalEvents.has(dedupeKey)) return;
+      entry.seenTerminalEvents.add(dedupeKey);
+      if (entry.seenTerminalEvents.size > MAX_SEEN_TERMINALS) {
+        entry.seenTerminalEvents.delete(
+          entry.seenTerminalEvents.values().next().value ?? ""
+        );
+      }
+      entry.contextsByTurnId.delete(turnId);
+      entry.pendingTerminalsByTurnId.delete(turnId);
+    }
+    opts.onTerminalEvent({
+      ...context,
+      event:
+        terminalType === "turn_aborted" ? "TurnInterrupted" : "TurnCompleted",
+      ...(turnId ? { turnId } : {}),
+    });
   }
 
   function scheduleDrain(path: string, entry: TranscriptEntry): void {
@@ -233,6 +255,7 @@ export function createCodexTranscriptReconciler(
       offset: initial.size,
       owners: new Map(),
       pending: false,
+      pendingTerminalsByTurnId: new Map(),
       processing: false,
       seenTerminalEvents: new Set(),
       watcher,
@@ -330,6 +353,10 @@ export function createCodexTranscriptReconciler(
           entry.contextsByTurnId.delete(
             entry.contextsByTurnId.keys().next().value ?? ""
           );
+        }
+        const pendingTerminal = entry.pendingTerminalsByTurnId.get(turnId);
+        if (pendingTerminal) {
+          emitTerminalEvent(entry, event, pendingTerminal, turnId);
         }
       }
       scheduleDrain(canonicalPath, entry);

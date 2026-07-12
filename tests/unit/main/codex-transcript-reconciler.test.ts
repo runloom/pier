@@ -92,6 +92,30 @@ describe("codex transcript reconciler", () => {
     reconciler.dispose();
   });
 
+  it("终态先于对应 hook 到达时暂存，注册 turn 上下文后补派发", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-existing"));
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"reason":"interrupted","turn_id":"turn-late-hook","type":"turn_aborted"}}\n'
+    );
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
+    expect(received).toHaveLength(0);
+
+    await reconciler.observe(hookEvent(path, "turn-late-hook"));
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toMatchObject({
+      event: "TurnInterrupted",
+      turnId: "turn-late-hook",
+    });
+    reconciler.dispose();
+  });
+
   it("缺少 turn_id 的多个终态不会跨回合误去重", async () => {
     const received: AgentHookEventPayload[] = [];
     const reconciler = createCodexTranscriptReconciler({
