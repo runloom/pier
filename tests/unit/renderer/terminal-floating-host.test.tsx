@@ -120,6 +120,19 @@ describe("terminal panel floating host", () => {
     expect(primary?.style.width).toBe("fit-content");
     expect(primary?.style.minWidth).toBe("min(20rem, calc(100% - 1rem))");
     expect(primary?.style.maxWidth).toBe("min(25rem, calc(100% - 1rem))");
+    expect(primary?.style.left).toBe("160px");
+    expect(primary?.style.top).toBe("8px");
+    expect(primary?.style.transform).toBe("");
+    const shell = primary?.firstElementChild;
+    expect(shell).toHaveClass(
+      "rounded-full",
+      "border",
+      "border-border",
+      "bg-popover",
+      "shadow-background/40",
+      "shadow-lg"
+    );
+    expect(shell).not.toHaveClass("ring-1", "ring-foreground/5");
 
     const handle = screen.getByRole("button", { name: "Move run controls" });
     expect(handle).toHaveAttribute("data-slot", "button");
