@@ -34,6 +34,7 @@ export const settings = {
     copyPatterns: {
       addPattern: "Add pattern",
       hint: "Glob patterns matched against gitignored files in the main worktree — matches are copied into new worktrees on creation.",
+      patternLabel: "File pattern",
       placeholder: ".env*",
       remove: "Remove",
       title: "Copy on create",
@@ -53,8 +54,10 @@ export const settings = {
     emptyTitle: "No environment settings",
     envVars: {
       addVariable: "Add variable",
+      keyLabel: "Variable name",
       remove: "Remove",
       title: "Variables",
+      valueLabel: "Variable value",
     },
     save: "Save",
     setupCommand: "Setup command",
@@ -232,7 +235,10 @@ export const settings = {
       enabled: "Enabled",
       disabled: "Disabled",
       manifestOnly: "Manifest preview",
+      runtimeUnavailable: "Not loaded",
     },
+    runtimeUnavailableDescription:
+      "This plugin is installed but did not enter the current runtime. Restart Pier; if the issue persists, reinstall the plugin.",
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",
@@ -249,7 +255,11 @@ export const settings = {
     loadingDescription: "Reading plugin manifests...",
     emptyTitle: "No plugins found",
     emptyDescription: "Built-in and local plugins will appear here.",
-    diagnosticsTitle: "Plugin diagnostics",
+    diagnostics: {
+      invalidManifest: "Plugin manifest could not be read",
+      runtime: "Plugin failed to load",
+      unsupported: "Plugin is not supported",
+    },
     errorTitle: "Unable to load plugins",
     openSettings: "Settings",
     openSettingsPlugin: "Open {{name}} settings",

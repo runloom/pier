@@ -6,6 +6,20 @@ import { join, resolve } from "node:path";
 const repoRoot = resolve(process.cwd());
 const indexFile = join(repoRoot, "plugins", "index.v1.json");
 const releaseBase = "https://github.com/runloom/pier/releases/download";
+const assetSource = parseAssetSource(process.argv.slice(2));
+
+function parseAssetSource(args) {
+  if (args.length === 0) {
+    return "local";
+  }
+  if (args.length === 1 && args[0] === "--source=release") {
+    return "release";
+  }
+  if (args.length === 1 && args[0] === "--source=local") {
+    return "local";
+  }
+  fail(`unsupported arguments: ${args.join(" ")}`);
+}
 
 function releaseTail(id) {
   return id.replace(/^pier\./, "").replace(/\./g, "-");
@@ -44,6 +58,19 @@ async function sha256File(filePath) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function assertAssetDigest(id, version, entry, actualSize, actualSha) {
+  if (actualSize !== entry.size) {
+    fail(
+      `${id}@${version} size mismatch: expected ${entry.size}, got ${actualSize}`
+    );
+  }
+  if (actualSha !== entry.sha256) {
+    fail(
+      `${id}@${version} sha256 mismatch: expected ${entry.sha256}, got ${actualSha}`
+    );
+  }
+}
+
 async function readIndex() {
   const raw = await readFile(indexFile, "utf8");
   try {
@@ -75,19 +102,40 @@ async function verifyLocalAsset(id, version, entry) {
   if (!assetStat) {
     fail(`missing local package asset for ${id}@${version}: ${assetPath}`);
   }
-
-  if (assetStat.size !== entry.size) {
-    fail(
-      `${id}@${version} size mismatch: expected ${entry.size}, got ${assetStat.size}`
-    );
-  }
-
   const actualSha = await sha256File(assetPath);
-  if (actualSha !== entry.sha256) {
+  assertAssetDigest(id, version, entry, assetStat.size, actualSha);
+}
+
+async function verifyReleaseAsset(id, version, entry) {
+  let response;
+  try {
+    response = await fetch(entry.assetUrl, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (err) {
     fail(
-      `${id}@${version} sha256 mismatch: expected ${entry.sha256}, got ${actualSha}`
+      `could not download ${id}@${version}: ${err instanceof Error ? err.message : String(err)}`
     );
   }
+  if (!(response.ok && response.body)) {
+    fail(
+      `could not download ${id}@${version}: HTTP ${response.status} ${response.statusText}`
+    );
+  }
+
+  const digest = createHash("sha256");
+  let actualSize = 0;
+  for await (const chunk of response.body) {
+    actualSize += chunk.byteLength;
+    if (actualSize > entry.size) {
+      fail(
+        `${id}@${version} size mismatch: expected ${entry.size}, got more than ${entry.size}`
+      );
+    }
+    digest.update(chunk);
+  }
+  assertAssetDigest(id, version, entry, actualSize, digest.digest("hex"));
 }
 
 async function verifyIndex() {
@@ -123,8 +171,12 @@ async function verifyIndex() {
         fail(`${id}@${version} size must be a positive integer`);
       }
 
-      await verifyLocalAsset(id, version, entry);
-      console.log(`verified ${id}@${version}`);
+      if (assetSource === "release") {
+        await verifyReleaseAsset(id, version, entry);
+      } else {
+        await verifyLocalAsset(id, version, entry);
+      }
+      console.log(`verified ${id}@${version} from ${assetSource}`);
     }
   }
 }

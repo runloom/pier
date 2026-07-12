@@ -23,6 +23,8 @@ export interface CreateCodexProviderOpts {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
   };
+  /** 可注入的用量读取实现（单测验证临时凭据写回）。 */
+  fetchUsageImpl?: typeof fetchCodexUsage;
   /** ~/.codex 真实路径（默认 `$HOME/.codex`）。 */
   realCodexHome: string;
   /** 可注入的 login spawn 替身（单测用）。 */
@@ -73,6 +75,7 @@ export function createCodexProvider(
 ): AgentAccountProvider {
   const realCodexHome = opts?.realCodexHome ?? defaultRealCodexHome();
   const spawnLogin = opts?.spawnLogin ?? defaultSpawnLogin;
+  const fetchUsageImpl = opts?.fetchUsageImpl ?? fetchCodexUsage;
   const credentials = opts?.credentials;
   const credentialTails = new Map<string, Promise<void>>();
 
@@ -139,11 +142,42 @@ export function createCodexProvider(
     const content = await readManagedAuth(accountHomeDir);
     await mkdir(accountHomeDir, { recursive: true });
     await writeFileAtomic(authPath, content, { mode: 0o600 });
+
+    let operation: { error: unknown; ok: false } | { ok: true; value: T };
     try {
-      return await fn();
+      operation = { ok: true, value: await fn() };
+    } catch (error) {
+      operation = { error, ok: false };
+    }
+
+    let writeBackError: unknown = null;
+    try {
+      const updated = await readFile(authPath, "utf-8").catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        }
+      );
+      if (updated !== null && updated !== content) {
+        await credentials.set(credentialKey(accountHomeDir), updated);
+      }
+    } catch (error) {
+      writeBackError = error;
     } finally {
       await rm(authPath, { force: true });
     }
+
+    if (!operation.ok) {
+      if (writeBackError) {
+        throw new AggregateError(
+          [operation.error, writeBackError],
+          "Codex operation and credential write-back failed"
+        );
+      }
+      throw operation.error;
+    }
+    if (writeBackError) throw writeBackError;
+    return operation.value;
   }
 
   async function withManagedAuth<T>(
@@ -270,10 +304,10 @@ export function createCodexProvider(
     ): Promise<AccountUsageResult> {
       if (accountHomeDir && credentials) {
         return await withManagedAuth(accountHomeDir, () =>
-          fetchCodexUsage(signal, { accountHomeDir })
+          fetchUsageImpl(signal, { accountHomeDir })
         );
       }
-      return await fetchCodexUsage(signal, {
+      return await fetchUsageImpl(signal, {
         ...(accountHomeDir ? { accountHomeDir } : {}),
       });
     },

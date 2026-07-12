@@ -1,5 +1,7 @@
 // RGL v2 CSS（v2 合并了 react-resizable 样式，只需一个 CSS 文件）
 import "react-grid-layout/css/styles.css";
+import "./mission-control-resize-handle.css";
+import { Badge } from "@pier/ui/badge.tsx";
 import type {
   MissionControlGridSize,
   MissionControlPanelWidgetEntry,
@@ -178,6 +180,7 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
     handleResizeMove,
     handleResizeStop,
     renderedLayout,
+    resizePreview,
   } = useMissionControlGridInteractions({
     cols,
     getSizeDeclaration,
@@ -278,9 +281,9 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
         "flex h-full min-h-0 min-w-0 flex-col bg-surface-canvas",
         "[&_.react-grid-item.react-draggable-dragging]:transition-none [&_.react-grid-item.resizing]:transition-none [&_.react-grid-item]:transition-[transform,width,height] [&_.react-grid-item]:duration-150",
         "[&_.react-grid-placeholder]:rounded-xl! [&_.react-grid-placeholder]:bg-primary/10! [&_.react-grid-placeholder]:opacity-100!",
-        "[&_.react-grid-item:hover_.react-resizable-handle]:opacity-100 [&_.react-resizable-handle]:opacity-40",
         "[&_.react-grid-item.react-draggable-dragging]:z-30",
         "[&_.react-grid-item.react-draggable-dragging_[data-slot=card]]:shadow-lg",
+        "[&_.react-grid-item.resizing_[data-slot=card]]:ring-2 [&_.react-grid-item.resizing_[data-slot=card]]:ring-ring/50",
         "[&_[data-highlighted=true]_[data-slot=card]]:ring-2 [&_[data-highlighted=true]_[data-slot=card]]:ring-primary/50",
       ].join(" ")}
     >
@@ -342,7 +345,7 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
                   key={widget.instanceId}
                 >
                   <div
-                    className="h-full transition-transform duration-150"
+                    className="relative h-full transition-transform duration-150"
                     data-mission-control-preview-instance-id={widget.instanceId}
                     style={missionControlPreviewTransform(
                       dragPreviewOffsets.get(widget.instanceId)
@@ -368,6 +371,18 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
                       visible={visible}
                       widget={widget}
                     />
+                    {resizePreview?.instanceId === widget.instanceId &&
+                    resizePreview.size ? (
+                      <Badge
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-3 bottom-3 z-20 tabular-nums"
+                        data-testid="mission-control-resize-size"
+                        size="xs"
+                        variant="secondary"
+                      >
+                        {resizePreview.size.w} × {resizePreview.size.h}
+                      </Badge>
+                    ) : null}
                   </div>
                 </div>
               );

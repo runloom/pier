@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createCodexAccountsService,
   SYSTEM_USAGE_CACHE_KEY,
+  USAGE_REFRESH_CONCURRENCY,
 } from "../../../packages/plugin-codex/src/main/accounts-service.ts";
 import type { AccountIdentity } from "../../../packages/plugin-codex/src/main/identity.ts";
 import { createCodexAccountsStateStore } from "../../../packages/plugin-codex/src/main/state.ts";
@@ -31,6 +32,7 @@ function createProvider(
     fetchUsage: vi.fn(
       async (): Promise<AccountUsageResult> => ({
         status: "ok",
+        windows: [],
       })
     ),
     login: vi.fn(async () => undefined),
@@ -50,6 +52,19 @@ function createProvider(
     syncBack: vi.fn(async () => "ok" as const),
     watchExternalAuth: vi.fn(() => () => undefined),
     ...overrides,
+  };
+}
+
+function usageWindow(
+  usedPercent: number,
+  windowMinutes = 300,
+  position: "primary" | "secondary" = "primary"
+): AccountUsageResult["windows"][number] {
+  return {
+    id: `codex:${position}`,
+    limitId: "codex",
+    usedPercent,
+    windowMinutes,
   };
 }
 
@@ -396,9 +411,8 @@ describe("pier.codex accounts service", () => {
     const provider = createProvider({
       fetchUsage: vi.fn(
         async (): Promise<AccountUsageResult> => ({
-          session: { usedPercent: 32 },
           status: "ok",
-          weekly: { usedPercent: 12, windowMinutes: 10_080 },
+          windows: [usageWindow(32), usageWindow(12, 10_080, "secondary")],
         })
       ),
       readCurrentIdentity: vi.fn(async () => null),
@@ -418,8 +432,9 @@ describe("pier.codex accounts service", () => {
     const snap = service.snapshot();
     expect(snap.activeAccountId).toBeNull();
     expect(snap.activeUsage?.status).toBe("ok");
-    expect(snap.activeUsage?.session?.usedPercent).toBe(32);
-    expect(snap.activeUsage?.weekly?.usedPercent).toBe(12);
+    expect(
+      snap.activeUsage?.windows.map((window) => window.usedPercent)
+    ).toEqual([32, 12]);
     expect(provider.fetchUsage).toHaveBeenCalled();
     service.dispose();
   });
@@ -427,8 +442,8 @@ describe("pier.codex accounts service", () => {
   it("activeUsage mirrors managed account usage when one is active", async () => {
     const { provider, service } = await seedManagedActiveAccount(dir);
     vi.mocked(provider.fetchUsage).mockResolvedValue({
-      session: { usedPercent: 55 },
       status: "ok",
+      windows: [usageWindow(55)],
     });
 
     await service.refreshUsage({ force: true });
@@ -437,8 +452,8 @@ describe("pier.codex accounts service", () => {
     const activeAccount = snap.accounts.find(
       (account) => account.id === "managed-active"
     );
-    expect(activeAccount?.usage?.session?.usedPercent).toBe(55);
-    expect(snap.activeUsage?.session?.usedPercent).toBe(55);
+    expect(activeAccount?.usage?.windows[0]?.usedPercent).toBe(55);
+    expect(snap.activeUsage?.windows[0]?.usedPercent).toBe(55);
     service.dispose();
   });
 
@@ -476,8 +491,8 @@ describe("pier.codex accounts service", () => {
     );
     const provider = createProvider({
       fetchUsage: vi.fn(async () => ({
-        session: { usedPercent: 42 },
         status: "ok" as const,
+        windows: [usageWindow(42)],
       })),
     });
     const service = createCodexAccountsService({
@@ -498,11 +513,135 @@ describe("pier.codex accounts service", () => {
     expect(snapshot.activeAccountId).toBe("account-1");
     expect(
       snapshot.accounts.find((account) => account.id === "account-2")?.usage
-        ?.session?.usedPercent
+        ?.windows[0]?.usedPercent
     ).toBe(42);
     expect(
       snapshot.accounts.find((account) => account.id === "account-2")?.planType
     ).toBe("pro");
+    service.dispose();
+  });
+
+  it("refreshes every managed account with bounded concurrency", async () => {
+    const stateFile = join(dir, "accounts.json");
+    const managedBaseDir = join(dir, "managed");
+    const accounts = Array.from({ length: 5 }, (_, index) => ({
+      createdAt: 1,
+      email: `account-${index}@example.com`,
+      id: `account-${index}`,
+      provider: "codex",
+      providerAccountId: `provider-${index}`,
+      updatedAt: 1,
+    }));
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        accounts,
+        activeAccountId: "account-0",
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchUsage = vi.fn(
+      async (_accountHomeDir?: string): Promise<AccountUsageResult> => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { status: "ok", windows: [usageWindow(10)] };
+      }
+    );
+    const service = createCodexAccountsService({
+      managedBaseDir,
+      onChanged: vi.fn(),
+      provider: createProvider({
+        fetchUsage,
+        readCurrentIdentity: vi.fn(async () => null),
+      }),
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+    await service.refreshAllUsage();
+    fetchUsage.mockClear();
+    await service.refreshAllUsage({ force: true });
+
+    const refreshedHomes = new Set(fetchUsage.mock.calls.map(([home]) => home));
+    expect(refreshedHomes).toEqual(
+      new Set(
+        accounts.map((account) => join(managedBaseDir, "codex", account.id))
+      )
+    );
+    expect(maxInFlight).toBeLessThanOrEqual(USAGE_REFRESH_CONCURRENCY);
+    for (const account of service.snapshot().accounts) {
+      expect(account.usage?.windows[0]?.usedPercent).toBe(10);
+    }
+    service.dispose();
+  });
+
+  it("does not start quota polling without a visible consumer", async () => {
+    const stateFile = join(dir, "accounts.json");
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        accounts: [
+          {
+            createdAt: 1,
+            email: "account@example.com",
+            id: "account-1",
+            provider: "codex",
+            providerAccountId: "provider-1",
+            updatedAt: 1,
+          },
+        ],
+        activeAccountId: "account-1",
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const provider = createProvider({
+      readCurrentIdentity: vi.fn(async () => null),
+    });
+    const service = createCodexAccountsService({
+      hasVisibleTarget: () => false,
+      managedBaseDir: join(dir, "managed"),
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+
+    await service.init();
+
+    expect(provider.fetchUsage).not.toHaveBeenCalled();
+    service.dispose();
+  });
+
+  it("retains the last successful quota when a refresh fails", async () => {
+    const { provider, service } = await seedManagedActiveAccount(dir);
+    await service.refreshAllUsage();
+    vi.mocked(provider.fetchUsage).mockReset();
+    vi.mocked(provider.fetchUsage)
+      .mockResolvedValueOnce({
+        status: "ok",
+        windows: [usageWindow(25)],
+      })
+      .mockResolvedValueOnce({
+        error: "token expired",
+        status: "error",
+        windows: [],
+      });
+
+    await service.refreshUsage({ accountId: "managed-active", force: true });
+    await service.refreshUsage({ accountId: "managed-active", force: true });
+
+    const usage = service.snapshot().accounts[0]?.usage;
+    expect(usage).toMatchObject({
+      error: "token expired",
+      status: "error",
+      windows: [{ usedPercent: 25 }],
+    });
     service.dispose();
   });
 

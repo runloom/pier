@@ -1,3 +1,4 @@
+import { cn } from "@pier/ui/utils.ts";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type {
@@ -29,7 +30,10 @@ export function RestoredTaskResultView({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: 恢复后的终端结果是原生右键菜单触发面，没有准确的交互 ARIA role
     <div
-      className={`${className} overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]`}
+      className={cn(
+        "overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]",
+        className
+      )}
       data-scrollbar="stable"
       data-testid="terminal-task-result"
       onContextMenu={onContextMenu}
@@ -77,7 +81,10 @@ export function RestoredAgentResultView({
 
   return (
     <div
-      className={`${className} overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]`}
+      className={cn(
+        "overflow-auto bg-[var(--terminal-background,var(--background))] px-2 py-1.5 font-mono text-[var(--terminal-foreground,var(--foreground))] leading-[1.35]",
+        className
+      )}
       data-scrollbar="stable"
       data-testid="terminal-agent-result"
       style={{ fontFamily, fontSize }}

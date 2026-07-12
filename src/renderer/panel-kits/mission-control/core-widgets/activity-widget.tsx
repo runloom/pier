@@ -1,3 +1,4 @@
+import { cn } from "@pier/ui/utils.ts";
 import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
@@ -31,13 +32,16 @@ function StatTile({
         {dotClass ? (
           <span
             aria-hidden="true"
-            className={`size-2 shrink-0 rounded-full ${dotClass}`}
+            className={cn("size-2 shrink-0 rounded-full", dotClass)}
           />
         ) : null}
         <span className="truncate text-muted-foreground text-xs">{label}</span>
       </div>
       <p
-        className={`@[14rem]:mt-1 font-semibold @[14rem]:text-2xl text-lg leading-tight ${value === 0 ? "text-muted-foreground" : "text-foreground"}`}
+        className={cn(
+          "@[14rem]:mt-1 font-semibold @[14rem]:text-2xl text-lg leading-tight",
+          value === 0 ? "text-muted-foreground" : "text-foreground"
+        )}
       >
         {value}
       </p>
@@ -137,7 +141,10 @@ export function ActivityWidget(_props: MissionControlWidgetComponentProps) {
         <div className="flex flex-col">
           {rows.map((activity, i) => (
             <button
-              className={`flex items-center justify-between gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-accent/50 ${i > 0 ? "border-border/50 border-t" : ""}`}
+              className={cn(
+                "flex items-center justify-between gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-accent/50",
+                i > 0 && "border-border/50 border-t"
+              )}
               key={activity.panelId}
               onClick={() => handleReveal(activity.panelId)}
               type="button"
@@ -145,7 +152,10 @@ export function ActivityWidget(_props: MissionControlWidgetComponentProps) {
               <span className="flex min-w-0 items-center gap-2">
                 <span
                   aria-hidden="true"
-                  className={`size-2 shrink-0 rounded-full ${activityStatusDot(activity)}`}
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    activityStatusDot(activity)
+                  )}
                 />
                 <span className="truncate font-medium text-sm">
                   {activityLabel(activity, t)}

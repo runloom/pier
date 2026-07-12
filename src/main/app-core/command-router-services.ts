@@ -26,6 +26,7 @@ import type { PluginSettingsService } from "../services/plugin-settings-service.
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
+import type { UsageDataService } from "../services/usage-data/usage-data-service.ts";
 import type { WorktreeService } from "../services/worktree-service.ts";
 import type { SecretsStore } from "../state/secrets-store.ts";
 import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
@@ -106,6 +107,7 @@ export interface PierCoreServices {
       patch: TerminalStatusBarItemOverridePatch
     ): Promise<TerminalStatusBarPrefs>;
   };
+  usageData: UsageDataService;
   window: {
     close(windowId: string): Promise<"closed" | "not-found" | "veto">;
     create(options?: WindowCreateOptions): Promise<{

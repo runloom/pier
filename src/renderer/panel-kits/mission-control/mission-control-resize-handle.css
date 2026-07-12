@@ -1,0 +1,14 @@
+/* RGL owns the hit target; Pier owns the affordance so it follows the card geometry. */
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+  right: 1px;
+  bottom: 1px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border-bottom-right-radius: var(--radius-xl);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se::after {
+  content: none;
+  border: 0;
+}

@@ -475,6 +475,7 @@ describe("WorktreeCreateOverlay", () => {
 
     await openOverlay(context);
 
+    const dialog = screen.getByRole("dialog");
     fireEvent.change(screen.getByRole("textbox", { name: TASK_LABEL }), {
       target: { value: "fix terminal focus" },
     });
@@ -488,6 +489,7 @@ describe("WorktreeCreateOverlay", () => {
     expect(
       screen.queryByRole("textbox", { name: TASK_LABEL })
     ).not.toBeInTheDocument();
+    expect(dialog).toHaveAttribute("data-state", "closed");
 
     await act(async () => {
       generation.resolve({ status: "ok", text: "fix-focus\n" });

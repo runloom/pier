@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
 import { ShieldCheck } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import type { FileEditorController } from "./file-editor-controller.ts";
@@ -6,7 +7,6 @@ import {
   DocumentFormatBadge,
   DocumentStatusDot,
   LanguageBadge,
-  ViewModeButton,
 } from "./file-panel-status.tsx";
 import type {
   FilesDocumentPanelSource,
@@ -83,30 +83,30 @@ export function ResolvedFilePanelActions({
       <LanguageBadge document={document} t={t} />
       <DocumentFormatBadge document={document} />
       {isMarkdown || showDiffToggle ? (
-        <div className="ml-1 flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5">
-          <ViewModeButton
-            active={mode === "source"}
-            onClick={() => onModeChange("source")}
-          >
+        <ToggleGroup
+          className="ml-1"
+          onValueChange={(value) => {
+            if (value) onModeChange(value as FileViewMode);
+          }}
+          size="sm"
+          type="single"
+          value={mode}
+          variant="outline"
+        >
+          <ToggleGroupItem value="source">
             {t("filePanel.view.source", "Source")}
-          </ViewModeButton>
+          </ToggleGroupItem>
           {isMarkdown ? (
-            <ViewModeButton
-              active={mode === "preview"}
-              onClick={() => onModeChange("preview")}
-            >
+            <ToggleGroupItem value="preview">
               {t("filePanel.view.preview", "Preview")}
-            </ViewModeButton>
+            </ToggleGroupItem>
           ) : null}
           {showDiffToggle ? (
-            <ViewModeButton
-              active={mode === "diff"}
-              onClick={() => onModeChange("diff")}
-            >
+            <ToggleGroupItem value="diff">
               {t("filePanel.view.diff", "Diff")}
-            </ViewModeButton>
+            </ToggleGroupItem>
           ) : null}
-        </div>
+        </ToggleGroup>
       ) : null}
       {document.source.kind === "disk" && document.durabilityUnknown ? (
         <Button

@@ -1,56 +1,101 @@
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
 
-/**
- * Shared hook for subscribing to Codex accounts snapshot via plugin RPC.
- * Used by both the settings page and the usage widget.
- */
-export function useCodexAccountsSnapshot(
-  context: ExternalRendererPluginContext
-): {
+interface AccountsSnapshotState {
   error: string | null;
   snapshot: CodexAccountsSnapshot | null;
-} {
-  const [snapshot, setSnapshot] = useState<CodexAccountsSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+}
 
-  useEffect(() => {
-    let disposed = false;
-    let currentRevision = 0;
-    setError(null);
+interface AccountsSnapshotStore {
+  getSnapshot: () => AccountsSnapshotState;
+  subscribe: (listener: () => void) => () => void;
+}
 
-    const unsubscribe = context.rpc.on<CodexAccountsSnapshot>(
+const EMPTY_STATE: AccountsSnapshotState = { error: null, snapshot: null };
+const stores = new WeakMap<
+  ExternalRendererPluginContext,
+  AccountsSnapshotStore
+>();
+
+function createAccountsSnapshotStore(
+  context: ExternalRendererPluginContext
+): AccountsSnapshotStore {
+  let state = EMPTY_STATE;
+  let currentRevision = 0;
+  let connectionGeneration = 0;
+  let unsubscribeRpc: (() => void) | null = null;
+  const listeners = new Set<() => void>();
+
+  const publish = (next: AccountsSnapshotState): void => {
+    state = next;
+    for (const listener of listeners) listener();
+  };
+
+  const acceptSnapshot = (snapshot: CodexAccountsSnapshot): void => {
+    if (snapshot.revision <= currentRevision) return;
+    currentRevision = snapshot.revision;
+    publish({ error: null, snapshot });
+  };
+
+  const connect = (): void => {
+    if (unsubscribeRpc) return;
+    const generation = ++connectionGeneration;
+    unsubscribeRpc = context.rpc.on<CodexAccountsSnapshot>(
       "accounts.changed",
-      (event) => {
-        if (!disposed && event.revision > currentRevision) {
-          currentRevision = event.revision;
-          setError(null);
-          setSnapshot(event);
-        }
-      }
+      acceptSnapshot
     );
-
     context.rpc
       .invoke<CodexAccountsSnapshot>("accounts.snapshot", null)
       .then((initial) => {
-        if (!disposed && initial.revision > currentRevision) {
-          currentRevision = initial.revision;
-          setError(null);
-          setSnapshot(initial);
-        }
+        if (generation === connectionGeneration) acceptSnapshot(initial);
       })
-      .catch((err: unknown) => {
-        if (!disposed) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
+      .catch((error: unknown) => {
+        if (generation !== connectionGeneration) return;
+        publish({
+          error: error instanceof Error ? error.message : String(error),
+          snapshot: state.snapshot,
+        });
       });
+  };
 
-    return () => {
-      disposed = true;
-      unsubscribe();
-    };
-  }, [context]);
+  const disconnect = (): void => {
+    connectionGeneration += 1;
+    unsubscribeRpc?.();
+    unsubscribeRpc = null;
+  };
 
-  return { error, snapshot };
+  return {
+    getSnapshot: () => state,
+    subscribe(listener) {
+      listeners.add(listener);
+      if (listeners.size === 1) connect();
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) disconnect();
+      };
+    },
+  };
+}
+
+function getAccountsSnapshotStore(
+  context: ExternalRendererPluginContext
+): AccountsSnapshotStore {
+  const existing = stores.get(context);
+  if (existing) return existing;
+  const created = createAccountsSnapshotStore(context);
+  stores.set(context, created);
+  return created;
+}
+
+/** 多个设置页／物料共享一个 RPC 订阅与首次快照请求。 */
+export function useCodexAccountsSnapshot(
+  context: ExternalRendererPluginContext
+): AccountsSnapshotState {
+  const store = getAccountsSnapshotStore(context);
+  return useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot
+  );
 }

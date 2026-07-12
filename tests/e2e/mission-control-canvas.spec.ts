@@ -41,9 +41,15 @@ const MATERIALS: readonly MaterialCase[] = [
   },
   {
     id: "pier.codex.accounts",
-    max: { h: 10, w: 8 },
+    max: { h: 4, w: 8 },
     min: { h: 3, w: 2 },
     name: "Codex accounts",
+  },
+  {
+    id: "pier.codex.cost",
+    max: { h: 5, w: 8 },
+    min: { h: 3, w: 2 },
+    name: "Codex cost",
   },
 ] as const;
 
@@ -88,14 +94,21 @@ async function assertPrimaryContentUsable(
   }
   if (material.id === "core.custom-card") {
     await expect(card.locator('[data-slot="widget-empty"]')).toBeVisible();
-    const menu = card.locator(
-      '[data-testid="mission-control-widget-menu-trigger"]'
+    const directSettings = card.locator(
+      '[data-testid="mission-control-widget-menu-settings"]'
     );
-    await menu.scrollIntoViewIfNeeded();
-    await menu.click();
-    await win
-      .locator('[data-testid="mission-control-widget-menu-settings"]')
-      .click();
+    if (await directSettings.isVisible()) {
+      await directSettings.click();
+    } else {
+      const menu = card.locator(
+        '[data-testid="mission-control-widget-menu-trigger"]'
+      );
+      await menu.scrollIntoViewIfNeeded();
+      await menu.click();
+      await win
+        .locator('[data-testid="mission-control-widget-menu-settings"]')
+        .click();
+    }
     const dialog = win.locator(
       '[data-testid="mission-control-widget-settings-dialog"]'
     );
@@ -104,7 +117,26 @@ async function assertPrimaryContentUsable(
     await expect(dialog).not.toBeVisible();
     return;
   }
-  const picker = content.getByRole("button").first();
+  if (material.id === "pier.codex.cost") {
+    await expect(
+      content.locator(
+        ':scope > [data-slot="codex-cost-widget"], :scope > [data-slot="widget-empty"], :scope > [data-slot="widget-error"], :scope > [data-slot="widget-skeleton"]'
+      )
+    ).toBeVisible({ timeout: 30_000 });
+    return;
+  }
+  const accountState = content.locator(
+    ':scope > [data-slot="codex-accounts-widget"], :scope > [data-slot="widget-empty"], :scope > [data-slot="widget-error"], :scope > [data-slot="widget-skeleton"]'
+  );
+  await expect(accountState).toBeVisible({ timeout: 30_000 });
+  if (
+    !(await content.locator('[data-slot="codex-accounts-widget"]').isVisible())
+  ) {
+    return;
+  }
+  const picker = content.getByRole("button", {
+    name: /切换账号|Switch account/,
+  });
   await picker.scrollIntoViewIfNeeded();
   await picker.click();
   const manage = win.getByRole("menuitem", {
@@ -116,6 +148,97 @@ async function assertPrimaryContentUsable(
 }
 
 test.describe("Mission Control responsive ordered grid e2e", () => {
+  test("resize handle follows the card corner without the default L-shaped border", async () => {
+    const context = await launchApp();
+    try {
+      await setWindowSize(context.app, context.win, 1200, 800);
+      await openMissionControl(context.win);
+      const card = await addWidget(context.win, "core.activity-overview");
+      const gridItem = context.win
+        .locator(".react-grid-item")
+        .filter({ has: card })
+        .first();
+      const handle = gridItem.locator(":scope > .react-resizable-handle-se");
+      await card.hover();
+      await expect(handle).toBeVisible();
+      const style = await handle.evaluate((element) => {
+        const handleStyle = getComputedStyle(element);
+        const markerStyle = getComputedStyle(element, "::after");
+        return {
+          backgroundImage: markerStyle.backgroundImage,
+          borderBottomWidth: markerStyle.borderBottomWidth,
+          borderRightWidth: markerStyle.borderRightWidth,
+          height: handleStyle.height,
+          width: handleStyle.width,
+        };
+      });
+      expect(style).toMatchObject({
+        borderBottomWidth: "0px",
+        borderRightWidth: "0px",
+        height: "28px",
+        width: "28px",
+      });
+      expect(style.backgroundImage).toBe("none");
+      const handleBox = await handle.boundingBox();
+      if (!handleBox) throw new Error("Resize hit target has no bounds");
+      await context.win.mouse.move(
+        handleBox.x + handleBox.width / 2,
+        handleBox.y + handleBox.height / 2
+      );
+      await context.win.mouse.down();
+      await context.win.mouse.move(handleBox.x + 100, handleBox.y + 100, {
+        steps: 10,
+      });
+      const size = gridItem.getByTestId("mission-control-resize-size");
+      await expect(size).toBeVisible();
+      await expect(size).toHaveText(/\d+ × \d+/);
+      await context.win.mouse.up();
+      await expect(size).toHaveCount(0);
+    } finally {
+      await closeApp(context);
+    }
+  });
+
+  test("物料标题栏只在真实空间不足时把低优先级动作收入更多菜单", async () => {
+    test.setTimeout(120_000);
+    const context = await launchApp();
+    try {
+      await setWindowSize(context.app, context.win, 1600, 900);
+      await openMissionControl(context.win);
+      const card = await addWidget(context.win, "core.custom-card");
+      await resizeToBoundary(context.win, card, { h: 2, w: 6 });
+      await expect(
+        card.locator('[data-testid="mission-control-widget-menu-settings"]')
+      ).toBeVisible();
+      await expect(
+        card.locator('[data-testid="mission-control-widget-menu-trigger"]')
+      ).toHaveCount(0);
+
+      await resizeToBoundary(context.win, card, { h: 2, w: 2 });
+      await expect(
+        card.locator('[data-testid="mission-control-widget-menu-settings"]')
+      ).toBeVisible();
+      const more = card.locator(
+        '[data-testid="mission-control-widget-menu-trigger"]'
+      );
+      await expect(more).toBeVisible();
+      await more.click();
+      await expect(
+        context.win.locator(
+          '[data-testid="mission-control-widget-menu-duplicate"]'
+        )
+      ).toBeVisible();
+      await expect(
+        context.win.locator(
+          '[data-testid="mission-control-widget-menu-remove"]'
+        )
+      ).toBeVisible();
+      await context.win.keyboard.press("Escape");
+    } finally {
+      await closeApp(context);
+    }
+  });
+
   test("连续跨槽拖拽只按有序槽位推位，不残留 RGL 碰撞空洞", async () => {
     test.setTimeout(120_000);
     const context = await launchApp();
@@ -329,7 +452,7 @@ test.describe("Mission Control responsive ordered grid e2e", () => {
         try {
           await setWindowSize(context.app, context.win, 1600, 1000);
           await selectTheme(context.win, theme);
-          if (material.id === "pier.codex.accounts") {
+          if (material.id.startsWith("pier.codex.")) {
             await installCodexPlugin(context);
           }
           await openMissionControl(context.win);

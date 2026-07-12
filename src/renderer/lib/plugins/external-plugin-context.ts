@@ -156,6 +156,13 @@ export function createExternalRendererPluginContext(
         const title = registration.title;
         return track(
           registerPluginMissionControlWidget({
+            ...(registration.actions
+              ? {
+                  actions: registration.actions as NonNullable<
+                    import("@plugins/api/renderer.ts").RendererMissionControlWidgetRegistration["actions"]
+                  >,
+                }
+              : {}),
             component:
               registration.component as FunctionComponent<HostMissionControlWidgetComponentProps>,
             icon: (registration.icon ?? KeyRound) as LucideIcon,

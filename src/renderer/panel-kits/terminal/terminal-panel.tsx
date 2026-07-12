@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import {
   type PanelFloatingPosition,
   panelFloatingLayoutFromParams,
@@ -394,7 +395,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     terminalBody = (
       <>
         <div
-          className={`terminal-anchor ${terminalContentClassName}`}
+          className={cn("terminal-anchor", terminalContentClassName)}
           ref={anchorRef}
         />
         {showPlaceholder ? (
@@ -402,7 +403,10 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         ) : null}
         {error ? (
           <div
-            className={`${terminalContentClassName} flex flex-col items-center justify-center gap-3 bg-[var(--terminal-background,var(--background))] px-4 text-center`}
+            className={cn(
+              terminalContentClassName,
+              "flex flex-col items-center justify-center gap-3 bg-[var(--terminal-background,var(--background))] px-4 text-center"
+            )}
           >
             <p className="text-muted-foreground text-sm">{error}</p>
             {errorRetryable ? (

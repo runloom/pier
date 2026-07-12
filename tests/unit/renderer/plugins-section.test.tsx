@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -124,9 +125,80 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     expect(screen.getByTestId("plugin-row-pier.external")).toBeVisible();
+    expect(screen.getByText("Plugin failed to load")).toBeVisible();
+    expect(screen.getByText("renderer plugin load timed out")).toBeVisible();
     expect(
-      screen.getByText("pier.external: renderer plugin load timed out")
-    ).toBeVisible();
+      within(screen.getByTestId("plugin-diagnostics-summary")).queryByText(
+        "pier.external"
+      )
+    ).toBeNull();
+  });
+
+  it("groups repeated registry diagnostics into one compact issue", () => {
+    usePluginRegistryStore.setState({
+      diagnostics: [
+        {
+          code: "invalid_manifest",
+          message: "invalid plugin manifest",
+          source: { kind: "builtin" },
+        },
+        {
+          code: "invalid_manifest",
+          message: "invalid plugin manifest",
+          source: { kind: "devOverride" },
+        },
+        {
+          code: "invalid_manifest",
+          message: "invalid plugin manifest",
+          source: { kind: "official" },
+        },
+      ],
+      initialized: true,
+      plugins: [entry("pier.codex", true)],
+    });
+
+    render(<PluginsSection />);
+
+    const summary = screen.getByTestId("plugin-diagnostics-summary");
+    expect(summary.querySelectorAll('[data-slot="alert"]')).toHaveLength(1);
+    expect(summary.querySelector('[data-slot="alert-title"]')).not.toBeNull();
+    expect(summary.querySelector('[data-slot="alert-action"]')).toBeNull();
+    expect(summary).toHaveTextContent("Plugin manifest could not be read");
+    expect(summary).not.toHaveTextContent("3 reports");
+    expect(within(summary).queryByText("Built-in")).toBeNull();
+    expect(within(summary).queryByText("Dev Override")).toBeNull();
+    expect(within(summary).queryByText("Official")).toBeNull();
+    expect(screen.queryByText("invalid plugin manifest")).toBeNull();
+    expect(
+      screen.getAllByText("Plugin manifest could not be read")
+    ).toHaveLength(1);
+  });
+
+  it("uses one standard shadcn alert per distinct diagnostic", () => {
+    usePluginRegistryStore.setState({
+      diagnostics: [
+        {
+          code: "invalid_manifest",
+          message: "invalid plugin manifest",
+          source: { kind: "builtin" },
+        },
+        {
+          code: "unsupported",
+          message: "unsupported plugin API version",
+          source: { kind: "official" },
+        },
+      ],
+      initialized: true,
+      plugins: [entry("pier.codex", true)],
+    });
+
+    render(<PluginsSection />);
+
+    expect(
+      screen
+        .getByTestId("plugin-diagnostics-summary")
+        .querySelectorAll('[data-slot="alert"]')
+    ).toHaveLength(2);
   });
 
   it("toggle 调用 disable 并 refresh store", async () => {

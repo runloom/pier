@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
+import { useLayoutEffect, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import type { ResolvedMissionControlWidget } from "./mission-control-merge.ts";
 
@@ -25,18 +26,33 @@ export function MissionControlSettingsDialog({
   widget,
 }: MissionControlSettingsDialogProps) {
   const t = useT();
-  const SettingsComponent = widget?.registration?.settingsComponent;
+  const [retainedWidget, setRetainedWidget] =
+    useState<ResolvedMissionControlWidget | null>(widget);
+
+  useLayoutEffect(() => {
+    if (widget) {
+      setRetainedWidget(widget);
+    }
+  }, [widget]);
+
+  const presentedWidget = widget ?? retainedWidget;
+  const SettingsComponent = presentedWidget?.registration?.settingsComponent;
   let title = "";
-  if (widget !== null) {
-    title = widget.status === "core" ? t(widget.title) : widget.title;
+  if (presentedWidget !== null) {
+    title =
+      presentedWidget.status === "core"
+        ? t(presentedWidget.title)
+        : presentedWidget.title;
   }
 
   return (
     <Dialog onOpenChange={onOpenChange} open={widget !== null}>
       <DialogContent
         className="max-h-[calc(100vh-var(--app-titlebar-height)-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        closeLabel={t("dialog.close")}
         data-testid="mission-control-widget-settings-dialog"
         initialFocus="firstFocusable"
+        showCloseButton
       >
         <DialogHeader className="border-border/60 border-b px-6 py-5 pr-14">
           <DialogTitle>{title}</DialogTitle>
@@ -44,11 +60,11 @@ export function MissionControlSettingsDialog({
             {t("missionControl.widget.settingsDescription")}
           </DialogDescription>
         </DialogHeader>
-        {widget && SettingsComponent ? (
+        {presentedWidget && SettingsComponent ? (
           <div className="min-h-0 overflow-y-auto p-6" data-scrollbar="stable">
             <SettingsComponent
-              instanceId={widget.instanceId}
-              params={widget.params}
+              instanceId={presentedWidget.instanceId}
+              params={presentedWidget.params}
               updateParams={updateParams}
             />
           </div>

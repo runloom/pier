@@ -17,6 +17,7 @@ const OUT_MAIN = join(
   "main",
   "index.js"
 );
+const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
 const GRID_MARGIN = 12;
 const VERTICAL_GRID_STRIDE = 100;
 
@@ -40,6 +41,8 @@ export async function launchApp(): Promise<AppContext> {
   const userDataDir = mkdtempSync(join(tmpdir(), "pier-mc-canvas-e2e-"));
   const app = await electron.launch({
     args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    cwd: PROJECT_ROOT,
+    env: { ...process.env, CODEX_HOME: join(userDataDir, "codex-home") },
   });
   const win = await app.firstWindow();
   await waitForAppShellReady(win);
@@ -117,16 +120,30 @@ export async function installCodexPlugin(context: AppContext): Promise<void> {
   const row = win.locator('[data-testid="plugin-row-pier.codex"]');
   await expect(row).toBeVisible({ timeout: 10_000 });
   await row.getByRole("button", { name: /安装|Install/ }).click();
+  await win.getByRole("tab", { name: /已安装|Installed/ }).click();
   await expect(
-    win.locator('[data-testid="settings-nav-plugin-pier.codex"]')
+    win.locator('[data-testid="plugin-row-pier.codex"]')
   ).toBeVisible({ timeout: 30_000 });
   await win
     .locator('[role="dialog"][data-state="open"]')
-    .getByRole("button", { name: "Close" })
+    .getByRole("button", { name: /关闭|Close/ })
     .click();
   await expect(
     win.locator('[role="dialog"], [data-slot="dialog-overlay"]')
   ).toHaveCount(0);
+
+  // External main modules are snapshotted at startup; relaunch before exercising RPC-backed UI.
+  await context.app.close();
+  context.app = await electron.launch({
+    args: [OUT_MAIN, `--user-data-dir=${context.userDataDir}`],
+    cwd: PROJECT_ROOT,
+    env: {
+      ...process.env,
+      CODEX_HOME: join(context.userDataDir, "codex-home"),
+    },
+  });
+  context.win = await context.app.firstWindow();
+  await waitForAppShellReady(context.win);
 }
 
 function gridItemForCard(win: Page, card: Locator): Locator {

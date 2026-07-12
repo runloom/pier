@@ -118,7 +118,7 @@ export function ActionCommandItem({
       {useAgentIcon ? (
         <AgentActionIcon actionId={action.id} />
       ) : (
-        <Icon className="size-4 shrink-0 opacity-70" />
+        <Icon className="opacity-70" />
       )}
       <span className="min-w-0 flex-1 truncate">{action.title()}</span>
       {disabledReason ? (

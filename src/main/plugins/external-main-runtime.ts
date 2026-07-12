@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import type { MainPluginUsageData } from "@pier/plugin-api/main";
 import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/install-runtime.ts";
 import type { PluginRpcBus } from "./plugin-rpc-bus.ts";
 
@@ -59,6 +60,7 @@ export interface ExternalMainPluginContext {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
   };
+  usageData: MainPluginUsageData;
 }
 
 export interface RecordActivationResultInput {

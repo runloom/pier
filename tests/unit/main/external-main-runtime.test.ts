@@ -69,6 +69,7 @@ function contextFor(
     plugin: { id: sourceArg.id, version: sourceArg.version },
     rpc: { handle: vi.fn() },
     secrets: { delete: vi.fn(), get: vi.fn(), set: vi.fn() },
+    usageData: { publish: vi.fn(), read: vi.fn() },
   };
 }
 

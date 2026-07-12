@@ -9,44 +9,75 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@pier/ui/alert-dialog.tsx";
+import { Button } from "@pier/ui/button.tsx";
+import { Field, FieldError, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import { LogOutIcon } from "lucide-react";
-import { type SyntheticEvent, useCallback, useEffect, useState } from "react";
+import {
+  type SyntheticEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { useT } from "@/i18n/use-t.ts";
 import {
   type AppDialogRequest,
   useAppDialogStore,
 } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
-import {
-  registerTerminalFullscreenWebOverlay,
-  requestTerminalWebFocus,
-} from "@/stores/terminal-input-routing-slice.ts";
+import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 
 const APP_DIALOG_OVERLAY_ID = "app-dialog";
 
+function isCurrentDialog(dialog: AppDialogRequest): boolean {
+  return useAppDialogStore.getState().current === dialog;
+}
+
 export function AppDialogHost() {
-  const t = useT();
-  const dialog = useAppDialogStore((state) => state.current);
+  const currentDialog = useAppDialogStore((state) => state.current);
+  const [retainedDialog, setRetainedDialog] = useState<AppDialogRequest | null>(
+    currentDialog
+  );
 
   useEffect(() => {
-    if (!dialog) {
+    if (!currentDialog) {
       return;
     }
-    const route = registerTerminalFullscreenWebOverlay(APP_DIALOG_OVERLAY_ID);
     const releaseWebFocus = requestTerminalWebFocus(APP_DIALOG_OVERLAY_ID);
     const scopeId = `overlay:${APP_DIALOG_OVERLAY_ID}`;
     useKeybindingScope.getState().pushBlockingScope(scopeId);
     return () => {
       useKeybindingScope.getState().popBlockingScope(scopeId);
       releaseWebFocus();
-      route.dispose();
     };
-  }, [dialog]);
+  }, [currentDialog]);
 
-  if (!dialog) {
-    return null;
-  }
+  useLayoutEffect(() => {
+    if (currentDialog) {
+      setRetainedDialog(currentDialog);
+    }
+  }, [currentDialog]);
+
+  const presentedDialog = currentDialog ?? retainedDialog;
+  if (!presentedDialog) return null;
+
+  return (
+    <ActiveAppDialog
+      dialog={presentedDialog}
+      open={currentDialog === presentedDialog}
+    />
+  );
+}
+
+function ActiveAppDialog({
+  dialog,
+  open,
+}: {
+  dialog: AppDialogRequest;
+  open: boolean;
+}) {
+  const t = useT();
 
   const isDestructive = dialog.intent === "destructive";
   const size = dialog.size;
@@ -56,7 +87,12 @@ export function AppDialogHost() {
   // 更清晰,也让 host 的顶层结构一目了然。
   if (dialog.kind === "prompt") {
     return (
-      <PromptDialog dialog={dialog} isDestructive={isDestructive} size={size} />
+      <PromptDialog
+        dialog={dialog}
+        isDestructive={isDestructive}
+        open={open}
+        size={size}
+      />
     );
   }
 
@@ -66,14 +102,17 @@ export function AppDialogHost() {
   if (dialog.kind === "choice") {
     return (
       <AlertDialog
-        onOpenChange={(open) => {
-          if (!open) {
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && isCurrentDialog(dialog)) {
             dialog.resolve("cancel");
           }
         }}
-        open
+        open={open}
       >
-        <AlertDialogContent size={size}>
+        <AlertDialogContent
+          size={size}
+          terminalOverlayId={APP_DIALOG_OVERLAY_ID}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
             {dialog.body ? (
@@ -112,14 +151,14 @@ export function AppDialogHost() {
 
   return (
     <AlertDialog
-      onOpenChange={(open) => {
-        if (!open) {
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && isCurrentDialog(dialog)) {
           dialog.resolve(false);
         }
       }}
-      open
+      open={open}
     >
-      <AlertDialogContent size={size}>
+      <AlertDialogContent size={size} terminalOverlayId={APP_DIALOG_OVERLAY_ID}>
         <AlertDialogHeader>
           {isDestructive ? (
             <AlertDialogMedia className="bg-destructive/10 text-destructive">
@@ -159,10 +198,12 @@ type PromptRequest = Extract<AppDialogRequest, { kind: "prompt" }>;
 function PromptDialog({
   dialog,
   isDestructive,
+  open,
   size,
 }: {
   dialog: PromptRequest;
   isDestructive: boolean;
+  open: boolean;
   size: "default" | "sm";
 }) {
   const t = useT();
@@ -207,14 +248,14 @@ function PromptDialog({
 
   return (
     <AlertDialog
-      onOpenChange={(open) => {
-        if (!open) {
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && isCurrentDialog(dialog)) {
           dialog.resolve(null);
         }
       }}
-      open
+      open={open}
     >
-      <AlertDialogContent size={size}>
+      <AlertDialogContent size={size} terminalOverlayId={APP_DIALOG_OVERLAY_ID}>
         <form onSubmit={handleSubmit}>
           <AlertDialogHeader>
             <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
@@ -225,20 +266,25 @@ function PromptDialog({
             ) : null}
           </AlertDialogHeader>
           <div className="px-6 pt-2 pb-4">
-            <Input
-              autoFocus
-              onChange={(event) => {
-                setValue(event.target.value);
-                if (error) {
-                  setError(null);
-                }
-              }}
-              placeholder={dialog.placeholder}
-              value={value}
-            />
-            {error ? (
-              <p className="mt-2 text-destructive text-xs">{error}</p>
-            ) : null}
+            <Field data-invalid={Boolean(error)}>
+              <FieldLabel className="sr-only" htmlFor="app-dialog-prompt">
+                {dialog.title}
+              </FieldLabel>
+              <Input
+                aria-invalid={Boolean(error)}
+                autoFocus
+                id="app-dialog-prompt"
+                onChange={(event) => {
+                  setValue(event.target.value);
+                  if (error) {
+                    setError(null);
+                  }
+                }}
+                placeholder={dialog.placeholder}
+                value={value}
+              />
+              {error ? <FieldError>{error}</FieldError> : null}
+            </Field>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel
@@ -250,13 +296,13 @@ function PromptDialog({
             >
               {dialog.cancelLabel ?? t("dialog.cancel")}
             </AlertDialogCancel>
-            <AlertDialogAction
+            <Button
               disabled={pending}
               type="submit"
               variant={isDestructive ? "destructive" : "default"}
             >
               {dialog.confirmLabel ?? t("dialog.ok")}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </form>
       </AlertDialogContent>

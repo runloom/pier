@@ -307,6 +307,7 @@
     "ui.worktreeCreate.branchLabel": "分支",
     "ui.worktreeCreate.branchPlaceholder": "feature/fix-dialog",
     "ui.worktreeCreate.confirm": "创建",
+    "ui.worktreeCreate.close": "关闭",
     "ui.worktreeCreate.createFailed": "工作树创建失败",
     "ui.worktreeCreate.creatingWorktree": "工作树创建中…",
     "ui.worktreeCreate.description": "为当前任务创建独立工作树",

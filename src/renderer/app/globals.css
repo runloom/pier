@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@pier/ui/tailwind-theme.css";
 
 @source "../../../packages/ui/src";
 @source "../../plugins";
@@ -248,91 +249,6 @@
   --shadow-2xl:
     0 0 0 1px var(--elevation-border),
     0 44px 132px -52px var(--elevation-shadow-key);
-}
-
-@theme inline {
-  /* font-family 注册到 Tailwind */
-  --font-sans: var(--pier-ui-font-family);
-  --font-mono: var(--pier-mono-font-family);
-  /* shadcn semantic mapping */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-success: var(--success);
-  --color-info: var(--info);
-  --color-done: var(--done);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-
-  --color-surface-canvas: var(--surface-canvas);
-  --color-surface-subtle: var(--surface-subtle);
-  --color-surface-raised: var(--surface-raised);
-  --color-surface-inset: var(--surface-inset);
-  --color-surface-border: var(--surface-border);
-  --color-overlay-scrim: var(--overlay-scrim);
-  --color-interactive-hover: var(--interactive-hover);
-  --color-interactive-active: var(--interactive-active);
-
-  --color-status-neutral-bg: var(--status-neutral-bg);
-  --color-status-neutral-fg: var(--status-neutral-fg);
-  --color-status-neutral-border: var(--status-neutral-border);
-  --color-status-info-bg: var(--status-info-bg);
-  --color-status-info-fg: var(--status-info-fg);
-  --color-status-info-border: var(--status-info-border);
-  --color-status-success-bg: var(--status-success-bg);
-  --color-status-success-fg: var(--status-success-fg);
-  --color-status-success-border: var(--status-success-border);
-  --color-status-warning-bg: var(--status-warning-bg);
-  --color-status-warning-fg: var(--status-warning-fg);
-  --color-status-warning-border: var(--status-warning-border);
-  --color-status-danger-bg: var(--status-danger-bg);
-  --color-status-danger-fg: var(--status-danger-fg);
-  --color-status-danger-border: var(--status-danger-border);
-  --color-status-done-bg: var(--status-done-bg);
-  --color-status-done-fg: var(--status-done-fg);
-  --color-status-done-border: var(--status-done-border);
-  --color-status-solid-foreground: var(--status-solid-foreground);
-  --color-action-accent: var(--action-accent);
-  --color-action-accent-foreground: var(--action-accent-foreground);
-  --color-action-danger: var(--action-danger);
-  --color-action-muted: var(--action-muted);
-  --color-action-secondary-hover: var(--action-secondary-hover);
-
-  /* Pier 业务 token 按实际功能增量添加；不要继承 Bay 的看板/任务台账命名。 */
-
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --radius-xl: calc(var(--radius) + 6px);
 }
 
 /* Universal border-color default packaged into @layer base so Tailwind utility-layer

@@ -1,3 +1,4 @@
+import { cn } from "@pier/ui/utils.ts";
 import type {
   GitDiffHunk,
   GitDiffLine,
@@ -92,7 +93,7 @@ export function GitDiffView({ patch, path, text }: GitDiffViewProps) {
           </div>
           {hunkRows(hunk).map((row) => (
             <div
-              className={`whitespace-pre px-2 ${LINE_CLASS[row.kind]}`}
+              className={cn("whitespace-pre px-2", LINE_CLASS[row.kind])}
               data-diff-line={row.kind}
               key={row.key}
             >

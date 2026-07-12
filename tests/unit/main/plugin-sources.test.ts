@@ -1,12 +1,4 @@
-import {
-  access,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BUILTIN_PLUGIN_SOURCES } from "@main/plugins/builtin-catalog.ts";
 import { createPluginService } from "@main/services/plugin-service.ts";
@@ -15,9 +7,8 @@ import {
   GIT_PLUGIN_ID,
   GIT_PLUGIN_MANIFEST,
 } from "@plugins/builtin/git/manifest.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const tempDirs: string[] = [];
 const FILES_PLUGIN_ID = "pier.files";
 const FILES_FILE_PANEL_ID = "pier.files.filePanel";
 
@@ -30,24 +21,9 @@ const emptyState = {
     }),
 };
 
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "pier-plugin-sources-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true }))
-  );
-});
-
 describe("createDefaultPluginSources", () => {
   it("包含默认启用的内置 worktree 插件", async () => {
-    const sources = await createDefaultPluginSources({
-      readDir: async () => [],
-      userDataDir: "/tmp/pier-user-data",
-    });
+    const sources = await createDefaultPluginSources();
 
     expect(sources[0]).toMatchObject({
       baseDir: expect.stringContaining("src/plugins/builtin/git"),
@@ -79,10 +55,7 @@ describe("createDefaultPluginSources", () => {
   });
 
   it("includes the builtin Files plugin manifest and single file-panel declaration", async () => {
-    const sources = await createDefaultPluginSources({
-      readDir: async () => [],
-      userDataDir: "/tmp/pier-user-data",
-    });
+    const sources = await createDefaultPluginSources();
     const filesSource = sources.find(
       (source) =>
         source.kind === "builtin" &&
@@ -230,19 +203,12 @@ describe("createDefaultPluginSources", () => {
     });
   });
 
-  it("发现 userData/plugins/<id>/plugin.json 本地插件入口", async () => {
-    const userDataDir = await makeTempDir();
-    const pluginDir = join(userDataDir, "plugins", "sample.local");
-    await mkdir(pluginDir, { recursive: true });
-    await writeFile(join(pluginDir, "plugin.json"), "{}");
+  it("不把 managed plugins 内部目录扫描为本地插件", async () => {
+    const sources = await createDefaultPluginSources();
 
-    await expect(createDefaultPluginSources({ userDataDir })).resolves.toEqual(
-      expect.arrayContaining([
-        {
-          kind: "local",
-          path: join(pluginDir, "plugin.json"),
-        },
-      ])
+    expect(sources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "local" })])
     );
+    expect(sources.every((source) => source.kind === "builtin")).toBe(true);
   });
 });

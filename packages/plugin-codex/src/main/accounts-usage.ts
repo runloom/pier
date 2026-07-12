@@ -9,18 +9,42 @@ export interface UsageCacheEntry {
   error?: string;
   fetchedAt: number;
   raw?: unknown;
-  session?: AccountUsageResult["session"];
+  resetCreditsAvailable?: number;
   status: "error" | "ok";
-  weekly?: AccountUsageResult["weekly"];
+  windows: AccountUsageResult["windows"];
+}
+
+export function createUsageCacheEntry(
+  result: AccountUsageResult,
+  cached: UsageCacheEntry | undefined,
+  fetchedAt: number
+): UsageCacheEntry {
+  const retained = result.status === "error" ? cached : undefined;
+  return {
+    fetchedAt,
+    raw: result,
+    status: result.status,
+    windows:
+      result.status === "error" ? (retained?.windows ?? []) : result.windows,
+    ...(retained?.resetCreditsAvailable === undefined
+      ? {}
+      : { resetCreditsAvailable: retained.resetCreditsAvailable }),
+    ...(result.error ? { error: result.error } : {}),
+    ...(result.resetCreditsAvailable === undefined
+      ? {}
+      : { resetCreditsAvailable: result.resetCreditsAvailable }),
+  };
 }
 
 export function toUsageSnapshot(entry: UsageCacheEntry): CodexUsageSnapshot {
   return {
     fetchedAt: entry.fetchedAt,
     status: entry.status,
+    windows: entry.windows,
     ...(entry.error ? { error: entry.error } : {}),
-    ...(entry.session ? { session: entry.session } : {}),
-    ...(entry.weekly ? { weekly: entry.weekly } : {}),
+    ...(entry.resetCreditsAvailable === undefined
+      ? {}
+      : { resetCreditsAvailable: entry.resetCreditsAvailable }),
     ...(entry.raw === undefined ? {} : { raw: entry.raw }),
   };
 }

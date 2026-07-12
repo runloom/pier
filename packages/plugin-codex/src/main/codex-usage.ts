@@ -1,5 +1,8 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import { parseRateLimitsResult } from "./rate-limits.ts";
 import type { AccountUsageResult } from "./types.ts";
+
+export { parseRateLimitsResult } from "./rate-limits.ts";
 
 const RPC_TIMEOUT_MS = 15_000;
 
@@ -21,60 +24,6 @@ function buildRpcMessage(id: number, method: string, params?: unknown): string {
   return `${JSON.stringify({ id, jsonrpc: "2.0", method, params: params ?? {} })}\n`;
 }
 
-interface RpcWindow {
-  resetsAt?: number;
-  usedPercent?: number;
-  windowDurationMins?: number;
-}
-
-function mapRpcWindow(
-  raw: RpcWindow | null | undefined
-): AccountUsageResult["session"] | undefined {
-  if (!raw || typeof raw.usedPercent !== "number") {
-    return;
-  }
-  const result: {
-    resetsAt?: number;
-    usedPercent: number;
-    windowMinutes?: number;
-  } = {
-    usedPercent: raw.usedPercent,
-  };
-  if (typeof raw.resetsAt === "number") {
-    result.resetsAt = raw.resetsAt * 1000;
-  }
-  if (typeof raw.windowDurationMins === "number") {
-    result.windowMinutes = raw.windowDurationMins;
-  }
-  return result;
-}
-
-/**
- * 解析 account/rateLimits/read 的 result 字段。纯函数，单测主体。
- * primary → session（5h 窗口），secondary → weekly（7d 窗口）。
- */
-export function parseRateLimitsResult(result: unknown): AccountUsageResult {
-  if (result === null || result === undefined || typeof result !== "object") {
-    return { status: "error", error: "Empty RPC result" };
-  }
-  const obj = result as Record<string, unknown>;
-  const rateLimits = obj.rateLimits;
-  if (!rateLimits || typeof rateLimits !== "object") {
-    return { status: "error", error: "Missing rateLimits in RPC result" };
-  }
-  const rl = rateLimits as Record<string, unknown>;
-  const out: AccountUsageResult = { status: "ok" };
-  const session = mapRpcWindow(rl.primary as RpcWindow | null | undefined);
-  if (session) {
-    out.session = session;
-  }
-  const weekly = mapRpcWindow(rl.secondary as RpcWindow | null | undefined);
-  if (weekly) {
-    out.weekly = weekly;
-  }
-  return out;
-}
-
 /**
  * spawn `codex app-server` 走 JSON-RPC 协议获取活跃账号用量。
  *
@@ -89,7 +38,7 @@ export function fetchCodexUsage(
   opts?: { accountHomeDir?: string; spawnImpl?: SpawnFn }
 ): Promise<AccountUsageResult> {
   if (signal.aborted) {
-    return Promise.resolve({ status: "error", error: "Aborted" });
+    return Promise.resolve({ status: "error", error: "Aborted", windows: [] });
   }
   const spawnImpl = opts?.spawnImpl ?? spawn;
 
@@ -140,7 +89,10 @@ export function fetchCodexUsage(
     }
 
     function onAbort(): void {
-      settle({ status: "error", error: "Aborted" }, { kill: true });
+      settle(
+        { status: "error", error: "Aborted", windows: [] },
+        { kill: true }
+      );
     }
 
     signal.addEventListener("abort", onAbort, { once: true });
@@ -149,11 +101,17 @@ export function fetchCodexUsage(
     // 下一次 write 触发的 EPIPE 若无 handler 会以 ERR_UNHANDLED_ERROR
     // 炸掉 Electron main —— 收敛为 usage error 态。
     child.stdin?.on("error", () => {
-      settle({ status: "error", error: "stdin write failed" }, { kill: true });
+      settle(
+        { status: "error", error: "stdin write failed", windows: [] },
+        { kill: true }
+      );
     });
 
     timeout = setTimeout(() => {
-      settle({ status: "error", error: "RPC timeout" }, { kill: true });
+      settle(
+        { status: "error", error: "RPC timeout", windows: [] },
+        { kill: true }
+      );
     }, RPC_TIMEOUT_MS);
 
     function sendRpc(method: string, params?: unknown): number {
@@ -178,7 +136,10 @@ export function fetchCodexUsage(
       // 不受支持）。不检查会盲目往下发 initialized + rateLimits，服务端退出后
       // 用户只看到笼统的 "RPC process exited unexpectedly"，真实错误被吞。
       if (error) {
-        settle({ status: "error", error: error.message }, { kill: true });
+        settle(
+          { status: "error", error: error.message, windows: [] },
+          { kill: true }
+        );
         return;
       }
       sendNotification("initialized");
@@ -190,7 +151,10 @@ export function fetchCodexUsage(
       result: unknown
     ): void {
       if (error) {
-        settle({ status: "error", error: error.message }, { kill: true });
+        settle(
+          { status: "error", error: error.message, windows: [] },
+          { kill: true }
+        );
         return;
       }
       settle(parseRateLimitsResult(result), { kill: true });
@@ -238,11 +202,16 @@ export function fetchCodexUsage(
       settle({
         status: "error",
         error: isEnoent ? "Codex CLI not found" : err.message,
+        windows: [],
       });
     });
 
     child.on("close", () => {
-      settle({ status: "error", error: "RPC process exited unexpectedly" });
+      settle({
+        status: "error",
+        error: "RPC process exited unexpectedly",
+        windows: [],
+      });
     });
   });
 }

@@ -46,6 +46,8 @@ export const missionControl = {
   panelTitle: "Mission Control",
   panelTitleShort: "Mission Control",
   widget: {
+    action: "Widget action",
+    actionFailed: "Couldn’t complete widget action",
     activityOverview: {
       description: "Live panel and session metrics",
       empty: "No active panels",
@@ -113,6 +115,7 @@ export const missionControl = {
       memory: "Memory",
       title: "System Resources",
     },
-    unknown: "Widget unavailable (plugin uninstalled)",
+    unknownDescription: "The plugin that provided this widget was uninstalled.",
+    unknownTitle: "Widget unavailable",
   },
 } as const;

@@ -32,7 +32,7 @@ function ItemSeparator({
 }
 
 const itemVariants = cva(
-  "group/item flex w-full flex-wrap items-center rounded-2xl border text-sm outline-none transition-colors duration-100 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [a]:transition-colors [a]:hover:bg-muted",
+  "group/item flex w-full flex-wrap items-center rounded-2xl border text-sm outline-none transition-colors duration-100 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [a]:transition-colors [a]:hover:bg-muted [button]:cursor-pointer [button]:transition-colors [button]:hover:bg-muted",
   {
     variants: {
       variant: {
@@ -74,9 +74,14 @@ function Item({
 }
 
 const itemMediaVariants = cva(
-  "flex shrink-0 items-center justify-center gap-2 group-has-data-[slot=item-description]/item:translate-y-0.5 group-has-data-[slot=item-description]/item:self-start [&_svg]:pointer-events-none",
+  "flex shrink-0 items-center justify-center gap-2 [&_svg]:pointer-events-none",
   {
     variants: {
+      align: {
+        center: "self-center",
+        start:
+          "group-has-data-[slot=item-description]/item:translate-y-0.5 group-has-data-[slot=item-description]/item:self-start",
+      },
       variant: {
         default: "bg-transparent",
         icon: "[&_svg:not([class*='size-'])]:size-4",
@@ -85,19 +90,22 @@ const itemMediaVariants = cva(
       },
     },
     defaultVariants: {
+      align: "start",
       variant: "default",
     },
   }
 );
 
 function ItemMedia({
+  align = "start",
   className,
   variant = "default",
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof itemMediaVariants>) {
   return (
     <div
-      className={cn(itemMediaVariants({ variant, className }))}
+      className={cn(itemMediaVariants({ align, variant, className }))}
+      data-align={align}
       data-slot="item-media"
       data-variant={variant}
       {...props}

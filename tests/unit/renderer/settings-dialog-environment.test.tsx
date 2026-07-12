@@ -351,7 +351,7 @@ describe("SettingsDialog — Environment section", () => {
     expect(screen.getByText("No environment settings")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Add environment setting" })
-    ).toBeInTheDocument();
+    ).toHaveAttribute("data-size", "default");
     expect(screen.queryByRole("textbox", { name: "Setup command" })).toBeNull();
   });
 

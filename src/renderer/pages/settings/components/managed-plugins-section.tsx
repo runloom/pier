@@ -1,8 +1,10 @@
+import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
+  EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
@@ -34,6 +36,7 @@ import {
   type ManagedPluginsWindowShim,
   ManagedRowExtraActions,
   rejectFailedManagedPluginOperation,
+  UnavailableManagedRow,
 } from "./managed-plugin-rows.tsx";
 import { PluginRow, PluginsLoadingState } from "./plugin-row.tsx";
 
@@ -53,6 +56,7 @@ function useCatalog(): {
   refresh: () => void;
   checkUpdates: () => Promise<ManagedPluginCatalogSnapshot | null>;
   checkingUpdates: boolean;
+  error: string | null;
   win: ManagedPluginsWindowShim | undefined;
 } {
   const win = (window as unknown as { pier?: ManagedPluginsWindowShim }).pier;
@@ -60,14 +64,19 @@ function useCatalog(): {
     null
   );
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback((): void => {
     if (!win?.managedPlugins) return;
     win.managedPlugins
       .list()
-      .then(setCatalog)
+      .then((next) => {
+        setCatalog(next);
+        setError(null);
+      })
       .catch((err: unknown) => {
         console.error("[managed-plugins] list failed:", err);
+        setError(errorDescription(err));
       });
   }, []);
 
@@ -91,7 +100,7 @@ function useCatalog(): {
     refresh();
   }, [refresh]);
 
-  return { catalog, refresh, checkUpdates, checkingUpdates, win };
+  return { catalog, refresh, checkUpdates, checkingUpdates, error, win };
 }
 
 type UnifiedRow =
@@ -105,6 +114,10 @@ type UnifiedRow =
   | {
       kind: "available";
       row: CatalogRow;
+    }
+  | {
+      kind: "unavailable";
+      row: CatalogRow;
     };
 
 function EmptyList({
@@ -116,10 +129,9 @@ function EmptyList({
   return (
     <Empty className="py-8">
       <EmptyHeader>
-        <AlertCircle
-          aria-hidden
-          className="mx-auto size-6 text-muted-foreground"
-        />
+        <EmptyMedia variant="icon">
+          <AlertCircle aria-hidden />
+        </EmptyMedia>
         <EmptyTitle>{t(`settings.plugins.${emptyKey}Title`)}</EmptyTitle>
         <EmptyDescription>
           {t(`settings.plugins.${emptyKey}Description`)}
@@ -142,7 +154,7 @@ function UnifiedList({
   rows: readonly UnifiedRow[];
   win: ManagedPluginsWindowShim | undefined;
   onRefreshManaged: () => void;
-  onToggleManaged(entry: PluginRegistryEntry, row: CatalogRow): void;
+  onToggleManaged(row: CatalogRow): void;
   onToggleBuiltin(entry: PluginRegistryEntry): void;
   pendingManagedId: string | null;
   pendingBuiltinId: string | null;
@@ -169,6 +181,22 @@ function UnifiedList({
             </Fragment>
           );
         }
+        if (row.kind === "unavailable") {
+          return (
+            <Fragment key={key}>
+              {index > 0 ? (
+                <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
+              ) : null}
+              <UnavailableManagedRow
+                onRefresh={onRefreshManaged}
+                onToggle={() => onToggleManaged(row.row)}
+                pending={pendingManagedId === row.row.id}
+                row={row.row}
+                win={win}
+              />
+            </Fragment>
+          );
+        }
         const managedRow = row.managedRow;
         const displayEntry = managedRow
           ? withManagedDesiredState(row.entry, managedRow)
@@ -189,9 +217,7 @@ function UnifiedList({
               entry={displayEntry}
               extraActions={extraActions}
               onToggle={
-                managedRow
-                  ? (entry) => onToggleManaged(entry, managedRow)
-                  : onToggleBuiltin
+                managedRow ? () => onToggleManaged(managedRow) : onToggleBuiltin
               }
               pending={
                 managedRow
@@ -236,7 +262,8 @@ export function ManagedPluginsSection({
   pendingBuiltinId: string | null;
 }): JSX.Element {
   const t = useT();
-  const { catalog, refresh, checkUpdates, checkingUpdates, win } = useCatalog();
+  const { catalog, refresh, checkUpdates, checkingUpdates, error, win } =
+    useCatalog();
   const [pendingManagedId, setPendingManagedId] = useState<string | null>(null);
 
   const managedById = new Map(catalog?.plugins.map((p) => [p.id, p]) ?? []);
@@ -244,6 +271,7 @@ export function ManagedPluginsSection({
   // PLUGINS_CHANGED asynchronously after mutate, so a Uninstall click updates
   // the catalog first and the registry a beat later. Hide any managed entry
   // the catalog no longer reports as installed — it'll surface in Not Installed.
+  const runtimeIds = new Set(builtinEntries.map((entry) => entry.manifest.id));
   const installedRows: UnifiedRow[] = builtinEntries
     .filter((entry) => {
       const managedRow = managedById.get(entry.manifest.id);
@@ -254,6 +282,11 @@ export function ManagedPluginsSection({
       entry,
       managedRow: managedById.get(entry.manifest.id) ?? null,
     }));
+  installedRows.push(
+    ...(catalog?.plugins ?? [])
+      .filter((row) => row.installed && !runtimeIds.has(row.id))
+      .map((row): UnifiedRow => ({ kind: "unavailable", row }))
+  );
   const installedIds = new Set(
     installedRows.flatMap((r) =>
       r.kind === "entry" ? [r.entry.manifest.id] : []
@@ -267,14 +300,14 @@ export function ManagedPluginsSection({
   );
 
   const toggleManaged = useCallback(
-    (entry: PluginRegistryEntry, row: CatalogRow): void => {
+    (row: CatalogRow): void => {
       const request = row.desired.enabled
-        ? win?.managedPlugins?.disable(entry.manifest.id)
-        : win?.managedPlugins?.enable(entry.manifest.id);
+        ? win?.managedPlugins?.disable(row.id)
+        : win?.managedPlugins?.enable(row.id);
       if (!request) {
         return;
       }
-      setPendingManagedId(entry.manifest.id);
+      setPendingManagedId(row.id);
       rejectFailedManagedPluginOperation(request)
         .then(refresh)
         .catch((err: unknown) => {
@@ -308,6 +341,14 @@ export function ManagedPluginsSection({
   return (
     <div className="flex flex-col gap-2">
       <Tabs defaultValue="installed">
+        {error ? (
+          <div className="mx-(--card-spacing) mb-2">
+            <Alert variant="destructive">
+              <AlertTitle>{t("settings.plugins.errorTitle")}</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
         <div className="mx-(--card-spacing) flex items-center justify-between gap-2">
           <TabsList>
             <TabsTrigger value="installed">
@@ -349,6 +390,7 @@ export function ManagedPluginsSection({
                     <RefreshCw
                       aria-hidden
                       className={cn(checkingUpdates && "animate-spin")}
+                      data-icon="inline-start"
                     />
                   </Button>
                 </TooltipTrigger>

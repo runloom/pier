@@ -10,6 +10,18 @@ export function compareSemver(a: string, b: string): number {
   return rcompare(a, b);
 }
 
+/** 返回候选中的最高合法语义版本；无合法版本时返回 null。 */
+export function selectNewestVersion(
+  versions: readonly (string | null | undefined)[]
+): string | null {
+  const candidates = versions.filter(
+    (version): version is string =>
+      typeof version === "string" && !!valid(version)
+  );
+  candidates.sort(rcompare);
+  return candidates[0] ?? null;
+}
+
 export function isPierRangeCompatible(
   range: string,
   pierVersion: string

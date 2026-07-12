@@ -15,6 +15,7 @@
  */
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { agentKindFromTabIconId } from "@shared/contracts/agent-session.ts";
 import type {
   PanelTabStatus,
@@ -157,7 +158,10 @@ function tabStatusIndicator(
   return (
     <span
       aria-label={displayLabel}
-      className={`inline-flex size-4 shrink-0 items-center justify-center ${visual.textClassName}`}
+      className={cn(
+        "inline-flex size-4 shrink-0 items-center justify-center",
+        visual.textClassName
+      )}
       data-panel-tab-state-indicator={status}
       data-tab-status={status}
       role="img"
@@ -165,7 +169,7 @@ function tabStatusIndicator(
     >
       <Icon
         aria-hidden="true"
-        className={`size-3 shrink-0 ${visual.iconClassName}`}
+        className={cn("size-3 shrink-0", visual.iconClassName)}
         data-panel-tab-state-icon={status}
       />
     </span>

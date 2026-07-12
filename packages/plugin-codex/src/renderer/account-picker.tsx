@@ -8,9 +8,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
-import { Check, ChevronDown, Settings } from "lucide-react";
+import { Spinner } from "@pier/ui/spinner.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
+import { ArrowLeftRight, Check, Settings } from "lucide-react";
 import type { JSX } from "react";
+import { useState } from "react";
 import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
+import { confirmAccountSwitch } from "./account-switch.ts";
 
 export interface AccountPickerProps {
   context: ExternalRendererPluginContext;
@@ -23,48 +32,85 @@ export function AccountPicker({
   snapshot,
   t,
 }: AccountPickerProps): JSX.Element {
-  const activeAccount = snapshot.accounts.find(
-    (a) => a.id === snapshot.activeAccountId
+  const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(
+    null
   );
-
-  const invoke = (method: string, payload: unknown = null): void => {
-    context.rpc.invoke(method, payload).catch((err: unknown) => {
-      context.dialogs.alert({
-        title: t("pier.codex.widget.actionFailed", "Account action failed"),
-        body: err instanceof Error ? err.message : String(err),
-      });
+  const reportError = async (err: unknown): Promise<void> => {
+    await context.dialogs.alert({
+      title: t("pier.codex.widget.actionFailed", "Account action failed"),
+      body: err instanceof Error ? err.message : String(err),
     });
   };
 
-  const handleSelect = (accountId: string): void => {
-    invoke("accounts.select", { accountId });
+  const handleSelect = async (accountId: string): Promise<void> => {
+    if (!(await confirmAccountSwitch(context, t))) return;
+    setSwitchingAccountId(accountId);
+    try {
+      await context.rpc.invoke("accounts.select", { accountId });
+    } catch (error) {
+      await reportError(error);
+    } finally {
+      setSwitchingAccountId(null);
+    }
   };
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          className="w-full justify-between font-normal"
-          size="sm"
-          variant="outline"
-        >
-          <span className="truncate">
-            {activeAccount?.label ??
-              t("pier.codex.widget.noActiveAccount", "No active account")}
-          </span>
-          <ChevronDown data-icon="inline-end" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[--trigger-width]">
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-busy={switchingAccountId !== null || undefined}
+                aria-label={t(
+                  "pier.codex.widget.switchAccount",
+                  "Switch account"
+                )}
+                disabled={switchingAccountId !== null}
+                size="icon-sm"
+                variant="ghost"
+              >
+                {switchingAccountId ? (
+                  <Spinner
+                    aria-label={t(
+                      "pier.codex.widget.switchingAccount",
+                      "Switching account"
+                    )}
+                    data-icon="inline-start"
+                  />
+                ) : null}
+                <ArrowLeftRight data-icon="inline-start" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent data-pier-codex-scope="">
+            {t("pier.codex.widget.switchAccount", "Switch account")}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <DropdownMenuContent
+        align="end"
+        className="min-w-64"
+        data-pier-codex-scope=""
+      >
         <DropdownMenuGroup>
           {snapshot.accounts.map((account) => (
             <DropdownMenuItem
               disabled={account.id === snapshot.activeAccountId}
               key={account.id}
-              onClick={() => handleSelect(account.id)}
+              onClick={() => {
+                handleSelect(account.id).catch(reportError);
+              }}
             >
               {account.id === snapshot.activeAccountId ? <Check /> : null}
-              <span className="truncate">{account.label}</span>
+              <span className="min-w-0">
+                <span className="block truncate">{account.label}</span>
+                {account.planType ? (
+                  <span className="block text-muted-foreground text-xs">
+                    {account.planType.toUpperCase()}
+                  </span>
+                ) : null}
+              </span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>

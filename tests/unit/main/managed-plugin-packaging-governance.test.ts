@@ -5,11 +5,18 @@ import { describe, expect, it } from "vitest";
 
 const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
   {
-    defaultSize: { h: 6, w: 4 },
-    maxSize: { h: 10, w: 8 },
+    defaultSize: { h: 3, w: 4 },
+    maxSize: { h: 4, w: 8 },
     minSize: { h: 3, w: 2 },
     pluginId: "pier.codex",
     widgetId: "pier.codex.accounts",
+  },
+  {
+    defaultSize: { h: 3, w: 4 },
+    maxSize: { h: 5, w: 8 },
+    minSize: { h: 3, w: 2 },
+    pluginId: "pier.codex",
+    widgetId: "pier.codex.cost",
   },
 ] as const;
 
@@ -31,6 +38,10 @@ const builderConfig = readFileSync(
 );
 const releaseWorkflow = readFileSync(
   join(process.cwd(), ".github/workflows/release-plugin.yml"),
+  "utf8"
+);
+const verifyIndexWorkflow = readFileSync(
+  join(process.cwd(), ".github/workflows/verify-index.yml"),
   "utf8"
 );
 const prePushHook = readFileSync(
@@ -89,9 +100,15 @@ describe("managed plugin packaging governance", () => {
       "verify-plugin-index-assets.mjs"
     );
     expect(packageJson.scripts?.["check:plugin-index"]).toContain(
+      "--source=release"
+    );
+    expect(packageJson.scripts?.["check:plugin-index"]).toContain(
       "plugins:pack"
     );
     expect(prePushHook).toContain("pnpm check:plugin-index");
+    expect(verifyIndexWorkflow).toContain(
+      "verify-plugin-index-assets.mjs --source=release"
+    );
   });
 
   it("matches every bundled widget to its approved explicit sizing policy", () => {

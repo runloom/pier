@@ -36,13 +36,11 @@ function CommandDialog({
   description = "Search for a command to run...",
   children,
   className,
-  showCloseButton = false,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string;
   description?: string;
   className?: string;
-  showCloseButton?: boolean;
 }) {
   return (
     <Dialog {...props}>
@@ -57,7 +55,7 @@ function CommandDialog({
         )}
         closeOnOverlayClick
         initialFocus="firstFocusable"
-        showCloseButton={showCloseButton}
+        showCloseButton={false}
       >
         {children}
       </DialogContent>

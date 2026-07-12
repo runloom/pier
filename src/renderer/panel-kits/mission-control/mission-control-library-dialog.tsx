@@ -250,12 +250,14 @@ export function MissionControlLibraryDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
         className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col sm:max-w-[1200px]"
+        closeLabel={t("dialog.close")}
         data-testid="mission-control-library"
         onOpenAutoFocus={(event) => {
           // 搜索是物料库的首要动作：打开即聚焦搜索框（对齐 quick pick 直觉）
           event.preventDefault();
           searchRef.current?.focus();
         }}
+        showCloseButton
       >
         <DialogHeader>
           <DialogTitle>{t("missionControl.library.title")}</DialogTitle>

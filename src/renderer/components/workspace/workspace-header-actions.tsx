@@ -74,7 +74,7 @@ export function WorkspaceHeaderRightActions(
           type="button"
           variant={variant}
         >
-          <Icon />
+          <Icon data-icon="inline-start" />
         </Button>
       ) : null}
     </div>

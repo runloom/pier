@@ -84,6 +84,31 @@ describe("CommandPalette quick pick rows", () => {
     expect(useCommandPaletteController.getState().open).toBe(true);
   });
 
+  it("retains quick-pick content while the dialog exits", async () => {
+    render(<CommandPalette />);
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        items: [{ id: "retained", label: "Retained item" }],
+        onAccept: vi.fn(),
+        title: "Retained picker",
+      });
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Retained item");
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    expect(useCommandPaletteController.getState()).toMatchObject({
+      mode: "commands",
+      open: false,
+      quickPick: null,
+    });
+    expect(dialog).toHaveAttribute("data-state", "closed");
+    expect(dialog).toHaveTextContent("Retained item");
+  });
+
   it("contains synchronous text-input callback failures", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<CommandPalette />);

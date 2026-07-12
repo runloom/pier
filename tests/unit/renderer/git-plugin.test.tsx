@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import { GIT_PLUGIN_ID } from "@plugins/builtin/git/manifest.ts";
@@ -39,6 +40,7 @@ import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import {
   getLastTerminalInputRoutingSnapshot,
+  registerTerminalElementWebOverlay,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -50,6 +52,9 @@ const toastMocks = vi.hoisted(() => ({
   loading: vi.fn(() => "git-loading-toast"),
   success: vi.fn(),
 }));
+const terminalOverlayRegistry = {
+  registerElement: registerTerminalElementWebOverlay,
+};
 
 vi.mock("sonner", () => ({
   toast: toastMocks,
@@ -504,7 +509,11 @@ describe("git builtin plugin", () => {
   let rendererPluginRuntime: RendererPluginRuntime;
 
   function activateWorktreePlugin(): () => void {
-    render(<AppDialogHost />);
+    render(
+      <TerminalOverlayContext.Provider value={terminalOverlayRegistry}>
+        <AppDialogHost />
+      </TerminalOverlayContext.Provider>
+    );
     return gitRendererPlugin.activate(
       createRendererPluginContext(pluginEntry(true))
     );
@@ -764,6 +773,17 @@ describe("git builtin plugin", () => {
           read: vi.fn(async () => ({})),
         },
       },
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 720,
+      height: 696,
+      left: 0,
+      right: 1280,
+      toJSON: () => ({}),
+      top: 24,
+      width: 1280,
+      x: 0,
+      y: 24,
     });
   });
 

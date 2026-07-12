@@ -13,6 +13,9 @@ export type CodexAccountStatus =
   | "error";
 
 export interface CodexUsageWindow {
+  id: string;
+  limitId: string;
+  limitName?: string;
   resetsAt?: number;
   usedPercent: number;
   windowMinutes?: number;
@@ -22,9 +25,9 @@ export interface CodexUsageSnapshot {
   error?: string;
   fetchedAt: number;
   raw?: unknown;
-  session?: CodexUsageWindow;
+  resetCreditsAvailable?: number;
   status: "ok" | "error";
-  weekly?: CodexUsageWindow;
+  windows: CodexUsageWindow[];
 }
 
 export interface CodexAccountSummary {
@@ -33,6 +36,7 @@ export interface CodexAccountSummary {
   label: string;
   planType?: string;
   status: CodexAccountStatus;
+  /** null 表示尚未完成首次用量请求；对象表示请求已完成（包括空结果或错误）。 */
   usage?: CodexUsageSnapshot | null;
 }
 
@@ -45,9 +49,44 @@ export interface CodexAccountsSnapshot {
   accounts: CodexAccountSummary[];
   activeAccountId: string | null;
   activeUsage?: CodexUsageSnapshot | null;
+  costUsage?: CodexCostUsageSnapshot | null;
   login: CodexLoginState | null;
   revision: number;
   schemaVersion: number;
+}
+
+export interface CodexCostUsageSnapshot {
+  buckets: Array<{
+    date: string;
+    estimatedCostMicrousd: number | null;
+    pricingStatus: "complete" | "partial" | "unpriced";
+    tokens: {
+      cachedInputTokens: number;
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens: number;
+      totalTokens: number;
+    };
+  }>;
+  coverage: { complete: boolean; from: string; to: string };
+  diagnostics?: {
+    candidateFiles: number;
+    deduplicatedEvents: number;
+    failedFiles: number;
+    forkedFiles: number;
+    malformedLines: number;
+    parsedFiles: number;
+    reusedFiles: number;
+    truncatedFiles: number;
+    uniqueEvents: number;
+  };
+  observedAt: number;
+  summary: {
+    estimatedCostMicrousd: number | null;
+    latestDayTokens: number;
+    periodTokens: number;
+    todayEstimatedCostMicrousd: number | null;
+  };
 }
 
 export interface CodexAccountsState {

@@ -89,9 +89,14 @@ describe("Mission Control native menu event boundaries", () => {
       />
     );
 
-    fireEvent.contextMenu(
-      screen.getByTestId("mission-control-widget-menu-trigger")
-    );
+    const trigger = screen.getByTestId("mission-control-widget-menu-trigger");
+    await vi.waitFor(() => expect(trigger).toBeVisible());
+    fireEvent.pointerDown(trigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    fireEvent.contextMenu(trigger);
 
     expect(menuPopupMock).not.toHaveBeenCalled();
     expect(

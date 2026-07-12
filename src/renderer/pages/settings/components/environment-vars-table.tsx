@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { Field, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
 import { Plus, Trash2 } from "lucide-react";
 import type { ChangeEvent } from "react";
@@ -80,25 +81,40 @@ export function EnvironmentVarsTable({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <FieldGroup className="gap-2">
       {rows.map((row, i) => (
-        <div className="grid grid-cols-[160px_1fr_auto] gap-2" key={row.id}>
-          <Input
-            className="font-mono"
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              updateRow(i, "key", e.target.value)
-            }
-            placeholder="KEY"
-            value={row.key}
-          />
-          <Input
-            className="font-mono"
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              updateRow(i, "value", e.target.value)
-            }
-            placeholder="value"
-            value={row.value}
-          />
+        <FieldGroup
+          className="grid grid-cols-[160px_1fr_auto] gap-2"
+          key={row.id}
+        >
+          <Field>
+            <FieldLabel className="sr-only" htmlFor={`${row.id}-key`}>
+              {t("settings.environment.envVars.keyLabel")}
+            </FieldLabel>
+            <Input
+              className="font-mono"
+              id={`${row.id}-key`}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                updateRow(i, "key", e.target.value)
+              }
+              placeholder="KEY"
+              value={row.key}
+            />
+          </Field>
+          <Field>
+            <FieldLabel className="sr-only" htmlFor={`${row.id}-value`}>
+              {t("settings.environment.envVars.valueLabel")}
+            </FieldLabel>
+            <Input
+              className="font-mono"
+              id={`${row.id}-value`}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                updateRow(i, "value", e.target.value)
+              }
+              placeholder="value"
+              value={row.value}
+            />
+          </Field>
           <Button
             aria-label={t("settings.environment.envVars.remove")}
             disabled={rows.length === 1}
@@ -107,9 +123,9 @@ export function EnvironmentVarsTable({
             type="button"
             variant="ghost"
           >
-            <Trash2 />
+            <Trash2 data-icon="inline-start" />
           </Button>
-        </div>
+        </FieldGroup>
       ))}
       <Button
         className="w-fit"
@@ -118,9 +134,9 @@ export function EnvironmentVarsTable({
         type="button"
         variant="outline"
       >
-        <Plus data-icon />
+        <Plus data-icon="inline-start" />
         {t("settings.environment.envVars.addVariable")}
       </Button>
-    </div>
+    </FieldGroup>
   );
 }

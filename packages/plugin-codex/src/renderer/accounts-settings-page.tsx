@@ -1,6 +1,14 @@
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
+import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@pier/ui/card.tsx";
 import {
   Empty,
   EmptyDescription,
@@ -8,82 +16,54 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { formatRelativeTime } from "@pier/ui/format.tsx";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemSeparator,
+  ItemTitle,
+} from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@pier/ui/table.tsx";
-import { CircleUserRound, Plus } from "lucide-react";
-import type { JSX } from "react";
-import { AccountUsageRow, type Translate } from "./account-usage-row.tsx";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
+import { CircleUserRound, RefreshCw } from "lucide-react";
+import { Fragment, type JSX } from "react";
+import {
+  AccountAvatar,
+  OtherAccount,
+  QuotaGroup,
+  resetCredits,
+} from "./account-display.tsx";
+import { confirmAccountSwitch } from "./account-switch.ts";
+import { AddAccountDialog } from "./add-account-dialog.tsx";
+import { CostCard } from "./cost-card.tsx";
+import type { Translate } from "./usage-meter.tsx";
+import { useAccountsRefresh } from "./use-accounts-refresh.ts";
 import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
+import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
 
 export interface AccountsSettingsPageProps {
   context: ExternalRendererPluginContext;
 }
 
-const ACCOUNT_SKELETON_ROWS = ["account-1", "account-2", "account-3"];
+const SETTINGS_LAYOUT_CLASS =
+  "flex w-full max-w-[62rem] flex-col gap-4 px-4 pb-8";
 
-function AccountsTableSkeleton(): JSX.Element {
+function SettingsSkeleton(): JSX.Element {
   return (
-    <div className="px-4 pb-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <Skeleton className="h-7 w-28 rounded-lg" />
-        <Skeleton className="h-7 w-24 rounded-full" />
-      </div>
-      <div className="pier-codex-account-table-shell">
-        <Table className="pier-codex-account-table">
-          <colgroup>
-            <col className="pier-codex-account-column" />
-            <col className="pier-codex-plan-column" />
-            <col className="pier-codex-usage-column" />
-            <col className="pier-codex-actions-column" />
-          </colgroup>
-          <TableHeader>
-            <TableRow>
-              <TableHead>
-                <Skeleton className="h-3 w-12 rounded-md" />
-              </TableHead>
-              <TableHead>
-                <Skeleton className="h-3 w-12 rounded-md" />
-              </TableHead>
-              <TableHead>
-                <Skeleton className="h-3 w-10 rounded-md" />
-              </TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {ACCOUNT_SKELETON_ROWS.map((row) => (
-              <TableRow className="pier-codex-account-row" key={row}>
-                <TableCell>
-                  <Skeleton className="h-4 w-4/5 rounded-md" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-5 w-10 rounded-full" />
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-2">
-                    <Skeleton className="h-3 w-2/5 rounded-md" />
-                    <Skeleton className="h-1.5 w-full rounded-full" />
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Skeleton className="size-7 rounded-full" />
-                    <Skeleton className="size-7 rounded-full" />
-                    <Skeleton className="size-7 rounded-full" />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+    <div className={SETTINGS_LAYOUT_CLASS}>
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-56 w-full" />
+      <Skeleton className="h-36 w-full" />
     </div>
   );
 }
@@ -96,41 +76,45 @@ export function AccountsSettingsPage({
   context,
 }: AccountsSettingsPageProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
+  useUsagePollingLease(context, "settings:accounts", true);
   const t: Translate = (key, fallback) => context.i18n.t(key, fallback);
-
   const reportError = (err: unknown): void => {
-    context.dialogs.alert({
-      title: t(
-        "pier.codex.accounts.settings.actionFailed",
-        "Account action failed"
-      ),
-      body: errorMessage(err),
-    });
+    context.dialogs
+      .alert({
+        body: errorMessage(err),
+        title: t(
+          "pier.codex.accounts.settings.actionFailed",
+          "Account action failed"
+        ),
+      })
+      .catch(() => undefined);
   };
-
   const invoke = (method: string, payload: unknown = null): void => {
     context.rpc.invoke(method, payload).catch(reportError);
   };
-
+  const { costRefreshing, refreshCost, refreshingAccountIds, refreshUsage } =
+    useAccountsRefresh({ context, onAccountError: reportError, t });
   const handleRemove = async (accountId: string): Promise<void> => {
     const ok = await context.dialogs.confirm({
+      body: t(
+        "pier.codex.accounts.settings.removeConfirmBody",
+        "This account will be removed from Pier."
+      ),
+      intent: "destructive",
       title: t(
         "pier.codex.accounts.settings.removeConfirmTitle",
         "Remove account?"
       ),
-      body: t(
-        "pier.codex.accounts.settings.removeConfirmBody",
-        "This account will be removed from Pier. Your Codex login on this device is not affected."
-      ),
-      intent: "destructive",
     });
-    if (!ok) return;
-    invoke("accounts.remove", { accountId });
+    if (ok) invoke("accounts.remove", { accountId });
   };
-
-  if (loadError) {
+  const handleSelect = async (accountId: string): Promise<void> => {
+    const ok = await confirmAccountSwitch(context, t);
+    if (ok) invoke("accounts.select", { accountId });
+  };
+  if (loadError)
     return (
-      <div className="px-4 pb-4">
+      <div className={SETTINGS_LAYOUT_CLASS}>
         <Alert variant="destructive">
           <AlertTitle>
             {t(
@@ -142,127 +126,114 @@ export function AccountsSettingsPage({
         </Alert>
       </div>
     );
-  }
-
-  if (!snapshot) {
-    return <AccountsTableSkeleton />;
-  }
-
+  if (!snapshot) return <SettingsSkeleton />;
+  const active =
+    snapshot.accounts.find(
+      (account) => account.id === snapshot.activeAccountId
+    ) ?? null;
+  const others = snapshot.accounts.filter(
+    (account) => account.id !== snapshot.activeAccountId
+  );
   const language = context.i18n.language();
-
   return (
-    <div className="px-4 pb-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <h1 className="text-xl">
+    <div className={SETTINGS_LAYOUT_CLASS}>
+      <header className="flex min-h-9 items-center justify-between gap-4">
+        <h1 className="font-semibold text-xl tracking-tight">
           {t("pier.codex.accounts.settings.title", "Codex Accounts")}
         </h1>
-        <Button
-          disabled={snapshot.login !== null}
-          onClick={() => invoke("accounts.add", {})}
-          type="button"
-        >
-          <Plus data-icon="inline-start" />
-          {t("pier.codex.accounts.settings.addAccount", "Add account")}
-        </Button>
-      </div>
-
-      {snapshot.login ? (
-        <Alert className="mb-4">
-          <AlertTitle>
-            {t(
-              "pier.codex.accounts.settings.loginPending",
-              "Login in progress"
-            )}
-          </AlertTitle>
-          <AlertDescription>
-            {t(
-              "pier.codex.accounts.settings.loginPendingDesc",
-              "Finish the Codex login flow in your browser or cancel it before adding another account."
-            )}
-          </AlertDescription>
-          <Button
-            className="mt-3"
-            onClick={() => invoke("accounts.cancelLogin", null)}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {t("pier.codex.accounts.settings.cancelLogin", "Cancel login")}
-          </Button>
-        </Alert>
-      ) : null}
-
-      {snapshot.accounts.length > 0 ? (
-        <div
-          className="pier-codex-account-table-shell"
-          data-testid="codex-account-table"
-        >
-          <Table className="pier-codex-account-table">
-            <colgroup>
-              <col className="pier-codex-account-column" />
-              <col className="pier-codex-plan-column" />
-              <col className="pier-codex-usage-column" />
-              <col className="pier-codex-actions-column" />
-            </colgroup>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  {t("pier.codex.accounts.settings.account", "Account")}
-                </TableHead>
-                <TableHead>
+        <AddAccountDialog
+          context={context}
+          login={snapshot.login}
+          onError={reportError}
+          t={t}
+        />
+      </header>
+      {active ? (
+        <Card data-testid="codex-active-account" size="sm">
+          <CardHeader className="items-center">
+            <CardTitle>
+              {t(
+                "pier.codex.accounts.settings.currentAccount",
+                "Current account"
+              )}
+            </CardTitle>
+            <CardAction className="flex items-center gap-2">
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-busy={
+                        refreshingAccountIds.has(active.id) || undefined
+                      }
+                      aria-label={t(
+                        "pier.codex.accounts.settings.refreshUsage",
+                        "Refresh usage"
+                      )}
+                      disabled={refreshingAccountIds.has(active.id)}
+                      onClick={() => refreshUsage(active.id)}
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <RefreshCw
+                        className={cn(
+                          refreshingAccountIds.has(active.id) &&
+                            "animate-spin motion-reduce:animate-none"
+                        )}
+                        data-icon="inline-start"
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent data-pier-codex-scope="">
+                    {t(
+                      "pier.codex.accounts.settings.refreshUsage",
+                      "Refresh usage"
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Item className="px-0 py-0" size="sm">
+              <ItemMedia align="center">
+                <AccountAvatar label={active.label} />
+              </ItemMedia>
+              <ItemContent className="min-w-0">
+                <ItemTitle title={active.label}>{active.label}</ItemTitle>
+                <ItemDescription>
+                  {[
+                    active.planType?.toUpperCase(),
+                    resetCredits(active, language, t),
+                    active.usage
+                      ? `${t("pier.codex.accounts.settings.updated", "Updated")} ${formatRelativeTime(active.usage.fetchedAt, Date.now(), language)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Badge variant="secondary">
                   {t(
-                    "pier.codex.accounts.settings.subscription",
-                    "Subscription"
+                    "pier.codex.accounts.settings.systemDefault",
+                    "System default"
                   )}
-                </TableHead>
-                <TableHead>
-                  {t("pier.codex.accounts.settings.usage", "Quota status")}
-                </TableHead>
-                <TableHead className="pier-codex-actions-head">
-                  {t("pier.codex.accounts.settings.actions", "Actions")}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {snapshot.accounts.map((account) => {
-                const isSystemDefault = account.id === snapshot.activeAccountId;
-                return (
-                  <AccountUsageRow
-                    description={account.error ?? undefined}
-                    isSystemDefault={isSystemDefault}
-                    key={account.id}
-                    label={account.label}
-                    language={language}
-                    onRefresh={() =>
-                      invoke("accounts.refreshUsage", {
-                        accountId: account.id,
-                      })
-                    }
-                    onRemove={
-                      isSystemDefault
-                        ? undefined
-                        : () => handleRemove(account.id).catch(reportError)
-                    }
-                    onSelect={
-                      isSystemDefault
-                        ? undefined
-                        : () =>
-                            invoke("accounts.select", {
-                              accountId: account.id,
-                            })
-                    }
-                    planType={account.planType}
-                    status={account.status}
-                    t={t}
-                    usage={account.usage}
-                  />
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                </Badge>
+              </ItemActions>
+            </Item>
+            <ItemSeparator className="my-0" />
+            <QuotaGroup
+              error={active.usage?.error}
+              language={language}
+              loading={!active.usage}
+              t={t}
+              windows={active.usage?.windows ?? []}
+            />
+          </CardContent>
+        </Card>
       ) : (
-        <Empty className="border border-dashed">
+        <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <CircleUserRound />
@@ -282,6 +253,46 @@ export function AccountsSettingsPage({
           </EmptyHeader>
         </Empty>
       )}
+      <CostCard
+        language={language}
+        onRefresh={() => refreshCost()}
+        refreshing={costRefreshing}
+        snapshot={snapshot.costUsage}
+        t={t}
+      />
+      {others.length > 0 ? (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>
+              {t(
+                "pier.codex.accounts.settings.otherAccounts",
+                "Other accounts"
+              )}
+            </CardTitle>
+            <CardAction>
+              <Badge variant="secondary">{others.length}</Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="px-0" data-testid="codex-account-table">
+            <ItemGroup className="gap-0">
+              {others.map((account, index) => (
+                <Fragment key={account.id}>
+                  {index > 0 ? <ItemSeparator /> : null}
+                  <OtherAccount
+                    account={account}
+                    language={language}
+                    onRefresh={() => refreshUsage(account.id)}
+                    onRemove={() => handleRemove(account.id).catch(reportError)}
+                    onSelect={() => handleSelect(account.id).catch(reportError)}
+                    refreshing={refreshingAccountIds.has(account.id)}
+                    t={t}
+                  />
+                </Fragment>
+              ))}
+            </ItemGroup>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

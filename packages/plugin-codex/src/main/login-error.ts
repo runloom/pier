@@ -17,7 +17,7 @@ export function classifyLoginError(
 ): ClassifiedLoginError {
   const e = err instanceof Error ? err : new Error(String(err));
   if (ctx.aborted && ctx.timedOut) {
-    const message = "Login timed out after 5 minutes";
+    const message = `Login timed out after ${LOGIN_TIMEOUT_MINUTES} minutes`;
     return { errorState: { at: ctx.at, message }, failure: new Error(message) };
   }
   if (ctx.aborted || e.name === "AbortError") {
@@ -27,3 +27,5 @@ export function classifyLoginError(
   }
   return { errorState: { at: ctx.at, message: e.message }, failure: e };
 }
+
+import { LOGIN_TIMEOUT_MINUTES } from "../shared/constants.ts";

@@ -9,6 +9,7 @@ import {
 } from "@/lib/plugins/plugin-runtime-diagnostics.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { ManagedPluginsSection } from "./managed-plugins-section.tsx";
+import { PluginDiagnosticsSummary } from "./plugin-diagnostics-summary.tsx";
 
 export function PluginsSection() {
   const t = useT();
@@ -59,31 +60,13 @@ export function PluginsSection() {
               </Alert>
             </div>
           ) : null}
-          {diagnostics.length || runtimeDiagnostics.length ? (
-            <div className="px-(--card-spacing)">
-              <Alert>
-                <AlertTitle>
-                  {t("settings.plugins.diagnosticsTitle")}
-                </AlertTitle>
-                <AlertDescription>
-                  <div className="flex flex-col gap-1">
-                    {diagnostics.map((diagnostic) => (
-                      <div
-                        key={`${diagnostic.source.kind}:${diagnostic.message}`}
-                      >
-                        {diagnostic.message}
-                      </div>
-                    ))}
-                    {runtimeDiagnostics.map((diagnostic) => (
-                      <div key={`runtime:${diagnostic.pluginId}`}>
-                        {diagnostic.pluginId}: {diagnostic.message}
-                      </div>
-                    ))}
-                  </div>
-                </AlertDescription>
-              </Alert>
-            </div>
-          ) : null}
+          <div className="px-(--card-spacing)">
+            <PluginDiagnosticsSummary
+              diagnostics={diagnostics}
+              runtimeDiagnostics={runtimeDiagnostics}
+              t={t}
+            />
+          </div>
           <ManagedPluginsSection
             builtinEntries={plugins}
             builtinInitialized={initialized}

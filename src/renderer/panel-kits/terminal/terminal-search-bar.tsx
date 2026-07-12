@@ -1,5 +1,10 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@pier/ui/input-group.tsx";
 import type { TerminalSearchStateEvent } from "@shared/contracts/terminal.ts";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -170,14 +175,12 @@ export function TerminalSearchBar({
       data-terminal-search-bar=""
       data-testid="terminal-search-bar"
     >
-      <div className="relative w-52 min-w-0">
-        <Search
-          aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-        />
-        <input
+      <InputGroup className="w-52 min-w-0">
+        <InputGroupAddon>
+          <Search aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
           aria-label={t("terminal.search.placeholder")}
-          className="h-7 pl-7 text-xs outline-none placeholder:text-muted-foreground/65"
           data-testid="terminal-search-input"
           onChange={(event) => runSearch(event.currentTarget.value)}
           onFocus={() => useTerminalStore.getState().activateOverlay(searchId)}
@@ -195,10 +198,10 @@ export function TerminalSearchBar({
           type="text"
           value={query}
         />
-      </div>
+      </InputGroup>
       {query ? (
         <Badge
-          className="text-muted-foreground tabular-nums"
+          className="tabular-nums"
           data-testid="terminal-search-match-count"
           variant="secondary"
         >
@@ -213,7 +216,7 @@ export function TerminalSearchBar({
         type="button"
         variant="ghost"
       >
-        <ArrowUp />
+        <ArrowUp data-icon="inline-start" />
       </Button>
       <Button
         aria-label={t("terminal.search.next")}
@@ -223,7 +226,7 @@ export function TerminalSearchBar({
         type="button"
         variant="ghost"
       >
-        <ArrowDown />
+        <ArrowDown data-icon="inline-start" />
       </Button>
       <Button
         aria-label={t("terminal.search.close")}
@@ -233,7 +236,7 @@ export function TerminalSearchBar({
         type="button"
         variant="ghost"
       >
-        <X />
+        <X data-icon="inline-start" />
       </Button>
     </search>
   );

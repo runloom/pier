@@ -52,6 +52,7 @@ interface WorktreeCreateOverlayProps {
   close: () => void;
   context: RendererPluginContext;
   data: WorktreeCreateOverlayData;
+  open: boolean;
   targetGroupId?: string;
 }
 
@@ -83,6 +84,7 @@ function WorktreeCreateOverlay({
   close,
   context,
   data,
+  open,
   targetGroupId,
 }: WorktreeCreateOverlayProps) {
   const [agentSelection, setAgentSelection] =
@@ -317,13 +319,15 @@ function WorktreeCreateOverlay({
           closeOverlay();
         }
       }}
-      open
+      open={open}
     >
       <DialogContent
+        closeLabel={text("close", undefined, "Close")}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           focusActiveModeInput(mode);
         }}
+        showCloseButton
       >
         <DialogHeader>
           <DialogTitle>{text("title", undefined, "New Worktree")}</DialogTitle>
@@ -435,11 +439,12 @@ export function openWorktreeCreateOverlay(
 ): void {
   context.overlays.open({
     id: "worktree-create",
-    render: ({ close }) => (
+    render: ({ close, open }) => (
       <WorktreeCreateOverlay
         close={close}
         context={context}
         data={data}
+        open={open}
         {...(targetGroupId ? { targetGroupId } : {})}
       />
     ),

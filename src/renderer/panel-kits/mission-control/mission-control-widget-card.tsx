@@ -1,4 +1,3 @@
-import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Card,
@@ -8,26 +7,36 @@ import {
   CardTitle,
 } from "@pier/ui/card.tsx";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@pier/ui/dropdown-menu.tsx";
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
 import { WidgetSkeleton } from "@pier/ui/widget-state.tsx";
+import type {
+  MissionControlWidgetActionContext,
+  RendererMissionControlWidgetAction,
+} from "@plugins/api/renderer.ts";
 import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import {
   Copy,
-  EllipsisVertical,
   GripVertical,
+  PackageX,
   RefreshCw,
   Settings2,
   Trash2,
 } from "lucide-react";
-import { type KeyboardEvent, useId, useState } from "react";
+import { type KeyboardEvent, useId } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import type { ResolvedMissionControlWidget } from "./mission-control-merge.ts";
+import {
+  MissionControlWidgetActions,
+  type WidgetHeaderAction,
+} from "./mission-control-widget-actions.tsx";
 import { WidgetErrorBoundary } from "./mission-control-widget-error-boundary.tsx";
 
 interface MissionControlWidgetCardProps {
@@ -46,20 +55,6 @@ interface MissionControlWidgetCardProps {
   widget: ResolvedMissionControlWidget;
 }
 
-/** 菜单条目按声明能力位与锁定态过滤；空菜单时整个触发器不渲染。 */
-function useMenuFlags(widget: ResolvedMissionControlWidget) {
-  const canRefresh =
-    widget.refreshable &&
-    (widget.status === "core" || widget.status === "plugin-active");
-  const canConfigure =
-    widget.configurable && widget.registration?.settingsComponent !== undefined;
-  return {
-    any: true,
-    canConfigure,
-    canRefresh,
-  };
-}
-
 const LAYOUT_KEY_SHORTCUTS =
   "ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown";
 export function MissionControlWidgetCard({
@@ -75,8 +70,6 @@ export function MissionControlWidgetCard({
   widget,
 }: MissionControlWidgetCardProps) {
   const t = useT();
-  const menu = useMenuFlags(widget);
-  const [menuOpen, setMenuOpen] = useState(false);
   const layoutInstructionsId = useId();
 
   const title = widget.status === "core" ? t(widget.title) : widget.title;
@@ -99,31 +92,136 @@ export function MissionControlWidgetCard({
     }
   };
 
+  const actionContext: MissionControlWidgetActionContext = {
+    instanceId: widget.instanceId,
+    params: widget.params,
+    requestRefresh: onRefresh,
+    updateParams,
+  };
+  let pluginActions: readonly RendererMissionControlWidgetAction[] = [];
+  try {
+    pluginActions = widget.registration?.actions?.(actionContext) ?? [];
+  } catch (error) {
+    console.error(
+      `[mission-control] widget actions failed: ${widget.widgetId}`,
+      error
+    );
+  }
+  const resolveActionLabel = (
+    label: RendererMissionControlWidgetAction["label"]
+  ): string => {
+    try {
+      return typeof label === "function" ? label() : label;
+    } catch {
+      return t("missionControl.widget.action");
+    }
+  };
+  const headerActions: WidgetHeaderAction[] = [
+    ...pluginActions.map(
+      (action): WidgetHeaderAction => ({
+        ...(action.disabled === undefined ? {} : { disabled: action.disabled }),
+        icon: action.icon,
+        id: `plugin:${action.id}`,
+        ...(action.intent === undefined ? {} : { intent: action.intent }),
+        invoke: () => action.invoke(actionContext),
+        label: resolveActionLabel(action.label),
+        priority: action.priority ?? 60,
+      })
+    ),
+    ...(widget.refreshable &&
+    (widget.status === "core" || widget.status === "plugin-active")
+      ? [
+          {
+            icon: RefreshCw,
+            id: "host:refresh",
+            invoke: onRefresh,
+            label: t("missionControl.widget.refresh"),
+            priority: 50,
+          } satisfies WidgetHeaderAction,
+        ]
+      : []),
+    ...(widget.configurable && widget.registration?.settingsComponent
+      ? [
+          {
+            icon: Settings2,
+            id: "host:settings",
+            invoke: onOpenSettings,
+            label: t("missionControl.widget.settings"),
+            priority: 40,
+            testId: "mission-control-widget-menu-settings",
+          } satisfies WidgetHeaderAction,
+        ]
+      : []),
+    ...(widget.multiInstance
+      ? [
+          {
+            icon: Copy,
+            id: "host:duplicate",
+            invoke: onDuplicate,
+            label: t("missionControl.widget.duplicate"),
+            priority: 20,
+            testId: "mission-control-widget-menu-duplicate",
+          } satisfies WidgetHeaderAction,
+        ]
+      : []),
+    ...(widget.status === "unknown"
+      ? []
+      : [
+          {
+            icon: Trash2,
+            id: "host:remove",
+            intent: "destructive",
+            invoke: confirmRemove,
+            label: t("missionControl.widget.remove"),
+            priority: 10,
+            testId: "mission-control-widget-menu-remove",
+          } satisfies WidgetHeaderAction,
+        ]),
+  ]
+    .map((action, index) => ({ action, index }))
+    .sort(
+      (left, right) =>
+        right.action.priority - left.action.priority || left.index - right.index
+    )
+    .map(({ action }) => action);
+
   const renderBody = (): React.ReactNode => {
     if (widget.status === "plugin-disabled") {
       return (
-        <div className="flex items-center justify-center p-4 text-muted-foreground text-sm">
-          {t("missionControl.widget.pluginDisabled")}
-        </div>
+        <Empty className="h-full p-6">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <PackageX />
+            </EmptyMedia>
+            <EmptyTitle>{t("missionControl.widget.pluginDisabled")}</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       );
     }
     if (widget.status === "unknown") {
       return (
-        <Alert className="m-3" variant="destructive">
-          <AlertDescription className="flex flex-col items-center gap-2">
-            <span>{t("missionControl.widget.unknown")}</span>
+        <Empty className="h-full p-6">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <PackageX />
+            </EmptyMedia>
+            <EmptyTitle>{t("missionControl.widget.unknownTitle")}</EmptyTitle>
+            <EmptyDescription>
+              {t("missionControl.widget.unknownDescription")}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
             <Button
               data-testid="mission-control-widget-unknown-remove"
               onClick={async () => {
                 await confirmRemove();
               }}
-              size="xs"
-              variant="destructive"
+              variant="outline"
             >
               {t("missionControl.widget.remove")}
             </Button>
-          </AlertDescription>
-        </Alert>
+          </EmptyContent>
+        </Empty>
       );
     }
     if (!widget.registration) {
@@ -156,8 +254,8 @@ export function MissionControlWidgetCard({
       data-testid={`mission-control-widget-${widget.instanceId}`}
       data-widget-id={widget.widgetId}
     >
-      <CardHeader className="select-none items-center gap-0.5 border-border/60 border-b pt-3">
-        <CardTitle className="flex items-center gap-1.5 font-semibold text-sm">
+      <CardHeader className="min-h-9 select-none items-center gap-1 px-3 py-1.5">
+        <CardTitle className="flex min-w-24 items-center gap-1.5 font-semibold text-sm">
           <button
             aria-describedby={layoutInstructionsId}
             aria-keyshortcuts={LAYOUT_KEY_SHORTCUTS}
@@ -191,65 +289,9 @@ export function MissionControlWidgetCard({
             {title}
           </span>
         </CardTitle>
-        {menu.any ? (
-          <CardAction>
-            <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  aria-label={t("missionControl.widget.menu")}
-                  className="text-muted-foreground opacity-40 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                  data-testid="mission-control-widget-menu-trigger"
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setMenuOpen(true);
-                  }}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <EllipsisVertical className="size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                {menu.canRefresh ? (
-                  <DropdownMenuItem onSelect={onRefresh}>
-                    <RefreshCw className="size-4" />
-                    {t("missionControl.widget.refresh")}
-                  </DropdownMenuItem>
-                ) : null}
-                {menu.canConfigure ? (
-                  <DropdownMenuItem
-                    data-testid="mission-control-widget-menu-settings"
-                    onSelect={onOpenSettings}
-                  >
-                    <Settings2 className="size-4" />
-                    {t("missionControl.widget.settings")}
-                  </DropdownMenuItem>
-                ) : null}
-                {widget.multiInstance ? (
-                  <DropdownMenuItem
-                    data-testid="mission-control-widget-menu-duplicate"
-                    onSelect={onDuplicate}
-                  >
-                    <Copy className="size-4" />
-                    {t("missionControl.widget.duplicate")}
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem
-                  data-testid="mission-control-widget-menu-remove"
-                  onSelect={async (event) => {
-                    event.preventDefault();
-                    await confirmRemove();
-                  }}
-                  variant="destructive"
-                >
-                  <Trash2 className="size-4" />
-                  {t("missionControl.widget.remove")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </CardAction>
-        ) : null}
+        <CardAction className="min-w-0 self-center">
+          <MissionControlWidgetActions actions={headerActions} />
+        </CardAction>
       </CardHeader>
       <CardContent
         className="@container min-h-0 flex-1 overflow-y-auto p-0"

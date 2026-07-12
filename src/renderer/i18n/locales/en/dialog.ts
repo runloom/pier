@@ -19,6 +19,7 @@ export const dialog = {
     title: "Quit Pier?",
   },
   cancel: "Cancel",
+  close: "Close",
   error: {
     invalid: "Invalid input",
   },

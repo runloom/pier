@@ -34,6 +34,7 @@ export const settings = {
     copyPatterns: {
       addPattern: "添加模式",
       hint: "匹配主 worktree 里被 gitignore 忽略的文件；符合的文件会在新 worktree 创建时复制过去。",
+      patternLabel: "文件匹配模式",
       placeholder: ".env*",
       remove: "删除",
       title: "创建时复制",
@@ -53,8 +54,10 @@ export const settings = {
     emptyTitle: "还没有环境设置",
     envVars: {
       addVariable: "添加变量",
+      keyLabel: "变量名",
       remove: "删除",
       title: "环境变量",
+      valueLabel: "变量值",
     },
     save: "保存",
     setupCommand: "启动命令",
@@ -226,7 +229,10 @@ export const settings = {
       enabled: "已启用",
       disabled: "已停用",
       manifestOnly: "仅清单预览",
+      runtimeUnavailable: "未加载",
     },
+    runtimeUnavailableDescription:
+      "插件已安装，但未进入当前运行态。请重启 Pier；如问题持续，请重新安装插件。",
     action: {
       enable: "启用",
       disable: "停用",
@@ -254,7 +260,11 @@ export const settings = {
     loadingDescription: "正在读取插件清单...",
     emptyTitle: "没有可用插件",
     emptyDescription: "发现内置或本地插件后会显示在这里。",
-    diagnosticsTitle: "插件诊断",
+    diagnostics: {
+      invalidManifest: "插件清单无法读取",
+      runtime: "插件加载失败",
+      unsupported: "当前版本不支持此插件",
+    },
     errorTitle: "无法加载插件",
     source: {
       builtin: "内置",

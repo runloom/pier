@@ -4,27 +4,28 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import type {
-  AddAccountPayload,
   CodexAccountsSnapshot,
-  RemoveAccountPayload,
-  SelectAccountPayload,
+  CodexCostUsageSnapshot,
 } from "../shared/accounts.ts";
+import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
 import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import type {
+  CodexAccountsService,
+  CodexAccountsServiceOpts,
+} from "./accounts-service-contract.ts";
 import { buildAccountsSnapshot } from "./accounts-snapshot.ts";
 import {
   activeUsageCacheKey,
+  createUsageCacheEntry,
   USAGE_MIN_REFETCH_MS,
   USAGE_POLL_INTERVAL_MS,
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
-import {
-  type CodexLegacyMigrationAdapter,
-  migrateLegacyAccountsToState,
-} from "./legacy-migration.ts";
+import { migrateLegacyAccountsToState } from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
 import {
   codexAccountHomeDir,
@@ -32,37 +33,16 @@ import {
 } from "./managed-account-home.ts";
 import { reconcileManagedCredentials } from "./managed-credential-reconciliation.ts";
 import { createSerialMutationQueue } from "./serial-mutation-queue.ts";
-import type { CodexAccountsStateStore } from "./state.ts";
-import type { AgentAccountProvider } from "./types.ts";
+import type { AccountUsageResult } from "./types.ts";
+import {
+  createUsageRefreshScheduler,
+  USAGE_REFRESH_CONCURRENCY,
+} from "./usage-refresh-scheduler.ts";
 
-const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const WATCH_SUPPRESS_MS = 1500;
 
 export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
-export interface CodexAccountsServiceOpts {
-  ensureUsageEnv?: () => Promise<void>;
-  hasVisibleTarget?: () => boolean;
-  legacyMigration?: CodexLegacyMigrationAdapter;
-  managedBaseDir: string;
-  onChanged: (snapshot: CodexAccountsSnapshot) => void;
-  provider: AgentAccountProvider;
-  stateStore: CodexAccountsStateStore;
-}
-
-export interface CodexAccountsService {
-  add(payload: AddAccountPayload): Promise<void>;
-  cancelLogin(): Promise<void>;
-  dispose(): void;
-  flush(): Promise<void>;
-  init(): Promise<void>;
-  refreshUsage(options?: {
-    accountId?: string;
-    force?: boolean;
-  }): Promise<void>;
-  remove(payload: RemoveAccountPayload): Promise<void>;
-  select(payload: SelectAccountPayload): Promise<void>;
-  snapshot(): CodexAccountsSnapshot;
-}
+export { USAGE_REFRESH_CONCURRENCY } from "./usage-refresh-scheduler.ts";
 
 export function createCodexAccountsService(
   opts: CodexAccountsServiceOpts
@@ -79,8 +59,15 @@ export function createCodexAccountsService(
   let usagePollTimer: ReturnType<typeof setInterval> | null = null;
   let lastLoginError: { at: number; message: string } | null = null;
   let suppressWatchUntil = 0;
+  let costUsage: CodexCostUsageSnapshot | null = null;
 
   const enqueueMutation = createSerialMutationQueue();
+  const refreshAllUsage = createUsageRefreshScheduler({
+    concurrency: USAGE_REFRESH_CONCURRENCY,
+    getAccountIds: () => stateStore.get().accounts.map((account) => account.id),
+    refreshAccount: (accountId, options) =>
+      doRefreshUsage({ accountId, ...options }),
+  });
 
   function now(): number {
     return Date.now();
@@ -92,14 +79,17 @@ export function createCodexAccountsService(
 
   function buildSnapshot(): CodexAccountsSnapshot {
     broadcastSeq += 1;
-    return buildAccountsSnapshot({
-      lastLoginError,
-      loginPending,
-      now: now(),
-      revision: broadcastSeq,
-      state: stateStore.get(),
-      usageCache,
-    });
+    return {
+      ...buildAccountsSnapshot({
+        lastLoginError,
+        loginPending,
+        now: now(),
+        revision: broadcastSeq,
+        state: stateStore.get(),
+        usageCache,
+      }),
+      costUsage,
+    };
   }
 
   function emitSnapshot(): void {
@@ -379,18 +369,20 @@ export function createCodexAccountsService(
     }
     await ensureUsageEnv();
     const abort = new AbortController();
-    const result = await provider.fetchUsage(
-      targetId ? accountHomeDir(targetId) : undefined,
-      abort.signal
-    );
-    usageCache[cacheKey] = {
-      fetchedAt: now(),
-      raw: result,
-      status: result.status,
-      ...(result.error ? { error: result.error } : {}),
-      ...(result.session ? { session: result.session } : {}),
-      ...(result.weekly ? { weekly: result.weekly } : {}),
-    };
+    let result: AccountUsageResult;
+    try {
+      result = await provider.fetchUsage(
+        targetId ? accountHomeDir(targetId) : undefined,
+        abort.signal
+      );
+    } catch (error) {
+      result = {
+        error: error instanceof Error ? error.message : String(error),
+        status: "error" as const,
+        windows: [],
+      };
+    }
+    usageCache[cacheKey] = createUsageCacheEntry(result, cached, now());
     emitSnapshot();
   }
 
@@ -466,13 +458,15 @@ export function createCodexAccountsService(
         if (!hasVisibleTarget()) {
           return;
         }
-        doRefreshUsage().catch(() => {
+        refreshAllUsage().catch(() => {
           /* fire-and-forget */
         });
       }, USAGE_POLL_INTERVAL_MS);
-      doRefreshUsage().catch(() => {
-        /* fire-and-forget */
-      });
+      if (hasVisibleTarget()) {
+        refreshAllUsage().catch(() => {
+          /* fire-and-forget */
+        });
+      }
     },
     dispose(): void {
       watchDispose?.();
@@ -483,6 +477,10 @@ export function createCodexAccountsService(
     },
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
+    setCostUsage(snapshot): void {
+      costUsage = snapshot;
+      emitSnapshot();
+    },
     add: (_payload) => enqueueMutation(doAdd),
     cancelLogin: () => {
       loginAbort?.abort();
@@ -496,5 +494,6 @@ export function createCodexAccountsService(
     select: (payload) => enqueueMutation(() => doSelect(payload.accountId)),
     remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
     refreshUsage: (options) => doRefreshUsage(options),
+    refreshAllUsage,
   };
 }

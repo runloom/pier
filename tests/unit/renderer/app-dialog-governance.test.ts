@@ -63,6 +63,24 @@ describe("app dialog usage governance", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps dialog results independent from presentation timing", () => {
+    const appDialogHost = readFileSync(
+      join(
+        ROOT,
+        "src",
+        "renderer",
+        "components",
+        "common",
+        "app-dialog-host.tsx"
+      ),
+      "utf8"
+    );
+
+    expect(appDialogHost).toContain("currentDialog ?? retainedDialog");
+    expect(appDialogHost).not.toContain("APP_DIALOG_EXIT_MS");
+    expect(appDialogHost).not.toContain("setTimeout(");
+  });
+
   it("requires every confirm dialog request to choose size and intent explicitly", () => {
     const appDialogStore = readFileSync(
       join(ROOT, "src", "renderer", "stores", "app-dialog.store.ts"),

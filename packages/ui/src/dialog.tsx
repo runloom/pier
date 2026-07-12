@@ -97,24 +97,31 @@ function wasInnerPortalOpenRecently(): boolean {
   return Date.now() - lastClickWhileInnerPortalOpenAt < 200;
 }
 
+type DialogContentProps = React.ComponentProps<
+  typeof DialogPrimitive.Content
+> & {
+  closeOnOverlayClick?: boolean;
+  initialFocus?: "content" | "firstFocusable";
+  overlayClassName?: string;
+} & (
+    | { closeLabel: string; showCloseButton: true }
+    | { closeLabel?: never; showCloseButton?: false }
+  );
+
 function DialogContent({
   className,
   children,
+  closeLabel,
   closeOnOverlayClick = false,
   initialFocus = "content",
   overlayClassName,
-  showCloseButton = true,
+  showCloseButton = false,
   onOpenAutoFocus,
   onPointerDownOutside,
   onInteractOutside,
   tabIndex = -1,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  closeOnOverlayClick?: boolean;
-  initialFocus?: "content" | "firstFocusable";
-  overlayClassName?: string;
-  showCloseButton?: boolean;
-}) {
+}: DialogContentProps) {
   const overlay = <DialogOverlay className={overlayClassName} />;
 
   return (
@@ -179,12 +186,12 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close asChild data-slot="dialog-close">
             <Button
-              className="absolute top-4 right-4 bg-secondary"
+              className="absolute top-4 right-4"
               size="icon-sm"
               variant="secondary"
             >
-              <XIcon />
-              <span className="sr-only">Close</span>
+              <XIcon data-icon="inline-start" />
+              <span className="sr-only">{closeLabel}</span>
             </Button>
           </DialogPrimitive.Close>
         )}
@@ -205,12 +212,9 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 
 function DialogFooter({
   className,
-  showCloseButton = false,
   children,
   ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean;
-}) {
+}: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
@@ -221,11 +225,6 @@ function DialogFooter({
       {...props}
     >
       {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
-        </DialogPrimitive.Close>
-      )}
     </div>
   );
 }

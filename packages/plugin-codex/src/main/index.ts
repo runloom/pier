@@ -3,15 +3,10 @@ import type {
   MainPluginContext,
   MainPluginModule,
 } from "@pier/plugin-api/main";
-import {
-  addAccountPayloadSchema,
-  emptyRpcPayloadSchema,
-  refreshUsagePayloadSchema,
-  removeAccountPayloadSchema,
-  selectAccountPayloadSchema,
-} from "../shared/accounts.ts";
 import { createCodexAccountsService } from "./accounts-service.ts";
 import { createCodexProvider } from "./codex-provider.ts";
+import { createLocalUsageScanner } from "./local-usage-scanner.ts";
+import { registerCodexRpcHandlers } from "./rpc-handlers.ts";
 import { createCodexAccountsStateStore } from "./state.ts";
 
 interface CodexPrivateMainPluginContext extends MainPluginContext {
@@ -33,7 +28,16 @@ export const plugin: MainPluginModule = {
     );
     const provider = createCodexProvider({ credentials: context.secrets });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
+    const codexHome =
+      context.processEnv.CODEX_HOME ??
+      join(context.processEnv.HOME ?? context.paths.workDir, ".codex");
+    const localUsageScanner = createLocalUsageScanner({
+      cachePath: join(context.paths.workDir, "local-usage-cache.json"),
+      codexHome,
+    });
+    const usagePollingConsumers = new Set<string>();
     const service = createCodexAccountsService({
+      hasVisibleTarget: () => usagePollingConsumers.size > 0,
       managedBaseDir,
       provider,
       stateStore,
@@ -45,38 +49,53 @@ export const plugin: MainPluginModule = {
     });
     await service.init();
 
-    context.rpc.handle("accounts.snapshot", async (payload) => {
-      emptyRpcPayloadSchema.parse(payload);
-      return service.snapshot();
-    });
-    context.rpc.handle("accounts.add", async (payload) => {
-      await service.add(addAccountPayloadSchema.parse(payload));
-      return null;
-    });
-    context.rpc.handle("accounts.cancelLogin", async (payload) => {
-      emptyRpcPayloadSchema.parse(payload);
-      await service.cancelLogin();
-      return null;
-    });
-    context.rpc.handle("accounts.select", async (payload) => {
-      await service.select(selectAccountPayloadSchema.parse(payload));
-      return null;
-    });
-    context.rpc.handle("accounts.remove", async (payload) => {
-      await service.remove(removeAccountPayloadSchema.parse(payload));
-      return null;
-    });
-    context.rpc.handle("accounts.refreshUsage", async (payload) => {
-      const request = refreshUsagePayloadSchema.parse(payload ?? {});
-      await service.refreshUsage({
-        ...(request.accountId ? { accountId: request.accountId } : {}),
-        force: true,
+    const cachedCostUsage = await context.usageData.read(
+      "codex-local-sessions",
+      { kind: "machine" }
+    );
+    if (cachedCostUsage) service.setCostUsage(cachedCostUsage);
+
+    let localUsageRefresh: Promise<void> | null = null;
+    function refreshLocalUsage(): Promise<void> {
+      if (localUsageRefresh) return localUsageRefresh;
+      localUsageRefresh = (async () => {
+        const result = await localUsageScanner.scan();
+        const snapshot = await context.usageData.publish(result.input);
+        service.setCostUsage({ ...snapshot, diagnostics: result.diagnostics });
+      })().finally(() => {
+        localUsageRefresh = null;
       });
-      return null;
+      return localUsageRefresh;
+    }
+    registerCodexRpcHandlers({
+      acquireUsagePolling: (consumerId) => {
+        const shouldRefresh = usagePollingConsumers.size === 0;
+        usagePollingConsumers.add(consumerId);
+        if (shouldRefresh) {
+          service.refreshAllUsage().catch((error: unknown) => {
+            context.logger.warn("[pier.codex] usage refresh failed", error);
+          });
+        }
+        return Promise.resolve();
+      },
+      refreshLocalUsage,
+      releaseUsagePolling: (consumerId) => {
+        usagePollingConsumers.delete(consumerId);
+      },
+      rpc: context.rpc,
+      service,
     });
+    // 先完成 RPC 就绪，让账号与缓存成本立即可读；本地日志扫描在插件激活后让出事件循环。
+    const initialUsageRefresh = setTimeout(() => {
+      refreshLocalUsage().catch((error: unknown) => {
+        context.logger.warn("[pier.codex] local usage scan failed", error);
+      });
+    }, 1000);
     context.lifecycle.onBeforeQuit(() => service.flush());
     context.logger.info("[pier.codex] activated");
     return () => {
+      clearTimeout(initialUsageRefresh);
+      usagePollingConsumers.clear();
       service.dispose();
     };
   },
