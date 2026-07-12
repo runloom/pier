@@ -360,8 +360,15 @@ function createPierAppCore(): PierAppCore {
           }
           foregroundActivityService.taskLaunched(panelId, windowId, task);
         },
-        onFinished: (panelId, args) => {
-          foregroundActivityService.taskFinished(panelId, args);
+        onFinished: (panelId, windowId, args) => {
+          if (!windowId) {
+            console.warn(
+              "[task-activity] missing windowId on finish, activity skipped:",
+              panelId
+            );
+            return;
+          }
+          foregroundActivityService.taskFinished(panelId, windowId, args);
         },
       },
       processEnvironment,

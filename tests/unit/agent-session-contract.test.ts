@@ -105,10 +105,11 @@ describe("activityStatusForHookEvent", () => {
   it.each([
     ["PermissionRequest", "waiting"],
     ["ToolStart", "tool"],
-    ["ToolComplete", "tool"],
+    ["ToolComplete", "processing"],
     ["error", "error"],
     ["SessionStart", "ready"],
     ["Stop", "ready"],
+    ["TurnCompleted", "ready"],
     ["SessionEnd", "ready"],
     ["PromptSubmit", "processing"],
     ["SubagentStart", "processing"],

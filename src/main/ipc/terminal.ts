@@ -380,7 +380,7 @@ export function registerTerminalIpc(
         // 旧 PTY 的收尾由 native process-closed → ptyExited 按层语义处理。
         taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
       } else {
-        foregroundActivityService.panelClosed(panelId);
+        foregroundActivityService.panelClosed(panelId, String(win.id));
         deps.taskService?.markPanelClosed(panelId, windowId);
         taskLifecycle.releasePanel(panelId, windowId);
       }

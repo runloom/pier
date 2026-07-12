@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
+import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "amp";
 
@@ -56,18 +57,7 @@ const PIER_EVENT_MAP = {
 ${eventMapLines}
 };
 
-function pierAppend(log, line) {
-	if (typeof process.getBuiltinModule === "function") {
-		// 同步写:保文件序 + 进程退出前落盘(Bun 与 Node >= 20.16)。
-		const { appendFileSync } = process.getBuiltinModule("node:fs");
-		appendFileSync(log, line);
-		return;
-	}
-	// 旧 Node 宿主退化为异步 best-effort(与旧行为一致, 不更糟)。
-	import("node:fs/promises")
-		.then(({ appendFile }) => appendFile(log, line))
-		.catch(() => {});
-}
+${JAVASCRIPT_LOCKED_APPEND_SOURCE}
 
 function pierSessionIdFrom(values) {
   for (const value of values) {

@@ -22,14 +22,14 @@ export const PIER_AGENT_HOOKS_DIR_MARK = "PIER_AGENT_HOOKS_DIR";
 export function pierHookCommand(
   agentId: AgentKind,
   pierEvent: string,
-  sessionIdShellExpression?: string
+  ...payloadShellExpressions: string[]
 ): string {
-  const sessionIdArg = sessionIdShellExpression
-    ? ` "${sessionIdShellExpression}"`
-    : "";
+  const payloadArgs = payloadShellExpressions
+    .map((expression) => ` "${expression}"`)
+    .join("");
   return (
     `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
-    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEvent" "${agentId}" "${pierEvent}"${sessionIdArg} || true`
+    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEvent" "${agentId}" "${pierEvent}"${payloadArgs} || true`
   );
 }
 
@@ -37,11 +37,38 @@ export function pierHookCommandWithStdinSessionId(
   agentId: AgentKind,
   pierEvent: string
 ): string {
+  const nodeExecutable = shellDoubleQuote(process.execPath);
   return [
     "_pier_payload=$(cat 2>/dev/null | head -c 65536)",
+    `_pier_metadata_b64=$(printf '%s' "$_pier_payload" | ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s),o={};for(const k of ["session_id","sessionId","turn_id","tool_use_id","tool_name","agent_id","agent_type","transcript_path"])if(typeof p[k]==="string")o[k]=p[k];process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"))}catch{}})' 2>/dev/null || true)`,
     `_pier_session_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p; s/.*"sessionId"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
-    pierHookCommand(agentId, pierEvent, "$_pier_session_id"),
+    `_pier_turn_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"turn_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    `_pier_tool_use_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"tool_use_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    `_pier_tool_name=$(printf '%s' "$_pier_payload" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    `_pier_agent_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"agent_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    `_pier_agent_type=$(printf '%s' "$_pier_payload" | sed -n 's/.*"agent_type"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    `_pier_transcript_path=$(printf '%s' "$_pier_payload" | sed -n 's/.*"transcript_path"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    pierHookCommand(
+      agentId,
+      pierEvent,
+      "$_pier_session_id",
+      "$_pier_turn_id",
+      "$_pier_tool_use_id",
+      "$_pier_tool_name",
+      "$_pier_agent_id",
+      "$_pier_agent_type",
+      "$_pier_transcript_path",
+      "$_pier_metadata_b64"
+    ),
   ].join("; ");
+}
+
+function shellDoubleQuote(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("$", "\\$")
+    .replaceAll("`", "\\`");
 }
 
 /**
@@ -236,8 +263,8 @@ export function createNestedJsonIntegration(
     detect: spec.detect ?? (() => existsSync(spec.configPath())),
     id: spec.agentId,
     // install 先剔全部 pier 条目再按当前 spec 写入——覆盖「上一版 spec 装过
-    // 但本版已移出」的遗留(如 codex 曾装 SubagentStart/SubagentStop、后来
-    // 移除, withPierNestedHooks 只处理当前 spec 内事件, 不会清废弃事件)。
+    // 但本版已移出」的遗留；withPierNestedHooks 只处理当前 spec 内事件，
+    // 不会自行清理已经废弃的事件键。
     install: () =>
       transformJsonConfig(
         spec.configPath(),

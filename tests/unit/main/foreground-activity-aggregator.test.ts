@@ -130,15 +130,44 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("ToolStart / ToolComplete → status=tool", () => {
+  it("ToolStart → tool，最后一个 ToolComplete → processing", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
-    agg.ingestAgentEvent(hookEvent("ToolStart"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "tool-1" })
+    );
     let a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.status).toBe("tool");
-    agg.ingestAgentEvent(hookEvent("ToolComplete"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "tool-1" })
+    );
     a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.status).toBe("tool");
+    expect(a.status).toBe("processing");
+    agg.dispose();
+  });
+
+  it("并发工具按 toolUseId 幂等记账，全部完成后才离开 tool", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "a" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "b" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "a" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "a" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "b" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
     agg.dispose();
   });
 
@@ -151,6 +180,63 @@ describe("ForegroundActivityAggregator", () => {
     agg.ingestAgentEvent(hookEvent("ToolStart"));
     a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("TurnInterrupted → ready，并吸收迟到的工具完成事件", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(hookEvent("ToolStart"));
+    agg.ingestAgentEvent(hookEvent("TurnInterrupted"));
+    let activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("ready");
+    agg.ingestAgentEvent(hookEvent("ToolComplete"));
+    activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("ready");
+    agg.dispose();
+  });
+
+  it("TurnCompleted → ready，并吸收迟到的工具事件", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", turnId: "turn-complete" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "TurnCompleted", turnId: "turn-complete" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "late-tool" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("旧 turn 的迟到 TurnInterrupted 不会冻结当前回合", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", turnId: "turn-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", turnId: "turn-2" })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEvent({ event: "TurnInterrupted", turnId: "turn-1" })
+      )
+    ).toBe(false);
+    let activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("processing");
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        event: "ToolStart",
+        toolUseId: "tool-2",
+        turnId: "turn-2",
+      })
+    );
+    activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("tool");
     agg.dispose();
   });
 
@@ -232,6 +318,30 @@ describe("ForegroundActivityAggregator", () => {
       agentHookEvent({ event: "SessionEnd", pid: 1002, sessionId: "s2" })
     );
     expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("旧 session 的重复 SessionEnd 不会被当作当前会话终态", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", sessionId: "old" })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEvent({ event: "SessionEnd", sessionId: "old" })
+      )
+    ).toBe(true);
+    advance(1501);
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", sessionId: "current" })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEvent({ event: "SessionEnd", sessionId: "old" })
+      )
+    ).toBe(false);
+    const activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("processing");
     agg.dispose();
   });
 
@@ -348,6 +458,36 @@ describe("ForegroundActivityAggregator", () => {
     // panel 关闭才清
     agg.panelClosed("p1");
     expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("跨窗口同 panelId 的 taskFinished 只更新目标窗口", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.taskLaunched("same-panel", "w-1", {
+      label: "one",
+      runId: "run-1",
+      taskId: "task-1",
+    });
+    agg.taskLaunched("same-panel", "w-2", {
+      label: "two",
+      runId: "run-2",
+      taskId: "task-2",
+    });
+
+    agg.taskFinished(
+      "same-panel",
+      { runId: "run-1", status: "success" },
+      "w-1"
+    );
+
+    expect(agg.snapshot("w-1").activities[0]).toMatchObject({
+      status: "success",
+      windowId: "w-1",
+    });
+    expect(agg.snapshot("w-2").activities[0]).toMatchObject({
+      status: "running",
+      windowId: "w-2",
+    });
     agg.dispose();
   });
 
@@ -491,6 +631,28 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
+  it("子代理按 agentInstanceId 幂等记账，重复事件不漂移", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SubagentStart", agentInstanceId: "worker-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SubagentStart", agentInstanceId: "worker-1" })
+    );
+    let activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.subagentCount).toBe(1);
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SubagentStop", agentInstanceId: "worker-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SubagentStop", agentInstanceId: "worker-1" })
+    );
+    activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.subagentCount).toBe(0);
+    agg.dispose();
+  });
+
   it("snapshot(windowId) 过滤只返回该窗口 activity", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit", "p1", "1"));
@@ -498,6 +660,20 @@ describe("ForegroundActivityAggregator", () => {
     expect(agg.snapshot("1").activities).toHaveLength(1);
     expect(agg.snapshot("1").activities[0]?.windowId).toBe("1");
     expect(agg.snapshot("2").activities).toHaveLength(1);
+    agg.dispose();
+  });
+
+  it("相同 panelId 在不同窗口使用独立 slot", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit", "shared", "1"));
+    agg.ingestAgentEvent(hookEvent("PromptSubmit", "shared", "2"));
+    expect(agg.snapshot().activities).toHaveLength(2);
+
+    agg.panelClosed("shared", "1");
+    const remaining = agg.snapshot().activities;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.panelId).toBe("shared");
+    expect(remaining[0]?.windowId).toBe("2");
     agg.dispose();
   });
 

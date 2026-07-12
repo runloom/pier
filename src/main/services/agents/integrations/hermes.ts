@@ -144,14 +144,42 @@ def _pier_emit(pier_event: str, payload: dict[str, Any]) -> None:
     line = json.dumps(
         body
     ) + "\\n"
+    lock = log + ".lock"
+    token = f"{os.getpid()}.{time.time_ns()}"
+    candidate = lock + "." + token
+    try:
+        with open(candidate, "x", encoding="ascii") as fp:
+            fp.write(token)
+    except OSError:
+        return
+    acquired = False
+    for _ in range(500):
+        try:
+            os.link(candidate, lock)
+            acquired = True
+            break
+        except FileExistsError:
+            time.sleep(0.01)
+        except OSError:
+            return
+    try:
+        os.remove(candidate)
+    except OSError:
+        pass
+    if not acquired:
+        return
     try:
         with open(log, "a", encoding="utf-8") as fp:
             fp.write(line)
     except OSError:
-        # 磁盘满 / 权限 / broken pipe 等文件 IO 失败——静默降级不干扰
-        # hermes 本体。不宽泛 catch Exception, 否则会掩盖 os.getpid /
-        # json.dumps 等内部 bug (review Commit B P1#2)。
         pass
+    finally:
+        try:
+            with open(lock, encoding="ascii") as fp:
+                if fp.read() == token:
+                    os.remove(lock)
+        except OSError:
+            pass
 
 
 def _make_hook(event_name: str) -> Callable[..., None]:

@@ -39,8 +39,7 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
  * `/hooks` 信任审查警告（见 issue#21639），这是预期 UX，用户首次触发时
  * 需要在 codex 内确认信任该 hooks.json，不代表集成出错。
  *
- * 官方事件全集（openai/codex main 分支 codex-rs/hooks/src/events/ 源码级
- * 确认, mod.rs 逐条列出）共 7 个 hook 模块 → 8 个事件类型：
+ * 当前 Codex hook 事件全集（以发布版文档与本机 generated schema 为准）：
  * - session_start.rs → SessionStart
  * - user_prompt_submit.rs → UserPromptSubmit
  * - pre_tool_use.rs → PreToolUse
@@ -48,11 +47,8 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
  * - permission_request.rs → PermissionRequest
  * - stop.rs → Stop
  * - compact.rs → PreCompact + PostCompact
- *
- * **翻案**：先前版本装了 SubagentStart/SubagentStop——是从 claude schema
- * 想当然搬来的**杜撰死条目**, codex 官方并无此事件类型（sub-agent 上下文
- * 通过其他 hook 的 SubagentCommandInputFields 字段透传, 而非独立事件）。
- * 已删除。
+ * - subagent_start.rs → SubagentStart
+ * - subagent_stop.rs → SubagentStop
  *
  * **补装**：PreCompact/PostCompact 官方源码级存在, 先前版本漏装。
  * 都映射为 processing——避免上下文压缩期间被 30min TTL 误衰减状态。
@@ -81,6 +77,8 @@ const CODEX_SPEC: NestedJsonIntegrationSpec = {
     { nativeEvent: "PermissionRequest", pierEvent: "PermissionRequest" },
     { nativeEvent: "PreCompact", pierEvent: "processing" },
     { nativeEvent: "PostCompact", pierEvent: "processing" },
+    { nativeEvent: "SubagentStart", pierEvent: "SubagentStart" },
+    { nativeEvent: "SubagentStop", pierEvent: "SubagentStop" },
     { nativeEvent: "Stop", pierEvent: "Stop" },
   ],
 };
@@ -104,8 +102,7 @@ export async function installCodexHooks(
   settingsPath: string = CODEX_SPEC.configPath()
 ): Promise<void> {
   // 先剔全部 pier 条目再按当前 spec 装, 与工厂 createNestedJsonIntegration
-  // 保持一致——清理「上一版 spec 装过但本版已移出」的遗留(如 codex 曾装
-  // 的 SubagentStart/SubagentStop)。
+  // 保持一致——清理上一版 spec 装过但本版已移出的遗留。
   await transformJsonConfig(
     settingsPath,
     (s) => withPierCodexHooks(withoutPierCodexHooks(s)),

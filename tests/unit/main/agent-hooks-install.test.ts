@@ -89,6 +89,9 @@ describe("installAgentHooksEmitScript", () => {
     expect(parsed.panelId).toBe("p1");
     expect(parsed.windowId).toBe("w1");
     expect(typeof parsed.pid).toBe("number");
+    await expect(stat(`${logPath}.lock`)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 
   it("agentEvent kind 第 4 个参数写入可选 sessionId", async () => {
