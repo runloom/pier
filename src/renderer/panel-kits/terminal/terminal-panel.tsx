@@ -75,6 +75,7 @@ import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
 import { useTerminalRelaunch } from "./use-terminal-relaunch.ts";
 import { useTerminalRuntimeControlPresentation } from "./use-terminal-runtime-control-presentation.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
+import { useTerminalSurfaceClose } from "./use-terminal-surface-close.ts";
 
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
@@ -323,6 +324,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     setActive: activatePanel,
   });
+  useTerminalSurfaceClose(panelId);
 
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {

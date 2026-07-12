@@ -1,4 +1,5 @@
 export const terminal = {
+  closeFailed: "Failed to close terminal",
   agentStatus: {
     error: "Error",
     processing: "Thinking",

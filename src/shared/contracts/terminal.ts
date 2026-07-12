@@ -157,6 +157,11 @@ export interface TerminalFocusRequest {
   reason: "mouse-down" | "key-event" | "window-become-key" | "system";
 }
 
+/** Ghostty 的已退出 surface 收到用户按键后，请求关闭宿主 panel。 */
+export interface TerminalSurfaceCloseRequest {
+  panelId: string;
+}
+
 /**
  * Terminal cwd 变化事件 — swift OSC 7 解析后通过 IPC 推送到 renderer.
  * cwd 是绝对路径 (file:// 前缀已由 swift 端从 URL 提取掉).
@@ -304,6 +309,10 @@ export interface TerminalAPI {
   /** main 端应用菜单请求打开当前终端搜索栏. */
   onSearchOpenRequest(cb: () => void): () => void;
   onSearchState(cb: (event: TerminalSearchStateEvent) => void): () => void;
+  /** 用户在 Ghostty 的进程退出提示上按键后，关闭对应宿主 panel。 */
+  onSurfaceCloseRequest: (
+    cb: (req: TerminalSurfaceCloseRequest) => void
+  ) => () => void;
   /**
    * 订阅 terminal title (OSC 0/2) 变化. 回调返回 dispose 函数.
    * 与 onCwdChange 相同的"多 listener 各自过滤"模式.

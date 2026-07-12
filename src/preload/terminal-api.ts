@@ -64,6 +64,8 @@ export const terminalApi: TerminalAPI = {
   onSearchOpenRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST, cb),
   onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),
+  onSurfaceCloseRequest: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TERMINAL_SURFACE_CLOSE_REQUEST, cb),
   onTitleChange: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_TITLE_CHANGED, cb),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),

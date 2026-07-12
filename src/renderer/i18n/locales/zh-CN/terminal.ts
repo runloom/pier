@@ -1,4 +1,5 @@
 export const terminal = {
+  closeFailed: "关闭终端失败",
   agentStatus: {
     error: "错误",
     processing: "思考中",

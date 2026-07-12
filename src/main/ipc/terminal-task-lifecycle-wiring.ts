@@ -223,6 +223,19 @@ export function registerTerminalTaskLifecycleForwarding(
           console.error("[pier-agent-session:process-closed] failed:", err);
         });
       }
+      // Ghostty 在底层进程退出后保留 surface，显示
+      // "Press any key to close the terminal"。用户按键后才会走到
+      // close-surface callback，此时由 renderer 的 workspace 关闭策略收口。
+      // processAlive=true 是宿主主动关闭 native surface 的回声，
+      // 不得再次请求关闭 panel，否则会形成递归。
+      if (processAlive === false) {
+        forwardToWindow(
+          id,
+          PIER_BROADCAST.TERMINAL_SURFACE_CLOSE_REQUEST,
+          { panelId: rawPanelId },
+          "pier-terminal-surface-close"
+        );
+      }
       lifecycle
         .completeFromNativeProcessClose({
           browserWindowId: id,
