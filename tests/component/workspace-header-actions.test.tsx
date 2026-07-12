@@ -778,6 +778,7 @@ describe("WorkspaceHeaderActions", () => {
     });
     const content = title.closest("[data-slot='popover-content']");
     expect(content).toHaveAccessibleName("Create in this panel group");
+    expect(content).toHaveClass("gap-0", "p-0", "ring-0", "shadow-xl");
     expect(content).toHaveStyle({
       maxWidth: "calc(var(--radix-popover-content-available-width) - 0.5rem)",
     });
@@ -789,8 +790,12 @@ describe("WorkspaceHeaderActions", () => {
       name: "Create in this panel group",
     });
     expect(listbox).toBeInTheDocument();
-    expect(listbox).toHaveAttribute("data-scrollbar", "overlay");
-    expect(listbox).not.toHaveClass("no-scrollbar");
+    expect(listbox).toHaveAttribute("data-scrollbar", "none");
+    expect(listbox).toHaveClass("no-scrollbar");
+    expect(search.closest("[data-slot='command']")).toHaveClass(
+      "p-1",
+      "[&_[cmdk-item]]:rounded-2xl"
+    );
     expect(visibleCommandItemLabels()).toEqual([
       "New Terminal",
       "Start Claude",
@@ -809,9 +814,8 @@ describe("WorkspaceHeaderActions", () => {
     expect(
       screen.getByText("Worktree", { selector: "[cmdk-group-heading]" })
     ).toBeVisible();
-    expect(await findCommandItem("Create Worktree")).toHaveTextContent(
-      "Open a project first"
-    );
+    const worktreeItem = await findCommandItem("Create Worktree");
+    expect(worktreeItem).toHaveTextContent("Open a project first");
     expect(
       (await findCommandItem("New Terminal")).querySelector("[data-slot='kbd']")
     ).toHaveTextContent(/^(?:⌘|Ctrl\+)T$/);

@@ -2,6 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { Tabs as TabsPrimitive } from "radix-ui";
 import type * as React from "react";
 
+import { CONTROL_HEIGHT_CLASS } from "./interactive-density.ts";
 import { cn } from "./utils.ts";
 
 function Tabs({
@@ -23,7 +24,10 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-2xl p-[3px] text-muted-foreground data-[variant=line]:rounded-none group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-vertical/tabs:p-1",
+  cn(
+    CONTROL_HEIGHT_CLASS,
+    "group/tabs-list inline-flex w-fit items-center justify-center rounded-2xl p-[3px] text-muted-foreground data-[variant=line]:rounded-none group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-vertical/tabs:p-1"
+  ),
   {
     variants: {
       variant: {

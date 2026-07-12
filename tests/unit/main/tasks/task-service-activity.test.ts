@@ -66,7 +66,7 @@ describe("task-service cancelRun onTaskActivity gating", () => {
 
     // build 完成 → coordinator 记 status=succeeded；schedule test；activity fire success。
     await service.completePanel("panel-build", 0, "main");
-    expect(onFinished).toHaveBeenNthCalledWith(1, "panel-build", {
+    expect(onFinished).toHaveBeenNthCalledWith(1, "panel-build", "main", {
       exitCode: 0,
       runId: opened.runId,
       status: "success",
@@ -80,7 +80,7 @@ describe("task-service cancelRun onTaskActivity gating", () => {
     service.cancelRun(opened.runId);
 
     expect(onFinished).toHaveBeenCalledTimes(1);
-    expect(onFinished).toHaveBeenCalledWith("panel-test", {
+    expect(onFinished).toHaveBeenCalledWith("panel-test", "main", {
       runId: opened.runId,
       status: "cancelled",
     });

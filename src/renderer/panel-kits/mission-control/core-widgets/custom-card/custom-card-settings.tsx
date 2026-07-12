@@ -270,6 +270,7 @@ export function CustomCardSettings({
               {t("missionControl.widget.customCard.labelLabel")}
             </FieldLabel>
             <Input
+              className="h-7"
               id="custom-card-label"
               onChange={(e) => setLabel(e.target.value)}
               placeholder={t(

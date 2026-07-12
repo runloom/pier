@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import type * as React from "react";
 import { Button } from "./button.tsx";
+import { CONTROL_ICON_SIZE_CLASS } from "./interactive-density.ts";
 import { cn } from "./utils.ts";
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
@@ -107,7 +108,8 @@ function PaginationEllipsis({
     <span
       aria-hidden
       className={cn(
-        "flex size-8 items-center justify-center [&_svg:not([class*='size-'])]:size-4",
+        CONTROL_ICON_SIZE_CLASS,
+        "flex items-center justify-center [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       data-slot="pagination-ellipsis"

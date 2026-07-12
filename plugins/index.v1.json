@@ -1,11 +1,11 @@
 {
-  "generatedAt": 1783764671757,
+  "generatedAt": 1783777530714,
   "plugins": {
     "pier.codex": {
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.0.4",
+      "latest": "1.0.5",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -17,20 +17,20 @@
         }
       },
       "versions": {
-        "1.0.4": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.0.4/pier.codex-1.0.4.tgz",
+        "1.0.5": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.0.5/pier.codex-1.0.5.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "21fb6d41c2532c9af1801107b42240e077d051f410053112f4f890ec19413eea",
-          "size": 454197
+          "sha256": "0bdc4ab05730cb82c6948f039164fb9c66438010fa9124dcebb33716a6b1f4ad",
+          "size": 454709
         }
       }
     }
   },
-  "sequence": 5,
+  "sequence": 6,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "3A78cK591Ik6UxwEhKOjoKrmq78PlHz2QqPmm115c6QTEvS0qUXSVZ2SFQ24sHuGeFMv9MKgfiLsU9V+yxvCBw=="
+    "value": "vyBD1L8kJwZ5UguWHs97SGoIMbbBYblVL7+v3gqA+JGpPm4xzI4YYEPn0dIFzXyQsTEoBrZGF5+EBYPrxeuyCw=="
   }
 }

@@ -20,7 +20,9 @@ export const EVENTS_JSONL_NAME = "events.jsonl";
  * - `$1` = kind（commandStart | commandFinished | agentEvent）
  * - commandStart: `$2` = 命令行文本
  * - commandFinished: `$2` = 退出码（整数字符串）
- * - agentEvent: `$2` = agent id，`$3` = pierEvent 名，`$4` = sessionId（可选）
+ * - agentEvent: `$2` = agent id，`$3` = pierEvent 名，`$4..$11` 依次为
+ *   sessionId / turnId / toolUseId / toolName / agentInstanceId / agentType /
+ *   transcriptPath / 已筛选身份元数据的 base64（均可为空，不含 prompt/tool input）。
  *
  * 要点：
  * - PIER_PANEL_ID / PIER_WINDOW_ID 缺失时 exit 0（非 Pier 启动的 agent 静默跳过）
@@ -41,6 +43,21 @@ const EMIT_SCRIPT = `#!/bin/sh
 [ -z "$PIER_AGENT_EVENT_LOG" ] && PIER_AGENT_EVENT_LOG="\${HOME}/.pier/agent-events.jsonl"
 mkdir -p "$(dirname "$PIER_AGENT_EVENT_LOG")"
 _ts=$(date +%s%N 2>/dev/null || date +%s000000000)
+_lock="\${PIER_AGENT_EVENT_LOG}.lock"
+_lock_token="$$.$_ts"
+_lock_candidate="$_lock.$_lock_token"
+printf '%s' "$_lock_token" > "$_lock_candidate" || exit 0
+_lock_attempt=0
+while ! ln "$_lock_candidate" "$_lock" 2>/dev/null; do
+  _lock_attempt=$((_lock_attempt + 1))
+  if [ "$_lock_attempt" -ge 500 ]; then
+    rm -f "$_lock_candidate"
+    exit 0
+  fi
+  sleep 0.01
+done
+rm -f "$_lock_candidate"
+trap '[ "$(cat "$_lock" 2>/dev/null || true)" = "$_lock_token" ] && rm -f "$_lock"; rm -f "$_lock_candidate"' EXIT HUP INT TERM
 case "$1" in
   commandStart)
     _cmd=$(printf '%s' "$2" | head -c 4096 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
@@ -53,15 +70,19 @@ case "$1" in
     ;;
   agentEvent)
     _sid=$(printf '%s' "$4" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
-    if [ -n "$_sid" ]; then
-      printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","sessionId":"%s"}\\n' \\
-        "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_sid" >> "$PIER_AGENT_EVENT_LOG"
-    else
-      printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s"}\\n' \\
-        "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" >> "$PIER_AGENT_EVENT_LOG"
-    fi
+    _turn=$(printf '%s' "$5" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _tool_id=$(printf '%s' "$6" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _tool_name=$(printf '%s' "$7" | head -c 256 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _agent_instance=$(printf '%s' "$8" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _agent_type=$(printf '%s' "$9" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _transcript=$(printf '%s' "\${10}" | head -c 8192 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _metadata_b64=$(printf '%s' "\${11}" | head -c 16384 | LC_ALL=C tr -cd 'A-Za-z0-9+/=')
+    printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","sessionId":"%s","turnId":"%s","toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
+      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_sid" "$_turn" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
     ;;
 esac
+[ "$(cat "$_lock" 2>/dev/null || true)" = "$_lock_token" ] && rm -f "$_lock"
+trap - EXIT HUP INT TERM
 `;
 
 /** 返回 agent-hooks 目录绝对路径。 */

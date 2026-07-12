@@ -2,6 +2,10 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Select as SelectPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import {
+  CONTROL_HEIGHT_CLASS,
+  MENU_ITEM_DENSITY_CLASS,
+} from "./interactive-density.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -55,7 +59,8 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex w-fit items-center justify-between gap-1.5 whitespace-nowrap rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none transition-[color,box-shadow] duration-200 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-8 data-[size=sm]:h-7 data-placeholder:text-foreground/30 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        CONTROL_HEIGHT_CLASS,
+        "flex w-fit items-center justify-between gap-1.5 whitespace-nowrap rounded-2xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow] duration-200 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-foreground/30 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className
       )}
       data-size={size}
@@ -133,7 +138,8 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex min-h-7 w-full select-none items-center gap-2 rounded-xl py-1.5 pr-8 pl-2 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        MENU_ITEM_DENSITY_CLASS,
+        "relative flex w-full select-none items-center gap-2 rounded-xl pr-8 pl-2 outline-hidden focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
       )}
       data-slot="select-item"

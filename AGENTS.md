@@ -74,6 +74,17 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 遇到内联 toast 文案字符串（未走 i18n） → finding。
 - 遇到 `toast.*(…, { description })` → finding，详情应走 `showAppAlert`。
 
+### 交互控件密度规范
+
+Pier 桌面端的单行交互控件统一使用 28px 高度：
+
+- 高度所有权在 `packages/ui/src/interactive-density.ts`；基础控件消费统一定义，业务代码不得用 `h-8`、`h-8!` 或额外纵向内边距把标准控件恢复到 32px。
+- Button、Input、InputGroup、Select trigger、Toggle、Tabs、Menubar、命令面板输入框和同类单行控件默认高度为 28px；纯图标默认控件为 28×28px。
+- Select、Dropdown Menu、Context Menu、Menubar、Command 和 Navigation Menu 的内容型选项统一使用“最小 28px”：单行必须为 28px，多行说明可按内容自然增高，禁止为了固定 28px 裁切文字。
+- `asChild` 触发器由子控件持有尺寸；应优先组合 `@pier/ui` 的 Button 等统一控件，不在业务层复制高度。
+- Textarea、卡片内容、头像、骨架内容块、导航分组标题等非单行交互控件不适用本规则。
+- 检查点在 `tests/unit/renderer/interactive-density-governance.test.ts`；新增通用交互原语必须接入统一密度定义，例外必须在测试中说明原因。
+
 ### 颜色使用规范
 
 产品界面颜色按“主题原色 → 语义令牌 → 组件变体 → 业务映射”单向使用：

@@ -271,7 +271,7 @@ describe("terminal close IPC reason semantics", () => {
       }),
     ]);
 
-    foregroundActivityService.taskFinished("terminal-1", {
+    foregroundActivityService.taskFinished("terminal-1", "window-main", {
       exitCode: 0,
       runId: "run-1",
       status: "success",

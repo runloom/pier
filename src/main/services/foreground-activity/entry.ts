@@ -46,7 +46,12 @@ export const VISIBILITY_DEBOUNCE_MS = 250;
  * omp 集成已用「不订阅 turn_end」规避同类问题，codex 因 Stop 是唯一回合
  * 边界信号不能照搬，改在此处统一豁免。`Stop → ready` 映射保留不变。
  */
-export const TURN_BOUNDARY_EVENTS = new Set(["SessionStart", "error"]);
+export const TURN_BOUNDARY_EVENTS = new Set([
+  "SessionStart",
+  "TurnCompleted",
+  "TurnInterrupted",
+  "error",
+]);
 /** 回合重置事件（新回合开始）——解除吸收 + 清 subagent 计数。 */
 export const TURN_RESET_EVENTS = new Set([
   "PromptSubmit",
@@ -87,6 +92,11 @@ export interface HookScopeIdentity {
 }
 
 export interface HookScope {
+  activeSubagentIds: Set<string>;
+  activeToolIds: Set<string>;
+  anonymousSubagentCount: number;
+  anonymousToolCount: number;
+  currentTurnId: string | undefined;
   key: string;
   stateStartedAt: number;
   status: ActivityStatus;
@@ -151,6 +161,7 @@ export type CommandLayer = AgentLaunchLayer | ShellLayer | TaskLayer;
 export interface PanelSlot {
   command: CommandLayer | null;
   hook: HookLayer | null;
+  panelId: string;
 }
 
 export interface TimerCtx {
@@ -204,6 +215,11 @@ export function hookScopeIdentity(
 
 export function newHookScope(key: string, at: number): HookScope {
   return {
+    activeSubagentIds: new Set(),
+    activeToolIds: new Set(),
+    anonymousSubagentCount: 0,
+    anonymousToolCount: 0,
+    currentTurnId: undefined,
     key,
     stateStartedAt: at,
     status: "ready",
@@ -251,7 +267,8 @@ export function refreshHookProjection(hook: HookLayer, at?: number): void {
   for (const scope of hook.scopes.values()) {
     selected = selected ? preferredScope(selected, scope) : scope;
     maxUpdatedAt = Math.max(maxUpdatedAt, scope.updatedAt);
-    subagentCount += scope.subagentCount;
+    subagentCount +=
+      scope.activeSubagentIds.size + scope.anonymousSubagentCount;
   }
   if (!selected) {
     return;
@@ -374,33 +391,6 @@ export function newTaskLayer(
     updatedAt: at,
     windowId,
   };
-}
-
-/**
- * 回合边界/重置/吸收 + 子代理计数记账。返回 false 表示事件应被吸收丢弃。
- * PermissionRequest 豁免吸收——权限弹窗是回合复活的证据。
- */
-export function applyTurnBookkeeping(
-  scope: HookScope,
-  eventName: string
-): boolean {
-  if (TURN_BOUNDARY_EVENTS.has(eventName)) {
-    scope.turnEnded = true;
-    scope.subagentCount = 0;
-  } else if (TURN_RESET_EVENTS.has(eventName)) {
-    scope.turnEnded = false;
-    scope.subagentCount = 0;
-  } else if (eventName === "PermissionRequest") {
-    scope.turnEnded = false;
-  } else if (scope.turnEnded) {
-    return false;
-  }
-  if (eventName === "SubagentStart") {
-    scope.subagentCount += 1;
-  } else if (eventName === "SubagentStop") {
-    scope.subagentCount = Math.max(0, scope.subagentCount - 1);
-  }
-  return true;
 }
 
 /**

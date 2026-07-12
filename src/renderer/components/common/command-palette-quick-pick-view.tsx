@@ -32,7 +32,7 @@ function QuickPickDefaultRow({ item }: { item: QuickPickItem }): ReactNode {
   const Icon = item.icon;
   const destructive = item.variant === "destructive";
   return (
-    <span className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5">
+    <span className="flex min-w-0 flex-1 items-center gap-2.5">
       {Icon ? (
         <Icon
           aria-hidden="true"
@@ -97,7 +97,7 @@ export function QuickPickView({
     return (
       <CommandItem
         aria-current={item.checked === true ? "true" : undefined}
-        className="items-center gap-2 py-2"
+        className="items-center gap-2"
         data-checked={item.checked === true}
         data-disabled={disabled}
         disabled={disabled}

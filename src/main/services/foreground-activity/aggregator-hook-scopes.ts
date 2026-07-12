@@ -50,7 +50,7 @@ export interface HookScopeCoordinator {
     key: string,
     event: AgentHookEventPayload,
     identity: HookScopeIdentity
-  ) => boolean;
+  ) => boolean | null;
   noteStatusEvent: (
     key: string,
     hook: HookLayer,
@@ -97,19 +97,20 @@ export function createHookScopeCoordinator({
     key: string,
     scopeKey: string,
     agent: AgentHookEventPayload["agent"]
-  ): void {
+  ): boolean {
     const cooldownKey = scopeCooldownKey(key, scopeKey);
     hookScopeCooldownUntil.set(cooldownKey, now() + SESSION_END_COOLDOWN_MS);
     const hook = slots.get(key)?.hook ?? null;
     if (!hook?.scopes.delete(scopeKey)) {
-      return;
+      return false;
     }
     if (hook.scopes.size === 0) {
       endHookSession(key);
-      return;
+      return true;
     }
     refreshHookProjectionWithLog(key, hook, now(), agent);
     scheduleEmit();
+    return true;
   }
 
   function allowsAgentEventAfterCooldowns(
@@ -150,13 +151,12 @@ export function createHookScopeCoordinator({
     key: string,
     event: AgentHookEventPayload,
     identity: HookScopeIdentity
-  ): boolean {
+  ): boolean | null {
     if (event.event !== "SessionEnd") {
-      return false;
+      return null;
     }
     if (identity.isolated) {
-      endHookScope(key, identity.key, event.agent);
-      return true;
+      return endHookScope(key, identity.key, event.agent);
     }
     endHookSession(key);
     return true;

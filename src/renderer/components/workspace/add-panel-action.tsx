@@ -425,7 +425,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         <PopoverContent
           align="start"
           aria-labelledby={titleId}
-          className="w-80 gap-1 p-1"
+          className="w-80 gap-0 p-0 shadow-xl ring-0"
           onEscapeKeyDown={(event) => {
             if (event.isComposing || event.keyCode === IME_PENDING_KEYCODE) {
               event.preventDefault();
@@ -448,8 +448,9 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
             </PopoverTitle>
           </PopoverHeader>
           <Command
-            className="h-auto"
+            className="h-auto [&_[cmdk-item]]:rounded-2xl"
             label={t("workspace.addPanelMenu.title")}
+            loop
             onKeyDown={(event) => {
               if (
                 event.nativeEvent.isComposing ||
@@ -476,7 +477,6 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
               aria-labelledby={titleId}
               className="max-h-[min(60vh,400px)]"
               label={t("workspace.addPanelMenu.title")}
-              scrollbar="overlay"
             >
               {renderListBody()}
             </CommandList>

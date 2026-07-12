@@ -92,7 +92,11 @@ export function registerTerminalTaskLifecycleForwarding(
       // tab/状态栏呈现。覆盖崩溃/kill 等无 SessionEnd hook 的路径。
       // 透传原始 exitCode：悬挂家族(145-148, Ctrl+Z)不视为 agent 退出。
       if (!lifecycleId) {
-        foregroundActivityService.commandFinished(rawPanelId, exitCode);
+        foregroundActivityService.commandFinished(
+          rawPanelId,
+          exitCode,
+          String(id)
+        );
       }
       if (
         !lifecycleId &&
@@ -201,7 +205,7 @@ export function registerTerminalTaskLifecycleForwarding(
       }
       // pty 进程退出 ≠ 面板关闭：task 面板保留终态 activity（tab 退出
       // chrome 单源）, 其余面板照旧清理。真正的面板关闭走 pier:terminal:close。
-      foregroundActivityService.ptyExited(rawPanelId);
+      foregroundActivityService.ptyExited(rawPanelId, String(id));
       if (
         !lifecycleId &&
         targetWindow &&

@@ -9,6 +9,10 @@ import {
   DialogTitle,
 } from "./dialog.tsx";
 import { InputGroup, InputGroupAddon } from "./input-group.tsx";
+import {
+  CONTROL_HEIGHT_CLASS,
+  MENU_ITEM_DENSITY_CLASS,
+} from "./interactive-density.ts";
 import { cn } from "./utils.ts";
 
 function Command({
@@ -65,7 +69,7 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div className="p-1 pb-0" data-slot="command-input-wrapper">
-      <InputGroup className="h-8! bg-input/50">
+      <InputGroup className={cn(CONTROL_HEIGHT_CLASS, "bg-input/50")}>
         <CommandPrimitive.Input
           className={cn(
             // placeholder 显式绑 --foreground 50% alpha, 绕开 preflight 的
@@ -159,7 +163,8 @@ function CommandItem({
   return (
     <CommandPrimitive.Item
       className={cn(
-        "group/command-item relative flex min-h-7 select-none items-center gap-2 in-data-[slot=dialog-content]:rounded-2xl rounded-xl px-2 py-1.5 text-sm outline-hidden data-[disabled=true]:pointer-events-none data-selected:bg-accent data-selected:text-accent-foreground data-[disabled=true]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-selected:*:[svg]:text-accent-foreground",
+        MENU_ITEM_DENSITY_CLASS,
+        "group/command-item relative flex select-none items-center gap-2 in-data-[slot=dialog-content]:rounded-2xl rounded-xl px-2 outline-hidden data-[disabled=true]:pointer-events-none data-selected:bg-accent data-selected:text-accent-foreground data-[disabled=true]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-selected:*:[svg]:text-accent-foreground",
         className
       )}
       data-slot="command-item"

@@ -59,7 +59,10 @@ export async function handleTerminalCreate(args: {
     win,
   } = args;
   if (!addon) {
-    foregroundActivityService.panelClosed(createArgs.panelId);
+    foregroundActivityService.panelClosed(
+      createArgs.panelId,
+      win ? String(win.id) : undefined
+    );
     return { ok: false, error: loadError ?? "native addon not loaded" };
   }
   if (!win) {
@@ -180,7 +183,7 @@ export async function handleTerminalCreate(args: {
       lifecycleId
     );
     if (!ok) {
-      foregroundActivityService.panelClosed(createArgs.panelId);
+      foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
       await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
       return { ok: false, error: "createTerminal returned false" };
     }
@@ -219,7 +222,7 @@ export async function handleTerminalCreate(args: {
     conformTerminalPresentationAfterCreate(win, addon);
     return { ok: true };
   } catch (err) {
-    foregroundActivityService.panelClosed(createArgs.panelId);
+    foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
     await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
     return {
       ok: false,
