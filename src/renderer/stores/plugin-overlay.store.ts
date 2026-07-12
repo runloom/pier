@@ -7,7 +7,8 @@ import { create } from "zustand";
 
 export interface PluginOverlayRequest {
   id: string;
-  render: (controls: { close: () => void }) => ReactNode;
+  /** `open=false` retains the component solely for its primitive-owned exit transition. */
+  render: (controls: { close: () => void; open: boolean }) => ReactNode;
 }
 
 export interface ActivePluginOverlay extends PluginOverlayRequest {

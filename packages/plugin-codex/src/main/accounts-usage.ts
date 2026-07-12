@@ -10,9 +10,8 @@ export interface UsageCacheEntry {
   fetchedAt: number;
   raw?: unknown;
   resetCreditsAvailable?: number;
-  session?: AccountUsageResult["session"];
   status: "error" | "ok";
-  weekly?: AccountUsageResult["weekly"];
+  windows: AccountUsageResult["windows"];
 }
 
 export function createUsageCacheEntry(
@@ -25,8 +24,8 @@ export function createUsageCacheEntry(
     fetchedAt,
     raw: result,
     status: result.status,
-    ...(retained?.session ? { session: retained.session } : {}),
-    ...(retained?.weekly ? { weekly: retained.weekly } : {}),
+    windows:
+      result.status === "error" ? (retained?.windows ?? []) : result.windows,
     ...(retained?.resetCreditsAvailable === undefined
       ? {}
       : { resetCreditsAvailable: retained.resetCreditsAvailable }),
@@ -34,8 +33,6 @@ export function createUsageCacheEntry(
     ...(result.resetCreditsAvailable === undefined
       ? {}
       : { resetCreditsAvailable: result.resetCreditsAvailable }),
-    ...(result.session ? { session: result.session } : {}),
-    ...(result.weekly ? { weekly: result.weekly } : {}),
   };
 }
 
@@ -43,12 +40,11 @@ export function toUsageSnapshot(entry: UsageCacheEntry): CodexUsageSnapshot {
   return {
     fetchedAt: entry.fetchedAt,
     status: entry.status,
+    windows: entry.windows,
     ...(entry.error ? { error: entry.error } : {}),
-    ...(entry.session ? { session: entry.session } : {}),
     ...(entry.resetCreditsAvailable === undefined
       ? {}
       : { resetCreditsAvailable: entry.resetCreditsAvailable }),
-    ...(entry.weekly ? { weekly: entry.weekly } : {}),
     ...(entry.raw === undefined ? {} : { raw: entry.raw }),
   };
 }

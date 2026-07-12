@@ -22,10 +22,12 @@ describe("PluginOverlayHost", () => {
     act(() => {
       openPluginOverlay("pier.git", {
         id: "demo",
-        render: ({ close }) => (
-          <button onClick={close} type="button">
-            overlay-content
-          </button>
+        render: ({ close, open }) => (
+          <div data-open={open} data-testid="overlay-presentation">
+            <button onClick={close} type="button">
+              overlay-content
+            </button>
+          </div>
         ),
       });
     });
@@ -39,7 +41,10 @@ describe("PluginOverlayHost", () => {
     act(() => {
       screen.getByText("overlay-content").click();
     });
-    expect(screen.queryByText("overlay-content")).not.toBeInTheDocument();
+    expect(screen.getByTestId("overlay-presentation")).toHaveAttribute(
+      "data-open",
+      "false"
+    );
     expect(
       useKeybindingScope
         .getState()
@@ -50,12 +55,15 @@ describe("PluginOverlayHost", () => {
   it("新 open 顶替旧 overlay(单例语义)", () => {
     render(<PluginOverlayHost />);
     act(() => {
-      openPluginOverlay("pier.git", { id: "a", render: () => <p>first</p> });
+      openPluginOverlay("pier.git", {
+        id: "a",
+        render: ({ open }) => <p data-open={open}>first</p>,
+      });
     });
     act(() => {
       openPluginOverlay("pier.other", {
         id: "b",
-        render: () => <p>second</p>,
+        render: ({ open }) => <p data-open={open}>second</p>,
       });
     });
     expect(screen.queryByText("first")).not.toBeInTheDocument();
@@ -68,7 +76,10 @@ describe("PluginOverlayHost", () => {
   it("closeOverlaysForPlugin 只清理该插件的 overlay", () => {
     render(<PluginOverlayHost />);
     act(() => {
-      openPluginOverlay("pier.git", { id: "a", render: () => <p>mine</p> });
+      openPluginOverlay("pier.git", {
+        id: "a",
+        render: ({ open }) => <p data-open={open}>mine</p>,
+      });
     });
     act(() => {
       closeOverlaysForPlugin("pier.other");
@@ -77,7 +88,7 @@ describe("PluginOverlayHost", () => {
     act(() => {
       closeOverlaysForPlugin("pier.git");
     });
-    expect(screen.queryByText("mine")).not.toBeInTheDocument();
+    expect(screen.getByText("mine")).toHaveAttribute("data-open", "false");
     expect(usePluginOverlayStore.getState().current).toBeNull();
   });
 });

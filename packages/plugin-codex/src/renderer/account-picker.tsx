@@ -11,6 +11,7 @@ import {
 import { Check, ChevronDown, Settings } from "lucide-react";
 import type { JSX } from "react";
 import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
+import { confirmAccountSwitch } from "./account-switch.ts";
 
 export interface AccountPickerProps {
   context: ExternalRendererPluginContext;
@@ -27,17 +28,21 @@ export function AccountPicker({
     (a) => a.id === snapshot.activeAccountId
   );
 
-  const invoke = (method: string, payload: unknown = null): void => {
-    context.rpc.invoke(method, payload).catch((err: unknown) => {
-      context.dialogs.alert({
-        title: t("pier.codex.widget.actionFailed", "Account action failed"),
-        body: err instanceof Error ? err.message : String(err),
-      });
+  const reportError = (err: unknown): void => {
+    context.dialogs.alert({
+      title: t("pier.codex.widget.actionFailed", "Account action failed"),
+      body: err instanceof Error ? err.message : String(err),
     });
   };
 
-  const handleSelect = (accountId: string): void => {
-    invoke("accounts.select", { accountId });
+  const invoke = (method: string, payload: unknown = null): void => {
+    context.rpc.invoke(method, payload).catch(reportError);
+  };
+
+  const handleSelect = async (accountId: string): Promise<void> => {
+    if (await confirmAccountSwitch(context, t)) {
+      invoke("accounts.select", { accountId });
+    }
   };
 
   return (
@@ -61,7 +66,7 @@ export function AccountPicker({
             <DropdownMenuItem
               disabled={account.id === snapshot.activeAccountId}
               key={account.id}
-              onClick={() => handleSelect(account.id)}
+              onClick={() => handleSelect(account.id).catch(reportError)}
             >
               {account.id === snapshot.activeAccountId ? <Check /> : null}
               <span className="truncate">{account.label}</span>

@@ -30,6 +30,7 @@ import {
   QuotaGroup,
   resetCredits,
 } from "./account-display.tsx";
+import { confirmAccountSwitch } from "./account-switch.ts";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
 import { CostCard } from "./cost-card.tsx";
 import type { Translate } from "./usage-meter.tsx";
@@ -89,6 +90,10 @@ export function AccountsSettingsPage({
     });
     if (ok) invoke("accounts.remove", { accountId });
   };
+  const handleSelect = async (accountId: string): Promise<void> => {
+    const ok = await confirmAccountSwitch(context, t);
+    if (ok) invoke("accounts.select", { accountId });
+  };
   if (loadError)
     return (
       <div className="pier-codex-settings">
@@ -134,7 +139,10 @@ export function AccountsSettingsPage({
                     {active.label}
                   </CardTitle>
                   <CardDescription>
-                    {[active.planType?.toUpperCase(), resetCredits(active, t)]
+                    {[
+                      active.planType?.toUpperCase(),
+                      resetCredits(active, language, t),
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </CardDescription>
@@ -153,9 +161,8 @@ export function AccountsSettingsPage({
               <QuotaGroup
                 error={active.usage?.error}
                 language={language}
-                session={active.usage?.session}
                 t={t}
-                weekly={active.usage?.weekly}
+                windows={active.usage?.windows ?? []}
               />
             </CardContent>
             <CardFooter className="justify-between">
@@ -238,9 +245,7 @@ export function AccountsSettingsPage({
                     language={language}
                     onRefresh={() => refreshUsage(account.id)}
                     onRemove={() => handleRemove(account.id).catch(reportError)}
-                    onSelect={() =>
-                      invoke("accounts.select", { accountId: account.id })
-                    }
+                    onSelect={() => handleSelect(account.id).catch(reportError)}
                     refreshing={refreshingAccountIds.has(account.id)}
                     t={t}
                   />

@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
+import type { ActivePluginOverlay } from "@/stores/plugin-overlay.store.ts";
 import {
   closePluginOverlay,
   usePluginOverlayStore,
@@ -11,6 +12,7 @@ import {
 
 export function PluginOverlayHost() {
   const current = usePluginOverlayStore((state) => state.current);
+  const [retained, setRetained] = useState<ActivePluginOverlay | null>(current);
   const overlayKey = current ? `${current.pluginId}:${current.id}` : null;
 
   useEffect(() => {
@@ -29,10 +31,18 @@ export function PluginOverlayHost() {
     };
   }, [overlayKey]);
 
-  if (!current) {
+  useLayoutEffect(() => {
+    if (current) {
+      setRetained(current);
+    }
+  }, [current]);
+
+  const presented = current ?? retained;
+  if (!presented) {
     return null;
   }
-  return current.render({
-    close: () => closePluginOverlay(current.pluginId, current.id),
+  return presented.render({
+    close: () => closePluginOverlay(presented.pluginId, presented.id),
+    open: current === presented,
   });
 }

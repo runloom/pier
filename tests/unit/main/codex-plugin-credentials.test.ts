@@ -135,7 +135,7 @@ describe("pier.codex credential lifecycle", () => {
             mode: 0o600,
           });
         }
-        return { status: "ok" };
+        return { status: "ok", windows: [] };
       },
       realCodexHome: join(dir, "real-codex"),
     });
@@ -169,7 +169,10 @@ describe("pier.codex credential lifecycle", () => {
         await writeFile(join(home, "auth.json"), authJson(), { mode: 0o600 });
       }),
     });
-    provider.fetchUsage = vi.fn(async () => ({ status: "ok" as const }));
+    provider.fetchUsage = vi.fn(async () => ({
+      status: "ok" as const,
+      windows: [],
+    }));
     provider.watchExternalAuth = vi.fn(() => () => undefined);
     const stateStore = createCodexAccountsStateStore(
       join(dir, "accounts.json"),

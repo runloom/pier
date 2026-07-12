@@ -11,6 +11,7 @@ import {
 } from "@pier/ui/card.tsx";
 import {
   formatCompactNumber,
+  formatCount,
   formatCurrency,
   formatRelativeTime,
 } from "@pier/ui/format.tsx";
@@ -24,10 +25,11 @@ import { cn } from "@pier/ui/utils.ts";
 import { RefreshCw } from "lucide-react";
 import type { CSSProperties, JSX } from "react";
 import type { CodexCostUsageSnapshot } from "../shared/accounts.ts";
+import { COST_USAGE_PERIOD_DAYS } from "../shared/constants.ts";
 import type { Translate } from "./usage-meter.tsx";
 
 const COST_DAYS = Array.from(
-  { length: 31 },
+  { length: COST_USAGE_PERIOD_DAYS },
   (_, index) => `cost-day-${index + 1}`
 );
 
@@ -44,6 +46,8 @@ export function CostCard({
   snapshot: CodexCostUsageSnapshot | null | undefined;
   t: Translate;
 }): JSX.Element {
+  const periodDays = formatCount(COST_USAGE_PERIOD_DAYS, language);
+  const tokensLabel = t("pier.codex.accounts.settings.chartTokens", "Tokens");
   const bucketsByDate = new Map(
     (snapshot?.buckets ?? []).map((bucket) => [bucket.date, bucket])
   );
@@ -181,8 +185,8 @@ export function CostCard({
             <span>
               {t(
                 "pier.codex.accounts.settings.costPeriod",
-                "Last 31 days cost"
-              )}
+                "Last {count} days cost"
+              ).replace("{count}", periodDays)}
             </span>
             <strong>
               {snapshot?.summary.estimatedCostMicrousd == null
@@ -197,8 +201,8 @@ export function CostCard({
             <span>
               {t(
                 "pier.codex.accounts.settings.tokensPeriod",
-                "Last 31 days tokens"
-              )}
+                "Last {count} days tokens"
+              ).replace("{count}", periodDays)}
             </span>
             <strong>
               {snapshot
@@ -228,8 +232,8 @@ export function CostCard({
           <figure
             aria-label={t(
               "pier.codex.accounts.settings.costChart",
-              "Daily estimated cost for the last 31 days"
-            )}
+              "Daily estimated cost for the last {count} days"
+            ).replace("{count}", periodDays)}
             className="pier-codex-cost-bars"
           >
             {chartBuckets.map((bucket) => {
@@ -247,7 +251,7 @@ export function CostCard({
                 bucket.tokens === null
                   ? "—"
                   : formatCompactNumber(bucket.tokens, language);
-              const label = `${bucket.date} · ${cost} · ${tokens} tokens`;
+              const label = `${bucket.date} · ${cost} · ${tokens} ${tokensLabel}`;
               return (
                 <Tooltip key={bucket.date}>
                   <TooltipTrigger asChild>
@@ -275,11 +279,7 @@ export function CostCard({
                         {cost}
                       </span>
                       <span>
-                        {t(
-                          "pier.codex.accounts.settings.chartTokens",
-                          "Tokens"
-                        )}
-                        : {tokens}
+                        {tokensLabel}: {tokens}
                       </span>
                     </div>
                   </TooltipContent>

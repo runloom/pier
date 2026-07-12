@@ -5,6 +5,7 @@ import type {
   UsageDataPublishInput,
   UsageTokenObservation,
 } from "@pier/plugin-api/main";
+import { COST_USAGE_PERIOD_DAYS } from "../shared/constants.ts";
 import {
   type CachedTokenUsage,
   type FileUsage,
@@ -13,7 +14,6 @@ import {
 } from "./local-usage-cache.ts";
 import { scanLocalUsageFile } from "./local-usage-session-parser.ts";
 
-const DAYS = 31;
 const MAX_FILES = 5000;
 const STAT_CONCURRENCY = 32;
 
@@ -134,7 +134,7 @@ async function scanLocalUsage(
   codexHome: string,
   cachePath: string
 ): Promise<LocalUsageScanResult> {
-  const from = dateDaysAgo(DAYS - 1);
+  const from = dateDaysAgo(COST_USAGE_PERIOD_DAYS - 1);
   const to = new Date().toISOString().slice(0, 10);
   const allPaths = await candidateFiles(codexHome, from, to);
   const paths = allPaths.slice(0, MAX_FILES);

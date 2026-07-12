@@ -135,6 +135,7 @@ export function SettingsDialog() {
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
         className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col sm:max-w-[1200px]"
+        closeLabel={t("dialog.close")}
         onEscapeKeyDown={(event) => {
           // 设置项以 blur 作为统一提交入口。Radix 通过 Escape 卸载 Dialog 前
           // 主动触发 blur，既保留自动保存语义，也不阻止 Dialog 的标准关闭行为。
@@ -142,6 +143,7 @@ export function SettingsDialog() {
             event.target.blur();
           }
         }}
+        showCloseButton
       >
         <DialogHeader>
           <DialogTitle>{t("settings.title")}</DialogTitle>

@@ -398,5 +398,13 @@ describe("实例模型与组件菜单", () => {
     expect(
       await screen.findByTestId("mission-control-widget-settings-dialog")
     ).toHaveAttribute("role", "dialog");
+    const dialog = screen.getByTestId("mission-control-widget-settings-dialog");
+    const title = dialog.querySelector('[data-slot="dialog-title"]');
+    expect(title?.textContent).not.toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(dialog).toHaveAttribute("data-state", "closed");
+    expect(title?.textContent).not.toBe("");
   });
 });

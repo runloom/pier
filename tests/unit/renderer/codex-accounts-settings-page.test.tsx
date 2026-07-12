@@ -13,7 +13,12 @@ import pluginManifest from "../../../packages/plugin-codex/plugin.json" with {
   type: "json",
 };
 import { AccountsSettingsPage } from "../../../packages/plugin-codex/src/renderer/accounts-settings-page.tsx";
-import type { CodexAccountsSnapshot } from "../../../packages/plugin-codex/src/shared/accounts.ts";
+import { AddAccountDialog } from "../../../packages/plugin-codex/src/renderer/add-account-dialog.tsx";
+import { usageWindowLabel } from "../../../packages/plugin-codex/src/renderer/usage-meter.tsx";
+import type {
+  CodexAccountsSnapshot,
+  CodexUsageWindow,
+} from "../../../packages/plugin-codex/src/shared/accounts.ts";
 
 function emptySnapshot(): CodexAccountsSnapshot {
   return {
@@ -45,6 +50,21 @@ function snapshotWithAccount(
     revision: 2,
     schemaVersion: 1,
     ...overrides,
+  };
+}
+
+function usageWindow(
+  usedPercent: number,
+  windowMinutes = 300,
+  position: "primary" | "secondary" = "primary",
+  limitName?: string
+): CodexUsageWindow {
+  return {
+    id: `codex:${position}`,
+    limitId: "codex",
+    usedPercent,
+    windowMinutes,
+    ...(limitName ? { limitName } : {}),
   };
 }
 
@@ -128,7 +148,7 @@ describe("AccountsSettingsPage", () => {
     ).toHaveTextContent("T");
     expect(container.querySelector(".pier-codex-avatar")).toBeNull();
     expect(screen.getByTestId("codex-cost-card")).toBeDefined();
-    expect(screen.getByText("PRO · Resets unavailable")).toBeDefined();
+    expect(screen.getByText("PRO")).toBeDefined();
     expect(screen.getByText("Last 31 days cost")).toBeDefined();
     expect(
       container.querySelectorAll(".pier-codex-cost-bars [data-cost-bar]")
@@ -151,6 +171,54 @@ describe("AccountsSettingsPage", () => {
     expect(styles).toContain("@media (max-width: 48rem)");
     expect(styles).toContain("var(--chart-2)");
     expect(styles).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
+  it("formats quota durations from data in both supported languages", () => {
+    const zhMessages = pluginManifest.locales["zh-CN"].messages as Record<
+      string,
+      string
+    >;
+    const zh = (key: string, fallback: string): string =>
+      zhMessages[key] ?? fallback;
+
+    expect(
+      usageWindowLabel(usageWindow(5, 15), "en", (_key, fallback) => fallback)
+    ).toBe("15-minute quota");
+    expect(usageWindowLabel(usageWindow(5, 300), "zh-CN", zh)).toBe(
+      "5 小时额度"
+    );
+    expect(usageWindowLabel(usageWindow(5, 10_080), "zh-CN", zh)).toBe(
+      "7 天额度"
+    );
+    expect(usageWindowLabel(usageWindow(5, 43_200), "zh-CN", zh)).toBe(
+      "30 天额度"
+    );
+  });
+
+  it("keeps business periods owned by data contracts instead of UI literals", () => {
+    const usageParser = readFileSync(
+      resolve(process.cwd(), "packages/plugin-codex/src/main/codex-usage.ts"),
+      "utf8"
+    );
+    const usageRenderer = readFileSync(
+      resolve(
+        process.cwd(),
+        "packages/plugin-codex/src/renderer/usage-meter.tsx"
+      ),
+      "utf8"
+    );
+    const costRenderer = readFileSync(
+      resolve(
+        process.cwd(),
+        "packages/plugin-codex/src/renderer/cost-card.tsx"
+      ),
+      "utf8"
+    );
+
+    expect(usageParser).not.toMatch(/windowMinutes\s*===/);
+    expect(usageRenderer).not.toMatch(/5-hour|Weekly|Session/);
+    expect(costRenderer).not.toContain("length: 31");
+    expect(costRenderer).toContain("COST_USAGE_PERIOD_DAYS");
   });
 
   it("renders the active account once with a system-default badge", async () => {
@@ -206,9 +274,8 @@ describe("AccountsSettingsPage", () => {
             usage: {
               fetchedAt: Date.now(),
               resetCreditsAvailable: 3,
-              session: { usedPercent: 38 },
               status: "ok",
-              weekly: { usedPercent: 64 },
+              windows: [usageWindow(38), usageWindow(64, 10_080, "secondary")],
             },
           },
         ],
@@ -240,7 +307,9 @@ describe("AccountsSettingsPage", () => {
     );
     const { container } = render(<AccountsSettingsPage context={context} />);
 
-    expect(await screen.findByText("PLUS · 3 resets")).toBeDefined();
+    expect(
+      await screen.findByText("PLUS · 3 quota resets available")
+    ).toBeDefined();
     expect(screen.getByText("62%")).toBeDefined();
     expect(screen.getByText("36%")).toBeDefined();
     expect(screen.getAllByText("$1.25")).toHaveLength(2);
@@ -381,8 +450,8 @@ describe("AccountsSettingsPage", () => {
             usage: {
               fetchedAt: Date.now(),
               resetCreditsAvailable: 0,
-              session: { usedPercent: 5, windowMinutes: 300 },
               status: "ok",
+              windows: [usageWindow(5)],
             },
           },
         ],
@@ -390,30 +459,31 @@ describe("AccountsSettingsPage", () => {
     );
     const { container } = render(<AccountsSettingsPage context={context} />);
 
-    expect(await screen.findByText("TEAM · 0 resets")).toBeDefined();
-    expect(screen.getByText("5-hour remaining")).toBeDefined();
+    expect(await screen.findByText("TEAM")).toBeDefined();
+    expect(screen.queryByText(/quota resets/)).toBeNull();
+    expect(screen.getByText("5-hour quota")).toBeDefined();
     expect(screen.getByText("95%")).toBeDefined();
-    expect(screen.queryByText("Weekly remaining")).toBeNull();
+    expect(screen.queryByText("7-day quota")).toBeNull();
     expect(screen.queryByText("No usage data")).toBeNull();
     expect(
       container.querySelector('.pier-codex-quota-grid[data-count="1"]')
     ).not.toBeNull();
   });
 
-  it("labels a normalized weekly-only account as weekly", async () => {
+  it("labels a 30-day named quota from its dynamic metadata", async () => {
     const { context } = contextWithSnapshot(
       snapshotWithAccount({
         accounts: [
           {
             error: null,
             id: "acc-1",
-            label: "weekly@codex.dev",
+            label: "monthly@codex.dev",
             planType: "team",
             status: "active",
             usage: {
               fetchedAt: Date.now(),
               status: "ok",
-              weekly: { usedPercent: 5, windowMinutes: 10_080 },
+              windows: [usageWindow(5, 43_200, "primary", "Code review")],
             },
           },
         ],
@@ -421,8 +491,8 @@ describe("AccountsSettingsPage", () => {
     );
     render(<AccountsSettingsPage context={context} />);
 
-    expect(await screen.findByText("Weekly remaining")).toBeDefined();
-    expect(screen.queryByText("5-hour remaining")).toBeNull();
+    expect(await screen.findByText("Code review · 30-day quota")).toBeDefined();
+    expect(screen.queryByText("5-hour quota")).toBeNull();
     expect(screen.queryByText("No usage data")).toBeNull();
   });
 
@@ -440,6 +510,7 @@ describe("AccountsSettingsPage", () => {
               error: "refresh token expired",
               fetchedAt: Date.now(),
               status: "error",
+              windows: [],
             },
           },
         ],
@@ -532,7 +603,7 @@ describe("AccountsSettingsPage", () => {
     });
   });
 
-  it("switches accounts directly without a confirmation dialog", async () => {
+  it("explains session restart behavior before switching accounts", async () => {
     const snap = snapshotWithAccount({
       accounts: [
         {
@@ -558,13 +629,52 @@ describe("AccountsSettingsPage", () => {
       screen.getByRole("button", { name: "Switch: other@codex.dev" })
     );
 
+    expect(context.dialogs.confirm).toHaveBeenCalledWith({
+      body: "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect.",
+      intent: "default",
+      title: "Switch Codex account?",
+    });
     await vi.waitFor(() => {
       expect(invokeCalls).toContainEqual({
         method: "accounts.select",
         payload: { accountId: "acc-2" },
       });
     });
-    expect(context.dialogs.confirm).not.toHaveBeenCalled();
+  });
+
+  it("keeps the active account when switching is cancelled", async () => {
+    const snap = snapshotWithAccount({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "active",
+          error: null,
+        },
+        {
+          id: "acc-2",
+          label: "other@codex.dev",
+          status: "available",
+          error: null,
+        },
+      ],
+    });
+    const { context, invokeCalls } = contextWithSnapshot(snap);
+    context.dialogs.confirm = vi.fn(async () => false);
+    render(<AccountsSettingsPage context={context} />);
+
+    await screen.findByText("other@codex.dev");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch: other@codex.dev" })
+    );
+
+    await vi.waitFor(() => {
+      expect(context.dialogs.confirm).toHaveBeenCalledOnce();
+    });
+    expect(invokeCalls).not.toContainEqual({
+      method: "accounts.select",
+      payload: { accountId: "acc-2" },
+    });
   });
 
   it("refreshes quota for the selected row without switching accounts", async () => {
@@ -655,6 +765,34 @@ describe("AccountsSettingsPage", () => {
     ).toBeDefined();
     expect(screen.getByText("Waiting for Codex authorization…")).toBeDefined();
     expect(screen.getByText("Cancel login")).toBeDefined();
+  });
+
+  it("retains the waiting presentation while authorization closes", async () => {
+    const { context } = contextWithSnapshot(emptySnapshot());
+    const t = (_key: string, fallback: string): string => fallback;
+    const { rerender } = render(
+      <AddAccountDialog
+        context={context}
+        login={{ provider: "codex", startedAt: Date.now() }}
+        onError={vi.fn()}
+        t={t}
+      />
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Waiting for browser authorization");
+    rerender(
+      <AddAccountDialog
+        context={context}
+        login={null}
+        onError={vi.fn()}
+        t={t}
+      />
+    );
+
+    expect(dialog).toHaveAttribute("data-state", "closed");
+    expect(dialog).toHaveTextContent("Waiting for browser authorization");
+    expect(dialog).not.toHaveTextContent("Add Codex account");
   });
 
   it("cancels a pending browser login", async () => {
@@ -772,9 +910,8 @@ describe("AccountsSettingsPage", () => {
           error: null,
           usage: {
             fetchedAt: now,
-            session: { usedPercent: 32 },
             status: "ok",
-            weekly: { usedPercent: 68 },
+            windows: [usageWindow(32), usageWindow(68, 10_080, "secondary")],
           },
         },
         {
@@ -784,9 +921,8 @@ describe("AccountsSettingsPage", () => {
           error: null,
           usage: {
             fetchedAt: now,
-            session: { usedPercent: 15 },
             status: "ok",
-            weekly: { usedPercent: 40 },
+            windows: [usageWindow(15), usageWindow(40, 10_080, "secondary")],
           },
         },
       ],
@@ -804,7 +940,7 @@ describe("AccountsSettingsPage", () => {
     ).toHaveAttribute("data-variant", "default");
     expect(container.textContent).toContain("68%");
     expect(container.textContent).toContain("32%");
-    expect(container.textContent).toContain("5-hour remaining");
+    expect(container.textContent).toContain("5-hour quota");
   });
 
   it("uses semantic progress variants at warning and critical thresholds", async () => {
@@ -818,9 +954,8 @@ describe("AccountsSettingsPage", () => {
           error: null,
           usage: {
             fetchedAt: now,
-            session: { usedPercent: 75 },
             status: "ok",
-            weekly: { usedPercent: 90 },
+            windows: [usageWindow(75), usageWindow(90, 10_080, "secondary")],
           },
         },
       ],
@@ -837,12 +972,12 @@ describe("AccountsSettingsPage", () => {
     ).toHaveAttribute("data-variant", "destructive");
     expect(
       screen.getByRole("progressbar", {
-        name: "5-hour remaining 25%",
+        name: "5-hour quota 25%",
       })
     ).toBeDefined();
     expect(
       screen.getByRole("progressbar", {
-        name: "Weekly remaining 10%",
+        name: "7-day quota 10%",
       })
     ).toBeDefined();
     expect(container.textContent).toContain("25%");
@@ -868,6 +1003,7 @@ describe("AccountsSettingsPage", () => {
             error: "network unavailable",
             fetchedAt: now,
             status: "error",
+            windows: [],
           },
         },
       ],

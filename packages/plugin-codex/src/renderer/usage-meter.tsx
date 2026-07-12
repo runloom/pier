@@ -1,4 +1,8 @@
-import { formatDurationShort, formatPercent } from "@pier/ui/format.tsx";
+import {
+  formatCount,
+  formatDurationShort,
+  formatPercent,
+} from "@pier/ui/format.tsx";
 import { Progress } from "@pier/ui/progress.tsx";
 import { cn } from "@pier/ui/utils";
 import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
@@ -18,6 +22,44 @@ export interface UsageProgressProps {
   showLabel?: boolean;
   t: Translate;
   window: CodexUsageWindow;
+}
+
+function replace(template: string, values: Record<string, string>): string {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.replace(`{${key}}`, value),
+    template
+  );
+}
+
+export function usageWindowLabel(
+  window: CodexUsageWindow,
+  language: string,
+  t: Translate
+): string {
+  const minutes = window.windowMinutes;
+  let quota: string;
+  if (!(minutes && Number.isFinite(minutes) && minutes > 0)) {
+    quota = t("pier.codex.usage.quota", "Quota");
+  } else if (minutes % 1440 === 0) {
+    quota = replace(t("pier.codex.usage.quotaDays", "{count}-day quota"), {
+      count: formatCount(minutes / 1440, language),
+    });
+  } else if (minutes % 60 === 0) {
+    quota = replace(t("pier.codex.usage.quotaHours", "{count}-hour quota"), {
+      count: formatCount(minutes / 60, language),
+    });
+  } else {
+    quota = replace(
+      t("pier.codex.usage.quotaMinutes", "{count}-minute quota"),
+      { count: formatCount(minutes, language) }
+    );
+  }
+  return window.limitName
+    ? replace(t("pier.codex.usage.namedQuota", "{name} · {quota}"), {
+        name: window.limitName,
+        quota,
+      })
+    : quota;
 }
 
 function resetsLabel(
@@ -97,19 +139,17 @@ export function UsageProgress({
 export interface UsageMeterProps {
   className?: string;
   language: string;
-  session?: CodexUsageWindow | undefined;
   t: Translate;
-  weekly?: CodexUsageWindow | undefined;
+  windows: CodexUsageWindow[];
 }
 
 export function UsageMeter({
   className,
   language,
-  session,
   t,
-  weekly,
+  windows,
 }: UsageMeterProps): JSX.Element {
-  if (!(session || weekly)) {
+  if (windows.length === 0) {
     return (
       <WidgetEmpty
         title={t("pier.codex.widget.noUsage", "No usage data available yet.")}
@@ -122,22 +162,15 @@ export function UsageMeter({
       className={cn("pier-codex-usage-meter", className)}
       data-slot="codex-usage-meter"
     >
-      {session ? (
+      {windows.map((window) => (
         <UsageProgress
-          label={t("pier.codex.widget.session", "Session")}
+          key={window.id}
+          label={usageWindowLabel(window, language, t)}
           language={language}
           t={t}
-          window={session}
+          window={window}
         />
-      ) : null}
-      {weekly ? (
-        <UsageProgress
-          label={t("pier.codex.widget.weekly", "Weekly")}
-          language={language}
-          t={t}
-          window={weekly}
-        />
-      ) : null}
+      ))}
     </div>
   );
 }

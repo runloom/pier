@@ -18,7 +18,7 @@ import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
 
 /**
  * Codex usage widget for Mission Control.
- * Shows session/weekly usage, account picker, and manage accounts link.
+ * Shows dynamic quota windows, account picker, and manage accounts link.
  * Consumes host `visible` / `refreshToken` for lifecycle.
  */
 
@@ -127,9 +127,8 @@ export function AccountsWidget({
       {/* Usage meters */}
       <UsageMeter
         language={context.i18n.language()}
-        session={usage.session}
         t={t}
-        weekly={usage.weekly}
+        windows={usage.windows}
       />
 
       {/* Account picker */}

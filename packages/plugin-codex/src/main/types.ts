@@ -25,7 +25,13 @@ export interface AgentAccountProvider {
 export interface AccountUsageResult {
   error?: string;
   resetCreditsAvailable?: number;
-  session?: { resetsAt?: number; usedPercent: number; windowMinutes?: number };
   status: "error" | "ok";
-  weekly?: { resetsAt?: number; usedPercent: number; windowMinutes?: number };
+  windows: Array<{
+    id: string;
+    limitId: string;
+    limitName?: string;
+    resetsAt?: number;
+    usedPercent: number;
+    windowMinutes?: number;
+  }>;
 }

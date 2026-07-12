@@ -13,6 +13,9 @@ export type CodexAccountStatus =
   | "error";
 
 export interface CodexUsageWindow {
+  id: string;
+  limitId: string;
+  limitName?: string;
   resetsAt?: number;
   usedPercent: number;
   windowMinutes?: number;
@@ -23,9 +26,8 @@ export interface CodexUsageSnapshot {
   fetchedAt: number;
   raw?: unknown;
   resetCreditsAvailable?: number;
-  session?: CodexUsageWindow;
   status: "ok" | "error";
-  weekly?: CodexUsageWindow;
+  windows: CodexUsageWindow[];
 }
 
 export interface CodexAccountSummary {

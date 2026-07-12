@@ -7,6 +7,7 @@ import type {
   CodexAccountsSnapshot,
   CodexCostUsageSnapshot,
 } from "../shared/accounts.ts";
+import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
 import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
@@ -38,7 +39,6 @@ import {
   USAGE_REFRESH_CONCURRENCY,
 } from "./usage-refresh-scheduler.ts";
 
-const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const WATCH_SUPPRESS_MS = 1500;
 
 export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
@@ -379,6 +379,7 @@ export function createCodexAccountsService(
       result = {
         error: error instanceof Error ? error.message : String(error),
         status: "error" as const,
+        windows: [],
       };
     }
     usageCache[cacheKey] = createUsageCacheEntry(result, cached, now());

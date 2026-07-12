@@ -33,8 +33,22 @@ function usageSnapshot(
     activeUsage: {
       fetchedAt: Date.now(),
       status: "ok",
-      session: { usedPercent: 32, resetsAt: Date.now() + 3_600_000 },
-      weekly: { usedPercent: 68, resetsAt: Date.now() + 86_400_000 },
+      windows: [
+        {
+          id: "codex:primary",
+          limitId: "codex",
+          resetsAt: Date.now() + 3_600_000,
+          usedPercent: 32,
+          windowMinutes: 300,
+        },
+        {
+          id: "codex:secondary",
+          limitId: "codex",
+          resetsAt: Date.now() + 86_400_000,
+          usedPercent: 68,
+          windowMinutes: 10_080,
+        },
+      ],
     },
     login: null,
     revision: 1,
@@ -50,8 +64,21 @@ function noActiveAccountSnapshot(): CodexAccountsSnapshot {
     activeUsage: {
       fetchedAt: Date.now(),
       status: "ok",
-      session: { usedPercent: 10, resetsAt: Date.now() + 3_600_000 },
-      weekly: { usedPercent: 45 },
+      windows: [
+        {
+          id: "codex:primary",
+          limitId: "codex",
+          resetsAt: Date.now() + 3_600_000,
+          usedPercent: 10,
+          windowMinutes: 300,
+        },
+        {
+          id: "codex:secondary",
+          limitId: "codex",
+          usedPercent: 45,
+          windowMinutes: 10_080,
+        },
+      ],
     },
     login: null,
     revision: 1,
@@ -116,14 +143,15 @@ describe("AccountsWidget (usage)", () => {
     cleanup();
   });
 
-  it("renders used percent for session and weekly usage", async () => {
+  it("renders remaining percent for dynamic usage windows", async () => {
     const snap = usageSnapshot();
     const { context } = contextWithSnapshot(snap);
     const { container } = render(
       <AccountsWidget context={context} {...baseProps()} />
     );
 
-    await screen.findByText("Session");
+    await screen.findByText("5-hour quota");
+    expect(screen.getByText("7-day quota")).toBeDefined();
     expect(container.textContent).toContain("32%");
     expect(container.textContent).toContain("68%");
     expect(container.textContent).not.toContain("remaining");
@@ -156,6 +184,11 @@ describe("AccountsWidget (usage)", () => {
     const otherOption = await screen.findByText("other@codex.dev");
     fireEvent.click(otherOption);
 
+    expect(context.dialogs.confirm).toHaveBeenCalledWith({
+      body: "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect.",
+      intent: "default",
+      title: "Switch Codex account?",
+    });
     await vi.waitFor(() => {
       expect(invokeCalls).toContainEqual({
         method: "accounts.select",
@@ -187,7 +220,7 @@ describe("AccountsWidget (usage)", () => {
       <AccountsWidget context={context} {...baseProps({ refreshToken: 0 })} />
     );
 
-    await screen.findByText("Session");
+    await screen.findByText("5-hour quota");
 
     rerender(
       <AccountsWidget context={context} {...baseProps({ refreshToken: 1 })} />
@@ -218,7 +251,7 @@ describe("AccountsWidget (usage)", () => {
       />
     );
 
-    await screen.findByText("Session");
+    await screen.findByText("5-hour quota");
     const meter = container.querySelector('[data-slot="codex-usage-meter"]');
     const progressBars = container.querySelectorAll(
       '[data-slot="codex-usage-progress"] [data-slot="progress"]'
@@ -252,7 +285,7 @@ describe("AccountsWidget (usage)", () => {
       />
     );
 
-    await screen.findByText("Session");
+    await screen.findByText("5-hour quota");
     rerender(
       <AccountsWidget
         context={context}

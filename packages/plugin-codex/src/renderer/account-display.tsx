@@ -1,7 +1,11 @@
 import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
-import { formatDurationShort, formatPercent } from "@pier/ui/format.tsx";
+import {
+  formatCount,
+  formatDurationShort,
+  formatPercent,
+} from "@pier/ui/format.tsx";
 import {
   Item,
   ItemActions,
@@ -25,7 +29,7 @@ import type {
   CodexUsageWindow,
 } from "../shared/accounts.ts";
 import { remainingPercent, usageRisk } from "../shared/usage.ts";
-import type { Translate } from "./usage-meter.tsx";
+import { type Translate, usageWindowLabel } from "./usage-meter.tsx";
 
 export function AccountAvatar({
   label,
@@ -94,40 +98,15 @@ export function QuotaGroup({
   compact = false,
   error,
   language,
-  session,
   t,
-  weekly,
+  windows,
 }: {
   compact?: boolean;
   error: string | undefined;
   language: string;
-  session: CodexUsageWindow | undefined;
   t: Translate;
-  weekly: CodexUsageWindow | undefined;
+  windows: CodexUsageWindow[];
 }): JSX.Element {
-  const windows = [
-    session
-      ? {
-          id: "session",
-          label: t(
-            "pier.codex.accounts.settings.sessionRemaining",
-            "5-hour remaining"
-          ),
-          window: session,
-        }
-      : null,
-    weekly
-      ? {
-          id: "weekly",
-          label: t(
-            "pier.codex.accounts.settings.weeklyRemaining",
-            "Weekly remaining"
-          ),
-          window: weekly,
-        }
-      : null,
-  ].filter((entry) => entry !== null);
-
   const errorState = error ? (
     <TooltipProvider delayDuration={200}>
       <Tooltip>
@@ -163,14 +142,14 @@ export function QuotaGroup({
       className={compact ? "pier-codex-mini-quotas" : "pier-codex-quota-grid"}
       data-count={windows.length}
     >
-      {windows.map((entry) => (
+      {windows.map((window) => (
         <Quota
           compact={compact}
-          key={entry.id}
-          label={entry.label}
+          key={window.id}
+          label={usageWindowLabel(window, language, t)}
           language={language}
           t={t}
-          window={entry.window}
+          window={window}
         />
       ))}
       {errorState}
@@ -180,18 +159,15 @@ export function QuotaGroup({
 
 export function resetCredits(
   account: CodexAccountSummary,
+  language: string,
   t: Translate
-): string {
+): string | null {
   const value = account.usage?.resetCreditsAvailable;
-  return value === undefined
-    ? t(
-        "pier.codex.accounts.settings.resetCreditsUnknown",
-        "Resets unavailable"
-      )
-    : t("pier.codex.accounts.settings.resetCredits", "{count} resets").replace(
-        "{count}",
-        String(value)
-      );
+  if (value === undefined || value <= 0) return null;
+  return t(
+    "pier.codex.accounts.settings.resetCredits",
+    "{count} quota resets available"
+  ).replace("{count}", formatCount(value, language));
 }
 
 function IconAction({
@@ -258,7 +234,10 @@ export function OtherAccount({
         <ItemContent className="min-w-0">
           <ItemTitle title={account.label}>{account.label}</ItemTitle>
           <ItemDescription>
-            {[account.planType?.toUpperCase(), resetCredits(account, t)]
+            {[
+              account.planType?.toUpperCase(),
+              resetCredits(account, language, t),
+            ]
               .filter(Boolean)
               .join(" · ")}
           </ItemDescription>
@@ -267,9 +246,8 @@ export function OtherAccount({
           compact
           error={account.usage?.error}
           language={language}
-          session={account.usage?.session}
           t={t}
-          weekly={account.usage?.weekly}
+          windows={account.usage?.windows ?? []}
         />
         <TooltipProvider delayDuration={200}>
           <ItemActions>

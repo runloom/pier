@@ -40,6 +40,9 @@ export function AddAccountDialog({
   t: Translate;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [presentation, setPresentation] = useState<"authorize" | "waiting">(
+    "authorize"
+  );
   const [starting, setStarting] = useState(false);
   const [pendingAction, setPendingAction] = useState<
     "cancel" | "restart" | null
@@ -50,6 +53,7 @@ export function AddAccountDialog({
 
   useEffect(() => {
     if (login) {
+      setPresentation("waiting");
       setOpen(true);
     } else if (previousLogin.current) {
       setOpen(false);
@@ -59,6 +63,7 @@ export function AddAccountDialog({
 
   const startLogin = (): void => {
     const currentOperation = ++operationId.current;
+    setPresentation("waiting");
     setStarting(true);
     context.rpc
       .invoke("accounts.add", {})
@@ -114,7 +119,16 @@ export function AddAccountDialog({
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
-        if (nextOpen || !waiting) setOpen(nextOpen);
+        if (nextOpen) {
+          if (!waiting) {
+            setPresentation("authorize");
+            setOpen(true);
+          }
+          return;
+        }
+        if (!waiting) {
+          setOpen(false);
+        }
       }}
       open={open}
     >
@@ -133,7 +147,7 @@ export function AddAccountDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {waiting
+            {presentation === "waiting"
               ? t(
                   "pier.codex.accounts.settings.addDialogWaitingTitle",
                   "Waiting for browser authorization"
@@ -144,7 +158,7 @@ export function AddAccountDialog({
                 )}
           </DialogTitle>
           <DialogDescription>
-            {waiting
+            {presentation === "waiting"
               ? t(
                   "pier.codex.accounts.settings.addDialogWaitingDescription",
                   "Complete Codex login in your browser. This dialog closes automatically after authorization."
@@ -155,7 +169,7 @@ export function AddAccountDialog({
                 )}
           </DialogDescription>
         </DialogHeader>
-        {waiting ? (
+        {presentation === "waiting" ? (
           <Item size="sm" variant="muted">
             <ItemMedia variant="icon">
               <Spinner />
@@ -185,7 +199,7 @@ export function AddAccountDialog({
           </Item>
         )}
         <DialogFooter>
-          {waiting ? (
+          {presentation === "waiting" ? (
             <>
               <Button
                 aria-busy={pendingAction === "cancel" || undefined}

@@ -439,7 +439,8 @@ export interface RendererPluginContext {
     close(id: string): void;
     open(overlay: {
       id: string;
-      render: (controls: { close: () => void }) => ReactNode;
+      /** Bind `open` to the controlled modal primitive; `close` settles host state immediately. */
+      render: (controls: { close: () => void; open: boolean }) => ReactNode;
     }): void;
   };
   panels: {

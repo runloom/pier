@@ -132,6 +132,22 @@ describe("shadcn composition governance", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("requires localized labels for visible dialog close buttons", () => {
+    const offenders = files.flatMap((filePath) => {
+      const source = readFileSync(filePath, "utf8");
+      return [...source.matchAll(/<(?:Dialog|Sheet)Content\b[\s\S]*?>/g)]
+        .filter(
+          ([openingTag]) =>
+            openingTag?.includes("showCloseButton") &&
+            !openingTag.includes("showCloseButton={false}") &&
+            !openingTag.includes("closeLabel=")
+        )
+        .map(() => projectRelative(filePath));
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps raw buttons behind Item or an explicit framework boundary", () => {
     const owners = files
       .filter((filePath) => /<button\b/.test(readFileSync(filePath, "utf8")))

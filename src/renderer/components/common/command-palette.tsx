@@ -19,6 +19,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -147,6 +148,21 @@ export function CommandPalette() {
   const quickPick = controller.quickPick;
   const isOpen = controller.open;
   const requestId = controller.requestId;
+  const [retainedPresentation, setRetainedPresentation] = useState({
+    mode,
+    quickPick,
+  });
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      setRetainedPresentation({ mode, quickPick });
+    }
+  }, [isOpen, mode, quickPick]);
+
+  const presentedMode = isOpen ? mode : retainedPresentation.mode;
+  const presentedQuickPick = isOpen
+    ? quickPick
+    : retainedPresentation.quickPick;
 
   // 键盘打开时显式请求 Web 焦点；Dialog overlay 的鼠标命中几何由 @pier/ui
   // 默认注册。同时 push scope id 进 keybinding scope 栈, 让浮层期间 panel/global
@@ -362,19 +378,19 @@ export function CommandPalette() {
   };
 
   const dialogTitle =
-    mode === "quick-pick" && quickPick
-      ? quickPick.title
+    presentedMode === "quick-pick" && presentedQuickPick
+      ? presentedQuickPick.title
       : t("commandPalette.title");
   const dialogPlaceholder =
-    mode === "quick-pick" && quickPick
-      ? (quickPick.placeholder ?? quickPick.title)
+    presentedMode === "quick-pick" && presentedQuickPick
+      ? (presentedQuickPick.placeholder ?? presentedQuickPick.title)
       : t("commandPalette.placeholder.commands");
   const commandContent: ReactNode =
-    mode === "quick-pick" && quickPick ? (
+    presentedMode === "quick-pick" && presentedQuickPick ? (
       <QuickPickView
         onAccept={handleAcceptQuickPickItem}
         query={normalizedQuery}
-        quickPick={quickPick}
+        quickPick={presentedQuickPick}
       />
     ) : null;
   const actionContent: ReactNode =
@@ -422,7 +438,7 @@ export function CommandPalette() {
         {quickPick?.onAcceptQuery ? null : (
           <CommandList className="max-h-[min(60vh,520px)]">
             <CommandEmpty>
-              {mode === "quick-pick"
+              {presentedMode === "quick-pick"
                 ? t("commandPalette.emptyQuickPick")
                 : t("commandPalette.empty")}
             </CommandEmpty>
