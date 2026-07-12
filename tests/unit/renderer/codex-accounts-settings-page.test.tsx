@@ -150,7 +150,7 @@ describe("AccountsSettingsPage", () => {
     expect(screen.getByTestId("codex-cost-card")).toBeDefined();
     expect(screen.getByText("PRO")).toBeDefined();
     expect(screen.getByText("Last 31 days cost")).toBeDefined();
-    expect(container.querySelectorAll(".pier-codex-cost-bars")).toHaveLength(1);
+    expect(container.querySelectorAll('[data-slot="chart"]')).toHaveLength(1);
     expect(
       screen.queryByText(
         "Manage Codex accounts and compare session and weekly remaining limits."
@@ -171,16 +171,32 @@ describe("AccountsSettingsPage", () => {
       ),
       "utf8"
     );
+    const accountDisplay = readFileSync(
+      resolve(
+        process.cwd(),
+        "packages/plugin-codex/src/renderer/account-display.tsx"
+      ),
+      "utf8"
+    );
 
-    expect(styles).toContain("@media (max-width: 48rem)");
+    expect(styles).not.toContain("@media");
+    expect(styles).not.toContain(".pier-codex-");
     expect(costVisualization).toContain("@[22rem]:grid-cols-");
+    expect(costVisualization).toContain("max-[48rem]:grid-cols-2");
     expect(costVisualization).toContain("var(--chart-1)");
     expect(costVisualization).not.toContain("var(--data-cost)");
     expect(costVisualization).toContain(
       'presentation?: "responsive" | "settings"'
     );
     expect(costVisualization).toContain('presentation === "settings"');
-    expect(costVisualization).toContain("pier-codex-cost-settings-metrics");
+    expect(costVisualization).toContain("h-15");
+    expect(accountDisplay).toContain(
+      "grid-cols-[auto_15rem_minmax(17rem,1fr)_auto]"
+    );
+    expect(accountDisplay).not.toContain(
+      "grid-cols-[auto_20rem_minmax(17rem,1fr)_auto]"
+    );
+    expect(accountDisplay).not.toContain("minmax(11rem,1.1fr)");
     expect(styles).not.toMatch(/#[0-9a-f]{3,8}/i);
     expect(costVisualization).not.toMatch(/#[0-9a-f]{3,8}/i);
   });
@@ -194,18 +210,32 @@ describe("AccountsSettingsPage", () => {
       resolve(process.cwd(), "src/renderer/app/globals.css"),
       "utf8"
     );
+    const uiPackage = readFileSync(
+      resolve(process.cwd(), "packages/ui/package.json"),
+      "utf8"
+    );
+    const pluginEntry = readFileSync(
+      resolve(process.cwd(), "packages/plugin-codex/src/renderer/index.tsx"),
+      "utf8"
+    );
 
-    expect(styles).toContain(
-      '@import "tailwindcss/utilities.css" layer(utilities) source(none) prefix(codex)'
-    );
-    expect(styles).toContain(
-      '@import "tailwindcss/theme.css" layer(theme) prefix(codex)'
-    );
+    expect(styles).toContain('@reference "@pier/ui/tailwind-theme.css"');
+    expect(styles).toContain('@reference "tailwindcss/theme.css"');
     expect(styles).toContain('@source "./"');
-    expect(styles).toContain("@theme inline");
+    expect(styles).toContain(
+      "@scope ([data-pier-codex-scope]) {\n  @tailwind utilities source(none);\n}"
+    );
     expect(styles).not.toContain('@import "tailwindcss";');
-    expect(styles).not.toContain("@reference");
+    expect(styles).not.toContain('@import "tailwindcss/utilities.css"');
+    expect(styles).not.toContain("prefix(codex)");
+    expect(styles).not.toContain("@theme inline");
+    expect(styles).not.toContain("src/renderer");
+    expect(pluginEntry).toContain('data-pier-codex-scope=""');
+    expect(globals).toContain('@import "@pier/ui/tailwind-theme.css"');
     expect(globals).not.toContain("@source ../../../packages/plugin-codex");
+    expect(uiPackage).toContain(
+      '"./tailwind-theme.css": "./src/tailwind-theme.css"'
+    );
   });
 
   it("replaces Node environment checks in the browser plugin bundle", () => {
@@ -358,7 +388,7 @@ describe("AccountsSettingsPage", () => {
     expect(screen.getByText("62%")).toBeDefined();
     expect(screen.getByText("36%")).toBeDefined();
     expect(screen.getAllByText("$1.25")).toHaveLength(2);
-    expect(container.querySelectorAll(".pier-codex-cost-bars")).toHaveLength(1);
+    expect(container.querySelectorAll('[data-slot="chart"]')).toHaveLength(1);
   });
 
   it("refreshes cost independently with loading and success feedback", async () => {
@@ -385,9 +415,7 @@ describe("AccountsSettingsPage", () => {
     await vi.waitFor(() => {
       expect(refreshButton).toBeDisabled();
       expect(refreshButton).toHaveAttribute("aria-busy", "true");
-      expect(refreshButton.querySelector("svg")).toHaveClass(
-        "codex:animate-spin"
-      );
+      expect(refreshButton.querySelector("svg")).toHaveClass("animate-spin");
     });
 
     await act(async () => {
@@ -498,7 +526,7 @@ describe("AccountsSettingsPage", () => {
     expect(screen.queryByText("7-day quota")).toBeNull();
     expect(screen.queryByText("No usage data")).toBeNull();
     expect(
-      container.querySelector('.pier-codex-quota-grid[data-count="1"]')
+      container.querySelector('[data-slot="codex-quota-group"][data-count="1"]')
     ).not.toBeNull();
   });
 
@@ -556,10 +584,34 @@ describe("AccountsSettingsPage", () => {
 
   it("renders dashed empty state when no managed accounts", async () => {
     const { context } = contextWithSnapshot(emptySnapshot());
-    render(<AccountsSettingsPage context={context} />);
+    const { container } = render(<AccountsSettingsPage context={context} />);
 
     expect(await screen.findByText("No managed accounts")).toBeDefined();
     expect(screen.queryByText("System default")).toBeNull();
+    expect(container.querySelector('[data-slot="empty"]')).not.toBeNull();
+  });
+
+  it("keeps machine-scoped cost visible without a managed account", async () => {
+    const snapshot: CodexAccountsSnapshot = {
+      ...emptySnapshot(),
+      costUsage: {
+        buckets: [],
+        coverage: { complete: true, from: "2026-06-12", to: "2026-07-12" },
+        observedAt: Date.now(),
+        summary: {
+          estimatedCostMicrousd: 350_000,
+          latestDayTokens: 175,
+          periodTokens: 175,
+          todayEstimatedCostMicrousd: 350_000,
+        },
+      },
+    };
+    const { context } = contextWithSnapshot(snapshot);
+    render(<AccountsSettingsPage context={context} />);
+
+    expect(await screen.findByText("No managed accounts")).toBeDefined();
+    expect(screen.getByTestId("codex-cost-card")).toBeDefined();
+    expect(screen.getAllByText("$0.35")).toHaveLength(2);
   });
 
   it("opens account authorization before starting the browser login", async () => {
@@ -770,9 +822,7 @@ describe("AccountsSettingsPage", () => {
     await vi.waitFor(() => {
       expect(refreshButton).toBeDisabled();
       expect(refreshButton).toHaveAttribute("aria-busy", "true");
-      expect(refreshButton.querySelector("svg")).toHaveClass(
-        "codex:animate-spin"
-      );
+      expect(refreshButton.querySelector("svg")).toHaveClass("animate-spin");
     });
 
     await act(async () => {
@@ -1018,7 +1068,7 @@ describe("AccountsSettingsPage", () => {
     expect(container.textContent).toContain("10%");
   });
 
-  it("renders one compact state for missing and failed usage", async () => {
+  it("distinguishes initial loading, successful empty usage, and failure", async () => {
     const now = Date.now();
     const snap = snapshotWithAccount({
       accounts: [
@@ -1030,6 +1080,17 @@ describe("AccountsSettingsPage", () => {
         },
         {
           id: "acc-2",
+          label: "empty@codex.dev",
+          status: "available",
+          error: null,
+          usage: {
+            fetchedAt: now,
+            status: "ok",
+            windows: [],
+          },
+        },
+        {
+          id: "acc-3",
           label: "failed@codex.dev",
           status: "error",
           error: null,
@@ -1046,6 +1107,9 @@ describe("AccountsSettingsPage", () => {
     render(<AccountsSettingsPage context={context} />);
 
     await screen.findByText("missing@codex.dev");
+    expect(
+      document.querySelectorAll('[data-slot="codex-usage-loading"]')
+    ).toHaveLength(1);
     expect(screen.getAllByText("No usage data")).toHaveLength(1);
     expect(screen.getAllByText("Usage update failed")).toHaveLength(1);
   });

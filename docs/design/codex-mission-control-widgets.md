@@ -63,10 +63,10 @@ ResizeObserver 测量 Header、按钮和间距
 ```text
 Codex CLI / OAuth ──> 插件账号与配额服务 ──> RPC 快照 ──> 账号与配额物料 / 设置页
 本机会话日志 ──────> 插件成本聚合服务 ────> RPC 快照 ──> 成本物料 / 设置页
-globals 数据令牌 ──> 共享 theme-tokens.css ─> 插件独立 Tailwind 构建 ─> 注入样式
+globals 数据令牌 ──> @pier/ui 语义映射 ──> 插件独立 Tailwind 构建 ──> 注入样式
 ```
 
-插件构建只扫描插件 renderer 源码，不输出 preflight、全局 reset 或宿主 Dockview 工具类。宿主不通过 `@source` 扫描 Codex 插件源码。
+插件构建通过 `@reference "@pier/ui/tailwind-theme.css"` 使用公开的语义映射，只扫描插件 renderer 源码并生成实际使用的无前缀 utility。生成规则放在 `@scope ([data-pier-codex-scope])` 中，只作用于插件贡献根节点和显式标记的 Portal，不参与宿主设置页等其他界面的级联。插件不反向读取宿主源码，也不重复输出主题定义、preflight、全局 reset 或宿主 Dockview 工具类。产品颜色值仍由宿主 `globals.css` 唯一维护，宿主不通过 `@source` 扫描 Codex 插件源码。
 
 ## 禁止的反模式
 
@@ -77,6 +77,7 @@ globals 数据令牌 ──> 共享 theme-tokens.css ─> 插件独立 Tailwind 
 - 不使用主题 `primary`、成功绿或业务文件中的具体颜色表达普通额度与成本。
 - 不用物料 `size` 推算像素布局；内容响应只使用容器查询。
 - 不让 renderer 扫描日志、保存凭据或重新定义 main 数据契约。
+- 不把插件生成的无前缀 utility 注入全局作用域；插件 Portal 必须显式进入插件样式作用域。
 
 ## 验收矩阵
 

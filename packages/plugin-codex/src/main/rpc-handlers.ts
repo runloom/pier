@@ -1,4 +1,5 @@
 import type { MainPluginContext } from "@pier/plugin-api/main";
+import { z } from "zod/mini";
 import {
   addAccountPayloadSchema,
   emptyRpcPayloadSchema,
@@ -9,11 +10,22 @@ import {
 import type { CodexAccountsService } from "./accounts-service-contract.ts";
 
 export function registerCodexRpcHandlers(options: {
+  acquireUsagePolling: (consumerId: string) => Promise<void>;
   refreshLocalUsage: () => Promise<void>;
+  releaseUsagePolling: (consumerId: string) => void;
   rpc: MainPluginContext["rpc"];
   service: CodexAccountsService;
 }): void {
-  const { refreshLocalUsage, rpc, service } = options;
+  const {
+    acquireUsagePolling,
+    refreshLocalUsage,
+    releaseUsagePolling,
+    rpc,
+    service,
+  } = options;
+  const usagePollingPayloadSchema = z.object({
+    consumerId: z.string().check(z.minLength(1), z.maxLength(200)),
+  });
   rpc.handle("accounts.snapshot", async (payload) => {
     emptyRpcPayloadSchema.parse(payload);
     return service.snapshot();
@@ -41,6 +53,16 @@ export function registerCodexRpcHandlers(options: {
       ...(request.accountId ? { accountId: request.accountId } : {}),
       force: true,
     });
+    return null;
+  });
+  rpc.handle("accounts.usagePolling.acquire", async (payload) => {
+    const { consumerId } = usagePollingPayloadSchema.parse(payload);
+    await acquireUsagePolling(consumerId);
+    return null;
+  });
+  rpc.handle("accounts.usagePolling.release", async (payload) => {
+    const { consumerId } = usagePollingPayloadSchema.parse(payload);
+    releaseUsagePolling(consumerId);
     return null;
   });
   rpc.handle("usage.refreshCost", async (payload) => {

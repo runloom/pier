@@ -35,7 +35,9 @@ export const plugin: MainPluginModule = {
       cachePath: join(context.paths.workDir, "local-usage-cache.json"),
       codexHome,
     });
+    const usagePollingConsumers = new Set<string>();
     const service = createCodexAccountsService({
+      hasVisibleTarget: () => usagePollingConsumers.size > 0,
       managedBaseDir,
       provider,
       stateStore,
@@ -66,7 +68,20 @@ export const plugin: MainPluginModule = {
       return localUsageRefresh;
     }
     registerCodexRpcHandlers({
+      acquireUsagePolling: (consumerId) => {
+        const shouldRefresh = usagePollingConsumers.size === 0;
+        usagePollingConsumers.add(consumerId);
+        if (shouldRefresh) {
+          service.refreshAllUsage().catch((error: unknown) => {
+            context.logger.warn("[pier.codex] usage refresh failed", error);
+          });
+        }
+        return Promise.resolve();
+      },
       refreshLocalUsage,
+      releaseUsagePolling: (consumerId) => {
+        usagePollingConsumers.delete(consumerId);
+      },
       rpc: context.rpc,
       service,
     });
@@ -80,6 +95,7 @@ export const plugin: MainPluginModule = {
     context.logger.info("[pier.codex] activated");
     return () => {
       clearTimeout(initialUsageRefresh);
+      usagePollingConsumers.clear();
       service.dispose();
     };
   },

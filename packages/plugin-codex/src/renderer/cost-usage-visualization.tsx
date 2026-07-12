@@ -93,7 +93,7 @@ export function CostDataQualityBadge({
                 )}
           </Badge>
         </TooltipTrigger>
-        <TooltipContent className="codex:max-w-96">
+        <TooltipContent className="max-w-96" data-pier-codex-scope="">
           {messages.join(" · ") ||
             t(
               "pier.codex.accounts.settings.partialDataUnknown",
@@ -152,7 +152,7 @@ function CostBarChart({
 }): JSX.Element {
   return (
     <ChartContainer
-      className={cn("pier-codex-cost-bars", className)}
+      className={cn("aspect-auto", className)}
       config={COST_CHART_CONFIG}
       initialDimension={{ height: 80, width: 320 }}
     >
@@ -265,13 +265,13 @@ export function CostUsageVisualization({
   ];
 
   return (
-    <div className="codex:flex codex:min-h-0 codex:flex-1 codex:flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div
         className={cn(
-          "codex:grid codex:grid-cols-1 codex:gap-3",
+          "grid grid-cols-1 gap-3",
           presentation === "settings"
-            ? "pier-codex-cost-settings-metrics"
-            : "codex:@[22rem]:grid-cols-3 codex:@[34rem]:grid-cols-4"
+            ? "grid-cols-4 gap-6 max-[36rem]:grid-cols-1 max-[48rem]:grid-cols-2 max-[48rem]:gap-3.5"
+            : "@[22rem]:grid-cols-3 @[34rem]:grid-cols-4"
         )}
       >
         {metrics.map((metric) => (
@@ -279,18 +279,18 @@ export function CostUsageVisualization({
             className={cn(
               presentation === "responsive" &&
                 metric.id !== "today" &&
-                "codex:@[22rem]:block codex:hidden",
+                "@[22rem]:block hidden",
               presentation === "responsive" &&
                 metric.id === "latest-tokens" &&
-                "codex:@[34rem]:block codex:@[22rem]:hidden"
+                "@[34rem]:block @[22rem]:hidden"
             )}
             data-cost-metric={metric.id}
             key={metric.id}
           >
-            <span className="codex:block codex:truncate codex:text-muted-foreground codex:text-xs">
+            <span className="block truncate text-muted-foreground text-xs">
               {metric.label}
             </span>
-            <strong className="pier-codex-font-semibold pier-codex-tabular-nums pier-codex-tracking-tight codex:mt-1 codex:block codex:text-lg">
+            <strong className="mt-1 block font-semibold text-lg tabular-nums tracking-tight">
               {metric.value}
             </strong>
           </div>
@@ -302,28 +302,26 @@ export function CostUsageVisualization({
           "Daily estimated cost for the last {count} days"
         ).replace("{count}", periodDays)}
         className={cn(
-          "codex:mt-3",
-          presentation === "settings"
-            ? "pier-codex-cost-settings-chart"
-            : "codex:min-h-20 codex:flex-1"
+          "mt-3",
+          presentation === "settings" ? "h-15" : "min-h-20 flex-1"
         )}
       >
         {presentation === "settings" ? (
           <CostBarChart
             buckets={chartData}
-            className="codex:h-full codex:w-full"
+            className="h-full w-full"
             language={language}
           />
         ) : (
           <>
             <CostBarChart
               buckets={chartData.slice(-7)}
-              className="codex:@[22rem]:hidden codex:h-full codex:min-h-20 codex:w-full"
+              className="@[22rem]:hidden h-full min-h-20 w-full"
               language={language}
             />
             <CostBarChart
               buckets={chartData}
-              className="codex:@[22rem]:flex codex:hidden codex:h-full codex:min-h-20 codex:w-full"
+              className="@[22rem]:flex hidden h-full min-h-20 w-full"
               language={language}
             />
           </>

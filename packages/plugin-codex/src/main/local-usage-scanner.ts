@@ -17,6 +17,11 @@ import { scanLocalUsageFile } from "./local-usage-session-parser.ts";
 const MAX_FILES = 5000;
 const STAT_CONCURRENCY = 32;
 
+export interface UsageCandidate {
+  date: string;
+  path: string;
+}
+
 export interface LocalUsageDiagnostics {
   candidateFiles: number;
   deduplicatedEvents: number;
@@ -67,13 +72,13 @@ async function recentSessionFiles(
   codexHome: string,
   from: string,
   to: string
-): Promise<string[]> {
-  const files: string[] = [];
+): Promise<UsageCandidate[]> {
+  const files: UsageCandidate[] = [];
   for (const date of datesInRange(from, to)) {
     const dayDir = join(codexHome, "sessions", ...date.split("-"));
     for (const entry of await safeReadDir(dayDir)) {
       if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-        files.push(join(dayDir, entry.name));
+        files.push({ date, path: join(dayDir, entry.name) });
       }
     }
   }
@@ -84,8 +89,8 @@ async function recentArchivedFiles(
   codexHome: string,
   from: string,
   to: string
-): Promise<string[]> {
-  const files: string[] = [];
+): Promise<UsageCandidate[]> {
+  const files: UsageCandidate[] = [];
   async function visit(dir: string): Promise<void> {
     for (const entry of await safeReadDir(dir)) {
       const path = join(dir, entry.name);
@@ -95,7 +100,7 @@ async function recentArchivedFiles(
       }
       if (!(entry.isFile() && entry.name.endsWith(".jsonl"))) continue;
       const date = /rollout-(\d{4}-\d{2}-\d{2})/.exec(entry.name)?.[1];
-      if (date && date >= from && date <= to) files.push(path);
+      if (date && date >= from && date <= to) files.push({ date, path });
     }
   }
   await visit(join(codexHome, "archived_sessions"));
@@ -106,12 +111,30 @@ async function candidateFiles(
   codexHome: string,
   from: string,
   to: string
-): Promise<string[]> {
+): Promise<UsageCandidate[]> {
   const paths = await Promise.all([
     recentSessionFiles(codexHome, from, to),
     recentArchivedFiles(codexHome, from, to),
   ]);
-  return [...new Set(paths.flat())].sort();
+  const candidatesByPath = new Map<string, UsageCandidate>();
+  for (const candidate of paths.flat()) {
+    candidatesByPath.set(candidate.path, candidate);
+  }
+  return [...candidatesByPath.values()];
+}
+
+export function selectRecentCandidatePaths(
+  candidates: readonly UsageCandidate[],
+  limit: number
+): string[] {
+  return [...candidates]
+    .sort(
+      (left, right) =>
+        right.date.localeCompare(left.date) ||
+        right.path.localeCompare(left.path)
+    )
+    .slice(0, limit)
+    .map((candidate) => candidate.path);
 }
 
 function lineageRoot(
@@ -136,8 +159,8 @@ async function scanLocalUsage(
 ): Promise<LocalUsageScanResult> {
   const from = dateDaysAgo(COST_USAGE_PERIOD_DAYS - 1);
   const to = new Date().toISOString().slice(0, 10);
-  const allPaths = await candidateFiles(codexHome, from, to);
-  const paths = allPaths.slice(0, MAX_FILES);
+  const allCandidates = await candidateFiles(codexHome, from, to);
+  const paths = selectRecentCandidatePaths(allCandidates, MAX_FILES);
   const cache = await readLocalUsageCache(cachePath);
   const entries: Record<string, FileUsage> = {};
   const diagnostics: LocalUsageDiagnostics = {
@@ -148,7 +171,7 @@ async function scanLocalUsage(
     malformedLines: 0,
     parsedFiles: 0,
     reusedFiles: 0,
-    truncatedFiles: Math.max(0, allPaths.length - paths.length),
+    truncatedFiles: Math.max(0, allCandidates.length - paths.length),
     uniqueEvents: 0,
   };
 

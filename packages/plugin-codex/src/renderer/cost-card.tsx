@@ -48,7 +48,7 @@ export function CostCard({
             "Estimated API-equivalent cost from local Codex session logs"
           )}
         </CardDescription>
-        <CardAction className="codex:flex codex:items-center codex:gap-1">
+        <CardAction className="flex items-center gap-1">
           <CostDataQualityBadge snapshot={snapshot} t={t} />
           <TooltipProvider delayDuration={200}>
             <Tooltip>
@@ -67,14 +67,13 @@ export function CostCard({
                 >
                   <RefreshCw
                     className={cn(
-                      refreshing &&
-                        "codex:animate-spin codex:motion-reduce:animate-none"
+                      refreshing && "animate-spin motion-reduce:animate-none"
                     )}
                     data-icon="inline-start"
                   />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
+              <TooltipContent data-pier-codex-scope="">
                 {t("pier.codex.accounts.settings.refreshCost", "Refresh cost")}
               </TooltipContent>
             </Tooltip>
@@ -91,7 +90,7 @@ export function CostCard({
       </CardContent>
       {snapshot ? (
         <CardFooter>
-          <span className="pier-codex-updated-at">
+          <span className="text-muted-foreground text-xs tabular-nums">
             {`${t("pier.codex.accounts.settings.updated", "Updated")} ${formatRelativeTime(snapshot.observedAt, Date.now(), language)}`}
           </span>
         </CardFooter>

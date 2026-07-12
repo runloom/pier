@@ -36,6 +36,7 @@ export interface CodexAccountSummary {
   label: string;
   planType?: string;
   status: CodexAccountStatus;
+  /** null 表示尚未完成首次用量请求；对象表示请求已完成（包括空结果或错误）。 */
   usage?: CodexUsageSnapshot | null;
 }
 

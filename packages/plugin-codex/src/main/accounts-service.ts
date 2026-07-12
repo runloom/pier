@@ -462,9 +462,11 @@ export function createCodexAccountsService(
           /* fire-and-forget */
         });
       }, USAGE_POLL_INTERVAL_MS);
-      refreshAllUsage().catch(() => {
-        /* fire-and-forget */
-      });
+      if (hasVisibleTarget()) {
+        refreshAllUsage().catch(() => {
+          /* fire-and-forget */
+        });
+      }
     },
     dispose(): void {
       watchDispose?.();

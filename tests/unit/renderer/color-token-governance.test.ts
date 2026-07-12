@@ -181,7 +181,7 @@ describe("color token governance", () => {
       "utf8"
     );
     const themeTokens = readFileSync(
-      join(ROOT, "src/renderer/app/theme-tokens.css"),
+      join(ROOT, "packages/ui/src/tailwind-theme.css"),
       "utf8"
     );
     const progress = readFileSync(

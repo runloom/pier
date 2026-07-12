@@ -12,18 +12,16 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@pier/ui/item.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
-import {
-  WidgetEmpty,
-  WidgetError,
-  WidgetSkeleton,
-} from "@pier/ui/widget-state.tsx";
+import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import type { JSX } from "react";
 import { useEffect, useRef, useState } from "react";
 import { AccountAvatar, resetCredits } from "./account-display.tsx";
 import { AccountPicker } from "./account-picker.tsx";
 import { UsageMeter } from "./usage-meter.tsx";
 import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
+import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
 
 /**
  * Codex account and quota widget. The host owns the outer Card and title.
@@ -36,20 +34,29 @@ export interface AccountsWidgetProps
 
 export function AccountsWidget({
   context,
+  instanceId,
   refreshToken,
   visible,
 }: AccountsWidgetProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
   const prevRefresh = useRef(refreshToken);
+  const refreshRequestId = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const t = (key: string, fallback: string): string =>
     context.i18n.t(key, fallback);
 
-  // Refresh usage when refreshToken increments
+  useUsagePollingLease(context, `widget:${instanceId}`, visible);
+
+  // Refresh usage when refreshToken increments.
   useEffect(() => {
-    if (!(visible && refreshToken !== prevRefresh.current)) return;
+    if (!visible) {
+      refreshRequestId.current += 1;
+      setRefreshing(false);
+      return;
+    }
+    if (refreshToken === prevRefresh.current) return;
     prevRefresh.current = refreshToken;
-    let cancelled = false;
+    const requestId = ++refreshRequestId.current;
     setRefreshing(true);
     context.rpc
       .invoke("accounts.refreshUsage", null)
@@ -73,10 +80,12 @@ export function AccountsWidget({
           .catch(() => undefined);
       })
       .finally(() => {
-        if (!cancelled) setRefreshing(false);
+        if (refreshRequestId.current === requestId) setRefreshing(false);
       });
     return () => {
-      cancelled = true;
+      if (refreshRequestId.current === requestId) {
+        refreshRequestId.current += 1;
+      }
     };
   }, [refreshToken, visible, context]);
 
@@ -98,7 +107,6 @@ export function AccountsWidget({
     (account) => account.id === snapshot.activeAccountId
   );
   const usage = snapshot.activeUsage;
-  const hasUsage = usage?.status === "ok";
   const fetchedLabel = usage
     ? formatRelativeTime(usage.fetchedAt, Date.now(), context.i18n.language())
     : null;
@@ -108,21 +116,44 @@ export function AccountsWidget({
   const accountLabel =
     activeAccount?.label ??
     t("pier.codex.widget.noActiveAccount", "No active account");
+  let usageContent: JSX.Element;
+  if (!usage) {
+    usageContent = (
+      <Skeleton
+        className="min-h-20 w-full flex-1"
+        data-slot="codex-usage-loading"
+      />
+    );
+  } else if (usage.status === "ok") {
+    usageContent = (
+      <UsageMeter
+        language={context.i18n.language()}
+        t={t}
+        windows={usage.windows}
+      />
+    );
+  } else {
+    usageContent = (
+      <WidgetError
+        message={
+          usage.error ??
+          t("pier.codex.accounts.settings.usageFailed", "Usage update failed")
+        }
+      />
+    );
+  }
 
   return (
     <div
-      className="pier-codex-account-quota-widget codex:flex codex:h-full codex:min-h-0 codex:flex-col codex:gap-3 codex:p-(--card-spacing) codex:text-sm"
+      className="pier-codex-account-quota-widget flex h-full min-h-0 flex-col gap-3 p-(--card-spacing) text-sm"
       data-slot="codex-accounts-widget"
     >
-      <Item className="codex:flex-nowrap codex:px-0 codex:py-0" size="xs">
+      <Item className="flex-nowrap px-0 py-0" size="xs">
         <ItemMedia align="center">
           <AccountAvatar label={accountLabel} />
         </ItemMedia>
-        <ItemContent className="codex:min-w-0 codex:basis-0">
-          <ItemTitle
-            className="codex:block codex:w-full codex:truncate"
-            title={accountLabel}
-          >
+        <ItemContent className="min-w-0 basis-0">
+          <ItemTitle className="block w-full truncate" title={accountLabel}>
             {accountLabel}
           </ItemTitle>
           <ItemDescription>
@@ -134,10 +165,7 @@ export function AccountsWidget({
                 )}
             </span>
             {fetchedLabel ? (
-              <span className="codex:@[22rem]:inline codex:hidden">
-                {" "}
-                · {fetchedLabel}
-              </span>
+              <span className="@[22rem]:inline hidden"> · {fetchedLabel}</span>
             ) : null}
           </ItemDescription>
         </ItemContent>
@@ -145,17 +173,17 @@ export function AccountsWidget({
           <Badge size="xs" variant="neutral">
             <Spinner
               aria-label={t("pier.codex.widget.refreshing", "Refreshing")}
-              className="codex:motion-reduce:animate-none"
+              className="motion-reduce:animate-none"
               data-icon="inline-start"
             />
-            <span className="codex:@[34rem]:inline codex:hidden">
+            <span className="@[34rem]:inline hidden">
               {t("pier.codex.widget.refreshing", "Refreshing")}
             </span>
           </Badge>
         ) : null}
         {creditsLabel ? (
           <Badge
-            className="codex:@[34rem]:inline-flex codex:hidden"
+            className="@[34rem]:inline-flex hidden"
             size="xs"
             variant="neutral"
           >
@@ -167,21 +195,7 @@ export function AccountsWidget({
         </ItemActions>
       </Item>
 
-      {hasUsage ? (
-        <UsageMeter
-          language={context.i18n.language()}
-          t={t}
-          windows={usage.windows}
-        />
-      ) : (
-        <WidgetEmpty
-          hint={t(
-            "pier.codex.widget.noUsageHint",
-            "Usage will appear after the next refresh."
-          )}
-          title={t("pier.codex.widget.noUsageData", "No usage data")}
-        />
-      )}
+      {usageContent}
     </div>
   );
 }

@@ -28,9 +28,13 @@ describe("Codex plugin RPC handlers", () => {
   it("keeps quota refresh independent from local cost scanning", async () => {
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
     const service = serviceStub();
+    const acquireUsagePolling = vi.fn(async () => undefined);
     const refreshLocalUsage = vi.fn(async () => undefined);
+    const releaseUsagePolling = vi.fn();
     registerCodexRpcHandlers({
+      acquireUsagePolling,
       refreshLocalUsage,
+      releaseUsagePolling,
       rpc: {
         handle: (method, handler) => {
           handlers.set(method, handler);
@@ -51,9 +55,13 @@ describe("Codex plugin RPC handlers", () => {
   it("refreshes local cost only through the dedicated RPC", async () => {
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
     const service = serviceStub();
+    const acquireUsagePolling = vi.fn(async () => undefined);
     const refreshLocalUsage = vi.fn(async () => undefined);
+    const releaseUsagePolling = vi.fn();
     registerCodexRpcHandlers({
+      acquireUsagePolling,
       refreshLocalUsage,
+      releaseUsagePolling,
       rpc: {
         handle: (method, handler) => {
           handlers.set(method, handler);
@@ -66,5 +74,32 @@ describe("Codex plugin RPC handlers", () => {
 
     expect(refreshLocalUsage).toHaveBeenCalledOnce();
     expect(service.refreshUsage).not.toHaveBeenCalled();
+  });
+
+  it("tracks renderer polling leases through dedicated RPC methods", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const acquireUsagePolling = vi.fn(async () => undefined);
+    const releaseUsagePolling = vi.fn();
+    registerCodexRpcHandlers({
+      acquireUsagePolling,
+      refreshLocalUsage: vi.fn(async () => undefined),
+      releaseUsagePolling,
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service: serviceStub(),
+    });
+
+    await handlers.get("accounts.usagePolling.acquire")?.({
+      consumerId: "widget:account-1",
+    });
+    await handlers.get("accounts.usagePolling.release")?.({
+      consumerId: "widget:account-1",
+    });
+
+    expect(acquireUsagePolling).toHaveBeenCalledWith("widget:account-1");
+    expect(releaseUsagePolling).toHaveBeenCalledWith("widget:account-1");
   });
 });

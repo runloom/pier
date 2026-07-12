@@ -83,12 +83,16 @@ export function AccountPicker({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent data-pier-codex-scope="">
             {t("pier.codex.widget.switchAccount", "Switch account")}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent align="end" className="codex:min-w-64">
+      <DropdownMenuContent
+        align="end"
+        className="min-w-64"
+        data-pier-codex-scope=""
+      >
         <DropdownMenuGroup>
           {snapshot.accounts.map((account) => (
             <DropdownMenuItem
@@ -99,12 +103,10 @@ export function AccountPicker({
               }}
             >
               {account.id === snapshot.activeAccountId ? <Check /> : null}
-              <span className="codex:min-w-0">
-                <span className="codex:block codex:truncate">
-                  {account.label}
-                </span>
+              <span className="min-w-0">
+                <span className="block truncate">{account.label}</span>
                 {account.planType ? (
-                  <span className="codex:block codex:text-muted-foreground codex:text-xs">
+                  <span className="block text-muted-foreground text-xs">
                     {account.planType.toUpperCase()}
                   </span>
                 ) : null}

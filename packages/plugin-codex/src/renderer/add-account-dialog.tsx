@@ -139,6 +139,7 @@ export function AddAccountDialog({
         </Button>
       </DialogTrigger>
       <DialogContent
+        data-pier-codex-scope=""
         initialFocus="firstFocusable"
         onEscapeKeyDown={(event) => {
           if (waiting) event.preventDefault();

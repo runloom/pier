@@ -109,33 +109,30 @@ export function UsageProgress({
 
   return (
     <div
-      className="codex:flex codex:min-w-0 codex:flex-col codex:gap-1.5"
+      className="flex min-w-0 flex-col gap-1.5"
       data-position={position}
       data-risk={risk}
       data-slot="codex-usage-progress"
       data-window-kind={kind}
     >
-      <div className="codex:flex codex:items-center codex:justify-between codex:gap-3">
+      <div className="flex items-center justify-between gap-3">
         {showLabel ? (
-          <span
-            className="pier-codex-font-medium codex:min-w-0 codex:truncate codex:text-xs"
-            title={label}
-          >
+          <span className="min-w-0 truncate font-medium text-xs" title={label}>
             {label}
           </span>
         ) : null}
-        <span className="pier-codex-font-semibold pier-codex-tabular-nums pier-codex-tracking-tight codex:shrink-0 codex:text-lg">
+        <span className="shrink-0 font-semibold text-lg tabular-nums tracking-tight">
           {remainingLabel}
         </span>
       </div>
       <Progress
         aria-label={`${label}: ${t("pier.codex.widget.remaining", "remaining")} ${remainingLabel}, ${riskLabel(risk, t)}`}
-        className="codex:h-1"
+        className="h-1"
         value={remaining}
         variant={usageProgressVariant(risk)}
       />
       {reset ? (
-        <div className="codex:flex codex:min-w-0 codex:items-center codex:justify-between codex:gap-2 codex:text-muted-foreground codex:text-xs">
+        <div className="flex min-w-0 items-center justify-between gap-2 text-muted-foreground text-xs">
           {risk === "normal" ? (
             <span />
           ) : (
@@ -146,7 +143,7 @@ export function UsageProgress({
               {riskLabel(risk, t)}
             </Badge>
           )}
-          <span className="pier-codex-tabular-nums codex:truncate codex:text-right">
+          <span className="truncate text-right tabular-nums">
             {t("pier.codex.widget.resetsIn", "Resets in")} {reset}
           </span>
         </div>
@@ -218,17 +215,17 @@ export function UsageMeter({
   ): JSX.Element => (
     <div
       className={cn(
-        "codex:grid codex:min-w-0 codex:@[22rem]:grid-cols-2 codex:grid-cols-1 codex:@[34rem]:gap-4 codex:gap-3",
-        kind === "additional" && "codex:@[34rem]:grid codex:hidden"
+        "grid min-w-0 @[22rem]:grid-cols-2 grid-cols-1 @[34rem]:gap-4 gap-3",
+        kind === "additional" && "@[34rem]:grid hidden"
       )}
       data-window-group={kind}
     >
       {kind === "additional" ? (
-        <div className="codex:col-span-full codex:flex codex:items-center codex:gap-2">
-          <p className="codex:shrink-0 codex:text-muted-foreground codex:text-xs">
+        <div className="col-span-full flex items-center gap-2">
+          <p className="shrink-0 text-muted-foreground text-xs">
             {t("pier.codex.widget.modelQuotas", "Model-specific quotas")}
           </p>
-          <Separator className="codex:flex-1" />
+          <Separator className="flex-1" />
         </div>
       ) : null}
       {group.map((window, position) => (
@@ -248,7 +245,7 @@ export function UsageMeter({
   return (
     <div
       className={cn(
-        "codex:flex codex:min-w-0 codex:flex-col codex:gap-4",
+        "flex min-w-0 flex-col gap-4",
         "pier-codex-usage-meter",
         className
       )}

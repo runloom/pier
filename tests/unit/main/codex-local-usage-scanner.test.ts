@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createLocalUsageScanner } from "../../../packages/plugin-codex/src/main/local-usage-scanner.ts";
+import {
+  createLocalUsageScanner,
+  selectRecentCandidatePaths,
+} from "../../../packages/plugin-codex/src/main/local-usage-scanner.ts";
 
 const tempDirs: string[] = [];
 
@@ -71,6 +74,19 @@ async function fixture(): Promise<{
 }
 
 describe("local Codex usage scanner", () => {
+  it("keeps the newest session files when the scan is capped", () => {
+    expect(
+      selectRecentCandidatePaths(
+        [
+          { date: "2026-07-10", path: "/sessions/old.jsonl" },
+          { date: "2026-07-12", path: "/sessions/new.jsonl" },
+          { date: "2026-07-11", path: "/sessions/middle.jsonl" },
+        ],
+        2
+      )
+    ).toEqual(["/sessions/new.jsonl", "/sessions/middle.jsonl"]);
+  });
+
   it("publishes machine-scoped model token observations from session JSONL", async () => {
     const { cachePath, codexHome, date } = await fixture();
     await writeSession(codexHome, "session", [

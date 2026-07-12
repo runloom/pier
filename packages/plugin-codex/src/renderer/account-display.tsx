@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import { Empty, EmptyDescription, EmptyHeader } from "@pier/ui/empty.tsx";
 import {
   formatCount,
   formatDurationShort,
@@ -15,6 +16,7 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Progress } from "@pier/ui/progress.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
 import {
   Tooltip,
   TooltipContent,
@@ -72,21 +74,24 @@ function Quota({
   const risk = usageRisk(window.usedPercent);
   return (
     <div
-      className={compact ? "pier-codex-mini-quota" : "pier-codex-quota"}
+      className="min-w-0"
+      data-compact={compact || undefined}
       data-risk={risk}
       data-slot="codex-usage-progress"
     >
-      <div className="pier-codex-quota-heading">
-        <span>{label}</span>
-        <strong>{formatPercent(remaining / 100, language)}</strong>
+      <div className="mb-2.5 flex items-baseline justify-between gap-4">
+        <span className="font-semibold text-xs">{label}</span>
+        <strong className="font-semibold tabular-nums tracking-tight">
+          {formatPercent(remaining / 100, language)}
+        </strong>
       </div>
       <Progress
         aria-label={`${label} ${formatPercent(remaining / 100, language)}`}
-        className={compact ? "codex:h-1" : "codex:h-1.5"}
+        className={compact ? "h-1" : "h-1.5"}
         value={remaining}
         variant={usageProgressVariant(risk)}
       />
-      <div className="pier-codex-quota-meta">
+      <div className="mt-2 min-h-4 text-right text-muted-foreground text-xs tabular-nums">
         {reset
           ? `${t("pier.codex.widget.resetsIn", "Resets in")} ${reset}`
           : "—"}
@@ -99,21 +104,32 @@ export function QuotaGroup({
   compact = false,
   error,
   language,
+  loading = false,
   t,
   windows,
 }: {
   compact?: boolean;
   error: string | undefined;
   language: string;
+  loading?: boolean;
   t: Translate;
   windows: CodexUsageWindow[];
 }): JSX.Element {
+  if (loading) {
+    return (
+      <Skeleton
+        className={cn("w-full", compact ? "h-16" : "h-19")}
+        data-slot="codex-usage-loading"
+      />
+    );
+  }
+
   const errorState = error ? (
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
           <Badge
-            className="codex:col-span-full codex:justify-self-start"
+            className="col-span-full justify-self-start"
             role="status"
             tabIndex={0}
             variant="danger"
@@ -124,24 +140,35 @@ export function QuotaGroup({
             )}
           </Badge>
         </TooltipTrigger>
-        <TooltipContent className="codex:max-w-80">{error}</TooltipContent>
+        <TooltipContent className="max-w-80" data-pier-codex-scope="">
+          {error}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : null;
 
   if (windows.length === 0) {
     return (
-      <div className="pier-codex-quota-empty">
-        {errorState ??
-          t("pier.codex.accounts.settings.noUsage", "No usage data")}
-      </div>
+      <Empty className="min-h-19 gap-0 p-3">
+        {errorState ?? (
+          <EmptyHeader className="gap-0">
+            <EmptyDescription>
+              {t("pier.codex.accounts.settings.noUsage", "No usage data")}
+            </EmptyDescription>
+          </EmptyHeader>
+        )}
+      </Empty>
     );
   }
 
   return (
     <div
-      className={compact ? "pier-codex-mini-quotas" : "pier-codex-quota-grid"}
+      className={cn(
+        "grid min-w-0 grid-cols-2 gap-4 data-[count=1]:grid-cols-1 max-[36rem]:grid-cols-1",
+        compact && "flex-1 max-[48rem]:col-span-full max-[48rem]:row-start-2"
+      )}
       data-count={windows.length}
+      data-slot="codex-quota-group"
     >
       {windows.map((window) => (
         <Quota
@@ -198,13 +225,13 @@ function IconAction({
         >
           <Icon
             className={cn(
-              spinning && "codex:animate-spin codex:motion-reduce:animate-none"
+              spinning && "animate-spin motion-reduce:animate-none"
             )}
             data-icon="inline-start"
           />
         </Button>
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent data-pier-codex-scope="">{label}</TooltipContent>
     </Tooltip>
   );
 }
@@ -227,12 +254,16 @@ export function OtherAccount({
   t: Translate;
 }): JSX.Element {
   return (
-    <Item asChild className="pier-codex-account-row" size="sm">
+    <Item
+      asChild
+      className="!grid grid-cols-[auto_15rem_minmax(17rem,1fr)_auto] items-center gap-3 max-[48rem]:grid-cols-[auto_minmax(0,1fr)_auto]"
+      size="sm"
+    >
       <li data-testid="codex-account-usage-row">
         <ItemMedia align="center">
           <AccountAvatar label={account.label} />
         </ItemMedia>
-        <ItemContent className="codex:min-w-0">
+        <ItemContent className="w-60 min-w-0 flex-none max-[48rem]:w-auto max-[48rem]:flex-1">
           <ItemTitle title={account.label}>{account.label}</ItemTitle>
           <ItemDescription>
             {[
@@ -247,6 +278,7 @@ export function OtherAccount({
           compact
           error={account.usage?.error}
           language={language}
+          loading={!account.usage}
           t={t}
           windows={account.usage?.windows ?? []}
         />

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./tailwind-theme.css": "./src/tailwind-theme.css",
     "./*": "./src/*.tsx",
     "./utils": "./src/utils.ts"
   },

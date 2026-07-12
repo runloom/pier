@@ -29,14 +29,20 @@ export function CostWidget({
 }: CostWidgetProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
   const previousRefresh = useRef(refreshToken);
+  const refreshRequestId = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const t = (key: string, fallback: string): string =>
     context.i18n.t(key, fallback);
 
   useEffect(() => {
-    if (!(visible && refreshToken !== previousRefresh.current)) return;
+    if (!visible) {
+      refreshRequestId.current += 1;
+      setRefreshing(false);
+      return;
+    }
+    if (refreshToken === previousRefresh.current) return;
     previousRefresh.current = refreshToken;
-    let cancelled = false;
+    const requestId = ++refreshRequestId.current;
     setRefreshing(true);
     context.rpc
       .invoke("usage.refreshCost", null)
@@ -60,10 +66,12 @@ export function CostWidget({
           .catch(() => undefined);
       })
       .finally(() => {
-        if (!cancelled) setRefreshing(false);
+        if (refreshRequestId.current === requestId) setRefreshing(false);
       });
     return () => {
-      cancelled = true;
+      if (refreshRequestId.current === requestId) {
+        refreshRequestId.current += 1;
+      }
     };
   }, [context, refreshToken, visible]);
 
@@ -90,10 +98,10 @@ export function CostWidget({
 
   return (
     <div
-      className="pier-codex-cost-widget codex:flex codex:h-full codex:min-h-0 codex:flex-col codex:gap-3 codex:p-(--card-spacing)"
+      className="pier-codex-cost-widget flex h-full min-h-0 flex-col gap-3 p-(--card-spacing)"
       data-slot="codex-cost-widget"
     >
-      <div className="codex:@[34rem]:flex codex:hidden codex:min-h-5 codex:justify-end">
+      <div className="@[34rem]:flex hidden min-h-5 justify-end">
         <CostDataQualityBadge snapshot={snapshot.costUsage} t={t} />
       </div>
       <CostUsageVisualization
@@ -103,13 +111,13 @@ export function CostWidget({
       />
       <div
         aria-live="polite"
-        className="pier-codex-tabular-nums codex:flex codex:min-h-4 codex:items-center codex:justify-end codex:gap-1 codex:text-muted-foreground codex:text-xs"
+        className="flex min-h-4 items-center justify-end gap-1 text-muted-foreground text-xs tabular-nums"
       >
         {refreshing ? (
           <>
             <Spinner
               aria-label={t("pier.codex.widget.refreshing", "Refreshing")}
-              className="codex:motion-reduce:animate-none"
+              className="motion-reduce:animate-none"
             />
             <span>{t("pier.codex.widget.refreshing", "Refreshing")}</span>
           </>

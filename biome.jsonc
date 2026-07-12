@@ -16,6 +16,9 @@
       "!src/renderer/app/globals.css"
     ]
   },
+  "css": {
+    "parser": { "tailwindDirectives": true }
+  },
   "overrides": [
     {
       "includes": [
@@ -64,6 +67,12 @@
       "includes": ["src/renderer/app/globals.css"],
       "formatter": { "enabled": false },
       "linter": { "enabled": false }
+    },
+    {
+      "includes": ["packages/plugin-codex/src/renderer/styles.css"],
+      "linter": {
+        "rules": { "suspicious": { "noUnknownAtRules": "off" } }
+      }
     },
     // 仅宿主 shadcn primitives + 生成 hook 放宽固有规则；共享 UI 包含手写业务组件，不在此豁免。
     {

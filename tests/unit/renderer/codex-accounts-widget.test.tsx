@@ -30,6 +30,14 @@ function baseProps(
   };
 }
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve = (): void => undefined;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 function usageSnapshot(
   overrides: Partial<CodexAccountsSnapshot> = {}
 ): CodexAccountsSnapshot {
@@ -272,13 +280,13 @@ describe("AccountsWidget (usage)", () => {
     expect(meter?.className).toContain("pier-codex-usage-meter");
     expect(progressBars).toHaveLength(2);
     expect(primaryWindows).toHaveLength(2);
-    expect(primaryWindows[1]?.className).not.toContain("codex:hidden");
+    expect(primaryWindows[1]?.className).not.toContain("hidden");
     expect(
       container.querySelector('[data-window-group="primary"]')?.className
-    ).toContain("codex:@[22rem]:grid-cols-2");
+    ).toContain("@[22rem]:grid-cols-2");
     expect(
       container.querySelector('[data-window-group="primary"]')?.className
-    ).toContain("codex:grid-cols-1");
+    ).toContain("grid-cols-1");
     expect(progressBars[0]?.className).toContain("h-1");
     expect(progressBars[0]?.getAttribute("data-variant")).toBe("success");
   });
@@ -382,6 +390,37 @@ describe("AccountsWidget (usage)", () => {
       invokeCalls.some((call) => call.method === "accounts.refreshUsage")
     ).toBe(false);
   });
+
+  it("clears the refresh state when hidden during an in-flight refresh", async () => {
+    const { context } = contextWithSnapshot(usageSnapshot());
+    const pending = deferred();
+    const invoke = context.rpc.invoke;
+    context.rpc.invoke = async <T,>(method: string, payload?: unknown) => {
+      if (method === "accounts.refreshUsage") await pending.promise;
+      return invoke<T>(method, payload);
+    };
+    const { rerender } = render(
+      <AccountsWidget context={context} {...baseProps({ refreshToken: 0 })} />
+    );
+    await screen.findByText("5-hour quota");
+
+    rerender(
+      <AccountsWidget context={context} {...baseProps({ refreshToken: 1 })} />
+    );
+    expect(await screen.findByText("Refreshing")).toBeDefined();
+    rerender(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ refreshToken: 1, visible: false })}
+      />
+    );
+
+    expect(screen.queryByText("Refreshing")).toBeNull();
+    await act(async () => {
+      pending.resolve();
+      await pending.promise;
+    });
+  });
 });
 
 describe("CostWidget", () => {
@@ -423,7 +462,7 @@ describe("CostWidget", () => {
 
     expect(await screen.findByText("Today")).toBeDefined();
     expect(screen.getByText("Last 31 days cost")).toBeDefined();
-    expect(container.querySelectorAll(".pier-codex-cost-bars")).toHaveLength(2);
+    expect(container.querySelectorAll('[data-slot="chart"]')).toHaveLength(2);
     expect(
       container.querySelector('[data-cost-metric="period-cost"]')?.className
     ).toContain("@[22rem]:block");
@@ -464,6 +503,50 @@ describe("CostWidget", () => {
       expect(context.notifications.success).toHaveBeenCalledWith(
         "Cost data refreshed"
       );
+    });
+  });
+
+  it("clears the cost refresh state when hidden", async () => {
+    const snapshot = usageSnapshot({
+      costUsage: {
+        buckets: [],
+        coverage: { complete: true, from: "2026-06-12", to: "2026-07-12" },
+        observedAt: Date.now(),
+        summary: {
+          estimatedCostMicrousd: 0,
+          latestDayTokens: 0,
+          periodTokens: 0,
+          todayEstimatedCostMicrousd: 0,
+        },
+      },
+    });
+    const { context } = contextWithSnapshot(snapshot);
+    const pending = deferred();
+    const invoke = context.rpc.invoke;
+    context.rpc.invoke = async <T,>(method: string, payload?: unknown) => {
+      if (method === "usage.refreshCost") await pending.promise;
+      return invoke<T>(method, payload);
+    };
+    const { rerender } = render(
+      <CostWidget context={context} {...baseProps({ refreshToken: 0 })} />
+    );
+    await screen.findByText("Today");
+
+    rerender(
+      <CostWidget context={context} {...baseProps({ refreshToken: 1 })} />
+    );
+    expect(await screen.findByText("Refreshing")).toBeDefined();
+    rerender(
+      <CostWidget
+        context={context}
+        {...baseProps({ refreshToken: 1, visible: false })}
+      />
+    );
+
+    expect(screen.queryByText("Refreshing")).toBeNull();
+    await act(async () => {
+      pending.resolve();
+      await pending.promise;
     });
   });
 });

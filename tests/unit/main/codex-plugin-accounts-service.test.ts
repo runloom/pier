@@ -580,6 +580,44 @@ describe("pier.codex accounts service", () => {
     service.dispose();
   });
 
+  it("does not start quota polling without a visible consumer", async () => {
+    const stateFile = join(dir, "accounts.json");
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        accounts: [
+          {
+            createdAt: 1,
+            email: "account@example.com",
+            id: "account-1",
+            provider: "codex",
+            providerAccountId: "provider-1",
+            updatedAt: 1,
+          },
+        ],
+        activeAccountId: "account-1",
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const provider = createProvider({
+      readCurrentIdentity: vi.fn(async () => null),
+    });
+    const service = createCodexAccountsService({
+      hasVisibleTarget: () => false,
+      managedBaseDir: join(dir, "managed"),
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+
+    await service.init();
+
+    expect(provider.fetchUsage).not.toHaveBeenCalled();
+    service.dispose();
+  });
+
   it("retains the last successful quota when a refresh fails", async () => {
     const { provider, service } = await seedManagedActiveAccount(dir);
     await service.refreshAllUsage();

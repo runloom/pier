@@ -1,3 +1,8 @@
+/*
+ * Public Tailwind mapping for Pier's shared semantic UI contract.
+ * Product token values remain owned by the host globals.css; this file only
+ * makes those runtime variables available to host and official-plugin utilities.
+ */
 @theme inline {
   --font-sans: var(--pier-ui-font-family);
   --font-mono: var(--pier-mono-font-family);
