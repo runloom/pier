@@ -48,7 +48,14 @@ const agentEventPayloadSchema = z
     ...baseHookFields,
     agent: agentKindSchema,
     event: z.string().min(1).max(64),
+    metadataBase64: z.string().max(16_384).optional(),
+    agentInstanceId: z.string().max(128).optional(),
+    agentType: z.string().max(128).optional(),
     sessionId: z.string().max(128).optional(),
+    toolName: z.string().max(256).optional(),
+    toolUseId: z.string().max(128).optional(),
+    transcriptPath: z.string().max(8192).optional(),
+    turnId: z.string().max(128).optional(),
   })
   .strict();
 export type AgentHookEventPayload = z.infer<typeof agentEventPayloadSchema>;

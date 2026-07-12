@@ -302,7 +302,7 @@ export function createTaskService({
         // 只把 pending/running 改为 cancelled；succeeded/failed 节点保留原状态）。
         // 无过滤会把已 success 的 activity 覆盖为 cancelled（终态常驻后即永久谎报）。
         if (node.status === "cancelled") {
-          onTaskActivity?.onFinished(node.panelId, {
+          onTaskActivity?.onFinished(node.panelId, node.windowId, {
             runId: result.runId,
             status: "cancelled",
           });
@@ -335,7 +335,7 @@ export function createTaskService({
         } else {
           activityStatus = exitCode === 0 ? "success" : "failure";
         }
-        onTaskActivity?.onFinished(panelId, {
+        onTaskActivity?.onFinished(panelId, windowId, {
           runId: result.runId,
           status: activityStatus,
           exitCode,

@@ -77,8 +77,11 @@ describe("buildOpencodePluginSource", () => {
     expect(source).toContain('"permission.replied") return "processing"');
     expect(source).toContain('"tool.execute.before"');
     expect(source).toContain('"tool.execute.after"');
-    expect(source).toContain('emitPierEvent("ToolStart")');
-    expect(source).toContain('emitPierEvent("ToolComplete")');
+    expect(source).toContain('emitPierEvent("ToolStart", args)');
+    expect(source).toContain('emitPierEvent("ToolComplete", args)');
+    expect(source).toContain('event.type === "session.deleted"');
+    expect(source).toContain("value.info || value.session || value.thread");
+    expect(source).toContain("toolUseId");
   });
 
   it("无加载合成 SessionStart：factory 体到 return 之间无独立 emit（真实 session.created 覆盖）", () => {

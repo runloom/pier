@@ -45,6 +45,7 @@ export interface TaskTerminalProcessController {
 export interface TaskActivityCallbacks {
   onFinished(
     panelId: string,
+    windowId: string | undefined,
     args: {
       runId: string;
       status: "success" | "failure" | "cancelled";

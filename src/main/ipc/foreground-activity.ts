@@ -12,7 +12,12 @@ import {
   installAllAgentHooks,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
+import {
+  type AgentTerminalReconciler,
+  createAgentTerminalReconciler,
+} from "../services/agents/integrations/terminal-reconciliation.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
+import { SUSPENDED_JOB_EXIT_CODES } from "../services/foreground-activity/entry.ts";
 import {
   createJsonlObserver,
   type JsonlObserver,
@@ -36,6 +41,7 @@ const foregroundActivityAggregator = createForegroundActivityAggregator();
 /** 上次广播覆盖过的窗口——会话清空时也要给这些窗口发空快照清 store。 */
 const lastBroadcastWindowIds = new Set<string>();
 let jsonlObserver: JsonlObserver | null = null;
+let agentTerminalReconciler: AgentTerminalReconciler | null = null;
 
 function markAgentSessionExited(args: {
   exitCode?: number | undefined;
@@ -145,8 +151,15 @@ export const foregroundActivityService = {
       PIER_AGENT_EVENT_LOG: eventsJsonlPath(userData),
     };
   },
-  commandFinished(panelId: string, exitCode?: number): void {
-    foregroundActivityAggregator.ingestCommandFinished(panelId, exitCode);
+  commandFinished(panelId: string, exitCode?: number, windowId?: string): void {
+    if (exitCode === undefined || !SUSPENDED_JOB_EXIT_CODES.has(exitCode)) {
+      agentTerminalReconciler?.releasePanel(panelId, windowId);
+    }
+    foregroundActivityAggregator.ingestCommandFinished(
+      panelId,
+      exitCode,
+      windowId
+    );
   },
   ingestCommandStarted(
     panelId: string,
@@ -178,24 +191,34 @@ export const foregroundActivityService = {
   },
   taskFinished(
     panelId: string,
+    windowId: string,
     args: {
       runId: string;
       status: "success" | "failure" | "cancelled";
       exitCode?: number;
     }
   ): void {
-    foregroundActivityAggregator.taskFinished(panelId, args);
+    const win = findAppWindowByInternalId(windowId);
+    foregroundActivityAggregator.taskFinished(
+      panelId,
+      args,
+      win ? String(win.id) : windowId
+    );
   },
-  panelClosed(panelId: string): void {
-    foregroundActivityAggregator.panelClosed(panelId);
+  panelClosed(panelId: string, windowId?: string): void {
+    agentTerminalReconciler?.releasePanel(panelId, windowId);
+    foregroundActivityAggregator.panelClosed(panelId, windowId);
   },
-  ptyExited(panelId: string): void {
-    foregroundActivityAggregator.ptyExited(panelId);
+  ptyExited(panelId: string, windowId?: string): void {
+    agentTerminalReconciler?.releasePanel(panelId, windowId);
+    foregroundActivityAggregator.ptyExited(panelId, windowId);
   },
   retainPanels(windowId: string, activePanelIds: readonly string[]): void {
+    agentTerminalReconciler?.retainPanels(windowId, activePanelIds);
     foregroundActivityAggregator.retainPanels(windowId, activePanelIds);
   },
   windowClosed(windowId: string): void {
+    agentTerminalReconciler?.releaseWindow(windowId);
     foregroundActivityAggregator.windowClosed(windowId);
     lastBroadcastWindowIds.delete(windowId);
   },
@@ -208,6 +231,8 @@ export const foregroundActivityService = {
 export function closeForegroundActivityResources(): void {
   jsonlObserver?.dispose();
   jsonlObserver = null;
+  agentTerminalReconciler?.dispose();
+  agentTerminalReconciler = null;
 }
 
 export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
@@ -220,6 +245,11 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // append 到 events.jsonl，observer 250ms 轮询 → 按 kind 分派到
   // aggregator 对应 hook。commandStart/commandFinished hook 目前无消费者
   // (native shell integration 走 native callback 通路)，是 forward-compat 占位。
+  agentTerminalReconciler = createAgentTerminalReconciler({
+    onTerminalEvent: (event) => {
+      foregroundActivityAggregator.ingestAgentEvent(event);
+    },
+  });
   jsonlObserver = createJsonlObserver({
     filePath: eventsJsonlPath(app.getPath("userData")),
     onAgentEvent: (event) => {
@@ -227,6 +257,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       if (!accepted) {
         return;
       }
+      agentTerminalReconciler?.observe(event).catch((err) => {
+        log.warn("agent terminal reconciliation failed", { err });
+      });
       recordAgentResumeSession({
         agentId: event.agent,
         panelId: event.panelId,
@@ -240,8 +273,10 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
         });
       }
     },
-    onCommandFinished: (event) =>
-      foregroundActivityAggregator.ingestCommandFinishedHook(event),
+    onCommandFinished: (event) => {
+      agentTerminalReconciler?.releasePanel(event.panelId, event.windowId);
+      foregroundActivityAggregator.ingestCommandFinishedHook(event);
+    },
     onCommandStart: (event) =>
       foregroundActivityAggregator.ingestCommandStartHook(event),
     onError: (err) => {

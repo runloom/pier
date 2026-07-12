@@ -124,15 +124,17 @@ export function activityStatusForHookEvent(
     case "PermissionRequest":
       return "waiting";
     case "ToolStart":
-    case "ToolComplete":
       return "tool";
     case "error":
       return "error";
     case "SessionStart":
     case "Stop":
+    case "TurnCompleted":
+    case "TurnInterrupted":
     case "SessionEnd":
       return "ready";
     case "PromptSubmit":
+    case "ToolComplete":
     case "SubagentStart":
     case "SubagentStop":
     case "processing":

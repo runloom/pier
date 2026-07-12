@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
+import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "omp";
 const EXTENSION_FILE_NAME = "pier-agent-status.ts";
@@ -137,6 +138,8 @@ export function buildOmpExtensionSource(): string {
 // call — not an ImportDeclaration — so the scan stays inert; available in
 // Bun (omp's extension host) and Node >= 20.16.
 
+${JAVASCRIPT_LOCKED_APPEND_SOURCE}
+
 let pierInstanceCount = 0;
 
 function pierSessionIdFrom(values) {
@@ -172,16 +175,7 @@ function pierEmit(event, ...values) {
 		event,
 		...(sessionId ? { sessionId } : {}),
 	}) + "\\n";
-	try {
-		// Synchronous append: keeps file order (the aggregator consumes JSONL
-		// in file order; same-ms events reorder under unawaited async appends)
-		// and survives host exit (the final session_shutdown must not race
-		// process teardown). Local ~200B appends are microsecond-scale.
-		const { appendFileSync } = process.getBuiltinModule("node:fs");
-		appendFileSync(log, line);
-	} catch {
-		// best-effort, never throw into the agent's own event loop
-	}
+	pierAppend(log, line);
 }
 
 export default function PierAgentStatus(pi) {

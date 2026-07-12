@@ -20,6 +20,8 @@ const CODEX_EVENTS = [
   "PermissionRequest",
   "PreCompact",
   "PostCompact",
+  "SubagentStart",
+  "SubagentStop",
   "Stop",
 ];
 
@@ -44,7 +46,7 @@ function matcherEntries(
 }
 
 describe("withPierCodexHooks", () => {
-  it("为 8 个 Codex hook 事件各注入一条 pier 命令", () => {
+  it("为当前 Codex hook 事件各注入一条 pier 命令", () => {
     const next = withPierCodexHooks({});
     const hooks = next.hooks as Record<string, unknown[]>;
     for (const evt of CODEX_EVENTS) {
@@ -181,8 +183,8 @@ describe("install/uninstallCodexHooks (文件 IO)", () => {
   });
 });
 
-describe("安装遗留清理（spec 事件表更迭后清理旧 pier 条目）", () => {
-  it("清理上一版装过但已从 spec 移除的事件下的 pier 条目", async () => {
+describe("安装遗留更新（spec 事件表更迭后替换旧 pier 条目）", () => {
+  it("替换旧版 Subagent 事件下的 pier 条目并保留用户条目", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-codex-legacy-"));
     const path = join(dir, "hooks.json");
     // 模拟上一版装过 SubagentStart/SubagentStop 的遗留:
@@ -220,13 +222,12 @@ describe("安装遗留清理（spec 事件表更迭后清理旧 pier 条目）",
     await installCodexHooks(path);
     const installed = JSON.parse(await readFile(path, "utf8"));
     const hooks = installed.hooks as Record<string, unknown[]>;
-    // pier 从 SubagentStart 里被清理, 用户其他条目保留;
-    // SubagentStop 全部是 pier 条目 → 键被清空并删除。
-    expect(hooks.SubagentStart).toHaveLength(1);
-    expect("SubagentStop" in hooks).toBe(false);
-    // 当前 spec 事件都装到঩了。
+    // 旧 pier 条目被替换为当前命令，用户其他条目保留。
+    expect(hooks.SubagentStart).toHaveLength(2);
+    expect(hooks.SubagentStop).toHaveLength(1);
+    // 当前 spec 事件都已安装。
     for (const evt of CODEX_EVENTS) {
-      expect(hooks[evt], evt).toHaveLength(1);
+      expect(hooks[evt], evt).toHaveLength(evt === "SubagentStart" ? 2 : 1);
     }
   });
 });

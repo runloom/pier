@@ -1,5 +1,5 @@
 import { appendFileSync, writeFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
@@ -67,7 +67,31 @@ describe("jsonl-observer", () => {
     observer.dispose();
   }, 20_000);
 
-  it("rotate：超 10MB 后截断保留 tail 1000 行", async () => {
+  it("drain：处理期间追加最终事件并再次唤醒，不会永久漏读", async () => {
+    writeFileSync(jsonlPath, "");
+    const received: AgentHookEventPayload[] = [];
+    let observer: ReturnType<typeof createJsonlObserver>;
+    observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent(event) {
+        received.push(event);
+        if (event.event === "evt-1") {
+          appendFileSync(jsonlPath, `${eventLine(2)}\n`);
+          observer.pollNow().catch(() => undefined);
+        }
+      },
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+
+    appendFileSync(jsonlPath, `${eventLine(1)}\n`);
+    await observer.pollNow();
+
+    expect(received.map((event) => event.event)).toEqual(["evt-1", "evt-2"]);
+    observer.dispose();
+  });
+
+  it("rotate：超 10MB 时先派发未读事件，再原子切换到新日志", async () => {
     // 写 100000 行（每行约 90 字节 → ~9MB，不够。加大内容让它超 10MB）
     const lines: string[] = [];
     for (let i = 0; i < 100_000; i++) {
@@ -85,10 +109,11 @@ describe("jsonl-observer", () => {
       );
     }
     writeFileSync(jsonlPath, `${lines.join("\n")}\n`);
+    const received: AgentHookEventPayload[] = [];
     const observer = createJsonlObserver({
       filePath: jsonlPath,
-      onAgentEvent() {
-        // rotate 后不该有历史事件回放
+      onAgentEvent(event) {
+        received.push(event);
       },
       onCommandFinished() {
         // 未消费——本 case 只测 agentEvent 路径。
@@ -105,16 +130,8 @@ describe("jsonl-observer", () => {
     appendFileSync(jsonlPath, `${eventLine(999_999)}\n`);
     await observer.pollNow();
 
-    const finalContent = await readFile(jsonlPath, "utf8");
-    const finalLines = finalContent.split("\n").filter((l) => l.trim());
-    expect(finalLines).toHaveLength(1000);
-    // 最后一行应是追加的那行
-    const last = finalLines.at(-1);
-    if (!last) {
-      throw new Error("empty finalLines after rotate");
-    }
-    const lastParsed = JSON.parse(last);
-    expect(lastParsed.event).toBe("evt-999999");
+    expect(received.map((event) => event.event)).toEqual(["evt-999999"]);
+    expect(await readFile(jsonlPath, "utf8")).toBe("");
 
     observer.dispose();
   }, 20_000);
@@ -155,6 +172,101 @@ describe("jsonl-observer", () => {
 
     observer.dispose();
   }, 20_000);
+
+  it("启动时恢复中断的轮转文件，按旧 offset 继续且不漏新日志", async () => {
+    const oldProcessed = `${eventLine(0)}\n`;
+    writeFileSync(`${jsonlPath}.rotating`, `${oldProcessed}${eventLine(1)}\n`);
+    writeFileSync(jsonlPath, `${eventLine(2)}\n`);
+    writeFileSync(offsetPath, String(Buffer.byteLength(oldProcessed)));
+    const received: AgentHookEventPayload[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+
+    await observer.pollNow();
+
+    expect(received.map((event) => event.event)).toEqual(["evt-1", "evt-2"]);
+    observer.dispose();
+  });
+
+  it("轮转在创建新日志前崩溃：只有 rotating 文件也能恢复", async () => {
+    const processed = `${eventLine(0)}\n`;
+    writeFileSync(`${jsonlPath}.rotating`, `${processed}${eventLine(1)}\n`);
+    writeFileSync(
+      `${jsonlPath}.rotating.offset`,
+      String(Buffer.byteLength(processed))
+    );
+    const received: AgentHookEventPayload[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+
+    await observer.pollNow();
+
+    expect(received.map((event) => event.event)).toEqual(["evt-1"]);
+    expect(await readFile(jsonlPath, "utf8")).toBe(
+      `${processed}${eventLine(1)}\n`
+    );
+    observer.dispose();
+  });
+
+  it("中断轮转恢复可重入：恢复完成后重启不会重复派发", async () => {
+    const processed = `${eventLine(0)}\n`;
+    writeFileSync(`${jsonlPath}.rotating`, `${processed}${eventLine(1)}\n`);
+    writeFileSync(jsonlPath, `${eventLine(2)}\n`);
+    writeFileSync(
+      `${jsonlPath}.rotating.offset`,
+      String(Buffer.byteLength(processed))
+    );
+    const received: AgentHookEventPayload[] = [];
+    const createObserver = () =>
+      createJsonlObserver({
+        filePath: jsonlPath,
+        onAgentEvent: (event) => received.push(event),
+        onCommandFinished() {},
+        onCommandStart() {},
+      });
+
+    const first = createObserver();
+    await first.pollNow();
+    first.dispose();
+    const second = createObserver();
+    await second.pollNow();
+
+    expect(received.map((event) => event.event)).toEqual(["evt-1", "evt-2"]);
+    second.dispose();
+  });
+
+  it("中断轮转旧文件以半行结尾时报告错误并继续消费新日志", async () => {
+    const processed = `${eventLine(0)}\n`;
+    writeFileSync(`${jsonlPath}.rotating`, `${processed}{half-json`);
+    writeFileSync(jsonlPath, `${eventLine(2)}\n`);
+    writeFileSync(
+      `${jsonlPath}.rotating.offset`,
+      String(Buffer.byteLength(processed))
+    );
+    const received: AgentHookEventPayload[] = [];
+    const errors: unknown[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+      onError: (error) => errors.push(error),
+    });
+
+    await observer.pollNow();
+
+    expect(received.map((event) => event.event)).toEqual(["evt-2"]);
+    expect(errors).toHaveLength(1);
+    observer.dispose();
+  });
 
   it("半行不丢：无换行尾部半行不派发不报错, 补齐后完整派发", async () => {
     writeFileSync(jsonlPath, "");
@@ -269,4 +381,91 @@ describe("jsonl-observer", () => {
 
     observer.dispose();
   }, 20_000);
+
+  it("超过 1 MiB 的单行不会造成大分配或阻塞后续事件", async () => {
+    writeFileSync(jsonlPath, "");
+    const received: AgentHookEventPayload[] = [];
+    const errors: unknown[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+      onError: (error) => errors.push(error),
+    });
+
+    appendFileSync(
+      jsonlPath,
+      `${"x".repeat(1024 * 1024 + 100)}\n${eventLine(9)}\n`
+    );
+    await observer.pollNow();
+
+    expect(received.map((event) => event.event)).toEqual(["evt-9"]);
+    expect(errors.length).toBeGreaterThan(0);
+    observer.dispose();
+  });
+
+  it("writer 在 append 前崩溃留下死亡锁时，周期回收无需主日志变化", async () => {
+    writeFileSync(jsonlPath, "");
+    const lockPath = `${jsonlPath}.lock`;
+    writeFileSync(lockPath, "99999999.crashed-writer");
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent() {},
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+
+    await vi.waitFor(
+      async () => {
+        await expect(stat(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
+      },
+      { timeout: 2500 }
+    );
+
+    observer.dispose();
+  });
+
+  it("原始 hook payload 只读取顶层身份字段，不受 tool_input 同名字段污染", async () => {
+    writeFileSync(jsonlPath, "");
+    const received: AgentHookEventPayload[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+    const rawPayload = {
+      agent_id: "worker-top",
+      session_id: "session-top",
+      tool_input: {
+        agent_id: "worker-nested",
+        session_id: "session-nested",
+      },
+      tool_use_id: "tool-top",
+      turn_id: "turn-top",
+    };
+    const line = JSON.stringify({
+      agent: "codex",
+      event: "ToolStart",
+      kind: "agentEvent",
+      panelId: "panel-1",
+      metadataBase64: Buffer.from(JSON.stringify(rawPayload)).toString(
+        "base64"
+      ),
+      sessionId: "session-nested",
+      v: 1,
+      windowId: "1",
+    });
+    appendFileSync(jsonlPath, `${line}\n`);
+    await observer.pollNow();
+
+    expect(received[0]).toMatchObject({
+      agentInstanceId: "worker-top",
+      sessionId: "session-top",
+      toolUseId: "tool-top",
+      turnId: "turn-top",
+    });
+    observer.dispose();
+  });
 });

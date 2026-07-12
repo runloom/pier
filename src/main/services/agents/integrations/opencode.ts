@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { atomicWriteFile, transformJsonConfig } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
+import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "opencode";
 
@@ -75,31 +76,32 @@ export function buildOpencodePluginSource(
 // call — not an ImportDeclaration; older Node falls back to async best-effort.
 // (Exception to ts-no-dynamic-import: generated file for a foreign host.)
 
-function pierAppend(log, line) {
-	if (typeof process.getBuiltinModule === "function") {
-		// 同步写:保文件序 + 进程退出前落盘(Bun 与 Node >= 20.16)。
-		const { appendFileSync } = process.getBuiltinModule("node:fs");
-		appendFileSync(log, line);
-		return;
-	}
-	// 旧 Node 宿主退化为异步 best-effort(与旧行为一致, 不更糟)。
-	import("node:fs/promises")
-		.then(({ appendFile }) => appendFile(log, line))
-		.catch(() => {});
-}
+${JAVASCRIPT_LOCKED_APPEND_SOURCE}
 
 function pierSessionIdFrom(event) {
-  const values = [event, event && event.properties];
+  const values = Array.isArray(event) ? [...event] : [event];
+  values.push(...values.map((value) => value && value.properties));
   for (const value of values) {
     if (!value || typeof value !== "object") continue;
     for (const key of ["sessionId", "sessionID", "session_id"]) {
       if (typeof value[key] === "string" && value[key]) return value[key];
     }
-    const session = value.session || value.thread;
+    const session = value.info || value.session || value.thread;
     if (session && typeof session === "object") {
       for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
         if (typeof session[key] === "string" && session[key]) return session[key];
       }
+    }
+  }
+  return undefined;
+}
+
+function pierToolIdFrom(event) {
+  const values = Array.isArray(event) ? event : [event];
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue;
+    for (const key of ["callID", "callId", "toolCallID", "toolCallId", "toolUseId", "tool_use_id"]) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
     }
   }
   return undefined;
@@ -111,6 +113,7 @@ function emitPierEvent(pierEvent, rawEvent) {
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
   const sessionId = pierSessionIdFrom(rawEvent);
+  const toolUseId = pierToolIdFrom(rawEvent);
   const line = JSON.stringify({
     v: 1,
     kind: "agentEvent",
@@ -121,6 +124,7 @@ function emitPierEvent(pierEvent, rawEvent) {
     agent: "${pluginId}",
     event: pierEvent,
     ...(sessionId ? { sessionId } : {}),
+    ...(toolUseId ? { toolUseId } : {}),
   }) + "\\n";
   try {
     pierAppend(log, line);
@@ -134,6 +138,7 @@ function mapPierEvent(event) {
   if (event.type === "session.created") return "SessionStart";
   if (event.type === "session.idle") return "Stop";
   if (event.type === "session.error") return "error";
+  if (event.type === "session.deleted") return "SessionEnd";
   if (event.type === "session.status") {
     // SDK EventSessionStatus: properties.status.type = busy/retry/idle
     // （sst/opencode packages/sdk/js/src/gen/types.gen.ts SessionStatus 联合）。
@@ -161,11 +166,11 @@ export const PierAgentStatus = () => {
       const mapped = mapPierEvent(event);
       if (mapped) emitPierEvent(mapped, event);
     },
-    "tool.execute.before": () => {
-      emitPierEvent("ToolStart");
+    "tool.execute.before": (...args) => {
+      emitPierEvent("ToolStart", args);
     },
-    "tool.execute.after": () => {
-      emitPierEvent("ToolComplete");
+    "tool.execute.after": (...args) => {
+      emitPierEvent("ToolComplete", args);
     },
   };
 };

@@ -105,8 +105,10 @@ describe("buildKiloPluginSource", () => {
     expect(source).not.toContain("permission.updated");
     expect(source).toContain('"tool.execute.before"');
     expect(source).toContain('"tool.execute.after"');
-    expect(source).toContain('pierEmit("ToolStart")');
-    expect(source).toContain('pierEmit("ToolComplete")');
+    expect(source).toContain('pierEmit("ToolStart", args)');
+    expect(source).toContain('pierEmit("ToolComplete", args)');
+    expect(source).toContain("value.info || value.session || value.thread");
+    expect(source).toContain("toolUseId");
   });
 
   it("不装 PromptSubmit：command.executed payload 未确认, session.status(busy/retry) 已提供 TURN_RESET", async () => {

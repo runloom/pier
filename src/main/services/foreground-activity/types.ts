@@ -33,7 +33,11 @@ export interface ForegroundActivityAggregator {
    * 前台命令退出：双层同清 + 5s 冷却（覆盖崩溃/kill 等无 SessionEnd hook
    * 的路径）。Ctrl+Z 悬挂（145-148）双层保留。
    */
-  ingestCommandFinished(panelId: string, exitCode?: number): void;
+  ingestCommandFinished(
+    panelId: string,
+    exitCode?: number,
+    windowId?: string
+  ): void;
   /** Path B 三 kind 占位入口——本 aggregator 不消费, 保 union 完整。 */
   ingestCommandFinishedHook(event: CommandFinishedHookEvent): void;
   /**
@@ -53,12 +57,12 @@ export interface ForegroundActivityAggregator {
   onChange(cb: (b: ForegroundActivityBroadcast) => void): () => void;
 
   /** panel 关闭 → 清 activity + 冷却拦迟到 hook。 */
-  panelClosed(panelId: string): void;
+  panelClosed(panelId: string, windowId?: string): void;
   /**
    * native pty 进程退出（面板可能仍开着）：task 面板保留终态 activity
    * （只清 hook 证据 + hook 冷却）；其余面板等同 panelClosed。
    */
-  ptyExited(panelId: string): void;
+  ptyExited(panelId: string, windowId?: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的活动按 panelClosed 处理。 */
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;
 
@@ -73,7 +77,8 @@ export interface ForegroundActivityAggregator {
       runId: string;
       status: "success" | "failure" | "cancelled";
       exitCode?: number;
-    }
+    },
+    windowId?: string
   ): void;
 
   /** Task 拉起：用户显式操作优先, 双层全清后建 task 层。 */
