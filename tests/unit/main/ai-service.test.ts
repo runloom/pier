@@ -1,7 +1,12 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentUsageState } from "@shared/contracts/agent-usage.ts";
 import { projectPreferencesSchema } from "@shared/contracts/preferences.ts";
-import { describe, expect, it, vi } from "vitest";
+import {
+  type LogRecord,
+  resetDefaultLogSinkForTests,
+  setDefaultLogSink,
+} from "@shared/logger.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { supportsOneShot } from "../../../src/main/services/ai/agent-one-shot.ts";
 import {
   AgentRunError,
@@ -9,6 +14,14 @@ import {
   defaultRunOneShot,
   type RunOneShotOptions,
 } from "../../../src/main/services/ai/ai-service.ts";
+
+beforeEach(() => {
+  setDefaultLogSink(() => undefined);
+});
+
+afterEach(() => {
+  resetDefaultLogSinkForTests();
+});
 
 function makePreferences(overrides: Record<string, unknown> = {}) {
   return projectPreferencesSchema.parse(overrides);
@@ -118,6 +131,18 @@ describe("createAiService(agent one-shot)", () => {
     expect(options).toEqual({ cwd: "/repo", timeoutMs: 45_000 });
   });
 
+  it("generateText:Codex 默认使用更长的 one-shot 超时", async () => {
+    const runOneShot = vi.fn<RunOneShot>().mockResolvedValue("fix/codex\n");
+    const service = makeService({ detected: ["codex"], runOneShot });
+
+    await service.generateText({ projectRootPath: "/repo", prompt: "x" });
+
+    expect(runOneShot.mock.calls[0]?.[2]).toEqual({
+      cwd: "/repo",
+      timeoutMs: 75_000,
+    });
+  });
+
   it("generateText:binary 遵循 agentCommandOverrides 覆盖", async () => {
     const runOneShot = vi.fn<RunOneShot>().mockResolvedValue("hello\n");
     const service = makeService({
@@ -173,6 +198,43 @@ describe("createAiService(agent one-shot)", () => {
     expect(runOneShot).toHaveBeenCalledTimes(2);
     expect(runOneShot.mock.calls[0]?.[0]).toBe("claude");
     expect(runOneShot.mock.calls[1]?.[0]).toBe("codex");
+  });
+
+  it("generateText:记录 fallback 结果但不记录 prompt", async () => {
+    const records: LogRecord[] = [];
+    setDefaultLogSink((record) => records.push(record));
+    const runOneShot = vi
+      .fn<RunOneShot>()
+      .mockRejectedValueOnce(
+        new AgentRunError("run_failed", "claude failed for secret7")
+      )
+      .mockResolvedValueOnce("feature/file-plugin\n");
+    const service = makeService({
+      detected: ["claude", "codex"],
+      runOneShot,
+    });
+
+    await service.generateText({ prompt: "secret7" });
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        ctx: {
+          agentId: "claude",
+          reason: "request_failed",
+          message: "claude failed for [redacted]",
+        },
+        level: "warn",
+        msg: "attempt failed",
+        scope: "ai.generate-text",
+      }),
+      expect.objectContaining({
+        ctx: { agentId: "codex" },
+        level: "info",
+        msg: "generation succeeded",
+        scope: "ai.generate-text",
+      }),
+    ]);
+    expect(JSON.stringify(records)).not.toContain("secret7");
   });
 
   it("generateText:未设置默认项时优先使用近期常用 agent", async () => {
@@ -288,7 +350,7 @@ describe("createAiService(agent one-shot)", () => {
     ]);
   });
 
-  it("generateText:3 个都失败时返回最后一次错误，且不尝试第 4 个", async () => {
+  it("generateText:3 个都失败时汇总错误，且不尝试第 4 个", async () => {
     const runOneShot = vi
       .fn<RunOneShot>()
       .mockRejectedValueOnce(new AgentRunError("run_failed", "claude fail"))
@@ -299,10 +361,10 @@ describe("createAiService(agent one-shot)", () => {
       runOneShot,
     });
 
-    const result = await service.generateText({ prompt: "x" });
+    const result = await service.generateText({ prompt: "private prompt" });
 
     expect(result).toMatchObject({
-      message: "grok timeout",
+      message: "claude: claude fail | codex: codex fail | grok: grok timeout",
       reason: "timeout",
       status: "unavailable",
     });
@@ -350,5 +412,24 @@ describe("defaultRunOneShot", () => {
     );
 
     expect(stdout).toBe("done\n");
+  });
+
+  it("uses stdout diagnostics without exposing command arguments", async () => {
+    const prompt = "private task description";
+    const run = defaultRunOneShot(
+      process.execPath,
+      [
+        "-e",
+        "process.stdout.write('Qoder API error: FORBIDDEN\\n'); process.exit(1)",
+        prompt,
+      ],
+      { cwd: process.cwd(), timeoutMs: 1000 }
+    );
+
+    await expect(run).rejects.toMatchObject({
+      kind: "run_failed",
+      message: "Qoder API error: FORBIDDEN",
+    });
+    await expect(run).rejects.not.toThrow(prompt);
   });
 });

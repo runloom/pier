@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useState } from "react";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import type { ActivePluginOverlay } from "@/stores/plugin-overlay.store.ts";
 import {
@@ -41,8 +41,12 @@ export function PluginOverlayHost() {
   if (!presented) {
     return null;
   }
-  return presented.render({
-    close: () => closePluginOverlay(presented.pluginId, presented.id),
-    open: current === presented,
-  });
+  return (
+    <Fragment key={presented.instanceId}>
+      {presented.render({
+        close: () => closePluginOverlay(presented.pluginId, presented.id),
+        open: current === presented,
+      })}
+    </Fragment>
+  );
 }

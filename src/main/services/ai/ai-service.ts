@@ -13,6 +13,7 @@ import type {
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import { createLogger } from "@shared/logger.ts";
 import { resolveOneShotInvocation } from "../agents/agent-launch.ts";
 import { supportsOneShot } from "./agent-one-shot.ts";
 
@@ -55,10 +56,65 @@ export interface RunOneShotOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 45_000;
+const DEFAULT_CODEX_TIMEOUT_MS = 75_000;
 const DEFAULT_FAILURE_COOLDOWN_MS = 5 * 60_000;
 const MAX_STDOUT_BYTES = 4 * 1024 * 1024;
+const MAX_FAILURE_DETAIL_LENGTH = 1000;
 /** one-shot 失败后最多再试几个 agent（含首选，合计上限）。 */
 const MAX_ONE_SHOT_ATTEMPTS = 3;
+
+const generateTextLog = createLogger("ai.generate-text");
+
+function redactValues(value: string, values: readonly string[]): string {
+  let redacted = value;
+  for (const candidate of values) {
+    if (candidate.length >= 8) {
+      redacted = redacted.replaceAll(candidate, "[redacted]");
+    }
+  }
+  return redacted;
+}
+
+function failureDetail(
+  err: unknown,
+  stdout: string,
+  stderr: string,
+  args: readonly string[]
+): string {
+  const output = stderr.trim() || stdout.trim();
+  if (output) {
+    const firstLines = output.split("\n").slice(0, 3).join(" | ");
+    return redactValues(firstLines, args).slice(0, MAX_FAILURE_DETAIL_LENGTH);
+  }
+  if (
+    err !== null &&
+    typeof err === "object" &&
+    "code" in err &&
+    (typeof err.code === "number" || typeof err.code === "string")
+  ) {
+    return `agent process exited with code ${err.code}`;
+  }
+  return "agent process failed";
+}
+
+function isKilledProcess(err: unknown): boolean {
+  return (
+    err !== null &&
+    typeof err === "object" &&
+    "killed" in err &&
+    err.killed === true
+  );
+}
+
+function oneShotTimeout(
+  agentId: AgentKind,
+  override: number | undefined
+): number {
+  if (override !== undefined) {
+    return override;
+  }
+  return agentId === "codex" ? DEFAULT_CODEX_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
+}
 
 function oneShotCwd(projectRootPath: string | undefined): string {
   return projectRootPath?.trim() || tmpdir();
@@ -81,9 +137,8 @@ export function defaultRunOneShot(
       },
       (err, stdout, stderr) => {
         if (err) {
-          const killed = (err as { killed?: boolean }).killed === true;
-          const detail =
-            stderr.trim().split("\n").slice(0, 3).join(" | ") || err.message;
+          const killed = isKilledProcess(err);
+          const detail = failureDetail(err, stdout, stderr, args);
           reject(
             new AgentRunError(
               killed ? "timeout" : "run_failed",
@@ -142,7 +197,7 @@ export function createAiService({
   readAgentUsage = async () => EMPTY_AGENT_USAGE_STATE,
   readPreferences,
   runOneShot = defaultRunOneShot,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs,
 }: CreateAiServiceOptions): AiService {
   const cooldownUntil = new Map<AgentKind, number>();
   const recentSuccessAt = new Map<AgentKind, number>();
@@ -196,10 +251,28 @@ export function createAiService({
         };
       }
       const cwd = oneShotCwd(request.projectRootPath);
-      let lastFailure: Extract<
-        AiGenerateTextResult,
-        { status: "unavailable" }
-      > | null = null;
+      const failures: Array<{
+        agentId: AgentKind;
+        result: Extract<AiGenerateTextResult, { status: "unavailable" }>;
+      }> = [];
+
+      const appendFailure = (
+        agentId: AgentKind,
+        result: Extract<AiGenerateTextResult, { status: "unavailable" }>
+      ): void => {
+        const safeResult = {
+          ...result,
+          message: request.prompt
+            ? result.message.replaceAll(request.prompt, "[redacted]")
+            : result.message,
+        };
+        failures.push({ agentId, result: safeResult });
+        generateTextLog.warn("attempt failed", {
+          agentId,
+          message: safeResult.message,
+          reason: safeResult.reason,
+        });
+      };
 
       for (const agent of agents) {
         const invocation = resolveOneShotInvocation({
@@ -211,42 +284,53 @@ export function createAiService({
           prompt: request.prompt,
         });
         if (!invocation) {
-          lastFailure = {
+          appendFailure(agent, {
             message: `agent ${agent} has no one-shot command`,
             reason: "not_configured",
             status: "unavailable",
-          };
+          });
           continue;
         }
         try {
           const text = await runOneShot(invocation.binary, invocation.args, {
             cwd,
-            timeoutMs,
+            timeoutMs: oneShotTimeout(agent, timeoutMs),
           });
           if (text.trim().length === 0) {
-            lastFailure = {
+            appendFailure(agent, {
               message: `agent ${agent} returned empty output`,
               reason: "request_failed",
               status: "unavailable",
-            };
+            });
             recordFailure(agent);
             continue;
           }
           recordSuccess(agent);
+          generateTextLog.info("generation succeeded", { agentId: agent });
           return { status: "ok", text };
         } catch (err) {
-          lastFailure = failureResult(err);
+          appendFailure(agent, failureResult(err));
           recordFailure(agent);
         }
       }
 
-      return (
-        lastFailure ?? {
+      const lastFailure = failures.at(-1)?.result;
+      if (!lastFailure) {
+        return {
           message: "no detected agent supports one-shot generation",
           reason: "not_configured",
           status: "unavailable",
-        }
-      );
+        };
+      }
+      if (failures.length === 1) {
+        return lastFailure;
+      }
+      return {
+        ...lastFailure,
+        message: failures
+          .map(({ agentId, result }) => `${agentId}: ${result.message}`)
+          .join(" | "),
+      };
     },
     async status() {
       const { agents, preferences } = await resolveContext();

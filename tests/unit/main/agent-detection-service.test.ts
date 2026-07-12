@@ -1,6 +1,34 @@
-import { createAgentDetectionService } from "@main/services/agents/agent-detection-service.ts";
+import {
+  createAgentDetectionService,
+  mergeLoginShellPath,
+} from "@main/services/agents/agent-detection-service.ts";
 import { describe, expect, it } from "vitest";
 
+describe("mergeLoginShellPath", () => {
+  it("保留 login shell 顺序并把 Electron 独有目录追加到末尾", () => {
+    expect(
+      mergeLoginShellPath(
+        "/opt/homebrew/bin:/app/resources/bin:/nvm/bin",
+        "/nvm/bin:/opt/homebrew/bin:/usr/bin"
+      )
+    ).toEqual({
+      added: ["/usr/bin"],
+      path: "/nvm/bin:/opt/homebrew/bin:/usr/bin:/app/resources/bin",
+    });
+  });
+
+  it("即使没有新增目录也按 login shell 优先级重新排序", () => {
+    expect(
+      mergeLoginShellPath(
+        "/opt/homebrew/bin:/nvm/bin",
+        "/nvm/bin:/opt/homebrew/bin"
+      )
+    ).toEqual({
+      added: [],
+      path: "/nvm/bin:/opt/homebrew/bin",
+    });
+  });
+});
 describe("agent detection", () => {
   it("只返回 probe 命中的 agent", async () => {
     const installed = new Set(["claude", "cursor-agent"]);

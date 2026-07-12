@@ -1,9 +1,38 @@
 import { execFile } from "node:child_process";
 import { platform } from "node:os";
+import { delimiter } from "node:path";
 import { AGENT_CATALOG } from "@shared/agent-catalog.ts";
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 
 const PROBE_TIMEOUT_MS = 5000;
+
+function uniquePathSegments(value: string): string[] {
+  const seen = new Set<string>();
+  return value.split(delimiter).filter((segment) => {
+    if (!segment || seen.has(segment)) {
+      return false;
+    }
+    seen.add(segment);
+    return true;
+  });
+}
+
+export function mergeLoginShellPath(
+  currentPath: string,
+  loginShellPath: string
+): { added: string[]; path: string } {
+  const current = uniquePathSegments(currentPath);
+  const login = uniquePathSegments(loginShellPath);
+  const currentSet = new Set(current);
+  const loginSet = new Set(login);
+  return {
+    added: login.filter((segment) => !currentSet.has(segment)),
+    path: [
+      ...login,
+      ...current.filter((segment) => !loginSet.has(segment)),
+    ].join(delimiter),
+  };
+}
 
 /** 用 which/where 查命令是否在 PATH 上（不 spawn binary，避免副作用）。 */
 export function probeCommand(cmd: string): Promise<boolean> {
@@ -27,17 +56,12 @@ function defaultHydratePath(): Promise<string[]> {
           resolve([]);
           return;
         }
-        const current = new Set(
-          (process.env.PATH ?? "").split(":").filter(Boolean)
+        const merged = mergeLoginShellPath(
+          process.env.PATH ?? "",
+          stdout.trim()
         );
-        const added = stdout
-          .trim()
-          .split(":")
-          .filter((s) => s && !current.has(s));
-        if (added.length > 0) {
-          process.env.PATH = [...current, ...added].join(":");
-        }
-        resolve(added);
+        process.env.PATH = merged.path;
+        resolve(merged.added);
       }
     );
   });

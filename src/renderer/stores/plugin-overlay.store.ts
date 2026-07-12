@@ -12,6 +12,7 @@ export interface PluginOverlayRequest {
 }
 
 export interface ActivePluginOverlay extends PluginOverlayRequest {
+  instanceId: number;
   pluginId: string;
 }
 
@@ -23,11 +24,20 @@ export const usePluginOverlayStore = create<PluginOverlayState>(() => ({
   current: null,
 }));
 
+let nextOverlayInstanceId = 1;
+
 export function openPluginOverlay(
   pluginId: string,
   overlay: PluginOverlayRequest
 ): void {
-  usePluginOverlayStore.setState({ current: { ...overlay, pluginId } });
+  usePluginOverlayStore.setState({
+    current: {
+      ...overlay,
+      instanceId: nextOverlayInstanceId,
+      pluginId,
+    },
+  });
+  nextOverlayInstanceId += 1;
 }
 
 export function closePluginOverlay(pluginId: string, id: string): void {
