@@ -16,8 +16,8 @@ on:
 #   3. Local package tgz sha256 matches declared digest
 #   4. Local package tgz size matches declared bytes
 #
-# PRs verify against freshly built local packages because the GitHub Release
-# asset is published later by release-plugin.yml.
+# PRs build the current source package independently, then validate the signed
+# index against the immutable GitHub Release assets it actually references.
 
 permissions:
   contents: read
@@ -40,5 +40,5 @@ jobs:
       - name: Build plugin packages
         run: pnpm plugins:pack
 
-      - name: Validate index against local packages
-        run: node scripts/verify-plugin-index-assets.mjs
+      - name: Validate index against published release assets
+        run: node scripts/verify-plugin-index-assets.mjs --source=release

@@ -31,7 +31,7 @@
     "plugin:codex:pack": "pnpm --filter @pier/plugin-codex build:package",
     "plugins:pack": "pnpm -r --filter '@pier/plugin-*' --workspace-concurrency=1 run build:package",
     "plugins:index": "node ./scripts/generate-plugin-index.mjs",
-    "check:plugin-index": "pnpm plugins:pack && node scripts/verify-plugin-index-assets.mjs",
+    "check:plugin-index": "pnpm plugins:pack && node scripts/verify-plugin-index-assets.mjs --source=release",
     "check:static": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size",
     "check": "pnpm check:static && pnpm test:unit && pnpm test:component && pnpm test:integration",
     "test": "vitest",

@@ -40,6 +40,10 @@ const releaseWorkflow = readFileSync(
   join(process.cwd(), ".github/workflows/release-plugin.yml"),
   "utf8"
 );
+const verifyIndexWorkflow = readFileSync(
+  join(process.cwd(), ".github/workflows/verify-index.yml"),
+  "utf8"
+);
 const prePushHook = readFileSync(
   join(process.cwd(), ".husky/pre-push"),
   "utf8"
@@ -96,9 +100,15 @@ describe("managed plugin packaging governance", () => {
       "verify-plugin-index-assets.mjs"
     );
     expect(packageJson.scripts?.["check:plugin-index"]).toContain(
+      "--source=release"
+    );
+    expect(packageJson.scripts?.["check:plugin-index"]).toContain(
       "plugins:pack"
     );
     expect(prePushHook).toContain("pnpm check:plugin-index");
+    expect(verifyIndexWorkflow).toContain(
+      "verify-plugin-index-assets.mjs --source=release"
+    );
   });
 
   it("matches every bundled widget to its approved explicit sizing policy", () => {
