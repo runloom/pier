@@ -7,7 +7,7 @@ import type { FilesDocument } from "./files-document-types.ts";
 const DISK_SAVE_CAPABILITIES = ["save", "saveAs"] as const;
 
 function unsupportedReadOnlyReason(
-  result: Exclude<FileDocumentReadResult, { kind: "text" }>
+  result: Exclude<FileDocumentReadResult, { kind: "image" | "text" }>
 ): NonNullable<FilesDocument["readOnlyReason"]> {
   if (result.kind === "binary") {
     return "binary";
@@ -72,6 +72,46 @@ export function withDocumentReadResult(
   document: FilesDocument,
   result: FileDocumentReadResult
 ): FilesDocument {
+  if (result.kind === "image") {
+    if (document.dirty || document.durabilityUnknown) {
+      return {
+        ...document,
+        capabilities: [],
+        diskConflict: true,
+        error: null,
+        loadState: "loaded",
+        preview: null,
+        readOnly: true,
+        readOnlyReason: "binary",
+        size: result.size,
+      };
+    }
+    return {
+      ...document,
+      baseMtimeMs: result.mtimeMs,
+      capabilities: [],
+      canonicalPath: result.canonicalPath,
+      currentContents: "",
+      deletedOnDisk: false,
+      dirty: false,
+      eol: null,
+      error: null,
+      format: null,
+      loadState: "loaded",
+      mode: null,
+      mime: result.mime,
+      preview: {
+        kind: "image",
+        mime: result.mime,
+        revision: result.revision,
+      },
+      readOnly: true,
+      readOnlyReason: null,
+      revision: result.revision,
+      savedContents: "",
+      size: result.size,
+    };
+  }
   if (result.kind !== "text") {
     const readOnlyReason = unsupportedReadOnlyReason(result);
     if (document.dirty || document.durabilityUnknown) {
@@ -81,6 +121,8 @@ export function withDocumentReadResult(
         diskConflict: true,
         error: null,
         loadState: "loaded",
+        mime: result.kind === "binary" ? result.mime : null,
+        preview: null,
         readOnly: true,
         readOnlyReason,
         size: "size" in result ? result.size : document.size,
@@ -97,6 +139,8 @@ export function withDocumentReadResult(
       format: null,
       loadState: "loaded",
       mode: null,
+      mime: result.kind === "binary" ? result.mime : null,
+      preview: null,
       readOnly: true,
       readOnlyReason,
       revision: "revision" in result ? result.revision : null,
@@ -133,6 +177,8 @@ export function withDocumentReadResult(
     hasBackingStore: true,
     loadState: "loaded" as const,
     mode: result.mode,
+    mime: null,
+    preview: null,
     readOnly: readOnlyReason !== null,
     readOnlyReason,
     revision: result.revision,
@@ -183,6 +229,8 @@ export function withDocumentPathReconciled(
     format: result.format,
     loadState: "loaded",
     mode: result.mode,
+    mime: null,
+    preview: null,
     readOnly: readOnlyReason !== null,
     readOnlyReason,
     revision: result.revision,

@@ -1,3 +1,5 @@
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@pier/ui/empty.tsx";
+import { Construction } from "lucide-react";
 import { CodeMirrorEditor } from "./code-mirror-editor.tsx";
 import type { FileEditorAdapterProps } from "./file-editor-adapter-types.ts";
 import { FilesLineDiff } from "./files-line-diff.tsx";
@@ -40,8 +42,13 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
 
 function UnsupportedFileView({ label }: { label: string }) {
   return (
-    <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-      {label}
-    </div>
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Construction />
+        </EmptyMedia>
+        <EmptyTitle>{label}</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
   );
 }

@@ -1,6 +1,14 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
+import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
@@ -10,6 +18,9 @@ import {
   ArrowLeft,
   ArrowRight,
   ChevronRight,
+  FileQuestion,
+  FileX,
+  MousePointerClick,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -41,28 +52,34 @@ export function ReadOnlyErrorState({
 
 export function UnsupportedFileState({
   actions,
+  details,
   message,
   title,
-  t,
 }: {
   actions?: ReactNode;
+  details?: ReactNode;
   message: string;
   title: string;
-  t: FilesTranslate;
 }) {
   return (
-    <div className="flex h-full flex-col gap-3 bg-background p-4">
-      <h1 className="font-semibold text-foreground text-sm">{title}</h1>
-      <Alert>
-        <AlertTitle>
-          {t("filePanel.unsupported.title", "This file cannot be edited")}
-        </AlertTitle>
-        <AlertDescription>{message}</AlertDescription>
-      </Alert>
-      {actions ? (
-        <div className="flex items-center gap-2">{actions}</div>
+    <Empty>
+      <h1 className="sr-only">{title}</h1>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <FileQuestion />
+        </EmptyMedia>
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{message}</EmptyDescription>
+      </EmptyHeader>
+      {details || actions ? (
+        <EmptyContent>
+          {details}
+          {actions ? (
+            <div className="flex items-center gap-2">{actions}</div>
+          ) : null}
+        </EmptyContent>
       ) : null}
-    </div>
+    </Empty>
   );
 }
 
@@ -74,32 +91,26 @@ export function MissingTemporaryState({
   t: FilesTranslate;
 }) {
   return (
-    <div className="flex h-full flex-col gap-3 bg-background p-4">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate font-semibold text-foreground text-sm">
-            {name}
-          </h1>
-          <p className="text-muted-foreground text-xs">
-            {t("filePanel.readOnly", "Read-only")}
-          </p>
-        </div>
-      </div>
-      <Alert>
-        <AlertTitle>
+    <Empty>
+      <h1 className="sr-only">{name}</h1>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <FileX />
+        </EmptyMedia>
+        <EmptyTitle>
           {t(
             "filePanel.temporary.missing.title",
             "Temporary file cannot be restored"
           )}
-        </AlertTitle>
-        <AlertDescription>
+        </EmptyTitle>
+        <EmptyDescription>
           {t(
             "filePanel.temporary.missing.description",
             "Temporary document contents are restored from the local draft cache when possible, and are released when the file panel closes."
           )}
-        </AlertDescription>
-      </Alert>
-    </div>
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 
@@ -111,22 +122,27 @@ export function EmptyFileState({
   t: FilesTranslate;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 bg-background p-6 text-center">
-      <h1 className="font-semibold text-foreground text-sm">
-        {t("filePanel.empty.title", "No file selected")}
-      </h1>
-      <p className="max-w-sm text-muted-foreground text-xs">
-        {hasProjectTree
-          ? t(
-              "filePanel.empty.withTree.description",
-              "Select a file from the project tree to open it in this tab."
-            )
-          : t(
-              "filePanel.empty.noTree.description",
-              "Open a file or a terminal Markdown preview to start editing."
-            )}
-      </p>
-    </div>
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <MousePointerClick />
+        </EmptyMedia>
+        <EmptyTitle>
+          {t("filePanel.empty.title", "No file selected")}
+        </EmptyTitle>
+        <EmptyDescription>
+          {hasProjectTree
+            ? t(
+                "filePanel.empty.withTree.description",
+                "Select a file from the project tree to open it in this tab."
+              )
+            : t(
+                "filePanel.empty.noTree.description",
+                "Open a file or a terminal Markdown preview to start editing."
+              )}
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 

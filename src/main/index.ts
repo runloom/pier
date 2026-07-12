@@ -14,6 +14,10 @@ import { handleMainStartupFailure } from "./app-startup-failure.ts";
 import { installCsp } from "./csp.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
 import {
+  handleFilePreviewProtocol,
+  registerFilePreviewScheme,
+} from "./files/file-preview-protocol.ts";
+import {
   handleAssetProtocol,
   registerAssetScheme,
 } from "./fonts/asset-protocol.ts";
@@ -289,11 +293,13 @@ if (gotTheLock) {
     .then(() => {
       registerAssetScheme();
       registerPluginAssetScheme();
+      registerFilePreviewScheme();
       return app.whenReady();
     })
     .then(async () => {
       installCsp();
       handleAssetProtocol();
+      handleFilePreviewProtocol();
       handlePluginAssetProtocol({
         getRuntimeSources: () =>
           appCore.services.managedPlugins.getRuntimeSources(),

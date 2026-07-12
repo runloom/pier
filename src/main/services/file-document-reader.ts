@@ -7,8 +7,13 @@ import type {
   FileReadDocumentRequest,
   FileWriteTargetInspection,
 } from "@shared/contracts/file.ts";
+import {
+  MAX_IMAGE_PREVIEW_FILE_BYTES,
+  readPreviewImageMime,
+} from "../files/image-preview-file.ts";
 import { decodeFileDocument } from "./file-document-codec.ts";
 import {
+  inspectFileRevision,
   isMissingPathError,
   resolveExistingFileIdentity,
   resolveWritableFileIdentity,
@@ -118,6 +123,44 @@ export async function readFileDocument(
       kind: "unsupported-file",
       path: request.path,
       root: request.root,
+    };
+  }
+  const imageMime = await readPreviewImageMime(identity.canonicalTarget);
+  if (imageMime) {
+    if (identity.stat.size > MAX_IMAGE_PREVIEW_FILE_BYTES) {
+      return {
+        kind: "too-large",
+        limit: MAX_IMAGE_PREVIEW_FILE_BYTES,
+        path: request.path,
+        root: request.root,
+        size: identity.stat.size,
+      };
+    }
+    const inspected = await inspectFileRevision(request.root, request.path);
+    if (inspected.identity.stat.size > MAX_IMAGE_PREVIEW_FILE_BYTES) {
+      return {
+        kind: "too-large",
+        limit: MAX_IMAGE_PREVIEW_FILE_BYTES,
+        path: request.path,
+        root: request.root,
+        size: inspected.identity.stat.size,
+      };
+    }
+    const inspectedMime = await readPreviewImageMime(
+      inspected.identity.canonicalTarget
+    );
+    if (!inspectedMime) {
+      throw new Error("file changed while classifying image preview");
+    }
+    return {
+      canonicalPath: inspected.identity.canonicalPath,
+      kind: "image",
+      mime: inspectedMime,
+      mtimeMs: inspected.identity.stat.mtimeMs,
+      path: request.path,
+      revision: inspected.revision,
+      root: request.root,
+      size: inspected.identity.stat.size,
     };
   }
   if (identity.stat.size > MAX_EDITABLE_FILE_BYTES) {
