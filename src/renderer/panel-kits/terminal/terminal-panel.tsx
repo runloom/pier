@@ -169,6 +169,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const currentTaskOutput =
     taskOutputFromParams(props.params) ?? activeLaunch.taskOutput;
   const runtimeControl = useTerminalRuntimeControlPresentation(panelId);
+  const handleRuntimeControlInteractionChange = useCallback(
+    (active: boolean) => {
+      runtimeControl.setAutoExitPause(active);
+    },
+    [runtimeControl.setAutoExitPause]
+  );
   const forceStoppedRun = taskRunsForPanel(taskRunsSnapshot, panelId).find(
     (run) =>
       run.runId === activeLaunch.task?.runId &&
@@ -457,6 +463,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
                   />
                 ),
                 id: "runtime-controls",
+                onInteractionChange: handleRuntimeControlInteractionChange,
                 phase: runtimeControl.phase,
               }
             : undefined

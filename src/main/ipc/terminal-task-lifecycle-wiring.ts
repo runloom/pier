@@ -19,6 +19,17 @@ import { parseTaskExitTitle } from "./terminal-task-exit-title.ts";
 import { createTerminalTaskLifecycle } from "./terminal-task-lifecycle.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
+const suppressedSurfaceClosePanelIds = new Set<string>();
+
+export function suppressNextTerminalSurfaceClose(
+  nativePanelId: string
+): () => void {
+  suppressedSurfaceClosePanelIds.add(nativePanelId);
+  return () => {
+    suppressedSurfaceClosePanelIds.delete(nativePanelId);
+  };
+}
+
 export interface RegisteredTerminalTaskLifecycle {
   ignoreNextNativeUserClose(
     panelId: string,
@@ -228,7 +239,10 @@ export function registerTerminalTaskLifecycleForwarding(
       // close-surface callback，此时由 renderer 的 workspace 关闭策略收口。
       // processAlive=true 是宿主主动关闭 native surface 的回声，
       // 不得再次请求关闭 panel，否则会形成递归。
-      if (processAlive === false) {
+      if (
+        processAlive === false &&
+        !suppressedSurfaceClosePanelIds.delete(panelId)
+      ) {
         forwardToWindow(
           id,
           PIER_BROADCAST.TERMINAL_SURFACE_CLOSE_REQUEST,

@@ -2,13 +2,17 @@ import type { TaskRunControlEntry } from "@shared/contracts/tasks.ts";
 import type { DockviewApi } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import { rebindOpenTaskOutputsAfterRestart } from "@/lib/actions/task-output-run-operations.ts";
+import {
+  rebindOpenTaskOutputsAfterRestart,
+  requestTaskOutputSurfaceClose,
+} from "@/lib/actions/task-output-run-operations.ts";
 import {
   resolveTaskRunActionTarget,
   restartTaskRun,
   taskRunActionTargetFromRun,
 } from "@/lib/actions/task-run-operations.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import { useAppDialogStore } from "@/stores/app-dialog.store.ts";
 import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -114,6 +118,10 @@ describe("task run operations", () => {
       initialized: false,
       snapshot: { runs: {}, version: 0 },
     });
+    const dialog = useAppDialogStore.getState().current;
+    if (dialog?.kind === "alert") {
+      dialog.resolve(false);
+    }
     vi.restoreAllMocks();
   });
 
@@ -323,6 +331,102 @@ describe("task run operations", () => {
         taskOutput: expect.objectContaining({ selectedRunId: "run-new" }),
       })
     );
+  });
+
+  it("defers an output surface close during restart and discards it after rebind", async () => {
+    const origin = {
+      id: "terminal-origin",
+      params: {
+        context: {
+          contextId: "ctx-repo",
+          projectRootPath: "/repo",
+          updatedAt: 100,
+        },
+      },
+      view: { contentComponent: "terminal" },
+    };
+    const output = outputPanel("task-output-run-1-test", "run-1");
+    const current = taskRun("run-1", "background-task", "background");
+    const spawn = Promise.withResolvers<{
+      panelIds: string[];
+      primaryPanelId: string;
+      runId: string;
+      status: "started";
+    }>();
+    installApi(origin, [origin, output]);
+    vi.mocked(window.pier.tasks.spawn).mockReturnValue(spawn.promise);
+
+    const restart = restartTaskRun(
+      taskRunActionTargetFromRun(current, "terminal-origin", "Test output")
+    );
+    await vi.waitFor(() => {
+      expect(window.pier.tasks.spawn).toHaveBeenCalledTimes(1);
+    });
+    const close = vi.fn();
+    requestTaskOutputSurfaceClose(output.id, close);
+    expect(close).not.toHaveBeenCalled();
+
+    spawn.resolve({
+      panelIds: ["terminal-origin"],
+      primaryPanelId: "terminal-origin",
+      runId: "run-new",
+      status: "started",
+    });
+    await expect(restart).resolves.toEqual({
+      panelRebound: true,
+      runId: "run-new",
+    });
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["unsupported", { message: "unsupported", status: "unsupported" as const }],
+    ["failed", new Error("spawn failed")],
+  ])("releases a deferred output surface close when restart is %s", async (_case, outcome) => {
+    const origin = {
+      id: "terminal-origin",
+      params: {
+        context: {
+          contextId: "ctx-repo",
+          projectRootPath: "/repo",
+          updatedAt: 100,
+        },
+      },
+      view: { contentComponent: "terminal" },
+    };
+    const output = outputPanel("task-output-run-1-test", "run-1");
+    const current = taskRun("run-1", "background-task", "background");
+    const spawn = Promise.withResolvers<
+      { message: string; status: "unsupported" } | never
+    >();
+    installApi(origin, [origin, output]);
+    vi.mocked(window.pier.tasks.spawn).mockReturnValue(spawn.promise);
+
+    const restart = restartTaskRun(
+      taskRunActionTargetFromRun(current, "terminal-origin", "Test output")
+    );
+    await vi.waitFor(() => {
+      expect(window.pier.tasks.spawn).toHaveBeenCalledTimes(1);
+    });
+    const close = vi.fn();
+    requestTaskOutputSurfaceClose(output.id, close);
+    expect(close).not.toHaveBeenCalled();
+
+    if (outcome instanceof Error) {
+      spawn.reject(outcome);
+    } else {
+      spawn.resolve(outcome);
+    }
+    await vi.waitFor(() => {
+      expect(useAppDialogStore.getState().current?.kind).toBe("alert");
+    });
+    const alert = useAppDialogStore.getState().current;
+    if (alert?.kind !== "alert") {
+      throw new Error("expected restart failure alert");
+    }
+    alert.resolve(false);
+    await expect(restart).resolves.toBeNull();
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it("rolls back earlier output views when a later rebind fails", async () => {

@@ -168,6 +168,130 @@ describe("terminal panel floating host", () => {
     });
   });
 
+  it("aggregates pointer and focus-within interaction", () => {
+    const onInteractionChange = vi.fn();
+
+    function Fixture() {
+      const panelRootRef = useRef<HTMLDivElement>(null);
+      return (
+        <div data-testid="floating-host-fixture" ref={panelRootRef}>
+          <TerminalPanelFloatingHost
+            layout={{ positions: {}, version: 1 }}
+            onPositionCommit={vi.fn()}
+            panelId="terminal-1"
+            panelRootRef={panelRootRef}
+            primary={{
+              content: <button type="button">Open result</button>,
+              id: "runtime-controls",
+              onInteractionChange,
+            }}
+          />
+          <button type="button">Outside</button>
+        </div>
+      );
+    }
+
+    const { container } = render(<Fixture />);
+    const primary = container.querySelector<HTMLElement>(
+      '[data-floating-item="runtime-controls"]'
+    );
+    const handle = screen.getByRole("button", { name: "Move run controls" });
+    const contentButton = screen.getByRole("button", { name: "Open result" });
+    const outsideButton = screen.getByRole("button", { name: "Outside" });
+    expect(primary).not.toBeNull();
+
+    fireEvent.pointerEnter(primary as HTMLElement);
+    expect(onInteractionChange).toHaveBeenLastCalledWith(true);
+    fireEvent.pointerLeave(primary as HTMLElement);
+    expect(onInteractionChange).toHaveBeenLastCalledWith(false);
+
+    onInteractionChange.mockClear();
+    fireEvent.focus(handle);
+    expect(onInteractionChange).toHaveBeenCalledOnce();
+    expect(onInteractionChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.blur(handle, { relatedTarget: contentButton });
+    fireEvent.focus(contentButton, { relatedTarget: handle });
+    expect(onInteractionChange).toHaveBeenCalledOnce();
+
+    fireEvent.pointerEnter(primary as HTMLElement);
+    fireEvent.pointerLeave(primary as HTMLElement);
+    expect(onInteractionChange).toHaveBeenCalledOnce();
+
+    fireEvent.blur(contentButton, { relatedTarget: outsideButton });
+    fireEvent.focus(outsideButton, { relatedTarget: contentButton });
+    expect(onInteractionChange).toHaveBeenCalledTimes(2);
+    expect(onInteractionChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("clears interaction on callback change, primary replacement, and unmount", () => {
+    const firstCallback = vi.fn();
+    const secondCallback = vi.fn();
+
+    function Fixture({
+      callback,
+      id,
+      mounted,
+    }: {
+      callback: (interacting: boolean) => void;
+      id: string;
+      mounted: boolean;
+    }) {
+      const panelRootRef = useRef<HTMLDivElement>(null);
+      return (
+        <div data-testid="floating-host-fixture" ref={panelRootRef}>
+          <TerminalPanelFloatingHost
+            layout={{ positions: {}, version: 1 }}
+            onPositionCommit={vi.fn()}
+            panelId="terminal-1"
+            panelRootRef={panelRootRef}
+            primary={
+              mounted
+                ? {
+                    content: <span>Run test</span>,
+                    id,
+                    onInteractionChange: callback,
+                  }
+                : undefined
+            }
+          />
+        </div>
+      );
+    }
+
+    const { container, rerender, unmount } = render(
+      <Fixture callback={firstCallback} id="runtime-controls" mounted />
+    );
+    fireEvent.pointerEnter(
+      container.querySelector(
+        '[data-floating-item="runtime-controls"]'
+      ) as Element
+    );
+    expect(firstCallback).toHaveBeenLastCalledWith(true);
+
+    rerender(
+      <Fixture callback={secondCallback} id="runtime-controls" mounted />
+    );
+    expect(firstCallback).toHaveBeenLastCalledWith(false);
+
+    fireEvent.pointerEnter(
+      container.querySelector(
+        '[data-floating-item="runtime-controls"]'
+      ) as Element
+    );
+    expect(secondCallback).toHaveBeenLastCalledWith(true);
+
+    rerender(<Fixture callback={secondCallback} id="replacement" mounted />);
+    expect(secondCallback).toHaveBeenLastCalledWith(false);
+
+    fireEvent.pointerEnter(
+      container.querySelector('[data-floating-item="replacement"]') as Element
+    );
+    expect(secondCallback).toHaveBeenLastCalledWith(true);
+    unmount();
+    expect(secondCallback).toHaveBeenLastCalledWith(false);
+  });
+
   it("keeps content and event routing registered until the whole capsule exits", () => {
     const dispose = vi.fn();
     const registerElement = vi.fn(() => ({

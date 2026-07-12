@@ -6,7 +6,7 @@ import { Spinner } from "@pier/ui/spinner.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import type { TaskRunControlEntry } from "@shared/contracts/tasks.ts";
 import {
-  ExternalLink,
+  LocateFixed,
   type LucideIcon,
   OctagonX,
   RotateCcw,
@@ -45,6 +45,7 @@ function ActionButton({
   loading = false,
   onClick,
   testId,
+  variant = "ghost",
 }: {
   disabled?: boolean;
   icon: LucideIcon;
@@ -52,6 +53,7 @@ function ActionButton({
   loading?: boolean;
   onClick(): Promise<void> | void;
   testId?: string;
+  variant?: "destructive" | "ghost";
 }) {
   return (
     <Tooltip>
@@ -63,7 +65,7 @@ function ActionButton({
           onClick={onClick}
           size="icon-sm"
           type="button"
-          variant="ghost"
+          variant={variant}
         >
           {loading ? (
             <Spinner aria-hidden="true" data-icon="inline-start" />
@@ -149,6 +151,8 @@ export function TerminalRuntimeControl({
     }
   };
 
+  const active = isActiveTaskRunStatus(run.status);
+
   return (
     <fieldset
       aria-label={t("terminal.runtimeControl.controlLabel", { label })}
@@ -214,14 +218,7 @@ export function TerminalRuntimeControl({
 
       <Separator className="my-2" orientation="vertical" />
       <div className="flex shrink-0 items-center gap-0.5 px-1">
-        <ActionButton
-          disabled={pendingAction !== null || run.status === "stopping"}
-          icon={RotateCcw}
-          label={t("terminal.runtimeControl.restart")}
-          loading={pendingAction === "restart"}
-          onClick={restart}
-        />
-        {isActiveTaskRunStatus(run.status) ? (
+        {active ? (
           <ActionButton
             disabled={
               pendingAction !== null || (run.status === "stopping" && !force)
@@ -237,16 +234,20 @@ export function TerminalRuntimeControl({
             }
             onClick={stop}
             testId="terminal-runtime-control-stop"
+            variant={force ? "destructive" : "ghost"}
           />
         ) : null}
-        {run.mode === "terminal-tab" ? (
+        {!active || run.status === "running" ? (
           <ActionButton
             disabled={pendingAction !== null}
-            icon={ExternalLink}
-            label={t("terminal.runtimeControl.reveal")}
-            onClick={reveal}
+            icon={RotateCcw}
+            label={t("terminal.runtimeControl.restart")}
+            loading={pendingAction === "restart"}
+            onClick={restart}
+            testId="terminal-runtime-control-restart"
           />
-        ) : (
+        ) : null}
+        {run.mode === "background" ? (
           <ActionButton
             disabled={pendingAction !== null}
             icon={SquareTerminal}
@@ -254,8 +255,17 @@ export function TerminalRuntimeControl({
             onClick={openOutput}
             testId="terminal-runtime-control-open-output"
           />
-        )}
-        {persistent ? (
+        ) : null}
+        {run.mode !== "background" && run.status !== "pending" ? (
+          <ActionButton
+            disabled={pendingAction !== null}
+            icon={LocateFixed}
+            label={t("terminal.runtimeControl.reveal")}
+            onClick={reveal}
+            testId="terminal-runtime-control-reveal"
+          />
+        ) : null}
+        {active ? null : (
           <ActionButton
             disabled={pendingAction !== null}
             icon={X}
@@ -263,7 +273,7 @@ export function TerminalRuntimeControl({
             onClick={() => onDismissRun(run.runId)}
             testId="terminal-runtime-control-dismiss"
           />
-        ) : null}
+        )}
       </div>
     </fieldset>
   );

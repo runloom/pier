@@ -8,7 +8,7 @@ import type {
   IDockviewPanelProps,
   PierDockviewGroupHandle,
 } from "@shared/contracts/dockview.ts";
-import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
@@ -190,6 +190,14 @@ export interface PluginPanelRegistration {
    */
   id: string;
   kind: "terminal" | "web";
+  /**
+   * 从 panel params 同步派生宿主 tab 呈现。宿主在新建、参数更新和布局恢复时
+   * 调用；返回 undefined 时使用注册级 icon/title。
+   */
+  resolveTab?: (input: {
+    params: Readonly<Record<string, unknown>>;
+    title: string;
+  }) => PanelTabChrome | undefined;
   /** 可选 tab 标题。传 thunk 让 locale 切换时实时生效;省略则 fallback 到 id。 */
   title?: (() => string) | string;
 }

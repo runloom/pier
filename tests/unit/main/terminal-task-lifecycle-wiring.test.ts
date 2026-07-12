@@ -1,4 +1,7 @@
-import { registerTerminalTaskLifecycleForwarding } from "@main/ipc/terminal-task-lifecycle-wiring.ts";
+import {
+  registerTerminalTaskLifecycleForwarding,
+  suppressNextTerminalSurfaceClose,
+} from "@main/ipc/terminal-task-lifecycle-wiring.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -130,6 +133,19 @@ describe("terminal task lifecycle wiring", () => {
     callbacks.processClosed?.(42, "native::terminal-1", "", true);
 
     expect(forwardToWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("suppresses only the stale native close emitted by an output reset", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromNativeProcessCloseMock.mockResolvedValue(false);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+    suppressNextTerminalSurfaceClose("native::task-output");
+
+    callbacks.processClosed?.(42, "native::task-output", "", false);
+    expect(forwardToWindowMock).not.toHaveBeenCalled();
+
+    callbacks.processClosed?.(42, "native::task-output", "", false);
+    expect(forwardToWindowMock).toHaveBeenCalledOnce();
   });
 
   it("normalizes negative command-finished exit codes before recording hints", () => {

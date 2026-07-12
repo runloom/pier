@@ -691,6 +691,41 @@ describe("PanelTabHeader", () => {
     ).not.toBeNull();
   });
 
+  it("renders a file-tree icon for namespaced file tab chrome", () => {
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "file-1": {
+          display: { short: "file.ts" },
+          tab: {
+            icon: { id: "pier.file:file.ts" },
+            title: "file.ts",
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader
+        {...createHeaderProps(
+          "pier.files.filePanel",
+          "file.ts",
+          undefined,
+          "file-1"
+        )}
+      />
+    );
+
+    const icon = container.querySelector(
+      '[data-panel-tab-icon="pier.file:file.ts"]'
+    );
+    expect(icon).toHaveAttribute("data-icon-token", "typescript");
+    expect(icon?.querySelector("use")).toHaveAttribute(
+      "href",
+      "#file-tree-builtin-typescript"
+    );
+  });
+
   it("does not render an icon for unknown panel kits", () => {
     const { container } = render(
       <PanelTabHeader {...createHeaderProps("unknown", "Unknown")} />
@@ -749,12 +784,28 @@ describe("PanelTabHeader", () => {
   });
 
   it("toggles the active group tab shortcut hint from web Command key events", () => {
-    useTerminalStore.getState().setActiveGroupPanels([{ id: "terminal-1" }]);
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "file-1": {
+          display: { short: "file.ts" },
+          tab: { icon: { id: "pier.file:file.ts" }, title: "file.ts" },
+        },
+      },
+    });
+    useTerminalStore.getState().setActiveGroupPanels([{ id: "file-1" }]);
 
     const { container } = render(
       <>
         <ShellKeybindings />
-        <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+        <PanelTabHeader
+          {...createHeaderProps(
+            "pier.files.filePanel",
+            "file.ts",
+            undefined,
+            "file-1"
+          )}
+        />
       </>
     );
 
@@ -774,7 +825,7 @@ describe("PanelTabHeader", () => {
     fireEvent.keyUp(window, { code: "MetaLeft", metaKey: false });
     expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
     expect(
-      container.querySelector('[data-panel-tab-icon="terminal"]')
+      container.querySelector('[data-panel-tab-icon="pier.file:file.ts"]')
     ).not.toBeNull();
   });
 

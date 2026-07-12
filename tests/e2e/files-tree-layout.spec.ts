@@ -31,7 +31,7 @@ async function forceClose(application: ElectronApplication): Promise<void> {
   ]);
 }
 
-test("uses available file-tree width and shares the sidebar search surface", async ({
+test("uses available file-tree width and shares file icons and the sidebar search surface", async ({
   browserName: _browserName,
 }, testInfo) => {
   test.setTimeout(60_000);
@@ -69,6 +69,9 @@ test("uses available file-tree width and shares the sidebar search surface", asy
       }
     });
     await page.waitForLoadState("domcontentloaded");
+    expect(page.url()).toMatch(/^file:/u);
+    await expect(page).toHaveTitle(/Pier/u);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
     await page
       .locator(
         '[data-testid="workspace-host-root"][data-workspace-ready="true"]'
@@ -104,6 +107,60 @@ test("uses available file-tree width and shares the sidebar search surface", asy
       name: "no-direct-dockview-imports.js",
     });
     await expect(rule).toBeVisible();
+    const treeFileIcon = rule.locator(
+      '[data-item-section="icon"] svg[data-icon-token="javascript"]'
+    );
+    await expect(treeFileIcon).toBeVisible();
+    const treeFileIconPresentation = {
+      color: await treeFileIcon.evaluate(
+        (element) => getComputedStyle(element).color
+      ),
+      href: await treeFileIcon.locator("use").getAttribute("href"),
+      token: await treeFileIcon.getAttribute("data-icon-token"),
+    };
+    await rule.click();
+    const tabFileIcon = page.locator(
+      '[data-panel-tab-icon="pier.file:no-direct-dockview-imports.js"]'
+    );
+    await expect(tabFileIcon).toBeVisible();
+    const tabFileIconPresentation = {
+      color: await tabFileIcon.evaluate(
+        (element) => getComputedStyle(element).color
+      ),
+      href: await tabFileIcon.locator("use").getAttribute("href"),
+      token: await tabFileIcon.getAttribute("data-icon-token"),
+    };
+    expect(tabFileIconPresentation).toEqual(treeFileIconPresentation);
+    const fileTabId = await tabFileIcon.evaluate((element) =>
+      element.closest("[data-panel-tab-id]")?.getAttribute("data-panel-tab-id")
+    );
+    expect(fileTabId).toBeTruthy();
+    const fileTab = page.locator(`[data-panel-tab-id="${fileTabId}"]`);
+
+    await page.keyboard.down("Meta");
+    await expect(tabFileIcon).toBeHidden();
+    await expect(fileTab.locator("[data-panel-tab-index-hint]")).toContainText(
+      "⌘"
+    );
+    await page.keyboard.up("Meta");
+    await expect(tabFileIcon).toBeVisible();
+    await fileTab.dblclick();
+    await dirty.click();
+    await selectTheme(page, { id: "light", label: /Light|浅色/u });
+    await expect
+      .poll(async () => ({
+        tab: await tabFileIcon.evaluate(
+          (element) => getComputedStyle(element).color
+        ),
+        tree: await treeFileIcon.evaluate(
+          (element) => getComputedStyle(element).color
+        ),
+      }))
+      .toEqual({
+        tab: "rgb(213, 169, 16)",
+        tree: "rgb(213, 169, 16)",
+      });
+    await selectTheme(page, { id: "dark", label: /Dark|深色/u });
     const layout = await rule.evaluate((element) => {
       const content = element.querySelector<HTMLElement>(
         '[data-item-section="content"]'

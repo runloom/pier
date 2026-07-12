@@ -1,6 +1,8 @@
 import type * as React from "react";
+import { PIER_FILE_TREE_ICON_COLOR_OVERRIDES } from "./file-icon-theme.ts";
 
 export type PierFileTreeStyle = React.CSSProperties & {
+  [key: `--trees-file-icon-color-${string}`]: string | undefined;
   "--trees-accent-override"?: string;
   "--trees-bg-muted-override"?: string;
   "--trees-bg-override"?: string;
@@ -78,6 +80,7 @@ export function pierFileTreeStyle(
   style: React.CSSProperties | undefined
 ): PierFileTreeStyle {
   return {
+    ...PIER_FILE_TREE_ICON_COLOR_OVERRIDES,
     "--trees-bg-override": "var(--sidebar)",
     "--trees-fg-override": "var(--sidebar-foreground)",
     "--trees-fg-muted-override": "var(--muted-foreground)",

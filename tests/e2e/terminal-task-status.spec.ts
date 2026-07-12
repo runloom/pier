@@ -73,6 +73,8 @@ function writeQuickTaskProject(projectRoot: string) {
           quick: 'node -e "process.exit(0)"',
           "background-output":
             "node -e \"console.log('pier background output'); setTimeout(() => console.error('pier background done'), 15000)\"",
+          "background-success":
+            'node -e "setTimeout(() => process.exit(0), 1000)"',
           "background-failure":
             "node -e \"console.error('pier expected failure'); process.exit(2)\"",
           // Long enough that reload / app-quit happens while the pty runs,
@@ -170,6 +172,56 @@ test.describe("Terminal task status e2e", () => {
     }
   });
 
+  test("keeps a successful background result while the runtime control is hovered", async () => {
+    test.setTimeout(120_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-task-success-e2e-"));
+    const projectRoot = mkdtempSync(join(tmpdir(), "pier-task-success-proj-"));
+    writeQuickTaskProject(projectRoot);
+
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      const started = await win.evaluate(
+        async ({ path }) =>
+          await window.pier.tasks.spawn({
+            mode: "background",
+            projectRootPath: path,
+            taskId: "package-script:background-success",
+            terminalPanelId: "terminal-1",
+          }),
+        { path: projectRoot }
+      );
+      expect(started.status).toBe("started");
+
+      await win.locator('[data-panel-tab-id="terminal-1"]').click();
+      const control = win.getByTestId("terminal-runtime-control");
+      const floatingItem = win.locator(
+        '[data-floating-item="runtime-controls"]'
+      );
+      await expect(control).toHaveAttribute("data-run-status", "running");
+      await floatingItem.hover();
+      await expect(control).toHaveAttribute("data-run-status", "succeeded");
+      await expect(
+        win.getByTestId("terminal-runtime-control-dismiss")
+      ).toBeVisible();
+      await floatingItem.hover();
+      await win.waitForTimeout(5500);
+      await expect(control).toBeVisible();
+
+      await win
+        .getByTestId("terminal-panel-root")
+        .hover({ position: { x: 4, y: 200 } });
+      await expect(control).toHaveCount(0, { timeout: 7000 });
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   test("opens one live output panel for a background run without rerunning it", async () => {
     test.setTimeout(120_000);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-task-output-e2e-"));
@@ -231,6 +283,7 @@ test.describe("Terminal task status e2e", () => {
       );
       await expect(runSelector).toBeVisible();
       const stopButton = win.getByTestId("terminal-runtime-control-stop");
+      await expect(stopButton).toBeVisible();
       await expect(stopButton).toHaveAttribute("data-size", "icon-sm");
       await expect(stopButton).toHaveAttribute("data-tone", "default");
       await expect(stopButton).toHaveAttribute("data-variant", "ghost");
@@ -241,12 +294,19 @@ test.describe("Terminal task status e2e", () => {
         .poll(async () => (await runningFloatingItem.boundingBox())?.width ?? 0)
         .toBeLessThanOrEqual(400);
       const selectorBox = await runSelector.boundingBox();
-      const restartBox = await win
-        .getByRole("button", { name: /重新运行|Restart task/ })
+      const actionSeparatorBox = await win
+        .locator(
+          '[data-testid="terminal-runtime-control"] [data-slot="separator"]'
+        )
         .boundingBox();
       expect(selectorBox).not.toBeNull();
-      expect(restartBox).not.toBeNull();
-      expect(selectorBox?.x ?? 0).toBeLessThan(restartBox?.x ?? 0);
+      expect(actionSeparatorBox).not.toBeNull();
+      expect(selectorBox?.x ?? 0).toBeLessThan(actionSeparatorBox?.x ?? 0);
+      const restartButton = win.getByTestId("terminal-runtime-control-restart");
+      await expect(restartButton).toBeVisible();
+      await expect(
+        win.getByTestId("terminal-runtime-control-more")
+      ).toHaveCount(0);
       await runSelector.click();
       const runOptions = win.locator('[data-slot="dropdown-menu-radio-item"]');
       await expect(runOptions).toHaveCount(2);
@@ -338,10 +398,10 @@ test.describe("Terminal task status e2e", () => {
         (await outputTabs.first().getAttribute("data-panel-tab-id")) ?? "";
       expect(outputPanelId).not.toBe("");
 
-      // 从发起终端的 runtime-control 直接点击重新运行，而不是从输出 Panel
+      // 从发起终端的 runtime-control 直接重新运行，而不是从输出 Panel
       // 调快捷键；已有输出 Panel 必须自动重绑到新 runId。
       await win.locator('[data-panel-tab-id="terminal-1"]').click();
-      await win.getByRole("button", { name: /重新运行|Restart task/ }).click();
+      await win.getByTestId("terminal-runtime-control-restart").click();
 
       let rerunId = "";
       await expect
