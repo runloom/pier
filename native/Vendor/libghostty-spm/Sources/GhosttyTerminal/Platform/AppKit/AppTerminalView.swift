@@ -54,6 +54,11 @@
             core.setDisplayVisible(visible)
         }
 
+        @_spi(PierDiagnostics)
+        public var pierRenderDiagnostics: TerminalSurfaceRenderDiagnostics {
+            core.pierDiagnostics
+        }
+
         var surface: TerminalSurface? {
             core.surface
         }

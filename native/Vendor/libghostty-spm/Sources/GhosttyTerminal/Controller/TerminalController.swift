@@ -56,8 +56,8 @@ public final class TerminalController {
     var renderedConfigContents: String = TerminalController.defaultRenderedConfig
 
     public internal(set) var lastConfigurationIssue: String?
-    var onWakeup: (() -> Void)?
-    var shouldProcessWakeup: (() -> Bool)?
+    private var appTickCount: UInt64 = 0
+    private var lastAppTickUptime: TimeInterval?
 
     // MARK: - Config Resolution State
 
@@ -282,19 +282,24 @@ public final class TerminalController {
 
     // MARK: - Tick
 
-    public func tick() {
+    private func tick() {
         guard let app else { return }
+        appTickCount &+= 1
+        lastAppTickUptime = ProcessInfo.processInfo.systemUptime
+        TerminalDebugLog.log(.render, "app tick")
         ghostty_app_tick(app)
     }
 
     func handleWakeup() {
-        guard shouldProcessWakeup?() ?? true else {
-            TerminalDebugLog.log(.lifecycle, "wakeup suspended")
-            return
-        }
-
         tick()
-        onWakeup?()
+    }
+
+    @_spi(PierDiagnostics)
+    public var pierDiagnostics: TerminalControllerDiagnostics {
+        TerminalControllerDiagnostics(
+            appTickCount: appTickCount,
+            lastAppTickUptime: lastAppTickUptime
+        )
     }
 
     private static func initializeRuntimeIfNeeded() {
@@ -309,5 +314,16 @@ public final class TerminalController {
         if let managedConfigURL {
             try? FileManager.default.removeItem(at: managedConfigURL)
         }
+    }
+}
+
+@_spi(PierDiagnostics)
+public struct TerminalControllerDiagnostics: Sendable {
+    public let appTickCount: UInt64
+    public let lastAppTickUptime: TimeInterval?
+
+    public init(appTickCount: UInt64, lastAppTickUptime: TimeInterval?) {
+        self.appTickCount = appTickCount
+        self.lastAppTickUptime = lastAppTickUptime
     }
 }

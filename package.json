@@ -38,6 +38,7 @@
     "test:unit": "vitest run tests/unit",
     "test:component": "vitest run tests/component",
     "test:integration": "vitest run tests/integration",
+    "test:native": "swift test --package-path native",
     "pretest:e2e": "pnpm plugin:codex:pack",
     "test:e2e": "playwright test --config playwright.config.ts",
     "test:coverage": "vitest run --coverage --no-file-parallelism",

@@ -14,7 +14,8 @@ import { join } from "node:path";
 import { execGit } from "@main/services/git-exec.ts";
 import { createGitService } from "@main/services/git-service.ts";
 import { createGitWatchService } from "@main/services/git-watch-service.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { resolveRepoAnchors } from "@main/services/git-watch-signatures.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const OID_RE = /^[0-9a-f]{40}$/;
 
@@ -204,29 +205,37 @@ describe("GitService 端到端(真临时仓库)", () => {
 describe("GitWatchService 端到端(真 fs.watch)", () => {
   it("修改工作区文件,debounce 后真触发 listener", async () => {
     const repo = await makeRepo();
+    const baselineReady = Promise.withResolvers<void>();
     const watchService = createGitWatchService({
       debounceMs: 50,
       pollMs: 60_000, // 拉长兜底,避免干扰本测试
+      resolveRepoAnchors: async (gitRoot) => {
+        const anchors = await resolveRepoAnchors(gitRoot);
+        // 服务只会在 baseline 完成后解析锚点，因此这是产品控制流提供的
+        // 确定性屏障，不依赖机器负载和固定等待时间。
+        baselineReady.resolve();
+        return anchors;
+      },
     });
     const events: Array<{ changeKind: string; gitRoot: string }> = [];
 
     try {
       watchService.watch(repo, (event) => events.push(event));
-
-      // 等基线签名采集完成(初始 force=true 不触发 listener)
-      await new Promise((resolveFn) => setTimeout(resolveFn, 100));
+      await baselineReady.promise;
 
       // 真改文件触发 fs.watch
       await writeFile(join(repo, "base.txt"), "watcher should see this\n");
 
-      // 等 fs event + debounce + 重算签名
-      await new Promise((resolveFn) => setTimeout(resolveFn, 500));
-
-      expect(events.length).toBeGreaterThanOrEqual(1);
+      await vi.waitFor(
+        () => {
+          expect(events.length).toBeGreaterThanOrEqual(1);
+        },
+        { timeout: 8000 }
+      );
       expect(events[0]?.gitRoot).toBe(repo);
       expect(events[0]?.changeKind).toBe("worktree");
     } finally {
       await watchService.dispose();
     }
-  });
+  }, 20_000);
 });

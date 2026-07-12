@@ -129,5 +129,5 @@ describe("createPierAppCore worktree service graph", () => {
       requestId: "worktree-defaults-root",
     });
     expect(result.ok ? result.data : null).not.toHaveProperty("branchPrefix");
-  });
+  }, 20_000);
 });

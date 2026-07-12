@@ -16,7 +16,7 @@
 import AppKit
 import CoreText
 import Darwin
-import GhosttyTerminal
+@_spi(PierDiagnostics) import GhosttyTerminal
 import GhosttyTheme
 
 // MARK: - Helpers
@@ -1761,20 +1761,40 @@ final class GhosttyBridgeImpl {
             .sorted { $0.key < $1.key }
             .map { panelId, term in
                 let frame = term.containerView.frame
+                let render = term.terminalView.pierRenderDiagnostics
                 var payload: [String: Any] = [
                     "alpha": Double(term.containerView.alphaValue),
                     "browserWindowId": browserWindowId,
                     "cursorSuppressed": term.terminalView.cursorSuppressed,
+                    "drawPending": render.drawPending,
+                    "drawSequence": Double(render.drawSequence),
                     "frame": Self.rectDebugPayload(frame),
+                    "ghosttyRenderReadySequence": Double(
+                        render.ghosttyRenderReadySequence
+                    ),
                     "hasRouterTarget": router?.targets[panelId] != nil,
+                    "hostRefreshRequestSequence": Double(
+                        render.hostRefreshRequestSequence
+                    ),
                     "hostKeyboardActive": term.terminalView.hostKeyboardActive,
                     "isFirstResponder": parent.firstResponder === term.terminalView,
                     "isHidden": term.containerView.isHidden,
                     "isOffscreen": frame.minX < -50000 || frame.minY < -50000,
                     "isSurfaceFocused": term.eventDelegate.isSurfaceFocused,
+                    "lastDrawnGhosttyRenderReadySequence": Double(
+                        render.lastDrawnGhosttyRenderReadySequence
+                    ),
                     "panelId": panelId,
+                    "refreshPending": render.refreshPending,
                     "surfaceVisible": term.surfaceVisible,
+                    "surfaceGeneration": Double(render.surfaceGeneration),
                 ]
+                if let lastDrawUptime = render.lastDrawUptime {
+                    payload["lastDrawUptime"] = lastDrawUptime
+                }
+                if let lastRenderReadyUptime = render.lastRenderReadyUptime {
+                    payload["lastRenderReadyUptime"] = lastRenderReadyUptime
+                }
                 if let contentView {
                     payload["viewportFrame"] = Self.rectDebugPayload(
                         Self.viewportDebugRect(contentView: contentView, frame: frame)
@@ -1786,7 +1806,7 @@ final class GhosttyBridgeImpl {
                 return payload
             }
 
-        let windowPayload: [String: Any] = [
+        var windowPayload: [String: Any] = [
             "activeTerminalPanelId": activeTerminalPanelId,
             "inputRoutingStaleDiscardCount": inputApplyState?.staleDiscardCount ?? 0,
             "keyboardFocusTarget": state.effectiveTarget.debugPayload,
@@ -1799,6 +1819,12 @@ final class GhosttyBridgeImpl {
             "terminalTargetCount": router?.targets.count ?? 0,
             "webOverlayRectCount": router?.webOverlayRects.count ?? 0,
         ]
+        if let controllerDiagnostics = controllers[windowId]?.pierDiagnostics {
+            windowPayload["appTickCount"] = Double(controllerDiagnostics.appTickCount)
+            if let lastAppTickUptime = controllerDiagnostics.lastAppTickUptime {
+                windowPayload["lastAppTickUptime"] = lastAppTickUptime
+            }
+        }
         let snapshot: [String: Any] = [
             "surfaces": surfaces,
             "window": windowPayload,

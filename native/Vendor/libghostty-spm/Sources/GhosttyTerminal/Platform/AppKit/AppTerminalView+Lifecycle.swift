@@ -61,8 +61,8 @@
                 }
                 updateMetalLayerMetrics()
                 updateColorScheme()
-                core.startDisplayLink()
-                core.requestImmediateTick()
+                core.resumeScheduledRendering()
+                core.requestHostRefresh(reason: "view-attached")
 
                 NotificationCenter.default.addObserver(
                     self,
@@ -92,7 +92,7 @@
                     object: window
                 )
             } else {
-                core.stopDisplayLink()
+                core.suspendScheduledRendering()
                 applySurfaceFocus(false)
             }
         }
@@ -114,7 +114,7 @@
                 guard let self else { return }
                 updateMetalLayerMetrics()
                 core.synchronizeMetrics()
-                core.requestImmediateTick()
+                core.requestHostRefresh(reason: "screen-changed")
             }
         }
 
@@ -142,20 +142,17 @@
         override open func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
             core.fitToSize()
-            core.requestImmediateTick()
         }
 
         override open func layout() {
             super.layout()
             core.fitToSize()
-            core.requestImmediateTick()
         }
 
         override open func viewDidChangeBackingProperties() {
             super.viewDidChangeBackingProperties()
             updateMetalLayerMetrics()
             core.fitToSize()
-            core.requestImmediateTick()
         }
 
         public func fitToSize() {

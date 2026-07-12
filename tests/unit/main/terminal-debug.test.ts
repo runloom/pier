@@ -23,23 +23,34 @@ describe("terminal native debug IPC", () => {
               alpha: 1,
               browserWindowId: 7,
               cursorSuppressed: false,
+              drawPending: true,
+              drawSequence: 12,
               frame: { height: 240, width: 320, x: 10, y: 20 },
+              ghosttyRenderReadySequence: 14,
               hasRouterTarget: true,
               hostKeyboardActive: true,
+              hostRefreshRequestSequence: 9,
               isFirstResponder: true,
               isHidden: false,
               isSurfaceFocused: false,
+              lastDrawUptime: 120.5,
+              lastDrawnGhosttyRenderReadySequence: 14,
+              lastRenderReadyUptime: 120.4,
               panelId: "7::terminal-1",
+              refreshPending: false,
+              surfaceGeneration: 3,
               targetRect: { height: 230, width: 310, x: 15, y: 25 },
             },
           ],
           window: {
             activeTerminalPanelId: "7::terminal-1",
+            appTickCount: 20,
             inputRoutingStaleDiscardCount: 2,
             keyboardFocusTarget: {
               kind: "terminal",
               panelId: "7::terminal-1",
             },
+            lastAppTickUptime: 120.3,
             terminalTargetCount: 1,
             webOverlayRectCount: 0,
           },
@@ -139,19 +150,30 @@ describe("terminal native debug IPC", () => {
         surfaces: [
           {
             cursorSuppressed: false,
+            drawPending: true,
+            drawSequence: 12,
+            ghosttyRenderReadySequence: 14,
             hostKeyboardActive: true,
+            hostRefreshRequestSequence: 9,
             isSurfaceFocused: false,
+            lastDrawUptime: 120.5,
+            lastDrawnGhosttyRenderReadySequence: 14,
+            lastRenderReadyUptime: 120.4,
             nativePanelId: "7::terminal-1",
             panelId: "terminal-1",
+            refreshPending: false,
+            surfaceGeneration: 3,
           },
         ],
         window: {
           activeTerminalPanelId: "terminal-1",
+          appTickCount: 20,
           inputRoutingStaleDiscardCount: 2,
           keyboardFocusTarget: {
             kind: "terminal",
             panelId: "terminal-1",
           },
+          lastAppTickUptime: 120.3,
           nativeActiveTerminalPanelId: "7::terminal-1",
         },
       },
@@ -173,6 +195,59 @@ describe("terminal native debug IPC", () => {
         }),
       ])
     );
+  });
+
+  it("keeps missing render diagnostics undefined and drops invalid values", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+
+    fakeAddon.debugSnapshot.mockReturnValue(
+      JSON.stringify({
+        surfaces: [
+          {
+            alpha: 1,
+            browserWindowId: 7,
+            drawPending: "yes",
+            drawSequence: -1,
+            frame: { height: 240, width: 320, x: 10, y: 20 },
+            ghosttyRenderReadySequence: null,
+            hasRouterTarget: true,
+            isFirstResponder: false,
+            isHidden: false,
+            isOffscreen: false,
+            lastDrawUptime: "now",
+            panelId: "7::terminal-1",
+          },
+        ],
+        window: {
+          activeTerminalPanelId: null,
+          appTickCount: -2,
+          keyboardFocusTarget: { kind: "web" },
+          lastAppTickUptime: "later",
+          terminalTargetCount: 1,
+          webOverlayRectCount: 0,
+        },
+      })
+    );
+
+    const snapshot = (await invokeHandlers.get(
+      "pier:terminal:debug-snapshot"
+    )?.({ sender: win.webContents })) as {
+      native: {
+        surfaces: Record<string, unknown>[];
+        window: Record<string, unknown>;
+      };
+    };
+
+    expect(snapshot.native.surfaces[0]).toMatchObject({
+      drawPending: undefined,
+      drawSequence: undefined,
+      ghosttyRenderReadySequence: undefined,
+      lastDrawUptime: undefined,
+    });
+    expect(snapshot.native.window).toMatchObject({
+      appTickCount: undefined,
+      lastAppTickUptime: undefined,
+    });
   });
 
   it("normalizes native recentRouterDecisions: demangles panel-id fields, preserves seq, tallies drops for unknown-kind / non-object entries", async () => {

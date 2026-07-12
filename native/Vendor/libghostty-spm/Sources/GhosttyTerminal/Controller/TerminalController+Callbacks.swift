@@ -152,15 +152,14 @@ private enum TerminalCallbacks {
     }
 
     static func action(
-        appPtr: ghostty_app_t?,
+        appPtr _: ghostty_app_t?,
         target: ghostty_target_s,
         action: ghostty_action_s
     ) -> Bool {
-        guard let appPtr else { return false }
-        guard ghostty_app_userdata(appPtr) != nil else { return false }
-        guard target.tag == GHOSTTY_TARGET_SURFACE else { return false }
-        guard let surfacePtr = target.target.surface else { return false }
-        guard let bridgePtr = ghostty_surface_userdata(surfacePtr) else { return false }
+        guard target.tag == GHOSTTY_TARGET_SURFACE,
+              let surfacePtr = target.target.surface,
+              let bridgePtr = ghostty_surface_userdata(surfacePtr)
+        else { return false }
 
         let bridge = Unmanaged<TerminalCallbackBridge>
             .fromOpaque(bridgePtr)

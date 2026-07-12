@@ -1,0 +1,11 @@
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -29,3 +29,7 @@
+ pub const App = struct {
++    // Embedded hosts present renderer frames on their application thread. This
++    // routes completed frames through redraw_surface with the original target.
++    pub const must_draw_from_app_thread = true;
++
+     /// Because we only expect the embedding API to be used in embedded
+     /// environments, the options are extern so that we can expose it

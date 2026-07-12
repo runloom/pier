@@ -79,6 +79,16 @@ function booleanValue(value: unknown): boolean {
   return typeof value === "boolean" ? value : false;
 }
 
+function optionalBooleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function optionalNonNegativeNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 function stringValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
@@ -230,16 +240,35 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           alpha: numberValue(surface.alpha, 1),
           browserWindowId: numberValue(surface.browserWindowId),
           cursorSuppressed: booleanValue(surface.cursorSuppressed),
+          drawPending: optionalBooleanValue(surface.drawPending),
+          drawSequence: optionalNonNegativeNumber(surface.drawSequence),
           frame: frameValue(surface.frame),
+          ghosttyRenderReadySequence: optionalNonNegativeNumber(
+            surface.ghosttyRenderReadySequence
+          ),
           hasRouterTarget: booleanValue(surface.hasRouterTarget),
           hostKeyboardActive: booleanValue(surface.hostKeyboardActive),
+          hostRefreshRequestSequence: optionalNonNegativeNumber(
+            surface.hostRefreshRequestSequence
+          ),
           isFirstResponder: booleanValue(surface.isFirstResponder),
           isHidden: booleanValue(surface.isHidden),
           isOffscreen: booleanValue(surface.isOffscreen),
           isSurfaceFocused: booleanValue(surface.isSurfaceFocused),
+          lastDrawUptime: optionalNonNegativeNumber(surface.lastDrawUptime),
+          lastDrawnGhosttyRenderReadySequence: optionalNonNegativeNumber(
+            surface.lastDrawnGhosttyRenderReadySequence
+          ),
+          lastRenderReadyUptime: optionalNonNegativeNumber(
+            surface.lastRenderReadyUptime
+          ),
           nativePanelId,
           panelId: fromNativePanelKey(nativePanelId),
+          refreshPending: optionalBooleanValue(surface.refreshPending),
           surfaceVisible: booleanValue(surface.surfaceVisible),
+          surfaceGeneration: optionalNonNegativeNumber(
+            surface.surfaceGeneration
+          ),
           targetRect: optionalFrameValue(surface.targetRect),
           viewportFrame: optionalFrameValue(surface.viewportFrame),
         },
@@ -249,6 +278,7 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
       activeTerminalPanelId: nativeActiveTerminalPanelId
         ? fromNativePanelKey(nativeActiveTerminalPanelId)
         : null,
+      appTickCount: optionalNonNegativeNumber(rawWindow?.appTickCount),
       inputRoutingStaleDiscardCount:
         typeof rawWindow?.inputRoutingStaleDiscardCount === "number"
           ? rawWindow.inputRoutingStaleDiscardCount
@@ -268,6 +298,9 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
         typeof rawWindow?.lastAppliedRendererSequence === "number"
           ? rawWindow.lastAppliedRendererSequence
           : undefined,
+      lastAppTickUptime: optionalNonNegativeNumber(
+        rawWindow?.lastAppTickUptime
+      ),
       lastPresentationReason:
         typeof rawWindow?.lastPresentationReason === "string"
           ? rawWindow.lastPresentationReason

@@ -62,11 +62,13 @@ export interface TerminalDebugRouterDecision {
 
 export interface TerminalDebugNativeWindowSnapshot {
   activeTerminalPanelId: string | null;
+  appTickCount?: number | undefined;
   inputRoutingStaleDiscardCount?: number | undefined;
   keyboardFocusTarget: TerminalKeyboardFocusTarget;
   lastAppliedInputRoutingSequence?: number | undefined;
   lastAppliedNativeApplySequence?: number | undefined;
   lastAppliedRendererSequence?: number | undefined;
+  lastAppTickUptime?: number | undefined;
   lastPresentationReason?: string | undefined;
   nativeActiveTerminalPanelId: string | null;
   recentRouterDecisions?: TerminalDebugRouterDecision[] | undefined;
@@ -84,15 +86,24 @@ export interface TerminalDebugNativeSurfaceSnapshot {
   alpha: number;
   browserWindowId: number;
   cursorSuppressed?: boolean | undefined;
+  drawPending?: boolean | undefined;
+  drawSequence?: number | undefined;
   frame: TerminalFrame;
+  ghosttyRenderReadySequence?: number | undefined;
   hasRouterTarget: boolean;
   hostKeyboardActive?: boolean | undefined;
+  hostRefreshRequestSequence?: number | undefined;
   isFirstResponder: boolean;
   isHidden: boolean;
   isOffscreen: boolean;
   isSurfaceFocused?: boolean | undefined;
+  lastDrawnGhosttyRenderReadySequence?: number | undefined;
+  lastDrawUptime?: number | undefined;
+  lastRenderReadyUptime?: number | undefined;
   nativePanelId: string;
   panelId: string;
+  refreshPending?: boolean | undefined;
+  surfaceGeneration?: number | undefined;
   surfaceVisible?: boolean | undefined;
   targetRect?: TerminalFrame | null | undefined;
   viewportFrame?: TerminalFrame | null | undefined;
