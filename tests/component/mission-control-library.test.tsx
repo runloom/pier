@@ -67,7 +67,21 @@ describe("Mission Control widget rendering", () => {
       updateParameters
     );
 
-    expect(screen.getByText(/Widget unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText("Widget unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("The plugin that provided this widget was uninstalled.")
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByTestId("mission-control-widget-unknown-remove")
+        .closest('[data-slot="empty"]')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("mission-control-widget-menu-remove")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("mission-control-widget-unknown-remove")
+    ).toHaveAttribute("data-size", "default");
     fireEvent.click(
       screen.getByTestId("mission-control-widget-unknown-remove")
     );
@@ -94,7 +108,7 @@ describe("Mission Control widget rendering", () => {
       },
       updateParameters
     );
-    openWidgetMenu();
+    await openWidgetMenu();
     fireEvent.click(
       await screen.findByTestId("mission-control-widget-menu-remove")
     );
@@ -107,6 +121,7 @@ describe("Mission Control widget rendering", () => {
     }
     expect(updateParameters).not.toHaveBeenCalled();
 
+    await openWidgetMenu();
     fireEvent.click(
       await screen.findByTestId("mission-control-widget-menu-remove")
     );
@@ -129,7 +144,7 @@ describe("Mission Control widget rendering", () => {
     renderPanel({
       widgets: [{ h: 3, id: "core.activity-overview", w: 4, x: 0, y: 0 }],
     });
-    openWidgetMenu();
+    await openWidgetMenu();
 
     expect(
       await screen.findByTestId("mission-control-widget-menu-remove")
@@ -177,7 +192,7 @@ describe("Mission Control widget rendering", () => {
       layoutVersion: 3,
       widgets: [{ h: 4, id: "core.system-resources", w: 4 }],
     });
-    openWidgetMenu();
+    await openWidgetMenu();
 
     expect(await screen.findByText(/^Refresh$/i)).toBeInTheDocument();
   });
@@ -359,7 +374,7 @@ describe("实例模型与组件菜单", () => {
       },
       updateParameters
     );
-    openWidgetMenu();
+    await openWidgetMenu();
     fireEvent.click(
       await screen.findByTestId("mission-control-widget-menu-duplicate")
     );
@@ -391,7 +406,7 @@ describe("实例模型与组件菜单", () => {
         },
       ],
     });
-    openWidgetMenu();
+    await openWidgetMenu();
     fireEvent.click(
       await screen.findByTestId("mission-control-widget-menu-settings")
     );

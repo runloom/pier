@@ -205,7 +205,6 @@ export function EnvironmentSection() {
                   // handled inside addEnvironment
                 });
               }}
-              size="sm"
               type="button"
             >
               <FolderPlus data-icon="inline-start" />

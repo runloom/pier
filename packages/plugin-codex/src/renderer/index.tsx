@@ -4,6 +4,7 @@ import type {
 } from "@pier/plugin-api/renderer";
 import { AccountsSettingsPage } from "./accounts-settings-page.tsx";
 import { AccountsWidget as AccountsWidgetImpl } from "./accounts-widget.tsx";
+import { CostWidget as CostWidgetImpl } from "./cost-widget.tsx";
 import rendererStyles from "./styles.css?inline";
 
 /**
@@ -11,6 +12,7 @@ import rendererStyles from "./styles.css?inline";
  */
 
 export { AccountsWidget } from "./accounts-widget.tsx";
+export { CostWidget } from "./cost-widget.tsx";
 
 export const plugin: ExternalRendererPluginModule = {
   id: "pier.codex",
@@ -20,16 +22,21 @@ export const plugin: ExternalRendererPluginModule = {
     styleElement.textContent = rendererStyles;
     document.head.appendChild(styleElement);
 
-    const disposeWidget = context.missionControlWidgets.register({
+    const disposeAccountsWidget = context.missionControlWidgets.register({
       id: "pier.codex.accounts",
-      component: (props) => AccountsWidgetImpl({ context, ...props }),
+      component: (props) => <AccountsWidgetImpl context={context} {...props} />,
+    });
+    const disposeCostWidget = context.missionControlWidgets.register({
+      id: "pier.codex.cost",
+      component: (props) => <CostWidgetImpl context={context} {...props} />,
     });
     const disposeSettings = context.settingsPages.register({
       id: "pier.codex.accounts",
       component: () => AccountsSettingsPage({ context }),
     });
     return () => {
-      disposeWidget();
+      disposeAccountsWidget();
+      disposeCostWidget();
       disposeSettings();
       styleElement.remove();
     };

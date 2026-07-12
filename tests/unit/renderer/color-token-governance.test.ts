@@ -175,6 +175,30 @@ describe("color token governance", () => {
     expect(button).not.toContain("text-status-info-fg");
   });
 
+  it("maps quota health and cost charts to existing semantic colors", () => {
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const themeTokens = readFileSync(
+      join(ROOT, "src/renderer/app/theme-tokens.css"),
+      "utf8"
+    );
+    const progress = readFileSync(
+      join(ROOT, "packages/ui/src/progress.tsx"),
+      "utf8"
+    );
+
+    expect(globals).not.toContain("--data-primary:");
+    expect(globals).not.toContain("--data-cost:");
+    expect(themeTokens).not.toContain("--color-data-primary:");
+    expect(themeTokens).not.toContain("--color-data-cost:");
+    expect(progress).toContain('success: "bg-success"');
+    expect(progress).toContain('warning: "bg-warning"');
+    expect(progress).toContain('destructive: "bg-destructive"');
+    expect(progress).not.toContain('data: "bg-data-primary"');
+  });
+
   it("keeps solid status text above the WCAG text contrast floor", () => {
     const globals = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),

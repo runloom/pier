@@ -139,8 +139,36 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
       }
     }
   }
-  if (out.windows.length === 0 && hasCompatibilityBucket) {
-    out.windows = mapRateLimitBucket(rl as RpcRateLimitBucket, "codex");
+  if (hasCompatibilityBucket) {
+    const compatibilityWindows = mapRateLimitBucket(
+      rl as RpcRateLimitBucket,
+      "codex"
+    );
+    if (out.windows.length === 0) {
+      out.windows = compatibilityWindows;
+    } else if (compatibilityWindows.length > 0) {
+      const existingIds = new Set(out.windows.map((window) => window.id));
+      const missingCompatibilityWindows = compatibilityWindows.filter(
+        (window) => !existingIds.has(window.id)
+      );
+      if (missingCompatibilityWindows.length > 0) {
+        const compatibilityLimitId = compatibilityWindows[0]?.limitId;
+        const sameBucket = out.windows
+          .filter((window) => window.limitId === compatibilityLimitId)
+          .concat(missingCompatibilityWindows)
+          .sort(
+            (left, right) =>
+              (left.windowMinutes ?? Number.POSITIVE_INFINITY) -
+              (right.windowMinutes ?? Number.POSITIVE_INFINITY)
+          );
+        out.windows = [
+          ...sameBucket,
+          ...out.windows.filter(
+            (window) => window.limitId !== compatibilityLimitId
+          ),
+        ];
+      }
+    }
   }
   return out;
 }

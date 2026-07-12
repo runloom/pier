@@ -65,18 +65,21 @@ export const plugin: MainPluginModule = {
       });
       return localUsageRefresh;
     }
-    refreshLocalUsage().catch((error: unknown) => {
-      context.logger.warn("[pier.codex] local usage scan failed", error);
-    });
-
     registerCodexRpcHandlers({
       refreshLocalUsage,
       rpc: context.rpc,
       service,
     });
+    // 先完成 RPC 就绪，让账号与缓存成本立即可读；本地日志扫描在插件激活后让出事件循环。
+    const initialUsageRefresh = setTimeout(() => {
+      refreshLocalUsage().catch((error: unknown) => {
+        context.logger.warn("[pier.codex] local usage scan failed", error);
+      });
+    }, 1000);
     context.lifecycle.onBeforeQuit(() => service.flush());
     context.logger.info("[pier.codex] activated");
     return () => {
+      clearTimeout(initialUsageRefresh);
       service.dispose();
     };
   },

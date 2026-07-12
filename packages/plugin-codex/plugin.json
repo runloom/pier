@@ -17,8 +17,12 @@
       },
       "missionControlWidgets": {
         "pier.codex.accounts": {
-          "title": "Codex Usage",
-          "description": "View Codex usage and quickly switch accounts."
+          "title": "Codex Account & Quota",
+          "description": "Switch the active Codex account and monitor its quota."
+        },
+        "pier.codex.cost": {
+          "title": "Codex Cost",
+          "description": "Monitor estimated API-equivalent cost from local Codex sessions."
         }
       },
       "messages": {
@@ -39,6 +43,7 @@
         "pier.codex.accounts.settings.cancel": "Cancel",
         "pier.codex.accounts.settings.cancelLogin": "Cancel login",
         "pier.codex.accounts.settings.systemDefault": "System default",
+        "pier.codex.accounts.settings.currentAccount": "Current account",
         "pier.codex.accounts.settings.switch": "Switch",
         "pier.codex.accounts.settings.switchConfirmTitle": "Switch Codex account?",
         "pier.codex.accounts.settings.switchConfirmBody": "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect.",
@@ -94,9 +99,18 @@
         "pier.codex.usage.quotaMinutes": "{count}-minute quota",
         "pier.codex.usage.namedQuota": "{name} · {quota}",
         "pier.codex.widget.noActiveAccount": "No active account",
+        "pier.codex.widget.accountUnavailable": "Account unavailable",
+        "pier.codex.widget.switch": "Switch",
+        "pier.codex.widget.switchAccount": "Switch account",
+        "pier.codex.widget.switchingAccount": "Switching account",
         "pier.codex.widget.manageAccounts": "Manage accounts...",
         "pier.codex.widget.actionFailed": "Account action failed",
-        "pier.codex.widget.refreshFailed": "Could not refresh Codex usage"
+        "pier.codex.widget.refreshFailed": "Could not refresh Codex usage",
+        "pier.codex.widget.refreshing": "Refreshing",
+        "pier.codex.widget.modelQuotas": "Model-specific quotas",
+        "pier.codex.widget.costLoadFailed": "Could not load Codex cost",
+        "pier.codex.widget.noCostData": "No cost data",
+        "pier.codex.widget.noCostHint": "Cost appears after local Codex sessions are scanned."
       }
     },
     "zh-CN": {
@@ -109,8 +123,12 @@
       },
       "missionControlWidgets": {
         "pier.codex.accounts": {
-          "title": "Codex 用量",
-          "description": "查看 Codex 用量和快速切换账号。"
+          "title": "Codex 账号与配额",
+          "description": "切换当前 Codex 账号并查看对应配额。"
+        },
+        "pier.codex.cost": {
+          "title": "Codex 成本",
+          "description": "查看基于本机 Codex 会话估算的 API 等价成本。"
         }
       },
       "messages": {
@@ -131,6 +149,7 @@
         "pier.codex.accounts.settings.cancel": "取消",
         "pier.codex.accounts.settings.cancelLogin": "取消登录",
         "pier.codex.accounts.settings.systemDefault": "系统默认",
+        "pier.codex.accounts.settings.currentAccount": "当前账号",
         "pier.codex.accounts.settings.switch": "切换",
         "pier.codex.accounts.settings.switchConfirmTitle": "切换 Codex 账号？",
         "pier.codex.accounts.settings.switchConfirmBody": "新启动的 Codex 会话将使用此账号。当前运行中的会话需重新启动后生效。",
@@ -186,9 +205,18 @@
         "pier.codex.usage.quotaMinutes": "{count} 分钟额度",
         "pier.codex.usage.namedQuota": "{name} · {quota}",
         "pier.codex.widget.noActiveAccount": "暂无活跃账号",
+        "pier.codex.widget.accountUnavailable": "账号不可用",
+        "pier.codex.widget.switch": "切换",
+        "pier.codex.widget.switchAccount": "切换账号",
+        "pier.codex.widget.switchingAccount": "正在切换账号",
         "pier.codex.widget.manageAccounts": "管理账号...",
         "pier.codex.widget.actionFailed": "账号操作失败",
-        "pier.codex.widget.refreshFailed": "无法刷新 Codex 用量"
+        "pier.codex.widget.refreshFailed": "无法刷新 Codex 用量",
+        "pier.codex.widget.refreshing": "正在刷新",
+        "pier.codex.widget.modelQuotas": "模型专属配额",
+        "pier.codex.widget.costLoadFailed": "无法加载 Codex 成本",
+        "pier.codex.widget.noCostData": "暂无成本数据",
+        "pier.codex.widget.noCostHint": "扫描本机 Codex 会话后将在此显示成本。"
       }
     }
   },
@@ -196,14 +224,25 @@
   "missionControlWidgets": [
     {
       "category": "agent",
-      "defaultSize": { "w": 4, "h": 6 },
-      "description": "Monitor Codex usage and switch accounts.",
+      "defaultSize": { "w": 4, "h": 3 },
+      "description": "Switch the active Codex account and monitor its quota.",
       "id": "pier.codex.accounts",
-      "maxSize": { "w": 8, "h": 10 },
+      "maxSize": { "w": 8, "h": 4 },
       "minSize": { "w": 2, "h": 3 },
       "refreshable": true,
-      "searchTerms": ["codex", "usage", "用量"],
-      "title": "Codex Usage"
+      "searchTerms": ["codex", "account", "quota", "账号", "配额"],
+      "title": "Codex Account & Quota"
+    },
+    {
+      "category": "agent",
+      "defaultSize": { "w": 4, "h": 3 },
+      "description": "Monitor estimated API-equivalent cost from local Codex sessions.",
+      "id": "pier.codex.cost",
+      "maxSize": { "w": 8, "h": 5 },
+      "minSize": { "w": 2, "h": 3 },
+      "refreshable": true,
+      "searchTerms": ["codex", "cost", "tokens", "成本", "令牌"],
+      "title": "Codex Cost"
     }
   ],
   "name": "Codex Account Management",
@@ -218,5 +257,5 @@
   "renderer": "dist/renderer.js",
   "settingsPages": [{ "id": "pier.codex.accounts" }],
   "terminalStatusItems": [],
-  "version": "1.0.5"
+  "version": "1.1.5"
 }

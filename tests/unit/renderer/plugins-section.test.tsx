@@ -128,10 +128,10 @@ describe("PluginsSection", () => {
     expect(screen.getByText("Plugin failed to load")).toBeVisible();
     expect(screen.getByText("renderer plugin load timed out")).toBeVisible();
     expect(
-      within(screen.getByTestId("plugin-diagnostics-summary")).getByText(
+      within(screen.getByTestId("plugin-diagnostics-summary")).queryByText(
         "pier.external"
       )
-    ).toBeVisible();
+    ).toBeNull();
   });
 
   it("groups repeated registry diagnostics into one compact issue", () => {
@@ -160,25 +160,21 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     const summary = screen.getByTestId("plugin-diagnostics-summary");
-    expect(summary).toHaveAttribute("data-slot", "alert");
+    expect(summary.querySelectorAll('[data-slot="alert"]')).toHaveLength(1);
     expect(summary.querySelector('[data-slot="alert-title"]')).not.toBeNull();
-    expect(summary.querySelector('[data-slot="alert-action"]')).not.toBeNull();
-    expect(
-      summary.querySelector('[data-slot="alert-description"]')
-    ).not.toBeNull();
-    expect(summary).toHaveTextContent("Plugin issues");
+    expect(summary.querySelector('[data-slot="alert-action"]')).toBeNull();
     expect(summary).toHaveTextContent("Plugin manifest could not be read");
-    expect(summary).toHaveTextContent("3 reports");
-    expect(within(summary).getByText("Built-in")).toBeVisible();
-    expect(within(summary).getByText("Dev Override")).toBeVisible();
-    expect(within(summary).getByText("Official")).toBeVisible();
+    expect(summary).not.toHaveTextContent("3 reports");
+    expect(within(summary).queryByText("Built-in")).toBeNull();
+    expect(within(summary).queryByText("Dev Override")).toBeNull();
+    expect(within(summary).queryByText("Official")).toBeNull();
     expect(screen.queryByText("invalid plugin manifest")).toBeNull();
     expect(
       screen.getAllByText("Plugin manifest could not be read")
     ).toHaveLength(1);
   });
 
-  it("uses a shadcn separator between distinct diagnostic groups", () => {
+  it("uses one standard shadcn alert per distinct diagnostic", () => {
     usePluginRegistryStore.setState({
       diagnostics: [
         {
@@ -201,8 +197,8 @@ describe("PluginsSection", () => {
     expect(
       screen
         .getByTestId("plugin-diagnostics-summary")
-        .querySelector('[data-slot="separator"]')
-    ).not.toBeNull();
+        .querySelectorAll('[data-slot="alert"]')
+    ).toHaveLength(2);
   });
 
   it("toggle 调用 disable 并 refresh store", async () => {

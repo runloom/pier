@@ -43,7 +43,27 @@ export interface MissionControlWidgetSettingsProps {
   updateParams: (patch: Record<string, JsonValue>) => void;
 }
 
+export interface MissionControlWidgetActionContext {
+  instanceId: string;
+  params: Readonly<Record<string, JsonValue>>;
+  requestRefresh(): void;
+  updateParams(patch: Record<string, JsonValue>): void;
+}
+
+export interface RendererMissionControlWidgetAction {
+  disabled?: boolean;
+  icon: ComponentType<{ size?: number | string }>;
+  id: string;
+  intent?: "default" | "destructive";
+  invoke(context: MissionControlWidgetActionContext): Promise<void> | void;
+  label: string | (() => string);
+  priority?: number;
+}
+
 export interface RendererMissionControlWidgetRegistration {
+  actions?(
+    context: MissionControlWidgetActionContext
+  ): readonly RendererMissionControlWidgetAction[];
   component: ComponentType<MissionControlWidgetComponentProps>;
   icon?: ComponentType<{ size?: number | string }>;
   id: string;

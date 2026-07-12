@@ -277,6 +277,34 @@ describe("managed plugin install service", () => {
     );
   });
 
+  it("prefers a newer bundled version over an older official index asset", async () => {
+    const officialSeed = await createSeedArchive("1.0.5");
+    const bundledSeed = await createSeedArchive("1.1.0");
+    const assetFetcher = vi.fn(async () => ({
+      body: await readFile(officialSeed.archivePath),
+      finalUrl: "https://example.test/pier.codex-1.0.5.tgz",
+      redirectCount: 0,
+    }));
+    const { service, operationLog } = await createService({
+      assetFetcher,
+      bundledArchive: bundledSeed,
+      bundledVersion: "1.1.0",
+      officialIndex: officialIndexFor("1.0.5", officialSeed),
+    });
+
+    expect((await service.listCatalogSnapshot()).plugins[0]?.update).toEqual({
+      version: "1.1.0",
+    });
+    await expect(service.install("pier.codex")).resolves.toMatchObject({
+      ok: true,
+      version: "1.1.0",
+    });
+    expect(assetFetcher).not.toHaveBeenCalled();
+    expect(operationLog).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "install-from-bundle" })
+    );
+  });
+
   it("install is idempotent — second call at same version is a no-op", async () => {
     const seed = await createSeedArchive();
     const { service } = await createService({

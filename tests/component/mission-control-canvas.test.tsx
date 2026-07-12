@@ -28,7 +28,7 @@ vi.mock("sonner", () => ({
 }));
 
 class TestResizeObserver implements ResizeObserver {
-  static latest: TestResizeObserver | null = null;
+  static instances: TestResizeObserver[] = [];
   readonly disconnect = vi.fn();
   readonly observe = vi.fn();
   readonly unobserve = vi.fn();
@@ -36,7 +36,7 @@ class TestResizeObserver implements ResizeObserver {
 
   constructor(callback: ResizeObserverCallback) {
     this.callback = callback;
-    TestResizeObserver.latest = this;
+    TestResizeObserver.instances.push(this);
   }
 
   emit(): void {
@@ -69,6 +69,7 @@ function callGridCallback(
 installMissionControlTestHarness();
 
 beforeEach(() => {
+  TestResizeObserver.instances = [];
   gridLayoutCapture.current = null;
   dimensions.height = 624;
   dimensions.width = 824;
@@ -132,7 +133,9 @@ describe("Mission Control responsive grid integration", () => {
     expect(capturedGrid().layout?.[0]).toMatchObject({ w: 8 });
 
     dimensions.width = 424;
-    act(() => TestResizeObserver.latest?.emit());
+    act(() => {
+      for (const observer of TestResizeObserver.instances) observer.emit();
+    });
 
     await vi.waitFor(() => {
       expect(capturedGrid().gridConfig?.cols).toBe(4);
@@ -141,7 +144,9 @@ describe("Mission Control responsive grid integration", () => {
     expect(updateParameters).not.toHaveBeenCalled();
 
     dimensions.width = 824;
-    act(() => TestResizeObserver.latest?.emit());
+    act(() => {
+      for (const observer of TestResizeObserver.instances) observer.emit();
+    });
     await vi.waitFor(() => {
       expect(capturedGrid().layout?.[0]).toMatchObject({ w: 8 });
     });
@@ -340,6 +345,40 @@ describe("Mission Control responsive grid integration", () => {
       layoutVersion: 3,
       widgets: [{ h: 4, id: "core.activity-overview", w: 5 }],
     });
+  });
+
+  it("shows live grid dimensions only while pointer resizing", () => {
+    render(
+      <MissionControlPanel
+        {...makeProps({
+          layoutVersion: 3,
+          widgets: [{ h: 3, id: "core.activity-overview", w: 4 }],
+        })}
+      />
+    );
+    const oldItem = capturedGrid().layout?.[0] as LayoutItem;
+
+    act(() => {
+      callGridCallback(capturedGrid().onResize, oldItem, {
+        ...oldItem,
+        h: 4,
+        w: 5,
+      });
+    });
+    expect(screen.getByTestId("mission-control-resize-size")).toHaveTextContent(
+      "5 × 4"
+    );
+
+    act(() => {
+      callGridCallback(capturedGrid().onResizeStop, oldItem, {
+        ...oldItem,
+        h: 4,
+        w: 5,
+      });
+    });
+    expect(
+      screen.queryByTestId("mission-control-resize-size")
+    ).not.toBeInTheDocument();
   });
 
   it("deleting the middle widget immediately closes its visual gap", async () => {

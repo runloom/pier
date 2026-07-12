@@ -4,6 +4,7 @@ import {
   Empty,
   EmptyDescription,
   EmptyHeader,
+  EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
@@ -128,10 +129,9 @@ function EmptyList({
   return (
     <Empty className="py-8">
       <EmptyHeader>
-        <AlertCircle
-          aria-hidden
-          className="mx-auto size-6 text-muted-foreground"
-        />
+        <EmptyMedia variant="icon">
+          <AlertCircle aria-hidden />
+        </EmptyMedia>
         <EmptyTitle>{t(`settings.plugins.${emptyKey}Title`)}</EmptyTitle>
         <EmptyDescription>
           {t(`settings.plugins.${emptyKey}Description`)}

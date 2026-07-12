@@ -36,8 +36,10 @@ describe("MissionControlPanel responsive ordered grid", () => {
     );
 
     expect(screen.getByTestId("mission-control-empty")).toBeInTheDocument();
+    const addButton = screen.getByTestId("mission-control-add-widget");
+    expect(addButton).toHaveAttribute("data-size", "default");
     expect(
-      screen.getByTestId("mission-control-add-widget")
+      addButton.closest('[data-slot="empty-content"]')
     ).toBeInTheDocument();
   });
 
@@ -54,9 +56,8 @@ describe("MissionControlPanel responsive ordered grid", () => {
     expect(
       container.querySelector(".mission-control-widget-drag-handle")
     ).toBeInTheDocument();
-    expect(
-      container.querySelector(".react-resizable-handle-se")
-    ).toBeInTheDocument();
+    const resizeHandle = container.querySelector(".react-resizable-handle-se");
+    expect(resizeHandle).toBeInTheDocument();
   });
 
   it("uses a non-horizontal-scrolling viewport and responsive columns", () => {

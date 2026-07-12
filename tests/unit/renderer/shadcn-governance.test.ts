@@ -10,8 +10,6 @@ const SOURCE_ROOTS = [
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
 ];
 const RAW_BUTTON_OWNERS = new Set([
-  // 成本柱是可聚焦的图表几何触点；普通 Button 的固定尺寸和表面样式不适用。
-  "packages/plugin-codex/src/renderer/cost-card.tsx",
   // shadcn SidebarRail 的上游实现需要独立命中区域。
   "src/renderer/components/primitives/sidebar.tsx",
   // Dockview tab action 必须保留其原生 class 与事件边界。

@@ -29,7 +29,11 @@ import type {
   CodexUsageWindow,
 } from "../shared/accounts.ts";
 import { remainingPercent, usageRisk } from "../shared/usage.ts";
-import { type Translate, usageWindowLabel } from "./usage-meter.tsx";
+import {
+  type Translate,
+  usageProgressVariant,
+  usageWindowLabel,
+} from "./usage-meter.tsx";
 
 export function AccountAvatar({
   label,
@@ -66,9 +70,6 @@ function Quota({
       ? formatDurationShort(window.resetsAt - Date.now(), language)
       : null;
   const risk = usageRisk(window.usedPercent);
-  let variant: "default" | "destructive" | "warning" = "default";
-  if (risk === "critical") variant = "destructive";
-  else if (risk === "warning") variant = "warning";
   return (
     <div
       className={compact ? "pier-codex-mini-quota" : "pier-codex-quota"}
@@ -81,9 +82,9 @@ function Quota({
       </div>
       <Progress
         aria-label={`${label} ${formatPercent(remaining / 100, language)}`}
-        className={compact ? "h-1" : "h-1.5"}
+        className={compact ? "codex:h-1" : "codex:h-1.5"}
         value={remaining}
-        variant={variant}
+        variant={usageProgressVariant(risk)}
       />
       <div className="pier-codex-quota-meta">
         {reset
@@ -112,7 +113,7 @@ export function QuotaGroup({
       <Tooltip>
         <TooltipTrigger asChild>
           <Badge
-            className="col-span-full justify-self-start"
+            className="codex:col-span-full codex:justify-self-start"
             role="status"
             tabIndex={0}
             variant="danger"
@@ -123,7 +124,7 @@ export function QuotaGroup({
             )}
           </Badge>
         </TooltipTrigger>
-        <TooltipContent className="max-w-80">{error}</TooltipContent>
+        <TooltipContent className="codex:max-w-80">{error}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : null;
@@ -197,7 +198,7 @@ function IconAction({
         >
           <Icon
             className={cn(
-              spinning && "animate-spin motion-reduce:animate-none"
+              spinning && "codex:animate-spin codex:motion-reduce:animate-none"
             )}
             data-icon="inline-start"
           />
@@ -231,7 +232,7 @@ export function OtherAccount({
         <ItemMedia align="center">
           <AccountAvatar label={account.label} />
         </ItemMedia>
-        <ItemContent className="min-w-0">
+        <ItemContent className="codex:min-w-0">
           <ItemTitle title={account.label}>{account.label}</ItemTitle>
           <ItemDescription>
             {[

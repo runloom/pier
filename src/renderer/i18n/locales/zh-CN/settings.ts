@@ -260,12 +260,9 @@ export const settings = {
     loadingDescription: "正在读取插件清单...",
     emptyTitle: "没有可用插件",
     emptyDescription: "发现内置或本地插件后会显示在这里。",
-    diagnosticsTitle: "插件诊断",
     diagnostics: {
       invalidManifest: "插件清单无法读取",
-      occurrences: "{{count}} 条记录",
       runtime: "插件加载失败",
-      summary: "插件问题",
       unsupported: "当前版本不支持此插件",
     },
     errorTitle: "无法加载插件",

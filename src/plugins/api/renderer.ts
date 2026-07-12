@@ -8,13 +8,12 @@ import type {
   IDockviewPanelProps,
   PierDockviewGroupHandle,
 } from "@shared/contracts/dockview.ts";
-import type { MissionControlGridSize } from "@shared/contracts/mission-control.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
+import type { RendererMissionControlWidgetRegistration } from "./mission-control.ts";
 import type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
@@ -22,6 +21,13 @@ import type {
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
 
+export type {
+  MissionControlWidgetActionContext,
+  MissionControlWidgetComponentProps,
+  MissionControlWidgetSettingsProps,
+  RendererMissionControlWidgetAction,
+  RendererMissionControlWidgetRegistration,
+} from "./mission-control.ts";
 export type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
@@ -130,54 +136,6 @@ export interface RendererTerminalStatusItem {
   isVisible?: (context: RendererTerminalStatusItemContext) => boolean;
   order?: number;
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
-}
-
-export interface MissionControlWidgetComponentProps {
-  /** 实例 id。多实例物料用它区分数据作用域与持久化身份。 */
-  instanceId: string;
-  /**
-   * 物料私有配置（随 panel params 持久化）。宿主视为黑盒 JSON——
-   * 校验责任在物料边界，用自己的 zod schema 解析并对非法值降级。
-   */
-  params: Readonly<Record<string, JsonValue>>;
-  /**
-   * 手动刷新信号：卡片菜单"刷新"/面板"刷新全部"时递增。
-   * 拉取型物料把它放进 effect 依赖以触发重拉；推送型物料可忽略。
-   */
-  refreshToken: number;
-  /**
-   * 卡片占位（格子数，非像素）。用于逻辑分支（如"h ≥ 4 才显示列表"）。
-   * 内容级响应式布局请用 container query（CardContent 已开 @container），
-   * 勿依赖本值换算像素——格宽固定但列数随面板宽度变化。
-   */
-  size: MissionControlGridSize;
-  /** 写回物料配置（浅合并 patch 并持久化）。 */
-  updateParams: (patch: Record<string, JsonValue>) => void;
-  /** 所在指挥中心面板的 dockview 可见性。轮询闸门：不可见时必须停止轮询。 */
-  visible: boolean;
-}
-
-/** 物料设置面板组件的 props（渲染进宿主 Sheet）。 */
-export interface MissionControlWidgetSettingsProps {
-  instanceId: string;
-  params: Readonly<Record<string, JsonValue>>;
-  updateParams: (patch: Record<string, JsonValue>) => void;
-}
-
-export interface RendererMissionControlWidgetRegistration {
-  component: FunctionComponent<MissionControlWidgetComponentProps>;
-  icon: LucideIcon;
-  /** 必须在本插件 manifest.missionControlWidgets 中声明 */
-  id: string;
-  /**
-   * 物料库预览卡（喂样例数据的静态渲染，宿主以 pointer-events-none 展示）。
-   * 缺省回退"图标 + 骨架示意"。
-   */
-  previewComponent?: FunctionComponent;
-  /** 设置面板。声明 configurable 的物料必须同步提供，否则菜单不显示"设置"。 */
-  settingsComponent?: FunctionComponent<MissionControlWidgetSettingsProps>;
-  /** 可选标题 thunk，locale 切换实时生效；省略则用 manifest 本地化解析结果 */
-  title?: (() => string) | string;
 }
 
 export interface PluginGroupContentClaim {

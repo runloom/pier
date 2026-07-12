@@ -29,6 +29,7 @@ type LayoutPreview =
       widgets: MissionControlPanelWidgetEntry[];
     }
   | {
+      activeInstanceId: string;
       kind: "resize";
       source: readonly MissionControlPanelWidgetEntry[];
       widgets: MissionControlPanelWidgetEntry[];
@@ -154,6 +155,16 @@ export function useMissionControlGridInteractions({
         )
       )
     : null;
+  const resizePreview =
+    layoutPreview?.kind === "resize" &&
+    widgets.some((entry) => entry.id === layoutPreview.activeInstanceId)
+      ? {
+          instanceId: layoutPreview.activeInstanceId,
+          size: layoutPreview.widgets.find(
+            (entry) => entry.id === layoutPreview.activeInstanceId
+          ),
+        }
+      : null;
   const resolveInsertionIndex = useCallback(
     (activeItem: LayoutItem) =>
       resolveMissionControlInsertionIndex(widgets, {
@@ -224,6 +235,7 @@ export function useMissionControlGridInteractions({
     (_layout, _oldItem, activeItem) => {
       if (!activeItem) return;
       setLayoutPreview({
+        activeInstanceId: activeItem.i,
         kind: "resize",
         source: widgets,
         widgets: withTransientSize(widgets, activeItem),
@@ -249,5 +261,6 @@ export function useMissionControlGridInteractions({
     handleResizeMove,
     handleResizeStop,
     renderedLayout,
+    resizePreview,
   };
 }

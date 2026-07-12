@@ -1,9 +1,11 @@
+import { Badge } from "@pier/ui/badge.tsx";
 import {
   formatCount,
   formatDurationShort,
   formatPercent,
 } from "@pier/ui/format.tsx";
 import { Progress } from "@pier/ui/progress.tsx";
+import { Separator } from "@pier/ui/separator.tsx";
 import { cn } from "@pier/ui/utils";
 import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { JSX } from "react";
@@ -17,8 +19,10 @@ import {
 export type Translate = (key: string, fallback: string) => string;
 
 export interface UsageProgressProps {
+  kind?: "additional" | "primary";
   label: string;
   language: string;
+  position?: number;
   showLabel?: boolean;
   t: Translate;
   window: CodexUsageWindow;
@@ -71,12 +75,12 @@ function resetsLabel(
   return formatDurationShort(window.resetsAt - now, language);
 }
 
-function progressVariant(
+export function usageProgressVariant(
   risk: UsageRisk
-): "default" | "destructive" | "warning" {
+): "destructive" | "success" | "warning" {
   if (risk === "critical") return "destructive";
   if (risk === "warning") return "warning";
-  return "default";
+  return "success";
 }
 
 function riskLabel(risk: UsageRisk, t: Translate): string {
@@ -90,8 +94,10 @@ function riskLabel(risk: UsageRisk, t: Translate): string {
 }
 
 export function UsageProgress({
+  kind,
   label,
   language,
+  position,
   showLabel = true,
   t,
   window,
@@ -103,33 +109,46 @@ export function UsageProgress({
 
   return (
     <div
-      className="pier-codex-usage-progress"
+      className="codex:flex codex:min-w-0 codex:flex-col codex:gap-1.5"
+      data-position={position}
       data-risk={risk}
       data-slot="codex-usage-progress"
+      data-window-kind={kind}
     >
-      <div className="pier-codex-usage-progress-heading">
+      <div className="codex:flex codex:items-center codex:justify-between codex:gap-3">
         {showLabel ? (
-          <span className="font-medium text-xs">{label}</span>
+          <span
+            className="pier-codex-font-medium codex:min-w-0 codex:truncate codex:text-xs"
+            title={label}
+          >
+            {label}
+          </span>
         ) : null}
-        <span className="text-xs tabular-nums">
+        <span className="pier-codex-font-semibold pier-codex-tabular-nums pier-codex-tracking-tight codex:shrink-0 codex:text-lg">
           {remainingLabel}
-          {risk === "normal" ? null : (
-            <span className="text-muted-foreground">
-              {" "}
-              · {riskLabel(risk, t)}
-            </span>
-          )}
         </span>
       </div>
       <Progress
         aria-label={`${label}: ${t("pier.codex.widget.remaining", "remaining")} ${remainingLabel}, ${riskLabel(risk, t)}`}
-        className="h-1.5"
+        className="codex:h-1"
         value={remaining}
-        variant={progressVariant(risk)}
+        variant={usageProgressVariant(risk)}
       />
       {reset ? (
-        <div className="pier-codex-usage-progress-meta">
-          {t("pier.codex.widget.resetsIn", "Resets in")} {reset}
+        <div className="codex:flex codex:min-w-0 codex:items-center codex:justify-between codex:gap-2 codex:text-muted-foreground codex:text-xs">
+          {risk === "normal" ? (
+            <span />
+          ) : (
+            <Badge
+              size="xs"
+              variant={risk === "critical" ? "danger" : "warning"}
+            >
+              {riskLabel(risk, t)}
+            </Badge>
+          )}
+          <span className="pier-codex-tabular-nums codex:truncate codex:text-right">
+            {t("pier.codex.widget.resetsIn", "Resets in")} {reset}
+          </span>
         </div>
       ) : null}
     </div>
@@ -141,6 +160,35 @@ export interface UsageMeterProps {
   language: string;
   t: Translate;
   windows: CodexUsageWindow[];
+}
+
+/** 保持服务端桶顺序，并确保首个（主）桶内周期从短到长。 */
+export function sortUsageWindows(
+  windows: readonly CodexUsageWindow[]
+): CodexUsageWindow[] {
+  const firstLimitId = windows[0]?.limitId;
+  const limitOrder = new Map<string, number>();
+  for (const window of windows) {
+    if (!limitOrder.has(window.limitId)) {
+      limitOrder.set(window.limitId, limitOrder.size);
+    }
+  }
+  return windows
+    .map((window, index) => ({ index, window }))
+    .sort((left, right) => {
+      const leftPrimary = left.window.limitId === firstLimitId;
+      const rightPrimary = right.window.limitId === firstLimitId;
+      if (leftPrimary !== rightPrimary) return leftPrimary ? -1 : 1;
+      const bucketOrder =
+        (limitOrder.get(left.window.limitId) ?? 0) -
+        (limitOrder.get(right.window.limitId) ?? 0);
+      if (bucketOrder !== 0) return bucketOrder;
+      const durationOrder =
+        (left.window.windowMinutes ?? Number.POSITIVE_INFINITY) -
+        (right.window.windowMinutes ?? Number.POSITIVE_INFINITY);
+      return durationOrder || left.index - right.index;
+    })
+    .map(({ window }) => window);
 }
 
 export function UsageMeter({
@@ -157,20 +205,57 @@ export function UsageMeter({
     );
   }
 
-  return (
+  const sorted = sortUsageWindows(windows);
+  const primaryLimitId = sorted[0]?.limitId;
+  const primary = sorted.filter((window) => window.limitId === primaryLimitId);
+  const additional = sorted.filter(
+    (window) => window.limitId !== primaryLimitId
+  );
+
+  const renderGroup = (
+    group: CodexUsageWindow[],
+    kind: "additional" | "primary"
+  ): JSX.Element => (
     <div
-      className={cn("pier-codex-usage-meter", className)}
-      data-slot="codex-usage-meter"
+      className={cn(
+        "codex:grid codex:min-w-0 codex:@[22rem]:grid-cols-2 codex:grid-cols-1 codex:@[34rem]:gap-4 codex:gap-3",
+        kind === "additional" && "codex:@[34rem]:grid codex:hidden"
+      )}
+      data-window-group={kind}
     >
-      {windows.map((window) => (
+      {kind === "additional" ? (
+        <div className="codex:col-span-full codex:flex codex:items-center codex:gap-2">
+          <p className="codex:shrink-0 codex:text-muted-foreground codex:text-xs">
+            {t("pier.codex.widget.modelQuotas", "Model-specific quotas")}
+          </p>
+          <Separator className="codex:flex-1" />
+        </div>
+      ) : null}
+      {group.map((window, position) => (
         <UsageProgress
           key={window.id}
+          kind={kind}
           label={usageWindowLabel(window, language, t)}
           language={language}
+          position={position}
           t={t}
           window={window}
         />
       ))}
+    </div>
+  );
+
+  return (
+    <div
+      className={cn(
+        "codex:flex codex:min-w-0 codex:flex-col codex:gap-4",
+        "pier-codex-usage-meter",
+        className
+      )}
+      data-slot="codex-usage-meter"
+    >
+      {renderGroup(primary, "primary")}
+      {additional.length > 0 ? renderGroup(additional, "additional") : null}
     </div>
   );
 }

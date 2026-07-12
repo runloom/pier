@@ -1,4 +1,10 @@
-import { Empty } from "@pier/ui/empty.tsx";
+import { Button } from "@pier/ui/button.tsx";
+import {
+  Empty,
+  EmptyContent,
+  EmptyHeader,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
 import { Plus } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
 
@@ -26,11 +32,23 @@ export function MissionControlAddCard({
     </button>
   );
 
-  return isEmpty ? (
-    <Empty className="size-full p-0" data-testid="mission-control-empty">
-      {card}
+  if (!isEmpty) return card;
+
+  return (
+    <Empty className="size-full gap-1 p-1" data-testid="mission-control-empty">
+      <EmptyHeader className="gap-0">
+        <EmptyTitle>{t("missionControl.empty")}</EmptyTitle>
+      </EmptyHeader>
+      <EmptyContent className="gap-0">
+        <Button
+          data-testid="mission-control-add-widget"
+          onClick={onBrowse}
+          type="button"
+        >
+          <Plus data-icon="inline-start" />
+          {t("missionControl.addWidget")}
+        </Button>
+      </EmptyContent>
     </Empty>
-  ) : (
-    card
   );
 }

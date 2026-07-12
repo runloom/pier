@@ -1,9 +1,16 @@
 import type { PluginMissionControlWidgetContribution } from "@shared/contracts/mission-control.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import i18next from "i18next";
-import { afterEach, beforeAll, beforeEach, type Mock, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  type Mock,
+  vi,
+} from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { clearPluginMissionControlWidgetsForTests } from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
 import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
@@ -151,8 +158,9 @@ export function setPluginRegistry(plugins: PluginRegistryEntry[]): void {
   });
 }
 
-export function openWidgetMenu(): void {
+export async function openWidgetMenu(): Promise<void> {
   const trigger = screen.getByTestId("mission-control-widget-menu-trigger");
+  await waitFor(() => expect(trigger).toBeVisible());
   fireEvent.pointerDown(trigger, {
     button: 0,
     ctrlKey: false,

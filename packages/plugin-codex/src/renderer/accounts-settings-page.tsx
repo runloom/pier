@@ -6,8 +6,6 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@pier/ui/card.tsx";
@@ -19,8 +17,23 @@ import {
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import { formatRelativeTime } from "@pier/ui/format.tsx";
-import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemSeparator,
+  ItemTitle,
+} from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { CircleUserRound, RefreshCw } from "lucide-react";
 import { Fragment, type JSX } from "react";
@@ -44,9 +57,9 @@ export interface AccountsSettingsPageProps {
 function SettingsSkeleton(): JSX.Element {
   return (
     <div className="pier-codex-settings">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-56 w-full" />
-      <Skeleton className="h-36 w-full" />
+      <Skeleton className="codex:h-8 codex:w-48" />
+      <Skeleton className="codex:h-56 codex:w-full" />
+      <Skeleton className="codex:h-36 codex:w-full" />
     </div>
   );
 }
@@ -119,8 +132,10 @@ export function AccountsSettingsPage({
   const language = context.i18n.language();
   return (
     <div className="pier-codex-settings">
-      <header className="pier-codex-page-header">
-        <h1>{t("pier.codex.accounts.settings.title", "Codex Accounts")}</h1>
+      <header className="codex:flex codex:min-h-9 codex:items-center codex:justify-between codex:gap-4">
+        <h1 className="pier-codex-font-semibold pier-codex-tracking-tight codex:text-xl">
+          {t("pier.codex.accounts.settings.title", "Codex Accounts")}
+        </h1>
         <AddAccountDialog
           context={context}
           login={snapshot.login}
@@ -130,34 +145,80 @@ export function AccountsSettingsPage({
       </header>
       {active ? (
         <>
-          <Card data-testid="codex-active-account">
-            <CardHeader>
-              <div className="flex min-w-0 items-center gap-3">
-                <AccountAvatar label={active.label} size="lg" />
-                <div className="min-w-0">
-                  <CardTitle className="truncate" title={active.label}>
-                    {active.label}
-                  </CardTitle>
-                  <CardDescription>
+          <Card data-testid="codex-active-account" size="sm">
+            <CardHeader className="codex:items-center">
+              <CardTitle>
+                {t(
+                  "pier.codex.accounts.settings.currentAccount",
+                  "Current account"
+                )}
+              </CardTitle>
+              <CardAction className="codex:flex codex:items-center codex:gap-2">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-busy={
+                          refreshingAccountIds.has(active.id) || undefined
+                        }
+                        aria-label={t(
+                          "pier.codex.accounts.settings.refreshUsage",
+                          "Refresh usage"
+                        )}
+                        disabled={refreshingAccountIds.has(active.id)}
+                        onClick={() => refreshUsage(active.id)}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <RefreshCw
+                          className={cn(
+                            refreshingAccountIds.has(active.id) &&
+                              "codex:animate-spin codex:motion-reduce:animate-none"
+                          )}
+                          data-icon="inline-start"
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t(
+                        "pier.codex.accounts.settings.refreshUsage",
+                        "Refresh usage"
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="codex:flex codex:flex-col codex:gap-4">
+              <Item className="codex:px-0 codex:py-0" size="sm">
+                <ItemMedia align="center">
+                  <AccountAvatar label={active.label} />
+                </ItemMedia>
+                <ItemContent className="codex:min-w-0">
+                  <ItemTitle title={active.label}>{active.label}</ItemTitle>
+                  <ItemDescription>
                     {[
                       active.planType?.toUpperCase(),
                       resetCredits(active, language, t),
+                      active.usage
+                        ? `${t("pier.codex.accounts.settings.updated", "Updated")} ${formatRelativeTime(active.usage.fetchedAt, Date.now(), language)}`
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
-                  </CardDescription>
-                </div>
-              </div>
-              <CardAction>
-                <Badge variant="secondary">
-                  {t(
-                    "pier.codex.accounts.settings.systemDefault",
-                    "System default"
-                  )}
-                </Badge>
-              </CardAction>
-            </CardHeader>
-            <CardContent>
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <Badge variant="secondary">
+                    {t(
+                      "pier.codex.accounts.settings.systemDefault",
+                      "System default"
+                    )}
+                  </Badge>
+                </ItemActions>
+              </Item>
+              <ItemSeparator className="codex:my-0" />
               <QuotaGroup
                 error={active.usage?.error}
                 language={language}
@@ -165,33 +226,6 @@ export function AccountsSettingsPage({
                 windows={active.usage?.windows ?? []}
               />
             </CardContent>
-            <CardFooter className="justify-between">
-              <span className="pier-codex-updated-at">
-                {active.usage
-                  ? `${t("pier.codex.accounts.settings.updated", "Updated")} ${formatRelativeTime(active.usage.fetchedAt, Date.now(), language)}`
-                  : ""}
-              </span>
-              <Button
-                aria-busy={refreshingAccountIds.has(active.id) || undefined}
-                disabled={refreshingAccountIds.has(active.id)}
-                onClick={() => refreshUsage(active.id)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                <RefreshCw
-                  className={cn(
-                    refreshingAccountIds.has(active.id) &&
-                      "animate-spin motion-reduce:animate-none"
-                  )}
-                  data-icon="inline-start"
-                />
-                {t(
-                  "pier.codex.accounts.settings.refreshUsage",
-                  "Refresh usage"
-                )}
-              </Button>
-            </CardFooter>
           </Card>
           <CostCard
             language={language}
@@ -235,8 +269,8 @@ export function AccountsSettingsPage({
               <Badge variant="secondary">{others.length}</Badge>
             </CardAction>
           </CardHeader>
-          <CardContent className="px-0" data-testid="codex-account-table">
-            <ItemGroup className="gap-0">
+          <CardContent className="codex:px-0" data-testid="codex-account-table">
+            <ItemGroup className="codex:gap-0">
               {others.map((account, index) => (
                 <Fragment key={account.id}>
                   {index > 0 ? <ItemSeparator /> : null}

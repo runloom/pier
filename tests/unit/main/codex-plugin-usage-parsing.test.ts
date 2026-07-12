@@ -94,6 +94,33 @@ describe("Codex App Server usage parsing", () => {
     ]);
   });
 
+  it("merges a compatibility secondary window missing from the multi-bucket view", () => {
+    expect(
+      parseRateLimitsResult({
+        rateLimits: {
+          limitId: "codex",
+          primary: { usedPercent: 17, windowDurationMins: 300 },
+          secondary: { usedPercent: 41, windowDurationMins: 10_080 },
+        },
+        rateLimitsByLimitId: {
+          spark: {
+            limitId: "spark",
+            limitName: "GPT-5.3-Codex-Spark",
+            primary: { usedPercent: 0, windowDurationMins: 300 },
+          },
+          codex: {
+            limitId: "codex",
+            primary: { usedPercent: 17, windowDurationMins: 300 },
+          },
+        },
+      }).windows.map((window) => `${window.id}:${window.windowMinutes}`)
+    ).toEqual([
+      "codex:primary:300",
+      "codex:secondary:10080",
+      "spark:primary:300",
+    ]);
+  });
+
   it("places model-specific buckets after the compatibility bucket", () => {
     expect(
       parseRateLimitsResult({

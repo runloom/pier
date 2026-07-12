@@ -150,9 +150,7 @@ describe("AccountsSettingsPage", () => {
     expect(screen.getByTestId("codex-cost-card")).toBeDefined();
     expect(screen.getByText("PRO")).toBeDefined();
     expect(screen.getByText("Last 31 days cost")).toBeDefined();
-    expect(
-      container.querySelectorAll(".pier-codex-cost-bars [data-cost-bar]")
-    ).toHaveLength(31);
+    expect(container.querySelectorAll(".pier-codex-cost-bars")).toHaveLength(1);
     expect(
       screen.queryByText(
         "Manage Codex accounts and compare session and weekly remaining limits."
@@ -166,11 +164,58 @@ describe("AccountsSettingsPage", () => {
       resolve(process.cwd(), "packages/plugin-codex/src/renderer/styles.css"),
       "utf8"
     );
+    const costVisualization = readFileSync(
+      resolve(
+        process.cwd(),
+        "packages/plugin-codex/src/renderer/cost-usage-visualization.tsx"
+      ),
+      "utf8"
+    );
 
-    expect(styles).toContain("grid-template-columns: repeat(31");
     expect(styles).toContain("@media (max-width: 48rem)");
-    expect(styles).toContain("var(--chart-2)");
+    expect(costVisualization).toContain("@[22rem]:grid-cols-");
+    expect(costVisualization).toContain("var(--chart-1)");
+    expect(costVisualization).not.toContain("var(--data-cost)");
+    expect(costVisualization).toContain(
+      'presentation?: "responsive" | "settings"'
+    );
+    expect(costVisualization).toContain('presentation === "settings"');
+    expect(costVisualization).toContain("pier-codex-cost-settings-metrics");
     expect(styles).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(costVisualization).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
+  it("builds plugin utilities from plugin sources without host preflight", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "packages/plugin-codex/src/renderer/styles.css"),
+      "utf8"
+    );
+    const globals = readFileSync(
+      resolve(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    expect(styles).toContain(
+      '@import "tailwindcss/utilities.css" layer(utilities) source(none) prefix(codex)'
+    );
+    expect(styles).toContain(
+      '@import "tailwindcss/theme.css" layer(theme) prefix(codex)'
+    );
+    expect(styles).toContain('@source "./"');
+    expect(styles).toContain("@theme inline");
+    expect(styles).not.toContain('@import "tailwindcss";');
+    expect(styles).not.toContain("@reference");
+    expect(globals).not.toContain("@source ../../../packages/plugin-codex");
+  });
+
+  it("replaces Node environment checks in the browser plugin bundle", () => {
+    const viteConfig = readFileSync(
+      resolve(process.cwd(), "packages/plugin-codex/vite.config.renderer.ts"),
+      "utf8"
+    );
+
+    expect(viteConfig).toContain('"process.env.NODE_ENV"');
+    expect(viteConfig).toContain('JSON.stringify("production")');
   });
 
   it("formats quota durations from data in both supported languages", () => {
@@ -210,7 +255,7 @@ describe("AccountsSettingsPage", () => {
     const costRenderer = readFileSync(
       resolve(
         process.cwd(),
-        "packages/plugin-codex/src/renderer/cost-card.tsx"
+        "packages/plugin-codex/src/renderer/cost-usage-visualization.tsx"
       ),
       "utf8"
     );
@@ -308,27 +353,12 @@ describe("AccountsSettingsPage", () => {
     const { container } = render(<AccountsSettingsPage context={context} />);
 
     expect(
-      await screen.findByText("PLUS · 3 quota resets available")
+      await screen.findByText(/^PLUS · 3 quota resets available · Updated/)
     ).toBeDefined();
     expect(screen.getByText("62%")).toBeDefined();
     expect(screen.getByText("36%")).toBeDefined();
     expect(screen.getAllByText("$1.25")).toHaveLength(2);
-    expect(
-      container.querySelectorAll(".pier-codex-cost-bars [data-cost-bar]")
-    ).toHaveLength(31);
-    const pricedBar = container.querySelector(
-      '.pier-codex-cost-bars [data-cost-bar][aria-label*="$1.25"]'
-    );
-    expect(pricedBar).not.toBeNull();
-    await act(async () => {
-      fireEvent.focus(pricedBar as Element);
-    });
-    await vi.waitFor(() => {
-      const tooltip = document.querySelector('[data-slot="tooltip-content"]');
-      expect(tooltip).toHaveTextContent("2026-07-11");
-      expect(tooltip).toHaveTextContent("Cost: $1.25");
-      expect(tooltip).toHaveTextContent("Tokens: 100");
-    });
+    expect(container.querySelectorAll(".pier-codex-cost-bars")).toHaveLength(1);
   });
 
   it("refreshes cost independently with loading and success feedback", async () => {
@@ -355,7 +385,9 @@ describe("AccountsSettingsPage", () => {
     await vi.waitFor(() => {
       expect(refreshButton).toBeDisabled();
       expect(refreshButton).toHaveAttribute("aria-busy", "true");
-      expect(refreshButton.querySelector("svg")).toHaveClass("animate-spin");
+      expect(refreshButton.querySelector("svg")).toHaveClass(
+        "codex:animate-spin"
+      );
     });
 
     await act(async () => {
@@ -459,7 +491,7 @@ describe("AccountsSettingsPage", () => {
     );
     const { container } = render(<AccountsSettingsPage context={context} />);
 
-    expect(await screen.findByText("TEAM")).toBeDefined();
+    expect(await screen.findByText(/^TEAM · Updated/)).toBeDefined();
     expect(screen.queryByText(/quota resets/)).toBeNull();
     expect(screen.getByText("5-hour quota")).toBeDefined();
     expect(screen.getByText("95%")).toBeDefined();
@@ -738,7 +770,9 @@ describe("AccountsSettingsPage", () => {
     await vi.waitFor(() => {
       expect(refreshButton).toBeDisabled();
       expect(refreshButton).toHaveAttribute("aria-busy", "true");
-      expect(refreshButton.querySelector("svg")).toHaveClass("animate-spin");
+      expect(refreshButton.querySelector("svg")).toHaveClass(
+        "codex:animate-spin"
+      );
     });
 
     await act(async () => {
@@ -937,7 +971,7 @@ describe("AccountsSettingsPage", () => {
     ).toHaveLength(4);
     expect(
       container.querySelector('[data-risk="normal"] [data-slot="progress"]')
-    ).toHaveAttribute("data-variant", "default");
+    ).toHaveAttribute("data-variant", "success");
     expect(container.textContent).toContain("68%");
     expect(container.textContent).toContain("32%");
     expect(container.textContent).toContain("5-hour quota");

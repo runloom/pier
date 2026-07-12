@@ -5,6 +5,7 @@ import type {
   ManagedPluginInstallIndexEntry,
 } from "@shared/contracts/managed-plugin.ts";
 import type { OperationsContext } from "./install-operations.ts";
+import { selectNewestVersion } from "./version.ts";
 
 /**
  * Read-only catalog derivations. Extracted from install-operations.ts to keep
@@ -24,19 +25,25 @@ export async function performListCatalogSnapshot(
       entry.source.kind === "devOverride" ? "devOverride" : "official";
     const officialEntry = officialIndex?.plugins[pluginId];
     const bundled = ctx.bundledPlugins.find((b) => b.id === pluginId);
+    const newestAvailableVersion = selectNewestVersion([
+      officialEntry?.latest,
+      bundled?.version,
+    ]);
     // `update` doubles as "target version for the primary action". When a plugin
     // is uninstalled but bundled, its available install version is the bundled one.
     const updateAvailable = ((): { version: string } | null => {
       if (
-        officialEntry?.latest &&
+        newestAvailableVersion &&
         entry.activeVersion &&
-        officialEntry.latest !== entry.activeVersion &&
+        selectNewestVersion([newestAvailableVersion, entry.activeVersion]) ===
+          newestAvailableVersion &&
+        newestAvailableVersion !== entry.activeVersion &&
         !entry.pendingRestart
       ) {
-        return { version: officialEntry.latest };
+        return { version: newestAvailableVersion };
       }
-      if (!entry.activeVersion && bundled) {
-        return { version: bundled.version };
+      if (!entry.activeVersion && newestAvailableVersion) {
+        return { version: newestAvailableVersion };
       }
       return null;
     })();
@@ -80,18 +87,26 @@ export async function performListCatalogSnapshot(
         continue;
       }
       seen.add(id);
+      const bundled = ctx.bundledPlugins.find((entry) => entry.id === id);
+      const newestAvailableVersion =
+        selectNewestVersion([officialEntry.latest, bundled?.version]) ??
+        officialEntry.latest;
       plugins.push({
         desired: { enabled: false, source: "official", version: null },
+        ...(bundled ? { contributionCounts: bundled.contributionCounts } : {}),
         diagnostics: [],
-        displayName: officialEntry.displayName,
-        ...(officialEntry.locales ? { locales: officialEntry.locales } : {}),
+        ...(bundled?.description ? { description: bundled.description } : {}),
+        displayName: officialEntry.displayName ?? bundled?.displayName ?? id,
+        ...(officialEntry.locales || bundled?.locales
+          ? { locales: officialEntry.locales ?? bundled?.locales }
+          : {}),
         effective: null,
         id,
         installed: false,
         lastKnownGoodVersion: null,
         offlineRestoreAvailable: false,
         pendingRestart: null,
-        update: { version: officialEntry.latest },
+        update: { version: newestAvailableVersion },
       });
     }
   }

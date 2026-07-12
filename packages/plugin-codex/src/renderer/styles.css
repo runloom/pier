@@ -1,24 +1,35 @@
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(codex);
+@import "tailwindcss/utilities.css" layer(utilities) source(none) prefix(codex);
+@source "./";
+
+@theme inline {
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+}
+
+.pier-codex-font-medium {
+  font-weight: 500;
+}
+
+.pier-codex-font-semibold {
+  font-weight: 600;
+}
+
+.pier-codex-tracking-tight {
+  letter-spacing: -0.025em;
+}
+
+.pier-codex-tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 .pier-codex-settings {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   width: min(100%, 62rem);
   padding: 0 1rem 2rem;
-}
-
-.pier-codex-page-header {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 2.25rem;
-}
-
-.pier-codex-page-header h1 {
-  margin: 0;
-  font-size: 1.375rem;
-  font-weight: 680;
-  letter-spacing: -0.025em;
 }
 
 .pier-codex-quota-grid {
@@ -80,59 +91,17 @@
   color: var(--muted-foreground);
 }
 
-.pier-codex-cost-metrics {
-  display: grid;
+.pier-codex-cost-bars {
+  aspect-ratio: auto;
+}
+
+.pier-codex-cost-settings-metrics {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.5rem;
 }
 
-.pier-codex-cost-metrics span {
-  display: block;
-  margin-bottom: 0.25rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.6875rem;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-}
-
-.pier-codex-cost-metrics strong {
-  display: block;
-  font-size: 1.0625rem;
-  font-weight: 660;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-.pier-codex-cost-bars {
-  display: grid;
-  grid-template-columns: repeat(31, minmax(0.1875rem, 1fr));
-  gap: 0.25rem;
-  align-items: end;
+.pier-codex-cost-settings-chart {
   height: 3.75rem;
-  padding-top: 0.375rem;
-  margin-top: 0.875rem;
-}
-
-.pier-codex-cost-bars [data-cost-bar] {
-  display: block;
-  height: var(--pier-cost-height);
-  min-height: 0.1875rem;
-  padding: 0;
-  background: var(--chart-2);
-  border: 0;
-  border-radius: 0.1875rem 0.1875rem 0.09375rem 0.09375rem;
-  opacity: 0.86;
-}
-
-.pier-codex-cost-bars [data-cost-bar]:last-child {
-  opacity: 1;
-}
-
-.pier-codex-cost-bars [data-cost-bar].is-empty {
-  height: 0.1875rem;
-  background: var(--muted);
-  opacity: 0.55;
 }
 
 .pier-codex-account-row {
@@ -162,38 +131,8 @@
   font-size: 0.5625rem;
 }
 
-.pier-codex-usage-meter {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.pier-codex-usage-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3125rem;
-  min-width: 0;
-}
-
-.pier-codex-usage-progress-heading {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.pier-codex-usage-progress-meta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.6875rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-}
-
 @media (max-width: 48rem) {
-  .pier-codex-cost-metrics {
+  .pier-codex-cost-settings-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.875rem;
   }
@@ -209,12 +148,9 @@
 }
 
 @media (max-width: 36rem) {
+  .pier-codex-cost-settings-metrics,
   .pier-codex-quota-grid,
   .pier-codex-mini-quotas {
     grid-template-columns: 1fr;
-  }
-
-  .pier-codex-cost-bars {
-    gap: 0.125rem;
   }
 }

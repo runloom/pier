@@ -6,11 +6,12 @@ import type {
   OperationsContext,
 } from "./install-operations.ts";
 import { downloadOfficialPluginAsset } from "./official-index.ts";
+import { selectNewestVersion } from "./version.ts";
 
 /**
  * Chooses which archive to install for a bundled plugin id.
  *
- * Priority: HTTP fetch of the official index's latest version → bundled tgz.
+ * Priority: official index 与 bundled 中版本较新者；同版本优先官方资产。
  * HTTP is only attempted when the operations context has both an
  * `officialIndexProvider` result (with matching entry) AND an `assetFetcher`.
  * Any failure (download, redirect budget, size mismatch, sha256 mismatch)
@@ -59,7 +60,8 @@ export async function resolveInstallSource(
   const index = ctx.officialIndexProvider();
   const entry = index?.plugins[bundled.id];
   const fetcher = ctx.assetFetcher;
-  if (entry && fetcher) {
+  const newestVersion = selectNewestVersion([entry?.latest, bundled.version]);
+  if (entry && fetcher && newestVersion === entry.latest) {
     const targetVersion = entry.latest;
     const asset = entry.versions[targetVersion];
     if (asset) {

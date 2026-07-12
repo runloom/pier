@@ -255,12 +255,9 @@ export const settings = {
     loadingDescription: "Reading plugin manifests...",
     emptyTitle: "No plugins found",
     emptyDescription: "Built-in and local plugins will appear here.",
-    diagnosticsTitle: "Plugin diagnostics",
     diagnostics: {
       invalidManifest: "Plugin manifest could not be read",
-      occurrences: "{{count}} reports",
       runtime: "Plugin failed to load",
-      summary: "Plugin issues",
       unsupported: "Plugin is not supported",
     },
     errorTitle: "Unable to load plugins",

@@ -44,6 +44,8 @@ export const missionControl = {
   panelTitle: "指挥中心",
   panelTitleShort: "指挥中心",
   widget: {
+    action: "组件操作",
+    actionFailed: "无法完成组件操作",
     activityOverview: {
       description: "实时面板与会话指标",
       empty: "无活跃面板",
@@ -110,6 +112,7 @@ export const missionControl = {
       memory: "内存",
       title: "系统资源",
     },
-    unknown: "组件不可用（插件已卸载）",
+    unknownDescription: "提供此组件的插件已卸载。",
+    unknownTitle: "组件不可用",
   },
 } as const;
