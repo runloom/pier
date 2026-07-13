@@ -11,7 +11,10 @@ import type {
 } from "@shared/contracts/git.ts";
 import { GitBranch, GitMerge } from "lucide-react";
 import { createElement } from "react";
-import { GitBranchQuickPickRow } from "./git-branch-quick-pick-row.tsx";
+import {
+  GitBranchQueryQuickPickRow,
+  GitBranchQuickPickRow,
+} from "./git-branch-quick-pick-row.tsx";
 import {
   activeCwdOrMessage,
   commandTitle,
@@ -24,6 +27,11 @@ import {
   showUnavailable,
 } from "./git-command-helpers.ts";
 import { pluginText } from "./git-plugin-text.ts";
+import {
+  collectLocalBranchNames,
+  readSwitchBranchQueryItem,
+  switchBranchQueryItem,
+} from "./git-switch-branch-query.ts";
 
 type BranchOperation = "merge" | "rebase" | "switch";
 
@@ -66,7 +74,7 @@ function branchPickPlaceholder(
     return pluginText(
       context,
       "gitSwitchSelectBranch",
-      "Select a branch to switch to"
+      "Enter a branch name to switch or create"
     );
   }
   return pluginText(
@@ -87,19 +95,27 @@ async function openBranchPick(
     return;
   }
 
-  // 拉全量候选(上限为 IPC 安全阀):quick pick 靠本地过滤,截断会让
-  // 排序靠后的分支永远无法被选中。
   const loading = showLoading(
     context,
     pluginText(context, "gitLoadingBranches", "Loading branches...")
   );
   let result: GitDiffBranchesResult;
+  let allLocalBranchNames = new Set<string>();
   try {
-    result = await context.git.searchBranches(cwd, {
-      ...(operation === "merge" && { diffMode: "mergeIntoCurrent" as const }),
-      limit: 1000,
-      query: "",
-    });
+    const [searchResult, localBranches] = await Promise.all([
+      context.git.searchBranches(cwd, {
+        ...(operation === "merge" && {
+          diffMode: "mergeIntoCurrent" as const,
+        }),
+        limit: 1000,
+        query: "",
+      }),
+      operation === "switch"
+        ? context.git.listBranches(cwd, { kind: "local" })
+        : Promise.resolve([]),
+    ]);
+    result = searchResult;
+    allLocalBranchNames = new Set(localBranches.map((branch) => branch.name));
   } catch (err) {
     loading.dismiss();
     await showError(context, title, err);
@@ -115,7 +131,7 @@ async function openBranchPick(
       canUseBranchForOperation(branch, result.currentBranch, operation)
     )
     .map(branchItem);
-  if (items.length === 0) {
+  if (items.length === 0 && operation !== "switch") {
     showInfo(
       context,
       title,
@@ -125,6 +141,10 @@ async function openBranchPick(
   }
 
   const branchesById = new Map(items.map((item) => [item.id, item]));
+  const presentedLocalBranchNames = collectLocalBranchNames(
+    result.items,
+    result.currentBranch
+  );
   const defaultLabel = pluginText(context, "branchDefault", "default");
   const graphCaveatTitle = pluginText(
     context,
@@ -139,8 +159,29 @@ async function openBranchPick(
     "seen in history"
   );
   context.commandPalette.openQuickPick({
+    ...(operation === "switch"
+      ? {
+          getQueryItem: (query: string) =>
+            switchBranchQueryItem(
+              context,
+              presentedLocalBranchNames,
+              allLocalBranchNames,
+              result.currentBranch,
+              query
+            ),
+        }
+      : {}),
     items,
     onAccept: async (selected) => {
+      const queryItem = readSwitchBranchQueryItem(selected);
+      if (operation === "switch" && queryItem?.kind === "create") {
+        await runCreateAndSwitchBranch(context, title, cwd, queryItem.name);
+        return;
+      }
+      if (operation === "switch" && queryItem?.kind === "existing") {
+        await runSwitchBranch(context, title, cwd, queryItem.name);
+        return;
+      }
       const item = branchesById.get(selected.id);
       if (!item) {
         return;
@@ -148,9 +189,21 @@ async function openBranchPick(
       await runBranchOperation(context, operation, title, cwd, item.data.name);
     },
     placeholder: branchPickPlaceholder(context, operation),
-    renderItem: (item) =>
-      createElement(GitBranchQuickPickRow, {
-        branch: item.data as GitDiffBranchOption,
+    renderItem: (item) => {
+      const queryItem = readSwitchBranchQueryItem(item);
+      if (queryItem) {
+        return createElement(GitBranchQueryQuickPickRow, {
+          ...(item.detail ? { detail: item.detail } : {}),
+          kind: queryItem.kind,
+          label: item.label,
+        });
+      }
+      const branch = branchesById.get(item.id)?.data;
+      if (!branch) {
+        return null;
+      }
+      return createElement(GitBranchQuickPickRow, {
+        branch,
         defaultLabel,
         graphCaveatTitle,
         graphLabel,
@@ -166,7 +219,8 @@ async function openBranchPick(
               count: match.commitsSince,
             }
           ),
-      }),
+      });
+    },
     title,
   });
 }
@@ -214,6 +268,37 @@ async function runSwitchBranch(
     pluginText(context, "gitSwitchSuccess", "Switched to branch {{branch}}", {
       branch,
     })
+  );
+}
+
+async function runCreateAndSwitchBranch(
+  context: RendererPluginContext,
+  title: string,
+  cwd: string,
+  branch: string
+): Promise<void> {
+  const loading = showLoading(
+    context,
+    pluginText(
+      context,
+      "gitLoadingCreateAndSwitchBranch",
+      "Creating and switching branch..."
+    )
+  );
+  try {
+    await context.git.createAndSwitchBranch(cwd, branch);
+  } catch (err) {
+    loading.dismiss();
+    await showError(context, title, err);
+    return;
+  }
+  loading.success(
+    pluginText(
+      context,
+      "gitCreateAndSwitchSuccess",
+      "Created and switched to branch {{branch}}",
+      { branch }
+    )
   );
 }
 

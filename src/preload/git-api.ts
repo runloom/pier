@@ -25,8 +25,8 @@ import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
 // 注意:commit / branch 增删仍保留在 main 命令表,服务 CLI 与未来表面,
-// 但不经 preload 暴露。renderer 仅暴露当前 UI 已消费的 checkoutBranch 窄口,
-// 避免闲置写入口扩大攻击面。
+// 但不经 preload 暴露。renderer 仅暴露当前 UI 已消费的 checkoutBranch 与
+// createAndSwitchBranch 窄口,避免闲置写入口扩大攻击面。
 
 /** diff 范围/路径选项(IPC 层用值类型;详细 zod 在 contracts/git.ts) */
 export interface GitDiffOptionsValue {
@@ -72,6 +72,7 @@ export interface PierGitAPI {
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
   checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
   continueRebase: (cwd: string) => Promise<GitRebaseContinueResult>;
+  createAndSwitchBranch: (cwd: string, name: string) => Promise<boolean>;
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
   dropStash: (cwd: string, index?: number) => Promise<GitStashDropResult>;
   // 读(git:read)
@@ -203,6 +204,12 @@ export const gitApi: PierGitAPI = {
       cwd,
       name,
       type: "git.checkoutBranch",
+    }),
+  createAndSwitchBranch: (cwd, name) =>
+    invokePierCommand<boolean>({
+      cwd,
+      name,
+      type: "git.createAndSwitchBranch",
     }),
   merge: (cwd, branch) =>
     invokePierCommand<GitMergeResult>({

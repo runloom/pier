@@ -155,6 +155,7 @@ export interface RendererPluginGitFacade {
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
   checkoutBranch(cwd: string, name: string): Promise<boolean>;
   continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
+  createAndSwitchBranch(cwd: string, name: string): Promise<boolean>;
   discardChanges(cwd: string, paths: string[]): Promise<boolean>;
   dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
   getDiffPatch(

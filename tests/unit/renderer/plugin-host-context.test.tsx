@@ -703,6 +703,41 @@ describe("createRendererPluginContext", () => {
     });
   });
 
+  it("adapts query-derived plugin quick-pick items through onAccept", async () => {
+    const context = createRendererPluginContext();
+    const onAccept = vi.fn();
+
+    context.commandPalette.openQuickPick({
+      getQueryItem: (query) => ({
+        data: { name: query },
+        id: `create:${query}`,
+        label: `Create ${query}`,
+      }),
+      items: [],
+      onAccept,
+      title: "Pick",
+    });
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const item = quickPick?.getQueryItem?.("feature/new");
+    expect(item).toMatchObject({
+      data: { name: "feature/new" },
+      id: "create:feature/new",
+      label: "Create feature/new",
+    });
+    if (!(quickPick && item)) {
+      throw new Error("expected query-derived quick-pick item");
+    }
+
+    await quickPick.onAccept(item);
+    expect(onAccept).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { name: "feature/new" },
+        id: "create:feature/new",
+      })
+    );
+  });
+
   it("returns the active panel context through a controlled panels facade", () => {
     const context = createRendererPluginContext();
     expect(context.panels.getActiveContext()).toBeNull();

@@ -342,6 +342,11 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     cwd: z.string().min(1),
     type: z.literal("git.createBranch"),
   }),
+  z.object({
+    cwd: z.string().min(1),
+    name: z.string().min(1),
+    type: z.literal("git.createAndSwitchBranch"),
+  }),
   gitDeleteBranchOptionsSchema.extend({
     cwd: z.string().min(1),
     type: z.literal("git.deleteBranch"),

@@ -60,6 +60,67 @@ async function makeDirtyableRepo(dir: string): Promise<void> {
 }
 
 test.describe("Git status live updates e2e", () => {
+  test("branch picker exposes an explicit create-and-switch candidate", async () => {
+    test.setTimeout(120_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-git-picker-e2e-"));
+    const repo = mkdtempSync(join(tmpdir(), "pier-git-picker-repo-"));
+    await makeDirtyableRepo(repo);
+
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      const consoleErrors: string[] = [];
+      win.on("console", (message) => {
+        if (message.type() === "error") {
+          consoleErrors.push(message.text());
+        }
+      });
+      await win.waitForLoadState("domcontentloaded");
+
+      const opened = await runPierCliJson<TerminalOpenData>(userDataDir, [
+        "terminal",
+        "open",
+        "--cwd",
+        repo,
+      ]);
+      expect(opened.ok).toBe(true);
+      const panelId = opened.data?.panelId ?? "";
+      expect(panelId).not.toBe("");
+      await win.locator(`[data-panel-tab-id="${panelId}"]`).click();
+
+      const statusTrigger = win
+        .locator('[data-testid="worktree-status-trigger"]:visible')
+        .first();
+      await expect(statusTrigger).toBeVisible({ timeout: 15_000 });
+      await statusTrigger.click();
+      await win.getByRole("menuitem", { name: "切换分支" }).click();
+
+      const input = win.locator("[cmdk-input]");
+      await expect(input).toHaveAttribute(
+        "placeholder",
+        "输入分支名称以切换或新建"
+      );
+      await input.fill("feature/pier-query-e2e");
+
+      const createItem = win
+        .locator('[cmdk-item]:has([data-branch-query-kind="create"])')
+        .filter({ hasText: "新建分支“feature/pier-query-e2e”" });
+      await expect(createItem).toBeVisible();
+      await expect(createItem).toHaveAttribute("data-selected", "true");
+      const screenshotPath = process.env.PIER_E2E_SCREENSHOT_PATH;
+      if (screenshotPath) {
+        await win.screenshot({ path: screenshotPath });
+      }
+      expect(consoleErrors).toEqual([]);
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
   /**
    * 回归：同窗口两个消费方(两个终端面板的状态栏 item)watch 同一 gitRoot,
    * 关闭其中一个面板(其订阅 STOP)后,另一个面板必须继续收到 git 变更广播。

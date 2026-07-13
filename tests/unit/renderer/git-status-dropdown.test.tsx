@@ -434,6 +434,7 @@ describe("GitStatusDropdown", () => {
       message: null,
       status: "ok" as const,
     }));
+    pluginContext.git.listBranches = vi.fn(async () => []);
     pluginContext.git.checkoutBranch = vi.fn(async () => true);
     await openDropdown(pluginContext, CLEAN_MODEL);
 
@@ -456,6 +457,10 @@ describe("GitStatusDropdown", () => {
     expect(pluginContext.git.searchBranches).toHaveBeenCalledWith(
       "/workspace/pier",
       { limit: 1000, query: "" }
+    );
+    expect(pluginContext.git.listBranches).toHaveBeenCalledWith(
+      "/workspace/pier",
+      { kind: "local" }
     );
     expect(pluginContext.git.checkoutBranch).toHaveBeenCalledWith(
       "/workspace/pier",

@@ -66,6 +66,92 @@ describe("CommandPalette quick pick rows", () => {
     });
   });
 
+  it("prepends and selects a query-derived item while retaining filtered candidates", async () => {
+    const onAccept = vi.fn();
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        getQueryItem: (query) => {
+          const name = query.trim();
+          return name
+            ? {
+                detail: "Create from current HEAD",
+                id: `create:${name}`,
+                label: `Create and switch to ${name}`,
+              }
+            : null;
+        },
+        items: [
+          {
+            id: "existing:feature/existing",
+            label: "feature/existing",
+          },
+        ],
+        onAccept,
+        placeholder: "Enter a branch name",
+        title: "Switch Branch",
+      });
+    });
+
+    const input = await screen.findByPlaceholderText("Enter a branch name");
+    fireEvent.change(input, { target: { value: "feature/e" } });
+
+    const createLabel = "Create and switch to feature/e";
+    await waitFor(() => {
+      expect(screen.getByText(createLabel)).toBeVisible();
+      expect(screen.getByText("feature/existing")).toBeVisible();
+    });
+    expect(
+      screen.getByText(createLabel).closest("[cmdk-item]")
+    ).toHaveAttribute("data-selected", "true");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => {
+      expect(onAccept).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "create:feature/e" })
+      );
+    });
+  });
+
+  it("keeps a disabled query-derived explanation selected without accepting it", async () => {
+    const onAccept = vi.fn();
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        getQueryItem: (query) => {
+          if (query !== "main") {
+            return null;
+          }
+          return {
+            disabled: true,
+            id: "query:current",
+            label: "Current branch",
+          };
+        },
+        items: [{ id: "maintenance", label: "maintenance" }],
+        onAccept,
+        placeholder: "Enter a branch name",
+        title: "Switch Branch",
+      });
+    });
+
+    const input = await screen.findByPlaceholderText("Enter a branch name");
+    fireEvent.change(input, { target: { value: "main" } });
+    const currentRow = await screen.findByText("Current branch");
+    await waitFor(() => {
+      expect(currentRow.closest("[cmdk-item]")).toHaveAttribute(
+        "data-selected",
+        "true"
+      );
+    });
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onAccept).not.toHaveBeenCalled();
+    expect(useCommandPaletteController.getState().open).toBe(true);
+  });
+
   it("does not submit text input while an IME composition is active", async () => {
     const onAcceptQuery = vi.fn();
     render(<CommandPalette />);

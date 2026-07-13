@@ -135,6 +135,25 @@ describe("GitService 端到端(真临时仓库)", () => {
     expect(branchesAfterDelete.map((b) => b.name)).toEqual(["main"]);
   });
 
+  it("createAndSwitchBranch 原子新建并切换，重名失败时保持当前分支", async () => {
+    const repo = await makeRepo();
+    const git = createGitService();
+
+    await git.createAndSwitchBranch(repo, "feature/atomic");
+    let branches = await git.listBranches(repo, { kind: "local" });
+    expect(branches.find((branch) => branch.name === "feature/atomic")).toEqual(
+      expect.objectContaining({ isCurrent: true })
+    );
+
+    await expect(
+      git.createAndSwitchBranch(repo, "feature/atomic")
+    ).rejects.toThrow();
+    branches = await git.listBranches(repo, { kind: "local" });
+    expect(branches.find((branch) => branch.isCurrent)?.name).toBe(
+      "feature/atomic"
+    );
+  });
+
   it("searchBranches 用真实 for-each-ref 输出列出当前分支以外的候选", async () => {
     const repo = await makeRepo();
     const git = createGitService();
