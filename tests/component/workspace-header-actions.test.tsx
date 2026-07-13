@@ -44,7 +44,7 @@ import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
-let applyInputRouting: Mock;
+let applyHostSnapshot: Mock;
 let detectAgents: Mock;
 let disposeAgentStartActions: (() => void) | null = null;
 let disposeNewAgentAction: (() => void) | null = null;
@@ -200,7 +200,7 @@ beforeEach(async () => {
   keybindingRegistry.loadUserKeymap([]);
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
   disposePanelActions = registerPanelActions();
-  applyInputRouting = vi.fn();
+  applyHostSnapshot = vi.fn();
   detectAgents = vi.fn(async () => ({ detectedIds: [] as AgentKind[] }));
   prepareAgentLaunch = vi.fn(async () => ({ launchId: null as string | null }));
   originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
@@ -234,7 +234,7 @@ beforeEach(async () => {
     configurable: true,
     value: {
       terminal: {
-        applyInputRouting,
+        applyHostSnapshot,
       },
       agents: {
         detect: detectAgents,

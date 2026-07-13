@@ -13,10 +13,8 @@ import { subscribeIpc } from "./ipc-envelope.ts";
  * ipcRenderer 绑定实现落地。renderer 端仍走 window.pier.terminal.*.
  */
 export const terminalApi: TerminalAPI = {
-  applyInputRouting: (snapshot) =>
-    ipcRenderer.send("pier:terminal:apply-input-routing", snapshot),
-  applyPresentation: (snapshot) =>
-    ipcRenderer.send("pier:terminal:apply-presentation", snapshot),
+  applyHostSnapshot: (snapshot) =>
+    ipcRenderer.send("pier:terminal:apply-host-snapshot", snapshot),
   applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
   close: (panelId, options) =>
     ipcRenderer
@@ -27,7 +25,6 @@ export const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
   endSearch: (panelId) =>
     ipcRenderer.invoke("pier:terminal:end-search", panelId),
-  hide: (panelId) => ipcRenderer.send("pier:terminal:hide", panelId),
   navigateSearch: (panelId, direction) =>
     ipcRenderer.invoke("pier:terminal:navigate-search", panelId, direction),
   reconcile: (activeIds) =>
@@ -82,10 +79,7 @@ export const terminalApi: TerminalAPI = {
   setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),
   setFont: (panelId, font) =>
     ipcRenderer.send("pier:terminal:set-font", panelId, font),
-  setFrame: (panelId, frame) =>
-    ipcRenderer.send("pier:terminal:set-frame", panelId, frame),
   setup: () => ipcRenderer.invoke("pier:terminal:setup"),
-  show: (panelId) => ipcRenderer.send("pier:terminal:show", panelId),
   onPresentationApplied: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, cb),
 };

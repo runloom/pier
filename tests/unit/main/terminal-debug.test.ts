@@ -10,8 +10,7 @@ describe("terminal native debug IPC", () => {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const fakeAddon = {
-      applyTerminalInputRouting: vi.fn(),
-      applyTerminalPresentation: vi.fn(),
+      applyTerminalWindowState: vi.fn(() => ({ status: "applied" })),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
@@ -57,9 +56,7 @@ describe("terminal native debug IPC", () => {
         })
       ),
       detachWindow: vi.fn(),
-      hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
-      setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
@@ -69,7 +66,6 @@ describe("terminal native debug IPC", () => {
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
       setupWindow: vi.fn(() => true),
-      showTerminal: vi.fn(),
     };
     const win = {
       focus: vi.fn(),
@@ -132,10 +128,33 @@ describe("terminal native debug IPC", () => {
 
   it("returns native surfaces with raw panel ids and recent route events", async () => {
     const { fakeAddon, handlers, invokeHandlers, win } = await setupHarness();
-
-    handlers.get("pier:terminal:show")?.(
+    await invokeHandlers.get("pier:terminal:create")?.(
       { sender: win.webContents },
-      "terminal-1"
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { height: 240, width: 320, x: 10, y: 20 },
+        panelId: "terminal-1",
+      }
+    );
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
+      { sender: win.webContents },
+      {
+        activePanelId: "terminal-1",
+        activeTerminalPanelId: "terminal-1",
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        hasMaximizedGroup: false,
+        reason: "dockview-active-panel",
+        rendererSequence: 1,
+        terminals: [
+          {
+            frame: { height: 240, width: 320, x: 10, y: 20 },
+            panelId: "terminal-1",
+            visible: true,
+          },
+        ],
+        webOverlayRects: [],
+        webRequestCount: 0,
+      }
     );
     const focusForward =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
@@ -168,7 +187,6 @@ describe("terminal native debug IPC", () => {
         window: {
           activeTerminalPanelId: "terminal-1",
           appTickCount: 20,
-          inputRoutingStaleDiscardCount: 2,
           keyboardFocusTarget: {
             kind: "terminal",
             panelId: "terminal-1",
@@ -184,8 +202,7 @@ describe("terminal native debug IPC", () => {
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          action: "show",
-          panelId: "terminal-1",
+          action: "apply-host-snapshot",
           route: "renderer->main->native",
         }),
         expect.objectContaining({

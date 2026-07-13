@@ -10,6 +10,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
+import { openMissionControl } from "./mission-control-e2e-harness.ts";
 
 const OUT_MAIN = join(
   import.meta.dirname,
@@ -483,6 +484,33 @@ test.describe("Native terminal focus e2e", () => {
     }
   });
 
+  test("selected terminal tab restores native input without a content click", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(win, 1);
+      await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
+
+      await win.locator('[data-panel-tab-id^="terminal-"]').first().click();
+      await writeMarkerFromTerminal(
+        app,
+        win,
+        join(markerDir, "selected-tab.txt"),
+        "selected-tab-ok"
+      );
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(markerDir, { recursive: true, force: true });
+    }
+  });
+
   test("terminal accepts shell input after tab drag into split group", async () => {
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
@@ -496,8 +524,11 @@ test.describe("Native terminal focus e2e", () => {
         BrowserWindow.getAllWindows()[0]?.setSize(1200, 820);
       });
 
-      await buildFourTerminalGrid(win);
+      await waitForTerminalCount(win, 1);
+      await focusTerminalAt(win, 0);
       await ensureKeystrokesDeliverable(app, win, markerDir);
+
+      await buildFourTerminalGrid(win);
       await dragTopLeftTabIntoBottomLeftRightSplit(win);
 
       await writeMarkerFromTerminal(
@@ -534,7 +565,6 @@ test.describe("Native terminal focus e2e", () => {
       await expect(win.locator('[role="dialog"]')).not.toBeAttached({
         timeout: 5000,
       });
-      await focusTerminalAt(win, 0);
 
       await writeMarkerFromTerminal(
         app,
@@ -544,6 +574,129 @@ test.describe("Native terminal focus e2e", () => {
       );
     } finally {
       await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  test("new terminal accepts shell input without a content click", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(win, 1);
+      await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
+
+      await win.keyboard.press("Meta+KeyT");
+      await waitForTerminalCount(win, 2);
+      await writeMarkerFromTerminal(
+        app,
+        win,
+        join(markerDir, "new-terminal.txt"),
+        "new-terminal-ok"
+      );
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  test("terminal successor accepts shell input after the active tab closes", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(win, 1);
+      await focusTerminalAt(win, 0);
+      await ensureKeystrokesDeliverable(app, win, markerDir);
+
+      await win.keyboard.press("Meta+KeyT");
+      await waitForTerminalCount(win, 2);
+      await win.keyboard.press("Meta+KeyW");
+      await waitForTerminalCount(win, 1);
+      await writeMarkerFromTerminal(
+        app,
+        win,
+        join(markerDir, "terminal-successor.txt"),
+        "terminal-successor-ok"
+      );
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      rmSync(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  test("Web successor receives shortcuts after the active terminal closes", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(win, 1);
+      await openMissionControl(win);
+
+      const terminalTab = win
+        .locator('[data-panel-tab-id^="terminal-"]')
+        .first();
+      await terminalTab.click();
+      await expect
+        .poll(
+          async () => terminalPanels(await panelList(userDataDir))[0]?.active
+        )
+        .toBe(true);
+      await win.keyboard.press("Meta+KeyW");
+      await waitForTerminalPanelCount(userDataDir, 0);
+
+      await win.keyboard.press("Meta+Shift+KeyP");
+      await expect(win.locator("[cmdk-input]")).toBeVisible({ timeout: 5000 });
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("restored active terminal accepts shell input without a content click", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
+    let app: ElectronApplication | null = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const initialWindow = await app.firstWindow();
+      await initialWindow.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(initialWindow, 1);
+      await focusTerminalAt(initialWindow, 0);
+      await ensureKeystrokesDeliverable(app, initialWindow, markerDir);
+      await app.close();
+      app = null;
+
+      app = await electron.launch({
+        args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+      });
+      const restoredWindow = await app.firstWindow();
+      await restoredWindow.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(restoredWindow, 1);
+      await writeMarkerFromTerminal(
+        app,
+        restoredWindow,
+        join(markerDir, "restored-terminal.txt"),
+        "restored-terminal-ok"
+      );
+    } finally {
+      await app?.close();
       rmSync(userDataDir, { recursive: true, force: true });
       rmSync(markerDir, { recursive: true, force: true });
     }

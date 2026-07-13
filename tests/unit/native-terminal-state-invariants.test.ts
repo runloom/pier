@@ -14,8 +14,7 @@ import { describe, expect, it } from "vitest";
  *    建立、detachWindow 清理, 否则跨 window 事件路由错乱
  * 2. panel id 跨 window 重复 (#30) — TerminalEventDelegate 必须自持 browserWindowId,
  *    不能靠 panelId 全局反查 (注释明确说 default layout 都用 "terminal-1")
- * 3. close 必须把 stale terminal keyboard target 清回 Web (#28) — 否则后续
- *    applyFirstResponder 会去 access 已删除的 terminalView
+ * 3. close 只移除 native 资源, 不产生或改写业务 keyboard owner
  * 4. 多 panel hitTest 区分 (#27) — targets dict 用 panelId 做 key, hit 时遍历找命中
  * 5. Web overlay rect 优先于 terminal target 命中, 右键也复用同一套规则
  */
@@ -44,8 +43,8 @@ const EVENT_DELEGATE_HOLDS_BROWSER_ID_RE = /let browserWindowId: Int/;
 const EVENT_DELEGATE_INIT_RE =
   /init\(panelId: String, browserWindowId: Int, lifecycleId: String\)/;
 
-const CLOSE_CLEARS_STALE_STATE_RE =
-  /if state\.basePanel\.panelId == panelId \{\s*state\.basePanel = \.web/;
+const CLOSE_FUNCTION_RE =
+  /func close\(panelId: String\) -> Bool \{[\s\S]{0,900}?return true/;
 
 const TARGETS_DICT_RE = /var targets: \[String: Target\]/;
 const HIT_ITERATES_TARGETS_RE =
@@ -60,8 +59,8 @@ const FORBIDDEN_HIDE_GUARD_RE =
   /guard panelId != activePanelId else \{ return \}/;
 const FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE =
   /private var activePanelId: String\?/;
-const FOCUS_INTENT_ACTIVATES_NATIVE_FIRST_RE =
-  /private func activateFocusIntent\(\) \{\s*if let window \{\s*GhosttyBridgeImpl\.shared\.activateTerminalFocus\(parent: window, panelId: panelId\)\s*\}\s*Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)\s*\}/;
+const FOCUS_INTENT_FORWARDS_ONLY_RE =
+  /private func activateFocusIntent\(\) \{\s*Self\.forwardFocusRequestCallback\?\(browserWindowId, panelId\)\s*\}/;
 const OTHER_MOUSE_DOWN_FOCUSES_BEFORE_FORWARD_RE =
   /override func otherMouseDown\(with event: NSEvent\) \{[\s\S]*?capturedTerminalMouseButton = \.other[\s\S]*?activateFocusIntent\(\)[\s\S]*?terminalView\.otherMouseDown\(with: event\)/;
 const FORBIDDEN_NATIVE_FOCUS_MUTATION_RE =
@@ -74,15 +73,15 @@ const TERMINAL_VIEW_MOUSE_FOCUS_POLICY_GUARD_RE =
   /if focusesOnMouseDown \{\s*window\?\.makeFirstResponder\(self\)\s*\}/g;
 const BRIDGE_DISABLES_TERMINAL_VIEW_MOUSE_FOCUS_RE =
   /let terminalView = TerminalView\(frame: \.zero\)\s*terminalView\.focusesOnMouseDown = false\s*terminalView\.hostKeyboardActive = false/;
-const FORBIDDEN_INPUT_ROUTING_RUNTIME_CURSOR_CONFIG_RE =
-  /applyInputRouting\([\s\S]*?applyTerminalRuntimeConfiguration\(window: parent\)/;
+const FORBIDDEN_ATOMIC_RUNTIME_CURSOR_CONFIG_RE =
+  /applyWindowState\([\s\S]*?applyTerminalRuntimeConfiguration\(window: parent\)/;
 const FORBIDDEN_TERMINAL_CURSOR_VISIBILITY_CONFIG_RE =
   /terminalCursorVisible|terminalCursorOpacity|terminalCursorBlink|withCursorOpacity/;
 const APPKIT_FOCUS_GATED_BY_HOST_RE =
   /override open func becomeFirstResponder\(\) -> Bool \{[\s\S]*?synchronizeHostFocusState\(\)[\s\S]*?\}/;
 const APPKIT_FORBIDS_UNCONDITIONAL_SURFACE_FOCUS_RE =
   /override open func becomeFirstResponder\(\) -> Bool \{[\s\S]*?core\.setFocus\(true\)[\s\S]*?\}/;
-const INPUT_ROUTING_APPLIES_HOST_FOCUS_RE =
+const ATOMIC_APPLY_SETS_HOST_FOCUS_RE =
   /term\.terminalView\.hostKeyboardActive = hostKeyboardActive[\s\S]*?term\.terminalView\.synchronizeHostFocusState\(\)/;
 const APPKIT_COMMANDS_GATED_BY_HOST_RE =
   /override open func doCommand\(by selector: Selector\) \{\s*guard hostKeyboardActive else \{ return \}/;
@@ -118,10 +117,10 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(SOURCE).toMatch(EVENT_DELEGATE_INIT_RE);
   });
 
-  it("close clears stale terminal keyboard target to avoid use-after-free in applyFirstResponder", () => {
-    // close 后 NSView removeFromSuperview, 但如果 state.basePanel 还指向它,
-    // 下次 applyFirstResponder 调 terminals[id] 会拿 nil. 必须主动回到 Web.
-    expect(SOURCE).toMatch(CLOSE_CLEARS_STALE_STATE_RE);
+  it("close removes native resources without producing a keyboard owner", () => {
+    const closeFunction = SOURCE.match(CLOSE_FUNCTION_RE)?.[0] ?? "";
+    expect(closeFunction).not.toContain("appliedWindowStates");
+    expect(closeFunction).not.toContain("applyFirstResponder");
   });
 
   it("EventRouterView.targets is keyed by panelId, hit-tested by iterating", () => {
@@ -147,14 +146,12 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(SOURCE).not.toMatch(FORBIDDEN_GLOBAL_ACTIVE_PANEL_ID_RE);
   });
 
-  it("activates terminal focus locally before forwarding focus intent", () => {
+  it("forwards terminal focus intent without local keyboard mutation", () => {
     const scrollContainerSource = readFileSync(
       TERMINAL_SCROLL_CONTAINER_PATH,
       "utf8"
     );
-    expect(scrollContainerSource).toMatch(
-      FOCUS_INTENT_ACTIVATES_NATIVE_FIRST_RE
-    );
+    expect(scrollContainerSource).toMatch(FOCUS_INTENT_FORWARDS_ONLY_RE);
     expect(scrollContainerSource).not.toMatch(
       FORBIDDEN_NATIVE_FOCUS_MUTATION_RE
     );
@@ -220,10 +217,8 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(appTerminalLifecycleSource).not.toMatch(
       APPKIT_FORBIDS_UNCONDITIONAL_SURFACE_FOCUS_RE
     );
-    expect(SOURCE).toMatch(INPUT_ROUTING_APPLIES_HOST_FOCUS_RE);
-    expect(SOURCE).not.toMatch(
-      FORBIDDEN_INPUT_ROUTING_RUNTIME_CURSOR_CONFIG_RE
-    );
+    expect(SOURCE).toMatch(ATOMIC_APPLY_SETS_HOST_FOCUS_RE);
+    expect(SOURCE).not.toMatch(FORBIDDEN_ATOMIC_RUNTIME_CURSOR_CONFIG_RE);
     expect(SOURCE).not.toMatch(FORBIDDEN_TERMINAL_CURSOR_VISIBILITY_CONFIG_RE);
   });
 
@@ -260,14 +255,12 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(appTerminalScrollViewSource).toMatch(SPM_LIVE_SCROLL_RE);
   });
 
-  it("applyFirstResponder web branch must not makeFirstResponder(nil)", () => {
+  it("Web ownership never clears the AppKit first responder directly", () => {
     const src = readFileSync(SWIFT_PATH, "utf8");
-    const fnStart = src.indexOf("func applyFirstResponder(for window");
+    const fnStart = src.indexOf("func applyFirstResponder(");
     expect(fnStart).toBeGreaterThan(-1);
-    const webBranchStart = src.indexOf("if activeTerminalId == nil", fnStart);
-    expect(webBranchStart).toBeGreaterThan(-1);
-    const webBranch = src.slice(webBranchStart, webBranchStart + 500);
-    expect(webBranch).not.toContain("makeFirstResponder(nil)");
+    const functionBody = src.slice(fnStart, fnStart + 1500);
+    expect(functionBody).not.toContain("makeFirstResponder(nil)");
   });
 
   it("does not let AppTerminalScrollView.mouseMoved recurse through AppKit responder forwarding", () => {

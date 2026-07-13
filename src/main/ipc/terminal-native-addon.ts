@@ -3,21 +3,13 @@ import { dirname, join } from "node:path";
 import type {
   TerminalColors,
   TerminalFrame,
-  TerminalNativeInputRoutingSnapshot,
-  TerminalNativePresentationSnapshot,
+  TerminalNativeApplyResult,
+  TerminalNativeWindowState,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 
 export interface NativeAddon {
-  applyTerminalInputRouting(
-    parentHandle: Buffer,
-    snapshot: TerminalNativeInputRoutingSnapshot
-  ): void;
-  applyTerminalPresentation(
-    parentHandle: Buffer,
-    snapshot: TerminalNativePresentationSnapshot
-  ): void;
   /**
    * 应用 Pier 主题派生的终端配色到指定 window 下的 Ghostty controller.
    * Ghostty 库 controller.setTheme(...) 内部 reconfigure 并立即生效, shell 进程
@@ -25,6 +17,10 @@ export interface NativeAddon {
    * 共享, 调一次即可.
    */
   applyTerminalTheme(parentHandle: Buffer, colors: TerminalColors): void;
+  applyTerminalWindowState(
+    parentHandle: Buffer,
+    snapshot: TerminalNativeWindowState
+  ): TerminalNativeApplyResult;
   closeAllTerminals(parentHandle: Buffer): void;
   closeTerminal(panelId: string): boolean;
   createOutputTerminal(
@@ -51,7 +47,6 @@ export interface NativeAddon {
     exitCode: number,
     runtimeMilliseconds: number
   ): boolean;
-  hideTerminal(panelId: string): void;
   performTerminalBindingAction(panelId: string, action: string): boolean;
   readSelectionText(panelId: string): string | null;
   /**
@@ -87,7 +82,6 @@ export interface NativeAddon {
         ) => void)
       | null
   ): void;
-  setFrame(panelId: string, frame: TerminalFrame): void;
   setKeyboardForwardCallback(
     cb:
       | ((
@@ -164,7 +158,6 @@ export interface NativeAddon {
       | null
   ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
-  showTerminal(panelId: string): void;
   writeTerminalOutput(panelId: string, data: Buffer): boolean;
 }
 

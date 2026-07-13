@@ -20,21 +20,33 @@ describe("native terminal debug bridge source", () => {
     expect(addon).toContain("ghostty_bridge_debug_snapshot");
     expect(addon).toContain('exports.Set("debugSnapshot"');
   });
-
-  it("exports and applies terminal presentation through one native path", () => {
+  it("exports and applies terminal window state through one native path", () => {
     const swift = readFileSync(GHOSTTY_BRIDGE_PATH, "utf8");
     const addon = readFileSync(ADDON_PATH, "utf8");
 
-    expect(swift).toContain("func applyPresentation(parent: NSWindow");
-    expect(swift).toContain('@_cdecl("ghostty_bridge_apply_presentation")');
+    expect(swift).toContain("func applyWindowState(parent: NSWindow");
+    expect(swift).toContain('@_cdecl("ghostty_bridge_apply_window_state")');
     expect(swift).toContain("lastAppliedNativeApplySequence");
     expect(swift).toContain("staleDiscardCount");
     expect(swift).toContain("rememberLayout(");
     expect(swift).toContain("terminalView.setSurfaceVisible(entry.visible)");
-    expect(swift).toContain("container.isHidden = true");
-    expect(addon).toContain("ghostty_bridge_apply_presentation");
-    expect(addon).toContain("JsApplyTerminalPresentation");
-    expect(addon).toContain('exports.Set("applyTerminalPresentation"');
+    expect(swift).toContain("term.containerView.isHidden = true");
+    expect(addon).toContain("ghostty_bridge_apply_window_state");
+    expect(addon).toContain("JsApplyTerminalWindowState");
+    expect(addon).toContain('exports.Set("applyTerminalWindowState"');
+  });
+
+  it("handles JSON stringify failures without C++ exceptions", () => {
+    const addon = readFileSync(ADDON_PATH, "utf8");
+    const functionStart = addon.indexOf(
+      "static Napi::Value JsApplyTerminalWindowState"
+    );
+    const functionBody = addon.slice(functionStart, functionStart + 1800);
+
+    expect(functionStart).toBeGreaterThan(-1);
+    expect(functionBody).not.toContain("try {");
+    expect(functionBody).toContain("encoded.IsEmpty()");
+    expect(functionBody).toContain("env.GetAndClearPendingException()");
   });
 
   it("exposes terminal surface visibility in the native debug snapshot", () => {

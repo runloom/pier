@@ -18,13 +18,11 @@ describe("terminal selection text IPC", () => {
       createTerminal: vi.fn(() => true),
       debugSnapshot: vi.fn(() => "{}"),
       detachWindow: vi.fn(),
-      hideTerminal: vi.fn(),
       performTerminalBindingAction: vi.fn(() => true),
       readSelectionText: vi.fn<(panelId: string) => string | null>((panelId) =>
         panelId === "7::terminal-1" ? "selected markdown" : null
       ),
       reconcileTerminals: vi.fn(),
-      setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
@@ -35,7 +33,6 @@ describe("terminal selection text IPC", () => {
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
-      showTerminal: vi.fn(),
     };
     const winA = {
       focus: vi.fn(),

@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
   resetAppDialogForTests,
   showAppAlert,
@@ -22,7 +23,6 @@ import {
 } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import {
-  getLastTerminalInputRoutingSnapshot,
   registerTerminalElementWebOverlay,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing-slice.ts";
@@ -55,7 +55,7 @@ describe("AppDialogHost", () => {
       configurable: true,
       value: {
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
-        terminal: { applyInputRouting: vi.fn() },
+        terminal: { applyHostSnapshot: vi.fn() },
       },
     });
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
@@ -241,7 +241,7 @@ describe("AppDialogHost", () => {
     });
 
     expect(await screen.findByText("Routing Check")).toBeVisible();
-    expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+    expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
         webOverlayRects: expect.arrayContaining([
           expect.objectContaining({ id: "app-dialog" }),
@@ -257,7 +257,7 @@ describe("AppDialogHost", () => {
     await result;
 
     await waitFor(() => {
-      expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+      expect(getLastTerminalHostSnapshot()).toEqual(
         expect.objectContaining({
           webOverlayRects: [],
           webRequestCount: 0,

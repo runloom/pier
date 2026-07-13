@@ -3,10 +3,10 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import {
-  getLastTerminalInputRoutingSnapshot,
   registerTerminalElementWebOverlay,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing-slice.ts";
@@ -38,7 +38,7 @@ describe("SettingsDialog input routing", () => {
   });
 
   it("keeps the default settings backdrop without hiding native terminal surfaces", () => {
-    const applyInputRouting = vi.fn();
+    const applyHostSnapshot = vi.fn();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       bottom: 720,
       height: 696,
@@ -67,7 +67,7 @@ describe("SettingsDialog input routing", () => {
       configurable: true,
       value: {
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
-        terminal: { applyInputRouting },
+        terminal: { applyHostSnapshot },
       },
     });
     useSettingsDialogStore.setState({ isOpen: true });
@@ -82,7 +82,7 @@ describe("SettingsDialog input routing", () => {
     expect(overlay?.className).not.toContain("inset-0");
     expect(overlay?.className).not.toContain("bg-black/30");
     expect(overlay?.className).not.toMatch(BACKDROP_FILTER_CLASS);
-    expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+    expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
         basePanel: { kind: "web" },
         webOverlayRects: expect.arrayContaining([
@@ -93,7 +93,7 @@ describe("SettingsDialog input routing", () => {
         webRequestCount: 1,
       })
     );
-    expect(applyInputRouting).toHaveBeenCalled();
+    expect(applyHostSnapshot).toHaveBeenCalled();
   });
 
   it("does not autofocus the first settings navigation item on open", () => {
@@ -104,7 +104,7 @@ describe("SettingsDialog input routing", () => {
     }));
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { terminal: { applyInputRouting: vi.fn() } },
+      value: { terminal: { applyHostSnapshot: vi.fn() } },
     });
     useSettingsDialogStore.setState({ isOpen: true });
 
@@ -136,7 +136,7 @@ describe("SettingsDialog input routing", () => {
             return vi.fn();
           }),
         },
-        terminal: { applyInputRouting: vi.fn() },
+        terminal: { applyHostSnapshot: vi.fn() },
       },
     });
 

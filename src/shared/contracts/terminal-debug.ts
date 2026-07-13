@@ -1,21 +1,9 @@
 import type {
+  TerminalCoordinatorDebugSnapshot,
   TerminalFrame,
-  TerminalInputRoutingSnapshot,
+  TerminalHostSnapshot,
   TerminalKeyboardFocusTarget,
-  TerminalNativeInputRoutingSnapshot,
-  TerminalNativePresentationSnapshot,
-  TerminalPresentationSnapshot,
 } from "./terminal.ts";
-
-export interface TerminalDebugPresentationSnapshot {
-  desired?: TerminalPresentationSnapshot | undefined;
-  effective?: TerminalNativePresentationSnapshot | undefined;
-}
-
-export interface TerminalDebugInputRoutingSnapshot {
-  desired?: TerminalInputRoutingSnapshot | undefined;
-  effective?: TerminalNativeInputRoutingSnapshot | undefined;
-}
 
 export type TerminalDebugRoute =
   | "renderer->main->native"
@@ -63,13 +51,11 @@ export interface TerminalDebugRouterDecision {
 export interface TerminalDebugNativeWindowSnapshot {
   activeTerminalPanelId: string | null;
   appTickCount?: number | undefined;
-  inputRoutingStaleDiscardCount?: number | undefined;
   keyboardFocusTarget: TerminalKeyboardFocusTarget;
-  lastAppliedInputRoutingSequence?: number | undefined;
   lastAppliedNativeApplySequence?: number | undefined;
   lastAppliedRendererSequence?: number | undefined;
   lastAppTickUptime?: number | undefined;
-  lastPresentationReason?: string | undefined;
+  lastWindowStateReason?: string | undefined;
   nativeActiveTerminalPanelId: string | null;
   recentRouterDecisions?: TerminalDebugRouterDecision[] | undefined;
   /**
@@ -184,8 +170,7 @@ export interface TerminalDebugRendererPanelSnapshot {
 
 export interface TerminalDebugRendererSnapshot {
   activePanelId: string | null;
-  desiredInputRouting?: TerminalInputRoutingSnapshot | undefined;
-  desiredPresentation?: TerminalPresentationSnapshot | undefined;
+  desiredHostSnapshot?: TerminalHostSnapshot | undefined;
   hasMaximizedGroup: boolean;
   panelCount: number;
   panels: TerminalDebugRendererPanelSnapshot[];
@@ -208,11 +193,10 @@ export interface TerminalDebugSnapshotArgs {
 }
 
 export interface TerminalDebugSnapshot {
+  coordinator?: TerminalCoordinatorDebugSnapshot | undefined;
   events: TerminalDebugEvent[];
-  inputRouting?: TerminalDebugInputRoutingSnapshot | undefined;
   issues?: TerminalDebugIssue[] | undefined;
   native: TerminalDebugNativeSnapshot;
-  presentation?: TerminalDebugPresentationSnapshot | undefined;
   renderer?: TerminalDebugRendererSnapshot | undefined;
 }
 

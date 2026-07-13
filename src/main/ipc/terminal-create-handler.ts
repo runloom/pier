@@ -19,11 +19,9 @@ import {
   resolveCreateTerminalLaunch,
   withPanelStatusEnv,
 } from "./terminal-create-launch.ts";
-import {
-  conformTerminalPresentationAfterCreate,
-  sendInitialTerminalInput,
-} from "./terminal-create-post-actions.ts";
+import { sendInitialTerminalInput } from "./terminal-create-post-actions.ts";
 import { recordRendererTerminalRoute } from "./terminal-debug.ts";
+import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
 import {
   persistInitialTerminalAgent,
   persistInitialTerminalContext,
@@ -101,13 +99,14 @@ export async function handleTerminalCreate(args: {
         params: parsed.data,
       });
       if (!attached.ok) {
+        terminalFocusCoordinator.surfaceWillClose(win, createArgs.panelId);
         addon.closeTerminal(nativePanelId);
         return {
           ok: false,
           error: attached.error ?? "task output binding failed",
         };
       }
-      conformTerminalPresentationAfterCreate(win, addon);
+      terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
     } catch (err) {
       return {
@@ -219,7 +218,7 @@ export async function handleTerminalCreate(args: {
       createArgs.panelId,
       createArgs.tab
     );
-    conformTerminalPresentationAfterCreate(win, addon);
+    terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
     return { ok: true };
   } catch (err) {
     foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));

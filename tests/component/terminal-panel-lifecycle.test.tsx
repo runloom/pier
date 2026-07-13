@@ -383,8 +383,7 @@ describe("TerminalPanel lifecycle", () => {
           }
         ),
         terminal: {
-          applyInputRouting: vi.fn(),
-          applyPresentation: vi.fn(),
+          applyHostSnapshot: vi.fn(),
           close: vi.fn(),
           create: vi.fn(async () => ({ ok: true })),
           endSearch: vi.fn(async () => ({ ok: true })),
@@ -421,8 +420,6 @@ describe("TerminalPanel lifecycle", () => {
           readSession: vi.fn(async () => null),
           search: vi.fn(async () => ({ ok: true })),
           setFont: vi.fn(),
-          setFrame: vi.fn(),
-          show: vi.fn(),
         },
       },
     });
@@ -1673,13 +1670,10 @@ describe("TerminalPanel lifecycle", () => {
     await waitFor(() => {
       expect(TestResizeObserver.observeCount).toBe(1);
     });
-    vi.mocked(window.pier.terminal.setFrame).mockClear();
     requestTerminalPresentationMock.mockClear();
 
     props.emitDimensions({ height: 340, width: 460 });
 
-    expect(window.pier.terminal.setFrame).not.toHaveBeenCalled();
-    vi.mocked(window.pier.terminal.setFrame).mockClear();
     anchorFrame = {
       height: 340,
       width: 460,
@@ -1687,8 +1681,6 @@ describe("TerminalPanel lifecycle", () => {
       y: 20,
     };
     TestResizeObserver.instances[0]?.emit();
-
-    expect(window.pier.terminal.setFrame).not.toHaveBeenCalled();
   });
 
   it("sends a trailing native frame after window layout pulses settle", async () => {
@@ -1699,7 +1691,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.setFrame).mockClear();
 
     emitWindowLayoutPulse?.({ reason: "view-zoom" });
     anchorFrame = {
@@ -1708,8 +1699,6 @@ describe("TerminalPanel lifecycle", () => {
       x: 10,
       y: 20,
     };
-
-    expect(window.pier.terminal.setFrame).not.toHaveBeenCalled();
   });
 
   it("applies effective terminal font size from window zoom without changing the base preference", async () => {
@@ -1749,7 +1738,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.show).mockClear();
     requestTerminalPresentationMock.mockClear();
 
     props.emitVisibility({ isVisible: false });
@@ -1760,7 +1748,6 @@ describe("TerminalPanel lifecycle", () => {
         "visibility"
       );
     });
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
   });
 
   it("resyncs an active native terminal when dockview moves it to another group", async () => {
@@ -1792,7 +1779,6 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    vi.mocked(window.pier.terminal.show).mockClear();
     requestTerminalPresentationMock.mockClear();
 
     props.emitVisibility({ isVisible: false });
@@ -1803,7 +1789,6 @@ describe("TerminalPanel lifecycle", () => {
         "visibility"
       );
     });
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
   });
 
   it("does not focus a terminal moved between groups while hidden", async () => {
@@ -1841,7 +1826,7 @@ describe("TerminalPanel lifecycle", () => {
       kind: "terminal",
       panelId: "terminal-1",
     });
-    vi.mocked(window.pier.terminal.applyInputRouting).mockClear();
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
     render(<TerminalPanel {...createPanelProps()} />);
     act(() => {
       window.dispatchEvent(
@@ -1854,7 +1839,7 @@ describe("TerminalPanel lifecycle", () => {
 
     // 搜索可见 → 持有一次 web 焦点请求，effective = web，basePanel 不被改写。
     await waitFor(() => {
-      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
         expect.objectContaining({
           basePanel: { kind: "terminal", panelId: "terminal-1" },
           webRequestCount: 1,
@@ -1864,7 +1849,7 @@ describe("TerminalPanel lifecycle", () => {
 
     // DOM 焦点移动（栏内或栏外）都不应改变请求计数 —— 不再由 focus/blur 驱动。
     screen.getByRole("button", { name: "Previous match" }).focus();
-    expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({ webRequestCount: 1 })
     );
 
@@ -1873,7 +1858,7 @@ describe("TerminalPanel lifecycle", () => {
     try {
       outside.focus();
       // 焦点移到搜索栏外、搜索仍可见 —— 仍持有 web 请求（不回写 terminal）。
-      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
         expect.objectContaining({ webRequestCount: 1 })
       );
     } finally {
@@ -1885,7 +1870,7 @@ describe("TerminalPanel lifecycle", () => {
       key: "Escape",
     });
     await waitFor(() => {
-      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
         expect.objectContaining({
           basePanel: { kind: "terminal", panelId: "terminal-1" },
           webRequestCount: 0,
@@ -1899,7 +1884,7 @@ describe("TerminalPanel lifecycle", () => {
       kind: "terminal",
       panelId: "terminal-1",
     });
-    vi.mocked(window.pier.terminal.applyInputRouting).mockClear();
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
     render(<TerminalPanel {...createPanelProps()} />);
     act(() => {
       window.dispatchEvent(
@@ -1912,7 +1897,7 @@ describe("TerminalPanel lifecycle", () => {
 
     // 打开搜索 → 持有一次 web 请求，basePanel 仍是 terminal-1。
     await waitFor(() => {
-      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
         expect.objectContaining({
           basePanel: { kind: "terminal", panelId: "terminal-1" },
           webRequestCount: 1,
@@ -1929,7 +1914,7 @@ describe("TerminalPanel lifecycle", () => {
 
     // effective 随 basePanel=terminal —— web 请求归零；搜索栏仍然挂载（共存）。
     await waitFor(() => {
-      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
         expect.objectContaining({
           basePanel: { kind: "terminal", panelId: "terminal-1" },
           webRequestCount: 0,
@@ -1941,7 +1926,7 @@ describe("TerminalPanel lifecycle", () => {
     // 用户点回输入框（onFocus）→ 重新激活，web 请求恢复为 1，搜索栏从未卸载。
     fireEvent.focus(screen.getByTestId("terminal-search-input"));
     await waitFor(() => {
-      expect(window.pier.terminal.applyInputRouting).toHaveBeenLastCalledWith(
+      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
         expect.objectContaining({ webRequestCount: 1 })
       );
     });

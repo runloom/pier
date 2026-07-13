@@ -29,12 +29,7 @@ import {
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import { getTerminalAddon } from "../ipc/terminal.ts";
-import {
-  blurActivePanelFocus,
-  clearTerminalFocusWindowById,
-  restoreActivePanelFocus,
-} from "../ipc/terminal-focus-state.ts";
-import { clearTerminalPresentationWindowById } from "../ipc/terminal-presentation.ts";
+import { terminalFocusCoordinator } from "../ipc/terminal-focus-coordinator.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
 import { installMacAppViewGeometry } from "./mac-app-view-geometry.ts";
@@ -214,8 +209,7 @@ class WindowManager {
       beforeLoadFailure: rendererShowGate.cancel,
       beforeRendererGone: () => {
         rendererShowGate.cancel();
-        clearTerminalPresentationWindowById(electronWindowId);
-        clearTerminalFocusWindowById(electronWindowId);
+        terminalFocusCoordinator.clearWindow(electronWindowId);
         try {
           getTerminalAddon()?.closeAllTerminals(window.getNativeWindowHandle());
         } catch {
@@ -238,7 +232,7 @@ class WindowManager {
       });
     });
     window.host.on("blur", () => {
-      blurActivePanelFocus(window);
+      terminalFocusCoordinator.setWindowFocused(window, false, "window-blur");
     });
     // BrowserWindow resignKey 时 Ghostty 库的 windowDidResignKey 会把每个 surface
     // 的 core.setFocus(false), cursor 变空心、shell 不接 stdin. becomeKey 只在
@@ -249,7 +243,7 @@ class WindowManager {
     // swift 端再按 keyboardFocusTarget 恢复 first responder。
     window.host.on("focus", () => {
       this.rememberFocusedWindow(id);
-      restoreActivePanelFocus(window);
+      terminalFocusCoordinator.setWindowFocused(window, true, "window-focus");
       const context = findWindowContext(window);
       if (context) {
         for (const cb of this.onFocusCallbacks) {
@@ -267,7 +261,7 @@ class WindowManager {
 
     if (isDev) {
       installDetachedDevToolsHandlers(window, () => {
-        restoreActivePanelFocus(window);
+        terminalFocusCoordinator.setWindowFocused(window, true, "window-focus");
       });
     }
 
@@ -284,8 +278,7 @@ class WindowManager {
         event.preventDefault();
         return;
       }
-      clearTerminalPresentationWindowById(electronWindowId);
-      clearTerminalFocusWindowById(electronWindowId);
+      terminalFocusCoordinator.clearWindow(electronWindowId);
       try {
         getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());
       } catch {
@@ -295,8 +288,7 @@ class WindowManager {
 
     window.host.on("closed", () => {
       rendererShowGate.cancel();
-      clearTerminalPresentationWindowById(electronWindowId);
-      clearTerminalFocusWindowById(electronWindowId);
+      terminalFocusCoordinator.clearWindow(electronWindowId);
       // 整窗关闭绕过 renderer 逐 panel 关闭 IPC——在此兜底清理 agent 会话,
       // 否则条目永久残留（幽灵 TitleBar 计数）。BaseWindow 不触发
       // app "browser-window-created"/BrowserWindow 事件, 只能挂在这里。
@@ -392,7 +384,7 @@ class WindowManager {
     }
     this.rememberFocusedWindow(id);
     w.focus();
-    w.webContents.focus();
+    terminalFocusCoordinator.setWindowFocused(w, true, "window-focus");
   }
 
   close(id: string): Promise<WindowCloseResult> {

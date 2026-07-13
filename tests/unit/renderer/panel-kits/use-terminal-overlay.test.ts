@@ -7,8 +7,8 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
-  getLastTerminalInputRoutingSnapshot,
   registerTerminalElementWebOverlay,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing-slice.ts";
@@ -47,7 +47,7 @@ function makeSizedElement(): HTMLElement {
 }
 
 function snapshot() {
-  return getLastTerminalInputRoutingSnapshot();
+  return getLastTerminalHostSnapshot();
 }
 
 const registry = {
@@ -78,7 +78,7 @@ describe("useTerminalOverlay", () => {
       configurable: true,
       value: {
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
-        terminal: { applyInputRouting: vi.fn() },
+        terminal: { applyHostSnapshot: vi.fn() },
       },
     });
   });

@@ -201,7 +201,7 @@ final class TerminalHostResizeTests: XCTestCase {
         XCTAssertEqual(terminalView.scrollWheelCallCount, 1)
     }
 
-    func testNativeScrollerInteractionActivatesTerminalFocus() throws {
+    func testNativeScrollerInteractionForwardsTerminalFocusIntent() throws {
         let (_, scrollView) = try makeContainer()
         scrollView.applyScrollbarState(TerminalScrollbarState(total: 1_000, offset: 0, length: 80))
 

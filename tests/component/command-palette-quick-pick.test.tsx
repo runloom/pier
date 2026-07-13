@@ -35,7 +35,7 @@ describe("CommandPalette quick pick rows", () => {
       configurable: true,
       value: {
         terminal: {
-          applyInputRouting: vi.fn(),
+          applyHostSnapshot: vi.fn(),
         },
       },
     });

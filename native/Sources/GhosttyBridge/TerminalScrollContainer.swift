@@ -98,9 +98,6 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     private func activateFocusIntent() {
-        if let window {
-            GhosttyBridgeImpl.shared.activateTerminalFocus(parent: window, panelId: panelId)
-        }
         Self.forwardFocusRequestCallback?(browserWindowId, panelId)
     }
 

@@ -39,7 +39,7 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { updatePanelResourceSnapshot } from "@/stores/panel-resource.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
-  activateTerminalInputRouting,
+  requestTerminalFocusIntent,
   setTerminalBasePanel,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -88,11 +88,11 @@ function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
   const component = panel.view.contentComponent;
   const kind = panelKindOf(component);
   useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
-  setTerminalBasePanel(
-    kind === "terminal"
-      ? { kind: "terminal", panelId: panel.id }
-      : { kind: "web" }
-  );
+  if (kind === "terminal") {
+    requestTerminalFocusIntent(panel.id);
+  } else {
+    setTerminalBasePanel({ kind: "web" });
+  }
 }
 
 function buildTerminalWorkspacePresentationState(
@@ -384,8 +384,8 @@ export function WorkspaceHost() {
           if (result.ok) {
             // 终端焦点意图：让任何活跃的共存浮层（如搜索栏）让出键盘但保持可见，
             // effective 随 basePanel=terminal 转向终端。
-            activateTerminalInputRouting(req.panelId);
             useTerminalStore.getState().yieldToTerminal();
+            requestTerminalFocusIntent(req.panelId);
             syncTerminalPresentation(event.api, "dockview-active-panel");
           }
         }) ?? (() => undefined);

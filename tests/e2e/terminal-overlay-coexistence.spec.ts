@@ -28,7 +28,7 @@ test.skip(process.platform !== "darwin", "native terminal is macOS-only");
  *  3. Cmd+F 走 DOM keybinding 打开搜索栏（窗口非 OS 焦点时键盘目标即 web）。
  */
 
-interface DebugInputRouting {
+interface DebugCoordinator {
   desired?: {
     webOverlayRects?: { frame: unknown; id: string }[];
     webRequestCount?: number;
@@ -40,7 +40,7 @@ interface DebugNativeWindow {
 }
 
 interface DebugSnapshot {
-  inputRouting?: DebugInputRouting;
+  coordinator?: DebugCoordinator;
   native?: { window?: DebugNativeWindow };
 }
 
@@ -55,11 +55,11 @@ function readSnapshot(win: Page): Promise<DebugSnapshot> {
 }
 
 function webRequestCount(snapshot: DebugSnapshot): number {
-  return snapshot.inputRouting?.desired?.webRequestCount ?? 0;
+  return snapshot.coordinator?.desired?.webRequestCount ?? 0;
 }
 
 function overlayRectIds(snapshot: DebugSnapshot): string[] {
-  return (snapshot.inputRouting?.desired?.webOverlayRects ?? []).map(
+  return (snapshot.coordinator?.desired?.webOverlayRects ?? []).map(
     (rect) => rect.id
   );
 }
@@ -88,8 +88,8 @@ async function readTerminalPanelId(win: Page): Promise<string> {
 }
 
 /**
- * 模拟一次「点终端内容区」焦点意图 —— 从 main 进程补发 native 层会发的同一条 IPC，
- * 驱动 renderer 的 onFocusRequest（yieldToTerminal + setTerminalBasePanel）。
+ * 模拟一次「点终端内容区」焦点意图 —— 补发 native 层会发的同一条 IPC，
+ * 驱动 renderer 发布 terminal intent host snapshot。
  */
 async function simulateTerminalFocusIntent(
   app: ElectronApplication,
@@ -242,6 +242,47 @@ test.describe("Terminal overlay coexistence e2e", () => {
         .toBe(false);
 
       expect(["cmd+f", "ipc"]).toContain(opener);
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("global dialog keeps Web ownership after terminal focus intent", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-overlay-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(win, 1);
+      const panelId = await readTerminalPanelId(win);
+
+      await win.keyboard.press("Meta+Shift+KeyP");
+      const dialog = win.locator('[role="dialog"]');
+      await expect(dialog).toBeAttached({ timeout: 5000 });
+      await expect
+        .poll(async () => webRequestCount(await readSnapshot(win)), {
+          timeout: 8000,
+        })
+        .toBeGreaterThanOrEqual(1);
+
+      await simulateTerminalFocusIntent(app, panelId);
+
+      await expect
+        .poll(async () => webRequestCount(await readSnapshot(win)), {
+          timeout: 8000,
+        })
+        .toBeGreaterThanOrEqual(1);
+      await expect
+        .poll(
+          async () =>
+            (await readSnapshot(win)).native?.window?.keyboardFocusTarget?.kind,
+          { timeout: 8000 }
+        )
+        .toBe("web");
+      await expect(dialog).toBeAttached();
     } finally {
       await app.close();
       rmSync(userDataDir, { recursive: true, force: true });

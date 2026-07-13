@@ -27,12 +27,10 @@ describe("terminal close IPC reason semantics", () => {
       createTerminal: vi.fn(() => true),
       debugSnapshot: vi.fn(() => "{}"),
       detachWindow: vi.fn(),
-      hideTerminal: vi.fn(),
       performTerminalBindingAction: vi.fn(() => true),
       reconcileTerminals: vi.fn(),
       setAppShortcutKeys: vi.fn(),
       setCommandFinishedForwardCallback: vi.fn(),
-      setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
@@ -48,7 +46,6 @@ describe("terminal close IPC reason semantics", () => {
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
-      showTerminal: vi.fn(),
     };
     const win = {
       focus: vi.fn(),

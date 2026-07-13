@@ -24,6 +24,11 @@ async function expectTooltipClosed(): Promise<void> {
     expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
   });
 }
+function waitForDelay(milliseconds: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(resolve, milliseconds);
+  return promise;
+}
 
 function expectNoManualHorizontalArrowClasses(tooltip: HTMLElement): void {
   expect(
@@ -168,7 +173,7 @@ describe("Tooltip primitive", () => {
     });
 
     fireEvent.pointerMove(trigger);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitForDelay(20);
     expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
 
     act(() => {
@@ -176,13 +181,103 @@ describe("Tooltip primitive", () => {
     });
     // Soft-suppress holds until a pointermove that is not itself a reopen.
     fireEvent.pointerMove(document.body);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitForDelay(20);
     expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
 
     // Radix only re-enters after leave clears hasPointerMoveOpenedRef.
     fireEvent.pointerLeave(trigger);
     fireEvent.pointerMove(trigger);
     await findTooltipContent();
+  });
+
+  it("suppresses pointer-driven focus reopen while preserving later hover", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    const trigger = getByRole("button");
+
+    fireEvent.pointerDown(trigger);
+    fireEvent.pointerMove(document.body);
+    fireEvent.focus(trigger);
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+
+    fireEvent.pointerLeave(trigger);
+    fireEvent.pointerMove(trigger);
+    expect(await findTooltipContent()).toHaveTextContent("Help");
+  });
+
+  it("keeps a clicked tooltip closed until pointer leave and reentry", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    const trigger = getByRole("button");
+
+    fireEvent.pointerMove(trigger);
+    expect(await findTooltipContent()).toHaveTextContent("Help");
+    fireEvent.pointerDown(trigger);
+    await expectTooltipClosed();
+
+    fireEvent.pointerMove(trigger);
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+
+    fireEvent.pointerLeave(trigger);
+    fireEvent.pointerMove(trigger);
+    expect(await findTooltipContent()).toHaveTextContent("Help");
+  });
+
+  it("opens from keyboard focus after pointer interaction", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    const trigger = getByRole("button");
+
+    fireEvent.pointerDown(trigger);
+    fireEvent.pointerUp(trigger);
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    fireEvent.focus(trigger);
+
+    expect(await findTooltipContent()).toHaveTextContent("Help");
+  });
+
+  it("does not reopen a delayed hover after keyboard dismissal", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={20}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    const trigger = getByRole("button");
+
+    fireEvent.pointerMove(trigger);
+    fireEvent.keyDown(document.body, { key: "x" });
+    await waitForDelay(30);
+
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
   });
 
   it("closes on document pointerdown / keydown / window blur", async () => {
