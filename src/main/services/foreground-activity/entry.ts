@@ -28,7 +28,7 @@ export const EMIT_DEBOUNCE_MS = 100;
 export const CLOSE_COOLDOWN_MS = 5000;
 /** SessionEnd 后的短冷却——干净收尾不需要 5s，1.5s 足以拦迟到。 */
 export const SESSION_END_COOLDOWN_MS = 1500;
-/** hook 静默 30min → status 回落 ready（活动仍存在, 计数 0）。 */
+/** hook 静默 30min → 清除不再可信的 status（活动证据仍保留, 计数 0）。 */
 export const HOOK_FRESH_TTL_MS = 30 * 60 * 1000;
 /**
  * 新建层的消抖隐藏时长（防瞬时闪条）。hook 层用于 SessionStart；
@@ -39,15 +39,9 @@ export const VISIBILITY_DEBOUNCE_MS = 250;
 
 /**
  * 回合边界事件（会话切换/错误）——之后的迟到工具事件被吸收。
- *
- * Stop 不列入：codex/claude 的 Stop hook 支持 `decision:"block"` 续跑机制
- * （agent 自动注入 continuation prompt 不发 UserPromptSubmit 直接进入
- * PreToolUse）。Stop 置 turnEnded 会吸收这些续跑事件，状态锁死 ready。
- * omp 集成已用「不订阅 turn_end」规避同类问题，codex 因 Stop 是唯一回合
- * 边界信号不能照搬，改在此处统一豁免。`Stop → ready` 映射保留不变。
+ * Stop 是否属于可信边界由集成的 `stopAuthority` 决定，不在此处一刀切。
  */
 export const TURN_BOUNDARY_EVENTS = new Set([
-  "SessionStart",
   "TurnCompleted",
   "TurnInterrupted",
   "error",
@@ -64,6 +58,8 @@ export const SESSION_CREATING_EVENTS = new Set([
   "PromptSubmit",
   "ToolStart",
   "PermissionRequest",
+  "processing",
+  "running",
 ]);
 /** 子代理事件只做计数, 不改父状态（防 tool→processing 闪跳）。 */
 export const SUBAGENT_EVENTS = new Set(["SubagentStart", "SubagentStop"]);
@@ -96,10 +92,13 @@ export interface HookScope {
   activeToolIds: Set<string>;
   anonymousSubagentCount: number;
   anonymousToolCount: number;
+  completionObserved: boolean;
   currentTurnId: string | undefined;
   key: string;
+  recentSettledTurnIds: Set<string>;
+  stale: boolean;
   stateStartedAt: number;
-  status: ActivityStatus;
+  status: ActivityStatus | undefined;
   subagentCount: number;
   turnEnded: boolean;
   updatedAt: number;
@@ -112,8 +111,8 @@ export interface HookLayer {
   hidden: boolean;
   scopes: Map<string, HookScope>;
   spawnedAt: number;
-  stateStartedAt: number;
-  status: ActivityStatus;
+  stateStartedAt: number | undefined;
+  status: ActivityStatus | undefined;
   subagentCount: number;
   ttlTimer: NodeJS.Timeout | null;
   updatedAt: number;
@@ -219,8 +218,11 @@ export function newHookScope(key: string, at: number): HookScope {
     activeToolIds: new Set(),
     anonymousSubagentCount: 0,
     anonymousToolCount: 0,
+    completionObserved: false,
     currentTurnId: undefined,
     key,
+    recentSettledTurnIds: new Set(),
+    stale: false,
     stateStartedAt: at,
     status: "ready",
     subagentCount: 0,
@@ -244,16 +246,25 @@ export function getOrCreateHookScope(
 }
 
 const STATUS_PRIORITY: Record<ActivityStatus, number> = {
-  error: 4,
-  processing: 2,
+  error: 2,
+  processing: 3,
   ready: 1,
-  tool: 3,
+  tool: 4,
   waiting: 5,
 };
 
+function statusPriority(status: ActivityStatus | undefined): number {
+  // “已观察到完成但尚无可信终态”不能覆盖 error，也不能被旧 ready 掩盖。
+  return status === undefined ? 1.5 : STATUS_PRIORITY[status];
+}
+
+function projectedScopeStatus(scope: HookScope): ActivityStatus | undefined {
+  return scope.stale ? undefined : scope.status;
+}
+
 function preferredScope(current: HookScope, candidate: HookScope): HookScope {
-  const currentPriority = STATUS_PRIORITY[current.status];
-  const candidatePriority = STATUS_PRIORITY[candidate.status];
+  const currentPriority = statusPriority(projectedScopeStatus(current));
+  const candidatePriority = statusPriority(projectedScopeStatus(candidate));
   if (candidatePriority !== currentPriority) {
     return candidatePriority > currentPriority ? candidate : current;
   }
@@ -273,8 +284,14 @@ export function refreshHookProjection(hook: HookLayer, at?: number): void {
   if (!selected) {
     return;
   }
-  hook.status = selected.status;
-  hook.stateStartedAt = selected.stateStartedAt;
+  const selectedStatus = projectedScopeStatus(selected);
+  const previousStatus = hook.status;
+  hook.status = selectedStatus;
+  if (selectedStatus === undefined) {
+    hook.stateStartedAt = undefined;
+  } else if (selectedStatus !== previousStatus) {
+    hook.stateStartedAt = at ?? selected.stateStartedAt;
+  }
   hook.subagentCount = subagentCount;
   hook.updatedAt = Math.max(maxUpdatedAt, at ?? 0);
 }
@@ -282,18 +299,19 @@ export function refreshHookProjection(hook: HookLayer, at?: number): void {
 export function setHookScopeStatus(
   hook: HookLayer,
   scope: HookScope,
-  status: ActivityStatus,
+  status: ActivityStatus | undefined,
   at: number
 ): void {
   if (scope.status !== status) {
     scope.status = status;
     scope.stateStartedAt = at;
   }
+  scope.stale = false;
   scope.updatedAt = at;
   refreshHookProjection(hook, at);
 }
 
-/** hook 静默 30min 后 processing/tool/waiting/error → ready 衰减。 */
+/** hook 静默后只失去具体状态置信度，不得凭超时伪造 ready。 */
 export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
   const hook = ctx.slots.get(key)?.hook;
   if (!hook) {
@@ -303,26 +321,48 @@ export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
     clearTimeout(hook.ttlTimer);
     hook.ttlTimer = null;
   }
-  hook.ttlTimer = setTimeout(() => {
-    const current = ctx.slots.get(key)?.hook;
-    if (!current) {
-      return;
-    }
-    current.ttlTimer = null;
-    if (
-      current.status !== "ready" ||
-      [...current.scopes.values()].some((scope) => scope.status !== "ready")
-    ) {
-      const at = ctx.now();
-      for (const scope of current.scopes.values()) {
-        scope.status = "ready";
-        scope.stateStartedAt = at;
-        scope.updatedAt = at;
+  const expiringScopes = [...hook.scopes.values()].filter(
+    (scope) =>
+      !(scope.turnEnded || scope.stale) &&
+      scope.status !== undefined &&
+      scope.status !== "ready" &&
+      scope.status !== "error"
+  );
+  if (expiringScopes.length === 0) {
+    return;
+  }
+  const nextExpiry = Math.min(
+    ...expiringScopes.map((scope) => scope.updatedAt + HOOK_FRESH_TTL_MS)
+  );
+  hook.ttlTimer = setTimeout(
+    () => {
+      const current = ctx.slots.get(key)?.hook;
+      if (!current) {
+        return;
       }
-      refreshHookProjection(current, at);
-      ctx.scheduleEmit();
-    }
-  }, HOOK_FRESH_TTL_MS);
+      current.ttlTimer = null;
+      const at = ctx.now();
+      let changed = false;
+      for (const scope of current.scopes.values()) {
+        if (
+          !(scope.turnEnded || scope.stale) &&
+          scope.status !== undefined &&
+          scope.status !== "ready" &&
+          scope.status !== "error" &&
+          at - scope.updatedAt >= HOOK_FRESH_TTL_MS
+        ) {
+          scope.stale = true;
+          changed = true;
+        }
+      }
+      if (changed) {
+        refreshHookProjection(current);
+        ctx.scheduleEmit();
+      }
+      armHookTtlTimer(key, ctx);
+    },
+    Math.max(0, nextExpiry - ctx.now())
+  );
 }
 
 export function newHookLayer(
@@ -425,8 +465,9 @@ export function projectSlot(
       panelId,
       source: "hook",
       spawnedAt: hook.spawnedAt,
-      stateStartedAt: hook.stateStartedAt,
-      status: hook.status,
+      ...(hook.status === undefined
+        ? {}
+        : { stateStartedAt: hook.stateStartedAt, status: hook.status }),
       subagentCount: hook.subagentCount,
       updatedAt: hook.updatedAt,
       windowId: hook.windowId,

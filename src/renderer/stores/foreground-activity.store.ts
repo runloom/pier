@@ -22,7 +22,7 @@ export const useForegroundActivityStore = create<ForegroundActivityState>(
     activities: {},
     ts: 0,
     apply: (b) => {
-      if (b.ts < get().ts) {
+      if (b.ts <= get().ts) {
         return;
       }
       set({

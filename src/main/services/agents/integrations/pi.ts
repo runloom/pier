@@ -87,14 +87,14 @@ function pierSessionIdFrom(values) {
 	return undefined;
 }
 
-function pierEmit(event, ...values) {
+function pierEmit(event, nativeEvent, ...values) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
 	const sessionId = pierSessionIdFrom(values);
 	const line = JSON.stringify({
-		v: 1,
+		v: 2,
 		kind: "agentEvent",
 		ts: Date.now() * 1_000_000,
 		panelId,
@@ -102,6 +102,7 @@ function pierEmit(event, ...values) {
 		pid: process.pid,
 		agent: "pi",
 		event,
+		nativeEvent,
 		...(sessionId ? { sessionId } : {}),
 	}) + "\\n";
 	try {
@@ -115,12 +116,12 @@ export default function PierAgentStatus(pi) {
 	// 加载即 agent 启动：合成 SessionStart 点亮启动态图标（事件流要到首个
 	// 会话/消息才有信号）。pi-mono 无 subagent 机制（Agent.prompt() throws
 	// if already processing）, 不存在 omp 式多实例加载风险, 合成安全。
-	pierEmit("SessionStart");
+	pierEmit("SessionStart", "pier.synthetic.session_start");
 
-	pi.on("session_start", (event, ctx) => pierEmit("SessionStart", event, ctx));
-	pi.on("agent_start", (event, ctx) => pierEmit("PromptSubmit", event, ctx));
-	pi.on("agent_end", (event, ctx) => pierEmit("Stop", event, ctx));
-	pi.on("session_shutdown", (event, ctx) => pierEmit("SessionEnd", event, ctx));
+	pi.on("session_start", (event, ctx) => pierEmit("SessionStart", "session_start", event, ctx));
+	pi.on("agent_start", (event, ctx) => pierEmit("PromptSubmit", "agent_start", event, ctx));
+	pi.on("agent_end", (event, ctx) => pierEmit("Stop", "agent_end", event, ctx));
+	pi.on("session_shutdown", (event, ctx) => pierEmit("SessionEnd", "session_shutdown", event, ctx));
 }
 `;
 }
@@ -177,6 +178,7 @@ export const piIntegration: AgentHookIntegration = {
   capability: "coarse",
   detect: piDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "authoritative" },
   install: () => installPiExtension(),
   uninstall: () => uninstallPiExtension(),
 };

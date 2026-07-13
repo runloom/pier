@@ -1,4 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { AgentStopAuthority } from "../../foreground-activity/types.ts";
 
 /**
  * agent hook 集成能力档位：
@@ -7,6 +8,11 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
  * - none：无 hook 机制，仅 L1 shell integration 命令行检测兜底（此类不注册集成模块）
  */
 export type AgentHookCapability = "coarse" | "full";
+
+export interface AgentRuntimeSemantics {
+  /** 当前集成映射出的 canonical Stop 是否足以结算用户回合。 */
+  stopAuthority: AgentStopAuthority;
+}
 
 /**
  * 单个 agent 的 hook 集成。设计约束（沿袭 claude 集成的既有纪律）：
@@ -21,5 +27,6 @@ export interface AgentHookIntegration {
   detect(): boolean;
   readonly id: AgentKind;
   install(): Promise<void>;
+  readonly runtime: AgentRuntimeSemantics;
   uninstall(): Promise<void>;
 }

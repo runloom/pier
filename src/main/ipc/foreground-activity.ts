@@ -3,12 +3,14 @@ import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-a
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, type IpcMain } from "electron";
+import { effectsForAcceptedAgentEvent } from "../services/agents/agent-event-effects.ts";
 import {
   agentHooksDir,
   eventsJsonlPath,
   installAgentHooksEmitScript,
 } from "../services/agents/agent-hooks-install.ts";
 import {
+  getAgentHookIntegration,
   installAllAgentHooks,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
@@ -31,15 +33,15 @@ import {
   findAppWindowByElectronId,
   findAppWindowByInternalId,
   findAppWindowByWebContents,
+  listAppWindowIds,
 } from "../windows/window-identity.ts";
+import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
 const log = createLogger("foreground-activity.ipc");
 
 const foregroundActivityAggregator = createForegroundActivityAggregator();
-/** 上次广播覆盖过的窗口——会话清空时也要给这些窗口发空快照清 store。 */
-const lastBroadcastWindowIds = new Set<string>();
 let jsonlObserver: JsonlObserver | null = null;
 let agentTerminalReconciler: AgentTerminalReconciler | null = null;
 
@@ -102,29 +104,26 @@ function sendToWindow(
 }
 
 /**
- * 按窗口过滤后定向发送（含上轮有活动、本轮清空的窗口）。
+ * 按窗口过滤后，向每个存活窗口发送完整快照（包括空数组）。
+ *
+ * 窗口不能只靠“上次非空 push”登记：renderer 可能先经 snapshot pull
+ * 观察到一条短命活动，而它在首次 debounce push 前消失。若空 publication
+ * 不覆盖所有存活窗口，该 renderer 会永久保留陈旧活动。
  * tab 状态点/icon/title 全部由 renderer 从该广播（+挂载时 snapshot pull）
  * 单源渲染。
  */
 function handleBroadcast(b: ForegroundActivityBroadcast): void {
-  const byWindow = new Map<string, ForegroundActivityBroadcast["activities"]>();
-  for (const activity of b.activities) {
-    const list = byWindow.get(activity.windowId) ?? [];
-    list.push(activity);
-    byWindow.set(activity.windowId, list);
-  }
-  for (const windowId of new Set([
-    ...byWindow.keys(),
-    ...lastBroadcastWindowIds,
-  ])) {
-    sendToWindow(windowId, {
-      activities: byWindow.get(windowId) ?? [],
-      ts: b.ts,
-    });
-  }
-  lastBroadcastWindowIds.clear();
-  for (const windowId of byWindow.keys()) {
-    lastBroadcastWindowIds.add(windowId);
+  const liveWindowIds = listAppWindowIds();
+  log.debug("publish", {
+    activityCount: b.activities.length,
+    ts: b.ts,
+    windowCount: liveWindowIds.length,
+  });
+  for (const publication of materializeForegroundActivityPublications(
+    b,
+    liveWindowIds
+  )) {
+    sendToWindow(publication.windowId, publication.payload);
   }
 }
 
@@ -220,7 +219,6 @@ export const foregroundActivityService = {
   windowClosed(windowId: string): void {
     agentTerminalReconciler?.releaseWindow(windowId);
     foregroundActivityAggregator.windowClosed(windowId);
-    lastBroadcastWindowIds.delete(windowId);
   },
   snapshot(windowId?: string): ForegroundActivityBroadcast {
     return foregroundActivityAggregator.snapshot(windowId);
@@ -247,26 +245,36 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // (native shell integration 走 native callback 通路)，是 forward-compat 占位。
   agentTerminalReconciler = createAgentTerminalReconciler({
     onTerminalEvent: (event) => {
-      foregroundActivityAggregator.ingestAgentEvent(event);
+      foregroundActivityAggregator.ingestAgentEvent(event, {
+        stopAuthority: "authoritative",
+      });
     },
   });
   jsonlObserver = createJsonlObserver({
     filePath: eventsJsonlPath(app.getPath("userData")),
     onAgentEvent: (event) => {
-      const accepted = foregroundActivityAggregator.ingestAgentEvent(event);
+      const accepted = foregroundActivityAggregator.ingestAgentEvent(event, {
+        stopAuthority:
+          getAgentHookIntegration(event.agent)?.runtime.stopAuthority ?? "none",
+      });
       if (!accepted) {
         return;
       }
-      agentTerminalReconciler?.observe(event).catch((err) => {
-        log.warn("agent terminal reconciliation failed", { err });
-      });
-      recordAgentResumeSession({
-        agentId: event.agent,
-        panelId: event.panelId,
-        sessionId: event.sessionId,
-        windowId: event.windowId,
-      });
-      if (event.event === "SessionEnd") {
+      const effects = effectsForAcceptedAgentEvent(event);
+      if (effects.observeTranscript) {
+        agentTerminalReconciler?.observe(event).catch((err) => {
+          log.warn("agent terminal reconciliation failed", { err });
+        });
+      }
+      if (effects.persistResume) {
+        recordAgentResumeSession({
+          agentId: event.agent,
+          panelId: event.panelId,
+          sessionId: event.sessionId,
+          windowId: event.windowId,
+        });
+      }
+      if (effects.markPanelExited) {
         markAgentSessionExited({
           panelId: event.panelId,
           windowId: event.windowId,

@@ -23,6 +23,7 @@ const qwenCodeConfigPath = () => join(homedir(), ".qwen", "settings.json");
 const QWEN_CODE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "qwen-code",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: qwenCodeConfigPath,
   detect: () => existsSync(qwenCodeConfigPath()) || commandExistsOnPath("qwen"),
   events: [

@@ -14,18 +14,19 @@ import { type AgentKind, agentKindSchema } from "./agent.ts";
  * panelId 跨窗口不唯一（见 terminal-panel-id.ts），windowId 必带，
  * 二者组成会话 key `${windowId}::${panelId}`。
  */
-const baseHookFields = {
-  v: z.literal(1),
+const baseHookIdentityFields = {
   ts: z.number().optional(),
   panelId: z.string().min(1).max(128),
   windowId: z.string().min(1).max(32),
   pid: z.number().optional(),
 };
 
+const v1BaseHookFields = { ...baseHookIdentityFields, v: z.literal(1) };
+
 const commandStartEventSchema = z
   .object({
     kind: z.literal("commandStart"),
-    ...baseHookFields,
+    ...v1BaseHookFields,
     commandLine: z.string().max(4096),
   })
   .strict();
@@ -34,7 +35,7 @@ export type CommandStartHookEvent = z.infer<typeof commandStartEventSchema>;
 const commandFinishedEventSchema = z
   .object({
     kind: z.literal("commandFinished"),
-    ...baseHookFields,
+    ...v1BaseHookFields,
     exitCode: z.number().int(),
   })
   .strict();
@@ -42,10 +43,10 @@ export type CommandFinishedHookEvent = z.infer<
   typeof commandFinishedEventSchema
 >;
 
-const agentEventPayloadSchema = z
+const agentEventPayloadV1Schema = z
   .object({
     kind: z.literal("agentEvent"),
-    ...baseHookFields,
+    ...v1BaseHookFields,
     agent: agentKindSchema,
     event: z.string().min(1).max(64),
     metadataBase64: z.string().max(16_384).optional(),
@@ -58,12 +59,40 @@ const agentEventPayloadSchema = z
     turnId: z.string().max(128).optional(),
   })
   .strict();
-export type AgentHookEventPayload = z.infer<typeof agentEventPayloadSchema>;
 
-export const agentHookEventSchema = z.discriminatedUnion("kind", [
+const agentEventPayloadV2Schema = z
+  .object({
+    kind: z.literal("agentEvent"),
+    ...baseHookIdentityFields,
+    v: z.literal(2),
+    agent: agentKindSchema,
+    /** v1 兼容的规范事件词汇；native 字段保留原生事实供适配和诊断。 */
+    event: z.string().min(1).max(64),
+    nativeEvent: z.string().min(1).max(128),
+    nativeState: z.string().min(1).max(64).optional(),
+    actorHint: z.enum(["main", "subagent"]).optional(),
+    parentSessionId: z.string().max(128).optional(),
+    metadataBase64: z.string().max(16_384).optional(),
+    agentInstanceId: z.string().max(128).optional(),
+    agentType: z.string().max(128).optional(),
+    sessionId: z.string().max(128).optional(),
+    toolName: z.string().max(256).optional(),
+    toolUseId: z.string().max(128).optional(),
+    transcriptPath: z.string().max(8192).optional(),
+    turnId: z.string().max(128).optional(),
+  })
+  .strict();
+
+export type AgentHookEventPayloadV1 = z.infer<typeof agentEventPayloadV1Schema>;
+export type AgentHookEventPayload =
+  | AgentHookEventPayloadV1
+  | z.infer<typeof agentEventPayloadV2Schema>;
+
+export const agentHookEventSchema = z.union([
   commandStartEventSchema,
   commandFinishedEventSchema,
-  agentEventPayloadSchema,
+  agentEventPayloadV1Schema,
+  agentEventPayloadV2Schema,
 ]);
 export type AgentHookEvent = z.infer<typeof agentHookEventSchema>;
 

@@ -22,6 +22,20 @@ describe("agentHookEventSchema", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("接受保留原生事件语义的 v2 agentEvent", () => {
+    expect(
+      agentHookEventSchema.safeParse({
+        v: 2,
+        kind: "agentEvent",
+        agent: "cline",
+        event: "Stop",
+        nativeEvent: "TaskCancel",
+        panelId: "panel-1",
+        windowId: "3",
+      }).success
+    ).toBe(true);
+  });
+
   it("接受合法 commandStart 分支", () => {
     const parsed = agentHookEventSchema.safeParse({
       v: 1,

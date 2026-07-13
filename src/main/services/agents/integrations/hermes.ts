@@ -122,14 +122,14 @@ def _pier_session_id_from(value: Any) -> str | None:
     return None
 
 
-def _pier_emit(pier_event: str, payload: dict[str, Any]) -> None:
+def _pier_emit(pier_event: str, native_event: str, payload: dict[str, Any]) -> None:
     log = os.environ.get("PIER_AGENT_EVENT_LOG", "")
     panel_id = os.environ.get("PIER_PANEL_ID", "")
     window_id = os.environ.get("PIER_WINDOW_ID", "")
     if not log or not panel_id or not window_id:
         return
     body = {
-        "v": 1,
+        "v": 2,
         "kind": "agentEvent",
         "ts": int(time.time_ns()),
         "panelId": panel_id,
@@ -137,6 +137,7 @@ def _pier_emit(pier_event: str, payload: dict[str, Any]) -> None:
         "pid": os.getpid(),
         "agent": "hermes",
         "event": pier_event,
+        "nativeEvent": native_event,
     }
     session_id = _pier_session_id_from(payload)
     if session_id:
@@ -186,7 +187,7 @@ def _make_hook(event_name: str) -> Callable[..., None]:
     pier_event = EVENT_MAP[event_name]
 
     def _hook(**kwargs: Any) -> None:
-        _pier_emit(pier_event, kwargs)
+        _pier_emit(pier_event, event_name, kwargs)
 
     return _hook
 
@@ -422,6 +423,7 @@ export const hermesIntegration: AgentHookIntegration = {
   capability: "coarse",
   detect: hermesDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "reset-only" },
   install: () => installHermesPlugin(),
   uninstall: () => uninstallHermesPlugin(),
 };

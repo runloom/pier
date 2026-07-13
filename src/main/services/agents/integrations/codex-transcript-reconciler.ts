@@ -16,6 +16,7 @@ type TerminalType = "task_complete" | "turn_aborted";
 interface TranscriptEntry {
   contextsByTurnId: Map<string, AgentHookEventPayload>;
   disposed: boolean;
+  initialScanEnd: number;
   offset: number;
   owners: Map<string, AgentHookEventPayload>;
   pending: boolean;
@@ -67,7 +68,10 @@ export function createCodexTranscriptReconciler(
         continue;
       }
       if (current.size < entry.offset) {
-        entry.offset = 0;
+        entry.initialScanEnd = current.size;
+        entry.offset = Math.max(0, current.size - MAX_READ_BYTES);
+        entry.pendingTerminalsByTurnId.clear();
+        entry.seenTerminalEvents.clear();
       }
       if (current.size === entry.offset) {
         continue;
@@ -93,9 +97,15 @@ export function createCodexTranscriptReconciler(
         continue;
       }
       const consumed = chunk.subarray(0, lastNewline + 1);
+      const chunkStart = entry.offset;
       entry.offset += consumed.length;
-      for (const line of consumed.toString("utf8").split("\n")) {
-        processLine(entry, line);
+      let lineStart = 0;
+      for (let index = 0; index < consumed.length; index += 1) {
+        if (consumed[index] !== 0x0a) continue;
+        const line = consumed.subarray(lineStart, index).toString("utf8");
+        const lineEnd = chunkStart + index + 1;
+        processLine(entry, line, lineEnd > entry.initialScanEnd);
+        lineStart = index + 1;
       }
       if (entry.offset < current.size) {
         entry.pending = true;
@@ -103,7 +113,11 @@ export function createCodexTranscriptReconciler(
     } while (!(disposed || entry.disposed) && entry.pending);
   }
 
-  function processLine(entry: TranscriptEntry, line: string): void {
+  function processLine(
+    entry: TranscriptEntry,
+    line: string,
+    allowOwnerFallback: boolean
+  ): void {
     if (disposed || entry.disposed || !line.trim()) {
       return;
     }
@@ -131,7 +145,7 @@ export function createCodexTranscriptReconciler(
         typeof payload?.turn_id === "string" ? payload.turn_id : "";
       let context: AgentHookEventPayload | undefined;
       if (turnId) context = entry.contextsByTurnId.get(turnId);
-      else if (entry.owners.size === 1) {
+      else if (allowOwnerFallback && entry.owners.size === 1) {
         context = entry.owners.values().next().value;
       }
       if (!context) {
@@ -158,9 +172,9 @@ export function createCodexTranscriptReconciler(
     turnId: string
   ): void {
     if (turnId) {
-      const dedupeKey = `${terminalType}:${turnId}`;
-      if (entry.seenTerminalEvents.has(dedupeKey)) return;
-      entry.seenTerminalEvents.add(dedupeKey);
+      // 同一 turn 第一个可信终态获胜；complete/abort 冲突不得二次迁移。
+      if (entry.seenTerminalEvents.has(turnId)) return;
+      entry.seenTerminalEvents.add(turnId);
       if (entry.seenTerminalEvents.size > MAX_SEEN_TERMINALS) {
         entry.seenTerminalEvents.delete(
           entry.seenTerminalEvents.values().next().value ?? ""
@@ -173,7 +187,9 @@ export function createCodexTranscriptReconciler(
       ...context,
       event:
         terminalType === "turn_aborted" ? "TurnInterrupted" : "TurnCompleted",
+      nativeEvent: `codex.transcript.${terminalType}`,
       ...(turnId ? { turnId } : {}),
+      v: 2,
     });
   }
 
@@ -252,7 +268,10 @@ export function createCodexTranscriptReconciler(
     const entry: TranscriptEntry = {
       contextsByTurnId: new Map(),
       disposed: false,
-      offset: initial.size,
+      initialScanEnd: initial.size,
+      // 首次绑定有限回扫尾部，覆盖 terminal 已写入、watcher 稍后建立的竞态。
+      // 起点可能落在一行中间；processLine 的 JSON 解析失败会安全忽略该残片。
+      offset: Math.max(0, initial.size - MAX_READ_BYTES),
       owners: new Map(),
       pending: false,
       pendingTerminalsByTurnId: new Map(),

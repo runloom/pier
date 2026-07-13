@@ -102,7 +102,7 @@ function subscriptionLines(): string {
   return Object.entries(byNative)
     .map(
       ([nativeEvent, m]) =>
-        `\tpi.on(${quote(nativeEvent)}, (nativeEvent, ctx) => pierDispatch(ctx, nativeEvent, ${quote(m.main)}, ${quote(m.sub)}));`
+        `\tpi.on(${quote(nativeEvent)}, (event, ctx) => pierDispatch(ctx, ${quote(nativeEvent)}, ${quote(m.main)}, ${quote(m.sub)}, event));`
     )
     .join("\n");
 }
@@ -158,14 +158,14 @@ function pierSessionIdFrom(values) {
 	return undefined;
 }
 
-function pierEmit(event, ...values) {
+function pierEmit(event, nativeEvent, actorHint, ...values) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
 	const sessionId = pierSessionIdFrom(values);
 	const line = JSON.stringify({
-		v: 1,
+		v: 2,
 		kind: "agentEvent",
 		ts: Date.now() * 1_000_000,
 		panelId,
@@ -173,6 +173,8 @@ function pierEmit(event, ...values) {
 		pid: process.pid,
 		agent: "omp",
 		event,
+		nativeEvent,
+		...(actorHint ? { actorHint } : {}),
 		...(sessionId ? { sessionId } : {}),
 	}) + "\\n";
 	pierAppend(log, line);
@@ -187,13 +189,21 @@ export default function PierAgentStatus(pi) {
 	const isFirstInstance = pierInstanceCount === 0;
 	pierInstanceCount += 1;
 	let role = null;
-	function pierDispatch(ctx, nativeEvent, mainEvent, subEvent) {
+	function pierDispatch(ctx, nativeEvent, mainEvent, subEvent, ...values) {
 		if (role === null) {
 			role =
 				(ctx && ctx.hasUI === true) || isFirstInstance ? "main" : "sub";
 		}
 		const event = role === "main" ? mainEvent : subEvent;
-		if (event) pierEmit(event, nativeEvent, ctx);
+		if (event) {
+			pierEmit(
+				event,
+				nativeEvent,
+				role === "sub" ? "subagent" : undefined,
+				...values,
+				ctx,
+			);
+		}
 	}
 
 ${subscriptionLines()}
@@ -253,6 +263,7 @@ export const ompIntegration: AgentHookIntegration = {
   capability: "full",
   detect: ompDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "authoritative" },
   install: () => installOmpExtension(),
   uninstall: () => uninstallOmpExtension(),
 };

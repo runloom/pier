@@ -117,6 +117,7 @@ export function withPierGooseHooks(
     capability: "full",
     configPath: gooseHooksJsonPath,
     events: GOOSE_HOOK_EVENTS,
+    runtime: { stopAuthority: "advisory" },
   });
 }
 
@@ -279,6 +280,7 @@ export const gooseIntegration: AgentHookIntegration = {
   capability: "full",
   detect: gooseDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "advisory" },
   install: () => installGooseHooks(),
   uninstall: () => uninstallGooseHooks(),
 };

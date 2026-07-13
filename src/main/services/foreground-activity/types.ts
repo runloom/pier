@@ -6,6 +6,12 @@ import type {
 } from "@shared/contracts/agent-session.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 
+export type AgentStopAuthority =
+  | "advisory"
+  | "authoritative"
+  | "none"
+  | "reset-only";
+
 /**
  * Aggregator 公共 API。native callback、hook observer、task launcher 与 IPC
  * 快照全部经此接口——单入口, 状态归一。
@@ -28,7 +34,10 @@ export interface ForegroundActivityAggregator {
    * 返回 true 表示事件归属有效且已被聚合器消费；调用方只应为 true
    * 的事件写会话恢复/退出等旁路状态，避免异 agent 子流程污染当前 panel。
    */
-  ingestAgentEvent(event: AgentHookEventPayload): boolean;
+  ingestAgentEvent(
+    event: AgentHookEventPayload,
+    options: { stopAuthority: AgentStopAuthority }
+  ): boolean;
   /**
    * 前台命令退出：双层同清 + 5s 冷却（覆盖崩溃/kill 等无 SessionEnd hook
    * 的路径）。Ctrl+Z 悬挂（145-148）双层保留。

@@ -75,7 +75,11 @@ export function withPierCursorHooks(
     const existing = Array.isArray(current) ? current : [];
     const kept = existing.filter((entry) => !isPierCursorEntry(entry));
     const pierEntry: CursorHookEntry = {
-      command: pierHookCommandWithStdinSessionId(AGENT_ID, event.pierEvent),
+      command: pierHookCommandWithStdinSessionId(
+        AGENT_ID,
+        event.pierEvent,
+        event.nativeEvent
+      ),
       timeout: TIMEOUT_SECONDS,
     };
     hooks[event.nativeEvent] = [...kept, pierEntry];
@@ -131,6 +135,7 @@ export const cursorIntegration: AgentHookIntegration = {
   capability: "full",
   detect: () => existsSync(configPath()) || commandExistsOnPath("cursor-agent"),
   id: AGENT_ID,
+  runtime: { stopAuthority: "advisory" },
   install: () => installCursorHooks(),
   uninstall: () => uninstallCursorHooks(),
 };

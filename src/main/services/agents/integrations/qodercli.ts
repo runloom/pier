@@ -21,6 +21,7 @@ const qodercliConfigPath = () => join(homedir(), ".qoder", "settings.json");
 const QODERCLI_SPEC: NestedJsonIntegrationSpec = {
   agentId: "qodercli",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: qodercliConfigPath,
   detect: () =>
     existsSync(qodercliConfigPath()) || commandExistsOnPath("qodercli"),

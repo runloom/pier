@@ -3,6 +3,7 @@ import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
 import type { HookLayer, HookScope } from "./entry.ts";
 import { refreshHookProjection, setHookScopeStatus } from "./entry.ts";
+import type { AgentStopAuthority } from "./types.ts";
 
 /**
  * aggregator 模块的日志辅助函数。
@@ -45,7 +46,7 @@ export function logAgentEventDropped(
     ownerAgent?: AgentKind;
   }
 ): void {
-  log.debug(`ingestAgentEvent:${reason}`, {
+  const details = {
     panelId,
     event,
     ...(extra?.eventAgent === undefined
@@ -57,7 +58,63 @@ export function logAgentEventDropped(
     ...(extra?.ownerAgent === undefined
       ? {}
       : { ownerAgent: extra.ownerAgent }),
+  };
+  if (reason === "absorbed" || reason === "foreign-agent-hook") {
+    log.warn(`ingestAgentEvent:${reason}`, details);
+  } else {
+    log.debug(`ingestAgentEvent:${reason}`, details);
+  }
+}
+
+/** 只记录身份与状态词，不记录 prompt、工具参数或 transcript 正文。 */
+export function logAgentLifecycleEvidence(args: {
+  agent: AgentKind;
+  authority: AgentStopAuthority;
+  event: string;
+  panelId: string;
+  previousStatus: ActivityStatus | undefined;
+  projectedStatus: ActivityStatus | undefined;
+  sessionId?: string | undefined;
+  turnId?: string | undefined;
+}): void {
+  let message: string | null = null;
+  if (args.event === "PromptSubmit") {
+    message = "agent-turn-started";
+  } else if (args.event === "Stop") {
+    message =
+      args.authority === "advisory"
+        ? "agent-terminal-candidate"
+        : "agent-terminal-trusted";
+  } else if (
+    args.event === "TurnCompleted" ||
+    args.event === "TurnInterrupted"
+  ) {
+    message = "agent-terminal-trusted";
+  }
+  if (!message) return;
+  log.info(message, {
+    agent: args.agent,
+    authority: args.authority,
+    event: args.event,
+    projectedStatus: args.projectedStatus,
+    panelId: args.panelId,
+    ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+    ...(args.turnId ? { turnId: args.turnId } : {}),
   });
+  if (
+    args.previousStatus !== "ready" &&
+    args.projectedStatus === "ready" &&
+    message === "agent-terminal-trusted"
+  ) {
+    log.info("agent-ready-derived", {
+      agent: args.agent,
+      authority: args.authority,
+      cause: args.event,
+      panelId: args.panelId,
+      ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+      ...(args.turnId ? { turnId: args.turnId } : {}),
+    });
+  }
 }
 
 /**
@@ -68,7 +125,7 @@ export function setHookScopeStatusWithLog(
   key: string,
   hook: HookLayer,
   scope: HookScope,
-  status: ActivityStatus,
+  status: ActivityStatus | undefined,
   at: number,
   agent: AgentKind
 ): void {

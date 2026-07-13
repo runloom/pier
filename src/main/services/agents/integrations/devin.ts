@@ -28,6 +28,7 @@ const devinConfigPath = () =>
 const DEVIN_SPEC: NestedJsonIntegrationSpec = {
   agentId: "devin",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: devinConfigPath,
   events: [
     { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
@@ -179,6 +180,7 @@ export const devinIntegration: AgentHookIntegration = {
   capability: DEVIN_SPEC.capability,
   detect: () => existsSync(devinConfigPath()) || commandExistsOnPath("devin"),
   id: DEVIN_SPEC.agentId,
+  runtime: { stopAuthority: "advisory" },
   install: () =>
     transformDevinConfig(devinConfigPath(), (s) =>
       withPierNestedHooks(s, DEVIN_SPEC)

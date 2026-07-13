@@ -55,10 +55,11 @@ describe("buildAmpPluginSource", () => {
   });
 
   it("JSONL 行字段：v/kind/agent/event/panelId/windowId/pid/ts", () => {
-    expect(source).toContain("v: 1");
+    expect(source).toContain("v: 2");
     expect(source).toContain('kind: "agentEvent"');
     expect(source).toContain('agent: "amp"');
     expect(source).toContain("event: pierEvent");
+    expect(source).toContain("nativeEvent,");
     expect(source).toContain("panelId,");
     expect(source).toContain("windowId,");
     expect(source).toContain("pid: process.pid");

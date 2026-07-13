@@ -1,7 +1,9 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { agentHookEventSchema } from "@shared/contracts/agent-session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { effectsForAcceptedAgentEvent } from "../../../src/main/services/agents/agent-event-effects.ts";
 import {
   buildOpencodePluginSource,
   installOpencodeHooks,
@@ -56,10 +58,14 @@ describe("buildOpencodePluginSource", () => {
   });
 
   it("JSONL 行字段：v/kind/agent/event/panelId/windowId/pid/ts", () => {
-    expect(source).toContain("v: 1");
+    expect(source).toContain("v: 2");
     expect(source).toContain('kind: "agentEvent"');
     expect(source).toContain('agent: "opencode"');
     expect(source).toContain("event: pierEvent");
+    expect(source).toContain("nativeEvent,");
+    expect(source).toContain("nativeState");
+    expect(source).toContain('actorHint: "subagent"');
+    expect(source).toContain("parentSessionId");
     expect(source).toContain("panelId,");
     expect(source).toContain("windowId,");
     expect(source).toContain("pid: process.pid");
@@ -77,8 +83,12 @@ describe("buildOpencodePluginSource", () => {
     expect(source).toContain('"permission.replied") return "processing"');
     expect(source).toContain('"tool.execute.before"');
     expect(source).toContain('"tool.execute.after"');
-    expect(source).toContain('emitPierEvent("ToolStart", args)');
-    expect(source).toContain('emitPierEvent("ToolComplete", args)');
+    expect(source).toContain(
+      'emitPierEvent("ToolStart", "tool.execute.before", args)'
+    );
+    expect(source).toContain(
+      'emitPierEvent("ToolComplete", "tool.execute.after", args)'
+    );
     expect(source).toContain('event.type === "session.deleted"');
     expect(source).toContain("value.info || value.session || value.thread");
     expect(source).toContain("toolUseId");
@@ -91,6 +101,93 @@ describe("buildOpencodePluginSource", () => {
     expect(returnStatement).toBeGreaterThan(factoryStart);
     const factoryPrelude = source.slice(factoryStart, returnStatement);
     expect(factoryPrelude).not.toContain("emitPierEvent(");
+  });
+});
+
+describe("opencode 生成插件的子会话身份继承", () => {
+  it("child created 后的 status/tool/deleted 全部保持 subagent actor", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-opencode-runtime-"));
+    const logPath = join(dir, "events.jsonl");
+    const previousEnv = {
+      log: process.env.PIER_AGENT_EVENT_LOG,
+      panel: process.env.PIER_PANEL_ID,
+      window: process.env.PIER_WINDOW_ID,
+    };
+    process.env.PIER_AGENT_EVENT_LOG = logPath;
+    process.env.PIER_PANEL_ID = "panel-1";
+    process.env.PIER_WINDOW_ID = "1";
+    try {
+      interface GeneratedPlugin {
+        event: (args: { event: Record<string, unknown> }) => void;
+        "tool.execute.after": (...args: unknown[]) => void;
+        "tool.execute.before": (...args: unknown[]) => void;
+      }
+      const moduleShim: {
+        exports: (() => GeneratedPlugin) | undefined;
+      } = { exports: undefined };
+      const source = buildOpencodePluginSource().replace(
+        "export const PierAgentStatus =",
+        "module.exports ="
+      );
+      const evaluate = new Function("module", source) as (
+        module: typeof moduleShim
+      ) => void;
+      evaluate(moduleShim);
+      if (!moduleShim.exports) throw new Error("生成插件没有导出 factory");
+      const plugin = moduleShim.exports();
+      plugin.event({
+        event: {
+          properties: { info: { id: "child", parentID: "parent" } },
+          type: "session.created",
+        },
+      });
+      plugin.event({
+        event: {
+          properties: { sessionID: "child", status: { type: "busy" } },
+          type: "session.status",
+        },
+      });
+      plugin["tool.execute.before"]({ callID: "tool-1", sessionID: "child" });
+      plugin["tool.execute.after"]({ callID: "tool-1", sessionID: "child" });
+      plugin.event({
+        event: {
+          properties: { info: { id: "child" } },
+          type: "session.deleted",
+        },
+      });
+
+      await vi.waitFor(async () => {
+        expect(
+          (await readFile(logPath, "utf8")).trim().split("\n")
+        ).toHaveLength(5);
+      });
+      const events = (await readFile(logPath, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+      for (const event of events) {
+        if (event.kind !== "agentEvent") continue;
+        expect(event).toMatchObject({
+          actorHint: "subagent",
+          parentSessionId: "parent",
+          sessionId: "child",
+        });
+        expect(effectsForAcceptedAgentEvent(event)).toEqual({
+          markPanelExited: false,
+          observeTranscript: false,
+          persistResume: false,
+        });
+      }
+    } finally {
+      if (previousEnv.log === undefined)
+        delete process.env.PIER_AGENT_EVENT_LOG;
+      else process.env.PIER_AGENT_EVENT_LOG = previousEnv.log;
+      if (previousEnv.panel === undefined) delete process.env.PIER_PANEL_ID;
+      else process.env.PIER_PANEL_ID = previousEnv.panel;
+      if (previousEnv.window === undefined) delete process.env.PIER_WINDOW_ID;
+      else process.env.PIER_WINDOW_ID = previousEnv.window;
+      await rm(dir, { force: true, recursive: true });
+    }
   });
 });
 

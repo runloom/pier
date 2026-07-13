@@ -65,8 +65,11 @@ const KIRO_EVENTS: ReadonlyArray<{
 ];
 
 /** kiro 专用命令变体：消费 stdin payload 并携带 session_id 上报。 */
-export function kiroHookCommand(pierEvent: string): string {
-  return pierHookCommandWithStdinSessionId(AGENT_ID, pierEvent);
+export function kiroHookCommand(
+  pierEvent: string,
+  nativeEvent: string = pierEvent
+): string {
+  return pierHookCommandWithStdinSessionId(AGENT_ID, pierEvent, nativeEvent);
 }
 
 interface KiroHookEntry {
@@ -101,7 +104,7 @@ export function withPierKiroHooks(
     const existing = Array.isArray(current) ? current : [];
     const kept = existing.filter((entry) => !isPierKiroEntry(entry));
     const pierEntry: KiroHookEntry = {
-      command: kiroHookCommand(event.pierEvent),
+      command: kiroHookCommand(event.pierEvent, event.nativeEvent),
       ...(event.matcher === undefined ? {} : { matcher: event.matcher }),
     };
     hooks[event.nativeEvent] = [...kept, pierEntry];
@@ -173,6 +176,7 @@ function kiroDetect(): boolean {
 
 export const kiroIntegration: AgentHookIntegration = {
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   detect: kiroDetect,
   id: AGENT_ID,
   install: installKiroHooks,

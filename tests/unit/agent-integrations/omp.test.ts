@@ -250,13 +250,14 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     ]);
     // JSONL 载荷契约（聚合器按这些字段消费）。
     expect(records[0]).toMatchObject({
-      v: 1,
+      v: 2,
       kind: "agentEvent",
       panelId: "panel-1",
       windowId: "window-1",
       pid: process.pid,
       agent: "omp",
       event: "SessionStart",
+      nativeEvent: "session_start",
     });
     expect(typeof records[0]?.ts).toBe("number");
   });
@@ -285,7 +286,8 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     main.fire("agent_end", mainCtx); // Stop
     sub.fire("session_shutdown", subCtx); // 无输出——不拆主会话层
     main.fire("session_shutdown", mainCtx); // SessionEnd
-    expect(eventsOf(await readEmittedRecords(logPath))).toEqual([
+    const records = await readEmittedRecords(logPath);
+    expect(eventsOf(records)).toEqual([
       "SessionStart",
       "PromptSubmit",
       "ToolStart",
@@ -296,6 +298,14 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       "ToolComplete",
       "Stop",
       "SessionEnd",
+    ]);
+    expect(
+      records.filter((record) =>
+        ["SubagentStart", "SubagentStop"].includes(String(record.event))
+      )
+    ).toEqual([
+      expect.objectContaining({ actorHint: "subagent" }),
+      expect.objectContaining({ actorHint: "subagent" }),
     ]);
   });
 

@@ -84,7 +84,7 @@ function emitPierEvent(nativeEvent, ...values) {
   if (!log || !panelId || !windowId) return;
   const sessionId = pierSessionIdFrom(values);
   const line = JSON.stringify({
-    v: 1,
+    v: 2,
     kind: "agentEvent",
     ts: Date.now() * 1_000_000,
     panelId,
@@ -92,6 +92,7 @@ function emitPierEvent(nativeEvent, ...values) {
     pid: process.pid,
     agent: "amp",
     event: pierEvent,
+    nativeEvent,
     ...(sessionId ? { sessionId } : {}),
   }) + "\\n";
   try {
@@ -195,6 +196,7 @@ export const ampIntegration: AgentHookIntegration = {
   capability: "full",
   detect: ampDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "authoritative" },
   install: () => installAmpHooks(),
   uninstall: () => uninstallAmpHooks(),
 };

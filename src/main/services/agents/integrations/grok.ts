@@ -41,6 +41,7 @@ const grokConfigPath = () => join(grokHomeDir(), "hooks", "pier-status.json");
 const GROK_SPEC: NestedJsonIntegrationSpec = {
   agentId: "grok",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: grokConfigPath,
   detect: () => existsSync(grokHomeDir()) || commandExistsOnPath("grok"),
   events: [

@@ -56,6 +56,7 @@ const ANTIGRAVITY_SPEC: NestedJsonIntegrationSpec = {
   // 仅 3 个事件(PreInvocation/PostToolUse/Stop),无 SessionStart/SessionEnd/
   // ToolStart/error/permission,能力有限——"coarse" 如实反映覆盖度。
   capability: "coarse",
+  runtime: { stopAuthority: "advisory" },
   configPath: antigravityConfigPath,
   detect: () =>
     existsSync(antigravityConfigDir()) ||

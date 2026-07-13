@@ -1,10 +1,48 @@
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type {
+  AgentHookEventPayload,
+  AgentHookEventPayloadV1,
+} from "@shared/contracts/agent-session.ts";
 import type {
   AgentActivity,
   TaskActivity,
 } from "@shared/contracts/foreground-activity.ts";
+import {
+  type LogRecord,
+  resetDefaultLogSinkForTests,
+  setDefaultLogSink,
+} from "@shared/logger.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { createForegroundActivityAggregator as createRawForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import type {
+  AgentStopAuthority,
+  ForegroundActivityAggregator,
+  ForegroundActivityAggregatorOpts,
+} from "../../../src/main/services/foreground-activity/types.ts";
+
+type TestForegroundActivityAggregator = Omit<
+  ForegroundActivityAggregator,
+  "ingestAgentEvent"
+> & {
+  ingestAgentEvent(
+    event: AgentHookEventPayload,
+    options?: { stopAuthority: AgentStopAuthority }
+  ): boolean;
+};
+
+function createForegroundActivityAggregator(
+  opts: ForegroundActivityAggregatorOpts = {}
+): TestForegroundActivityAggregator {
+  const aggregator = createRawForegroundActivityAggregator(opts);
+  return {
+    ...aggregator,
+    ingestAgentEvent: (
+      event: AgentHookEventPayload,
+      options: { stopAuthority: AgentStopAuthority } = {
+        stopAuthority: "authoritative",
+      }
+    ) => aggregator.ingestAgentEvent(event, options),
+  };
+}
 
 function hookEvent(
   event: string,
@@ -22,7 +60,7 @@ function hookEvent(
 }
 
 function agentHookEvent(
-  args: Partial<AgentHookEventPayload> & {
+  args: Partial<AgentHookEventPayloadV1> & {
     event: string;
   }
 ): AgentHookEventPayload {
@@ -45,6 +83,7 @@ describe("ForegroundActivityAggregator", () => {
     vi.useFakeTimers();
   });
   afterEach(() => {
+    resetDefaultLogSinkForTests();
     vi.useRealTimers();
   });
 
@@ -171,15 +210,170 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("Stop → status=ready, 后续 ToolStart 自然迁移到 tool (Stop 不再置 turnEnded)", () => {
+  it("advisory Stop 不谎报 ready，后续 ToolStart 恢复为 tool", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
-    agg.ingestAgentEvent(hookEvent("Stop"));
+    agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "advisory" });
     let a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.status).toBe("ready");
-    agg.ingestAgentEvent(hookEvent("ToolStart"));
+    expect(a.status).toBeUndefined();
+    agg.ingestAgentEvent(hookEvent("ToolStart"), {
+      stopAuthority: "advisory",
+    });
     a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("none Stop 整条丢弃，不得借 canonical 名称制造 ready", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+
+    expect(
+      agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "none" })
+    ).toBe(false);
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it.each([
+    "TurnCompleted",
+    "TurnInterrupted",
+  ])("%s 可信终态不被迟到 advisory Stop 降级", (terminalEvent) => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", turnId: "turn-settled" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: terminalEvent, turnId: "turn-settled" })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEvent({ event: "Stop", turnId: "turn-settled" }),
+        { stopAuthority: "advisory" }
+      )
+    ).toBe(false);
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("生命周期诊断区分 candidate/trusted/ready 且不记录正文", () => {
+    const records: LogRecord[] = [];
+    setDefaultLogSink((record) => records.push(record));
+    const agg = createForegroundActivityAggregator({ now });
+    const sensitive = "SENSITIVE_PROMPT_OR_TOOL_BODY";
+    const base = {
+      metadataBase64: Buffer.from(sensitive).toString("base64"),
+      sessionId: "session-log",
+      transcriptPath: `/tmp/${sensitive}`,
+      turnId: "turn-log",
+    };
+    agg.ingestAgentEvent(agentHookEvent({ ...base, event: "PromptSubmit" }), {
+      stopAuthority: "advisory",
+    });
+    agg.ingestAgentEvent(agentHookEvent({ ...base, event: "Stop" }), {
+      stopAuthority: "advisory",
+    });
+    agg.ingestAgentEvent(agentHookEvent({ ...base, event: "TurnCompleted" }), {
+      stopAuthority: "authoritative",
+    });
+
+    expect(records.map((record) => record.msg)).toEqual(
+      expect.arrayContaining([
+        "agent-turn-started",
+        "agent-terminal-candidate",
+        "agent-terminal-trusted",
+        "agent-ready-derived",
+      ])
+    );
+    expect(
+      records.find((record) => record.msg === "agent-ready-derived")?.ctx
+    ).toMatchObject({
+      authority: "authoritative",
+      cause: "TurnCompleted",
+    });
+    expect(JSON.stringify(records)).not.toContain(sensitive);
+    expect(JSON.stringify(records)).not.toContain(base.metadataBase64);
+    agg.dispose();
+  });
+
+  it("同 scope 重复 SessionStart 幂等，不清空正在执行的工具事实", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", sessionId: "session-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        event: "ToolStart",
+        sessionId: "session-1",
+        toolUseId: "tool-1",
+      })
+    );
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SessionStart", sessionId: "session-1" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("新 scope 的 SessionStart 后可直接接收 ToolStart", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("SessionStart"));
+    agg.ingestAgentEvent(hookEvent("ToolStart"));
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("Cline TaskComplete 后 TaskResume 可开始新的工具回合", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    const clineEvent = (event: string): AgentHookEventPayload => ({
+      agent: "cline",
+      event,
+      kind: "agentEvent",
+      panelId: "p1",
+      v: 1,
+      windowId: "1",
+    });
+    agg.ingestAgentEvent(clineEvent("SessionStart"));
+    agg.ingestAgentEvent(clineEvent("ToolStart"));
+    agg.ingestAgentEvent(clineEvent("Stop"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+
+    agg.ingestAgentEvent(clineEvent("running"));
+    agg.ingestAgentEvent(clineEvent("ToolStart"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it.each([
+    "ToolStart",
+    "PermissionRequest",
+    "error",
+    "SubagentStart",
+  ])("拒绝旧 turn 的 %s 污染当前 turn", (event) => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", turnId: "turn-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", turnId: "turn-2" })
+    );
+
+    expect(
+      agg.ingestAgentEvent(agentHookEvent({ event, turnId: "turn-1" }))
+    ).toBe(false);
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
     agg.dispose();
   });
 
@@ -351,10 +545,11 @@ describe("ForegroundActivityAggregator", () => {
       agentHookEvent({ agent: "codex", event: "PromptSubmit", pid: 2001 })
     );
     agg.ingestAgentEvent(
-      agentHookEvent({ agent: "codex", event: "Stop", pid: 2002 })
+      agentHookEvent({ agent: "codex", event: "Stop", pid: 2002 }),
+      { stopAuthority: "advisory" }
     );
     let a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.status).toBe("ready");
+    expect(a.status).toBeUndefined();
 
     agg.ingestAgentEvent(
       agentHookEvent({ agent: "codex", event: "ToolStart", pid: 2003 })
@@ -571,14 +766,65 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("hook TTL 30min → agent status 回落 ready", () => {
+  it("hook TTL 30min → 清除不再可信的 agent status", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     let a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.status).toBe("processing");
     advance(30 * 60 * 1000);
     a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.status).toBe("ready");
+    expect(a.status).toBeUndefined();
+    expect(a.updatedAt).toBe(0);
+    agg.dispose();
+  });
+
+  it("多 scope 投影优先当前执行事实，旧 error 不遮住新 tool", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "error", sessionId: "session-error" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", sessionId: "session-tool" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("多 scope 同状态切换不重置公共 stateStartedAt", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", sessionId: "session-1" })
+    );
+    advance(100);
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", sessionId: "session-2" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).stateStartedAt).toBe(
+      0
+    );
+    agg.dispose();
+  });
+
+  it("主导 scope 删除导致公共状态变化时从删除时刻重新计时", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "PromptSubmit", sessionId: "session-processing" })
+    );
+    advance(100);
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", sessionId: "session-tool" })
+    );
+    advance(100);
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SessionEnd", sessionId: "session-tool" })
+    );
+
+    const activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("processing");
+    expect(activity.stateStartedAt).toBe(200);
     agg.dispose();
   });
 
@@ -628,6 +874,38 @@ describe("ForegroundActivityAggregator", () => {
     a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.subagentCount).toBe(0);
     expect(a.status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("advisory Stop 后 SubagentStart 恢复 processing 并计数", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "advisory" });
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity).status
+    ).toBeUndefined();
+
+    agg.ingestAgentEvent(hookEvent("SubagentStart"), {
+      stopAuthority: "advisory",
+    });
+    const activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("processing");
+    expect(activity.subagentCount).toBe(1);
+    agg.dispose();
+  });
+
+  it("TTL stale 后 SubagentStart 恢复 processing", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    advance(30 * 60 * 1000);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity).status
+    ).toBeUndefined();
+
+    agg.ingestAgentEvent(hookEvent("SubagentStart"));
+    const activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBe("processing");
+    expect(activity.subagentCount).toBe(1);
     agg.dispose();
   });
 
@@ -735,11 +1013,11 @@ describe("ForegroundActivityAggregator", () => {
     expect(a.source).toBe("hook");
     expect(a.agentId).toBe("claude");
     expect(a.status).toBe("tool");
-    // hook TTL 不因 relaunch 重置：30min 静默照常衰减 ready
+    // hook TTL 不因 relaunch 重置：30min 静默照常清除不再可信的状态
     advance(30 * 60 * 1000);
     a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.source).toBe("hook");
-    expect(a.status).toBe("ready");
+    expect(a.status).toBeUndefined();
     agg.dispose();
   });
 
@@ -1157,25 +1435,20 @@ describe("ForegroundActivityAggregator", () => {
       agg.dispose();
     });
 
-    it("Stop 后迟到工具事件自然迁移状态 (Stop 不再置 turnEnded)", () => {
-      // Stop 不再吸收后续事件——codex/claude 的 Stop hook `decision:"block"`
-      // 续跑机制支持 Stop 后直接发 PreToolUse 不发 UserPromptSubmit, 旧逻辑
-      // 会吸收这些续跑事件锁死 ready, 现在改为自然迁移。
-      // 乱序场景的副作用: pierEmit 异步落盘乱序导致 ToolComplete 比 Stop 后到,
-      // 短暂把 status 从 ready 拉回 tool, 下个真实事件纠正——可接受。
+    it("authoritative Stop 吸收迟到工具事件，新 PromptSubmit 才开始下一轮", () => {
       const agg = createForegroundActivityAggregator({ now });
       agg.ingestAgentEvent(ompEvent("PromptSubmit"));
       agg.ingestAgentEvent(ompEvent("ToolStart"));
       agg.ingestAgentEvent(ompEvent("Stop"));
       let a = agg.snapshot().activities[0] as AgentActivity;
       expect(a.status).toBe("ready");
-      // 迟到/续跑 ToolComplete 自然迁移到 tool
+      // 迟到的 ToolComplete / ToolStart 不得推翻可信终态
       agg.ingestAgentEvent(ompEvent("ToolComplete"));
       a = agg.snapshot().activities[0] as AgentActivity;
-      expect(a.status).toBe("tool");
+      expect(a.status).toBe("ready");
       agg.ingestAgentEvent(ompEvent("ToolStart"));
       a = agg.snapshot().activities[0] as AgentActivity;
-      expect(a.status).toBe("tool");
+      expect(a.status).toBe("ready");
       // 新一轮 PromptSubmit → processing
       agg.ingestAgentEvent(ompEvent("PromptSubmit"));
       a = agg.snapshot().activities[0] as AgentActivity;

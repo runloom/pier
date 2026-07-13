@@ -36,6 +36,7 @@ import {
 const GEMINI_SPEC: NestedJsonIntegrationSpec = {
   agentId: "gemini",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: () => join(homedir(), ".gemini", "settings.json"),
   events: [
     { nativeEvent: "SessionStart", pierEvent: "SessionStart" },

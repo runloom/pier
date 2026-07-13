@@ -2,7 +2,11 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import type { AgentHookCapability, AgentHookIntegration } from "./types.ts";
+import type {
+  AgentHookCapability,
+  AgentHookIntegration,
+  AgentRuntimeSemantics,
+} from "./types.ts";
 
 /**
  * pier hook 命令的识别标记（新格式——JSONL emit 脚本方式）。
@@ -16,12 +20,13 @@ export const PIER_AGENT_HOOKS_DIR_MARK = "PIER_AGENT_HOOKS_DIR";
  * 缺失直接短路（emit 脚本内部 guard）。
  * 尾部 `|| true` 保证 hook 永远 exit 0，不干扰 agent 本体。
  *
- * 第一个位置参数固定 `agentEvent`（emit 脚本 kind dispatch），随后是
+ * 第一个位置参数固定 `agentEventV2`（emit 脚本 kind dispatch），随后是
  * agent id 与 pier 事件名——见 EMIT_SCRIPT 三 kind 契约。
  */
 export function pierHookCommand(
   agentId: AgentKind,
   pierEvent: string,
+  nativeEvent: string = pierEvent,
   ...payloadShellExpressions: string[]
 ): string {
   const payloadArgs = payloadShellExpressions
@@ -29,13 +34,14 @@ export function pierHookCommand(
     .join("");
   return (
     `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
-    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEvent" "${agentId}" "${pierEvent}"${payloadArgs} || true`
+    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEventV2" "${agentId}" "${pierEvent}" "${nativeEvent}"${payloadArgs} || true`
   );
 }
 
 export function pierHookCommandWithStdinSessionId(
   agentId: AgentKind,
-  pierEvent: string
+  pierEvent: string,
+  nativeEvent: string = pierEvent
 ): string {
   const nodeExecutable = shellDoubleQuote(process.execPath);
   return [
@@ -51,6 +57,7 @@ export function pierHookCommandWithStdinSessionId(
     pierHookCommand(
       agentId,
       pierEvent,
+      nativeEvent,
       "$_pier_session_id",
       "$_pier_turn_id",
       "$_pier_tool_use_id",
@@ -171,6 +178,7 @@ export interface NestedJsonIntegrationSpec {
   /** 默认：配置文件已存在才安装（loomdesk 语义）。 */
   detect?: () => boolean;
   events: readonly NestedHookEventSpec[];
+  runtime: AgentRuntimeSemantics;
   timeoutSeconds?: number;
 }
 
@@ -215,7 +223,8 @@ export function withPierNestedHooks(
         {
           command: pierHookCommandWithStdinSessionId(
             spec.agentId,
-            event.pierEvent
+            event.pierEvent,
+            event.nativeEvent
           ),
           timeout: spec.timeoutSeconds ?? 5,
           type: "command",
@@ -262,6 +271,7 @@ export function createNestedJsonIntegration(
     capability: spec.capability,
     detect: spec.detect ?? (() => existsSync(spec.configPath())),
     id: spec.agentId,
+    runtime: spec.runtime,
     // install 先剔全部 pier 条目再按当前 spec 写入——覆盖「上一版 spec 装过
     // 但本版已移出」的遗留；withPierNestedHooks 只处理当前 spec 内事件，
     // 不会自行清理已经废弃的事件键。

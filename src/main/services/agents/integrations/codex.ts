@@ -63,6 +63,7 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
 const CODEX_SPEC: NestedJsonIntegrationSpec = {
   agentId: "codex",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: codexConfigPath,
   // 与 claude/gemini/grok 默认 detect（配置文件是否已存在）不同：
   // codex 的 hooks.json 通常尚不存在, 只要 CODEX_HOME 目录存在即视为

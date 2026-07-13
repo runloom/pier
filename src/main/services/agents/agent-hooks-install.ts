@@ -14,13 +14,16 @@ export const EMIT_SCRIPT_NAME = "emit";
 export const EVENTS_JSONL_NAME = "events.jsonl";
 
 /**
- * emit 脚本内容——spec §4.4 三 kind 模板（commandStart / commandFinished / agentEvent）。
+ * emit 脚本内容——保留 v1 agentEvent，并以 agentEventV2 承载新协议。
  *
  * 位置参数：
- * - `$1` = kind（commandStart | commandFinished | agentEvent）
+ * - `$1` = kind（commandStart | commandFinished | agentEvent | agentEventV2）
  * - commandStart: `$2` = 命令行文本
  * - commandFinished: `$2` = 退出码（整数字符串）
- * - agentEvent: `$2` = agent id，`$3` = pierEvent 名，`$4..$11` 依次为
+ * - agentEvent（旧协议）: `$2` = agent id，`$3` = pierEvent 名，`$4..$11`
+ *   为身份字段；继续写 v1，保证升级期间旧配置调用新脚本不发生参数错位。
+ * - agentEventV2: `$2` = agent id，`$3` = pierEvent 名，`$4` = 原生事件名，
+ *   `$5..$12` 依次为
  *   sessionId / turnId / toolUseId / toolName / agentInstanceId / agentType /
  *   transcriptPath / 已筛选身份元数据的 base64（均可为空，不含 prompt/tool input）。
  *
@@ -79,6 +82,19 @@ case "$1" in
     _metadata_b64=$(printf '%s' "\${11}" | head -c 16384 | LC_ALL=C tr -cd 'A-Za-z0-9+/=')
     printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","sessionId":"%s","turnId":"%s","toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
       "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_sid" "$_turn" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
+    ;;
+  agentEventV2)
+    _native=$(printf '%s' "$4" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _sid=$(printf '%s' "$5" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _turn=$(printf '%s' "$6" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _tool_id=$(printf '%s' "$7" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _tool_name=$(printf '%s' "$8" | head -c 256 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _agent_instance=$(printf '%s' "$9" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _agent_type=$(printf '%s' "\${10}" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _transcript=$(printf '%s' "\${11}" | head -c 8192 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _metadata_b64=$(printf '%s' "\${12}" | head -c 16384 | LC_ALL=C tr -cd 'A-Za-z0-9+/=')
+    printf '{"v":2,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","nativeEvent":"%s","sessionId":"%s","turnId":"%s","toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
+      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_native" "$_sid" "$_turn" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
     ;;
 esac
 [ "$(cat "$_lock" 2>/dev/null || true)" = "$_lock_token" ] && rm -f "$_lock"

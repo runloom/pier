@@ -2,6 +2,7 @@ import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import {
   logAgentEventDropped,
+  logAgentLifecycleEvidence,
   refreshHookProjectionWithLog,
   setHookScopeStatusWithLog,
 } from "./aggregator-tracing.ts";
@@ -13,6 +14,7 @@ import {
   SESSION_END_COOLDOWN_MS,
   SUBAGENT_EVENTS,
 } from "./entry.ts";
+import type { AgentStopAuthority } from "./types.ts";
 
 export function isInCooldown(
   map: Map<string, number>,
@@ -56,8 +58,9 @@ export interface HookScopeCoordinator {
     hook: HookLayer,
     scope: HookScope,
     event: AgentHookEventPayload,
-    status: ActivityStatus,
-    at: number
+    status: ActivityStatus | undefined,
+    at: number,
+    stopAuthority: AgentStopAuthority
   ) => void;
   pruneExpiredCooldowns: () => void;
 }
@@ -167,16 +170,32 @@ export function createHookScopeCoordinator({
     hook: HookLayer,
     scope: HookScope,
     event: AgentHookEventPayload,
-    status: ActivityStatus,
-    at: number
+    status: ActivityStatus | undefined,
+    at: number,
+    stopAuthority: AgentStopAuthority
   ): void {
     hook.agentId = event.agent;
-    if (SUBAGENT_EVENTS.has(event.event)) {
+    if (
+      SUBAGENT_EVENTS.has(event.event) &&
+      !scope.stale &&
+      !(event.event === "SubagentStart" && scope.status === undefined)
+    ) {
       scope.updatedAt = at;
       refreshHookProjectionWithLog(key, hook, at, event.agent);
       return;
     }
+    const previousStatus = hook.status;
     setHookScopeStatusWithLog(key, hook, scope, status, at, event.agent);
+    logAgentLifecycleEvidence({
+      agent: event.agent,
+      authority: stopAuthority,
+      event: event.event,
+      panelId: key,
+      previousStatus,
+      projectedStatus: hook.status,
+      sessionId: event.sessionId,
+      turnId: event.turnId,
+    });
   }
 
   return {

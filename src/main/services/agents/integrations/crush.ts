@@ -71,7 +71,11 @@ export function withPierCrushHooks(
   const existing = Array.isArray(current) ? current : [];
   const kept = existing.filter((entry) => !isPierCrushEntry(entry));
   const pierEntry: CrushHookEntry = {
-    command: pierHookCommandWithStdinSessionId(AGENT_ID, CRUSH_PIER_EVENT),
+    command: pierHookCommandWithStdinSessionId(
+      AGENT_ID,
+      CRUSH_PIER_EVENT,
+      CRUSH_NATIVE_EVENT
+    ),
   };
   hooks[CRUSH_NATIVE_EVENT] = [...kept, pierEntry];
   return { ...settings, hooks };
@@ -115,6 +119,7 @@ export const crushIntegration: AgentHookIntegration = {
   capability: "coarse",
   detect: () => existsSync(configPath()) || commandExistsOnPath("crush"),
   id: AGENT_ID,
+  runtime: { stopAuthority: "none" },
   install: () => installCrushHooks(),
   uninstall: () => uninstallCrushHooks(),
 };

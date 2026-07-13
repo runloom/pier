@@ -14,11 +14,20 @@ import { useForegroundActivityStore } from "@/stores/foreground-activity.store.t
 export function ForegroundActivityBridge(): null {
   useEffect(() => {
     const apply = useForegroundActivityStore.getState().apply;
+    let active = true;
+    const unsubscribe = window.pier.foregroundActivity.onChanged(apply);
     window.pier.foregroundActivity
       .snapshot()
-      .then(apply)
+      .then((snapshot) => {
+        if (active) {
+          apply(snapshot);
+        }
+      })
       .catch(() => undefined);
-    return window.pier.foregroundActivity.onChanged(apply);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

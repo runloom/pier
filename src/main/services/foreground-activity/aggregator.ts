@@ -1,5 +1,6 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type {
+  ActivityStatus,
   ForegroundActivity,
   ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
@@ -52,15 +53,12 @@ import type {
   ForegroundActivityAggregatorOpts,
 } from "./types.ts";
 
-/** ForegroundActivityAggregator：双层 slot 模型，API 见 ./types.ts。 */
 export function createForegroundActivityAggregator(
   opts: ForegroundActivityAggregatorOpts = {}
 ): ForegroundActivityAggregator {
   const now = opts.now ?? Date.now;
   const slots = new Map<string, PanelSlot>();
-  /** panel 已死后拦迟到 hook / 命令事件。 */
   const panelCooldownUntil = new Map<string, number>();
-  /** hook 收尾后只拦迟到 hook；新命令永不被此冷却拦截。 */
   const hookCooldownUntil = new Map<string, number>();
   const listeners = new Set<(b: ForegroundActivityBroadcast) => void>();
   let emitTimer: NodeJS.Timeout | null = null;
@@ -216,7 +214,6 @@ export function createForegroundActivityAggregator(
       const slot = slotFor(key, panelId);
       const existing = slot.command;
       if (existing?.kind === "agent-launch" && existing.agentId === agentId) {
-        // launcher 先验 + OSC 133 C 双击（同 agent）→ 去抖：保层保消抖 timer。
         existing.updatedAt = now();
         existing.windowId = windowId;
       } else {
@@ -227,9 +224,6 @@ export function createForegroundActivityAggregator(
         slot.command = layer;
         armLaunchVisibility(key, layer, { scheduleEmit, slots });
       }
-      // 异 agent 的 hook 证据在新 agent 命令启动时作废（loomdesk
-      // clearAgentHookActivitiesBySession 同语义）；同 agent 保留——
-      // 覆盖 OSC/hook 到达竞态与相邻重启的证据延续。status 仍唯 hook 可写。
       const hook = slot.hook;
       if (hook && hook.agentId !== agentId) {
         logClearForeignHook(key, hook.agentId, agentId);
@@ -248,8 +242,6 @@ export function createForegroundActivityAggregator(
         return;
       }
       const key = panelKey(windowId, panelId);
-      // 只查 panel 死亡冷却：命令收尾的 hook 冷却不拦新命令——
-      // 相邻命令 <5s 也必须正常呈现（loomdesk ingestCommandStart 同语义）。
       if (isInCooldown(panelCooldownUntil, key, now)) {
         return;
       }
@@ -257,7 +249,6 @@ export function createForegroundActivityAggregator(
       if (slot.command) {
         clearCommandTimers(slot.command);
       }
-      // 只覆盖 command 层——`fg` 等 shell 命令不摧毁挂起 agent 的 hook 证据。
       slot.command = newShellLayer(windowId, commandLine, now());
       scheduleEmit();
     },
@@ -282,22 +273,23 @@ export function createForegroundActivityAggregator(
       pruneExpiredCooldowns();
     },
 
-    ingestCommandStartHook(_event) {
-      // 保 discriminated union 完整——目前无 consumer。
-    },
-    ingestCommandFinishedHook(_event) {
-      // 同上。
-    },
+    ingestCommandStartHook(_event) {},
+    ingestCommandFinishedHook(_event) {},
 
-    ingestAgentEvent(event) {
+    ingestAgentEvent(event, options) {
       if (disposed) {
         return false;
       }
       const key = panelKey(event.windowId, event.panelId);
       const slotBefore = slots.get(key);
       logRouting(event.event, event.agent, key, slotBefore?.hook ?? null);
-      const ownerAgent = commandOwnedAgent(slotBefore);
-      if (ownerAgent !== null && ownerAgent !== event.agent) {
+      const ownerAgent =
+        commandOwnedAgent(slotBefore) ?? slotBefore?.hook?.agentId;
+      if (
+        ownerAgent !== null &&
+        ownerAgent !== undefined &&
+        ownerAgent !== event.agent
+      ) {
         logAgentEventDropped("foreign-agent-hook", key, event.event, {
           eventAgent: event.agent,
           ownerAgent,
@@ -327,23 +319,35 @@ export function createForegroundActivityAggregator(
         logAgentEventDropped("ghost-rejected", key, event.event);
         return false;
       }
+      const existingScope = hook.scopes.get(identity.key);
+      if (event.event === "SessionStart" && existingScope) {
+        return true;
+      }
       const scope = getOrCreateHookScope(hook, identity, at);
-      if (!applyTurnBookkeeping(scope, event)) {
+      const stopAuthority = options.stopAuthority;
+      if (!applyTurnBookkeeping(scope, event, stopAuthority)) {
         logAgentEventDropped("absorbed", key, event.event, {
-          frozenStatus: scope.status,
+          ...(scope.status === undefined ? {} : { frozenStatus: scope.status }),
         });
         return false;
+      }
+      let nextStatus: ActivityStatus | undefined = status;
+      if (scope.completionObserved) {
+        nextStatus = undefined;
+      } else if (
+        event.event === "ToolComplete" &&
+        (!event.toolUseId?.trim() || hookScopeHasActiveTools(scope))
+      ) {
+        nextStatus = "tool";
       }
       hookScopes.noteStatusEvent(
         key,
         hook,
         scope,
         event,
-        event.event === "ToolComplete" &&
-          (!event.toolUseId?.trim() || hookScopeHasActiveTools(scope))
-          ? "tool"
-          : status,
-        at
+        nextStatus,
+        at,
+        stopAuthority
       );
       armHookTtlTimer(key, timerCtx);
       scheduleEmit();

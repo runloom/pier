@@ -93,15 +93,37 @@ function pierToolIdFrom(event) {
 	return undefined;
 }
 
-function pierEmit(pierEvent, rawEvent) {
+const pierParentSessionIds = new Map();
+
+function pierEmit(pierEvent, nativeEvent, rawEvent) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
 	const sessionId = pierSessionIdFrom(rawEvent);
 	const toolUseId = pierToolIdFrom(rawEvent);
+	const properties = rawEvent && !Array.isArray(rawEvent) && rawEvent.properties;
+	const info = properties && (properties.info || properties.session);
+	const nativeState =
+		properties && properties.status && typeof properties.status.type === "string"
+			? properties.status.type
+			: undefined;
+	const discoveredParentSessionId =
+		(info && (info.parentID || info.parentId || info.parent_id)) ||
+		(properties && (properties.parentID || properties.parentId || properties.parent_id));
+	if (
+		sessionId &&
+		typeof discoveredParentSessionId === "string" &&
+		discoveredParentSessionId
+	) {
+		pierParentSessionIds.set(sessionId, discoveredParentSessionId);
+	}
+	const parentSessionId = sessionId
+		? pierParentSessionIds.get(sessionId)
+		: undefined;
+	const isSubagent = parentSessionId !== undefined;
 	const line = JSON.stringify({
-		v: 1,
+		v: 2,
 		kind: "agentEvent",
 		ts: Date.now() * 1_000_000,
 		panelId,
@@ -109,6 +131,12 @@ function pierEmit(pierEvent, rawEvent) {
 		pid: process.pid,
 		agent: "${pluginId}",
 		event: pierEvent,
+		nativeEvent,
+		...(nativeState ? { nativeState } : {}),
+		...(isSubagent ? { actorHint: "subagent" } : {}),
+		...(typeof parentSessionId === "string" && parentSessionId
+			? { parentSessionId }
+			: {}),
 		...(sessionId ? { sessionId } : {}),
 		...(toolUseId ? { toolUseId } : {}),
 	}) + "\\n";
@@ -116,6 +144,9 @@ function pierEmit(pierEvent, rawEvent) {
 		pierAppend(log, line);
 	} catch {
 		// best-effort, never throw into the agent's own event loop
+	}
+	if (nativeEvent === "session.deleted" && sessionId) {
+		pierParentSessionIds.delete(sessionId);
 	}
 }
 
@@ -147,13 +178,13 @@ const server = async () => {
 	return {
 		event: async ({ event }) => {
 			const mapped = mapPierEvent(event);
-			if (mapped) pierEmit(mapped, event);
+			if (mapped) pierEmit(mapped, event.type, event);
 		},
 		"tool.execute.before": async (...args) => {
-			pierEmit("ToolStart", args);
+			pierEmit("ToolStart", "tool.execute.before", args);
 		},
 		"tool.execute.after": async (...args) => {
-			pierEmit("ToolComplete", args);
+			pierEmit("ToolComplete", "tool.execute.after", args);
 		},
 	};
 };
@@ -224,6 +255,7 @@ export const kiloIntegration: AgentHookIntegration = {
   capability: "full",
   detect: kiloDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "authoritative" },
   install: () => installKiloHooks(),
   uninstall: () => uninstallKiloHooks(),
 };

@@ -97,7 +97,8 @@ function buildKimiHooksBlock(): string {
   for (const event of KIMI_HOOK_EVENTS) {
     const command = pierHookCommandWithStdinSessionId(
       AGENT_ID,
-      event.pierEvent
+      event.pierEvent,
+      event.nativeEvent
     );
     lines.push("[[hooks]]");
     lines.push(`event = ${JSON.stringify(event.nativeEvent)}`);
@@ -188,6 +189,7 @@ export const kimiIntegration: AgentHookIntegration = {
   capability: "full",
   detect: kimiDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "advisory" },
   install: () => installKimiHooks(),
   uninstall: () => uninstallKimiHooks(),
 };

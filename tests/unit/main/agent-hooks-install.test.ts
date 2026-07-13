@@ -52,8 +52,10 @@ describe("installAgentHooksEmitScript", () => {
     expect(content).toContain("commandStart)");
     expect(content).toContain("commandFinished)");
     expect(content).toContain("agentEvent)");
+    expect(content).toContain("agentEventV2)");
     // JSONL printf 模板（保序字段）
     expect(content).toContain('"v":1');
+    expect(content).toContain('"v":2');
     expect(content).toContain('"kind":"commandStart"');
     expect(content).toContain('"kind":"commandFinished"');
     expect(content).toContain('"kind":"agentEvent"');
@@ -70,7 +72,7 @@ describe("installAgentHooksEmitScript", () => {
     const logPath = join(dir, "events.jsonl");
     const r = spawnSync(
       "/bin/sh",
-      [emitScriptPath(dir), "agentEvent", "claude", "Stop"],
+      [emitScriptPath(dir), "agentEventV2", "claude", "Stop", "Stop"],
       {
         env: {
           PIER_PANEL_ID: "p1",
@@ -82,10 +84,11 @@ describe("installAgentHooksEmitScript", () => {
     expect(r.status).toBe(0);
     const content = await readFile(logPath, "utf8");
     const parsed = JSON.parse(content.trim());
-    expect(parsed.v).toBe(1);
+    expect(parsed.v).toBe(2);
     expect(parsed.kind).toBe("agentEvent");
     expect(parsed.agent).toBe("claude");
     expect(parsed.event).toBe("Stop");
+    expect(parsed.nativeEvent).toBe("Stop");
     expect(parsed.panelId).toBe("p1");
     expect(parsed.windowId).toBe("w1");
     expect(typeof parsed.pid).toBe("number");
@@ -100,7 +103,14 @@ describe("installAgentHooksEmitScript", () => {
     const logPath = join(dir, "events.jsonl");
     const r = spawnSync(
       "/bin/sh",
-      [emitScriptPath(dir), "agentEvent", "claude", "SessionStart", "s-123"],
+      [
+        emitScriptPath(dir),
+        "agentEventV2",
+        "claude",
+        "SessionStart",
+        "SessionStart",
+        "s-123",
+      ],
       {
         env: {
           PIER_PANEL_ID: "p1",
@@ -113,6 +123,49 @@ describe("installAgentHooksEmitScript", () => {
     const parsed = JSON.parse((await readFile(logPath, "utf8")).trim());
     expect(parsed.kind).toBe("agentEvent");
     expect(parsed.sessionId).toBe("s-123");
+  });
+
+  it("旧 agentEvent 命令调用新版脚本时保持 v1 参数布局", async () => {
+    const dir = await makeTempDir();
+    await installAgentHooksEmitScript(dir);
+    const logPath = join(dir, "events.jsonl");
+    const r = spawnSync(
+      "/bin/sh",
+      [
+        emitScriptPath(dir),
+        "agentEvent",
+        "codex",
+        "PromptSubmit",
+        "session-old",
+        "turn-old",
+        "tool-old",
+        "shell",
+        "agent-old",
+        "worker",
+        "/tmp/transcript.jsonl",
+        "e30=",
+      ],
+      {
+        env: {
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+      }
+    );
+
+    expect(r.status).toBe(0);
+    expect(JSON.parse((await readFile(logPath, "utf8")).trim())).toMatchObject({
+      agent: "codex",
+      event: "PromptSubmit",
+      metadataBase64: "e30=",
+      sessionId: "session-old",
+      toolName: "shell",
+      toolUseId: "tool-old",
+      transcriptPath: "/tmp/transcript.jsonl",
+      turnId: "turn-old",
+      v: 1,
+    });
   });
 
   it("commandStart kind spawn 写出合法 JSONL + 命令行转义", async () => {

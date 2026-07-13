@@ -34,6 +34,7 @@ const augHomeDir = () => join(homedir(), ".augment");
 const AUG_SPEC: NestedJsonIntegrationSpec = {
   agentId: "aug",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: augConfigPath,
   detect: () =>
     existsSync(augHomeDir()) ||

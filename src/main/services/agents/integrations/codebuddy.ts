@@ -21,6 +21,7 @@ const codebuddyConfigPath = () =>
 const CODEBUDDY_SPEC: NestedJsonIntegrationSpec = {
   agentId: "codebuddy",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: codebuddyConfigPath,
   detect: () =>
     existsSync(codebuddyConfigPath()) || commandExistsOnPath("codebuddy"),

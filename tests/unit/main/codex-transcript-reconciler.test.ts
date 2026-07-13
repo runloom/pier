@@ -65,8 +65,10 @@ describe("codex transcript reconciler", () => {
     });
     expect(received[0]).toMatchObject({
       event: "TurnInterrupted",
+      nativeEvent: "codex.transcript.turn_aborted",
       panelId: "panel-1",
       turnId: "turn-1",
+      v: 2,
       windowId: "1",
     });
     reconciler.dispose();
@@ -113,6 +115,63 @@ describe("codex transcript reconciler", () => {
       event: "TurnInterrupted",
       turnId: "turn-late-hook",
     });
+    reconciler.dispose();
+  });
+
+  it("首次绑定会回看尾部，补获 watcher 建立前已写入的终态", async () => {
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"reason":"interrupted","turn_id":"turn-before-observe","type":"turn_aborted"}}\n'
+    );
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+
+    await reconciler.observe(hookEvent(path, "turn-before-observe"));
+
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]).toMatchObject({
+      event: "TurnInterrupted",
+      turnId: "turn-before-observe",
+    });
+    reconciler.dispose();
+  });
+
+  it("首次回看忽略历史无 turn_id 终态，不得绑定到当前新回合", async () => {
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"type":"task_complete"}}\n'
+    );
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+
+    await reconciler.observe(hookEvent(path, "turn-current"));
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
+
+    expect(received).toHaveLength(0);
+    reconciler.dispose();
+  });
+
+  it("同一 turn 出现冲突终态时以 transcript 中第一个终态为准", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-conflict"));
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"reason":"interrupted","turn_id":"turn-conflict","type":"turn_aborted"}}\n' +
+        '{"type":"event_msg","payload":{"turn_id":"turn-conflict","type":"task_complete"}}\n'
+    );
+
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]?.event).toBe("TurnInterrupted");
     reconciler.dispose();
   });
 
@@ -285,6 +344,44 @@ describe("codex transcript reconciler", () => {
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
     expect(received[0]?.event).toBe("TurnCompleted");
+    reconciler.dispose();
+  });
+
+  it("transcript 截断后无 turn_id 的新增终态仍属于增量区间", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-truncate"));
+    writeFileSync(path, "");
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"type":"task_complete"}}\n'
+    );
+
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]?.event).toBe("TurnCompleted");
+    reconciler.dispose();
+  });
+
+  it("截断检测时已存在的无 turn_id 终态仍按历史区间忽略", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    appendFileSync(path, `${"x".repeat(1024)}\n`);
+    await reconciler.observe(hookEvent(path, "turn-replaced"));
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
+    writeFileSync(
+      path,
+      '{"type":"event_msg","payload":{"type":"task_complete"}}\n'
+    );
+
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
+    expect(received).toHaveLength(0);
     reconciler.dispose();
   });
 

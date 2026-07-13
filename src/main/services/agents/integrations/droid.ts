@@ -55,6 +55,7 @@ async function cleanupDroidLegacy(): Promise<void> {
 const DROID_SPEC: NestedJsonIntegrationSpec = {
   agentId: "droid",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: droidConfigPath,
   detect: () => existsSync(droidConfigPath()) || commandExistsOnPath("droid"),
   events: [

@@ -22,6 +22,7 @@ const commandCodeConfigPath = () =>
 const COMMAND_CODE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "command-code",
   capability: "coarse",
+  runtime: { stopAuthority: "advisory" },
   configPath: commandCodeConfigPath,
   detect: () =>
     existsSync(commandCodeConfigPath()) || commandExistsOnPath("command-code"),

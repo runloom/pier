@@ -105,7 +105,7 @@ describe("install/uninstallClineHooks (文件 IO)", () => {
     await installClineHooks(dir);
     const expectations: [string, string][] = [
       ["TaskStart", "SessionStart"],
-      ["TaskResume", "SessionStart"],
+      ["TaskResume", "running"],
       ["UserPromptSubmit", "PromptSubmit"],
       ["PreToolUse", "ToolStart"],
       ["PostToolUse", "ToolComplete"],

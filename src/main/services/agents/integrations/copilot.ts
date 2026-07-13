@@ -70,7 +70,11 @@ export function withPierCopilotHooks(
     const existing = Array.isArray(current) ? current : [];
     const kept = existing.filter((entry) => !isPierCopilotEntry(entry));
     const pierEntry: CopilotHookEntry = {
-      bash: pierHookCommandWithStdinSessionId(AGENT_ID, event.pierEvent),
+      bash: pierHookCommandWithStdinSessionId(
+        AGENT_ID,
+        event.pierEvent,
+        event.nativeEvent
+      ),
       timeoutSec: TIMEOUT_SECONDS,
       type: "command",
     };
@@ -144,6 +148,7 @@ export const copilotIntegration: AgentHookIntegration = {
   detect: () =>
     existsSync(join(homedir(), ".copilot")) || commandExistsOnPath("copilot"),
   id: AGENT_ID,
+  runtime: { stopAuthority: "advisory" },
   install: () => installCopilotHooks(),
   uninstall: () => uninstallCopilotHooks(),
 };

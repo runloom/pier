@@ -22,6 +22,7 @@ import {
 const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "claude",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: () => join(homedir(), ".claude", "settings.json"),
   // claude 为旗舰集成：无条件安装（配置不存在则创建）, 保持既有行为。
   detect: () => true,

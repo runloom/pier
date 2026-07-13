@@ -96,7 +96,11 @@ export function withPierAutohandHooks(
   );
   const pierEntries: AutohandHookEntry[] = AUTOHAND_HOOK_EVENTS.map(
     (event) => ({
-      command: pierHookCommandWithStdinSessionId(AGENT_ID, event.pierEvent),
+      command: pierHookCommandWithStdinSessionId(
+        AGENT_ID,
+        event.pierEvent,
+        event.nativeEvent
+      ),
       enabled: true,
       event: event.nativeEvent,
       timeout: AUTOHAND_HOOK_TIMEOUT_MS,
@@ -148,6 +152,7 @@ export async function uninstallAutohandHooks(
 
 export const autohandIntegration: AgentHookIntegration = {
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   detect: autohandDetect,
   id: AGENT_ID,
   install: () => installAutohandHooks(),

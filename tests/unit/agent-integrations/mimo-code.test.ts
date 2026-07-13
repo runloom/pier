@@ -52,10 +52,14 @@ describe("buildMimoCodePluginSource", () => {
   });
 
   it("JSONL 行字段：v/kind/agent/event/panelId/windowId/pid/ts, agent 为 mimo-code", () => {
-    expect(source).toContain("v: 1");
+    expect(source).toContain("v: 2");
     expect(source).toContain('kind: "agentEvent"');
     expect(source).toContain('agent: "mimo-code"');
     expect(source).toContain("event: pierEvent");
+    expect(source).toContain("nativeEvent,");
+    expect(source).toContain("nativeState");
+    expect(source).toContain('actorHint: "subagent"');
+    expect(source).toContain("parentSessionId");
     expect(source).toContain("panelId,");
     expect(source).toContain("windowId,");
     expect(source).toContain("pid: process.pid");
@@ -73,8 +77,12 @@ describe("buildMimoCodePluginSource", () => {
     expect(source).toContain('"permission.replied") return "processing"');
     expect(source).toContain('"tool.execute.before"');
     expect(source).toContain('"tool.execute.after"');
-    expect(source).toContain('emitPierEvent("ToolStart", args)');
-    expect(source).toContain('emitPierEvent("ToolComplete", args)');
+    expect(source).toContain(
+      'emitPierEvent("ToolStart", "tool.execute.before", args)'
+    );
+    expect(source).toContain(
+      'emitPierEvent("ToolComplete", "tool.execute.after", args)'
+    );
     expect(source).toContain('event.type === "session.deleted"');
     expect(source).toContain("value.info || value.session || value.thread");
     expect(source).toContain("toolUseId");

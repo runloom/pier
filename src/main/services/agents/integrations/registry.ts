@@ -1,3 +1,4 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import { aiderIntegration } from "./aider.ts";
 import { ampIntegration } from "./amp.ts";
 import { antigravityIntegration } from "./antigravity.ts";
@@ -66,6 +67,16 @@ export const AGENT_HOOK_INTEGRATIONS: readonly AgentHookIntegration[] = [
   qodercliIntegration,
   qwenCodeIntegration,
 ];
+
+const AGENT_HOOK_INTEGRATIONS_BY_ID = new Map(
+  AGENT_HOOK_INTEGRATIONS.map((integration) => [integration.id, integration])
+);
+
+export function getAgentHookIntegration(
+  agentId: AgentKind
+): AgentHookIntegration | null {
+  return AGENT_HOOK_INTEGRATIONS_BY_ID.get(agentId) ?? null;
+}
 
 /**
  * 幂等安装全部已检测到的集成。单个失败不影响其他（逐个隔离告警）——

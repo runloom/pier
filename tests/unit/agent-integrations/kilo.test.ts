@@ -78,10 +78,14 @@ describe("buildKiloPluginSource", () => {
   it("JSONL 行字段：v/kind/agent/event/panelId/windowId/pid/ts", async () => {
     const { buildKiloPluginSource } = await loadIntegration();
     const source = buildKiloPluginSource();
-    expect(source).toContain("v: 1");
+    expect(source).toContain("v: 2");
     expect(source).toContain('kind: "agentEvent"');
     expect(source).toContain('agent: "kilo"');
     expect(source).toContain("event: pierEvent");
+    expect(source).toContain("nativeEvent,");
+    expect(source).toContain("nativeState");
+    expect(source).toContain('actorHint: "subagent"');
+    expect(source).toContain("parentSessionId");
     expect(source).toContain("panelId,");
     expect(source).toContain("windowId,");
     expect(source).toContain("pid: process.pid");
@@ -105,8 +109,12 @@ describe("buildKiloPluginSource", () => {
     expect(source).not.toContain("permission.updated");
     expect(source).toContain('"tool.execute.before"');
     expect(source).toContain('"tool.execute.after"');
-    expect(source).toContain('pierEmit("ToolStart", args)');
-    expect(source).toContain('pierEmit("ToolComplete", args)');
+    expect(source).toContain(
+      'pierEmit("ToolStart", "tool.execute.before", args)'
+    );
+    expect(source).toContain(
+      'pierEmit("ToolComplete", "tool.execute.after", args)'
+    );
     expect(source).toContain("value.info || value.session || value.thread");
     expect(source).toContain("toolUseId");
   });

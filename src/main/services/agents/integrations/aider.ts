@@ -84,6 +84,7 @@ export const aiderIntegration: AgentHookIntegration = {
   capability: "coarse",
   detect: aiderDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "none" },
   install: () => installAiderHooks(),
   uninstall: () => uninstallAiderHooks(),
 };

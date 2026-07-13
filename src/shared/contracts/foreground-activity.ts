@@ -27,7 +27,9 @@ export type ActivityKind = z.infer<typeof activityKindSchema>;
  * status 的唯一来源是 hook 证据。launch 先验（OSC 133 / launcher）只能
  * 证明「面板里有个 agent 二进制在跑」, 不能证明它处于任何会话状态——
  * 例如 `omp update` 这类非会话子命令。因此 AgentActivity.status 是
- * optional：缺席 = 无 hook 证据, renderer 只出品牌图标不出状态文案。
+ * optional：缺席 = 没有足够证据断言具体运行态。它既可能来自 launch 先验，
+ * 也可能是 hook 已观察到候选终态、但尚无可信完成证据；renderer 此时只出
+ * 品牌图标，不展示“未知/待确认”等内部术语。
  */
 export const activityStatusSchema = z.enum([
   "ready",
@@ -58,7 +60,7 @@ const agentActivitySchema = z
     subagentCount: z.number().int().nonnegative(),
     /**
      * 状态最近一次「变化」的时刻（同状态内的心跳事件不重置, 供 UI 计时）。
-     * 与 status 同生同灭：无 hook 证据时缺席。
+     * 与 status 同生同灭：无可信状态投影时缺席。
      */
     stateStartedAt: z.number().int().nonnegative().optional(),
   })

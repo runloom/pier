@@ -18,6 +18,7 @@ const openclaudeConfigPath = () =>
 const OPENCLAUDE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "openclaude",
   capability: "full",
+  runtime: { stopAuthority: "advisory" },
   configPath: openclaudeConfigPath,
   detect: () =>
     existsSync(openclaudeConfigPath()) || commandExistsOnPath("openclaude"),

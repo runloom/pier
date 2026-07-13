@@ -50,10 +50,16 @@ describe("buildPiExtensionSource", () => {
     for (const evt of NATIVE_EVENTS) {
       expect(src).toContain(`pi.on("${evt}"`);
     }
-    expect(src).toContain('pierEmit("SessionStart")');
-    expect(src).toContain('pierEmit("PromptSubmit", event, ctx)');
-    expect(src).toContain('pierEmit("Stop", event, ctx)');
-    expect(src).toContain('pierEmit("SessionEnd", event, ctx)');
+    expect(src).toContain(
+      'pierEmit("SessionStart", "pier.synthetic.session_start")'
+    );
+    expect(src).toContain(
+      'pierEmit("PromptSubmit", "agent_start", event, ctx)'
+    );
+    expect(src).toContain('pierEmit("Stop", "agent_end", event, ctx)');
+    expect(src).toContain(
+      'pierEmit("SessionEnd", "session_shutdown", event, ctx)'
+    );
     // agent_start 映射 PromptSubmit（与 omp 对齐, 非旧 processing）
     expect(
       PI_EVENT_MAP.find((e) => e.nativeEvent === "agent_start")?.pierEvent
@@ -78,7 +84,10 @@ describe("buildPiExtensionSource", () => {
     const functionStart = src.indexOf(
       "export default function PierAgentStatus(pi)"
     );
-    const loadEmit = src.indexOf('pierEmit("SessionStart");', functionStart);
+    const loadEmit = src.indexOf(
+      'pierEmit("SessionStart", "pier.synthetic.session_start");',
+      functionStart
+    );
     const firstSubscription = src.indexOf(
       'pi.on("session_start"',
       functionStart
@@ -88,7 +97,7 @@ describe("buildPiExtensionSource", () => {
     expect(loadEmit).toBeLessThan(firstSubscription);
     // 独立语句, 不在任何 pi.on(...) 回调闭包内。
     const between = src.slice(functionStart, firstSubscription);
-    expect(between.match(/pierEmit\("SessionStart"\)/g)).toHaveLength(1);
+    expect(between.match(/pierEmit\("SessionStart"/g)).toHaveLength(1);
     expect(between).not.toContain("pi.on(");
   });
 });

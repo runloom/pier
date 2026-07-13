@@ -100,7 +100,8 @@ export function buildVibeHookBlock(): string {
   const entries = VIBE_HOOK_EVENTS.map((event) => {
     const command = pierHookCommandWithStdinSessionId(
       AGENT_ID,
-      event.pierEvent
+      event.pierEvent,
+      event.nativeType
     );
     const commandLiteral = JSON.stringify(command);
     const nameLiteral = JSON.stringify(`pier-${event.nativeType}`);
@@ -169,6 +170,7 @@ export const mistralVibeIntegration: AgentHookIntegration = {
   capability: "coarse",
   detect: vibeDetect,
   id: AGENT_ID,
+  runtime: { stopAuthority: "authoritative" },
   install: () => installVibeHooks(),
   uninstall: () => uninstallVibeHooks(),
 };
