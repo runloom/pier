@@ -73,12 +73,18 @@ describe("terminal runtime control presentation", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps the last complete success model mounted through the whole exit", () => {
+  it("keeps a successful result visible for five seconds before exiting", () => {
+    expect(RUNTIME_CONTROL_SUCCESS_LINGER_MS).toBe(5000);
+    expect(RUNTIME_CONTROL_EXIT_MS).toBe(180);
+
     publish(run("succeeded"));
     const { result } = renderHook(() =>
       useTerminalRuntimeControlPresentation("terminal-task")
     );
 
+    act(() => {
+      vi.advanceTimersByTime(4999);
+    });
     expect(result.current).toMatchObject({
       mounted: true,
       phase: "visible",
@@ -86,7 +92,7 @@ describe("terminal runtime control presentation", () => {
     expect(result.current.runs).toHaveLength(1);
 
     act(() => {
-      vi.advanceTimersByTime(RUNTIME_CONTROL_SUCCESS_LINGER_MS);
+      vi.advanceTimersByTime(1);
     });
     expect(result.current).toMatchObject({
       mounted: true,
@@ -99,6 +105,85 @@ describe("terminal runtime control presentation", () => {
     });
     expect(result.current.mounted).toBe(false);
     expect(result.current.runs).toHaveLength(0);
+  });
+
+  it("freezes the remaining success linger while keeping public time current", () => {
+    publish(run("succeeded"));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    const nowBeforePause = result.current.now;
+
+    act(() => {
+      result.current.setAutoExitPause(true);
+    });
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(result.current.phase).toBe("visible");
+    expect(result.current.now).toBe(nowBeforePause + 4000);
+
+    act(() => {
+      result.current.setAutoExitPause(false);
+    });
+    act(() => {
+      vi.advanceTimersByTime(2999);
+    });
+    expect(result.current.phase).toBe("visible");
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current.phase).toBe("exiting");
+  });
+
+  it("keeps repeated floating interaction updates idempotent", () => {
+    publish(run("succeeded"));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+      result.current.setAutoExitPause(true);
+    });
+    act(() => {
+      vi.advanceTimersByTime(2000);
+      result.current.setAutoExitPause(true);
+      vi.advanceTimersByTime(4000);
+    });
+    expect(result.current.phase).toBe("visible");
+
+    act(() => {
+      result.current.setAutoExitPause(false);
+      vi.advanceTimersByTime(3999);
+    });
+    expect(result.current.phase).toBe("visible");
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current.phase).toBe("exiting");
+  });
+
+  it("dismisses a persistent result immediately while auto-exit is paused", () => {
+    publish(run("failed"));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+
+    act(() => {
+      result.current.setAutoExitPause(true);
+      result.current.dismissRun("run-1");
+    });
+
+    expect(result.current).toMatchObject({
+      mounted: true,
+      phase: "exiting",
+    });
+    expect(result.current.runs[0]?.status).toBe("failed");
   });
 
   it("keeps failures visible until the user dismisses them", () => {

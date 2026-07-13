@@ -16,7 +16,7 @@ import {
 } from "@/stores/task-runs.store.ts";
 
 export const RUNTIME_CONTROL_EXIT_MS = 180;
-export const RUNTIME_CONTROL_SUCCESS_LINGER_MS = 2000;
+export const RUNTIME_CONTROL_SUCCESS_LINGER_MS = 5000;
 export const RUNTIME_CONTROL_CANCELLED_LINGER_MS = 3000;
 
 export type TerminalRuntimeControlPhase = "exiting" | "visible";
@@ -27,6 +27,7 @@ interface TerminalRuntimeControlPresentation {
   now: number;
   phase: TerminalRuntimeControlPhase;
   runs: readonly TaskRunControlEntry[];
+  setAutoExitPause(paused: boolean): void;
 }
 
 type InternalPhase = "exiting" | "hidden" | "visible";
@@ -106,7 +107,8 @@ function lingerDuration(status: TaskRunNodeStatus): number {
 function shouldPresentRun(
   run: TaskRunControlEntry,
   now: number,
-  dismissedRunIds: ReadonlySet<string>
+  dismissedRunIds: ReadonlySet<string>,
+  pausedMs: number
 ): boolean {
   if (isActiveTaskRunStatus(run.status)) {
     return true;
@@ -117,7 +119,8 @@ function shouldPresentRun(
   if (isPersistentTaskRun(run)) {
     return true;
   }
-  return now - run.updatedAt < lingerDuration(run.status);
+  const effectiveElapsed = now - run.updatedAt - pausedMs;
+  return effectiveElapsed < lingerDuration(run.status);
 }
 
 function reducedMotionEnabled(): boolean {
@@ -160,12 +163,25 @@ export function useTerminalRuntimeControlPresentation(
     () => currentTaskRunsByLogicalTask(panelRuns),
     [panelRuns]
   );
-  const eligibleRuns = useMemo(() => {
-    const visible = currentRuns.filter((run) =>
-      shouldPresentRun(run, now, dismissedRunIds)
+  const pauseStartedAtRef = useRef<number | null>(null);
+  const pausedMsByRunIdRef = useRef<Map<string, number>>(new Map());
+  const currentRunsRef = useRef(currentRuns);
+  currentRunsRef.current = currentRuns;
+  const [, setPauseRevision] = useState(0);
+  const pauseStartedAt = pauseStartedAtRef.current;
+  const eligibleRuns = currentRuns.filter((run) => {
+    const accumulatedPause = pausedMsByRunIdRef.current.get(run.runId) ?? 0;
+    const openPause =
+      pauseStartedAt === null
+        ? 0
+        : Math.max(0, now - Math.max(pauseStartedAt, run.updatedAt));
+    return shouldPresentRun(
+      run,
+      now,
+      dismissedRunIds,
+      accumulatedPause + openPause
     );
-    return visible;
-  }, [currentRuns, dismissedRunIds, now]);
+  });
   const [retainedRuns, setRetainedRuns] = useState<
     readonly TaskRunControlEntry[]
   >(() => eligibleRuns);
@@ -198,6 +214,15 @@ export function useTerminalRuntimeControlPresentation(
     },
     [clearExitTimer]
   );
+
+  useEffect(() => {
+    const currentRunIds = new Set(currentRuns.map((run) => run.runId));
+    for (const runId of pausedMsByRunIdRef.current.keys()) {
+      if (!currentRunIds.has(runId)) {
+        pausedMsByRunIdRef.current.delete(runId);
+      }
+    }
+  }, [currentRuns]);
 
   useLayoutEffect(() => {
     if (eligibleRuns.length > 0) {
@@ -245,6 +270,45 @@ export function useTerminalRuntimeControlPresentation(
     [panelRuns]
   );
 
+  const setAutoExitPause = useCallback((paused: boolean) => {
+    if (paused) {
+      if (pauseStartedAtRef.current !== null) {
+        return;
+      }
+      pauseStartedAtRef.current = Date.now();
+      setPauseRevision((current) => current + 1);
+      return;
+    }
+
+    const pauseStartedAt = pauseStartedAtRef.current;
+    if (pauseStartedAt === null) {
+      return;
+    }
+    const pauseEndedAt = Date.now();
+    pauseStartedAtRef.current = null;
+    const currentRunIds = new Set<string>();
+    for (const run of currentRunsRef.current) {
+      currentRunIds.add(run.runId);
+      if (isActiveTaskRunStatus(run.status) || isPersistentTaskRun(run)) {
+        continue;
+      }
+      const overlap = Math.max(
+        0,
+        pauseEndedAt - Math.max(pauseStartedAt, run.updatedAt)
+      );
+      if (overlap > 0) {
+        const accumulated = pausedMsByRunIdRef.current.get(run.runId) ?? 0;
+        pausedMsByRunIdRef.current.set(run.runId, accumulated + overlap);
+      }
+    }
+    for (const runId of pausedMsByRunIdRef.current.keys()) {
+      if (!currentRunIds.has(runId)) {
+        pausedMsByRunIdRef.current.delete(runId);
+      }
+    }
+    setPauseRevision((current) => current + 1);
+  }, []);
+
   const runs = eligibleRuns.length > 0 ? eligibleRuns : retainedRuns;
   return {
     dismissRun,
@@ -252,5 +316,6 @@ export function useTerminalRuntimeControlPresentation(
     now,
     phase: eligibleRuns.length > 0 || phase === "hidden" ? "visible" : phase,
     runs,
+    setAutoExitPause,
   };
 }

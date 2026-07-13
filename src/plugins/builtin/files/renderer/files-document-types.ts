@@ -1,6 +1,7 @@
 import {
   type FileDocumentEol,
   type FileDocumentFormat,
+  type FilePreviewImageMime,
   nonEmptyFileRootRelativePathSchema,
 } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -133,9 +134,15 @@ export interface FilesDocument {
   id: string;
   language: FilesDocumentLanguage;
   loadState: "error" | "idle" | "loaded" | "loading";
+  mime: string | null;
   mode: number | null;
   name: string;
   needsSaveAs: boolean;
+  preview: {
+    kind: "image";
+    mime: FilePreviewImageMime;
+    revision: string;
+  } | null;
   readOnly: boolean;
   readOnlyReason:
     | "binary"

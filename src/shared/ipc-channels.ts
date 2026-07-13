@@ -48,6 +48,8 @@ export const PIER_BROADCAST = {
   TERMINAL_CWD_CHANGED: "pier://terminal:cwd-changed",
   // 终端标题变更广播 (main → renderer).
   TERMINAL_TITLE_CHANGED: "pier://terminal:title-changed",
+  // Ghostty 在已退出进程的 surface 上收到用户关闭确认。
+  TERMINAL_SURFACE_CLOSE_REQUEST: "pier://terminal:surface-close-request",
   // 命令面板 MRU 变更广播 (main → renderer, payload MruState).
   COMMAND_PALETTE_MRU_CHANGED: "pier://command-palette-mru:changed",
   // git 变更广播 (main → renderer, payload GitChangeEvent).

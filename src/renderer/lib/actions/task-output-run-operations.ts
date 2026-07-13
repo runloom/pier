@@ -17,6 +17,73 @@ type WorkspaceApi = NonNullable<
   ReturnType<typeof useWorkspaceStore.getState>["api"]
 >;
 
+interface DeferredSurfaceClose {
+  close: (() => void) | undefined;
+  guards: Set<symbol>;
+}
+
+const deferredSurfaceClosesByPanel = new Map<string, DeferredSurfaceClose>();
+
+export function requestTaskOutputSurfaceClose(
+  panelId: string,
+  close: () => void
+): void {
+  const pending = deferredSurfaceClosesByPanel.get(panelId);
+  if (!pending) {
+    close();
+    return;
+  }
+  pending.close ??= close;
+}
+
+export function beginTaskOutputRestartSurfaceCloseGuard(
+  previousRun: TaskRunControlEntry
+): (rebindSucceeded: boolean) => void {
+  const api = useWorkspaceStore.getState().api;
+  if (!api) {
+    return () => undefined;
+  }
+  const token = Symbol(previousRun.runId);
+  const panelIds = taskOutputPanelsForRun(
+    api,
+    previousRun.runId,
+    previousRun.rootTaskId
+  ).map((binding) => binding.panelId);
+  for (const panelId of panelIds) {
+    const pending = deferredSurfaceClosesByPanel.get(panelId) ?? {
+      close: undefined,
+      guards: new Set<symbol>(),
+    };
+    pending.guards.add(token);
+    deferredSurfaceClosesByPanel.set(panelId, pending);
+  }
+
+  let finished = false;
+  return (rebindSucceeded) => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    for (const panelId of panelIds) {
+      const pending = deferredSurfaceClosesByPanel.get(panelId);
+      if (!pending) {
+        continue;
+      }
+      if (rebindSucceeded) {
+        pending.close = undefined;
+      }
+      pending.guards.delete(token);
+      if (pending.guards.size > 0) {
+        continue;
+      }
+      deferredSurfaceClosesByPanel.delete(panelId);
+      if (!rebindSucceeded) {
+        pending.close?.();
+      }
+    }
+  };
+}
+
 function taskOutputViewIdentity(
   api: WorkspaceApi,
   projectRootPath: string,

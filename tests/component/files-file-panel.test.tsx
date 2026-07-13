@@ -10,13 +10,18 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_GROUP_VIEW_CONTENT_ID,
 } from "@plugins/builtin/files/manifest.ts";
+import { FileEditorAdapter } from "@plugins/builtin/files/renderer/file-editor-adapter.tsx";
 import { FileEditorController } from "@plugins/builtin/files/renderer/file-editor-controller.ts";
+import { FileImagePreview } from "@plugins/builtin/files/renderer/file-image-preview.tsx";
 import { createFilePanel as createFilePanelWithController } from "@plugins/builtin/files/renderer/file-panel.tsx";
 import {
   createFileFilePanelInstanceId,
   fileFilePanelIdentityKey,
 } from "@plugins/builtin/files/renderer/file-panel-id.ts";
+import { FilePanelBreadcrumb } from "@plugins/builtin/files/renderer/file-panel-parts.tsx";
 import { FileTreeSidebar } from "@plugins/builtin/files/renderer/file-tree-sidebar.tsx";
+import { createDiskDocumentRecord } from "@plugins/builtin/files/renderer/files-document-factory.ts";
+import { withDocumentReadResult } from "@plugins/builtin/files/renderer/files-document-reducers.ts";
 import {
   clearFilesDocumentStore,
   createUntitledMarkdownDocument,
@@ -156,6 +161,7 @@ function createMockContext(overrides?: {
   pickSaveTarget?: RendererPluginContext["files"]["pickSaveTarget"];
   readDocument?: RendererPluginContext["files"]["readDocument"];
   readText?: RendererPluginContext["files"]["readText"];
+  reveal?: RendererPluginContext["files"]["reveal"];
   translate?: RendererPluginContext["i18n"]["t"];
   watch?: RendererPluginContext["files"]["watch"];
   writeDocument?: RendererPluginContext["files"]["writeDocument"];
@@ -326,6 +332,9 @@ function createMockContext(overrides?: {
       pickSaveTarget: overrides?.pickSaveTarget ?? vi.fn(async () => null),
       readDocument,
       readText,
+      reveal:
+        overrides?.reveal ??
+        vi.fn(async (request) => ({ ...request, revealed: true })),
       stat,
       trash: vi.fn(async (request) => ({
         path: request.path,
@@ -338,6 +347,7 @@ function createMockContext(overrides?: {
     },
     groupContent: createHostGroupContentContext(undefined, () => undefined),
     i18n: {
+      language: () => "en",
       t:
         overrides?.translate ??
         ((_key: string, _values?: unknown, fallback?: string) =>
@@ -572,6 +582,38 @@ afterEach(() => {
 });
 
 describe("Files file-panel", () => {
+  it("preserves breadcrumb scroll position across unrelated rerenders", () => {
+    const segments = ["pier", "src", "file.ts"];
+    const { container, rerender } = render(
+      <FilePanelBreadcrumb
+        onSegmentClick={() => undefined}
+        segments={segments}
+      />
+    );
+    const breadcrumb = container.firstElementChild;
+    expect(breadcrumb).toBeInstanceOf(HTMLElement);
+    Object.defineProperty(breadcrumb, "scrollWidth", {
+      configurable: true,
+      value: 480,
+    });
+    (breadcrumb as HTMLElement).scrollLeft = 120;
+
+    rerender(
+      <FilePanelBreadcrumb
+        onSegmentClick={() => undefined}
+        segments={[...segments]}
+      />
+    );
+    expect((breadcrumb as HTMLElement).scrollLeft).toBe(120);
+
+    rerender(
+      <FilePanelBreadcrumb
+        onSegmentClick={() => undefined}
+        segments={["pier", "packages", "file.ts"]}
+      />
+    );
+    expect((breadcrumb as HTMLElement).scrollLeft).toBe(480);
+  });
   it("localizes file-panel chrome through plugin i18n messages", async () => {
     const translations = new Map<string, string>([
       ["filePanel.empty.title", "[未选择文件]"],
@@ -635,10 +677,249 @@ describe("Files file-panel", () => {
     });
     expect(screen.getByText("No file selected")).toBeVisible();
     expect(
+      screen.getByText("No file selected").closest('[data-slot="empty"]')
+    ).not.toBeNull();
+    expect(
       screen.getByRole("button", { name: "Collapse file tree" })
     ).toBeVisible();
     const tree = within(getFileTree(container));
     expect(tree.getByRole("treeitem", { name: "README.md" })).toBeVisible();
+  });
+
+  it("renders signature-classified images with fit, zoom, actual-size, and failure states", async () => {
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async (request) => ({
+        canonicalPath: request.path,
+        kind: "image" as const,
+        mime: "image/png" as const,
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:image-revision",
+        root: request.root,
+        size: 2048,
+      })
+    );
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "assets/photo.png", root: PROJECT_ROOT },
+      },
+      createMockContext({ readDocument })
+    );
+
+    const image = await screen.findByRole("img", { name: "photo.png" });
+    expect(image.getAttribute("src")).toMatch(
+      /^pier-file-preview:\/\/file\/?\?/u
+    );
+    const toolbar = screen.getByRole("toolbar", { name: "Image controls" });
+    expect(toolbar).toBeVisible();
+    expect(toolbar).toHaveClass("absolute", "right-3", "bottom-3");
+    expect(screen.getByText("Fit to window", { exact: true })).toBeVisible();
+    expect(screen.queryByText("1:1", { exact: true })).toBeNull();
+    const zoomMenu = screen.getByRole("button", {
+      name: "Zoom level: Fit to window",
+    });
+    expect(zoomMenu).toHaveAttribute("data-variant", "secondary");
+    expect(screen.queryByText("Saved")).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Source" })).toBeNull();
+
+    fireEvent.keyDown(zoomMenu, { key: "Enter" });
+    const actualSizeItem = await screen.findByRole("menuitemradio", {
+      name: /100%/u,
+    });
+    fireEvent.click(actualSizeItem);
+    expect(screen.getByText("100%")).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("region", { name: "Image preview" }), {
+      key: "+",
+    });
+    expect(screen.getByText("110%")).toBeVisible();
+    fireEvent.doubleClick(image);
+    expect(screen.getByText("Fit to window", { exact: true })).toBeVisible();
+
+    fireEvent.error(image);
+    expect(screen.getByText("Unable to display image")).toBeVisible();
+    expect(
+      screen.getByText("Unable to display image").closest('[data-slot="empty"]')
+    ).not.toBeNull();
+  });
+
+  it("retries an image after its revision changes from a failed preview URL", () => {
+    const initial = createDiskDocumentRecord({
+      draft: null,
+      id: "disk:image-preview-retry",
+      path: "assets/photo.png",
+      root: PROJECT_ROOT,
+    });
+    const imageResult = (revision: string) => ({
+      canonicalPath: "assets/photo.png",
+      kind: "image" as const,
+      mime: "image/png" as const,
+      mtimeMs: 1,
+      path: "assets/photo.png",
+      revision,
+      root: PROJECT_ROOT,
+      size: 2048,
+    });
+    const t = (_key: string, fallback?: string) => fallback ?? _key;
+    const first = withDocumentReadResult(initial, imageResult("file-v1:first"));
+    const view = render(<FileImagePreview document={first} t={t} />);
+    const failedImage = screen.getByRole("img", { name: "photo.png" });
+    const failedUrl = failedImage.getAttribute("src");
+
+    fireEvent.error(failedImage);
+    expect(screen.getByText("Unable to display image")).toBeVisible();
+
+    const next = withDocumentReadResult(first, imageResult("file-v1:next"));
+    view.rerender(<FileImagePreview document={next} t={t} />);
+
+    const retriedImage = screen.getByRole("img", { name: "photo.png" });
+    expect(retriedImage.getAttribute("src")).not.toBe(failedUrl);
+    expect(screen.queryByText("Unable to display image")).toBeNull();
+
+    fireEvent.error(failedImage);
+    expect(screen.getByRole("img", { name: "photo.png" })).toBeVisible();
+    expect(screen.queryByText("Unable to display image")).toBeNull();
+  });
+
+  it("clamps image zoom controls between 10% and 800%", async () => {
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async (request) => ({
+        canonicalPath: request.path,
+        kind: "image" as const,
+        mime: "image/webp" as const,
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:webp-revision",
+        root: request.root,
+        size: 12,
+      })
+    );
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "preview.webp", root: PROJECT_ROOT },
+      },
+      createMockContext({ readDocument })
+    );
+    await screen.findByRole("img", { name: "preview.webp" });
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: "Zoom level: Fit to window" }),
+      { key: "Enter" }
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitemradio", {
+        name: /100%/u,
+      })
+    );
+    const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+    for (let index = 0; index < 20; index += 1) fireEvent.click(zoomOut);
+    expect(screen.getByText("10%")).toBeVisible();
+    expect(zoomOut).toBeDisabled();
+
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
+    for (let index = 0; index < 100; index += 1) fireEvent.click(zoomIn);
+    expect(screen.getByText("800%")).toBeVisible();
+    expect(zoomIn).toBeDisabled();
+  });
+
+  it("renders binary metadata in Empty and reveals it through the system file manager", async () => {
+    const reveal = vi.fn<RendererPluginContext["files"]["reveal"]>(
+      async (request) => ({ ...request, revealed: true })
+    );
+    const context = createMockContext({
+      readDocument: vi.fn(async (request) => ({
+        canonicalPath: request.path,
+        kind: "binary" as const,
+        mime: "application/pdf",
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:pdf-revision",
+        root: request.root,
+        size: 1536,
+      })),
+      reveal,
+    });
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "docs/report.pdf", root: PROJECT_ROOT },
+      },
+      context
+    );
+
+    expect(await screen.findByText("application/pdf · 1.5 KB")).toBeVisible();
+    expect(
+      screen
+        .getByText("application/pdf · 1.5 KB")
+        .closest('[data-slot="empty"]')
+    ).not.toBeNull();
+    expect(screen.queryByText("Saved")).toBeNull();
+
+    const revealButton = screen.getByRole("button", {
+      name: "Show in file manager",
+    });
+    expect(revealButton).toHaveAttribute("data-variant", "default");
+    fireEvent.click(revealButton);
+    await waitFor(() => {
+      expect(reveal).toHaveBeenCalledWith({
+        path: "docs/report.pdf",
+        root: PROJECT_ROOT,
+      });
+    });
+  });
+
+  it("shows technical reveal failures in the host dialog", async () => {
+    const context = createMockContext({
+      readDocument: vi.fn(async (request) => ({
+        canonicalPath: request.path,
+        kind: "binary" as const,
+        mime: "application/octet-stream",
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:binary-revision",
+        root: request.root,
+        size: 4,
+      })),
+      reveal: vi.fn(async () => {
+        throw new Error("Finder unavailable");
+      }),
+    });
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "data.bin", root: PROJECT_ROOT },
+      },
+      context
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Show in file manager" })
+    );
+
+    await waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "Finder unavailable",
+        title: "Unable to show file in file manager",
+      });
+    });
+  });
+
+  it("uses Empty for views that are not implemented", () => {
+    const context = createMockContext();
+    const controller = filesRuntimeFor(context).controller;
+    const { container } = render(
+      <FileEditorAdapter
+        controller={controller}
+        documentId="unimplemented"
+        editorSessionId="unimplemented"
+        mode="rich"
+        value=""
+      />
+    );
+
+    expect(container.querySelector('[data-slot="empty"]')).not.toBeNull();
+    expect(
+      screen.getByText("Rich Markdown editing is not enabled yet.")
+    ).toBeVisible();
   });
 
   it("hides repository metadata by default while keeping developer dotfiles visible", async () => {
@@ -2692,6 +2973,8 @@ describe("Files file-panel", () => {
       );
     });
     const searchBar = await screen.findByTestId("files-tree-search-bar");
+    expect(searchBar).toHaveClass("bg-sidebar", "text-sidebar-foreground");
+    expect(searchBar.closest("aside")).toHaveClass("bg-sidebar");
     const searchInput = within(searchBar).getByRole("textbox", {
       name: "Find in tree",
     });
@@ -3364,15 +3647,26 @@ describe("Files file-panel", () => {
         "| A | B |\n| - | - |\n| 1 | 2 |\n\n- alpha\n- beta\n\n```ts\nconst value = 1;\n```",
     });
 
-    renderFilePanel({
+    const { container } = renderFilePanel({
       context: panelContext,
       source: { id: document.id, kind: "untitled", name: document.name },
     });
     fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
 
+    expect(
+      container.querySelector('[data-slot="markdown-preview"]')
+    ).toHaveAttribute("data-scrollbar", "stable");
     expect(screen.getByRole("table")).toBeVisible();
     expect(screen.getByRole("list")).toBeVisible();
     expect(screen.getByText("const value = 1;")).toBeVisible();
+    expect(container.querySelector("pre")).toHaveAttribute(
+      "data-scrollbar",
+      "overlay"
+    );
+    expect(screen.getByRole("table").parentElement).toHaveAttribute(
+      "data-scrollbar",
+      "overlay"
+    );
   });
 
   it("preserves editor state, selection, scroll, and undo history across view mode switches", () => {
@@ -3612,6 +3906,11 @@ describe("Files file-panel", () => {
 
     expect(screen.getByRole("heading", { name: "Lost.md" })).toBeVisible();
     expect(screen.getByText("Temporary file cannot be restored")).toBeVisible();
+    expect(
+      screen
+        .getByText("Temporary file cannot be restored")
+        .closest('[data-slot="empty"]')
+    ).not.toBeNull();
     expect(readText).not.toHaveBeenCalled();
   });
 

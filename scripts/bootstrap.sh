@@ -128,11 +128,18 @@ info "node OK ($NODE_VER)"
 
 # ---------- pnpm install ----------
 info "pnpm install..."
-pnpm install
+# pnpm 11 会把 workspace 绝对路径写入 node_modules 状态。旧版
+# setup 创建的主仓软链在 pnpm install 前必须先迁移，否则 pnpm 会
+# 尝试清理主仓的共享目录。直接跑 Node 脚本可避开 pnpm run 的前置校验。
+if [[ -L node_modules ]]; then
+    node scripts/setup-worktree.mjs
+else
+    pnpm install
+fi
 
 # ---------- setup:worktree（含 xcframework + native addon 构建）----------
 # 该步骤内部会：
-#   1. 软链 node_modules → 主仓（如是 worktree）
+#   1. 建立 worktree 本地 node_modules 布局（包内容复用 pnpm store）
 #   2. 检测并 build GhosttyKit.xcframework（首次约 3-5 min）
 #   3. 编译 native addon（约 30-60s）
 info "跑 setup:worktree（首次含 libghostty universal 构建 + native 编译，约 5 分钟）..."

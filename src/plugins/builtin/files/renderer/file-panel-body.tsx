@@ -1,11 +1,14 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import { formatBytes } from "@pier/ui/format.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { useCallback, useRef } from "react";
+import { FolderSearch } from "lucide-react";
+import { type ReactNode, useCallback, useRef } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { FileEditorAdapter } from "./file-editor-adapter.tsx";
 import type { FileEditorController } from "./file-editor-controller.ts";
+import { FileImagePreview } from "./file-image-preview.tsx";
 import {
   MissingTemporaryState,
   ReadOnlyErrorState,
@@ -111,6 +114,36 @@ export function ResolvedFilePanel({
     [context, document, editorSessionId, panelContext, t]
   );
 
+  const handleReveal = useCallback(async () => {
+    if (!(context && document?.source.kind === "disk")) {
+      return;
+    }
+    try {
+      const result = await context.files.reveal({
+        path: document.source.path,
+        root: document.source.root,
+      });
+      if (!result.revealed) {
+        throw new Error(
+          t(
+            "filePanel.unsupported.revealUnavailable",
+            "The system file manager did not reveal the file."
+          )
+        );
+      }
+    } catch (error) {
+      await context.dialogs
+        .alert({
+          body: error instanceof Error ? error.message : String(error),
+          title: t(
+            "filePanel.unsupported.revealFailed",
+            "Unable to show file in file manager"
+          ),
+        })
+        .catch(() => undefined);
+    }
+  }, [context, document, t]);
+
   if (!document) {
     if (source.kind === "untitled") {
       return <MissingTemporaryState name={source.name} t={t} />;
@@ -127,7 +160,64 @@ export function ResolvedFilePanel({
     );
   }
 
+  if (document.preview) {
+    return <FileImagePreview document={document} t={t} />;
+  }
+
   if (document.readOnlyReason) {
+    let actions: ReactNode;
+    if (
+      document.readOnlyReason === "binary" &&
+      context &&
+      document.source.kind === "disk"
+    ) {
+      actions = (
+        <Button
+          onClick={handleReveal}
+          size="sm"
+          type="button"
+          variant="default"
+        >
+          <FolderSearch data-icon="inline-start" />
+          {t("filePanel.unsupported.reveal", "Show in file manager")}
+        </Button>
+      );
+    } else if (document.readOnlyReason === "mixed-eol") {
+      actions = (
+        <>
+          <Button
+            onClick={() => controller.normalizeDocumentEol(document.id, "lf")}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {t("filePanel.unsupported.normalizeLf", "Normalize to LF")}
+          </Button>
+          <Button
+            onClick={() => controller.normalizeDocumentEol(document.id, "crlf")}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {t("filePanel.unsupported.normalizeCrlf", "Normalize to CRLF")}
+          </Button>
+        </>
+      );
+    }
+    let details: ReactNode;
+    if (document.readOnlyReason === "binary") {
+      const type =
+        document.mime ?? t("filePanel.unsupported.binaryType", "Binary");
+      const size =
+        document.size === null
+          ? null
+          : formatBytes(document.size, context?.i18n.language() ?? "en");
+      details = (
+        <p className="font-mono text-muted-foreground text-xs tabular-nums">
+          {size ? `${type} · ${size}` : type}
+        </p>
+      );
+    }
     const messageByReason = {
       binary: t(
         "filePanel.unsupported.binary",
@@ -156,34 +246,9 @@ export function ResolvedFilePanel({
     } satisfies Record<NonNullable<typeof document.readOnlyReason>, string>;
     return (
       <UnsupportedFileState
-        actions={
-          document.readOnlyReason === "mixed-eol" ? (
-            <>
-              <Button
-                onClick={() =>
-                  controller.normalizeDocumentEol(document.id, "lf")
-                }
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {t("filePanel.unsupported.normalizeLf", "Normalize to LF")}
-              </Button>
-              <Button
-                onClick={() =>
-                  controller.normalizeDocumentEol(document.id, "crlf")
-                }
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {t("filePanel.unsupported.normalizeCrlf", "Normalize to CRLF")}
-              </Button>
-            </>
-          ) : undefined
-        }
+        actions={actions}
+        details={details}
         message={messageByReason[document.readOnlyReason]}
-        t={t}
         title={document.name}
       />
     );

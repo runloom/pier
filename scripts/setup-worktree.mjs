@@ -6,11 +6,13 @@
 // prod 用 `file://` 加载 out/renderer (需 `pnpm build` 生成). 新 worktree 两者皆缺,
 // 于是 Electron 窗口加载不到 renderer → 白屏.
 //
-// 本脚本把 worktree 的 node_modules 软链到主仓 node_modules: 主仓那份已经过 postinstall 的
-// electron-rebuild (针对本机 Electron ABI), 软链复用比在 worktree 内重新 `pnpm install` +
-// rebuild 更快也更稳.
+// pnpm 11 会把 workspace 与 patchedDependencies 的绝对路径写入 node_modules
+// 状态。整体软链主仓 node_modules 会让 worktree 永久被判定为依赖不同步，
+// `pnpm run/exec` 进而尝试清理主仓的共享目录。因此每个 worktree 保持自己的
+// 顶层 node_modules 布局；包内容仍由 pnpm store 去重复用，无需重复下载。
 //
-// 幂等: 已正确软链则跳过; prod/packaged 需要的 `out/` 不在此处理 (按需 `pnpm build`).
+// 幂等: 已有完整的本地安装则跳过; prod/packaged 需要的 `out/` 不在此处理
+// (按需 `pnpm build`).
 
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -23,7 +25,6 @@ import {
   readlinkSync,
   rmSync,
   statSync,
-  symlinkSync,
 } from "node:fs";
 import path from "node:path";
 
@@ -55,7 +56,7 @@ const isWorktree = commonDir !== gitDir;
 
 if (!isWorktree) {
   console.log(
-    "[setup-worktree] 当前在主仓 (非 worktree), 无需软链 node_modules."
+    "[setup-worktree] 当前在主仓（非 worktree），无需初始化 worktree 依赖."
   );
   process.exit(0);
 }
@@ -63,27 +64,23 @@ if (!isWorktree) {
 const mainNodeModules = path.join(mainRoot, "node_modules");
 const wtNodeModules = path.join(cwd, "node_modules");
 
-if (!existsSync(mainNodeModules)) {
-  console.error(
-    `[setup-worktree] 主仓缺 node_modules: ${mainNodeModules}\n` +
-      `  请先在主仓执行: (cd ${mainRoot} && pnpm install)`
-  );
-  process.exit(1);
-}
-
-function linkNodeModules() {
+function ensureWorktreeNodeModules() {
   if (existsSync(wtNodeModules) || isBrokenSymlink(wtNodeModules)) {
     const stat = lstatSync(wtNodeModules);
     if (stat.isSymbolicLink()) {
       const target = path.resolve(cwd, readlinkSync(wtNodeModules));
       if (target === mainNodeModules) {
-        console.log("[setup-worktree] node_modules 已软链到主仓, 跳过.");
-        return;
+        console.log(
+          "[setup-worktree] 移除与 pnpm 11 不兼容的主仓 node_modules 软链."
+        );
       }
-      rmSync(wtNodeModules); // 指向别处的软链, 重建
+      rmSync(wtNodeModules); // 只删除 worktree 软链，不会删除目标目录。
     } else {
-      // 真实目录: 若已是完整安装 (含 react) 则尊重它, 不动; 否则视为残缺 (如仅 .vite 缓存) 替换.
-      if (existsSync(path.join(wtNodeModules, "react"))) {
+      // 真实目录：.modules.yaml 与根依赖同时存在才视为完整安装。
+      if (
+        existsSync(path.join(wtNodeModules, ".modules.yaml")) &&
+        existsSync(path.join(wtNodeModules, "react"))
+      ) {
         console.log(
           "[setup-worktree] worktree 已有独立完整 node_modules, 保留不动."
         );
@@ -92,8 +89,19 @@ function linkNodeModules() {
       rmSync(wtNodeModules, { recursive: true, force: true });
     }
   }
-  symlinkSync(mainNodeModules, wtNodeModules, "dir");
-  console.log(`[setup-worktree] 已软链 node_modules → ${mainNodeModules}`);
+  console.log(
+    "[setup-worktree] 安装 worktree 本地依赖（包内容复用 pnpm store）..."
+  );
+  const result = spawnSync("pnpm", ["install", "--frozen-lockfile"], {
+    cwd,
+    stdio: "inherit",
+  });
+  if (result.status !== 0) {
+    console.error(
+      `[setup-worktree] pnpm install 失败 (exit ${result.status}).`
+    );
+    process.exit(1);
+  }
 }
 
 function isBrokenSymlink(p) {
@@ -355,7 +363,7 @@ function ensureLibghostty() {
   }
 }
 
-linkNodeModules();
+ensureWorktreeNodeModules();
 ensureLibghostty();
 ensureNativeAddon();
 

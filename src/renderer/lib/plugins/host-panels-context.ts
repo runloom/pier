@@ -50,14 +50,15 @@ function openPluginPanel(
   // 无来源 context 时保留 panel 已存的 context,避免重开时被抹掉。
   const context =
     options.context ?? descriptorStore.descriptors[panelId]?.context;
-  descriptorStore.upsert(
-    panelId,
-    pluginPanelDescriptor(panelId, registration, context)
-  );
   const params = {
     ...(registration?.getParams?.() ?? {}),
     ...(context ? { context } : {}),
   };
+  const title = resolveRegistrationTitle(registration, panelId);
+  descriptorStore.upsert(
+    panelId,
+    pluginPanelDescriptor(panelId, registration, context, title, params)
+  );
   const hasParams = Object.keys(params).length > 0;
   const existing = api.panels.find((panel) => panel.id === panelId);
   if (existing) {
@@ -68,7 +69,7 @@ function openPluginPanel(
   api.addPanel({
     id: panelId,
     component: panelId,
-    title: resolveRegistrationTitle(registration, panelId),
+    title,
     position: { direction: "right" },
     ...(hasParams ? { params } : {}),
   });

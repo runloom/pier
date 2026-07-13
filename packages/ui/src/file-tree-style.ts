@@ -1,6 +1,8 @@
 import type * as React from "react";
+import { PIER_FILE_TREE_ICON_COLOR_OVERRIDES } from "./file-icon-theme.ts";
 
 export type PierFileTreeStyle = React.CSSProperties & {
+  [key: `--trees-file-icon-color-${string}`]: string | undefined;
   "--trees-accent-override"?: string;
   "--trees-bg-muted-override"?: string;
   "--trees-bg-override"?: string;
@@ -24,9 +26,26 @@ export type PierFileTreeStyle = React.CSSProperties & {
   "--trees-selected-fg-override"?: string;
 };
 
-// @pierre/trees 在 Shadow DOM 内自行绘制滚动条，只暴露基础宽度和颜色。
-// 通过其官方 unsafeCSS 入口补齐 Pier 的常态、悬停、按下和轨道视觉。
+// @pierre/trees 在 Shadow DOM 内自行绘制滚动条和行布局。
+// 通过其官方 unsafeCSS 入口补齐 Pier 的滚动条视觉，并让空装饰列不抢占文件名宽度。
 export const TREE_SCROLLBAR_CSS = `
+[data-item-section="content"] {
+  flex: 1 1 auto;
+}
+
+[data-item-section="decoration"]:empty {
+  flex: 0 0 0;
+}
+
+[data-item-section="decoration"]:not(:empty) {
+  flex: 0 1 auto;
+}
+
+[data-item-section="git"]:empty,
+[data-item-section="action"]:empty {
+  display: none;
+}
+
 [data-file-tree-virtualized-scroll="true"],
 [data-file-tree-scrollbar-measure="true"] {
   --trees-scrollbar-thumb-current: transparent;
@@ -61,6 +80,7 @@ export function pierFileTreeStyle(
   style: React.CSSProperties | undefined
 ): PierFileTreeStyle {
   return {
+    ...PIER_FILE_TREE_ICON_COLOR_OVERRIDES,
     "--trees-bg-override": "var(--sidebar)",
     "--trees-fg-override": "var(--sidebar-foreground)",
     "--trees-fg-muted-override": "var(--muted-foreground)",

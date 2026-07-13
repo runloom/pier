@@ -12,6 +12,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { MAX_IMAGE_PREVIEW_FILE_BYTES } from "@main/files/image-preview-file.ts";
 import { createFileService } from "@main/services/file-service.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -107,6 +108,78 @@ describe("createFileService", () => {
       fileType: "directory",
       kind: "unsupported-file",
     });
+  });
+
+  it.each([
+    [
+      "png",
+      "image/png",
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    ],
+    ["jpg", "image/jpeg", Buffer.from([0xff, 0xd8, 0xff, 0xe0])],
+    ["gif", "image/gif", Buffer.from("GIF89a", "ascii")],
+    [
+      "webp",
+      "image/webp",
+      Buffer.concat([
+        Buffer.from("RIFF", "ascii"),
+        Buffer.alloc(4),
+        Buffer.from("WEBP", "ascii"),
+      ]),
+    ],
+  ])("classifies oversized %s bytes as a previewable image by signature", async (extension, mime, signature) => {
+    const path = `large.${extension}`;
+    const target = join(root, path);
+    await writeFile(target, signature);
+    await truncate(target, 10 * 1024 * 1024 + 1);
+
+    const result = await createFileService().readDocument({ path, root });
+
+    expect(result).toMatchObject({
+      canonicalPath: path,
+      kind: "image",
+      mime,
+      path,
+      root,
+      size: 10 * 1024 * 1024 + 1,
+    });
+    expect(result).toHaveProperty("mtimeMs");
+    expect(result).toHaveProperty("revision");
+  });
+
+  it("rejects a signature-classified image above the bounded preview limit", async () => {
+    const path = "oversized-preview.png";
+    const target = join(root, path);
+    await writeFile(
+      target,
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    );
+    await truncate(target, MAX_IMAGE_PREVIEW_FILE_BYTES + 1);
+
+    await expect(
+      createFileService().readDocument({ path, root })
+    ).resolves.toMatchObject({
+      kind: "too-large",
+      limit: MAX_IMAGE_PREVIEW_FILE_BYTES,
+      path,
+      root,
+      size: MAX_IMAGE_PREVIEW_FILE_BYTES + 1,
+    });
+  });
+
+  it("does not trust image extensions or classify SVG as a previewable image", async () => {
+    await writeFile(join(root, "spoofed.png"), Buffer.from([0, 1, 2, 3]));
+    await writeFile(
+      join(root, "vector.svg"),
+      '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+    );
+
+    await expect(
+      createFileService().readDocument({ path: "spoofed.png", root })
+    ).resolves.toMatchObject({ kind: "binary", mime: "image/png" });
+    await expect(
+      createFileService().readDocument({ path: "vector.svg", root })
+    ).resolves.toMatchObject({ kind: "text" });
   });
 
   it("detects same-mtime content changes through opaque revisions", async () => {

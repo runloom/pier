@@ -47,6 +47,7 @@ function syncVisibility(
   group: PierDockviewGroupHandle
 ): void {
   const isVisible = entry.visible(group);
+  entry.host.style.display = isVisible ? "flex" : "none";
   entry.host.style.visibility = isVisible ? "visible" : "hidden";
   entry.host.style.pointerEvents = isVisible ? "auto" : "none";
 }

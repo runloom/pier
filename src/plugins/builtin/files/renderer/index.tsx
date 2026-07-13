@@ -30,6 +30,7 @@ import { createFilesEditorActions } from "./files-editor-actions.ts";
 import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
+import { filesPanelTabChrome } from "./files-panel-tab.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
 import {
   clearFileTreeSidebarCache,
@@ -332,6 +333,7 @@ export const filesRendererPlugin: RendererPluginModule = {
         icon: FileText,
         id: FILES_FILE_PANEL_ID,
         kind: "web",
+        resolveTab: ({ params }) => filesPanelTabChrome(params),
         title: () => t("filePanel.title", "File"),
       }),
       registerDirtyCloseGuard(context, editorController),

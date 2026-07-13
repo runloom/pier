@@ -68,6 +68,9 @@ export function ResolvedFilePanelActions({
   if (!document) {
     return null;
   }
+  if (document.preview || document.readOnlyReason === "binary") {
+    return null;
+  }
 
   const isMarkdown = document.language === "markdown";
   const showDiffToggle =

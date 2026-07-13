@@ -44,7 +44,11 @@ function preventRendererNavigation(event: MouseEvent<HTMLAnchorElement>): void {
 
 export function MarkdownPreview({ value }: { value: string }) {
   return (
-    <div className="h-full overflow-auto bg-background p-4 text-foreground text-sm">
+    <div
+      className="h-full overflow-auto bg-background p-4 text-foreground text-sm"
+      data-scrollbar="stable"
+      data-slot="markdown-preview"
+    >
       <div className="flex max-w-none flex-col gap-3 leading-6">
         <ReactMarkdown
           components={{
@@ -100,12 +104,18 @@ export function MarkdownPreview({ value }: { value: string }) {
             ),
             p: ({ children }) => <p>{children}</p>,
             pre: ({ children }) => (
-              <pre className="overflow-auto rounded-lg border border-border bg-muted/50 p-3 font-mono text-foreground text-xs leading-5">
+              <pre
+                className="overflow-auto rounded-lg border border-border bg-muted/50 p-3 font-mono text-foreground text-xs leading-5"
+                data-scrollbar="overlay"
+              >
                 {children}
               </pre>
             ),
             table: ({ children }) => (
-              <div className="overflow-x-auto rounded-lg border border-border">
+              <div
+                className="overflow-x-auto rounded-lg border border-border"
+                data-scrollbar="overlay"
+              >
                 <table className="w-full border-collapse text-left text-sm">
                   {children}
                 </table>

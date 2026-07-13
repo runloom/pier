@@ -168,18 +168,21 @@ describe("host group content context", () => {
       '[data-slot="host.test.groupView"]'
     );
     expect(host?.style.visibility).toBe("visible");
+    expect(host?.style.display).toBe("flex");
 
     setActiveComponent("terminal");
     emitActiveChange();
 
     expect(host?.style.visibility).toBe("hidden");
     expect(host?.style.pointerEvents).toBe("none");
+    expect(host?.style.display).toBe("none");
 
     setActiveComponent("pier.files.filePanel");
     emitActiveChange();
 
     expect(host?.style.visibility).toBe("visible");
     expect(host?.style.pointerEvents).toBe("auto");
+    expect(host?.style.display).toBe("flex");
   });
 
   it("clears all claimed group content for one plugin namespace", () => {

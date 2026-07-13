@@ -10,6 +10,7 @@ import {
 } from "@shared/contracts/tasks.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
+import { suppressNextTerminalSurfaceClose } from "./terminal-task-lifecycle-wiring.ts";
 
 interface OutputBinding {
   browserWindowId: number;
@@ -322,7 +323,10 @@ export function createTaskOutputTerminalBindings(args: {
           stale: true,
         };
       }
+      const cancelCloseSuppression =
+        suppressNextTerminalSurfaceClose(nativePanelId);
       if (!resetSurface(existing.browserWindowId, nativePanelId)) {
+        cancelCloseSuppression();
         return { ok: false, error: "native terminal output reset failed" };
       }
 

@@ -52,6 +52,7 @@ export function FilesSearchBar({
   options,
   readOnly = false,
   replaceValue = "",
+  surface = "popover",
   testId,
   submitDisabled = false,
   value,
@@ -76,6 +77,7 @@ export function FilesSearchBar({
   options?: FilesSearchOptions;
   readOnly?: boolean;
   replaceValue?: string;
+  surface?: "popover" | "sidebar";
   testId?: string;
   submitDisabled?: boolean;
   value: string;
@@ -99,7 +101,10 @@ export function FilesSearchBar({
     <search
       aria-label={labels.placeholder}
       className={cn(
-        "pointer-events-auto flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-background/40 shadow-lg",
+        "pointer-events-auto flex min-w-0 flex-col gap-1 rounded-xl border border-border p-1.5",
+        surface === "sidebar"
+          ? "bg-sidebar text-sidebar-foreground"
+          : "bg-popover text-popover-foreground shadow-background/40 shadow-lg",
         className
       )}
       {...(testId ? { "data-testid": testId } : {})}
