@@ -15,6 +15,8 @@ const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
 const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
 const execFileAsync = promisify(execFile);
+const RULE_FILE_NAME =
+  "no-direct-dockview-imports-with-an-intentionally-long-name-for-breadcrumb-overflow.js";
 
 async function forceClose(application: ElectronApplication): Promise<void> {
   const child = application.process();
@@ -39,10 +41,7 @@ test("uses available file-tree width and shares file icons and the sidebar searc
   const workspaceDir = mkdtempSync(join(tmpdir(), "pier-file-tree-workspace-"));
   const rulesDir = join(workspaceDir, ".eslint-rules");
   mkdirSync(rulesDir);
-  writeFileSync(
-    join(rulesDir, "no-direct-dockview-imports.js"),
-    "export {};\n"
-  );
+  writeFileSync(join(rulesDir, RULE_FILE_NAME), "export {};\n");
   writeFileSync(join(workspaceDir, "dirty.txt"), "clean\n");
   execFileSync("git", ["init"], { cwd: workspaceDir });
   execFileSync("git", ["config", "user.email", "pier@example.test"], {
@@ -104,7 +103,7 @@ test("uses available file-tree width and shares file icons and the sidebar searc
     });
     await page.getByRole("treeitem", { name: ".eslint-rules" }).click();
     const rule = page.getByRole("treeitem", {
-      name: "no-direct-dockview-imports.js",
+      name: RULE_FILE_NAME,
     });
     await expect(rule).toBeVisible();
     const treeFileIcon = rule.locator(
@@ -120,7 +119,7 @@ test("uses available file-tree width and shares file icons and the sidebar searc
     };
     await rule.click();
     const tabFileIcon = page.locator(
-      '[data-panel-tab-icon="pier.file:no-direct-dockview-imports.js"]'
+      `[data-panel-tab-icon="pier.file:${RULE_FILE_NAME}"]`
     );
     await expect(tabFileIcon).toBeVisible();
     const tabFileIconPresentation = {
@@ -131,11 +130,67 @@ test("uses available file-tree width and shares file icons and the sidebar searc
       token: await tabFileIcon.getAttribute("data-icon-token"),
     };
     expect(tabFileIconPresentation).toEqual(treeFileIconPresentation);
+    const fileChrome = page
+      .getByRole("button", { name: /Find in tree|在树中查找/u })
+      .locator("xpath=ancestor::header");
+    const fileChromeCenter = fileChrome.locator(":scope > div").nth(1);
+    await expect(fileChromeCenter).toBeVisible();
+    expect(
+      await fileChromeCenter.evaluate(
+        (element) => getComputedStyle(element).overflowX
+      )
+    ).toBe("hidden");
     const fileTabId = await tabFileIcon.evaluate((element) =>
       element.closest("[data-panel-tab-id]")?.getAttribute("data-panel-tab-id")
     );
     expect(fileTabId).toBeTruthy();
     const fileTab = page.locator(`[data-panel-tab-id="${fileTabId}"]`);
+    await setWindowSize(application, page, 720, 800);
+    const narrowBreadcrumbLayout = await fileChromeCenter.evaluate((center) => {
+      const breadcrumb = center.firstElementChild;
+      if (!(breadcrumb instanceof HTMLElement)) {
+        throw new Error("file breadcrumb missing");
+      }
+      const centerRect = center.getBoundingClientRect();
+      const segments = [
+        ...center.querySelectorAll<HTMLElement>("button[title]"),
+      ];
+      const segmentRects = segments.map((segment) =>
+        segment.getBoundingClientRect()
+      );
+      const lastRect = segmentRects.at(-1);
+      return {
+        lastSegmentVisible:
+          lastRect !== undefined &&
+          lastRect.left < centerRect.right &&
+          lastRect.right <= centerRect.right + 0.5,
+        overflowX: getComputedStyle(breadcrumb).overflowX,
+        segmentsDoNotOverlap: segmentRects.every(
+          (rect, index) =>
+            index === segmentRects.length - 1 ||
+            rect.right <= (segmentRects[index + 1]?.left ?? rect.right) + 0.5
+        ),
+      };
+    });
+    expect(narrowBreadcrumbLayout).toEqual({
+      lastSegmentVisible: true,
+      overflowX: "auto",
+      segmentsDoNotOverlap: true,
+    });
+
+    const filesGroupView = page.locator('[data-slot="pier.files.groupView"]');
+    const existingTerminalTab = page
+      .locator('[data-panel-tab-id^="terminal-"]')
+      .first();
+    await expect(existingTerminalTab).toBeVisible();
+    await existingTerminalTab.click();
+    expect(
+      await filesGroupView.evaluate(
+        (element) => getComputedStyle(element).display
+      )
+    ).toBe("none");
+    await fileTab.click();
+    await expect(fileChrome).toBeVisible();
 
     await page.keyboard.down("Meta");
     await expect(tabFileIcon).toBeHidden();

@@ -18,6 +18,7 @@ import {
   createFileFilePanelInstanceId,
   fileFilePanelIdentityKey,
 } from "@plugins/builtin/files/renderer/file-panel-id.ts";
+import { FilePanelBreadcrumb } from "@plugins/builtin/files/renderer/file-panel-parts.tsx";
 import { FileTreeSidebar } from "@plugins/builtin/files/renderer/file-tree-sidebar.tsx";
 import { createDiskDocumentRecord } from "@plugins/builtin/files/renderer/files-document-factory.ts";
 import { withDocumentReadResult } from "@plugins/builtin/files/renderer/files-document-reducers.ts";
@@ -581,6 +582,38 @@ afterEach(() => {
 });
 
 describe("Files file-panel", () => {
+  it("preserves breadcrumb scroll position across unrelated rerenders", () => {
+    const segments = ["pier", "src", "file.ts"];
+    const { container, rerender } = render(
+      <FilePanelBreadcrumb
+        onSegmentClick={() => undefined}
+        segments={segments}
+      />
+    );
+    const breadcrumb = container.firstElementChild;
+    expect(breadcrumb).toBeInstanceOf(HTMLElement);
+    Object.defineProperty(breadcrumb, "scrollWidth", {
+      configurable: true,
+      value: 480,
+    });
+    (breadcrumb as HTMLElement).scrollLeft = 120;
+
+    rerender(
+      <FilePanelBreadcrumb
+        onSegmentClick={() => undefined}
+        segments={[...segments]}
+      />
+    );
+    expect((breadcrumb as HTMLElement).scrollLeft).toBe(120);
+
+    rerender(
+      <FilePanelBreadcrumb
+        onSegmentClick={() => undefined}
+        segments={["pier", "packages", "file.ts"]}
+      />
+    );
+    expect((breadcrumb as HTMLElement).scrollLeft).toBe(480);
+  });
   it("localizes file-panel chrome through plugin i18n messages", async () => {
     const translations = new Map<string, string>([
       ["filePanel.empty.title", "[未选择文件]"],

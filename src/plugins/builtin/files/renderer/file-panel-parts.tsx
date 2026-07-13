@@ -25,7 +25,12 @@ import {
   PanelLeftOpen,
   Search,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import {
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+  type WheelEvent,
+} from "react";
 import type { FilesTranslate } from "./files-i18n.ts";
 
 export function ReadOnlyErrorState({
@@ -240,7 +245,9 @@ export function FilePanelChrome({
       {leading ? (
         <div className="flex shrink-0 items-center">{leading}</div>
       ) : null}
-      <div className="flex min-w-0 flex-1 items-center">{center}</div>
+      <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+        {center}
+      </div>
       {trailing ? (
         <div className="flex shrink-0 items-center gap-1">{trailing}</div>
       ) : null}
@@ -260,28 +267,78 @@ export function FilePanelBreadcrumb({
   segments: readonly string[];
   status?: ReactNode;
 }) {
+  const breadcrumbRef = useRef<HTMLDivElement | null>(null);
+  const previousSegmentsRef = useRef<readonly string[]>([]);
+  useLayoutEffect(() => {
+    const previousSegments = previousSegmentsRef.current;
+    let segmentsChanged = previousSegments.length !== segments.length;
+    for (
+      let index = 0;
+      !segmentsChanged && index < segments.length;
+      index += 1
+    ) {
+      segmentsChanged = previousSegments[index] !== segments[index];
+    }
+    previousSegmentsRef.current = segments;
+    const breadcrumb = breadcrumbRef.current;
+    if (segmentsChanged && breadcrumb) {
+      breadcrumb.scrollLeft = breadcrumb.scrollWidth;
+    }
+  });
+  useLayoutEffect(() => {
+    const breadcrumb = breadcrumbRef.current;
+    if (!breadcrumb || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      breadcrumb.scrollLeft = breadcrumb.scrollWidth;
+    });
+    observer.observe(breadcrumb);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+      return;
+    }
+    const breadcrumb = event.currentTarget;
+    const previousScrollLeft = breadcrumb.scrollLeft;
+    breadcrumb.scrollLeft += event.deltaY;
+    if (breadcrumb.scrollLeft !== previousScrollLeft) {
+      event.preventDefault();
+    }
+  };
+
   if (segments.length === 0) {
     return <span className="text-muted-foreground text-xs">—</span>;
   }
   const last = segments.length - 1;
   return (
-    <div className="flex min-w-0 items-center gap-1 font-mono text-xs">
+    <div
+      className="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden font-mono text-xs"
+      data-scrollbar="none"
+      onWheel={handleWheel}
+      ref={breadcrumbRef}
+    >
       {segments.map((segment, index) => {
         const isLast = index === last;
         // 面包屑 key 用 index+segment:同级同名段极罕见,但前缀 index 保证唯一。
         const key = `${index}:${segment}`;
         if (onSegmentClick) {
           return (
-            <span className="flex min-w-0 items-center gap-1" key={key}>
+            <span
+              className="flex min-w-0 max-w-[80%] shrink-0 items-center"
+              key={key}
+            >
               {index > 0 ? (
                 <ChevronRight
                   aria-hidden="true"
-                  className="size-3 shrink-0 text-muted-foreground/60"
+                  className="mx-0.5 size-3 shrink-0 text-muted-foreground/60"
                 />
               ) : null}
               <Button
                 aria-current={isLast ? "page" : undefined}
-                className="min-w-0 truncate"
+                className="min-w-0 max-w-full shrink truncate px-1"
                 onClick={() => onSegmentClick(index)}
                 size="xs"
                 title={segment}
@@ -294,16 +351,19 @@ export function FilePanelBreadcrumb({
           );
         }
         return (
-          <span className="flex min-w-0 items-center gap-1" key={key}>
+          <span
+            className="flex min-w-0 max-w-[80%] shrink-0 items-center"
+            key={key}
+          >
             {index > 0 ? (
               <ChevronRight
                 aria-hidden="true"
-                className="size-3 shrink-0 text-muted-foreground/60"
+                className="mx-0.5 size-3 shrink-0 text-muted-foreground/60"
               />
             ) : null}
             <span
               className={cn(
-                "truncate",
+                "min-w-0 max-w-full shrink truncate",
                 isLast
                   ? "font-semibold text-foreground"
                   : "text-muted-foreground"
