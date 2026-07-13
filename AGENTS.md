@@ -136,6 +136,7 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 - broadcast 通道 `pier://foreground-activity:changed` 是 renderer 侧 canonical UI 状态源
 - 双源迁移已完成：老 `agent-session` broadcast 已下线，此通道是唯一活动广播源
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
+- Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 

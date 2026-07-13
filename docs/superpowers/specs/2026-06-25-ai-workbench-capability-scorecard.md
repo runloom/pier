@@ -194,7 +194,7 @@ flowchart TD
 | 受管理外部插件运行时 | 部分完成 | P0 | 已实现 external main / renderer 激活、插件 RPC、按 `pluginId` 作用域的 handler、settings page、panel、status item、mission control widget、secret、路径、用量发布和生命周期回调。main 代码仍在宿主 Node 权限域执行。 | 当前只承载可信官方插件；第三方开放必须另做独立 realm / 进程和主体级授权。 |
 | 指挥中心贡献点 | 完成 | P1 | 已实现 v3 响应式有序网格、物料库、指标目录、多实例、配置、刷新、可见性停轮询、持久化迁移、插件物料注册及组件 / E2E 测试；`pier.codex` 已贡献账号与成本物料。 | 作为插件状态与观测的标准 UI 扩展点继续演进，不扩成自由画布或通用 BI。 |
 | Profile、环境与密钥 | 部分完成 | P0 | 已有 terminal profile、`profileId` 启动解析、项目级环境配置、worktree 绑定、`safeStorage` 密钥 store 和受 `pluginId` 作用域约束的 secrets facade。 | 补通用的项目 / worktree Agent profile 选择与状态展示；provider 专属账号逻辑继续归对应插件。 |
-| 前台活动与 Agent 状态 | 完成 | P0 | `ForegroundActivity` 已成为 agent / task / shell / idle 的唯一权威 UI 广播源；旧 `agent-session` 广播已下线，并补齐跨窗口发布、生命周期和 Codex transcript 兼容对账测试。 | 继续维护各 CLI agent 的事件映射准确性，不恢复双状态源。 |
+| 前台活动与 Agent 状态 | 完成 | P0 | `ForegroundActivity` 已成为 agent / task / shell / idle 的唯一权威 UI 广播源；旧 `agent-session` 广播已下线，并补齐跨窗口发布、生命周期和 Codex transcript 兼容对账测试。公共 Transcript capability 已删除，提供方原生记录只在适配器内部用于兼容对账。 | 继续维护各 CLI agent 的事件映射准确性，不恢复双状态源或公共 Transcript 数据域。 |
 | worktree 操作 | 完成 | P1 | 已有 list、check、creation defaults、create、open、openTerminal、remove、prune 命令与 Git 插件 UI，并完成创建和分支命名稳定性修复。 | 保持其作为 Git / 路径上下文能力，不升级为任务看板或自动调度系统。 |
 | Evidence 证据层 | 待实现 | P1 | capability 已预留 `evidence:write`，但缺少契约、存储、UI 和与 diff/session 的绑定。 | 定义 evidence 契约，支持测试、评估、审查和截图证据挂载。 |
 | AI 调用底座 | 部分完成 | P1 | 已有 `ai.status`、`ai.generateText` 和 renderer 插件 AI facade，分支建议已通过统一文本生成能力消费。 | 保持窄能力，避免扩成通用模型平台；补 provider / profile / secret 的清晰边界。 |
@@ -618,7 +618,7 @@ flowchart TD
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
 <p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">能力说明：识别 terminal panel 里到底跑的是哪个 CLI agent，以及它是否需要用户处理。</p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">当前状态：`ForegroundActivity` 已统一 agent / task / shell / idle，结合 agent hooks、终端事件和 Codex transcript 兼容对账形成单一权威 UI 状态；后续重点是扩充 CLI 映射准确性，而不是继续使用标题猜测。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">当前状态：`ForegroundActivity` 已统一 agent / task / shell / idle，结合 agent hooks、终端事件和 Codex transcript 兼容对账形成单一权威 UI 状态；公共 Transcript capability 已删除，提供方原生记录只在适配器内部用于可信终态补充。后续重点是扩充 CLI 映射准确性，而不是继续使用标题猜测。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
 <p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">Pier <code>src/shared/contracts/foreground-activity.ts</code>；Pier <code>src/main/services/foreground-activity/</code>；Pier <code>src/main/ipc/foreground-activity.ts</code>；Pier <code>src/renderer/stores/foreground-activity.store.ts</code>；Pier <code>tests/unit/main/foreground-activity-aggregator.test.ts</code></p>
@@ -814,7 +814,7 @@ flowchart TD
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
 <p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">能力说明：状态条、agent 列表、等待输入提醒、完成通知。</p>
-<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">当前状态：已完成核心闭环。`ForegroundActivityBroadcast` 是 renderer 唯一状态源，agent hook、task 生命周期和 shell 状态都汇入同一聚合器。</p>
+<p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">当前状态：已完成核心闭环。`ForegroundActivityBroadcast` 是 renderer 唯一状态源，agent hook、task 生命周期和 shell 状态都汇入同一聚合器；提供方原生 session 记录不进入宿主公共 API、存储、索引或回放。</p>
 </td>
 <td style="vertical-align: top; white-space: normal; word-break: break-word;">
 <p style="margin: 0 0 6px 0; white-space: normal; word-break: break-word;">Pier <code>src/shared/contracts/foreground-activity.ts</code>；Pier <code>src/main/services/foreground-activity/</code>；Pier <code>src/renderer/panel-kits/terminal/agent-status-item.tsx</code>；Pier <code>tests/unit/main/foreground-activity-publication.test.ts</code>；Claude hooks: <a href="https://docs.anthropic.com/en/docs/claude-code/hooks">https://docs.anthropic.com/en/docs/claude-code/hooks</a></p>
@@ -1706,9 +1706,9 @@ flowchart TD
 
 ### 第一轮：先冻结所有权与契约
 
-- [ ] **A1 Agent 状态适配契约与能力减法审计**
+- [x] **A1 Agent 状态适配契约与能力减法审计**
   - 目标：审查现有 Agent integrations、`ForegroundActivity`、terminal reconciliation 和预留 capability，确认每种状态的权威来源，并识别 `transcript:read` 等不再需要的公共能力。
-  - 完成证据：逐 Agent 事件映射矩阵、状态所有权、兼容输入边界、待删除公共契约和需求到证据矩阵；明确 provider 原生 session 记录只属于适配器内部输入。
+  - 完成证据：[Agent 状态适配契约与公共能力审计](./2026-07-13-agent-status-adapter-contract-audit.md) 已记录 30 个 hook 集成、5 个仅启动识别 Agent、状态所有权、数据流、兼容输入边界、capability 分类和需求到证据矩阵；提供方原生 session 记录只属于适配器内部输入。
   - 会话提示词：`请在 /Users/xyz/ABC/pier 中审计 Agent 状态适配契约与能力减法。先读 AGENTS.md、foreground-activity、agents/integrations、terminal reconciliation、permissions 和插件 API。逐项确认状态权威来源，识别 transcript:read 等无实际消费者的预留能力。Pier 不建设自有 Transcript、统一索引或回放。先输出 findings、所有权、数据流和验收矩阵，不直接实现。`
 
 - [ ] **B1 Evidence 证据层架构与契约**
@@ -1738,9 +1738,9 @@ flowchart TD
 
 ### 第二轮：实现最小可用数据底座
 
-- [ ] **A2 清理未使用的 Transcript 公共能力**
+- [x] **A2 清理未使用的 Transcript 公共能力**
   - 目标：根据 A1 审计结果删除无消费者的 `transcript:read` capability、i18n、manifest 暴露和测试假设，同时保留 Codex 状态适配器内部实现。
-  - 完成证据：运行时行为不变；公共插件 API 不再暗示 Pier 提供 Transcript 服务；permissions、文案、类型和契约测试同步通过。
+  - 完成证据：`transcript:read` 已从共享 capability 和双语权限文案删除；builtin / managed manifest 的根级及贡献级 permissions 均由负向契约测试拒绝旧值；Codex `transcriptPath` 和内部终态对账保持不变。
   - 会话提示词：`请根据已批准的 Agent 状态适配审计，在 /Users/xyz/ABC/pier 中清理无消费者的 transcript:read 公共 capability 及对应 i18n、manifest fixtures 和测试。保留 codex-transcript-reconciler 作为 provider 私有状态兼容实现，不新增公共读取 API、存储、索引或 UI。运行 typecheck、depcruise 和相关测试。`
 
 - [ ] **B2 Evidence 存储与服务**
