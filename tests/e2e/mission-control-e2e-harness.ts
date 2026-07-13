@@ -67,15 +67,28 @@ export async function setWindowSize(
   width: number,
   height: number
 ): Promise<void> {
-  await app.evaluate(
-    ({ BrowserWindow }, size) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height);
+  const windowId = await app.evaluate(
+    ({ BaseWindow }, size) => {
+      const targetWindow = BaseWindow.getAllWindows()[0];
+      if (!targetWindow) {
+        throw new Error("Expected Pier BaseWindow before resizing");
+      }
+      targetWindow.setSize(size.width, size.height);
+      return targetWindow.id;
     },
     { height, width }
   );
+  expect(windowId).toBeGreaterThan(0);
   await expect
-    .poll(() => win.evaluate(() => window.innerWidth), { timeout: 5000 })
-    .toBeGreaterThan(Math.min(width - 120, 800));
+    .poll(
+      () =>
+        win.evaluate(() => ({
+          height: window.innerHeight,
+          width: window.innerWidth,
+        })),
+      { timeout: 5000 }
+    )
+    .toEqual({ height, width });
 }
 
 async function openPaletteAction(win: Page, name: RegExp): Promise<void> {

@@ -2,10 +2,10 @@
 
 ## 工具链
 
-- Node.js 22 LTS + TypeScript 6 strict
-- pnpm 10（`--frozen-lockfile` 强制）
+- Node.js 24 LTS + TypeScript 6 strict
+- pnpm 11（`--frozen-lockfile` 强制）
 - Biome 2.5 + Ultracite（lint + format，单一 fix 入口 = pre-commit）
-- Electron 42 + Vite 8 + React 19 + Tailwind v4 + dockview-react
+- Electron 43 + Vite 8 + React 19 + Tailwind v4 + dockview-react
 
 ## 开发命令
 

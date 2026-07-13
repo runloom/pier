@@ -9,6 +9,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
+import { setWindowSize } from "./mission-control-e2e-harness.ts";
 
 const OUT_MAIN = join(
   import.meta.dirname,
@@ -49,23 +50,6 @@ async function openMissionControlViaPalette(win: Page): Promise<void> {
   const item = win.locator("[cmdk-item]").filter({ hasText: "新建指挥中心" });
   await expect(item).toBeVisible({ timeout: 10_000 });
   await item.click();
-}
-
-async function setWindowSize(
-  app: ElectronApplication,
-  win: Page,
-  width: number,
-  height: number
-): Promise<void> {
-  await app.evaluate(
-    ({ BrowserWindow }, size) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height);
-    },
-    { height, width }
-  );
-  await expect
-    .poll(() => win.evaluate(() => window.innerWidth), { timeout: 5000 })
-    .toBeGreaterThan(Math.min(width - 120, 800));
 }
 
 async function addWidget(win: Page, widgetId: string): Promise<Locator> {

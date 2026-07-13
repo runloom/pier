@@ -110,21 +110,39 @@ if ! command -v pnpm >/dev/null 2>&1; then
     if confirm "允许自动 brew install pnpm?"; then
         brew install pnpm
     else
-        err "跳过 pnpm 安装。pier 需要 pnpm 10+"
+        err "跳过 pnpm 安装。Pier 需要 pnpm 11.12+"
         exit 1
     fi
 fi
 PNPM_VER=$(pnpm --version 2>/dev/null || echo unknown)
-info "pnpm OK ($PNPM_VER)"
+PNPM_MAJOR=${PNPM_VER%%.*}
+PNPM_REST=${PNPM_VER#*.}
+PNPM_MINOR=${PNPM_REST%%.*}
+if ! [[ "$PNPM_MAJOR" =~ ^[0-9]+$ && "$PNPM_MINOR" =~ ^[0-9]+$ ]] || \
+    [ "$PNPM_MAJOR" -lt 11 ] || \
+    { [ "$PNPM_MAJOR" -eq 11 ] && [ "$PNPM_MINOR" -lt 12 ]; }; then
+    err "pnpm 版本 $PNPM_VER 不满足 11.12+。请先升级 pnpm。"
+    exit 1
+fi
+info "pnpm 11.12+ OK ($PNPM_VER)"
 
 # ---------- Node ----------
 info "检查 Node..."
 if ! command -v node >/dev/null 2>&1; then
-    err "Node 未装。pier 需要 Node 22+。推荐 nvm/fnm/mise 装。"
+    err "Node 未安装。Pier 需要 Node 24 LTS。推荐使用 nvm、fnm 或 mise 安装。"
     exit 1
 fi
 NODE_VER=$(node --version)
-info "node OK ($NODE_VER)"
+NODE_MAJOR=${NODE_VER#v}
+NODE_REST=${NODE_MAJOR#*.}
+NODE_MAJOR=${NODE_MAJOR%%.*}
+NODE_MINOR=${NODE_REST%%.*}
+if ! [[ "$NODE_MAJOR" =~ ^[0-9]+$ && "$NODE_MINOR" =~ ^[0-9]+$ ]] || \
+    [ "$NODE_MAJOR" -ne 24 ] || [ "$NODE_MINOR" -lt 15 ]; then
+    err "Node 版本 $NODE_VER 不满足 Node 24.15+。请升级到当前 Node 24 LTS。"
+    exit 1
+fi
+info "Node 24.15+ LTS OK ($NODE_VER)"
 
 # ---------- pnpm install ----------
 info "pnpm install..."

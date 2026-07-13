@@ -327,6 +327,25 @@ describe("managed plugin install foundation", () => {
     ).rejects.toThrow(/unresolved renderer import/);
   });
 
+  it("detects unresolved renderer imports that use import attributes", async () => {
+    const rendererBarePackage = await createPackage();
+    await writeFile(
+      join(rendererBarePackage, "dist/renderer.js"),
+      "import data from 'react' with { type: 'json' };\nexport const plugin = { data };\n"
+    );
+    await expect(
+      validateManagedPluginPackage({
+        packageDir: rendererBarePackage,
+        archivePath: null,
+        expectedId: "pier.codex",
+        expectedVersion: "1.0.0",
+        expectedSha256: null,
+        expectedSize: null,
+        pierVersion: "0.1.0",
+      })
+    ).rejects.toThrow(/unresolved renderer import/);
+  });
+
   it("rejects packages that use eval or new Function", async () => {
     const rendererEvalPackage = await createPackage();
     await writeFile(
