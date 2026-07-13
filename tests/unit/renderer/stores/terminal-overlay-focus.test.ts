@@ -1,15 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
   resetTerminalOverlayFocusForTests,
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
-import {
-  getLastTerminalInputRoutingSnapshot,
-  resetTerminalInputRoutingForTests,
-} from "@/stores/terminal-input-routing-slice.ts";
+import { resetTerminalInputRoutingForTests } from "@/stores/terminal-input-routing-slice.ts";
 
 function webRequestCount(): number | undefined {
-  return getLastTerminalInputRoutingSnapshot()?.webRequestCount;
+  return getLastTerminalHostSnapshot()?.webRequestCount;
 }
 
 describe("terminal overlay focus store", () => {
@@ -21,7 +19,7 @@ describe("terminal overlay focus store", () => {
       value: {
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
         terminal: {
-          applyInputRouting: vi.fn(),
+          applyHostSnapshot: vi.fn(),
         },
       },
     });
@@ -62,7 +60,7 @@ describe("terminal overlay focus store", () => {
 
     expect(useTerminalStore.getState().activeOverlayId).toBeNull();
     // 无活跃浮层时 yield 不发布任何 routing 更新（快照保持未创建）。
-    expect(getLastTerminalInputRoutingSnapshot()).toBeNull();
+    expect(getLastTerminalHostSnapshot()).toBeNull();
   });
 
   it("deactivating a non-active overlay id does nothing", () => {

@@ -11,6 +11,8 @@ import type {
   WorktreeCreateProgress,
   WorktreeCreateResult,
 } from "@shared/contracts/worktree.ts";
+import { createLogger } from "@shared/logger.ts";
+import { GitExecError } from "../services/git-exec.ts";
 import {
   isLocalEnvironmentScriptError,
   LocalEnvironmentScriptError,
@@ -27,6 +29,49 @@ import {
   executeTerminalOpenCommand,
 } from "./panel-commands.ts";
 
+const worktreeCreateLog = createLogger("worktree.create");
+
+type WorktreeCreateCommand = Extract<PierCommand, { type: "worktree.create" }>;
+
+function worktreeCreateLogContext(
+  requestId: string,
+  command: WorktreeCreateCommand,
+  phase: WorktreeCreateProgress["phase"]
+): Record<string, unknown> {
+  return {
+    branch: command.branch,
+    name: command.name,
+    phase,
+    requestId,
+    requestedPath: command.path,
+    ...(command.base ? { base: command.base } : {}),
+    ...(command.operationId ? { operationId: command.operationId } : {}),
+  };
+}
+
+function worktreeCreateErrorContext(
+  requestId: string,
+  command: WorktreeCreateCommand,
+  phase: WorktreeCreateProgress["phase"],
+  err: unknown
+): Record<string, unknown> {
+  const context = {
+    ...worktreeCreateLogContext(requestId, command, phase),
+    errorMessage: err instanceof Error ? err.message : String(err),
+    errorName: err instanceof Error ? err.name : "UnknownError",
+  };
+  if (!(err instanceof GitExecError)) {
+    return context;
+  }
+  return {
+    ...context,
+    gitArgs: err.args,
+    gitCwd: err.cwd,
+    gitExitCode: err.exitCode,
+    gitStderr: err.stderr,
+    gitStdout: err.stdout,
+  };
+}
 async function copyCreateIncludes(
   result: WorktreeCreateResult,
   patterns: readonly string[]
@@ -196,7 +241,7 @@ async function executeWorktreeOpenTerminalCommand(
 
 async function executeWorktreeCreateCommand(
   requestId: string,
-  command: Extract<PierCommand, { type: "worktree.create" }>,
+  command: WorktreeCreateCommand,
   services: PierCoreServices,
   onProgress?: (progress: WorktreeCreateProgress) => void
 ): Promise<PierCommandResult> {
@@ -205,27 +250,36 @@ async function executeWorktreeCreateCommand(
       onProgress?.({ operationId: command.operationId, phase });
     }
   };
-
-  reportProgress("creating");
-  const check = await services.worktrees.check({ path: command.path });
-  if (check.status !== "supported") {
-    // unsupported/unavailable — fall through to raw create for compat
-    const created = await services.worktrees.create(command);
-    const copiedFiles = await copyCreateIncludes(created, []);
-    services.gitWatch.pulse(command.path);
-    return success(requestId, { ...created, copiedFiles });
-  }
-
-  const project = await services.localEnvironments.resolveProject(
-    check.mainPath
-  );
-  const shouldRunSetup = project !== null && project.setupCommand.trim() !== "";
-
+  let phase: WorktreeCreateProgress["phase"] = "creating";
   let created: WorktreeCreateResult | null = null;
-  try {
-    created = await services.worktrees.create(command);
+  worktreeCreateLog.info(
+    "create started",
+    worktreeCreateLogContext(requestId, command, phase)
+  );
 
-    reportProgress("initializing");
+  try {
+    reportProgress(phase);
+    const check = await services.worktrees.check({ path: command.path });
+    if (check.status !== "supported") {
+      // unsupported/unavailable — fall through to raw create for compat
+      created = await services.worktrees.create(command);
+      const copiedFiles = await copyCreateIncludes(created, []);
+      worktreeCreateLog.info("create succeeded", {
+        ...worktreeCreateLogContext(requestId, command, phase),
+        targetPath: created.targetPath,
+      });
+      return success(requestId, { ...created, copiedFiles });
+    }
+
+    const project = await services.localEnvironments.resolveProject(
+      check.mainPath
+    );
+    const shouldRunSetup =
+      project !== null && project.setupCommand.trim() !== "";
+
+    created = await services.worktrees.create(command);
+    phase = "initializing";
+    reportProgress(phase);
 
     await services.localEnvironments.bindWorktree({
       projectRootPath: check.mainPath,
@@ -245,8 +299,16 @@ async function executeWorktreeCreateCommand(
       });
     }
 
+    worktreeCreateLog.info("create succeeded", {
+      ...worktreeCreateLogContext(requestId, command, phase),
+      targetPath: created.targetPath,
+    });
     return success(requestId, { ...created, copiedFiles });
   } catch (err) {
+    worktreeCreateLog.error(
+      "create failed",
+      worktreeCreateErrorContext(requestId, command, phase, err)
+    );
     if (
       err instanceof LocalEnvironmentScriptError ||
       isLocalEnvironmentScriptError(err) ||

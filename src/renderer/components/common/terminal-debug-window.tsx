@@ -311,11 +311,10 @@ function RoutingStateView({
       ? `terminal:${keyboardTarget.panelId}`
       : "web";
   const rendererSeq =
-    snapshot?.inputRouting?.desired?.rendererSequence ??
-    snapshot?.renderer?.desiredInputRouting?.rendererSequence ??
+    snapshot?.coordinator?.desired?.rendererSequence ??
+    snapshot?.renderer?.desiredHostSnapshot?.rendererSequence ??
     "-";
-  const nativeSeq =
-    snapshot?.native.window.lastAppliedInputRoutingSequence ?? "-";
+  const nativeSeq = snapshot?.native.window.lastAppliedRendererSequence ?? "-";
   const health = routeHealth(snapshot);
 
   return (
@@ -331,9 +330,9 @@ function RoutingStateView({
               label="Renderer Coordinator"
               status={presentation}
             >
-              {snapshot?.renderer?.desiredInputRouting?.webOverlayRects
-                .length ??
-                snapshot?.inputRouting?.desired?.webOverlayRects.length ??
+              {snapshot?.coordinator?.desired?.webOverlayRects.length ??
+                snapshot?.renderer?.desiredHostSnapshot?.webOverlayRects
+                  .length ??
                 0}{" "}
               web rects
             </NodeCard>

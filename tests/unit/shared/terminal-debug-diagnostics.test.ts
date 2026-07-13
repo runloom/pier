@@ -1,6 +1,57 @@
 import { buildTerminalDebugIssues } from "@shared/terminal-debug-diagnostics.ts";
 import { describe, expect, it } from "vitest";
 
+function desiredHostSnapshot(
+  basePanel: { kind: "web" } | { kind: "terminal"; panelId: string },
+  rendererSequence: number
+) {
+  const terminalPanelId =
+    basePanel.kind === "terminal" ? basePanel.panelId : null;
+  return {
+    activePanelId: "terminal-1",
+    activeTerminalPanelId: terminalPanelId,
+    basePanel,
+    hasMaximizedGroup: false,
+    reason: "input-routing" as const,
+    rendererSequence,
+    terminals: [
+      {
+        frame: { height: 93, width: 213, x: 0, y: 72 },
+        panelId: "terminal-1",
+        visible: true,
+      },
+    ],
+    webOverlayRects: [],
+    webRequestCount: 0,
+  };
+}
+
+function blurredCoordinatorDebug(rendererSequence: number) {
+  const desired = desiredHostSnapshot(
+    { kind: "terminal", panelId: "terminal-1" },
+    rendererSequence
+  );
+  return {
+    desired,
+    dirty: false,
+    effective: {
+      keyboardTarget: { kind: "web" as const },
+      nativeApplySequence: 6,
+      reason: "window-blur" as const,
+      rendererSequence,
+      terminals: desired.terminals.map((entry) => ({
+        ...entry,
+        focused: false,
+      })),
+      webOverlayRects: [],
+      windowFocused: false,
+    },
+    lastError: null,
+    lastSuccessfulNativeApplySequence: 6,
+    readyPanelIds: ["terminal-1"],
+  };
+}
+
 describe("terminal debug diagnostics", () => {
   it("compares renderer anchors with native viewport frames, not AppKit frames", () => {
     const issues = buildTerminalDebugIssues(
@@ -117,12 +168,7 @@ describe("terminal debug diagnostics", () => {
     const issues = buildTerminalDebugIssues(
       {
         activePanelId: "terminal-1",
-        desiredInputRouting: {
-          basePanel: { kind: "web" },
-          rendererSequence: 4,
-          webOverlayRects: [],
-          webRequestCount: 0,
-        },
+        desiredHostSnapshot: desiredHostSnapshot({ kind: "web" }, 4),
         hasMaximizedGroup: false,
         panelCount: 1,
         panels: [
@@ -158,7 +204,7 @@ describe("terminal debug diagnostics", () => {
         window: {
           activeTerminalPanelId: null,
           keyboardFocusTarget: { kind: "web" },
-          lastAppliedInputRoutingSequence: 4,
+          lastAppliedRendererSequence: 4,
           nativeActiveTerminalPanelId: null,
           terminalTargetCount: 1,
           webOverlayRectCount: 0,
@@ -179,12 +225,7 @@ describe("terminal debug diagnostics", () => {
     const issues = buildTerminalDebugIssues(
       {
         activePanelId: "terminal-1",
-        desiredInputRouting: {
-          basePanel: { kind: "web" },
-          rendererSequence: 4,
-          webOverlayRects: [],
-          webRequestCount: 0,
-        },
+        desiredHostSnapshot: desiredHostSnapshot({ kind: "web" }, 4),
         hasMaximizedGroup: false,
         panelCount: 1,
         panels: [
@@ -220,7 +261,7 @@ describe("terminal debug diagnostics", () => {
         window: {
           activeTerminalPanelId: null,
           keyboardFocusTarget: { kind: "web" },
-          lastAppliedInputRoutingSequence: 4,
+          lastAppliedRendererSequence: 4,
           nativeActiveTerminalPanelId: null,
           terminalTargetCount: 1,
           webOverlayRectCount: 0,
@@ -241,12 +282,10 @@ describe("terminal debug diagnostics", () => {
     const issues = buildTerminalDebugIssues(
       {
         activePanelId: "terminal-1",
-        desiredInputRouting: {
-          basePanel: { kind: "terminal", panelId: "terminal-1" },
-          rendererSequence: 4,
-          webOverlayRects: [],
-          webRequestCount: 0,
-        },
+        desiredHostSnapshot: desiredHostSnapshot(
+          { kind: "terminal", panelId: "terminal-1" },
+          4
+        ),
         hasMaximizedGroup: false,
         panelCount: 1,
         panels: [
@@ -266,7 +305,7 @@ describe("terminal debug diagnostics", () => {
         window: {
           activeTerminalPanelId: "terminal-1",
           keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
-          lastAppliedInputRoutingSequence: 4,
+          lastAppliedRendererSequence: 4,
           nativeActiveTerminalPanelId: "1::terminal-1",
           terminalTargetCount: 0,
           webOverlayRectCount: 0,
@@ -287,12 +326,10 @@ describe("terminal debug diagnostics", () => {
     const issues = buildTerminalDebugIssues(
       {
         activePanelId: "terminal-1",
-        desiredInputRouting: {
-          basePanel: { kind: "terminal", panelId: "terminal-1" },
-          rendererSequence: 3,
-          webOverlayRects: [],
-          webRequestCount: 0,
-        },
+        desiredHostSnapshot: desiredHostSnapshot(
+          { kind: "terminal", panelId: "terminal-1" },
+          3
+        ),
         hasMaximizedGroup: false,
         panelCount: 1,
         panels: [
@@ -327,23 +364,13 @@ describe("terminal debug diagnostics", () => {
         window: {
           activeTerminalPanelId: "terminal-1",
           keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
-          lastAppliedInputRoutingSequence: 3,
+          lastAppliedRendererSequence: 3,
           nativeActiveTerminalPanelId: "1::terminal-1",
           terminalTargetCount: 1,
           webOverlayRectCount: 0,
         },
       },
-      undefined,
-      {
-        effective: {
-          basePanel: { kind: "terminal", panelId: "terminal-1" },
-          nativeApplySequence: 6,
-          rendererSequence: 3,
-          webOverlayRects: [],
-          webRequestCount: 0,
-          windowFocused: false,
-        },
-      }
+      blurredCoordinatorDebug(3)
     );
 
     expect(issues).not.toContainEqual(
@@ -357,12 +384,10 @@ describe("terminal debug diagnostics", () => {
     const issues = buildTerminalDebugIssues(
       {
         activePanelId: "terminal-1",
-        desiredInputRouting: {
-          basePanel: { kind: "terminal", panelId: "terminal-1" },
-          rendererSequence: 4,
-          webOverlayRects: [],
-          webRequestCount: 0,
-        },
+        desiredHostSnapshot: desiredHostSnapshot(
+          { kind: "terminal", panelId: "terminal-1" },
+          4
+        ),
         hasMaximizedGroup: false,
         panelCount: 1,
         panels: [
@@ -398,7 +423,7 @@ describe("terminal debug diagnostics", () => {
         window: {
           activeTerminalPanelId: "terminal-1",
           keyboardFocusTarget: { kind: "terminal", panelId: "terminal-1" },
-          lastAppliedInputRoutingSequence: 4,
+          lastAppliedRendererSequence: 4,
           nativeActiveTerminalPanelId: "1::terminal-1",
           terminalTargetCount: 1,
           webOverlayRectCount: 0,

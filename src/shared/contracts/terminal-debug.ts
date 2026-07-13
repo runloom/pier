@@ -1,21 +1,9 @@
 import type {
+  TerminalCoordinatorDebugSnapshot,
   TerminalFrame,
-  TerminalInputRoutingSnapshot,
+  TerminalHostSnapshot,
   TerminalKeyboardFocusTarget,
-  TerminalNativeInputRoutingSnapshot,
-  TerminalNativePresentationSnapshot,
-  TerminalPresentationSnapshot,
 } from "./terminal.ts";
-
-export interface TerminalDebugPresentationSnapshot {
-  desired?: TerminalPresentationSnapshot | undefined;
-  effective?: TerminalNativePresentationSnapshot | undefined;
-}
-
-export interface TerminalDebugInputRoutingSnapshot {
-  desired?: TerminalInputRoutingSnapshot | undefined;
-  effective?: TerminalNativeInputRoutingSnapshot | undefined;
-}
 
 export type TerminalDebugRoute =
   | "renderer->main->native"
@@ -62,12 +50,12 @@ export interface TerminalDebugRouterDecision {
 
 export interface TerminalDebugNativeWindowSnapshot {
   activeTerminalPanelId: string | null;
-  inputRoutingStaleDiscardCount?: number | undefined;
+  appTickCount?: number | undefined;
   keyboardFocusTarget: TerminalKeyboardFocusTarget;
-  lastAppliedInputRoutingSequence?: number | undefined;
   lastAppliedNativeApplySequence?: number | undefined;
   lastAppliedRendererSequence?: number | undefined;
-  lastPresentationReason?: string | undefined;
+  lastAppTickUptime?: number | undefined;
+  lastWindowStateReason?: string | undefined;
   nativeActiveTerminalPanelId: string | null;
   recentRouterDecisions?: TerminalDebugRouterDecision[] | undefined;
   /**
@@ -84,15 +72,24 @@ export interface TerminalDebugNativeSurfaceSnapshot {
   alpha: number;
   browserWindowId: number;
   cursorSuppressed?: boolean | undefined;
+  drawPending?: boolean | undefined;
+  drawSequence?: number | undefined;
   frame: TerminalFrame;
+  ghosttyRenderReadySequence?: number | undefined;
   hasRouterTarget: boolean;
   hostKeyboardActive?: boolean | undefined;
+  hostRefreshRequestSequence?: number | undefined;
   isFirstResponder: boolean;
   isHidden: boolean;
   isOffscreen: boolean;
   isSurfaceFocused?: boolean | undefined;
+  lastDrawnGhosttyRenderReadySequence?: number | undefined;
+  lastDrawUptime?: number | undefined;
+  lastRenderReadyUptime?: number | undefined;
   nativePanelId: string;
   panelId: string;
+  refreshPending?: boolean | undefined;
+  surfaceGeneration?: number | undefined;
   surfaceVisible?: boolean | undefined;
   targetRect?: TerminalFrame | null | undefined;
   viewportFrame?: TerminalFrame | null | undefined;
@@ -173,8 +170,7 @@ export interface TerminalDebugRendererPanelSnapshot {
 
 export interface TerminalDebugRendererSnapshot {
   activePanelId: string | null;
-  desiredInputRouting?: TerminalInputRoutingSnapshot | undefined;
-  desiredPresentation?: TerminalPresentationSnapshot | undefined;
+  desiredHostSnapshot?: TerminalHostSnapshot | undefined;
   hasMaximizedGroup: boolean;
   panelCount: number;
   panels: TerminalDebugRendererPanelSnapshot[];
@@ -197,11 +193,10 @@ export interface TerminalDebugSnapshotArgs {
 }
 
 export interface TerminalDebugSnapshot {
+  coordinator?: TerminalCoordinatorDebugSnapshot | undefined;
   events: TerminalDebugEvent[];
-  inputRouting?: TerminalDebugInputRoutingSnapshot | undefined;
   issues?: TerminalDebugIssue[] | undefined;
   native: TerminalDebugNativeSnapshot;
-  presentation?: TerminalDebugPresentationSnapshot | undefined;
   renderer?: TerminalDebugRendererSnapshot | undefined;
 }
 

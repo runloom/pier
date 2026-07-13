@@ -25,6 +25,7 @@ import type {
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
 import {
+  type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
@@ -44,6 +45,7 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
+import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
 
 export const PANEL_TAB_TOOLTIP_DELAY_MS = 1000;
@@ -220,6 +222,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   );
   const isPreviewRef = useRef(isPreview);
   const suppressNextDoubleClickRef = useRef(false);
+  const wasActiveOnPointerDownRef = useRef(false);
   const descriptor = usePanelDescriptorStore(
     (state) => state.descriptors[props.api.id]
   );
@@ -361,6 +364,29 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     },
     [baseOnContextMenu, props.api]
   );
+  const publishTerminalFocusIntent = useCallback(() => {
+    if (props.api.component === "terminal") {
+      requestTerminalFocusIntent(props.api.id);
+    }
+  }, [props.api.component, props.api.id]);
+  const onClick = useCallback(() => {
+    const shouldReplay = wasActiveOnPointerDownRef.current;
+    wasActiveOnPointerDownRef.current = false;
+    if (shouldReplay) {
+      publishTerminalFocusIntent();
+    }
+  }, [publishTerminalFocusIntent]);
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.target !== event.currentTarget) {
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        publishTerminalFocusIntent();
+      }
+    },
+    [publishTerminalFocusIntent]
+  );
   const promotePreview = useCallback(() => {
     if (!isPreviewRef.current) {
       return false;
@@ -385,6 +411,8 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   );
   const onPointerDownCapture = useCallback(
     (event: PointerEvent) => {
+      wasActiveOnPointerDownRef.current =
+        event.button === 0 && props.api.isActive;
       if (!(event.button === 0 && event.detail >= 2 && promotePreview())) {
         return;
       }
@@ -394,7 +422,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       event.preventDefault();
       event.stopPropagation();
     },
-    [promotePreview]
+    [promotePreview, props.api.isActive]
   );
   // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
   // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
@@ -407,8 +435,10 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       data-pier-tab-preview={isPreview ? "true" : undefined}
       data-tab-state-label={tab?.state?.label}
       data-tab-status={status}
+      onClick={onClick}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
+      onKeyDown={onKeyDown}
       onPointerDownCapture={onPointerDownCapture}
       role="tab"
       tabIndex={0}

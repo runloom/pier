@@ -28,10 +28,17 @@ import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
+import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 
 type ActiveChangeHandler = (event: { isActive: boolean }) => void;
 
 const contextActionDisposers: Array<() => void> = [];
+vi.mock("@/stores/terminal-input-routing-slice.ts", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/stores/terminal-input-routing-slice.ts")
+  >()),
+  requestTerminalFocusIntent: vi.fn(),
+}));
 
 function render(ui: ReactElement, options?: RenderOptions) {
   return renderBase(
@@ -109,6 +116,7 @@ describe("PanelTabHeader", () => {
       }
     }
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    vi.mocked(requestTerminalFocusIntent).mockClear();
   });
 
   afterEach(async () => {
@@ -120,6 +128,30 @@ describe("PanelTabHeader", () => {
     await i18next.changeLanguage("en");
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useTerminalStore.getState().resetShortcutHints();
+  });
+
+  it("replays terminal ownership when its selected tab is clicked", () => {
+    const props = createHeaderProps("terminal", "Terminal");
+    Object.assign(props.api, { isActive: true });
+    const { container } = render(<PanelTabHeader {...props} />);
+    const tab = container.querySelector(
+      '[data-panel-tab-id="terminal-1"]'
+    ) as Element;
+
+    fireEvent.pointerDown(tab, { button: 0, detail: 1 });
+    fireEvent.click(tab);
+
+    expect(requestTerminalFocusIntent).toHaveBeenCalledWith("terminal-1");
+  });
+
+  it("does not treat close-button keyboard activation as a tab focus intent", () => {
+    render(<PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />);
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Close tab" }), {
+      key: "Enter",
+    });
+
+    expect(requestTerminalFocusIntent).not.toHaveBeenCalled();
   });
 
   it("renders the icon declared by the panel kit metadata", () => {
@@ -545,6 +577,52 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector("[data-panel-tab-index-hint]")
     ).toHaveTextContent("⌘1");
+  });
+
+  it("does not reopen the previous tab tooltip during pointer-driven tab focus handoff", () => {
+    vi.useFakeTimers();
+    usePanelDescriptorStore.setState({
+      activeId: "terminal-1",
+      descriptors: {
+        "terminal-1": {
+          display: { short: "one" },
+          tab: { title: "one", tooltip: { title: "one" } },
+        },
+        "terminal-2": {
+          display: { short: "two" },
+          tab: { title: "two", tooltip: { title: "two" } },
+        },
+      },
+    });
+    const { container } = render(
+      <>
+        <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+        <PanelTabHeader
+          {...createHeaderProps(
+            "terminal",
+            "Terminal",
+            undefined,
+            "terminal-2"
+          )}
+        />
+      </>
+    );
+    const [firstTab, secondTab] = container.querySelectorAll(".dv-default-tab");
+    expect(firstTab).toBeDefined();
+    expect(secondTab).toBeDefined();
+    if (!(firstTab && secondTab)) {
+      return;
+    }
+
+    fireEvent.focus(firstTab);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("one");
+
+    fireEvent.pointerDown(secondTab, { button: 0, detail: 1 });
+    fireEvent.pointerMove(secondTab, { pointerType: "mouse" });
+    fireEvent.pointerLeave(secondTab, { pointerType: "mouse" });
+    fireEvent.focus(firstTab);
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("keeps tab tooltips delayed across repeated adjacent tab moves", () => {

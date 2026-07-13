@@ -47,42 +47,75 @@ export type TerminalKeyboardFocusTarget =
       kind: "web";
     };
 
-export interface TerminalInputRoutingSnapshot {
-  /** dockview 活跃面板意图（terminal | web）。 */
-  basePanel: TerminalKeyboardFocusTarget;
-  rendererSequence: number;
-  webOverlayRects: TerminalWebOverlayRect[];
-  /** 当前活跃的浮层 web 焦点请求数；>0 即 effective=web。 */
-  webRequestCount: number;
-}
-
-export interface TerminalNativeInputRoutingSnapshot
-  extends TerminalInputRoutingSnapshot {
-  nativeApplySequence: number;
-  windowFocused: boolean;
-}
-
-export interface TerminalPresentationEntry {
-  focused: boolean;
+export interface TerminalHostEntry {
   frame: TerminalFrame | null;
   panelId: string;
   visible: boolean;
 }
 
-export interface TerminalPresentationSnapshot {
+export type TerminalHostReason =
+  | TerminalPresentationReason
+  | "input-routing"
+  | "surface-created"
+  | "surface-closing";
+
+export interface TerminalHostSnapshot {
   activePanelId: string | null;
   activeTerminalPanelId: string | null;
+  basePanel: TerminalKeyboardFocusTarget;
   hasMaximizedGroup: boolean;
-  reason: TerminalPresentationReason;
+  reason: TerminalHostReason;
   rendererSequence: number;
-  terminals: TerminalPresentationEntry[];
+  terminals: TerminalHostEntry[];
+  webOverlayRects: TerminalWebOverlayRect[];
+  webRequestCount: number;
 }
 
-export interface TerminalNativePresentationSnapshot
-  extends TerminalPresentationSnapshot {
+export interface TerminalNativeWindowState {
+  keyboardTarget: TerminalKeyboardFocusTarget;
   nativeApplySequence: number;
+  reason: TerminalHostReason;
+  rendererSequence: number;
+  terminals: Array<TerminalHostEntry & { focused: boolean }>;
+  webOverlayRects: TerminalWebOverlayRect[];
   windowFocused: boolean;
 }
+
+export type TerminalNativeApplyResult =
+  | { status: "applied" | "stale" | "unchanged" }
+  | { status: "error"; error: string };
+
+export interface TerminalCoordinatorDebugSnapshot {
+  desired: TerminalHostSnapshot | null;
+  dirty: boolean;
+  effective: TerminalNativeWindowState | null;
+  lastError: string | null;
+  lastSuccessfulNativeApplySequence: number;
+  readyPanelIds: string[];
+}
+
+export interface TerminalFocusApplyResult {
+  effective: TerminalNativeWindowState | null;
+  error: string | null;
+  nativeStatus: TerminalNativeApplyResult["status"] | null;
+  rendererSequence: number | null;
+  shouldAck: boolean;
+  status:
+    | "applied"
+    | "conflict"
+    | "error"
+    | "stale"
+    | "unavailable"
+    | "unchanged";
+  webContentsFocused: boolean;
+}
+
+export type NativeFocusIntentResult =
+  | { ok: true; panelId: string }
+  | {
+      ok: false;
+      reason: "cross-window" | "hidden" | "not-ready" | "stale";
+    };
 
 /**
  * Terminal 字体配置. family 是有序的字体族 fallback 链, 已在 renderer 侧由
@@ -266,8 +299,7 @@ export interface TerminalCloseOptions {
 }
 
 export interface TerminalAPI {
-  applyInputRouting(snapshot: TerminalInputRoutingSnapshot): void;
-  applyPresentation(snapshot: TerminalPresentationSnapshot): void;
+  applyHostSnapshot(snapshot: TerminalHostSnapshot): void;
   applyTheme(colors: TerminalColors): void;
   /**
    * 关闭 terminal panel 的 native NSView. 普通 workspace close 可以忽略返回的
@@ -280,7 +312,6 @@ export interface TerminalAPI {
     args?: TerminalDebugSnapshotArgs
   ): Promise<TerminalDebugSnapshot>;
   endSearch(panelId: string): Promise<TerminalOperationResult>;
-  hide(panelId: string): void;
   navigateSearch(
     panelId: string,
     direction: TerminalSearchDirection
@@ -352,7 +383,5 @@ export interface TerminalAPI {
    * → ghostty_surface_update_config, 不重建 surface, 不杀 shell. fire-and-forget.
    */
   setFont(panelId: string, font: TerminalFont): void;
-  setFrame(panelId: string, frame: TerminalFrame): void;
   setup(): Promise<CreateTerminalResult>;
-  show(panelId: string): void;
 }

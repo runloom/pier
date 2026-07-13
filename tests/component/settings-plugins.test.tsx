@@ -151,7 +151,7 @@ describe("Settings plugins section", () => {
           list,
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
-        terminal: { applyInputRouting: vi.fn() },
+        terminal: { applyHostSnapshot: vi.fn() },
       },
     });
     // 组件不再挂载时自拉取, 而是读取 registry 镜像 store(2b1e7c5);
@@ -217,7 +217,7 @@ describe("Settings plugins section", () => {
           list: vi.fn(),
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
-        terminal: { applyInputRouting: vi.fn() },
+        terminal: { applyHostSnapshot: vi.fn() },
       },
     });
 
@@ -285,7 +285,7 @@ describe("Settings plugins section", () => {
           list: vi.fn(),
         },
         settings: { onOpenRequest: vi.fn(() => vi.fn()) },
-        terminal: { applyInputRouting: vi.fn() },
+        terminal: { applyHostSnapshot: vi.fn() },
       },
     });
     usePluginRegistryStore.setState({

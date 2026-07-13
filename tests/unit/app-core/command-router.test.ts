@@ -6,6 +6,7 @@ import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
 import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
 import { createFileService } from "@main/services/file-service.ts";
+import { GitExecError } from "@main/services/git-exec.ts";
 import { createGitService } from "@main/services/git-service.ts";
 import { createGitWatchService } from "@main/services/git-watch-service.ts";
 import { LocalEnvironmentServiceError } from "@main/services/local-environments-service.ts";
@@ -28,6 +29,11 @@ import type {
   PluginSourceKind,
 } from "@shared/contracts/plugin.ts";
 import type { TaskListResult } from "@shared/contracts/tasks.ts";
+import {
+  type LogRecord,
+  resetDefaultLogSinkForTests,
+  setDefaultLogSink,
+} from "@shared/logger.ts";
 import { describe, expect, it, vi } from "vitest";
 import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
@@ -3213,6 +3219,88 @@ describe("createCommandRouter", () => {
       "00000000-0000-4000-8000-000000000001:creating",
       "00000000-0000-4000-8000-000000000001:initializing",
     ]);
+  });
+
+  it("worktree.create records structured Git failure diagnostics", async () => {
+    const records: LogRecord[] = [];
+    setDefaultLogSink((record) => records.push(record));
+    try {
+      const fakeServices = services();
+      fakeServices.worktrees.check = vi.fn(async () => ({
+        currentPath: "/repo",
+        mainPath: "/repo-main",
+        path: "/repo",
+        status: "supported" as const,
+      }));
+      fakeServices.localEnvironments.resolveProject = vi.fn(async () => null);
+      fakeServices.worktrees.create = vi.fn(async () => {
+        throw new GitExecError({
+          args: [
+            "worktree",
+            "add",
+            "-b",
+            "feature/a",
+            "/repo-main.worktree/feature-a",
+            "origin/main",
+          ],
+          cwd: "/repo-main",
+          exitCode: 128,
+          message: "git 退出码 128",
+          stderr: "fatal: a branch named 'feature/a' already exists",
+          stdout: "",
+        });
+      });
+      const router = createCommandRouter({
+        clients: registryWith(desktopClient),
+        services: fakeServices,
+      });
+
+      await router.execute({
+        clientId: "desktop-1",
+        command: {
+          base: "origin/main",
+          branch: "feature/a",
+          name: "feature-a",
+          operationId: "00000000-0000-4000-8000-000000000002",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-create-git-failed",
+      });
+
+      expect(records).toContainEqual(
+        expect.objectContaining({
+          ctx: expect.objectContaining({
+            base: "origin/main",
+            branch: "feature/a",
+            errorMessage: "git 退出码 128",
+            errorName: "GitExecError",
+            gitArgs: [
+              "worktree",
+              "add",
+              "-b",
+              "feature/a",
+              "/repo-main.worktree/feature-a",
+              "origin/main",
+            ],
+            gitCwd: "/repo-main",
+            gitExitCode: 128,
+            gitStderr: "fatal: a branch named 'feature/a' already exists",
+            name: "feature-a",
+            operationId: "00000000-0000-4000-8000-000000000002",
+            phase: "creating",
+            requestId: "req-worktree-create-git-failed",
+            requestedPath: "/repo",
+          }),
+          level: "error",
+          msg: "create failed",
+          scope: "worktree.create",
+        })
+      );
+    } finally {
+      resetDefaultLogSinkForTests();
+    }
   });
 
   it("worktree.create setup 失败时保留 worktree 和 binding 但不开 terminal 或 agent", async () => {

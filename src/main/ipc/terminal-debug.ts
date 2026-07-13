@@ -1,4 +1,5 @@
 import type {
+  TerminalCoordinatorDebugSnapshot,
   TerminalFrame,
   TerminalKeyboardFocusTarget,
 } from "@shared/contracts/terminal.ts";
@@ -17,12 +18,9 @@ import { buildTerminalDebugIssues } from "@shared/terminal-debug-diagnostics.ts"
 import type { IpcMain, WebContents } from "electron";
 import type { AppWindow } from "../windows/app-window.ts";
 import { findAppWindowByElectronId } from "../windows/window-identity.ts";
+import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
-import {
-  readTerminalInputRoutingDebug,
-  readTerminalPresentationDebug,
-} from "./terminal-presentation.ts";
 import { stableWindowIdFor } from "./terminal-window-scope.ts";
 
 const MAX_EVENTS = 120;
@@ -77,6 +75,16 @@ function numberValue(value: unknown, fallback = 0): number {
 
 function booleanValue(value: unknown): boolean {
   return typeof value === "boolean" ? value : false;
+}
+
+function optionalBooleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function optionalNonNegativeNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function stringValue(value: unknown): string | null {
@@ -230,16 +238,35 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           alpha: numberValue(surface.alpha, 1),
           browserWindowId: numberValue(surface.browserWindowId),
           cursorSuppressed: booleanValue(surface.cursorSuppressed),
+          drawPending: optionalBooleanValue(surface.drawPending),
+          drawSequence: optionalNonNegativeNumber(surface.drawSequence),
           frame: frameValue(surface.frame),
+          ghosttyRenderReadySequence: optionalNonNegativeNumber(
+            surface.ghosttyRenderReadySequence
+          ),
           hasRouterTarget: booleanValue(surface.hasRouterTarget),
           hostKeyboardActive: booleanValue(surface.hostKeyboardActive),
+          hostRefreshRequestSequence: optionalNonNegativeNumber(
+            surface.hostRefreshRequestSequence
+          ),
           isFirstResponder: booleanValue(surface.isFirstResponder),
           isHidden: booleanValue(surface.isHidden),
           isOffscreen: booleanValue(surface.isOffscreen),
           isSurfaceFocused: booleanValue(surface.isSurfaceFocused),
+          lastDrawUptime: optionalNonNegativeNumber(surface.lastDrawUptime),
+          lastDrawnGhosttyRenderReadySequence: optionalNonNegativeNumber(
+            surface.lastDrawnGhosttyRenderReadySequence
+          ),
+          lastRenderReadyUptime: optionalNonNegativeNumber(
+            surface.lastRenderReadyUptime
+          ),
           nativePanelId,
           panelId: fromNativePanelKey(nativePanelId),
+          refreshPending: optionalBooleanValue(surface.refreshPending),
           surfaceVisible: booleanValue(surface.surfaceVisible),
+          surfaceGeneration: optionalNonNegativeNumber(
+            surface.surfaceGeneration
+          ),
           targetRect: optionalFrameValue(surface.targetRect),
           viewportFrame: optionalFrameValue(surface.viewportFrame),
         },
@@ -249,17 +276,10 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
       activeTerminalPanelId: nativeActiveTerminalPanelId
         ? fromNativePanelKey(nativeActiveTerminalPanelId)
         : null,
-      inputRoutingStaleDiscardCount:
-        typeof rawWindow?.inputRoutingStaleDiscardCount === "number"
-          ? rawWindow.inputRoutingStaleDiscardCount
-          : undefined,
+      appTickCount: optionalNonNegativeNumber(rawWindow?.appTickCount),
       keyboardFocusTarget: keyboardFocusTargetValue(
         rawWindow?.keyboardFocusTarget
       ),
-      lastAppliedInputRoutingSequence:
-        typeof rawWindow?.lastAppliedInputRoutingSequence === "number"
-          ? rawWindow.lastAppliedInputRoutingSequence
-          : undefined,
       lastAppliedNativeApplySequence:
         typeof rawWindow?.lastAppliedNativeApplySequence === "number"
           ? rawWindow.lastAppliedNativeApplySequence
@@ -268,9 +288,12 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
         typeof rawWindow?.lastAppliedRendererSequence === "number"
           ? rawWindow.lastAppliedRendererSequence
           : undefined,
-      lastPresentationReason:
-        typeof rawWindow?.lastPresentationReason === "string"
-          ? rawWindow.lastPresentationReason
+      lastAppTickUptime: optionalNonNegativeNumber(
+        rawWindow?.lastAppTickUptime
+      ),
+      lastWindowStateReason:
+        typeof rawWindow?.lastWindowStateReason === "string"
+          ? rawWindow.lastWindowStateReason
           : undefined,
       nativeActiveTerminalPanelId,
       recentRouterDecisions: routerDecisionsResult.decisions,
@@ -351,6 +374,31 @@ export function recordNativeTerminalRoute(
   });
 }
 
+function normalizeCoordinatorDebug(
+  snapshot: TerminalCoordinatorDebugSnapshot
+): TerminalCoordinatorDebugSnapshot {
+  const effective = snapshot.effective;
+  return {
+    ...snapshot,
+    effective: effective
+      ? {
+          ...effective,
+          keyboardTarget:
+            effective.keyboardTarget.kind === "terminal"
+              ? {
+                  kind: "terminal",
+                  panelId: fromNativePanelKey(effective.keyboardTarget.panelId),
+                }
+              : effective.keyboardTarget,
+          terminals: effective.terminals.map((entry) => ({
+            ...entry,
+            panelId: fromNativePanelKey(entry.panelId),
+          })),
+        }
+      : null,
+  };
+}
+
 export function readTerminalDebugSnapshot(
   win: AppWindow,
   addon: NativeAddon | null,
@@ -371,24 +419,19 @@ export function readTerminalDebugSnapshot(
     }
   }
 
-  const presentation = readTerminalPresentationDebug(win);
-  const inputRouting = readTerminalInputRoutingDebug(win);
+  const coordinator = normalizeCoordinatorDebug(
+    terminalFocusCoordinator.readDebug(win)
+  );
   return {
+    coordinator,
     events: events.filter((event) => event.browserWindowId === win.id),
     ...(renderer
       ? {
-          issues: buildTerminalDebugIssues(
-            renderer,
-            native,
-            presentation,
-            inputRouting
-          ),
+          issues: buildTerminalDebugIssues(renderer, native, coordinator),
           renderer,
         }
       : {}),
-    inputRouting,
     native,
-    presentation,
   };
 }
 

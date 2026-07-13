@@ -39,16 +39,13 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       (...args: unknown[]) => unknown | Promise<unknown>
     >();
     const fakeAddon = {
-      applyTerminalInputRouting: vi.fn(),
-      applyTerminalPresentation: vi.fn(),
+      applyTerminalWindowState: vi.fn(() => ({ status: "applied" })),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
       closeTerminal: vi.fn(),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
-      hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
-      setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
@@ -57,7 +54,6 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
-      showTerminal: vi.fn(),
     };
     const win = {
       focus: vi.fn(),
@@ -153,9 +149,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       closeTerminal: vi.fn(),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
-      hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
-      setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
@@ -164,7 +158,6 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
-      showTerminal: vi.fn(),
     };
     const makeWin = (id: number) => ({
       focus: vi.fn(),
@@ -293,37 +286,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     );
   });
 
-  it("show / hide / setFrame / close / input routing all scope the panelId", async () => {
-    // 锁住所有 panel-related IPC handler 都给 panelId 加 scope. 缺任何一条 swift 端
-    // 就拿到 raw id, dict lookup miss → 整个 panel 操作 silently no-op.
+  it("scopes atomic host state, create, and close panel ids", async () => {
     const { fakeAddon, handlers, invokeHandlers, win } = await setupHarness(7);
-
-    handlers.get("pier:terminal:show")?.(
-      { sender: win.webContents },
-      "panel-a"
-    );
-    handlers.get("pier:terminal:hide")?.(
-      { sender: win.webContents },
-      "panel-a"
-    );
-    handlers.get("pier:terminal:set-frame")?.(
-      { sender: win.webContents },
-      "panel-a",
-      { x: 0, y: 0, width: 1, height: 1 }
-    );
-    await invokeHandlers.get("pier:terminal:close")?.(
-      { sender: win.webContents },
-      "panel-a"
-    );
-    handlers.get("pier:terminal:apply-input-routing")?.(
-      { sender: win.webContents },
-      {
-        basePanel: { kind: "terminal", panelId: "panel-a" },
-        webRequestCount: 0,
-        rendererSequence: 1,
-        webOverlayRects: [],
-      }
-    );
     await invokeHandlers.get("pier:terminal:create")?.(
       { sender: win.webContents },
       {
@@ -332,18 +296,36 @@ describe("multi-window panel id scoping (#16 #30)", () => {
         panelId: "panel-a",
       }
     );
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
+      { sender: win.webContents },
+      {
+        activePanelId: "panel-a",
+        activeTerminalPanelId: "panel-a",
+        basePanel: { kind: "terminal", panelId: "panel-a" },
+        hasMaximizedGroup: false,
+        reason: "dockview-active-panel",
+        rendererSequence: 1,
+        terminals: [
+          {
+            frame: { x: 0, y: 0, width: 1, height: 1 },
+            panelId: "panel-a",
+            visible: true,
+          },
+        ],
+        webOverlayRects: [],
+        webRequestCount: 0,
+      }
+    );
+    await invokeHandlers.get("pier:terminal:close")?.(
+      { sender: win.webContents },
+      "panel-a"
+    );
 
-    expect(fakeAddon.showTerminal).toHaveBeenCalledWith("7::panel-a");
-    expect(fakeAddon.hideTerminal).toHaveBeenCalledWith("7::panel-a");
-    expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalWindowState).toHaveBeenCalledWith(
       Buffer.from("win-7"),
       expect.objectContaining({
-        basePanel: { kind: "terminal", panelId: "7::panel-a" },
+        keyboardTarget: { kind: "terminal", panelId: "7::panel-a" },
       })
-    );
-    expect(fakeAddon.setFrame).toHaveBeenCalledWith(
-      "7::panel-a",
-      expect.any(Object)
     );
     expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-a");
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
@@ -426,12 +408,36 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     // Swift forward 传 scoped panelId (因为 swift 内部 dict key 是 scoped), main 必须
     // unscope 后给 renderer. 缺这条 React 端收到 "1::terminal-1" 但 dockview state
     // 用 "terminal-1", 事件 filter (`req.panelId !== panelId`) 永远不命中, 全部 drop.
-    const { fakeAddon, win } = await setupHarness(5);
+    const { fakeAddon, handlers, win } = await setupHarness(5);
     const mouseFwd = fakeAddon.setMouseForwardCallback.mock.calls[0]?.[0];
     const focusFwd =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
     const pwdFwd = fakeAddon.setPwdForwardCallback.mock.calls[0]?.[0];
     const titleFwd = fakeAddon.setTitleForwardCallback.mock.calls[0]?.[0];
+    const { terminalFocusCoordinator } = await import(
+      "@main/ipc/terminal-focus-coordinator.ts"
+    );
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
+      { sender: win.webContents },
+      {
+        activePanelId: "terminal-3",
+        activeTerminalPanelId: "terminal-3",
+        basePanel: { kind: "terminal", panelId: "terminal-3" },
+        hasMaximizedGroup: false,
+        reason: "dockview-active-panel",
+        rendererSequence: 1,
+        terminals: [
+          {
+            frame: { height: 100, width: 100, x: 0, y: 0 },
+            panelId: "terminal-3",
+            visible: true,
+          },
+        ],
+        webOverlayRects: [],
+        webRequestCount: 0,
+      }
+    );
+    terminalFocusCoordinator.surfaceCreated(win as never, "terminal-3");
 
     mouseFwd?.(win.id, "5::terminal-2", 100, 200);
     focusFwd?.(win.id, "5::terminal-3");
@@ -461,19 +467,16 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     );
   });
 
-  it("unscopePanelId tolerates legacy raw id (no separator) for backward compat", async () => {
-    // 边界:swift 端理论上始终传 scoped id, 但万一拿到 raw (例如 setupWindow 路径不
-    // 经过 createTerminal, 或者旧测试 mock 直接传 raw), unscope 应该 fallback 返回
-    // 原值不 crash.
+  it("rejects unscoped native focus intents", async () => {
     const { fakeAddon, win } = await setupHarness(9);
     const focusFwd =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
 
     focusFwd?.(win.id, "legacy-no-scope");
 
-    expect(win.webContents.send).toHaveBeenCalledWith(
+    expect(win.webContents.send).not.toHaveBeenCalledWith(
       "pier:terminal:focus-request",
-      { panelId: "legacy-no-scope" }
+      expect.anything()
     );
   });
 });

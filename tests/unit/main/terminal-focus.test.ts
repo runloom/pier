@@ -25,6 +25,7 @@ describe("terminal focus restoration", () => {
     const invokeHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const fakeAddon = {
+      applyTerminalWindowState: vi.fn(() => ({ status: "applied" })),
       applyTerminalInputRouting: vi.fn(),
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
@@ -32,10 +33,8 @@ describe("terminal focus restoration", () => {
       closeTerminal: vi.fn(),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
-      hideTerminal: vi.fn(),
       reconcileTerminals: vi.fn(),
       sendText: vi.fn(() => true),
-      setFrame: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
@@ -44,7 +43,6 @@ describe("terminal focus restoration", () => {
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
       setupWindow: vi.fn(() => true),
-      showTerminal: vi.fn(),
     };
     const createFakeWindow = (focused = true) => ({
       focus: vi.fn(),
@@ -140,8 +138,8 @@ describe("terminal focus restoration", () => {
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
-    const { restoreActivePanelFocus } = await import(
-      "@main/ipc/terminal-focus-state.ts"
+    const { terminalFocusCoordinator } = await import(
+      "@main/ipc/terminal-focus-coordinator.ts"
     );
 
     registerTerminalIpc(fakeIpcMain as never, {
@@ -151,13 +149,13 @@ describe("terminal focus restoration", () => {
         : {}),
     });
     return {
+      terminalFocusCoordinator,
       consumeLaunch,
       fakeAddon,
       handlers,
       invokeHandlers,
       ipcWindow,
       readLaunch,
-      restoreActivePanelFocus,
       restoreWindow,
       sessionState,
     };
@@ -167,53 +165,39 @@ describe("terminal focus restoration", () => {
     return {
       activePanelId: panelId,
       activeTerminalPanelId: panelId,
+      basePanel: { kind: "terminal" as const, panelId },
       hasMaximizedGroup: false,
       reason: "dockview-active-panel" as const,
       rendererSequence,
       terminals: [
         {
-          focused: false,
           frame: { height: 200, width: 300, x: 1, y: 2 },
           panelId,
           visible: true,
         },
       ],
+      webOverlayRects: [],
+      webRequestCount: 0,
     };
   }
 
-  it("restores a native terminal panel recorded by active panel sync", async () => {
-    const {
-      fakeAddon,
-      handlers,
-      ipcWindow,
-      restoreActivePanelFocus,
-      restoreWindow,
-    } = await setupTerminalFocusHarness();
+  it("applies the active terminal after its host snapshot and surface are ready", async () => {
+    const { fakeAddon, handlers, ipcWindow, terminalFocusCoordinator } =
+      await setupTerminalFocusHarness();
 
-    handlers.get("pier:terminal:apply-presentation")?.(
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
       { sender: ipcWindow.webContents },
       terminalPresentation("panel-1")
     );
-    handlers.get("pier:terminal:apply-input-routing")?.(
-      { sender: ipcWindow.webContents },
-      {
-        basePanel: { kind: "terminal", panelId: "panel-1" },
-        webRequestCount: 0,
-        rendererSequence: 2,
-        webOverlayRects: [],
-      }
-    );
-    fakeAddon.applyTerminalPresentation.mockClear();
+    fakeAddon.applyTerminalWindowState.mockClear();
+    ipcWindow.webContents.focus.mockClear();
 
-    restoreActivePanelFocus(restoreWindow as never);
+    terminalFocusCoordinator.surfaceCreated(ipcWindow as never, "panel-1");
 
-    expect(restoreWindow.focus).toHaveBeenCalledOnce();
-    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalWindowState).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        activePanelId: "7::panel-1",
-        activeTerminalPanelId: "7::panel-1",
-        reason: "window-focus",
+        keyboardTarget: { kind: "terminal", panelId: "7::panel-1" },
         terminals: [
           expect.objectContaining({
             focused: true,
@@ -223,93 +207,78 @@ describe("terminal focus restoration", () => {
         ],
       })
     );
-    expect(restoreWindow.webContents.focus).not.toHaveBeenCalled();
+    expect(ipcWindow.webContents.focus).not.toHaveBeenCalled();
   });
 
-  it("restores a native terminal panel recorded by terminal focus", async () => {
+  it("repairs native focus while the desired terminal remains unchanged", async () => {
     const {
       fakeAddon,
       handlers,
       ipcWindow,
-      restoreActivePanelFocus,
       restoreWindow,
+      terminalFocusCoordinator,
     } = await setupTerminalFocusHarness();
-
-    handlers.get("pier:terminal:apply-presentation")?.(
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
       { sender: ipcWindow.webContents },
       terminalPresentation("panel-1")
     );
-    handlers.get("pier:terminal:apply-input-routing")?.(
-      { sender: ipcWindow.webContents },
-      {
-        basePanel: { kind: "terminal", panelId: "panel-1" },
-        webRequestCount: 0,
-        rendererSequence: 2,
-        webOverlayRects: [],
-      }
+    terminalFocusCoordinator.surfaceCreated(ipcWindow as never, "panel-1");
+    fakeAddon.applyTerminalWindowState.mockClear();
+
+    terminalFocusCoordinator.setWindowFocused(
+      restoreWindow as never,
+      true,
+      "window-focus"
     );
-    fakeAddon.applyTerminalPresentation.mockClear();
 
-    restoreActivePanelFocus(restoreWindow as never);
-
-    expect(restoreWindow.focus).toHaveBeenCalledOnce();
-    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalWindowState).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        activePanelId: "7::panel-1",
-        activeTerminalPanelId: "7::panel-1",
+        keyboardTarget: { kind: "terminal", panelId: "7::panel-1" },
         reason: "window-focus",
       })
     );
     expect(restoreWindow.webContents.focus).not.toHaveBeenCalled();
   });
 
-  it("records but does not focus a terminal panel while its window is blurred", async () => {
-    const { fakeAddon, handlers, ipcWindow } = await setupTerminalFocusHarness({
-      ipcWindowFocused: false,
-    });
+  it("preserves terminal intent but applies Web while its window is blurred", async () => {
+    const { fakeAddon, handlers, ipcWindow, terminalFocusCoordinator } =
+      await setupTerminalFocusHarness({ ipcWindowFocused: false });
 
-    handlers.get("pier:terminal:apply-presentation")?.(
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
       { sender: ipcWindow.webContents },
       terminalPresentation("panel-1")
     );
+    terminalFocusCoordinator.surfaceCreated(ipcWindow as never, "panel-1");
 
-    expect(fakeAddon.applyTerminalInputRouting).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalWindowState).toHaveBeenLastCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        basePanel: { kind: "web" },
+        keyboardTarget: { kind: "web" },
         windowFocused: false,
       })
     );
-    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
-      Buffer.from("window"),
-      expect.objectContaining({
-        activePanelId: "7::panel-1",
-        activeTerminalPanelId: "7::panel-1",
-        terminals: [
-          expect.objectContaining({
-            focused: false,
-            panelId: "7::panel-1",
-            visible: true,
-          }),
-        ],
-        windowFocused: false,
-      })
-    );
+    expect(
+      terminalFocusCoordinator.readDebug(ipcWindow as never).desired?.basePanel
+    ).toEqual({
+      kind: "terminal",
+      panelId: "panel-1",
+    });
   });
 
-  it("forwards native terminal focus requests to source window renderer (unscoped panelId)", async () => {
-    // swift 端 forward callback 传的是 scoped panelId (因为 createTerminal 时
-    // main 用 scoped key 写进了 swift terminals dict), main 必须 unscope 后给 renderer
-    // — React/dockview 的 panel id 是 raw.
-    const { fakeAddon, ipcWindow } = await setupTerminalFocusHarness();
+  it("forwards a valid native terminal focus intent to its source window", async () => {
+    const { fakeAddon, handlers, ipcWindow, terminalFocusCoordinator } =
+      await setupTerminalFocusHarness();
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
+      { sender: ipcWindow.webContents },
+      terminalPresentation("panel-2")
+    );
+    terminalFocusCoordinator.surfaceCreated(ipcWindow as never, "panel-2");
     const focusForward =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
-    fakeAddon.applyTerminalInputRouting.mockClear();
 
     focusForward?.(ipcWindow.id, "7::panel-2");
 
-    expect(fakeAddon.applyTerminalInputRouting).not.toHaveBeenCalled();
     expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",
       { panelId: "panel-2" }
@@ -696,44 +665,45 @@ describe("terminal focus restoration", () => {
     );
   });
 
-  it("blurs native terminal focus when the owning window loses focus", async () => {
-    const { fakeAddon, handlers, ipcWindow } =
+  it("blurs native terminal focus without dropping desired intent", async () => {
+    const { fakeAddon, handlers, ipcWindow, terminalFocusCoordinator } =
       await setupTerminalFocusHarness();
-    const { blurActivePanelFocus } = await import(
-      "@main/ipc/terminal-focus-state.ts"
-    );
-
-    handlers.get("pier:terminal:apply-presentation")?.(
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
       { sender: ipcWindow.webContents },
       terminalPresentation("panel-1")
     );
-    fakeAddon.applyTerminalPresentation.mockClear();
+    terminalFocusCoordinator.surfaceCreated(ipcWindow as never, "panel-1");
+    fakeAddon.applyTerminalWindowState.mockClear();
 
-    blurActivePanelFocus(ipcWindow as never);
+    terminalFocusCoordinator.setWindowFocused(
+      ipcWindow as never,
+      false,
+      "window-blur"
+    );
 
-    expect(fakeAddon.applyTerminalPresentation).toHaveBeenCalledWith(
+    expect(fakeAddon.applyTerminalWindowState).toHaveBeenCalledWith(
       Buffer.from("window"),
       expect.objectContaining({
-        activePanelId: "7::panel-1",
-        activeTerminalPanelId: "7::panel-1",
+        keyboardTarget: { kind: "web" },
         reason: "window-blur",
         terminals: [
           expect.objectContaining({
             focused: false,
             panelId: "7::panel-1",
-            visible: true,
           }),
         ],
       })
     );
+    expect(
+      terminalFocusCoordinator.readDebug(ipcWindow as never).desired?.basePanel
+    ).toEqual({
+      kind: "terminal",
+      panelId: "panel-1",
+    });
   });
 
-  it("restoreActivePanelFocus on minimized window calls win.restore() first (#15)", async () => {
-    // window 从 dock 点回恢复:BrowserWindow focus 事件 fire 时 isMinimized 可能仍是
-    // true (取决于 OS timing), restoreActivePanelFocus 必须先 win.restore() 让窗口
-    // 真正出来, 再做后续 terminal focus 恢复, 否则 makeFirstResponder 在最小化窗口上
-    // 是 silent no-op.
-    const { handlers, ipcWindow, restoreActivePanelFocus } =
+  it("restores, focuses, then reapplies terminal ownership for a minimized window", async () => {
+    const { fakeAddon, handlers, ipcWindow, terminalFocusCoordinator } =
       await setupTerminalFocusHarness();
     const minimizedWindow = {
       focus: vi.fn(),
@@ -749,51 +719,52 @@ describe("terminal focus restoration", () => {
         send: vi.fn(),
       },
     };
-
-    handlers.get("pier:terminal:apply-input-routing")?.(
+    handlers.get("pier:terminal:apply-host-snapshot")?.(
       { sender: ipcWindow.webContents },
-      {
-        basePanel: { kind: "terminal", panelId: "panel-1" },
-        webRequestCount: 0,
-        rendererSequence: 1,
-        webOverlayRects: [],
-      }
+      terminalPresentation("panel-1")
     );
-    restoreActivePanelFocus(minimizedWindow as never);
+    terminalFocusCoordinator.surfaceCreated(ipcWindow as never, "panel-1");
+    fakeAddon.applyTerminalWindowState.mockClear();
 
-    expect(minimizedWindow.restore).toHaveBeenCalledOnce();
-    expect(minimizedWindow.focus).toHaveBeenCalledOnce();
-    // restore 必须在 focus 之前, 否则 focus 调用没有可见效果
-    const restoreOrder = minimizedWindow.restore.mock.invocationCallOrder[0];
-    const focusOrder = minimizedWindow.focus.mock.invocationCallOrder[0];
-    expect(focusOrder).toBeGreaterThan(restoreOrder ?? 0);
+    minimizedWindow.restore();
+    minimizedWindow.focus();
+    terminalFocusCoordinator.setWindowFocused(
+      minimizedWindow as never,
+      true,
+      "window-focus"
+    );
+
+    const restoreOrder =
+      minimizedWindow.restore.mock.invocationCallOrder[0] ?? 0;
+    const focusOrder = minimizedWindow.focus.mock.invocationCallOrder[0] ?? 0;
+    const nativeOrder =
+      fakeAddon.applyTerminalWindowState.mock.invocationCallOrder[0] ?? 0;
+    expect(focusOrder).toBeGreaterThan(restoreOrder);
+    expect(nativeOrder).toBeGreaterThan(focusOrder);
+    expect(minimizedWindow.webContents.focus).not.toHaveBeenCalled();
   });
 
-  it("blurActivePanelFocus tolerates destroyed window (no throw)", async () => {
-    // window close 跟 blur 事件可能 race:window.on("blur") fire 后 micro-task 内
-    // window 已被销毁. blurActivePanelFocus 必须 guard isDestroyed, 否则
-    // win.getNativeWindowHandle() 抛 native error 跨 process 难调试.
+  it("window blur tolerates a destroyed window", async () => {
     const destroyedWindow = {
-      focus: vi.fn(),
       getNativeWindowHandle: () => {
         throw new Error("window destroyed");
       },
       id: 99,
       isDestroyed: () => true,
       isFocused: () => false,
-      isMinimized: () => false,
-      restore: vi.fn(),
       webContents: {
         focus: vi.fn(),
         isDestroyed: () => true,
-        send: vi.fn(),
       },
     };
-    await setupTerminalFocusHarness();
-    const { blurActivePanelFocus } = await import(
-      "@main/ipc/terminal-focus-state.ts"
-    );
+    const { terminalFocusCoordinator } = await setupTerminalFocusHarness();
 
-    expect(() => blurActivePanelFocus(destroyedWindow as never)).not.toThrow();
+    expect(() =>
+      terminalFocusCoordinator.setWindowFocused(
+        destroyedWindow as never,
+        false,
+        "window-blur"
+      )
+    ).not.toThrow();
   });
 });

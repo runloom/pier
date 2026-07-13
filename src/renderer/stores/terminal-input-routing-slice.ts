@@ -1,6 +1,5 @@
 import type {
   TerminalFrame,
-  TerminalInputRoutingSnapshot,
   TerminalKeyboardFocusTarget,
 } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
@@ -9,6 +8,10 @@ import {
   sameKeyboardFocusTarget as sameBasePanel,
 } from "@shared/terminal-keyboard-target.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
+import {
+  resetTerminalHostStateForTests,
+  updateTerminalHostInputFacts,
+} from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-viewport.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
@@ -43,10 +46,9 @@ export function beginTerminalPanelWebDragCapture(
 
 const webOverlayRects = new Map<string, TerminalFrame>();
 const webRequestIds = new Set<string>();
+const TRANSIENT_WEB_CLICK_FOCUS_ID = "pier.click";
 
 let basePanel: TerminalKeyboardFocusTarget = { kind: "web" };
-let rendererSequence = 0;
-let lastSnapshot: TerminalInputRoutingSnapshot | null = null;
 let lastEffectiveKeyboardKind: TerminalKeyboardFocusTarget["kind"] = "web";
 let webFocusHandOffArmedUntil = 0;
 
@@ -70,18 +72,17 @@ function applyTerminalInputRouting(): void {
       performance.now() + WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS;
   }
   lastEffectiveKeyboardKind = nextEffectiveKind;
-  rendererSequence += 1;
-  const snapshot: TerminalInputRoutingSnapshot = {
-    basePanel,
-    rendererSequence,
-    webOverlayRects: Array.from(webOverlayRects, ([id, frame]) => ({
-      frame,
-      id,
-    })),
-    webRequestCount: webRequestIds.size,
-  };
-  lastSnapshot = snapshot;
-  window.pier?.terminal?.applyInputRouting?.(snapshot);
+  updateTerminalHostInputFacts(
+    {
+      basePanel,
+      webOverlayRects: Array.from(webOverlayRects, ([id, frame]) => ({
+        frame,
+        id,
+      })),
+      webRequestCount: webRequestIds.size,
+    },
+    "input-routing"
+  );
 }
 
 function setWebOverlayRect(id: string, frame: TerminalFrame | null): void {
@@ -116,10 +117,6 @@ function cssDomRectToTerminalFrame(rect: DOMRect): TerminalFrame | null {
   );
 }
 
-export function getLastTerminalInputRoutingSnapshot(): TerminalInputRoutingSnapshot | null {
-  return lastSnapshot;
-}
-
 export function setTerminalBasePanel(
   target: TerminalKeyboardFocusTarget
 ): void {
@@ -129,19 +126,13 @@ export function setTerminalBasePanel(
   basePanel = target;
   applyTerminalInputRouting();
 }
-
-export function activateTerminalInputRouting(panelId: string): void {
-  const nextBasePanel: TerminalKeyboardFocusTarget = {
-    kind: "terminal",
-    panelId,
-  };
-  const shouldApply =
-    !sameBasePanel(basePanel, nextBasePanel) || webRequestIds.size > 0;
-  basePanel = nextBasePanel;
-  webRequestIds.clear();
-  if (shouldApply) {
-    applyTerminalInputRouting();
+export function requestTerminalFocusIntent(panelId: string): void {
+  const target = { kind: "terminal", panelId } as const;
+  if (!sameBasePanel(basePanel, target)) {
+    basePanel = target;
   }
+  webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID);
+  applyTerminalInputRouting();
 }
 
 /**
@@ -266,8 +257,8 @@ export function registerTerminalFullscreenWebOverlay(
 //
 // 焦点意图在事件路由层由 capture 阶段 pointerdown 统一触发：任何落在 web
 // 上的点击都走同一入口，各 Radix 组件只负责几何注册 (useTerminalOverlay
-// focus: false，勿再传 true——挂载期请求焦点重复且时序更晚)。终端激活时
-// activateTerminalInputRouting 会 clear webRequestIds，自然释放此请求。
+// focus: false，勿再传 true——挂载期请求焦点重复且时序更晚)。终端共存浮层
+// 由其 owner 显式释放；独立 Web owner 不会因 terminal intent 被清空。
 //
 // 注意"第一次点击闪关"的真实根因不在此入口的早晚：webContents.focus() 做
 // FR 交接时 renderer 必然收到一对瞬时 window blur→focus（实测点击后
@@ -316,7 +307,7 @@ export function installTerminalInputRoutingPointerDownListener(): void {
     () => {
       // 幂等：同 id 再次调用不重复 add，也不重复触发 IPC。
       // 只在真正首次 add 时下发 snapshot，主进程再按 previousTargetKey 去重。
-      requestTerminalWebFocus("pier.click");
+      requestTerminalWebFocus(TRANSIENT_WEB_CLICK_FOCUS_ID);
     },
     { capture: true }
   );
@@ -473,8 +464,7 @@ export function resetTerminalInputRoutingForTests(): void {
   webOverlayRects.clear();
   webRequestIds.clear();
   basePanel = { kind: "web" };
-  rendererSequence = 0;
-  lastSnapshot = null;
+  resetTerminalHostStateForTests();
   lastEffectiveKeyboardKind = "web";
   webFocusHandOffArmedUntil = 0;
   dragWatcherInstalled = false;

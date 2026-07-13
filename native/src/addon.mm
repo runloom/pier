@@ -28,10 +28,6 @@ extern "C" {
     void ghostty_bridge_set_terminal_config(void* nsWindow, const char* cursorStyle,
                                             bool cursorBlink, double scrollbackLimitBytes,
                                             bool pasteProtection);
-    void ghostty_bridge_set_frame(const char* panelId,
-                                   double x, double y, double w, double h);
-    void ghostty_bridge_show(const char* panelId);
-    void ghostty_bridge_hide(const char* panelId);
     bool ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     bool ghostty_bridge_send_text(const char* panelId, const char* text);
@@ -86,8 +82,7 @@ extern "C" {
     typedef void (*ProcessClosedForwardFn)(long browserWindowId, const char* panelId,
                                            const char* lifecycleId, bool processAlive);
     void ghostty_bridge_set_process_closed_forward_callback(ProcessClosedForwardFn cb);
-    void ghostty_bridge_apply_presentation(void* nsWindow, const char* json);
-    void ghostty_bridge_apply_input_routing(void* nsWindow, const char* json);
+    int32_t ghostty_bridge_apply_window_state(void* nsWindow, const char* json);
     // 应用 Pier 主题派生的终端配色. cursor / selection 可空 (NULL = 不设置).
     // palette 是 16 槽 const char* 数组, 每槽 #RRGGBB hex (含 #). 调用同步, swift 同步
     // 构造 GhosttyThemeDefinition 后立即 setTheme — addon 端的字符串生命周期只需覆盖
@@ -265,28 +260,6 @@ static Napi::Value JsResetTerminalOutput(const Napi::CallbackInfo& info) {
     );
 }
 
-static Napi::Value JsSetFrame(const Napi::CallbackInfo& info) {
-    std::string panelId = info[0].As<Napi::String>().Utf8Value();
-    Napi::Object frame = info[1].As<Napi::Object>();
-    double x = frame.Get("x").As<Napi::Number>().DoubleValue();
-    double y = frame.Get("y").As<Napi::Number>().DoubleValue();
-    double w = frame.Get("width").As<Napi::Number>().DoubleValue();
-    double h = frame.Get("height").As<Napi::Number>().DoubleValue();
-    ghostty_bridge_set_frame(panelId.c_str(), x, y, w, h);
-    return info.Env().Undefined();
-}
-
-static Napi::Value JsShow(const Napi::CallbackInfo& info) {
-    std::string panelId = info[0].As<Napi::String>().Utf8Value();
-    ghostty_bridge_show(panelId.c_str());
-    return info.Env().Undefined();
-}
-
-static Napi::Value JsHide(const Napi::CallbackInfo& info) {
-    std::string panelId = info[0].As<Napi::String>().Utf8Value();
-    ghostty_bridge_hide(panelId.c_str());
-    return info.Env().Undefined();
-}
 
 static Napi::Value JsClose(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
@@ -850,39 +823,55 @@ static Napi::Value JsSetTerminalConfig(const Napi::CallbackInfo& info) {
     return env.Undefined();
 }
 
-static Napi::Value JsApplyTerminalPresentation(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    NSWindow* win = WindowFromHandle(info[0]);
-    if (!win) return env.Undefined();
-    Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
-    Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
-    Napi::Value encoded = stringify.Call(json, { info[1] });
-    if (!encoded.IsString()) return env.Undefined();
-    std::string payload = encoded.As<Napi::String>().Utf8Value();
-    ghostty_bridge_apply_presentation((__bridge void*)win, payload.c_str());
-    return env.Undefined();
+static Napi::Object TerminalWindowStateResult(
+    Napi::Env env,
+    const char* status,
+    const char* error = nullptr
+) {
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("status", status);
+    if (error) result.Set("error", error);
+    return result;
 }
 
-static Napi::Value JsApplyTerminalInputRouting(const Napi::CallbackInfo& info) {
+static Napi::Value JsApplyTerminalWindowState(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     NSWindow* win = WindowFromHandle(info[0]);
-    if (!win) return env.Undefined();
+    if (!win) return TerminalWindowStateResult(env, "error", "invalid-window");
+    if (info.Length() < 2) {
+        return TerminalWindowStateResult(env, "error", "invalid-snapshot");
+    }
+
     Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
     Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
     Napi::Value encoded = stringify.Call(json, { info[1] });
-    if (!encoded.IsString()) return env.Undefined();
+    if (encoded.IsEmpty()) {
+        (void)env.GetAndClearPendingException();
+        return TerminalWindowStateResult(env, "error", "invalid-snapshot");
+    }
+    if (!encoded.IsString()) {
+        return TerminalWindowStateResult(env, "error", "invalid-snapshot");
+    }
+
     std::string payload = encoded.As<Napi::String>().Utf8Value();
-    ghostty_bridge_apply_input_routing((__bridge void*)win, payload.c_str());
-    return env.Undefined();
+    int32_t code = ghostty_bridge_apply_window_state(
+        (__bridge void*)win,
+        payload.c_str()
+    );
+    if (code == 0) return TerminalWindowStateResult(env, "applied");
+    if (code == 1) return TerminalWindowStateResult(env, "unchanged");
+    if (code == 2) return TerminalWindowStateResult(env, "stale");
+    return TerminalWindowStateResult(
+        env,
+        "error",
+        "native-rejected-snapshot"
+    );
 }
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setupWindow",     Napi::Function::New(env, JsSetupWindow));
     exports.Set("createTerminal",  Napi::Function::New(env, JsCreateTerminal));
     exports.Set("createOutputTerminal", Napi::Function::New(env, JsCreateOutputTerminal));
-    exports.Set("setFrame",        Napi::Function::New(env, JsSetFrame));
-    exports.Set("showTerminal",    Napi::Function::New(env, JsShow));
-    exports.Set("hideTerminal",    Napi::Function::New(env, JsHide));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("sendText", Napi::Function::New(env, JsSendText));
@@ -903,8 +892,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setCommandFinishedForwardCallback", Napi::Function::New(env, JsSetCommandFinishedForwardCallback));
     exports.Set("setCommandStartedForwardCallback", Napi::Function::New(env, JsSetCommandStartedForwardCallback));
     exports.Set("setProcessClosedForwardCallback", Napi::Function::New(env, JsSetProcessClosedForwardCallback));
-    exports.Set("applyTerminalPresentation", Napi::Function::New(env, JsApplyTerminalPresentation));
-    exports.Set("applyTerminalInputRouting", Napi::Function::New(env, JsApplyTerminalInputRouting));
+    exports.Set("applyTerminalWindowState", Napi::Function::New(env, JsApplyTerminalWindowState));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
     exports.Set("setTerminalFocusRequestCallback", Napi::Function::New(env, JsSetTerminalFocusRequestCallback));
     exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));

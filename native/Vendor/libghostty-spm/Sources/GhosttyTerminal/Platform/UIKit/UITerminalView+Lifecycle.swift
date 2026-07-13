@@ -53,7 +53,7 @@
             if window != nil {
                 core.rebuildIfReady()
                 updateColorScheme()
-                core.startDisplayLink()
+                core.resumeScheduledRendering()
                 // Defer sublayer frame and metrics sync to the next runloop
                 // so that AutoLayout has resolved final bounds.
                 DispatchQueue.main.async { [weak self] in
@@ -62,7 +62,7 @@
                     core.fitToSize()
                 }
             } else {
-                core.stopDisplayLink()
+                core.suspendScheduledRendering()
                 core.freeSurface()
             }
         }

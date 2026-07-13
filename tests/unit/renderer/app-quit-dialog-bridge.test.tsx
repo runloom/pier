@@ -96,7 +96,7 @@ function installAppQuitApi() {
         onRequested,
       },
       onWindowLayoutPulse: vi.fn(() => vi.fn()),
-      terminal: { applyInputRouting: vi.fn() },
+      terminal: { applyHostSnapshot: vi.fn() },
     },
   });
 

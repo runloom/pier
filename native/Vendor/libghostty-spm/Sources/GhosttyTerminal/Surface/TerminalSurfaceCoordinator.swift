@@ -7,7 +7,6 @@
 
 import Foundation
 import GhosttyKit
-import MSDisplayLink
 
 /// Shared terminal state and logic used by both UIKit and AppKit views.
 ///
@@ -17,7 +16,7 @@ import MSDisplayLink
 @MainActor
 final class TerminalSurfaceCoordinator {
     weak var delegate: (any TerminalSurfaceViewDelegate)? {
-        didSet { bridge.delegate = delegate }
+        didSet { bridge?.delegate = delegate }
     }
 
     var controller: TerminalController? {
@@ -35,7 +34,7 @@ final class TerminalSurfaceCoordinator {
     }
 
     var surface: TerminalSurface?
-    let bridge = TerminalCallbackBridge()
+    private var bridge: TerminalCallbackBridge?
 
     // MARK: - Platform Hooks
 
@@ -46,7 +45,7 @@ final class TerminalSurfaceCoordinator {
     var onMetricsUpdate: (() -> Void)?
     var onCellSizeDidChange: (() -> Void)?
 
-    /// Called after every display-link render (`tick`).
+    /// Called after every presented frame.
     ///
     /// When `synchronizeMetrics` sends a new pixel size to ghostty via
     /// `setSize`, the underlying IOSurface is not rebuilt synchronously.
@@ -66,30 +65,47 @@ final class TerminalSurfaceCoordinator {
     private var isDisplayVisible = true
     private var isApplicationActive = true
     private var isSurfaceFocused = false
-    private var pendingImmediateTick = true
-    private var lastTickTimestamp: TimeInterval = 0
-    private var tickScheduled = false
+    private var surfaceGeneration: UInt64 = 0
+    private var refreshPending = false
+    private var refreshScheduled = false
+    private var drawPending = false
+    private var drawScheduled = false
+    private var ghosttyRenderReadySequence: UInt64 = 0
+    private var hostRefreshRequestSequence: UInt64 = 0
+    private var drawSequence: UInt64 = 0
+    private var lastDrawnGhosttyRenderReadySequence: UInt64 = 0
+    private var lastRenderReadyUptime: TimeInterval?
+    private var lastDrawUptime: TimeInterval?
 
-    init() {
-        bridge.onCellSizeChange = { [weak self] width, height in
-            self?.handleCellSizeChange(width: width, height: height)
-        }
-        bridge.onRenderRequest = { [weak self] in
-            self?.requestImmediateTick()
-        }
+    var pierDiagnostics: TerminalSurfaceRenderDiagnostics {
+        TerminalSurfaceRenderDiagnostics(
+            drawPending: drawPending,
+            drawSequence: drawSequence,
+            ghosttyRenderReadySequence: ghosttyRenderReadySequence,
+            hostRefreshRequestSequence: hostRefreshRequestSequence,
+            lastDrawUptime: lastDrawUptime,
+            lastDrawnGhosttyRenderReadySequence: lastDrawnGhosttyRenderReadySequence,
+            lastRenderReadyUptime: lastRenderReadyUptime,
+            refreshPending: refreshPending,
+            surfaceGeneration: surfaceGeneration
+        )
     }
 
-    func requestImmediateTick() {
-        pendingImmediateTick = true
-        scheduleTickIfNeeded()
+    func resumeScheduledRendering() {
+        scheduleRefreshIfNeeded(generation: surfaceGeneration)
+        scheduleDrawIfNeeded(generation: surfaceGeneration)
     }
 
-    func startDisplayLink() {
-        scheduleTickIfNeeded()
+    func suspendScheduledRendering() {
+        refreshScheduled = false
+        drawScheduled = false
     }
 
-    func stopDisplayLink() {
-        tickScheduled = false
+    func requestHostRefresh(reason: String) {
+        requestSurfaceRefresh(
+            generation: surfaceGeneration,
+            reason: reason
+        )
     }
 
     // MARK: - Surface Lifecycle
@@ -118,6 +134,26 @@ final class TerminalSurfaceCoordinator {
             .lifecycle,
             "surface rebuild scale=\(String(format: "%.2f", scale)) \(configuration.debugSummary)"
         )
+        surfaceGeneration &+= 1
+        let generation = surfaceGeneration
+        let bridge = TerminalCallbackBridge(delegate: delegate)
+        bridge.onCellSizeChange = { [weak self] width, height in
+            self?.handleCellSizeChange(
+                width: width,
+                height: height,
+                generation: generation
+            )
+        }
+        bridge.onRefreshRequest = { [weak self] in
+            self?.requestSurfaceRefresh(
+                generation: generation,
+                reason: "ghostty-config-change"
+            )
+        }
+        bridge.onRenderReady = { [weak self] in
+            self?.handleGhosttyRenderReady(generation: generation)
+        }
+        self.bridge = bridge
         let rawSurface = controller.createSurface(
             bridge: bridge,
             configuration: configuration,
@@ -127,6 +163,7 @@ final class TerminalSurfaceCoordinator {
             }
         )
         guard let rawSurface else {
+            self.bridge = nil
             TerminalDebugLog.log(.lifecycle, "surface rebuild failed")
             return
         }
@@ -139,17 +176,11 @@ final class TerminalSurfaceCoordinator {
         // the host-owned state so an inactive terminal created before its
         // surface exists does not render an active cursor.
         newSurface.setFocus(isSurfaceFocused)
-        controller.shouldProcessWakeup = { [weak self] in
-            self?.canRenderFrame == true
-        }
-        controller.onWakeup = { [weak self] in
-            self?.requestImmediateTick()
-        }
         TerminalDebugLog.log(.lifecycle, "surface rebuild succeeded")
         (delegate as? any TerminalSurfaceLifecycleDelegate)?
             .terminalDidAttachSurface(newSurface)
         synchronizeMetrics()
-        requestImmediateTick()
+        requestSurfaceRefresh(generation: generation, reason: "surface-rebuild")
     }
 
     // MARK: - Metrics
@@ -227,7 +258,10 @@ final class TerminalSurfaceCoordinator {
             synchronizeMetrics()
         }
         if surface != nil {
-            requestImmediateTick()
+            requestSurfaceRefresh(
+                generation: surfaceGeneration,
+                reason: "fit-to-size"
+            )
         }
     }
 
@@ -246,18 +280,24 @@ final class TerminalSurfaceCoordinator {
         surface?.setOcclusion(effectiveSurfaceVisible)
 
         if canRenderFrame {
-            requestImmediateTick()
+            requestSurfaceRefresh(
+                generation: surfaceGeneration,
+                reason: "visibility-restored"
+            )
         } else {
-            stopDisplayLink()
+            suspendScheduledRendering()
         }
     }
 
     func setApplicationActive(_ active: Bool) {
         guard isApplicationActive != active else {
             if active {
-                renderImmediately()
+                requestSurfaceRefresh(
+                    generation: surfaceGeneration,
+                    reason: "application-active"
+                )
             } else {
-                stopDisplayLink()
+                suspendScheduledRendering()
             }
             return
         }
@@ -267,34 +307,25 @@ final class TerminalSurfaceCoordinator {
 
         if active {
             synchronizeMetrics()
-            renderImmediately()
+            requestSurfaceRefresh(
+                generation: surfaceGeneration,
+                reason: "application-restored"
+            )
         } else {
-            stopDisplayLink()
+            suspendScheduledRendering()
         }
-    }
-
-    // MARK: - Frame Rendering
-
-    func tick(context: DisplayLinkCallbackContext) {
-        guard shouldRenderFrame(at: context.timestamp) else {
-            return
-        }
-        pendingImmediateTick = false
-        lastTickTimestamp = context.timestamp
-        TerminalDebugLog.log(.render, "tick")
-        controller?.tick()
-        surface?.refresh()
-        surface?.draw()
-        onPostRender?()
     }
 
     // MARK: - Focus
 
     func setFocus(_ focused: Bool) {
         isSurfaceFocused = focused
-        requestImmediateTick()
         TerminalDebugLog.log(.lifecycle, "focus=\(focused)")
         surface?.setFocus(focused)
+        requestSurfaceRefresh(
+            generation: surfaceGeneration,
+            reason: "focus"
+        )
         (delegate as? any TerminalSurfaceFocusDelegate)?
             .terminalDidChangeFocus(focused)
     }
@@ -319,70 +350,104 @@ final class TerminalSurfaceCoordinator {
 
     private func tearDownSurface(removingBridgeFrom controller: TerminalController?) {
         TerminalDebugLog.log(.lifecycle, "tear down surface")
-        tickScheduled = false
+        surfaceGeneration &+= 1
+        let previousBridge = bridge
+        bridge = nil
+        refreshPending = false
+        refreshScheduled = false
+        drawPending = false
+        drawScheduled = false
         if let session = configuration.inMemorySession {
             session.clearSurface(ifMatches: surface?.rawValue)
         }
-        controller?.onWakeup = nil
-        controller?.shouldProcessWakeup = nil
-        bridge.rawSurface = nil
+        previousBridge?.rawSurface = nil
         let hadSurface = surface != nil
         surface?.setFocus(false)
         surface?.free()
         surface = nil
         lastMetrics = nil
-        pendingImmediateTick = true
-        lastTickTimestamp = 0
-        controller?.remove(bridge)
+        if let previousBridge {
+            controller?.remove(previousBridge)
+        }
         if hadSurface {
             (delegate as? any TerminalSurfaceLifecycleDelegate)?
                 .terminalDidDetachSurface()
         }
     }
 
-    private func handleCellSizeChange(width: UInt32, height: UInt32) {
+    private func handleCellSizeChange(
+        width: UInt32,
+        height: UInt32,
+        generation: UInt64
+    ) {
+        guard generation == surfaceGeneration else { return }
         TerminalDebugLog.log(
             .metrics,
             "cell size changed width=\(width) height=\(height)"
         )
         synchronizeMetrics()
-        requestImmediateTick()
+        requestSurfaceRefresh(
+            generation: generation,
+            reason: "cell-size-change"
+        )
         onCellSizeDidChange?()
     }
 
-    private func shouldRenderFrame(at _: TimeInterval) -> Bool {
-        guard canRenderFrame else {
-            return false
-        }
-        return pendingImmediateTick || lastTickTimestamp == 0
+    private func requestSurfaceRefresh(generation: UInt64, reason: String) {
+        guard generation == surfaceGeneration, surface != nil else { return }
+        hostRefreshRequestSequence &+= 1
+        refreshPending = true
+        TerminalDebugLog.log(.render, "refresh requested reason=\(reason)")
+        scheduleRefreshIfNeeded(generation: generation)
     }
 
-    private func scheduleTickIfNeeded() {
-        guard canRenderFrame else {
-            tickScheduled = false
-            return
-        }
-        guard !tickScheduled else {
-            return
-        }
-        tickScheduled = true
-        TerminalDebugLog.log(.lifecycle, "tick scheduled")
+    private func scheduleRefreshIfNeeded(generation: UInt64) {
+        guard generation == surfaceGeneration,
+              refreshPending,
+              canRenderFrame,
+              !refreshScheduled
+        else { return }
+        refreshScheduled = true
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            tickScheduled = false
-            let timestamp = Self.monotonicTimestamp()
-            tick(
-                context: .init(
-                    duration: 0,
-                    timestamp: timestamp,
-                    targetTimestamp: timestamp
-                )
-            )
+            guard generation == surfaceGeneration else { return }
+            refreshScheduled = false
+            guard refreshPending, canRenderFrame else { return }
+            refreshPending = false
+            TerminalDebugLog.log(.render, "surface refresh")
+            surface?.refresh()
         }
     }
 
-    private static func monotonicTimestamp() -> TimeInterval {
-        ProcessInfo.processInfo.systemUptime
+    private func handleGhosttyRenderReady(generation: UInt64) {
+        guard generation == surfaceGeneration, surface != nil else { return }
+        ghosttyRenderReadySequence &+= 1
+        lastRenderReadyUptime = ProcessInfo.processInfo.systemUptime
+        drawPending = true
+        TerminalDebugLog.log(.render, "target frame ready")
+        scheduleDrawIfNeeded(generation: generation)
+    }
+
+    private func scheduleDrawIfNeeded(generation: UInt64) {
+        guard generation == surfaceGeneration,
+              drawPending,
+              canRenderFrame,
+              !drawScheduled
+        else { return }
+        drawScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard generation == surfaceGeneration else { return }
+            drawScheduled = false
+            guard drawPending, canRenderFrame else { return }
+            drawPending = false
+            drawSequence &+= 1
+            lastDrawnGhosttyRenderReadySequence = ghosttyRenderReadySequence
+            lastDrawUptime = ProcessInfo.processInfo.systemUptime
+            TerminalDebugLog.log(.render, "surface draw ready frame")
+            surface?.draw()
+            onPostRender?()
+        }
     }
 
     private var effectiveSurfaceVisible: Bool {
@@ -400,19 +465,20 @@ final class TerminalSurfaceCoordinator {
 
     private func renderImmediately() {
         guard canRenderFrame else {
-            tickScheduled = false
+            refreshScheduled = false
+            drawScheduled = false
             return
         }
 
-        pendingImmediateTick = true
-        tickScheduled = false
-        let timestamp = Self.monotonicTimestamp()
-        tick(
-            context: .init(
-                duration: 0,
-                timestamp: timestamp,
-                targetTimestamp: timestamp
-            )
-        )
+        hostRefreshRequestSequence &+= 1
+        refreshPending = false
+        drawPending = false
+        drawSequence &+= 1
+        lastDrawnGhosttyRenderReadySequence = ghosttyRenderReadySequence
+        lastDrawUptime = ProcessInfo.processInfo.systemUptime
+        TerminalDebugLog.log(.render, "surface synchronous refresh and draw")
+        surface?.refresh()
+        surface?.draw()
+        onPostRender?()
     }
 }

@@ -91,10 +91,24 @@ function exitCodeFor(run: TaskRunControlEntry, taskId: string): number {
  */
 export function createTaskOutputTerminalBindings(args: {
   addon: NativeAddon;
+  onSurfaceReset?:
+    | ((browserWindowId: number, nativePanelId: string) => void)
+    | undefined;
   taskService: TaskService;
 }): TaskOutputTerminalBindings {
-  const { addon, taskService } = args;
+  const { addon, onSurfaceReset, taskService } = args;
   const bindings = new Map<string, OutputBinding>();
+
+  const resetSurface = (
+    browserWindowId: number,
+    nativePanelId: string
+  ): boolean => {
+    if (!addon.resetTerminalOutput(nativePanelId)) {
+      return false;
+    }
+    onSurfaceReset?.(browserWindowId, nativePanelId);
+    return true;
+  };
 
   const writeText = (binding: OutputBinding, text: string): boolean => {
     if (!text) {
@@ -224,7 +238,7 @@ export function createTaskOutputTerminalBindings(args: {
           // Renderer reload/crash 可能发生在 native 重绑成功、dockview layout
           // 持久化之前。恢复时以已持久化的 panel params 为准重新水合，避免
           // main 内存绑定与 renderer 视图永久分裂或直接创建失败。
-          if (!addon.resetTerminalOutput(nativePanelId)) {
+          if (!resetSurface(browserWindowId, nativePanelId)) {
             return { ok: false, error: "native terminal output reset failed" };
           }
           const replacement = createBinding({
@@ -235,7 +249,7 @@ export function createTaskOutputTerminalBindings(args: {
           });
           bindings.set(nativePanelId, replacement);
           if (!hydrate(replacement)) {
-            if (addon.resetTerminalOutput(nativePanelId)) {
+            if (resetSurface(existing.browserWindowId, nativePanelId)) {
               const rollback = createBinding({
                 browserWindowId: existing.browserWindowId,
                 nativePanelId,
@@ -311,7 +325,7 @@ export function createTaskOutputTerminalBindings(args: {
       }
       const cancelCloseSuppression =
         suppressNextTerminalSurfaceClose(nativePanelId);
-      if (!addon.resetTerminalOutput(nativePanelId)) {
+      if (!resetSurface(existing.browserWindowId, nativePanelId)) {
         cancelCloseSuppression();
         return { ok: false, error: "native terminal output reset failed" };
       }
@@ -331,7 +345,7 @@ export function createTaskOutputTerminalBindings(args: {
 
       // 新输出回放失败时尽力恢复旧视图。任务已经启动，不能谎称业务回滚；
       // 这里只补偿只读 adapter，使用户仍能看到重绑前的输出。
-      if (addon.resetTerminalOutput(nativePanelId)) {
+      if (resetSurface(existing.browserWindowId, nativePanelId)) {
         const rollback = createBinding({
           browserWindowId: existing.browserWindowId,
           nativePanelId,

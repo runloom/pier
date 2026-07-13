@@ -4,20 +4,14 @@ import { describe, expect, it } from "vitest";
 
 /**
  * window-manager 在 BaseWindow / BrowserWindow 上挂的 blur/focus handler 是终端
- * 能否输入的关键. 用 source-level lock 替代行为测试 — window-manager.create 内部
- * 用 BaseWindow + WebContentsView 复杂建构, mock 成本极高且脆弱, 直接 grep 锁住
- * `window.host.on("blur")` 跟 `window.host.on("focus")` 两条 wiring 更稳.
+ * 能否输入的关键。用 source-level lock 替代行为测试：window-manager.create 内部
+ * 用 BaseWindow + WebContentsView 复杂建构，mock 成本极高且脆弱，直接锁住
+ * `window.host.on("blur")` 跟 `window.host.on("focus")` 两条 wiring。
  *
- * - blur → blurActivePanelFocus 让 swift state 切 web/null, Ghostty 库自身的
- *   windowDidResignKey 同时把每个 surface core.setFocus(false)
- * - focus → 先记录最后聚焦窗口, 再 restoreActivePanelFocus 让 main 重发 user
- *   期望的 active terminal panelId 给 swift, swift 重新 makeFirstResponder +
- *   强制 becomeFirstResponder, Ghostty surface core.setFocus(true) 被
- *   windowDidBecomeKey 的 firstResponder === self 分支命中, cursor 恢复实心、
- *   shell 重新接 stdin.
- *
- * 缺 focus handler 的实际表现:用户切到其他 app 再切回 Pier, 所有终端 cursor
- * 空心、无法输入.
+ * blur/focus 都必须进入窗口级 TerminalFocusCoordinator。coordinator 保留 host
+ * snapshot，在窗口恢复时重新派生并原子应用 keyboard owner 与 first responder。
+ * 缺 focus replay 的实际表现：用户切到其他 app 再切回 Pier，终端 cursor 空心且
+ * shell 无法继续接收 stdin。
  */
 const SOURCE = readFileSync(
   resolve(import.meta.dirname, "../../../src/main/windows/window-manager.ts"),
@@ -25,16 +19,16 @@ const SOURCE = readFileSync(
 );
 
 const BLUR_WIRING_RE =
-  /window\.host\.on\("blur",\s*\(\)\s*=>\s*\{\s*blurActivePanelFocus\(window\);\s*\}\);/;
+  /window\.host\.on\("blur",\s*\(\)\s*=>\s*\{\s*terminalFocusCoordinator\.setWindowFocused\(window, false, "window-blur"\);\s*\}\);/;
 const FOCUS_WIRING_RE =
-  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*this\.rememberFocusedWindow\(id\);\s*restoreActivePanelFocus\(window\);[\s\S]{0,350}?this\.onFocusCallbacks/;
+  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*this\.rememberFocusedWindow\(id\);\s*terminalFocusCoordinator\.setWindowFocused\(window, true, "window-focus"\);[\s\S]{0,350}?this\.onFocusCallbacks/;
 
 describe("window-manager focus / blur wiring", () => {
-  it("attaches blur handler routing to blurActivePanelFocus", () => {
+  it("routes window blur through the focus coordinator", () => {
     expect(SOURCE).toMatch(BLUR_WIRING_RE);
   });
 
-  it("attaches focus handler routing to restoreActivePanelFocus", () => {
+  it("routes window focus replay through the focus coordinator", () => {
     expect(SOURCE).toMatch(FOCUS_WIRING_RE);
   });
 });

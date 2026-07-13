@@ -70,7 +70,12 @@ describe("task output terminal bindings", () => {
       }),
       subscribeRuns: vi.fn(() => vi.fn()),
     } as unknown as TaskService;
-    const bindings = createTaskOutputTerminalBindings({ addon, taskService });
+    const onSurfaceReset = vi.fn();
+    const bindings = createTaskOutputTerminalBindings({
+      addon,
+      onSurfaceReset,
+      taskService,
+    });
     expect(
       bindings.attach({
         browserWindowId: 7,
@@ -88,6 +93,8 @@ describe("task output terminal bindings", () => {
         params: { label: "Build", runId: "run-new", taskId: "build" },
       })
     ).toEqual({ error: "native terminal rejected task output", ok: false });
+    expect(onSurfaceReset).toHaveBeenCalledTimes(2);
+    expect(onSurfaceReset).toHaveBeenLastCalledWith(7, "7::output");
 
     outputListener?.(
       {

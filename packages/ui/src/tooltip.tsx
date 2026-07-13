@@ -11,6 +11,7 @@ const dismissListeners = new Set<DismissListener>();
 let hardSuppressCount = 0;
 let softSuppressed = false;
 let pointerMoveReleaseArmed = false;
+let focusInputModality: "keyboard" | "pointer" = "keyboard";
 let globalListenersInstalled = false;
 
 function isTooltipSuppressed(): boolean {
@@ -81,14 +82,19 @@ function ensureGlobalDismissListeners(): void {
   }
   globalListenersInstalled = true;
 
-  const onDismissSignal = () => {
+  const onPointerDismissSignal = () => {
+    focusInputModality = "pointer";
+    dismissAllTooltips();
+  };
+  const onKeyboardDismissSignal = () => {
+    focusInputModality = "keyboard";
     dismissAllTooltips();
   };
 
-  document.addEventListener("pointerdown", onDismissSignal, true);
-  document.addEventListener("keydown", onDismissSignal, true);
-  document.addEventListener("dragstart", onDismissSignal, true);
-  window.addEventListener("blur", onDismissSignal);
+  document.addEventListener("pointerdown", onPointerDismissSignal, true);
+  document.addEventListener("keydown", onKeyboardDismissSignal, true);
+  document.addEventListener("dragstart", onPointerDismissSignal, true);
+  window.addEventListener("blur", dismissAllTooltips);
 }
 
 /** 测试用: 清掉 suppress / listener 状态, 不卸载 document 监听 (jsdom 生命周期内复用). */
@@ -96,6 +102,7 @@ function resetTooltipDismissStateForTests(): void {
   hardSuppressCount = 0;
   softSuppressed = false;
   pointerMoveReleaseArmed = false;
+  focusInputModality = "keyboard";
   dismissListeners.clear();
 }
 
@@ -163,9 +170,28 @@ function Tooltip({
 }
 
 function TooltipTrigger({
+  onFocus,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+  const handleFocus = React.useCallback(
+    (event: React.FocusEvent<HTMLButtonElement>) => {
+      if (focusInputModality === "keyboard") {
+        softSuppressed = false;
+      }
+      onFocus?.(event);
+      if (focusInputModality === "pointer") {
+        event.preventDefault();
+      }
+    },
+    [onFocus]
+  );
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      {...props}
+      onFocus={handleFocus}
+    />
+  );
 }
 
 function TooltipContent({

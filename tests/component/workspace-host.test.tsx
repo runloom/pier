@@ -15,6 +15,7 @@ import {
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { resetTerminalPresentationReconcilerForTests } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { usePanelResourceStore } from "@/stores/panel-resource.store.ts";
+import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("dockview-react", async (importOriginal) => {
@@ -128,12 +129,9 @@ function installPierWindowApi() {
         readyToShow: vi.fn(),
       },
       terminal: {
-        applyInputRouting: vi.fn(),
-        applyPresentation: vi.fn(),
-        hide: vi.fn(),
+        applyHostSnapshot: vi.fn(),
         onFocusRequest: vi.fn(() => vi.fn()),
         reconcile: vi.fn(),
-        show: vi.fn(),
       },
       workspace: {
         clearLayout: vi.fn(async () => undefined),
@@ -367,6 +365,110 @@ describe("WorkspaceHost", () => {
     expect(useWorkspaceStore.getState().hasMaximizedGroup).toBe(true);
   });
 
+  it("publishes a newly active terminal through the unified host snapshot", () => {
+    const web = createPanel({
+      component: "welcome",
+      id: "welcome-1",
+      isActive: true,
+      isVisible: true,
+    });
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-2",
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([web, terminal], web);
+    vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    });
+    render(<WorkspaceHost />);
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+      api: dockview.api,
+    });
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+
+    web.api.isActive = false;
+    terminal.api.isActive = true;
+    dockview.emitActivePanelChange(terminal);
+
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activePanelId: "terminal-2",
+        activeTerminalPanelId: "terminal-2",
+        basePanel: { kind: "terminal", panelId: "terminal-2" },
+      })
+    );
+  });
+
+  it("publishes Dockview's terminal successor after the active terminal closes", () => {
+    const successor = createPanel({
+      component: "terminal",
+      id: "terminal-1",
+      isVisible: true,
+    });
+    const closing = createPanel({
+      component: "terminal",
+      id: "terminal-2",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([successor, closing], closing);
+    render(<WorkspaceHost />);
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+      api: dockview.api,
+    });
+    requestTerminalWebFocus("pier.click");
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+
+    closing.api.isActive = false;
+    successor.api.isActive = true;
+    dockview.emitActivePanelChange(successor);
+
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activePanelId: "terminal-1",
+        activeTerminalPanelId: "terminal-1",
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        webRequestCount: 0,
+      })
+    );
+  });
+
+  it("publishes Web ownership when Dockview selects a Web successor", () => {
+    const closing = createPanel({
+      component: "terminal",
+      id: "terminal-1",
+      isActive: true,
+      isVisible: true,
+    });
+    const successor = createPanel({
+      component: "welcome",
+      id: "welcome-1",
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([closing, successor], closing);
+    render(<WorkspaceHost />);
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+      api: dockview.api,
+    });
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+
+    closing.api.isActive = false;
+    successor.api.isActive = true;
+    dockview.emitActivePanelChange(successor);
+
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activePanelId: "welcome-1",
+        activeTerminalPanelId: null,
+        basePanel: { kind: "web" },
+      })
+    );
+  });
+
   it("hides inactive terminals when a web panel is maximized", () => {
     const activeWeb = createPanel({
       component: "welcome",
@@ -398,7 +500,7 @@ describe("WorkspaceHost", () => {
     expect(flushTerminalLayoutFramesTrailing).toHaveBeenCalledWith(
       "dockview-maximize"
     );
-    expect(window.pier.terminal.applyPresentation).toHaveBeenLastCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activePanelId: "welcome-1",
         activeTerminalPanelId: null,
@@ -415,8 +517,6 @@ describe("WorkspaceHost", () => {
         ],
       })
     );
-    expect(window.pier.terminal.hide).not.toHaveBeenCalled();
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
   });
 
   it("resyncs terminal visibility when tabs change while maximized", () => {
@@ -438,16 +538,14 @@ describe("WorkspaceHost", () => {
     const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
     props?.onReady?.({ api: dockview.api });
     dockview.emitMaximizedGroupChange();
-    vi.mocked(window.pier.terminal.hide).mockClear();
-    vi.mocked(window.pier.terminal.show).mockClear();
-    vi.mocked(window.pier.terminal.applyPresentation).mockClear();
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
 
     terminal.api.isActive = false;
     terminal.api.isVisible = false;
     web.api.isActive = true;
     dockview.emitActivePanelChange(web);
 
-    expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         activePanelId: "welcome-1",
         activeTerminalPanelId: null,
@@ -459,8 +557,6 @@ describe("WorkspaceHost", () => {
         ],
       })
     );
-    expect(window.pier.terminal.hide).not.toHaveBeenCalled();
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
   });
 
   it("does not show a maximized active terminal until its renderer anchor is visible", () => {
@@ -481,11 +577,8 @@ describe("WorkspaceHost", () => {
     expect(flushTerminalLayoutFramesTrailing).toHaveBeenCalledWith(
       "dockview-maximize"
     );
-    expect(window.pier.terminal.show).not.toHaveBeenCalledWith("terminal-1");
 
-    vi.mocked(window.pier.terminal.hide).mockClear();
-    vi.mocked(window.pier.terminal.show).mockClear();
-    vi.mocked(window.pier.terminal.applyPresentation).mockClear();
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
       height: 93,
       width: 213,
@@ -495,20 +588,17 @@ describe("WorkspaceHost", () => {
 
     dockview.emitMaximizedGroupChange();
 
-    expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         activeTerminalPanelId: "terminal-1",
         terminals: [
           expect.objectContaining({
-            focused: false,
             panelId: "terminal-1",
             visible: true,
           }),
         ],
       })
     );
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.hide).not.toHaveBeenCalled();
   });
 
   it("keeps visible split terminals shown outside maximized mode", () => {
@@ -545,7 +635,7 @@ describe("WorkspaceHost", () => {
     props?.onReady?.({ api: dockview.api });
     dockview.emitActivePanelChange(activeWeb);
 
-    expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         activeTerminalPanelId: null,
         terminals: [
@@ -560,8 +650,6 @@ describe("WorkspaceHost", () => {
         ],
       })
     );
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.hide).not.toHaveBeenCalled();
   });
 
   it("resyncs terminal visibility on layout changes after leaving maximized mode", () => {
@@ -588,11 +676,11 @@ describe("WorkspaceHost", () => {
     render(<WorkspaceHost />);
     const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
     props?.onReady?.({ api: dockview.api });
-    vi.mocked(window.pier.terminal.applyPresentation).mockClear();
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
 
     dockview.emitLayoutChange();
 
-    expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         terminals: [
           expect.objectContaining({
@@ -602,8 +690,6 @@ describe("WorkspaceHost", () => {
         ],
       })
     );
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.hide).not.toHaveBeenCalled();
   });
 
   it("does not show hidden inactive terminal panels only because their anchors are visible", () => {
@@ -632,7 +718,7 @@ describe("WorkspaceHost", () => {
     props?.onReady?.({ api: dockview.api });
     dockview.emitLayoutChange();
 
-    expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         terminals: [
           expect.objectContaining({
@@ -642,8 +728,6 @@ describe("WorkspaceHost", () => {
         ],
       })
     );
-    expect(window.pier.terminal.show).not.toHaveBeenCalled();
-    expect(window.pier.terminal.hide).not.toHaveBeenCalled();
   });
 
   it("keeps the active terminal visible when dockview visibility lags behind its anchor", () => {
@@ -670,7 +754,7 @@ describe("WorkspaceHost", () => {
     props?.onReady?.({ api: dockview.api });
     dockview.emitLayoutChange();
 
-    expect(window.pier.terminal.applyPresentation).toHaveBeenCalledWith(
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         activePanelId: "terminal-stale-active",
         activeTerminalPanelId: "terminal-stale-active",
@@ -705,8 +789,7 @@ describe("WorkspaceHost", () => {
           resolve,
         },
         terminal: {
-          applyInputRouting: vi.fn(),
-          applyPresentation: vi.fn(),
+          applyHostSnapshot: vi.fn(),
           onFocusRequest: vi.fn(),
           reconcile: vi.fn(),
         },
@@ -800,7 +883,7 @@ describe("WorkspaceHost", () => {
           resolve: vi.fn(),
         },
         terminal: {
-          applyInputRouting: vi.fn(),
+          applyHostSnapshot: vi.fn(),
           onFocusRequest: vi.fn(),
           reconcile: vi.fn(),
         },

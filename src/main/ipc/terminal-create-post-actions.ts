@@ -1,27 +1,6 @@
-import type { AppWindow } from "../windows/app-window.ts";
-import { focusWebContentsForEffectiveInputRouting } from "./terminal-focus-state.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
-import {
-  applyLatestTerminalPresentation,
-  readTerminalInputRoutingDebug,
-} from "./terminal-presentation.ts";
 
 const INITIAL_INPUT_RETRY_DELAYS_MS = [50, 100, 200, 400, 800] as const;
-
-export function conformTerminalPresentationAfterCreate(
-  win: AppWindow,
-  addon: NativeAddon | null
-): void {
-  applyLatestTerminalPresentation(win, addon, "restore");
-  const effectiveInputRouting = readTerminalInputRoutingDebug(win).effective;
-  if (effectiveInputRouting) {
-    focusWebContentsForEffectiveInputRouting(
-      win,
-      effectiveInputRouting,
-      "terminal-create-conform"
-    );
-  }
-}
 
 export function sendInitialTerminalInput(args: {
   addon: NativeAddon;

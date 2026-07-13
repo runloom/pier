@@ -299,14 +299,19 @@ function DraggablePrimaryItem({
       }}
       ref={itemCallbackRef}
       style={{
+        left: point.x,
         maxWidth: "min(25rem, calc(100% - 1rem))",
         minWidth: "min(20rem, calc(100% - 1rem))",
-        transform: `translate3d(${point.x}px, ${point.y}px, 0)`,
+        // 终端浮层位于透明 Chromium WebContentsView 与原生 Metal 终端表面的
+        // 合成边界上。三维位移会把整个胶囊提升为独立 GPU 合成层，macOS 在
+        // 悬停或局部重绘时可能保留旧层像素，形成跨位置残影。这里用普通
+        // 绝对定位偏移量驱动同一套面板局部几何，避免强制创建合成层。
+        top: point.y,
         width: "fit-content",
       }}
     >
       <div
-        className="flex w-full items-stretch overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 transition-[opacity,transform,box-shadow] duration-[180ms] ease-in data-[phase=exiting]:-translate-y-1 data-[phase=exiting]:scale-[0.985] data-[phase=exiting]:opacity-0 data-[dragging=true]:shadow-xl motion-reduce:transition-none"
+        className="flex w-full items-stretch overflow-hidden rounded-full border border-border bg-popover text-popover-foreground shadow-background/40 shadow-lg transition-[opacity,transform,box-shadow] duration-[180ms] ease-in data-[phase=exiting]:-translate-y-1 data-[phase=exiting]:scale-[0.985] data-[phase=exiting]:opacity-0 data-[dragging=true]:shadow-xl motion-reduce:transition-none"
         data-dragging={drag.dragging ? "true" : "false"}
         data-phase={phase}
       >

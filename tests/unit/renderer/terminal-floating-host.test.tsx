@@ -3,11 +3,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useMemo, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import { TerminalPanelFloatingHost } from "@/panel-kits/terminal/terminal-panel-floating-host.tsx";
-import {
-  getLastTerminalInputRoutingSnapshot,
-  resetTerminalInputRoutingForTests,
-} from "@/stores/terminal-input-routing-slice.ts";
+import { resetTerminalInputRoutingForTests } from "@/stores/terminal-input-routing-slice.ts";
 
 class ResizeObserverMock {
   disconnect(): void {}
@@ -37,7 +35,7 @@ describe("terminal panel floating host", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        terminal: { applyInputRouting: vi.fn() },
+        terminal: { applyHostSnapshot: vi.fn() },
         window: { onLayoutPulse: vi.fn(() => () => undefined) },
       },
     });
@@ -120,6 +118,19 @@ describe("terminal panel floating host", () => {
     expect(primary?.style.width).toBe("fit-content");
     expect(primary?.style.minWidth).toBe("min(20rem, calc(100% - 1rem))");
     expect(primary?.style.maxWidth).toBe("min(25rem, calc(100% - 1rem))");
+    expect(primary?.style.left).toBe("160px");
+    expect(primary?.style.top).toBe("8px");
+    expect(primary?.style.transform).toBe("");
+    const shell = primary?.firstElementChild;
+    expect(shell).toHaveClass(
+      "rounded-full",
+      "border",
+      "border-border",
+      "bg-popover",
+      "shadow-background/40",
+      "shadow-lg"
+    );
+    expect(shell).not.toHaveClass("ring-1", "ring-foreground/5");
 
     const handle = screen.getByRole("button", { name: "Move run controls" });
     expect(handle).toHaveAttribute("data-slot", "button");
@@ -133,7 +144,7 @@ describe("terminal panel floating host", () => {
       pointerId: 7,
     });
     expect(primary).toHaveAttribute("data-dragging", "true");
-    expect(getLastTerminalInputRoutingSnapshot()).toMatchObject({
+    expect(getLastTerminalHostSnapshot()).toMatchObject({
       webOverlayRects: [
         {
           frame: { height: 300, width: 500, x: 0, y: 0 },
@@ -159,7 +170,7 @@ describe("terminal panel floating host", () => {
     expect(dragCommit?.x).toBeGreaterThan(0.7);
     expect(dragCommit?.y).toBeGreaterThan(0.2);
     expect(primary).toHaveAttribute("data-dragging", "false");
-    expect(getLastTerminalInputRoutingSnapshot()?.webOverlayRects).toEqual([]);
+    expect(getLastTerminalHostSnapshot()?.webOverlayRects).toEqual([]);
 
     fireEvent.doubleClick(handle);
     expect(commit).toHaveBeenLastCalledWith("runtime-controls", {

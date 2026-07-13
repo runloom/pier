@@ -908,6 +908,41 @@ describe("WorktreeCreateOverlay", () => {
     expect(openTerminalMock).not.toHaveBeenCalled();
   });
 
+  it("创建失败后重新打开 overlay 可以再次提交", async () => {
+    createMock.mockRejectedValueOnce(new Error("invalid worktree branch"));
+    await openOverlay(context);
+    await switchToCustom();
+
+    fireEvent.change(screen.getByRole("textbox", { name: BRANCH_LABEL }), {
+      target: { value: "feature/first" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+    await vi.waitFor(() => {
+      expect(dialogAlertMock).toHaveBeenCalledWith({
+        body: "invalid worktree branch",
+        title: "Worktree creation failed",
+      });
+    });
+
+    act(() => {
+      openWorktreeCreateOverlay(context, overlayData());
+    });
+    await switchToCustom();
+    fireEvent.change(screen.getByRole("textbox", { name: BRANCH_LABEL }), {
+      target: { value: "feature/second" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
+
+    await vi.waitFor(() => {
+      expect(createMock).toHaveBeenCalledTimes(2);
+    });
+    expectCreateRequest({
+      branch: "feature/second",
+      name: "feature-second",
+      path: "/repo",
+    });
+  });
+
   it("环境初始化失败时明确说明工作树已创建", async () => {
     createMock.mockImplementationOnce(async (_request, options) => {
       options?.onProgress?.({

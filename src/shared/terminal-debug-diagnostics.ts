@@ -1,14 +1,13 @@
 import type {
+  TerminalCoordinatorDebugSnapshot,
   TerminalFrame,
-  TerminalInputRoutingSnapshot,
-  TerminalPresentationEntry,
-  TerminalPresentationSnapshot,
+  TerminalHostEntry,
+  TerminalHostSnapshot,
+  TerminalNativeWindowState,
 } from "./contracts/terminal.ts";
 import type {
-  TerminalDebugInputRoutingSnapshot,
   TerminalDebugIssue,
   TerminalDebugNativeSnapshot,
-  TerminalDebugPresentationSnapshot,
   TerminalDebugRendererSnapshot,
 } from "./contracts/terminal-debug.ts";
 import {
@@ -131,8 +130,7 @@ function buildRendererPanelNativeIssues(
 export function buildTerminalDebugIssues(
   renderer: TerminalDebugRendererSnapshot,
   native: TerminalDebugNativeSnapshot,
-  presentation?: TerminalDebugPresentationSnapshot | undefined,
-  inputRouting?: TerminalDebugInputRoutingSnapshot | undefined
+  coordinator?: TerminalCoordinatorDebugSnapshot | undefined
 ): TerminalDebugIssue[] {
   const issues: TerminalDebugIssue[] = [];
   const panelCounts = new Map<string, number>();
@@ -153,22 +151,15 @@ export function buildTerminalDebugIssues(
   const nativeByPanelId = new Map(
     native.surfaces.map((surface) => [surface.panelId, surface])
   );
-  const expectedPresentation =
-    presentation?.effective ??
-    presentation?.desired ??
-    renderer.desiredPresentation;
-  if (expectedPresentation) {
+  const expectedHost = coordinator?.desired ?? renderer.desiredHostSnapshot;
+  if (expectedHost) {
+    issues.push(...buildTerminalPresentationIssues(expectedHost, native));
     issues.push(
-      ...buildTerminalPresentationIssues(expectedPresentation, native)
-    );
-  }
-  const expectedInputRouting =
-    inputRouting?.effective ??
-    inputRouting?.desired ??
-    renderer.desiredInputRouting;
-  if (expectedInputRouting) {
-    issues.push(
-      ...buildTerminalInputRoutingIssues(expectedInputRouting, native)
+      ...buildTerminalInputRoutingIssues(
+        expectedHost,
+        native,
+        coordinator?.effective
+      )
     );
   }
   const rendererTerminalIds = new Set(
@@ -226,13 +217,14 @@ function collectInputRoutingSurfaceState(
 }
 
 function buildTerminalInputRoutingIssues(
-  expected: TerminalInputRoutingSnapshot,
-  native: TerminalDebugNativeSnapshot
+  expected: TerminalHostSnapshot,
+  native: TerminalDebugNativeSnapshot,
+  effective?: TerminalNativeWindowState | null
 ): TerminalDebugIssue[] {
   const issues: TerminalDebugIssue[] = [];
   if (
-    native.window.lastAppliedInputRoutingSequence !== undefined &&
-    native.window.lastAppliedInputRoutingSequence < expected.rendererSequence
+    native.window.lastAppliedRendererSequence !== undefined &&
+    native.window.lastAppliedRendererSequence < expected.rendererSequence
   ) {
     issues.push({
       code: "input_routing_stale",
@@ -241,10 +233,12 @@ function buildTerminalInputRoutingIssues(
       severity: "warning",
     });
   }
-  const expectedEffective = computeEffectiveKeyboardTarget(
-    expected.basePanel,
-    expected.webRequestCount
-  );
+  const expectedEffective =
+    effective?.keyboardTarget ??
+    computeEffectiveKeyboardTarget(
+      expected.basePanel,
+      expected.webRequestCount
+    );
   if (
     !sameKeyboardFocusTarget(
       expectedEffective,
@@ -267,8 +261,7 @@ function buildTerminalInputRoutingIssues(
       severity: "warning",
     });
   }
-  const windowFocused =
-    "windowFocused" in expected ? expected.windowFocused !== false : true;
+  const windowFocused = effective?.windowFocused ?? true;
   const surfaceState = collectInputRoutingSurfaceState(native);
   if (expectedEffective.kind === "web") {
     return issues.concat(buildWebKeyboardTargetIssues(surfaceState));
@@ -414,7 +407,7 @@ function isNativeVisible(
 }
 
 function buildTerminalPresentationIssues(
-  expected: TerminalPresentationSnapshot,
+  expected: TerminalHostSnapshot,
   native: TerminalDebugNativeSnapshot
 ): TerminalDebugIssue[] {
   const issues: TerminalDebugIssue[] = [];
@@ -443,7 +436,7 @@ function buildTerminalPresentationIssues(
 }
 
 function buildTerminalPresentationPanelIssues(
-  expected: TerminalPresentationEntry,
+  expected: TerminalHostEntry,
   nativeSurface: TerminalDebugNativeSnapshot["surfaces"][number] | undefined
 ): TerminalDebugIssue[] {
   if (!nativeSurface) {

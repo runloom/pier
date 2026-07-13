@@ -31,6 +31,7 @@ import {
   getPluginPanelRegistrations,
 } from "@/lib/plugins/plugin-panel-registry.ts";
 import { RendererPluginRuntime } from "@/lib/plugins/runtime.ts";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
@@ -39,7 +40,6 @@ import { usePluginOverlayStore } from "@/stores/plugin-overlay.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import {
-  getLastTerminalInputRoutingSnapshot,
   registerTerminalElementWebOverlay,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing-slice.ts";
@@ -767,7 +767,7 @@ describe("git builtin plugin", () => {
           watch: vi.fn(() => () => undefined),
         },
         terminal: {
-          applyInputRouting: vi.fn(),
+          applyHostSnapshot: vi.fn(),
         },
         preferences: {
           read: vi.fn(async () => ({})),
@@ -1613,7 +1613,7 @@ describe("git builtin plugin", () => {
 
     expect(await screen.findByText("Git operation failed")).toBeVisible();
     expect(screen.getByText("fatal: not a git repository")).toBeVisible();
-    expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+    expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
         webOverlayRects: expect.arrayContaining([
           expect.objectContaining({ id: "app-dialog" }),
@@ -1627,7 +1627,7 @@ describe("git builtin plugin", () => {
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await handlerPromise;
     await waitFor(() => {
-      expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+      expect(getLastTerminalHostSnapshot()).toEqual(
         expect.objectContaining({
           webOverlayRects: [],
           webRequestCount: 0,
@@ -1793,7 +1793,7 @@ describe("git builtin plugin", () => {
       "destructive"
     );
     expect(useCommandPaletteController.getState().quickPick).toBeNull();
-    expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+    expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
         webOverlayRects: expect.arrayContaining([
           expect.objectContaining({ id: "app-dialog" }),
@@ -1807,7 +1807,7 @@ describe("git builtin plugin", () => {
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     await handlerPromise;
     await waitFor(() => {
-      expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+      expect(getLastTerminalHostSnapshot()).toEqual(
         expect.objectContaining({
           webOverlayRects: [],
           webRequestCount: 0,

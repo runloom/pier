@@ -1,27 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
-  activateTerminalInputRouting,
   beginTerminalPanelWebDragCapture,
-  getLastTerminalInputRoutingSnapshot,
   installTerminalInputRoutingBlurSuppressor,
   registerTerminalFullscreenWebOverlay,
+  requestTerminalFocusIntent,
   requestTerminalWebFocus,
   resetTerminalInputRoutingForTests,
   setTerminalBasePanel,
 } from "@/stores/terminal-input-routing-slice.ts";
 
 describe("terminal input routing store", () => {
-  let applyInputRouting: ReturnType<typeof vi.fn>;
+  let applyHostSnapshot: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     resetTerminalInputRoutingForTests();
-    applyInputRouting = vi.fn();
+    applyHostSnapshot = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
         terminal: {
-          applyInputRouting,
+          applyHostSnapshot,
         },
       },
     });
@@ -33,7 +33,7 @@ describe("terminal input routing store", () => {
       panelId: "terminal-1",
     });
 
-    expect(applyInputRouting).toHaveBeenLastCalledWith(
+    expect(applyHostSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({
         basePanel: { kind: "terminal", panelId: "terminal-1" },
         webOverlayRects: [],
@@ -42,80 +42,102 @@ describe("terminal input routing store", () => {
     );
   });
 
+  it("republishes unchanged terminal intent after a tab click", () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    const firstSequence = getLastTerminalHostSnapshot()?.rendererSequence;
+    applyHostSnapshot.mockClear();
+
+    requestTerminalFocusIntent("terminal-1");
+
+    expect(applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        rendererSequence: (firstSequence ?? 0) + 1,
+      })
+    );
+  });
+  it("clears only transient click ownership for terminal intent", () => {
+    setTerminalBasePanel({ kind: "web" });
+    requestTerminalWebFocus("pier.click");
+    requestTerminalWebFocus("dialog");
+
+    requestTerminalFocusIntent("terminal-1");
+
+    expect(getLastTerminalHostSnapshot()).toEqual(
+      expect.objectContaining({
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        webRequestCount: 1,
+      })
+    );
+  });
+
   it("base panel goes into snapshot.basePanel", () => {
     setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
-    expect(getLastTerminalInputRoutingSnapshot()?.basePanel).toEqual({
+    expect(getLastTerminalHostSnapshot()?.basePanel).toEqual({
       kind: "terminal",
       panelId: "terminal-1",
     });
-    expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(0);
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
   });
 
   it("web focus requests increment webRequestCount and release decrements", () => {
     setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
     const release = requestTerminalWebFocus("search:terminal-1");
 
-    expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(1);
-    expect(getLastTerminalInputRoutingSnapshot()?.basePanel).toEqual({
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(1);
+    expect(getLastTerminalHostSnapshot()?.basePanel).toEqual({
       kind: "terminal",
       panelId: "terminal-1",
     });
 
     release();
 
-    expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(0);
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
   });
 
   it("multiple web focus requests stay until all released", () => {
     const releaseA = requestTerminalWebFocus("a");
     const releaseB = requestTerminalWebFocus("b");
-    expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(2);
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(2);
 
     releaseA();
-    expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(1);
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(1);
     releaseB();
-    expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(0);
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
   });
 
   it("duplicate web focus request is idempotent", () => {
     requestTerminalWebFocus("a");
     requestTerminalWebFocus("a");
-    expect(getLastTerminalInputRoutingSnapshot()?.webRequestCount).toBe(1);
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(1);
   });
 
-  it("terminal focus intent clears all web focus requests", () => {
+  it("changing base intent does not clear independent Web focus owners", () => {
     setTerminalBasePanel({ kind: "web" });
-    requestTerminalWebFocus("stale-dialog");
-    requestTerminalWebFocus("stale-popover");
+    requestTerminalWebFocus("dialog");
+    requestTerminalWebFocus("command-palette");
 
-    activateTerminalInputRouting("terminal-1");
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
 
-    expect(getLastTerminalInputRoutingSnapshot()).toEqual(
+    expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
         basePanel: { kind: "terminal", panelId: "terminal-1" },
-        webRequestCount: 0,
+        webRequestCount: 2,
       })
     );
-    expect(applyInputRouting).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        basePanel: { kind: "terminal", panelId: "terminal-1" },
-        webRequestCount: 0,
-      })
+    expect(applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ webRequestCount: 2 })
     );
   });
 
   it("registers and disposes a fullscreen Web overlay rect", () => {
     const registration = registerTerminalFullscreenWebOverlay("dialog");
 
-    expect(getLastTerminalInputRoutingSnapshot()?.webOverlayRects).toHaveLength(
-      1
-    );
+    expect(getLastTerminalHostSnapshot()?.webOverlayRects).toHaveLength(1);
 
     registration.dispose();
 
-    expect(getLastTerminalInputRoutingSnapshot()?.webOverlayRects).toHaveLength(
-      0
-    );
+    expect(getLastTerminalHostSnapshot()?.webOverlayRects).toHaveLength(0);
   });
 
   it("routes the whole terminal panel to Web for the duration of a drag", () => {
@@ -134,7 +156,7 @@ describe("terminal input routing store", () => {
 
     const capture = beginTerminalPanelWebDragCapture("terminal-1", panel);
 
-    expect(getLastTerminalInputRoutingSnapshot()).toMatchObject({
+    expect(getLastTerminalHostSnapshot()).toMatchObject({
       webOverlayRects: [
         {
           id: "terminal-floating-drag:terminal-1",
@@ -147,7 +169,7 @@ describe("terminal input routing store", () => {
     capture.dispose();
     capture.dispose();
 
-    expect(getLastTerminalInputRoutingSnapshot()).toMatchObject({
+    expect(getLastTerminalHostSnapshot()).toMatchObject({
       webOverlayRects: [],
       webRequestCount: 0,
     });
@@ -155,19 +177,19 @@ describe("terminal input routing store", () => {
 });
 
 describe("terminal→web hand-off transient blur suppression", () => {
-  let applyInputRouting: ReturnType<typeof vi.fn>;
+  let applyHostSnapshot: ReturnType<typeof vi.fn>;
   let radixBlurListener: ReturnType<typeof vi.fn<() => void>>;
 
   const dispatchWindowBlur = () => window.dispatchEvent(new Event("blur"));
 
   beforeEach(() => {
     resetTerminalInputRoutingForTests();
-    applyInputRouting = vi.fn();
+    applyHostSnapshot = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
-        terminal: { applyInputRouting },
+        terminal: { applyHostSnapshot },
       },
     });
     installTerminalInputRoutingBlurSuppressor();
@@ -211,7 +233,7 @@ describe("terminal→web hand-off transient blur suppression", () => {
 
   it("does not arm on web→terminal flips (terminal click must still close menus)", () => {
     setTerminalBasePanel({ kind: "web" });
-    activateTerminalInputRouting("terminal-1"); // web → terminal
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" }); // web → terminal
 
     dispatchWindowBlur();
 

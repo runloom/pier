@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildTerminalPresentationSnapshot,
+  buildTerminalPresentationFacts,
   type TerminalPresentationWorkspaceState,
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 
@@ -39,10 +39,9 @@ function workspace(
 
 describe("terminal presentation reconciler", () => {
   it("hides every terminal while a web panel is maximized", () => {
-    const snapshot = buildTerminalPresentationSnapshot({
+    const snapshot = buildTerminalPresentationFacts({
       readFrame: () => frame,
       reason: "dockview-maximize",
-      rendererSequence: 1,
       workspace: workspace({
         activePanelId: "welcome-1",
         activeTerminalPanelId: null,
@@ -51,46 +50,43 @@ describe("terminal presentation reconciler", () => {
     });
 
     expect(snapshot.terminals).toEqual([
-      { focused: false, frame, panelId: "terminal-1", visible: false },
-      { focused: false, frame, panelId: "terminal-2", visible: false },
+      { frame, panelId: "terminal-1", visible: false },
+      { frame, panelId: "terminal-2", visible: false },
     ]);
   });
 
   it("shows only the active terminal while maximized", () => {
-    const snapshot = buildTerminalPresentationSnapshot({
+    const snapshot = buildTerminalPresentationFacts({
       readFrame: (panelId) => (panelId === "terminal-1" ? frame : null),
       reason: "dockview-maximize",
-      rendererSequence: 2,
       workspace: workspace({
         hasMaximizedGroup: true,
       }),
     });
 
     expect(snapshot.terminals).toEqual([
-      { focused: false, frame, panelId: "terminal-1", visible: true },
-      { focused: false, frame: null, panelId: "terminal-2", visible: false },
+      { frame, panelId: "terminal-1", visible: true },
+      { frame: null, panelId: "terminal-2", visible: false },
     ]);
   });
 
   it("does not treat a real anchor frame as visible when dockview marks the panel hidden", () => {
-    const snapshot = buildTerminalPresentationSnapshot({
+    const snapshot = buildTerminalPresentationFacts({
       readFrame: (panelId) => (panelId === "terminal-2" ? frame : null),
       reason: "dockview-layout",
-      rendererSequence: 3,
       workspace: workspace({ hasMaximizedGroup: false }),
     });
 
     expect(snapshot.terminals).toEqual([
-      { focused: false, frame: null, panelId: "terminal-1", visible: false },
-      { focused: false, frame, panelId: "terminal-2", visible: false },
+      { frame: null, panelId: "terminal-1", visible: false },
+      { frame, panelId: "terminal-2", visible: false },
     ]);
   });
 
   it("keeps the active terminal visible during transient dockview visibility lag", () => {
-    const snapshot = buildTerminalPresentationSnapshot({
+    const snapshot = buildTerminalPresentationFacts({
       readFrame: (panelId) => (panelId === "terminal-2" ? frame : null),
       reason: "dockview-layout",
-      rendererSequence: 3,
       workspace: workspace({
         activePanelId: "terminal-2",
         activeTerminalPanelId: "terminal-2",
@@ -107,23 +103,22 @@ describe("terminal presentation reconciler", () => {
     });
 
     expect(snapshot.terminals).toEqual([
-      { focused: false, frame, panelId: "terminal-2", visible: true },
+      { frame, panelId: "terminal-2", visible: true },
     ]);
   });
 
   it("does not encode keyboard focus in the presentation snapshot", () => {
-    const snapshot = buildTerminalPresentationSnapshot({
+    const snapshot = buildTerminalPresentationFacts({
       readFrame: () => frame,
       reason: "dockview-active-panel",
-      rendererSequence: 4,
       workspace: workspace({ hasMaximizedGroup: false }),
     });
 
     expect(snapshot.terminals[0]).toEqual({
-      focused: false,
       frame,
       panelId: "terminal-1",
       visible: true,
     });
+    expect(snapshot.terminals[0]).not.toHaveProperty("focused");
   });
 });

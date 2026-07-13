@@ -145,10 +145,10 @@ function snapshotBounds(snapshot: TerminalDebugSnapshot | null): Bounds | null {
 function overlayRects(
   snapshot: TerminalDebugSnapshot | null
 ): TerminalWebOverlayRect[] {
-  const routing = snapshot?.inputRouting;
   return (
-    routing?.desired?.webOverlayRects ??
-    routing?.effective?.webOverlayRects ??
+    snapshot?.coordinator?.desired?.webOverlayRects ??
+    snapshot?.coordinator?.effective?.webOverlayRects ??
+    snapshot?.renderer?.desiredHostSnapshot?.webOverlayRects ??
     []
   );
 }

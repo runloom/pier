@@ -49,17 +49,53 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
+  native:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - id: ghostty-kit-cache
+        uses: actions/cache@v4
+        with:
+          key: ghostty-kit-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-libghostty.sh', 'native/Vendor/libghostty-spm/Patches/ghostty/**') }}
+          path: native/Vendor/libghostty-spm/GhosttyKit.xcframework
+      - if: steps.ghostty-kit-cache.outputs.cache-hit != 'true'
+        run: brew install zig@0.15
+      - if: steps.ghostty-kit-cache.outputs.cache-hit != 'true'
+        run: xcrun -sdk macosx metal -v || xcodebuild -downloadComponent MetalToolchain
+      - if: steps.ghostty-kit-cache.outputs.cache-hit != 'true'
+        run: pnpm build:libghostty
+      - run: pnpm test:native
+      - run: pnpm build:native
+      - name: Load release native addon
+        run: >-
+          node -e 'const addon =
+          require("./native/build/Release/ghostty_native.node"); if
+          (!addon.debugSnapshot) throw new Error("debugSnapshot export missing")'
+      - run: pnpm plugin:codex:pack
+      - run: pnpm build:electron
+      - run: >-
+          pnpm exec playwright test --config playwright.config.ts
+          tests/e2e/native-terminal-render.spec.ts
+
   check:
     if: always()
-    needs: [static, coverage, build]
+    needs: [static, coverage, build, native]
     runs-on: ubuntu-latest
     steps:
       - name: Require successful quality jobs
         env:
           BUILD_RESULT: ${{ needs.build.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
           STATIC_RESULT: ${{ needs.static.result }}
         run: |
           test "$STATIC_RESULT" = "success"
           test "$COVERAGE_RESULT" = "success"
+          test "$NATIVE_RESULT" = "success"
           test "$BUILD_RESULT" = "success"
