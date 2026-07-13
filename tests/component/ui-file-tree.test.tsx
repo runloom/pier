@@ -5,6 +5,7 @@ import {
   type PierFileTreeItem,
 } from "@pier/ui/file-tree.tsx";
 import { collectPreservedExpandedDirectoryPaths } from "@pier/ui/file-tree-model.ts";
+import { TREE_SCROLLBAR_CSS } from "@pier/ui/file-tree-style.ts";
 import {
   act,
   fireEvent,
@@ -210,6 +211,18 @@ describe("PierFileTree", () => {
     expect(
       content?.querySelector('[data-truncate-group-container="middle"]')
     ).toBeNull();
+  });
+
+  it("lets item names consume space left by an empty decoration lane", () => {
+    expect(TREE_SCROLLBAR_CSS).toContain(
+      '[data-item-section="content"] {\n  flex: 1 1 auto;'
+    );
+    expect(TREE_SCROLLBAR_CSS).toContain(
+      '[data-item-section="decoration"]:empty {\n  flex: 0 0 0;'
+    );
+    expect(TREE_SCROLLBAR_CSS).toContain(
+      '[data-item-section="git"]:empty,\n[data-item-section="action"]:empty {\n  display: none;'
+    );
   });
 
   it("restores the full tree after clearing or cancelling a search filter", async () => {

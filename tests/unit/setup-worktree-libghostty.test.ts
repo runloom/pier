@@ -2,10 +2,12 @@ import { spawnSync } from "node:child_process";
 import { chmodSync } from "node:fs";
 import {
   access,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -103,15 +105,20 @@ async function addWorktreeWithNativeAddon(repo: string): Promise<string> {
   return worktree;
 }
 
-async function writeFailingPnpmBin(): Promise<string> {
+async function writePnpmInstallBin(): Promise<string> {
   const binDir = await makeTempDir("pier-setup-worktree-bin-");
   const pnpmPath = join(binDir, "pnpm");
   await writeFile(
     pnpmPath,
     [
       "#!/usr/bin/env bash",
-      'echo "pnpm should not run: $*" >&2',
-      "exit 17",
+      'if [[ "$*" != "install --frozen-lockfile" ]]; then',
+      '  echo "unexpected pnpm command: $*" >&2',
+      "  exit 17",
+      "fi",
+      'mkdir -p "$PWD/node_modules/react"',
+      'touch "$PWD/node_modules/.modules.yaml"',
+      'echo "pnpm install --frozen-lockfile"',
       "",
     ].join("\n")
   );
@@ -126,10 +133,11 @@ afterEach(async () => {
 });
 
 describe("setup-worktree libghostty reuse", () => {
-  it("worktree 缺 GhosttyKit.xcframework 时从主仓复制,不重新构建", async () => {
+  it("迁移主仓 node_modules 软链并复用 GhosttyKit.xcframework", async () => {
     const repo = await initRepoWithMainLibghostty();
     const worktree = await addWorktreeWithNativeAddon(repo);
-    const fakeBin = await writeFailingPnpmBin();
+    const fakeBin = await writePnpmInstallBin();
+    await symlink(join(repo, "node_modules"), join(worktree, "node_modules"));
 
     const result = spawnSync(process.execPath, [SETUP_WORKTREE_SCRIPT], {
       cwd: worktree,
@@ -141,8 +149,13 @@ describe("setup-worktree libghostty reuse", () => {
     });
 
     expect(result.status).toBe(0);
-    expect(result.stderr).not.toContain("pnpm should not run");
+    expect(result.stderr).not.toContain("unexpected pnpm command");
+    expect(result.stdout).toContain("pnpm install --frozen-lockfile");
     expect(result.stdout).toContain("从主仓复制 GhosttyKit.xcframework");
+    expect((await lstat(join(worktree, "node_modules"))).isDirectory()).toBe(
+      true
+    );
+    expect((await lstat(join(repo, "node_modules"))).isDirectory()).toBe(true);
     await access(join(worktree, XCF_RELATIVE_PATH, "Info.plist"));
     await expect(
       readFile(

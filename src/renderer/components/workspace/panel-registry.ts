@@ -4,7 +4,10 @@ import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
 import { missionControlPanelKit } from "@/panel-kits/mission-control/mission-control-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
-import { withPanelResourceBoundary } from "./panel-resource-boundary.tsx";
+import {
+  withPanelResourceBoundary,
+  withPluginPanelHostBoundary,
+} from "./panel-resource-boundary.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
 type PanelKind = "terminal" | "web";
@@ -57,10 +60,7 @@ export function getPanelComponents(): Record<
   }
   for (const [id, registration] of getPluginPanelRegistrations()) {
     if (!(id in components)) {
-      components[id] =
-        registration.kind === "terminal"
-          ? registration.component
-          : withPanelResourceBoundary(registration.component);
+      components[id] = withPluginPanelHostBoundary(registration);
     }
   }
   return components;

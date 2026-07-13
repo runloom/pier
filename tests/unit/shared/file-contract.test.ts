@@ -1,4 +1,5 @@
 import { pierCommandSchema } from "@shared/contracts/commands.ts";
+import { fileDocumentReadResultSchema } from "@shared/contracts/file.ts";
 import { describe, expect, it } from "vitest";
 
 const root = "/Users/xyz/ABC/pier";
@@ -137,5 +138,28 @@ describe("shared file contract", () => {
     ]) {
       expect(pierCommandSchema.safeParse(command).success).toBe(false);
     }
+  });
+
+  it("keeps image read results metadata-only without an IPC payload", () => {
+    const image = {
+      canonicalPath: "assets/image.png",
+      kind: "image",
+      mime: "image/png",
+      mtimeMs: 1,
+      path: "assets/image.png",
+      revision: "file-v1:revision",
+      root,
+      size: 8,
+    };
+
+    expect(fileDocumentReadResultSchema.parse(image)).toEqual(image);
+    expect(
+      fileDocumentReadResultSchema.safeParse({ ...image, bytes: [137, 80] })
+        .success
+    ).toBe(false);
+    expect(
+      fileDocumentReadResultSchema.safeParse({ ...image, base64: "iVBORw==" })
+        .success
+    ).toBe(false);
   });
 });

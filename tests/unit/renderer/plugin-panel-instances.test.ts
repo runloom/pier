@@ -432,6 +432,33 @@ describe("plugin panel instances", () => {
     );
   });
 
+  it("derives instance tab chrome from the complete panel params", () => {
+    const { api } = createMockApi();
+    useWorkspaceStore.setState({ api });
+    const context = createRendererPluginContext(entryWithPanel());
+    context.panels.register({
+      ...testPanelRegistration,
+      getParams: () => ({ registrationValue: "base" }),
+      resolveTab: ({ params }) => ({
+        icon: {
+          id: `${String(params.registrationValue)}:${String(params.fileName)}`,
+        },
+      }),
+    });
+
+    context.panels.openInstance({
+      componentId: "pier.files.filePanel",
+      instanceId: "file-1",
+      params: { fileName: "file.ts" },
+      title: "file.ts",
+    });
+
+    expect(usePanelDescriptorStore.getState().descriptors["file-1"]).toEqual({
+      display: { short: "file.ts" },
+      tab: { icon: { id: "base:file.ts" } },
+    });
+  });
+
   it("opens two dockview panel instances with the same plugin component", () => {
     const { api } = createMockApi();
     useWorkspaceStore.setState({ api });

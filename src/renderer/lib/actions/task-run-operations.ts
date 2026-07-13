@@ -8,6 +8,7 @@ import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { spawnTaskWithInputResolution } from "./task-input-flow.ts";
 import {
+  beginTaskOutputRestartSurfaceCloseGuard,
   rebindOpenTaskOutputsAfterRestart,
   rebindRestartedTaskOutput,
 } from "./task-output-run-operations.ts";
@@ -101,6 +102,11 @@ export async function stopTaskRun(
 async function executeRestartTaskRun(
   target: TaskRunActionTarget
 ): Promise<RestartTaskRunResult | null> {
+  let outputRebindSucceeded = false;
+  const finishOutputRestartGuard =
+    target.mode === "background" && target.run
+      ? beginTaskOutputRestartSurfaceCloseGuard(target.run)
+      : undefined;
   try {
     const terminalPanelId =
       target.mode === "background"
@@ -159,9 +165,9 @@ async function executeRestartTaskRun(
           runId,
         });
       const rebound = await rebind();
-      if (
-        !(rebound.ok || (await retryFailedOutputRebind(rebound.error, rebind)))
-      ) {
+      outputRebindSucceeded =
+        rebound.ok || (await retryFailedOutputRebind(rebound.error, rebind));
+      if (!outputRebindSucceeded) {
         return { panelRebound: false, runId };
       }
     } else if (target.taskOutput) {
@@ -188,6 +194,8 @@ async function executeRestartTaskRun(
       title: i18next.t("terminal.runtimeControl.startFailed"),
     });
     return null;
+  } finally {
+    finishOutputRestartGuard?.(outputRebindSucceeded);
   }
 }
 

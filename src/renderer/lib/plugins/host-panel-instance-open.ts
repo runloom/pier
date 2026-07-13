@@ -130,11 +130,18 @@ function upsertPanelInstanceDescriptor(
   registration: PluginPanelRegistration,
   options: PluginPanelInstanceOptions,
   context: PanelContext | undefined,
-  title: string
+  title: string,
+  params: Readonly<Record<string, unknown>>
 ): void {
   descriptorStore.upsert(
     options.instanceId,
-    pluginPanelDescriptor(options.instanceId, registration, context, title)
+    pluginPanelDescriptor(
+      options.instanceId,
+      registration,
+      context,
+      title,
+      params
+    )
   );
 }
 
@@ -148,17 +155,18 @@ function updateExistingPanelInstance(input: {
   registration: PluginPanelRegistration;
   title: string;
 }): void {
+  const nextParams = preservePinnedState(
+    input.existing.params as { pinned?: unknown } | undefined,
+    input.panelParams,
+    input.options.dropUnpinnedInstances === true
+  );
   upsertPanelInstanceDescriptor(
     input.descriptorStore,
     input.registration,
     input.options,
     input.context,
-    input.title
-  );
-  const nextParams = preservePinnedState(
-    input.existing.params as { pinned?: unknown } | undefined,
-    input.panelParams,
-    input.options.dropUnpinnedInstances === true
+    input.title,
+    nextParams
   );
   if (!sameParamValue(input.existing.params, nextParams)) {
     input.existing.api.updateParameters(nextParams);
@@ -215,7 +223,8 @@ function addNewPanelInstance(input: {
     input.registration,
     input.options,
     input.context,
-    input.title
+    input.title,
+    input.panelParams
   );
   for (const panel of input.previewPanelsToClose) {
     panel.api.close();

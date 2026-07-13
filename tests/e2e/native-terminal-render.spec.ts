@@ -29,6 +29,9 @@ const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
 const SCREENSHOT_PATH = "/tmp/pier-native-terminal-render.png";
 const execFileAsync = promisify(execFile);
 const APP_CLOSE_TIMEOUT_MS = 5000;
+const COMMAND_COMPLETION_TIMEOUT_MS = 30_000;
+const DIRECTORY_REMOVE_RETRIES = 10;
+const DIRECTORY_REMOVE_RETRY_DELAY_MS = 100;
 
 interface CliResult<T> {
   data?: T;
@@ -97,6 +100,15 @@ async function killAndWait(child: ChildProcess): Promise<void> {
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+function removeDirectory(path: string): void {
+  rmSync(path, {
+    force: true,
+    maxRetries: DIRECTORY_REMOVE_RETRIES,
+    recursive: true,
+    retryDelay: DIRECTORY_REMOVE_RETRY_DELAY_MS,
+  });
 }
 
 function surfaceByPanelId(
@@ -215,7 +227,9 @@ test.describe("Native terminal target rendering", () => {
         )
         .toBeGreaterThanOrEqual(3);
       await expect
-        .poll(() => existsSync(markerPath), { timeout: 15_000 })
+        .poll(() => existsSync(markerPath), {
+          timeout: COMMAND_COMPLETION_TIMEOUT_MS,
+        })
         .toBe(true);
 
       await expect
@@ -249,8 +263,8 @@ test.describe("Native terminal target rendering", () => {
       expect(consoleIssues).toEqual([]);
     } finally {
       await killAndWait(app.process());
-      rmSync(userDataDir, { force: true, recursive: true });
-      rmSync(commandDir, { force: true, recursive: true });
+      removeDirectory(userDataDir);
+      removeDirectory(commandDir);
     }
   });
 });

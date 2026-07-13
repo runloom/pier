@@ -435,7 +435,7 @@ export function FileTreeSidebar({
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: contextmenu bubbles from tree children; aside just captures.
     <aside
-      className="flex h-full min-h-0 w-full flex-col bg-sidebar/50"
+      className="flex h-full min-h-0 w-full flex-col bg-sidebar"
       onContextMenu={handleTreeBackgroundContextMenu}
       onDoubleClick={handleTreeDoubleClick}
     >
@@ -462,6 +462,7 @@ export function FileTreeSidebar({
             submitDisabled={
               searchActionsDisabled || !treeSearch.focusedMatchOpenable
             }
+            surface="sidebar"
             testId="files-tree-search-bar"
             value={treeSearch.value}
           />

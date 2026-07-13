@@ -240,6 +240,14 @@ export const fileUnsupportedTypeSchema = z.enum([
 ]);
 export type FileUnsupportedType = z.infer<typeof fileUnsupportedTypeSchema>;
 
+export const filePreviewImageMimeSchema = z.enum([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+export type FilePreviewImageMime = z.infer<typeof filePreviewImageMimeSchema>;
+
 const fileDocumentLocatorResultSchema = z.object({
   path: nonEmptyFileRootRelativePathSchema,
   root: fileRootSchema,
@@ -265,6 +273,16 @@ export const fileDocumentReadResultSchema = z.discriminatedUnion("kind", [
     revision: z.string().min(1),
     size: z.number().int().nonnegative(),
   }),
+  fileDocumentLocatorResultSchema
+    .extend({
+      canonicalPath: nonEmptyFileRootRelativePathSchema,
+      kind: z.literal("image"),
+      mime: filePreviewImageMimeSchema,
+      mtimeMs: z.number().nonnegative(),
+      revision: z.string().min(1),
+      size: z.number().int().nonnegative(),
+    })
+    .strict(),
   fileDocumentLocatorResultSchema.extend({
     kind: z.literal("unsupported-encoding"),
     size: z.number().int().nonnegative(),

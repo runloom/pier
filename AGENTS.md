@@ -233,15 +233,19 @@ CI / 无交互场景：`BOOTSTRAP_YES=1 pnpm bootstrap` 缺依赖直接自动装
 git worktree **不复制** `node_modules` 也不复制 `native/build/`。第一次进 worktree 必须先：
 
 ```bash
-pnpm setup:worktree   # 软链 node_modules → 主仓 + 补 GhosttyKit.xcframework + 编译 native addon
+pnpm setup:worktree   # 用 pnpm store 建立本地 node_modules + 补 GhosttyKit.xcframework + 编译 native addon
 pnpm dev              # 否则 panel 内会报 "Cannot find module .../ghostty_native.node"
 ```
 
 `setup:worktree` 内部：
 
-1. 软链 `node_modules` 到主仓（避免每次 worktree 都 `pnpm install`）
+1. 建立 worktree 自己的 `node_modules` 布局，包内容由 pnpm store 去重复用；旧版主仓软链会自动迁移
 2. 若 `native/Vendor/libghostty-spm/GhosttyKit.xcframework/` 缺失（首次 clone / 新电脑）自动跑 `pnpm build:libghostty`——**首次约 3-5 分钟**（含 fetch ghostty 上游、apply patches、跨 arch build），后续增量 60-90s
 3. native addon（`ghostty_native.node` + `libGhosttyBridge.dylib`）过期则重编，约 30s
+
+如旧 worktree 仍把整个 `node_modules` 软链到主仓，pnpm 11 可能在进入
+`setup:worktree` 脚本前就因依赖状态路径不匹配而中止。这种旧状态只需一次性执行
+`node scripts/setup-worktree.mjs` 完成迁移；之后继续使用 `pnpm setup:worktree`。
 
 `pnpm build:libghostty` 依赖：
 - `brew install zig@0.15`（硬要求 zig 0.15.2）

@@ -33,6 +33,7 @@ const STATUS_BAR_RESERVED = 28;
 interface FloatingPrimaryItem {
   content: ReactNode;
   id: string;
+  onInteractionChange?(interacting: boolean): void;
   phase?: "exiting" | "visible" | undefined;
 }
 
@@ -86,6 +87,7 @@ function DraggablePrimaryItem({
   layout,
   layoutRevision,
   obstacles,
+  onInteractionChange,
   onPositionCommit,
   panelId,
   panelRootRef,
@@ -101,6 +103,9 @@ function DraggablePrimaryItem({
   const t = useT();
   const itemRef = useRef<HTMLDivElement | null>(null);
   const pointRef = useRef<FloatingPoint>({ x: SAFE_INSET, y: SAFE_INSET });
+  const pointerInsideRef = useRef(false);
+  const focusWithinRef = useRef(false);
+  const interactingRef = useRef(false);
   const normalizedRef = useRef(
     layout.positions[id] ?? DEFAULT_PANEL_FLOATING_POSITION
   );
@@ -114,6 +119,27 @@ function DraggablePrimaryItem({
       overlay.ref(element);
     },
     [overlay]
+  );
+  const reportInteraction = useCallback(() => {
+    const interacting = pointerInsideRef.current || focusWithinRef.current;
+    if (interacting === interactingRef.current) {
+      return;
+    }
+    interactingRef.current = interacting;
+    onInteractionChange?.(interacting);
+  }, [onInteractionChange]);
+
+  useLayoutEffect(
+    () => () => {
+      const wasInteracting = interactingRef.current;
+      pointerInsideRef.current = false;
+      focusWithinRef.current = false;
+      interactingRef.current = false;
+      if (wasInteracting) {
+        onInteractionChange?.(false);
+      }
+    },
+    [onInteractionChange]
   );
 
   const setPoint = useCallback((next: FloatingPoint) => {
@@ -252,6 +278,25 @@ function DraggablePrimaryItem({
       data-dragging={drag.dragging ? "true" : "false"}
       data-floating-item={id}
       data-phase={phase}
+      onBlurCapture={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          return;
+        }
+        focusWithinRef.current = false;
+        reportInteraction();
+      }}
+      onFocusCapture={() => {
+        focusWithinRef.current = true;
+        reportInteraction();
+      }}
+      onPointerEnter={() => {
+        pointerInsideRef.current = true;
+        reportInteraction();
+      }}
+      onPointerLeave={() => {
+        pointerInsideRef.current = false;
+        reportInteraction();
+      }}
       ref={itemCallbackRef}
       style={{
         left: point.x,
@@ -378,6 +423,7 @@ export function TerminalPanelFloatingHost({
       {primary ? (
         <div data-floating-slot="primary">
           <DraggablePrimaryItem
+            key={primary.id}
             {...primary}
             layout={layout}
             layoutRevision={layoutRevision}

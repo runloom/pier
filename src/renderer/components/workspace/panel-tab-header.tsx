@@ -14,6 +14,7 @@
  * 改前不一致, inspect DOM 取 dockview 实际默认 tab 的 class 对齐.
  */
 
+import { fileNameFromTabIconId, PierFileIcon } from "@pier/ui/file-icon.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { agentKindFromTabIconId } from "@shared/contracts/agent-session.ts";
@@ -228,6 +229,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const tab = descriptor?.tab;
   const { Icon, iconId } = resolvePanelTabIcon(tab, props.api.component);
   const agentKind = agentKindFromTabIconId(tab?.icon?.id);
+  const fileName = fileNameFromTabIconId(tab?.icon?.id);
   const displayTitle = tab?.title ?? title;
   const tooltipText = tabTooltipText(
     tab?.tooltip,
@@ -265,6 +267,16 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       >
         <AgentIcon agentId={agentKind} size={14} />
       </span>
+    );
+  } else if (fileName) {
+    leadingVisual = (
+      <PierFileIcon
+        aria-hidden="true"
+        className="pier-panel-tab-icon shrink-0"
+        data-panel-tab-icon={tab?.icon?.id}
+        fileName={fileName}
+        size={14}
+      />
     );
   } else if (Icon) {
     leadingVisual = (

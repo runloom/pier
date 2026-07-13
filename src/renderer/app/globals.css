@@ -47,6 +47,20 @@
   --success: #34d399;
   --info: #60a5fa;
   --done: #c084fc;
+  /* 文件树与文件标签共享的文件类型图标调色板。类型映射由 packages/ui 持有。 */
+  --pier-file-icon-gray: #adadb1;
+  --pier-file-icon-red: #ff6762;
+  --pier-file-icon-vermilion: #d5512f;
+  --pier-file-icon-orange: #ffa359;
+  --pier-file-icon-yellow: #ffd452;
+  --pier-file-icon-green: #5ecc71;
+  --pier-file-icon-teal: #64d1db;
+  --pier-file-icon-cyan: #68cdf2;
+  --pier-file-icon-blue: #69b1ff;
+  --pier-file-icon-indigo: #9d6afb;
+  --pier-file-icon-purple: #d568ea;
+  --pier-file-icon-pink: #ff678d;
+  --pier-file-icon-mauve: #79697b;
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -178,6 +192,19 @@
 }
 
 :root.light {
+  --pier-file-icon-gray: #84848a;
+  --pier-file-icon-red: #d52c36;
+  --pier-file-icon-vermilion: #ff8c5b;
+  --pier-file-icon-orange: #d47628;
+  --pier-file-icon-yellow: #d5a910;
+  --pier-file-icon-green: #199f43;
+  --pier-file-icon-teal: #17a5af;
+  --pier-file-icon-cyan: #1ca1c7;
+  --pier-file-icon-blue: #1a85d4;
+  --pier-file-icon-indigo: #693acf;
+  --pier-file-icon-purple: #a631be;
+  --pier-file-icon-pink: #d32a61;
+  --pier-file-icon-mauve: #594c5b;
   /* shadcn neutral LIGHT (opt-in 由 ThemeProvider apply class="light") */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

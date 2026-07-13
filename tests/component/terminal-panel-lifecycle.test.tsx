@@ -46,6 +46,7 @@ import {
   resetFreshTerminalPanelsForTests,
   setFreshTerminalInitialInput,
 } from "@/stores/terminal-panel-session-hints.store.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 interface TerminalRelaunchRequest {
@@ -303,6 +304,9 @@ describe("TerminalPanel lifecycle", () => {
   let titleChangeListeners: Array<{
     cb: (event: { panelId: string; title: string }) => void;
   }> = [];
+  let surfaceCloseListeners: Array<{
+    cb: (event: { panelId: string }) => void;
+  }> = [];
 
   let searchStateListeners: Array<{
     cb: (event: { panelId: string; selected: number; total: number }) => void;
@@ -324,6 +328,7 @@ describe("TerminalPanel lifecycle", () => {
     searchStateListeners = [];
     cwdChangeListeners = [];
     titleChangeListeners = [];
+    surfaceCloseListeners = [];
     terminalRelaunchStoreMock.reset();
     resetTerminalLaunchConfirmationsForTest();
     resetFreshTerminalPanelsForTests();
@@ -346,6 +351,7 @@ describe("TerminalPanel lifecycle", () => {
       snapshot: { runs: {}, version: 0 },
     });
     useZoomStore.setState({ windowZoomLevel: 0 });
+    useWorkspaceStore.setState({ closePanel: vi.fn(async () => true) });
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 0)
@@ -408,6 +414,15 @@ describe("TerminalPanel lifecycle", () => {
               );
             };
           }),
+          onSurfaceCloseRequest: vi.fn((cb) => {
+            const listener = { cb };
+            surfaceCloseListeners.push(listener);
+            return () => {
+              surfaceCloseListeners = surfaceCloseListeners.filter(
+                (entry) => entry !== listener
+              );
+            };
+          }),
           onTitleChange: vi.fn((cb) => {
             const listener = { cb };
             titleChangeListeners.push(listener);
@@ -446,6 +461,36 @@ describe("TerminalPanel lifecycle", () => {
     unmount();
 
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
+  });
+
+  it("closes its workspace panel after the exited terminal accepts a key", async () => {
+    render(<TerminalPanel {...createPanelProps()} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+
+    act(() => {
+      for (const listener of surfaceCloseListeners) {
+        listener.cb({ panelId: "terminal-2" });
+      }
+    });
+    expect(useWorkspaceStore.getState().closePanel).not.toHaveBeenCalled();
+
+    act(() => {
+      for (const listener of surfaceCloseListeners) {
+        listener.cb({ panelId: "terminal-1" });
+      }
+    });
+
+    await waitFor(() => {
+      expect(useWorkspaceStore.getState().closePanel).toHaveBeenCalledOnce();
+      expect(useWorkspaceStore.getState().closePanel).toHaveBeenCalledWith(
+        "terminal-1"
+      );
+    });
   });
 
   it("creates a task output surface without mounting runtime controls", async () => {

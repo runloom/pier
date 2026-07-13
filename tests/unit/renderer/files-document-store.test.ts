@@ -658,6 +658,71 @@ describe("files-document-store", () => {
     });
   });
 
+  it("stores image preview metadata without text editing capabilities", () => {
+    const root = "/repo";
+    const path = "assets/photo.png";
+    const document = ensureDiskDocument({ path, root });
+
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      kind: "image",
+      mime: "image/png",
+      mtimeMs: 2,
+      path,
+      revision: "image-r1",
+      root,
+      size: 2048,
+    });
+
+    expect(getDocument(document.id)).toMatchObject({
+      canonicalPath: path,
+      capabilities: [],
+      currentContents: "",
+      preview: { kind: "image", mime: "image/png", revision: "image-r1" },
+      readOnly: true,
+      readOnlyReason: null,
+      revision: "image-r1",
+      size: 2048,
+    });
+  });
+
+  it("clears image preview metadata when the same path reloads as text", () => {
+    const root = "/repo";
+    const path = "changing-file";
+    const document = ensureDiskDocument({ path, root });
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      kind: "image",
+      mime: "image/gif",
+      mtimeMs: 2,
+      path,
+      revision: "image-r1",
+      root,
+      size: 32,
+    });
+
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      contents: "now text",
+      eol: "none",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mode: 0o644,
+      path,
+      revision: "text-r2",
+      root,
+      size: 8,
+      writable: true,
+    });
+
+    expect(getDocument(document.id)).toMatchObject({
+      currentContents: "now text",
+      preview: null,
+      readOnly: false,
+      revision: "text-r2",
+    });
+  });
+
   it("surfaces hydration failure while retaining an emergency local draft", async () => {
     const root = "/repo";
     const path = "fallback.md";

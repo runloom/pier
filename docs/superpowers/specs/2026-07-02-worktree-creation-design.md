@@ -4,7 +4,7 @@
 
 ## 背景与问题
 
-后端能力已经就绪：`WorktreeService`（[worktree-service.ts](../../../src/main/services/worktree-service.ts)）实现了 check / list / create / remove / prune，worktree 统一放在主仓 `.worktrees/<name>/` 下，IPC（[worktree-api.ts](../../../src/preload/worktree-api.ts)）、权限（`worktree:read` / `worktree:write`）、命令路由（`worktree.open` → `panel.open`）全部打通，`scripts/setup-worktree.mjs` 也已能自动软链 node_modules + 按需编译 native addon。
+后端能力已经就绪：`WorktreeService`（[worktree-service.ts](../../../src/main/services/worktree-service.ts)）实现了 check / list / create / remove / prune，worktree 统一放在主仓 `.worktrees/<name>/` 下，IPC（[worktree-api.ts](../../../src/preload/worktree-api.ts)）、权限（`worktree:read` / `worktree:write`）、命令路由（`worktree.open` → `panel.open`）全部打通，`scripts/setup-worktree.mjs` 也已能用 pnpm store 建立 worktree 本地 `node_modules` 并按需编译 native addon。
 
 但创建交互是最原始的形态：命令面板 action（[worktree-operation-actions.ts](../../../src/plugins/builtin/git/renderer/worktree-operation-actions.ts)）连续弹两个 `window.prompt()` 要求手填 name 和 branch。问题：
 
