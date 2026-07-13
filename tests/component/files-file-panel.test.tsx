@@ -18,7 +18,10 @@ import {
   createFileFilePanelInstanceId,
   fileFilePanelIdentityKey,
 } from "@plugins/builtin/files/renderer/file-panel-id.ts";
-import { FilePanelBreadcrumb } from "@plugins/builtin/files/renderer/file-panel-parts.tsx";
+import {
+  FilePanelBreadcrumb,
+  SidebarToggleButton,
+} from "@plugins/builtin/files/renderer/file-panel-parts.tsx";
 import { FileTreeSidebar } from "@plugins/builtin/files/renderer/file-tree-sidebar.tsx";
 import { createDiskDocumentRecord } from "@plugins/builtin/files/renderer/files-document-factory.ts";
 import { withDocumentReadResult } from "@plugins/builtin/files/renderer/files-document-reducers.ts";
@@ -613,6 +616,21 @@ describe("Files file-panel", () => {
       />
     );
     expect((breadcrumb as HTMLElement).scrollLeft).toBe(480);
+  });
+  it("uses FolderTree for the collapsed file-tree opener", () => {
+    const { container } = render(
+      <SidebarToggleButton
+        collapsed
+        hidden={false}
+        onToggle={() => undefined}
+        t={(key, fallback) => fallback ?? key}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Expand file tree" })
+    ).toBeVisible();
+    expect(container.querySelector("svg")).toHaveClass("lucide-folder-tree");
   });
   it("localizes file-panel chrome through plugin i18n messages", async () => {
     const translations = new Map<string, string>([
