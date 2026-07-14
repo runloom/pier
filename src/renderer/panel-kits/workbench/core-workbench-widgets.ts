@@ -80,29 +80,6 @@ export const CORE_WORKBENCH_WIDGETS: readonly CoreWorkbenchWidgetDeclaration[] =
       refreshable: false,
       titleKey: "workbench.widget.costOverview.title",
     },
-    {
-      category: "analytics",
-      defaultSize: { h: 3, w: 4 },
-      descriptionKey: "missionControl.widget.costOverview.description",
-      id: CORE_COST_OVERVIEW_WIDGET_ID,
-      searchTerms: [
-        "cost",
-        "spending",
-        "tokens",
-        "usage",
-        "成本",
-        "花费",
-        "令牌",
-      ],
-      maxSize: { h: 5, w: 8 },
-      // h=2: 极简布局隐藏副标题，仅保留 KPI、细 sparkline 和 footer；
-      // w=2 时 KPI 会响应式堆叠成单列，用户拖窄自负。
-      minSize: { h: 2, w: 2 },
-      // refreshable=false：改用 registration 里的 async action，让 header 刷新
-      // 按钮 spinner 覆盖真实 refreshAll 耗时。
-      refreshable: false,
-      titleKey: "missionControl.widget.costOverview.title",
-    },
   ];
 
 /**
