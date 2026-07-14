@@ -36,11 +36,22 @@ describe("MissionControlPanel responsive ordered grid", () => {
     );
 
     expect(screen.getByTestId("mission-control-empty")).toBeInTheDocument();
+    expect(
+      screen.getByText(i18next.t("missionControl.emptyDescription"))
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByTestId("mission-control-empty")
+        .querySelector('[data-slot="empty-icon"]')
+    ).toBeInTheDocument();
     const addButton = screen.getByTestId("mission-control-add-widget");
     expect(addButton).toHaveAttribute("data-size", "default");
     expect(
       addButton.closest('[data-slot="empty-content"]')
     ).toBeInTheDocument();
+
+    fireEvent.click(addButton);
+    expect(screen.getByTestId("mission-control-library")).toBeInTheDocument();
   });
 
   it("always exposes reorder and resize affordances", () => {

@@ -45,7 +45,6 @@ import {
 } from "./account-display.tsx";
 import { confirmAccountSwitch } from "./account-switch.ts";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
-import { CostCard } from "./cost-card.tsx";
 import type { Translate } from "./usage-meter.tsx";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
 import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
@@ -92,8 +91,11 @@ export function AccountsSettingsPage({
   const invoke = (method: string, payload: unknown = null): void => {
     context.rpc.invoke(method, payload).catch(reportError);
   };
-  const { costRefreshing, refreshCost, refreshingAccountIds, refreshUsage } =
-    useAccountsRefresh({ context, onAccountError: reportError, t });
+  const { refreshingAccountIds, refreshUsage } = useAccountsRefresh({
+    context,
+    onAccountError: reportError,
+    t,
+  });
   const handleRemove = async (accountId: string): Promise<void> => {
     const ok = await context.dialogs.confirm({
       body: t(
@@ -253,13 +255,6 @@ export function AccountsSettingsPage({
           </EmptyHeader>
         </Empty>
       )}
-      <CostCard
-        language={language}
-        onRefresh={() => refreshCost()}
-        refreshing={costRefreshing}
-        snapshot={snapshot.costUsage}
-        t={t}
-      />
       {others.length > 0 ? (
         <Card size="sm">
           <CardHeader>

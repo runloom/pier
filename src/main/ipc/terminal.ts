@@ -33,6 +33,10 @@ import { registerTerminalDebugSnapshotIpc } from "./terminal-debug-snapshot.ts";
 import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import { isTerminalHostSnapshot } from "./terminal-host-snapshot-validation.ts";
+import {
+  cancelPromptReady,
+  signalPromptReady,
+} from "./terminal-initial-input-gate.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
 import {
@@ -159,6 +163,11 @@ export function registerTerminalIpc(
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     recordNativeTerminalRoute(id, "cwd", panelId, { cwd });
     const rawPanelId = fromNativePanelKey(panelId);
+    // 首次 cwd 事件 = ghostty shell integration 已进入 precmd（准备打
+    // prompt），此时把 initialInput 注入 pty 才能落在 shell 已读 stdin
+    // 的区间内，避免命令字符被 raw tty echo 打在登录 banner 之前。后续
+    // cwd 事件对 gate 是 no-op（gate 一次性消费）。
+    signalPromptReady(rawPanelId);
     const targetWindow = findAppWindowByElectronId(id);
     handleTerminalCwdChange(id, rawPanelId, cwd, targetWindow).catch((err) => {
       console.error("[pier-cwd-context] failed:", err);
@@ -341,6 +350,9 @@ export function registerTerminalIpc(
       const nativePanelId = toNativePanelKey(win, panelId);
       taskOutputBindings?.detach(nativePanelId);
       terminalFocusCoordinator.surfaceWillClose(win, panelId);
+      // 面板关闭时清 initial-input gate 的 pending 定时器，防止 pty 已死
+      // 但 fallback timer 仍尝试注入到不存在的 panel。
+      cancelPromptReady(panelId);
       addon?.closeTerminal(nativePanelId);
       try {
         await removeTerminalPanelSession(sessionScope, panelId);

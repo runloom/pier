@@ -6,13 +6,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@pier/ui/dropdown-menu.tsx";
-import { Spinner } from "@pier/ui/spinner.tsx";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { LucideIcon } from "lucide-react";
 import { EllipsisVertical } from "lucide-react";
 import { useState } from "react";
@@ -55,11 +55,12 @@ function DirectAction({
           size="icon-xs"
           variant={action.intent === "destructive" ? "destructive" : "ghost"}
         >
-          {pending ? (
-            <Spinner aria-label={action.label} data-icon="inline-start" />
-          ) : (
-            <Icon data-icon="inline-start" />
-          )}
+          {/* pending 时用当前 icon 原地旋转，避免换成 Spinner 组件造成视觉跳变、
+              布局微抖。aria-busy 已由 Button 承担 loading 语义。 */}
+          <Icon
+            className={cn(pending && "animate-spin motion-reduce:animate-none")}
+            data-icon="inline-start"
+          />
         </Button>
       </TooltipTrigger>
       <TooltipContent>{action.label}</TooltipContent>
@@ -170,6 +171,7 @@ export function MissionControlWidgetActions({
                     const pending = pendingIds.has(action.id);
                     return (
                       <DropdownMenuItem
+                        aria-busy={pending || undefined}
                         data-testid={action.testId}
                         disabled={action.disabled || pending}
                         key={action.id}
@@ -182,7 +184,11 @@ export function MissionControlWidgetActions({
                             : "default"
                         }
                       >
-                        {pending ? <Spinner /> : <Icon />}
+                        <Icon
+                          className={cn(
+                            pending && "animate-spin motion-reduce:animate-none"
+                          )}
+                        />
                         {action.label}
                       </DropdownMenuItem>
                     );

@@ -13,7 +13,6 @@ function serviceStub(): CodexAccountsService {
     refreshUsage: vi.fn(),
     remove: vi.fn(),
     select: vi.fn(),
-    setCostUsage: vi.fn(),
     snapshot: vi.fn(() => ({
       accounts: [],
       activeAccountId: null,
@@ -29,11 +28,9 @@ describe("Codex plugin RPC handlers", () => {
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
     const service = serviceStub();
     const acquireUsagePolling = vi.fn(async () => undefined);
-    const refreshLocalUsage = vi.fn(async () => undefined);
     const releaseUsagePolling = vi.fn();
     registerCodexRpcHandlers({
       acquireUsagePolling,
-      refreshLocalUsage,
       releaseUsagePolling,
       rpc: {
         handle: (method, handler) => {
@@ -49,31 +46,24 @@ describe("Codex plugin RPC handlers", () => {
       accountId: "account-1",
       force: true,
     });
-    expect(refreshLocalUsage).not.toHaveBeenCalled();
   });
 
-  it("refreshes local cost only through the dedicated RPC", async () => {
+  it("no longer exposes usage.refreshCost — cost refresh is host-owned", () => {
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
-    const service = serviceStub();
     const acquireUsagePolling = vi.fn(async () => undefined);
-    const refreshLocalUsage = vi.fn(async () => undefined);
     const releaseUsagePolling = vi.fn();
     registerCodexRpcHandlers({
       acquireUsagePolling,
-      refreshLocalUsage,
       releaseUsagePolling,
       rpc: {
         handle: (method, handler) => {
           handlers.set(method, handler);
         },
       },
-      service,
+      service: serviceStub(),
     });
 
-    await handlers.get("usage.refreshCost")?.(null);
-
-    expect(refreshLocalUsage).toHaveBeenCalledOnce();
-    expect(service.refreshUsage).not.toHaveBeenCalled();
+    expect(handlers.has("usage.refreshCost")).toBe(false);
   });
 
   it("tracks renderer polling leases through dedicated RPC methods", async () => {
@@ -82,7 +72,6 @@ describe("Codex plugin RPC handlers", () => {
     const releaseUsagePolling = vi.fn();
     registerCodexRpcHandlers({
       acquireUsagePolling,
-      refreshLocalUsage: vi.fn(async () => undefined),
       releaseUsagePolling,
       rpc: {
         handle: (method, handler) => {

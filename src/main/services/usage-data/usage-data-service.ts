@@ -8,48 +8,54 @@ import type {
   UsageTokenObservation,
   UsageTokenTotals,
 } from "@pier/plugin-api/main";
+import {
+  type UsageAggregateSnapshot,
+  type UsageAggregateSource,
+  usageDataCoverageSchema,
+  usageDataDailyBucketSchema,
+  usageDataScopeSchema,
+  usageModelBreakdownSchema,
+} from "@shared/contracts/usage-data.ts";
 import { z } from "zod";
 import { versionedJsonStore } from "../../state/versioned-store.ts";
+import { aggregateSnapshots } from "./aggregator.ts";
 import { estimateObservationCostMicrousd } from "./pricing.ts";
+import {
+  createUsageSourceRegistry,
+  type UsageSource,
+  type UsageSourceRegistry,
+} from "./source-registry.ts";
+
+/**
+ * 宿主自身作为 usage-data 源时使用的保留 pluginId。UI 视角为"pier 主项目内置
+ * 采集"，不与任何 managed external plugin 命名冲突。built-in collector（如
+ * `collectors/codex-local`）通过 `publishBuiltIn` / `registerBuiltInSource`
+ * 走这个身份写入。
+ */
+export const HOST_BUILTIN_PLUGIN_ID = "pier.core";
+const LEGACY_CODEX_PLUGIN_ID = "pier.codex";
+const CODEX_LOCAL_USAGE_SOURCE_ID = "codex-local-sessions";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_OBSERVATIONS = 250_000;
 
-const tokenTotalsSchema = z.object({
-  cachedInputTokens: z.number().int().nonnegative(),
-  inputTokens: z.number().int().nonnegative(),
-  outputTokens: z.number().int().nonnegative(),
-  reasoningTokens: z.number().int().nonnegative(),
-  totalTokens: z.number().int().nonnegative(),
+// summary 单独定义：byModel 需要 `.default([])` 兜底老快照缺失字段，
+// shared canonical schema 不带 default（renderer 侧不做迁移）。
+const persistedSummarySchema = z.object({
+  byModel: z.array(usageModelBreakdownSchema).default([]),
+  estimatedCostMicrousd: z.number().int().nonnegative().nullable(),
+  latestDayTokens: z.number().int().nonnegative(),
+  periodTokens: z.number().int().nonnegative(),
+  todayEstimatedCostMicrousd: z.number().int().nonnegative().nullable(),
 });
-const scopeSchema = z.union([
-  z.object({ kind: z.literal("machine") }),
-  z.object({ key: z.string().min(1).max(200), kind: z.literal("account") }),
-]);
 const snapshotSchema = z.object({
-  buckets: z.array(
-    z.object({
-      date: z.string().regex(DATE_PATTERN),
-      estimatedCostMicrousd: z.number().int().nonnegative().nullable(),
-      pricingStatus: z.enum(["complete", "partial", "unpriced"]),
-      tokens: tokenTotalsSchema,
-    })
-  ),
-  coverage: z.object({
-    complete: z.boolean(),
-    from: z.string().regex(DATE_PATTERN),
-    to: z.string().regex(DATE_PATTERN),
-  }),
+  buckets: z.array(usageDataDailyBucketSchema),
+  coverage: usageDataCoverageSchema,
   observedAt: z.number().int().nonnegative(),
   pluginId: z.string().min(1),
-  scope: scopeSchema,
+  scope: usageDataScopeSchema,
   sourceId: z.string().min(1).max(100),
-  summary: z.object({
-    estimatedCostMicrousd: z.number().int().nonnegative().nullable(),
-    latestDayTokens: z.number().int().nonnegative(),
-    periodTokens: z.number().int().nonnegative(),
-    todayEstimatedCostMicrousd: z.number().int().nonnegative().nullable(),
-  }),
+  summary: persistedSummarySchema,
 });
 const stateSchema = z.object({
   snapshots: z.record(z.string(), snapshotSchema),
@@ -57,7 +63,12 @@ const stateSchema = z.object({
 });
 type UsageDataState = z.infer<typeof stateSchema>;
 
+export type UsageAggregateListener = (snapshot: UsageAggregateSnapshot) => void;
+
 export interface UsageDataService {
+  aggregate(): UsageAggregateSnapshot;
+  /** 删除宿主采集器此前持久化的快照；扫描为空时用于避免残留过期数据。 */
+  clearBuiltIn(sourceId: string, scope: UsageDataScope): boolean;
   createPluginFacade(
     pluginId: string,
     canPublish: boolean
@@ -65,11 +76,26 @@ export interface UsageDataService {
   flush(): Promise<void>;
   init(): Promise<void>;
   publish(pluginId: string, input: UsageDataPublishInput): UsageDataSnapshot;
+  /**
+   * 宿主内置采集器 publish 快捷入口。等价于 `publish(HOST_BUILTIN_PLUGIN_ID, input)`。
+   */
+  publishBuiltIn(input: UsageDataPublishInput): UsageDataSnapshot;
   read(
     pluginId: string,
     sourceId: string,
     scope: UsageDataScope
   ): UsageDataSnapshot | null;
+  /**
+   * 触发全部注册源的 rescan（fan-out），随后 aggregate + 广播。
+   * 单源失败不短路其他源；结束后若有失败取第一条抛出。
+   */
+  refreshAll(): Promise<void>;
+  /**
+   * 注册宿主内置采集源（built-in collector）。source.id 会被作用域为
+   * `${HOST_BUILTIN_PLUGIN_ID}/${id}`，避免与插件命名冲突。返回 dispose。
+   */
+  registerBuiltInSource(source: UsageSource): () => void;
+  subscribe(listener: UsageAggregateListener): () => void;
 }
 
 function scopeKey(scope: UsageDataScope): string {
@@ -109,6 +135,12 @@ function assertPublishInput(input: UsageDataPublishInput): void {
     if (!DATE_PATTERN.test(observation.date))
       throw new Error("Invalid usage date");
     if (
+      observation.eventId !== undefined &&
+      (observation.eventId.length === 0 || observation.eventId.length > 500)
+    ) {
+      throw new Error("Invalid usage event id");
+    }
+    if (
       observation.date < input.coverage.from ||
       observation.date > input.coverage.to
     ) {
@@ -147,61 +179,116 @@ function emptyTotals(): UsageTokenTotals {
   };
 }
 
-function pricingStatus(
-  pricedCount: number,
-  unpricedCount: number
+interface CostAccumulator {
+  hasPriced: boolean;
+  hasUnpriced: boolean;
+  pricedSum: number;
+}
+
+function accumulateCost(acc: CostAccumulator, cost: number | null): void {
+  if (cost === null) {
+    acc.hasUnpriced = true;
+  } else {
+    acc.pricedSum += cost;
+    acc.hasPriced = true;
+  }
+}
+
+function pricingStatusOf(
+  acc: CostAccumulator
 ): UsageDataDailyBucket["pricingStatus"] {
-  if (unpricedCount === 0) return "complete";
-  if (pricedCount > 0) return "partial";
+  if (!acc.hasUnpriced) return "complete";
+  if (acc.hasPriced) return "partial";
   return "unpriced";
 }
 
-function buildBuckets(
-  observations: UsageTokenObservation[]
-): UsageDataDailyBucket[] {
+function pricedTotal(acc: CostAccumulator): number | null {
+  return acc.hasPriced ? acc.pricedSum : null;
+}
+
+interface BuildRollup {
+  buckets: UsageDataDailyBucket[];
+  byModel: readonly {
+    estimatedCostMicrousd: number | null;
+    modelId: string;
+    totalTokens: number;
+  }[];
+}
+
+function observationTotalTokens(observation: UsageTokenObservation): number {
+  return (
+    observation.totalTokens ??
+    observation.inputTokens + observation.outputTokens
+  );
+}
+
+function buildRollup(observations: UsageTokenObservation[]): BuildRollup {
   const byDate = new Map<
     string,
-    { costs: number[]; totals: UsageTokenTotals; unpriced: number }
+    { cost: CostAccumulator; totals: UsageTokenTotals }
+  >();
+  const byModel = new Map<
+    string,
+    { cost: CostAccumulator; totalTokens: number }
   >();
   for (const observation of observations) {
-    const row = byDate.get(observation.date) ?? {
-      costs: [],
-      totals: emptyTotals(),
-      unpriced: 0,
-    };
-    row.totals.inputTokens += observation.inputTokens;
-    row.totals.cachedInputTokens += observation.cachedInputTokens;
-    row.totals.outputTokens += observation.outputTokens;
-    row.totals.reasoningTokens += observation.reasoningTokens ?? 0;
-    row.totals.totalTokens +=
-      observation.totalTokens ??
-      observation.inputTokens + observation.outputTokens;
+    const totalTokens = observationTotalTokens(observation);
     const cost = estimateObservationCostMicrousd(observation);
-    if (cost === null) row.unpriced += 1;
-    else row.costs.push(cost);
-    byDate.set(observation.date, row);
+
+    const dateRow = byDate.get(observation.date) ?? {
+      cost: { hasPriced: false, hasUnpriced: false, pricedSum: 0 },
+      totals: emptyTotals(),
+    };
+    dateRow.totals.inputTokens += observation.inputTokens;
+    dateRow.totals.cachedInputTokens += observation.cachedInputTokens;
+    dateRow.totals.outputTokens += observation.outputTokens;
+    dateRow.totals.reasoningTokens += observation.reasoningTokens ?? 0;
+    dateRow.totals.totalTokens += totalTokens;
+    accumulateCost(dateRow.cost, cost);
+    byDate.set(observation.date, dateRow);
+
+    const modelKey = observation.modelId ?? "";
+    const modelRow = byModel.get(modelKey) ?? {
+      cost: { hasPriced: false, hasUnpriced: false, pricedSum: 0 },
+      totalTokens: 0,
+    };
+    modelRow.totalTokens += totalTokens;
+    accumulateCost(modelRow.cost, cost);
+    byModel.set(modelKey, modelRow);
   }
-  return [...byDate.entries()]
+  const buckets = [...byDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, row]) => ({
       date,
-      estimatedCostMicrousd:
-        row.costs.length > 0
-          ? row.costs.reduce((sum, value) => sum + value, 0)
-          : null,
-      pricingStatus: pricingStatus(row.costs.length, row.unpriced),
+      estimatedCostMicrousd: pricedTotal(row.cost),
+      pricingStatus: pricingStatusOf(row.cost),
       tokens: row.totals,
     }));
+  const modelSummary = [...byModel.entries()].map(([modelId, row]) => ({
+    estimatedCostMicrousd: pricedTotal(row.cost),
+    modelId,
+    totalTokens: row.totalTokens,
+  }));
+  return { buckets, byModel: modelSummary };
 }
 
 function buildSnapshot(
   pluginId: string,
   input: UsageDataPublishInput
 ): UsageDataSnapshot {
-  const buckets = buildBuckets(input.observations);
-  const priced = buckets.flatMap((bucket) =>
-    bucket.estimatedCostMicrousd === null ? [] : [bucket.estimatedCostMicrousd]
-  );
+  const rollup = buildRollup(input.observations);
+  const { buckets } = rollup;
+  // 一次遍历同时算周期 tokens 与已定价成本总额。
+  const totals: CostAccumulator = {
+    hasPriced: false,
+    hasUnpriced: false,
+    pricedSum: 0,
+  };
+  let periodTokens = 0;
+  for (const bucket of buckets) {
+    periodTokens += bucket.tokens.totalTokens;
+    accumulateCost(totals, bucket.estimatedCostMicrousd);
+  }
   const today = new Date().toISOString().slice(0, 10);
   const todayBucket = buckets.find((bucket) => bucket.date === today);
   const latestBucket = buckets.at(-1);
@@ -213,15 +300,11 @@ function buildSnapshot(
     scope: input.scope,
     sourceId: input.sourceId,
     summary: {
-      estimatedCostMicrousd:
-        priced.length > 0
-          ? priced.reduce((sum, value) => sum + value, 0)
-          : null,
+      // rollup 内部用 readonly 契约保护聚合器边界；对外 DTO 需要可变数组。
+      byModel: [...rollup.byModel],
+      estimatedCostMicrousd: pricedTotal(totals),
       latestDayTokens: latestBucket?.tokens.totalTokens ?? 0,
-      periodTokens: buckets.reduce(
-        (sum, bucket) => sum + bucket.tokens.totalTokens,
-        0
-      ),
+      periodTokens,
       todayEstimatedCostMicrousd: todayBucket?.estimatedCostMicrousd ?? null,
     },
   };
@@ -237,6 +320,34 @@ export function createUsageDataService(options: {
     migrations: [],
     schema: stateSchema,
   });
+  const listeners = new Set<UsageAggregateListener>();
+  const sources: UsageSourceRegistry = createUsageSourceRegistry();
+
+  function collectSources(): UsageAggregateSource[] {
+    return Object.values(store.get().snapshots).map((snapshot) => ({
+      pluginId: snapshot.pluginId,
+      scope: snapshot.scope,
+      snapshot,
+      sourceId: snapshot.sourceId,
+    }));
+  }
+
+  function aggregate(): UsageAggregateSnapshot {
+    return aggregateSnapshots(collectSources());
+  }
+
+  function notify(): void {
+    if (listeners.size === 0) return;
+    const snapshot = aggregate();
+    for (const listener of listeners) {
+      try {
+        listener(snapshot);
+      } catch {
+        // 不允许单个订阅者影响其他订阅者
+      }
+    }
+  }
+
   function publish(
     pluginId: string,
     input: UsageDataPublishInput
@@ -250,6 +361,7 @@ export function createUsageDataService(options: {
         [snapshotKey(pluginId, input.sourceId, input.scope)]: snapshot,
       },
     }));
+    notify();
     return snapshot;
   }
 
@@ -263,13 +375,74 @@ export function createUsageDataService(options: {
     );
   }
 
+  function clearBuiltIn(sourceId: string, scope: UsageDataScope): boolean {
+    const key = snapshotKey(HOST_BUILTIN_PLUGIN_ID, sourceId, scope);
+    if (!store.get().snapshots[key]) return false;
+    store.mutate((state) => {
+      const snapshots = { ...state.snapshots };
+      delete snapshots[key];
+      return { ...state, snapshots };
+    });
+    notify();
+    return true;
+  }
+
   return {
     async init(): Promise<void> {
       await store.init();
+      const machineScope = { kind: "machine" } as const;
+      const legacyKey = snapshotKey(
+        LEGACY_CODEX_PLUGIN_ID,
+        CODEX_LOCAL_USAGE_SOURCE_ID,
+        machineScope
+      );
+      const hostKey = snapshotKey(
+        HOST_BUILTIN_PLUGIN_ID,
+        CODEX_LOCAL_USAGE_SOURCE_ID,
+        machineScope
+      );
+      const legacy = store.get().snapshots[legacyKey];
+      if (legacy) {
+        store.mutate((state) => {
+          const snapshots = { ...state.snapshots };
+          if (!snapshots[hostKey]) {
+            snapshots[hostKey] = {
+              ...legacy,
+              pluginId: HOST_BUILTIN_PLUGIN_ID,
+            };
+          }
+          delete snapshots[legacyKey];
+          return { ...state, snapshots };
+        });
+        await store.flush();
+      }
     },
+    aggregate,
+    clearBuiltIn,
     flush: () => store.flush(),
     publish,
+    publishBuiltIn: (input) => publish(HOST_BUILTIN_PLUGIN_ID, input),
     read,
+    registerBuiltInSource: (source) =>
+      sources.register({
+        id: `${HOST_BUILTIN_PLUGIN_ID}/${source.id}`,
+        rescan: () => source.rescan(),
+      }),
+    refreshAll: async () => {
+      // fan-out 到全部注册源；单源失败不短路其他源。rescan 完成后总是
+      // 补一次广播——即使无源，也让 renderer 的手动刷新链路可端到端观测。
+      try {
+        await sources.refreshAll();
+      } finally {
+        notify();
+      }
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     createPluginFacade(pluginId, canPublish) {
       return {
         publish: async (input) => {
@@ -278,6 +451,11 @@ export function createUsageDataService(options: {
           return publish(pluginId, input);
         },
         read: async (sourceId, scope) => read(pluginId, sourceId, scope),
+        registerSource: (source) =>
+          sources.register({
+            id: `${pluginId}/${source.id}`,
+            rescan: () => source.rescan(),
+          }),
       };
     },
   };

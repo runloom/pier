@@ -51,7 +51,6 @@ import { createProcessEnvironmentService } from "../services/process-environment
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTaskService } from "../services/tasks/task-service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
-import { createUsageDataService } from "../services/usage-data/usage-data-service.ts";
 import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
@@ -66,6 +65,7 @@ import {
 import { showNativeWindowCloseFailure } from "../windows/native-window-close-failure.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
+import { createAppCoreUsageData } from "./app-core-usage-data.ts";
 import { readBundledPlugin } from "./bundled-plugin-reader.ts";
 import {
   createClientRegistry,
@@ -217,11 +217,8 @@ function createPierAppCore(): PierAppCore {
   });
   const preferences = createPreferencesService({ eventBus });
   const secrets = createSecretsStore();
-  const usageData = createUsageDataService({
-    userDataDir: app.getPath("userData"),
-  });
-  const usageDataReady = requireAppCoreInitialization(usageData.init(), (err) =>
-    console.error("[usage-data] init failed:", err)
+  const { ready: usageDataReady, usageData } = createAppCoreUsageData(
+    app.getPath("userData")
   );
   const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
     broadcast: (payload) => {

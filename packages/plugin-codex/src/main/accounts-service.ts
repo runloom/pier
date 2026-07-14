@@ -3,10 +3,7 @@ import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import type {
-  CodexAccountsSnapshot,
-  CodexCostUsageSnapshot,
-} from "../shared/accounts.ts";
+import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
 import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
 import {
   buildAccountRecord,
@@ -59,7 +56,6 @@ export function createCodexAccountsService(
   let usagePollTimer: ReturnType<typeof setInterval> | null = null;
   let lastLoginError: { at: number; message: string } | null = null;
   let suppressWatchUntil = 0;
-  let costUsage: CodexCostUsageSnapshot | null = null;
 
   const enqueueMutation = createSerialMutationQueue();
   const refreshAllUsage = createUsageRefreshScheduler({
@@ -79,17 +75,14 @@ export function createCodexAccountsService(
 
   function buildSnapshot(): CodexAccountsSnapshot {
     broadcastSeq += 1;
-    return {
-      ...buildAccountsSnapshot({
-        lastLoginError,
-        loginPending,
-        now: now(),
-        revision: broadcastSeq,
-        state: stateStore.get(),
-        usageCache,
-      }),
-      costUsage,
-    };
+    return buildAccountsSnapshot({
+      lastLoginError,
+      loginPending,
+      now: now(),
+      revision: broadcastSeq,
+      state: stateStore.get(),
+      usageCache,
+    });
   }
 
   function emitSnapshot(): void {
@@ -477,10 +470,6 @@ export function createCodexAccountsService(
     },
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
-    setCostUsage(snapshot): void {
-      costUsage = snapshot;
-      emitSnapshot();
-    },
     add: (_payload) => enqueueMutation(doAdd),
     cancelLogin: () => {
       loginAbort?.abort();

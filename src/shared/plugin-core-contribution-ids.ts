@@ -4,6 +4,7 @@ export const CORE_TASK_STATUS_ITEM_ID = "core.task-status";
 export const CORE_ACTIVITY_OVERVIEW_WIDGET_ID = "core.activity-overview";
 export const CORE_SYSTEM_RESOURCES_WIDGET_ID = "core.system-resources";
 export const CORE_CUSTOM_CARD_WIDGET_ID = "core.custom-card";
+export const CORE_COST_OVERVIEW_WIDGET_ID = "core.cost-overview";
 
 export const CORE_RESERVED_ACTION_IDS = [
   "pier.agent.new",
@@ -74,4 +75,5 @@ export const CORE_RESERVED_MISSION_CONTROL_WIDGET_IDS = [
   CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
   CORE_SYSTEM_RESOURCES_WIDGET_ID,
   CORE_CUSTOM_CARD_WIDGET_ID,
+  CORE_COST_OVERVIEW_WIDGET_ID,
 ] as const;
