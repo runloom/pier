@@ -164,6 +164,9 @@ describe("action contribution boundary", () => {
       "放大界面",
       "fangda",
     ]);
+    expect(zhCN.commandPalette.aliases.pier.panel.newWorkbench).toEqual(
+      expect.arrayContaining(["工作台", "gongzuo", "gongzuotai"])
+    );
   });
 
   it("resolves host aliases from every registered locale", async () => {

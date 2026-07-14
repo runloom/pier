@@ -96,7 +96,7 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         reset: vi.fn(async () => undefined),
         set: vi.fn(async () => undefined),
       },
-      missionControlWidgets: {
+      workbenchWidgets: {
         register: vi.fn(() => () => undefined),
       },
       dialogs: {

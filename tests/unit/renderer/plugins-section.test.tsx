@@ -25,7 +25,7 @@ function entry(id: string, enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id,
@@ -47,7 +47,7 @@ const INITIAL_STORE_STATE = {
   plugins: [],
 };
 
-const MISSION_CONTROL_WIDGETS_SUMMARY_RE = /2 Mission Control widgets/i;
+const WORKBENCH_WIDGETS_SUMMARY_RE = /2 Workbench widgets/i;
 
 describe("PluginsSection", () => {
   beforeEach(async () => {
@@ -282,9 +282,9 @@ describe("PluginsSection", () => {
     expect(screen.queryByText("Settings")).not.toBeInTheDocument();
   });
 
-  it("contributionSummary 显示 missionControlWidgets 计数", () => {
+  it("contributionSummary 显示 workbenchWidgets 计数", () => {
     const e = entry("pier.dash", true);
-    e.manifest.missionControlWidgets = [
+    e.manifest.workbenchWidgets = [
       { id: "w1", permissions: [], title: "W1" },
       { id: "w2", permissions: [], title: "W2" },
     ];
@@ -300,8 +300,6 @@ describe("PluginsSection", () => {
     const pluginRow = screen.getByText("pier.dash");
     fireEvent.click(pluginRow);
 
-    expect(
-      screen.getByText(MISSION_CONTROL_WIDGETS_SUMMARY_RE)
-    ).toBeInTheDocument();
+    expect(screen.getByText(WORKBENCH_WIDGETS_SUMMARY_RE)).toBeInTheDocument();
   });
 });

@@ -63,8 +63,7 @@ export function SwitchConfirmDialog({
     onResult({ confirmed: false, syncTargets: [] });
   }
 
-  const targetLabel: Record<CrossToolSyncTarget, string> = {
-    codex: "Codex",
+  const targetLabel: Record<Exclude<CrossToolSyncTarget, "codex">, string> = {
     opencode: t("pier.codex.switch.syncTarget.opencode", "OpenCode"),
     pi: t("pier.codex.switch.syncTarget.pi", "pi"),
     omp: t("pier.codex.switch.syncTarget.omp", "omp"),
@@ -102,19 +101,21 @@ export function SwitchConfirmDialog({
           </p>
           <div className="flex flex-col gap-1" data-testid="sync-targets">
             {ALL_SYNC_TARGETS.map((target) => (
-              <button
-                className="flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent/50"
+              <Button
+                className="flex w-full justify-start gap-3 rounded-md px-2 py-1.5 font-normal hover:bg-accent/50"
                 key={target}
                 onClick={() => toggleTarget(target)}
                 type="button"
+                variant="ghost"
               >
                 <Checkbox
                   checked={syncTargets.has(target)}
                   data-testid={`sync-target-${target}`}
                   onCheckedChange={() => toggleTarget(target)}
+                  onClick={(e) => e.stopPropagation()}
                 />
                 <span className="text-sm">{targetLabel[target]}</span>
-              </button>
+              </Button>
             ))}
           </div>
         </div>

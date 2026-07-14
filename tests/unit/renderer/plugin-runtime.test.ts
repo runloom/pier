@@ -33,7 +33,7 @@ const pluginEntry = {
   manifest: {
     apiVersion: 1,
     commands: [],
-    missionControlWidgets: [],
+    workbenchWidgets: [],
     settingsPages: [],
     engines: { pier: ">=0.1.0" },
     groupContent: [{ id: "runtime.test.groupView", title: "Group View" }],
@@ -184,6 +184,23 @@ describe("RendererPluginRuntime", () => {
     expect(
       container.querySelector('[data-slot="runtime.test.groupView"]')
     ).toBeNull();
+  });
+
+  it("clears lifecycle participants when builtin activation fails", async () => {
+    const runtime = new RendererPluginRuntime([
+      {
+        activate: () => {
+          throw new Error("activation failed");
+        },
+        id: "runtime.test",
+      },
+    ]);
+
+    await expect(runtime.refresh([pluginEntry])).rejects.toThrow(
+      "renderer plugin refresh failed"
+    );
+
+    expect(pluginLifecycleBarriers.pluginIds()).not.toContain("runtime.test");
   });
 
   it("clears host group content even when the plugin disposer throws", async () => {

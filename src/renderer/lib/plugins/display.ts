@@ -1,4 +1,3 @@
-import type { PluginMissionControlWidgetContribution } from "@shared/contracts/mission-control.ts";
 import type {
   PluginCommandContribution,
   PluginLocaleMessages,
@@ -7,6 +6,7 @@ import type {
   PluginRegistryEntry,
   PluginTerminalStatusItemContribution,
 } from "@shared/contracts/plugin.ts";
+import type { PluginWorkbenchWidgetContribution } from "@shared/contracts/workbench.ts";
 
 export interface PluginDisplayText {
   description?: string;
@@ -224,23 +224,23 @@ export function resolvePluginTerminalStatusItemDisplay(
   };
 }
 
-export function resolvePluginMissionControlWidgetDisplay(
+export function resolvePluginWorkbenchWidgetDisplay(
   manifest: PluginManifest,
-  widget: PluginMissionControlWidgetContribution,
+  widget: PluginWorkbenchWidgetContribution,
   locale: string
 ): PluginContributionDisplayText {
   const description =
     resolveFromLocales(
       manifest,
       locale,
-      (messages) => messages.missionControlWidgets?.[widget.id]?.description
+      (messages) => messages.workbenchWidgets?.[widget.id]?.description
     ) ?? widget.description;
   return {
     title:
       resolveFromLocales(
         manifest,
         locale,
-        (messages) => messages.missionControlWidgets?.[widget.id]?.title
+        (messages) => messages.workbenchWidgets?.[widget.id]?.title
       ) ?? widget.title,
     ...(description ? { description } : {}),
   };

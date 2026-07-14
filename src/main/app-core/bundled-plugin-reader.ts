@@ -25,7 +25,7 @@ export interface BundledPluginBundle {
   readonly archivePath: string;
   readonly contributionCounts: {
     readonly commands: number;
-    readonly missionControlWidgets: number;
+    readonly workbenchWidgets: number;
     readonly panels: number;
     readonly terminalStatusItems: number;
   };
@@ -71,6 +71,7 @@ export function readBundledPlugin(
       description?: string;
       version?: string;
       commands?: unknown[];
+      workbenchWidgets?: unknown[];
       missionControlWidgets?: unknown[];
       panels?: unknown[];
       terminalStatusItems?: unknown[];
@@ -93,7 +94,9 @@ export function readBundledPlugin(
       archivePath,
       contributionCounts: {
         commands: parsed.commands?.length ?? 0,
-        missionControlWidgets: parsed.missionControlWidgets?.length ?? 0,
+        workbenchWidgets:
+          (parsed.workbenchWidgets ?? parsed.missionControlWidgets)?.length ??
+          0,
         panels: parsed.panels?.length ?? 0,
         terminalStatusItems: parsed.terminalStatusItems?.length ?? 0,
       },

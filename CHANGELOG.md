@@ -6,7 +6,7 @@
 
 ### Added
 
-- **成本管理归宿主指挥中心。** 新增 core widget `core.cost-overview`（分类
+- **成本管理归宿主工作台。** 新增 core widget `core.cost-overview`（分类
   `analytics`，可搜索关键词包括 `cost` / `spending` / `tokens` / `成本` /
   `花费` / `令牌`），跨插件聚合 API 等价成本估算：4 KPI（今日 / 近 31 天 /
   tokens / 来源数）+ 堆叠 Bar chart（每源一层，走 `--chart-1..5` 语义色）
@@ -18,7 +18,7 @@
 - **`UsageSourceRegistry`**（`src/main/services/usage-data/source-registry.ts`）
   + 插件 facade `context.usageData.registerSource({ id, rescan })`；
   `refreshAll` fan-out 到全部注册源，单源失败不短路其他源。
-- **6 个 `core.cost.*` metrics** 注册到 mission-control metric registry：
+- **6 个 `core.cost.*` metrics** 注册到 workbench metric registry：
   `today` / `periodInstant` / `periodTokens` / `dailySeries` / `byModel` /
   `bySource`，供自定义卡片物料按指标组装。
 - **定价目录扩展**：`src/main/services/usage-data/pricing-catalog.json` 抽出
@@ -43,9 +43,13 @@ in-flight 去重防并发落两条记录。
 
 ### Changed
 
+- **“指挥中心”统一更名为“工作台”。** 面板组件值、动作标识、国际化键、
+  插件贡献点和运行时注册接口统一使用 `workbench` / `workbenchWidgets`；旧布局与
+  已安装的 `apiVersion: 1` 官方插件只在读取边界做单向兼容。`pier.codex` 同步升级
+  到 1.3.0。
 - **`pier.codex` 插件版本 1.1.6 → 1.2.0。** Codex 只保留会话日志采集 + 账号
   管理；成本 UI / 定价 / 展示由宿主统一负责。历史布局中的 `pier.codex.cost`
-  widget 会走宿主 unknown widget fallback（`mission-control-merge.ts:101`），
+  widget 会走宿主 unknown widget fallback（`workbench-merge.ts:101`），
   显示占位卡带移除按钮，用户可手工从物料库添加 `core.cost-overview`。
 - **Path B agent hook 通路收敛为 emit 脚本 + JSONL 直写。**
   - emit 脚本升级为 `commandStart` / `commandFinished` / `agentEvent` 三 kind

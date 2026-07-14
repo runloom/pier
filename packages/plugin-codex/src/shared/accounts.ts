@@ -82,11 +82,10 @@ export type AddAccountPayload = Record<string, never>;
 export type CrossToolSyncTarget = "codex" | "opencode" | "pi" | "omp";
 
 /** All sync targets, in display order. */
-export const ALL_SYNC_TARGETS: readonly CrossToolSyncTarget[] = [
-  "opencode",
-  "pi",
-  "omp",
-];
+export const ALL_SYNC_TARGETS: readonly Exclude<
+  CrossToolSyncTarget,
+  "codex"
+>[] = ["opencode", "pi", "omp"];
 
 export interface SelectAccountPayload {
   accountId: string;

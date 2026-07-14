@@ -93,6 +93,8 @@ export function FilesGroupView({
   const activeParams = activePanel?.params as
     | {
         context?: PanelContext;
+        markdownAnchor?: string;
+        markdownAnchorRequestId?: string;
         pinned?: boolean;
         source?: unknown;
       }
@@ -105,6 +107,8 @@ export function FilesGroupView({
   const activeTab = activePanel
     ? {
         context: activeParams?.context,
+        markdownAnchor: activeParams?.markdownAnchor,
+        markdownAnchorRequestId: activeParams?.markdownAnchorRequestId,
         panelId: activePanel.id,
         pinned: activeParams?.pinned === true,
         source: parsedSource,
@@ -402,6 +406,8 @@ export function FilesGroupView({
       <ResolvedFilePanel
         context={context}
         controller={controller}
+        markdownAnchor={activeTab?.markdownAnchor}
+        markdownAnchorRequestId={activeTab?.markdownAnchorRequestId}
         mode={mode}
         panelContext={panelContext}
         panelId={activeTab?.panelId}

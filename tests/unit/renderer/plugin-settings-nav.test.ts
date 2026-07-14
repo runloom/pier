@@ -23,7 +23,7 @@ function entry(
       commands: [],
       engines: { pier: ">=0.1.0" },
       id,
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       name: `${id}-name`,
       panels: [],
       permissions: [],

@@ -10,11 +10,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ensureCoreMetricsRegistered,
   resetCoreMetricsForTests,
-} from "@/lib/mission-control/core-metrics.ts";
+} from "@/lib/workbench/core-metrics.ts";
 import {
   clearMetricsForTests,
   getMetricRegistration,
-} from "@/lib/mission-control/metric-registry.ts";
+} from "@/lib/workbench/metric-registry.ts";
 import { useUsageDataStore } from "@/stores/usage-data.store.ts";
 
 function readValue(id: string) {

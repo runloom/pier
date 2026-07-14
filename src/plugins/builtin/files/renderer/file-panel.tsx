@@ -470,6 +470,8 @@ function FilePanelContent({
       <ResolvedFilePanel
         context={runtimeContext}
         controller={controller}
+        markdownAnchor={props.params?.markdownAnchor}
+        markdownAnchorRequestId={props.params?.markdownAnchorRequestId}
         mode={mode}
         panelContext={props.params?.context}
         panelId={props.api?.id}
@@ -480,7 +482,6 @@ function FilePanelContent({
     </FilePanelShell>
   );
 }
-
 export function createFilePanel(
   context: RendererPluginContext,
   controller: FileEditorController,

@@ -7,7 +7,7 @@ const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
   {
     defaultSize: { h: 3, w: 4 },
     maxSize: { h: 4, w: 8 },
-    minSize: { h: 3, w: 3 },
+    minSize: { h: 3, w: 2 },
     pluginId: "pier.codex",
     widgetId: "pier.codex.accounts",
   },
@@ -113,7 +113,7 @@ describe("managed plugin packaging governance", () => {
 
     const sizingPolicies = bundledPluginManifests.flatMap(({ raw }) => {
       const manifest = managedPluginPackageManifestSchema.parse(raw);
-      return manifest.missionControlWidgets.map((widget) => ({
+      return manifest.workbenchWidgets.map((widget) => ({
         defaultSize: widget.defaultSize,
         maxSize: widget.maxSize,
         minSize: widget.minSize,

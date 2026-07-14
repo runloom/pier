@@ -1,10 +1,18 @@
 import { join } from "node:path";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeImage,
+  shell,
+} from "electron";
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control-registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { appCore } from "./app-core/app-core.ts";
+import { configureMainAppIdentity } from "./app-identity.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { showAppQuitConfirmation } from "./app-quit/quit-confirmation.ts";
 import { createAppQuitController } from "./app-quit/quit-controller.ts";
@@ -15,6 +23,7 @@ import { installCsp } from "./csp.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
 import {
   handleFilePreviewProtocol,
+  registerFilePreviewRequestGuard,
   registerFilePreviewScheme,
 } from "./files/file-preview-protocol.ts";
 import {
@@ -24,6 +33,8 @@ import {
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
+import { registerExternalNavigationIpc } from "./ipc/external-navigation.ts";
+import { registerFilePreviewTicketIpc } from "./ipc/file-preview-ticket.ts";
 import { registerFileSaveTargetIpc } from "./ipc/file-save-target.ts";
 import { registerFileWatchIpc } from "./ipc/file-watch.ts";
 import {
@@ -47,6 +58,7 @@ import {
 } from "./plugins/plugin-asset-protocol.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
+import { createExternalNavigationService } from "./services/external-navigation.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import { reconcileOrphanedRunningTasks } from "./state/terminal-session-state.ts";
@@ -56,7 +68,6 @@ import { createWindowZoomController } from "./windows/window-zoom.ts";
 
 const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
-const DEV_USER_DATA_ROOT = "Pier-dev";
 const startupLog = createLogger("startup");
 const windowLog = createLogger("window");
 const windowZoomLog = createLogger("window-zoom");
@@ -82,39 +93,7 @@ windowManager.onCreate(({ window }) => {
   });
 });
 
-// dev 的 Vite HMR 需要 unsafe-eval，因此关闭 Electron 的对应安全警告。
-if (isDev) {
-  process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
-}
-
-function hasExplicitUserDataDir(argv: readonly string[]): boolean {
-  return argv.some(
-    (arg) => arg === "--user-data-dir" || arg.startsWith("--user-data-dir=")
-  );
-}
-
-function devUserDataDirForCwd(cwd: string): string {
-  return join(cwd, `.${DEV_USER_DATA_ROOT.toLowerCase()}`, "userData");
-}
-
-function setUserDataPath(userDataDir: string): void {
-  if (hasExplicitUserDataDir(process.argv)) {
-    return;
-  }
-  app.setPath("userData", userDataDir);
-}
-
-function configureAppIdentity(): void {
-  if (isDev) {
-    const cwd = process.cwd();
-    setUserDataPath(
-      process.env.ELECTRON_USER_DATA_DIR ?? devUserDataDirForCwd(cwd)
-    );
-  }
-  app.setName("Pier");
-}
-
-configureAppIdentity();
+configureMainAppIdentity(isDev);
 
 // 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
 const gotTheLock = app.requestSingleInstanceLock();
@@ -300,6 +279,7 @@ if (gotTheLock) {
     .then(async () => {
       installCsp();
       handleAssetProtocol();
+      registerFilePreviewRequestGuard();
       handleFilePreviewProtocol();
       handlePluginAssetProtocol({
         getRuntimeSources: () =>
@@ -389,7 +369,15 @@ if (gotTheLock) {
 
       registerWindowIpc(ipcMain);
       registerCommandIpc(ipcMain);
+      registerExternalNavigationIpc(ipcMain, {
+        service: createExternalNavigationService({
+          now: Date.now,
+          openExternal: (url) => shell.openExternal(url),
+        }),
+        windowForSender: (sender) => windowManager.fromWebContents(sender),
+      });
       registerFileSaveTargetIpc(ipcMain);
+      registerFilePreviewTicketIpc();
       registerMenuIpc(ipcMain);
       registerAgentsIpc(ipcMain);
       registerForegroundActivityIpc(ipcMain);

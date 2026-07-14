@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { MetricDescriptor } from "@/lib/mission-control/metric-registry.ts";
+import type { MetricDescriptor } from "@/lib/workbench/metric-registry.ts";
 import {
   blockAcceptsMetric,
   parseCustomCardParams,
-} from "@/panel-kits/mission-control/core-widgets/custom-card/custom-card-params.ts";
+} from "@/panel-kits/workbench/core-widgets/custom-card/custom-card-params.ts";
 
 function descriptor(
   kind: MetricDescriptor["kind"],

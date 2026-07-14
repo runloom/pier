@@ -32,7 +32,7 @@ function entryWithPanel(): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.test",

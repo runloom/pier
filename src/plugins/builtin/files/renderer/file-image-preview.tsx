@@ -14,6 +14,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
 import {
   Tooltip,
   TooltipContent,
@@ -21,13 +22,13 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { createFilePreviewUrl } from "@shared/file-preview-url.ts";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { ChevronDown, ImageOff, ZoomIn, ZoomOut } from "lucide-react";
 import {
+  type KeyboardEvent,
   type SyntheticEvent,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -44,27 +45,118 @@ function clampZoom(value: number): number {
 }
 
 export function FileImagePreview({
+  context,
   document,
   t,
 }: {
+  context: Pick<RendererPluginContext, "filePreviews">;
   document: FilesDocument;
   t: FilesTranslate;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [zoom, setZoom] = useState<number | "fit">("fit");
-  const canvasRef = useRef<HTMLElement>(null);
+  const activePreviewRef = useRef<{
+    generation: number;
+    src: string;
+    ticket: string;
+  } | null>(null);
+  const requestGenerationRef = useRef(0);
+  const [renderGeneration, setRenderGeneration] = useState(0);
+  const [src, setSrc] = useState("");
+  const [loadState, setLoadState] = useState<"error" | "loading" | "ready">(
+    "loading"
+  );
   const source = document.source;
   const preview = document.preview;
-  const src = useMemo(() => {
+  useEffect(() => {
+    requestGenerationRef.current += 1;
+    const requestGeneration = requestGenerationRef.current;
     if (!(preview && source.kind === "disk")) {
-      return "";
+      const abandonedTicket = activePreviewRef.current?.ticket;
+      activePreviewRef.current = null;
+      setFailedSrc(null);
+      setSrc("");
+      setLoadState("error");
+      if (abandonedTicket) {
+        context.filePreviews.release(abandonedTicket).catch(() => undefined);
+      }
+      return;
     }
-    return createFilePreviewUrl({
-      path: source.path,
-      revision: preview.revision,
-      root: source.root,
-    });
-  }, [preview, source]);
+    setLoadState("loading");
+    setFailedSrc(null);
+    let cancelled = false;
+    const previousTicket = activePreviewRef.current?.ticket;
+    context.filePreviews
+      .issue(
+        {
+          mime: preview.mime,
+          path: source.path,
+          revision: preview.revision,
+          root: source.root,
+        },
+        previousTicket
+      )
+      .then((result) => {
+        if (requestGenerationRef.current !== requestGeneration) {
+          if (result.issued) {
+            context.filePreviews.release(result.ticket).catch(() => undefined);
+          }
+          return;
+        }
+        if (!result.issued) {
+          if (!cancelled) {
+            const abandonedTicket = activePreviewRef.current?.ticket;
+            activePreviewRef.current = null;
+            setSrc("");
+            setLoadState("error");
+            if (abandonedTicket) {
+              context.filePreviews
+                .release(abandonedTicket)
+                .catch(() => undefined);
+            }
+          }
+          return;
+        }
+        if (cancelled) {
+          context.filePreviews.release(result.ticket).catch(() => undefined);
+          return;
+        }
+        activePreviewRef.current = {
+          generation: requestGeneration,
+          src: result.url,
+          ticket: result.ticket,
+        };
+        setFailedSrc(null);
+        setRenderGeneration(requestGeneration);
+        setSrc(result.url);
+      })
+      .catch(() => {
+        if (cancelled || requestGenerationRef.current !== requestGeneration) {
+          return;
+        }
+        const abandonedTicket = activePreviewRef.current?.ticket;
+        activePreviewRef.current = null;
+        setSrc("");
+        setLoadState("error");
+        if (abandonedTicket) {
+          context.filePreviews.release(abandonedTicket).catch(() => undefined);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context, preview, source]);
+
+  useEffect(
+    () => () => {
+      const ticket = activePreviewRef.current?.ticket;
+      if (ticket) {
+        context.filePreviews.release(ticket).catch(() => undefined);
+        activePreviewRef.current = null;
+      }
+    },
+    [context]
+  );
 
   const adjustZoom = useCallback((delta: number) => {
     setZoom((current) => clampZoom((current === "fit" ? 1 : current) + delta));
@@ -73,13 +165,8 @@ export function FileImagePreview({
     setZoom((current) => (current === "fit" ? 1 : "fit"));
   }, []);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    const handleDoubleClick = () => toggleZoom();
-    const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
       if (event.key === "+" || event.key === "=") {
         event.preventDefault();
         adjustZoom(ZOOM_STEP);
@@ -90,26 +177,76 @@ export function FileImagePreview({
         event.preventDefault();
         setZoom(1);
       }
-    };
-    canvas.addEventListener("dblclick", handleDoubleClick);
-    canvas.addEventListener("keydown", handleKeyDown);
-    return () => {
-      canvas.removeEventListener("dblclick", handleDoubleClick);
-      canvas.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [adjustZoom, toggleZoom]);
+    },
+    [adjustZoom]
+  );
+
+  const previewForImageEvent = useCallback((element: HTMLImageElement) => {
+    const eventGeneration = Number(element.dataset.previewGeneration);
+    const eventUrl = element.getAttribute("src");
+    const activePreview = activePreviewRef.current;
+    if (
+      !eventUrl ||
+      activePreview?.generation !== eventGeneration ||
+      activePreview.src !== eventUrl ||
+      requestGenerationRef.current !== eventGeneration
+    ) {
+      return null;
+    }
+    return activePreview;
+  }, []);
 
   const handleImageError = useCallback(
     (event: SyntheticEvent<HTMLImageElement>) => {
       const failedUrl = event.currentTarget.getAttribute("src");
-      if (failedUrl) {
-        setFailedSrc(failedUrl);
+      const activePreview = previewForImageEvent(event.currentTarget);
+      if (!(failedUrl && activePreview)) {
+        return;
       }
+      activePreviewRef.current = null;
+      setLoadState("error");
+      setFailedSrc(failedUrl);
+      context.filePreviews.release(activePreview.ticket).catch(() => undefined);
     },
-    []
+    [context, previewForImageEvent]
   );
 
-  if (!(preview && src) || failedSrc === src) {
+  const handleImageLoad = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      if (!previewForImageEvent(event.currentTarget)) {
+        return;
+      }
+      setFailedSrc(null);
+      setLoadState("ready");
+    },
+    [previewForImageEvent]
+  );
+
+  const loading = loadState === "loading";
+  const loadingLabel = t("filePanel.image.loading", "Loading image");
+  const loadingIndicator = loading ? (
+    <div
+      className="absolute inset-3 flex items-center justify-center"
+      role="status"
+    >
+      <span className="sr-only">{loadingLabel}</span>
+      <Skeleton className="h-2/3 w-2/3 max-w-2xl" />
+    </div>
+  ) : null;
+
+  if (preview && loading && !src) {
+    return (
+      <section
+        aria-busy="true"
+        aria-label={t("filePanel.image.viewerLabel", "Image preview")}
+        className="relative flex min-h-0 flex-1 items-center justify-center bg-muted/20 p-3"
+      >
+        {loadingIndicator}
+      </section>
+    );
+  }
+
+  if (!(preview && src) || loadState === "error" || failedSrc === src) {
     return (
       <Empty>
         <EmptyHeader>
@@ -137,24 +274,31 @@ export function FileImagePreview({
 
   return (
     <div className="relative flex min-h-0 flex-1 bg-background">
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: the focusable image canvas exposes documented keyboard and double-click zoom controls */}
       <section
+        aria-busy={loading}
         aria-label={t("filePanel.image.viewerLabel", "Image preview")}
-        className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/20 p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
-        ref={canvasRef}
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/20 p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
+        onDoubleClick={toggleZoom}
+        onKeyDown={handleKeyDown}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: the image canvas accepts documented zoom shortcuts when focused
         tabIndex={0}
       >
+        {loadingIndicator}
         {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: image load failures are scoped to the exact preview URL */}
         <img
           alt={document.name}
           className={cn(
             "object-contain",
+            loading && "opacity-0",
             zoom === "fit" ? "max-h-full max-w-full" : "max-w-none"
           )}
+          data-preview-generation={renderGeneration}
           draggable={false}
           height={1}
-          key={src}
+          key={`${renderGeneration}:${src}`}
           onError={handleImageError}
+          onLoad={handleImageLoad}
           src={src}
           style={{
             height: "auto",
@@ -169,6 +313,7 @@ export function FileImagePreview({
           aria-label={t("filePanel.image.controlsLabel", "Image controls")}
           className="absolute right-3 bottom-3 z-10 flex items-center gap-1"
           data-slot="file-image-controls"
+          hidden={loading}
           role="toolbar"
         >
           <Tooltip>

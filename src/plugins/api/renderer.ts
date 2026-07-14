@@ -8,32 +8,45 @@ import type {
   IDockviewPanelProps,
   PierDockviewGroupHandle,
 } from "@shared/contracts/dockview.ts";
+import type { ExternalNavigationResult } from "@shared/contracts/external-navigation.ts";
+import type {
+  FilePreviewTicketIssueResult,
+  FilePreviewTicketLocator,
+} from "@shared/contracts/file-preview-ticket.ts";
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
-import type { RendererMissionControlWidgetRegistration } from "./mission-control.ts";
+import type {
+  RendererPluginAppearance,
+  RendererPluginMermaidResult,
+} from "./renderer-appearance.ts";
 import type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
+import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
 
 export type {
-  MissionControlWidgetActionContext,
-  MissionControlWidgetComponentProps,
-  MissionControlWidgetSettingsProps,
-  RendererMissionControlWidgetAction,
-  RendererMissionControlWidgetRegistration,
-} from "./mission-control.ts";
+  RendererPluginAppearance,
+  RendererPluginMermaidResult,
+} from "./renderer-appearance.ts";
 export type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
+export type {
+  RendererWorkbenchWidgetAction,
+  RendererWorkbenchWidgetRegistration,
+  WorkbenchWidgetActionContext,
+  WorkbenchWidgetComponentProps,
+  WorkbenchWidgetSettingsProps,
+} from "./workbench.ts";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
@@ -268,13 +281,22 @@ export interface RendererPluginContext {
   agents: {
     selection(): Promise<RendererPluginAgentSelection>;
   };
+  ai: {
+    generateText(request: AiGenerateTextRequest): Promise<AiGenerateTextResult>;
+    status(): Promise<AiStatusResult>;
+  };
   /**
    * AI 任务级能力(main 侧持有 provider 配置与密钥;插件需声明 ai:invoke)。
    * 结果用 status 区分,不抛业务异常 —— 未配置/失败时调用方自行降级。
    */
-  ai: {
-    generateText(request: AiGenerateTextRequest): Promise<AiGenerateTextResult>;
-    status(): Promise<AiStatusResult>;
+  appearance: {
+    current(): RendererPluginAppearance;
+    onDidChange(
+      listener: (appearance: RendererPluginAppearance) => void
+    ): () => void;
+  };
+  charts: {
+    renderMermaid(source: string): Promise<RendererPluginMermaidResult>;
   };
   commandPalette: {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
@@ -354,6 +376,16 @@ export interface RendererPluginContext {
    * `environment:write`.
    */
   environments: RendererPluginEnvironmentsFacade;
+  externalNavigation: {
+    open(url: string): Promise<ExternalNavigationResult>;
+  };
+  filePreviews: {
+    issue(
+      locator: FilePreviewTicketLocator,
+      previousTicket?: string
+    ): Promise<FilePreviewTicketIssueResult>;
+    release(ticket: string): Promise<boolean>;
+  };
   files: RendererPluginFilesFacade;
   /**
    * Git 主体能力(对应 main 进程 GitService;插件按 manifest 声明的 capability 调用)。
@@ -376,11 +408,6 @@ export interface RendererPluginContext {
   };
   lifecycle: {
     beforeSuspend(participant: RendererPluginSuspendParticipant): () => void;
-  };
-  missionControlWidgets: {
-    register(
-      registration: RendererMissionControlWidgetRegistration
-    ): () => void;
   };
   /**
    * 通知能力。error/info/success/loading 是应用内短 toast(由宿主统一渲染与
@@ -452,6 +479,9 @@ export interface RendererPluginContext {
   terminal: RendererPluginTerminalContext;
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;
+  };
+  workbenchWidgets: {
+    register(registration: RendererWorkbenchWidgetRegistration): () => void;
   };
   worktrees: RendererPluginWorktreesFacade;
 }

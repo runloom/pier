@@ -9,7 +9,7 @@ import {
   expect,
   test,
 } from "@playwright/test";
-import { selectTheme, setWindowSize } from "./mission-control-e2e-harness.ts";
+import { selectTheme, setWindowSize } from "./workbench-e2e-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
@@ -31,7 +31,7 @@ async function forceClose(application: ElectronApplication): Promise<void> {
   ]);
 }
 
-test("uses the same scrollbar policy in Markdown source and preview modes", async ({
+test("renders Markdown in the production worker and keeps scrollbar policy consistent", async ({
   browserName: _browserName,
 }, testInfo) => {
   test.setTimeout(60_000);
@@ -39,10 +39,18 @@ test("uses the same scrollbar policy in Markdown source and preview modes", asyn
     join(tmpdir(), "pier-markdown-scrollbar-e2e-")
   );
   const workspaceDir = mkdtempSync(join(tmpdir(), "pier-markdown-workspace-"));
-  const markdown = Array.from(
-    { length: 80 },
-    (_, index) => `## Section ${index + 1}\n\nScrollbar comparison content.\n`
-  ).join("\n");
+  const markdown = [
+    "# Worker Diagram",
+    "",
+    "```mermaid",
+    "graph TD;A-->B",
+    "```",
+    "",
+    ...Array.from(
+      { length: 80 },
+      (_, index) => `## Section ${index + 1}\n\nScrollbar comparison content.\n`
+    ),
+  ].join("\n");
   writeFileSync(join(workspaceDir, "scrollbars.md"), markdown);
   const application = await electron.launch({
     args: [OUT_MAIN],
@@ -108,6 +116,35 @@ test("uses the same scrollbar policy in Markdown source and preview modes", asyn
       '[data-slot="markdown-preview"][data-scrollbar="stable"]'
     );
     await expect(previewScroller).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Section 1", exact: true })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByText(
+        /Unable to render Markdown preview|无法渲染 Markdown 预览/u
+      )
+    ).toHaveCount(0);
+    const diagram = page.locator('[data-slot="markdown-diagram"] svg');
+    await expect(diagram).toBeVisible({ timeout: 30_000 });
+    const diagramColors = await diagram.evaluate((element) => {
+      const arrow = element.querySelector("marker polygon");
+      const edge = element.querySelector("polyline.edge");
+      if (!(arrow instanceof SVGElement && edge instanceof SVGElement)) {
+        throw new Error("Expected Mermaid arrow and edge elements");
+      }
+      const accentProbe = document.createElement("span");
+      accentProbe.style.color = "var(--action-accent)";
+      document.body.append(accentProbe);
+      const colors = {
+        actionAccent: getComputedStyle(accentProbe).color,
+        arrow: getComputedStyle(arrow).fill,
+        edge: getComputedStyle(edge).stroke,
+      };
+      accentProbe.remove();
+      return colors;
+    });
+    expect(diagramColors.arrow).not.toBe(diagramColors.actionAccent);
+    expect(diagramColors.arrow).not.toBe(diagramColors.edge);
     await previewScroller.evaluate((element) => {
       element.scrollTop = 600;
       element.dispatchEvent(new Event("scroll"));

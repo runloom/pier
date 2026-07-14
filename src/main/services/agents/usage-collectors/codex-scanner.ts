@@ -37,7 +37,6 @@ function emptyScanInput(from: string, to: string): UsageDataPublishInput {
     sourceId: CODEX_USAGE_SOURCE_ID,
   };
 }
-
 interface UsageCandidate {
   date: string;
   path: string;

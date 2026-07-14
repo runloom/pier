@@ -33,15 +33,13 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const api = useWorkspaceStore.getState().api;
       useWorkspaceStore
         .getState()
-        .addMissionControl(
-          referenceGroupById(api, invocation?.sourcePanelGroupId)
-        );
+        .addWorkbench(referenceGroupById(api, invocation?.sourcePanelGroupId));
     },
     iconComponent: LayoutDashboard,
-    id: "pier.panel.newMissionControl",
+    id: "pier.panel.newWorkbench",
     sortOrder: 0,
     surfaces: ["command-palette", "create-menu"],
-    titleKey: "commandPalette.action.newMissionControl",
+    titleKey: "commandPalette.action.newWorkbench",
     when: "workspace.hasApi",
   },
   {

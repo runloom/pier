@@ -15,7 +15,25 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
   const labels = props.labels ?? DEFAULT_LABELS;
 
   if (props.mode === "preview") {
-    return <MarkdownPreview value={props.value} />;
+    return (
+      <MarkdownPreview
+        appearance={props.markdownAppearance}
+        charts={props.markdownCharts}
+        copyCode={props.markdownCopyCode}
+        errorLabel={props.markdownErrorLabel}
+        fileResources={props.markdownFileResources}
+        initialAnchor={props.markdownInitialAnchor}
+        initialAnchorRequestId={props.markdownInitialAnchorRequestId}
+        labels={props.markdownLabels}
+        openExternal={props.openExternal}
+        openInternal={props.onOpenMarkdownInternal}
+        searchLabels={props.searchLabels}
+        searchRequest={props.searchRequest}
+        sessionId={props.editorSessionId}
+        source={props.markdownSource}
+        value={props.value}
+      />
+    );
   }
 
   if (props.mode === "diff") {
