@@ -8,17 +8,19 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   ExternalRendererPluginContext,
-  MissionControlWidgetComponentProps,
+  WorkbenchWidgetComponentProps,
 } from "../../../packages/plugin-api/src/renderer.ts";
-import { AccountsWidget } from "../../../packages/plugin-codex/src/renderer/accounts-widget.tsx";
-import { CostWidget } from "../../../packages/plugin-codex/src/renderer/cost-widget.tsx";
+import {
+  AccountsWidget,
+  accountsWidgetActions,
+} from "../../../packages/plugin-codex/src/renderer/accounts-widget.tsx";
 import { plugin } from "../../../packages/plugin-codex/src/renderer/index.tsx";
 import { sortUsageWindows } from "../../../packages/plugin-codex/src/renderer/usage-meter.tsx";
 import type { CodexAccountsSnapshot } from "../../../packages/plugin-codex/src/shared/accounts.ts";
 
 function baseProps(
-  overrides: Partial<MissionControlWidgetComponentProps> = {}
-): MissionControlWidgetComponentProps {
+  overrides: Partial<WorkbenchWidgetComponentProps> = {}
+): WorkbenchWidgetComponentProps {
   return {
     instanceId: "widget-1",
     params: {},
@@ -28,14 +30,6 @@ function baseProps(
     visible: true,
     ...overrides,
   };
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = (): void => undefined;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 }
 
 function usageSnapshot(
@@ -126,7 +120,7 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         reset: vi.fn(async () => undefined),
         set: vi.fn(async () => undefined),
       },
-      missionControlWidgets: { register: vi.fn(() => () => undefined) },
+      workbenchWidgets: { register: vi.fn(() => () => undefined) },
       dialogs: { alert: vi.fn(), confirm: vi.fn(async () => true) },
       i18n: {
         language: () => "en",
@@ -229,27 +223,27 @@ describe("AccountsWidget (usage)", () => {
     });
   });
 
-  it("calls accounts.refreshUsage when refreshToken changes", async () => {
+  it("exposes a refresh action that awaits accounts.refreshUsage", async () => {
     const snap = usageSnapshot();
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    const { rerender } = render(
-      <AccountsWidget context={context} {...baseProps({ refreshToken: 0 })} />
-    );
-
-    await screen.findByText("5-hour quota");
-
-    await act(async () => {
-      rerender(
-        <AccountsWidget context={context} {...baseProps({ refreshToken: 1 })} />
-      );
+    const [action] = accountsWidgetActions(context, {
+      instanceId: "widget-1",
+      params: {},
+      requestRefresh: vi.fn(),
+      updateParams: vi.fn(),
     });
-
-    await vi.waitFor(() => {
-      expect(invokeCalls).toContainEqual({
-        method: "accounts.refreshUsage",
-        payload: null,
-      });
+    expect(action?.id).toBe("refresh");
+    await action?.invoke({
+      instanceId: "widget-1",
+      params: {},
+      requestRefresh: vi.fn(),
+      updateParams: vi.fn(),
     });
+    expect(invokeCalls).toContainEqual({
+      method: "accounts.refreshUsage",
+      payload: null,
+    });
+    expect(context.notifications.success).toHaveBeenCalledTimes(1);
   });
 
   it("renders an explicit fallback when no account is active", async () => {
@@ -321,36 +315,17 @@ describe("AccountsWidget (usage)", () => {
     ]);
   });
 
-  it("registers account/quota and cost as independent widgets", () => {
+  it("registers only the account/quota widget (cost owns host core.cost-overview)", () => {
     const { context } = contextWithSnapshot(usageSnapshot());
-    const register = vi.mocked(context.missionControlWidgets.register);
+    const register = vi.mocked(context.workbenchWidgets.register);
     const dispose = plugin.activate(context);
 
-    expect(register).toHaveBeenCalledTimes(2);
+    expect(register).toHaveBeenCalledTimes(1);
     expect(register.mock.calls.map(([entry]) => entry.id)).toEqual([
       "pier.codex.accounts",
-      "pier.codex.cost",
     ]);
 
     dispose();
-  });
-
-  it("deduplicates the shared snapshot request across both widgets", async () => {
-    const { context, invokeCalls } = contextWithSnapshot(usageSnapshot());
-    render(
-      <>
-        <AccountsWidget context={context} {...baseProps()} />
-        <CostWidget
-          context={context}
-          {...baseProps({ instanceId: "widget-2" })}
-        />
-      </>
-    );
-
-    await screen.findByText("5-hour quota");
-    expect(
-      invokeCalls.filter((call) => call.method === "accounts.snapshot")
-    ).toHaveLength(1);
   });
 
   it("mounts and removes the plugin-owned responsive stylesheet", () => {
@@ -368,185 +343,14 @@ describe("AccountsWidget (usage)", () => {
     ).toBeNull();
   });
 
-  it("does not refresh while the widget is hidden", async () => {
-    const { context, invokeCalls } = contextWithSnapshot(usageSnapshot());
-    const { rerender } = render(
-      <AccountsWidget
-        context={context}
-        {...baseProps({ refreshToken: 0, visible: false })}
-      />
-    );
-
-    await screen.findByText("5-hour quota");
-    rerender(
-      <AccountsWidget
-        context={context}
-        {...baseProps({ refreshToken: 1, visible: false })}
-      />
-    );
-
-    await Promise.resolve();
-    expect(
-      invokeCalls.some((call) => call.method === "accounts.refreshUsage")
-    ).toBe(false);
-  });
-
-  it("clears the refresh state when hidden during an in-flight refresh", async () => {
+  it("does not render an in-body refresh spinner while an action is in flight", () => {
+    // 新契约：refresh 状态归 header 按钮 spinner，widget body 不再自渲另一份
+    // 「Refreshing」badge——防两个 loading 指示同时出现的错觉 bug。
     const { context } = contextWithSnapshot(usageSnapshot());
-    const pending = deferred();
-    const invoke = context.rpc.invoke;
-    context.rpc.invoke = async <T,>(method: string, payload?: unknown) => {
-      if (method === "accounts.refreshUsage") await pending.promise;
-      return invoke<T>(method, payload);
-    };
-    const { rerender } = render(
-      <AccountsWidget context={context} {...baseProps({ refreshToken: 0 })} />
-    );
-    await screen.findByText("5-hour quota");
-
-    rerender(
-      <AccountsWidget context={context} {...baseProps({ refreshToken: 1 })} />
-    );
-    expect(await screen.findByText("Refreshing")).toBeDefined();
-    rerender(
-      <AccountsWidget
-        context={context}
-        {...baseProps({ refreshToken: 1, visible: false })}
-      />
-    );
-
+    render(<AccountsWidget context={context} {...baseProps()} />);
     expect(screen.queryByText("Refreshing")).toBeNull();
-    await act(async () => {
-      pending.resolve();
-      await pending.promise;
-    });
-  });
-});
-
-describe("CostWidget", () => {
-  afterEach(() => {
-    cleanup();
-  });
-
-  it("renders responsive cost metrics and local history", async () => {
-    const snapshot = usageSnapshot({
-      costUsage: {
-        buckets: [
-          {
-            date: "2026-07-12",
-            estimatedCostMicrousd: 350_000,
-            pricingStatus: "complete",
-            tokens: {
-              cachedInputTokens: 0,
-              inputTokens: 100,
-              outputTokens: 50,
-              reasoningTokens: 25,
-              totalTokens: 175,
-            },
-          },
-        ],
-        coverage: { complete: true, from: "2026-06-12", to: "2026-07-12" },
-        observedAt: Date.now(),
-        summary: {
-          estimatedCostMicrousd: 2_991_180_000,
-          latestDayTokens: 9_900_000_000,
-          periodTokens: 64_700_000_000,
-          todayEstimatedCostMicrousd: 350_000,
-        },
-      },
-    });
-    const { context } = contextWithSnapshot(snapshot);
-    const { container } = render(
-      <CostWidget context={context} {...baseProps({ size: { w: 2, h: 3 } })} />
-    );
-
-    expect(await screen.findByText("Today")).toBeDefined();
-    expect(screen.getByText("Last 31 days cost")).toBeDefined();
-    expect(container.querySelectorAll('[data-slot="chart"]')).toHaveLength(2);
     expect(
-      container.querySelector('[data-cost-metric="period-cost"]')?.className
-    ).toContain("@[22rem]:block");
-  });
-
-  it("refreshes cost independently and reports success", async () => {
-    const { context, invokeCalls } = contextWithSnapshot(
-      usageSnapshot({
-        costUsage: {
-          buckets: [],
-          coverage: { complete: true, from: "2026-06-12", to: "2026-07-12" },
-          observedAt: Date.now(),
-          summary: {
-            estimatedCostMicrousd: 0,
-            latestDayTokens: 0,
-            periodTokens: 0,
-            todayEstimatedCostMicrousd: 0,
-          },
-        },
-      })
-    );
-    const { rerender } = render(
-      <CostWidget context={context} {...baseProps({ refreshToken: 0 })} />
-    );
-    await screen.findByText("Today");
-
-    await act(async () => {
-      rerender(
-        <CostWidget context={context} {...baseProps({ refreshToken: 1 })} />
-      );
-    });
-
-    await vi.waitFor(() => {
-      expect(invokeCalls).toContainEqual({
-        method: "usage.refreshCost",
-        payload: null,
-      });
-      expect(context.notifications.success).toHaveBeenCalledWith(
-        "Cost data refreshed"
-      );
-    });
-  });
-
-  it("clears the cost refresh state when hidden", async () => {
-    const snapshot = usageSnapshot({
-      costUsage: {
-        buckets: [],
-        coverage: { complete: true, from: "2026-06-12", to: "2026-07-12" },
-        observedAt: Date.now(),
-        summary: {
-          estimatedCostMicrousd: 0,
-          latestDayTokens: 0,
-          periodTokens: 0,
-          todayEstimatedCostMicrousd: 0,
-        },
-      },
-    });
-    const { context } = contextWithSnapshot(snapshot);
-    const pending = deferred();
-    const invoke = context.rpc.invoke;
-    context.rpc.invoke = async <T,>(method: string, payload?: unknown) => {
-      if (method === "usage.refreshCost") await pending.promise;
-      return invoke<T>(method, payload);
-    };
-    const { rerender } = render(
-      <CostWidget context={context} {...baseProps({ refreshToken: 0 })} />
-    );
-    await screen.findByText("Today");
-
-    rerender(
-      <CostWidget context={context} {...baseProps({ refreshToken: 1 })} />
-    );
-    expect(await screen.findByText("Refreshing")).toBeDefined();
-    rerender(
-      <CostWidget
-        context={context}
-        {...baseProps({ refreshToken: 1, visible: false })}
-      />
-    );
-
-    expect(screen.queryByText("Refreshing")).toBeNull();
-    await act(async () => {
-      pending.resolve();
-      await pending.promise;
-    });
+      document.querySelector('[data-slot="spinner"][aria-label="Refreshing"]')
+    ).toBeNull();
   });
 });

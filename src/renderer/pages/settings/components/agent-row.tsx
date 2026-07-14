@@ -14,12 +14,14 @@ import {
   resolveEffectiveAgentDefaultEnv,
 } from "@shared/contracts/agent.ts";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { type MouseEvent, useState } from "react";
+import { toast } from "sonner";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
 function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   const t = useT();
@@ -218,6 +220,37 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
     }
   };
 
+  const handleWebsiteClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if ((event.button !== 0 && event.button !== 1) || !entry?.homepageUrl) {
+      return;
+    }
+    event.preventDefault();
+    window.pier.externalNavigation
+      .open(entry.homepageUrl)
+      .then((result) => {
+        if (result.opened) {
+          return;
+        }
+        if (result.reason === "busy") {
+          toast.info(t("settings.agents.action.websiteOpenBusy"));
+          return;
+        }
+        return showAppAlert({
+          body: t("settings.agents.action.websiteOpenFailedDescription"),
+          size: "sm",
+          title: t("settings.agents.action.websiteOpenFailedTitle"),
+        });
+      })
+      .catch((error: unknown) =>
+        showAppAlert({
+          body: error instanceof Error ? error.message : String(error),
+          size: "default",
+          title: t("settings.agents.action.websiteOpenFailedTitle"),
+        })
+      )
+      .catch(() => undefined);
+  };
+
   return (
     <Collapsible onOpenChange={setOpen} open={open}>
       <Item
@@ -260,8 +293,9 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
               <a
                 aria-label={t("settings.agents.action.website")}
                 href={entry.homepageUrl}
+                onAuxClick={handleWebsiteClick}
+                onClick={handleWebsiteClick}
                 rel="noreferrer"
-                target="_blank"
               >
                 <ExternalLink data-icon="inline-start" />
               </a>

@@ -186,7 +186,7 @@ function pluginEntry(
     manifest: {
       apiVersion: 1,
       commands,
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id,
@@ -3095,7 +3095,7 @@ describe("createCommandRouter", () => {
     });
   });
 
-  it("worktree.create 编排 resolveProject、bind、copy 和 setup", async () => {
+  it("worktree.create 编排 resolveProject、bind、copy 并把 setupCommand 塞进 pendingSetupCommand（不再在 main 跑 setup）", async () => {
     const operations: string[] = [];
     const progress: string[] = [];
     const fakeServices = services();
@@ -3163,7 +3163,8 @@ describe("createCommandRouter", () => {
       return Promise.resolve();
     });
     localEnvironments.runLifecycle = vi.fn(() => {
-      operations.push("setup");
+      // setup 已挪到 renderer 侧的终端里跑,main 不该在 create 阶段调 runLifecycle
+      operations.push("setup-should-not-run");
       return Promise.resolve();
     });
     const router = createCommandRouter({
@@ -3191,6 +3192,7 @@ describe("createCommandRouter", () => {
     ).resolves.toMatchObject({
       data: {
         copiedFiles: [],
+        pendingSetupCommand: "pnpm setup:worktree",
         targetPath: "/repo-main.worktree/feature-a",
       },
       ok: true,
@@ -3202,23 +3204,108 @@ describe("createCommandRouter", () => {
       projectRootPath: "/repo-main",
       worktreePath: "/repo-main.worktree/feature-a",
     });
-    expect(localEnvironments.runLifecycle).toHaveBeenCalledWith({
-      cwd: "/repo-main.worktree/feature-a",
-      project,
-      phase: "setup",
-    });
+    // setup 已挪到 renderer 侧终端里执行,main 不该在 create 时跑 runLifecycle
+    expect(localEnvironments.runLifecycle).not.toHaveBeenCalled();
     expect(operations).toEqual([
       "check:/repo",
       "resolve-project",
       "create:feature-a",
       "bind-worktree",
-      "setup",
       "pulse:/repo",
     ]);
     expect(progress).toEqual([
       "00000000-0000-4000-8000-000000000001:creating",
       "00000000-0000-4000-8000-000000000001:initializing",
     ]);
+  });
+
+  it("worktree.create 在项目 setupCommand 为空时不设置 pendingSetupCommand", async () => {
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    const project = pierProject({
+      projectRootPath: "/repo-main",
+      setupCommand: "",
+    });
+    fakeServices.worktrees.check = vi.fn(async (args) => ({
+      currentPath: args.path,
+      mainPath: "/repo-main",
+      path: args.path,
+      status: "supported" as const,
+    }));
+    fakeServices.worktrees.create = vi.fn(async (args) => ({
+      created: {
+        bare: false,
+        branch: args.branch,
+        detached: false,
+        head: "def456",
+        isCurrent: false,
+        isMain: false,
+        locked: false,
+        lockedReason: null,
+        path: "/repo-main.worktree/feature-b",
+        prunable: false,
+        prunableReason: null,
+      },
+      targetPath: "/repo-main.worktree/feature-b",
+      worktrees: [],
+    }));
+    localEnvironments.resolveProject = vi.fn(() => Promise.resolve(project));
+    localEnvironments.bindWorktree = vi.fn(() => Promise.resolve(undefined));
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const result = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        branch: "feature/b",
+        name: "feature-b",
+        path: "/repo",
+        type: "worktree.create",
+      },
+      protocolVersion: 1,
+      requestId: "req-worktree-create-no-setup",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.data : null).not.toHaveProperty(
+      "pendingSetupCommand"
+    );
+  });
+
+  it("worktree.create 在 agent 启动前完成 setup 再返回", async () => {
+    const fakeServices = services();
+    const localEnvironments = localEnvironmentsOf(fakeServices);
+    const project = pierProject({ projectRootPath: "/repo" });
+    localEnvironments.resolveProject = vi.fn(async () => project);
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    const result = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        branch: "feature/agent",
+        name: "feature-agent",
+        path: "/repo",
+        runSetupBeforeReturn: true,
+        type: "worktree.create",
+      },
+      protocolVersion: 1,
+      requestId: "req-worktree-create-agent",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.data : null).not.toHaveProperty(
+      "pendingSetupCommand"
+    );
+    expect(localEnvironments.runLifecycle).toHaveBeenCalledWith({
+      cwd: "/repo/.worktrees/feature-agent",
+      phase: "setup",
+      project,
+    });
   });
 
   it("worktree.create records structured Git failure diagnostics", async () => {
@@ -3303,7 +3390,67 @@ describe("createCommandRouter", () => {
     }
   });
 
-  it("worktree.create setup 失败时保留 worktree 和 binding 但不开 terminal 或 agent", async () => {
+  it("worktree.create GitExecError.hookSignal 非空时映射为 git_hook_signal_killed", async () => {
+    // 场景:macOS 26+ XProtect 首次扫描 hook 慢 + 上游 timeout → SIGKILL 波及 hook。
+    // git-exec.ts 会把 stderr 里的 `<path> died of signal N` 解析进 GitExecError.hookSignal,
+    // command-router.ts 据此转成专用 code,UI 侧走"重试建议"提示而非技术噪音。
+    const fakeServices = services();
+    fakeServices.worktrees.check = vi.fn(async () => ({
+      currentPath: "/repo",
+      mainPath: "/repo-main",
+      path: "/repo",
+      status: "supported" as const,
+    }));
+    fakeServices.localEnvironments.resolveProject = vi.fn(async () => null);
+    fakeServices.worktrees.create = vi.fn(async () => {
+      throw new GitExecError({
+        args: [
+          "worktree",
+          "add",
+          "-b",
+          "feature/a",
+          "/repo-main.worktree/feature-a",
+        ],
+        cwd: "/repo-main",
+        exitCode: 128,
+        hookSignal: {
+          hookPath: "/repo-main/.husky/_/post-checkout",
+          signal: 9,
+        },
+        message: "git 退出码 128",
+        stderr:
+          "Preparing worktree (new branch 'feature/a')\nerror: /repo-main/.husky/_/post-checkout died of signal 9\n",
+        stdout: "",
+      });
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          branch: "feature/a",
+          name: "feature-a",
+          path: "/repo",
+          type: "worktree.create",
+        },
+        protocolVersion: 1,
+        requestId: "req-worktree-create-hook-signal",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "git_hook_signal_killed",
+        message: expect.stringContaining("died of signal 9"),
+      },
+      ok: false,
+      requestId: "req-worktree-create-hook-signal",
+    });
+  });
+
+  it("worktree.create 遇到 LocalEnvironmentServiceError 时返回 environment_not_found 且不开 terminal/agent", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];
     const fakeServices = services(
@@ -3363,10 +3510,15 @@ describe("createCommandRouter", () => {
       })
     );
     localEnvironments.resolveProject = vi.fn(() => Promise.resolve(project));
-    localEnvironments.bindWorktree = vi.fn(() => Promise.resolve(undefined));
-    localEnvironments.runLifecycle = vi.fn(() =>
-      Promise.reject(localEnvironmentScriptError("setup"))
+    localEnvironments.bindWorktree = vi.fn(() =>
+      Promise.reject(
+        new LocalEnvironmentServiceError("bound environment not found: pier")
+      )
     );
+    localEnvironments.runLifecycle = vi.fn(() => {
+      // setup 已挪到 renderer 终端里跑,main 侧不该调 runLifecycle
+      throw new Error("runLifecycle should not run in worktree.create");
+    });
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
       services: fakeServices,
@@ -3382,17 +3534,15 @@ describe("createCommandRouter", () => {
           type: "worktree.create",
         },
         protocolVersion: 1,
-        requestId: "req-worktree-create-setup-failed",
+        requestId: "req-worktree-create-environment-not-found",
       })
     ).resolves.toEqual({
       error: {
-        code: "environment_script_failed",
-        message: expect.stringContaining(
-          "local environment setup script failed"
-        ),
+        code: "environment_not_found",
+        message: expect.stringContaining("bound environment not found"),
       },
       ok: false,
-      requestId: "req-worktree-create-setup-failed",
+      requestId: "req-worktree-create-environment-not-found",
     });
 
     expect(fakeServices.worktrees.create).toHaveBeenCalled();

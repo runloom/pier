@@ -26,6 +26,7 @@ const GROUP_CONTENT_ID_PREFIX_PATTERN =
   /groupContent id must start with.*sample\.plugin\./;
 const ENVIRONMENT_READ_CAPABILITY_PATTERN = /environment:read/;
 const CONFIGURABLE_WIDGET_SETTINGS_PATTERN = /settingsComponent/i;
+const EXTERNAL_OPEN_CAPABILITY_PATTERN = /external:open/;
 
 const toastMocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -52,13 +53,18 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
 import { clearHostGroupContentForTests } from "@/lib/plugins/host-group-content-context.tsx";
-import {
-  clearPluginMissionControlWidgetsForTests,
-  getPluginMissionControlWidgetRegistrations,
-} from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
+import { mermaidRenderer } from "@/lib/plugins/mermaid-renderer.ts";
+import { pluginLifecycleBarriers } from "@/lib/plugins/plugin-lifecycle-barriers.ts";
 import { clearPluginPanelsForTests } from "@/lib/plugins/plugin-panel-registry.ts";
+import {
+  clearPluginWorkbenchWidgetsForTests,
+  getPluginWorkbenchWidgetRegistrations,
+} from "@/lib/plugins/plugin-workbench-widget-registry.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
+import { useFontStore } from "@/stores/font.store.ts";
+import { useLocaleStore } from "@/stores/locale.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useThemeStore } from "@/stores/theme.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const panelContext: PanelContext = {
@@ -130,7 +136,7 @@ const sampleCommands = [
 const sampleTerminalStatusItems = [
   { id: "sample.status", permissions: [], title: "Sample Status" },
 ];
-const sampleMissionControlWidgets = [
+const sampleWorkbenchWidgets = [
   { id: "sample.widget", permissions: [], title: "Sample Widget" },
 ];
 const undeclaredContributionErrorPattern = /not declared/;
@@ -187,7 +193,7 @@ const pluginEntry = {
     permissions: ["command:register"],
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
-    missionControlWidgets: sampleMissionControlWidgets,
+    workbenchWidgets: sampleWorkbenchWidgets,
     settingsPages: [],
     version: "1.0.0",
   },
@@ -202,7 +208,7 @@ const configurableWidgetEntry = {
   ...pluginEntry,
   manifest: {
     ...pluginEntry.manifest,
-    missionControlWidgets: [
+    workbenchWidgets: [
       {
         configurable: true,
         defaultSize: { h: 4, w: 4 },
@@ -332,6 +338,9 @@ beforeAll(async () => {
 
 afterEach(() => {
   clearHostGroupContentForTests();
+  for (const pluginId of pluginLifecycleBarriers.pluginIds()) {
+    pluginLifecycleBarriers.clear(pluginId);
+  }
   document.body.replaceChildren();
   clearPluginPanelsForTests();
   terminalStatusItemRegistry.clearForTests();
@@ -346,7 +355,7 @@ afterEach(() => {
   useWorkspaceStore.setState({ api: null });
   workspaceActivationMocks.activateWorkspacePanel.mockReset();
   vi.restoreAllMocks();
-  clearPluginMissionControlWidgetsForTests();
+  clearPluginWorkbenchWidgetsForTests();
   vi.useRealTimers();
 });
 
@@ -503,39 +512,37 @@ describe("createRendererPluginContext", () => {
     expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
-  it("delegates Mission Control widget registration to the internal registry", () => {
+  it("delegates Workbench widget registration to the internal registry", () => {
     const context = createRendererPluginContext(pluginEntry);
 
-    const dispose = context.missionControlWidgets.register({
+    const dispose = context.workbenchWidgets.register({
       component: () => null,
       icon: House,
       id: "sample.widget",
     });
 
-    expect(
-      getPluginMissionControlWidgetRegistrations().has("sample.widget")
-    ).toBe(true);
+    expect(getPluginWorkbenchWidgetRegistrations().has("sample.widget")).toBe(
+      true
+    );
 
     dispose();
-    expect(
-      getPluginMissionControlWidgetRegistrations().has("sample.widget")
-    ).toBe(false);
+    expect(getPluginWorkbenchWidgetRegistrations().has("sample.widget")).toBe(
+      false
+    );
   });
 
   it("rejects a configurable builtin widget without a settings component", () => {
     const context = createRendererPluginContext(configurableWidgetEntry);
 
     expect(() =>
-      context.missionControlWidgets.register({
+      context.workbenchWidgets.register({
         component: () => null,
         icon: House,
         id: "sample.configurableWidget",
       })
     ).toThrow(CONFIGURABLE_WIDGET_SETTINGS_PATTERN);
     expect(
-      getPluginMissionControlWidgetRegistrations().has(
-        "sample.configurableWidget"
-      )
+      getPluginWorkbenchWidgetRegistrations().has("sample.configurableWidget")
     ).toBe(false);
   });
 
@@ -548,41 +555,39 @@ describe("createRendererPluginContext", () => {
       settingsComponent: () => null,
     };
 
-    const dispose = context.missionControlWidgets.register(registration);
+    const dispose = context.workbenchWidgets.register(registration);
 
     expect(
-      getPluginMissionControlWidgetRegistrations().get(
-        "sample.configurableWidget"
-      )
+      getPluginWorkbenchWidgetRegistrations().get("sample.configurableWidget")
     ).toBe(registration);
     dispose();
   });
 
-  it("rejects Mission Control widget registration not declared by the plugin manifest", () => {
+  it("rejects Workbench widget registration not declared by the plugin manifest", () => {
     const context = createRendererPluginContext(pluginEntry);
 
     expect(() =>
-      context.missionControlWidgets.register({
+      context.workbenchWidgets.register({
         component: () => null,
         icon: House,
         id: "sample.missingWidget",
       })
     ).toThrow(undeclaredContributionErrorPattern);
     expect(
-      getPluginMissionControlWidgetRegistrations().has("sample.missingWidget")
+      getPluginWorkbenchWidgetRegistrations().has("sample.missingWidget")
     ).toBe(false);
   });
 
-  it("allows Mission Control widget registration without entry (core context)", () => {
+  it("allows Workbench widget registration without entry (core context)", () => {
     const context = createRendererPluginContext();
 
-    const dispose = context.missionControlWidgets.register({
+    const dispose = context.workbenchWidgets.register({
       component: () => null,
       icon: House,
       id: "any.widget",
     });
 
-    expect(getPluginMissionControlWidgetRegistrations().has("any.widget")).toBe(
+    expect(getPluginWorkbenchWidgetRegistrations().has("any.widget")).toBe(
       true
     );
 
@@ -1820,5 +1825,160 @@ describe("createRendererPluginContext", () => {
 
     const result = await context.environments.projectSnapshot("/unknown");
     expect(result).toBeNull();
+  });
+  it("guards external navigation with the plugin capability", async () => {
+    const open = vi.fn(async () => ({ opened: true as const }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { externalNavigation: { open } },
+    });
+    const context = createRendererPluginContext(pluginEntry);
+
+    await expect(
+      context.externalNavigation.open("https://example.com")
+    ).rejects.toThrow(EXTERNAL_OPEN_CAPABILITY_PATTERN);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("delegates external navigation after the capability check", async () => {
+    const open = vi.fn(async () => ({ opened: true as const }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { externalNavigation: { open } },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["external:open"],
+    });
+
+    await expect(
+      context.externalNavigation.open("https://example.com/docs")
+    ).resolves.toEqual({ opened: true });
+    expect(open).toHaveBeenCalledWith("https://example.com/docs");
+  });
+
+  it("exposes live appearance and Mermaid rendering through host facades", async () => {
+    document.documentElement.style.fontSize = "16px";
+    document.documentElement.style.setProperty("--font-sans", "Pier Sans");
+    document.documentElement.style.setProperty("--font-mono", "Pier Mono");
+    useLocaleStore.setState({ language: "zh-CN" });
+    useThemeStore.setState({
+      resolvedTheme: "light",
+      stylePresetId: "github-default",
+    });
+    await i18next.changeLanguage("zh-CN");
+    const renderMermaid = vi
+      .spyOn(mermaidRenderer, "render")
+      .mockResolvedValue({ ok: true, svg: "<svg />" });
+    const context = createRendererPluginContext(pluginEntry);
+
+    expect(context.appearance.current()).toMatchObject({
+      codeTheme: "github-light-default",
+      density: "compact",
+      language: "zh-CN",
+      locale: "zh-CN",
+      theme: "light",
+      typography: {
+        baseFontSize: "16px",
+        codeFontFamily: "Pier Mono",
+        fontFamily: "Pier Sans",
+      },
+    });
+
+    const listener = vi.fn();
+    const unsubscribe = context.appearance.onDidChange(listener);
+    useThemeStore.setState({ resolvedTheme: "dark" });
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        codeTheme: "github-dark-default",
+        theme: "dark",
+      })
+    );
+    document.documentElement.style.setProperty("--font-mono", "Next Mono");
+    useFontStore.setState({ monoFontFamily: "Next Mono" });
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        typography: expect.objectContaining({ codeFontFamily: "Next Mono" }),
+      })
+    );
+    unsubscribe();
+    const calls = listener.mock.calls.length;
+    useThemeStore.setState({ resolvedTheme: "light" });
+    expect(listener).toHaveBeenCalledTimes(calls);
+
+    await expect(
+      context.charts.renderMermaid("graph TD;A-->B")
+    ).resolves.toEqual({ ok: true, svg: "<svg />" });
+    expect(renderMermaid).toHaveBeenCalledWith("graph TD;A-->B");
+  });
+
+  it("acquires a main-owned runtime lease for file preview ticket calls", async () => {
+    const acquire = vi.fn(async () => ({
+      acquired: true as const,
+      leaseId: "runtime-lease-000000000",
+      runtimeId: "runtime-id-00000000000",
+    }));
+    const issue = vi.fn(async () => ({
+      expiresAt: 100,
+      issued: true as const,
+      ticket: "preview-ticket-00000000",
+      url: "pier-file-preview://file/preview-ticket-00000000",
+    }));
+    const release = vi.fn(async () => true);
+    const revoke = vi.fn(async () => true);
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { filePreviews: { acquire, issue, release, revoke } },
+    });
+    const context = createRendererPluginContext({
+      ...pluginEntry,
+      effectivePermissions: ["file:read"],
+    });
+    const locator = {
+      mime: "image/png",
+      path: "image.png",
+      revision: "file-v1:a",
+      root: "/repo",
+    };
+
+    await context.filePreviews.issue(locator, "old-ticket-00000000000");
+    await context.filePreviews.release("preview-ticket-00000000");
+
+    expect(acquire).toHaveBeenCalledWith(pluginEntry.manifest.id);
+    expect(issue).toHaveBeenCalledWith({
+      leaseId: "runtime-lease-000000000",
+      locator,
+      previousTicket: "old-ticket-00000000000",
+    });
+    expect(release).toHaveBeenCalledWith({
+      leaseId: "runtime-lease-000000000",
+      ticket: "preview-ticket-00000000",
+    });
+
+    await pluginLifecycleBarriers.prepare(
+      pluginEntry.manifest.id,
+      "plugin-reload",
+      "file-preview-lease-abort-test"
+    );
+    const waitingIssue = context.filePreviews.issue(locator);
+    await pluginLifecycleBarriers.finalize(
+      "file-preview-lease-abort-test",
+      "abort"
+    );
+    await expect(waitingIssue).resolves.toMatchObject({ issued: true });
+    expect(acquire).toHaveBeenCalledOnce();
+
+    await pluginLifecycleBarriers.prepare(
+      pluginEntry.manifest.id,
+      "plugin-reload",
+      "file-preview-lease-test"
+    );
+    await pluginLifecycleBarriers.finalize("file-preview-lease-test", "commit");
+    expect(revoke).toHaveBeenCalledWith("runtime-lease-000000000");
+    await expect(context.filePreviews.issue(locator)).resolves.toEqual({
+      issued: false,
+      reason: "forbidden",
+    });
+    expect(acquire).toHaveBeenCalledOnce();
   });
 });

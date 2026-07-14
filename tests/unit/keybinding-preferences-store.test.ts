@@ -312,6 +312,42 @@ describe("keybinding-preferences.store", () => {
     );
   });
 
+  it("migrates legacy mission control shortcuts to the workbench action", async () => {
+    installPierApi({
+      userKeymap: [
+        {
+          commandId: "pier.panel.newMissionControl",
+          keys: "Mod+Alt+KeyW",
+          scope: "global",
+        },
+      ],
+    });
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { parseChord } = await import("@/lib/keybindings/parse.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+
+    expect(useKeybindingPreferencesStore.getState().userKeymap).toEqual([
+      {
+        commandId: "pier.panel.newWorkbench",
+        keys: "Mod+Alt+KeyW",
+        scope: "global",
+      },
+    ]);
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Alt+KeyW", false), {
+        activePanelComponent: null,
+        overlayStack: [],
+      })
+    ).toBe("pier.panel.newWorkbench");
+  });
+
   it("migrates legacy terminal debug unbind entries when hydrating preferences", async () => {
     installPierApi({
       userKeymap: [

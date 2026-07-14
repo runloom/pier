@@ -242,8 +242,8 @@ export const settings = {
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",
-      missionControlWidget: "{{count}} Mission Control widget",
-      missionControlWidgets: "{{count}} Mission Control widgets",
+      workbenchWidget: "{{count}} Workbench widget",
+      workbenchWidgets: "{{count}} Workbench widgets",
       none: "No contributions",
       panel: "{{count}} panel",
       panels: "{{count}} panels",
@@ -380,6 +380,9 @@ export const settings = {
       isDefault: "Default",
       expand: "Details",
       website: "Website",
+      websiteOpenBusy: "Another external link is already opening.",
+      websiteOpenFailedDescription: "The agent website could not be opened.",
+      websiteOpenFailedTitle: "Unable to open website",
     },
     row: {
       launchCmd: "Launch command",

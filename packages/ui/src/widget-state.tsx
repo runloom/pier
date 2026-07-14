@@ -6,7 +6,7 @@ import { Skeleton } from "./skeleton.tsx";
 import { cn } from "./utils.ts";
 
 /**
- * 指挥中心物料三态（loading / empty / error）统一形态。
+ * 工作台物料三态（loading / empty / error）统一形态。
  * core widget 与插件共用；文案由调用方传入（本包不依赖 i18n）。
  */
 

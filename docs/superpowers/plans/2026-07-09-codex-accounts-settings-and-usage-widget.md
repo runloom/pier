@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 让 `pier.codex` 设置页成为账号 CRUD 唯一入口（对齐 Orca 图 1），Mission Control 物料改为用量仪表盘（对齐图 2 子集），并删除命令面板账号操作；宿主新增可复用的 `settingsPages` 贡献点。
+**Goal:** 让 `pier.codex` 设置页成为账号 CRUD 唯一入口（对齐 Orca 图 1），Workbench 物料改为用量仪表盘（对齐图 2 子集），并删除命令面板账号操作；宿主新增可复用的 `settingsPages` 贡献点。
 
 **Architecture:** 宿主增加 `settingsPages` 纪律链（manifest → assert → registry → SettingsDialog）。插件经 `context.settingsPages.register` 挂自定义设置页；物料只做用量 + 快切 + `context.app.openSettings`。`activeAccountId === null` 表示系统默认；新增 `accounts.selectSystemDefault`；用量 DTO 结构化并支持系统默认缓存键 `__system__`。
 
@@ -163,7 +163,7 @@ dialogs: {
 };
 ```
 
-- Registry API 镜像 `plugin-mission-control-widget-registry.ts`：
+- Registry API 镜像 `plugin-workbench-widget-registry.ts`：
   - `registerPluginSettingsPage(pluginId, registration)`
   - `getPluginSettingsPage(pluginId)`
   - `subscribePluginSettingsPageRegistry` / `getPluginSettingsPageRevision`
@@ -446,7 +446,7 @@ component: (props) => (
 ),
 ```
 
-`AccountsWidgetProps = MissionControlWidgetComponentProps & { context: ... }`
+`AccountsWidgetProps = WorkbenchWidgetComponentProps & { context: ... }`
 
 - [ ] **Step 1: Rewrite failing tests**
 
@@ -497,7 +497,7 @@ pnpm test:unit -- tests/unit/shared/plugin-manifest-settings-pages.test.ts tests
 
 1. `pnpm setup:worktree`（若需要）+ `pnpm dev`
 2. 设置 → Codex：见系统默认 + 添加账户
-3. 指挥中心加 Codex 物料：见双进度条；管理账户跳转设置
+3. 工作台加 Codex 物料：见双进度条；管理账户跳转设置
 4. 命令面板搜索「Codex: Add」应无结果
 
 ---

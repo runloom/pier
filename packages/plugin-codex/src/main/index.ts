@@ -5,7 +5,6 @@ import type {
 } from "@pier/plugin-api/main";
 import { createCodexAccountsService } from "./accounts-service.ts";
 import { createCodexProvider } from "./codex-provider.ts";
-import { createLocalUsageScanner } from "./local-usage-scanner.ts";
 import { registerCodexRpcHandlers } from "./rpc-handlers.ts";
 import { createCodexAccountsStateStore } from "./state.ts";
 
@@ -28,13 +27,6 @@ export const plugin: MainPluginModule = {
     );
     const provider = createCodexProvider({ credentials: context.secrets });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
-    const codexHome =
-      context.processEnv.CODEX_HOME ??
-      join(context.processEnv.HOME ?? context.paths.workDir, ".codex");
-    const localUsageScanner = createLocalUsageScanner({
-      cachePath: join(context.paths.workDir, "local-usage-cache.json"),
-      codexHome,
-    });
     const usagePollingConsumers = new Set<string>();
     const service = createCodexAccountsService({
       hasVisibleTarget: () => usagePollingConsumers.size > 0,
@@ -49,24 +41,6 @@ export const plugin: MainPluginModule = {
     });
     await service.init();
 
-    const cachedCostUsage = await context.usageData.read(
-      "codex-local-sessions",
-      { kind: "machine" }
-    );
-    if (cachedCostUsage) service.setCostUsage(cachedCostUsage);
-
-    let localUsageRefresh: Promise<void> | null = null;
-    function refreshLocalUsage(): Promise<void> {
-      if (localUsageRefresh) return localUsageRefresh;
-      localUsageRefresh = (async () => {
-        const result = await localUsageScanner.scan();
-        const snapshot = await context.usageData.publish(result.input);
-        service.setCostUsage({ ...snapshot, diagnostics: result.diagnostics });
-      })().finally(() => {
-        localUsageRefresh = null;
-      });
-      return localUsageRefresh;
-    }
     registerCodexRpcHandlers({
       acquireUsagePolling: (consumerId) => {
         const shouldRefresh = usagePollingConsumers.size === 0;
@@ -78,23 +52,15 @@ export const plugin: MainPluginModule = {
         }
         return Promise.resolve();
       },
-      refreshLocalUsage,
       releaseUsagePolling: (consumerId) => {
         usagePollingConsumers.delete(consumerId);
       },
       rpc: context.rpc,
       service,
     });
-    // 先完成 RPC 就绪，让账号与缓存成本立即可读；本地日志扫描在插件激活后让出事件循环。
-    const initialUsageRefresh = setTimeout(() => {
-      refreshLocalUsage().catch((error: unknown) => {
-        context.logger.warn("[pier.codex] local usage scan failed", error);
-      });
-    }, 1000);
     context.lifecycle.onBeforeQuit(() => service.flush());
     context.logger.info("[pier.codex] activated");
     return () => {
-      clearTimeout(initialUsageRefresh);
       usagePollingConsumers.clear();
       service.dispose();
     };

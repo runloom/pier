@@ -46,6 +46,13 @@ describe("usage data service", () => {
       tokens: { totalTokens: 1100 },
     });
     expect(snapshot.summary).toMatchObject({
+      byModel: [
+        {
+          estimatedCostMicrousd: 2025,
+          modelId: "gpt-5-codex",
+          totalTokens: 1100,
+        },
+      ],
       estimatedCostMicrousd: 2025,
       periodTokens: 1100,
     });
@@ -162,5 +169,62 @@ describe("usage data service", () => {
     await expect(
       facade.read("local-sessions", { kind: "machine" })
     ).resolves.toBeNull();
+  });
+
+  it("migrates the legacy Codex snapshot into the host key without double counting", async () => {
+    const userDataDir = await tempDir();
+    const legacy = createUsageDataService({ userDataDir });
+    await legacy.init();
+    legacy.publish("pier.codex", {
+      coverage: { complete: true, from: "2026-07-11", to: "2026-07-11" },
+      observations: [
+        {
+          cachedInputTokens: 0,
+          date: "2026-07-11",
+          inputTokens: 10,
+          modelId: "gpt-4o",
+          outputTokens: 5,
+        },
+      ],
+      observedAt: 1,
+      scope: { kind: "machine" },
+      sourceId: "codex-local-sessions",
+    });
+    await legacy.flush();
+
+    const upgraded = createUsageDataService({ userDataDir });
+    await upgraded.init();
+    expect(
+      upgraded.read("pier.codex", "codex-local-sessions", { kind: "machine" })
+    ).toBeNull();
+    expect(
+      upgraded.read("pier.core", "codex-local-sessions", { kind: "machine" })
+    ).toMatchObject({
+      pluginId: "pier.core",
+      sourceId: "codex-local-sessions",
+    });
+    expect(upgraded.aggregate().overall.summary).toMatchObject({
+      periodTokens: 15,
+      sourceCount: 1,
+    });
+  });
+
+  it("clears a built-in snapshot when its collector becomes empty", async () => {
+    const service = createUsageDataService({ userDataDir: await tempDir() });
+    await service.init();
+    service.publishBuiltIn({
+      coverage: { complete: true, from: "2026-07-11", to: "2026-07-11" },
+      observations: [],
+      observedAt: 1,
+      scope: { kind: "machine" },
+      sourceId: "claude-code-local-sessions",
+    });
+    expect(
+      service.clearBuiltIn("claude-code-local-sessions", { kind: "machine" })
+    ).toBe(true);
+    expect(service.aggregate().overall.summary.sourceCount).toBe(0);
+    expect(
+      service.clearBuiltIn("claude-code-local-sessions", { kind: "machine" })
+    ).toBe(false);
   });
 });

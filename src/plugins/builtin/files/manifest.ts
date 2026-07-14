@@ -177,7 +177,7 @@ export const FILES_PLUGIN_MANIFEST = {
       },
     },
   },
-  missionControlWidgets: [],
+  workbenchWidgets: [],
   settingsPages: [],
   groupContent: [
     {
@@ -212,6 +212,7 @@ export const FILES_PLUGIN_MANIFEST = {
     "file:write",
     "git:read",
     "terminal:read",
+    "external:open",
   ],
   publisher: "Pier",
   source: { kind: "builtin" },

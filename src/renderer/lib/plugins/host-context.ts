@@ -3,9 +3,6 @@ import type {
   RendererPluginAction,
   RendererPluginContext,
   RendererPluginMessageValues,
-  RendererPluginQuickPick,
-  RendererPluginQuickPickItem,
-  RendererPluginQuickPickSection,
 } from "@plugins/api/renderer.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
@@ -32,12 +29,6 @@ import {
 import { useSettingsDialogStore } from "../../stores/settings-dialog.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
-import { useCommandPaletteController } from "../command-palette/controller.ts";
-import type {
-  QuickPick,
-  QuickPickItem,
-  QuickPickSection,
-} from "../command-palette/types.ts";
 import { popupContextMenuAt } from "../context-menu/use-context-menu.ts";
 import { cssPointToContentViewPoint } from "../window-zoom/coordinates.ts";
 import {
@@ -48,6 +39,11 @@ import {
 } from "./display.ts";
 import { createPluginAgentsContext } from "./host-agents-context.ts";
 import { createPluginAiContext } from "./host-ai-context.ts";
+import {
+  createPluginAppearanceContext,
+  createPluginChartsContext,
+} from "./host-appearance-context.ts";
+import { createPluginCommandPaletteContext } from "./host-command-palette-context.ts";
 import { createPluginEnvironmentsContext } from "./host-environments-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
@@ -56,11 +52,11 @@ import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
-import {
-  assertPluginMissionControlWidgetRegistration,
-  registerPluginMissionControlWidget,
-} from "./plugin-mission-control-widget-registry.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
+import {
+  assertPluginWorkbenchWidgetRegistration,
+  registerPluginWorkbenchWidget,
+} from "./plugin-workbench-widget-registry.ts";
 
 function createPluginI18n(
   entry?: PluginRegistryEntry
@@ -260,81 +256,6 @@ function createPluginConfiguration(
   };
 }
 
-function adaptQuickPickItem(item: RendererPluginQuickPickItem): QuickPickItem {
-  return {
-    id: item.id,
-    label: item.label,
-    ...(item.aliases ? { aliases: item.aliases } : {}),
-    ...(item.badges ? { badges: item.badges } : {}),
-    ...(item.checked == null ? {} : { checked: item.checked }),
-    ...("data" in item ? { data: item.data } : {}),
-    ...(item.description ? { description: item.description } : {}),
-    ...(item.detail ? { detail: item.detail } : {}),
-    ...(item.disabled == null ? {} : { disabled: item.disabled }),
-    ...(item.icon ? { icon: item.icon } : {}),
-    ...(item.searchTerms ? { searchTerms: item.searchTerms } : {}),
-    ...(item.variant ? { variant: item.variant } : {}),
-  };
-}
-
-function adaptQuickPickSection(
-  section: RendererPluginQuickPickSection
-): QuickPickSection {
-  return {
-    heading: section.heading,
-    id: section.id,
-    items: section.items.map(adaptQuickPickItem),
-  };
-}
-
-function indexPluginQuickPickItems(
-  quickPick: RendererPluginQuickPick
-): ReadonlyMap<string, RendererPluginQuickPickItem> {
-  const items = [
-    ...(quickPick.items ?? []),
-    ...(quickPick.sections?.flatMap((section) => section.items) ?? []),
-  ];
-  return new Map(items.map((item) => [item.id, item]));
-}
-
-function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
-  const pluginItemsById = indexPluginQuickPickItems(quickPick);
-  const pluginItemFor = (item: QuickPickItem) =>
-    pluginItemsById.get(item.id) ?? item;
-  return {
-    ...(quickPick.getQueryItem
-      ? {
-          getQueryItem: (query: string) => {
-            const item = quickPick.getQueryItem?.(query);
-            return item ? adaptQuickPickItem(item) : null;
-          },
-        }
-      : {}),
-    onAccept: (item) => quickPick.onAccept(pluginItemFor(item)),
-    ...(quickPick.items
-      ? { items: quickPick.items.map(adaptQuickPickItem) }
-      : {}),
-    ...(quickPick.onChangeSelection
-      ? {
-          onChangeSelection: (item: QuickPickItem) =>
-            quickPick.onChangeSelection?.(pluginItemFor(item)),
-        }
-      : {}),
-    ...(quickPick.onDismiss ? { onDismiss: quickPick.onDismiss } : {}),
-    ...(quickPick.placeholder ? { placeholder: quickPick.placeholder } : {}),
-    ...(quickPick.renderItem
-      ? {
-          renderItem: (item: QuickPickItem) =>
-            quickPick.renderItem?.(pluginItemFor(item)),
-        }
-      : {}),
-    ...(quickPick.sections
-      ? { sections: quickPick.sections.map(adaptQuickPickSection) }
-      : {}),
-    title: quickPick.title,
-  };
-}
-
 function toastNotificationOptions(options?: {
   action?: { label: string; onClick: () => void };
 }): { action: { label: string; onClick: () => void } } | undefined {
@@ -345,9 +266,79 @@ function toastNotificationOptions(options?: {
   return { action };
 }
 
+interface FilePreviewRuntimeLease {
+  leaseId: string;
+}
+
 export function createRendererPluginContext(
   entry?: PluginRegistryEntry
 ): RendererPluginContext {
+  let activeFilePreviewLease: FilePreviewRuntimeLease | null = null;
+  let filePreviewLeasePromise: Promise<FilePreviewRuntimeLease | null> | null =
+    null;
+  let filePreviewSuspended = false;
+  let resolveFilePreviewSuspension: ((resumed: boolean) => void) | null = null;
+  let filePreviewSuspension: Promise<boolean> | null = null;
+  const acquireFilePreviewLease =
+    async (): Promise<FilePreviewRuntimeLease | null> => {
+      if (filePreviewSuspended) {
+        const resumed = await filePreviewSuspension;
+        return resumed ? acquireFilePreviewLease() : null;
+      }
+      if (!filePreviewLeasePromise) {
+        filePreviewLeasePromise = entry
+          ? window.pier.filePreviews
+              .acquire(entry.manifest.id)
+              .then(async (result) => {
+                if (!result.acquired) {
+                  filePreviewLeasePromise = null;
+                  return null;
+                }
+                const lease = { leaseId: result.leaseId };
+                if (filePreviewSuspended) {
+                  const resumed = await filePreviewSuspension;
+                  if (!resumed) {
+                    await window.pier.filePreviews.revoke(lease.leaseId);
+                    filePreviewLeasePromise = null;
+                    return null;
+                  }
+                }
+                activeFilePreviewLease = lease;
+                return lease;
+              })
+          : Promise.resolve(null);
+      }
+      return filePreviewLeasePromise;
+    };
+  const revokeFilePreviewLease = async () => {
+    const lease = await filePreviewLeasePromise;
+    activeFilePreviewLease = null;
+    filePreviewLeasePromise = null;
+    if (lease) {
+      await window.pier.filePreviews.revoke(lease.leaseId);
+    }
+  };
+  const settleFilePreviewSuspension = (resumed: boolean) => {
+    filePreviewSuspended = !resumed;
+    resolveFilePreviewSuspension?.(resumed);
+    resolveFilePreviewSuspension = null;
+    filePreviewSuspension = null;
+  };
+  if (entry) {
+    pluginLifecycleBarriers.register(entry.manifest.id, {
+      abort: () => settleFilePreviewSuspension(true),
+      commit: async () => {
+        settleFilePreviewSuspension(false);
+        await revokeFilePreviewLease();
+      },
+      prepare: () => {
+        filePreviewSuspended = true;
+        filePreviewSuspension = new Promise<boolean>((resolve) => {
+          resolveFilePreviewSuspension = resolve;
+        });
+      },
+    });
+  }
   return {
     actions: {
       register: (action) => {
@@ -357,12 +348,9 @@ export function createRendererPluginContext(
       },
     },
     agents: createPluginAgentsContext(),
-    commandPalette: {
-      openQuickPick: (quickPick) =>
-        useCommandPaletteController
-          .getState()
-          .openQuickPick(adaptQuickPick(quickPick)),
-    },
+    appearance: createPluginAppearanceContext(),
+    commandPalette: createPluginCommandPaletteContext(),
+    charts: createPluginChartsContext(),
     contextMenu: {
       popup: (surface, coords, invocation) => {
         const zoomLevel = useZoomStore.getState().windowZoomLevel;
@@ -430,10 +418,10 @@ export function createRendererPluginContext(
         return terminalStatusItemRegistry.register(item);
       },
     },
-    missionControlWidgets: {
+    workbenchWidgets: {
       register: (registration) => {
-        assertPluginMissionControlWidgetRegistration(entry, registration);
-        return registerPluginMissionControlWidget(registration);
+        assertPluginWorkbenchWidgetRegistration(entry, registration);
+        return registerPluginWorkbenchWidget(registration);
       },
     },
     groupContent: createHostGroupContentContext(
@@ -444,6 +432,33 @@ export function createRendererPluginContext(
       entry,
       assertPluginCapability
     ),
+    externalNavigation: {
+      open: async (url) => {
+        assertPluginCapability(entry, "external:open");
+        return window.pier.externalNavigation.open(url);
+      },
+    },
+    filePreviews: {
+      issue: async (locator, previousTicket) => {
+        assertPluginCapability(entry, "file:read");
+        const lease = await acquireFilePreviewLease();
+        if (!lease || filePreviewSuspended) {
+          return { issued: false, reason: "forbidden" };
+        }
+        return window.pier.filePreviews.issue({
+          leaseId: lease.leaseId,
+          locator,
+          ...(previousTicket ? { previousTicket } : {}),
+        });
+      },
+      release: async (ticket) => {
+        assertPluginCapability(entry, "file:read");
+        const lease = activeFilePreviewLease;
+        return lease
+          ? window.pier.filePreviews.release({ leaseId: lease.leaseId, ticket })
+          : false;
+      },
+    },
     files: createPluginFilesContext(entry, assertPluginCapability),
     terminal: createPluginTerminalContext(entry, assertPluginCapability),
     worktrees: createPluginWorktreesContext(entry, assertPluginCapability),

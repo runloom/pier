@@ -49,7 +49,7 @@ function pluginEntry(overrides: {
     manifest: {
       apiVersion: 1,
       commands,
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       ...(overrides.description ? { description: overrides.description } : {}),
       engines: { pier: ">=0.1.0" },

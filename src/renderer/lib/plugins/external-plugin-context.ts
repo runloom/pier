@@ -1,13 +1,13 @@
 import type {
-  RendererMissionControlWidgetRegistration as ExternalMissionControlWidgetRegistration,
   RendererPluginAction as ExternalPluginAction,
   RendererPluginPanelRegistration as ExternalPluginPanelRegistration,
   ExternalRendererPluginContext,
   RendererSettingsPageRegistration as ExternalSettingsPageRegistration,
+  RendererWorkbenchWidgetRegistration as ExternalWorkbenchWidgetRegistration,
 } from "@pier/plugin-api/renderer";
 import type {
-  MissionControlWidgetComponentProps as HostMissionControlWidgetComponentProps,
-  MissionControlWidgetSettingsProps as HostMissionControlWidgetSettingsProps,
+  WorkbenchWidgetComponentProps as HostWorkbenchWidgetComponentProps,
+  WorkbenchWidgetSettingsProps as HostWorkbenchWidgetSettingsProps,
 } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
@@ -26,13 +26,13 @@ import { resolvePluginMessage } from "./display.ts";
 import type { ExternalRendererActivationScope } from "./external-activation-scope.ts";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
 import {
-  assertPluginMissionControlWidgetRegistration,
-  registerPluginMissionControlWidget,
-} from "./plugin-mission-control-widget-registry.ts";
-import {
   getPluginSettingsPage,
   registerPluginSettingsPage,
 } from "./plugin-settings-page-registry.ts";
+import {
+  assertPluginWorkbenchWidgetRegistration,
+  registerPluginWorkbenchWidget,
+} from "./plugin-workbench-widget-registry.ts";
 
 /**
  * Builds a plugin-scoped `ExternalRendererPluginContext`. The plugin id is
@@ -91,8 +91,42 @@ export function createExternalRendererPluginContext(
   const pluginId = entry.manifest.id;
   const track = (dispose: () => void): (() => void) =>
     scope?.add(dispose) ?? dispose;
+  const workbenchWidgets: ExternalRendererPluginContext["workbenchWidgets"] = {
+    register: (registration: ExternalWorkbenchWidgetRegistration) => {
+      assertPluginWorkbenchWidgetRegistration(entry, registration);
+      const title = registration.title;
+      return track(
+        registerPluginWorkbenchWidget({
+          ...(registration.actions
+            ? {
+                actions: registration.actions as NonNullable<
+                  import("@plugins/api/renderer.ts").RendererWorkbenchWidgetRegistration["actions"]
+                >,
+              }
+            : {}),
+          component:
+            registration.component as FunctionComponent<HostWorkbenchWidgetComponentProps>,
+          icon: (registration.icon ?? KeyRound) as LucideIcon,
+          id: registration.id,
+          ...(registration.previewComponent
+            ? {
+                previewComponent:
+                  registration.previewComponent as FunctionComponent,
+              }
+            : {}),
+          ...(registration.settingsComponent
+            ? {
+                settingsComponent:
+                  registration.settingsComponent as FunctionComponent<HostWorkbenchWidgetSettingsProps>,
+              }
+            : {}),
+          ...(title === undefined ? {} : { title: () => resolveTitle(title) }),
+        })
+      );
+    },
+  };
 
-  return {
+  const context: ExternalRendererPluginContext = {
     app: {
       openSettings: (options) => {
         useSettingsDialogStore
@@ -150,43 +184,7 @@ export function createExternalRendererPluginContext(
         await usePluginSettingsStore.getState().set(key, value as never);
       },
     },
-    missionControlWidgets: {
-      register: (registration: ExternalMissionControlWidgetRegistration) => {
-        assertPluginMissionControlWidgetRegistration(entry, registration);
-        const title = registration.title;
-        return track(
-          registerPluginMissionControlWidget({
-            ...(registration.actions
-              ? {
-                  actions: registration.actions as NonNullable<
-                    import("@plugins/api/renderer.ts").RendererMissionControlWidgetRegistration["actions"]
-                  >,
-                }
-              : {}),
-            component:
-              registration.component as FunctionComponent<HostMissionControlWidgetComponentProps>,
-            icon: (registration.icon ?? KeyRound) as LucideIcon,
-            id: registration.id,
-            ...(registration.previewComponent
-              ? {
-                  previewComponent:
-                    registration.previewComponent as FunctionComponent,
-                }
-              : {}),
-            ...(registration.settingsComponent
-              ? {
-                  settingsComponent:
-                    registration.settingsComponent as FunctionComponent<HostMissionControlWidgetSettingsProps>,
-                }
-              : {}),
-            // 省略 title = 用 manifest 本地化标题（宿主 merge 层解析）
-            ...(title === undefined
-              ? {}
-              : { title: () => resolveTitle(title) }),
-          })
-        );
-      },
-    },
+    workbenchWidgets,
     settingsPages: {
       register: (registration: ExternalSettingsPageRegistration) => {
         assertDeclared(entry, "settingsPage", registration.id);
@@ -290,4 +288,13 @@ export function createExternalRendererPluginContext(
         ),
     },
   };
+
+  // 只给已安装的 apiVersion 1 旧包提供不可枚举运行时别名；公开类型和新包只使用新键。
+  Object.defineProperty(context, "missionControlWidgets", {
+    configurable: false,
+    enumerable: false,
+    value: workbenchWidgets,
+    writable: false,
+  });
+  return context;
 }

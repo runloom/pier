@@ -801,7 +801,7 @@ describe("WorkspaceHeaderActions", () => {
       "Start Claude",
       "Start Codex",
       "Run Task…",
-      "New Mission Control",
+      "New Workbench",
       "Create Worktree",
       "New Window",
     ]);
@@ -910,6 +910,24 @@ describe("WorkspaceHeaderActions", () => {
     expect(await screen.findByText("No matching items")).toBeVisible();
   });
 
+  it.each([
+    "gongzuo",
+    "gongzuotai",
+  ])("searches the localized Workbench action by pinyin: %s", async (query) => {
+    await i18next.changeLanguage("zh-CN");
+    const props = createProps([createPanel("terminal-1", "终端 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "在此面板组中新建" }));
+    const search = screen.getByPlaceholderText("搜索面板类型或智能体…");
+    fireEvent.change(search, { target: { value: query } });
+
+    await waitFor(() => {
+      expect(visibleCommandItemLabels()).toEqual(["新建工作台"]);
+    });
+  });
+
   it("lets frecency promote a create action without changing its source", async () => {
     useCommandPaletteMru.setState({
       entries: [
@@ -1000,11 +1018,11 @@ describe("WorkspaceHeaderActions", () => {
     );
 
     openAddPanelPopover();
-    fireEvent.click(await findCommandItem("New Mission Control"));
+    fireEvent.click(await findCommandItem("New Workbench"));
     expect(props.containerApi.addPanel).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        component: "mission-control",
+        component: "workbench",
         position: {
           direction: "within",
           referenceGroup: originalGroup,

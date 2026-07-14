@@ -2,7 +2,7 @@
 
 **日期**：2026-07-09  
 **状态**：待用户审阅规格  
-**范围**：`pier.codex` 设置页（账号管理）+ Mission Control 用量物料重做 + 宿主自定义设置页贡献点；删除命令面板账号操作  
+**范围**：`pier.codex` 设置页（账号管理）+ Workbench 用量物料重做 + 宿主自定义设置页贡献点；删除命令面板账号操作
 **关联文档**：
 
 - [2026-07-05-dashboard-kit-and-codex-accounts-design.md](2026-07-05-dashboard-kit-and-codex-accounts-design.md)（早期「账号 UI 仅在大盘」产品决定，**本规格修订**）

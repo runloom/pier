@@ -96,7 +96,7 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         reset: vi.fn(async () => undefined),
         set: vi.fn(async () => undefined),
       },
-      missionControlWidgets: {
+      workbenchWidgets: {
         register: vi.fn(() => () => undefined),
       },
       dialogs: {
@@ -133,7 +133,7 @@ describe("AccountsSettingsPage", () => {
     cleanup();
   });
 
-  it("uses the active account and cost card without redundant copy", async () => {
+  it("renders the active account chrome without redundant copy or cost UI", async () => {
     const { context } = contextWithSnapshot(snapshotWithAccount());
     const { container } = render(<AccountsSettingsPage context={context} />);
 
@@ -147,10 +147,10 @@ describe("AccountsSettingsPage", () => {
       container.querySelector('[data-slot="avatar-fallback"]')
     ).toHaveTextContent("T");
     expect(container.querySelector(".pier-codex-avatar")).toBeNull();
-    expect(screen.getByTestId("codex-cost-card")).toBeDefined();
+    // v1.2: 成本 UI 已迁至宿主 core.cost-overview 物料
+    expect(screen.queryByTestId("codex-cost-card")).toBeNull();
     expect(screen.getByText("PRO")).toBeDefined();
-    expect(screen.getByText("Last 31 days cost")).toBeDefined();
-    expect(container.querySelectorAll('[data-slot="chart"]')).toHaveLength(1);
+    expect(container.querySelector('[data-slot="chart"]')).toBeNull();
     expect(
       screen.queryByText(
         "Manage Codex accounts and compare session and weekly remaining limits."
@@ -159,16 +159,9 @@ describe("AccountsSettingsPage", () => {
     expect("configuration" in pluginManifest).toBe(false);
   });
 
-  it("uses responsive grids and semantic design tokens", () => {
+  it("uses responsive grids and semantic design tokens for account rows", () => {
     const styles = readFileSync(
       resolve(process.cwd(), "packages/plugin-codex/src/renderer/styles.css"),
-      "utf8"
-    );
-    const costVisualization = readFileSync(
-      resolve(
-        process.cwd(),
-        "packages/plugin-codex/src/renderer/cost-usage-visualization.tsx"
-      ),
       "utf8"
     );
     const accountDisplay = readFileSync(
@@ -181,15 +174,6 @@ describe("AccountsSettingsPage", () => {
 
     expect(styles).not.toContain("@media");
     expect(styles).not.toContain(".pier-codex-");
-    expect(costVisualization).toContain("@[22rem]:grid-cols-");
-    expect(costVisualization).toContain("max-[48rem]:grid-cols-2");
-    expect(costVisualization).toContain("var(--chart-1)");
-    expect(costVisualization).not.toContain("var(--data-cost)");
-    expect(costVisualization).toContain(
-      'presentation?: "responsive" | "settings"'
-    );
-    expect(costVisualization).toContain('presentation === "settings"');
-    expect(costVisualization).toContain("h-15");
     expect(accountDisplay).toContain(
       "grid-cols-[auto_15rem_minmax(17rem,1fr)_auto]"
     );
@@ -198,7 +182,6 @@ describe("AccountsSettingsPage", () => {
     );
     expect(accountDisplay).not.toContain("minmax(11rem,1.1fr)");
     expect(styles).not.toMatch(/#[0-9a-f]{3,8}/i);
-    expect(costVisualization).not.toMatch(/#[0-9a-f]{3,8}/i);
   });
 
   it("builds plugin utilities from plugin sources without host preflight", () => {
@@ -282,18 +265,9 @@ describe("AccountsSettingsPage", () => {
       ),
       "utf8"
     );
-    const costRenderer = readFileSync(
-      resolve(
-        process.cwd(),
-        "packages/plugin-codex/src/renderer/cost-usage-visualization.tsx"
-      ),
-      "utf8"
-    );
 
     expect(usageParser).not.toMatch(/windowMinutes\s*===/);
     expect(usageRenderer).not.toMatch(/5-hour|Weekly|Session/);
-    expect(costRenderer).not.toContain("length: 31");
-    expect(costRenderer).toContain("COST_USAGE_PERIOD_DAYS");
   });
 
   it("renders the active account once with a system-default badge", async () => {
@@ -334,167 +308,6 @@ describe("AccountsSettingsPage", () => {
     );
     expect(media).toHaveAttribute("data-align", "center");
     expect(media).toHaveClass("self-center");
-  });
-
-  it("shows reset credits, remaining quota and host-computed cost history", async () => {
-    const { context } = contextWithSnapshot(
-      snapshotWithAccount({
-        accounts: [
-          {
-            error: null,
-            id: "acc-1",
-            label: "test@codex.dev",
-            planType: "plus",
-            status: "active",
-            usage: {
-              fetchedAt: Date.now(),
-              resetCreditsAvailable: 3,
-              status: "ok",
-              windows: [usageWindow(38), usageWindow(64, 10_080, "secondary")],
-            },
-          },
-        ],
-        costUsage: {
-          buckets: [
-            {
-              date: "2026-07-11",
-              estimatedCostMicrousd: 1_250_000,
-              pricingStatus: "complete",
-              tokens: {
-                cachedInputTokens: 10,
-                inputTokens: 80,
-                outputTokens: 20,
-                reasoningTokens: 0,
-                totalTokens: 100,
-              },
-            },
-          ],
-          coverage: { complete: true, from: "2026-06-11", to: "2026-07-11" },
-          observedAt: Date.now(),
-          summary: {
-            estimatedCostMicrousd: 1_250_000,
-            latestDayTokens: 100,
-            periodTokens: 100,
-            todayEstimatedCostMicrousd: 1_250_000,
-          },
-        },
-      })
-    );
-    const { container } = render(<AccountsSettingsPage context={context} />);
-
-    expect(
-      await screen.findByText(/^PLUS · 3 quota resets available · Updated/)
-    ).toBeDefined();
-    expect(screen.getByText("62%")).toBeDefined();
-    expect(screen.getByText("36%")).toBeDefined();
-    expect(screen.getAllByText("$1.25")).toHaveLength(2);
-    expect(container.querySelectorAll('[data-slot="chart"]')).toHaveLength(1);
-  });
-
-  it("refreshes cost independently with loading and success feedback", async () => {
-    const snapshot = snapshotWithAccount();
-    const { context } = contextWithSnapshot(snapshot);
-    let resolveRefresh: (() => void) | undefined;
-    const refreshPending = new Promise<void>((resolvePromise) => {
-      resolveRefresh = resolvePromise;
-    });
-    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
-      if (method === "accounts.snapshot") return snapshot as T;
-      if (method === "usage.refreshCost") await refreshPending;
-      return null as T;
-    };
-    render(<AccountsSettingsPage context={context} />);
-
-    const refreshButton = await screen.findByRole("button", {
-      name: "Refresh cost",
-    });
-    await act(async () => {
-      fireEvent.click(refreshButton);
-    });
-
-    await vi.waitFor(() => {
-      expect(refreshButton).toBeDisabled();
-      expect(refreshButton).toHaveAttribute("aria-busy", "true");
-      expect(refreshButton.querySelector("svg")).toHaveClass("animate-spin");
-    });
-
-    await act(async () => {
-      resolveRefresh?.();
-      await refreshPending;
-    });
-    await vi.waitFor(() => {
-      expect(refreshButton).not.toBeDisabled();
-      expect(context.notifications.success).toHaveBeenCalledWith(
-        "Cost data refreshed"
-      );
-    });
-  });
-
-  it("explains incomplete cost coverage with scan diagnostics", async () => {
-    const { context } = contextWithSnapshot(
-      snapshotWithAccount({
-        costUsage: {
-          buckets: [],
-          coverage: { complete: false, from: "2026-06-11", to: "2026-07-11" },
-          diagnostics: {
-            candidateFiles: 3,
-            deduplicatedEvents: 2,
-            failedFiles: 1,
-            forkedFiles: 1,
-            malformedLines: 4,
-            parsedFiles: 3,
-            reusedFiles: 0,
-            truncatedFiles: 0,
-            uniqueEvents: 2,
-          },
-          observedAt: Date.now(),
-          summary: {
-            estimatedCostMicrousd: null,
-            latestDayTokens: 0,
-            periodTokens: 0,
-            todayEstimatedCostMicrousd: null,
-          },
-        },
-      })
-    );
-    render(<AccountsSettingsPage context={context} />);
-
-    const partial = await screen.findByText("Partial data");
-    fireEvent.focus(partial);
-
-    await vi.waitFor(() => {
-      const tooltip = document.querySelector('[data-slot="tooltip-content"]');
-      expect(tooltip).toHaveTextContent("1 files could not be read");
-      expect(tooltip).toHaveTextContent("4 malformed log lines");
-      expect(tooltip).not.toHaveTextContent("repeated fork events");
-    });
-  });
-
-  it("restores the cost refresh button and shows details after failure", async () => {
-    const snapshot = snapshotWithAccount();
-    const { context } = contextWithSnapshot(snapshot);
-    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
-      if (method === "accounts.snapshot") return snapshot as T;
-      if (method === "usage.refreshCost") throw new Error("scan failed");
-      return null as T;
-    };
-    render(<AccountsSettingsPage context={context} />);
-
-    const refreshButton = await screen.findByRole("button", {
-      name: "Refresh cost",
-    });
-    await act(async () => {
-      fireEvent.click(refreshButton);
-    });
-
-    await vi.waitFor(() => {
-      expect(context.dialogs.alert).toHaveBeenCalledWith({
-        body: "scan failed",
-        title: "Could not refresh cost data",
-      });
-      expect(refreshButton).not.toBeDisabled();
-    });
-    expect(context.notifications.success).not.toHaveBeenCalled();
   });
 
   it("renders a team account's single quota without an invented empty lane", async () => {
@@ -589,29 +402,6 @@ describe("AccountsSettingsPage", () => {
     expect(await screen.findByText("No managed accounts")).toBeDefined();
     expect(screen.queryByText("System default")).toBeNull();
     expect(container.querySelector('[data-slot="empty"]')).not.toBeNull();
-  });
-
-  it("keeps machine-scoped cost visible without a managed account", async () => {
-    const snapshot: CodexAccountsSnapshot = {
-      ...emptySnapshot(),
-      costUsage: {
-        buckets: [],
-        coverage: { complete: true, from: "2026-06-12", to: "2026-07-12" },
-        observedAt: Date.now(),
-        summary: {
-          estimatedCostMicrousd: 350_000,
-          latestDayTokens: 175,
-          periodTokens: 175,
-          todayEstimatedCostMicrousd: 350_000,
-        },
-      },
-    };
-    const { context } = contextWithSnapshot(snapshot);
-    render(<AccountsSettingsPage context={context} />);
-
-    expect(await screen.findByText("No managed accounts")).toBeDefined();
-    expect(screen.getByTestId("codex-cost-card")).toBeDefined();
-    expect(screen.getAllByText("$0.35")).toHaveLength(2);
   });
 
   it("opens account authorization before starting the browser login", async () => {

@@ -18,10 +18,10 @@ import {
 } from "../state/plugin-state.ts";
 import {
   findCommandIdConflict,
-  findMissionControlWidgetIdConflict,
   findPanelIdConflict,
   findPluginIdDotPrefixConflict,
   findTerminalStatusItemIdConflict,
+  findWorkbenchWidgetIdConflict,
 } from "./plugin-contribution-conflicts.ts";
 import { loadManifestLocaleFiles } from "./plugin-localization.ts";
 
@@ -116,7 +116,7 @@ export function collectEffectivePermissions(
       permissions.add(permission);
     }
   }
-  for (const widget of manifest.missionControlWidgets) {
+  for (const widget of manifest.workbenchWidgets) {
     for (const permission of widget.permissions) {
       permissions.add(permission);
     }
@@ -337,14 +337,14 @@ export function createPluginService({
           });
           continue;
         }
-        const missionControlWidgetConflict = findMissionControlWidgetIdConflict(
+        const workbenchWidgetConflict = findWorkbenchWidgetIdConflict(
           manifests.map((item) => item.manifest),
           withLocales.manifest
         );
-        if (missionControlWidgetConflict) {
+        if (workbenchWidgetConflict) {
           diagnostics.push({
             code: "invalid_manifest",
-            message: `missionControlWidgets id must be unique across plugins ("${missionControlWidgetConflict}"): ${withLocales.manifest.id}`,
+            message: `workbenchWidgets id must be unique across plugins ("${workbenchWidgetConflict}"): ${withLocales.manifest.id}`,
             source: diagnosticSource(source),
           });
           continue;
@@ -410,14 +410,14 @@ export function createPluginService({
           });
           continue;
         }
-        const missionControlWidgetConflict = findMissionControlWidgetIdConflict(
+        const workbenchWidgetConflict = findWorkbenchWidgetIdConflict(
           acceptedManifests,
           ext.manifest
         );
-        if (missionControlWidgetConflict) {
+        if (workbenchWidgetConflict) {
           diagnostics.push({
             code: "invalid_manifest",
-            message: `missionControlWidgets id must be unique across plugins ("${missionControlWidgetConflict}"): ${ext.manifest.id}`,
+            message: `workbenchWidgets id must be unique across plugins ("${workbenchWidgetConflict}"): ${ext.manifest.id}`,
             source: { kind: ext.source },
           });
           continue;

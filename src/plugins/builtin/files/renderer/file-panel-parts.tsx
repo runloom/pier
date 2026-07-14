@@ -20,9 +20,9 @@ import {
   ChevronRight,
   FileQuestion,
   FileX,
+  FolderTree,
   MousePointerClick,
   PanelLeftClose,
-  PanelLeftOpen,
   Search,
 } from "lucide-react";
 import {
@@ -406,7 +406,7 @@ export function SidebarToggleButton({
       variant="ghost"
     >
       {collapsed ? (
-        <PanelLeftOpen aria-hidden="true" data-icon="inline-start" />
+        <FolderTree aria-hidden="true" data-icon="inline-start" />
       ) : (
         <PanelLeftClose aria-hidden="true" data-icon="inline-start" />
       )}

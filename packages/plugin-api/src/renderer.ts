@@ -17,12 +17,12 @@ export type JsonValue =
  * plugin coupling into a de-facto host API.
  */
 
-export interface MissionControlGridSize {
+export interface WorkbenchGridSize {
   h: number;
   w: number;
 }
 
-export interface MissionControlWidgetComponentProps {
+export interface WorkbenchWidgetComponentProps {
   /** Instance id. Multi-instance widgets use this as their persistence scope. */
   instanceId: string;
   /** Widget-private persisted params. Plugins own validation and fallback. */
@@ -30,48 +30,48 @@ export interface MissionControlWidgetComponentProps {
   /** Incremented when the user triggers widget refresh. */
   refreshToken: number;
   /** Grid size in cells. Use container queries for visual responsiveness. */
-  size: MissionControlGridSize;
+  size: WorkbenchGridSize;
   /** Shallow-merge params patch back into the host panel state. */
   updateParams: (patch: Record<string, JsonValue>) => void;
-  /** Current Mission Control panel visibility. Polling widgets should pause when false. */
+  /** Current Workbench panel visibility. Polling widgets should pause when false. */
   visible: boolean;
 }
 
-export interface MissionControlWidgetSettingsProps {
+export interface WorkbenchWidgetSettingsProps {
   instanceId: string;
   params: Readonly<Record<string, JsonValue>>;
   updateParams: (patch: Record<string, JsonValue>) => void;
 }
 
-export interface MissionControlWidgetActionContext {
+export interface WorkbenchWidgetActionContext {
   instanceId: string;
   params: Readonly<Record<string, JsonValue>>;
   requestRefresh(): void;
   updateParams(patch: Record<string, JsonValue>): void;
 }
 
-export interface RendererMissionControlWidgetAction {
+export interface RendererWorkbenchWidgetAction {
   disabled?: boolean;
   icon: ComponentType<{ size?: number | string }>;
   id: string;
   intent?: "default" | "destructive";
-  invoke(context: MissionControlWidgetActionContext): Promise<void> | void;
+  invoke(context: WorkbenchWidgetActionContext): Promise<void> | void;
   label: string | (() => string);
   priority?: number;
 }
 
-export interface RendererMissionControlWidgetRegistration {
+export interface RendererWorkbenchWidgetRegistration {
   actions?(
-    context: MissionControlWidgetActionContext
-  ): readonly RendererMissionControlWidgetAction[];
-  component: ComponentType<MissionControlWidgetComponentProps>;
+    context: WorkbenchWidgetActionContext
+  ): readonly RendererWorkbenchWidgetAction[];
+  component: ComponentType<WorkbenchWidgetComponentProps>;
   icon?: ComponentType<{ size?: number | string }>;
   id: string;
   /** 物料库预览卡（样例数据静态渲染，宿主以 pointer-events-none 展示）。 */
   previewComponent?: ComponentType;
   /** Settings panel. Required when the manifest contribution is configurable. */
-  settingsComponent?: ComponentType<MissionControlWidgetSettingsProps>;
-  /** 省略时用 manifest 本地化标题（locales.<lang>.missionControlWidgets）。 */
+  settingsComponent?: ComponentType<WorkbenchWidgetSettingsProps>;
+  /** 省略时用 manifest 本地化标题（locales.<lang>.workbenchWidgets）。 */
   title?: string | (() => string);
 }
 
@@ -150,11 +150,6 @@ export interface ExternalRendererPluginContext {
   lifecycle: {
     beforeSuspend(participant: RendererPluginSuspendParticipant): () => void;
   };
-  missionControlWidgets: {
-    register(
-      registration: RendererMissionControlWidgetRegistration
-    ): () => void;
-  };
   notifications: {
     error(message: string): void;
     info(message: string): void;
@@ -169,6 +164,9 @@ export interface ExternalRendererPluginContext {
   };
   settingsPages: {
     register(registration: RendererSettingsPageRegistration): () => void;
+  };
+  workbenchWidgets: {
+    register(registration: RendererWorkbenchWidgetRegistration): () => void;
   };
 }
 

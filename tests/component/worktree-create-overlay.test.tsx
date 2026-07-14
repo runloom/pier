@@ -194,9 +194,27 @@ function createMockContext(): RendererPluginContext {
     agents: {
       selection: agentSelectionMock,
     },
+    appearance: {
+      current: () => ({
+        codeTheme: "github-dark-default",
+        density: "compact",
+        language: "en",
+        locale: "en",
+        theme: "dark",
+        typography: {
+          baseFontSize: "16px",
+          codeFontFamily: "monospace",
+          fontFamily: "sans-serif",
+        },
+      }),
+      onDidChange: unimplemented("appearance.onDidChange"),
+    },
     ai: {
       generateText: generateTextMock,
       status: aiStatusMock,
+    },
+    charts: {
+      renderMermaid: unimplemented("charts.renderMermaid"),
     },
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
@@ -210,7 +228,14 @@ function createMockContext(): RendererPluginContext {
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
     },
-    missionControlWidgets: { register: vi.fn(() => vi.fn()) },
+    externalNavigation: {
+      open: unimplemented("externalNavigation.open"),
+    },
+    filePreviews: {
+      issue: unimplemented("filePreviews.issue"),
+      release: unimplemented("filePreviews.release"),
+    },
+    workbenchWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: dialogAlertMock,
       choice: unimplemented("dialogs.choice"),
@@ -555,7 +580,7 @@ describe("WorktreeCreateOverlay", () => {
     ).toHaveFocus();
   });
 
-  it("默认 AI 模式：创建后在来源标签组打开终端，并在打开前关闭加载提示", async () => {
+  it("默认 AI 模式：创建后在来源标签组打开终端，loading 持续到终端就绪后再 dismiss", async () => {
     await openOverlay(context, overlayData(), "source-group");
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
@@ -590,10 +615,13 @@ describe("WorktreeCreateOverlay", () => {
       "Generating branch name…"
     );
     expect(loadingUpdateMock).toHaveBeenCalledWith("Creating worktree…");
+    expect(loadingUpdateMock).toHaveBeenCalledWith("Opening terminal…");
     expect(loadingDismissMock).toHaveBeenCalledTimes(1);
     expect(loadingSuccessMock).not.toHaveBeenCalled();
-    expect(loadingDismissMock.mock.invocationCallOrder[0]).toBeLessThan(
-      openTerminalMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    // loading 消息在 openTerminal 完成之后才 dismiss，防止用户看到「loading
+    // 消失 → 终端还没打开」的空白窗口期（Bug 1）。
+    expect(loadingDismissMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      openTerminalMock.mock.invocationCallOrder[0] ?? 0
     );
   });
 
@@ -614,6 +642,7 @@ describe("WorktreeCreateOverlay", () => {
         branch: "fix-focus",
         name: "fix-focus",
         path: "/repo",
+        runSetupBeforeReturn: true,
       });
     });
     await vi.waitFor(() => {
@@ -796,8 +825,9 @@ describe("WorktreeCreateOverlay", () => {
       expect(openTerminalMock).toHaveBeenCalled();
     });
     expect(loadingSuccessMock).not.toHaveBeenCalled();
-    expect(loadingDismissMock.mock.invocationCallOrder[0]).toBeLessThan(
-      openTerminalMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    // 新契约：loading dismiss 在 openTerminal 完成之后（避免空白窗口期）。
+    expect(loadingDismissMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      openTerminalMock.mock.invocationCallOrder[0] ?? 0
     );
   });
 

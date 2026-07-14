@@ -222,6 +222,26 @@ describeMockedMacOSWindowManager(
       });
     });
 
+    it("denies renderer navigation without opening the system browser", async () => {
+      const electron = await import("electron");
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+
+      windowManager.create({ id: "main" });
+      const openHandler = electronMock.webContents.setWindowOpenHandler.mock
+        .calls[0]?.[0] as
+        | ((details: { url: string }) => { action: "deny" })
+        | undefined;
+
+      expect(openHandler?.({ url: "https://example.com/docs" })).toEqual({
+        action: "deny",
+      });
+      expect(electron.shell.openExternal).not.toHaveBeenCalled();
+
+      const navigationEvent = { preventDefault: vi.fn() };
+      electronMock.webListeners.get("will-navigate")?.(navigationEvent);
+      expect(navigationEvent.preventDefault).toHaveBeenCalledOnce();
+    });
+
     it("scopes terminal sessions by durable window record, not reusable runtime id", async () => {
       const { windowManager } = await import("@main/windows/window-manager.ts");
       const { findWindowContext } = await import(

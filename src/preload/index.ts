@@ -41,7 +41,15 @@ import {
   environmentsApi,
   type PierEnvironmentsAPI,
 } from "./environment-api.ts";
+import {
+  createExternalNavigationApi,
+  type PierExternalNavigationApi,
+} from "./external-navigation-api.ts";
 import { filesApi, type PierFilesAPI } from "./file-api.ts";
+import {
+  createFilePreviewApi,
+  type PierFilePreviewApi,
+} from "./file-preview-api.ts";
 import {
   foregroundActivityApi,
   type PierForegroundActivityAPI,
@@ -73,6 +81,7 @@ import {
   type PierTerminalStatusBarPrefsAPI,
   terminalStatusBarPrefsApi,
 } from "./terminal-status-bar-api.ts";
+import { type PierUsageDataAPI, usageDataApi } from "./usage-data-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
 export type WindowInfo = SharedWindowInfo;
@@ -209,6 +218,8 @@ export interface PierWindowAPI {
   createWindow: () => Promise<WindowCreateResult>;
   env: PierEnvAPI;
   environments: PierEnvironmentsAPI;
+  externalNavigation: PierExternalNavigationApi;
+  filePreviews: PierFilePreviewApi;
   files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
   foregroundActivity: PierForegroundActivityAPI;
@@ -229,6 +240,7 @@ export interface PierWindowAPI {
   terminal: TerminalAPI;
   terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
   theme: PierThemeAPI;
+  usageData: PierUsageDataAPI;
   window: PierWindowNsAPI;
   workspace: PierWorkspaceAPI;
   worktrees: PierWorktreesAPI;
@@ -333,6 +345,30 @@ const pluginsApi: PierPluginsAPI = {
   onChanged: (cb) => subscribeIpc(PIER_BROADCAST.PLUGINS_CHANGED, cb),
 };
 
+const externalNavigationApi = createExternalNavigationApi({
+  invoke: (request) =>
+    ipcRenderer.invoke(PIER.EXTERNAL_NAVIGATION_OPEN, request),
+  isUserActivationActive: () => navigator.userActivation?.isActive === true,
+  now: Date.now,
+  randomNonce: () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+      ""
+    );
+  },
+});
+
+const filePreviewApi = createFilePreviewApi({
+  invokeAcquire: (request) =>
+    ipcRenderer.invoke(PIER.FILE_PREVIEW_RUNTIME_ACQUIRE, request),
+  invokeIssue: (request) =>
+    ipcRenderer.invoke(PIER.FILE_PREVIEW_TICKET_ISSUE, request),
+  invokeRelease: (request) =>
+    ipcRenderer.invoke(PIER.FILE_PREVIEW_TICKET_RELEASE, request),
+  invokeRevoke: (request) =>
+    ipcRenderer.invoke(PIER.FILE_PREVIEW_RUNTIME_REVOKE, request),
+});
+
 // gitApi / pluginSettingsApi 实现在独立文件(避免 preload/index.ts 超 500 行硬上限)。
 
 const menuApi: PierMenuAPI = {
@@ -367,6 +403,8 @@ const api: PierWindowAPI = {
     invokePierCommand<void>({ type: "window.focus", windowId }),
   files: filesApi,
   environments: environmentsApi,
+  externalNavigation: externalNavigationApi,
+  filePreviews: filePreviewApi,
   git: gitApi,
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
@@ -381,6 +419,7 @@ const api: PierWindowAPI = {
   tasks: tasksApi,
   terminal: terminalApi,
   terminalStatusBarPrefs: terminalStatusBarPrefsApi,
+  usageData: usageDataApi,
   managedPlugins: createManagedPluginsPreloadApi(),
   pluginRpc: createPluginRpcPreloadApi(),
   app: createAppPreloadApi(),

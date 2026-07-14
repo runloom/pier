@@ -1,6 +1,8 @@
 import type {
   ExternalRendererPluginContext,
-  MissionControlWidgetComponentProps,
+  RendererWorkbenchWidgetAction,
+  WorkbenchWidgetActionContext,
+  WorkbenchWidgetComponentProps,
 } from "@pier/plugin-api/renderer";
 import { Badge } from "@pier/ui/badge.tsx";
 import { formatRelativeTime } from "@pier/ui/format.tsx";
@@ -13,10 +15,9 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import { Spinner } from "@pier/ui/spinner.tsx";
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
+import { RefreshCw } from "lucide-react";
 import type { JSX } from "react";
-import { useEffect, useRef, useState } from "react";
 import { AccountAvatar, resetCredits } from "./account-display.tsx";
 import { AccountPicker } from "./account-picker.tsx";
 import { UsageMeter } from "./usage-meter.tsx";
@@ -25,69 +26,27 @@ import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
 
 /**
  * Codex account and quota widget. The host owns the outer Card and title.
+ *
+ * Refresh flows through {@link accountsWidgetActions}: the async invoke keeps
+ * the header refresh-button spinner spinning for the real IPC duration, and
+ * the widget body doesn't render a separate spinner element (双 spinner 是错
+ * 觉——同一动作有两个 loading 指示是 UX bug)。
  */
 
-export interface AccountsWidgetProps
-  extends MissionControlWidgetComponentProps {
+export interface AccountsWidgetProps extends WorkbenchWidgetComponentProps {
   context: ExternalRendererPluginContext;
 }
 
 export function AccountsWidget({
   context,
   instanceId,
-  refreshToken,
   visible,
 }: AccountsWidgetProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
-  const prevRefresh = useRef(refreshToken);
-  const refreshRequestId = useRef(0);
-  const [refreshing, setRefreshing] = useState(false);
   const t = (key: string, fallback: string): string =>
     context.i18n.t(key, fallback);
 
   useUsagePollingLease(context, `widget:${instanceId}`, visible);
-
-  // Refresh usage when refreshToken increments.
-  useEffect(() => {
-    if (!visible) {
-      refreshRequestId.current += 1;
-      setRefreshing(false);
-      return;
-    }
-    if (refreshToken === prevRefresh.current) return;
-    prevRefresh.current = refreshToken;
-    const requestId = ++refreshRequestId.current;
-    setRefreshing(true);
-    context.rpc
-      .invoke("accounts.refreshUsage", null)
-      .then(() => {
-        context.notifications.success(
-          context.i18n.t(
-            "pier.codex.accounts.settings.usageRefreshSuccess",
-            "Usage refreshed"
-          )
-        );
-      })
-      .catch((err: unknown) => {
-        context.dialogs
-          .alert({
-            title: context.i18n.t(
-              "pier.codex.widget.refreshFailed",
-              "Could not refresh Codex usage"
-            ),
-            body: err instanceof Error ? err.message : String(err),
-          })
-          .catch(() => undefined);
-      })
-      .finally(() => {
-        if (refreshRequestId.current === requestId) setRefreshing(false);
-      });
-    return () => {
-      if (refreshRequestId.current === requestId) {
-        refreshRequestId.current += 1;
-      }
-    };
-  }, [refreshToken, visible, context]);
 
   // Error state
   if (loadError) {
@@ -169,18 +128,6 @@ export function AccountsWidget({
             ) : null}
           </ItemDescription>
         </ItemContent>
-        {refreshing ? (
-          <Badge size="xs" variant="neutral">
-            <Spinner
-              aria-label={t("pier.codex.widget.refreshing", "Refreshing")}
-              className="motion-reduce:animate-none"
-              data-icon="inline-start"
-            />
-            <span className="@[34rem]:inline hidden">
-              {t("pier.codex.widget.refreshing", "Refreshing")}
-            </span>
-          </Badge>
-        ) : null}
         {creditsLabel ? (
           <Badge
             className="@[34rem]:inline-flex hidden"
@@ -198,4 +145,46 @@ export function AccountsWidget({
       {usageContent}
     </div>
   );
+}
+
+/**
+ * Async refresh action builder for the Codex accounts widget. The header
+ * button's spinner covers the whole `accounts.refreshUsage` RPC round-trip.
+ * Success/failure feedback stays with the plugin context.
+ */
+export function accountsWidgetActions(
+  context: ExternalRendererPluginContext,
+  _actionContext: WorkbenchWidgetActionContext
+): readonly RendererWorkbenchWidgetAction[] {
+  return [
+    {
+      icon: RefreshCw,
+      id: "refresh",
+      async invoke() {
+        try {
+          await context.rpc.invoke("accounts.refreshUsage", null);
+          context.notifications.success(
+            context.i18n.t(
+              "pier.codex.accounts.settings.usageRefreshSuccess",
+              "Usage refreshed"
+            )
+          );
+        } catch (err) {
+          await context.dialogs.alert({
+            body: err instanceof Error ? err.message : String(err),
+            title: context.i18n.t(
+              "pier.codex.widget.refreshFailed",
+              "Could not refresh Codex usage"
+            ),
+          });
+        }
+      },
+      label: () =>
+        context.i18n.t(
+          "pier.codex.accounts.settings.refreshUsage",
+          "Refresh usage"
+        ),
+      priority: 50,
+    },
+  ];
 }

@@ -6,6 +6,29 @@
 
 ### Added
 
+- **成本管理归宿主工作台。** 新增 core widget `core.cost-overview`（分类
+  `analytics`，可搜索关键词包括 `cost` / `spending` / `tokens` / `成本` /
+  `花费` / `令牌`），跨插件聚合 API 等价成本估算：4 KPI（今日 / 近 31 天 /
+  tokens / 来源数）+ 堆叠 Bar chart（每源一层，走 `--chart-1..5` 语义色）
+  + 未定价日数提示。三态齐全（loading / empty / error），响应式三档
+  container query（<@14rem 只显今天；@22rem 3 列；@34rem 4 列），
+  `refreshToken` 变化触发 `window.pier.usageData.refreshAll()`。
+- **`window.pier.usageData` preload API** 暴露 `read` / `refreshAll` /
+  `onChanged`，配套 renderer store `useUsageDataStore` + `initUsageDataBridge()`。
+- **`UsageSourceRegistry`**（`src/main/services/usage-data/source-registry.ts`）
+  + 插件 facade `context.usageData.registerSource({ id, rescan })`；
+  `refreshAll` fan-out 到全部注册源，单源失败不短路其他源。
+- **6 个 `core.cost.*` metrics** 注册到 workbench metric registry：
+  `today` / `periodInstant` / `periodTokens` / `dailySeries` / `byModel` /
+  `bySource`，供自定义卡片物料按指标组装。
+- **定价目录扩展**：`src/main/services/usage-data/pricing-catalog.json` 抽出
+  为独立 JSON，新增 Anthropic（Claude Haiku 4.5、Sonnet 4.5/4.6/4.7、Opus
+  4.7、3.5 Sonnet/Haiku、3 Opus）、Google（Gemini 2.5 Pro/Flash/Flash-Lite、
+  Gemini 3 Pro/Flash）、xAI（Grok 4、Grok Code）条目，支持精确 → 别名 →
+  最长前缀通配三段匹配。文档见 `docs/model-pricing.md`。
+- **`UsageAggregateSnapshot` 跨插件成本聚合契约**
+  （`src/shared/contracts/usage-data.ts`）+ `aggregator.ts`。broadcast 通道
+  `pier://usage-data:changed` 是 renderer 侧唯一数据源。
 - `**ForegroundActivityAggregator**` (`src/main/services/foreground-activity/`)
 统一 agent / task / shell / idle 四态活动模型，per-panel 单一 activity。
 新广播通道 `pier://foreground-activity:changed`，新 preload API
@@ -20,6 +43,14 @@ in-flight 去重防并发落两条记录。
 
 ### Changed
 
+- **“指挥中心”统一更名为“工作台”。** 面板组件值、动作标识、国际化键、
+  插件贡献点和运行时注册接口统一使用 `workbench` / `workbenchWidgets`；旧布局与
+  已安装的 `apiVersion: 1` 官方插件只在读取边界做单向兼容。`pier.codex` 同步升级
+  到 1.3.0。
+- **`pier.codex` 插件版本 1.1.6 → 1.2.0。** Codex 只保留会话日志采集 + 账号
+  管理；成本 UI / 定价 / 展示由宿主统一负责。历史布局中的 `pier.codex.cost`
+  widget 会走宿主 unknown widget fallback（`workbench-merge.ts:101`），
+  显示占位卡带移除按钮，用户可手工从物料库添加 `core.cost-overview`。
 - **Path B agent hook 通路收敛为 emit 脚本 + JSONL 直写。**
   - emit 脚本升级为 `commandStart` / `commandFinished` / `agentEvent` 三 kind
   dispatch，`agentHookEventSchema` 变为 zod discriminated union。
@@ -30,6 +61,13 @@ in-flight 去重防并发落两条记录。
 
 ### Removed
 
+- `**pier.codex.cost` widget 三件套**（`cost-widget.tsx` / `cost-card.tsx` /
+  `cost-usage-visualization.tsx`）+ `usage.refreshCost` RPC +
+  `CodexCostUsageSnapshot` 类型 + `CodexAccountsSnapshot.costUsage` 字段 +
+  `setCostUsage` 服务方法 + 15+ `pier.codex.accounts.settings.cost*` /
+  `pier.codex.widget.cost*` / `pier.codex.widget.noCost*` i18n key。
+  成本相关的 renderer refresh 分支（`refreshCost` / `costRefreshing`）从
+  `use-accounts-refresh.ts` 移除。
 - `**agent-hook-server`** (HTTP loopback) 与相关 test 文件删除。
 - 环境变量 `PIER_AGENT_HOOK_PORT` / `PIER_AGENT_HOOK_TOKEN` 从 PTY hookEnv
 中删除。`hookEnv()` 变同步（不再等 loopback server 启动）。

@@ -6,6 +6,7 @@
 export const PIER = {
   // command router facade
   COMMAND_EXECUTE: "pier://command:execute",
+  EXTERNAL_NAVIGATION_OPEN: "pier://external-navigation:open",
   APP_QUIT_DECISION: "pier://app-quit:decision",
   // git watch (订阅/退订;事件本身经 PIER_BROADCAST.GIT_CHANGED 广播)
   GIT_WATCH_START: "pier://git:watch-start",
@@ -14,6 +15,10 @@ export const PIER = {
   FILE_WATCH_START: "pier://file:watch-start",
   FILE_WATCH_STOP: "pier://file:watch-stop",
   FILE_PICK_SAVE_TARGET: "pier://file:pick-save-target",
+  FILE_PREVIEW_RUNTIME_ACQUIRE: "pier://file-preview-runtime:acquire",
+  FILE_PREVIEW_RUNTIME_REVOKE: "pier://file-preview-runtime:revoke",
+  FILE_PREVIEW_TICKET_ISSUE: "pier://file-preview-ticket:issue",
+  FILE_PREVIEW_TICKET_RELEASE: "pier://file-preview-ticket:release",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
@@ -27,8 +32,12 @@ export const PIER = {
   PLUGIN_RENDERER_ACTIVATION_REPORT: "pier://plugin:renderer-activation-report",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
-  // 系统资源快照（renderer 拉取式轮询;指挥中心 system-resources 物料）
+  // 系统资源快照（renderer 拉取式轮询;工作台 system-resources 物料）
   SYSTEM_STATS_SNAPSHOT: "pier://system-stats:snapshot",
+  // 跨插件 API 等价成本聚合快照的初值拉取（增量走 PIER_BROADCAST.USAGE_DATA_CHANGED）。
+  USAGE_DATA_SNAPSHOT: "pier://usage-data:snapshot",
+  // 触发所有注册源的 rescan + 广播；成本物料手动刷新入口。
+  USAGE_DATA_REFRESH_ALL: "pier://usage-data:refresh-all",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -84,6 +93,8 @@ export const PIER_BROADCAST = {
   // 工作树创建的真实后台阶段。payload 只含随机操作标识与阶段，
   // 不广播项目路径、分支名或脚本输出。
   WORKTREE_CREATE_PROGRESS: "pier://worktree-create:progress",
+  // 跨插件成本聚合快照增量 (main → 所有 renderer, payload UsageAggregateSnapshot).
+  USAGE_DATA_CHANGED: "pier://usage-data:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];
