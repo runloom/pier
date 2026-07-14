@@ -1,8 +1,8 @@
 import type {
   ExternalRendererPluginContext,
-  MissionControlWidgetActionContext,
-  MissionControlWidgetComponentProps,
-  RendererMissionControlWidgetAction,
+  RendererWorkbenchWidgetAction,
+  WorkbenchWidgetActionContext,
+  WorkbenchWidgetComponentProps,
 } from "@pier/plugin-api/renderer";
 import { Badge } from "@pier/ui/badge.tsx";
 import { formatRelativeTime } from "@pier/ui/format.tsx";
@@ -33,8 +33,7 @@ import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
  * 觉——同一动作有两个 loading 指示是 UX bug)。
  */
 
-export interface AccountsWidgetProps
-  extends MissionControlWidgetComponentProps {
+export interface AccountsWidgetProps extends WorkbenchWidgetComponentProps {
   context: ExternalRendererPluginContext;
 }
 
@@ -155,8 +154,8 @@ export function AccountsWidget({
  */
 export function accountsWidgetActions(
   context: ExternalRendererPluginContext,
-  _actionContext: MissionControlWidgetActionContext
-): readonly RendererMissionControlWidgetAction[] {
+  _actionContext: WorkbenchWidgetActionContext
+): readonly RendererWorkbenchWidgetAction[] {
   return [
     {
       icon: RefreshCw,

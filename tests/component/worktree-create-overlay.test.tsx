@@ -210,7 +210,7 @@ function createMockContext(): RendererPluginContext {
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
     },
-    missionControlWidgets: { register: vi.fn(() => vi.fn()) },
+    workbenchWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: dialogAlertMock,
       choice: unimplemented("dialogs.choice"),

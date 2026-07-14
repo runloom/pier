@@ -56,11 +56,11 @@ import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
-import {
-  assertPluginMissionControlWidgetRegistration,
-  registerPluginMissionControlWidget,
-} from "./plugin-mission-control-widget-registry.ts";
 import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
+import {
+  assertPluginWorkbenchWidgetRegistration,
+  registerPluginWorkbenchWidget,
+} from "./plugin-workbench-widget-registry.ts";
 
 function createPluginI18n(
   entry?: PluginRegistryEntry
@@ -422,10 +422,10 @@ export function createRendererPluginContext(
         return terminalStatusItemRegistry.register(item);
       },
     },
-    missionControlWidgets: {
+    workbenchWidgets: {
       register: (registration) => {
-        assertPluginMissionControlWidgetRegistration(entry, registration);
-        return registerPluginMissionControlWidget(registration);
+        assertPluginWorkbenchWidgetRegistration(entry, registration);
+        return registerPluginWorkbenchWidget(registration);
       },
     },
     groupContent: createHostGroupContentContext(

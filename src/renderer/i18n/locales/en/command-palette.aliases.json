@@ -29,6 +29,12 @@
         "new terminal",
         "open terminal",
         "create terminal"
+      ],
+      "newWorkbench": [
+        "workbench",
+        "new workbench",
+        "open workbench",
+        "create workbench"
       ]
     },
     "run": {

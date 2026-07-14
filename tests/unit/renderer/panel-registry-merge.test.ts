@@ -14,23 +14,24 @@ import {
 describe("panel-registry dynamic merge", () => {
   afterEach(() => clearPluginPanelsForTests());
 
-  it("includes core panels (terminal/welcome) always", () => {
+  it("includes core panels (workbench/terminal/welcome) always", () => {
     const components = getPanelComponents();
+    expect(components.workbench).toBeDefined();
     expect(components.terminal).toBeDefined();
     expect(components.welcome).toBeDefined();
   });
 
-  it("resolves the dashboard alias through the Mission Control panel kit", () => {
+  it("resolves the Workbench panel kit metadata", () => {
     const components = getPanelComponents();
 
     expect({
-      componentName: components.dashboard?.displayName,
-      icon: panelIconOf("dashboard"),
-      kind: panelKindOf("dashboard"),
+      componentName: components.workbench?.displayName,
+      icon: panelIconOf("workbench"),
+      kind: panelKindOf("workbench"),
     }).toEqual({
-      componentName: components["mission-control"]?.displayName,
-      icon: panelKits["mission-control"].icon,
-      kind: panelKits["mission-control"].kind,
+      componentName: components.workbench?.displayName,
+      icon: panelKits.workbench.icon,
+      kind: panelKits.workbench.kind,
     });
   });
 

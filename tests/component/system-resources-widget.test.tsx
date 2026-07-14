@@ -1,4 +1,4 @@
-import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
+import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import {
   afterEach,
@@ -10,7 +10,7 @@ import {
   vi,
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import { SystemResourcesWidget } from "@/panel-kits/mission-control/core-widgets/system-resources-widget.tsx";
+import { SystemResourcesWidget } from "@/panel-kits/workbench/core-widgets/system-resources-widget.tsx";
 import { useSystemStatsStore } from "@/stores/system-stats.store.ts";
 
 const SNAPSHOT = {
@@ -27,10 +27,8 @@ const SNAPSHOT = {
 
 const originalPierDescriptor = Object.getOwnPropertyDescriptor(window, "pier");
 
-function renderWidget(
-  overrides: Partial<MissionControlWidgetComponentProps> = {}
-) {
-  const props: MissionControlWidgetComponentProps = {
+function renderWidget(overrides: Partial<WorkbenchWidgetComponentProps> = {}) {
+  const props: WorkbenchWidgetComponentProps = {
     instanceId: "core.system-resources",
     params: {},
     refreshToken: 0,

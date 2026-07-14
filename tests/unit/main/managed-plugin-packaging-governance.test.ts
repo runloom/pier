@@ -113,7 +113,7 @@ describe("managed plugin packaging governance", () => {
 
     const sizingPolicies = bundledPluginManifests.flatMap(({ raw }) => {
       const manifest = managedPluginPackageManifestSchema.parse(raw);
-      return manifest.missionControlWidgets.map((widget) => ({
+      return manifest.workbenchWidgets.map((widget) => ({
         defaultSize: widget.defaultSize,
         maxSize: widget.maxSize,
         minSize: widget.minSize,

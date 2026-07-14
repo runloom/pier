@@ -124,7 +124,7 @@ describe("plugin command routing", () => {
         commands: [],
         engines: { pier: ">=0.1.0" },
         id: "pier.external",
-        missionControlWidgets: [],
+        workbenchWidgets: [],
         name: "External",
         panels: [],
         permissions: [],

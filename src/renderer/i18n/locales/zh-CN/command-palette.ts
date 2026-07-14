@@ -43,7 +43,7 @@ export const commandPalette = {
     openCreatePanel: "新建面板...",
     newAgent: "启动默认智能体",
     startAgent: "启动 {{agent}}",
-    newMissionControl: "新建指挥中心",
+    newWorkbench: "新建工作台",
     runTask: "运行任务…",
     terminalList: "终端列表...",
     selectTheme: "选择主题",

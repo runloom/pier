@@ -100,7 +100,7 @@ export function findGroupById(
 /**
  * Build a `{ referenceGroup }` opts object for the requested group ID.
  * Returns `{}` when the group can't be resolved, so callers can spread it into
- * addTerminal/addMissionControl opts without tripping exactOptionalPropertyTypes.
+ * addTerminal/addWorkbench opts without tripping exactOptionalPropertyTypes.
  */
 export function referenceGroupById(
   api: DockviewApi | null,

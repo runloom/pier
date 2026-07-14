@@ -109,6 +109,66 @@ describe("sanitizeSavedLayout", () => {
     expect(branch.data?.length).toBe(2);
   });
 
+  it.each([
+    ["dashboard", "Dashboard"],
+    ["mission-control", "Mission Control"],
+  ])("migrates legacy workbench component %s to the canonical value", (component, title) => {
+    const result = sanitizeSavedLayout(
+      layout({
+        leaves: [{ groupId: "1", views: ["legacy-workbench"] }],
+        panels: [{ contentComponent: component, id: "legacy-workbench" }],
+      }),
+      new Set(["workbench"])
+    );
+    const panel = result?.panels["legacy-workbench"] as
+      | Record<string, unknown>
+      | undefined;
+    expect(panel).toMatchObject({
+      contentComponent: "workbench",
+      title: "legacy-workbench",
+    });
+
+    const input = layout({
+      leaves: [{ groupId: "1", views: ["legacy-workbench"] }],
+      panels: [{ contentComponent: component, id: "legacy-workbench" }],
+    });
+    (input.panels["legacy-workbench"] as Record<string, unknown>).title = title;
+    const titledResult = sanitizeSavedLayout(input, new Set(["workbench"]));
+    expect(titledResult?.panels["legacy-workbench"]).toMatchObject({
+      contentComponent: "workbench",
+      title: "Workbench",
+    });
+  });
+
+  it("preserves maximizedNode during a rename-only workbench migration", () => {
+    const input = layout({
+      leaves: [{ groupId: "1", views: ["legacy-workbench"] }],
+      panels: [
+        {
+          contentComponent: "mission-control",
+          id: "legacy-workbench",
+        },
+      ],
+    });
+    (input.panels["legacy-workbench"] as Record<string, unknown>).title =
+      "Mission Control";
+    (input.grid as Record<string, unknown>).maximizedNode = {
+      location: [0],
+      maximized: true,
+    };
+
+    const result = sanitizeSavedLayout(input, new Set(["workbench"]));
+
+    expect(result?.panels["legacy-workbench"]).toMatchObject({
+      contentComponent: "workbench",
+      title: "Workbench",
+    });
+    expect((result?.grid as Record<string, unknown>).maximizedNode).toEqual({
+      location: [0],
+      maximized: true,
+    });
+  });
+
   it("drops a leaf whose only view is unknown but keeps sibling leaves", () => {
     const result = sanitizeSavedLayout(
       layout({

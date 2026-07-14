@@ -16,7 +16,7 @@ interface UsageDataState {
  *
  * 写入方：`initUsageDataBridge()`（挂载 preload subscribe 后初值经
  * `window.pier.usageData.read()` 灌入，增量走 broadcast）。
- * 读取方：指挥中心 `core.cost-overview` 物料、`core.cost.*` 指标注册器。
+ * 读取方：工作台 `core.cost-overview` 物料、`core.cost.*` 指标注册器。
  *
  * `observedAt` 由 aggregator 保证只增不减；此 store 用 `observedAt` 做
  * 单调守卫，避免网络乱序造成快照回退。空聚合（`sourceCount === 0`

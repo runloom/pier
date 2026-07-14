@@ -2,8 +2,8 @@ import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
-import { missionControlPanelKit } from "@/panel-kits/mission-control/mission-control-panel.tsx";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { workbenchPanelKit } from "@/panel-kits/workbench/workbench-panel.tsx";
 import {
   withPanelResourceBoundary,
   withPluginPanelHostBoundary,
@@ -24,24 +24,13 @@ interface PanelKitMetadata {
  * 见 getPanelComponents()。新增主系统 panel 时在此登记一行。
  */
 export const panelKits = {
-  "mission-control": missionControlPanelKit,
+  workbench: workbenchPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
 } satisfies Record<string, PanelKitMetadata>;
 
-/**
- * 兼容映射：2026-07 大盘改名指挥中心（"dashboard" → "mission-control"）之前
- * 持久化的 layout 仍以旧 component id 反序列化，指向同一 kit。只用于恢复，
- * 新建面板一律走 "mission-control"。
- */
-const legacyPanelKitAliases: Readonly<Record<string, PanelKitMetadata>> = {
-  dashboard: missionControlPanelKit,
-};
-
-const corePanelKitByComponent: Readonly<Record<string, PanelKitMetadata>> = {
-  ...legacyPanelKitAliases,
-  ...panelKits,
-};
+const corePanelKitByComponent: Readonly<Record<string, PanelKitMetadata>> =
+  panelKits;
 
 /**
  * dockview component 名 → React 组件。合并 core 静态 panel 与插件动态 panel。

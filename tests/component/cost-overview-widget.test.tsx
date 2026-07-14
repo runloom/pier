@@ -1,4 +1,4 @@
-import type { MissionControlWidgetComponentProps } from "@plugins/api/renderer.ts";
+import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
 import type {
   UsageAggregateSnapshot,
   UsageAggregateSource,
@@ -22,7 +22,7 @@ import { initI18n } from "@/i18n/index.ts";
 import {
   CostOverviewWidget,
   costOverviewWidgetActions,
-} from "@/panel-kits/mission-control/core-widgets/cost-overview-widget.tsx";
+} from "@/panel-kits/workbench/core-widgets/cost-overview-widget.tsx";
 import { useUsageDataStore } from "@/stores/usage-data.store.ts";
 
 vi.mock("sonner", () => ({
@@ -32,8 +32,8 @@ vi.mock("sonner", () => ({
 const originalPierDescriptor = Object.getOwnPropertyDescriptor(window, "pier");
 
 function baseProps(
-  overrides: Partial<MissionControlWidgetComponentProps> = {}
-): MissionControlWidgetComponentProps {
+  overrides: Partial<WorkbenchWidgetComponentProps> = {}
+): WorkbenchWidgetComponentProps {
   return {
     instanceId: "core.cost-overview",
     params: {},
@@ -45,7 +45,7 @@ function baseProps(
   };
 }
 
-function renderWidget(props?: Partial<MissionControlWidgetComponentProps>) {
+function renderWidget(props?: Partial<WorkbenchWidgetComponentProps>) {
   return render(<CostOverviewWidget {...baseProps(props)} />);
 }
 

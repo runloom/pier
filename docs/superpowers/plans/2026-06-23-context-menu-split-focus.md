@@ -1618,7 +1618,7 @@ feat(keybindings): split/focus 默认快捷键 (6 条)
 
 splitLeft/splitUp 不绑默认快捷键 (loomdesk 同款约定, 留菜单和命令面板
 入口). focus 用 Ctrl+Shift+方向键: mac 上是独立 Ctrl (不撞 Cmd+方向 =
-mission control), 非 mac 上经 DSL 自动归一化到 Mod+Shift+方向键
+workbench), 非 mac 上经 DSL 自动归一化到 Mod+Shift+方向键
 (等价表达). 全部 scope: "global" — 跨 panel 都生效.
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>

@@ -1,6 +1,6 @@
 import {
-  findMissionControlWidgetIdConflict,
   findPluginIdDotPrefixConflict,
+  findWorkbenchWidgetIdConflict,
 } from "@main/services/plugin-contribution-conflicts.ts";
 import type { PluginStateStore } from "@main/services/plugin-service.ts";
 import { createPluginService } from "@main/services/plugin-service.ts";
@@ -107,9 +107,7 @@ function builtinSourceWithWidget(id: string, widgetId: string) {
       apiVersion: 1,
       engines: { pier: ">=0.1.0" },
       id,
-      missionControlWidgets: [
-        { id: widgetId, permissions: [], title: widgetId },
-      ],
+      workbenchWidgets: [{ id: widgetId, permissions: [], title: widgetId }],
       name: id,
       source: { kind: "builtin" },
       version: "1.0.0",
@@ -238,9 +236,9 @@ describe("plugin registry — 插件 id 互为点分前缀拒绝", () => {
     expect(result.diagnostics[0]?.message).toContain("shared.status");
   });
 
-  it("外部插件也参与跨插件指挥中心物料唯一性校验", async () => {
+  it("外部插件也参与跨插件工作台物料唯一性校验", async () => {
     const external = externalSource("pier.beta");
-    external.manifest.missionControlWidgets = [
+    external.manifest.workbenchWidgets = [
       { id: "shared.widget", permissions: [], title: "External widget" },
     ];
     const service = createPluginService({
@@ -331,7 +329,7 @@ describe("plugin registry — 插件 id 互为点分前缀拒绝", () => {
     expect(result.diagnostics[0]?.message).toContain("core.agent-status");
   });
 
-  it("插件清单不能占用宿主核心指挥中心物料 id", async () => {
+  it("插件清单不能占用宿主核心工作台物料 id", async () => {
     const service = createPluginService({
       sources: [builtinSourceWithWidget("pier.duplicate", "core.custom-card")],
       state: memoryState(),
@@ -422,7 +420,7 @@ describe("plugin registry — terminalStatusItems id 跨插件唯一性", () => 
 });
 
 function manifestWith(overrides: {
-  missionControlWidgets?: Array<{
+  workbenchWidgets?: Array<{
     id: string;
     permissions: string[];
     title: string;
@@ -431,7 +429,7 @@ function manifestWith(overrides: {
 }) {
   return pluginManifestSchema.parse({
     apiVersion: 1,
-    missionControlWidgets: overrides.missionControlWidgets ?? [],
+    workbenchWidgets: overrides.workbenchWidgets ?? [],
     engines: { pier: ">=0.1.0" },
     id: overrides.id,
     name: overrides.id,
@@ -440,40 +438,38 @@ function manifestWith(overrides: {
   });
 }
 
-describe("findMissionControlWidgetIdConflict", () => {
+describe("findWorkbenchWidgetIdConflict", () => {
   it("两个插件声明同一 widget id 时返回冲突 id", () => {
     const accepted = manifestWith({
-      missionControlWidgets: [
+      workbenchWidgets: [
         { id: "pier.a.widget", permissions: [], title: "A Widget" },
       ],
       id: "pier.a",
     });
     const candidate = manifestWith({
-      missionControlWidgets: [
+      workbenchWidgets: [
         { id: "pier.a.widget", permissions: [], title: "Steal" },
       ],
       id: "pier.b",
     });
-    expect(findMissionControlWidgetIdConflict([accepted], candidate)).toBe(
+    expect(findWorkbenchWidgetIdConflict([accepted], candidate)).toBe(
       "pier.a.widget"
     );
   });
 
   it("无重叠 id 时返回 null", () => {
     const accepted = manifestWith({
-      missionControlWidgets: [
+      workbenchWidgets: [
         { id: "pier.a.widget", permissions: [], title: "A Widget" },
       ],
       id: "pier.a",
     });
     const candidate = manifestWith({
-      missionControlWidgets: [
+      workbenchWidgets: [
         { id: "pier.b.widget", permissions: [], title: "B Widget" },
       ],
       id: "pier.b",
     });
-    expect(
-      findMissionControlWidgetIdConflict([accepted], candidate)
-    ).toBeNull();
+    expect(findWorkbenchWidgetIdConflict([accepted], candidate)).toBeNull();
   });
 });

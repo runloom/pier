@@ -295,7 +295,7 @@ export function WorkspaceHost() {
 
       // 结构变化与 panel params 变化都属于 layout JSON 的组成部分。dockview 的
       // onDidLayoutChange 不包含 updateParameters，因此两条事件必须汇入同一个
-      // debounce 保存入口，否则浮层位置、指挥中心物料等参数只能活到本次渲染。
+      // debounce 保存入口，否则浮层位置、工作台物料等参数只能活到本次渲染。
       const layoutSubscription = event.api.onDidLayoutChange(() => {
         if (isApplyingPersistedLayout) {
           return; // program-driven, 不算 user touched

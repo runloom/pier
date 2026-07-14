@@ -50,6 +50,16 @@
         "终端",
         "xinjian zhongduan",
         "zhongduan"
+      ],
+      "newWorkbench": [
+        "工作台",
+        "新建工作台",
+        "打开工作台",
+        "gongzuo",
+        "gong zuo",
+        "gongzuotai",
+        "gong zuo tai",
+        "xinjian gongzuotai"
       ]
     },
     "run": {

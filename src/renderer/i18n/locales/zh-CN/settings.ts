@@ -247,8 +247,8 @@ export const settings = {
     contributionSummary: {
       command: "{{count}} 个命令",
       commands: "{{count}} 个命令",
-      missionControlWidget: "{{count}} 个指挥中心组件",
-      missionControlWidgets: "{{count}} 个指挥中心组件",
+      workbenchWidget: "{{count}} 个工作台组件",
+      workbenchWidgets: "{{count}} 个工作台组件",
       none: "没有贡献项",
       panel: "{{count}} 个面板",
       panels: "{{count}} 个面板",
