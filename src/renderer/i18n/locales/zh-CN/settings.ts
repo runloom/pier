@@ -372,6 +372,9 @@ export const settings = {
       isDefault: "默认",
       expand: "详情",
       website: "官网",
+      websiteOpenBusy: "另一个外部链接正在打开。",
+      websiteOpenFailedDescription: "无法打开该智能体官网。",
+      websiteOpenFailedTitle: "无法打开官网",
     },
     row: {
       launchCmd: "启动命令",

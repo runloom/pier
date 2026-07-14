@@ -1,24 +1,27 @@
 import {
-  fileRootSchema,
-  nonEmptyFileRootRelativePathSchema,
-} from "@shared/contracts/file.ts";
-import { FILE_PREVIEW_SCHEME } from "@shared/file-preview-url.ts";
-import { protocol as electronProtocol } from "electron";
+  FILE_PREVIEW_SCHEME,
+  filePreviewTicketFromUrl,
+} from "@shared/file-preview-url.ts";
+
+export { FILE_PREVIEW_SCHEME } from "@shared/file-preview-url.ts";
+
+import type { OnBeforeRequestListenerDetails } from "electron";
+import { protocol as electronProtocol, session } from "electron";
 import {
   resolveExistingFileIdentity,
   revisionForFileBytes,
   unsupportedFileType,
 } from "../services/file-path-identity.ts";
 import {
+  type FilePreviewTicketRegistry,
+  filePreviewPartitionKey,
+  filePreviewTicketRegistry,
+} from "./file-preview-ticket-registry.ts";
+import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readFileWithinImagePreviewLimit,
 } from "./image-preview-file.ts";
 import { classifyPreviewImageSignature } from "./image-signature.ts";
-
-export {
-  createFilePreviewUrl,
-  FILE_PREVIEW_SCHEME,
-} from "@shared/file-preview-url.ts";
 
 interface ProtocolRegistration {
   handle(
@@ -37,13 +40,6 @@ interface ProtocolRegistration {
   ): void;
 }
 
-function decode(value: string | null): string {
-  if (!value) {
-    throw new Error("missing file preview locator");
-  }
-  return Buffer.from(value, "base64url").toString("utf8");
-}
-
 function notFound(): Response {
   return new Response(null, {
     headers: { "x-content-type-options": "nosniff" },
@@ -59,21 +55,16 @@ function payloadTooLarge(): Response {
 }
 
 export async function resolveFilePreviewResponse(
-  requestUrl: string
+  requestUrl: string,
+  registry: Pick<FilePreviewTicketRegistry, "peek"> = filePreviewTicketRegistry
 ): Promise<Response> {
   try {
-    const url = new URL(requestUrl);
-    if (url.protocol !== `${FILE_PREVIEW_SCHEME}:` || url.host !== "file") {
+    const ticket = filePreviewTicketFromUrl(requestUrl);
+    const entry = ticket ? registry.peek(ticket) : null;
+    if (!entry) {
       return notFound();
     }
-    const root = fileRootSchema.parse(decode(url.searchParams.get("root")));
-    const path = nonEmptyFileRootRelativePathSchema.parse(
-      decode(url.searchParams.get("path"))
-    );
-    const requestedRevision = url.searchParams.get("revision");
-    if (!requestedRevision) {
-      return notFound();
-    }
+    const { path, revision: requestedRevision, root } = entry.locator;
     const identity = await resolveExistingFileIdentity(root, path);
     if (unsupportedFileType(identity.stat)) {
       return notFound();
@@ -89,7 +80,7 @@ export async function resolveFilePreviewResponse(
       return payloadTooLarge();
     }
     const mime = classifyPreviewImageSignature(bytes);
-    if (!mime) {
+    if (!mime || mime !== entry.locator.mime) {
       return notFound();
     }
     const revision = revisionForFileBytes(identity, bytes);
@@ -111,6 +102,41 @@ export async function resolveFilePreviewResponse(
   } catch {
     return notFound();
   }
+}
+
+export function authorizeFilePreviewRequest(
+  details: Pick<OnBeforeRequestListenerDetails, "url" | "webContentsId">,
+  partition: string,
+  registry: Pick<
+    FilePreviewTicketRegistry,
+    "resolveRequest"
+  > = filePreviewTicketRegistry
+): boolean {
+  const ticket = filePreviewTicketFromUrl(details.url);
+  return Boolean(
+    ticket &&
+      details.webContentsId !== undefined &&
+      registry.resolveRequest(ticket, {
+        partition,
+        webContentsId: details.webContentsId,
+      })
+  );
+}
+
+export function registerFilePreviewRequestGuard(
+  targetSession = session.defaultSession
+): void {
+  targetSession.webRequest.onBeforeRequest(
+    { urls: [`${FILE_PREVIEW_SCHEME}://file/*`] },
+    (details, callback) => {
+      callback({
+        cancel: !authorizeFilePreviewRequest(
+          details,
+          filePreviewPartitionKey(targetSession)
+        ),
+      });
+    }
+  );
 }
 
 export function registerFilePreviewScheme(

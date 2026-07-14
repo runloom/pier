@@ -1,27 +1,33 @@
 export const FILE_PREVIEW_SCHEME = "pier-file-preview";
 
-export interface FilePreviewLocator {
-  path: string;
-  revision: string;
-  root: string;
-}
+const FILE_PREVIEW_TICKET_PATTERN = /^[A-Za-z0-9_-]{22,128}$/u;
 
-function encodeBase64Url(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+export function filePreviewUrlForTicket(ticket: string): string {
+  if (!FILE_PREVIEW_TICKET_PATTERN.test(ticket)) {
+    throw new Error("Invalid file preview ticket");
   }
-  return btoa(binary)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/u, "");
+  return `${FILE_PREVIEW_SCHEME}://file/${ticket}`;
 }
 
-export function createFilePreviewUrl(locator: FilePreviewLocator): string {
-  const url = new URL(`${FILE_PREVIEW_SCHEME}://file`);
-  url.searchParams.set("root", encodeBase64Url(locator.root));
-  url.searchParams.set("path", encodeBase64Url(locator.path));
-  url.searchParams.set("revision", locator.revision);
-  return url.toString();
+export function filePreviewTicketFromUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== `${FILE_PREVIEW_SCHEME}:` ||
+      url.hostname !== "file" ||
+      url.username ||
+      url.password ||
+      url.port ||
+      url.search ||
+      url.hash
+    ) {
+      return null;
+    }
+    const ticket = url.pathname.slice(1);
+    return !ticket.includes("/") && FILE_PREVIEW_TICKET_PATTERN.test(ticket)
+      ? ticket
+      : null;
+  } catch {
+    return null;
+  }
 }

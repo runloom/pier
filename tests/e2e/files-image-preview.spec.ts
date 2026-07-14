@@ -90,7 +90,7 @@ test("previews a signature-validated image and changes its zoom", async ({
     await expect(image).toBeVisible({ timeout: 30_000 });
     await expect(image).toHaveAttribute(
       "src",
-      /^pier-file-preview:\/\/file\/?\?/u
+      /^pier-file-preview:\/\/file\/[A-Za-z0-9_-]{22}$/u
     );
     await expect(page.getByText(/^(Fit to window|适应窗口)$/u)).toBeVisible();
     const zoomMenu = page.getByRole("button", {

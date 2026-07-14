@@ -6,6 +6,7 @@
 export const PIER = {
   // command router facade
   COMMAND_EXECUTE: "pier://command:execute",
+  EXTERNAL_NAVIGATION_OPEN: "pier://external-navigation:open",
   APP_QUIT_DECISION: "pier://app-quit:decision",
   // git watch (订阅/退订;事件本身经 PIER_BROADCAST.GIT_CHANGED 广播)
   GIT_WATCH_START: "pier://git:watch-start",
@@ -14,6 +15,10 @@ export const PIER = {
   FILE_WATCH_START: "pier://file:watch-start",
   FILE_WATCH_STOP: "pier://file:watch-stop",
   FILE_PICK_SAVE_TARGET: "pier://file:pick-save-target",
+  FILE_PREVIEW_RUNTIME_ACQUIRE: "pier://file-preview-runtime:acquire",
+  FILE_PREVIEW_RUNTIME_REVOKE: "pier://file-preview-runtime:revoke",
+  FILE_PREVIEW_TICKET_ISSUE: "pier://file-preview-ticket:issue",
+  FILE_PREVIEW_TICKET_RELEASE: "pier://file-preview-ticket:release",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",

@@ -186,6 +186,23 @@ describe("RendererPluginRuntime", () => {
     ).toBeNull();
   });
 
+  it("clears lifecycle participants when builtin activation fails", async () => {
+    const runtime = new RendererPluginRuntime([
+      {
+        activate: () => {
+          throw new Error("activation failed");
+        },
+        id: "runtime.test",
+      },
+    ]);
+
+    await expect(runtime.refresh([pluginEntry])).rejects.toThrow(
+      "renderer plugin refresh failed"
+    );
+
+    expect(pluginLifecycleBarriers.pluginIds()).not.toContain("runtime.test");
+  });
+
   it("clears host group content even when the plugin disposer throws", async () => {
     const { container, group } = createMockGroup();
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

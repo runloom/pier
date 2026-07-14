@@ -23,7 +23,6 @@ import {
   BaseWindow,
   BrowserWindow,
   nativeTheme,
-  shell,
   WebContentsView,
 } from "electron";
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
@@ -252,11 +251,9 @@ class WindowManager {
       }
     });
 
-    window.webContents.setWindowOpenHandler(({ url }) => {
-      shell.openExternal(url).catch(() => {
-        // ignore: 外部 URL 打开失败由 OS 处理
-      });
-      return { action: "deny" };
+    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    window.webContents.on("will-navigate", (event) => {
+      event.preventDefault();
     });
 
     if (isDev) {

@@ -194,9 +194,27 @@ function createMockContext(): RendererPluginContext {
     agents: {
       selection: agentSelectionMock,
     },
+    appearance: {
+      current: () => ({
+        codeTheme: "github-dark-default",
+        density: "compact",
+        language: "en",
+        locale: "en",
+        theme: "dark",
+        typography: {
+          baseFontSize: "16px",
+          codeFontFamily: "monospace",
+          fontFamily: "sans-serif",
+        },
+      }),
+      onDidChange: unimplemented("appearance.onDidChange"),
+    },
     ai: {
       generateText: generateTextMock,
       status: aiStatusMock,
+    },
+    charts: {
+      renderMermaid: unimplemented("charts.renderMermaid"),
     },
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
@@ -209,6 +227,13 @@ function createMockContext(): RendererPluginContext {
       onDidChange: unimplemented("configuration.onDidChange"),
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
+    },
+    externalNavigation: {
+      open: unimplemented("externalNavigation.open"),
+    },
+    filePreviews: {
+      issue: unimplemented("filePreviews.issue"),
+      release: unimplemented("filePreviews.release"),
     },
     workbenchWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
