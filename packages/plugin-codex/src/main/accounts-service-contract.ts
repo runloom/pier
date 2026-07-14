@@ -3,6 +3,7 @@ import type {
   CodexAccountsSnapshot,
   RemoveAccountPayload,
   SelectAccountPayload,
+  SyncToPeersPayload,
 } from "../shared/accounts.ts";
 import type { CodexLegacyMigrationAdapter } from "./legacy-migration.ts";
 import type { CodexAccountsStateStore } from "./state.ts";
@@ -36,4 +37,6 @@ export interface CodexAccountsService {
   remove(payload: RemoveAccountPayload): Promise<void>;
   select(payload: SelectAccountPayload): Promise<void>;
   snapshot(): CodexAccountsSnapshot;
+  /** Mirror the managed account credential into peer tools without switching Codex. */
+  syncToPeers(payload: SyncToPeersPayload): Promise<void>;
 }

@@ -241,7 +241,9 @@ describe("AccountsWidget (usage)", () => {
     });
 
     // The switch confirmation dialog opens with sync checkboxes.
-    const switchButton = await screen.findByRole("button", { name: /Switch$/ });
+    const switchButton = await screen.findByRole("button", {
+      name: /Confirm$/,
+    });
     await act(async () => {
       fireEvent.click(switchButton);
     });
@@ -254,6 +256,42 @@ describe("AccountsWidget (usage)", () => {
         },
       });
     });
+  });
+
+  it("defers the switch dialog until the next macrotask after menu select", async () => {
+    const snap = usageSnapshot({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "active",
+          error: null,
+        },
+        {
+          id: "acc-2",
+          label: "other@codex.dev",
+          status: "available",
+          error: null,
+        },
+      ],
+      activeAccountId: "acc-1",
+    });
+    const { context } = contextWithSnapshot(snap);
+    render(<AccountsWidget context={context} {...baseProps()} />);
+
+    await screen.findByText("active@codex.dev");
+    openDropdown("Switch account");
+    await act(async () => {
+      fireEvent.click(await screen.findByText("other@codex.dev"));
+    });
+
+    // Dialog primitive owns deferred open; product state may already be true.
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    expect(
+      await screen.findByRole("dialog", undefined, { timeout: 1000 })
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Confirm$/ })).toBeTruthy();
   });
 
   it("shows only the spinner icon while an account switch is pending", async () => {
@@ -296,7 +334,9 @@ describe("AccountsWidget (usage)", () => {
     fireEvent.click(await screen.findByText("other@codex.dev"));
 
     // Confirm in the switch dialog to trigger the RPC.
-    const switchButton = await screen.findByRole("button", { name: /Switch$/ });
+    const switchButton = await screen.findByRole("button", {
+      name: /Confirm$/,
+    });
     await act(async () => {
       fireEvent.click(switchButton);
     });
@@ -310,7 +350,7 @@ describe("AccountsWidget (usage)", () => {
     });
   });
 
-  it('calls app.openSettings when "Manage accounts..." is clicked', async () => {
+  it("routes manage accounts through host openSettings", async () => {
     const snap = usageSnapshot({
       accounts: [
         {
@@ -335,8 +375,11 @@ describe("AccountsWidget (usage)", () => {
     openDropdown("Switch account");
 
     const manageBtn = await screen.findByText("Manage accounts...");
-    fireEvent.click(manageBtn);
+    await act(async () => {
+      fireEvent.click(manageBtn);
+    });
 
+    // openSettings is immediate; Dialog primitive defers the actual mount.
     expect(context.app.openSettings).toHaveBeenCalledWith({
       section: "plugin:pier.codex",
     });

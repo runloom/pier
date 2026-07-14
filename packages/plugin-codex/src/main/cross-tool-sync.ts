@@ -199,11 +199,12 @@ async function syncOmp(
 
     const nowSec = Math.floor(Date.now() / 1000);
 
-    // Check if a row with this identity_key already exists.
+    // node:sqlite expects positional binds as separate arguments, not an array.
+    // Passing an array is treated as a named-parameter object → "Unknown named parameter '0'".
     const row = db.prepare(
       "SELECT id FROM auth_credentials WHERE provider = ? AND identity_key = ?"
     ) as PreparedStmt;
-    const existing = row.get(["openai-codex", identityKey]) as
+    const existing = row.get("openai-codex", identityKey) as
       | { id: number }
       | undefined;
 
@@ -211,12 +212,12 @@ async function syncOmp(
       const update = db.prepare(
         "UPDATE auth_credentials SET data = ?, disabled_cause = NULL, updated_at = ? WHERE id = ?"
       ) as PreparedStmt;
-      update.run([data, nowSec, existing.id]);
+      update.run(data, nowSec, existing.id);
     } else {
       const insert = db.prepare(
         "INSERT INTO auth_credentials (provider, credential_type, data, identity_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
       ) as PreparedStmt;
-      insert.run(["openai-codex", "oauth", data, identityKey, nowSec, nowSec]);
+      insert.run("openai-codex", "oauth", data, identityKey, nowSec, nowSec);
     }
   } finally {
     db.close();
@@ -229,8 +230,8 @@ interface DatabaseSyncLike {
 }
 
 interface PreparedStmt {
-  get(params: BindValue[]): unknown;
-  run(params: BindValue[]): void;
+  get(...params: BindValue[]): unknown;
+  run(...params: BindValue[]): void;
 }
 
 type BindValue = string | number | null;

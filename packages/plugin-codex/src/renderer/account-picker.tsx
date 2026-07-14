@@ -23,6 +23,7 @@ import type {
   CrossToolSyncTarget,
 } from "../shared/accounts.ts";
 import { SwitchConfirmDialog } from "./account-switch.ts";
+import { formatAccountError } from "./format-account-error.ts";
 
 export interface AccountPickerProps {
   accounts: readonly CodexAccountSummary[];
@@ -40,15 +41,12 @@ export function AccountPicker({
   );
   const [dialogAccountId, setDialogAccountId] = useState<string | null>(null);
   if (accounts.length === 0) return null;
+
   const reportError = async (err: unknown): Promise<void> => {
     await context.dialogs.alert({
       title: t("pier.codex.widget.actionFailed", "Account action failed"),
-      body: err instanceof Error ? err.message : String(err),
+      body: formatAccountError(err, t),
     });
-  };
-
-  const handleSelect = (accountId: string): void => {
-    setDialogAccountId(accountId);
   };
 
   const handleDialogResult = async ({
@@ -123,8 +121,8 @@ export function AccountPicker({
             {accounts.map((account) => (
               <DropdownMenuItem
                 key={account.id}
-                onClick={() => {
-                  handleSelect(account.id);
+                onSelect={() => {
+                  setDialogAccountId(account.id);
                 }}
               >
                 <span className="min-w-0">
@@ -145,7 +143,7 @@ export function AccountPicker({
 
           <DropdownMenuGroup>
             <DropdownMenuItem
-              onClick={() => {
+              onSelect={() => {
                 context.app.openSettings({ section: "plugin:pier.codex" });
               }}
             >

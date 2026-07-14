@@ -16,25 +16,26 @@ import {
 } from "../shared/accounts.ts";
 import type { Translate } from "./usage-meter.tsx";
 
+export type PeerSyncDialogMode = "switch" | "sync";
+
 export interface SwitchConfirmResult {
   confirmed: boolean;
   syncTargets: CrossToolSyncTarget[];
 }
 
 /**
- * Account switch confirmation dialog with cross-tool sync checkboxes.
+ * Confirmation dialog with peer-tool checkboxes.
  *
- * Renders a Dialog (same pattern as AddAccountDialog) because the external
- * plugin `dialogs.confirm` API only supports plain text body — no custom
- * content like checkboxes. The dialog shows the standard switch warning plus
- * a list of peer tools (opencode / pi / omp) with checkboxes, all selected
- * by default. The user can deselect tools they don't want synced.
+ * - `switch`: confirm Codex account switch + optional peer mirror
+ * - `sync`: mirror the current managed account into peers only
  */
 export function SwitchConfirmDialog({
+  mode = "switch",
   open,
   onResult,
   t,
 }: {
+  mode?: PeerSyncDialogMode;
   open: boolean;
   onResult: (result: SwitchConfirmResult) => void;
   t: Translate;
@@ -69,6 +70,41 @@ export function SwitchConfirmDialog({
     omp: t("pier.codex.switch.syncTarget.omp", "omp"),
   };
 
+  const title =
+    mode === "sync"
+      ? t(
+          "pier.codex.accounts.settings.syncPeersTitle",
+          "Sync OpenAI account to other tools?"
+        )
+      : t(
+          "pier.codex.accounts.settings.switchConfirmTitle",
+          "Switch Codex account?"
+        );
+  const body =
+    mode === "sync"
+      ? t(
+          "pier.codex.accounts.settings.syncPeersBody",
+          "Write this Codex account's OpenAI credentials into the selected tools. Already-running sessions in those tools may need a restart."
+        )
+      : t(
+          "pier.codex.accounts.settings.switchConfirmBody",
+          "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect."
+        );
+  const sectionLabel =
+    mode === "sync"
+      ? t(
+          "pier.codex.accounts.settings.syncPeersSectionLabel",
+          "Sync the OpenAI account to:"
+        )
+      : t(
+          "pier.codex.switch.syncSectionLabel",
+          "Also switch the OpenAI account in:"
+        );
+  const confirmLabel =
+    mode === "sync"
+      ? t("pier.codex.accounts.settings.syncPeersAction", "Sync")
+      : t("pier.codex.accounts.settings.switchConfirmAction", "Confirm");
+
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
@@ -78,45 +114,39 @@ export function SwitchConfirmDialog({
     >
       <DialogContent data-pier-codex-scope="">
         <DialogHeader>
-          <DialogTitle>
-            {t(
-              "pier.codex.accounts.settings.switchConfirmTitle",
-              "Switch Codex account?"
-            )}
-          </DialogTitle>
-          <DialogDescription className="whitespace-pre-wrap">
-            {t(
-              "pier.codex.accounts.settings.switchConfirmBody",
-              "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect."
-            )}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2 py-2">
-          <p className="text-foreground-muted text-sm">
-            {t(
-              "pier.codex.switch.syncSectionLabel",
-              "Also switch the OpenAI account in:"
-            )}
-          </p>
-          <div className="flex flex-col gap-1" data-testid="sync-targets">
-            {ALL_SYNC_TARGETS.map((target) => (
-              <Button
-                className="flex w-full justify-start gap-3 rounded-md px-2 py-1.5 font-normal hover:bg-accent/50"
-                key={target}
-                onClick={() => toggleTarget(target)}
-                type="button"
-                variant="ghost"
-              >
-                <Checkbox
-                  checked={syncTargets.has(target)}
-                  data-testid={`sync-target-${target}`}
-                  onCheckedChange={() => toggleTarget(target)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <span className="text-sm">{targetLabel[target]}</span>
-              </Button>
-            ))}
+        <div className="flex flex-col gap-3">
+          <DialogDescription className="whitespace-pre-wrap">
+            {body}
+          </DialogDescription>
+          <div className="flex flex-col gap-2">
+            <p className="text-muted-foreground text-sm">{sectionLabel}</p>
+            <div className="flex flex-col gap-1" data-testid="sync-targets">
+              {ALL_SYNC_TARGETS.map((target) => {
+                const checkboxId = `pier-codex-sync-target-${target}`;
+                return (
+                  <div
+                    className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent/50"
+                    key={target}
+                  >
+                    <Checkbox
+                      checked={syncTargets.has(target)}
+                      data-testid={`sync-target-${target}`}
+                      id={checkboxId}
+                      onCheckedChange={() => toggleTarget(target)}
+                    />
+                    <label
+                      className="flex-1 cursor-pointer text-sm"
+                      htmlFor={checkboxId}
+                    >
+                      {targetLabel[target]}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -124,9 +154,14 @@ export function SwitchConfirmDialog({
           <Button onClick={handleCancel} type="button" variant="outline">
             {t("pier.codex.accounts.settings.cancel", "Cancel")}
           </Button>
-          <Button onClick={handleConfirm} type="button" variant="default">
+          <Button
+            disabled={syncTargets.size === 0 && mode === "sync"}
+            onClick={handleConfirm}
+            type="button"
+            variant="default"
+          >
             <Check data-icon="inline-start" />
-            {t("pier.codex.accounts.settings.switch", "Switch")}
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -6,6 +6,7 @@ import {
   refreshUsagePayloadSchema,
   removeAccountPayloadSchema,
   selectAccountPayloadSchema,
+  syncToPeersPayloadSchema,
 } from "../shared/accounts.ts";
 import type { CodexAccountsService } from "./accounts-service-contract.ts";
 
@@ -34,6 +35,10 @@ export function registerCodexRpcHandlers(options: {
   });
   rpc.handle("accounts.select", async (payload) => {
     await service.select(selectAccountPayloadSchema.parse(payload));
+    return null;
+  });
+  rpc.handle("accounts.syncToPeers", async (payload) => {
+    await service.syncToPeers(syncToPeersPayloadSchema.parse(payload));
     return null;
   });
   rpc.handle("accounts.remove", async (payload) => {

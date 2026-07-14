@@ -69,28 +69,40 @@ export interface CodexAccountsState {
 export type AddAccountPayload = Record<string, never>;
 
 /**
- * Tools whose OpenAI OAuth credential should be synced alongside the Codex
- * switch. All four tools (codex / opencode / pi / omp) share the same OpenAI
- * OAuth client (`app_EMoamEEZ73f0CkXaXp7hrann`), issuer, and audience — their
- * access/refresh tokens are interchangeable. When the user switches the active
- * Codex account, the same token set can be materialized into the other tools'
- * auth stores so they all use the same ChatGPT account.
+ * Tools that can receive a mirrored OpenAI OAuth credential from a managed
+ * Codex account. All four tools (codex / opencode / pi / omp) share the same
+ * OpenAI OAuth client, issuer, and audience — their access/refresh tokens are
+ * interchangeable.
  *
- * `"codex"` is always synced (it is the primary target of the switch); the
- * remaining targets are opt-in via the switch confirmation dialog.
+ * - On account switch, `"codex"` is always handled by materialize; peer tools
+ *   are optional via the switch confirmation dialog.
+ * - `accounts.syncToPeers` only accepts peer tools and never changes the
+ *   active Codex account.
  */
 export type CrossToolSyncTarget = "codex" | "opencode" | "pi" | "omp";
 
-/** All sync targets, in display order. */
+/** Peer tools only, in display order. */
 export const ALL_SYNC_TARGETS: readonly Exclude<
   CrossToolSyncTarget,
   "codex"
 >[] = ["opencode", "pi", "omp"];
 
+export type PeerSyncTarget = (typeof ALL_SYNC_TARGETS)[number];
+
 export interface SelectAccountPayload {
   accountId: string;
-  /** Optional: which peer tools to sync the credential to. Defaults to none. */
-  syncTargets?: readonly CrossToolSyncTarget[] | undefined;
+  /** Optional peer tools to mirror credentials into. Defaults to none. */
+  syncTargets?: readonly PeerSyncTarget[] | undefined;
+}
+
+export interface SyncToPeersPayload {
+  /**
+   * Managed account to read credentials from. Defaults to the current active
+   * managed account. System default (`null` active) is not supported.
+   */
+  accountId?: string | undefined;
+  /** Peer tools to update. Must contain at least one entry. */
+  syncTargets: readonly PeerSyncTarget[];
 }
 
 export interface RemoveAccountPayload {
@@ -102,12 +114,16 @@ export interface RefreshUsagePayload {
 }
 
 const nonEmptyStringSchema = z.string().check(z.minLength(1));
-const syncTargetSchema = z.enum(["codex", "opencode", "pi", "omp"]);
+const peerSyncTargetSchema = z.enum(["opencode", "pi", "omp"]);
 
 export const addAccountPayloadSchema = z.strictObject({});
 export const selectAccountPayloadSchema = z.strictObject({
   accountId: nonEmptyStringSchema,
-  syncTargets: z.optional(z.array(syncTargetSchema)),
+  syncTargets: z.optional(z.array(peerSyncTargetSchema)),
+});
+export const syncToPeersPayloadSchema = z.strictObject({
+  accountId: z.optional(nonEmptyStringSchema),
+  syncTargets: z.array(peerSyncTargetSchema).check(z.minLength(1)),
 });
 export const removeAccountPayloadSchema = z.strictObject({
   accountId: nonEmptyStringSchema,

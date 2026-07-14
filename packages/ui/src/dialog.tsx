@@ -3,13 +3,22 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { Button } from "./button.tsx";
+import { useDeferredDialogOpen } from "./use-deferred-dialog-open.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
 function Dialog({
+  open,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+  const deferredOpen = useDeferredDialogOpen(open);
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      {...props}
+      {...(open === undefined ? {} : { open: deferredOpen })}
+    />
+  );
 }
 
 function DialogTrigger({

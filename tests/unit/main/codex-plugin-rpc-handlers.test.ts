@@ -20,6 +20,7 @@ function serviceStub(): CodexAccountsService {
       revision: 1,
       schemaVersion: 1,
     })),
+    syncToPeers: vi.fn(),
   };
 }
 
@@ -90,5 +91,28 @@ describe("Codex plugin RPC handlers", () => {
 
     expect(acquireUsagePolling).toHaveBeenCalledWith("widget:account-1");
     expect(releaseUsagePolling).toHaveBeenCalledWith("widget:account-1");
+  });
+
+  it("routes accounts.syncToPeers to the service", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const service = serviceStub();
+    registerCodexRpcHandlers({
+      acquireUsagePolling: vi.fn(async () => undefined),
+      releaseUsagePolling: vi.fn(),
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service,
+    });
+
+    await handlers.get("accounts.syncToPeers")?.({
+      syncTargets: ["omp", "opencode"],
+    });
+
+    expect(service.syncToPeers).toHaveBeenCalledWith({
+      syncTargets: ["omp", "opencode"],
+    });
   });
 });

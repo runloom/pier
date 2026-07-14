@@ -3,15 +3,16 @@ import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import type {
-  CodexAccountsSnapshot,
-  CrossToolSyncTarget,
-} from "../shared/accounts.ts";
+import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
 import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
 import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import {
+  selectManagedAccount,
+  syncManagedAccountPeers,
+} from "./accounts-select.ts";
 import type {
   CodexAccountsService,
   CodexAccountsServiceOpts,
@@ -25,10 +26,6 @@ import {
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
-import {
-  extractTokenSetFromCodexAuth,
-  syncCrossToolCredentials,
-} from "./cross-tool-sync.ts";
 import { migrateLegacyAccountsToState } from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
 import {
@@ -276,73 +273,44 @@ export function createCodexAccountsService(
 
   async function doSelect(
     accountId: string,
-    syncTargets?: readonly CrossToolSyncTarget[]
+    syncTargets?: Parameters<typeof selectManagedAccount>[2]
   ): Promise<void> {
-    const state = stateStore.get();
-    const target = state.accounts.find((a) => a.id === accountId);
-    if (!target) {
-      throw new Error(`Account not found: ${accountId}`);
-    }
-    if (state.activeAccountId === accountId) {
-      return;
-    }
+    await selectManagedAccount(
+      {
+        accountHomeDir,
+        handleDrift,
+        ...(logger ? { logger } : {}),
+        now,
+        onSelected: (selectedId) => {
+          emitSnapshot();
+          doRefreshUsage({ accountId: selectedId, force: true }).catch(() => {
+            // 用量 error 经 snapshot 传播；此 catch 仅防 unhandled rejection。
+          });
+        },
+        provider,
+        setSuppressWatchUntil: (until) => {
+          suppressWatchUntil = until;
+        },
+        stateStore,
+        watchSuppressMs: WATCH_SUPPRESS_MS,
+      },
+      accountId,
+      syncTargets
+    );
+  }
 
-    if (state.activeAccountId) {
-      const activeAccount = state.accounts.find(
-        (a) => a.id === state.activeAccountId
-      );
-      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-      const syncResult = await provider.syncBack(
-        accountHomeDir(state.activeAccountId),
-        activeAccount?.providerAccountId
-      );
-      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-      if (syncResult === "identity-mismatch") {
-        await handleDrift();
-      }
-    }
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-    await provider.materialize(accountHomeDir(accountId));
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-
-    // Cross-tool sync: materialize the same OpenAI OAuth token into the
-    // peer tools selected by the user. Each target is independent — a
-    // failure in one does not abort the switch or the others.
-    if (syncTargets && syncTargets.length > 0) {
-      try {
-        const authContent = await provider.readManagedAuthContent(
-          accountHomeDir(accountId)
-        );
-        const tokens = extractTokenSetFromCodexAuth(authContent, target.email);
-        const results = await syncCrossToolCredentials(syncTargets, tokens, {
-          ...(logger ? { logger } : {}),
-        });
-        for (const result of results) {
-          if (!result.ok) {
-            logger?.warn(
-              `[pier.codex] cross-tool sync failed for ${result.target}`,
-              { error: result.error }
-            );
-          }
-        }
-      } catch (error) {
-        logger?.warn("[pier.codex] cross-tool sync skipped", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    stateStore.mutate((s) => ({
-      ...s,
-      activeAccountId: accountId,
-      revision: s.revision + 1,
-    }));
-    await stateStore.flush();
-    emitSnapshot();
-    doRefreshUsage({ accountId, force: true }).catch(() => {
-      // 用量 error 已通过 doRefreshUsage → usageCache → emitSnapshot 传播到 UI；
-      // 此 catch 仅防 unhandled rejection，不面向用户。
-    });
+  async function doSyncToPeers(
+    payload: Parameters<typeof syncManagedAccountPeers>[1]
+  ): Promise<void> {
+    await syncManagedAccountPeers(
+      {
+        accountHomeDir,
+        ...(logger ? { logger } : {}),
+        provider,
+        stateStore,
+      },
+      payload
+    );
   }
 
   async function doRemove(accountId: string): Promise<void> {
@@ -522,6 +490,7 @@ export function createCodexAccountsService(
     },
     select: (payload) =>
       enqueueMutation(() => doSelect(payload.accountId, payload.syncTargets)),
+    syncToPeers: (payload) => enqueueMutation(() => doSyncToPeers(payload)),
     remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
     refreshUsage: (options) => doRefreshUsage(options),
     refreshAllUsage,

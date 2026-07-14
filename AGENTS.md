@@ -57,6 +57,15 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - `showAppAlert` 可保持默认尺寸，用于错误详情时避免把长输出塞进小弹窗；短 alert 如需小尺寸应由调用方显式传 `size: "sm"`。
 - 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts`：锁定文档存在、禁止绕过 `AppDialogHost` 直接使用 shadcn `AlertDialog` primitive，并要求 confirm API 的 `size` / `intent` 保持必填。
 
+### 浮层后打开 Dialog / 设置
+
+从 DropdownMenu / ContextMenu / Select 等 Radix overlay 的菜单项打开 Dialog 或设置时，业务代码写普通 controlled state 即可：
+
+- `@pier/ui/dialog` / `@pier/ui/alert-dialog` 对 controlled `open`：无 overlay 时同步打开；检测到菜单/select 仍在或 body `pointer-events: none` 时，内部等待 unlock 后再挂载。关闭始终同步。
+- 若等待超时仍被锁，**放弃打开**（不强制挂载），避免 body 指针锁残留导致整页点不动；`open` 变回 `false` 会取消 pending。
+- 打开设置继续走 `useSettingsDialogStore.open` / `openSection` 或插件 `context.app.openSettings`，不要在业务侧再套 `setTimeout` / `scheduleAfterOverlay` / `modal={false}`。
+- 检查点在 `tests/unit/renderer/overlay-dialog-governance.test.ts`、`tests/unit/renderer/use-deferred-dialog-open.test.tsx` 与 `tests/unit/renderer/schedule-after-overlay.test.ts`。
+
 ### 操作反馈规范
 
 所有用户触发的动作必须有可识别的完成或失败信号，静默失败（`catch (err) { console.error(...) }` 就结束）一律禁止。选择反馈方式时按以下顺序判断，防止漏报也防止重复：

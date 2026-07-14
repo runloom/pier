@@ -4,13 +4,22 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { Button } from "./button.tsx";
+import { useDeferredDialogOpen } from "./use-deferred-dialog-open.ts";
 import { useTerminalOverlayRegistration } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
 function AlertDialog({
+  open,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+  const deferredOpen = useDeferredDialogOpen(open);
+  return (
+    <AlertDialogPrimitive.Root
+      data-slot="alert-dialog"
+      {...props}
+      {...(open === undefined ? {} : { open: deferredOpen })}
+    />
+  );
 }
 
 function AlertDialogTrigger({
@@ -96,12 +105,19 @@ function AlertDialogHeader({
 
 function AlertDialogFooter({
   className,
+  singleAction = false,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & {
+  /** One primary button only (alert). Center instead of sm 2-col grid. */
+  singleAction?: boolean;
+}) {
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        singleAction
+          ? "grid-cols-1 sm:justify-center"
+          : "group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2",
         className
       )}
       data-slot="alert-dialog-footer"

@@ -35,17 +35,24 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { CircleUserRound, RefreshCw } from "lucide-react";
+import { CircleUserRound, RefreshCw, Share2 } from "lucide-react";
 import { Fragment, type JSX, useState } from "react";
-import type { CrossToolSyncTarget } from "../shared/accounts.ts";
+import type {
+  CrossToolSyncTarget,
+  PeerSyncTarget,
+} from "../shared/accounts.ts";
 import {
   AccountAvatar,
   OtherAccount,
   QuotaGroup,
   resetCredits,
 } from "./account-display.tsx";
-import { SwitchConfirmDialog } from "./account-switch.ts";
+import {
+  type PeerSyncDialogMode,
+  SwitchConfirmDialog,
+} from "./account-switch.ts";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
+import { formatAccountError } from "./format-account-error.ts";
 import type { Translate } from "./usage-meter.tsx";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
 import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
@@ -68,8 +75,8 @@ function SettingsSkeleton(): JSX.Element {
   );
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function errorMessage(err: unknown, t: Translate): string {
+  return formatAccountError(err, t);
 }
 
 export function AccountsSettingsPage({
@@ -81,7 +88,7 @@ export function AccountsSettingsPage({
   const reportError = (err: unknown): void => {
     context.dialogs
       .alert({
-        body: errorMessage(err),
+        body: errorMessage(err, t),
         title: t(
           "pier.codex.accounts.settings.actionFailed",
           "Account action failed"
@@ -111,9 +118,15 @@ export function AccountsSettingsPage({
     });
     if (ok) invoke("accounts.remove", { accountId });
   };
-  const [dialogAccountId, setDialogAccountId] = useState<string | null>(null);
+  const [dialogState, setDialogState] = useState<{
+    accountId: string;
+    mode: PeerSyncDialogMode;
+  } | null>(null);
   const handleSelect = (accountId: string): void => {
-    setDialogAccountId(accountId);
+    setDialogState({ accountId, mode: "switch" });
+  };
+  const handleSyncPeers = (accountId: string): void => {
+    setDialogState({ accountId, mode: "sync" });
   };
   const handleDialogResult = ({
     confirmed,
@@ -122,10 +135,34 @@ export function AccountsSettingsPage({
     confirmed: boolean;
     syncTargets: CrossToolSyncTarget[];
   }): void => {
-    const accountId = dialogAccountId;
-    setDialogAccountId(null);
-    if (!(confirmed && accountId)) return;
-    invoke("accounts.select", { accountId, syncTargets });
+    const current = dialogState;
+    setDialogState(null);
+    if (!(confirmed && current)) return;
+    if (current.mode === "sync") {
+      const peers = syncTargets.filter(
+        (target): target is PeerSyncTarget => target !== "codex"
+      );
+      if (peers.length === 0) return;
+      context.rpc
+        .invoke("accounts.syncToPeers", {
+          accountId: current.accountId,
+          syncTargets: peers,
+        })
+        .then(() => {
+          context.notifications.success(
+            t(
+              "pier.codex.accounts.settings.syncPeersSuccess",
+              "Synced credentials to selected tools"
+            )
+          );
+        })
+        .catch(reportError);
+      return;
+    }
+    invoke("accounts.select", {
+      accountId: current.accountId,
+      syncTargets,
+    });
   };
   if (loadError)
     return (
@@ -174,6 +211,28 @@ export function AccountsSettingsPage({
             </CardTitle>
             <CardAction className="flex items-center gap-2">
               <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-label={t(
+                        "pier.codex.accounts.settings.syncPeers",
+                        "Sync to other tools"
+                      )}
+                      onClick={() => handleSyncPeers(active.id)}
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Share2 data-icon="inline-start" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent data-pier-codex-scope="">
+                    {t(
+                      "pier.codex.accounts.settings.syncPeers",
+                      "Sync to other tools"
+                    )}
+                  </TooltipContent>
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -302,8 +361,9 @@ export function AccountsSettingsPage({
         </Card>
       ) : null}
       <SwitchConfirmDialog
+        mode={dialogState?.mode ?? "switch"}
         onResult={handleDialogResult}
-        open={dialogAccountId !== null}
+        open={dialogState !== null}
         t={t}
       />
     </div>

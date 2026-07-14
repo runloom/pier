@@ -504,7 +504,9 @@ describe("AccountsSettingsPage", () => {
     );
 
     // The switch confirmation dialog opens with sync checkboxes.
-    const switchButton = await screen.findByRole("button", { name: /Switch$/ });
+    const switchButton = await screen.findByRole("button", {
+      name: /Confirm$/,
+    });
     await act(async () => {
       fireEvent.click(switchButton);
     });
@@ -516,6 +518,85 @@ describe("AccountsSettingsPage", () => {
           syncTargets: ["opencode", "pi", "omp"],
         },
       });
+    });
+  });
+
+  it("syncs the current account credentials to peer tools without selecting", async () => {
+    const snap = snapshotWithAccount({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "active",
+          error: null,
+        },
+      ],
+    });
+    const { context, invokeCalls } = contextWithSnapshot(snap);
+    render(<AccountsSettingsPage context={context} />);
+
+    await screen.findByText("active@codex.dev");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sync to other tools" })
+    );
+
+    expect(
+      await screen.findByText("Sync OpenAI account to other tools?")
+    ).toBeTruthy();
+    const syncButton = await screen.findByRole("button", { name: /Sync$/ });
+    await act(async () => {
+      fireEvent.click(syncButton);
+    });
+
+    await vi.waitFor(() => {
+      expect(invokeCalls).toContainEqual({
+        method: "accounts.syncToPeers",
+        payload: {
+          accountId: "acc-1",
+          syncTargets: ["opencode", "pi", "omp"],
+        },
+      });
+    });
+    expect(invokeCalls).not.toContainEqual({
+      method: "accounts.select",
+      payload: expect.anything(),
+    });
+    expect(context.notifications.success).toHaveBeenCalledWith(
+      "Synced credentials to selected tools"
+    );
+  });
+
+  it("does not call accounts.syncToPeers when peer sync is cancelled", async () => {
+    const snap = snapshotWithAccount({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "active",
+          error: null,
+        },
+      ],
+    });
+    const { context, invokeCalls } = contextWithSnapshot(snap);
+    render(<AccountsSettingsPage context={context} />);
+
+    await screen.findByText("active@codex.dev");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sync to other tools" })
+    );
+    const cancelButton = await screen.findByRole("button", { name: "Cancel" });
+    await act(async () => {
+      fireEvent.click(cancelButton);
+    });
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 0);
+      await promise;
+    });
+
+    expect(invokeCalls).not.toContainEqual({
+      method: "accounts.syncToPeers",
+      payload: expect.anything(),
     });
   });
 
