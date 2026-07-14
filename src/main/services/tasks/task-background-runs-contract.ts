@@ -1,5 +1,4 @@
 import type {
-  TaskBackgroundSnapshot,
   TaskLaunchPlan,
   TaskOutputUpdate,
   TaskRunSnapshot,
@@ -19,12 +18,6 @@ export interface TaskBackgroundRuns {
     windowId?: string | undefined
   ): { message?: string; ok: boolean };
   output(runId: string, taskId: string): TaskOutputUpdate | null;
-  setNodeFromSnapshot(
-    projectRootPath: string,
-    runId: string,
-    node: TaskRunSnapshot["nodes"][string]
-  ): void;
-  snapshot(): TaskBackgroundSnapshot;
   start(args: {
     clientEnv?: Record<string, string> | undefined;
     launches: readonly TaskLaunchPlan[];

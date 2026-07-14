@@ -16,7 +16,13 @@ import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("@/components/workspace/open-task-output-panel.ts", () => ({
+  maintainTaskOutputPanels: vi.fn(async () => undefined),
+  nextTaskOutputBinding: vi.fn(),
   openTaskOutputPanel: vi.fn(() => ({ ok: true })),
+  rebindTaskOutputPanel: vi.fn(() => ({ ok: true })),
+  resolveTaskOutputContextId: vi.fn(() => "ctx-repo"),
+  taskOutputFromPanel: vi.fn(() => null),
+  taskOutputPanelsForRun: vi.fn(() => []),
 }));
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
@@ -455,7 +461,7 @@ describe("terminal runtime control", () => {
     await waitFor(() => expect(selector).toBeEnabled());
   });
 
-  it("opens background output without spawning and dismisses only after success", async () => {
+  it("opens background output without spawning and keeps runtime control visible", async () => {
     const current = run("failed", { mode: "background" });
     const spawn = vi.fn();
     const onDismissRun = vi.fn();
@@ -488,12 +494,12 @@ describe("terminal runtime control", () => {
         taskId: "test",
         version: 2,
       });
-      expect(onDismissRun).toHaveBeenCalledWith("run-1");
     });
+    expect(onDismissRun).not.toHaveBeenCalled();
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it("dismisses a persistent terminal result after reveal succeeds, not after failure", async () => {
+  it("reveals a persistent terminal result without dismissing runtime control", async () => {
     const current = run("failed");
     const onDismissRun = vi.fn();
     installTasks({});
@@ -511,11 +517,11 @@ describe("terminal runtime control", () => {
     fireEvent.click(reveal);
     await waitFor(() => {
       expect(api.panels[0]?.api.setActive).toHaveBeenCalled();
-      expect(onDismissRun).toHaveBeenCalledWith("run-1");
     });
+    expect(onDismissRun).not.toHaveBeenCalled();
   });
 
-  it("dismisses a persistent result after restart succeeds, not after failure", async () => {
+  it("restarts a persistent result without dismissing runtime control", async () => {
     const current = run("failed");
     const onDismissRun = vi.fn();
     const spawn = vi
@@ -538,8 +544,8 @@ describe("terminal runtime control", () => {
     fireEvent.click(restart);
     await waitFor(() => {
       expect(spawn).toHaveBeenCalledTimes(2);
-      expect(onDismissRun).toHaveBeenCalledWith("run-1");
     });
+    expect(onDismissRun).not.toHaveBeenCalled();
   });
 
   it("requests an ordinary graceful stop", async () => {

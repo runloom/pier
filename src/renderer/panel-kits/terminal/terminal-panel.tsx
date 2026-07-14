@@ -73,6 +73,7 @@ import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layou
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
 import { useTerminalRelaunch } from "./use-terminal-relaunch.ts";
+import { useTerminalRunSelection } from "./use-terminal-run-selection.ts";
 import { useTerminalRuntimeControlPresentation } from "./use-terminal-runtime-control-presentation.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
 import { useTerminalSurfaceClose } from "./use-terminal-surface-close.ts";
@@ -166,12 +167,19 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   const taskRunsSnapshot = useTaskRunsStore((state) => state.snapshot);
+  const panelTaskRuns = useMemo(
+    () => taskRunsForPanel(taskRunsSnapshot, panelId),
+    [panelId, taskRunsSnapshot]
+  );
+  const { selectedRunId: selectedTaskRunId } = useTerminalRunSelection(
+    panelId,
+    panelTaskRuns
+  );
   const currentTaskOutput =
     taskOutputFromParams(props.params) ?? activeLaunch.taskOutput;
   const runtimeControl = useTerminalRuntimeControlPresentation(panelId);
   const forceStoppedRun = taskRunsForPanel(taskRunsSnapshot, panelId).find(
     (run) =>
-      run.runId === activeLaunch.task?.runId &&
       Object.values(run.nodes).some(
         (node) =>
           node.panelId === panelId &&
@@ -185,11 +193,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     mergeTabChrome(
       mergeTabChrome(
         savedSession?.tab ?? activeLaunch.tab,
-        activityTabChromeOverlay(activity, effectiveTitle)
+        activityTabChromeOverlay(activity, effectiveTitle, taskRunsSnapshot)
       ),
       taskRunTabChromeOverlay(
+        panelId,
+        taskRunsSnapshot,
         savedSession?.task ?? activeLaunch.task,
-        taskRunsSnapshot
+        selectedTaskRunId
       )
     ),
     taskOutputTabChromeOverlay(currentTaskOutput, taskRunsSnapshot)
@@ -324,7 +334,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     setActive: activatePanel,
   });
-  useTerminalSurfaceClose(panelId);
+  useTerminalSurfaceClose(panelId, props.params);
 
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {

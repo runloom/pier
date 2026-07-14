@@ -3,6 +3,7 @@ import type {
   TaskRunSnapshot,
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
+import { deriveBackgroundSnapshot } from "@shared/contracts/tasks.ts";
 import {
   isBackgroundPanelId,
   panelRefKey,
@@ -272,7 +273,7 @@ export function createTaskService({
   }
 
   return {
-    backgroundSnapshot: () => backgroundRuns.snapshot(),
+    backgroundSnapshot: () => deriveBackgroundSnapshot(taskRuns.runsSnapshot()),
     bindTerminalProcessController(controller) {
       terminalProcessController = controller;
     },
@@ -288,23 +289,12 @@ export function createTaskService({
         }
         if (isBackgroundPanelId(node.panelId)) {
           backgroundRuns.cancelPanel(node.panelId, node.windowId);
-          if (node.status === "cancelled") {
-            backgroundRuns.setNodeFromSnapshot(
-              result.projectRootPath,
-              runId,
-              node
-            );
-          }
           continue;
         }
         forgetRunningPanel(node.panelId, node.windowId);
-        // 只对本次 cancel 才真正翻状态的节点 fire onFinished（cancelRun 内 coordinator
-        // 只把 pending/running 改为 cancelled；succeeded/failed 节点保留原状态）。
-        // 无过滤会把已 success 的 activity 覆盖为 cancelled（终态常驻后即永久谎报）。
         if (node.status === "cancelled") {
-          onTaskActivity?.onFinished(node.panelId, node.windowId, {
+          onTaskActivity?.onCleared(node.panelId, node.windowId, {
             runId: result.runId,
-            status: "cancelled",
           });
         }
       }
@@ -315,7 +305,6 @@ export function createTaskService({
       if (isBackgroundPanelId(panelId)) {
         return await backgroundRuns.finishPanel(panelId, exitCode, windowId);
       }
-      const stopRequested = taskRuns.isStopRequested(panelId, windowId);
       const result = await taskRuns.completePanel(
         panelId,
         exitCode,
@@ -329,16 +318,8 @@ export function createTaskService({
         forgetSnapshotTasks(result);
       }
       if (result) {
-        let activityStatus: "cancelled" | "failure" | "success";
-        if (stopRequested) {
-          activityStatus = "cancelled";
-        } else {
-          activityStatus = exitCode === 0 ? "success" : "failure";
-        }
-        onTaskActivity?.onFinished(panelId, windowId, {
+        onTaskActivity?.onCleared(panelId, windowId, {
           runId: result.runId,
-          status: activityStatus,
-          exitCode,
         });
       }
       return result;

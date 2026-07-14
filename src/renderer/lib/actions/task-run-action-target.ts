@@ -1,5 +1,5 @@
 import {
-  selectedTaskOutputRunId,
+  committedTaskOutputRunId,
   type TaskOutputPanelParams,
   type TaskRunControlEntry,
   type TaskSpawnMode,
@@ -107,11 +107,14 @@ export function resolveTaskRunActionTarget(
     // 任务面板的动作属于实际占用该 panel 的 run。originPanelId 只表示某个
     // 后台任务从这里发起，不能抢占任务 tab 自身的默认目标；如果浮层已显式
     // 选中某个 run，右键菜单必须复用同一选择。
+    const ownedRuns = runsOwnedByPanel(relatedRuns, panel.id);
     const run =
       selectedRun ??
-      preferredPanelRun(runsOwnedByPanel(relatedRuns, panel.id)) ??
-      snapshot.runs[task.runId] ??
-      preferredPanelRun(relatedRuns);
+      preferredPanelRun(
+        ownedRuns.filter((candidate) =>
+          ["pending", "running", "stopping"].includes(candidate.status)
+        )
+      );
     if (run) {
       return taskRunActionTargetFromRun(run, panel.id, task.label);
     }
@@ -120,7 +123,7 @@ export function resolveTaskRunActionTarget(
       mode: "terminal-tab",
       panelId: panel.id,
       projectRootPath: task.projectRootPath,
-      runId: task.runId,
+      runId: panel.id,
       taskId: task.taskId,
     };
   }
@@ -129,7 +132,7 @@ export function resolveTaskRunActionTarget(
   if (!output) {
     return null;
   }
-  const selectedRunId = selectedTaskOutputRunId(output);
+  const selectedRunId = committedTaskOutputRunId(output);
   const run = snapshot.runs[selectedRunId];
   if (!run) {
     if (!("projectRootPath" in output)) {
@@ -149,4 +152,9 @@ export function resolveTaskRunActionTarget(
     ...taskRunActionTargetFromRun(run, panel.id, output.label),
     taskOutput: output,
   };
+}
+
+/** restart 去重键：有 run 用 runId，无 run 用 panel 作用域，避免与真实 runId 冲突。 */
+export function restartOperationKey(target: TaskRunActionTarget): string {
+  return target.run ? `run:${target.run.runId}` : `panel:${target.panelId}`;
 }

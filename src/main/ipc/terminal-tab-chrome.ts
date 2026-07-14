@@ -1,9 +1,9 @@
-import { taskTabStateForActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type {
   TaskExitReason,
   TaskExitSource,
 } from "@shared/contracts/tasks.ts";
+import { taskRunTabState } from "@shared/contracts/tasks.ts";
 import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import { updateTerminalPanelTab } from "../state/terminal-session-state.ts";
 
@@ -32,10 +32,10 @@ export function taskExitTabPatch(
   exit: TerminalTaskExitStatus
 ): Partial<PanelTabChrome> {
   if (exit.reason === "user") {
-    return { state: taskTabStateForActivityStatus("cancelled") };
+    return { state: taskRunTabState("cancelled") };
   }
   if (exit.code === 0) {
-    return { state: taskTabStateForActivityStatus("success", 0) };
+    return { state: taskRunTabState("succeeded", 0) };
   }
-  return { state: taskTabStateForActivityStatus("failure", exit.code) };
+  return { state: taskRunTabState("failed", exit.code) };
 }

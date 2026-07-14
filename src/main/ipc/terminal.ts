@@ -1,4 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { isPanelTaskLive } from "@shared/contracts/tasks.ts";
 import type {
   CreateTerminalArgs,
   TerminalCloseOptions,
@@ -246,6 +247,7 @@ export function registerTerminalIpc(
       recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,
       taskOutputBindings,
+      taskService: deps.taskService ?? null,
       win: windowFromWebContents(event.sender),
     })
   );
@@ -302,12 +304,16 @@ export function registerTerminalIpc(
       if (!session?.task) {
         return session;
       }
-      // main 担保的 task 活性：foreground-activity 有 task slot（终态常驻,
-      // 与 panel 同寿命）⇔ 该 task 面板寿命仍在本 main 进程内 ⇔ renderer
-      // 属 reload 重挂路径, 应渲染真终端而非静态结果卡。
-      const taskLive = foregroundActivityService
-        .snapshot(String(win.id))
-        .activities.some((a) => a.kind === "task" && a.panelId === panelId);
+      // main 担保的 task 活性：TaskRuns 仍关联该 panel 的活跃节点 ⇔ renderer
+      // reload 重挂路径, 应渲染真终端而非静态结果卡。
+      const windowId = findInternalWindowId(win) ?? undefined;
+      const taskLive = deps.taskService
+        ? isPanelTaskLive(
+            deps.taskService.runsSnapshot(windowId),
+            panelId,
+            windowId
+          )
+        : false;
       return { ...session, taskLive };
     }
   );
@@ -327,11 +333,8 @@ export function registerTerminalIpc(
       const sessionScope = windowRecordIdFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
       if (options?.reason === "relaunch") {
-        // relaunch = 同 panel 换 pty, 不是面板死亡——activity slot 不清。
-        // rerun 时序：renderer 先关闭旧 PTY，再创建并确认新 PTY，最后才 resolve
-        // terminal.open。这个间隙必须保留 task activity slot；否则新 PTY 确认前
-        // 浮层和 tab 会短暂丢失，后续 taskFinished 也可能因 kind 守卫落空。
-        // 旧 PTY 的收尾由 native process-closed → ptyExited 按层语义处理。
+        // relaunch = 同 panel 换 pty, 不是面板死亡。TaskRuns 仍持有 panel
+        // 映射，RuntimeControl / tab overlay 不依赖 FA task slot。
         taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
       } else {
         foregroundActivityService.panelClosed(panelId, String(win.id));

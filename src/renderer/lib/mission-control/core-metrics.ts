@@ -1,4 +1,5 @@
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
+import { activityKindCounts } from "@shared/task-activity-sources.ts";
 import i18next from "i18next";
 import {
   activityCounts,
@@ -8,6 +9,7 @@ import {
   acquireSystemStatsPolling,
   useSystemStatsStore,
 } from "@/stores/system-stats.store.ts";
+import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import type { MetricValue } from "./metric-registry.ts";
 import { registerMetric } from "./metric-registry.ts";
 
@@ -29,12 +31,36 @@ function activityInstant(
   };
 }
 
+function combinedActivityInstant(
+  select: (
+    activities: Record<string, ForegroundActivity>,
+    taskRuns: ReturnType<typeof useTaskRunsStore.getState>["snapshot"]
+  ) => number
+): { read(): MetricValue; subscribe(listener: () => void): () => void } {
+  return {
+    read: () => ({
+      kind: "instant",
+      value: select(
+        useForegroundActivityStore.getState().activities,
+        useTaskRunsStore.getState().snapshot
+      ),
+    }),
+    subscribe: (listener) => {
+      const unsubActivity = useForegroundActivityStore.subscribe(listener);
+      const unsubRuns = useTaskRunsStore.subscribe(listener);
+      return () => {
+        unsubActivity();
+        unsubRuns();
+      };
+    },
+  };
+}
+
 function activityByKind(): MetricValue {
-  const counts = new Map<ForegroundActivity["kind"], number>();
-  const activities = useForegroundActivityStore.getState().activities;
-  for (const activity of Object.values(activities)) {
-    counts.set(activity.kind, (counts.get(activity.kind) ?? 0) + 1);
-  }
+  const counts = activityKindCounts(
+    useForegroundActivityStore.getState().activities,
+    useTaskRunsStore.getState().snapshot
+  );
   return {
     items: Array.from(counts.entries())
       .map(([kind, value]) => ({
@@ -98,7 +124,9 @@ export function ensureCoreMetricsRegistered(): void {
       kind: "instant",
       titleKey: "missionControl.metrics.activityRunning",
     },
-    ...activityInstant((activities) => activityCounts(activities).running),
+    ...combinedActivityInstant(
+      (activities, taskRuns) => activityCounts(activities, taskRuns).running
+    ),
   });
   registerMetric({
     descriptor: {
@@ -107,7 +135,9 @@ export function ensureCoreMetricsRegistered(): void {
       kind: "instant",
       titleKey: "missionControl.metrics.activityWaiting",
     },
-    ...activityInstant((activities) => activityCounts(activities).waiting),
+    ...combinedActivityInstant(
+      (activities, taskRuns) => activityCounts(activities, taskRuns).waiting
+    ),
   });
   registerMetric({
     descriptor: {
@@ -117,7 +147,14 @@ export function ensureCoreMetricsRegistered(): void {
       titleKey: "missionControl.metrics.activityByKind",
     },
     read: activityByKind,
-    subscribe: (listener) => useForegroundActivityStore.subscribe(listener),
+    subscribe: (listener) => {
+      const unsubActivity = useForegroundActivityStore.subscribe(listener);
+      const unsubRuns = useTaskRunsStore.subscribe(listener);
+      return () => {
+        unsubActivity();
+        unsubRuns();
+      };
+    },
   });
 
   registerMetric({

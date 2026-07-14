@@ -168,6 +168,35 @@ describe("terminal runtime control presentation", () => {
     expect(result.current.phase).toBe("exiting");
   });
 
+  it("dismisses a succeeded result immediately", () => {
+    publish(run("succeeded"));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+
+    act(() => result.current.dismissRun("run-1"));
+
+    expect(result.current).toMatchObject({
+      mounted: true,
+      phase: "exiting",
+    });
+    expect(result.current.runs[0]?.status).toBe("succeeded");
+  });
+
+  it("hides an active run without stopping it when dismissed", () => {
+    publish(run("running"));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+
+    act(() => result.current.dismissRun("run-1"));
+
+    expect(result.current).toMatchObject({
+      mounted: true,
+      phase: "exiting",
+    });
+  });
+
   it("dismisses a persistent result immediately while auto-exit is paused", () => {
     publish(run("failed"));
     const { result } = renderHook(() =>

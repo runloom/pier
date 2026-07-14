@@ -33,10 +33,7 @@ import {
   terminalRuntimeStatusLabelKey,
 } from "./terminal-runtime-status.tsx";
 import { useTerminalRunSelection } from "./use-terminal-run-selection.ts";
-import {
-  isActiveTaskRunStatus,
-  isPersistentTaskRun,
-} from "./use-terminal-runtime-control-presentation.ts";
+import { isActiveTaskRunStatus } from "./use-terminal-runtime-control-presentation.ts";
 
 function ActionButton({
   disabled,
@@ -111,7 +108,6 @@ export function TerminalRuntimeControl({
   const total = Object.keys(run.nodes).length;
   const force = forceStopAvailable(run, now);
   const label = node?.label ?? run.rootTaskId;
-  const persistent = isPersistentTaskRun(run);
   const statusText = t(terminalRuntimeStatusLabelKey(run.status));
   const actionTarget = taskRunActionTargetFromRun(run, panelId, label);
   const duration = formatDurationShort(
@@ -128,24 +124,17 @@ export function TerminalRuntimeControl({
   };
 
   const reveal = async () => {
-    if ((await revealTaskRun(run)) && persistent) {
-      onDismissRun(run.runId);
-    }
+    await revealTaskRun(run);
   };
 
   const openOutput = async () => {
-    if ((await openTaskRunOutput(run, label)) && persistent) {
-      onDismissRun(run.runId);
-    }
+    await openTaskRunOutput(run, label);
   };
 
   const restart = async () => {
     setPendingAction("restart");
     try {
-      const result = await restartTaskRun(actionTarget);
-      if (result?.panelRebound && persistent) {
-        onDismissRun(run.runId);
-      }
+      await restartTaskRun(actionTarget);
     } finally {
       setPendingAction(null);
     }
@@ -265,15 +254,13 @@ export function TerminalRuntimeControl({
             testId="terminal-runtime-control-reveal"
           />
         ) : null}
-        {active ? null : (
-          <ActionButton
-            disabled={pendingAction !== null}
-            icon={X}
-            label={t("terminal.runtimeControl.dismiss")}
-            onClick={() => onDismissRun(run.runId)}
-            testId="terminal-runtime-control-dismiss"
-          />
-        )}
+        <ActionButton
+          disabled={pendingAction !== null}
+          icon={X}
+          label={t("terminal.runtimeControl.dismiss")}
+          onClick={() => onDismissRun(run.runId)}
+          testId="terminal-runtime-control-dismiss"
+        />
       </div>
     </fieldset>
   );

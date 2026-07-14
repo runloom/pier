@@ -110,11 +110,11 @@ function shouldPresentRun(
   dismissedRunIds: ReadonlySet<string>,
   pausedMs: number
 ): boolean {
-  if (isActiveTaskRunStatus(run.status)) {
-    return true;
-  }
   if (dismissedRunIds.has(run.runId)) {
     return false;
+  }
+  if (isActiveTaskRunStatus(run.status)) {
+    return true;
   }
   if (isPersistentTaskRun(run)) {
     return true;
@@ -254,21 +254,14 @@ export function useTerminalRuntimeControlPresentation(
     );
   }, [clearExitTimer, eligibleRuns, setPhase]);
 
-  const dismissRun = useCallback(
-    (runId: string) => {
-      const run = panelRuns.find((candidate) => candidate.runId === runId);
-      if (!(run && isPersistentTaskRun(run))) {
-        return;
+  const dismissRun = useCallback((runId: string) => {
+    setDismissedRunIds((current) => {
+      if (current.has(runId)) {
+        return current;
       }
-      setDismissedRunIds((current) => {
-        if (current.has(runId)) {
-          return current;
-        }
-        return new Set([...current, runId]);
-      });
-    },
-    [panelRuns]
-  );
+      return new Set([...current, runId]);
+    });
+  }, []);
 
   const setAutoExitPause = useCallback((paused: boolean) => {
     if (paused) {

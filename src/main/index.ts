@@ -268,6 +268,7 @@ const appQuitController = createAppQuitController({
   },
   flushBeforeQuit: flushBeforeQuitConfirmed,
   getActivities: () => foregroundActivityService.snapshot().activities,
+  getTaskRuns: () => appCore.services.tasks.runsSnapshot(),
   getDialogParent: getQuitDialogParentWindow,
   logFailure: (error) => {
     appQuitLog.error("failed before quit", { error });

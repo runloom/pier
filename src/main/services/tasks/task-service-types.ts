@@ -43,14 +43,10 @@ export interface TaskTerminalProcessController {
 }
 
 export interface TaskActivityCallbacks {
-  onFinished(
+  onCleared(
     panelId: string,
     windowId: string | undefined,
-    args: {
-      runId: string;
-      status: "success" | "failure" | "cancelled";
-      exitCode?: number;
-    }
+    args: { runId: string }
   ): void;
   onLaunched(
     panelId: string,

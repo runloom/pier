@@ -12,7 +12,11 @@ import {
   rebindOpenTaskOutputsAfterRestart,
   rebindRestartedTaskOutput,
 } from "./task-output-run-operations.ts";
-import type { TaskRunActionTarget } from "./task-run-action-target.ts";
+import { scheduleTaskOutputPanelSync } from "./task-output-sync.ts";
+import {
+  restartOperationKey,
+  type TaskRunActionTarget,
+} from "./task-run-action-target.ts";
 
 export interface RestartTaskRunResult {
   panelRebound: boolean;
@@ -103,6 +107,7 @@ async function executeRestartTaskRun(
   target: TaskRunActionTarget
 ): Promise<RestartTaskRunResult | null> {
   let outputRebindSucceeded = false;
+  let panelRebound = false;
   const finishOutputRestartGuard =
     target.mode === "background" && target.run
       ? beginTaskOutputRestartSurfaceCloseGuard(target.run)
@@ -167,7 +172,9 @@ async function executeRestartTaskRun(
       const rebound = await rebind();
       outputRebindSucceeded =
         rebound.ok || (await retryFailedOutputRebind(rebound.error, rebind));
+      panelRebound = outputRebindSucceeded;
       if (!outputRebindSucceeded) {
+        scheduleTaskOutputPanelSync();
         return { panelRebound: false, runId };
       }
     } else if (target.taskOutput) {
@@ -181,13 +188,15 @@ async function executeRestartTaskRun(
           runId,
         });
       const rebound = await rebind();
-      if (
-        !(rebound.ok || (await retryFailedOutputRebind(rebound.error, rebind)))
-      ) {
+      panelRebound =
+        rebound.ok || (await retryFailedOutputRebind(rebound.error, rebind));
+      if (!panelRebound) {
+        scheduleTaskOutputPanelSync();
         return { panelRebound: false, runId };
       }
     }
-    return { panelRebound: true, runId };
+    scheduleTaskOutputPanelSync();
+    return { panelRebound, runId };
   } catch (error) {
     await showAppAlert({
       body: error instanceof Error ? error.message : String(error),
@@ -203,7 +212,7 @@ async function executeRestartTaskRun(
 export function restartTaskRun(
   target: TaskRunActionTarget
 ): Promise<RestartTaskRunResult | null> {
-  const operationKey = `run:${target.runId}`;
+  const operationKey = restartOperationKey(target);
   const existing = restartOperationsByRun.get(operationKey);
   if (existing) {
     return existing;
@@ -246,6 +255,7 @@ export { openTaskRunOutput } from "./task-output-run-operations.ts";
 export {
   isTaskRunPanelParams,
   resolveTaskRunActionTarget,
+  restartOperationKey,
   type TaskRunActionTarget,
   taskRunActionTargetFromRun,
 } from "./task-run-action-target.ts";

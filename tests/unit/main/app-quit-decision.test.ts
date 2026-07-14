@@ -64,16 +64,13 @@ function agentActivity({
   return activity;
 }
 
-function taskActivity(
-  status: TaskActivity["status"] = "running"
-): TaskActivity {
+function taskActivity(): TaskActivity {
   return {
     kind: "task",
     runId: "run-1",
     ...BASE_ACTIVITY,
     taskId: "task-1",
     label: "Build release",
-    status,
   };
 }
 
@@ -120,16 +117,8 @@ describe("isDangerousQuitActivity", () => {
     );
   });
 
-  it.each([
-    { status: "running", expected: true },
-    { status: "success", expected: false },
-    { status: "failure", expected: false },
-    { status: "cancelled", expected: false },
-  ] as const)("returns $expected for task status=$status", ({
-    status,
-    expected,
-  }) => {
-    expect(isDangerousQuitActivity(taskActivity(status))).toBe(expected);
+  it("treats task occupation pointer as dangerous", () => {
+    expect(isDangerousQuitActivity(taskActivity())).toBe(true);
   });
 
   it("treats idle activity as not dangerous", () => {
@@ -173,8 +162,8 @@ describe("summarizeQuitActivity", () => {
     });
   });
 
-  it("summarizes running task activity with the task label and panel/window ids", () => {
-    expect(summarizeQuitActivity(taskActivity("running"))).toEqual({
+  it("summarizes task occupation with the task label and panel/window ids", () => {
+    expect(summarizeQuitActivity(taskActivity())).toEqual({
       kind: "task",
       label: "Build release",
       panelId: BASE_ACTIVITY.panelId,
@@ -183,9 +172,6 @@ describe("summarizeQuitActivity", () => {
   });
 
   it.each([
-    { name: "successful task", activity: taskActivity("success") },
-    { name: "failed task", activity: taskActivity("failure") },
-    { name: "cancelled task", activity: taskActivity("cancelled") },
     { name: "idle panel", activity: idleActivity() },
   ] satisfies readonly {
     name: string;
@@ -199,11 +185,9 @@ describe("summarizeDangerousQuitActivities", () => {
   it("filters out non-dangerous activities and returns summaries for dangerous activities", () => {
     const activities: ForegroundActivity[] = [
       idleActivity(),
-      taskActivity("success"),
       shellActivity("  pnpm build  "),
-      taskActivity("running"),
+      taskActivity(),
       agentActivity({ source: "hook", status: "ready" }),
-      taskActivity("cancelled"),
     ];
 
     expect(summarizeDangerousQuitActivities(activities)).toEqual([
@@ -225,6 +209,43 @@ describe("summarizeDangerousQuitActivities", () => {
         label: "codex",
         panelId: BASE_ACTIVITY.panelId,
         windowId: BASE_ACTIVITY.windowId,
+      },
+    ]);
+  });
+
+  it("includes active background task runs not represented in foreground activity", () => {
+    const activities: ForegroundActivity[] = [idleActivity()];
+    const taskRuns = {
+      runs: {
+        "run-bg": {
+          mode: "background" as const,
+          nodes: {
+            test: {
+              label: "test",
+              panelId: "background-task:run-bg:test",
+              status: "running" as const,
+              taskId: "package-script:test",
+            },
+          },
+          originPanelId: "terminal-1",
+          ownerWindowId: "window-1",
+          projectRootPath: "/repo",
+          rootTaskId: "package-script:test",
+          runId: "run-bg",
+          startedAt: 1,
+          status: "running" as const,
+          updatedAt: 2,
+        },
+      },
+      version: 1,
+    };
+
+    expect(summarizeDangerousQuitActivities(activities, taskRuns)).toEqual([
+      {
+        kind: "task",
+        label: "test",
+        panelId: "terminal-1",
+        windowId: "window-1",
       },
     ]);
   });
