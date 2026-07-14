@@ -36,14 +36,15 @@ import {
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { CircleUserRound, RefreshCw } from "lucide-react";
-import { Fragment, type JSX } from "react";
+import { Fragment, type JSX, useState } from "react";
+import type { CrossToolSyncTarget } from "../shared/accounts.ts";
 import {
   AccountAvatar,
   OtherAccount,
   QuotaGroup,
   resetCredits,
 } from "./account-display.tsx";
-import { confirmAccountSwitch } from "./account-switch.ts";
+import { SwitchConfirmDialog } from "./account-switch.ts";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
 import type { Translate } from "./usage-meter.tsx";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
@@ -110,9 +111,21 @@ export function AccountsSettingsPage({
     });
     if (ok) invoke("accounts.remove", { accountId });
   };
-  const handleSelect = async (accountId: string): Promise<void> => {
-    const ok = await confirmAccountSwitch(context, t);
-    if (ok) invoke("accounts.select", { accountId });
+  const [dialogAccountId, setDialogAccountId] = useState<string | null>(null);
+  const handleSelect = (accountId: string): void => {
+    setDialogAccountId(accountId);
+  };
+  const handleDialogResult = ({
+    confirmed,
+    syncTargets,
+  }: {
+    confirmed: boolean;
+    syncTargets: CrossToolSyncTarget[];
+  }): void => {
+    const accountId = dialogAccountId;
+    setDialogAccountId(null);
+    if (!(confirmed && accountId)) return;
+    invoke("accounts.select", { accountId, syncTargets });
   };
   if (loadError)
     return (
@@ -278,7 +291,7 @@ export function AccountsSettingsPage({
                     language={language}
                     onRefresh={() => refreshUsage(account.id)}
                     onRemove={() => handleRemove(account.id).catch(reportError)}
-                    onSelect={() => handleSelect(account.id).catch(reportError)}
+                    onSelect={() => handleSelect(account.id)}
                     refreshing={refreshingAccountIds.has(account.id)}
                     t={t}
                   />
@@ -288,6 +301,11 @@ export function AccountsSettingsPage({
           </CardContent>
         </Card>
       ) : null}
+      <SwitchConfirmDialog
+        onResult={handleDialogResult}
+        open={dialogAccountId !== null}
+        t={t}
+      />
     </div>
   );
 }

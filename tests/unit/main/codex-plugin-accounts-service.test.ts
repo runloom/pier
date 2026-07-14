@@ -37,6 +37,10 @@ function createProvider(
     ),
     login: vi.fn(async () => undefined),
     materialize: vi.fn(async () => undefined),
+    readManagedAuthContent: vi.fn(
+      async () =>
+        '{"tokens":{"access_token":"x","refresh_token":"y","account_id":"z"}}'
+    ),
     readCurrentIdentity: vi.fn(
       async (): Promise<AccountIdentity | null> => ({
         email: "current@example.com",

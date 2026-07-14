@@ -3,7 +3,10 @@ import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
+import type {
+  CodexAccountsSnapshot,
+  CrossToolSyncTarget,
+} from "../shared/accounts.ts";
 import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
 import {
   buildAccountRecord,
@@ -22,6 +25,10 @@ import {
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
+import {
+  extractTokenSetFromCodexAuth,
+  syncCrossToolCredentials,
+} from "./cross-tool-sync.ts";
 import { migrateLegacyAccountsToState } from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
 import {
@@ -47,6 +54,7 @@ export function createCodexAccountsService(
   const { managedBaseDir, provider, stateStore, onChanged } = opts;
   const hasVisibleTarget = opts.hasVisibleTarget ?? (() => true);
   const ensureUsageEnv = opts.ensureUsageEnv ?? (() => Promise.resolve());
+  const logger = opts.logger;
 
   let broadcastSeq = 0;
   let loginAbort: AbortController | null = null;
@@ -266,7 +274,10 @@ export function createCodexAccountsService(
     }
   }
 
-  async function doSelect(accountId: string): Promise<void> {
+  async function doSelect(
+    accountId: string,
+    syncTargets?: readonly CrossToolSyncTarget[]
+  ): Promise<void> {
     const state = stateStore.get();
     const target = state.accounts.find((a) => a.id === accountId);
     if (!target) {
@@ -294,6 +305,33 @@ export function createCodexAccountsService(
     await provider.materialize(accountHomeDir(accountId));
     suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
 
+    // Cross-tool sync: materialize the same OpenAI OAuth token into the
+    // peer tools selected by the user. Each target is independent — a
+    // failure in one does not abort the switch or the others.
+    if (syncTargets && syncTargets.length > 0) {
+      try {
+        const authContent = await provider.readManagedAuthContent(
+          accountHomeDir(accountId)
+        );
+        const tokens = extractTokenSetFromCodexAuth(authContent, target.email);
+        const results = await syncCrossToolCredentials(syncTargets, tokens, {
+          ...(logger ? { logger } : {}),
+        });
+        for (const result of results) {
+          if (!result.ok) {
+            logger?.warn(
+              `[pier.codex] cross-tool sync failed for ${result.target}`,
+              { error: result.error }
+            );
+          }
+        }
+      } catch (error) {
+        logger?.warn("[pier.codex] cross-tool sync skipped", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     stateStore.mutate((s) => ({
       ...s,
       activeAccountId: accountId,
@@ -302,7 +340,8 @@ export function createCodexAccountsService(
     await stateStore.flush();
     emitSnapshot();
     doRefreshUsage({ accountId, force: true }).catch(() => {
-      /* fire-and-forget */
+      // 用量 error 已通过 doRefreshUsage → usageCache → emitSnapshot 传播到 UI；
+      // 此 catch 仅防 unhandled rejection，不面向用户。
     });
   }
 
@@ -452,12 +491,13 @@ export function createCodexAccountsService(
           return;
         }
         refreshAllUsage().catch(() => {
-          /* fire-and-forget */
+          // 用量 error 已通过 doRefreshUsage → usageCache → emitSnapshot 传播到 UI；
+          // 此 catch 仅防 unhandled rejection，不面向用户。
         });
       }, USAGE_POLL_INTERVAL_MS);
       if (hasVisibleTarget()) {
         refreshAllUsage().catch(() => {
-          /* fire-and-forget */
+          // 同上：用量 error 经 snapshot 传播，此 catch 仅防 unhandled rejection。
         });
       }
     },
@@ -480,7 +520,8 @@ export function createCodexAccountsService(
         return Promise.resolve();
       });
     },
-    select: (payload) => enqueueMutation(() => doSelect(payload.accountId)),
+    select: (payload) =>
+      enqueueMutation(() => doSelect(payload.accountId, payload.syncTargets)),
     remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
     refreshUsage: (options) => doRefreshUsage(options),
     refreshAllUsage,

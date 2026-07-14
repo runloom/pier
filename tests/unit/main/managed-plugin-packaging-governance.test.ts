@@ -7,7 +7,7 @@ const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
   {
     defaultSize: { h: 3, w: 4 },
     maxSize: { h: 4, w: 8 },
-    minSize: { h: 3, w: 2 },
+    minSize: { h: 3, w: 3 },
     pluginId: "pier.codex",
     widgetId: "pier.codex.accounts",
   },

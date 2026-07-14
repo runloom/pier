@@ -32,6 +32,7 @@ function createAccountsSnapshotStore(
     for (const listener of listeners) listener();
   };
 
+  // revision 单调递增：丢弃乱序到达的旧快照，保证最终一致性。
   const acceptSnapshot = (snapshot: CodexAccountsSnapshot): void => {
     if (snapshot.revision <= currentRevision) return;
     currentRevision = snapshot.revision;

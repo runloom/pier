@@ -179,8 +179,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           node.termination === "force"
       )
   );
-  // agent 会话呈现 overlay 叠在最外层：icon/status 换 agent, title 保留 agent
-  // TUI 设置的终端标题；会话消失自动回退。
+  // agent 会话呈现 overlay 叠在最外层：icon/status 换 agent；tab 短标题用短 OSC
+  // 或 catalog label（超长 prompt 不进 tab，完整 OSC 仍在 display.long / tooltip）。
+  // 会话消失自动回退。
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
       mergeTabChrome(

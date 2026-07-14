@@ -72,6 +72,16 @@ in-flight 去重防并发落两条记录。
 
 ### Fixed
 
+- **Codex 账号与配额物料完整展示。** 配额窗口改为按 `limitId` 排序的单一 CSS
+  Grid；`auto-fit` / `minmax` 按内容宽度自动单列或多列，窄卡不再丢模型配额，
+  宽卡左右排布，多余高度不再拉伸指标行。
+- **Codex 账号切换菜单恢复可用布局。** 无其他账号时不再显示切换入口；多账号
+  菜单只列出可切换目标，并以可用视口约束 16rem 最小宽度。切换期间按钮只显示
+  单一 loading 指示，不再叠加切换图标。
+- **成本物料 Tooltip 不再被卡片裁切。** 图表 hover 明细通过共享
+  `ChartTooltipPortalContent` 渲染到卡片滚动层之外，按视口自动翻转并约束位置；
+  浮层保持 `pointer-events: none`，不干扰图表 hover 命中。
+
 - `**ForegroundActivityAggregator.acquireHookAgentEntry**` 迟到的
 `Stop` / `ToolComplete` / `SubagentStop` / `error` 事件不再销毁已有 task /
 shell activity（仅 `SESSION_CREATING_EVENTS` 才允许覆盖为 agent kind）。

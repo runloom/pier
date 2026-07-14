@@ -90,6 +90,7 @@ export function AddAccountDialog({
       .then(() => {
         operationId.current += 1;
         setStarting(false);
+        setPresentation("authorize");
         setOpen(false);
       })
       .catch((error: unknown) => {

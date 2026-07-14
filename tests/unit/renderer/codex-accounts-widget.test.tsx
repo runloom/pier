@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -165,6 +166,51 @@ describe("AccountsWidget (usage)", () => {
     expect(container.textContent).not.toContain("remaining");
   });
 
+  it("hides the account switcher when no alternative account exists", async () => {
+    const { context } = contextWithSnapshot(usageSnapshot());
+    render(<AccountsWidget context={context} {...baseProps()} />);
+
+    await screen.findByText("test@codex.dev");
+    expect(screen.queryByRole("button", { name: "Switch account" })).toBeNull();
+  });
+
+  it("renders a readable menu containing only switchable accounts", async () => {
+    const snap = usageSnapshot({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "active",
+          error: null,
+        },
+        {
+          id: "acc-2",
+          label: "other@codex.dev",
+          status: "available",
+          error: null,
+        },
+      ],
+      activeAccountId: "acc-1",
+    });
+    const { context } = contextWithSnapshot(snap);
+    render(<AccountsWidget context={context} {...baseProps()} />);
+
+    await screen.findByText("active@codex.dev");
+    openDropdown("Switch account");
+
+    const menu = await screen.findByRole("menu");
+    expect(menu.style.minWidth).toBe(
+      "min(16rem, var(--radix-dropdown-menu-content-available-width))"
+    );
+    expect(menu.style.maxWidth).toBe(
+      "var(--radix-dropdown-menu-content-available-width)"
+    );
+    expect(within(menu).queryByText("active@codex.dev")).toBeNull();
+    const target = within(menu).getByText("other@codex.dev");
+    expect(target.className).toContain("break-words");
+    expect(target.className).not.toContain("truncate");
+  });
+
   it("calls accounts.select when managed account is selected", async () => {
     const snap = usageSnapshot({
       accounts: [
@@ -194,21 +240,94 @@ describe("AccountsWidget (usage)", () => {
       fireEvent.click(otherOption);
     });
 
-    expect(context.dialogs.confirm).toHaveBeenCalledWith({
-      body: "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect.",
-      intent: "default",
-      title: "Switch Codex account?",
+    // The switch confirmation dialog opens with sync checkboxes.
+    const switchButton = await screen.findByRole("button", { name: /Switch$/ });
+    await act(async () => {
+      fireEvent.click(switchButton);
     });
     await vi.waitFor(() => {
       expect(invokeCalls).toContainEqual({
         method: "accounts.select",
-        payload: { accountId: "acc-2" },
+        payload: {
+          accountId: "acc-2",
+          syncTargets: ["opencode", "pi", "omp"],
+        },
       });
     });
   });
 
+  it("shows only the spinner icon while an account switch is pending", async () => {
+    const snap = usageSnapshot({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "active",
+          error: null,
+        },
+        {
+          id: "acc-2",
+          label: "other@codex.dev",
+          status: "available",
+          error: null,
+        },
+      ],
+      activeAccountId: "acc-1",
+    });
+    const { context } = contextWithSnapshot(snap);
+    const invoke = context.rpc.invoke;
+    let resolveSelect: (() => void) | undefined;
+    context.rpc.invoke = async <T,>(
+      method: string,
+      payload?: unknown
+    ): Promise<T> => {
+      if (method === "accounts.select") {
+        await new Promise<void>((resolve) => {
+          resolveSelect = resolve;
+        });
+        return null as T;
+      }
+      return invoke<T>(method, payload);
+    };
+    render(<AccountsWidget context={context} {...baseProps()} />);
+
+    await screen.findByText("active@codex.dev");
+    openDropdown("Switch account");
+    fireEvent.click(await screen.findByText("other@codex.dev"));
+
+    // Confirm in the switch dialog to trigger the RPC.
+    const switchButton = await screen.findByRole("button", { name: /Switch$/ });
+    await act(async () => {
+      fireEvent.click(switchButton);
+    });
+
+    await screen.findByRole("status", { name: "Switching account" });
+    const trigger = screen.getByRole("button", { name: "Switch account" });
+    expect(trigger.querySelectorAll("svg")).toHaveLength(1);
+
+    await act(async () => {
+      resolveSelect?.();
+    });
+  });
+
   it('calls app.openSettings when "Manage accounts..." is clicked', async () => {
-    const snap = usageSnapshot();
+    const snap = usageSnapshot({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "test@codex.dev",
+          status: "active",
+          error: null,
+        },
+        {
+          id: "acc-2",
+          label: "other@codex.dev",
+          status: "available",
+          error: null,
+        },
+      ],
+      activeAccountId: "acc-1",
+    });
     const { context } = contextWithSnapshot(snap);
     render(<AccountsWidget context={context} {...baseProps()} />);
 
@@ -254,35 +373,58 @@ describe("AccountsWidget (usage)", () => {
     expect(await screen.findByText("No active account")).toBeDefined();
   });
 
-  it("uses container-query layouts for narrow and wider widget spaces", async () => {
-    const { context } = contextWithSnapshot(usageSnapshot());
+  it("keeps every quota visible and identifiable at compact size", async () => {
+    const snapshot = usageSnapshot({
+      activeUsage: {
+        fetchedAt: Date.now(),
+        status: "ok",
+        windows: [
+          {
+            id: "codex:secondary",
+            limitId: "codex",
+            resetsAt: Date.now() + 86_400_000,
+            usedPercent: 32,
+            windowMinutes: 10_080,
+          },
+          {
+            id: "spark:secondary",
+            limitId: "spark",
+            limitName: "GPT-5.3-Codex-Spark",
+            resetsAt: Date.now() + 86_400_000,
+            usedPercent: 0,
+            windowMinutes: 10_080,
+          },
+        ],
+      },
+    });
+    const { context } = contextWithSnapshot(snapshot);
     const { container } = render(
       <AccountsWidget
         context={context}
-        {...baseProps({ size: { w: 2, h: 3 } })}
+        {...baseProps({ size: { w: 3, h: 3 } })}
       />
     );
 
-    await screen.findByText("5-hour quota");
+    await screen.findByText("7-day quota");
+    expect(screen.getByText("GPT-5.3-Codex-Spark · 7-day quota")).toBeDefined();
+
     const meter = container.querySelector('[data-slot="codex-usage-meter"]');
-    const progressBars = container.querySelectorAll(
-      '[data-slot="codex-usage-progress"] [data-slot="progress"]'
-    );
-    const primaryWindows = container.querySelectorAll(
-      '[data-window-group="primary"] [data-slot="codex-usage-progress"]'
+    const windows = container.querySelectorAll(
+      '[data-slot="codex-usage-progress"]'
     );
     expect(meter?.className).toContain("pier-codex-usage-meter");
-    expect(progressBars).toHaveLength(2);
-    expect(primaryWindows).toHaveLength(2);
-    expect(primaryWindows[1]?.className).not.toContain("hidden");
+    expect(meter?.className).toContain("auto-fit");
+    expect(meter?.className).toContain("content-start");
+    expect(windows).toHaveLength(2);
     expect(
-      container.querySelector('[data-window-group="primary"]')?.className
-    ).toContain("@[22rem]:grid-cols-2");
+      Array.from(windows, (window) => window.getAttribute("data-limit-id"))
+    ).toEqual(["codex", "spark"]);
+    expect(container.querySelector('[data-slot="separator"]')).toBeNull();
     expect(
-      container.querySelector('[data-window-group="primary"]')?.className
-    ).toContain("grid-cols-1");
-    expect(progressBars[0]?.className).toContain("h-1");
-    expect(progressBars[0]?.getAttribute("data-variant")).toBe("success");
+      container.querySelectorAll(
+        '[data-slot="codex-usage-progress"] [data-slot="progress"]'
+      )
+    ).toHaveLength(2);
   });
 
   it("keeps primary quota windows before model-specific windows", () => {

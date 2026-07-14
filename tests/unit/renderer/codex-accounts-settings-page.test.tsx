@@ -503,15 +503,18 @@ describe("AccountsSettingsPage", () => {
       screen.getByRole("button", { name: "Switch: other@codex.dev" })
     );
 
-    expect(context.dialogs.confirm).toHaveBeenCalledWith({
-      body: "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect.",
-      intent: "default",
-      title: "Switch Codex account?",
+    // The switch confirmation dialog opens with sync checkboxes.
+    const switchButton = await screen.findByRole("button", { name: /Switch$/ });
+    await act(async () => {
+      fireEvent.click(switchButton);
     });
     await vi.waitFor(() => {
       expect(invokeCalls).toContainEqual({
         method: "accounts.select",
-        payload: { accountId: "acc-2" },
+        payload: {
+          accountId: "acc-2",
+          syncTargets: ["opencode", "pi", "omp"],
+        },
       });
     });
   });
@@ -534,7 +537,6 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    context.dialogs.confirm = vi.fn(async () => false);
     render(<AccountsSettingsPage context={context} />);
 
     await screen.findByText("other@codex.dev");
@@ -542,12 +544,18 @@ describe("AccountsSettingsPage", () => {
       screen.getByRole("button", { name: "Switch: other@codex.dev" })
     );
 
-    await vi.waitFor(() => {
-      expect(context.dialogs.confirm).toHaveBeenCalledOnce();
+    // The switch dialog opens; click Cancel to dismiss without switching.
+    const cancelButton = await screen.findByRole("button", { name: "Cancel" });
+    await act(async () => {
+      fireEvent.click(cancelButton);
+    });
+    // Give any pending state updates a tick to flush.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(invokeCalls).not.toContainEqual({
       method: "accounts.select",
-      payload: { accountId: "acc-2" },
+      payload: expect.anything(),
     });
   });
 

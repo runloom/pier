@@ -15,26 +15,31 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
-import { ArrowLeftRight, Check, Settings } from "lucide-react";
+import { ArrowLeftRight, Settings } from "lucide-react";
 import type { JSX } from "react";
 import { useState } from "react";
-import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
-import { confirmAccountSwitch } from "./account-switch.ts";
+import type {
+  CodexAccountSummary,
+  CrossToolSyncTarget,
+} from "../shared/accounts.ts";
+import { SwitchConfirmDialog } from "./account-switch.ts";
 
 export interface AccountPickerProps {
+  accounts: readonly CodexAccountSummary[];
   context: ExternalRendererPluginContext;
-  snapshot: CodexAccountsSnapshot;
   t: (key: string, fallback: string) => string;
 }
 
 export function AccountPicker({
+  accounts,
   context,
-  snapshot,
   t,
-}: AccountPickerProps): JSX.Element {
+}: AccountPickerProps): JSX.Element | null {
   const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(
     null
   );
+  const [dialogAccountId, setDialogAccountId] = useState<string | null>(null);
+  if (accounts.length === 0) return null;
   const reportError = async (err: unknown): Promise<void> => {
     await context.dialogs.alert({
       title: t("pier.codex.widget.actionFailed", "Account action failed"),
@@ -42,11 +47,26 @@ export function AccountPicker({
     });
   };
 
-  const handleSelect = async (accountId: string): Promise<void> => {
-    if (!(await confirmAccountSwitch(context, t))) return;
+  const handleSelect = (accountId: string): void => {
+    setDialogAccountId(accountId);
+  };
+
+  const handleDialogResult = async ({
+    confirmed,
+    syncTargets,
+  }: {
+    confirmed: boolean;
+    syncTargets: CrossToolSyncTarget[];
+  }): Promise<void> => {
+    const accountId = dialogAccountId;
+    setDialogAccountId(null);
+    if (!(confirmed && accountId)) return;
     setSwitchingAccountId(accountId);
     try {
-      await context.rpc.invoke("accounts.select", { accountId });
+      await context.rpc.invoke("accounts.select", {
+        accountId,
+        syncTargets,
+      });
     } catch (error) {
       await reportError(error);
     } finally {
@@ -55,79 +75,91 @@ export function AccountPicker({
   };
 
   return (
-    <DropdownMenu>
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-busy={switchingAccountId !== null || undefined}
-                aria-label={t(
-                  "pier.codex.widget.switchAccount",
-                  "Switch account"
-                )}
-                disabled={switchingAccountId !== null}
-                size="icon-sm"
-                variant="ghost"
+    <>
+      <DropdownMenu>
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-busy={switchingAccountId !== null || undefined}
+                  aria-label={t(
+                    "pier.codex.widget.switchAccount",
+                    "Switch account"
+                  )}
+                  disabled={switchingAccountId !== null}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  {switchingAccountId ? (
+                    <Spinner
+                      aria-label={t(
+                        "pier.codex.widget.switchingAccount",
+                        "Switching account"
+                      )}
+                      data-icon="inline-start"
+                    />
+                  ) : (
+                    <ArrowLeftRight data-icon="inline-start" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent data-pier-codex-scope="">
+              {t("pier.codex.widget.switchAccount", "Switch account")}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <DropdownMenuContent
+          align="end"
+          data-pier-codex-scope=""
+          style={{
+            maxWidth: "var(--radix-dropdown-menu-content-available-width)",
+            minWidth:
+              "min(16rem, var(--radix-dropdown-menu-content-available-width))",
+          }}
+        >
+          <DropdownMenuGroup>
+            {accounts.map((account) => (
+              <DropdownMenuItem
+                key={account.id}
+                onClick={() => {
+                  handleSelect(account.id);
+                }}
               >
-                {switchingAccountId ? (
-                  <Spinner
-                    aria-label={t(
-                      "pier.codex.widget.switchingAccount",
-                      "Switching account"
-                    )}
-                    data-icon="inline-start"
-                  />
-                ) : null}
-                <ArrowLeftRight data-icon="inline-start" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent data-pier-codex-scope="">
-            {t("pier.codex.widget.switchAccount", "Switch account")}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <DropdownMenuContent
-        align="end"
-        className="min-w-64"
-        data-pier-codex-scope=""
-      >
-        <DropdownMenuGroup>
-          {snapshot.accounts.map((account) => (
+                <span className="min-w-0">
+                  <span className="block whitespace-normal break-words">
+                    {account.label}
+                  </span>
+                  {account.planType ? (
+                    <span className="block text-muted-foreground text-xs">
+                      {account.planType.toUpperCase()}
+                    </span>
+                  ) : null}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuGroup>
             <DropdownMenuItem
-              disabled={account.id === snapshot.activeAccountId}
-              key={account.id}
               onClick={() => {
-                handleSelect(account.id).catch(reportError);
+                context.app.openSettings({ section: "plugin:pier.codex" });
               }}
             >
-              {account.id === snapshot.activeAccountId ? <Check /> : null}
-              <span className="min-w-0">
-                <span className="block truncate">{account.label}</span>
-                {account.planType ? (
-                  <span className="block text-muted-foreground text-xs">
-                    {account.planType.toUpperCase()}
-                  </span>
-                ) : null}
-              </span>
+              <Settings />
+              {t("pier.codex.widget.manageAccounts", "Manage accounts...")}
             </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuGroup>
-          <DropdownMenuItem
-            onClick={() => {
-              context.app.openSettings({ section: "plugin:pier.codex" });
-            }}
-          >
-            <Settings />
-            {t("pier.codex.widget.manageAccounts", "Manage accounts...")}
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <SwitchConfirmDialog
+        onResult={handleDialogResult}
+        open={dialogAccountId !== null}
+        t={t}
+      />
+    </>
   );
 }

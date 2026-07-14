@@ -83,7 +83,11 @@
         "pier.codex.widget.actionFailed": "Account action failed",
         "pier.codex.widget.refreshFailed": "Could not refresh Codex usage",
         "pier.codex.widget.refreshing": "Refreshing",
-        "pier.codex.widget.modelQuotas": "Model-specific quotas"
+        "pier.codex.widget.modelQuotas": "Model-specific quotas",
+        "pier.codex.switch.syncSectionLabel": "Also switch the OpenAI account in:",
+        "pier.codex.switch.syncTarget.opencode": "OpenCode",
+        "pier.codex.switch.syncTarget.pi": "pi",
+        "pier.codex.switch.syncTarget.omp": "omp"
       }
     },
     "zh-CN": {
@@ -162,7 +166,11 @@
         "pier.codex.widget.actionFailed": "账号操作失败",
         "pier.codex.widget.refreshFailed": "无法刷新 Codex 用量",
         "pier.codex.widget.refreshing": "正在刷新",
-        "pier.codex.widget.modelQuotas": "模型专属配额"
+        "pier.codex.widget.modelQuotas": "模型专属配额",
+        "pier.codex.switch.syncSectionLabel": "同时切换以下工具的 OpenAI 账号：",
+        "pier.codex.switch.syncTarget.opencode": "OpenCode",
+        "pier.codex.switch.syncTarget.pi": "pi",
+        "pier.codex.switch.syncTarget.omp": "omp"
       }
     }
   },
@@ -174,7 +182,7 @@
       "description": "Switch the active Codex account and monitor its quota.",
       "id": "pier.codex.accounts",
       "maxSize": { "w": 8, "h": 4 },
-      "minSize": { "w": 2, "h": 3 },
+      "minSize": { "w": 3, "h": 3 },
       "refreshable": false,
       "searchTerms": ["codex", "account", "quota", "账号", "配额"],
       "title": "Codex Account & Quota"

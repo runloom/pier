@@ -12,6 +12,10 @@ export interface CodexAccountsServiceOpts {
   ensureUsageEnv?: () => Promise<void>;
   hasVisibleTarget?: () => boolean;
   legacyMigration?: CodexLegacyMigrationAdapter;
+  logger?: {
+    warn(message: string, meta?: unknown): void;
+    info(message: string, meta?: unknown): void;
+  };
   managedBaseDir: string;
   onChanged: (snapshot: CodexAccountsSnapshot) => void;
   provider: AgentAccountProvider;

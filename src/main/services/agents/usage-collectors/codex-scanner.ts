@@ -24,8 +24,19 @@ import {
 const CODEX_USAGE_PERIOD_DAYS = 31;
 const MAX_FILES = 5000;
 const STAT_CONCURRENCY = 32;
+const SCAN_TIMEOUT_MS = 60_000;
 
 export const CODEX_USAGE_SOURCE_ID = "codex-local-sessions";
+
+function emptyScanInput(from: string, to: string): UsageDataPublishInput {
+  return {
+    coverage: { complete: false, from, to },
+    observations: [],
+    observedAt: Date.now(),
+    scope: { kind: "machine" },
+    sourceId: CODEX_USAGE_SOURCE_ID,
+  };
+}
 
 interface UsageCandidate {
   date: string;
@@ -144,7 +155,8 @@ function lineageRoot(
 
 async function scanCodexUsage(
   codexHome: string,
-  cachePath: string
+  cachePath: string,
+  signal?: AbortSignal
 ): Promise<CodexUsageScanResult> {
   const from = dateDaysAgo(CODEX_USAGE_PERIOD_DAYS - 1);
   const to = todayDate();
@@ -164,7 +176,12 @@ async function scanCodexUsage(
     uniqueEvents: 0,
   };
 
+  if (signal?.aborted) {
+    return { diagnostics, input: emptyScanInput(from, to) };
+  }
+
   for (let index = 0; index < paths.length; index += STAT_CONCURRENCY) {
+    if (signal?.aborted) break;
     const batch = paths.slice(index, index + STAT_CONCURRENCY);
     await Promise.all(
       batch.map(async (path) => {
@@ -268,11 +285,16 @@ export function createCodexUsageScanner(options: {
   return {
     scan(): Promise<CodexUsageScanResult> {
       if (inFlight) return inFlight;
-      inFlight = scanCodexUsage(options.codexHome, options.cachePath).finally(
-        () => {
-          inFlight = null;
-        }
-      );
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
+      inFlight = scanCodexUsage(
+        options.codexHome,
+        options.cachePath,
+        controller.signal
+      ).finally(() => {
+        clearTimeout(timeout);
+        inFlight = null;
+      });
       return inFlight;
     },
   };
