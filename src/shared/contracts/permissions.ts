@@ -36,7 +36,6 @@ export const pierCapabilitySchema = z.enum([
   "git:write",
   "file:read",
   "file:write",
-  "transcript:read",
   "profile:read",
   "secret:read",
   "secret:write",

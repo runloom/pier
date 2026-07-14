@@ -55,11 +55,11 @@ import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
 import { clearHostGroupContentForTests } from "@/lib/plugins/host-group-content-context.tsx";
 import { mermaidRenderer } from "@/lib/plugins/mermaid-renderer.ts";
 import { pluginLifecycleBarriers } from "@/lib/plugins/plugin-lifecycle-barriers.ts";
-import {
-  clearPluginMissionControlWidgetsForTests,
-  getPluginMissionControlWidgetRegistrations,
-} from "@/lib/plugins/plugin-mission-control-widget-registry.ts";
 import { clearPluginPanelsForTests } from "@/lib/plugins/plugin-panel-registry.ts";
+import {
+  clearPluginWorkbenchWidgetsForTests,
+  getPluginWorkbenchWidgetRegistrations,
+} from "@/lib/plugins/plugin-workbench-widget-registry.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 import { useLocaleStore } from "@/stores/locale.store.ts";
@@ -136,7 +136,7 @@ const sampleCommands = [
 const sampleTerminalStatusItems = [
   { id: "sample.status", permissions: [], title: "Sample Status" },
 ];
-const sampleMissionControlWidgets = [
+const sampleWorkbenchWidgets = [
   { id: "sample.widget", permissions: [], title: "Sample Widget" },
 ];
 const undeclaredContributionErrorPattern = /not declared/;
@@ -193,7 +193,7 @@ const pluginEntry = {
     permissions: ["command:register"],
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
-    missionControlWidgets: sampleMissionControlWidgets,
+    workbenchWidgets: sampleWorkbenchWidgets,
     settingsPages: [],
     version: "1.0.0",
   },
@@ -208,7 +208,7 @@ const configurableWidgetEntry = {
   ...pluginEntry,
   manifest: {
     ...pluginEntry.manifest,
-    missionControlWidgets: [
+    workbenchWidgets: [
       {
         configurable: true,
         defaultSize: { h: 4, w: 4 },
@@ -355,7 +355,7 @@ afterEach(() => {
   useWorkspaceStore.setState({ api: null });
   workspaceActivationMocks.activateWorkspacePanel.mockReset();
   vi.restoreAllMocks();
-  clearPluginMissionControlWidgetsForTests();
+  clearPluginWorkbenchWidgetsForTests();
   vi.useRealTimers();
 });
 
@@ -512,39 +512,37 @@ describe("createRendererPluginContext", () => {
     expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
-  it("delegates Mission Control widget registration to the internal registry", () => {
+  it("delegates Workbench widget registration to the internal registry", () => {
     const context = createRendererPluginContext(pluginEntry);
 
-    const dispose = context.missionControlWidgets.register({
+    const dispose = context.workbenchWidgets.register({
       component: () => null,
       icon: House,
       id: "sample.widget",
     });
 
-    expect(
-      getPluginMissionControlWidgetRegistrations().has("sample.widget")
-    ).toBe(true);
+    expect(getPluginWorkbenchWidgetRegistrations().has("sample.widget")).toBe(
+      true
+    );
 
     dispose();
-    expect(
-      getPluginMissionControlWidgetRegistrations().has("sample.widget")
-    ).toBe(false);
+    expect(getPluginWorkbenchWidgetRegistrations().has("sample.widget")).toBe(
+      false
+    );
   });
 
   it("rejects a configurable builtin widget without a settings component", () => {
     const context = createRendererPluginContext(configurableWidgetEntry);
 
     expect(() =>
-      context.missionControlWidgets.register({
+      context.workbenchWidgets.register({
         component: () => null,
         icon: House,
         id: "sample.configurableWidget",
       })
     ).toThrow(CONFIGURABLE_WIDGET_SETTINGS_PATTERN);
     expect(
-      getPluginMissionControlWidgetRegistrations().has(
-        "sample.configurableWidget"
-      )
+      getPluginWorkbenchWidgetRegistrations().has("sample.configurableWidget")
     ).toBe(false);
   });
 
@@ -557,41 +555,39 @@ describe("createRendererPluginContext", () => {
       settingsComponent: () => null,
     };
 
-    const dispose = context.missionControlWidgets.register(registration);
+    const dispose = context.workbenchWidgets.register(registration);
 
     expect(
-      getPluginMissionControlWidgetRegistrations().get(
-        "sample.configurableWidget"
-      )
+      getPluginWorkbenchWidgetRegistrations().get("sample.configurableWidget")
     ).toBe(registration);
     dispose();
   });
 
-  it("rejects Mission Control widget registration not declared by the plugin manifest", () => {
+  it("rejects Workbench widget registration not declared by the plugin manifest", () => {
     const context = createRendererPluginContext(pluginEntry);
 
     expect(() =>
-      context.missionControlWidgets.register({
+      context.workbenchWidgets.register({
         component: () => null,
         icon: House,
         id: "sample.missingWidget",
       })
     ).toThrow(undeclaredContributionErrorPattern);
     expect(
-      getPluginMissionControlWidgetRegistrations().has("sample.missingWidget")
+      getPluginWorkbenchWidgetRegistrations().has("sample.missingWidget")
     ).toBe(false);
   });
 
-  it("allows Mission Control widget registration without entry (core context)", () => {
+  it("allows Workbench widget registration without entry (core context)", () => {
     const context = createRendererPluginContext();
 
-    const dispose = context.missionControlWidgets.register({
+    const dispose = context.workbenchWidgets.register({
       component: () => null,
       icon: House,
       id: "any.widget",
     });
 
-    expect(getPluginMissionControlWidgetRegistrations().has("any.widget")).toBe(
+    expect(getPluginWorkbenchWidgetRegistrations().has("any.widget")).toBe(
       true
     );
 

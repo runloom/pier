@@ -15,14 +15,10 @@
           "title": "Codex Accounts"
         }
       },
-      "missionControlWidgets": {
+      "workbenchWidgets": {
         "pier.codex.accounts": {
           "title": "Codex Account & Quota",
           "description": "Switch the active Codex account and monitor its quota."
-        },
-        "pier.codex.cost": {
-          "title": "Codex Cost",
-          "description": "Monitor estimated API-equivalent cost from local Codex sessions."
         }
       },
       "messages": {
@@ -60,26 +56,6 @@
         "pier.codex.accounts.settings.updated": "Updated",
         "pier.codex.accounts.settings.noUsage": "No usage data",
         "pier.codex.accounts.settings.resetCredits": "{count} quota resets available",
-        "pier.codex.accounts.settings.cost": "Cost",
-        "pier.codex.accounts.settings.costToday": "Today",
-        "pier.codex.accounts.settings.costPeriod": "Last {count} days cost",
-        "pier.codex.accounts.settings.tokensPeriod": "Last {count} days tokens",
-        "pier.codex.accounts.settings.tokensLatest": "Latest active day tokens",
-        "pier.codex.accounts.settings.costChart": "Daily estimated cost for the last {count} days",
-        "pier.codex.accounts.settings.costEstimateNote": "Estimated API-equivalent cost from local Codex session logs",
-        "pier.codex.accounts.settings.refreshCost": "Refresh cost",
-        "pier.codex.accounts.settings.costRefreshSuccess": "Cost data refreshed",
-        "pier.codex.accounts.settings.costRefreshFailed": "Could not refresh cost data",
-        "pier.codex.accounts.settings.costFailedFiles": "{count} files could not be read",
-        "pier.codex.accounts.settings.costMalformedLines": "{count} malformed log lines were ignored",
-        "pier.codex.accounts.settings.costTruncatedFiles": "{count} files exceeded the scan limit",
-        "pier.codex.accounts.settings.costUnpricedDays": "{count} days contain usage without published pricing or a model identifier",
-        "pier.codex.accounts.settings.partialData": "Partial data",
-        "pier.codex.accounts.settings.partiallyUnpriced": "Some cost is unpriced",
-        "pier.codex.accounts.settings.costUnavailable": "Not priced",
-        "pier.codex.accounts.settings.chartCost": "Cost",
-        "pier.codex.accounts.settings.chartTokens": "Tokens",
-        "pier.codex.accounts.settings.partialDataUnknown": "Some local usage could not be included",
         "pier.codex.accounts.settings.otherAccounts": "Other accounts",
         "pier.codex.accounts.settings.usageRefreshSuccess": "Usage refreshed",
         "pier.codex.accounts.settings.usageFailed": "Usage update failed",
@@ -107,10 +83,7 @@
         "pier.codex.widget.actionFailed": "Account action failed",
         "pier.codex.widget.refreshFailed": "Could not refresh Codex usage",
         "pier.codex.widget.refreshing": "Refreshing",
-        "pier.codex.widget.modelQuotas": "Model-specific quotas",
-        "pier.codex.widget.costLoadFailed": "Could not load Codex cost",
-        "pier.codex.widget.noCostData": "No cost data",
-        "pier.codex.widget.noCostHint": "Cost appears after local Codex sessions are scanned."
+        "pier.codex.widget.modelQuotas": "Model-specific quotas"
       }
     },
     "zh-CN": {
@@ -121,14 +94,10 @@
           "title": "Codex 账号"
         }
       },
-      "missionControlWidgets": {
+      "workbenchWidgets": {
         "pier.codex.accounts": {
           "title": "Codex 账号与配额",
           "description": "切换当前 Codex 账号并查看对应配额。"
-        },
-        "pier.codex.cost": {
-          "title": "Codex 成本",
-          "description": "查看基于本机 Codex 会话估算的 API 等价成本。"
         }
       },
       "messages": {
@@ -166,26 +135,6 @@
         "pier.codex.accounts.settings.updated": "更新于",
         "pier.codex.accounts.settings.noUsage": "暂无用量",
         "pier.codex.accounts.settings.resetCredits": "可用额度重置 {count} 次",
-        "pier.codex.accounts.settings.cost": "成本",
-        "pier.codex.accounts.settings.costToday": "今天",
-        "pier.codex.accounts.settings.costPeriod": "最近 {count} 天成本",
-        "pier.codex.accounts.settings.tokensPeriod": "最近 {count} 天 tokens",
-        "pier.codex.accounts.settings.tokensLatest": "最近有数据日 tokens",
-        "pier.codex.accounts.settings.costChart": "最近 {count} 天每日估算成本柱状图",
-        "pier.codex.accounts.settings.costEstimateNote": "基于本机 Codex 会话日志估算的 API 等价成本",
-        "pier.codex.accounts.settings.refreshCost": "刷新成本",
-        "pier.codex.accounts.settings.costRefreshSuccess": "成本数据已刷新",
-        "pier.codex.accounts.settings.costRefreshFailed": "无法刷新成本数据",
-        "pier.codex.accounts.settings.costFailedFiles": "有 {count} 个文件无法读取",
-        "pier.codex.accounts.settings.costMalformedLines": "已忽略 {count} 行异常日志",
-        "pier.codex.accounts.settings.costTruncatedFiles": "有 {count} 个文件超出扫描上限",
-        "pier.codex.accounts.settings.costUnpricedDays": "有 {count} 天包含未公开定价或缺少模型标识的用量",
-        "pier.codex.accounts.settings.partialData": "数据不完整",
-        "pier.codex.accounts.settings.partiallyUnpriced": "部分成本未定价",
-        "pier.codex.accounts.settings.costUnavailable": "未定价",
-        "pier.codex.accounts.settings.chartCost": "成本",
-        "pier.codex.accounts.settings.chartTokens": "tokens",
-        "pier.codex.accounts.settings.partialDataUnknown": "部分本地用量未能计入",
         "pier.codex.accounts.settings.otherAccounts": "其他账号",
         "pier.codex.accounts.settings.usageRefreshSuccess": "用量刷新成功",
         "pier.codex.accounts.settings.usageFailed": "用量更新失败",
@@ -213,15 +162,12 @@
         "pier.codex.widget.actionFailed": "账号操作失败",
         "pier.codex.widget.refreshFailed": "无法刷新 Codex 用量",
         "pier.codex.widget.refreshing": "正在刷新",
-        "pier.codex.widget.modelQuotas": "模型专属配额",
-        "pier.codex.widget.costLoadFailed": "无法加载 Codex 成本",
-        "pier.codex.widget.noCostData": "暂无成本数据",
-        "pier.codex.widget.noCostHint": "扫描本机 Codex 会话后将在此显示成本。"
+        "pier.codex.widget.modelQuotas": "模型专属配额"
       }
     }
   },
   "main": "dist/main.js",
-  "missionControlWidgets": [
+  "workbenchWidgets": [
     {
       "category": "agent",
       "defaultSize": { "w": 4, "h": 3 },
@@ -229,33 +175,17 @@
       "id": "pier.codex.accounts",
       "maxSize": { "w": 8, "h": 4 },
       "minSize": { "w": 2, "h": 3 },
-      "refreshable": true,
+      "refreshable": false,
       "searchTerms": ["codex", "account", "quota", "账号", "配额"],
       "title": "Codex Account & Quota"
-    },
-    {
-      "category": "agent",
-      "defaultSize": { "w": 4, "h": 3 },
-      "description": "Monitor estimated API-equivalent cost from local Codex sessions.",
-      "id": "pier.codex.cost",
-      "maxSize": { "w": 8, "h": 5 },
-      "minSize": { "w": 2, "h": 3 },
-      "refreshable": true,
-      "searchTerms": ["codex", "cost", "tokens", "成本", "令牌"],
-      "title": "Codex Cost"
     }
   ],
   "name": "Codex Account Management",
   "panels": [],
-  "permissions": [
-    "plugin:read",
-    "secret:read",
-    "secret:write",
-    "usage:publish"
-  ],
+  "permissions": ["plugin:read", "secret:read", "secret:write"],
   "publisher": "Pier",
   "renderer": "dist/renderer.js",
   "settingsPages": [{ "id": "pier.codex.accounts" }],
   "terminalStatusItems": [],
-  "version": "1.1.6"
+  "version": "1.3.0"
 }

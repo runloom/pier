@@ -99,7 +99,7 @@ function entryWithCapabilities(
     manifest: {
       apiVersion: 1,
       commands: [{ id: testAction.id, permissions: [], title: "Open" }],
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.files",

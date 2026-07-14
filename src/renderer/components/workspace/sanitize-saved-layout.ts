@@ -24,6 +24,37 @@ interface SerializedFloatingGroup {
   data?: SerializedGroupState;
 }
 
+const WORKBENCH_COMPONENT = "workbench";
+const LEGACY_WORKBENCH_COMPONENTS = new Set(["dashboard", "mission-control"]);
+const LEGACY_WORKBENCH_TITLES = new Set(["Dashboard", "Mission Control"]);
+
+function migrateWorkbenchPanelState(state: unknown): {
+  migrated: boolean;
+  state: unknown;
+} {
+  if (typeof state !== "object" || state === null) {
+    return { migrated: false, state };
+  }
+  const record = state as Record<string, unknown>;
+  if (
+    typeof record.contentComponent !== "string" ||
+    !LEGACY_WORKBENCH_COMPONENTS.has(record.contentComponent)
+  ) {
+    return { migrated: false, state };
+  }
+  return {
+    migrated: true,
+    state: {
+      ...record,
+      contentComponent: WORKBENCH_COMPONENT,
+      ...(typeof record.title === "string" &&
+      LEGACY_WORKBENCH_TITLES.has(record.title)
+        ? { title: "Workbench" }
+        : {}),
+    },
+  };
+}
+
 function isLeaf(node: unknown): node is SerializedGridLeaf {
   return (
     typeof node === "object" &&
@@ -142,10 +173,10 @@ function pruneFloatingGroups(
 }
 
 /**
- * 剔除 saved layout 中引用了未注册 dockview component 的 panel + grid/floating
- * 引用。用于禁用插件后重启的边界:旧布局存了 plugin panel,但 component 已 unregister,
- * 直接 fromJSON 会抛错 → workspace 回退 default,连其它正常 panel 也丢。
- * 这里剪掉无效引用后再 fromJSON,尽量保住用户其它 panel。
+ * 读取边界先把历史工作台 component/title 单向迁移为当前值，再剔除 saved layout
+ * 中引用了未注册 dockview component 的 panel + grid/floating 引用。用于更名和
+ * 禁用插件后重启的边界：旧布局不会继续写出旧工作台值；旧布局中的 plugin panel
+ * 若已 unregister，也只剪掉无效引用，避免 fromJSON 失败后把其它正常 panel 一并丢失。
  *
  * 注意 dockview 序列化里 grid leaf 的 data.id 是"组 id"(顺序号),data.views 才是
  * "panel id 数组" —— sanitize 必须在 views[] 层操作,不能用 leaf.data.id 比对 panel id。
@@ -168,16 +199,20 @@ export function sanitizeSavedLayout(
   const keepPanelIds = new Set<string>();
   const sanitizedPanels: Record<string, unknown> = {};
   let panelsPruned = false;
+  let panelsMigrated = false;
   for (const [panelId, state] of Object.entries(
     panels as Record<string, unknown>
   )) {
-    const contentComponent = (state as { contentComponent?: unknown })
-      ?.contentComponent;
+    const migrated = migrateWorkbenchPanelState(state);
+    panelsMigrated ||= migrated.migrated;
+    const contentComponent = (
+      migrated.state as { contentComponent?: unknown } | null
+    )?.contentComponent;
     if (
       typeof contentComponent === "string" &&
       knownComponents.has(contentComponent)
     ) {
-      sanitizedPanels[panelId] = state;
+      sanitizedPanels[panelId] = migrated.state;
       keepPanelIds.add(panelId);
     } else {
       panelsPruned = true;
@@ -202,25 +237,28 @@ export function sanitizeSavedLayout(
   }
 
   // 无 panel 被剪 → 透传原 layout,保留 maximizedNode / activeGroup 等用户状态。
-  if (!panelsPruned) {
+  if (!(panelsPruned || panelsMigrated)) {
     return saved as SerializedDockview;
   }
 
-  // 真实发生剪枝。处理两个连带状态:
-  // 1) maximizedNode 是"最大化路径",剪枝可能让它指向无效 leaf;fromJSON 会抛错
-  //    或最大化错的 panel,统一丢掉(用户重启后自行点 maximize,数据无损失)。
-  // 2) activeGroup 可能指向被剪掉的 group;dockview 复原后无 active panel,焦点/
-  //    快捷键全废。检测失效后改指 surviving group(优先用剪枝后 grid 的第一个 leaf)。
-  const { maximizedNode: _, ...gridWithoutMaximized } = grid as Record<
-    string,
-    unknown
-  >;
+  // 只有真实剪枝时才丢弃 maximizedNode。组件重命名不改变布局拓扑，
+  // 原有最大化路径仍然有效，必须保留。
+  let sanitizedGrid = grid as Record<string, unknown>;
+  if (panelsPruned) {
+    // maximizedNode 是最大化路径，剪枝可能让它指向无效 leaf，
+    // 导致 fromJSON 抛错或最大化错误面板。
+    const { maximizedNode: _, ...gridWithoutMaximized } = sanitizedGrid;
+    sanitizedGrid = gridWithoutMaximized;
+  }
+
+  // activeGroup 可能指向被剪掉的 group。检测失效后改指存活 group，
+  // 优先使用剪枝后 grid 的第一个 leaf。
   const survivingGroupIds = new Set<string>();
   collectLeafGroupIds(prunedRoot, survivingGroupIds);
 
   const sanitized: Record<string, unknown> = {
     ...root,
-    grid: { ...gridWithoutMaximized, root: prunedRoot },
+    grid: { ...sanitizedGrid, root: prunedRoot },
     panels: sanitizedPanels,
   };
 

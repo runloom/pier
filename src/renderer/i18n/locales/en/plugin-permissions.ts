@@ -20,7 +20,6 @@ export const pluginPermissions = {
   "secret:write": "Write secrets",
   "terminal:control": "Control terminals",
   "terminal:read": "Read terminal state",
-  "transcript:read": "Read transcripts",
   "window:close": "Close windows",
   "window:control": "Control windows",
   "window:create": "Create windows",

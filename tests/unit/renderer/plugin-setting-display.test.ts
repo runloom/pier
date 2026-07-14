@@ -16,7 +16,7 @@ function entryWith(overrides: {
     manifest: {
       apiVersion: 1,
       commands: [],
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       configuration: {
         properties: {

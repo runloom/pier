@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { pluginMissionControlWidgetContributionSchema } from "./mission-control.ts";
 import { pierCapabilitySchema } from "./permissions.ts";
 import {
+  normalizeLegacyWorkbenchContributionKey,
   pluginCommandContributionSchema,
   pluginConfigurationSchema,
   pluginLocaleCodeSchema,
@@ -12,6 +12,7 @@ import {
   pluginSettingsPageContributionSchema,
   pluginTerminalStatusItemContributionSchema,
 } from "./plugin.ts";
+import { pluginWorkbenchWidgetContributionSchema } from "./workbench.ts";
 
 /**
  * Managed plugin package manifest (`plugin.json` shipped inside `.tgz`).
@@ -84,39 +85,42 @@ export type ManagedPluginRendererActivationReport = z.infer<
   typeof managedPluginRendererActivationReportSchema
 >;
 
-export const managedPluginPackageManifestSchema = z.object({
-  apiVersion: z.literal(1),
-  commands: z.array(pluginCommandContributionSchema).default([]),
-  configuration: pluginConfigurationSchema.optional(),
-  dataSchemas: z.record(z.string(), managedPluginDataSchemaSchema).optional(),
-  description: z.string().min(1).optional(),
-  engines: z.object({ pier: z.string().min(1) }),
-  homepage: z.string().min(1).optional(),
-  id: z.string().min(1),
-  locales: z
-    .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
-    .optional(),
-  localization: pluginLocalizationSchema.optional(),
-  main: relativePosixPathSchema,
-  missionControlWidgets: z
-    .array(pluginMissionControlWidgetContributionSchema)
-    .default([]),
-  name: z.string().min(1),
-  panels: z.array(pluginPanelContributionSchema).default([]),
-  permissions: z.array(pierCapabilitySchema).default([]),
-  publisher: z.string().min(1).optional(),
-  settingsPages: z
-    .array(pluginSettingsPageContributionSchema)
-    .max(1)
-    .default([]),
-  renderer: relativePosixPathSchema,
-  repository: z.string().min(1).optional(),
-  runtime: pluginRuntimePolicySchema.optional(),
-  terminalStatusItems: z
-    .array(pluginTerminalStatusItemContributionSchema)
-    .default([]),
-  version: z.string().min(1),
-});
+export const managedPluginPackageManifestSchema = z.preprocess(
+  normalizeLegacyWorkbenchContributionKey,
+  z.object({
+    apiVersion: z.literal(1),
+    commands: z.array(pluginCommandContributionSchema).default([]),
+    configuration: pluginConfigurationSchema.optional(),
+    dataSchemas: z.record(z.string(), managedPluginDataSchemaSchema).optional(),
+    description: z.string().min(1).optional(),
+    engines: z.object({ pier: z.string().min(1) }),
+    homepage: z.string().min(1).optional(),
+    id: z.string().min(1),
+    locales: z
+      .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
+      .optional(),
+    localization: pluginLocalizationSchema.optional(),
+    main: relativePosixPathSchema,
+    workbenchWidgets: z
+      .array(pluginWorkbenchWidgetContributionSchema)
+      .default([]),
+    name: z.string().min(1),
+    panels: z.array(pluginPanelContributionSchema).default([]),
+    permissions: z.array(pierCapabilitySchema).default([]),
+    publisher: z.string().min(1).optional(),
+    settingsPages: z
+      .array(pluginSettingsPageContributionSchema)
+      .max(1)
+      .default([]),
+    renderer: relativePosixPathSchema,
+    repository: z.string().min(1).optional(),
+    runtime: pluginRuntimePolicySchema.optional(),
+    terminalStatusItems: z
+      .array(pluginTerminalStatusItemContributionSchema)
+      .default([]),
+    version: z.string().min(1),
+  })
+);
 export type ManagedPluginPackageManifest = z.infer<
   typeof managedPluginPackageManifestSchema
 >;
@@ -283,7 +287,7 @@ export const managedPluginCatalogRowSchema = z.object({
   contributionCounts: z
     .object({
       commands: z.number().int().nonnegative(),
-      missionControlWidgets: z.number().int().nonnegative(),
+      workbenchWidgets: z.number().int().nonnegative(),
       panels: z.number().int().nonnegative(),
       terminalStatusItems: z.number().int().nonnegative(),
     })

@@ -43,7 +43,7 @@ export const commandPalette = {
     openCreatePanel: "New Panel…",
     newAgent: "Start Default Agent",
     startAgent: "Start {{agent}}",
-    newMissionControl: "New Mission Control",
+    newWorkbench: "New Workbench",
     runTask: "Run Task…",
     terminalList: "Terminal List...",
     selectTheme: "Select Theme",

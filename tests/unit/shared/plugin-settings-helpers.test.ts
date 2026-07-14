@@ -42,7 +42,7 @@ function entry(
       apiVersion: 1,
       commands: [],
       configuration: { properties },
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id,

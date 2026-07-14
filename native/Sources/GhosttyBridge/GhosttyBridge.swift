@@ -40,7 +40,7 @@ private func stripHash(_ s: String) -> String {
 /// (Ghostty TerminalView 是 firstResponder), 导致 web 层 useKeyboardShortcuts 收
 /// 不到全局快捷键. 含 Cmd 修饰的组合 → 通过 forwardCallback 把 chord 转给 main
 /// process, main 通过 IPC 调 renderer 直接 resolve action — 完全绕开 NSView
-/// responder chain (因为 wk.keyDown forward 在 Electron 42 ViewsCompositorSuperview
+/// responder chain (因为 wk.keyDown forward 在 Electron 43 ViewsCompositorSuperview
 /// 架构下不可靠 — 真正渲染 web 的是 ViewsCompositorSuperview 不是 WKWebView).
 /// 非 Cmd 组合放行给 firstResponder (terminal 正常处理 Ctrl+C / 普通输入 / IME 等).
 final class EventRouterView: NSView {
@@ -1210,7 +1210,7 @@ final class GhosttyBridgeImpl {
         eventDelegate.scrollbarSink = container
 
         // PIER: 放在所有 web 渲染相关 NSView 之下.
-        // Electron 42 macOS contentView 实际结构 (subviews 从底到顶):
+        // Electron 43 macOS contentView 实际结构 (subviews 从底到顶):
         //   [0] ViewsCompositorSuperview — Chromium GPU compositor, 真正渲染 web 内容
         //   [1] WebContentsViewCocoa     — Electron 的空 wrapper
         //   [2] EventRouterView          — 我们的 hit-test 顶层

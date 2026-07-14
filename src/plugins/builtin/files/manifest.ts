@@ -177,7 +177,7 @@ export const FILES_PLUGIN_MANIFEST = {
       },
     },
   },
-  missionControlWidgets: [],
+  workbenchWidgets: [],
   settingsPages: [],
   groupContent: [
     {

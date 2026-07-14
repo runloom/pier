@@ -2,17 +2,16 @@ import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
 import { useState } from "react";
 import type { Translate } from "./usage-meter.tsx";
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
+/**
+ * v1.2 起成本刷新走宿主 `window.pier.usageData.refreshAll()`（成本物料手动
+ * 刷新入口）。本 hook 只剩账号/配额刷新，成本相关的 refreshCost/costRefreshing
+ * 分支已删除。
+ */
 export function useAccountsRefresh(options: {
   context: ExternalRendererPluginContext;
   onAccountError: (error: unknown) => void;
   t: Translate;
 }): {
-  costRefreshing: boolean;
-  refreshCost: () => Promise<void>;
   refreshingAccountIds: ReadonlySet<string>;
   refreshUsage: (accountId: string) => Promise<void>;
 } {
@@ -20,7 +19,6 @@ export function useAccountsRefresh(options: {
   const [refreshingAccountIds, setRefreshingAccountIds] = useState<
     ReadonlySet<string>
   >(new Set());
-  const [costRefreshing, setCostRefreshing] = useState(false);
 
   const refreshUsage = async (accountId: string): Promise<void> => {
     setRefreshingAccountIds((current) => new Set(current).add(accountId));
@@ -40,32 +38,7 @@ export function useAccountsRefresh(options: {
     }
   };
 
-  const refreshCost = async (): Promise<void> => {
-    setCostRefreshing(true);
-    try {
-      await context.rpc.invoke("usage.refreshCost", null);
-      context.notifications.success(
-        t(
-          "pier.codex.accounts.settings.costRefreshSuccess",
-          "Cost data refreshed"
-        )
-      );
-    } catch (error) {
-      await context.dialogs.alert({
-        body: errorMessage(error),
-        title: t(
-          "pier.codex.accounts.settings.costRefreshFailed",
-          "Could not refresh cost data"
-        ),
-      });
-    } finally {
-      setCostRefreshing(false);
-    }
-  };
-
   return {
-    costRefreshing,
-    refreshCost,
     refreshingAccountIds,
     refreshUsage,
   };

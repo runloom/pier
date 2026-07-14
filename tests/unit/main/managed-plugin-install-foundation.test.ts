@@ -74,7 +74,7 @@ async function createPackage(version = "1.0.0"): Promise<string> {
     JSON.stringify({
       apiVersion: 1,
       commands: [],
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       dataSchemas: { "codex.accounts": { read: ">=1 <=1", write: 1 } },
       engines: { pier: ">=0.1.0 <0.2.0" },
       id: "pier.codex",
@@ -180,7 +180,7 @@ describe("managed plugin install foundation", () => {
         content: JSON.stringify({
           apiVersion: 1,
           commands: [],
-          missionControlWidgets: [],
+          workbenchWidgets: [],
           dataSchemas: { "codex.accounts": { read: ">=1 <=1", write: 1 } },
           engines: { pier: ">=0.1.0 <0.2.0" },
           id: "pier.codex",
@@ -313,6 +313,25 @@ describe("managed plugin install foundation", () => {
     await writeFile(
       join(rendererBarePackage, "dist/renderer.js"),
       "import React from 'react';\nexport const plugin = {};\n"
+    );
+    await expect(
+      validateManagedPluginPackage({
+        packageDir: rendererBarePackage,
+        archivePath: null,
+        expectedId: "pier.codex",
+        expectedVersion: "1.0.0",
+        expectedSha256: null,
+        expectedSize: null,
+        pierVersion: "0.1.0",
+      })
+    ).rejects.toThrow(/unresolved renderer import/);
+  });
+
+  it("detects unresolved renderer imports that use import attributes", async () => {
+    const rendererBarePackage = await createPackage();
+    await writeFile(
+      join(rendererBarePackage, "dist/renderer.js"),
+      "import data from 'react' with { type: 'json' };\nexport const plugin = { data };\n"
     );
     await expect(
       validateManagedPluginPackage({

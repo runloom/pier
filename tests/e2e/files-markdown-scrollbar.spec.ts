@@ -9,7 +9,7 @@ import {
   expect,
   test,
 } from "@playwright/test";
-import { selectTheme, setWindowSize } from "./mission-control-e2e-harness.ts";
+import { selectTheme, setWindowSize } from "./workbench-e2e-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");

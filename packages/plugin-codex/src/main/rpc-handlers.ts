@@ -11,18 +11,11 @@ import type { CodexAccountsService } from "./accounts-service-contract.ts";
 
 export function registerCodexRpcHandlers(options: {
   acquireUsagePolling: (consumerId: string) => Promise<void>;
-  refreshLocalUsage: () => Promise<void>;
   releaseUsagePolling: (consumerId: string) => void;
   rpc: MainPluginContext["rpc"];
   service: CodexAccountsService;
 }): void {
-  const {
-    acquireUsagePolling,
-    refreshLocalUsage,
-    releaseUsagePolling,
-    rpc,
-    service,
-  } = options;
+  const { acquireUsagePolling, releaseUsagePolling, rpc, service } = options;
   const usagePollingPayloadSchema = z.object({
     consumerId: z.string().check(z.minLength(1), z.maxLength(200)),
   });
@@ -65,9 +58,7 @@ export function registerCodexRpcHandlers(options: {
     releaseUsagePolling(consumerId);
     return null;
   });
-  rpc.handle("usage.refreshCost", async (payload) => {
-    emptyRpcPayloadSchema.parse(payload);
-    await refreshLocalUsage();
-    return null;
-  });
+  // v1.2 起 `usage.refreshCost` 由宿主 `window.pier.usageData.refreshAll()`
+  // 通过 UsageSourceRegistry fan-out 到 registerSource 上报的 rescan 回调统一
+  // 触发，Codex 不再对 renderer 暴露独立 RPC。
 }

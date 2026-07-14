@@ -26,7 +26,7 @@ function entry(id: string): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       settingsPages: [],
       configuration: {
         properties: {

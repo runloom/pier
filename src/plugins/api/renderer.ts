@@ -18,7 +18,6 @@ import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts"
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
-import type { RendererMissionControlWidgetRegistration } from "./mission-control.ts";
 import type {
   RendererPluginAppearance,
   RendererPluginMermaidResult,
@@ -29,15 +28,9 @@ import type {
   RendererPluginGitFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
+import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
 
 export type {
-  MissionControlWidgetActionContext,
-  MissionControlWidgetComponentProps,
-  MissionControlWidgetSettingsProps,
-  RendererMissionControlWidgetAction,
-  RendererMissionControlWidgetRegistration,
-} from "./mission-control.ts";
-export type {
   RendererPluginAppearance,
   RendererPluginMermaidResult,
 } from "./renderer-appearance.ts";
@@ -47,6 +40,13 @@ export type {
   RendererPluginGitFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
+export type {
+  RendererWorkbenchWidgetAction,
+  RendererWorkbenchWidgetRegistration,
+  WorkbenchWidgetActionContext,
+  WorkbenchWidgetComponentProps,
+  WorkbenchWidgetSettingsProps,
+} from "./workbench.ts";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
@@ -407,11 +407,6 @@ export interface RendererPluginContext {
   lifecycle: {
     beforeSuspend(participant: RendererPluginSuspendParticipant): () => void;
   };
-  missionControlWidgets: {
-    register(
-      registration: RendererMissionControlWidgetRegistration
-    ): () => void;
-  };
   /**
    * 通知能力。error/info/success/loading 是应用内短 toast(由宿主统一渲染与
    * 排队,插件不感知具体 toast 库);可带可选 action(如撤销)。长说明/错误详情
@@ -482,6 +477,9 @@ export interface RendererPluginContext {
   terminal: RendererPluginTerminalContext;
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;
+  };
+  workbenchWidgets: {
+    register(registration: RendererWorkbenchWidgetRegistration): () => void;
   };
   worktrees: RendererPluginWorktreesFacade;
 }
